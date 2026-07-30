@@ -16,6 +16,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
+import { requestAutomaticDocumentOcr } from "@/api/lib/document-processing-queue";
 import { LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
 import {
@@ -88,7 +89,7 @@ export const processExtraction = async (
           // field" selection, which must resolve to the SAME field
           // wherever it runs (see findExtractionFileField).
           fields: {
-            columns: { content: true, propertyId: true },
+            columns: { content: true, id: true, propertyId: true },
             orderBy: { id: "asc" },
             limit: LIMITS.propertiesCount,
           },
@@ -109,7 +110,15 @@ export const processExtraction = async (
     version.fields,
     options?.filePropertyId,
   );
+  const fileFieldRow = version.fields.find(
+    (field) =>
+      field.content.type === "file" &&
+      field.content.id === fileField?.id &&
+      (options?.filePropertyId === undefined ||
+        field.propertyId === options.filePropertyId),
+  );
   const canExtract = fileField && !fileField.encrypted;
+  let shouldRequestAutomaticOcr = false;
 
   if (canExtract) {
     try {
@@ -130,6 +139,7 @@ export const processExtraction = async (
         entityId,
         fileId: source.fileId,
       });
+      shouldRequestAutomaticOcr = fileField.mimeType === PDF_MIME_TYPE && !text;
 
       if (text) {
         const encrypted = await encryptContent(workspace.organizationId, text);
@@ -166,7 +176,26 @@ export const processExtraction = async (
         entityId,
         mimeType: fileField.mimeType,
       });
+      shouldRequestAutomaticOcr = fileField.mimeType === PDF_MIME_TYPE;
     }
+  }
+
+  if (shouldRequestAutomaticOcr && fileFieldRow && fileField) {
+    await requestAutomaticDocumentOcr({
+      entityId,
+      entityVersionId: version.id,
+      fieldId: fileFieldRow.id,
+      organizationId: workspace.organizationId,
+      sourceFileId: fileField.id,
+      sourceSha256Hex: fileField.sha256Hex,
+      workspaceId: workspace.id,
+    }).catch((error: unknown) => {
+      captureError(error, {
+        entityId,
+        fieldId: fileFieldRow.id,
+        mimeType: fileField.mimeType,
+      });
+    });
   }
 
   // Always index: includes extracted content when available,

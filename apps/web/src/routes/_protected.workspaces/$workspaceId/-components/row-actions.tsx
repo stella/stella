@@ -18,6 +18,7 @@ import {
   MessageSquareIcon,
   PencilIcon,
   RefreshCwIcon,
+  ScanTextIcon,
   Trash2Icon,
   UploadIcon,
 } from "lucide-react";
@@ -88,6 +89,7 @@ import {
 import type { TableTreeNode } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 import { useEntitiesCountLimit } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-limits";
 import { useRetryCell } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-retry-cell";
+import { useRunOcr } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-run-ocr";
 import { useUploadVersion } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-upload-version";
 import {
   useCreateEntities,
@@ -151,6 +153,7 @@ export const RowActions = ({
   const queryClient = useQueryClient();
   const deleteEntities = useDeleteEntities();
   const uploadVersion = useUploadVersion();
+  const runOcr = useRunOcr();
   const requestChatAbout = useRequestChatAbout(workspaceId);
   const retryCell = useRetryCell(toSafeId<"workspace">(workspaceId));
   const [copyToMatterOpen, setCopyToMatterOpen] = useState(false);
@@ -594,6 +597,12 @@ export const RowActions = ({
   // Show "Upload new version" for non-folder, non-bulk entities with a file
   const canUploadVersion =
     !isBulk && !isFolder && !entity.readOnly && file !== null;
+  const canRunOcr =
+    !isBulk &&
+    !isFolder &&
+    !entity.readOnly &&
+    file !== null &&
+    file.mimeType === PDF_MIME_TYPE;
   // Extension-based filter for the OS file picker. Browser-reported MIME
   // strings vary across platforms for the same extension; matching by
   // extension is consistent across Chrome, Safari, Firefox, and Edge.
@@ -643,6 +652,21 @@ export const RowActions = ({
           >
             <UploadIcon />
             {t("fileDetail.uploadNewVersion")}
+          </MenuItem>
+        )}
+        {!isCellContext && canRunOcr && file && (
+          <MenuItem
+            disabled={runOcr.isPending}
+            onClick={() => {
+              runOcr.mutate({
+                workspaceId: toSafeId<"workspace">(workspaceId),
+                entityId: entity.entityId,
+                fieldId: file.fieldId,
+              });
+            }}
+          >
+            <ScanTextIcon />
+            {t("workspaces.files.runOcr")}
           </MenuItem>
         )}
         {!isBulk && cellMetadataTarget && (

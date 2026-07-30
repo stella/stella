@@ -2539,6 +2539,12 @@
       "pendingInvitations": "Ootel kutsed",
       "practiceJurisdictions": "Jurisdiktsioonid",
       "practiceJurisdictionsDescription": "Valige teile asjakohased jurisdiktsioonid.",
+      "documentProcessing": {
+        "description": "Tuvastage skannitud PDF-ides tekst automaatselt, et nende sisu oleks otsitav.",
+        "title": "Dokumenditeksti tuvastamine",
+        "toggleLabel": "Tuvasta skannitud PDF-ides tekst automaatselt",
+        "updated": "Dokumenditeksti tuvastamise seadistus uuendatud"
+      },
       "promptCaching": {
         "description": "Sisselülitamisel lisab stella vahemälu markerid, et korduvad AI-päringud sama dokumendi või lõime kohta maksaksid ~10× vähem ja lõpeksid kiiremini. Vahemällu salvestatud promptid jäävad AI teenusepakkuja juurde kuni 5 minutiks ning on piiratud teie organisatsiooniga. Väljalülitamisel ei saada stella enam vahemälu markereid, kuid teenusepakkujad võivad endiselt oportunistlikult vahemällu salvestada — ainult Zero Data Retention leping teenusepakkujaga lülitab serveripoolse vahemälu täielikult välja.",
         "title": "Promptide vahemällu salvestamine",
@@ -3206,6 +3212,9 @@
       "uploading": "Failide üleslaadimine",
       "uploadingDescription": "Ärge sulgege seda lehte enne, kui failid on üles laaditud",
       "uploadingProgress": "{completed, number}/{total, number} üles laaditud",
+      "ocrQueueFailed": "Tekstituvastust ei õnnestunud järjekorda lisada",
+      "ocrQueued": "Tekstituvastus lisati järjekorda",
+      "runOcr": "Käivita OCR",
       "versionOrNewFile": {
         "createNewOption": "Loo uus fail",
         "description": "Sa lohistasid \"{fileName}\" olemasolevale dokumendile.",

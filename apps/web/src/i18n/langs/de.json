@@ -2539,6 +2539,12 @@
       "pendingInvitations": "Ausstehende Einladungen",
       "practiceJurisdictions": "Jurisdiktionen",
       "practiceJurisdictionsDescription": "Wählen Sie die für Sie relevanten Jurisdiktionen aus.",
+      "documentProcessing": {
+        "description": "Erkennt Text in gescannten PDFs automatisch, damit deren Inhalt durchsuchbar ist.",
+        "title": "Dokumenttexterkennung",
+        "toggleLabel": "Text in gescannten PDFs automatisch erkennen",
+        "updated": "Einstellung für Dokumenttexterkennung aktualisiert"
+      },
       "promptCaching": {
         "description": "Wenn aktiviert, fügt stella Cache-Markierungen hinzu, sodass wiederholte KI-Anfragen über dasselbe Dokument oder denselben Thread ca. 10× weniger kosten und schneller abschließen. Zwischengespeicherte Prompts verbleiben bis zu 5 Minuten beim KI-Anbieter und sind auf Ihre Organisation beschränkt. Beim Deaktivieren sendet stella keine Cache-Markierungen mehr, Anbieter können jedoch weiterhin opportunistisch zwischenspeichern — nur ein Zero-Data-Retention-Vertrag mit dem Anbieter deaktiviert das serverseitige Caching vollständig.",
         "title": "Prompt-Caching",
@@ -3206,6 +3212,9 @@
       "uploading": "Dateien werden hochgeladen",
       "uploadingDescription": "Schließen Sie diese Seite nicht, bis die Dateien hochgeladen sind",
       "uploadingProgress": "{completed, number} von {total, number} hochgeladen",
+      "ocrQueueFailed": "Texterkennung konnte nicht in die Warteschlange gestellt werden",
+      "ocrQueued": "Texterkennung in Warteschlange gestellt",
+      "runOcr": "OCR ausführen",
       "versionOrNewFile": {
         "createNewOption": "Neue Datei erstellen",
         "description": "Sie haben \"{fileName}\" auf ein bestehendes Dokument gezogen.",

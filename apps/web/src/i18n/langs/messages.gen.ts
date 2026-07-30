@@ -2542,6 +2542,12 @@ type Messages = {
       "pendingInvitations": "Pending invitations";
       "practiceJurisdictions": "Jurisdictions";
       "practiceJurisdictionsDescription": "Select the jurisdictions relevant to you.";
+      "documentProcessing": {
+        "description": "Automatically recognize text in scanned PDFs and images so their contents can be searched.";
+        "title": "Document text recognition";
+        "toggleLabel": "Automatically recognize text in scanned PDFs and images";
+        "updated": "Document text recognition setting updated";
+      };
       "promptCaching": {
         "description": "When on, stella adds cache markers so repeated AI requests over the same document or thread cost ~10x less and finish faster. Cached prompts live with the AI provider for up to 5 minutes, scoped to your organization. Turning off stops stella from sending cache markers, but providers may still cache opportunistically — only a Zero Data Retention contract with the provider fully disables server-side caching.";
         "title": "Prompt caching";
@@ -3209,6 +3215,9 @@ type Messages = {
       "uploading": "Uploading files";
       "uploadingDescription": "Don't close this page until the files are uploaded";
       "uploadingProgress": "{completed, number} of {total, number} uploaded";
+      "ocrQueueFailed": "Couldn't queue text recognition";
+      "ocrQueued": "Text recognition queued";
+      "runOcr": "Run OCR";
       "versionOrNewFile": {
         "createNewOption": "Create new file";
         "description": "You dropped \"{fileName}\" onto an existing document.";

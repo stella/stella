@@ -17,6 +17,12 @@ import type { PracticeJurisdiction } from "./common";
 import { workspaces } from "./contacts";
 import { entities } from "./entities";
 
+export const DOCUMENT_PROCESSING_MODES = ["off", "searchable-text"] as const;
+export type DocumentProcessingMode = (typeof DOCUMENT_PROCESSING_MODES)[number];
+
+export const DEFAULT_DOCUMENT_PROCESSING_MODE =
+  "off" as const satisfies DocumentProcessingMode;
+
 export const matterCounters = p.pgTable(
   "matter_counters",
   {
@@ -70,6 +76,17 @@ export const organizationSettings = p.pgTable(
       .boolean("document_stamp_enabled")
       .notNull()
       .default(true),
+    /**
+     * Whether uploaded documents may receive additional processing beyond
+     * their native text layer. Defaults off so an organization must opt in
+     * before OCR-derived searchable text is generated.
+     */
+    documentProcessingMode: p
+      .text("document_processing_mode", {
+        enum: DOCUMENT_PROCESSING_MODES,
+      })
+      .notNull()
+      .default(DEFAULT_DOCUMENT_PROCESSING_MODE),
     practiceJurisdictions: jsonb("practice_jurisdictions")
       .$type<PracticeJurisdiction[]>()
       .notNull()
@@ -134,7 +151,13 @@ export const organizationSettings = p.pgTable(
       .default(false),
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
-  () => [...orgPolicies()],
+  (table) => [
+    p.check(
+      "organization_settings_document_processing_mode_check",
+      sql`${table.documentProcessingMode} IN ('off', 'searchable-text')`,
+    ),
+    ...orgPolicies(),
+  ],
 );
 
 /**

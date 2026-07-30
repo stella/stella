@@ -2539,6 +2539,12 @@
       "pendingInvitations": "Laukiantys kvietimai",
       "practiceJurisdictions": "Jurisdikcijos",
       "practiceJurisdictionsDescription": "Pasirinkite jums aktualias jurisdikcijas.",
+      "documentProcessing": {
+        "description": "Automatiškai atpažinkite tekstą nuskenuotuose PDF, kad jų turinį būtų galima ieškoti.",
+        "title": "Dokumentų teksto atpažinimas",
+        "toggleLabel": "Automatiškai atpažinti tekstą nuskenuotuose PDF",
+        "updated": "Dokumentų teksto atpažinimo nustatymas atnaujintas"
+      },
       "promptCaching": {
         "description": "Įjungus stella prideda talpyklos žymes, kad pakartotinės AI užklausos dėl to paties dokumento ar gijos kainuotų ~10× pigiau ir baigtųsi greičiau. Talpyklavime saugomos užklausos lieka pas AI tiekėją iki 5 minučių ir yra ribotos jūsų organizacijai. Išjungus stella nustoja siųsti talpyklos žymes, tačiau tiekėjai vis tiek gali talpyklavti oportunistiškai — tik Zero Data Retention sutartis su tiekėju visiškai išjungia talpyklavimą serverio pusėje.",
         "title": "Užklausų talpyklavimas",
@@ -3206,6 +3212,9 @@
       "uploading": "Failai keliami",
       "uploadingDescription": "Neuždarykite šio puslapio, kol failai bus įkelti",
       "uploadingProgress": "{completed, number} iš {total, number} įkelta",
+      "ocrQueueFailed": "Nepavyko įtraukti teksto atpažinimo į eilę",
+      "ocrQueued": "Teksto atpažinimas įtrauktas į eilę",
+      "runOcr": "Paleisti OCR",
       "versionOrNewFile": {
         "createNewOption": "Sukurti naują failą",
         "description": "Numetėte \"{fileName}\" ant esamo dokumento.",

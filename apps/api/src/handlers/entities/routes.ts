@@ -37,6 +37,7 @@ import readEntitiesWindow from "@/api/handlers/entities/read-window";
 import releaseDesktopEditLock from "@/api/handlers/entities/release-desktop-edit-lock";
 import renameEntity from "@/api/handlers/entities/rename";
 import requestDesktopEditTakeover from "@/api/handlers/entities/request-desktop-edit-takeover";
+import requestOcr from "@/api/handlers/entities/request-ocr";
 import restoreVersion from "@/api/handlers/entities/restore-version";
 import translateEntity from "@/api/handlers/entities/translate";
 import updateVersionDescription from "@/api/handlers/entities/update-version-description";
@@ -242,6 +243,11 @@ export const entitiesRoute = new Elysia({
   .get("/entity/:entityId/field/:fieldId/file", readFieldFile.handler, {
     params: readFieldFile.config.params,
     permissions: readFieldFile.config.permissions,
+  })
+  .post("/entity/:entityId/ocr", requestOcr.handler, {
+    body: requestOcr.config.body,
+    params: requestOcr.config.params,
+    permissions: requestOcr.config.permissions,
   })
   .get("/entity/:entityId/versions/:versionId/diff", versionDiff.handler, {
     params: versionDiff.config.params,

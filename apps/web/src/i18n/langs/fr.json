@@ -2539,6 +2539,12 @@
       "pendingInvitations": "Invitations en attente",
       "practiceJurisdictions": "Juridictions",
       "practiceJurisdictionsDescription": "Sélectionnez les juridictions qui vous concernent.",
+      "documentProcessing": {
+        "description": "Reconnaissez automatiquement le texte des PDF numérisés afin de pouvoir rechercher leur contenu.",
+        "title": "Reconnaissance de texte des documents",
+        "toggleLabel": "Reconnaître automatiquement le texte des PDF numérisés",
+        "updated": "Paramètre de reconnaissance de texte mis à jour"
+      },
       "promptCaching": {
         "description": "Lorsqu'activé, stella ajoute des marqueurs de cache afin que les requêtes IA répétées sur le même document ou fil de discussion coûtent ~10× moins et s'achèvent plus vite. Les prompts mis en cache restent chez le fournisseur d'IA jusqu'à 5 minutes, limités à votre organisation. La désactivation empêche stella d'envoyer des marqueurs de cache, mais les fournisseurs peuvent toujours mettre en cache de manière opportuniste — seul un contrat Zero Data Retention avec le fournisseur désactive entièrement la mise en cache côté serveur.",
         "title": "Mise en cache des prompts",
@@ -3206,6 +3212,9 @@
       "uploading": "Import des fichiers",
       "uploadingDescription": "Ne fermez pas cette page tant que les fichiers ne sont pas importés",
       "uploadingProgress": "{completed, number} sur {total, number} importés",
+      "ocrQueueFailed": "Impossible de mettre la reconnaissance de texte en file d’attente",
+      "ocrQueued": "Reconnaissance de texte mise en file d’attente",
+      "runOcr": "Lancer l’OCR",
       "versionOrNewFile": {
         "createNewOption": "Créer un nouveau fichier",
         "description": "Vous avez déposé \"{fileName}\" sur un document existant.",

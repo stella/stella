@@ -199,6 +199,12 @@ const envApi = createEnv({
     GOTENBERG_URL: v.pipe(v.string(), v.url()),
     GOTENBERG_USERNAME: v.string(),
     GOTENBERG_PASSWORD: v.string(),
+    /**
+     * Optional private PaddleOCR serving endpoint. The dedicated document
+     * processing worker requires it; the API server can run without it.
+     */
+    OCR_SERVICE_URL: v.optional(v.pipe(v.string(), v.url())),
+    OCR_SERVICE_TOKEN: v.optional(v.pipe(v.string(), v.minLength(16))),
     CONTENT_ENCRYPTION_KEY: v.optional(
       v.pipe(
         v.string(),

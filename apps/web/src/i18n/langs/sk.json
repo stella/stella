@@ -2539,6 +2539,12 @@
       "pendingInvitations": "Čakajúce pozvánky",
       "practiceJurisdictions": "Jurisdikcie",
       "practiceJurisdictionsDescription": "Vyberte jurisdikcie, ktoré sú pre vás relevantné.",
+      "documentProcessing": {
+        "description": "Automaticky rozpoznávajte text v naskenovaných PDF, aby sa v ich obsahu dalo vyhľadávať.",
+        "title": "Rozpoznávanie textu dokumentov",
+        "toggleLabel": "Automaticky rozpoznávať text v naskenovaných PDF",
+        "updated": "Nastavenie rozpoznávania textu dokumentov aktualizované"
+      },
       "promptCaching": {
         "description": "Po zapnutí stella pridáva cache značky tak, aby opakované AI dotazy nad rovnakým dokumentom alebo vláknom stáli ~10× menej a boli rýchlejšie. Cachované prompty zostávajú u poskytovateľa AI až 5 minút a sú obmedzené na vašu organizáciu. Vypnutie zastaví zasielanie cache značiek, ale poskytovatelia môžu prompty stále cachovať oportunisticky — iba zmluva Zero Data Retention s poskytovateľom úplne vypne cachovanie na strane servera.",
         "title": "Cachovanie promptov",
@@ -3206,6 +3212,9 @@
       "uploading": "Nahrávanie súborov",
       "uploadingDescription": "Nezatvárajte túto stránku, kým sa súbory nenahrajú",
       "uploadingProgress": "{completed, number} z {total, number} nahraných",
+      "ocrQueueFailed": "Rozpoznávanie textu sa nepodarilo zaradiť do fronty",
+      "ocrQueued": "Rozpoznávanie textu zaradené do fronty",
+      "runOcr": "Spustiť OCR",
       "versionOrNewFile": {
         "createNewOption": "Vytvoriť nový súbor",
         "description": "Pustili ste \"{fileName}\" na existujúci dokument.",

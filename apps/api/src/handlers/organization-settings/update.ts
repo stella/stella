@@ -3,7 +3,11 @@ import { t } from "elysia";
 import type { Static } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { organizationSettings } from "@/api/db/schema";
+import {
+  DOCUMENT_PROCESSING_MODES,
+  DEFAULT_DOCUMENT_PROCESSING_MODE,
+  organizationSettings,
+} from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -14,6 +18,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { validatePattern } from "@/api/lib/matter-reference";
 
 const updateOrganizationSettingsBodySchema = t.Object({
+  documentProcessingMode: t.Optional(t.UnionEnum(DOCUMENT_PROCESSING_MODES)),
   matterNumberPattern: t.Optional(t.String({ minLength: 1, maxLength: 128 })),
   matterNumberPadding: t.Optional(t.Integer({ minimum: 1, maximum: 6 })),
   promptCachingEnabled: t.Optional(t.Boolean()),
@@ -74,15 +79,21 @@ export const updateOrganizationSettingsHandler = async function* ({
   yield* Result.await(
     safeDb(async (tx) => {
       // Only touch promptCachingEnabled when the body carries it;
-      // omitting it from the upsert set keeps a concurrent toggle
-      // request from being clobbered by a stale read.
+      // omitting optional settings from the upsert set keeps a concurrent
+      // toggle request from being clobbered by a stale read.
       const wantsPromptCachingUpdate = body.promptCachingEnabled !== undefined;
-      const existing = wantsPromptCachingUpdate
-        ? await tx.query.organizationSettings.findFirst({
-            where: { organizationId: { eq: organizationId } },
-            columns: { promptCachingEnabled: true },
-          })
-        : undefined;
+      const wantsDocumentProcessingUpdate =
+        body.documentProcessingMode !== undefined;
+      const existing =
+        wantsPromptCachingUpdate || wantsDocumentProcessingUpdate
+          ? await tx.query.organizationSettings.findFirst({
+              where: { organizationId: { eq: organizationId } },
+              columns: {
+                documentProcessingMode: true,
+                promptCachingEnabled: true,
+              },
+            })
+          : undefined;
 
       // Insert path needs schema defaults for any required column
       // the body did not carry. Matter columns are NOT NULL with
@@ -101,6 +112,9 @@ export const updateOrganizationSettingsHandler = async function* ({
           ...(wantsPromptCachingUpdate
             ? { promptCachingEnabled: body.promptCachingEnabled }
             : {}),
+          ...(wantsDocumentProcessingUpdate
+            ? { documentProcessingMode: body.documentProcessingMode }
+            : {}),
         })
         .onConflictDoUpdate({
           target: organizationSettings.organizationId,
@@ -113,6 +127,9 @@ export const updateOrganizationSettingsHandler = async function* ({
               : {}),
             ...(wantsPromptCachingUpdate
               ? { promptCachingEnabled: body.promptCachingEnabled }
+              : {}),
+            ...(wantsDocumentProcessingUpdate
+              ? { documentProcessingMode: body.documentProcessingMode }
               : {}),
             updatedAt: new Date(),
           },
@@ -144,6 +161,19 @@ export const updateOrganizationSettingsHandler = async function* ({
                 },
               }
             : {}),
+          ...(wantsDocumentProcessingUpdate &&
+          body.documentProcessingMode !==
+            (existing?.documentProcessingMode ??
+              DEFAULT_DOCUMENT_PROCESSING_MODE)
+            ? {
+                documentProcessingMode: {
+                  old:
+                    existing?.documentProcessingMode ??
+                    DEFAULT_DOCUMENT_PROCESSING_MODE,
+                  new: body.documentProcessingMode,
+                },
+              }
+            : {}),
         },
       });
     }),
@@ -158,6 +188,9 @@ export const updateOrganizationSettingsHandler = async function* ({
       : {}),
     ...(body.promptCachingEnabled !== undefined
       ? { promptCachingEnabled: body.promptCachingEnabled }
+      : {}),
+    ...(body.documentProcessingMode !== undefined
+      ? { documentProcessingMode: body.documentProcessingMode }
       : {}),
   });
 };

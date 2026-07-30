@@ -2539,6 +2539,12 @@
       "pendingInvitations": "Oczekujące zaproszenia",
       "practiceJurisdictions": "Jurysdykcje",
       "practiceJurisdictionsDescription": "Wybierz jurysdykcje, które są dla Ciebie istotne.",
+      "documentProcessing": {
+        "description": "Automatycznie rozpoznawaj tekst w zeskanowanych plikach PDF, aby można było przeszukiwać ich zawartość.",
+        "title": "Rozpoznawanie tekstu dokumentów",
+        "toggleLabel": "Automatycznie rozpoznawaj tekst w zeskanowanych plikach PDF",
+        "updated": "Ustawienie rozpoznawania tekstu dokumentów zaktualizowane"
+      },
       "promptCaching": {
         "description": "Po włączeniu stella dodaje znaczniki cache, dzięki czemu powtarzające się zapytania AI dotyczące tego samego dokumentu lub wątku kosztują ~10× mniej i kończą się szybciej. Cache'owane prompty pozostają u dostawcy AI do 5 minut i są ograniczone do Twojej organizacji. Po wyłączeniu stella przestaje wysyłać znaczniki cache, ale dostawcy mogą nadal cache'ować oportunistycznie — tylko umowa Zero Data Retention z dostawcą całkowicie wyłącza cache'owanie po stronie serwera.",
         "title": "Cache'owanie promptów",
@@ -3206,6 +3212,9 @@
       "uploading": "Przesyłanie plików",
       "uploadingDescription": "Nie zamykaj tej strony, dopóki pliki nie zostaną przesłane",
       "uploadingProgress": "{completed, number} z {total, number} przesłano",
+      "ocrQueueFailed": "Nie udało się dodać rozpoznawania tekstu do kolejki",
+      "ocrQueued": "Rozpoznawanie tekstu dodane do kolejki",
+      "runOcr": "Uruchom OCR",
       "versionOrNewFile": {
         "createNewOption": "Utwórz nowy plik",
         "description": "Upuściłeś \"{fileName}\" na istniejący dokument.",

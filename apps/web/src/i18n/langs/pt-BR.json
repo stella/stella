@@ -2539,6 +2539,12 @@
       "pendingInvitations": "Convites pendentes",
       "practiceJurisdictions": "Jurisdições",
       "practiceJurisdictionsDescription": "Selecione as jurisdições relevantes para você.",
+      "documentProcessing": {
+        "description": "Reconheça automaticamente texto em PDFs digitalizados para que seu conteúdo possa ser pesquisado.",
+        "title": "Reconhecimento de texto de documentos",
+        "toggleLabel": "Reconhecer automaticamente texto em PDFs digitalizados",
+        "updated": "Configuração de reconhecimento de texto atualizada"
+      },
       "promptCaching": {
         "description": "Quando ativado, a stella adiciona marcadores de cache para que solicitações de IA repetidas sobre o mesmo documento ou thread custem ~10× menos e terminem mais rápido. Os prompts em cache permanecem com o provedor de IA por até 5 minutos, restritos à sua organização. Ao desativar, a stella para de enviar marcadores de cache, mas os provedores ainda podem cachear oportunisticamente — apenas um contrato Zero Data Retention com o provedor desativa totalmente o cache do lado do servidor.",
         "title": "Cache de prompts",
@@ -3206,6 +3212,9 @@
       "uploading": "Fazendo upload de arquivos",
       "uploadingDescription": "Não feche esta página até que os arquivos sejam carregados",
       "uploadingProgress": "{completed, number} de {total, number} enviados",
+      "ocrQueueFailed": "Não foi possível colocar o reconhecimento de texto na fila",
+      "ocrQueued": "Reconhecimento de texto colocado na fila",
+      "runOcr": "Executar OCR",
       "versionOrNewFile": {
         "createNewOption": "Criar novo arquivo",
         "description": "Você soltou \"{fileName}\" em um documento existente.",
