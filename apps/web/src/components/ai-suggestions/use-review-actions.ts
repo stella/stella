@@ -10,7 +10,6 @@
 
 import type { RefObject } from "react";
 
-import { useRouteContext } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import type { DocxEditorRef, FolioAIEditApplyMode } from "@stll/folio-react";
@@ -33,6 +32,7 @@ import type {
 import { getWordEditAuthorName } from "@/features/chat/hooks/use-chat-user-context";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 
 const DOCUMENT_OPERATION_CONTRACT_VERSION = 1 as const;
@@ -115,15 +115,8 @@ export const useReviewActions = ({
   // Author the tracked-change marks as the user (their preferred name
   // from account settings): they are accepting the AI's suggestion AS
   // THEMSELVES, not as "AI".
-  const wordAuthor = useRouteContext({
-    from: "/_protected",
-    select: (ctx) =>
-      getWordEditAuthorName({
-        name: ctx.user.name ?? null,
-        preferredName: ctx.user.preferredName ?? null,
-        wordEditShortcut: ctx.user.wordEditShortcut ?? null,
-      }),
-  });
+  const user = useAuthenticatedUser();
+  const wordAuthor = getWordEditAuthorName(user);
 
   const setApplyMode = useLatestCallback((mode: FolioAIEditApplyMode) => {
     setApplyModeAction(entityId, mode);

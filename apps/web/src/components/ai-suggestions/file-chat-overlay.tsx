@@ -21,7 +21,6 @@ import {
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
-import { getRouteApi } from "@tanstack/react-router";
 import { Result } from "better-result";
 import { LoaderCircleIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -105,6 +104,7 @@ import { getTranslator } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
 import { api } from "@/lib/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import {
   getChatSendMode,
   useChatAnonymized,
@@ -865,8 +865,6 @@ type FileChatOverlayProps = {
   onNewThread: () => void;
 };
 
-const protectedRouteApi = getRouteApi("/_protected");
-
 const fallback = (
   <div
     aria-hidden="true"
@@ -954,9 +952,7 @@ const ResolvedFileChatOverlay = ({
   requestDocxEditMode,
   workspaceId,
 }: ResolvedFileChatOverlayProps) => {
-  const activeOrganizationId = protectedRouteApi.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const { data: chatThreadId } = useSuspenseQuery(
     fileChatThreadOptions({
       activeOrganizationId,
@@ -1006,9 +1002,7 @@ const FileChatOverlayInner = ({
   onNewThread,
 }: FileChatOverlayInnerProps) => {
   const t = useTranslations();
-  const activeOrganizationId = protectedRouteApi.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const userContext = useChatUserContext();
   const getUserContext = useLatestCallback(() => userContext);
   const threadRef = useMemo<ChatThreadRef>(

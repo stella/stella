@@ -73,7 +73,7 @@ test.describe("DOCX upload + inspector", () => {
     workspace = null;
   });
 
-  test("uploaded DOCX renders in the document view", async ({
+  test("uploaded DOCX opens from the matter with its AI overlay", async ({
     browserErrors,
     page,
     request,
@@ -97,20 +97,6 @@ test.describe("DOCX upload + inspector", () => {
     );
     expect(uploaded.entityId).toBeTruthy();
 
-    // The document view requires both entity + field URL params (see
-    // apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx:198).
-    // Read the entity to find the file field id.
-    const entity = await readEntity(
-      request,
-      testWorkspace.id,
-      uploaded.entityId,
-    );
-    const fileField = findFileFieldForProperty(
-      entity,
-      testWorkspace.filePropertyId,
-    );
-    expect(fileField, "uploaded file field present on entity").toBeTruthy();
-
     const { cookies } = await request.storageState();
     await page.context().addCookies(cookies);
 
@@ -125,23 +111,33 @@ test.describe("DOCX upload + inspector", () => {
       )
       .toBe(200);
 
-    // Do not wait for the full load event here; the assertions below prove
-    // the route and viewer finished the work that matters for this test.
-    await page.goto(
-      `/workspaces/${testWorkspace.id}/${testWorkspace.viewId}/document?entity=${uploaded.entityId}&field=${fileField!.id}`,
-      { waitUntil: "domcontentloaded" },
-    );
+    // Exercise the user path that originally exposed the route-context race:
+    // enter the matter first, then mount the cold lazy file-chat overlay by
+    // opening the file from the table. A direct document URL does not cover
+    // this client-side transition.
+    await page.goto(`/workspaces/${testWorkspace.id}/${testWorkspace.viewId}`, {
+      waitUntil: "domcontentloaded",
+    });
 
-    // The route stays mounted (didn't redirect to /auth or the workspace
-    // index). toHaveURL retries until it matches the timeout, so we don't
-    // have to fight networkidle on a page that keeps long-poll/SSE sockets
-    // open.
-    await expect(page).toHaveURL(
-      new RegExp(
-        `/workspaces/${testWorkspace.id}/${testWorkspace.viewId}/document(\\?|$)`,
-        "u",
-      ),
-    );
+    // New matters land on their Overview view. Move through the visible Table
+    // tab before opening the uploaded file so this remains a client-side user
+    // transition instead of falling back to a direct document URL.
+    const tableTab = page.getByRole("tab", { exact: true, name: "Table" });
+    await expect(tableTab).toBeVisible({ timeout: 30_000 });
+    await tableTab.click();
+
+    const fileButton = page.getByRole("button", {
+      exact: true,
+      name: "stella-e2e.docx",
+    });
+    await expect(fileButton).toBeVisible({ timeout: 30_000 });
+    await fileButton.click();
+
+    // Prove the optional overlay itself mounted; asserting only document text
+    // would pass if its local error boundary had silently removed the overlay.
+    await expect(
+      page.getByRole("toolbar", { name: "AI message composer" }),
+    ).toBeVisible({ timeout: 45_000 });
 
     // Positive proof the viewer actually rendered: the fixture's first
     // paragraph appears in the painted layout. This catches render crashes
