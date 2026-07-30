@@ -55,6 +55,13 @@ export const caseLawDecisions = p.pgTable(
       .notNull()
       .references(() => caseLawSources.id, { onDelete: "cascade" }),
     caseNumber: p.varchar("case_number", { length: 256 }).notNull(),
+    /**
+     * `caseNumber` under `bareCitationKey`. A citation's text canonicalizes
+     * to the same key, so resolution is an indexed equality join rather than
+     * a scan. Null when the case number does not canonicalize, which keeps
+     * unresolvable rows out of the join instead of matching on "".
+     */
+    citationKey: p.varchar("citation_key", { length: 128 }),
     slug: p.varchar({ length: 256 }),
     ecli: p.varchar({ length: 256 }),
     court: p.varchar({ length: 512 }).notNull(),
@@ -234,6 +241,8 @@ export const caseLawCitations = p.pgTable(
       onDelete: "set null",
     }),
     citationText: p.varchar("citation_text", { length: 512 }).notNull(),
+    /** `citationText` under `bareCitationKey`; joins to a decision's own key. */
+    citationKey: p.varchar("citation_key", { length: 128 }),
     sectionIndex: p.integer("section_index"),
     polarity: p.varchar("polarity", { length: 16 }),
     polarityRuleId: safeUuid<"caseLawPolarityRule">(
