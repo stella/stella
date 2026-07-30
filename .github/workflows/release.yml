@@ -532,12 +532,14 @@ jobs:
     permissions:
       contents: read
     steps:
-      # Checked out before the promote because the dispatch runs from a local
-      # composite action, and again supplies the verification script below.
-      - name: Checkout release source
+      # The dispatch runs from a local composite action, so the workspace has
+      # to hold the workflow's own revision rather than the release's. This
+      # job can be dispatched manually against any existing tag, including one
+      # cut before the action existed: checking out that release first would
+      # leave `uses: ./...` unresolvable and fail before dispatching.
+      - name: Checkout workflow source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.resolve.outputs.release_sha }}
           persist-credentials: false
 
       - name: Mint App token for the infra repo
@@ -557,6 +559,14 @@ jobs:
           infra-repo: ${{ github.repository_owner }}/stella-infra
           release-ref: ${{ needs.resolve.outputs.release_ref }}
           target-environment: production
+
+      # Swap the workspace to the release being promoted: the verification
+      # script must come from that revision, not from the workflow's.
+      - name: Checkout release verification script
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.resolve.outputs.release_sha }}
+          persist-credentials: false
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
@@ -582,12 +592,13 @@ jobs:
     permissions:
       contents: read
     steps:
-      # The dispatch runs from a local composite action, so the workspace has
-      # to hold this release's source before it can be resolved.
-      - name: Checkout release source
+      # The workflow's own revision, not the release's: this job can be
+      # dispatched manually against a tag cut before the composite action
+      # existed, and only the workflow revision is guaranteed to contain it.
+      # Nothing here reads the release source, so it is never checked out.
+      - name: Checkout workflow source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.resolve.outputs.release_sha }}
           persist-credentials: false
 
       - name: Mint App token for the infra repo
