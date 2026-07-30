@@ -24,6 +24,7 @@ import type {
   ContentSearchQuery,
   ContentSearchResult,
   FacetBucket,
+  RemoveEntityOptions,
   SearchHit,
   SearchProvider,
   SearchQuery,
@@ -258,19 +259,15 @@ const indexEntity = async (entityId: SafeId<"entity">): Promise<void> => {
   await upsertSearchDocument(entityId);
 };
 
-const removeEntity = async (entityId: SafeId<"entity">): Promise<void> => {
-  const existing = await rootDb.query.searchDocuments.findFirst({
-    where: { entityId: { eq: entityId } },
-    columns: { workspaceId: true },
-  });
-
+const removeEntity = async ({
+  entityId,
+  workspaceId,
+}: RemoveEntityOptions): Promise<void> => {
   await rootDb
     .delete(searchDocuments)
     .where(eq(searchDocuments.entityId, entityId));
 
-  if (existing) {
-    await syncWorkspaceSearchActivity(existing.workspaceId);
-  }
+  await syncWorkspaceSearchActivity(workspaceId);
 };
 
 // Upsert all entities without deleting first to avoid search

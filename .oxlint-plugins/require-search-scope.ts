@@ -1684,6 +1684,16 @@ export default {
           return null;
         };
 
+        const directMemberPropertyName = (member: AstNode): string | null => {
+          const property = member.property;
+          if (member.computed !== true && isIdentifier(property)) {
+            return property.name;
+          }
+          return member.computed === true && isStringLiteral(property)
+            ? property.value
+            : null;
+        };
+
         const rootDbPrivateBuilderTable = (node: AstNode): string | null => {
           if (
             node.type !== "CallExpression" ||
@@ -1693,15 +1703,7 @@ export default {
           ) {
             return null;
           }
-          const property = node.callee.property;
-          const isFrom =
-            (isIdentifier(property) &&
-              node.callee.computed !== true &&
-              property.name === "from") ||
-            (node.callee.computed === true &&
-              isStringLiteral(property) &&
-              property.value === "from");
-          if (!isFrom) {
+          if (directMemberPropertyName(node.callee) !== "from") {
             return null;
           }
           const root = callChainRoot(node.callee.object);
@@ -1710,6 +1712,51 @@ export default {
           }
           const table = node.arguments.at(0);
           return table === undefined ? null : privateProjectionTable(table);
+        };
+
+        const rootDbPrivateRelationalTable = (node: AstNode): string | null => {
+          if (
+            node.type !== "CallExpression" ||
+            !isAstNode(node.callee) ||
+            node.callee.type !== "MemberExpression" ||
+            !["findFirst", "findMany"].includes(
+              directMemberPropertyName(node.callee) ?? "",
+            )
+          ) {
+            return null;
+          }
+          const relation = unwrapExpression(node.callee.object);
+          if (!isAstNode(relation) || relation.type !== "MemberExpression") {
+            return null;
+          }
+          const query = unwrapExpression(relation.object);
+          if (
+            !isAstNode(query) ||
+            query.type !== "MemberExpression" ||
+            directMemberPropertyName(query) !== "query"
+          ) {
+            return null;
+          }
+          const root = unwrapExpression(query.object);
+          if (!isIdentifier(root) || !isApprovedImport(root, ROOT_DB_IMPORTS)) {
+            return null;
+          }
+          const relationName = directMemberPropertyName(relation);
+          if (relationName === null) {
+            return null;
+          }
+          for (const [table, projection] of Object.entries(
+            PRIVATE_SEARCH_PROJECTIONS,
+          )) {
+            if (
+              projection.tableImports.some(
+                ({ importedName }) => importedName === relationName,
+              )
+            ) {
+              return table;
+            }
+          }
+          return null;
         };
 
         const isImportBackedInterpolation = (expression: unknown): boolean => {
@@ -3258,7 +3305,9 @@ export default {
             if (!isAstNode(node)) {
               return;
             }
-            const builderTable = rootDbPrivateBuilderTable(node);
+            const builderTable =
+              rootDbPrivateBuilderTable(node) ??
+              rootDbPrivateRelationalTable(node);
             if (builderTable !== null) {
               context.report({
                 node,

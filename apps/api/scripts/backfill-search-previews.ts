@@ -15,19 +15,43 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { backfillChatThreadSearchIndex } from "@/api/lib/search/index-chat";
 import { rebuildSupplementalSearchIndex } from "@/api/lib/search/index-global";
 
-const main = async (): Promise<void> => {
-  const organizations = await rootDb.execute<{ id: string }>(sql`
-    SELECT id
-    FROM organization
-    ORDER BY id
-  `);
+const ORGANIZATION_BATCH_SIZE = 100;
 
-  for (const [index, { id }] of organizations.entries()) {
-    // oxlint-disable-next-line no-await-in-loop -- bounded per-tenant rebuild prevents one tenant's derived projection writes from interleaving with another's
-    await rebuildSupplementalSearchIndex(toSafeId<"organization">(id));
-    console.log(
-      `Supplemental search previews rebuilt for organization ${index + 1} of ${organizations.length}.`,
-    );
+const main = async (): Promise<void> => {
+  let organizationCursor: string | null = null;
+  let processedOrganizations = 0;
+
+  for (;;) {
+    // oxlint-disable-next-line no-await-in-loop -- sequential keyset pagination: the next organization page depends on this batch's final id
+    const organizationRows = await rootDb.execute<{ id: string }>(sql`
+      SELECT id
+      FROM organization
+      ${organizationCursor ? sql`WHERE id > ${organizationCursor}` : sql``}
+      ORDER BY id
+      LIMIT ${ORGANIZATION_BATCH_SIZE}
+    `);
+    const organizations = [...organizationRows];
+    if (organizations.length === 0) {
+      break;
+    }
+
+    for (const { id } of organizations) {
+      // oxlint-disable-next-line no-await-in-loop -- bounded per-tenant rebuild prevents one tenant's derived projection writes from interleaving with another's
+      await rebuildSupplementalSearchIndex(toSafeId<"organization">(id));
+      processedOrganizations += 1;
+      console.log(
+        `Supplemental search previews rebuilt for ${processedOrganizations} organization(s).`,
+      );
+    }
+
+    const lastOrganization = organizations.at(-1);
+    if (
+      lastOrganization === undefined ||
+      organizations.length < ORGANIZATION_BATCH_SIZE
+    ) {
+      break;
+    }
+    organizationCursor = lastOrganization.id;
   }
 
   const indexedThreads = await backfillChatThreadSearchIndex();
