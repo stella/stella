@@ -15,7 +15,7 @@ const recordAuditEvent = mock(async () => undefined);
 void mock.module("@/api/db/root", () => ({
   rootDb: { transaction: rootTransactionMock },
 }));
-void mock.module("@/api/lib/document-processing-queue", () => ({
+void mock.module("@/api/lib/document-processing-enqueue", () => ({
   enqueueDocumentProcessingRun: enqueueDocumentProcessingRunMock,
 }));
 

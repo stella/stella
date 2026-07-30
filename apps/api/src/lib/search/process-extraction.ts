@@ -16,7 +16,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
-import { requestAutomaticDocumentOcr } from "@/api/lib/document-processing-queue";
+import { requestAutomaticDocumentOcr } from "@/api/lib/document-processing-automatic-request";
 import { LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
 import {

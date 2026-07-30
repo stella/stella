@@ -9,7 +9,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
-import { enqueueDocumentProcessingRun } from "@/api/lib/document-processing-queue";
+import { enqueueDocumentProcessingRun } from "@/api/lib/document-processing-enqueue";
 import {
   persistManualOcrRun,
   type ManualOcrSource,

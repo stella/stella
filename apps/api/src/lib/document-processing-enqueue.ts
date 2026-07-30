@@ -1,0 +1,58 @@
+import { Queue } from "bullmq";
+
+import type { SafeId } from "@/api/lib/branded-types";
+import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
+import { createBullMqConnection } from "@/api/lib/redis-client";
+
+export const DOCUMENT_PROCESSING_QUEUE_NAME = "document-processing";
+export const DOCUMENT_PROCESSING_OCR_JOB_NAME = "ocr";
+
+const DEFAULT_JOB_ATTEMPTS = 3;
+
+export type DocumentProcessingJobData = {
+  runId: SafeId<"documentProcessingRun">;
+};
+
+let queue: Queue<DocumentProcessingJobData> | null = null;
+let queueConnection: ReturnType<typeof createBullMqConnection> | null = null;
+
+const getQueueConnection = () => {
+  queueConnection ??= createBullMqConnection();
+  return queueConnection;
+};
+
+const getQueue = (): Queue<DocumentProcessingJobData> => {
+  queue ??= new Queue<DocumentProcessingJobData>(
+    DOCUMENT_PROCESSING_QUEUE_NAME,
+    {
+      connection: getQueueConnection(),
+      defaultJobOptions: {
+        attempts: DEFAULT_JOB_ATTEMPTS,
+        backoff: { type: "exponential", delay: 30_000 },
+        removeOnComplete: 1000,
+        removeOnFail: 5000,
+      },
+    },
+  );
+  return queue;
+};
+
+export const enqueueDocumentProcessingRun = async (
+  runId: SafeId<"documentProcessingRun">,
+): Promise<void> => {
+  const jobId = createBullMqJobId(DOCUMENT_PROCESSING_QUEUE_NAME, runId);
+  const existing = await getQueue().getJob(jobId);
+  if (existing) {
+    const state = await existing.getState();
+    if (state === "failed") {
+      await existing.retry();
+      return;
+    }
+    if (state !== "completed") {
+      return;
+    }
+    await existing.remove();
+  }
+
+  await getQueue().add(DOCUMENT_PROCESSING_OCR_JOB_NAME, { runId }, { jobId });
+};

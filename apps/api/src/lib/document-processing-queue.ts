@@ -1,5 +1,5 @@
 import { Result, TaggedError } from "better-result";
-import { Queue, Worker } from "bullmq";
+import { Worker } from "bullmq";
 import {
   and,
   asc,
@@ -29,9 +29,13 @@ import type { FieldContent } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
-import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { encryptContent } from "@/api/lib/content-encryption";
 import { detached } from "@/api/lib/detached";
+import {
+  DOCUMENT_PROCESSING_QUEUE_NAME,
+  enqueueDocumentProcessingRun,
+  type DocumentProcessingJobData,
+} from "@/api/lib/document-processing-enqueue";
 import {
   DocumentOcrProviderError,
   recognizePdfText,
@@ -45,11 +49,8 @@ import { getSearchProvider } from "@/api/lib/search/provider";
 import { broadcast } from "@/api/lib/sse";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
-const QUEUE_NAME = "document-processing";
-const OCR_JOB_NAME = "ocr";
 const OCR_SOURCE_URL_TTL_SECONDS = 35 * 60;
 const WORKER_CONCURRENCY = 2;
-const DEFAULT_JOB_ATTEMPTS = 3;
 const RECONCILE_INTERVAL_MS = 30_000;
 const RECONCILE_BATCH_SIZE = 100;
 const ENQUEUE_VISIBILITY_TIMEOUT_MS = 5 * 60 * 1000;
@@ -69,10 +70,6 @@ const REVERSIBLE_AUTOMATIC_OCR_CANCELLATION_CODES = [
   "workspace_unavailable",
 ] as const;
 
-type DocumentProcessingJobData = {
-  runId: SafeId<"documentProcessingRun">;
-};
-
 type CurrentOcrSource = {
   content: FieldContent;
   currentVersionId: SafeId<"entityVersion"> | null;
@@ -88,171 +85,6 @@ export class DocumentProcessingJobError extends TaggedError(
   message: string;
   cause?: unknown;
 }>() {}
-
-let queue: Queue<DocumentProcessingJobData> | null = null;
-let queueConnection: ReturnType<typeof createBullMqConnection> | null = null;
-
-const getQueueConnection = () => {
-  queueConnection ??= createBullMqConnection();
-  return queueConnection;
-};
-
-const getQueue = (): Queue<DocumentProcessingJobData> => {
-  queue ??= new Queue<DocumentProcessingJobData>(QUEUE_NAME, {
-    connection: getQueueConnection(),
-    defaultJobOptions: {
-      attempts: DEFAULT_JOB_ATTEMPTS,
-      backoff: { type: "exponential", delay: 30_000 },
-      removeOnComplete: 1000,
-      removeOnFail: 5000,
-    },
-  });
-  return queue;
-};
-
-export const enqueueDocumentProcessingRun = async (
-  runId: SafeId<"documentProcessingRun">,
-): Promise<void> => {
-  const jobId = createBullMqJobId("document-processing", runId);
-  const existing = await getQueue().getJob(jobId);
-  if (existing) {
-    const state = await existing.getState();
-    if (state === "failed") {
-      await existing.retry();
-      return;
-    }
-    if (state !== "completed") {
-      return;
-    }
-    await existing.remove();
-  }
-
-  await getQueue().add(OCR_JOB_NAME, { runId }, { jobId });
-};
-
-export const requestAutomaticDocumentOcr = async ({
-  entityId,
-  entityVersionId,
-  fieldId,
-  organizationId,
-  requestSource,
-  sourceFileId,
-  sourceSha256Hex,
-  workspaceId,
-}: {
-  entityId: SafeId<"entity">;
-  entityVersionId: SafeId<"entityVersion">;
-  fieldId: SafeId<"field">;
-  organizationId: SafeId<"organization">;
-  requestSource: "repair" | "upload";
-  sourceFileId: string;
-  sourceSha256Hex: string;
-  workspaceId: SafeId<"workspace">;
-}): Promise<void> => {
-  const run = await rootDb.transaction(async (tx) => {
-    const settings = await tx.query.organizationSettings.findFirst({
-      where: { organizationId: { eq: organizationId } },
-      columns: { documentProcessingMode: true },
-    });
-    if (settings?.documentProcessingMode !== "searchable-text") {
-      return null;
-    }
-
-    const currentRows = await tx
-      .select({ content: fields.content })
-      .from(entities)
-      .innerJoin(
-        entityVersions,
-        and(
-          eq(entityVersions.id, entityVersionId),
-          eq(entityVersions.entityId, entities.id),
-          eq(entityVersions.workspaceId, workspaceId),
-          isNull(entityVersions.deletedAt),
-        ),
-      )
-      .innerJoin(
-        fields,
-        and(
-          eq(fields.id, fieldId),
-          eq(fields.entityVersionId, entityVersionId),
-          eq(fields.workspaceId, workspaceId),
-        ),
-      )
-      .where(
-        and(
-          eq(entities.id, entityId),
-          eq(entities.workspaceId, workspaceId),
-          eq(entities.currentVersionId, entityVersionId),
-          eq(entities.readOnly, false),
-        ),
-      )
-      .limit(1)
-      .for("update");
-    const content = currentRows.at(0)?.content;
-    if (
-      content?.type !== "file" ||
-      content.id !== sourceFileId ||
-      content.sha256Hex !== sourceSha256Hex ||
-      content.mimeType !== PDF_MIME_TYPE ||
-      content.encrypted
-    ) {
-      return null;
-    }
-
-    const inserted = await tx
-      .insert(documentProcessingRuns)
-      .values({
-        id: createSafeId<"documentProcessingRun">(),
-        organizationId,
-        workspaceId,
-        entityId,
-        entityVersionId,
-        fieldId,
-        sourceFileId,
-        sourceSha256Hex,
-        kind: "ocr",
-        processorVersion: 1,
-        requestSource,
-        requestedBy: null,
-      })
-      .onConflictDoNothing({
-        target: [
-          documentProcessingRuns.organizationId,
-          documentProcessingRuns.kind,
-          documentProcessingRuns.entityVersionId,
-          documentProcessingRuns.fieldId,
-          documentProcessingRuns.sourceFileId,
-          documentProcessingRuns.sourceSha256Hex,
-          documentProcessingRuns.processorVersion,
-        ],
-      })
-      .returning({ id: documentProcessingRuns.id });
-    const created = inserted.at(0);
-    if (created) {
-      return created;
-    }
-
-    return await tx.query.documentProcessingRuns.findFirst({
-      where: {
-        organizationId: { eq: organizationId },
-        workspaceId: { eq: workspaceId },
-        entityId: { eq: entityId },
-        entityVersionId: { eq: entityVersionId },
-        fieldId: { eq: fieldId },
-        sourceFileId: { eq: sourceFileId },
-        sourceSha256Hex: { eq: sourceSha256Hex },
-        kind: { eq: "ocr" },
-        processorVersion: { eq: 1 },
-        status: { eq: "queued" },
-      },
-      columns: { id: true },
-    });
-  });
-
-  if (run) {
-    await enqueueDocumentProcessingRun(run.id);
-  }
-};
 
 export const isCurrentOcrSource = ({
   run,
@@ -1348,7 +1180,7 @@ const reconcileDocumentProcessing = async ({
 
 export const initDocumentProcessingWorker = () => {
   const worker = new Worker<DocumentProcessingJobData>(
-    QUEUE_NAME,
+    DOCUMENT_PROCESSING_QUEUE_NAME,
     async (job) => {
       try {
         await processDocumentProcessingRun(job.data.runId);
