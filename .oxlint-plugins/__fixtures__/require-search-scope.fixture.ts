@@ -1,3 +1,4 @@
+import { load } from "cheerio";
 import { sql } from "drizzle-orm";
 
 import { searchDocuments } from "@/api/db/schema";
@@ -493,6 +494,9 @@ scopedSingleAppendPrivateRead.append(
 const unrelatedAppendControl = {
   append: (fragment: unknown) => fragment,
 }.append(sql`search_documents sd`);
+
+const cheerio = load("<p>search_documents</p>");
+cheerio("p").append("\n");
 
 declare const opaqueAppendReceiver: {
   append: (fragment: unknown) => unknown;

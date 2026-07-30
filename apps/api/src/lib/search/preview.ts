@@ -179,25 +179,6 @@ type PreviewPassageJoinOptions = {
   tenantFilter?: SQL | undefined;
 };
 
-const previewPassageTableSql = (table: PreviewPassageTable): SQL => {
-  switch (table) {
-    case "case-law":
-      return sql`case_law_search_document_preview_passages`;
-    case "chat":
-      return sql`chat_thread_search_preview_passages`;
-    case "contact":
-      return sql`contact_search_document_preview_passages`;
-    case "document":
-      return sql`search_document_preview_passages`;
-    case "matter":
-      return sql`workspace_search_document_preview_passages`;
-    default: {
-      const exhaustive: never = table;
-      return exhaustive;
-    }
-  }
-};
-
 const previewPassageJoin = ({
   generation,
   locatorTsQuery,
@@ -208,32 +189,147 @@ const previewPassageJoin = ({
   if (!locatorTsQuery) {
     return sql.empty();
   }
-  return sql`
-    LEFT JOIN LATERAL (
-      (
-        SELECT passage.content, passage.ordinal, 0 AS priority
-        FROM ${previewPassageTableSql(table)} passage
-        WHERE ${parentFilter}
-          AND passage.generation = ${generation}
-          ${tenantFilter}
-          AND passage.tsv @@ ${locatorTsQuery}
-        ORDER BY passage.ordinal
-        LIMIT 1
-      )
-      UNION ALL
-      (
-        SELECT passage.content, passage.ordinal, 1 AS priority
-        FROM ${previewPassageTableSql(table)} passage
-        WHERE ${parentFilter}
-          AND passage.generation = ${generation}
-          ${tenantFilter}
-          AND passage.ordinal = 0
-        LIMIT 1
-      )
-      ORDER BY priority, ordinal
-      LIMIT 1
-    ) preview_passage ON true
-  `;
+  switch (table) {
+    case "case-law":
+      return sql`
+        LEFT JOIN LATERAL (
+          (
+            SELECT passage.content, passage.ordinal, 0 AS priority
+            FROM case_law_search_document_preview_passages passage
+            WHERE ${parentFilter}
+              AND passage.generation = ${generation}
+              ${tenantFilter}
+              AND passage.tsv @@ ${locatorTsQuery}
+            ORDER BY passage.ordinal
+            LIMIT 1
+          )
+          UNION ALL
+          (
+            SELECT passage.content, passage.ordinal, 1 AS priority
+            FROM case_law_search_document_preview_passages passage
+            WHERE ${parentFilter}
+              AND passage.generation = ${generation}
+              ${tenantFilter}
+              AND passage.ordinal = 0
+            LIMIT 1
+          )
+          ORDER BY priority, ordinal
+          LIMIT 1
+        ) preview_passage ON true
+      `;
+    case "chat":
+      return sql`
+        LEFT JOIN LATERAL (
+          (
+            SELECT passage.content, passage.ordinal, 0 AS priority
+            FROM chat_thread_search_preview_passages passage
+            WHERE ${parentFilter}
+              AND passage.generation = ${generation}
+              ${tenantFilter}
+              AND passage.tsv @@ ${locatorTsQuery}
+            ORDER BY passage.ordinal
+            LIMIT 1
+          )
+          UNION ALL
+          (
+            SELECT passage.content, passage.ordinal, 1 AS priority
+            FROM chat_thread_search_preview_passages passage
+            WHERE ${parentFilter}
+              AND passage.generation = ${generation}
+              ${tenantFilter}
+              AND passage.ordinal = 0
+            LIMIT 1
+          )
+          ORDER BY priority, ordinal
+          LIMIT 1
+        ) preview_passage ON true
+      `;
+    case "contact":
+      return sql`
+        LEFT JOIN LATERAL (
+          (
+            SELECT passage.content, passage.ordinal, 0 AS priority
+            FROM contact_search_document_preview_passages passage
+            WHERE ${parentFilter}
+              AND passage.generation = ${generation}
+              ${tenantFilter}
+              AND passage.tsv @@ ${locatorTsQuery}
+            ORDER BY passage.ordinal
+            LIMIT 1
+          )
+          UNION ALL
+          (
+            SELECT passage.content, passage.ordinal, 1 AS priority
+            FROM contact_search_document_preview_passages passage
+            WHERE ${parentFilter}
+              AND passage.generation = ${generation}
+              ${tenantFilter}
+              AND passage.ordinal = 0
+            LIMIT 1
+          )
+          ORDER BY priority, ordinal
+          LIMIT 1
+        ) preview_passage ON true
+      `;
+    case "document":
+      return sql`
+        LEFT JOIN LATERAL (
+          (
+            SELECT passage.content, passage.ordinal, 0 AS priority
+            FROM search_document_preview_passages passage
+            WHERE ${parentFilter}
+              AND passage.generation = ${generation}
+              ${tenantFilter}
+              AND passage.tsv @@ ${locatorTsQuery}
+            ORDER BY passage.ordinal
+            LIMIT 1
+          )
+          UNION ALL
+          (
+            SELECT passage.content, passage.ordinal, 1 AS priority
+            FROM search_document_preview_passages passage
+            WHERE ${parentFilter}
+              AND passage.generation = ${generation}
+              ${tenantFilter}
+              AND passage.ordinal = 0
+            LIMIT 1
+          )
+          ORDER BY priority, ordinal
+          LIMIT 1
+        ) preview_passage ON true
+      `;
+    case "matter":
+      return sql`
+        LEFT JOIN LATERAL (
+          (
+            SELECT passage.content, passage.ordinal, 0 AS priority
+            FROM workspace_search_document_preview_passages passage
+            WHERE ${parentFilter}
+              AND passage.generation = ${generation}
+              ${tenantFilter}
+              AND passage.tsv @@ ${locatorTsQuery}
+            ORDER BY passage.ordinal
+            LIMIT 1
+          )
+          UNION ALL
+          (
+            SELECT passage.content, passage.ordinal, 1 AS priority
+            FROM workspace_search_document_preview_passages passage
+            WHERE ${parentFilter}
+              AND passage.generation = ${generation}
+              ${tenantFilter}
+              AND passage.ordinal = 0
+            LIMIT 1
+          )
+          ORDER BY priority, ordinal
+          LIMIT 1
+        ) preview_passage ON true
+      `;
+    default: {
+      const exhaustive: never = table;
+      return exhaustive;
+    }
+  }
 };
 
 export const buildSearchPreviewQuery = ({

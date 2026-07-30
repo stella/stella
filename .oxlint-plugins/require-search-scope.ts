@@ -72,6 +72,10 @@ const DRIZZLE_SQL_IMPORTS = [
   { importedName: "sql", module: "drizzle-orm" },
 ] as const satisfies readonly ApprovedImport[];
 
+const CHEERIO_LOAD_IMPORTS = [
+  { importedName: "load", module: "cheerio" },
+] as const satisfies readonly ApprovedImport[];
+
 const PRIVATE_SEARCH_PROJECTIONS = {
   search_documents: {
     expectedAlias: "sd",
@@ -1074,9 +1078,7 @@ const interpolationIsUnsafeScopeOperand = (
     precedingText = token.value + precedingText;
   }
   return (
-    /\boperator\s*\([^)]*\)\s*(?:\(\s*)*(?:true\s*)?$/iu.test(
-      precedingText,
-    ) ||
+    /\boperator\s*\([^)]*\)\s*(?:\(\s*)*(?:true\s*)?$/iu.test(precedingText) ||
     /\b(?:not\s+)?between\s*(?:\(\s*)*(?:true\s+)?$/iu.test(precedingText) ||
     /\b(?:not\s+)?between\s+(?:false|true)\s+and\s*(?:\(\s*)*(?:true\s+)?$/iu.test(
       precedingText,
@@ -1563,10 +1565,7 @@ export default {
               if (
                 token.type !== "expression" ||
                 !Object.values(PRIVATE_SEARCH_PROJECTIONS).some((projection) =>
-                  isApprovedScopeFragment(
-                    token.value,
-                    projection.scopeImports,
-                  ),
+                  isApprovedScopeFragment(token.value, projection.scopeImports),
                 )
               ) {
                 return token;
@@ -2646,7 +2645,31 @@ export default {
           expression: unknown,
         ): boolean => {
           const resolved = resolveConstInitializer(expression);
-          return isAstNode(resolved) && resolved.type === "ObjectExpression";
+          if (!isAstNode(resolved)) {
+            return false;
+          }
+          if (resolved.type === "ObjectExpression") {
+            return true;
+          }
+          if (
+            resolved.type !== "CallExpression" ||
+            !isAstNode(resolved.callee)
+          ) {
+            return false;
+          }
+          const factory = resolveConstInitializer(resolved.callee);
+          if (
+            !isAstNode(factory) ||
+            factory.type !== "CallExpression" ||
+            !isAstNode(factory.callee)
+          ) {
+            return false;
+          }
+          const factoryCallee = resolveConstInitializer(factory.callee);
+          return (
+            isIdentifier(factoryCallee) &&
+            isApprovedImport(factoryCallee, CHEERIO_LOAD_IMPORTS)
+          );
         };
 
         const inspectSqlTokenPaths = (
@@ -3010,9 +3033,7 @@ export default {
               }
               if (
                 sequence.calls.length > 1 ||
-                sequence.calls.some(
-                  (call) => !call.sharesDeclarationContainer,
-                )
+                sequence.calls.some((call) => !call.sharesDeclarationContainer)
               ) {
                 tokenPaths = withoutApprovedScopeFragments(tokenPaths);
               }
