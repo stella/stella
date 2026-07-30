@@ -380,6 +380,10 @@ export const CAPABILITY_DISPATCH = {
   "legislation.search": {
     load: async () => await import("@/api/handlers/legislation/search"),
   },
+  "organization-settings.document-ocr-availability.get": {
+    load: async () =>
+      await import("@/api/handlers/organization-settings/document-ocr-availability/get"),
+  },
   "organization-settings.get": {
     load: async () => await import("@/api/handlers/organization-settings/get"),
   },

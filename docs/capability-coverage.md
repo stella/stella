@@ -202,6 +202,7 @@ here as its CLI form). Projected from the same handler enumeration that builds
 
 | Capability                                             | Access | Scope              | Feature | Reachable via                                                                             |
 | ------------------------------------------------------ | ------ | ------------------ | ------- | ----------------------------------------------------------------------------------------- |
+| `organization-settings.document-ocr-availability.get`  | read   | stella:admin_read  | —       | generic invoke → `stella capability organization-settings document-ocr-availability-get`  |
 | `organization-settings.get`                            | read   | stella:admin_read  | —       | generic invoke → `stella capability organization-settings get`                            |
 | `organization-settings.preview`                        | read   | stella:admin_read  | —       | generic invoke → `stella capability organization-settings preview`                        |
 | `organization-settings.read-ai-availability`           | read   | stella:admin_read  | —       | generic invoke → `stella capability organization-settings read-ai-availability`           |

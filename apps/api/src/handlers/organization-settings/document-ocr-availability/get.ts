@@ -5,6 +5,8 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { isDocumentOcrWorkerAvailable } from "@/api/lib/document-processing-readiness";
 
 const config = {
+  description:
+    "Report whether a document OCR worker is currently ready to accept work.",
   // Any org member may see whether document OCR can currently accept work.
   // The response is only an ephemeral availability bit; it exposes no worker
   // topology or provider configuration.
@@ -13,14 +15,14 @@ const config = {
   access: "read",
 } satisfies HandlerConfig;
 
-const readDocumentOcrAvailability = createSafeRootHandler(
+const getDocumentOcrAvailability = createSafeRootHandler(
   config,
   async function* () {
-    const available = yield* Result.await(isDocumentOcrWorkerAvailable());
+    const available = yield* Result.ok(await isDocumentOcrWorkerAvailable());
     return Result.ok({
       available,
     });
   },
 );
 
-export default readDocumentOcrAvailability;
+export default getDocumentOcrAvailability;

@@ -3,6 +3,7 @@ import Elysia from "elysia";
 import deleteAIConfig from "@/api/handlers/organization-settings/delete-ai-config";
 import deleteDeepLKey from "@/api/handlers/organization-settings/delete-deepl-key";
 import deleteWebSearchKey from "@/api/handlers/organization-settings/delete-web-search-key";
+import getDocumentOcrAvailability from "@/api/handlers/organization-settings/document-ocr-availability/get";
 import readOrganizationSettings from "@/api/handlers/organization-settings/get";
 import previewOrganizationSettings from "@/api/handlers/organization-settings/preview";
 import readAIAvailability from "@/api/handlers/organization-settings/read-ai-availability";
@@ -10,7 +11,6 @@ import readAIConfig from "@/api/handlers/organization-settings/read-ai-config";
 import readAnonymizationBlacklist from "@/api/handlers/organization-settings/read-anonymization-blacklist";
 import readDeepLAvailability from "@/api/handlers/organization-settings/read-deepl-availability";
 import readDeepLConfig from "@/api/handlers/organization-settings/read-deepl-config";
-import readDocumentOcrAvailability from "@/api/handlers/organization-settings/read-document-ocr-availability";
 import readWebSearchConfig from "@/api/handlers/organization-settings/read-web-search-config";
 import updateOrganizationSettings from "@/api/handlers/organization-settings/update";
 import updateAIConfig from "@/api/handlers/organization-settings/update-ai-config";
@@ -55,8 +55,8 @@ export const organizationSettingsRoute = new Elysia({
   .get("/ai-availability", readAIAvailability.handler, {
     permissions: readAIAvailability.config.permissions,
   })
-  .get("/document-ocr-availability", readDocumentOcrAvailability.handler, {
-    permissions: readDocumentOcrAvailability.config.permissions,
+  .get("/document-ocr-availability", getDocumentOcrAvailability.handler, {
+    permissions: getDocumentOcrAvailability.config.permissions,
   })
   .get("/ai-config", readAIConfig.handler, {
     permissions: readAIConfig.config.permissions,
