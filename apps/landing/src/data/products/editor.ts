@@ -10,7 +10,7 @@ export const editor: Product = {
   // matter, with review and revisions. The tool queries ("edit docx online",
   // "docx editor without Word") belong to /docx-editor, whose meta, FAQ set,
   // and structured data are kept disjoint from this page's on purpose.
-  metaTitle: "Editing Word Documents in Your Legal Workspace | stella",
+  metaTitle: "Edit Word documents in your legal workspace | stella",
   metaDescription:
     "Edit a matter's Word documents inside stella: track changes reviewed in place, a revision in the version history for every save, and a bridge to local Word.",
   hero: {
@@ -36,7 +36,7 @@ export const editor: Product = {
     },
     {
       title: "Track changes",
-      body: "Tracked insertions and deletions render in place, and AI-proposed edits arrive as tracked changes you accept or reject in the document.",
+      body: "Tracked insertions and deletions appear in place, and AI-proposed edits arrive as tracked changes you accept or reject in the document.",
     },
     {
       title: "Version history for every save",
@@ -68,7 +68,7 @@ export const editor: Product = {
         "Move between the document and its matter without uploading copies",
         "Keep document properties and revisions with the file",
         "Open the same document through the desktop bridge when needed",
-        "Use the document as context for matter-aware tools",
+        "Use the document as context for the AI agent",
       ],
     },
   ],
@@ -84,7 +84,7 @@ export const editor: Product = {
     {
       question: "Does the editor keep track changes?",
       answer:
-        "Yes. Tracked insertions and deletions render in place, the way Word shows them. Edits proposed by stella's AI arrive the same way, so a redline is reviewed and accepted or rejected before it becomes part of the document.",
+        "Yes. Tracked insertions and deletions appear in place, the way Word shows them. Edits proposed by stella's AI arrive the same way, so a redline is reviewed and accepted or rejected before it becomes part of the document.",
     },
     {
       question: "What happens when I save?",
@@ -104,7 +104,7 @@ export const editor: Product = {
     {
       question: "Can stella's AI work on the document I am editing?",
       answer:
-        "Yes. The document is part of its matter's context, so matter-aware tools can read it and propose edits as tracked changes in the same document.",
+        "Yes. The document is part of its matter, so the AI agent can read it and propose edits as tracked changes in the same document.",
     },
   ],
   adjacent: [

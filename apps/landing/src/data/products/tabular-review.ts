@@ -6,7 +6,7 @@ export const tabularReview: Product = {
   eyebrow: "Tabular Review",
   title: "Turn a pile of documents into a table you can review.",
   summary:
-    "Ask questions across a whole document set and get structured answers back as a matter-scoped table — sortable, filterable, and traceable to the source text. Built for due diligence, discovery, and research.",
+    "Ask questions across a whole document set and get structured answers back as a table in the matter — sortable, filterable, and traceable to the source text. Built for due diligence, discovery, and research.",
   metaTitle: "Tabular document review for due diligence | stella",
   metaDescription:
     "Ask questions across a whole document set and get structured answers as a sortable, source-traceable table. Built for due diligence, discovery, and research.",
@@ -32,7 +32,7 @@ export const tabularReview: Product = {
       body: "Each cell links to the exact passage it was extracted from, so you can verify in one click.",
     },
     {
-      title: "Matter-scoped",
+      title: "Part of the matter",
       body: "Reviews live inside a matter alongside the documents, contacts, and chat they relate to.",
     },
     {
@@ -68,7 +68,7 @@ export const tabularReview: Product = {
     {
       heading: "It lives where the work lives",
       bullets: [
-        "Reviews are scoped to a matter, next to its files and chat",
+        "Reviews live in the matter, next to its files and chat",
         "Hand a review to the AI agent for follow-up questions",
         "Export the table or keep refining it in place",
       ],
@@ -83,7 +83,7 @@ export const tabularReview: Product = {
     {
       question: "Where do the answers come from?",
       answer:
-        "From the documents in your matter. AI features are bring-your-own-key, so extraction runs through the AI provider you configure, and every answer links back to the passage it was drawn from.",
+        "From the documents in your matter. AI features use your own provider keys, so extraction runs through the AI provider you choose, and every answer links back to the passage it was drawn from.",
     },
     {
       question: "Can I export the review?",

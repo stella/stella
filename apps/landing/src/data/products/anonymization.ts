@@ -85,7 +85,7 @@ export const anonymization: Product = {
     {
       to: "product",
       slug: "tabular-review",
-      body: "Turn a document set into a matter-scoped table you can sort, filter, and trace.",
+      body: "Turn a document set into a table you can sort, filter, and trace back to the source.",
     },
     {
       to: "ai-info",

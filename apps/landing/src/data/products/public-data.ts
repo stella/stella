@@ -45,7 +45,7 @@ export const publicData: Product = {
     },
     {
       title: "By jurisdiction",
-      body: "Browse and filter case law and registries scoped to the jurisdiction you work in.",
+      body: "Browse and filter case law and registries by the jurisdiction you work in.",
     },
     {
       title: "Grounded for AI",
@@ -109,7 +109,7 @@ export const publicData: Product = {
     {
       to: "product",
       slug: "tabular-review",
-      body: "Turn a document set into a matter-scoped review table.",
+      body: "Turn a document set into a review table in the matter.",
     },
     {
       to: "ai-info",

@@ -89,14 +89,14 @@ export const agent: Product = {
     {
       question: "Where do its answers come from?",
       answer:
-        "From your matters, files, registries, and connected tools. AI features are bring-your-own-key, and answers are grounded by citations back to the source.",
+        "From your matters, files, registries, and connected tools. AI features use your own provider keys, and answers are grounded by citations back to the source.",
     },
   ],
   adjacent: [
     {
       to: "product",
       slug: "tabular-review",
-      body: "Turn a document set into a matter-scoped table you can sort, filter, and trace.",
+      body: "Turn a document set into a table you can sort, filter, and trace back to the source.",
     },
     {
       to: "product",

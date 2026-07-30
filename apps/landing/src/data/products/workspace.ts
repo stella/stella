@@ -84,7 +84,7 @@ export const workspace: Product = {
     {
       question: "Can I edit Word documents in stella?",
       answer:
-        "Yes. The web app supports Word .docx editing and review. For local Office editing, the desktop app acts as a bridge so you can open a document from stella and edit it on your machine.",
+        "Yes. The web app supports Word .docx editing and review. For local Office editing, the desktop app acts as a bridge so you can open a document from stella and edit it on your computer.",
     },
     {
       question: "What lives inside a matter?",
@@ -106,7 +106,7 @@ export const workspace: Product = {
     {
       to: "product",
       slug: "tabular-review",
-      body: "Turn a document set into a matter-scoped table you can sort, filter, and trace.",
+      body: "Turn a document set into a table you can sort, filter, and trace back to the source.",
     },
     {
       to: "product",

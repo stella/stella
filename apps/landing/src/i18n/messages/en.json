@@ -81,8 +81,8 @@
     "toolsTitle": "Tools for AI agents."
   },
   "meta": {
-    "homeDescription": "Open source legal workspace for documents, matters, contract review, and case-law research. Self-host or use our cloud. Usage-based AI, no vendor lock-in.",
-    "homeTitle": "stella | open source legal workspace"
+    "homeDescription": "Open-source legal workspace for documents, matters, contract review, and case-law research. Self-host or use our cloud. Usage-based AI, no vendor lock-in.",
+    "homeTitle": "stella | open-source legal workspace"
   },
   "nav": {
     "aiFactSheet": "AI fact sheet",
@@ -127,12 +127,12 @@
         "title": "Legal data, ready to pull into a matter."
       },
       "tabular-review": {
-        "blurb": "Ask questions across a whole document set and get structured answers back as a matter-scoped table — sortable, filterable, and traceable to the source text. Built for due diligence, discovery, and research.",
+        "blurb": "Ask questions across a whole document set and get structured answers back as a table in the matter — sortable, filterable, and traceable to the source text. Built for due diligence, discovery, and research.",
         "eyebrow": "Tabular Review",
         "title": "Turn a pile of documents into a table you can review."
       },
       "templates": {
-        "blurb": "Define a template once with fields and conditional clauses, then fill it in by hand or let stella draft it from a matter's data. Produce a document into the matter and keep editing it.",
+        "blurb": "Define a template once with fields and conditional clauses, then fill it in by hand or let stella draft it from a matter's data. The finished document lands in the matter, ready to keep editing.",
         "eyebrow": "Templates",
         "title": "Build reusable templates, and let AI fill them in."
       },
@@ -148,7 +148,7 @@
     "agent": {
       "adjacent": {
         "0": {
-          "body": "Turn a document set into a matter-scoped table you can sort, filter, and trace."
+          "body": "Turn a document set into a table you can sort, filter, and trace back to the source."
         },
         "1": {
           "body": "Matters, documents, .docx editing, review, and chat in one workspace."
@@ -199,7 +199,7 @@
           "question": "How do I add new capabilities?"
         },
         "2": {
-          "answer": "From your matters, files, registries, and connected tools. AI features are bring-your-own-key, and answers are grounded by citations back to the source.",
+          "answer": "From your matters, files, registries, and connected tools. AI features use your own provider keys, and answers are grounded by citations back to the source.",
           "question": "Where do its answers come from?"
         }
       },
@@ -245,7 +245,7 @@
           "body": "Matters, documents, .docx editing, review, and chat in one workspace."
         },
         "2": {
-          "body": "Turn a document set into a matter-scoped table you can sort, filter, and trace."
+          "body": "Turn a document set into a table you can sort, filter, and trace back to the source."
         },
         "3": {
           "body": "stella in machine-readable form for AI search engines."
@@ -415,7 +415,7 @@
           "title": "Formatting stays intact"
         },
         "2": {
-          "body": "Tracked insertions and deletions render in place, and AI-proposed edits arrive as tracked changes you accept or reject in the document.",
+          "body": "Tracked insertions and deletions appear in place, and AI-proposed edits arrive as tracked changes you accept or reject in the document.",
           "title": "Track changes"
         },
         "3": {
@@ -440,7 +440,7 @@
           "question": "Does the document stay attached to its matter while I edit?"
         },
         "1": {
-          "answer": "Yes. Tracked insertions and deletions render in place, the way Word shows them. Edits proposed by stella's AI arrive the same way, so a redline is reviewed and accepted or rejected before it becomes part of the document.",
+          "answer": "Yes. Tracked insertions and deletions appear in place, the way Word shows them. Edits proposed by stella's AI arrive the same way, so a redline is reviewed and accepted or rejected before it becomes part of the document.",
           "question": "Does the editor keep track changes?"
         },
         "2": {
@@ -456,12 +456,12 @@
           "question": "Can I open the same document in Microsoft Word?"
         },
         "5": {
-          "answer": "Yes. The document is part of its matter's context, so matter-aware tools can read it and propose edits as tracked changes in the same document.",
+          "answer": "Yes. The document is part of its matter, so the AI agent can read it and propose edits as tracked changes in the same document.",
           "question": "Can stella's AI work on the document I am editing?"
         }
       },
       "metaDescription": "Edit a matter's Word documents inside stella: track changes reviewed in place, a revision in the version history for every save, and a bridge to local Word.",
-      "metaTitle": "Editing Word Documents in Your Legal Workspace | stella",
+      "metaTitle": "Edit Word documents in your legal workspace | stella",
       "quickAnswer": {
         "answer": "Yes. Open a .docx file from a matter and edit it in the browser. stella keeps the document in its original Word format and records saved revisions in the same document's version history.",
         "question": "Can I edit Word documents in stella?"
@@ -482,7 +482,7 @@
             "0": "Move between the document and its matter without uploading copies",
             "1": "Keep document properties and revisions with the file",
             "2": "Open the same document through the desktop bridge when needed",
-            "3": "Use the document as context for matter-aware tools"
+            "3": "Use the document as context for the AI agent"
           },
           "heading": "Connected to the rest of the matter"
         }
@@ -497,7 +497,7 @@
           "body": "Chat across matters, files, and sources with approvals and citations."
         },
         "2": {
-          "body": "Turn a document set into a matter-scoped review table."
+          "body": "Turn a document set into a review table in the matter."
         },
         "3": {
           "body": "stella in machine-readable form for AI search engines."
@@ -521,7 +521,7 @@
           "title": "Follow citations"
         },
         "4": {
-          "body": "Browse and filter case law and registries scoped to the jurisdiction you work in.",
+          "body": "Browse and filter case law and registries by the jurisdiction you work in.",
           "title": "By jurisdiction"
         },
         "5": {
@@ -605,7 +605,7 @@
         },
         "2": {
           "body": "Reviews live inside a matter alongside the documents, contacts, and chat they relate to.",
-          "title": "Matter-scoped"
+          "title": "Part of the matter"
         },
         "3": {
           "body": "Treat answers like data: sort by any column, filter to the rows that need attention.",
@@ -629,7 +629,7 @@
           "question": "What kinds of questions can a column ask?"
         },
         "1": {
-          "answer": "From the documents in your matter. AI features are bring-your-own-key, so extraction runs through the AI provider you configure, and every answer links back to the passage it was drawn from.",
+          "answer": "From the documents in your matter. AI features use your own provider keys, so extraction runs through the AI provider you choose, and every answer links back to the passage it was drawn from.",
           "question": "Where do the answers come from?"
         },
         "2": {
@@ -662,7 +662,7 @@
         },
         "2": {
           "bullets": {
-            "0": "Reviews are scoped to a matter, next to its files and chat",
+            "0": "Reviews live in the matter, next to its files and chat",
             "1": "Hand a review to the AI agent for follow-up questions",
             "2": "Export the table or keep refining it in place"
           },
@@ -676,7 +676,7 @@
           "body": "Matters, documents, and Word editing in one place."
         },
         "1": {
-          "body": "Turn a document set into a matter-scoped review table."
+          "body": "Turn a document set into a review table in the matter."
         },
         "2": {
           "body": "Chat across matters, files, and sources with citations."
@@ -707,7 +707,7 @@
           "title": "Edit in place"
         },
         "5": {
-          "body": "Produce a draft into a matter and keep editing it alongside the rest of the work.",
+          "body": "The draft lands in the matter, ready to edit alongside the rest of the work.",
           "title": "Into a matter"
         }
       },
@@ -728,10 +728,10 @@
           "question": "Where does the assembled document go?"
         }
       },
-      "metaDescription": "Define a template with fields and conditional clauses, then fill it by hand or let stella draft it from a matter's data. Produce a document into the matter.",
+      "metaDescription": "Define a template with fields and conditional clauses, then fill it by hand or let stella draft it from a matter's data. The draft lands in the matter.",
       "metaTitle": "Legal document templates with AI drafting | stella",
       "quickAnswer": {
-        "answer": "A template is a document with fields and clauses you can include conditionally. You fill the fields in by hand or let stella draft them from a matter's data; the conditional clauses resolve, and you get a document to keep working on in the matter. Templates and clauses are reusable, so repeat documents start from a known-good base.",
+        "answer": "A template is a document with fields and clauses you can include conditionally. You fill the fields in by hand or let stella draft them from a matter's data; the right clauses are included, and you get a document to keep working on in the matter. Templates and clauses are reusable, so repeat documents start from a known-good base.",
         "question": "How do templates work in stella?"
       },
       "sections": {
@@ -747,17 +747,17 @@
           "bullets": {
             "0": "Prefill fields from a document already stored in the matter",
             "1": "Review and adjust every value before producing the draft",
-            "2": "Conditional clauses still resolve from the values you keep"
+            "2": "Conditional clauses still follow the values you keep"
           },
           "heading": "Fill it from the matter's data"
         },
         "2": {
           "bullets": {
             "0": "Author and adjust templates in the editor",
-            "1": "Produce the draft into a matter",
+            "1": "Assemble the draft directly in the matter",
             "2": "Keep editing the result alongside the matter's files"
           },
-          "heading": "Edit and produce in place"
+          "heading": "Edit and assemble in place"
         }
       }
     },
@@ -773,7 +773,7 @@
           "body": "Chat across matters, files, and connected tools with approvals and source previews."
         },
         "1": {
-          "body": "Turn a document set into a matter-scoped table you can sort, filter, and trace."
+          "body": "Turn a document set into a table you can sort, filter, and trace back to the source."
         },
         "2": {
           "body": "Reach the same matters, documents, and case law from the CLI and MCP-compatible tools."
@@ -813,7 +813,7 @@
       },
       "faqs": {
         "0": {
-          "answer": "Yes. The web app supports Word .docx editing and review. For local Office editing, the desktop app acts as a bridge so you can open a document from stella and edit it on your machine.",
+          "answer": "Yes. The web app supports Word .docx editing and review. For local Office editing, the desktop app acts as a bridge so you can open a document from stella and edit it on your computer.",
           "question": "Can I edit Word documents in stella?"
         },
         "1": {
@@ -860,7 +860,7 @@
     "bringWorkspaceToFront": "Bring stella workspace to front",
     "controlBody": "stella is <gh>open-source</gh> legal software you can self-host: inspect the code, run it your way, and export everything in standard formats.",
     "controlTitle": "Keep control of your technology.",
-    "dataBody": "Case law and company registries, loaded straight into the matter in every jurisdiction you work in. Anonymization keeps identifying details away from the AI.",
+    "dataBody": "Case law and company registries from every jurisdiction you work in, loaded straight into the matter. Anonymization keeps identifying details away from the AI.",
     "dataEyebrow": "Legal data",
     "dataMainAlt": "An official court decision open in stella",
     "dataTitle": "Bring the law and the data with you.",
@@ -872,21 +872,21 @@
     "exploreTemplates": "Explore Templates",
     "exploreWorkspace": "Explore Workspace",
     "eyebrow": "A connected workspace",
-    "intro": "Source material, review, and finalized documents stay in the matter and build on each other. You can work on the matter together with the AI, and every step it takes can be verified.",
+    "intro": "Source material, review, and final documents stay in the matter and build on each other. Work on the matter with the AI agent, and verify every step it takes.",
     "openEditor": "Open Editor",
     "proofByokBody": "Use your own provider keys for AI features.",
     "proofByokTitle": "Bring your own models",
     "proofOpenSourceBody": "Inspect the code and keep a portable system.",
     "proofOpenSourceTitle": "Open source",
     "proofPermissionsBody": "Every action stays within the user's and the workspace's permissions.",
-    "proofPermissionsTitle": "Permission-aware",
+    "proofPermissionsTitle": "Respects permissions",
     "proofSelfHostBody": "Run stella on infrastructure you control.",
     "proofSelfHostTitle": "Self-hostable",
     "selfHostGuide": "Read self-hosting guide",
     "sourceOnGitHub": "Source on GitHub",
     "title": "One matter. Every part of the work.",
     "velocityAll": "Full changelog",
-    "velocityTitle": "What shipped lately.",
+    "velocityTitle": "What's new in stella.",
     "workspaceBody": "Documents, deadlines, structured review, and drafting stay together, searchable across every matter.",
     "workspaceEyebrow": "Workspace",
     "workspaceTitle": "Run the whole matter in one place."

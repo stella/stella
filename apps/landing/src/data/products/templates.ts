@@ -9,10 +9,10 @@ export const templates: Product = {
   eyebrow: "Templates",
   title: "Build reusable templates, and let AI fill them in.",
   summary:
-    "Define a template once with fields and conditional clauses, then fill it in by hand or let stella draft it from a matter's data. Produce a document into the matter and keep editing it.",
+    "Define a template once with fields and conditional clauses, then fill it in by hand or let stella draft it from a matter's data. The finished document lands in the matter, ready to keep editing.",
   metaTitle: "Legal document templates with AI drafting | stella",
   metaDescription:
-    "Define a template with fields and conditional clauses, then fill it by hand or let stella draft it from a matter's data. Produce a document into the matter.",
+    "Define a template with fields and conditional clauses, then fill it by hand or let stella draft it from a matter's data. The draft lands in the matter.",
   hero: {
     type: "story",
     sceneId: "templates",
@@ -24,7 +24,7 @@ export const templates: Product = {
   quickAnswer: {
     question: "How do templates work in stella?",
     answer:
-      "A template is a document with fields and clauses you can include conditionally. You fill the fields in by hand or let stella draft them from a matter's data; the conditional clauses resolve, and you get a document to keep working on in the matter. Templates and clauses are reusable, so repeat documents start from a known-good base.",
+      "A template is a document with fields and clauses you can include conditionally. You fill the fields in by hand or let stella draft them from a matter's data; the right clauses are included, and you get a document to keep working on in the matter. Templates and clauses are reusable, so repeat documents start from a known-good base.",
   },
   capabilities: [
     {
@@ -49,7 +49,7 @@ export const templates: Product = {
     },
     {
       title: "Into a matter",
-      body: "Produce a draft into a matter and keep editing it alongside the rest of the work.",
+      body: "The draft lands in the matter, ready to edit alongside the rest of the work.",
     },
   ],
   sections: [
@@ -71,7 +71,7 @@ export const templates: Product = {
       bullets: [
         "Prefill fields from a document already stored in the matter",
         "Review and adjust every value before producing the draft",
-        "Conditional clauses still resolve from the values you keep",
+        "Conditional clauses still follow the values you keep",
       ],
       media: {
         type: "story",
@@ -81,10 +81,10 @@ export const templates: Product = {
       frameVariant: "wash",
     },
     {
-      heading: "Edit and produce in place",
+      heading: "Edit and assemble in place",
       bullets: [
         "Author and adjust templates in the editor",
-        "Produce the draft into a matter",
+        "Assemble the draft directly in the matter",
         "Keep editing the result alongside the matter's files",
       ],
       media: {
@@ -121,7 +121,7 @@ export const templates: Product = {
     {
       to: "product",
       slug: "tabular-review",
-      body: "Turn a document set into a matter-scoped review table.",
+      body: "Turn a document set into a review table in the matter.",
     },
     {
       to: "product",
