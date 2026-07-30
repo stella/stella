@@ -43,7 +43,7 @@
     "agent": "Agente de IA",
     "anonymization": "Anonimización",
     "clarity": "Claridad en cada asunto.",
-    "connect": "Conectar",
+    "connect": "Contacto",
     "contact": "Contáctanos",
     "documentation": "Documentación",
     "editor": "Editor",
@@ -73,7 +73,7 @@
   "mcpProof": {
     "contextBody": "Lleva los asuntos aprobados y los datos jurídicos a Claude o a cualquier cliente compatible con MCP.",
     "contextTitle": "Contexto del asunto.",
-    "scopeBody": "Autentícate con OAuth; cada llamada sigue limitada por los alcances concedidos y los permisos del espacio de trabajo.",
+    "scopeBody": "Autentícate con OAuth; cada llamada sigue limitada por los ámbitos concedidos y los permisos del espacio de trabajo.",
     "scopeTitle": "El acceso siempre acotado.",
     "subtitle": "Lleva el contexto actualizado del asunto a las herramientas con las que trabajas.",
     "title": "Tu espacio de trabajo ya habla MCP.",
@@ -104,10 +104,10 @@
       "agent": {
         "blurb": "Conversa con tus asuntos, documentos, registros y herramientas conectadas en un solo lugar. El agente de IA actúa con aprobaciones y vistas previas de la fuente, fundamenta sus respuestas en citas y se amplía con habilidades y conectores externos.",
         "eyebrow": "Agente de IA",
-        "title": "Un agente de IA que trabaja en tus asuntos, archivos y herramientas."
+        "title": "Un agente de IA que trabaja con tus asuntos, archivos y herramientas."
       },
       "anonymization": {
-        "blurb": "Elimina nombres, entidades y datos identificativos antes de que el material llegue a la IA, directamente desde el chat y la revisión de documentos, con un resultado redactado que puedes comprobar antes de que nada siga adelante.",
+        "blurb": "Elimina nombres, entidades y datos identificativos antes de que el material llegue a la IA, directamente desde el chat y la revisión de documentos, con un resultado anonimizado que puedes comprobar antes de continuar.",
         "eyebrow": "Anonimización",
         "title": "Prepara el material para la IA sin exponer datos identificativos."
       },
@@ -122,17 +122,17 @@
         "title": "Edita documentos de Word en el navegador, sin salir del asunto."
       },
       "public-data": {
-        "blurb": "Jurisprudencia y registros mercantiles de fuentes públicas oficiales, recopilados por Legal Atlas en stella conservando su estructura. Lee una resolución, consulta una empresa, sigue las citas y remite a cualquiera de ellos desde un asunto o pásalo al agente de IA.",
+        "blurb": "Jurisprudencia y registros mercantiles de fuentes públicas oficiales, recopilados por el Legal Atlas de stella conservando su estructura. Lee una resolución, consulta una empresa, sigue las citas y remite a cualquiera de ellos desde un asunto o pásalo al agente de IA.",
         "eyebrow": "Datos públicos",
         "title": "Datos jurídicos, listos para llevarlos a un asunto."
       },
       "tabular-review": {
-        "blurb": "Haz preguntas a todo un conjunto de documentos y recibe respuestas estructuradas en una tabla dentro del asunto: ordenable, filtrable y rastreable hasta el texto de origen. Pensada para due diligence, discovery e investigación.",
+        "blurb": "Haz preguntas a todo un conjunto de documentos y recibe respuestas estructuradas en una tabla dentro del asunto: ordenable, filtrable y rastreable hasta el texto de origen. Pensada para la due diligence, los litigios y la investigación.",
         "eyebrow": "Revisión tabular",
         "title": "Convierte una pila de documentos en una tabla que puedes revisar."
       },
       "templates": {
-        "blurb": "Define una plantilla una vez, con campos y cláusulas condicionales, y luego rellénala a mano o deja que stella redacte un borrador con los datos del asunto. Genera un documento dentro del asunto y sigue editándolo.",
+        "blurb": "Define una plantilla una vez, con campos y cláusulas condicionales, y luego rellénala a mano o deja que stella redacte un borrador con los datos del asunto. El documento terminado queda en el asunto, listo para seguir editándolo.",
         "eyebrow": "Plantillas",
         "title": "Crea plantillas reutilizables y deja que la IA las rellene."
       },
@@ -148,7 +148,7 @@
     "agent": {
       "adjacent": {
         "0": {
-          "body": "Convierte un conjunto de documentos en una tabla dentro del asunto que puedes ordenar, filtrar y rastrear."
+          "body": "Convierte un conjunto de documentos en una tabla que puedes ordenar, filtrar y rastrear hasta la fuente."
         },
         "1": {
           "body": "Asuntos, documentos, edición .docx, revisión y chat en un solo espacio de trabajo."
@@ -162,7 +162,7 @@
       },
       "capabilities": {
         "0": {
-          "body": "Pregunta sobre los asuntos, documentos y contactos que ya tienes en stella. Una sola conversación alcanza todos los asuntos a los que tienes acceso, con los mismos permisos que rigen el resto de tu espacio de trabajo.",
+          "body": "Pregunta sobre los asuntos, documentos y contactos que ya tienes en stella. Una sola conversación abarca todos los asuntos a los que tienes acceso, con los mismos permisos que rigen el resto de tu espacio de trabajo.",
           "title": "Trabaja en todos tus asuntos"
         },
         "1": {
@@ -199,11 +199,11 @@
           "question": "¿Cómo añado nuevas capacidades?"
         },
         "2": {
-          "answer": "De tus asuntos, archivos, registros y herramientas conectadas. Las funciones de IA usan tus propias claves, y las respuestas se respaldan con citas a la fuente.",
+          "answer": "De tus asuntos, archivos, registros y herramientas conectadas. Las funciones de IA usan tus propias claves de proveedor, y las respuestas se respaldan con citas a la fuente.",
           "question": "¿De dónde salen sus respuestas?"
         }
       },
-      "metaDescription": "Conversa con tus asuntos, documentos, registros y herramientas conectadas. El agente de IA actúa con aprobaciones, respalda las respuestas con citas.",
+      "metaDescription": "Conversa con tus asuntos, documentos, registros y herramientas conectadas. El agente de IA actúa con aprobaciones y respalda sus respuestas con citas.",
       "metaTitle": "Agente de IA: asistente jurídico para tus asuntos | stella",
       "quickAnswer": {
         "answer": "El agente de IA conversa con tus asuntos, archivos, registros mercantiles y herramientas conectadas. Pide aprobación antes de actuar, muestra una vista previa de lo que lee y respalda sus respuestas con citas. Puedes ampliarlo con habilidades reutilizables y conectores externos compatibles con MCP.",
@@ -229,7 +229,7 @@
         "2": {
           "bullets": {
             "0": "Las habilidades son instrucciones y herramientas reutilizables entre asuntos",
-            "1": "Los conectores externos son compatibles con MCP: el agente de IA alcanza más herramientas",
+            "1": "Los conectores externos son compatibles con MCP: el agente de IA llega a más herramientas",
             "2": "Añade capacidades sin cambiar cómo funciona el chat"
           },
           "heading": "Amplíalo con habilidades y conectores"
@@ -245,7 +245,7 @@
           "body": "Asuntos, documentos, edición .docx, revisión y chat en un solo espacio de trabajo."
         },
         "2": {
-          "body": "Convierte un conjunto de documentos en una tabla dentro del asunto que puedes ordenar, filtrar y rastrear."
+          "body": "Convierte un conjunto de documentos en una tabla que puedes ordenar, filtrar y rastrear hasta la fuente."
         },
         "3": {
           "body": "stella en formato legible por máquinas, para los buscadores de IA."
@@ -254,7 +254,7 @@
       "capabilities": {
         "0": {
           "body": "Elimina nombres, entidades y datos identificativos antes de que el material llegue a un paso con IA.",
-          "title": "Ningún dato identificativo pasa"
+          "title": "Deja fuera los datos identificativos"
         },
         "1": {
           "body": "Se ejecuta directamente en el chat y en la revisión de documentos, no en una herramienta aparte.",
@@ -265,7 +265,7 @@
           "title": "Con tus propios términos"
         },
         "3": {
-          "body": "Muestra el documento redactado en contexto, para que confirmes qué sale del asunto.",
+          "body": "Muestra el documento anonimizado en contexto, para que confirmes qué sale del asunto.",
           "title": "Un resultado que puedes comprobar"
         }
       },
@@ -278,29 +278,29 @@
           "question": "¿La anonimización ya está disponible?"
         },
         "1": {
-          "answer": "Para preparar material destinado a flujos con IA sin exponer nombres, entidades ni datos identificativos, manteniendo el resultado redactado disponible para su revisión.",
+          "answer": "Para preparar material destinado a flujos con IA sin exponer nombres, entidades ni datos identificativos, manteniendo el resultado anonimizado disponible para que lo revises.",
           "question": "¿Para qué sirve?"
         }
       },
       "metaDescription": "Elimina nombres, entidades y datos identificativos antes de que el material llegue a la IA, desde el chat y la revisión, con un resultado que compruebas.",
       "metaTitle": "Anonimización de documentos para la IA jurídica | stella",
       "quickAnswer": {
-        "answer": "Elimina nombres, entidades y datos identificativos antes de que el material entre en un flujo con IA, y te muestra el resultado redactado para que confirmes qué sale del asunto. Está integrada directamente en el chat y en la revisión de documentos.",
+        "answer": "Elimina nombres, entidades y datos identificativos antes de que el material entre en un flujo con IA, y te muestra el resultado anonimizado para que confirmes qué sale del asunto. Está integrada directamente en el chat y en la revisión de documentos.",
         "question": "¿Qué es la anonimización en stella?"
       },
       "sections": {
         "0": {
           "bullets": {
             "0": "Nombres, entidades y datos identificativos quedan fuera de los pasos con IA",
-            "1": "Pensada para flujos jurídicos, no para un enmascarado genérico",
-            "2": "Deja un documento redactado que revisas antes del siguiente paso"
+            "1": "Pensada para flujos jurídicos con IA, no para un enmascaramiento genérico de documentos",
+            "2": "Deja un documento anonimizado que revisas antes del siguiente paso"
           },
           "heading": "Prepara el material antes de que llegue a la IA"
         },
         "1": {
           "bullets": {
             "0": "Disponible desde el chat y la revisión de documentos",
-            "1": "Sin copiar y pegar en una herramienta de redacción externa",
+            "1": "Sin copiar y pegar en otra herramienta para tachar datos",
             "2": "Construida sobre el motor de anonimización de código abierto de stella"
           },
           "heading": "Parte del espacio de trabajo, no una herramienta aparte"
@@ -440,7 +440,7 @@
           "question": "¿El documento sigue vinculado a su asunto mientras lo edito?"
         },
         "1": {
-          "answer": "Sí. Las inserciones y eliminaciones marcadas se muestran en su sitio, como en Word. Las ediciones que propone la IA de stella llegan igual, así que revisas el redline y lo aceptas o lo rechazas antes de que forme parte del documento.",
+          "answer": "Sí. Las inserciones y eliminaciones marcadas se muestran en su sitio, como en Word. Las ediciones que propone la IA de stella llegan igual, así que revisas cada cambio y lo aceptas o lo rechazas antes de que forme parte del documento.",
           "question": "¿El editor mantiene el control de cambios?"
         },
         "2": {
@@ -456,7 +456,7 @@
           "question": "¿Puedo abrir el mismo documento en Microsoft Word?"
         },
         "5": {
-          "answer": "Sí. El documento forma parte del contexto de su asunto, así que las herramientas que conocen el asunto pueden leerlo y proponer ediciones como cambios marcados en el mismo documento.",
+          "answer": "Sí. El documento forma parte de su asunto, así que el agente de IA puede leerlo y proponer ediciones como cambios marcados en el mismo documento.",
           "question": "¿Puede la IA de stella trabajar sobre el documento que estoy editando?"
         }
       },
@@ -482,7 +482,7 @@
             "0": "Pasa del documento a su asunto sin subir copias",
             "1": "Mantén las propiedades y las revisiones junto al archivo",
             "2": "Abre el mismo documento por el puente de escritorio cuando haga falta",
-            "3": "Usa el documento como contexto para las herramientas del asunto"
+            "3": "Usa el documento como contexto para el agente de IA"
           },
           "heading": "Conectado con el resto del asunto"
         }
@@ -526,7 +526,7 @@
         },
         "5": {
           "body": "Cita cualquier fuente desde un asunto para que las respuestas del agente de IA sigan siendo rastreables.",
-          "title": "Base para la IA"
+          "title": "Una base sólida para la IA"
         }
       },
       "cta": {
@@ -534,7 +534,7 @@
       },
       "faqs": {
         "0": {
-          "answer": "La jurisprudencia procede de fuentes jurídicas públicas oficiales, recopilada por Legal Atlas en stella conservando su estructura. Los datos de empresas vienen directamente de los registros mercantiles y de sociedades nacionales, no de copias de terceros.",
+          "answer": "La jurisprudencia procede de fuentes jurídicas públicas oficiales, recopilada por el Legal Atlas de stella conservando su estructura. Los datos de empresas vienen directamente de los registros mercantiles y de sociedades nacionales, no de copias de terceros.",
           "question": "¿De dónde vienen los datos?"
         },
         "1": {
@@ -616,7 +616,7 @@
           "title": "Pensada para el volumen"
         },
         "5": {
-          "body": "Llévate la tabla en formatos estándar: sin dependencia sobre tu propio trabajo.",
+          "body": "Llévate la tabla en formatos estándar: tu trabajo no queda atado a ninguna herramienta.",
           "title": "Exporta a donde quieras"
         }
       },
@@ -629,28 +629,28 @@
           "question": "¿Qué tipo de preguntas puede hacer una columna?"
         },
         "1": {
-          "answer": "De los documentos de tu asunto. Las funciones de IA usan tus propias claves, así que la extracción pasa por el proveedor de IA que configures y cada respuesta enlaza con el pasaje del que salió.",
+          "answer": "De los documentos de tu asunto. Las funciones de IA usan tus propias claves, así que la extracción pasa por el proveedor de IA que elijas y cada respuesta enlaza con el pasaje del que salió.",
           "question": "¿De dónde salen las respuestas?"
         },
         "2": {
-          "answer": "Sí. El resultado de la revisión tabular se exporta en formatos estándar, así que tu trabajo sigue siendo portable, sin dependencia.",
+          "answer": "Sí. El resultado de la revisión tabular se exporta en formatos estándar, así que tu trabajo sigue siendo portable, sin ataduras.",
           "question": "¿Puedo exportar la revisión?"
         }
       },
-      "metaDescription": "Haz preguntas a todo un conjunto de documentos y recibe respuestas estructuradas en una tabla ordenable y rastreable hasta la fuente. Para due diligence.",
+      "metaDescription": "Haz preguntas a todo un conjunto de documentos y recibe respuestas estructuradas en una tabla ordenable y rastreable hasta la fuente. Para la due diligence.",
       "metaTitle": "Revisión tabular de contratos con IA | stella",
       "quickAnswer": {
-        "answer": "Apuntas la revisión tabular a un conjunto de documentos de un asunto y defines las columnas como preguntas: «ley aplicable», «plazo de preaviso» o «cláusula de cambio de control», por ejemplo. stella extrae una respuesta por documento en una tabla que puedes ordenar, filtrar y exportar, con cada celda enlazada al pasaje del que procede.",
+        "answer": "Aplicas la revisión tabular a un conjunto de documentos de un asunto y defines las columnas como preguntas: «ley aplicable», «plazo de preaviso» o «cláusula de cambio de control», por ejemplo. stella extrae una respuesta por documento en una tabla que puedes ordenar, filtrar y exportar, con cada celda enlazada al pasaje del que procede.",
         "question": "¿Cómo funciona la revisión tabular?"
       },
       "sections": {
         "0": {
           "bullets": {
             "0": "Añade una columna escribiendo la pregunta que le harías a un júnior",
-            "1": "Reutiliza conjuntos de columnas entre asuntos como guiones de revisión",
+            "1": "Reutiliza conjuntos de columnas entre asuntos como protocolos de revisión",
             "2": "Mezcla extracción (fechas, partes, importes) con preguntas de criterio"
           },
-          "heading": "Define las preguntas una vez, respóndelas en todas partes"
+          "heading": "Haz las preguntas una vez, para todos los documentos"
         },
         "1": {
           "bullets": {
@@ -662,7 +662,7 @@
         },
         "2": {
           "bullets": {
-            "0": "Las revisiones se ciñen a un asunto, junto a sus archivos y su chat",
+            "0": "Las revisiones viven en el asunto, junto a sus archivos y su chat",
             "1": "Pasa una revisión al agente de IA para seguir preguntando",
             "2": "Exporta la tabla o sigue afinándola donde está"
           },
@@ -691,7 +691,7 @@
           "title": "Plantillas reutilizables"
         },
         "1": {
-          "body": "Define los valores que necesita un documento y complétalos al montarlo.",
+          "body": "Define los valores que necesita un documento y complétalos al generarlo.",
           "title": "Campos y marcadores"
         },
         "2": {
@@ -699,7 +699,7 @@
           "title": "Cláusulas condicionales"
         },
         "3": {
-          "body": "Deja que stella redacte un documento completo con los datos del asunto y luego perfíllalo.",
+          "body": "Deja que stella redacte el documento con los datos del asunto y luego afínalo.",
           "title": "Rellena con IA"
         },
         "4": {
@@ -707,7 +707,7 @@
           "title": "Edita donde están"
         },
         "5": {
-          "body": "Genera un borrador dentro de un asunto y sigue editándolo junto al resto del trabajo.",
+          "body": "El borrador queda en el asunto, listo para seguir editándolo junto al resto del trabajo.",
           "title": "Directo al asunto"
         }
       },
@@ -716,28 +716,28 @@
       },
       "faqs": {
         "0": {
-          "answer": "Sí. Las plantillas se crean y se ajustan en el editor, y luego montas documentos a partir de ellas.",
+          "answer": "Sí. Las plantillas se crean y se ajustan en el editor, y luego generas documentos a partir de ellas.",
           "question": "¿Puedo editar una plantilla?"
         },
         "1": {
-          "answer": "Una pieza reutilizable de un documento. Una cláusula puede usarse en varias plantillas y añadirse de forma condicional según los valores que indiques al montar el documento.",
+          "answer": "Una pieza reutilizable de un documento. Una cláusula puede usarse en varias plantillas y añadirse de forma condicional según los valores que indiques al generar el documento.",
           "question": "¿Qué es una cláusula?"
         },
         "2": {
           "answer": "A un asunto, como borrador que puedes seguir editando junto a los demás documentos del asunto.",
-          "question": "¿Dónde va el documento montado?"
+          "question": "¿Dónde va el documento generado?"
         }
       },
-      "metaDescription": "Define una plantilla con campos y cláusulas condicionales y rellénala a mano o deja que stella la redacte con los datos del asunto. Genera el documento allí.",
+      "metaDescription": "Define una plantilla con campos y cláusulas condicionales y rellénala a mano o deja que stella la redacte con los datos del asunto; el borrador queda allí.",
       "metaTitle": "Plantillas y generación de contratos con IA | stella",
       "quickAnswer": {
-        "answer": "Una plantilla es un documento con campos y cláusulas que puedes incluir de forma condicional. Rellenas los campos a mano o dejas que stella los redacte con los datos del asunto; las cláusulas condicionales se resuelven y obtienes un documento con el que seguir trabajando dentro del asunto. Plantillas y cláusulas son reutilizables, así que los documentos repetidos parten de una base probada.",
+        "answer": "Una plantilla es un documento con campos y cláusulas que puedes incluir de forma condicional. Rellenas los campos a mano o dejas que stella los redacte con los datos del asunto; se incluyen las cláusulas adecuadas y obtienes un documento con el que seguir trabajando dentro del asunto. Plantillas y cláusulas son reutilizables, así que los documentos repetidos parten de una base probada.",
         "question": "¿Cómo funcionan las plantillas en stella?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Monta un documento desde una plantilla en vez de empezar en blanco",
+            "0": "Genera un documento desde una plantilla en vez de empezar en blanco",
             "1": "Reutiliza las mismas cláusulas en varias plantillas",
             "2": "Mantén coherentes los documentos que se repiten"
           },
@@ -747,17 +747,17 @@
           "bullets": {
             "0": "Precarga los campos desde un documento ya guardado en el asunto",
             "1": "Revisa y ajusta cada valor antes de generar el borrador",
-            "2": "Las cláusulas condicionales se resuelven con los valores que dejes"
+            "2": "Las cláusulas condicionales siguen los valores que conservas"
           },
           "heading": "Rellénala con los datos del asunto"
         },
         "2": {
           "bullets": {
             "0": "Crea y ajusta las plantillas en el editor",
-            "1": "Genera el borrador dentro de un asunto",
+            "1": "Genera el borrador directamente en el asunto",
             "2": "Sigue editando el resultado junto a los archivos del asunto"
           },
-          "heading": "Edita y genera sin salir de ahí"
+          "heading": "Edita y genera en el mismo sitio"
         }
       }
     },
@@ -773,10 +773,10 @@
           "body": "Conversa con tus asuntos, archivos y herramientas conectadas, con aprobaciones y vistas previas de la fuente."
         },
         "1": {
-          "body": "Convierte un conjunto de documentos en una tabla dentro del asunto que puedes ordenar, filtrar y rastrear."
+          "body": "Convierte un conjunto de documentos en una tabla que puedes ordenar, filtrar y rastrear hasta la fuente."
         },
         "2": {
-          "body": "Alcanza los mismos asuntos, documentos y jurisprudencia desde la CLI y las herramientas compatibles con MCP."
+          "body": "Accede a los mismos asuntos, documentos y jurisprudencia desde la CLI y las herramientas compatibles con MCP."
         },
         "3": {
           "body": "stella en formato legible por máquinas, para los buscadores de IA."
@@ -796,8 +796,8 @@
           "title": "Revisión e investigación"
         },
         "3": {
-          "body": "Reúne el agente de IA y las herramientas de conocimiento en el mismo espacio de trabajo que tus archivos.",
-          "title": "Chat y herramientas de conocimiento"
+          "body": "Reúne el agente de IA y la base de conocimiento en el mismo espacio de trabajo que tus archivos.",
+          "title": "Chat y base de conocimiento"
         },
         "4": {
           "body": "Una aplicación de escritorio actúa como puente local para editar documentos de Office desde stella.",
@@ -822,7 +822,7 @@
         },
         "2": {
           "answer": "Sí. La CLI y el servidor MCP de stella exponen los mismos asuntos, documentos y jurisprudencia a las herramientas conectadas, bajo los mismos permisos. Consulta CLI & MCP para más detalles.",
-          "question": "¿Pueden otras herramientas llegar al espacio de trabajo?"
+          "question": "¿Pueden otras herramientas acceder al espacio de trabajo?"
         }
       },
       "metaDescription": "Asuntos, documentos, edición .docx, revisión y chat en un espacio de trabajo jurídico. Todo sigue en contexto, de los documentos a la respuesta.",
@@ -843,7 +843,7 @@
         "1": {
           "bullets": {
             "0": "Abre y edita documentos .docx de Word directamente en el espacio de trabajo",
-            "1": "El redline sigue siendo un archivo de Word: sin conversión ni copias",
+            "1": "El documento con cambios marcados sigue siendo un archivo de Word: sin conversión ni copias",
             "2": "Usa el puente de escritorio cuando un documento necesite Microsoft Word"
           },
           "heading": "Documentos de Word, editados donde los necesitas"
@@ -872,7 +872,7 @@
     "exploreTemplates": "Explorar las plantillas",
     "exploreWorkspace": "Explorar el espacio de trabajo",
     "eyebrow": "Un espacio de trabajo conectado",
-    "intro": "Los materiales, la revisión y los documentos finalizados se quedan en el asunto y encadenan el trabajo. Puedes trabajar en el asunto junto con la IA, y cada paso que da se puede verificar.",
+    "intro": "Los materiales, la revisión y los documentos finalizados se quedan en el asunto y se apoyan unos en otros. Trabaja en el asunto con el agente de IA y verifica cada paso que da.",
     "openEditor": "Abrir el editor",
     "proofByokBody": "Usa tus propias claves de proveedor para las funciones de IA.",
     "proofByokTitle": "Trae tus propios modelos",
@@ -886,7 +886,7 @@
     "sourceOnGitHub": "Código fuente en GitHub",
     "title": "Un asunto. De los documentos a la respuesta.",
     "velocityAll": "Todas las novedades",
-    "velocityTitle": "Lo último que hemos lanzado.",
+    "velocityTitle": "Lo nuevo de stella.",
     "workspaceBody": "Documentos, plazos, revisión estructurada y redacción permanecen juntos y puedes buscarlos en todos los asuntos.",
     "workspaceEyebrow": "Espacio de trabajo",
     "workspaceTitle": "Gestiona todo el asunto en un solo lugar."

@@ -117,7 +117,7 @@
         "title": "Ein Arbeitsbereich, aus jedem Werkzeug."
       },
       "editor": {
-        "blurb": "Öffnen und bearbeiten Sie Word-.docx-Dateien direkt im Browser: keine Installation, keine Umwandlung in ein anderes Format. Der Online-DOCX-Editor in stella erhält die ursprüngliche Formatierung und die Änderungsverfolgung, hält die Datei mit ihrer Akte verbunden und schreibt jede Speicherung in die Versionshistorie des Dokuments.",
+        "blurb": "Öffnen und bearbeiten Sie Word-.docx-Dateien direkt im Browser: keine Installation, keine Umwandlung in ein anderes Format. Der Online-DOCX-Editor in stella bewahrt die ursprüngliche Formatierung und die Änderungsverfolgung, hält die Datei mit ihrer Akte verbunden und schreibt jede Speicherung in die Versionshistorie des Dokuments.",
         "eyebrow": "Editor",
         "title": "Bearbeiten Sie Word-Dokumente im Browser, ohne die Akte zu verlassen."
       },
@@ -127,12 +127,12 @@
         "title": "Rechtsdaten, bereit für die Akte."
       },
       "tabular-review": {
-        "blurb": "Stellen Sie Fragen an einen ganzen Dokumentenbestand und erhalten Sie strukturierte Antworten als Tabelle im Rahmen der Akte: sortierbar, filterbar und bis zum Ausgangstext nachvollziehbar. Gebaut für Due Diligence, Discovery und Recherche.",
+        "blurb": "Stellen Sie Fragen an einen ganzen Dokumentenbestand und erhalten Sie strukturierte Antworten als Tabelle in der Akte: sortierbar, filterbar und bis zum Ausgangstext nachvollziehbar. Gebaut für Due Diligence, Vertragsanalyse und Recherche.",
         "eyebrow": "Tabellenprüfung",
         "title": "Machen Sie aus einem Dokumentenstapel eine prüfbare Tabelle."
       },
       "templates": {
-        "blurb": "Definieren Sie eine Vorlage einmal, mit Feldern und bedingten Klauseln, und füllen Sie sie dann von Hand aus oder lassen Sie stella daraus einen Entwurf aus den Daten der Akte erstellen. Erzeugen Sie ein Dokument in die Akte und bearbeiten Sie es weiter.",
+        "blurb": "Definieren Sie eine Vorlage einmal, mit Feldern und bedingten Klauseln, und füllen Sie sie dann von Hand aus oder lassen Sie stella einen Entwurf aus den Daten der Akte erstellen. Das fertige Dokument landet in der Akte und lässt sich direkt weiterbearbeiten.",
         "eyebrow": "Vorlagen",
         "title": "Bauen Sie wiederverwendbare Vorlagen und lassen Sie KI sie ausfüllen."
       },
@@ -148,7 +148,7 @@
     "agent": {
       "adjacent": {
         "0": {
-          "body": "Machen Sie aus einem Dokumentenbestand eine Tabelle im Rahmen der Akte, sortierbar, filterbar und nachvollziehbar."
+          "body": "Machen Sie aus einem Dokumentenbestand eine Tabelle, die Sie sortieren, filtern und bis zur Quelle zurückverfolgen."
         },
         "1": {
           "body": "Akten, Dokumente, .docx-Bearbeitung, Prüfung und Chat in einem Arbeitsbereich."
@@ -171,7 +171,7 @@
         },
         "2": {
           "body": "Greifen Sie auf Handelsregister und andere angebundene Quellen zu, ohne den Chat zu verlassen.",
-          "title": "Angebundene Werkzeuge"
+          "title": "Angebundene Tools"
         },
         "3": {
           "body": "Der KI-Agent fragt, bevor er handelt, damit Sie jeden Schritt in der Hand behalten.",
@@ -224,12 +224,12 @@
             "1": "Eine Quellvorschau zeigt zu jedem Schritt die Grundlage",
             "2": "Fundstellen öffnen das Quelldokument an der genauen Stelle"
           },
-          "heading": "Sie behalten die Hand darauf"
+          "heading": "Sie behalten die Kontrolle"
         },
         "2": {
           "bullets": {
-            "0": "Skills sind Anweisungen und Werkzeuge für jede Akte",
-            "1": "Externe Konnektoren sind MCP-kompatibel und öffnen weitere Tools",
+            "0": "Skills sind Anweisungen und Werkzeuge, die Sie über Akten hinweg wiederverwenden",
+            "1": "Externe Konnektoren sind MCP-kompatibel, sodass der KI-Agent weitere Tools erreicht",
             "2": "Neue Fähigkeiten, ohne den Chat umzubauen"
           },
           "heading": "Mehr Reichweite über Skills und Konnektoren"
@@ -245,7 +245,7 @@
           "body": "Akten, Dokumente, .docx-Bearbeitung, Prüfung und Chat in einem Arbeitsbereich."
         },
         "2": {
-          "body": "Machen Sie aus einem Dokumentenbestand eine Tabelle im Rahmen der Akte, sortierbar, filterbar und nachvollziehbar."
+          "body": "Machen Sie aus einem Dokumentenbestand eine Tabelle, die Sie sortieren, filtern und bis zur Quelle zurückverfolgen."
         },
         "3": {
           "body": "stella in maschinenlesbarer Form für KI-Suchmaschinen."
@@ -253,7 +253,7 @@
       },
       "capabilities": {
         "0": {
-          "body": "Entfernt Namen, Entitäten und identifizierende Angaben, bevor Material in einen KI-Schritt geht.",
+          "body": "Entfernt Namen, Entitäten und identifizierende Angaben, bevor Material an die KI geht.",
           "title": "Identifizierende Angaben bleiben draußen"
         },
         "1": {
@@ -278,7 +278,7 @@
           "question": "Ist die Anonymisierung schon verfügbar?"
         },
         "1": {
-          "answer": "Beim Aufbereiten von Material für KI-Workflows, ohne Namen, Entitäten oder identifizierende Angaben preiszugeben, und das anonymisierte Ergebnis bleibt zur Prüfung verfügbar.",
+          "answer": "Sie bereitet Material für KI-Workflows auf, ohne Namen, Entitäten oder identifizierende Angaben preiszugeben; das anonymisierte Ergebnis bleibt zur Prüfung erhalten.",
           "question": "Wobei hilft sie?"
         }
       },
@@ -291,7 +291,7 @@
       "sections": {
         "0": {
           "bullets": {
-            "0": "Namen, Entitäten und identifizierende Angaben bleiben aus KI-Schritten heraus",
+            "0": "Hält Namen, Entitäten und identifizierende Angaben aus KI-Schritten heraus",
             "1": "Für juristische KI-Workflows gebaut, nicht für generisches Maskieren",
             "2": "Vor dem nächsten Schritt liegt ein prüfbares anonymisiertes Dokument vor"
           },
@@ -301,9 +301,9 @@
           "bullets": {
             "0": "Aus dem Chat und der Dokumentenprüfung erreichbar",
             "1": "Kein Kopieren in ein externes Anonymisierungswerkzeug",
-            "2": "Basiert auf der eigenen Open-Source-Anonymisierungs-Engine von stella"
+            "2": "Basiert auf der eigenen Open-Source-Anonymisierung von stella"
           },
-          "heading": "Teil des Arbeitsbereichs, kein Extra-Werkzeug"
+          "heading": "Teil des Arbeitsbereichs, kein separates Werkzeug"
         }
       }
     },
@@ -345,7 +345,7 @@
         },
         "5": {
           "body": "Richten Sie CLI und MCP-Clients auf den stella-Server, den Ihre Organisation betreibt.",
-          "title": "Auch selbst gehostet"
+          "title": "Bereit für Self-Hosting"
         }
       },
       "cta": {
@@ -366,7 +366,7 @@
         }
       },
       "metaDescription": "Suchen, lesen und arbeiten Sie mit stella über die Kommandozeile oder jeden MCP-kompatiblen Client. Beide Oberflächen teilen Rechte und Daten.",
-      "metaTitle": "MCP-Server und CLI für Ihren Arbeitsbereich | stella",
+      "metaTitle": "MCP-Server und CLI für Ihre Kanzlei | stella",
       "quickAnswer": {
         "answer": "Zwei Oberflächen auf dieselben Capabilities von stella. Die CLI bildet die MCP-Tool-Registry als Befehle ab, und der MCP-Server lässt kompatible KI-Agenten und Werkzeuge mit Akten, Dokumenten, Vorlagen und öffentlichen Rechtsdaten arbeiten, unter denselben Zugriffsregeln.",
         "question": "Was sind die stella-CLI und der MCP-Server?"
@@ -456,7 +456,7 @@
           "question": "Kann ich dasselbe Dokument in Microsoft Word öffnen?"
         },
         "5": {
-          "answer": "Ja. Das Dokument gehört zum Kontext seiner Akte, sodass aktenbezogene Werkzeuge es lesen und Änderungen als nachverfolgte Änderungen im selben Dokument vorschlagen können.",
+          "answer": "Ja. Das Dokument gehört zu seiner Akte, sodass der KI-Agent es lesen und Änderungen als nachverfolgte Änderungen im selben Dokument vorschlagen kann.",
           "question": "Kann die KI in stella an dem Dokument arbeiten, das ich gerade bearbeite?"
         }
       },
@@ -482,7 +482,7 @@
             "0": "Zwischen Dokument und Akte wechseln, ohne Kopien hochzuladen",
             "1": "Dokumenteigenschaften und Versionen bleiben an der Datei",
             "2": "Bei Bedarf dasselbe Dokument über die Desktop-Brücke öffnen",
-            "3": "Das Dokument als Kontext für aktenbezogene Werkzeuge nutzen"
+            "3": "Das Dokument als Kontext für den KI-Agenten nutzen"
           },
           "heading": "Mit der ganzen Akte verbunden"
         }
@@ -497,7 +497,7 @@
           "body": "Chatten Sie über Akten, Dateien und Quellen hinweg, mit Freigaben und Fundstellen."
         },
         "2": {
-          "body": "Machen Sie aus einem Dokumentenbestand eine Prüftabelle im Rahmen der Akte."
+          "body": "Machen Sie aus einem Dokumentenbestand eine Prüftabelle in der Akte."
         },
         "3": {
           "body": "stella in maschinenlesbarer Form für KI-Suchmaschinen."
@@ -521,11 +521,11 @@
           "title": "Fundstellen folgen"
         },
         "4": {
-          "body": "Durchstöbern und filtern Sie Rechtsprechung und Register in der Jurisdiktion, in der Sie arbeiten.",
+          "body": "Durchsuchen und filtern Sie Rechtsprechung und Register nach der Jurisdiktion, in der Sie arbeiten.",
           "title": "Nach Jurisdiktion"
         },
         "5": {
-          "body": "Verweisen Sie aus einer Akte auf jede Quelle, damit die Antworten des KI-Agenten dorthin nachvollziehbar bleiben.",
+          "body": "Verweisen Sie aus einer Akte auf jede Quelle; die Antworten des KI-Agenten bleiben bis dorthin nachvollziehbar.",
           "title": "Belegt für die KI"
         }
       },
@@ -538,7 +538,7 @@
           "question": "Woher stammen die Daten?"
         },
         "1": {
-          "answer": "Zwei Listen, beide wachsend. Zu den angebundenen Registern zählen bereits ARES (Tschechien), Companies House (UK), SEC EDGAR (USA), KRS (Polen), PRH (Finnland) und VIES (EU-USt). Über Register hinaus kommen offizielle Quellen Jurisdiktion für Jurisdiktion hinzu; Tschechien, Spanien und Taiwan haben zum Beispiel bereits angebundene Quellen, und die Leseansicht für Rechtsprechung ist darauf ausgelegt, nach Jurisdiktion zu blättern und zu filtern, während weitere offizielle Quellen hinzukommen.",
+          "answer": "Zwei Listen, beide wachsend. Zu den angebundenen Registern zählen bereits ARES (Tschechien), Companies House (UK), SEC EDGAR (USA), KRS (Polen), PRH (Finnland) und VIES (EU-USt). Über Register hinaus kommen offizielle Quellen Jurisdiktion für Jurisdiktion hinzu; Tschechien, Spanien und Taiwan sind bereits angebunden, und in der Leseansicht für Rechtsprechung blättern und filtern Sie nach Jurisdiktion, während weitere offizielle Quellen dazukommen.",
           "question": "Welche Jurisdiktionen und Register sind abgedeckt?"
         },
         "2": {
@@ -549,7 +549,7 @@
       "metaDescription": "Rechtsprechung und Handelsregister aus offiziellen Quellen. Entscheidungen lesen, Unternehmen nachschlagen, Fundstellen folgen, alles direkt in die Akte.",
       "metaTitle": "Juristische Recherche: Rechtsprechung und Register | stella",
       "quickAnswer": {
-        "answer": "Zweierlei. Offizielle öffentliche Rechtsprechung, mit erhaltener Struktur eingelesen, sodass Sie Entscheidungen lesen, durchsuchen und ihren Fundstellen folgen. Und direkten Zugriff auf nationale Unternehmens- und Handelsregister, sodass Sie offizielle Unternehmensdaten direkt in eine Akte holen. Beides sind belegte Quellen, die der KI-Agent zitieren kann.",
+        "answer": "Zweierlei. Offizielle öffentliche Rechtsprechung, mit erhaltener Struktur gesammelt, sodass Sie Entscheidungen lesen, durchsuchen und ihren Fundstellen folgen können. Und direkter Zugriff auf nationale Unternehmens- und Handelsregister, sodass Sie offizielle Unternehmensdaten direkt in eine Akte holen. Beides sind belegte Quellen, die der KI-Agent zitieren kann.",
         "question": "Welche öffentlichen Daten bringt stella mit?"
       },
       "sections": {
@@ -605,10 +605,10 @@
         },
         "2": {
           "body": "Prüfungen liegen in der Akte, neben den Dokumenten, Kontakten und Gesprächen, zu denen sie gehören.",
-          "title": "Im Rahmen der Akte"
+          "title": "Teil der Akte"
         },
         "3": {
-          "body": "Behandeln Sie Antworten wie Daten: nach jeder Spalte sortieren, auf die Zeilen filtern, die Aufmerksamkeit brauchen.",
+          "body": "Behandeln Sie Antworten wie Daten: nach jeder Spalte sortieren, die Zeilen herausfiltern, die Aufmerksamkeit brauchen.",
           "title": "Sortieren und filtern"
         },
         "4": {
@@ -625,11 +625,11 @@
       },
       "faqs": {
         "0": {
-          "answer": "Alles, was Sie einer Person stellen würden, die das Dokument prüft: Faktenextraktion wie Daten, Parteien und Beträge, oder Wertungsfragen wie die, ob eine Klausel vorhanden ist und wie sie gefasst ist. Die Antworten kommen mit Fundstellen zum Ausgangstext zurück.",
+          "answer": "Alles, was Sie eine Person fragen würden, die das Dokument prüft: Faktenextraktion wie Daten, Parteien und Beträge, oder Wertungsfragen, etwa ob eine Klausel vorhanden ist und wie sie gefasst ist. Die Antworten kommen mit Fundstellen zum Ausgangstext zurück.",
           "question": "Welche Fragen kann eine Spalte stellen?"
         },
         "1": {
-          "answer": "Aus den Dokumenten Ihrer Akte. KI-Funktionen laufen über Ihre eigenen Anbieter-Schlüssel, die Extraktion also über den von Ihnen konfigurierten KI-Anbieter, und jede Antwort verweist zurück auf die Stelle, aus der sie stammt.",
+          "answer": "Aus den Dokumenten Ihrer Akte. KI-Funktionen laufen über Ihre eigenen Anbieter-Schlüssel, die Extraktion also über den von Ihnen gewählten KI-Anbieter, und jede Antwort verweist zurück auf die Stelle, aus der sie stammt.",
           "question": "Woher kommen die Antworten?"
         },
         "2": {
@@ -676,7 +676,7 @@
           "body": "Akten, Dokumente und Word-Bearbeitung an einem Ort."
         },
         "1": {
-          "body": "Machen Sie aus einem Dokumentenbestand eine Prüftabelle im Rahmen der Akte."
+          "body": "Machen Sie aus einem Dokumentenbestand eine Prüftabelle in der Akte."
         },
         "2": {
           "body": "Chatten Sie über Akten, Dateien und Quellen hinweg, mit Fundstellen."
@@ -691,7 +691,7 @@
           "title": "Wiederverwendbare Vorlagen"
         },
         "1": {
-          "body": "Legen Sie fest, welche Werte ein Dokument braucht, und füllen Sie sie beim Erzeugen aus.",
+          "body": "Legen Sie fest, welche Werte ein Dokument braucht, und füllen Sie sie beim Erstellen aus.",
           "title": "Felder und Platzhalter"
         },
         "2": {
@@ -703,11 +703,11 @@
           "title": "Mit KI ausfüllen"
         },
         "4": {
-          "body": "Vorlagen im Editor anlegen und anpassen, dann Dokumente daraus erzeugen.",
+          "body": "Vorlagen im Editor anlegen und anpassen, dann Dokumente daraus erstellen.",
           "title": "Direkt bearbeiten"
         },
         "5": {
-          "body": "Erzeugen Sie einen Entwurf in eine Akte und arbeiten Sie neben allem anderen daran weiter.",
+          "body": "Der Entwurf landet in der Akte und lässt sich neben der übrigen Arbeit weiterbearbeiten.",
           "title": "Direkt in die Akte"
         }
       },
@@ -716,28 +716,28 @@
       },
       "faqs": {
         "0": {
-          "answer": "Ja. Vorlagen werden im Editor angelegt und angepasst, und daraus erzeugen Sie dann Dokumente.",
+          "answer": "Ja. Vorlagen werden im Editor angelegt und angepasst, und daraus erstellen Sie dann Dokumente.",
           "question": "Kann ich eine Vorlage bearbeiten?"
         },
         "1": {
-          "answer": "Ein wiederverwendbarer Baustein eines Dokuments. Klauseln lassen sich in mehreren Vorlagen einsetzen und je nach den beim Erzeugen eingegebenen Werten bedingt hinzufügen.",
+          "answer": "Ein wiederverwendbarer Baustein eines Dokuments. Klauseln lassen sich in mehreren Vorlagen einsetzen und je nach den beim Erstellen eingegebenen Werten bedingt hinzufügen.",
           "question": "Was ist eine Klausel?"
         },
         "2": {
           "answer": "In eine Akte, als Entwurf, an dem Sie neben den übrigen Dokumenten der Akte weiterarbeiten.",
-          "question": "Wohin kommt das erzeugte Dokument?"
+          "question": "Wohin kommt das erstellte Dokument?"
         }
       },
-      "metaDescription": "Definieren Sie eine Vorlage mit Feldern und bedingten Klauseln, füllen Sie sie von Hand aus oder lassen Sie stella das aus den Daten der Akte übernehmen.",
+      "metaDescription": "Definieren Sie eine Vorlage mit Feldern und bedingten Klauseln, füllen Sie sie von Hand aus oder lassen Sie stella den Entwurf aus den Aktendaten erstellen.",
       "metaTitle": "Vorlagen für die Dokumentenerstellung mit KI | stella",
       "quickAnswer": {
-        "answer": "Eine Vorlage ist ein Dokument mit Feldern und Klauseln, die sich bedingt aufnehmen lassen. Sie füllen die Felder von Hand aus oder lassen stella sie aus den Daten einer Akte entwerfen; die bedingten Klauseln lösen sich auf, und Sie erhalten ein Dokument, an dem Sie in der Akte weiterarbeiten. Vorlagen und Klauseln sind wiederverwendbar, sodass wiederkehrende Dokumente von einer geprüften Grundlage starten.",
+        "answer": "Eine Vorlage ist ein Dokument mit Feldern und Klauseln, die sich bedingt aufnehmen lassen. Sie füllen die Felder von Hand aus oder lassen stella sie aus den Daten einer Akte entwerfen; die passenden Klauseln werden aufgenommen, und Sie erhalten ein Dokument, an dem Sie in der Akte weiterarbeiten. Vorlagen und Klauseln sind wiederverwendbar, sodass wiederkehrende Dokumente von einer geprüften Grundlage starten.",
         "question": "Wie funktionieren Vorlagen in stella?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Ein Dokument aus einer Vorlage erzeugen statt bei null zu beginnen",
+            "0": "Ein Dokument aus einer Vorlage erstellen, statt bei null zu beginnen",
             "1": "Klauseln über Vorlagen hinweg wiederverwenden",
             "2": "Wiederkehrende Dokumente bleiben einheitlich"
           },
@@ -747,17 +747,17 @@
           "bullets": {
             "0": "Felder aus einem Dokument vorbelegen, das schon in der Akte liegt",
             "1": "Jeden Wert prüfen und anpassen, bevor der Entwurf entsteht",
-            "2": "Bedingte Klauseln lösen sich weiterhin aus den übernommenen Werten"
+            "2": "Bedingte Klauseln richten sich weiter nach den übernommenen Werten"
           },
           "heading": "Aus den Daten der Akte befüllen"
         },
         "2": {
           "bullets": {
             "0": "Vorlagen im Editor anlegen und anpassen",
-            "1": "Den Entwurf in eine Akte erzeugen",
+            "1": "Den Entwurf direkt in der Akte erstellen",
             "2": "Am Ergebnis neben den Dateien der Akte weiterarbeiten"
           },
-          "heading": "Bearbeiten und erzeugen an einem Ort"
+          "heading": "Erstellen und bearbeiten an einem Ort"
         }
       }
     },
@@ -773,10 +773,10 @@
           "body": "Chatten Sie über Akten, Dateien und angebundene Tools hinweg, mit Freigaben und Quellvorschauen."
         },
         "1": {
-          "body": "Machen Sie aus einem Dokumentenbestand eine Tabelle im Rahmen der Akte, sortierbar, filterbar und nachvollziehbar."
+          "body": "Machen Sie aus einem Dokumentenbestand eine Tabelle, die Sie sortieren, filtern und bis zur Quelle zurückverfolgen."
         },
         "2": {
-          "body": "Erreichen Sie dieselben Akten, Dokumente und Rechtsprechung über die CLI und MCP-kompatible Werkzeuge."
+          "body": "Erreichen Sie dieselben Akten, Dokumente und dieselbe Rechtsprechung über die CLI und MCP-kompatible Werkzeuge."
         },
         "3": {
           "body": "stella in maschinenlesbarer Form für KI-Suchmaschinen."
@@ -784,7 +784,7 @@
       },
       "capabilities": {
         "0": {
-          "body": "Ordnen Sie Dokumente, Kontakte, Prüfung und Chat der Akte zu, zu der sie gehören. Alles, was in eine Akte kommt, bleibt daran hängen und ist im gesamten Arbeitsbereich durchsuchbar, sodass der Kontext da ist, wenn Sie zurückkommen.",
+          "body": "Ordnen Sie Dokumente, Kontakte, Prüfung und Chat der Akte zu, zu der sie gehören. Alles, was in eine Akte kommt, bleibt bei ihr und ist im gesamten Arbeitsbereich durchsuchbar, sodass der Kontext da ist, wenn Sie zurückkommen.",
           "title": "Akten"
         },
         "1": {
@@ -817,18 +817,18 @@
           "question": "Kann ich Word-Dokumente in stella bearbeiten?"
         },
         "1": {
-          "answer": "Dokumente, Kontakte, Prüftabellen, Chatverläufe und die Dokumenthistorie. Alles, was in eine Akte kommt, bleibt daran hängen, sodass der Kontext da ist, wenn Sie zurückkehren.",
+          "answer": "Dokumente, Kontakte, Prüftabellen, Chatverläufe und die Dokumenthistorie. Alles, was in eine Akte kommt, bleibt bei ihr, sodass der Kontext da ist, wenn Sie zurückkehren.",
           "question": "Was steckt in einer Akte?"
         },
         "2": {
-          "answer": "Ja. Die stella-CLI und der MCP-Server stellen angebundenen Werkzeugen dieselben Akten, Dokumente und Rechtsprechung bereit, unter denselben Berechtigungen. Details unter CLI & MCP.",
+          "answer": "Ja. Die stella-CLI und der MCP-Server stellen angebundenen Tools dieselben Akten, Dokumente und dieselbe Rechtsprechung bereit, unter denselben Berechtigungen. Details unter CLI & MCP.",
           "question": "Können andere Werkzeuge auf den Arbeitsbereich zugreifen?"
         }
       },
       "metaDescription": "Akten, Dokumente, Word-.docx-Bearbeitung, Prüfung, Recherche und Chat in einem juristischen Arbeitsbereich, von den Unterlagen bis zur Antwort.",
       "metaTitle": "Digitale Aktenverwaltung für Kanzleien | stella",
       "quickAnswer": {
-        "answer": "Eine Web-App, die Akten, Dokumente, Word-.docx-Bearbeitung, Prüfung, Recherche und Chat an einem Ort hält. Alles, was in eine Akte kommt, bleibt daran hängen, sodass der Kontext da ist, wenn Sie zurückkehren. Eine begleitende Desktop-App dient als lokale Brücke, wenn ein Dokument Microsoft Word braucht.",
+        "answer": "Eine Web-App, die Akten, Dokumente, Word-.docx-Bearbeitung, Prüfung, Recherche und Chat an einem Ort hält. Alles, was in eine Akte kommt, bleibt bei ihr, sodass der Kontext da ist, wenn Sie zurückkehren. Eine begleitende Desktop-App dient als lokale Brücke, wenn ein Dokument Microsoft Word braucht.",
         "question": "Was ist der Arbeitsbereich von stella?"
       },
       "sections": {
@@ -852,7 +852,7 @@
     }
   },
   "story": {
-    "agentBody": "Der KI-Agent durchsucht die Akte, liest den relevanten Text und antwortet mit Zitaten, die die Quelle an der genauen Stelle öffnen. Nutzen Sie ihn direkt in stella oder verbinden Sie ihn mit den Werkzeugen, mit denen Sie ohnehin arbeiten.",
+    "agentBody": "Der KI-Agent durchsucht die Akte, liest den relevanten Text und antwortet mit Fundstellen, die die Quelle an der genauen Stelle öffnen. Nutzen Sie ihn direkt in stella oder verbinden Sie ihn mit den Werkzeugen, mit denen Sie ohnehin arbeiten.",
     "agentEyebrow": "KI-Agent",
     "agentTitle": "Einmal fragen genügt. Jede Antwort nennt ihre Quelle.",
     "bringEditorToFront": "Editor von stella in den Vordergrund holen",
@@ -860,7 +860,7 @@
     "bringWorkspaceToFront": "Arbeitsbereich von stella in den Vordergrund holen",
     "controlBody": "stella ist juristische <gh>Open-Source</gh>-Software, die Sie selbst hosten können: Prüfen Sie den Code, betreiben Sie sie auf Ihre Weise und exportieren Sie alles in Standardformaten.",
     "controlTitle": "Behalten Sie die Technik in der Hand.",
-    "dataBody": "Rechtsprechung und Register, direkt in die Akte geladen, in jeder Jurisdiktion, in der Sie arbeiten. Die Anonymisierung hält identifizierende Angaben von der KI fern.",
+    "dataBody": "Rechtsprechung und Handelsregister aus jeder Jurisdiktion, in der Sie arbeiten, direkt in die Akte geladen. Die Anonymisierung hält identifizierende Angaben von der KI fern.",
     "dataEyebrow": "Juristische Daten",
     "dataMainAlt": "Eine offizielle Gerichtsentscheidung, geöffnet in stella",
     "dataTitle": "Rechtsprechung und Register griffbereit.",
@@ -872,7 +872,7 @@
     "exploreTemplates": "Vorlagen entdecken",
     "exploreWorkspace": "Arbeitsbereich entdecken",
     "eyebrow": "Ein vernetzter Arbeitsbereich",
-    "intro": "Unterlagen, Prüfung und finalisierte Dokumente bleiben in der Akte und bauen aufeinander auf. Sie können gemeinsam mit der KI an der Akte arbeiten, und jeder ihrer Schritte lässt sich überprüfen.",
+    "intro": "Unterlagen, Prüfung und die fertigen Dokumente bleiben in der Akte und bauen aufeinander auf. Arbeiten Sie mit dem KI-Agenten an der Akte, und prüfen Sie jeden seiner Schritte.",
     "openEditor": "Editor öffnen",
     "proofByokBody": "Nutzen Sie für KI-Funktionen Ihre eigenen Anbieter-Schlüssel.",
     "proofByokTitle": "Eigene Modelle nutzen",
@@ -886,7 +886,7 @@
     "sourceOnGitHub": "Quellcode auf GitHub",
     "title": "Eine Akte. Von den Unterlagen bis zur Antwort.",
     "velocityAll": "Vollständiges Änderungsprotokoll",
-    "velocityTitle": "Was wir zuletzt geliefert haben.",
+    "velocityTitle": "Neues in stella.",
     "workspaceBody": "Dokumente, Fristen, strukturierte Prüfung und Entwürfe bleiben beisammen und sind über alle Akten hinweg durchsuchbar.",
     "workspaceEyebrow": "Arbeitsbereich",
     "workspaceTitle": "Führen Sie die ganze Akte an einem Ort."

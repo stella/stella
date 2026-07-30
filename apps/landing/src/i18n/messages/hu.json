@@ -42,7 +42,7 @@
   "footer": {
     "agent": "AI-ügynök",
     "anonymization": "Anonimizálás",
-    "clarity": "Tisztán látás minden ügyben.",
+    "clarity": "Tisztánlátás minden ügyben.",
     "connect": "Kapcsolat",
     "contact": "Kapcsolatfelvétel",
     "documentation": "Dokumentáció",
@@ -68,7 +68,7 @@
     "title": "Állítsa munkába az AI-t minden ügyben."
   },
   "home": {
-    "ctaTitle": "Hozza el az AI-t a jogi munkájába."
+    "ctaTitle": "Vezesse be az AI-t a jogi munkájába."
   },
   "mcpProof": {
     "contextBody": "Vigye a jóváhagyott ügyeket és jogi adatokat a Claude-ba vagy bármely MCP-kompatibilis kliensbe.",
@@ -77,7 +77,7 @@
     "scopeTitle": "A hozzáférés mindig korlátozott.",
     "subtitle": "Vigye az ügy naprakész kontextusát azokba az eszközökbe, amelyekkel dolgozik.",
     "title": "A munkaterület mostantól érti az MCP-t.",
-    "toolsBody": "Keressen, olvasson és töltsön ki sablonokat ugyanabból a nyilvántartásból, amelyből a stella alkalmazás CLI-je készül.",
+    "toolsBody": "Keressen, olvasson és töltsön ki sablonokat ugyanabból a nyilvántartásból, amelyre a stella CLI is épül.",
     "toolsTitle": "Eszközök AI-ügynököknek."
   },
   "meta": {
@@ -104,7 +104,7 @@
       "agent": {
         "blurb": "Beszélgessen az ügyeivel, dokumentumaival, nyilvántartásokkal és a csatlakoztatott eszközökkel egy helyen. Az AI-ügynök jóváhagyással és forrás-előnézettel cselekszik, válaszait hivatkozásokra alapozza, és készségekkel, valamint külső csatlakozókkal bővül.",
         "eyebrow": "AI-ügynök",
-        "title": "AI-ügynök, amely az ügyein, fájljain és eszközein át dolgozik."
+        "title": "AI-ügynök, amely átfogja az ügyeit, fájljait és eszközeit."
       },
       "anonymization": {
         "blurb": "Távolítsa el a neveket, az entitásokat és az azonosító adatokat, mielőtt az anyag az AI-hoz kerül, közvetlenül a csevegésből és a dokumentumok ellenőrzéséből, kitakart eredménnyel, amelyet még azelőtt ellenőrizhet, hogy bármi továbbmenne.",
@@ -117,22 +117,22 @@
         "title": "Egyetlen munkaterület, minden eszközből."
       },
       "editor": {
-        "blurb": "Nyisson meg és szerkesszen Word .docx fájlokat közvetlenül a böngészőben: telepítés és formátumátalakítás nélkül. A stella alkalmazás online DOCX-szerkesztője megőrzi az eredeti formázást és a változáskövetést, a fájlt az ügyéhez kötve tartja, és minden mentést a dokumentum verziótörténetébe ír.",
+        "blurb": "Nyisson meg és szerkesszen Word .docx fájlokat közvetlenül a böngészőben: telepítés és formátumátalakítás nélkül. A stella alkalmazás online DOCX-szerkesztője megőrzi az eredeti formázást és a változáskövetést, a fájlt az ügyéhez kötve tartja, és minden mentés bekerül a dokumentum verziótörténetébe.",
         "eyebrow": "Szerkesztő",
         "title": "Szerkesszen Word-dokumentumokat a böngészőben, az ügy elhagyása nélkül."
       },
       "public-data": {
-        "blurb": "Ítélkezési gyakorlat és cégnyilvántartások hivatalos nyilvános forrásokból, amelyeket a stella Legal Atlas szolgáltatása gyűjt össze a szerkezet megőrzésével. Olvasson el egy határozatot, nézzen utána egy cégnek, kövesse a hivatkozásokat, és hivatkozzon bármelyikre az ügyből, vagy adja át az AI-ügynöknek.",
+        "blurb": "Ítélkezési gyakorlat és cégnyilvántartások hivatalos nyilvános forrásokból, amelyeket a stella Legal Atlas szolgáltatása gyűjt össze a szerkezetük megőrzésével. Olvasson el egy határozatot, nézzen utána egy cégnek, kövesse a hivatkozásokat, és hivatkozzon bármelyikre az ügyből, vagy adja át az AI-ügynöknek.",
         "eyebrow": "Nyilvános adatok",
         "title": "Jogi adatok, készen arra, hogy az ügybe kerüljenek."
       },
       "tabular-review": {
-        "blurb": "Tegyen fel kérdéseket egy teljes dokumentumhalmazra, és kapjon strukturált válaszokat az ügyhöz kötött táblázatban: rendezhető, szűrhető és a forrásszövegig visszakövethető. Átvilágításhoz, iratfeltáráshoz és kutatáshoz készült.",
+        "blurb": "Tegyen fel kérdéseket egy teljes dokumentumhalmazra, és kapjon strukturált válaszokat az ügyhöz kötött táblázatban: rendezhető, szűrhető és a forrásszövegig visszakövethető. Átvilágításhoz, iratvizsgálathoz és kutatáshoz készült.",
         "eyebrow": "Táblázatos ellenőrzés",
         "title": "Alakítson egy halom dokumentumot ellenőrizhető táblázattá."
       },
       "templates": {
-        "blurb": "Határozza meg a sablont egyszer, mezőkkel és feltételes kikötésekkel, majd töltse ki kézzel, vagy hagyja, hogy a stella alkalmazás megfogalmazza az ügy adataiból. Hozzon létre egy dokumentumot az ügyben, és szerkessze tovább.",
+        "blurb": "Határozza meg a sablont egyszer, mezőkkel és feltételes kikötésekkel, majd töltse ki kézzel, vagy hagyja, hogy a stella alkalmazás megfogalmazza az ügy adataiból. A kész dokumentum az ügybe kerül, és ott tovább szerkesztheti.",
         "eyebrow": "Sablonok",
         "title": "Építsen újrafelhasználható sablonokat, és töltesse ki őket az AI-val."
       },
@@ -148,7 +148,7 @@
     "agent": {
       "adjacent": {
         "0": {
-          "body": "Alakítsa a dokumentumhalmazt az ügyhöz kötött táblázattá, amelyet rendezhet, szűrhet és visszakövethet."
+          "body": "Alakítsa a dokumentumhalmazt táblázattá, amelyet rendezhet, szűrhet és a forrásig visszakövethet."
         },
         "1": {
           "body": "Ügyek, dokumentumok, .docx-szerkesztés, ellenőrzés és csevegés egyetlen munkaterületen."
@@ -162,7 +162,7 @@
       },
       "capabilities": {
         "0": {
-          "body": "Kérdezzen rá azokra az ügyekre, dokumentumokra és kapcsolatokra, amelyek már a stella alkalmazásban vannak. Egyetlen beszélgetés minden olyan ügyet elér, amelyhez hozzáférése van, ugyanazokkal a jogosultságokkal, amelyek mindenhol máshol is érvényesek.",
+          "body": "Kérdezzen rá azokra az ügyekre, dokumentumokra és kapcsolatokra, amelyek már a stella alkalmazásban vannak. Egyetlen beszélgetés minden olyan ügyet elér, amelyhez hozzáférése van, ugyanazokkal a jogosultságokkal, amelyek a munkaterülete egészére érvényesek.",
           "title": "Átfogja az összes ügyét"
         },
         "1": {
@@ -199,7 +199,7 @@
           "question": "Hogyan adhatok hozzá új képességeket?"
         },
         "2": {
-          "answer": "Az Ön ügyeiből, fájljaiból, a nyilvántartásokból és a csatlakoztatott eszközökből. Az AI-funkciók saját szolgáltatói kulccsal működnek, a válaszokat pedig a forrásra mutató hivatkozások támasztják alá.",
+          "answer": "Az Ön ügyeiből, fájljaiból, a nyilvántartásokból és a csatlakoztatott eszközökből. Az AI-funkciók az Ön saját szolgáltatói kulcsaival működnek, a válaszokat pedig a forrásra mutató hivatkozások támasztják alá.",
           "question": "Honnan származnak a válaszai?"
         }
       },
@@ -213,10 +213,10 @@
         "0": {
           "bullets": {
             "0": "Csevegés az ügyekről, dokumentumokról és kapcsolatokról egy beszélgetésben",
-            "1": "Cég- és nyilvántartási adatok betöltése ugyanabba a szálba",
+            "1": "Cég- és nyilvántartási adatok betöltése ugyanabba a beszélgetésbe",
             "2": "Adjon át egy táblázatos ellenőrzést az AI-ügynöknek további kérdésekhez"
           },
-          "heading": "Kérdezzen egyszer, az egész ügyre"
+          "heading": "Kérdezzen egyszer, az ügy egészéről"
         },
         "1": {
           "bullets": {
@@ -239,13 +239,13 @@
     "anonymization": {
       "adjacent": {
         "0": {
-          "body": "Beszélgessen ügyeken, fájlokon és csatlakoztatott eszközökön át, jóváhagyással és forrás-előnézettel."
+          "body": "Beszélgessen az ügyeivel, fájljaival és a csatlakoztatott eszközökkel, jóváhagyással és forrás-előnézettel."
         },
         "1": {
           "body": "Ügyek, dokumentumok, .docx-szerkesztés, ellenőrzés és csevegés egyetlen munkaterületen."
         },
         "2": {
-          "body": "Alakítsa a dokumentumhalmazt az ügyhöz kötött táblázattá, amelyet rendezhet, szűrhet és visszakövethet."
+          "body": "Alakítsa a dokumentumhalmazt táblázattá, amelyet rendezhet, szűrhet és a forrásig visszakövethet."
         },
         "3": {
           "body": "A stella géppel olvasható formában, AI-keresőmotorok számára."
@@ -313,7 +313,7 @@
           "body": "Ügyek, dokumentumok, ellenőrzés és csevegés egyetlen munkaterületen."
         },
         "1": {
-          "body": "Dolgozzon az ügyeken és a csatlakoztatott eszközökön át, jóváhagyással és hivatkozásokkal."
+          "body": "Dolgozzon az ügyein és a csatlakoztatott eszközeivel, jóváhagyással és hivatkozásokkal."
         },
         "2": {
           "body": "Töltsön ki újrafelhasználható jogi dokumentumokat az alkalmazásból, a CLI-ből vagy csatlakoztatott eszközökből."
@@ -382,7 +382,7 @@
         },
         "1": {
           "bullets": {
-            "0": "Ügyek, dokumentumok, ítélkezési gyakorlat, sablonok és más jóváhagyott eszközök közzététele",
+            "0": "Ügyek, dokumentumok, ítélkezési gyakorlat, sablonok és más jóváhagyott eszközök elérhetővé tétele",
             "1": "A képességkatalógus és a CLI-parancsok egyetlen nyilvántartásból generálódnak",
             "2": "Kompatibilis AI-ügynökök csatlakoztatása anélkül, hogy a jogi adatok másik munkaterületre kerülnének"
           },
@@ -393,7 +393,7 @@
     "editor": {
       "adjacent": {
         "0": {
-          "body": "Nézze meg, hol él együtt az ügy, a dokumentumok és az eszközök."
+          "body": "Nézze meg, hol van együtt az összes ügy, dokumentum és eszköz."
         },
         "1": {
           "body": "Hozzon létre újrafelhasználható Word-dokumentumokat mezőkkel és feltételes kikötésekkel."
@@ -456,7 +456,7 @@
           "question": "Megnyithatom ugyanazt a dokumentumot Microsoft Wordben?"
         },
         "5": {
-          "answer": "Igen. A dokumentum az ügy kontextusának része, így az ügyet ismerő eszközök elolvashatják, és követett változásként javasolhatnak módosításokat ugyanabban a dokumentumban.",
+          "answer": "Igen. A dokumentum az ügy része, így az AI-ügynök elolvashatja, és követett változásként javasolhat módosításokat ugyanabban a dokumentumban.",
           "question": "Dolgozhat a stella AI-ja azon a dokumentumon, amelyet éppen szerkesztek?"
         }
       },
@@ -482,7 +482,7 @@
             "0": "Váltás a dokumentum és az ügye között, másolatok feltöltése nélkül",
             "1": "A dokumentum tulajdonságai és verziói a fájllal maradnak",
             "2": "Szükség esetén ugyanaz a dokumentum megnyitható az asztali hídon át",
-            "3": "A dokumentum kontextusként szolgál az ügyet ismerő eszközöknek"
+            "3": "A dokumentum kontextusként szolgál az AI-ügynöknek"
           },
           "heading": "Összekötve az ügy többi részével"
         }
@@ -494,7 +494,7 @@
           "body": "Készítse elő az érzékeny anyagot az AI számára az azonosító adatok felfedése nélkül."
         },
         "1": {
-          "body": "Beszélgessen ügyeken, fájlokon és forrásokon át, jóváhagyással és hivatkozásokkal."
+          "body": "Beszélgessen az ügyeivel, fájljaival és a forrásokkal, jóváhagyással és hivatkozásokkal."
         },
         "2": {
           "body": "Alakítsa a dokumentumhalmazt az ügyhöz kötött ellenőrzési táblázattá."
@@ -517,16 +517,16 @@
           "title": "Cégnyilvántartások"
         },
         "3": {
-          "body": "Lépjen a határozat és az általa hivatkozott döntések között anélkül, hogy kilépne az olvasóból.",
+          "body": "Lépjen a határozat és az általa hivatkozott döntések között az olvasónézet elhagyása nélkül.",
           "title": "Hivatkozások követése"
         },
         "4": {
-          "body": "Böngéssze és szűrje az ítélkezési gyakorlatot és a nyilvántartásokat abban a joghatóságban, amelyben dolgozik.",
+          "body": "Böngéssze és szűrje az ítélkezési gyakorlatot és a nyilvántartásokat a saját joghatósága szerint.",
           "title": "Joghatóság szerint"
         },
         "5": {
           "body": "Hivatkozzon bármelyik forrásra az ügyből, hogy az AI-ügynök válaszai visszakövethetők maradjanak.",
-          "title": "Megalapozott alap az AI-nak"
+          "title": "Megalapozott forrás az AI-nak"
         }
       },
       "cta": {
@@ -538,7 +538,7 @@
           "question": "Honnan származnak az adatok?"
         },
         "1": {
-          "answer": "Két lista, mindkettő bővül. A csatlakoztatott nyilvántartások között már ott van az ARES (Csehország), a Companies House (Egyesült Királyság), a SEC EDGAR (Egyesült Államok), a KRS (Lengyelország), a PRH (Finnország) és a VIES (uniós áfa). A nyilvántartásokon túl a hivatalos források joghatóságról joghatóságra kerülnek be; Csehországnak, Spanyolországnak és Tajvannak például már vannak összekapcsolt forrásai, az ítélkezési gyakorlat olvasója pedig úgy készült, hogy joghatóság szerint lehessen böngészni és szűrni, ahogy újabb hivatalos források kerülnek be.",
+          "answer": "Két lista, mindkettő bővül. A csatlakoztatott nyilvántartások között már ott van az ARES (Csehország), a Companies House (Egyesült Királyság), a SEC EDGAR (Egyesült Államok), a KRS (Lengyelország), a PRH (Finnország) és a VIES (uniós áfa). A nyilvántartásokon túl a hivatalos források joghatóságról joghatóságra kerülnek be; Csehországnak, Spanyolországnak és Tajvannak például már vannak összekapcsolt forrásai, az ítélkezési gyakorlat olvasónézete pedig úgy készült, hogy joghatóság szerint lehessen böngészni és szűrni, ahogy újabb hivatalos források kerülnek be.",
           "question": "Mely joghatóságokra és nyilvántartásokra terjed ki?"
         },
         "2": {
@@ -549,7 +549,7 @@
       "metaDescription": "Ítélkezési gyakorlat és cégnyilvántartások hivatalos forrásokból. Olvasson határozatokat, keressen cégeket, kövesse a hivatkozásokat, és hozza az ügybe.",
       "metaTitle": "Ítélkezési gyakorlat és cégadatok | stella",
       "quickAnswer": {
-        "answer": "Kétfélét. Hivatalos nyilvános ítélkezési gyakorlatot, a szerkezetét megőrizve begyűjtve, hogy határozatokat olvashasson, kereshessen bennük, és követhesse a hivatkozásaikat. És közvetlen hozzáférést a nemzeti cég- és kereskedelmi nyilvántartásokhoz, hogy a hivatalos cégadatokat egyenesen az ügybe hozhassa. Mindkettő megalapozott forrás, amelyre az AI-ügynök hivatkozni tud.",
+        "answer": "Kétfélét. Hivatalos nyilvános ítélkezési gyakorlatot, megőrzött szerkezettel begyűjtve, hogy határozatokat olvashasson, kereshessen bennük, és követhesse a hivatkozásaikat. És közvetlen hozzáférést a nemzeti cég- és kereskedelmi nyilvántartásokhoz, hogy a hivatalos cégadatokat egyenesen az ügybe hozhassa. Mindkettő megalapozott forrás, amelyre az AI-ügynök hivatkozni tud.",
         "question": "Milyen nyilvános adatokat hoz be a stella?"
       },
       "sections": {
@@ -582,7 +582,7 @@
     "tabular-review": {
       "adjacent": {
         "0": {
-          "body": "Beszélgessen ügyeken, fájlokon és csatlakoztatott forrásokon át, jóváhagyással és forrás-előnézettel."
+          "body": "Beszélgessen az ügyeivel, fájljaival és a csatlakoztatott forrásokkal, jóváhagyással és forrás-előnézettel."
         },
         "1": {
           "body": "Hivatalos ítélkezési gyakorlat és cégnyilvántartások, egyenesen az ügybe."
@@ -604,7 +604,7 @@
           "title": "A forrásig hivatkozva"
         },
         "2": {
-          "body": "Az ellenőrzések az ügyön belül élnek, azon dokumentumok, kapcsolatok és beszélgetések mellett, amelyekhez tartoznak.",
+          "body": "Az ellenőrzések az ügyön belül maradnak, a hozzájuk tartozó dokumentumok, kapcsolatok és csevegés mellett.",
           "title": "Az ügyhöz kötve"
         },
         "3": {
@@ -679,7 +679,7 @@
           "body": "Alakítsa a dokumentumhalmazt az ügyhöz kötött ellenőrzési táblázattá."
         },
         "2": {
-          "body": "Beszélgessen ügyeken, fájlokon és forrásokon át, hivatkozásokkal."
+          "body": "Beszélgessen az ügyeivel, fájljaival és a forrásokkal, hivatkozásokkal alátámasztva."
         },
         "3": {
           "body": "A stella géppel olvasható formában, AI-keresőmotorok számára."
@@ -687,7 +687,7 @@
       },
       "capabilities": {
         "0": {
-          "body": "Az ismétlődő dokumentumok bevált alapról induljanak, ne másolt fájlból.",
+          "body": "Indítsa az ismétlődő dokumentumokat bevált alapról, ne másolt fájlból.",
           "title": "Újrafelhasználható sablonok"
         },
         "1": {
@@ -695,7 +695,7 @@
           "title": "Mezők és helyőrzők"
         },
         "2": {
-          "body": "A megadott értékek alapján kerüljenek be vagy maradjanak ki a kikötések, így egy sablon több változatot is lefed.",
+          "body": "A megadott értékek alapján kerülnek be vagy maradnak ki a kikötések, így egy sablon több változatot is lefed.",
           "title": "Feltételes kikötések"
         },
         "3": {
@@ -707,7 +707,7 @@
           "title": "Szerkesztés helyben"
         },
         "5": {
-          "body": "Hozzon létre piszkozatot az ügyben, és szerkessze tovább a munka többi része mellett.",
+          "body": "A piszkozat az ügybe kerül, és a munka többi része mellett szerkesztheti tovább.",
           "title": "Egyenesen az ügybe"
         }
       },
@@ -731,7 +731,7 @@
       "metaDescription": "Készítsen sablont mezőkkel és feltételes kikötésekkel, majd töltse ki kézzel, vagy hagyja, hogy a stella az ügy adataiból fogalmazza meg a dokumentumot.",
       "metaTitle": "Jogi dokumentumsablonok AI-val kitöltve | stella",
       "quickAnswer": {
-        "answer": "A sablon olyan dokumentum, amelyben mezők vannak, és a kikötések feltételesen szerepelhetnek. A mezőket kézzel tölti ki, vagy hagyja, hogy a stella az ügy adataiból fogalmazza meg őket; a feltételes kikötések feloldódnak, és olyan dokumentumot kap, amelyen az ügyben dolgozhat tovább. A sablonok és a kikötések újrafelhasználhatók, így az ismétlődő dokumentumok bevált alapról indulnak.",
+        "answer": "A sablon olyan dokumentum, amelyben mezők vannak, és a kikötések feltételesen szerepelhetnek. A mezőket kézzel tölti ki, vagy hagyja, hogy a stella az ügy adataiból fogalmazza meg őket; a megfelelő kikötések bekerülnek, és olyan dokumentumot kap, amelyen az ügyben dolgozhat tovább. A sablonok és a kikötések újrafelhasználhatók, így az ismétlődő dokumentumok bevált alapról indulnak.",
         "question": "Hogyan működnek a sablonok a stella alkalmazásban?"
       },
       "sections": {
@@ -739,25 +739,25 @@
           "bullets": {
             "0": "Állítson össze dokumentumot sablonból ahelyett, hogy üresen kezdene",
             "1": "Használja újra a kikötéseket több sablonban",
-            "2": "Az ismétlődő dokumentumok maradjanak egységesek"
+            "2": "Tartsa egységesnek az ismétlődő dokumentumokat"
           },
           "heading": "Építkezzen sablonokból és kikötésekből"
         },
         "1": {
           "bullets": {
-            "0": "Előtöltés az ügyben már tárolt dokumentumból",
+            "0": "Mezők előtöltése az ügyben már tárolt dokumentumból",
             "1": "Minden értéket ellenőrizhet és módosíthat a piszkozat létrehozása előtt",
-            "2": "A feltételes kikötések a megtartott értékek alapján oldódnak fel"
+            "2": "A feltételes kikötések a megtartott értékekhez igazodnak"
           },
           "heading": "Töltse ki az ügy adataiból"
         },
         "2": {
           "bullets": {
             "0": "Sablonok írása és igazítása a szerkesztőben",
-            "1": "A piszkozat egyenesen az ügybe kerül",
+            "1": "A piszkozat összeállítása közvetlenül az ügyben",
             "2": "Az eredmény az ügy fájljai mellett szerkeszthető tovább"
           },
-          "heading": "Szerkesztés és létrehozás egy helyen"
+          "heading": "Szerkesztés és összeállítás egy helyen"
         }
       }
     },
@@ -770,10 +770,10 @@
     "workspace": {
       "adjacent": {
         "0": {
-          "body": "Beszélgessen ügyeken, fájlokon és csatlakoztatott eszközökön át, jóváhagyással és forrás-előnézettel."
+          "body": "Beszélgessen az ügyeivel, fájljaival és a csatlakoztatott eszközökkel, jóváhagyással és forrás-előnézettel."
         },
         "1": {
-          "body": "Alakítsa a dokumentumhalmazt az ügyhöz kötött táblázattá, amelyet rendezhet, szűrhet és visszakövethet."
+          "body": "Alakítsa a dokumentumhalmazt táblázattá, amelyet rendezhet, szűrhet és a forrásig visszakövethet."
         },
         "2": {
           "body": "Érje el ugyanazokat az ügyeket, dokumentumokat és ítélkezési gyakorlatot a CLI-ből és MCP-kompatibilis eszközökből."
@@ -834,9 +834,9 @@
       "sections": {
         "0": {
           "bullets": {
-            "0": "A dokumentumok, kapcsolatok, ellenőrzés és csevegés az ügyön belül él",
+            "0": "A dokumentumok, a kapcsolatok, az ellenőrzés és a csevegés az ügyön belül marad",
             "1": "Word .docx dokumentumok szerkesztése a munkaterület elhagyása nélkül",
-            "2": "Váltás a kutatás, az ellenőrzés és a csevegés között alkalmazásváltás nélkül"
+            "2": "Váltás a kutatás, az ellenőrzés és a csevegés között, alkalmazások közötti ugrálás nélkül"
           },
           "heading": "Minden, ami az ügyhöz kell, egy helyen"
         },
@@ -860,7 +860,7 @@
     "bringWorkspaceToFront": "A stella alkalmazás munkaterületének előtérbe hozása",
     "controlBody": "A stella <gh>nyílt forráskódú</gh> jogi szoftver, amelyet saját maga is üzemeltethet: vizsgálja meg a kódot, futtassa a maga módján, és exportáljon mindent szabványos formátumokban.",
     "controlTitle": "Tartsa kézben a rendszerét.",
-    "dataBody": "Ítélkezési gyakorlat és cégnyilvántartások közvetlenül az ügyben, minden joghatóságban, ahol dolgozik. Az anonimizálás közben távol tartja az azonosító adatokat az AI-tól.",
+    "dataBody": "Ítélkezési gyakorlat és cégnyilvántartások közvetlenül az ügyben, minden joghatóságból, amelyben dolgozik. Az anonimizálás távol tartja az azonosító adatokat az AI-tól.",
     "dataEyebrow": "Jogi adatok",
     "dataMainAlt": "Egy hivatalos bírósági határozat a stella alkalmazásban megnyitva",
     "dataTitle": "Ítélkezési gyakorlat és nyilvántartások kéznél.",
@@ -872,11 +872,11 @@
     "exploreTemplates": "Sablonok felfedezése",
     "exploreWorkspace": "Munkaterület felfedezése",
     "eyebrow": "Összekapcsolt munkaterület",
-    "intro": "Az iratok, az ellenőrzés és a véglegesített dokumentumok az ügyben maradnak és egymásra épülnek. Az ügyön az AI-jal együtt dolgozhat, és annak minden lépése ellenőrizhető.",
+    "intro": "Az iratok, az ellenőrzés és a véglegesített dokumentumok az ügyben maradnak, és egymásra épülnek. Dolgozzon az ügyön az AI-ügynökkel, és ellenőrizze annak minden lépését.",
     "openEditor": "Szerkesztő megnyitása",
     "proofByokBody": "Az AI-funkciókhoz használja saját szolgáltatói kulcsait.",
     "proofByokTitle": "Saját modellek használata",
-    "proofOpenSourceBody": "Vizsgálja meg a kódot, és tartson meg egy hordozható rendszert.",
+    "proofOpenSourceBody": "Vizsgálja meg a kódot, a rendszere pedig hordozható marad.",
     "proofOpenSourceTitle": "Nyílt forráskód",
     "proofPermissionsBody": "Minden művelet a felhasználó és a munkaterület jogosultságain belül marad.",
     "proofPermissionsTitle": "Tiszteletben tartja a jogosultságokat",
@@ -886,7 +886,7 @@
     "sourceOnGitHub": "Forráskód a GitHubon",
     "title": "Egy ügy. Az iratoktól a válaszig.",
     "velocityAll": "Teljes változásnapló",
-    "velocityTitle": "Amit mostanában kiadtunk.",
+    "velocityTitle": "Újdonságok a stella alkalmazásban.",
     "workspaceBody": "A dokumentumok, a határidők, a strukturált ellenőrzés és a szövegezés együtt maradnak, és minden ügyben kereshetők.",
     "workspaceEyebrow": "Munkaterület",
     "workspaceTitle": "Intézze az egész ügyet egy helyen."

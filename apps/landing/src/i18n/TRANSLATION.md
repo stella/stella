@@ -54,6 +54,21 @@ headline resists translation twice, stop translating it and write the claim
 a native marketer would make; matching the section's actual content beats
 matching the English syntax.
 
+Recurring calque families the quality passes keep removing — check for them
+whenever a string is touched:
+
+- English's "lives in / live together" metaphor ("reviews live in the matter")
+  produces literal `žijí`/`elab`/`él` renderings; say stays, remains, is part
+  of, or happens in.
+- "bring AI to your practice" as a literal carry verb (cs `Přineste`,
+  hu `Hozza el`, lv `Ienesiet`); use the locale's adoption verb (zavést,
+  bevezet, ieviest, ievade).
+- English false friends around redaction: es `redactado` and pl `zredagowany`
+  mean drafted/copyedited, et `redigeeritud` means edited; the anonymization
+  pages say anonymised, never a redact cognate.
+- "works across your matters" as a spatial preposition pile; unfold into the
+  locale's own structure (reaches, covers, spans as a verb).
+
 ## The reader is a lawyer, not a developer
 
 Developer vocabulary is banned on every marketing surface except the CLI & MCP
@@ -137,6 +152,24 @@ plural) for Matter, because a demo label had drifted to `Případy` / `Prípady`
 while every other string in the same file said `spis`. Only those two forms are
 banned per language: the oblique forms carry the everyday `v případě` idiom and
 would false-fire.
+
+The gate is a ratchet, not a whitelist: `i18n-lint` fires only on renderings
+listed as `forbidden`, and it cannot require the canonical term to appear
+(transcreation legitimately restructures a sentence around the concept). So a
+synonym nobody has banned yet drifts silently — Lithuanian rendered Clause as
+`nuostata` for months while the app said `sąlyga`. When you catch such a drift,
+fix the strings **and** add the wrong family to the glossary's `forbidden`
+list, scoped by the concept's English trigger, so the class stays dead.
+
+Two wording rules the glossary cannot express as bans:
+
+- cs/sk: a company is `společnost` / `spoločnosť`. `firma` legally names the
+  business name (obchodní firma, ObčZ § 423), so prose about looking up
+  companies must not say it; the researched query term `firmy` may survive
+  only inside the two public-data meta descriptions.
+- de: a citation the AI answers with is a `Fundstelle`; running copy had three
+  renderings (`Quellenangaben`, `Fundstellen`, `Zitate`). Product-page prose
+  uses `Fundstellen`; only the settled hero keeps its own phrasing.
 
 ### Terms the app owns, not the landing
 
@@ -557,7 +590,13 @@ _Terms the market does not have._ `discovery` had been carried into the cs and
 sk tabular-review descriptions, and `الإفصاح` into the Arabic one; neither
 legal system has that procedural stage. Arabic `العناية الواجبة` is the AML/KYC
 sense of due diligence in Gulf practice, not the transactional sense a document
-review page means (`الفحص النافي للجهالة`).
+review page means (`الفحص النافي للجهالة`). This rule covers body copy, not
+just metas: the en tabular-review blurb legitimately says "discovery" to a
+common-law reader, but every civil-law locale replaces it with the market's
+real stage or task (de `Vertragsanalyse`, pl `analiza umów`, fr
+`le contentieux`, es `los litigios`, pt-BR `contencioso`, lt/lv evidence
+analysis, hu `iratvizsgálat`, et `dokumentide läbivaatus`). Never leave the
+English word untranslated in a market that has no such procedure.
 
 _Terms that overclaim._ pt-BR searches `processos`, but that word promises
 tribunal docket sync, so the Brazilian pages stay on `casos`. The anonymization
@@ -712,9 +751,11 @@ Design, lv Motīvs, ar السمة), not a second synonym coined here.
 ## Typography per locale
 
 French uses the typographic apostrophe `’` (U+2019) throughout, never the
-straight `'`: the file had been mixing both. Arabic keeps its own punctuation
-(see below). Nothing else in the catalogs needs locale-specific typography
-today; when it does, record it here rather than fixing one string.
+straight `'`: the file had been mixing both. French also takes a narrow
+no-break space (U+202F) before `:` `;` `!` `?` and inside `« »` guillemets;
+the whole catalog once carried plain spaces there. Arabic keeps its own
+punctuation (see below). Nothing else in the catalogs needs locale-specific
+typography today; when it does, record it here rather than fixing one string.
 
 ## Arabic specifics
 

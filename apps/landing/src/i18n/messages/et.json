@@ -64,7 +64,7 @@
   "hero": {
     "badge": "Aktiivses arenduses",
     "selfHost": "Oma serveris",
-    "subtitle": "<gh>Avatud lähtekoodiga</gh> õigustööruum: toimikud, dokumendid, ülevaatus ja tehisintellekti agent, kes vastab allikaviidetega.",
+    "subtitle": "<gh>Avatud lähtekoodiga</gh> õigustööruum: toimikud, dokumendid, ülevaatus ja tehisintellekti agent, mis vastab allikaviidetega.",
     "title": "Pane tehisintellekt igas toimikus tööle."
   },
   "home": {
@@ -77,7 +77,7 @@
     "scopeTitle": "Ligipääs on alati piiritletud.",
     "subtitle": "Too toimiku ajakohane kontekst tööriistadesse, millega töötad.",
     "title": "Tööruum räägib nüüd MCP keelt.",
-    "toolsBody": "Otsi, loe ja täida malle sama registri kaudu, millest sünnib rakenduse stella CLI.",
+    "toolsBody": "Otsi, loe ja täida malle sama registri kaudu, millel töötab ka stella CLI.",
     "toolsTitle": "Tööriistad tehisintellekti agentidele."
   },
   "meta": {
@@ -104,10 +104,10 @@
       "agent": {
         "blurb": "Vestle oma toimikute, dokumentide, registrite ja ühendatud tööriistadega ühes kohas. Tehisintellekti agent tegutseb kinnituste ja allika eelvaadetega, tugineb vastustes allikaviidetele ning laieneb oskuste ja väliste konnektorite kaudu.",
         "eyebrow": "Tehisintellekti agent",
-        "title": "Tehisintellekti agent, mis töötab su toimikute, failide ja tööriistade lõikes."
+        "title": "Tehisintellekti agent, mis töötab su toimikute, failide ja tööriistadega."
       },
       "anonymization": {
-        "blurb": "Eemalda nimed, üksused ja tuvastavad andmed enne, kui materjal jõuab tehisintellektini, otse vestlusest ja dokumentide ülevaatusest, ning kontrolli redigeeritud tulemust, enne kui miski edasi liigub.",
+        "blurb": "Eemalda nimed, üksused ja tuvastavad andmed enne, kui materjal jõuab tehisintellektini, otse vestlusest ja dokumentide ülevaatusest, ning kontrolli anonüümitud tulemust, enne kui miski edasi liigub.",
         "eyebrow": "Anonüümimine",
         "title": "Valmista materjal tehisintellekti jaoks ette, tuvastavaid andmeid paljastamata."
       },
@@ -124,15 +124,15 @@
       "public-data": {
         "blurb": "Kohtupraktika ja ettevõtete registrid ametlikest avalikest allikatest, mille kogub rakenduse stella Legal Atlas nii, et nende struktuur säilib. Loe lahendit, otsi ettevõtet, järgi allikaviiteid ja viita neile toimikust või anna need tehisintellekti agendile.",
         "eyebrow": "Avalikud andmed",
-        "title": "Õigusandmed, valmis toimikusse tõmbamiseks."
+        "title": "Õigusandmed, valmis toimikusse toomiseks."
       },
       "tabular-review": {
-        "blurb": "Esita küsimused tervele dokumendikogumile ja saa struktureeritud vastused toimikupõhise tabelina: sorditav, filtreeritav ja jälgitav kuni lähtetekstini. Loodud due diligence’i, discovery ja otsingu jaoks.",
+        "blurb": "Esita küsimused tervele dokumendikogumile ja saa struktureeritud vastused toimikupõhise tabelina: sorditav, filtreeritav ja jälgitav kuni lähtetekstini. Loodud due diligence’i, dokumentide läbivaatuse ja otsingu jaoks.",
         "eyebrow": "Tabelülevaatus",
-        "title": "Muuda dokumendihunnik tabeliks, mille saab üle vaadata."
+        "title": "Muuda dokumendihunnik tabeliks, mille saad üle vaadata."
       },
       "templates": {
-        "blurb": "Määra mall korra ära, koos väljade ja tingimuslike klauslitega, ning täida see siis käsitsi või lase rakendusel stella koostada mustand toimiku andmetest. Loo dokument otse toimikusse ja jätka selle muutmist.",
+        "blurb": "Määra mall korra ära, koos väljade ja tingimuslike klauslitega, ning täida see siis käsitsi või lase rakendusel stella koostada mustand toimiku andmetest. Valmis dokument jõuab toimikusse ja saad seda seal edasi muuta.",
         "eyebrow": "Mallid",
         "title": "Koosta korduskasutatavad mallid ja lase tehisintellektil need täita."
       },
@@ -148,7 +148,7 @@
     "agent": {
       "adjacent": {
         "0": {
-          "body": "Muuda dokumendikogum toimikupõhiseks tabeliks, mida saab sortida, filtreerida ja jälgida."
+          "body": "Muuda dokumendikogum tabeliks, mida saad sortida, filtreerida ja allikani jälgida."
         },
         "1": {
           "body": "Toimikud, dokumendid, .docx-i muutmine, ülevaatus ja vestlus ühes kohas."
@@ -162,8 +162,8 @@
       },
       "capabilities": {
         "0": {
-          "body": "Küsi küsimusi toimikute, dokumentide ja kontaktide kohta, mis sul rakenduses stella juba on. Üks vestlus ulatub igasse toimikusse, millele sul on juurdepääs, samade õigustega, mis kehtivad mujalgi.",
-          "title": "Töötab kõigi su toimikute lõikes"
+          "body": "Esita küsimusi toimikute, dokumentide ja kontaktide kohta, mis sul rakenduses stella juba on. Üks vestlus ulatub igasse toimikusse, millele sul on juurdepääs, samade õigustega, mis kehtivad mujalgi.",
+          "title": "Ulatub kõigi su toimikuteni"
         },
         "1": {
           "body": "Too dokumendid vestlusse ja palu tehisintellekti agendil need läbi lugeda, võrrelda või kokku võtta.",
@@ -206,7 +206,7 @@
       "metaDescription": "Vestle toimikute, dokumentide, registrite ja ühendatud tööriistadega. Tehisintellekti agent tegutseb kinnitustega, viitab allikatele ja laieneb oskustega.",
       "metaTitle": "Tehisintellekti agent toimikute jaoks | stella",
       "quickAnswer": {
-        "answer": "Tehisintellekti agent vestleb sinu toimikute, failide, ettevõtete registrite ja ühendatud tööriistadega. Ta küsib enne tegutsemist kinnitust, näitab allika eelvaadet selle kohta, mida ta loeb, ja toetub vastustes allikaviidetele. Saad teda laiendada korduskasutatavate oskuste ja MCP-ga ühilduvate väliste konnektoritega.",
+        "answer": "Tehisintellekti agent vestleb sinu toimikute, failide, ettevõtete registrite ja ühendatud tööriistadega. Ta küsib enne tegutsemist kinnitust, näitab allika eelvaadet selle kohta, mida ta loeb, ja toetub vastustes allikaviidetele. Saad seda laiendada korduskasutatavate oskuste ja MCP-ga ühilduvate väliste konnektoritega.",
         "question": "Mida tehisintellekti agent teha oskab?"
       },
       "sections": {
@@ -229,7 +229,7 @@
         "2": {
           "bullets": {
             "0": "Oskused on juhised ja tööriistad, mida saad eri toimikutes taaskasutada",
-            "1": "Välised konnektorid ühilduvad MCP-ga, nii ulatub tehisintellekti agent rohkemate tööriistadeni",
+            "1": "Välised konnektorid ühilduvad MCP-ga, nii et tehisintellekti agent ulatub rohkemate tööriistadeni",
             "2": "Lisa võimalusi, muutmata seda, kuidas vestlus töötab"
           },
           "heading": "Laienda seda oskuste ja konnektoritega"
@@ -239,13 +239,13 @@
     "anonymization": {
       "adjacent": {
         "0": {
-          "body": "Vestle toimikute, failide ja ühendatud tööriistade lõikes, kinnituste ja allika eelvaadetega."
+          "body": "Vestle toimikute, failide ja ühendatud tööriistadega, kinnituste ja allika eelvaadete toel."
         },
         "1": {
           "body": "Toimikud, dokumendid, .docx-i muutmine, ülevaatus ja vestlus ühes kohas."
         },
         "2": {
-          "body": "Muuda dokumendikogum toimikupõhiseks tabeliks, mida saab sortida, filtreerida ja jälgida."
+          "body": "Muuda dokumendikogum tabeliks, mida saad sortida, filtreerida ja allikani jälgida."
         },
         "3": {
           "body": "stella masinloetaval kujul tehisintellekti otsimootoritele."
@@ -265,7 +265,7 @@
           "title": "Koos sinu enda terminitega"
         },
         "3": {
-          "body": "Näitab redigeeritud dokumenti kontekstis, nii et kinnitad, mis toimikust välja läheb.",
+          "body": "Näitab anonüümitud dokumenti kontekstis, nii et kinnitad, mis toimikust välja läheb.",
           "title": "Ülevaadatav tulemus"
         }
       },
@@ -278,14 +278,14 @@
           "question": "Kas anonüümimine on juba saadaval?"
         },
         "1": {
-          "answer": "Materjali ettevalmistamisel tehisintellekti töövoogude jaoks, ilma nimesid, üksusi või tuvastavaid andmeid paljastamata, nii et redigeeritud tulemus jääb ülevaatamiseks alles.",
+          "answer": "Materjali ettevalmistamisel tehisintellekti töövoogude jaoks, nimesid, üksusi või tuvastavaid andmeid paljastamata, nii et anonüümitud tulemus jääb ülevaatamiseks alles.",
           "question": "Millega see aitab?"
         }
       },
       "metaDescription": "Eemalda nimed, üksused ja tuvastavad andmed enne, kui materjal jõuab tehisintellektini, otse vestlusest ja ülevaatusest, ning kontrolli tulemust.",
       "metaTitle": "Dokumentide anonüümimine tehisintellekti jaoks | stella",
       "quickAnswer": {
-        "answer": "See eemaldab nimed, üksused ja tuvastavad andmed enne, kui materjal siseneb tehisintellekti töövoogu, ja näitab sulle redigeeritud tulemust, et saaksid kinnitada, mis toimikust välja läheb. See on lõimitud otse vestlusesse ja dokumentide ülevaatusesse.",
+        "answer": "See eemaldab nimed, üksused ja tuvastavad andmed enne, kui materjal siseneb tehisintellekti töövoogu, ja näitab sulle anonüümitud tulemust, et saaksid kinnitada, mis toimikust välja läheb. See on lõimitud otse vestlusesse ja dokumentide ülevaatusesse.",
         "question": "Mis on anonüümimine rakenduses stella?"
       },
       "sections": {
@@ -293,14 +293,14 @@
           "bullets": {
             "0": "Hoiab nimed, üksused ja tuvastavad andmed tehisintellekti sammudest eemal",
             "1": "Loodud õigusvaldkonna tehisintellekti töövoogudele, mitte üldiseks dokumentide maskimiseks",
-            "2": "Jätab enne järgmist sammu alles ülevaadatava redigeeritud dokumendi"
+            "2": "Jätab enne järgmist sammu alles ülevaadatava anonüümitud dokumendi"
           },
           "heading": "Valmista materjal ette, enne kui see tehisintellektini jõuab"
         },
         "1": {
           "bullets": {
             "0": "Saadaval vestlusest ja dokumentide ülevaatusest",
-            "1": "Pole vaja kopeerida välisesse redigeerimistööriista",
+            "1": "Pole vaja midagi kopeerida eraldi anonüümimistööriista",
             "2": "Põhineb rakenduse stella enda avatud lähtekoodiga anonüümimismootoril"
           },
           "heading": "Osa tööruumist, mitte eraldi tööriist"
@@ -313,7 +313,7 @@
           "body": "Toimikud, dokumendid, ülevaatus ja vestlus ühes kohas."
         },
         "1": {
-          "body": "Tööta toimikute ja ühendatud tööriistade lõikes, kinnituste ja allikaviidetega."
+          "body": "Tööta toimikute ja ühendatud tööriistadega, kinnituste ja allikaviidete toel."
         },
         "2": {
           "body": "Täida korduskasutatavaid õigusdokumente rakendusest, käsurealt või ühendatud tööriistadest."
@@ -332,7 +332,7 @@
           "title": "MCP-ga ühilduv"
         },
         "2": {
-          "body": "CLI käsustik genereeritakse MCP tööriistaregistrist, nii et kaks liidest püsivad rakenduse stella arenedes kooskõlas.",
+          "body": "CLI-käsustik genereeritakse MCP-tööriistaregistrist, nii et kaks liidest püsivad rakenduse stella arenedes kooskõlas.",
           "title": "Üks võimekusregister"
         },
         "3": {
@@ -344,7 +344,7 @@
           "title": "Struktureeritud väljund"
         },
         "5": {
-          "body": "Suuna CLI ja MCP kliendid sinu organisatsiooni hallatavasse stella serverisse.",
+          "body": "Suuna CLI ja MCP-kliendid sinu organisatsiooni hallatavasse stella serverisse.",
           "title": "Sobib ise majutamiseks"
         }
       },
@@ -354,28 +354,28 @@
       "faqs": {
         "0": {
           "answer": "Ei. Need on eraldi liidesed, mis genereeritakse samast võimekusregistrist ja ühenduvad sama stella serveriga.",
-          "question": "Kas CLI on MCP serverist eraldi toode?"
+          "question": "Kas CLI on MCP-serverist eraldi toode?"
         },
         "1": {
           "answer": "Jah. CLI toetab struktureeritud JSON-väljundit, lehekülgedeks jaotamist, ennustatavaid väljumiskoode ja automatiseerimiseks sobivat mitteinteraktiivset kasutust.",
-          "question": "Kas CLI-d saab skriptides kasutada?"
+          "question": "Kas ma saan CLI-d skriptides kasutada?"
         },
         "2": {
           "answer": "Ei. Server kontrollib enne võimekuse käivitamist autentimise ulatusi ja stella õigusi.",
-          "question": "Kas MCP kliendi ühendamine läheb tööruumi õigustest mööda?"
+          "question": "Kas MCP-kliendi ühendamine läheb tööruumi õigustest mööda?"
         }
       },
       "metaDescription": "Otsi, loe ja tööta rakendusega stella käsurealt või ükskõik millisest MCP-ga ühilduvast kliendist. Mõlemal pinnal on samad võimalused ja õigused.",
-      "metaTitle": "MCP server ja CLI sinu õigustööruumi jaoks | stella",
+      "metaTitle": "MCP-server ja CLI sinu õigustööruumi jaoks | stella",
       "quickAnswer": {
-        "answer": "Need on kaks liidest samadele rakenduse stella võimalustele. CLI peegeldab MCP tööriistaregistrit käskudena, MCP server aga lubab ühilduvatel tehisintellekti agentidel ja tööriistadel töötada toimikute, dokumentide, mallide ja avalike õigusandmetega samade juurdepääsureeglite alusel.",
-        "question": "Mis on stella CLI ja MCP server?"
+        "answer": "Need on kaks liidest samadele rakenduse stella võimalustele. CLI peegeldab MCP-tööriistaregistrit käskudena, MCP-server aga lubab ühilduvatel tehisintellekti agentidel ja tööriistadel töötada toimikute, dokumentide, mallide ja avalike õigusandmetega samade juurdepääsureeglite alusel.",
+        "question": "Mis on stella CLI ja MCP-server?"
       },
       "sections": {
         "0": {
           "bullets": {
             "0": "Leia lõike toimiku dokumentidest käsuga stella search matters",
-            "1": "Loe dokumente, loetle toimikuid ja vaata malle ilma konteksti vahetamata",
+            "1": "Loe dokumente, loetle toimikuid ja vaata malle konteksti vahetamata",
             "2": "Kasuta lehekülgedeks jaotatud struktureeritud tulemusi skriptides ja automaatsetes töövoogudes"
           },
           "heading": "Otsi kogu toimikust terminalist"
@@ -383,7 +383,7 @@
         "1": {
           "bullets": {
             "0": "Ava toimikud, dokumendid, kohtupraktika, mallid ja muud lubatud tööriistad",
-            "1": "Võimekuste kataloog ja CLI käsud genereeritakse ühest registrist",
+            "1": "Võimekuste kataloog ja CLI-käsud genereeritakse ühest registrist",
             "2": "Ühenda ühilduvad tehisintellekti agendid, ilma et õigusandmed teise tööruumi kopeeritaks"
           },
           "heading": "Samad võimalused MCP kaudu"
@@ -393,7 +393,7 @@
     "editor": {
       "adjacent": {
         "0": {
-          "body": "Vaata, kus toimikud, dokumendid ja tööriistad koos elavad."
+          "body": "Vaata, kus toimikud, dokumendid ja tööriistad kokku saavad."
         },
         "1": {
           "body": "Loo korduskasutatavaid Wordi dokumente väljade ja tingimuslike klauslitega."
@@ -407,7 +407,7 @@
       },
       "capabilities": {
         "0": {
-          "body": "Ava ja muuda Wordi dokumente otse rakenduse stella veebiredaktoris: ilma paigalduseta ja ilma faili eraldi suletud vormingusse teisendamata.",
+          "body": "Ava ja muuda Wordi dokumente otse rakenduse stella veebiredaktoris: ilma paigalduseta ja faili eraldi suletud vormingusse teisendamata.",
           "title": "Muuda .docx-faile brauseris"
         },
         "1": {
@@ -415,7 +415,7 @@
           "title": "Vorming jääb puutumata"
         },
         "2": {
-          "body": "Jälgitud lisamised ja kustutamised kuvatakse kohapeal ning tehisintellekti pakutud muudatused saabuvad jälgitud muudatustena, mille saad dokumendis vastu võtta või tagasi lükata.",
+          "body": "Jälgitud lisamised ja kustutamised on näha otse tekstis ning tehisintellekti pakutud muudatused saabuvad jälgitud muudatustena, mille saad dokumendis vastu võtta või tagasi lükata.",
           "title": "Muudatuste jälgimine"
         },
         "3": {
@@ -440,7 +440,7 @@
           "question": "Kas dokument jääb muutmise ajal oma toimikuga seotuks?"
         },
         "1": {
-          "answer": "Jah. Jälgitud lisamised ja kustutamised kuvatakse kohapeal, nii nagu Word neid näitab. Rakenduse stella tehisintellekti pakutud muudatused saabuvad samamoodi, nii et parandused vaadatakse üle ning võetakse vastu või lükatakse tagasi, enne kui need dokumendi osaks saavad.",
+          "answer": "Jah. Jälgitud lisamised ja kustutamised on näha otse tekstis, nii nagu Word neid näitab. Rakenduse stella tehisintellekti pakutud muudatused saabuvad samamoodi, nii et parandused vaadatakse üle ning võetakse vastu või lükatakse tagasi, enne kui need dokumendi osaks saavad.",
           "question": "Kas redaktor säilitab muudatuste jälgimise?"
         },
         "2": {
@@ -456,7 +456,7 @@
           "question": "Kas ma saan sama dokumendi Microsoft Wordis avada?"
         },
         "5": {
-          "answer": "Jah. Dokument on osa oma toimiku kontekstist, nii et toimikut tundvad tööriistad saavad seda lugeda ja pakkuda muudatusi jälgitud muudatustena samas dokumendis.",
+          "answer": "Jah. Dokument on osa oma toimikust, nii et tehisintellekti agent saab seda lugeda ja pakkuda muudatusi jälgitud muudatustena samas dokumendis.",
           "question": "Kas rakenduse stella tehisintellekt saab töötada dokumendiga, mida ma parajasti muudan?"
         }
       },
@@ -479,10 +479,10 @@
         },
         "1": {
           "bullets": {
-            "0": "Liigu dokumendi ja selle toimiku vahel ilma koopiaid üles laadimata",
+            "0": "Liigu dokumendi ja selle toimiku vahel koopiaid üles laadimata",
             "1": "Dokumendi omadused ja versioonid püsivad failiga koos",
             "2": "Vajadusel ava sama dokument töölauasilla kaudu",
-            "3": "Kasuta dokumenti kontekstina toimikut tundvatele tööriistadele"
+            "3": "Kasuta dokumenti tehisintellekti agendi kontekstina"
           },
           "heading": "Ühenduses ülejäänud toimikuga"
         }
@@ -494,7 +494,7 @@
           "body": "Valmista tundlik materjal tehisintellekti jaoks ette, tuvastavaid andmeid paljastamata."
         },
         "1": {
-          "body": "Vestle toimikute, failide ja allikate lõikes, kinnituste ja allikaviidetega."
+          "body": "Vestle toimikute, failide ja allikatega, kinnituste ja allikaviidete toel."
         },
         "2": {
           "body": "Muuda dokumendikogum toimikupõhiseks ülevaatustabeliks."
@@ -517,16 +517,16 @@
           "title": "Ettevõtete registrid"
         },
         "3": {
-          "body": "Liigu lahendi ja selle viidatud otsuste vahel lugerist lahkumata.",
+          "body": "Liigu lahendi ja selle viidatud lahendite vahel lugemisvaatest lahkumata.",
           "title": "Järgi viiteid"
         },
         "4": {
-          "body": "Sirvi ja filtreeri kohtupraktikat ja registreid selles jurisdiktsioonis, kus sa töötad.",
+          "body": "Sirvi ja filtreeri kohtupraktikat ja registreid oma jurisdiktsiooni järgi.",
           "title": "Jurisdiktsiooni kaupa"
         },
         "5": {
           "body": "Viita toimikust ükskõik millisele allikale, et tehisintellekti agendi vastused jääksid selleni jälgitavaks.",
-          "title": "Alus tehisintellektile"
+          "title": "Põhjendatud allikas tehisintellektile"
         }
       },
       "cta": {
@@ -538,7 +538,7 @@
           "question": "Kust andmed pärinevad?"
         },
         "1": {
-          "answer": "Kaks loendit, mõlemad kasvavad. Ühendatud registrid hõlmavad juba ARES-t (Tšehhi), Companies House’i (Ühendkuningriik), SEC EDGAR-i (USA), KRS-i (Poola), PRH-d (Soome) ja VIES-t (ELi käibemaks). Registritest kaugemal lisanduvad ametlikud allikad jurisdiktsioon jurisdiktsiooni haaval; näiteks Tšehhil, Hispaanial ja Taiwanil on juba ühendatud allikad ning kohtupraktika luger on ehitatud nii, et saad jurisdiktsiooni kaupa sirvida ja filtreerida, kui ametlikke allikaid lisandub.",
+          "answer": "Kaks loendit, mõlemad kasvavad. Ühendatud registrid hõlmavad juba ARES-t (Tšehhi), Companies House’i (Ühendkuningriik), SEC EDGAR-i (USA), KRS-i (Poola), PRH-d (Soome) ja VIES-t (ELi käibemaks). Lisaks registritele lisanduvad ametlikud allikad jurisdiktsioonide kaupa; näiteks Tšehhil, Hispaanial ja Taiwanil on need juba olemas, ning kohtupraktika lugemisvaates saad jurisdiktsiooni kaupa sirvida ja filtreerida, kui ametlikke allikaid lisandub.",
           "question": "Millised jurisdiktsioonid ja registrid on kaetud?"
         },
         "2": {
@@ -549,7 +549,7 @@
       "metaDescription": "Kohtupraktika ja ettevõtete registrid ametlikest avalikest allikatest. Loe lahendeid, otsi ettevõtteid, järgi viiteid ja too need otse toimikusse.",
       "metaTitle": "Kohtupraktika ja ettevõtete registriandmed | stella",
       "quickAnswer": {
-        "answer": "Kahte liiki. Ametlikku avalikku kohtupraktikat, mis on kogutud nii, et struktuur säilib, ja mille lahendeid saad lugeda, neist otsida ja nende viiteid järgida. Ning otsejuurdepääsu riiklikele äri- ja kaubandusregistritele, et tõmmata ametlikud ettevõtteandmed otse toimikusse. Mõlemad on põhjendatud allikad, millele tehisintellekti agent saab viidata.",
+        "answer": "Kahte liiki. Ametlikku avalikku kohtupraktikat, mis on kogutud nii, et struktuur säilib, ja mille lahendeid saad lugeda, neist otsida ja nende viiteid järgida. Ning otsejuurdepääsu riiklikele äri- ja kaubandusregistritele, et tuua ametlikud ettevõtteandmed otse toimikusse. Mõlemad on põhjendatud allikad, millele tehisintellekti agent saab viidata.",
         "question": "Milliseid avalikke andmeid stella juurde toob?"
       },
       "sections": {
@@ -573,7 +573,7 @@
           "bullets": {
             "0": "Viita toimikust lahendile või ettevõtte registrikandele",
             "1": "Tehisintellekti agent viitab aluseks olevale allikale, mitte ümbersõnastusele",
-            "2": "Otsi allikate üleselt, mitte ainult ühe sees"
+            "2": "Otsi üle kõigi allikate, mitte ainult ühest"
           },
           "heading": "Üks põhjendatud allikas tehisintellekti agendile"
         }
@@ -582,7 +582,7 @@
     "tabular-review": {
       "adjacent": {
         "0": {
-          "body": "Vestle toimikute, failide ja ühendatud allikate lõikes, kinnituste ja allika eelvaadetega."
+          "body": "Vestle toimikute, failide ja ühendatud allikatega, kinnituste ja allika eelvaadete toel."
         },
         "1": {
           "body": "Ametlik kohtupraktika ja ettevõtete registrid, tõmmatud otse toimikusse."
@@ -596,16 +596,16 @@
       },
       "capabilities": {
         "0": {
-          "body": "Sõnasta veerg tavakeeles; stella vastab sellele iga kogumi dokumendi kohta.",
+          "body": "Sõnasta veerg tavakeeles; stella vastab sellele kogumi iga dokumendi kohta.",
           "title": "Veerud on küsimused"
         },
         "1": {
-          "body": "Iga lahter viitab täpsele lõigule, kust see pärineb, nii et saad ühe klikiga kontrollida.",
+          "body": "Iga lahter viitab täpsele lõigule, kust see pärineb, nii et saad ühe klõpsuga kontrollida.",
           "title": "Viidatud kuni allikani"
         },
         "2": {
-          "body": "Ülevaatused elavad toimiku sees, koos dokumentide, kontaktide ja vestlustega, mille juurde nad kuuluvad.",
-          "title": "Toimikupõhine"
+          "body": "Ülevaatused püsivad toimikus, koos dokumentide, kontaktide ja vestlustega, mille juurde nad kuuluvad.",
+          "title": "Osa toimikust"
         },
         "3": {
           "body": "Kohtle vastuseid andmetena: sordi mis tahes veeru järgi ja filtreeri välja read, mis vajavad tähelepanu.",
@@ -613,7 +613,7 @@
         },
         "4": {
           "body": "Esita samad küsimused suurte dokumendikogumite kohta, selle asemel et faile ükshaaval avada.",
-          "title": "Loodud mahu jaoks"
+          "title": "Loodud suurte mahtude jaoks"
         },
         "5": {
           "body": "Võta tabel kaasa standardvormingutes: sinu enda töö tulemus ei jää lõksu.",
@@ -625,15 +625,15 @@
       },
       "faqs": {
         "0": {
-          "answer": "Kõike, mida küsiksid dokumenti üle vaatavalt inimeselt: faktide väljanoppimist, näiteks kuupäevi, pooli ja summasid, või kaalutlust nõudvaid küsimusi, näiteks kas klausel on olemas ja kuidas see on sõnastatud. Vastused tulevad koos viidetega lähtetekstile.",
+          "answer": "Kõike, mida küsiksid dokumenti üle vaatavalt inimeselt: faktide eraldamist, näiteks kuupäevi, pooli ja summasid, või kaalutlust nõudvaid küsimusi, näiteks kas klausel on olemas ja kuidas see on sõnastatud. Vastused tulevad koos viidetega lähtetekstile.",
           "question": "Milliseid küsimusi saab veerg esitada?"
         },
         "1": {
-          "answer": "Sinu toimiku dokumentidest. Tehisintellekti funktsioonid kasutavad sinu enda teenusepakkuja võtmeid, nii et väljanoppimine käib sinu seadistatud teenusepakkuja kaudu ja iga vastus viitab tagasi lõigule, kust see pärineb.",
+          "answer": "Sinu toimiku dokumentidest. Tehisintellekti funktsioonid kasutavad sinu enda teenusepakkuja võtmeid, nii et eraldamine käib sinu valitud tehisintellekti teenusepakkuja kaudu ja iga vastus viitab tagasi lõigule, kust see pärineb.",
           "question": "Kust vastused pärinevad?"
         },
         "2": {
-          "answer": "Jah. Tabelülevaatuse tulemuse saab eksportida standardvormingutes, nii et sinu töö tulemus jääb ülekantavaks, tarnijalõksuta.",
+          "answer": "Jah. Tabelülevaatuse tulemuse saad eksportida standardvormingutes, nii et sinu töö tulemus jääb ülekantavaks, tarnijalõksuta.",
           "question": "Kas ma saan ülevaatuse eksportida?"
         }
       },
@@ -648,25 +648,25 @@
           "bullets": {
             "0": "Lisa veerg, kirjutades küsimuse, mida küsiksid noorelt juristilt",
             "1": "Taaskasuta veerukomplekte eri toimikutes korratavate ülevaatusjuhendite jaoks",
-            "2": "Sega väljanoppimine (kuupäevad, pooled, summad) kaalutlust nõudvate küsimustega"
+            "2": "Sega faktide eraldamine (kuupäevad, pooled, summad) kaalutlust nõudvate küsimustega"
           },
           "heading": "Sõnasta küsimused korra, vastused tulevad kõigi kohta"
         },
         "1": {
           "bullets": {
             "0": "Klõpsa lahtril ja allikdokument avaneb viidatud lõigus",
-            "1": "Vastused toetuvad viidetele, mitte õhku rippuma jäävatele kokkuvõtetele",
+            "1": "Vastused toetuvad viidetele, mitte allikata kokkuvõtetele",
             "2": "Märka ühe pilguga dokumentide vahelisi lahknevusi"
           },
           "heading": "Iga vastus viib tagasi tekstini"
         },
         "2": {
           "bullets": {
-            "0": "Ülevaatused kuuluvad toimiku juurde, selle failide ja vestluste kõrvale",
+            "0": "Ülevaatused on toimikus, selle failide ja vestluse kõrval",
             "1": "Anna ülevaatus tehisintellekti agendile edasisteks küsimusteks",
             "2": "Ekspordi tabel või jätka selle täpsustamist kohapeal"
           },
-          "heading": "See on seal, kus töö"
+          "heading": "Seal, kus töö käib"
         }
       }
     },
@@ -679,7 +679,7 @@
           "body": "Muuda dokumendikogum toimikupõhiseks ülevaatustabeliks."
         },
         "2": {
-          "body": "Vestle toimikute, failide ja allikate lõikes, koos viidetega."
+          "body": "Vestle toimikute, failide ja allikatega, allikaviidete toel."
         },
         "3": {
           "body": "stella masinloetaval kujul tehisintellekti otsimootoritele."
@@ -687,7 +687,7 @@
       },
       "capabilities": {
         "0": {
-          "body": "Alusta korduvaid dokumente tõestatud alusest, mitte kopeeritud failist.",
+          "body": "Alusta korduvaid dokumente end tõestanud alusest, mitte kopeeritud failist.",
           "title": "Korduskasutatavad mallid"
         },
         "1": {
@@ -695,7 +695,7 @@
           "title": "Väljad ja kohatäited"
         },
         "2": {
-          "body": "Lisa või jäta klauslid välja sisestatud väärtuste põhjal, nii katab üks mall mitu varianti.",
+          "body": "Klauslid tulevad kaasa või jäävad välja sinu antud väärtuste põhjal, nii katab üks mall mitu varianti.",
           "title": "Tingimuslikud klauslid"
         },
         "3": {
@@ -707,7 +707,7 @@
           "title": "Muuda kohapeal"
         },
         "5": {
-          "body": "Loo mustand toimikusse ja jätka selle muutmist ülejäänud töö kõrval.",
+          "body": "Mustand jõuab toimikusse ja seda saad ülejäänud töö kõrval edasi muuta.",
           "title": "Otse toimikusse"
         }
       },
@@ -716,11 +716,11 @@
       },
       "faqs": {
         "0": {
-          "answer": "Jah. Malle kirjutatakse ja kohendatakse redaktoris ning seejärel pannakse nende põhjal dokumendid kokku.",
+          "answer": "Jah. Malle kirjutad ja kohendad redaktoris ning paned siis nende põhjal dokumendid kokku.",
           "question": "Kas ma saan malli muuta?"
         },
         "1": {
-          "answer": "Dokumendi korduskasutatav osa. Klausleid saab kasutada mitmes mallis ja lisada tingimuslikult, lähtudes väärtustest, mille kokkupanemisel annad.",
+          "answer": "Dokumendi korduskasutatav osa. Klausleid saad kasutada mitmes mallis ja lisada tingimuslikult, lähtudes väärtustest, mille kokkupanemisel annad.",
           "question": "Mis on klausel?"
         },
         "2": {
@@ -728,10 +728,10 @@
           "question": "Kuhu kokkupandud dokument läheb?"
         }
       },
-      "metaDescription": "Määra mall väljade ja tingimuslike klauslitega, täida see käsitsi või lase rakendusel stella koostada dokument toimiku andmetest otse toimikusse.",
+      "metaDescription": "Määra mall väljade ja tingimuslike klauslitega, täida see käsitsi või lase rakendusel stella koostada mustand toimiku andmetest. Mustand jõuab toimikusse.",
       "metaTitle": "Õigusdokumentide mallid tehisintellektiga | stella",
       "quickAnswer": {
-        "answer": "Mall on dokument, milles on väljad ja klauslid, mida saab tingimuslikult kaasata. Täidad väljad käsitsi või lased rakendusel stella need toimiku andmetest koostada; tingimuslikud klauslid lahenevad ja saad dokumendi, millega toimikus edasi töötada. Mallid ja klauslid on korduskasutatavad, nii et korduvad dokumendid algavad tõestatud alusest.",
+        "answer": "Mall on dokument, milles on väljad ja klauslid, mida saab tingimuslikult kaasata. Täidad väljad käsitsi või lased rakendusel stella need toimiku andmetest koostada; sobivad klauslid tulevad kaasa ja saad dokumendi, millega toimikus edasi töötada. Mallid ja klauslid on korduskasutatavad, nii et korduvad dokumendid algavad end tõestanud alusest.",
         "question": "Kuidas mallid rakenduses stella töötavad?"
       },
       "sections": {
@@ -747,17 +747,17 @@
           "bullets": {
             "0": "Eeltäida väljad dokumendist, mis on toimikus juba olemas",
             "1": "Vaata iga väärtus üle ja kohenda seda enne mustandi loomist",
-            "2": "Tingimuslikud klauslid lahenevad ikka nende väärtuste põhjal, mille alles jätad"
+            "2": "Tingimuslikud klauslid järgivad ikka väärtusi, mille alles jätad"
           },
           "heading": "Täida see toimiku andmetest"
         },
         "2": {
           "bullets": {
             "0": "Kirjuta ja kohenda malle redaktoris",
-            "1": "Loo mustand otse toimikusse",
+            "1": "Pane mustand kokku otse toimikus",
             "2": "Jätka tulemuse muutmist toimiku failide kõrval"
           },
-          "heading": "Muuda ja loo kohapeal"
+          "heading": "Muuda ja pane kokku ühes kohas"
         }
       }
     },
@@ -770,10 +770,10 @@
     "workspace": {
       "adjacent": {
         "0": {
-          "body": "Vestle toimikute, failide ja ühendatud tööriistade lõikes, kinnituste ja allika eelvaadetega."
+          "body": "Vestle toimikute, failide ja ühendatud tööriistadega, kinnituste ja allika eelvaadete toel."
         },
         "1": {
-          "body": "Muuda dokumendikogum toimikupõhiseks tabeliks, mida saab sortida, filtreerida ja jälgida."
+          "body": "Muuda dokumendikogum tabeliks, mida saad sortida, filtreerida ja allikani jälgida."
         },
         "2": {
           "body": "Jõua samade toimikute, dokumentide ja kohtupraktikani CLI-st ja MCP-ga ühilduvatest tööriistadest."
@@ -784,7 +784,7 @@
       },
       "capabilities": {
         "0": {
-          "body": "Korralda dokumendid, kontaktid, ülevaatus ja vestlus toimiku ümber, kuhu need kuuluvad. Kõik, mis toimikusse lisatakse, jääb sellega seotuks ja on otsitav kõigi toimikute lõikes, nii et kontekst on olemas, kui tagasi tuled.",
+          "body": "Korralda dokumendid, kontaktid, ülevaatus ja vestlus toimiku ümber, kuhu need kuuluvad. Kõik, mis toimikusse lisatakse, jääb sellega seotuks ja on otsitav üle kõigi toimikute, nii et kontekst on olemas, kui tagasi tuled.",
           "title": "Toimikud"
         },
         "1": {
@@ -818,10 +818,10 @@
         },
         "1": {
           "answer": "Dokumendid, kontaktid, ülevaatustabelid, vestlused ja dokumentide ajalugu. Kõik, mis toimikusse lisatakse, jääb sellega seotuks, nii et kontekst on olemas, kui tagasi tuled.",
-          "question": "Mis elab toimiku sees?"
+          "question": "Mis on toimiku sees?"
         },
         "2": {
-          "answer": "Jah. stella CLI ja MCP server avavad samad toimikud, dokumendid ja kohtupraktika ühendatud tööriistadele, samade õigustega. Üksikasjad leiad lehelt CLI & MCP.",
+          "answer": "Jah. stella CLI ja MCP-server teevad samad toimikud, dokumendid ja kohtupraktika ühendatud tööriistadele kättesaadavaks, samade õigustega. Üksikasjad leiad lehelt CLI & MCP.",
           "question": "Kas teised tööriistad pääsevad tööruumi ligi?"
         }
       },
@@ -834,9 +834,9 @@
       "sections": {
         "0": {
           "bullets": {
-            "0": "Dokumendid, kontaktid, ülevaatus ja vestlus elavad toimiku sees",
+            "0": "Dokumendid, kontaktid, ülevaatus ja vestlus püsivad toimiku sees",
             "1": "Muuda Wordi .docx-dokumente tööruumist lahkumata",
-            "2": "Liigu otsingu, ülevaatuse ja vestluse vahel ilma rakendust vahetamata"
+            "2": "Liigu otsingu, ülevaatuse ja vestluse vahel rakendust vahetamata"
           },
           "heading": "Kõik, mis toimikusse kuulub, ühes kohas"
         },
@@ -852,7 +852,7 @@
     }
   },
   "story": {
-    "agentBody": "Tehisintellekti agent otsib toimikust, loeb asjakohase teksti läbi ja vastab viidetega, mis avavad allika täpselt õiges lõigus. Kasuta teda otse stella rakenduses või ühenda tööriistadega, mida juba kasutad.",
+    "agentBody": "Tehisintellekti agent otsib toimikust, loeb asjakohase teksti läbi ja vastab viidetega, mis avavad allika täpselt õiges lõigus. Kasuta seda otse rakenduses stella või ühenda tööriistadega, mida juba kasutad.",
     "agentEyebrow": "Tehisintellekti agent",
     "agentTitle": "Piisab ühest küsimusest. Iga vastus viitab allikale.",
     "bringEditorToFront": "Too rakenduse stella redaktor esiplaanile",
@@ -860,7 +860,7 @@
     "bringWorkspaceToFront": "Too rakenduse stella tööruum esiplaanile",
     "controlBody": "stella on <gh>avatud lähtekoodiga</gh> õigustarkvara, mida saad ise majutada: uuri koodi, käita seda oma moodi ja ekspordi kõik standardvormingutes.",
     "controlTitle": "Hoia taristu enda kontrolli all.",
-    "dataBody": "Kohtupraktika ja äriregistrid otse toimikus, igas jurisdiktsioonis, kus töötad. Anonüümimine hoiab tuvastavad andmed tehisintellektist eemal.",
+    "dataBody": "Kohtupraktika ja ettevõtete registrid otse toimikus, igas jurisdiktsioonis, kus töötad. Anonüümimine hoiab tuvastavad andmed tehisintellektist eemal.",
     "dataEyebrow": "Õigusandmed",
     "dataMainAlt": "Kohtu ametlik lahend, avatud rakenduses stella",
     "dataTitle": "Kohtupraktika ja registrid käepärast.",
@@ -872,11 +872,11 @@
     "exploreTemplates": "Tutvu mallidega",
     "exploreWorkspace": "Tutvu tööruumiga",
     "eyebrow": "Ühendatud tööruum",
-    "intro": "Materjalid, ülevaatus ja lõplikud dokumendid püsivad toimikus ja toetuvad üksteisele. Saad toimiku kallal koos tehisintellektiga töötada ja iga selle samm on kontrollitav.",
+    "intro": "Materjalid, ülevaatus ja lõplikud dokumendid püsivad toimikus ja toetuvad üksteisele. Tööta toimiku kallal koos tehisintellekti agendiga ja kontrolli iga tema sammu.",
     "openEditor": "Ava redaktor",
     "proofByokBody": "Kasuta tehisintellekti funktsioonideks enda teenusepakkuja võtmeid.",
     "proofByokTitle": "Kasuta oma mudeleid",
-    "proofOpenSourceBody": "Uuri koodi ja hoia süsteem ülekantav.",
+    "proofOpenSourceBody": "Uuri koodi ja hoia süsteem ülekantavana.",
     "proofOpenSourceTitle": "Avatud lähtekood",
     "proofPermissionsBody": "Iga toiming püsib kasutaja ja tööruumi õiguste piires.",
     "proofPermissionsTitle": "Arvestab õigustega",
@@ -886,8 +886,8 @@
     "sourceOnGitHub": "Lähtekood GitHubis",
     "title": "Üks toimik. Materjalidest vastuseni.",
     "velocityAll": "Kogu muudatuste logi",
-    "velocityTitle": "Mis on viimati valminud.",
-    "workspaceBody": "Dokumendid, tähtajad, struktureeritud ülevaatus ja koostamine püsivad koos ning on otsitavad kõigi toimikute lõikes.",
+    "velocityTitle": "Mis on uut rakenduses stella.",
+    "workspaceBody": "Dokumendid, tähtajad, struktureeritud ülevaatus ja koostamine püsivad koos ning on otsitavad üle kõigi toimikute.",
     "workspaceEyebrow": "Tööruum",
     "workspaceTitle": "Halda kogu toimikut ühes kohas."
   }

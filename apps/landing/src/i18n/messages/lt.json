@@ -68,7 +68,7 @@
     "title": "Pasitelkite DI kiekvienoje byloje."
   },
   "home": {
-    "ctaTitle": "Atneškite DI į savo teisinę praktiką."
+    "ctaTitle": "Įtraukite DI į savo teisinę praktiką."
   },
   "mcpProof": {
     "contextBody": "Perkelkite patvirtintas bylas ir teisinius duomenis į Claude ar bet kurį su MCP suderinamą klientą.",
@@ -102,12 +102,12 @@
     "product": "Produktas",
     "products": {
       "agent": {
-        "blurb": "Bendraukite su savo bylomis, dokumentais, registrais ir prijungtais įrankiais vienoje vietoje. DI agentas veikia gavęs patvirtinimą ir su šaltinių peržiūromis, atsakymus grindžia citatomis ir plečiasi per gebėjimus bei išorines jungtis.",
+        "blurb": "Bendraukite su savo bylomis, dokumentais, registrais ir prijungtais įrankiais vienoje vietoje. DI agentas veikia tik gavęs patvirtinimą ir rodydamas šaltinių peržiūras, atsakymus grindžia citatomis, o praplėsti jį galima gebėjimais ir išorinėmis jungtimis.",
         "eyebrow": "DI agentas",
         "title": "DI agentas, dirbantis su jūsų bylomis, failais ir įrankiais."
       },
       "anonymization": {
-        "blurb": "Pašalinkite vardus, subjektus ir identifikuojančius duomenis, kol medžiaga dar nepasiekė DI, tiesiai iš pokalbio ir dokumentų peržiūros, o paslėptą rezultatą patikrinkite prieš judant toliau.",
+        "blurb": "Pašalinkite vardus, subjektus ir identifikuojančius duomenis, kol medžiaga dar nepasiekė DI, tiesiai iš pokalbio ir dokumentų peržiūros, o nuasmenintą rezultatą patikrinkite prieš tęsdami.",
         "eyebrow": "Anonimizavimas",
         "title": "Paruoškite medžiagą DI neatskleisdami identifikuojančių duomenų."
       },
@@ -122,17 +122,17 @@
         "title": "Redaguokite Word dokumentus naršyklėje neišeidami iš bylos."
       },
       "public-data": {
-        "blurb": "Teismų praktika ir įmonių registrai iš oficialių viešų šaltinių, kuriuos išsaugodamas jų struktūrą surenka programos stella Legal Atlas. Perskaitykite sprendimą, pasitikrinkite įmonę, sekite citatas ir remkitės bet kuriuo iš jų byloje arba perduokite juos DI agentui.",
+        "blurb": "Teismų praktika ir įmonių registrai iš oficialių viešų šaltinių, kuriuos programos stella Legal Atlas surenka išsaugodamas jų struktūrą. Perskaitykite sprendimą, pasitikrinkite įmonę, sekite citatas ir remkitės bet kuriuo iš jų byloje arba perduokite juos DI agentui.",
         "eyebrow": "Viešieji duomenys",
         "title": "Teisiniai duomenys, parengti įtraukti į bylą."
       },
       "tabular-review": {
-        "blurb": "Užduokite klausimus visam dokumentų rinkiniui ir gaukite struktūruotus atsakymus byloje esančioje lentelėje: rikiuojamoje, filtruojamoje ir atsekamoje iki pirminio teksto. Skirta due diligence, discovery ir teisinei paieškai.",
+        "blurb": "Užduokite klausimus visam dokumentų rinkiniui ir gaukite struktūruotus atsakymus byloje esančioje lentelėje: rikiuojamoje, filtruojamoje ir atsekamoje iki pirminio teksto. Skirta due diligence patikroms, įrodymų analizei ir teisinei paieškai.",
         "eyebrow": "Lentelinė peržiūra",
         "title": "Paverskite dokumentų krūvą lentele, kurią galima peržiūrėti."
       },
       "templates": {
-        "blurb": "Šabloną apibrėžkite kartą, su laukais ir sąlyginėmis nuostatomis, o paskui užpildykite jį ranka arba leiskite programai stella parengti projektą iš bylos duomenų. Sukurkite dokumentą tiesiai byloje ir toliau jį redaguokite.",
+        "blurb": "Šabloną su laukais ir pagal poreikį įtraukiamomis sąlygomis apibrėžkite vieną kartą, o paskui užpildykite jį ranka arba leiskite programai stella parengti projektą iš bylos duomenų. Parengtas dokumentas atsiduria byloje ir jį galite toliau redaguoti.",
         "eyebrow": "Šablonai",
         "title": "Kurkite pakartotinai naudojamus šablonus ir leiskite DI juos užpildyti."
       },
@@ -148,7 +148,7 @@
     "agent": {
       "adjacent": {
         "0": {
-          "body": "Paverskite dokumentų rinkinį byloje esančia lentele, kurią galima rikiuoti, filtruoti ir atsekti."
+          "body": "Paverskite dokumentų rinkinį lentele, kurią galite rikiuoti, filtruoti ir atsekti iki šaltinio."
         },
         "1": {
           "body": "Bylos, dokumentai, .docx redagavimas, peržiūra ir pokalbiai vienoje darbo srityje."
@@ -196,10 +196,10 @@
         },
         "1": {
           "answer": "Per gebėjimus (pakartotinai naudojamus nurodymus ir įrankius) ir su MCP suderinamas išorines jungtis. Abu būdai praplečia tai, ką DI agentas pasiekia, nekeisdami paties pokalbio.",
-          "question": "Kaip pridėti naujų gebėjimų?"
+          "question": "Kaip pridėti naujų galimybių?"
         },
         "2": {
-          "answer": "Iš jūsų bylų, failų, registrų ir prijungtų įrankių. DI funkcijos veikia su jūsų pačių raktais, o atsakymai pagrįsti citatomis, vedančiomis atgal į šaltinį.",
+          "answer": "Iš jūsų bylų, failų, registrų ir prijungtų įrankių. DI funkcijos veikia su jūsų pačių tiekėjų raktais, o atsakymai pagrįsti citatomis, vedančiomis atgal į šaltinį.",
           "question": "Iš kur atsiranda jo atsakymai?"
         }
       },
@@ -245,7 +245,7 @@
           "body": "Bylos, dokumentai, .docx redagavimas, peržiūra ir pokalbiai vienoje darbo srityje."
         },
         "2": {
-          "body": "Paverskite dokumentų rinkinį byloje esančia lentele, kurią galima rikiuoti, filtruoti ir atsekti."
+          "body": "Paverskite dokumentų rinkinį lentele, kurią galite rikiuoti, filtruoti ir atsekti iki šaltinio."
         },
         "3": {
           "body": "stella mašinai skaitomu formatu DI paieškos sistemoms."
@@ -265,7 +265,7 @@
           "title": "Su jūsų pačių terminais"
         },
         "3": {
-          "body": "Parodo paslėptą dokumentą kontekste, todėl patvirtinate, kas išeina iš bylos.",
+          "body": "Parodo nuasmenintą dokumentą kontekste, todėl patvirtinate, kas išeina iš bylos.",
           "title": "Rezultatas, kurį patikrinsite"
         }
       },
@@ -278,29 +278,29 @@
           "question": "Ar anonimizavimas jau veikia?"
         },
         "1": {
-          "answer": "Paruošti medžiagą DI darbo eigoms neatskleidžiant vardų, subjektų ar identifikuojančių duomenų, o paslėptą rezultatą palikti peržiūrai.",
+          "answer": "Jis padeda paruošti medžiagą DI darbo eigoms neatskleidžiant vardų, subjektų ar identifikuojančių duomenų; nuasmenintas rezultatas lieka peržiūrai.",
           "question": "Kam jis padeda?"
         }
       },
       "metaDescription": "Pašalinkite vardus, subjektus ir identifikuojančius duomenis, kol medžiaga nepasiekė DI, tiesiai iš pokalbio ir peržiūros; rezultatą patikrinsite.",
       "metaTitle": "Dokumentų anonimizavimas teisiniam DI | stella",
       "quickAnswer": {
-        "answer": "Jis pašalina vardus, subjektus ir identifikuojančius duomenis, kol medžiaga dar nepateko į DI darbo eigą, ir parodo paslėptą rezultatą, kad patvirtintumėte, kas išeina iš bylos. Jis integruotas tiesiai į pokalbį ir dokumentų peržiūrą.",
+        "answer": "Jis pašalina vardus, subjektus ir identifikuojančius duomenis, kol medžiaga dar nepateko į DI darbo eigą, ir parodo nuasmenintą rezultatą, kad patvirtintumėte, kas išeina iš bylos. Jis integruotas tiesiai į pokalbį ir dokumentų peržiūrą.",
         "question": "Kas yra anonimizavimas programoje stella?"
       },
       "sections": {
         "0": {
           "bullets": {
             "0": "Vardai, subjektai ir identifikuojantys duomenys nepatenka į DI žingsnius",
-            "1": "Sukurta teisinėms DI darbo eigoms, o ne bendram dokumentų slėpimui",
-            "2": "Prieš kitą žingsnį palieka paslėptą dokumentą peržiūrai"
+            "1": "Sukurta teisinėms DI darbo eigoms, o ne bendram dokumentų maskavimui",
+            "2": "Prieš kitą žingsnį palieka nuasmenintą dokumentą peržiūrai"
           },
           "heading": "Paruoškite medžiagą prieš ją perduodami DI"
         },
         "1": {
           "bullets": {
             "0": "Pasiekiama iš pokalbio ir dokumentų peržiūros",
-            "1": "Nereikia nieko kopijuoti į išorinį slėpimo įrankį",
+            "1": "Nereikia nieko kopijuoti į išorinį maskavimo įrankį",
             "2": "Veikia programos stella atvirojo kodo anonimizavimo varikliu"
           },
           "heading": "Darbo srities dalis, o ne atskiras įrankis"
@@ -396,7 +396,7 @@
           "body": "Pažiūrėkite, kur bylos, dokumentai ir įrankiai laikomi kartu."
         },
         "1": {
-          "body": "Kurkite pakartotinai naudojamus Word dokumentus su laukais ir sąlyginėmis nuostatomis."
+          "body": "Kurkite pakartotinai naudojamus Word dokumentus su laukais ir pagal poreikį įtraukiamomis sąlygomis."
         },
         "2": {
           "body": "Išbandykite tą patį redaktorių atskirai: atverkite ir redaguokite .docx naršyklėje, paskyros nereikia."
@@ -452,11 +452,11 @@
           "question": "Ar galiu grįžti prie ankstesnės versijos?"
         },
         "4": {
-          "answer": "Taip. Programos stella tiltas į kompiuterį atveria dokumentą vietiniame Office, kai reikia Word būdingų veiksmų, ir grąžina suredaguotą failą į tą pačią bylą.",
+          "answer": "Taip. Programos stella tiltas į kompiuterį atveria dokumentą vietiniame Office, kai reikia programai Word būdingų veiksmų, ir grąžina suredaguotą failą į tą pačią bylą.",
           "question": "Ar galiu tą patį dokumentą atverti su Microsoft Word?"
         },
         "5": {
-          "answer": "Taip. Dokumentas yra bylos konteksto dalis, todėl bylą matantys įrankiai gali jį perskaityti ir pasiūlyti taisymus kaip sekamus keitimus tame pačiame dokumente.",
+          "answer": "Taip. Dokumentas yra bylos dalis, todėl DI agentas gali jį perskaityti ir pasiūlyti taisymus kaip sekamus keitimus tame pačiame dokumente.",
           "question": "Ar programos stella DI gali dirbti su redaguojamu dokumentu?"
         }
       },
@@ -475,14 +475,14 @@
             "3": "Išlaikykite pirminį Word failo formatą",
             "4": "Įrašykite pakeitimus į dokumento versijų istoriją"
           },
-          "heading": "Iš .docx lieka .docx"
+          "heading": ".docx lieka .docx"
         },
         "1": {
           "bullets": {
             "0": "Judėkite tarp dokumento ir jo bylos neįkeldami kopijų",
             "1": "Laikykite dokumento savybes ir versijas kartu su failu",
             "2": "Prireikus atverkite tą patį dokumentą per tiltą į kompiuterį",
-            "3": "Naudokite dokumentą kaip kontekstą bylą matantiems įrankiams"
+            "3": "Naudokite dokumentą kaip kontekstą DI agentui"
           },
           "heading": "Susieta su likusia bylos dalimi"
         }
@@ -497,7 +497,7 @@
           "body": "Bendraukite su bylomis, failais ir šaltiniais: su patvirtinimais ir citatomis."
         },
         "2": {
-          "body": "Paverskite dokumentų rinkinį byloje esančia peržiūros lentele."
+          "body": "Paverskite dokumentų rinkinį peržiūros lentele tiesiai byloje."
         },
         "3": {
           "body": "stella mašinai skaitomu formatu DI paieškos sistemoms."
@@ -517,7 +517,7 @@
           "title": "Įmonių registrai"
         },
         "3": {
-          "body": "Judėkite tarp sprendimo ir jo cituojamų bylų neišeidami iš skaityklės.",
+          "body": "Judėkite tarp sprendimo ir jame cituojamų sprendimų neišeidami iš skaityklės.",
           "title": "Sekite citatas"
         },
         "4": {
@@ -575,7 +575,7 @@
             "1": "DI agentas cituoja patį šaltinį, o ne perpasakojimą",
             "2": "Ieškokite per visus šaltinius, o ne tik viename"
           },
-          "heading": "Vienas patikimas pagrindas DI agentui"
+          "heading": "Vienas pagrįstas šaltinis DI agentui"
         }
       }
     },
@@ -605,7 +605,7 @@
         },
         "2": {
           "body": "Peržiūros laikomos byloje, šalia su jomis susijusių dokumentų, kontaktų ir pokalbių.",
-          "title": "Bylos ribose"
+          "title": "Bylos dalis"
         },
         "3": {
           "body": "Atsakymus traktuokite kaip duomenis: rikiuokite pagal bet kurį stulpelį, filtruokite iki dėmesio reikalaujančių eilučių.",
@@ -625,11 +625,11 @@
       },
       "faqs": {
         "0": {
-          "answer": "Bet kokius, kokius užduotumėte dokumentą peržiūrinčiam žmogui: faktinius, pavyzdžiui, datas, šalis ir sumas, arba vertinamuosius, pavyzdžiui, ar nuostata yra ir kaip ji suformuluota. Atsakymai grąžinami pagrįsti citatomis iš pirminio teksto.",
+          "answer": "Bet kokius, kokius užduotumėte dokumentą peržiūrinčiam žmogui: faktinius, pavyzdžiui, datas, šalis ir sumas, arba vertinamuosius, pavyzdžiui, ar sąlyga yra ir kaip ji suformuluota. Atsakymai grąžinami pagrįsti citatomis iš pirminio teksto.",
           "question": "Kokius klausimus gali užduoti stulpelis?"
         },
         "1": {
-          "answer": "Iš jūsų bylos dokumentų. DI funkcijos veikia su jūsų pačių raktais, todėl duomenys išgaunami per jūsų sukonfigūruotą DI tiekėją, o kiekvienas atsakymas veda atgal į teksto vietą, iš kurios paimtas.",
+          "answer": "Iš jūsų bylos dokumentų. DI funkcijos veikia su jūsų pačių tiekėjų raktais, todėl duomenys išgaunami per jūsų pasirinktą DI tiekėją, o kiekvienas atsakymas veda atgal į teksto vietą, iš kurios paimtas.",
           "question": "Iš kur atsiranda atsakymai?"
         },
         "2": {
@@ -640,7 +640,7 @@
       "metaDescription": "Užduokite klausimus visam dokumentų rinkiniui ir gaukite struktūruotus atsakymus rikiuojamoje, iki šaltinio atsekamoje lentelėje. Skirta due diligence.",
       "metaTitle": "Lentelinė dokumentų peržiūra due diligence | stella",
       "quickAnswer": {
-        "answer": "Lentelinę peržiūrą nukreipiate į byloje esantį dokumentų rinkinį ir stulpelius apibrėžiate kaip klausimus, pavyzdžiui, „taikytina teisė“, „įspėjimo apie nutraukimą terminas“ ar „kontrolės pasikeitimo nuostata“. stella kiekvienam dokumentui išgauna atsakymą į lentelę, kurią galite rikiuoti, filtruoti ir eksportuoti, o kiekvienas langelis veda atgal į teksto vietą, iš kurios kilęs.",
+        "answer": "Lentelinę peržiūrą nukreipiate į byloje esantį dokumentų rinkinį ir stulpelius apibrėžiate kaip klausimus, pavyzdžiui, „taikytina teisė“, „įspėjimo apie nutraukimą terminas“ ar „kontrolės pasikeitimo sąlyga“. stella kiekvienam dokumentui išgauna atsakymą į lentelę, kurią galite rikiuoti, filtruoti ir eksportuoti, o kiekvienas langelis veda atgal į teksto vietą, iš kurios paimtas.",
         "question": "Kaip veikia lentelinė peržiūra?"
       },
       "sections": {
@@ -662,7 +662,7 @@
         },
         "2": {
           "bullets": {
-            "0": "Peržiūros priskirtos bylai, šalia jos failų ir pokalbių",
+            "0": "Peržiūros lieka byloje, šalia jos failų ir pokalbių",
             "1": "Perduokite peržiūrą DI agentui tolesniems klausimams",
             "2": "Eksportuokite lentelę arba toliau ją tikslinkite vietoje"
           },
@@ -676,7 +676,7 @@
           "body": "Bylos, dokumentai ir Word redagavimas vienoje vietoje."
         },
         "1": {
-          "body": "Paverskite dokumentų rinkinį byloje esančia peržiūros lentele."
+          "body": "Paverskite dokumentų rinkinį peržiūros lentele tiesiai byloje."
         },
         "2": {
           "body": "Bendraukite su bylomis, failais ir šaltiniais, gaudami citatas."
@@ -695,8 +695,8 @@
           "title": "Laukai ir vietaženkliai"
         },
         "2": {
-          "body": "Įtraukite arba praleiskite nuostatas pagal pateiktas reikšmes, kad vienas šablonas apimtų kelis variantus.",
-          "title": "Sąlyginės nuostatos"
+          "body": "Įtraukite arba praleiskite sąlygas pagal pateiktas reikšmes, kad vienas šablonas apimtų kelis variantus.",
+          "title": "Sąlygos pagal poreikį"
         },
         "3": {
           "body": "Leiskite programai stella parengti užpildytą dokumentą iš bylos duomenų ir jį patikslinkite.",
@@ -707,7 +707,7 @@
           "title": "Redagavimas vietoje"
         },
         "5": {
-          "body": "Sukurkite projektą tiesiai byloje ir toliau jį redaguokite šalia viso kito darbo.",
+          "body": "Projektas atsiduria byloje ir jį galite iš karto redaguoti šalia viso kito darbo.",
           "title": "Tiesiai į bylą"
         }
       },
@@ -720,44 +720,44 @@
           "question": "Ar galiu redaguoti šabloną?"
         },
         "1": {
-          "answer": "Pakartotinai naudojama dokumento dalis. Nuostatas galima įtraukti į skirtingus šablonus ir pridėti pagal sąlygas, priklausomai nuo rengiant pateiktų reikšmių.",
-          "question": "Kas yra nuostata?"
+          "answer": "Pakartotinai naudojama dokumento dalis. Sąlygas galima įtraukti į skirtingus šablonus ir pridėti pagal poreikį, priklausomai nuo rengiant pateiktų reikšmių.",
+          "question": "Kas yra sąlyga?"
         },
         "2": {
           "answer": "Byloje, kaip projektas, kurį galite toliau redaguoti šalia kitų bylos dokumentų.",
           "question": "Kur atsiduria parengtas dokumentas?"
         }
       },
-      "metaDescription": "Apibrėžkite šabloną su laukais ir sąlyginėmis nuostatomis, užpildykite ranka arba leiskite programai stella parengti jį iš bylos duomenų, tiesiai byloje.",
+      "metaDescription": "Apibrėžkite šabloną su laukais ir sąlygomis, užpildykite jį ranka arba leiskite programai stella parengti projektą iš bylos duomenų. Projektas lieka byloje.",
       "metaTitle": "Teisinių dokumentų šablonai su DI | stella",
       "quickAnswer": {
-        "answer": "Šablonas yra dokumentas su laukais ir nuostatomis, kurias galima įtraukti pagal sąlygas. Laukus užpildote ranka arba leidžiate programai stella parengti juos iš bylos duomenų; sąlyginės nuostatos išsisprendžia, ir gaunate dokumentą, su kuriuo toliau dirbate byloje. Šablonai ir nuostatos naudojami pakartotinai, todėl pasikartojantys dokumentai pradedami nuo patikimo pagrindo.",
+        "answer": "Šablonas yra dokumentas su laukais ir sąlygomis, kurias galima įtraukti pagal poreikį. Laukus užpildote ranka arba leidžiate programai stella parengti juos iš bylos duomenų; įtraukiamos reikiamos sąlygos, ir gaunate dokumentą, su kuriuo toliau dirbate byloje. Šablonai ir sąlygos naudojami pakartotinai, todėl pasikartojantys dokumentai pradedami nuo patikimo pagrindo.",
         "question": "Kaip veikia šablonai programoje stella?"
       },
       "sections": {
         "0": {
           "bullets": {
             "0": "Dokumentą surinkite iš šablono, o ne pradėkite nuo tuščio lapo",
-            "1": "Naudokite tas pačias nuostatas skirtinguose šablonuose",
+            "1": "Naudokite tas pačias sąlygas skirtinguose šablonuose",
             "2": "Išlaikykite pasikartojančius dokumentus nuoseklius"
           },
-          "heading": "Statykite iš šablonų ir nuostatų"
+          "heading": "Kurkite iš šablonų ir sąlygų"
         },
         "1": {
           "bullets": {
             "0": "Iš anksto užpildykite laukus iš byloje jau esančio dokumento",
             "1": "Prieš rengdami projektą peržiūrėkite ir pakoreguokite kiekvieną reikšmę",
-            "2": "Sąlyginės nuostatos išsisprendžia pagal paliktas reikšmes"
+            "2": "Sąlygos ir toliau įtraukiamos pagal jūsų paliktas reikšmes"
           },
           "heading": "Užpildykite jį bylos duomenimis"
         },
         "2": {
           "bullets": {
             "0": "Kurkite ir koreguokite šablonus redaktoriuje",
-            "1": "Sukurkite projektą tiesiai byloje",
+            "1": "Parenkite projektą tiesiai byloje",
             "2": "Toliau redaguokite rezultatą šalia bylos failų"
           },
-          "heading": "Redaguokite ir kurkite vietoje"
+          "heading": "Redaguokite ir renkite čia pat"
         }
       }
     },
@@ -773,7 +773,7 @@
           "body": "Bendraukite su bylomis, failais ir prijungtais įrankiais: su patvirtinimais ir šaltinių peržiūromis."
         },
         "1": {
-          "body": "Paverskite dokumentų rinkinį byloje esančia lentele, kurią galima rikiuoti, filtruoti ir atsekti."
+          "body": "Paverskite dokumentų rinkinį lentele, kurią galite rikiuoti, filtruoti ir atsekti iki šaltinio."
         },
         "2": {
           "body": "Pasiekite tas pačias bylas, dokumentus ir teismų praktiką iš CLI ir su MCP suderinamų įrankių."
@@ -809,11 +809,11 @@
         }
       },
       "cta": {
-        "heading": "Suneškite visas bylas į vieną darbo sritį."
+        "heading": "Sutelkite visas bylas vienoje darbo srityje."
       },
       "faqs": {
         "0": {
-          "answer": "Taip. Žiniatinklio programa leidžia redaguoti ir peržiūrėti Word .docx failus. Vietiniam redagavimui su Office kompiuterio programa veikia kaip tiltas: dokumentą atveriate iš programos stella ir redaguojate savo įrenginyje.",
+          "answer": "Taip. Žiniatinklio programa leidžia redaguoti ir peržiūrėti Word .docx failus. Vietiniam redagavimui su Office kompiuterio programa veikia kaip tiltas: dokumentą atveriate iš programos stella ir redaguojate savo kompiuteryje.",
           "question": "Ar galiu redaguoti Word dokumentus programoje stella?"
         },
         "1": {
@@ -859,8 +859,8 @@
     "bringTerminalToFront": "Perkelti programos stella terminalą į priekinį planą",
     "bringWorkspaceToFront": "Perkelti programos stella darbo sritį į priekinį planą",
     "controlBody": "stella – <gh>atvirojo kodo</gh> teisinė programinė įranga, kurią galite įdiegti savo serveryje: peržiūrėkite kodą, paleiskite ją savaip ir eksportuokite viską standartiniais formatais.",
-    "controlTitle": "Išlaikykite infrastruktūros kontrolę.",
-    "dataBody": "Teismų praktika ir įmonių registrai tiesiai byloje, kiekvienoje jurisdikcijoje, kurioje dirbate. Anonimizavimas tuo metu saugo identifikuojančius duomenis nuo DI.",
+    "controlTitle": "Technologijos lieka jūsų rankose.",
+    "dataBody": "Teismų praktika ir įmonių registrai iš visų jurisdikcijų, kuriose dirbate, įkeliami tiesiai į bylą. Anonimizavimas saugo identifikuojančius duomenis nuo DI.",
     "dataEyebrow": "Teisiniai duomenys",
     "dataMainAlt": "Oficialus teismo sprendimas, atvertas programoje stella",
     "dataTitle": "Teismų praktika ir registrai po ranka.",
@@ -872,7 +872,7 @@
     "exploreTemplates": "Susipažinti su šablonais",
     "exploreWorkspace": "Susipažinti su darbo sritimi",
     "eyebrow": "Susieta darbo sritis",
-    "intro": "Medžiaga, peržiūra ir galutiniai dokumentai lieka byloje ir remiasi vieni kitais. Prie bylos galite dirbti kartu su DI, o kiekvieną jo žingsnį galima patikrinti.",
+    "intro": "Pirminė medžiaga, peržiūra ir galutiniai dokumentai lieka byloje ir remiasi vieni kitais. Prie bylos dirbkite kartu su DI agentu ir patikrinkite kiekvieną jo žingsnį.",
     "openEditor": "Atverti redaktorių",
     "proofByokBody": "DI funkcijoms naudokite savo tiekėjų raktus.",
     "proofByokTitle": "Naudokite savo modelius",
@@ -882,11 +882,11 @@
     "proofPermissionsTitle": "Paiso teisių",
     "proofSelfHostBody": "Paleiskite programą stella savo valdomoje infrastruktūroje.",
     "proofSelfHostTitle": "Diegiama savo serveryje",
-    "selfHostGuide": "Skaityti diegimo savo serveryje gidą",
+    "selfHostGuide": "Skaityti diegimo savo serveryje vadovą",
     "sourceOnGitHub": "Pirminis kodas platformoje GitHub",
     "title": "Viena byla. Nuo dokumentų iki atsakymo.",
     "velocityAll": "Visas pakeitimų žurnalas",
-    "velocityTitle": "Ką neseniai išleidome.",
+    "velocityTitle": "Kas naujo programoje stella.",
     "workspaceBody": "Dokumentai, terminai, struktūruota peržiūra ir rengimas lieka kartu, juos galima surasti visose bylose.",
     "workspaceEyebrow": "Darbo sritis",
     "workspaceTitle": "Tvarkykite visą bylą vienoje vietoje."

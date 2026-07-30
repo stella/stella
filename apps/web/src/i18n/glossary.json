@@ -583,9 +583,21 @@
     {
       "id": "clause",
       "en": "Clause",
-      "note": "cs uses \"Ustanovení\" / sk \"Ustanovenie\" (the clause library renders as \"Vzorová ustanovení\" / \"Vzorové ustanovenia\"); \"Klauzule\" / \"Klauzula\" and their inflected forms must not be used. ar بند for a generic contract clause; reserve مادة for statutes/codes and شرط for genuinely conditional stipulations.",
+      "note": "cs uses \"Ustanovení\" / sk \"Ustanovenie\" (the clause library renders as \"Vzorová ustanovení\" / \"Vzorové ustanovenia\"); \"Klauzule\" / \"Klauzula\" and their inflected forms must not be used. ar بند for a generic contract clause; reserve مادة for statutes/codes and شرط for genuinely conditional stipulations. lt \"nuostata\" and its inflected forms must not render Clause (the clauses feature says \"sąlyga\"); the ban is scoped to clause strings, so statutory provisions elsewhere may still say nuostata.",
       "forbidden": {
         "ar": ["مادة"],
+        "lt": [
+          "nuostata",
+          "nuostatos",
+          "nuostatai",
+          "nuostatą",
+          "nuostatoje",
+          "nuostatų",
+          "nuostatoms",
+          "nuostatas",
+          "nuostatomis",
+          "nuostatose"
+        ],
         "cs": [
           "klauzule",
           "klauzuli",

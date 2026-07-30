@@ -56,7 +56,7 @@
     "sourceCode": "Código-fonte",
     "status": "Status",
     "tabularReview": "Revisão tabular",
-    "tagline": "Espaço de trabalho jurídico aberto para o trabalho que importa.",
+    "tagline": "Espaço de trabalho jurídico aberto, para os casos que importam.",
     "templates": "Modelos",
     "terms": "Termos",
     "workspace": "Espaço de trabalho"
@@ -68,7 +68,7 @@
     "title": "Coloque a IA para trabalhar em cada caso."
   },
   "home": {
-    "ctaTitle": "Traga a IA para a sua prática jurídica."
+    "ctaTitle": "Traga a IA para a sua advocacia."
   },
   "mcpProof": {
     "contextBody": "Leve os casos aprovados e os dados jurídicos para o Claude ou para qualquer cliente compatível com MCP.",
@@ -117,7 +117,7 @@
         "title": "Um espaço de trabalho, a partir de qualquer ferramenta."
       },
       "editor": {
-        "blurb": "Abra e edite arquivos .docx do Word direto no navegador: sem instalação, sem converter para outro formato. O editor DOCX on-line da stella preserva a formatação original e o controle de alterações, mantém o arquivo ligado ao seu caso e grava cada revisão no histórico de versões do documento.",
+        "blurb": "Abra e edite arquivos .docx do Word direto no navegador: sem instalação, sem converter para outro formato. O editor DOCX on-line da stella preserva a formatação original e o controle de alterações, mantém o arquivo ligado ao seu caso e salva cada revisão no histórico de versões do documento.",
         "eyebrow": "Editor",
         "title": "Edite documentos do Word no navegador, sem sair do caso."
       },
@@ -127,12 +127,12 @@
         "title": "Dados jurídicos, prontos para entrar em um caso."
       },
       "tabular-review": {
-        "blurb": "Faça perguntas a um conjunto inteiro de documentos e receba respostas estruturadas como uma tabela dentro do caso: ordenável, filtrável e rastreável até o texto de origem. Feita para due diligence, discovery e pesquisa.",
+        "blurb": "Faça perguntas a um conjunto inteiro de documentos e receba respostas estruturadas como uma tabela dentro do caso: ordenável, filtrável e rastreável até o texto de origem. Feita para due diligence, contencioso e pesquisa.",
         "eyebrow": "Revisão tabular",
         "title": "Transforme uma pilha de documentos em uma tabela para revisar."
       },
       "templates": {
-        "blurb": "Defina um modelo uma vez, com campos e cláusulas condicionais, e depois preencha-o à mão ou deixe a stella redigir uma minuta a partir dos dados do caso. Gere um documento dentro do caso e continue editando.",
+        "blurb": "Defina um modelo uma vez, com campos e cláusulas condicionais, e depois preencha-o à mão ou deixe a stella redigir uma minuta a partir dos dados do caso. O documento pronto nasce dentro do caso, para você continuar editando.",
         "eyebrow": "Modelos",
         "title": "Crie modelos reutilizáveis e deixe a IA preenchê-los."
       },
@@ -148,7 +148,7 @@
     "agent": {
       "adjacent": {
         "0": {
-          "body": "Transforme um conjunto de documentos em uma tabela do caso que você pode ordenar, filtrar e rastrear."
+          "body": "Transforme um conjunto de documentos em uma tabela que você pode ordenar, filtrar e rastrear até a fonte."
         },
         "1": {
           "body": "Casos, documentos, edição de .docx, revisão e chat em um só espaço de trabalho."
@@ -199,7 +199,7 @@
           "question": "Como adiciono novas capacidades?"
         },
         "2": {
-          "answer": "Dos seus casos, arquivos, registros e ferramentas conectadas. Os recursos de IA usam suas próprias chaves de provedor, e as respostas são fundamentadas em citações à fonte.",
+          "answer": "Dos seus casos, arquivos, registros e ferramentas conectadas. Os recursos de IA usam as chaves do seu próprio provedor, e as respostas são fundamentadas em citações à fonte.",
           "question": "De onde vêm as respostas dele?"
         }
       },
@@ -245,7 +245,7 @@
           "body": "Casos, documentos, edição de .docx, revisão e chat em um só espaço de trabalho."
         },
         "2": {
-          "body": "Transforme um conjunto de documentos em uma tabela do caso que você pode ordenar, filtrar e rastrear."
+          "body": "Transforme um conjunto de documentos em uma tabela que você pode ordenar, filtrar e rastrear até a fonte."
         },
         "3": {
           "body": "stella em formato legível por máquinas, para buscadores com IA."
@@ -419,8 +419,8 @@
           "title": "Controle de alterações"
         },
         "3": {
-          "body": "Cada gravação vira uma revisão do documento, então o arquivo atual e todo o seu histórico ficam juntos.",
-          "title": "Histórico de versões a cada gravação"
+          "body": "Cada salvamento vira uma revisão do documento, então o arquivo atual e todo o seu histórico ficam juntos.",
+          "title": "Histórico de versões a cada salvamento"
         },
         "4": {
           "body": "O documento permanece ligado ao seu caso, ao lado dos arquivos, das propriedades, das tarefas e das conversas.",
@@ -444,7 +444,7 @@
           "question": "O editor mantém o controle de alterações?"
         },
         "2": {
-          "answer": "O arquivo salvo continua ligado ao mesmo caso e ao mesmo documento, e a gravação vira uma revisão no histórico de versões desse documento.",
+          "answer": "O arquivo salvo continua ligado ao mesmo caso e ao mesmo documento, e o salvamento vira uma revisão no histórico de versões desse documento.",
           "question": "O que acontece quando eu salvo?"
         },
         "3": {
@@ -456,11 +456,11 @@
           "question": "Posso abrir o mesmo documento no Microsoft Word?"
         },
         "5": {
-          "answer": "Sim. O documento faz parte do contexto do caso, então as ferramentas que conhecem o caso podem lê-lo e propor edições como alterações controladas no mesmo documento.",
+          "answer": "Sim. O documento faz parte do caso, então o agente de IA pode lê-lo e propor edições como alterações controladas no próprio documento.",
           "question": "A IA da stella pode trabalhar no documento que estou editando?"
         }
       },
-      "metaDescription": "Edite os documentos do Word de um caso dentro da stella: alterações controladas revisadas no lugar, uma revisão a cada gravação e ponte para o Word local.",
+      "metaDescription": "Edite os documentos do Word de um caso dentro da stella: alterações controladas revisadas no lugar, uma revisão a cada salvamento e ponte para o Word local.",
       "metaTitle": "Editor de Word no espaço de trabalho jurídico | stella",
       "quickAnswer": {
         "answer": "Sim. Abra um arquivo .docx de um caso e edite no navegador. A stella mantém o documento no formato original do Word e registra as revisões salvas no histórico de versões do próprio documento.",
@@ -482,7 +482,7 @@
             "0": "Vá do documento ao caso sem enviar cópias",
             "1": "Propriedades e revisões acompanham o arquivo",
             "2": "Abra o mesmo documento pela ponte do desktop quando precisar",
-            "3": "Use o documento como contexto para as ferramentas do caso"
+            "3": "Use o documento como contexto para o agente de IA"
           },
           "heading": "Ligado ao resto do caso"
         }
@@ -497,7 +497,7 @@
           "body": "Converse sobre casos, arquivos e fontes, com aprovações e citações."
         },
         "2": {
-          "body": "Transforme um conjunto de documentos em uma tabela de revisão do caso."
+          "body": "Transforme um conjunto de documentos em uma tabela de revisão dentro do caso."
         },
         "3": {
           "body": "stella em formato legível por máquinas, para buscadores com IA."
@@ -616,7 +616,7 @@
           "title": "Feita para escala"
         },
         "5": {
-          "body": "Leve a tabela em formatos padrão: nada de dependência sobre o seu próprio trabalho.",
+          "body": "Leve a tabela em formatos padrão: seu trabalho nunca fica preso a um fornecedor.",
           "title": "Exporte para onde quiser"
         }
       },
@@ -625,11 +625,11 @@
       },
       "faqs": {
         "0": {
-          "answer": "Qualquer uma que você faria a alguém revisando o documento: extração factual, como datas, partes e valores, ou juízos, como a presença de uma cláusula e a forma como está redigida. As respostas voltam fundamentadas em citações ao texto de origem.",
+          "answer": "Qualquer uma que você faria a alguém revisando o documento: extração de dados, como datas, partes e valores, ou avaliações, como saber se uma cláusula existe e como foi redigida. As respostas voltam fundamentadas em citações ao texto de origem.",
           "question": "Que tipo de pergunta uma coluna pode fazer?"
         },
         "1": {
-          "answer": "Dos documentos do seu caso. Os recursos de IA usam suas próprias chaves de provedor, então a extração roda pelo provedor que você configurar, e cada resposta remete à passagem de onde foi tirada.",
+          "answer": "Dos documentos do seu caso. Os recursos de IA usam as chaves do seu próprio provedor, então a extração roda pelo provedor de IA que você escolher, e cada resposta remete à passagem de onde foi tirada.",
           "question": "De onde vêm as respostas?"
         },
         "2": {
@@ -648,7 +648,7 @@
           "bullets": {
             "0": "Adicione uma coluna escrevendo a pergunta que você faria a um júnior",
             "1": "Reutilize conjuntos de colunas entre casos como roteiros de revisão",
-            "2": "Misture extração (datas, partes, valores) com perguntas de juízo"
+            "2": "Misture extração (datas, partes, valores) com perguntas de avaliação"
           },
           "heading": "Defina as perguntas uma vez, responda em todos os documentos"
         },
@@ -676,7 +676,7 @@
           "body": "Casos, documentos e edição de Word em um só lugar."
         },
         "1": {
-          "body": "Transforme um conjunto de documentos em uma tabela de revisão do caso."
+          "body": "Transforme um conjunto de documentos em uma tabela de revisão dentro do caso."
         },
         "2": {
           "body": "Converse sobre casos, arquivos e fontes, com citações."
@@ -707,7 +707,7 @@
           "title": "Edite ali mesmo"
         },
         "5": {
-          "body": "Gere a minuta dentro do caso e continue editando junto com o resto do trabalho.",
+          "body": "A minuta nasce dentro do caso, pronta para editar junto com o resto do trabalho.",
           "title": "Direto para o caso"
         }
       },
@@ -728,10 +728,10 @@
           "question": "Para onde vai o documento montado?"
         }
       },
-      "metaDescription": "Defina um modelo com campos e cláusulas condicionais e preencha à mão ou deixe a stella redigir com os dados do caso. O documento nasce dentro do caso.",
+      "metaDescription": "Defina um modelo com campos e cláusulas condicionais e preencha à mão ou deixe a stella redigir com os dados do caso. A minuta nasce dentro do caso.",
       "metaTitle": "Modelos de petições e contratos com IA | stella",
       "quickAnswer": {
-        "answer": "Um modelo é um documento com campos e cláusulas que podem ser incluídas condicionalmente. Você preenche os campos à mão ou deixa a stella redigi-los com os dados do caso; as cláusulas condicionais se resolvem e você recebe um documento para continuar trabalhando dentro do caso. Modelos e cláusulas são reutilizáveis, então os documentos recorrentes partem de uma base confiável.",
+        "answer": "Um modelo é um documento com campos e cláusulas que podem ser incluídas condicionalmente. Você preenche os campos à mão ou deixa a stella redigi-los com os dados do caso; as cláusulas certas entram no documento e você recebe uma minuta para continuar trabalhando dentro do caso. Modelos e cláusulas são reutilizáveis, então os documentos recorrentes partem de uma base confiável.",
         "question": "Como funcionam os modelos na stella?"
       },
       "sections": {
@@ -747,22 +747,22 @@
           "bullets": {
             "0": "Preencha campos a partir de um documento já guardado no caso",
             "1": "Confira e ajuste cada valor antes de gerar a minuta",
-            "2": "As cláusulas condicionais se resolvem pelos valores que você mantiver"
+            "2": "As cláusulas condicionais acompanham os valores que você mantiver"
           },
           "heading": "Preencha com os dados do caso"
         },
         "2": {
           "bullets": {
             "0": "Crie e ajuste os modelos no editor",
-            "1": "Gere a minuta dentro do caso",
+            "1": "Monte a minuta direto no caso",
             "2": "Continue editando o resultado junto dos arquivos do caso"
           },
-          "heading": "Edite e gere no mesmo lugar"
+          "heading": "Edite e monte no mesmo lugar"
         }
       }
     },
     "ui": {
-      "capabilities": "Recursos",
+      "capabilities": "Funcionalidades",
       "exploreMore": "Explore mais",
       "faq": "Perguntas frequentes",
       "inShort": "Em resumo"
@@ -773,7 +773,7 @@
           "body": "Converse sobre casos, arquivos e ferramentas conectadas, com aprovações e prévias da fonte."
         },
         "1": {
-          "body": "Transforme um conjunto de documentos em uma tabela do caso que você pode ordenar, filtrar e rastrear."
+          "body": "Transforme um conjunto de documentos em uma tabela que você pode ordenar, filtrar e rastrear até a fonte."
         },
         "2": {
           "body": "Alcance os mesmos casos, documentos e jurisprudência pela CLI e por ferramentas compatíveis com MCP."
@@ -784,7 +784,7 @@
       },
       "capabilities": {
         "0": {
-          "body": "Organize documentos, contatos, revisão e chat em torno do caso a que pertencem. Tudo o que entra em um caso fica preso a ele e pesquisável em todo o espaço de trabalho, então o contexto está lá quando você voltar.",
+          "body": "Organize documentos, contatos, revisão e chat em torno do caso a que pertencem. Tudo o que entra em um caso fica vinculado a ele e pesquisável em todo o espaço de trabalho, então o contexto está lá quando você voltar.",
           "title": "Casos"
         },
         "1": {
@@ -804,7 +804,7 @@
           "title": "Ponte para o desktop"
         },
         "5": {
-          "body": "Gravações e envios viram revisões do documento, então o arquivo atual e seu histórico ficam juntos.",
+          "body": "Edições salvas e arquivos enviados viram revisões do documento, então o arquivo atual e seu histórico ficam juntos.",
           "title": "Histórico de versões"
         }
       },
@@ -813,11 +813,11 @@
       },
       "faqs": {
         "0": {
-          "answer": "Sim. O aplicativo web edita e revisa arquivos .docx do Word. Para editar no Office local, o aplicativo para desktop funciona como ponte: você abre um documento da stella e edita na sua máquina.",
+          "answer": "Sim. No aplicativo web você edita e revisa arquivos .docx do Word. Para editar no Office local, o aplicativo para desktop funciona como ponte: você abre um documento da stella e edita no seu computador.",
           "question": "Dá para editar documentos do Word na stella?"
         },
         "1": {
-          "answer": "Documentos, contatos, tabelas de revisão, conversas e o histórico dos documentos. Tudo o que entra em um caso fica preso a ele, então o contexto está lá quando você voltar.",
+          "answer": "Documentos, contatos, tabelas de revisão, conversas e o histórico dos documentos. Tudo o que entra em um caso fica vinculado a ele, então o contexto está lá quando você voltar.",
           "question": "O que fica dentro de um caso?"
         },
         "2": {
@@ -828,7 +828,7 @@
       "metaDescription": "Casos, documentos, edição de .docx do Word, revisão, pesquisa e chat em um espaço de trabalho jurídico. O trabalho fica em contexto, da fonte à resposta.",
       "metaTitle": "Gestão de casos jurídicos em um só lugar | stella",
       "quickAnswer": {
-        "answer": "Um aplicativo web que reúne casos, documentos, edição de .docx do Word, revisão, pesquisa e chat em um só lugar. Tudo o que entra em um caso fica preso a ele, então o contexto está lá quando você voltar. Um aplicativo para desktop funciona como ponte local quando um documento precisa do Microsoft Word.",
+        "answer": "Um aplicativo web que reúne casos, documentos, edição de .docx do Word, revisão, pesquisa e chat em um só lugar. Tudo o que entra em um caso fica vinculado a ele, então o contexto está lá quando você voltar. Um aplicativo para desktop funciona como ponte local quando um documento precisa do Microsoft Word.",
         "question": "O que é o espaço de trabalho da stella?"
       },
       "sections": {
@@ -860,7 +860,7 @@
     "bringWorkspaceToFront": "Trazer o espaço de trabalho da stella para a frente",
     "controlBody": "A stella é um software jurídico de <gh>código aberto</gh> que você pode auto-hospedar: inspecione o código, rode do seu jeito e exporte tudo em formatos padrão.",
     "controlTitle": "Mantenha o controle da infraestrutura.",
-    "dataBody": "Jurisprudência e registros empresariais carregados direto no caso, em cada jurisdição onde você atua. A anonimização mantém os dados identificáveis longe da IA.",
+    "dataBody": "Jurisprudência e registros de empresas de todas as jurisdições em que você atua, carregados direto no caso. A anonimização mantém os dados identificadores longe da IA.",
     "dataEyebrow": "Dados jurídicos",
     "dataMainAlt": "Uma decisão judicial oficial aberta na stella",
     "dataTitle": "Jurisprudência e registros à mão.",
@@ -872,7 +872,7 @@
     "exploreTemplates": "Explorar os modelos",
     "exploreWorkspace": "Explorar o espaço de trabalho",
     "eyebrow": "Um espaço de trabalho conectado",
-    "intro": "Os materiais, a revisão e os documentos finalizados ficam no caso e se encadeiam. Você pode trabalhar no caso junto com a IA, e cada passo dela é verificável.",
+    "intro": "Materiais de origem, revisão e documentos finais ficam no caso e se encadeiam. Trabalhe no caso com o agente de IA e verifique cada passo que ele dá.",
     "openEditor": "Abrir o editor",
     "proofByokBody": "Use suas próprias chaves de provedor para os recursos de IA.",
     "proofByokTitle": "Traga seus próprios modelos",
@@ -886,7 +886,7 @@
     "sourceOnGitHub": "Código-fonte no GitHub",
     "title": "Um caso. Dos documentos à resposta.",
     "velocityAll": "Todas as novidades",
-    "velocityTitle": "O que lançamos ultimamente.",
+    "velocityTitle": "O que há de novo na stella.",
     "workspaceBody": "Documentos, prazos, revisão estruturada e redação ficam juntos, pesquisáveis em todos os casos.",
     "workspaceEyebrow": "Espaço de trabalho",
     "workspaceTitle": "Conduza o caso inteiro em um só lugar."

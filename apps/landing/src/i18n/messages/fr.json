@@ -25,7 +25,7 @@
     "matters": "Dossiers",
     "notes": "Notes",
     "overview": "Vue d’ensemble",
-    "sectionBody": "Capturé directement depuis le produit en fonctionnement. Ce que vous voyez ici est ce que vous utilisez.",
+    "sectionBody": "Capturé directement dans le produit, tel qu’il fonctionne réellement. Ce que vous voyez ici est ce que vous utilisez.",
     "sectionLabel": "Le produit réel",
     "sectionTitle": "stella, telle qu’elle est.",
     "sort": "Trier",
@@ -64,16 +64,16 @@
   "hero": {
     "badge": "Développement actif",
     "selfHost": "Auto-hébergement",
-    "subtitle": "La plateforme juridique <gh>open source</gh> : dossiers, documents, revue et un agent IA qui répond en citant ses sources.",
+    "subtitle": "La plateforme juridique <gh>open source</gh> : dossiers, documents, revue et un agent IA qui répond en citant ses sources.",
     "title": "Mettez l’IA au service de chaque dossier."
   },
   "home": {
-    "ctaTitle": "Apportez l’IA à votre pratique juridique."
+    "ctaTitle": "Faites entrer l’IA dans votre pratique."
   },
   "mcpProof": {
     "contextBody": "Apportez les dossiers approuvés et les données juridiques dans Claude ou tout client compatible MCP.",
     "contextTitle": "Contexte du dossier.",
-    "scopeBody": "Authentifiez-vous via OAuth ; chaque appel reste limité par les portées accordées et les permissions de l’espace de travail.",
+    "scopeBody": "Authentifiez-vous via OAuth ; chaque appel reste limité par les portées accordées et les permissions de l’espace de travail.",
     "scopeTitle": "Un accès toujours délimité.",
     "subtitle": "Apportez le contexte à jour du dossier dans les outils que vous utilisez.",
     "title": "Quand l’espace de travail rencontre MCP.",
@@ -81,11 +81,11 @@
     "toolsTitle": "Des outils pour les agents IA."
   },
   "meta": {
-    "homeDescription": "Plateforme juridique open source pour avocats : dossiers, documents, analyse de contrats et recherche de jurisprudence. À héberger vous-même ou dans le cloud.",
+    "homeDescription": "Plateforme juridique open source pour avocats : dossiers, documents, analyse de contrats et recherche de jurisprudence. À héberger vous-même ou dans le cloud.",
     "homeTitle": "stella | espace de travail juridique open source"
   },
   "nav": {
-    "aiFactSheet": "Fiche technique IA",
+    "aiFactSheet": "Fiche pour l’IA",
     "aiFactSheetBlurb": "stella sous forme lisible par machine.",
     "beta": "Bêta",
     "blog": "Blog",
@@ -102,14 +102,14 @@
     "product": "Produit",
     "products": {
       "agent": {
-        "blurb": "Dialoguez avec vos dossiers, vos documents, les registres et vos outils connectés au même endroit. L’agent IA agit avec validation et aperçu des sources, fonde ses réponses sur des citations et s’étend via des compétences et des connecteurs externes.",
+        "blurb": "Dialoguez avec vos dossiers, vos documents, les registres et vos outils connectés au même endroit. L’agent IA agit avec validation et aperçu des sources, fonde ses réponses sur des citations et s’enrichit de compétences et de connecteurs externes.",
         "eyebrow": "Agent IA",
-        "title": "Un agent IA qui travaille sur vos dossiers, vos fichiers et vos outils."
+        "title": "Un agent IA qui travaille dans vos dossiers, vos fichiers et vos outils."
       },
       "anonymization": {
-        "blurb": "Supprimez les noms, les entités et les éléments identifiants avant que le matériel n’atteigne l’IA, directement depuis le chat et la revue de documents, avec un résultat caviardé que vous vérifiez avant que quoi que ce soit ne poursuive son chemin.",
+        "blurb": "Supprimez les noms, les entités et les éléments identifiants avant qu’un document n’atteigne l’IA, directement depuis le chat et la revue de documents, avec un résultat caviardé à vérifier avant d’aller plus loin.",
         "eyebrow": "Anonymisation",
-        "title": "Préparez le matériel pour l’IA sans exposer les éléments identifiants."
+        "title": "Préparez vos documents pour l’IA sans exposer les éléments identifiants."
       },
       "cli-mcp": {
         "blurb": "Cherchez, lisez et travaillez avec stella depuis la ligne de commande ou depuis n’importe quel client compatible MCP. Les deux surfaces partagent le même registre de capacités, les mêmes permissions et les mêmes données d’espace de travail que l’application web.",
@@ -117,22 +117,22 @@
         "title": "Un seul espace de travail, depuis chaque outil."
       },
       "editor": {
-        "blurb": "Ouvrez et modifiez des fichiers Word .docx directement dans votre navigateur : sans installation, sans conversion vers un autre format. L’éditeur DOCX en ligne de stella préserve la mise en forme d’origine et le suivi des modifications, garde le fichier rattaché à son dossier et enregistre chaque révision dans l’historique des versions du document.",
+        "blurb": "Ouvrez et modifiez des fichiers Word .docx directement dans votre navigateur : sans installation, sans conversion vers un autre format. L’éditeur DOCX en ligne de stella préserve la mise en forme d’origine et le suivi des modifications, garde le fichier rattaché à son dossier et enregistre chaque révision dans l’historique des versions du document.",
         "eyebrow": "Éditeur",
         "title": "Modifiez des documents Word dans le navigateur, sans quitter le dossier."
       },
       "public-data": {
-        "blurb": "Jurisprudence et registres d’entreprises issus de sources publiques officielles, collectés par Legal Atlas dans stella en préservant leur structure. Lisez une décision, consultez une entreprise, suivez les citations et référencez tout cela depuis un dossier ou confiez-le à l’agent IA.",
+        "blurb": "Jurisprudence et registres d’entreprises issus de sources publiques officielles, collectés par le Legal Atlas de stella en préservant leur structure. Lisez une décision, consultez une entreprise, suivez les citations et référencez tout cela depuis un dossier ou confiez-le à l’agent IA.",
         "eyebrow": "Données publiques",
         "title": "Des données juridiques, prêtes à verser au dossier."
       },
       "tabular-review": {
-        "blurb": "Posez vos questions à un ensemble de documents entier et recevez des réponses structurées sous forme de tableau rattaché au dossier : triable, filtrable et traçable jusqu’au texte source. Conçu pour la due diligence, la discovery et la recherche.",
+        "blurb": "Posez vos questions à tout un ensemble de documents et recevez des réponses structurées sous forme de tableau rattaché au dossier : triable, filtrable et traçable jusqu’au texte source. Conçue pour la due diligence, le contentieux et la recherche.",
         "eyebrow": "Revue tabulaire",
         "title": "Transformez une pile de documents en un tableau à passer en revue."
       },
       "templates": {
-        "blurb": "Définissez un modèle une fois, avec des champs et des clauses conditionnelles, puis remplissez-le à la main ou laissez stella en rédiger un projet à partir des données du dossier. Produisez un document dans le dossier et continuez à le modifier.",
+        "blurb": "Définissez un modèle une fois, avec des champs et des clauses conditionnelles, puis remplissez-le à la main ou laissez stella en rédiger un projet à partir des données du dossier. Le document terminé arrive dans le dossier, prêt à être retravaillé.",
         "eyebrow": "Modèles",
         "title": "Créez des modèles réutilisables et laissez l’IA les remplir."
       },
@@ -148,13 +148,13 @@
     "agent": {
       "adjacent": {
         "0": {
-          "body": "Transformez un ensemble de documents en un tableau rattaché au dossier, que vous pouvez trier, filtrer et tracer."
+          "body": "Transformez un ensemble de documents en un tableau triable et filtrable, dont chaque réponse remonte à la source."
         },
         "1": {
           "body": "Dossiers, documents, édition .docx, revue et chat au même endroit."
         },
         "2": {
-          "body": "Lisez et interrogez la jurisprudence officielle, les sources juridiques et les registres d’entreprises."
+          "body": "Lisez et explorez la jurisprudence officielle, les sources juridiques et les registres d’entreprises."
         },
         "3": {
           "body": "stella sous forme lisible par machine, pour les moteurs de recherche IA."
@@ -162,7 +162,7 @@
       },
       "capabilities": {
         "0": {
-          "body": "Interrogez les dossiers, les documents et les contacts que vous avez déjà dans stella. Une seule conversation atteint chaque dossier auquel vous avez accès, avec les mêmes permissions que partout ailleurs.",
+          "body": "Interrogez les dossiers, les documents et les contacts que vous avez déjà dans stella. Une seule conversation couvre chaque dossier auquel vous avez accès, avec les mêmes permissions que partout ailleurs.",
           "title": "Travaille sur tous vos dossiers"
         },
         "1": {
@@ -170,11 +170,11 @@
           "title": "Lit vos fichiers"
         },
         "2": {
-          "body": "Atteignez les registres d’entreprises et d’autres sources connectées sans quitter le chat.",
+          "body": "Accédez aux registres d’entreprises et à d’autres sources connectées sans quitter le chat.",
           "title": "Outils connectés"
         },
         "3": {
-          "body": "L’agent IA demande votre accord avant d’agir : vous gardez la main à chaque étape.",
+          "body": "L’agent IA demande votre accord avant d’agir : vous gardez la main à chaque étape.",
           "title": "Validation avant chaque action"
         },
         "4": {
@@ -192,22 +192,22 @@
       "faqs": {
         "0": {
           "answer": "Non. Il demande votre accord avant d’agir et affiche un aperçu de ce qu’il lit, pour que vous puissiez suivre et confirmer chaque étape.",
-          "question": "L’agent IA agit-il de lui-même ?"
+          "question": "L’agent IA agit-il de lui-même ?"
         },
         "1": {
           "answer": "Par des compétences (instructions et outils réutilisables) et par des connecteurs externes compatibles MCP. Les deux étendent la portée de l’agent IA sans changer le chat lui-même.",
-          "question": "Comment ajouter de nouvelles capacités ?"
+          "question": "Comment ajouter de nouvelles capacités ?"
         },
         "2": {
-          "answer": "De vos dossiers, de vos fichiers, des registres et des outils connectés. Les fonctions IA utilisent vos propres clés, et les réponses sont fondées sur des citations qui renvoient à la source.",
-          "question": "D’où viennent ses réponses ?"
+          "answer": "De vos dossiers, de vos fichiers, des registres et des outils connectés. Les fonctions IA utilisent vos propres clés de fournisseur, et les réponses sont fondées sur des citations qui renvoient à la source.",
+          "question": "D’où viennent ses réponses ?"
         }
       },
-      "metaDescription": "Dialoguez avec vos dossiers, documents et registres. L’agent IA agit avec validation, fonde ses réponses sur des citations et s’étend via des compétences.",
-      "metaTitle": "Agent IA : assistant juridique pour vos dossiers | stella",
+      "metaDescription": "Dialoguez avec vos dossiers, documents et registres. L’agent IA agit avec validation, fonde ses réponses sur des citations et s’enrichit de compétences.",
+      "metaTitle": "Agent IA : assistant juridique pour vos dossiers | stella",
       "quickAnswer": {
         "answer": "L’agent IA dialogue avec vos dossiers, vos fichiers, les registres d’entreprises et vos outils connectés. Il demande votre accord avant d’agir, affiche un aperçu de ce qu’il lit et fonde ses réponses sur des citations. Vous pouvez l’étendre avec des compétences réutilisables et des connecteurs externes compatibles MCP.",
-        "question": "Que sait faire l’agent IA ?"
+        "question": "Que sait faire l’agent IA ?"
       },
       "sections": {
         "0": {
@@ -228,8 +228,8 @@
         },
         "2": {
           "bullets": {
-            "0": "Des compétences réutilisables d’un dossier à l’autre : instructions et outils",
-            "1": "Les connecteurs externes sont compatibles MCP : l’agent IA atteint plus d’outils",
+            "0": "Des compétences réutilisables d’un dossier à l’autre : instructions et outils",
+            "1": "Les connecteurs externes sont compatibles MCP : l’agent IA accède à plus d’outils",
             "2": "Ajoutez des capacités sans changer le fonctionnement du chat"
           },
           "heading": "Étendez-le avec des compétences et des connecteurs"
@@ -245,7 +245,7 @@
           "body": "Dossiers, documents, édition .docx, revue et chat au même endroit."
         },
         "2": {
-          "body": "Transformez un ensemble de documents en un tableau rattaché au dossier, que vous pouvez trier, filtrer et tracer."
+          "body": "Transformez un ensemble de documents en un tableau triable et filtrable, dont chaque réponse remonte à la source."
         },
         "3": {
           "body": "stella sous forme lisible par machine, pour les moteurs de recherche IA."
@@ -253,7 +253,7 @@
       },
       "capabilities": {
         "0": {
-          "body": "Supprime les noms, les entités et les éléments identifiants avant que le matériel n’atteigne une étape IA.",
+          "body": "Supprime les noms, les entités et les éléments identifiants avant qu’un document n’atteigne une étape IA.",
           "title": "Aucun élément identifiant ne passe"
         },
         "1": {
@@ -265,7 +265,7 @@
           "title": "Vos propres termes"
         },
         "3": {
-          "body": "Affiche le document caviardé dans son contexte : vous confirmez ce qui sort du dossier.",
+          "body": "Affiche le document caviardé dans son contexte : vous confirmez ce qui sort du dossier.",
           "title": "Un résultat vérifiable"
         }
       },
@@ -275,18 +275,18 @@
       "faqs": {
         "0": {
           "answer": "Oui. L’anonymisation est disponible aujourd’hui, intégrée au chat et à la revue de documents.",
-          "question": "L’anonymisation est-elle déjà disponible ?"
+          "question": "L’anonymisation est-elle déjà disponible ?"
         },
         "1": {
-          "answer": "À préparer le matériel pour les flux IA sans exposer de noms, d’entités ni d’éléments identifiants, tout en gardant le résultat caviardé disponible pour vérification.",
-          "question": "À quoi sert-elle ?"
+          "answer": "À préparer vos documents pour les flux IA sans exposer de noms, d’entités ni d’éléments identifiants, tout en gardant le résultat caviardé disponible pour vérification.",
+          "question": "À quoi sert-elle ?"
         }
       },
-      "metaDescription": "Supprimez noms, entités et éléments identifiants avant que le matériel n’atteigne l’IA, depuis le chat et la revue, avec un résultat caviardé vérifiable.",
+      "metaDescription": "Supprimez noms, entités et éléments identifiants avant que vos documents n’atteignent l’IA, depuis le chat et la revue, avec un résultat caviardé vérifiable.",
       "metaTitle": "Anonymisation de documents pour l’IA juridique | stella",
       "quickAnswer": {
-        "answer": "Elle supprime les noms, les entités et les éléments identifiants avant que le matériel n’entre dans un flux IA, et vous montre le résultat caviardé pour que vous confirmiez ce qui sort du dossier. Elle est intégrée directement au chat et à la revue de documents.",
-        "question": "Qu’est-ce que l’anonymisation dans stella ?"
+        "answer": "Elle supprime les noms, les entités et les éléments identifiants avant que vos documents n’entrent dans un flux IA, et vous montre le résultat caviardé pour que vous confirmiez ce qui sort du dossier. Elle est intégrée directement au chat et à la revue de documents.",
+        "question": "Qu’est-ce que l’anonymisation dans stella ?"
       },
       "sections": {
         "0": {
@@ -295,7 +295,7 @@
             "1": "Pensée pour les flux juridiques, pas pour un masquage générique",
             "2": "Laisse un document caviardé à vérifier avant l’étape suivante"
           },
-          "heading": "Préparez le matériel avant qu’il n’atteigne l’IA"
+          "heading": "Préparez vos documents avant qu’ils n’atteignent l’IA"
         },
         "1": {
           "bullets": {
@@ -332,7 +332,7 @@
           "title": "Compatible MCP"
         },
         "2": {
-          "body": "Les commandes de la CLI sont générées à partir du registre d’outils MCP : les deux interfaces restent alignées à mesure que stella évolue.",
+          "body": "Les commandes de la CLI sont générées à partir du registre d’outils MCP : les deux interfaces restent alignées à mesure que stella évolue.",
           "title": "Un seul registre de capacités"
         },
         "3": {
@@ -354,22 +354,22 @@
       "faqs": {
         "0": {
           "answer": "Non. Ce sont deux interfaces distinctes, générées depuis le même registre de capacités et reliées au même serveur stella.",
-          "question": "La CLI est-elle un produit distinct du serveur MCP ?"
+          "question": "La CLI est-elle un produit distinct du serveur MCP ?"
         },
         "1": {
           "answer": "Oui. La CLI prend en charge la sortie JSON structurée, la pagination, des codes de sortie prévisibles et un usage non interactif adapté à l’automatisation.",
-          "question": "Puis-je utiliser la CLI dans des scripts ?"
+          "question": "Puis-je utiliser la CLI dans des scripts ?"
         },
         "2": {
           "answer": "Non. Le serveur vérifie les portées d’authentification et les permissions stella avant d’exécuter une capacité.",
-          "question": "Connecter un client MCP contourne-t-il les permissions de l’espace de travail ?"
+          "question": "Connecter un client MCP contourne-t-il les permissions de l’espace de travail ?"
         }
       },
       "metaDescription": "Cherchez, lisez et travaillez avec stella depuis la ligne de commande ou tout client compatible MCP. Mêmes capacités, mêmes permissions, mêmes données.",
       "metaTitle": "Serveur MCP et CLI pour votre plateforme juridique | stella",
       "quickAnswer": {
         "answer": "Ce sont deux interfaces vers les mêmes capacités de stella. La CLI reprend le registre d’outils MCP sous forme de commandes, tandis que le serveur MCP permet aux agents IA et aux outils compatibles de travailler sur les dossiers, les documents, les modèles et les données juridiques publiques, sous les mêmes contrôles d’accès.",
-        "question": "Qu’est-ce que la CLI et le serveur MCP de stella ?"
+        "question": "Qu’est-ce que la CLI et le serveur MCP de stella ?"
       },
       "sections": {
         "0": {
@@ -399,7 +399,7 @@
           "body": "Créez des documents Word réutilisables avec des champs et des clauses conditionnelles."
         },
         "2": {
-          "body": "Essayez le même éditeur seul : ouvrez et modifiez un .docx dans le navigateur, sans compte."
+          "body": "Essayez le même éditeur seul : ouvrez et modifiez un .docx dans le navigateur, sans compte."
         },
         "3": {
           "body": "stella sous forme lisible par machine, pour les moteurs de recherche IA."
@@ -407,19 +407,19 @@
       },
       "capabilities": {
         "0": {
-          "body": "Ouvrez et modifiez des documents Word directement dans l’éditeur en ligne de stella : sans installation et sans conversion vers un format propriétaire.",
+          "body": "Ouvrez et modifiez des documents Word directement dans l’éditeur en ligne de stella : sans installation et sans conversion vers un format propriétaire.",
           "title": "Modifiez vos .docx dans le navigateur"
         },
         "1": {
-          "body": "Le document reste un .docx de bout en bout : polices, styles et mise en page s’affichent et s’enregistrent tels que Word les a créés.",
+          "body": "Le document reste un .docx de bout en bout : polices, styles et mise en page s’affichent et s’enregistrent tels que Word les a créés.",
           "title": "La mise en forme reste intacte"
         },
         "2": {
-          "body": "Les insertions et suppressions suivies s’affichent en place, et les modifications proposées par l’IA arrivent sous forme de modifications suivies que vous acceptez ou refusez dans le document.",
+          "body": "Les insertions et suppressions suivies apparaissent directement dans le texte, et les modifications proposées par l’IA arrivent sous forme de modifications suivies que vous acceptez ou refusez dans le document.",
           "title": "Suivi des modifications"
         },
         "3": {
-          "body": "Chaque enregistrement devient une révision du document : le fichier courant et tout son historique restent ensemble.",
+          "body": "Chaque enregistrement devient une révision du document : le fichier courant et tout son historique restent ensemble.",
           "title": "Un historique de versions à chaque enregistrement"
         },
         "4": {
@@ -436,42 +436,42 @@
       },
       "faqs": {
         "0": {
-          "answer": "Oui. Le document se modifie là où il vit, aux côtés des autres fichiers, propriétés, tâches et conversations du dossier : aucune copie locale à télécharger puis à renvoyer pour une simple modification.",
-          "question": "Le document reste-t-il rattaché à son dossier pendant que je le modifie ?"
+          "answer": "Oui. Le document se modifie là où il vit, aux côtés des autres fichiers, propriétés, tâches et conversations du dossier : aucune copie locale à télécharger puis à renvoyer pour une simple modification.",
+          "question": "Le document reste-t-il rattaché à son dossier pendant que je le modifie ?"
         },
         "1": {
-          "answer": "Oui. Les insertions et suppressions suivies s’affichent en place, comme dans Word. Les modifications proposées par l’IA de stella arrivent de la même façon : un redline se relit puis s’accepte ou se refuse avant d’entrer dans le document.",
-          "question": "L’éditeur conserve-t-il le suivi des modifications ?"
+          "answer": "Oui. Les insertions et suppressions suivies apparaissent directement dans le texte, comme dans Word. Les modifications proposées par l’IA de stella arrivent de la même façon : vous les relisez, puis vous les acceptez ou les refusez avant qu’elles n’entrent dans le document.",
+          "question": "L’éditeur conserve-t-il le suivi des modifications ?"
         },
         "2": {
           "answer": "Le fichier enregistré reste rattaché au même dossier et au même document, et l’enregistrement devient une révision dans l’historique des versions.",
-          "question": "Que se passe-t-il quand j’enregistre ?"
+          "question": "Que se passe-t-il quand j’enregistre ?"
         },
         "3": {
-          "answer": "Oui. Les révisions enregistrées restent dans l’historique des versions du document : le fichier courant et ceux qu’il remplace restent ensemble.",
-          "question": "Puis-je revenir à une révision antérieure ?"
+          "answer": "Oui. Les révisions enregistrées restent dans l’historique des versions du document : le fichier courant et ceux qu’il remplace restent ensemble.",
+          "question": "Puis-je revenir à une révision antérieure ?"
         },
         "4": {
           "answer": "Oui. La passerelle bureau de stella ouvre le document dans Office local pour les usages propres à Word et renvoie le fichier modifié dans le même dossier.",
-          "question": "Puis-je ouvrir le même document dans Microsoft Word ?"
+          "question": "Puis-je ouvrir le même document dans Microsoft Word ?"
         },
         "5": {
-          "answer": "Oui. Le document fait partie du contexte de son dossier : les outils qui connaissent le dossier peuvent le lire et proposer des modifications suivies dans le même document.",
-          "question": "L’IA de stella peut-elle travailler sur le document que je modifie ?"
+          "answer": "Oui. Le document fait partie de son dossier : l’agent IA peut le lire et proposer des modifications suivies dans le même document.",
+          "question": "L’IA de stella peut-elle travailler sur le document que je modifie ?"
         }
       },
-      "metaDescription": "Modifiez les documents Word d’un dossier dans stella : suivi des modifications relu en place, une révision à chaque enregistrement, une passerelle vers Word.",
+      "metaDescription": "Modifiez les documents Word d’un dossier dans stella : suivi des modifications relu dans le texte, une révision par enregistrement, une passerelle vers Word.",
       "metaTitle": "Modifier des documents Word dans le dossier | stella",
       "quickAnswer": {
         "answer": "Oui. Ouvrez un fichier .docx depuis un dossier et modifiez-le dans le navigateur. stella conserve le document au format Word d’origine et enregistre chaque révision dans l’historique des versions du même document.",
-        "question": "Puis-je modifier des documents Word dans stella ?"
+        "question": "Puis-je modifier des documents Word dans stella ?"
       },
       "sections": {
         "0": {
           "bullets": {
             "0": "Ouvrez un .docx directement depuis un dossier",
             "1": "Modifiez le document avec les contrôles de page et de mise en forme habituels",
-            "2": "Relisez le suivi des modifications en place, y compris celles proposées par l’IA",
+            "2": "Relisez les modifications suivies directement dans le texte, y compris celles proposées par l’IA",
             "3": "Conservez le format Word d’origine",
             "4": "Enregistrez vos modifications dans l’historique des versions"
           },
@@ -482,7 +482,7 @@
             "0": "Passez du document à son dossier sans envoyer de copies",
             "1": "Gardez les propriétés et les révisions avec le fichier",
             "2": "Ouvrez le même document via la passerelle bureau si besoin",
-            "3": "Servez-vous du document comme contexte pour les outils liés au dossier"
+            "3": "Servez-vous du document comme contexte pour l’agent IA"
           },
           "heading": "Relié au reste du dossier"
         }
@@ -491,7 +491,7 @@
     "public-data": {
       "adjacent": {
         "0": {
-          "body": "Préparez le matériel sensible pour l’IA sans exposer les éléments identifiants."
+          "body": "Préparez les documents sensibles pour l’IA sans exposer les éléments identifiants."
         },
         "1": {
           "body": "Dialoguez avec vos dossiers, vos fichiers et vos sources, avec validation et citations."
@@ -534,23 +534,23 @@
       },
       "faqs": {
         "0": {
-          "answer": "La jurisprudence provient de sources juridiques publiques officielles, collectée par Legal Atlas dans stella en préservant sa structure. Les données d’entreprise viennent directement des registres du commerce et des sociétés nationaux, pas de copies tierces.",
-          "question": "D’où proviennent les données ?"
+          "answer": "La jurisprudence provient de sources juridiques publiques officielles, collectée par le Legal Atlas de stella en préservant sa structure. Les données d’entreprise viennent directement des registres du commerce et des sociétés nationaux, pas de copies tierces.",
+          "question": "D’où proviennent les données ?"
         },
         "1": {
-          "answer": "Deux listes, l’une et l’autre en expansion. Les registres connectés couvrent déjà ARES (Tchéquie), Companies House (Royaume-Uni), SEC EDGAR (États-Unis), KRS (Pologne), PRH (Finlande) et VIES (TVA de l’UE). Au-delà des registres, les sources officielles s’ajoutent juridiction par juridiction : la Tchéquie, l’Espagne et Taïwan, par exemple, ont déjà des sources connectées, et le lecteur de jurisprudence est conçu pour parcourir et filtrer par juridiction à mesure que d’autres sources officielles s’ajoutent.",
-          "question": "Quelles juridictions et quels registres sont couverts ?"
+          "answer": "Deux listes, l’une et l’autre en expansion. Les registres connectés couvrent déjà ARES (Tchéquie), Companies House (Royaume-Uni), SEC EDGAR (États-Unis), KRS (Pologne), PRH (Finlande) et VIES (TVA de l’UE). Au-delà des registres, les sources officielles s’ajoutent juridiction par juridiction : la Tchéquie, l’Espagne et Taïwan, par exemple, ont déjà des sources connectées, et le lecteur de jurisprudence est conçu pour parcourir et filtrer par juridiction à mesure que d’autres sources officielles s’ajoutent.",
+          "question": "Quelles juridictions et quels registres sont couverts ?"
         },
         "2": {
-          "answer": "Oui. Une donnée publique référencée depuis un dossier devient une source fondée : l’agent IA cite la décision ou l’enregistrement sous-jacent, et ses réponses restent traçables.",
-          "question": "L’IA peut-elle utiliser ces données ?"
+          "answer": "Oui. Une donnée publique référencée depuis un dossier devient une source fondée : l’agent IA cite la décision ou l’enregistrement sous-jacent, et ses réponses restent traçables.",
+          "question": "L’IA peut-elle utiliser ces données ?"
         }
       },
       "metaDescription": "Jurisprudence et registres d’entreprises issus de sources publiques officielles. Lisez les décisions, suivez les citations et versez le tout au dossier.",
       "metaTitle": "Recherche de jurisprudence et registre du commerce | stella",
       "quickAnswer": {
-        "answer": "Deux types. La jurisprudence publique officielle, collectée en préservant sa structure, pour lire et interroger les décisions et suivre leurs citations. Et l’accès direct aux registres du commerce et des sociétés nationaux, pour verser des données d’entreprise officielles directement au dossier. Les deux sont des sources fondées que l’agent IA peut citer.",
-        "question": "Quelles données publiques stella apporte-t-elle ?"
+        "answer": "Deux types. La jurisprudence publique officielle, collectée en préservant sa structure, pour lire les décisions, y faire des recherches et suivre leurs citations. Et l’accès direct aux registres du commerce et des sociétés nationaux, pour verser des données d’entreprise officielles directement au dossier. Les deux sont des sources fondées que l’agent IA peut citer.",
+        "question": "Quelles données publiques stella apporte-t-elle ?"
       },
       "sections": {
         "0": {
@@ -563,7 +563,7 @@
         },
         "1": {
           "bullets": {
-            "0": "Registres nationaux connectés : ARES, Companies House, SEC EDGAR, KRS, PRH, VIES et d’autres",
+            "0": "Registres nationaux connectés : ARES, Companies House, SEC EDGAR, KRS, PRH, VIES et d’autres",
             "1": "Versez les données d’entreprise officielles au dossier plutôt que de les recopier",
             "2": "La couverture s’étend à mesure que d’autres sources officielles s’ajoutent"
           },
@@ -588,7 +588,7 @@
           "body": "Jurisprudence officielle et registres d’entreprises, versés au dossier."
         },
         "2": {
-          "body": "Préparez le matériel sensible pour l’IA sans exposer les éléments identifiants."
+          "body": "Préparez les documents sensibles pour l’IA sans exposer les éléments identifiants."
         },
         "3": {
           "body": "stella sous forme lisible par machine, pour les moteurs de recherche IA."
@@ -596,11 +596,11 @@
       },
       "capabilities": {
         "0": {
-          "body": "Définissez une colonne en langage courant ; stella y répond pour chaque document de l’ensemble.",
+          "body": "Définissez une colonne en langage courant ; stella y répond pour chaque document de l’ensemble.",
           "title": "Les colonnes sont des questions"
         },
         "1": {
-          "body": "Chaque cellule renvoie au passage exact dont elle est extraite : une vérification en un clic.",
+          "body": "Chaque cellule renvoie au passage exact dont elle est extraite : une vérification en un clic.",
           "title": "Citée jusqu’à la source"
         },
         "2": {
@@ -608,7 +608,7 @@
           "title": "Rattachée au dossier"
         },
         "3": {
-          "body": "Traitez les réponses comme des données : triez par colonne, filtrez les lignes qui demandent attention.",
+          "body": "Traitez les réponses comme des données : triez par colonne, filtrez les lignes qui méritent votre attention.",
           "title": "Tri et filtres"
         },
         "4": {
@@ -616,7 +616,7 @@
           "title": "Conçue pour le volume"
         },
         "5": {
-          "body": "Emportez le tableau dans des formats standards : aucune dépendance sur votre propre travail.",
+          "body": "Emportez le tableau dans des formats standard : votre travail ne reste pas prisonnier d’un outil.",
           "title": "Exportez où vous voulez"
         }
       },
@@ -625,23 +625,23 @@
       },
       "faqs": {
         "0": {
-          "answer": "Tout ce que vous demanderiez à une personne qui relit le document : de l’extraction factuelle comme les dates, les parties et les montants, ou des appréciations comme la présence d’une clause et sa formulation. Les réponses reviennent fondées sur des citations du texte source.",
-          "question": "Quelles questions une colonne peut-elle poser ?"
+          "answer": "Tout ce que vous demanderiez à une personne qui relit le document : de l’extraction factuelle comme les dates, les parties et les montants, ou des appréciations comme la présence d’une clause et sa formulation. Les réponses reviennent fondées sur des citations du texte source.",
+          "question": "Quelles questions une colonne peut-elle poser ?"
         },
         "1": {
-          "answer": "Des documents de votre dossier. Les fonctions IA utilisent vos propres clés : l’extraction passe par le fournisseur d’IA que vous configurez, et chaque réponse renvoie au passage dont elle est tirée.",
-          "question": "D’où viennent les réponses ?"
+          "answer": "Des documents de votre dossier. Les fonctions IA utilisent vos propres clés : l’extraction passe par le fournisseur d’IA que vous choisissez, et chaque réponse renvoie au passage dont elle est tirée.",
+          "question": "D’où viennent les réponses ?"
         },
         "2": {
-          "answer": "Oui. Le résultat de la revue tabulaire s’exporte dans des formats standards : votre travail reste portable, sans dépendance.",
-          "question": "Puis-je exporter la revue ?"
+          "answer": "Oui. Le résultat de la revue tabulaire s’exporte dans des formats standard : votre travail reste portable, jamais captif.",
+          "question": "Puis-je exporter la revue ?"
         }
       },
-      "metaDescription": "Posez vos questions à tout un ensemble de documents : des réponses structurées en tableau triable, traçable jusqu’à la source. Pour la due diligence.",
-      "metaTitle": "Revue tabulaire : analyse de contrats par l’IA | stella",
+      "metaDescription": "Posez vos questions à tout un ensemble de documents : des réponses structurées en tableau triable, traçable jusqu’à la source. Pour la due diligence.",
+      "metaTitle": "Revue tabulaire : analyse de contrats par l’IA | stella",
       "quickAnswer": {
-        "answer": "Vous pointez la revue tabulaire vers un ensemble de documents d’un dossier et vous définissez les colonnes comme des questions : « droit applicable », « préavis de résiliation » ou « clause de changement de contrôle », par exemple. stella extrait une réponse par document dans un tableau que vous triez, filtrez et exportez, chaque cellule renvoyant au passage dont elle provient.",
-        "question": "Comment fonctionne la revue tabulaire ?"
+        "answer": "Vous lancez la revue tabulaire sur un ensemble de documents d’un dossier et vous définissez les colonnes comme des questions : « droit applicable », « préavis de résiliation » ou « clause de changement de contrôle », par exemple. stella extrait une réponse par document dans un tableau que vous triez, filtrez et exportez, chaque cellule renvoyant au passage dont elle provient.",
+        "question": "Comment fonctionne la revue tabulaire ?"
       },
       "sections": {
         "0": {
@@ -650,7 +650,7 @@
             "1": "Réutilisez des jeux de colonnes d’un dossier à l’autre",
             "2": "Mêlez extraction (dates, parties, montants) et questions d’appréciation"
           },
-          "heading": "Définissez les questions une fois, répondez partout"
+          "heading": "Posez vos questions une fois, pour tous les documents"
         },
         "1": {
           "bullets": {
@@ -664,7 +664,7 @@
           "bullets": {
             "0": "Les revues sont rattachées à un dossier, près de ses fichiers et de son chat",
             "1": "Confiez une revue à l’agent IA pour approfondir",
-            "2": "Exportez le tableau ou continuez à l’affiner sur place"
+            "2": "Exportez le tableau ou continuez à l’affiner dans le dossier"
           },
           "heading": "Là où le travail se fait"
         }
@@ -695,7 +695,7 @@
           "title": "Champs et espaces réservés"
         },
         "2": {
-          "body": "Incluez ou omettez des clauses selon les valeurs fournies : un modèle couvre toutes les variantes.",
+          "body": "Incluez ou omettez des clauses selon les valeurs fournies : un modèle couvre toutes les variantes.",
           "title": "Clauses conditionnelles"
         },
         "3": {
@@ -704,10 +704,10 @@
         },
         "4": {
           "body": "Rédigez et ajustez vos modèles dans l’éditeur, puis assemblez à partir d’eux.",
-          "title": "Modifiez sur place"
+          "title": "Tout se fait dans l’éditeur"
         },
         "5": {
-          "body": "Produisez un brouillon dans un dossier et continuez à le modifier avec le reste du travail.",
+          "body": "Le brouillon arrive directement dans le dossier, prêt à être retravaillé avec le reste du travail.",
           "title": "Directement au dossier"
         }
       },
@@ -717,22 +717,22 @@
       "faqs": {
         "0": {
           "answer": "Oui. Les modèles se rédigent et s’ajustent dans l’éditeur, puis vous assemblez des documents à partir d’eux.",
-          "question": "Puis-je modifier un modèle ?"
+          "question": "Puis-je modifier un modèle ?"
         },
         "1": {
           "answer": "Un fragment de document réutilisable. Une clause peut servir dans plusieurs modèles et s’ajouter sous condition, selon les valeurs fournies lors de l’assemblage.",
-          "question": "Qu’est-ce qu’une clause ?"
+          "question": "Qu’est-ce qu’une clause ?"
         },
         "2": {
           "answer": "Dans un dossier, sous forme de brouillon que vous continuez à modifier aux côtés des autres documents du dossier.",
-          "question": "Où va le document assemblé ?"
+          "question": "Où va le document assemblé ?"
         }
       },
       "metaDescription": "Définissez un modèle avec des champs et des clauses conditionnelles, remplissez-le à la main ou laissez stella le rédiger depuis les données du dossier.",
       "metaTitle": "Modèles et automatisation de documents juridiques | stella",
       "quickAnswer": {
-        "answer": "Un modèle est un document doté de champs et de clauses que vous pouvez inclure sous condition. Vous remplissez les champs à la main ou laissez stella les rédiger à partir des données du dossier ; les clauses conditionnelles se résolvent et vous obtenez un document à retravailler dans le dossier. Modèles et clauses sont réutilisables : vos documents récurrents partent d’une base éprouvée.",
-        "question": "Comment fonctionnent les modèles dans stella ?"
+        "answer": "Un modèle est un document doté de champs et de clauses que vous pouvez inclure sous condition. Vous remplissez les champs à la main ou laissez stella les rédiger à partir des données du dossier ; les clauses voulues sont incluses et vous obtenez un document à retravailler dans le dossier. Modèles et clauses sont réutilisables : vos documents récurrents partent d’une base éprouvée.",
+        "question": "Comment fonctionnent les modèles dans stella ?"
       },
       "sections": {
         "0": {
@@ -747,17 +747,17 @@
           "bullets": {
             "0": "Préremplissez les champs depuis un document déjà présent au dossier",
             "1": "Vérifiez et ajustez chaque valeur avant de produire le brouillon",
-            "2": "Les clauses conditionnelles se résolvent depuis les valeurs retenues"
+            "2": "Les clauses conditionnelles suivent les valeurs que vous retenez"
           },
           "heading": "Remplissez-le avec les données du dossier"
         },
         "2": {
           "bullets": {
             "0": "Rédigez et ajustez vos modèles dans l’éditeur",
-            "1": "Produisez le brouillon dans un dossier",
+            "1": "Assemblez le brouillon directement dans le dossier",
             "2": "Continuez à le modifier aux côtés des fichiers du dossier"
           },
-          "heading": "Modifiez et produisez sur place"
+          "heading": "Rédigez et assemblez au même endroit"
         }
       }
     },
@@ -773,10 +773,10 @@
           "body": "Dialoguez avec vos dossiers, vos fichiers et vos outils connectés, avec validation et aperçu des sources."
         },
         "1": {
-          "body": "Transformez un ensemble de documents en un tableau rattaché au dossier, que vous pouvez trier, filtrer et tracer."
+          "body": "Transformez un ensemble de documents en un tableau triable et filtrable, dont chaque réponse remonte à la source."
         },
         "2": {
-          "body": "Atteignez les mêmes dossiers, documents et jurisprudence depuis la CLI et les outils compatibles MCP."
+          "body": "Accédez aux mêmes dossiers, documents et jurisprudence depuis la CLI et les outils compatibles MCP."
         },
         "3": {
           "body": "stella sous forme lisible par machine, pour les moteurs de recherche IA."
@@ -784,7 +784,7 @@
       },
       "capabilities": {
         "0": {
-          "body": "Organisez documents, contacts, revue et chat autour du dossier auquel ils appartiennent. Tout ce qui est ajouté à un dossier y reste rattaché et reste consultable partout, pour retrouver le contexte à votre retour.",
+          "body": "Organisez documents, contacts, revue et chat autour du dossier auquel ils appartiennent. Tout ce qui s’ajoute à un dossier y reste rattaché et ressort d’une simple recherche : le contexte est là quand vous revenez.",
           "title": "Dossiers"
         },
         "1": {
@@ -796,15 +796,15 @@
           "title": "Revue et recherche"
         },
         "3": {
-          "body": "Réunissez l’agent IA et les outils de connaissance dans le même espace de travail que vos fichiers.",
-          "title": "Chat et outils de connaissance"
+          "body": "Réunissez l’agent IA et la base de connaissances dans le même espace de travail que vos fichiers.",
+          "title": "Chat et base de connaissances"
         },
         "4": {
           "body": "Une application de bureau sert de passerelle locale pour modifier les documents Office depuis stella.",
           "title": "Passerelle bureau"
         },
         "5": {
-          "body": "Les modifications enregistrées et les envois deviennent des révisions : le fichier courant et son historique restent ensemble.",
+          "body": "Les modifications enregistrées et les envois deviennent des révisions : le fichier courant et son historique restent ensemble.",
           "title": "Historique des versions"
         }
       },
@@ -813,23 +813,23 @@
       },
       "faqs": {
         "0": {
-          "answer": "Oui. L’application web prend en charge l’édition et la revue des .docx Word. Pour l’édition dans Office local, l’application de bureau sert de passerelle : ouvrez un document depuis stella et modifiez-le sur votre machine.",
-          "question": "Puis-je modifier des documents Word dans stella ?"
+          "answer": "Oui. L’application web prend en charge l’édition et la revue des .docx Word. Pour l’édition dans Office local, l’application de bureau sert de passerelle : ouvrez un document depuis stella et modifiez-le sur votre machine.",
+          "question": "Puis-je modifier des documents Word dans stella ?"
         },
         "1": {
           "answer": "Documents, contacts, tableaux de revue, fils de discussion et historique des documents. Tout ce qui est ajouté à un dossier y reste rattaché, pour retrouver le contexte à votre retour.",
-          "question": "Que contient un dossier ?"
+          "question": "Que contient un dossier ?"
         },
         "2": {
           "answer": "Oui. La CLI et le serveur MCP de stella exposent les mêmes dossiers, documents et jurisprudence aux outils connectés, sous les mêmes permissions. Voir CLI & MCP pour les détails.",
-          "question": "D’autres outils peuvent-ils atteindre l’espace de travail ?"
+          "question": "D’autres outils peuvent-ils accéder à l’espace de travail ?"
         }
       },
       "metaDescription": "Dossiers, documents, édition Word .docx, revue, recherche et chat au même endroit. Le travail reste dans son contexte, des pièces à la réponse.",
       "metaTitle": "Gestion de dossiers pour cabinets d’avocats | stella",
       "quickAnswer": {
         "answer": "Une application web qui réunit dossiers, documents, édition Word .docx, revue, recherche et chat au même endroit. Tout ce qui est ajouté à un dossier y reste rattaché, pour retrouver le contexte à votre retour. Une application de bureau complémentaire sert de passerelle locale quand un document exige Microsoft Word.",
-        "question": "Qu’est-ce que l’espace de travail stella ?"
+        "question": "Qu’est-ce que l’espace de travail stella ?"
       },
       "sections": {
         "0": {
@@ -843,7 +843,7 @@
         "1": {
           "bullets": {
             "0": "Ouvrez et modifiez les documents Word .docx directement dans l’espace de travail",
-            "1": "Le redline reste un fichier Word : sans conversion, sans copies",
+            "1": "La version annotée reste un fichier Word : sans conversion, sans copies",
             "2": "Utilisez la passerelle bureau quand un document exige Microsoft Word"
           },
           "heading": "Les documents Word, modifiés là où vous en avez besoin"
@@ -858,9 +858,9 @@
     "bringEditorToFront": "Mettre l’éditeur stella au premier plan",
     "bringTerminalToFront": "Mettre le terminal stella au premier plan",
     "bringWorkspaceToFront": "Mettre l’espace de travail stella au premier plan",
-    "controlBody": "stella est un logiciel juridique <gh>open source</gh> que vous pouvez auto-héberger : inspectez le code, exécutez-le à votre façon et exportez tout dans des formats standards.",
+    "controlBody": "stella est un logiciel juridique <gh>open source</gh> que vous pouvez auto-héberger : inspectez le code, exécutez-le à votre façon et exportez tout dans des formats standard.",
     "controlTitle": "Gardez le contrôle de votre infrastructure.",
-    "dataBody": "Jurisprudence et registres du commerce chargés directement dans le dossier, dans chaque juridiction où vous travaillez. L’anonymisation tient les données identifiantes à l’écart de l’IA.",
+    "dataBody": "Jurisprudence et registres du commerce chargés directement dans le dossier, dans chaque juridiction où vous exercez. L’anonymisation tient les éléments identifiants à l’écart de l’IA.",
     "dataEyebrow": "Données juridiques",
     "dataMainAlt": "Une décision de justice officielle ouverte dans stella",
     "dataTitle": "Jurisprudence et registres à portée de main.",
@@ -872,13 +872,13 @@
     "exploreTemplates": "Découvrir les modèles",
     "exploreWorkspace": "Découvrir l’espace de travail",
     "eyebrow": "Un espace de travail connecté",
-    "intro": "Les pièces, la revue et les documents finalisés restent dans le dossier et s’enchaînent. Vous pouvez travailler sur le dossier avec l’IA, et chacune de ses étapes est vérifiable.",
+    "intro": "Les pièces, la revue et les documents finalisés restent dans le dossier et se nourrissent les uns des autres. Travaillez sur le dossier avec l’agent IA et vérifiez chacune de ses étapes.",
     "openEditor": "Ouvrir l’éditeur",
     "proofByokBody": "Utilisez vos propres clés de fournisseur pour les fonctions IA.",
     "proofByokTitle": "Apportez vos propres modèles",
     "proofOpenSourceBody": "Inspectez le code et conservez un système portable.",
     "proofOpenSourceTitle": "Open source",
-    "proofPermissionsBody": "Chaque action reste dans les droits de l’utilisateur et de son espace de travail.",
+    "proofPermissionsBody": "Chaque action reste dans les permissions de l’utilisateur et de l’espace de travail.",
     "proofPermissionsTitle": "Respecte les permissions",
     "proofSelfHostBody": "Exécutez stella sur une infrastructure que vous contrôlez.",
     "proofSelfHostTitle": "Auto-hébergeable",
@@ -886,7 +886,7 @@
     "sourceOnGitHub": "Code source sur GitHub",
     "title": "Un dossier. Des pièces à la réponse.",
     "velocityAll": "Journal des modifications complet",
-    "velocityTitle": "Ce que nous avons livré récemment.",
+    "velocityTitle": "Les nouveautés de stella.",
     "workspaceBody": "Documents, échéances, revue structurée et rédaction restent ensemble et vous les retrouvez d’une simple recherche dans tous les dossiers.",
     "workspaceEyebrow": "Espace de travail",
     "workspaceTitle": "Gérez tout le dossier au même endroit."

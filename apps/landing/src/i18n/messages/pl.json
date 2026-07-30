@@ -25,7 +25,7 @@
     "matters": "Sprawy",
     "notes": "Notatki",
     "overview": "Przegląd",
-    "sectionBody": "Obraz pochodzi bezpośrednio z działającego produktu. To, co tu widzisz, jest tym, czego używasz.",
+    "sectionBody": "Zarejestrowane prosto w działającym produkcie. To, co tu widzisz, to dokładnie to, z czego korzystasz.",
     "sectionLabel": "Prawdziwy produkt",
     "sectionTitle": "stella taka, jaka jest.",
     "sort": "Sortuj",
@@ -68,7 +68,7 @@
     "title": "Zaprzęgnij AI do każdej sprawy."
   },
   "home": {
-    "ctaTitle": "Wprowadź AI do Twojej praktyki prawnej."
+    "ctaTitle": "Wprowadź AI do Twojej praktyki prawniczej."
   },
   "mcpProof": {
     "contextBody": "Przenieś zatwierdzone sprawy i dane prawne do Claude lub dowolnego klienta zgodnego z MCP.",
@@ -102,12 +102,12 @@
     "product": "Produkt",
     "products": {
       "agent": {
-        "blurb": "Rozmawiaj ze swoimi sprawami, dokumentami, rejestrami i podłączonymi narzędziami w jednym miejscu. Agent AI działa za zatwierdzeniem i z podglądem źródeł, opiera odpowiedzi na cytowaniach i rozszerza się o umiejętności oraz zewnętrzne konektory.",
+        "blurb": "Rozmawiaj ze swoimi sprawami, dokumentami, rejestrami i podłączonymi narzędziami w jednym miejscu. Agent AI pyta o zatwierdzenie i pokazuje podgląd źródeł, opiera odpowiedzi na cytowaniach, a rozszerzysz go o umiejętności i zewnętrzne konektory.",
         "eyebrow": "Agent AI",
         "title": "Agent AI, który działa w Twoich sprawach, plikach i narzędziach."
       },
       "anonymization": {
-        "blurb": "Usuń nazwiska, podmioty i dane identyfikujące, zanim materiały trafią do AI, prosto z czatu i z przeglądu dokumentów, z zredagowanym wynikiem, który sprawdzisz, zanim cokolwiek pójdzie dalej.",
+        "blurb": "Usuń nazwiska, podmioty i dane identyfikujące, zanim materiały trafią do AI, prosto z czatu i z przeglądu dokumentów, z zanonimizowanym wynikiem, który sprawdzisz, zanim cokolwiek pójdzie dalej.",
         "eyebrow": "Anonimizacja",
         "title": "Przygotuj materiały dla AI bez ujawniania danych identyfikujących."
       },
@@ -124,20 +124,20 @@
       "public-data": {
         "blurb": "Orzecznictwo i rejestry spółek z oficjalnych źródeł publicznych, zbierane z zachowaniem struktury przez Legal Atlas w aplikacji stella. Przeczytaj orzeczenie, sprawdź spółkę, prześledź cytowania i powołaj się na dowolne z nich ze sprawy albo przekaż je agentowi AI.",
         "eyebrow": "Dane publiczne",
-        "title": "Dane prawne gotowe do wciągnięcia do sprawy."
+        "title": "Dane prawne gotowe do użycia w sprawie."
       },
       "tabular-review": {
-        "blurb": "Zadaj pytania całemu zbiorowi dokumentów i otrzymaj ustrukturyzowane odpowiedzi jako tabelę w obrębie sprawy: sortowalną, filtrowalną i możliwą do prześledzenia aż do tekstu źródłowego. Stworzone do due diligence, discovery i badań.",
+        "blurb": "Zadaj pytania całemu zbiorowi dokumentów i otrzymaj ustrukturyzowane odpowiedzi jako tabelę w sprawie: sortuj, filtruj i sprawdzaj każdą odpowiedź w tekście źródłowym. Sprawdza się w due diligence, analizie umów i researchu.",
         "eyebrow": "Przegląd tabelaryczny",
         "title": "Zamień stos dokumentów w tabelę gotową do przeglądu."
       },
       "templates": {
-        "blurb": "Zdefiniuj szablon raz, z polami i klauzulami warunkowymi, a potem wypełnij go ręcznie albo pozwól aplikacji stella przygotować projekt z danych sprawy. Utwórz dokument prosto w sprawie i dalej go edytuj.",
+        "blurb": "Zdefiniuj szablon raz, z polami i klauzulami warunkowymi, a potem wypełnij go ręcznie albo pozwól aplikacji stella przygotować projekt z danych sprawy. Gotowy dokument trafia do sprawy i od razu możesz go dalej edytować.",
         "eyebrow": "Szablony",
         "title": "Twórz szablony wielokrotnego użytku i pozwól AI je wypełnić."
       },
       "workspace": {
-        "blurb": "Obszar roboczy trzyma razem dokumenty sprawy, edycję plików Word .docx, przegląd, badania i czat w jednym miejscu, dzięki czemu praca zostaje w kontekście od materiałów źródłowych po odpowiedź.",
+        "blurb": "Obszar roboczy trzyma dokumenty sprawy, edycję plików Word .docx, przegląd, research i czat w jednym miejscu, dzięki czemu praca zostaje w kontekście od materiałów źródłowych po odpowiedź.",
         "eyebrow": "Obszar roboczy",
         "title": "Sprawy, dokumenty, przegląd i czat w jednym obszarze roboczym."
       }
@@ -148,7 +148,7 @@
     "agent": {
       "adjacent": {
         "0": {
-          "body": "Zamień zbiór dokumentów w tabelę w obrębie sprawy: sortuj, filtruj i sprawdzaj źródła."
+          "body": "Zamień zbiór dokumentów w tabelę, którą sortujesz, filtrujesz i prześledzisz do źródła."
         },
         "1": {
           "body": "Sprawy, dokumenty, edycja .docx, przegląd i czat w jednym obszarze roboczym."
@@ -166,7 +166,7 @@
           "title": "Działa we wszystkich Twoich sprawach"
         },
         "1": {
-          "body": "Wciągnij dokumenty do rozmowy i poproś agenta AI, aby je przeczytał, porównał albo streścił.",
+          "body": "Dodaj dokumenty do rozmowy i poproś agenta AI, aby je przeczytał, porównał albo streścił.",
           "title": "Czyta Twoje pliki"
         },
         "2": {
@@ -195,7 +195,7 @@
           "question": "Czy agent AI działa samodzielnie?"
         },
         "1": {
-          "answer": "Przez umiejętności (wielokrotnego użytku instrukcje i narzędzia) oraz zewnętrzne konektory zgodne z MCP. Jedno i drugie poszerza zasięg agenta AI, nie zmieniając samego czatu.",
+          "answer": "Przez umiejętności (instrukcje i narzędzia wielokrotnego użytku) oraz zewnętrzne konektory zgodne z MCP. Jedno i drugie poszerza zasięg agenta AI, nie zmieniając samego czatu.",
           "question": "Jak dodać nowe możliwości?"
         },
         "2": {
@@ -203,8 +203,8 @@
           "question": "Skąd pochodzą jego odpowiedzi?"
         }
       },
-      "metaDescription": "Rozmawiaj ze swoimi sprawami, dokumentami, rejestrami i narzędziami. Agent AI działa za zatwierdzeniem, cytuje źródła i rośnie o kolejne umiejętności.",
-      "metaTitle": "Agent AI dla prawników: asystent prawny do spraw | stella",
+      "metaDescription": "Rozmawiaj ze swoimi sprawami, dokumentami, rejestrami i narzędziami. Agent AI pyta o zatwierdzenie, cytuje źródła i rośnie o kolejne umiejętności.",
+      "metaTitle": "Agent AI dla prawników i kancelarii | stella",
       "quickAnswer": {
         "answer": "Agent AI rozmawia z Twoimi sprawami, plikami, rejestrami firm i podłączonymi narzędziami. Przed działaniem prosi o zatwierdzenie, pokazuje podgląd źródła, które czyta, i opiera odpowiedzi na cytowaniach. Rozszerzysz go o umiejętności wielokrotnego użytku i zewnętrzne konektory zgodne z MCP.",
         "question": "Co potrafi agent AI?"
@@ -213,7 +213,7 @@
         "0": {
           "bullets": {
             "0": "Sprawy, dokumenty i kontakty w jednej rozmowie",
-            "1": "Wciągnij dane firm i rejestrów do tego samego wątku",
+            "1": "Dodaj dane firm i rejestrów do tego samego wątku",
             "2": "Przekaż agentowi AI przegląd tabelaryczny i dopytuj"
           },
           "heading": "Jedno pytanie, cała sprawa"
@@ -245,7 +245,7 @@
           "body": "Sprawy, dokumenty, edycja .docx, przegląd i czat w jednym obszarze roboczym."
         },
         "2": {
-          "body": "Zamień zbiór dokumentów w tabelę w obrębie sprawy: sortuj, filtruj i sprawdzaj źródła."
+          "body": "Zamień zbiór dokumentów w tabelę, którą sortujesz, filtrujesz i prześledzisz do źródła."
         },
         "3": {
           "body": "stella w formie czytelnej dla maszyn, dla wyszukiwarek AI."
@@ -253,7 +253,7 @@
       },
       "capabilities": {
         "0": {
-          "body": "Usuwa nazwiska, podmioty i dane identyfikujące, zanim materiały trafią do kroku z AI.",
+          "body": "Usuwa nazwiska, podmioty i dane identyfikujące, zanim materiały trafią do AI.",
           "title": "Dane identyfikujące zostają poza AI"
         },
         "1": {
@@ -265,12 +265,12 @@
           "title": "Twoje własne terminy"
         },
         "3": {
-          "body": "Pokazuje zredagowany dokument w kontekście, więc potwierdzasz, co opuszcza sprawę.",
+          "body": "Pokazuje zanonimizowany dokument w kontekście, więc potwierdzasz, co opuszcza sprawę.",
           "title": "Wynik do sprawdzenia"
         }
       },
       "cta": {
-        "heading": "Trzymaj dane identyfikujące poza przepływami pracy z AI."
+        "heading": "Trzymaj dane identyfikujące z dala od pracy z AI."
       },
       "faqs": {
         "0": {
@@ -278,30 +278,30 @@
           "question": "Czy anonimizacja jest już dostępna?"
         },
         "1": {
-          "answer": "W przygotowaniu materiałów do przepływów pracy z AI bez ujawniania nazwisk, podmiotów ani danych identyfikujących, przy zachowaniu zredagowanego wyniku do sprawdzenia.",
+          "answer": "W przygotowaniu materiałów do pracy z AI bez ujawniania nazwisk, podmiotów ani danych identyfikujących, z zanonimizowanym wynikiem do sprawdzenia.",
           "question": "W czym pomaga?"
         }
       },
       "metaDescription": "Usuń nazwiska, podmioty i dane identyfikujące, zanim materiały trafią do AI, prosto z czatu i przeglądu dokumentów, z wynikiem do sprawdzenia.",
       "metaTitle": "Anonimizacja dokumentów przed wysłaniem do AI | stella",
       "quickAnswer": {
-        "answer": "Usuwa nazwiska, podmioty i dane identyfikujące, zanim materiały wejdą do przepływu pracy z AI, i pokazuje zredagowany wynik, więc potwierdzasz, co opuszcza sprawę. Jest wbudowana wprost w czat i w przegląd dokumentów.",
+        "answer": "Usuwa nazwiska, podmioty i dane identyfikujące, zanim materiały trafią do pracy z AI, i pokazuje zanonimizowany wynik, więc potwierdzasz, co opuszcza sprawę. Jest wbudowana wprost w czat i w przegląd dokumentów.",
         "question": "Czym jest anonimizacja w aplikacji stella?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Nazwiska, podmioty i dane identyfikujące zostają poza krokami z AI",
-            "1": "Zbudowana pod prawnicze przepływy pracy z AI, nie pod ogólne maskowanie",
-            "2": "Przed kolejnym krokiem zostaje zredagowany dokument do sprawdzenia"
+            "0": "Nazwiska, podmioty i dane identyfikujące nie trafiają do AI",
+            "1": "Zbudowana z myślą o pracy prawników z AI, nie o ogólnym maskowaniu dokumentów",
+            "2": "Przed kolejnym krokiem zostaje zanonimizowany dokument do sprawdzenia"
           },
           "heading": "Przygotuj materiały, zanim zobaczy je AI"
         },
         "1": {
           "bullets": {
             "0": "Dostępna z czatu i z przeglądu dokumentów",
-            "1": "Bez kopiowania do zewnętrznego narzędzia do redakcji",
-            "2": "Oparta na własnym silniku anonimizacji open source aplikacji stella"
+            "1": "Bez kopiowania do zewnętrznego narzędzia do anonimizacji",
+            "2": "Oparta na własnym mechanizmie anonimizacji open source aplikacji stella"
           },
           "heading": "Część obszaru roboczego, nie osobne narzędzie"
         }
@@ -345,7 +345,7 @@
         },
         "5": {
           "body": "Skieruj CLI i klientów MCP na serwer stella, który prowadzi Twoja organizacja.",
-          "title": "Przyjazne self-hostingowi"
+          "title": "Gotowe na self-hosting"
         }
       },
       "cta": {
@@ -354,7 +354,7 @@
       "faqs": {
         "0": {
           "answer": "Nie. To dwa interfejsy generowane z tego samego rejestru możliwości i podłączone do tego samego serwera stella.",
-          "question": "Czy CLI to osobny produkt niż serwer MCP?"
+          "question": "Czy CLI to inny produkt niż serwer MCP?"
         },
         "1": {
           "answer": "Tak. CLI obsługuje ustrukturyzowany wynik w JSON, stronicowanie, przewidywalne kody wyjścia i tryb nieinteraktywny do automatyzacji.",
@@ -366,7 +366,7 @@
         }
       },
       "metaDescription": "Szukaj, czytaj i pracuj z aplikacją stella z wiersza poleceń albo z klienta zgodnego z MCP. Oba interfejsy dzielą możliwości, uprawnienia i dane.",
-      "metaTitle": "Serwer MCP i CLI do obszaru roboczego | stella",
+      "metaTitle": "Serwer MCP i CLI dla kancelarii | stella",
       "quickAnswer": {
         "answer": "To dwa interfejsy do tych samych możliwości aplikacji stella. CLI odwzorowuje rejestr narzędzi MCP jako polecenia, a serwer MCP pozwala zgodnym agentom AI i narzędziom pracować na sprawach, dokumentach, szablonach i publicznych danych prawnych, pod tymi samymi zasadami dostępu.",
         "question": "Czym są CLI i serwer MCP aplikacji stella?"
@@ -396,7 +396,7 @@
           "body": "Zobacz, gdzie sprawy, dokumenty i narzędzia spotykają się w jednym miejscu."
         },
         "1": {
-          "body": "Twórz wielokrotnego użytku dokumenty Word z polami i klauzulami warunkowymi."
+          "body": "Twórz dokumenty Word wielokrotnego użytku, z polami i klauzulami warunkowymi."
         },
         "2": {
           "body": "Wypróbuj ten sam edytor osobno: otwórz i edytuj plik .docx w przeglądarce, bez zakładania konta."
@@ -423,7 +423,7 @@
           "title": "Każdy zapis to nowa wersja"
         },
         "4": {
-          "body": "Dokument zostaje powiązany ze swoją sprawą, obok jej plików, właściwości, zadań i rozmów.",
+          "body": "Dokument pozostaje powiązany ze swoją sprawą, obok jej plików, właściwości, zadań i rozmów.",
           "title": "Kontekst sprawy pozostaje widoczny"
         },
         "5": {
@@ -456,7 +456,7 @@
           "question": "Czy mogę otworzyć ten sam dokument w Microsoft Word?"
         },
         "5": {
-          "answer": "Tak. Dokument należy do kontekstu swojej sprawy, więc narzędzia znające sprawę mogą go czytać i proponować poprawki jako śledzone zmiany w tym samym dokumencie.",
+          "answer": "Tak. Dokument należy do swojej sprawy, więc agent AI może go przeczytać i zaproponować poprawki jako śledzone zmiany w tym samym dokumencie.",
           "question": "Czy AI w aplikacji stella może pracować na dokumencie, który edytuję?"
         }
       },
@@ -482,7 +482,7 @@
             "0": "Przechodź między dokumentem a sprawą bez wgrywania kopii",
             "1": "Właściwości i wersje dokumentu zostają przy pliku",
             "2": "W razie potrzeby otwórz ten sam dokument przez mostek desktopowy",
-            "3": "Używaj dokumentu jako kontekstu dla narzędzi znających sprawę"
+            "3": "Używaj dokumentu jako kontekstu dla agenta AI"
           },
           "heading": "Połączony z resztą sprawy"
         }
@@ -497,7 +497,7 @@
           "body": "Rozmawiaj o sprawach, plikach i źródłach, z zatwierdzeniami i cytowaniami."
         },
         "2": {
-          "body": "Zamień zbiór dokumentów w tabelę przeglądu w obrębie sprawy."
+          "body": "Zamień zbiór dokumentów w tabelę przeglądu w sprawie."
         },
         "3": {
           "body": "stella w formie czytelnej dla maszyn, dla wyszukiwarek AI."
@@ -518,15 +518,15 @@
         },
         "3": {
           "body": "Przechodź między orzeczeniem a przywołanymi w nim sprawami bez wychodzenia z czytnika.",
-          "title": "Podążaj za cytowaniami"
+          "title": "Śledź cytowania"
         },
         "4": {
-          "body": "Przeglądaj i filtruj orzecznictwo oraz rejestry w jurysdykcji, w której pracujesz.",
+          "body": "Przeglądaj i filtruj orzecznictwo oraz rejestry według jurysdykcji, w której pracujesz.",
           "title": "Według jurysdykcji"
         },
         "5": {
           "body": "Powołaj się ze sprawy na dowolne źródło, żeby odpowiedzi agenta AI dało się do niego prześledzić.",
-          "title": "Ugruntowane dla AI"
+          "title": "Podstawa odpowiedzi AI"
         }
       },
       "cta": {
@@ -542,14 +542,14 @@
           "question": "Które jurysdykcje i rejestry są objęte?"
         },
         "2": {
-          "answer": "Tak. Dane publiczne przywołane ze sprawy stają się ugruntowanym źródłem: agent AI cytuje leżące u ich podstaw orzeczenie lub wpis, dzięki czemu jego odpowiedzi da się prześledzić.",
+          "answer": "Tak. Dane publiczne przywołane ze sprawy stają się źródłem, na którym agent AI opiera odpowiedź: cytuje orzeczenie lub wpis, z których korzysta, więc jego odpowiedzi da się prześledzić.",
           "question": "Czy AI może korzystać z tych danych?"
         }
       },
-      "metaDescription": "Orzecznictwo i rejestry firm z oficjalnych źródeł publicznych. Czytaj orzeczenia, sprawdzaj firmy, śledź cytowania i wciągaj je wprost do sprawy.",
-      "metaTitle": "Research prawny: orzecznictwo i rejestry firm | stella",
+      "metaDescription": "Orzecznictwo i rejestry firm z oficjalnych źródeł publicznych. Czytaj orzeczenia, sprawdzaj firmy, śledź cytowania i dodawaj je wprost do sprawy.",
+      "metaTitle": "Research prawniczy: orzecznictwo i rejestry firm | stella",
       "quickAnswer": {
-        "answer": "Dwa rodzaje. Oficjalne publiczne orzecznictwo, wczytane z zachowaniem struktury, więc przeczytasz i przeszukasz orzeczenia oraz prześledzisz ich cytowania. Oraz bezpośredni dostęp do krajowych rejestrów spółek i rejestrów handlowych, więc wciągniesz oficjalne dane o spółce prosto do sprawy. Jedno i drugie to ugruntowane źródła, które agent AI może cytować.",
+        "answer": "Dwa rodzaje. Oficjalne publiczne orzecznictwo, wczytane z zachowaniem struktury, więc przeczytasz i przeszukasz orzeczenia oraz prześledzisz ich cytowania. Oraz bezpośredni dostęp do krajowych rejestrów spółek i rejestrów handlowych, więc pobierzesz oficjalne dane o spółce prosto do sprawy. Jedno i drugie to źródła, które agent AI może cytować i na których opiera odpowiedzi.",
         "question": "Jakie dane publiczne wnosi aplikacja stella?"
       },
       "sections": {
@@ -564,7 +564,7 @@
         "1": {
           "bullets": {
             "0": "Podłączone rejestry krajowe: ARES, Companies House, SEC EDGAR, KRS, PRH, VIES i kolejne",
-            "1": "Wciągaj oficjalne dane o firmie do sprawy zamiast przepisywać je ręcznie",
+            "1": "Pobieraj oficjalne dane o firmie prosto do sprawy, zamiast przepisywać je ręcznie",
             "2": "Zasięg rośnie wraz z kolejnymi oficjalnymi źródłami"
           },
           "heading": "Rejestry spółek i handlowe, przeszukiwane ze sprawy"
@@ -575,7 +575,7 @@
             "1": "Agent AI cytuje źródło, a nie parafrazę",
             "2": "Szukaj we wszystkich źródłach, nie tylko w jednym"
           },
-          "heading": "Jedno ugruntowane źródło dla agenta AI"
+          "heading": "Jedno pewne źródło dla agenta AI"
         }
       }
     },
@@ -585,7 +585,7 @@
           "body": "Rozmawiaj o sprawach, plikach i podłączonych źródłach, z zatwierdzeniami i podglądem źródeł."
         },
         "1": {
-          "body": "Oficjalne orzecznictwo i rejestry firm, wciągnięte do sprawy."
+          "body": "Oficjalne orzecznictwo i rejestry firm, dostępne wprost w sprawie."
         },
         "2": {
           "body": "Przygotuj wrażliwe materiały dla AI bez ujawniania danych identyfikujących."
@@ -605,7 +605,7 @@
         },
         "2": {
           "body": "Przeglądy żyją w sprawie, obok dokumentów, kontaktów i czatu, których dotyczą.",
-          "title": "W obrębie sprawy"
+          "title": "Część sprawy"
         },
         "3": {
           "body": "Traktuj odpowiedzi jak dane: sortuj po dowolnej kolumnie, filtruj do wierszy, które wymagają uwagi.",
@@ -613,11 +613,11 @@
         },
         "4": {
           "body": "Zadaj te same pytania wielkim zbiorom dokumentów zamiast otwierać pliki jeden po drugim.",
-          "title": "Zbudowany na dużą skalę"
+          "title": "Gotowy na duże zbiory"
         },
         "5": {
-          "body": "Zabierz tabelę ze sobą w standardowych formatach: bez uzależnienia od dostawcy przy własnej pracy.",
-          "title": "Eksport dokądkolwiek"
+          "body": "Zabierz tabelę ze sobą w standardowych formatach: Twoja praca nie jest zamknięta w narzędziu.",
+          "title": "Eksport, dokąd chcesz"
         }
       },
       "cta": {
@@ -625,19 +625,19 @@
       },
       "faqs": {
         "0": {
-          "answer": "Wszystko, o co pytasz osobę przeglądającą dokument: wydobycie faktów, jak daty, strony i kwoty, albo pytania ocenne, jak to, czy klauzula występuje i jak została sformułowana. Odpowiedzi wracają poparte cytowaniami do tekstu źródłowego.",
+          "answer": "Wszystko, o co zapytasz osobę przeglądającą dokument: o fakty, jak daty, strony i kwoty, albo o ocenę, na przykład czy klauzula występuje i jak ją sformułowano. Odpowiedzi wracają poparte cytowaniami do tekstu źródłowego.",
           "question": "Jakie pytania może zadawać kolumna?"
         },
         "1": {
-          "answer": "Z dokumentów w Twojej sprawie. Funkcje AI działają na Twoich własnych kluczach, więc wydobywanie danych idzie przez skonfigurowanego przez Ciebie dostawcę AI, a każda odpowiedź odsyła do fragmentu, z którego pochodzi.",
+          "answer": "Z dokumentów w Twojej sprawie. Funkcje AI działają na Twoich własnych kluczach dostawcy, więc wydobywanie danych przechodzi przez wybranego przez Ciebie dostawcę AI, a każda odpowiedź odsyła do fragmentu, z którego pochodzi.",
           "question": "Skąd pochodzą odpowiedzi?"
         },
         "2": {
-          "answer": "Tak. Wyniki przeglądu tabelarycznego wyeksportujesz w standardowych formatach, więc Twoja praca zostaje przenośna, bez uzależnienia od dostawcy.",
+          "answer": "Tak. Wyniki przeglądu tabelarycznego wyeksportujesz w standardowych formatach, więc Twoja praca pozostaje przenośna, bez uzależnienia od dostawcy.",
           "question": "Czy mogę wyeksportować przegląd?"
         }
       },
-      "metaDescription": "Zadaj pytania całemu zbiorowi dokumentów i odbierz ustrukturyzowane odpowiedzi jako sortowalną tabelę ze wskazaniem źródeł. Do due diligence i badań.",
+      "metaDescription": "Zadaj pytania całemu zbiorowi dokumentów i odbierz ustrukturyzowane odpowiedzi jako sortowalną tabelę ze wskazaniem źródeł. Do due diligence i researchu.",
       "metaTitle": "Przegląd tabelaryczny: analiza umów z AI | stella",
       "quickAnswer": {
         "answer": "Kierujesz przegląd tabelaryczny na zbiór dokumentów w sprawie i definiujesz kolumny jako pytania, na przykład „prawo właściwe”, „okres wypowiedzenia” albo „klauzula zmiany kontroli”. stella wydobywa odpowiedź dla każdego dokumentu do tabeli, którą sortujesz, filtrujesz i eksportujesz, a każda komórka odsyła do fragmentu, z którego pochodzi.",
@@ -676,7 +676,7 @@
           "body": "Sprawy, dokumenty i edycja plików Word w jednym miejscu."
         },
         "1": {
-          "body": "Zamień zbiór dokumentów w tabelę przeglądu w obrębie sprawy."
+          "body": "Zamień zbiór dokumentów w tabelę przeglądu w sprawie."
         },
         "2": {
           "body": "Rozmawiaj o sprawach, plikach i źródłach, z cytowaniami."
@@ -703,11 +703,11 @@
           "title": "Wypełnianie z AI"
         },
         "4": {
-          "body": "Twórz i dostosowuj szablony w edytorze, a potem składaj z nich dokumenty.",
+          "body": "Szablony przygotowujesz i dopracowujesz w edytorze, a potem tworzysz z nich dokumenty.",
           "title": "Edycja na miejscu"
         },
         "5": {
-          "body": "Utwórz wersję roboczą w sprawie i edytuj ją obok reszty pracy.",
+          "body": "Projekt trafia do sprawy, gotowy do edycji obok reszty pracy.",
           "title": "Prosto do sprawy"
         }
       },
@@ -716,28 +716,28 @@
       },
       "faqs": {
         "0": {
-          "answer": "Tak. Szablony tworzysz i dostosowujesz w edytorze, a potem składasz z nich dokumenty.",
+          "answer": "Tak. Szablony tworzysz i dostosowujesz w edytorze, a gotowe dokumenty powstają na ich podstawie.",
           "question": "Czy mogę edytować szablon?"
         },
         "1": {
-          "answer": "To fragment dokumentu wielokrotnego użytku. Klauzule wstawiasz w różnych szablonach i dodajesz warunkowo, zależnie od wartości podanych przy składaniu.",
+          "answer": "To fragment dokumentu wielokrotnego użytku. Klauzule wstawiasz w różnych szablonach i dodajesz warunkowo, zależnie od wartości podanych przy tworzeniu dokumentu.",
           "question": "Czym jest klauzula?"
         },
         "2": {
-          "answer": "Do sprawy, jako wersja robocza, którą dalej edytujesz obok pozostałych dokumentów sprawy.",
-          "question": "Gdzie trafia złożony dokument?"
+          "answer": "Do sprawy, jako projekt, który dalej edytujesz obok pozostałych dokumentów sprawy.",
+          "question": "Gdzie trafia utworzony dokument?"
         }
       },
-      "metaDescription": "Zdefiniuj szablon z polami i klauzulami warunkowymi, wypełnij go ręcznie albo pozwól aplikacji stella zrobić to z danych sprawy. Dokument trafia do sprawy.",
+      "metaDescription": "Zdefiniuj szablon z polami i klauzulami warunkowymi, wypełnij go ręcznie albo pozwól aplikacji stella zrobić to z danych sprawy. Projekt trafia do sprawy.",
       "metaTitle": "Automatyzacja dokumentów i szablony z AI | stella",
       "quickAnswer": {
-        "answer": "Szablon to dokument z polami i klauzulami, które można włączać warunkowo. Pola wypełniasz ręcznie albo pozwalasz aplikacji stella przygotować je z danych sprawy; klauzule warunkowe rozstrzygają się same, a Ty dostajesz dokument, nad którym pracujesz dalej w sprawie. Szablony i klauzule są wielokrotnego użytku, więc powtarzalne dokumenty zaczynają się od sprawdzonej podstawy.",
+        "answer": "Szablon to dokument z polami i klauzulami, które można włączać warunkowo. Pola wypełniasz ręcznie albo pozwalasz aplikacji stella przygotować je z danych sprawy; właściwe klauzule trafiają do dokumentu, a Ty dostajesz projekt, nad którym pracujesz dalej w sprawie. Szablony i klauzule są wielokrotnego użytku, więc powtarzalne dokumenty zaczynają się od sprawdzonej podstawy.",
         "question": "Jak działają szablony w aplikacji stella?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Składaj dokument z szablonu zamiast zaczynać od zera",
+            "0": "Twórz dokumenty z szablonu, zamiast zaczynać od zera",
             "1": "Używaj tych samych klauzul w wielu szablonach",
             "2": "Utrzymuj spójność powtarzalnych dokumentów"
           },
@@ -746,15 +746,15 @@
         "1": {
           "bullets": {
             "0": "Wstępnie wypełnij pola z dokumentu, który już jest w sprawie",
-            "1": "Sprawdź i popraw każdą wartość, zanim powstanie wersja robocza",
-            "2": "Klauzule warunkowe wciąż rozstrzygają się z zachowanych wartości"
+            "1": "Sprawdź i popraw każdą wartość, zanim powstanie projekt",
+            "2": "Klauzule warunkowe nadal kierują się wartościami, które zostawisz"
           },
           "heading": "Wypełnij go danymi ze sprawy"
         },
         "2": {
           "bullets": {
             "0": "Twórz i dostosowuj szablony w edytorze",
-            "1": "Utwórz wersję roboczą prosto w sprawie",
+            "1": "Utwórz projekt prosto w sprawie",
             "2": "Edytuj wynik dalej, obok plików sprawy"
           },
           "heading": "Edytuj i twórz w jednym miejscu"
@@ -773,7 +773,7 @@
           "body": "Rozmawiaj o sprawach, plikach i podłączonych narzędziach, z zatwierdzeniami i podglądem źródeł."
         },
         "1": {
-          "body": "Zamień zbiór dokumentów w tabelę w obrębie sprawy: sortuj, filtruj i sprawdzaj źródła."
+          "body": "Zamień zbiór dokumentów w tabelę, którą sortujesz, filtrujesz i prześledzisz do źródła."
         },
         "2": {
           "body": "Sięgaj po te same sprawy, dokumenty i orzecznictwo z CLI i z narzędzi zgodnych z MCP."
@@ -792,8 +792,8 @@
           "title": "Dokumenty i edycja .docx"
         },
         "2": {
-          "body": "Prowadź przegląd tabelaryczny i badania obok dokumentów, których dotyczą.",
-          "title": "Przegląd i badania"
+          "body": "Prowadź przegląd tabelaryczny i research obok dokumentów, których dotyczą.",
+          "title": "Przegląd i research"
         },
         "3": {
           "body": "Wprowadź agenta AI i narzędzia wiedzy do tego samego obszaru roboczego co Twoje pliki.",
@@ -822,13 +822,13 @@
         },
         "2": {
           "answer": "Tak. CLI i serwer MCP aplikacji stella udostępniają podłączonym narzędziom te same sprawy, dokumenty i orzecznictwo, pod tymi samymi uprawnieniami. Szczegóły w CLI & MCP.",
-          "question": "Czy inne narzędzia sięgną do obszaru roboczego?"
+          "question": "Czy inne narzędzia mają dostęp do obszaru roboczego?"
         }
       },
-      "metaDescription": "Sprawy, dokumenty, edycja plików Word .docx, przegląd, badania i czat w jednym prawniczym obszarze roboczym, od materiałów źródłowych po odpowiedź.",
+      "metaDescription": "Sprawy, dokumenty, edycja plików Word .docx, przegląd, research i czat w jednym prawniczym obszarze roboczym, od materiałów źródłowych po odpowiedź.",
       "metaTitle": "Zarządzanie sprawami dla kancelarii prawnych | stella",
       "quickAnswer": {
-        "answer": "Aplikacja webowa, która trzyma w jednym miejscu sprawy, dokumenty, edycję plików Word .docx, przegląd, badania i czat. Wszystko dodane do sprawy zostaje przy niej, więc kontekst czeka, gdy wracasz. Towarzysząca aplikacja desktopowa działa jako lokalny mostek, gdy dokument wymaga Microsoft Word.",
+        "answer": "Aplikacja webowa, która trzyma w jednym miejscu sprawy, dokumenty, edycję plików Word .docx, przegląd, research i czat. Wszystko dodane do sprawy zostaje przy niej, więc kontekst czeka, gdy wracasz. Towarzysząca aplikacja desktopowa działa jako lokalny mostek, gdy dokument wymaga Microsoft Word.",
         "question": "Czym jest obszar roboczy aplikacji stella?"
       },
       "sections": {
@@ -836,7 +836,7 @@
           "bullets": {
             "0": "Dokumenty, kontakty, przegląd i czat żyją w sprawie",
             "1": "Edytuj dokumenty Word .docx bez wychodzenia z obszaru roboczego",
-            "2": "Przechodź między badaniami, przeglądem i czatem bez zmiany aplikacji"
+            "2": "Przechodź między researchem, przeglądem i czatem bez zmiany aplikacji"
           },
           "heading": "Cała sprawa w jednym miejscu"
         },
@@ -858,9 +858,9 @@
     "bringEditorToFront": "Przenieś na wierzch edytor aplikacji stella",
     "bringTerminalToFront": "Przenieś na wierzch terminal aplikacji stella",
     "bringWorkspaceToFront": "Przenieś na wierzch obszar roboczy aplikacji stella",
-    "controlBody": "stella to prawnicze oprogramowanie <gh>open source</gh>, które możesz uruchomić na własnej infrastrukturze: przejrzyj kod, uruchamiaj je po swojemu i eksportuj wszystko w standardowych formatach.",
-    "controlTitle": "Zachowaj kontrolę nad infrastrukturą.",
-    "dataBody": "Orzecznictwo i rejestry wprost w sprawie, w każdej jurysdykcji, w której pracujesz. Anonimizacja trzyma przy tym dane identyfikujące z dala od AI.",
+    "controlBody": "stella to prawnicze oprogramowanie <gh>open source</gh>, które uruchomisz na własnej infrastrukturze: przejrzyj kod, korzystaj z niego na swoich zasadach i eksportuj wszystko w standardowych formatach.",
+    "controlTitle": "Zachowaj kontrolę nad swoją technologią.",
+    "dataBody": "Orzecznictwo i rejestry spółek z każdej jurysdykcji, w której pracujesz, trafiają wprost do sprawy. Anonimizacja trzyma dane identyfikujące z dala od AI.",
     "dataEyebrow": "Dane prawne",
     "dataMainAlt": "Oficjalne orzeczenie sądu otwarte w aplikacji stella",
     "dataTitle": "Orzecznictwo i rejestry pod ręką.",
@@ -872,7 +872,7 @@
     "exploreTemplates": "Poznaj szablony",
     "exploreWorkspace": "Poznaj obszar roboczy",
     "eyebrow": "Połączony obszar roboczy",
-    "intro": "Materiały, przegląd i sfinalizowane dokumenty zostają w sprawie i wzajemnie na sobie bazują. Nad sprawą możesz pracować razem z AI, a każdy jej krok da się sprawdzić.",
+    "intro": "Materiały źródłowe, przegląd i gotowe dokumenty zostają w sprawie, a kolejne etapy korzystają z wcześniejszych. Pracuj nad sprawą z agentem AI i sprawdzaj każdy jego krok.",
     "openEditor": "Otwórz edytor",
     "proofByokBody": "Używaj własnych kluczy dostawców do funkcji AI.",
     "proofByokTitle": "Własne modele",
@@ -886,7 +886,7 @@
     "sourceOnGitHub": "Kod źródłowy na GitHubie",
     "title": "Jedna sprawa. Od materiałów po odpowiedź.",
     "velocityAll": "Pełny dziennik zmian",
-    "velocityTitle": "Co ostatnio wydaliśmy.",
+    "velocityTitle": "Co nowego w aplikacji stella.",
     "workspaceBody": "Dokumenty, terminy, ustrukturyzowany przegląd i redagowanie pozostają razem, a przeszukasz je we wszystkich sprawach.",
     "workspaceEyebrow": "Obszar roboczy",
     "workspaceTitle": "Prowadź całą sprawę w jednym miejscu."
