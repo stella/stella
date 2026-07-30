@@ -6,7 +6,7 @@ import { frameAccents, productCtaLabels, type Product } from "./types";
 export const publicData: Product = {
   slug: "public-data",
   eyebrow: "Public data",
-  title: "Legal data, ready to pull into a matter.",
+  title: "Legal data, ready for your work.",
   summary:
     "Case law and company registries from official public sources, collected by stella's Legal Atlas with their structure preserved. Read a decision, look up a company, follow citations, and reference any of it from a matter or hand it to the AI agent.",
   metaTitle: "Case law and company registry data | stella",
