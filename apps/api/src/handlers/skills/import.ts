@@ -48,10 +48,16 @@ export const importSkillsBodySchema = t.Object({
       maxItems: MAX_SKILL_IMPORTS,
     },
   ),
-  scope: t.Union([
-    t.Literal(importSkillScopeValues[0]),
-    t.Literal(importSkillScopeValues[1]),
-  ]),
+  scope: t.Union(
+    [
+      t.Literal(importSkillScopeValues[0]),
+      t.Literal(importSkillScopeValues[1]),
+    ],
+    {
+      enum: [...importSkillScopeValues],
+      type: "string",
+    },
+  ),
 });
 
 const config = {

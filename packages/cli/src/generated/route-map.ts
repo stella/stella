@@ -50053,9 +50053,18 @@ export const generatedRouteMap: RouteNode = {
                           },
                         },
                         scope: {
-                          default: "team",
-                          type: "string",
                           enum: ["team", "private"],
+                          type: "string",
+                          anyOf: [
+                            {
+                              const: "team",
+                              type: "string",
+                            },
+                            {
+                              const: "private",
+                              type: "string",
+                            },
+                          ],
                         },
                       },
                     },
