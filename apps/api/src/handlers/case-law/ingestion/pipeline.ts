@@ -36,6 +36,7 @@ import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter"
 import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import {
+  bareCitationKey,
   extractCitations,
   isSelfCitation,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
@@ -271,6 +272,14 @@ const uploadSourceRaw = async (
   await getS3().write(key, data, { type: contentType });
   return key;
 };
+
+/**
+ * Canonical join key for citation resolution, or null when the text does not
+ * canonicalize. Null keeps a row out of the resolver's join instead of
+ * matching every other unkeyed row on an empty string.
+ */
+const citationKeyOf = (text: string): string | null =>
+  bareCitationKey(text) || null;
 
 type PreserveCorpusWriteRetryInput = {
   decisionId: SafeId<"caseLawDecision">;
@@ -853,6 +862,7 @@ export const processDecision = async (
             citations.map((c) => ({
               citingDecisionId: existing.id,
               citationText: c.citationText,
+              citationKey: citationKeyOf(c.citationText),
               sectionIndex: c.sectionIndex,
             })),
           );
@@ -883,6 +893,7 @@ export const processDecision = async (
           id: decisionId,
           sourceId,
           caseNumber: result.caseNumber,
+          citationKey: citationKeyOf(result.caseNumber),
           slug,
           ecli: result.ecli,
           court: result.court,
@@ -912,6 +923,7 @@ export const processDecision = async (
           citations.map((c) => ({
             citingDecisionId: decisionRow.id,
             citationText: c.citationText,
+            citationKey: citationKeyOf(c.citationText),
             sectionIndex: c.sectionIndex,
           })),
         );

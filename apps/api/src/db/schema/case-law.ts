@@ -55,6 +55,13 @@ export const caseLawDecisions = p.pgTable(
       .notNull()
       .references(() => caseLawSources.id, { onDelete: "cascade" }),
     caseNumber: p.varchar("case_number", { length: 256 }).notNull(),
+    /**
+     * `caseNumber` under `bareCitationKey`. A citation's text canonicalizes
+     * to the same key, so resolution is an indexed equality join rather than
+     * a scan. Null when the case number does not canonicalize, which keeps
+     * unresolvable rows out of the join instead of matching on "".
+     */
+    citationKey: p.varchar("citation_key", { length: 128 }),
     slug: p.varchar({ length: 256 }),
     ecli: p.varchar({ length: 256 }),
     court: p.varchar({ length: 512 }).notNull(),
@@ -195,6 +202,10 @@ export const caseLawDecisions = p.pgTable(
       .where(
         sql`${t.contentHash} is not null and ${t.indexedGeneration} is null`,
       ),
+    p
+      .index("case_law_decisions_citation_key_idx")
+      .on(t.citationKey)
+      .where(isNotNull(t.citationKey)),
     // Deferred-document queue, priority tier: decisions a reader asked
     // for, oldest request first. Partial on the pending predicate, so
     // the index stays proportional to the queue, not to the corpus.
@@ -234,6 +245,8 @@ export const caseLawCitations = p.pgTable(
       onDelete: "set null",
     }),
     citationText: p.varchar("citation_text", { length: 512 }).notNull(),
+    /** `citationText` under `bareCitationKey`; joins to a decision's own key. */
+    citationKey: p.varchar("citation_key", { length: 128 }),
     sectionIndex: p.integer("section_index"),
     polarity: p.varchar("polarity", { length: 16 }),
     polarityRuleId: safeUuid<"caseLawPolarityRule">(
@@ -253,6 +266,12 @@ export const caseLawCitations = p.pgTable(
       .index("case_law_citations_polarity_null_idx")
       .on(t.polarity)
       .where(isNull(t.polarity)),
+    p
+      .index("case_law_citations_unresolved_key_idx")
+      .on(t.citationKey)
+      .where(
+        sql`${t.citedDecisionId} is null and ${t.citationKey} is not null`,
+      ),
     p.check(
       "citations_polarity_values",
       sql`${t.polarity} IN ('positive','supportive','neutral','negative','unknown')`,
