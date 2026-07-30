@@ -3,7 +3,11 @@ import * as drizzle from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
-import { searchDocuments } from "@/api/db/schema";
+import {
+  entities,
+  searchDocumentPreviewPassages,
+  searchDocuments,
+} from "@/api/db/schema";
 import { redistributableCaseLawSource as importedOpaqueRelationFragment } from "@/api/lib/case-law/redistribution";
 import { chatThreadScopeSql } from "@/api/lib/search/chat-thread-scope-sql";
 import {
@@ -26,8 +30,35 @@ const singleWorkspaceFilter = searchDocumentsAccessSql({});
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves an unscoped private projection read is rejected
 const unsafeEntity = sql`SELECT * FROM search_documents sd WHERE sd.organization_id = ${organizationId}`;
 
+const _unsafeDocumentPassage =
+  // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves document preview passages are private projections
+  sql`SELECT * FROM search_document_preview_passages passage`;
+
+const _unsafeWorkspacePassage =
+  // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves workspace preview passages are private projections
+  sql`SELECT * FROM workspace_search_document_preview_passages passage`;
+
+const _unsafeContactPassage =
+  // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves contact preview passages are private projections
+  sql`SELECT * FROM contact_search_document_preview_passages passage`;
+
+const _unsafeChatPassage =
+  // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves chat preview passages are private projections
+  sql`SELECT * FROM chat_thread_search_preview_passages passage`;
+
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves rootDb query builders cannot read private projections outside the SQL scope guard
 const unsafeBuilderEntity = rootDb.select().from(searchDocuments);
+
+const _unsafeJoinedEntity = rootDb
+  .select()
+  .from(entities)
+  // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves rootDb joins cannot introduce an unscoped private projection
+  .innerJoin(searchDocuments, sql`true`);
+
+const _unsafePreviewPassage = rootDb
+  .select()
+  // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves preview-passage projections receive the same rootDb builder protection
+  .from(searchDocumentPreviewPassages);
 
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves rootDb relational reads cannot bypass the private projection scope guard
 const _unsafeRelationalEntity = rootDb.query.searchDocuments.findFirst();

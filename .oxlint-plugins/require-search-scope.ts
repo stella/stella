@@ -80,6 +80,18 @@ const ROOT_DB_IMPORTS = [
   { importedName: "rootDb", module: "@/api/db/root" },
 ] as const satisfies readonly ApprovedImport[];
 
+const ROOT_DB_READ_TABLE_METHODS = new Set([
+  "crossJoin",
+  "crossJoinLateral",
+  "from",
+  "fullJoin",
+  "innerJoin",
+  "innerJoinLateral",
+  "leftJoin",
+  "leftJoinLateral",
+  "rightJoin",
+]);
+
 const PRIVATE_SEARCH_PROJECTIONS = {
   search_documents: {
     expectedAlias: "sd",
@@ -141,6 +153,82 @@ const PRIVATE_SEARCH_PROJECTIONS = {
       { importedName: "chatThreadSearchDocuments", module: "@/api/db/schema" },
       {
         importedName: "chatThreadSearchDocuments",
+        module: "@/api/db/schema/chat",
+      },
+    ],
+  },
+  search_document_preview_passages: {
+    expectedAlias: "passage",
+    scopeImports: [
+      {
+        importedName: "searchDocumentsAccessSql",
+        module: "@/api/lib/search/contact-workspace-access-sql",
+      },
+    ],
+    tableImports: [
+      {
+        importedName: "searchDocumentPreviewPassages",
+        module: "@/api/db/schema",
+      },
+      {
+        importedName: "searchDocumentPreviewPassages",
+        module: "@/api/db/schema/templates",
+      },
+    ],
+  },
+  workspace_search_document_preview_passages: {
+    expectedAlias: "passage",
+    scopeImports: [
+      {
+        importedName: "workspaceSearchDocumentsAccessSql",
+        module: "@/api/lib/search/contact-workspace-access-sql",
+      },
+    ],
+    tableImports: [
+      {
+        importedName: "workspaceSearchDocumentPreviewPassages",
+        module: "@/api/db/schema",
+      },
+      {
+        importedName: "workspaceSearchDocumentPreviewPassages",
+        module: "@/api/db/schema/templates",
+      },
+    ],
+  },
+  contact_search_document_preview_passages: {
+    expectedAlias: "passage",
+    scopeImports: [
+      {
+        importedName: "contactWorkspaceAccessSql",
+        module: "@/api/lib/search/contact-workspace-access-sql",
+      },
+    ],
+    tableImports: [
+      {
+        importedName: "contactSearchDocumentPreviewPassages",
+        module: "@/api/db/schema",
+      },
+      {
+        importedName: "contactSearchDocumentPreviewPassages",
+        module: "@/api/db/schema/templates",
+      },
+    ],
+  },
+  chat_thread_search_preview_passages: {
+    expectedAlias: "passage",
+    scopeImports: [
+      {
+        importedName: "chatThreadScopeSql",
+        module: "@/api/lib/search/chat-thread-scope-sql",
+      },
+    ],
+    tableImports: [
+      {
+        importedName: "chatThreadSearchPreviewPassages",
+        module: "@/api/db/schema",
+      },
+      {
+        importedName: "chatThreadSearchPreviewPassages",
         module: "@/api/db/schema/chat",
       },
     ],
@@ -1703,7 +1791,8 @@ export default {
           ) {
             return null;
           }
-          if (directMemberPropertyName(node.callee) !== "from") {
+          const method = directMemberPropertyName(node.callee);
+          if (method === null || !ROOT_DB_READ_TABLE_METHODS.has(method)) {
             return null;
           }
           const root = callChainRoot(node.callee.object);
