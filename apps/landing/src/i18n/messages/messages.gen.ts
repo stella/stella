@@ -77,7 +77,7 @@ type Messages = {
     "contextBody": "Bring approved matters and legal data into Claude or any compatible MCP client.";
     "contextTitle": "Matter context.";
     "scopeBody": "Authenticate with OAuth; every call remains constrained by granted scopes and workspace permissions.";
-    "scopeTitle": "Scoped by design.";
+    "scopeTitle": "Only the access you grant.";
     "subtitle": "Bring live matter context into the tools where you work.";
     "title": "Workspace, meet MCP.";
     "toolsBody": "Search, read, and fill templates through the same registry that powers the stella CLI.";

@@ -74,7 +74,7 @@
     "contextBody": "Przenieś zatwierdzone sprawy i dane prawne do Claude lub dowolnego klienta zgodnego z MCP.",
     "contextTitle": "Kontekst sprawy.",
     "scopeBody": "Zaloguj się przez OAuth; każde wywołanie pozostaje ograniczone przyznanymi zakresami i uprawnieniami obszaru roboczego.",
-    "scopeTitle": "Dostęp zawsze w granicach.",
+    "scopeTitle": "Tylko dostęp, który przyznasz.",
     "subtitle": "Przenieś aktualny kontekst sprawy do narzędzi, w których pracujesz.",
     "title": "Twój obszar roboczy rozumie już MCP.",
     "toolsBody": "Wyszukuj, czytaj i wypełniaj szablony przez ten sam rejestr, z którego powstaje CLI aplikacji stella.",

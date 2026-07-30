@@ -74,7 +74,7 @@
     "contextBody": "Vigye a jóváhagyott ügyeket és jogi adatokat a Claude-ba vagy bármely MCP-kompatibilis kliensbe.",
     "contextTitle": "Az ügy kontextusa.",
     "scopeBody": "Hitelesítsen OAuth-tal; minden hívás a megadott hatókörök és a munkaterület jogosultságai között marad.",
-    "scopeTitle": "A hozzáférés mindig korlátozott.",
+    "scopeTitle": "Csak az a hozzáférés, amelyet Ön megad.",
     "subtitle": "Vigye az ügy naprakész kontextusát azokba az eszközökbe, amelyekkel dolgozik.",
     "title": "A munkaterület mostantól érti az MCP-t.",
     "toolsBody": "Keressen, olvasson és töltsön ki sablonokat ugyanabból a nyilvántartásból, amelyre a stella CLI is épül.",

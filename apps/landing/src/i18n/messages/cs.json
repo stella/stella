@@ -74,7 +74,7 @@
     "contextBody": "Přeneste schválené spisy a právní data do nástroje Claude nebo do libovolného klienta kompatibilního s MCP.",
     "contextTitle": "Kontext spisu.",
     "scopeBody": "Přihlaste se přes OAuth; každé volání zůstává omezené udělenými rozsahy a oprávněními pracovního prostoru.",
-    "scopeTitle": "Přístup vždy v mezích.",
+    "scopeTitle": "Jen přístup, který povolíte.",
     "subtitle": "Přeneste aktuální kontext spisu do nástrojů, ve kterých pracujete.",
     "title": "Pracovní prostor teď rozumí MCP.",
     "toolsBody": "Vyhledávejte, čtěte a vyplňujte vzory přes stejný registr, ze kterého vychází CLI aplikace stella.",

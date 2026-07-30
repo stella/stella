@@ -74,7 +74,7 @@
     "contextBody": "Leve os casos aprovados e os dados jurídicos para o Claude ou para qualquer cliente compatível com MCP.",
     "contextTitle": "Contexto do caso.",
     "scopeBody": "Autentique-se com OAuth; cada chamada continua limitada pelos escopos concedidos e pelas permissões do espaço de trabalho.",
-    "scopeTitle": "Acesso sempre delimitado.",
+    "scopeTitle": "Só o acesso que você concede.",
     "subtitle": "Leve o contexto atualizado do caso para as ferramentas com que você trabalha.",
     "title": "Seu espaço de trabalho agora fala MCP.",
     "toolsBody": "Pesquise, leia e preencha modelos pelo mesmo registro que alimenta a CLI da stella.",

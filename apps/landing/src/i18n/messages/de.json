@@ -74,7 +74,7 @@
     "contextBody": "Bringen Sie freigegebene Akten und Rechtsdaten in Claude oder einen beliebigen kompatiblen MCP-Client.",
     "contextTitle": "Aktenkontext.",
     "scopeBody": "Melden Sie sich per OAuth an; jeder Aufruf bleibt durch die gewährten Scopes und die Berechtigungen im Arbeitsbereich begrenzt.",
-    "scopeTitle": "Zugriff bleibt begrenzt.",
+    "scopeTitle": "Nur der Zugriff, den Sie freigeben.",
     "subtitle": "Bringen Sie den aktuellen Aktenkontext in die Werkzeuge, mit denen Sie arbeiten.",
     "title": "Arbeitsbereich trifft MCP.",
     "toolsBody": "Suchen, lesen und Vorlagen ausfüllen: alles über dieselbe Registry, aus der die stella CLI generiert wird.",

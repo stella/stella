@@ -74,7 +74,7 @@
     "contextBody": "Perkelkite patvirtintas bylas ir teisinius duomenis į Claude ar bet kurį su MCP suderinamą klientą.",
     "contextTitle": "Bylos kontekstas.",
     "scopeBody": "Prisijunkite per OAuth; kiekvienas iškvietimas lieka apribotas suteiktomis apimtimis ir darbo srities teisėmis.",
-    "scopeTitle": "Prieiga visada ribota.",
+    "scopeTitle": "Tik Jūsų suteikta prieiga.",
     "subtitle": "Perkelkite naujausią bylos kontekstą į įrankius, su kuriais dirbate.",
     "title": "Darbo sritis dabar supranta MCP.",
     "toolsBody": "Ieškokite, skaitykite ir pildykite šablonus per tą patį registrą, iš kurio kuriama programos stella CLI.",

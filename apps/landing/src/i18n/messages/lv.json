@@ -74,7 +74,7 @@
     "contextBody": "Ienesiet apstiprinātās lietas un juridiskos datus Claude vai jebkurā ar MCP saderīgā klientā.",
     "contextTitle": "Lietas konteksts.",
     "scopeBody": "Autentificējieties ar OAuth; katrs izsaukums paliek ierobežots ar piešķirtajiem tvērumiem un darbvietas atļaujām.",
-    "scopeTitle": "Piekļuve vienmēr ierobežota.",
+    "scopeTitle": "Tikai Jūsu piešķirtā piekļuve.",
     "subtitle": "Ienesiet aktuālo lietas kontekstu rīkos, ar kuriem strādājat.",
     "title": "Darbvieta tagad saprot MCP.",
     "toolsBody": "Meklējiet, lasiet un aizpildiet veidnes, izmantojot to pašu reģistru, uz kura balstās lietotnes stella CLI.",
