@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { Result, UnhandledException } from "better-result";
 import { Queue, Worker } from "bullmq";
 import { and, asc, eq, lt, lte, or, sql } from "drizzle-orm";
 
@@ -177,22 +177,21 @@ export const processEntityDeletionCleanupRequest = async (
         label: STORAGE_DELETE_TIMEOUT_LABEL,
         timeoutMs: deps.storageDeleteTimeoutMs,
       }),
-    catch: (cause) => cause,
+    catch: (cause) =>
+      cause instanceof Error ? cause : new UnhandledException({ cause }),
   });
-  const deleteError = Result.isError(deleteAttempt)
-    ? deleteAttempt.error
-    : Result.isError(deleteAttempt.value)
-      ? deleteAttempt.value.error
-      : null;
+  let deleteError: Error | null = null;
+  if (Result.isError(deleteAttempt)) {
+    deleteError = deleteAttempt.error;
+  } else if (Result.isError(deleteAttempt.value)) {
+    deleteError = deleteAttempt.value.error;
+  }
   if (deleteError !== null) {
     const failedAt = new Date();
     await deps.rootDb
       .update(entityDeletionCleanupRequests)
       .set({
-        errorMessage:
-          deleteError instanceof Error
-            ? deleteError.message
-            : "Storage deletion failed",
+        errorMessage: deleteError.message,
         nextAttemptAt: getEntityDeletionCleanupRetryAt({
           attemptCount: claim.attemptCount,
           now: failedAt,

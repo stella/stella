@@ -115,7 +115,7 @@ describe("entity deletion cleanup queue", () => {
 
   test("times out a stalled storage deletion and schedules durable recovery", async () => {
     deleteS3KeysMock.mockImplementationOnce(async () => {
-      const neverSettles: Promise<void> = new Promise(() => undefined);
+      const neverSettles = new Promise<void>(() => {});
       await neverSettles;
       return Result.ok();
     });
