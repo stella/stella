@@ -11,7 +11,7 @@ import {
 } from "@stll/boe";
 import { roles } from "@stll/permissions";
 
-import { DOCUMENT_PROCESSING_MODES } from "@/api/db/schema/workspace-admin";
+import { DOCUMENT_PROCESSING_MODES } from "@/api/db/schema";
 import {
   type AuditLogFilter,
   queryAuditLogPage,

@@ -52,26 +52,34 @@ export const readBoundedOcrJson = async (
     });
   }
 
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
   let totalBytes = 0;
-  const boundedStream = new TransformStream<Uint8Array, Uint8Array>({
-    transform(chunk, controller) {
-      totalBytes += chunk.byteLength;
-      if (totalBytes > maxBytes) {
-        controller.error(
-          new DocumentOcrProviderError({
-            code: "response_too_large",
-            message: "OCR service response exceeded the allowed size",
-          }),
-        );
-        return;
-      }
-      controller.enqueue(chunk);
-    },
+  const readNextChunk = async (): Promise<void> => {
+    const chunk = await reader.read();
+    if (chunk.done) {
+      return;
+    }
+    totalBytes += chunk.value.byteLength;
+    if (totalBytes > maxBytes) {
+      await reader.cancel();
+      throw new DocumentOcrProviderError({
+        code: "response_too_large",
+        message: "OCR service response exceeded the allowed size",
+      });
+    }
+    chunks.push(chunk.value);
+    return await readNextChunk();
+  };
+  await readNextChunk();
+
+  const bytes = new Uint8Array(totalBytes);
+  let offset = 0;
+  chunks.forEach((chunk) => {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
   });
-  const boundedResponse = new Response(
-    response.body.pipeThrough(boundedStream),
-  );
-  const parsed: unknown = JSON.parse(await boundedResponse.text());
+  const parsed: unknown = JSON.parse(new TextDecoder().decode(bytes));
   return parsed;
 };
 

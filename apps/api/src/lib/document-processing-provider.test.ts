@@ -79,4 +79,19 @@ describe("readBoundedOcrJson", () => {
       ),
     ).rejects.toMatchObject({ code: "response_too_large" });
   });
+
+  test("rejects a chunked response that crosses the boundary", async () => {
+    const body = new ReadableStream({
+      start(controller) {
+        const encoder = new TextEncoder();
+        controller.enqueue(encoder.encode("ab"));
+        controller.enqueue(encoder.encode("cd"));
+        controller.close();
+      },
+    });
+
+    await expect(
+      readBoundedOcrJson(new Response(body), 3),
+    ).rejects.toMatchObject({ code: "response_too_large" });
+  });
 });

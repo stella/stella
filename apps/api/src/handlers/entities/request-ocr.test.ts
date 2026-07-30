@@ -12,10 +12,10 @@ const rootTransactionMock = mock();
 const enqueueDocumentProcessingRunMock = mock(async () => undefined);
 const recordAuditEvent = mock(async () => undefined);
 
-mock.module("@/api/db/root", () => ({
+void mock.module("@/api/db/root", () => ({
   rootDb: { transaction: rootTransactionMock },
 }));
-mock.module("@/api/lib/document-processing-queue", () => ({
+void mock.module("@/api/lib/document-processing-queue", () => ({
   enqueueDocumentProcessingRun: enqueueDocumentProcessingRunMock,
 }));
 
@@ -184,7 +184,9 @@ describe("requestManualOcrHandler", () => {
       }),
     });
     rootTransactionMock.mockImplementationOnce(
-      async (callback) => await callback(tx),
+      async (operation: (transaction: Transaction) => Promise<unknown>) => {
+        return await operation(tx);
+      },
     );
 
     const run = await persistManualOcrRun({

@@ -14,7 +14,6 @@ import {
   persistManualOcrRun,
   type ManualOcrSource,
   type PersistedDocumentProcessingRun,
-  type PersistManualOcrRun,
 } from "@/api/lib/document-processing-request";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
@@ -45,7 +44,7 @@ type RequestManualOcrProps = {
   entityId: SafeId<"entity">;
   fieldId: SafeId<"field">;
   organizationId: SafeId<"organization">;
-  persistRun?: PersistManualOcrRun;
+  persistRun?: typeof persistManualOcrRun;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   userId: SafeId<"user">;

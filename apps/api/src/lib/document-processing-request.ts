@@ -30,17 +30,13 @@ export type PersistManualOcrRunOptions = {
   workspaceId: SafeId<"workspace">;
 };
 
-export type PersistManualOcrRun = (
-  options: PersistManualOcrRunOptions,
-) => Promise<PersistedDocumentProcessingRun | null>;
-
-export const persistManualOcrRun: PersistManualOcrRun = async ({
+export const persistManualOcrRun = async ({
   organizationId,
   recordAuditEvent,
   source,
   userId,
   workspaceId,
-}) =>
+}: PersistManualOcrRunOptions): Promise<PersistedDocumentProcessingRun | null> =>
   await rootDb.transaction(async (tx) => {
     // Re-check and lock the mutable entity under the root write. The scoped
     // validation above authorizes the request; this prevents a concurrent

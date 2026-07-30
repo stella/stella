@@ -239,7 +239,7 @@ describe("manage_organization per-action validation", () => {
       (tool) => tool.name === "manage_organization",
     );
     const property =
-      definition?.inputSchema.properties?.["document_processing_mode"];
+      definition?.inputSchema.properties?.document_processing_mode;
 
     expect(property).toMatchObject({
       type: "string",

@@ -586,35 +586,31 @@ type MissingAutomaticOcrCandidate = {
   workspaceId: SafeId<"workspace">;
 };
 
-const requestMissingAutomaticOcr = async (
-  candidate: MissingAutomaticOcrCandidate,
-): Promise<void> => {
-  if (!isAutomaticOcrRepairCandidate(candidate.content)) {
-    return;
-  }
+type EnqueueAttemptResult =
+  | {
+      status: "enqueued";
+      runId: SafeId<"documentProcessingRun">;
+    }
+  | {
+      status: "failed";
+      runId: SafeId<"documentProcessingRun">;
+    };
 
-  const requestResult = await Result.tryPromise({
+const tryEnqueueDocumentProcessingRun = async (
+  runId: SafeId<"documentProcessingRun">,
+): Promise<EnqueueAttemptResult> => {
+  const result = await Result.tryPromise({
     try: async () => {
-      await requestAutomaticDocumentOcr({
-        entityId: candidate.entityId,
-        entityVersionId: candidate.entityVersionId,
-        fieldId: candidate.fieldId,
-        organizationId: candidate.organizationId,
-        requestSource: "repair",
-        sourceFileId: candidate.content.id,
-        sourceSha256Hex: candidate.content.sha256Hex,
-        workspaceId: candidate.workspaceId,
-      });
+      await enqueueDocumentProcessingRun(runId);
       return undefined;
     },
     catch: (cause) => cause,
   });
-  if (Result.isError(requestResult)) {
-    captureError(requestResult.error, {
-      entityId: candidate.entityId,
-      fieldId: candidate.fieldId,
-    });
+  if (Result.isError(result)) {
+    captureError(result.error, { runId });
+    return { runId, status: "failed" };
   }
+  return { runId, status: "enqueued" };
 };
 
 const recoverMissingAutomaticOcrRuns = async (): Promise<number> => {
@@ -712,45 +708,74 @@ const recoverMissingAutomaticOcrRuns = async (): Promise<number> => {
     )
     .limit(RECONCILE_BATCH_SIZE);
 
-  await Promise.all(candidates.map(requestMissingAutomaticOcr));
-  return candidates.length;
-};
-
-const reconcileQueuedRun = async (
-  runId: SafeId<"documentProcessingRun">,
-): Promise<void> => {
-  const enqueueResult = await Result.tryPromise({
-    try: async () => {
-      await enqueueDocumentProcessingRun(runId);
-      return await rootDb
-        .update(documentProcessingRuns)
-        .set({
-          nextAttemptAt: new Date(Date.now() + ENQUEUE_VISIBILITY_TIMEOUT_MS),
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(documentProcessingRuns.id, runId),
-            eq(documentProcessingRuns.status, "queued"),
-          ),
-        );
-    },
-    catch: (cause) => cause,
-  });
-  if (Result.isOk(enqueueResult)) {
-    return;
+  const values: (typeof documentProcessingRuns.$inferInsert)[] = [];
+  for (const candidate of candidates) {
+    const content = candidate.content;
+    if (!isAutomaticOcrRepairCandidate(content)) {
+      continue;
+    }
+    values.push({
+      id: createSafeId<"documentProcessingRun">(),
+      entityId: candidate.entityId,
+      entityVersionId: candidate.entityVersionId,
+      fieldId: candidate.fieldId,
+      kind: "ocr",
+      organizationId: candidate.organizationId,
+      processorVersion: 1,
+      requestedBy: null,
+      requestSource: "repair",
+      sourceFileId: content.id,
+      sourceSha256Hex: content.sha256Hex,
+      workspaceId: candidate.workspaceId,
+    });
+  }
+  if (values.length === 0) {
+    return 0;
   }
 
-  captureError(enqueueResult.error, { runId });
+  const inserted = await rootDb
+    .insert(documentProcessingRuns)
+    .values(values)
+    .onConflictDoNothing({
+      target: [
+        documentProcessingRuns.organizationId,
+        documentProcessingRuns.kind,
+        documentProcessingRuns.entityVersionId,
+        documentProcessingRuns.fieldId,
+        documentProcessingRuns.sourceFileId,
+        documentProcessingRuns.sourceSha256Hex,
+        documentProcessingRuns.processorVersion,
+      ],
+    })
+    .returning({ id: documentProcessingRuns.id });
+
+  await Promise.all(
+    inserted.map(async ({ id }) => await tryEnqueueDocumentProcessingRun(id)),
+  );
+  return inserted.length;
+};
+
+const updateQueuedRunSchedule = async ({
+  delayMs,
+  runIds,
+  updatedAt,
+}: {
+  delayMs: number;
+  runIds: SafeId<"documentProcessingRun">[];
+  updatedAt: Date;
+}): Promise<void> => {
+  if (runIds.length === 0) {
+    return;
+  }
   await rootDb
     .update(documentProcessingRuns)
     .set({
-      nextAttemptAt: new Date(Date.now() + ENQUEUE_FAILURE_RETRY_MS),
-      updatedAt: new Date(),
+      nextAttemptAt: new Date(updatedAt.getTime() + delayMs),
+      updatedAt,
     })
     .where(
       and(
-        eq(documentProcessingRuns.id, runId),
+        inArray(documentProcessingRuns.id, runIds),
         eq(documentProcessingRuns.status, "queued"),
       ),
     );
@@ -776,7 +801,35 @@ const enqueueQueuedRuns = async (): Promise<number> => {
     )
     .limit(RECONCILE_BATCH_SIZE);
 
-  await Promise.all(runs.map(({ id }) => reconcileQueuedRun(id)));
+  const attempts = await Promise.all(
+    runs.map(async ({ id }) => await tryEnqueueDocumentProcessingRun(id)),
+  );
+  const enqueuedIds: SafeId<"documentProcessingRun">[] = [];
+  const failedIds: SafeId<"documentProcessingRun">[] = [];
+  for (const attempt of attempts) {
+    switch (attempt.status) {
+      case "enqueued":
+        enqueuedIds.push(attempt.runId);
+        break;
+      case "failed":
+        failedIds.push(attempt.runId);
+        break;
+      default:
+        attempt satisfies never;
+    }
+  }
+
+  const updatedAt = new Date();
+  await updateQueuedRunSchedule({
+    delayMs: ENQUEUE_VISIBILITY_TIMEOUT_MS,
+    runIds: enqueuedIds,
+    updatedAt,
+  });
+  await updateQueuedRunSchedule({
+    delayMs: ENQUEUE_FAILURE_RETRY_MS,
+    runIds: failedIds,
+    updatedAt,
+  });
   return runs.length;
 };
 
