@@ -55,6 +55,24 @@ describe("skill URL import batches", () => {
     });
   });
 
+  test("deduplicates content-identical packages across mirror URLs", () => {
+    const integrity = contentIntegrity("a".repeat(64));
+    const result = deduplicateSkillImportItems([
+      { integrity, sourceUrl: "https://primary.example/SKILL.md" },
+      { integrity, sourceUrl: "https://mirror.example/SKILL.md" },
+    ]);
+
+    expect(result).toEqual({
+      failed: [],
+      items: [
+        {
+          integrity,
+          sourceUrl: "https://primary.example/SKILL.md",
+        },
+      ],
+    });
+  });
+
   test("rejects a URL with conflicting preview integrity", () => {
     const sourceUrl = "https://example.com/SKILL.md";
     const result = deduplicateSkillImportItems([

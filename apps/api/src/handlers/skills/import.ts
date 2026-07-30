@@ -117,6 +117,7 @@ const importSkillsFromUrls = createSafeRootHandler(
       }
 
       const result = await installSkill({
+        allowUnchangedUrlReplay: true,
         memberRole,
         origin: "url",
         parsed: parsed.value,

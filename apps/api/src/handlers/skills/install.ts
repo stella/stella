@@ -15,6 +15,7 @@ import { PG_ERROR } from "@/api/lib/pg-error";
 import type { ParsedSkillPackage } from "./skill-package";
 
 type InstallSkillProps = {
+  allowUnchangedUrlReplay?: boolean;
   // Install as a draft (hidden until the user finishes). Defaults to true so
   // existing upload/import callers keep installing enabled skills.
   enabled?: boolean;
@@ -38,11 +39,14 @@ type InstallSkillProps = {
 
 type InstallSkillTransactionResult =
   | { id: SafeId<"agentSkill">; type: "installed" }
+  | { id: SafeId<"agentSkill">; type: "unchanged" }
+  | { type: "conflict" }
   | { type: "insert-failed" }
   | { type: "limit-reached" }
   | { type: "team-limit-reached" };
 
 export const installSkill = async ({
+  allowUnchangedUrlReplay = false,
   enabled = true,
   memberRole,
   onInstalled,
@@ -64,6 +68,42 @@ export const installSkill = async ({
     async (tx) =>
       await tx.transaction(
         async (innerTx): Promise<InstallSkillTransactionResult> => {
+          const existingSkill = async () => {
+            if (!allowUnchangedUrlReplay) {
+              return undefined;
+            }
+            const rows = await innerTx
+              .select({
+                contentHash: agentSkills.contentHash,
+                id: agentSkills.id,
+                origin: agentSkills.origin,
+                sourceUrl: agentSkills.sourceUrl,
+              })
+              .from(agentSkills)
+              .where(
+                and(
+                  eq(agentSkills.organizationId, session.activeOrganizationId),
+                  eq(agentSkills.scope, scope),
+                  eq(agentSkills.slug, slug ?? parsed.name),
+                  scope === "private"
+                    ? eq(agentSkills.userId, user.id)
+                    : undefined,
+                ),
+              )
+              .limit(1);
+            return rows.at(0);
+          };
+          const unchangedSkill = async () => {
+            const existing = await existingSkill();
+            return existing && isUnchangedUrlSkill({ existing, origin, parsed })
+              ? existing
+              : undefined;
+          };
+          const unchangedBeforeInsert = await unchangedSkill();
+          if (unchangedBeforeInsert) {
+            return { id: unchangedBeforeInsert.id, type: "unchanged" };
+          }
+
           const userCount = await innerTx.$count(
             agentSkills,
             and(
@@ -91,29 +131,37 @@ export const installSkill = async ({
             }
           }
 
-          const rows = await innerTx
-            .insert(agentSkills)
-            .values({
-              organizationId: session.activeOrganizationId,
-              userId: user.id,
-              scope,
-              origin,
-              slug: slug ?? parsed.name,
-              name: parsed.name,
-              description: parsed.description,
-              version: parsed.version,
-              license: parsed.license,
-              compatibility: parsed.compatibility,
-              metadata: parsed.metadata,
-              sourceUrl: parsed.sourceUrl,
-              contentHash: parsed.contentHash,
-              body: parsed.body,
-              enabled,
-            })
-            .returning({ id: agentSkills.id });
+          const insert = innerTx.insert(agentSkills).values({
+            organizationId: session.activeOrganizationId,
+            userId: user.id,
+            scope,
+            origin,
+            slug: slug ?? parsed.name,
+            name: parsed.name,
+            description: parsed.description,
+            version: parsed.version,
+            license: parsed.license,
+            compatibility: parsed.compatibility,
+            metadata: parsed.metadata,
+            sourceUrl: parsed.sourceUrl,
+            contentHash: parsed.contentHash,
+            body: parsed.body,
+            enabled,
+          });
+          const rows = allowUnchangedUrlReplay
+            ? await insert
+                .onConflictDoNothing()
+                .returning({ id: agentSkills.id })
+            : await insert.returning({ id: agentSkills.id });
 
           const row = rows.at(0);
           if (!row) {
+            if (allowUnchangedUrlReplay) {
+              const unchangedAfterConflict = await unchangedSkill();
+              return unchangedAfterConflict
+                ? { id: unchangedAfterConflict.id, type: "unchanged" }
+                : { type: "conflict" };
+            }
             return { type: "insert-failed" };
           }
 
@@ -199,8 +247,35 @@ export const installSkill = async ({
     );
   }
 
+  if (insertResult.value.type === "conflict") {
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        message: `A skill named "${parsed.name}" already exists`,
+      }),
+    );
+  }
+
   return Result.ok({ id: insertResult.value.id });
 };
+
+export const isUnchangedUrlSkill = ({
+  existing,
+  origin,
+  parsed,
+}: {
+  existing: Pick<
+    typeof agentSkills.$inferSelect,
+    "contentHash" | "origin" | "sourceUrl"
+  >;
+  origin: AgentSkillOrigin;
+  parsed: Pick<ParsedSkillPackage, "contentHash" | "sourceUrl">;
+}): boolean =>
+  origin === "url" &&
+  existing.origin === "url" &&
+  parsed.sourceUrl !== null &&
+  existing.sourceUrl === parsed.sourceUrl &&
+  existing.contentHash === parsed.contentHash;
 
 export const authorizeSkillInstallScope = ({
   memberRole,

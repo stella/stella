@@ -91,5 +91,16 @@ export const deduplicateSkillImportItems = (
       sourceUrl,
     });
   }
-  return { failed, items: [...itemsBySourceUrl.values()] };
+  const contentHashes = new Set<string>();
+  const items = [...itemsBySourceUrl.values()].filter((item) => {
+    if (item.integrity.type !== "content-hash") {
+      return true;
+    }
+    if (contentHashes.has(item.integrity.value)) {
+      return false;
+    }
+    contentHashes.add(item.integrity.value);
+    return true;
+  });
+  return { failed, items };
 };
