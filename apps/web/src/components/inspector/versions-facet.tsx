@@ -22,7 +22,7 @@ import { useMountEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
-import { fileMetadataOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
+import { fileMetadataOptions } from "@/lib/files/file-metadata-query";
 import { VersionsSidebar } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/versions-sidebar";
 import type { Version } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/versions-sidebar";
 import {

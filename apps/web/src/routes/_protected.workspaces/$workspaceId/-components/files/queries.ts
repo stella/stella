@@ -1,18 +1,16 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
-import type { QueryOptionsInput } from "@/lib/react-query";
+import { unwrapEden } from "@/lib/errors/api";
 import {
-  fetchStorageArrayBuffer,
+  fileMetadataQueryKey,
+  type FileMetadataQueryKey,
   type StorageFetchPurpose,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/files/storage-fetch";
+} from "@/lib/files/file-metadata-query";
+import type { QueryOptionsInput } from "@/lib/react-query";
+import { fetchStorageArrayBuffer } from "@/routes/_protected.workspaces/$workspaceId/-components/files/storage-fetch";
 
-type FileByFieldIdKey = {
-  workspaceId: string;
-  fieldId: string;
-  purpose?: StorageFetchPurpose;
-};
+type FileByFieldIdKey = FileMetadataQueryKey;
 
 type FileData = {
   fileId: string;
@@ -21,8 +19,6 @@ type FileData = {
   originalMimeType: string;
   buffer: ArrayBuffer;
 };
-
-type FileMetadata = Omit<FileData, "buffer">;
 
 type EmailHtmlPreviewData = {
   fileId: string;
@@ -48,13 +44,7 @@ export const filesKeys = {
     key.fieldId,
     key.purpose ?? "display",
   ],
-  metadataByFieldId: (key: FileByFieldIdKey) => [
-    ...filesKeys.all(),
-    "metadata",
-    key.workspaceId,
-    key.fieldId,
-    key.purpose ?? "display",
-  ],
+  metadataByFieldId: fileMetadataQueryKey,
   emailHtmlByFieldId: (key: FileByFieldIdKey) => [
     ...filesKeys.all(),
     "email-html",
@@ -70,32 +60,6 @@ export const filesKeys = {
 };
 
 type FileOptionsProps = QueryOptionsInput<FileByFieldIdKey>;
-type FileMetadataOptionsProps = FileOptionsProps & { enabled?: boolean };
-
-export const fileMetadataOptions = (props: FileMetadataOptionsProps) =>
-  queryOptions({
-    queryKey: filesKeys.metadataByFieldId(props),
-    enabled: props.enabled ?? true,
-    retry: shouldRetryAPIRequest,
-    queryFn: async ({ signal }) => {
-      const response = await api
-        .files({ workspaceId: props.workspaceId })
-        .url({ fieldId: props.fieldId })
-        .get({
-          query: { purpose: props.purpose ?? "display" },
-          fetch: { signal },
-        });
-
-      const data = unwrapEden(response);
-
-      return {
-        fileId: data.fileId,
-        fileName: data.fileName,
-        mimeType: data.mimeType,
-        originalMimeType: data.originalMimeType,
-      } satisfies FileMetadata;
-    },
-  });
 
 export const fileOptions = (props: FileOptionsProps) =>
   queryOptions({

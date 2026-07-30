@@ -25,8 +25,8 @@ import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { fetchWithTimeout } from "@/lib/fetch";
+import { fileMetadataOptions } from "@/lib/files/file-metadata-query";
 import { downloadFile } from "@/lib/utils";
-import { fileMetadataOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
 import {
   fetchPrintPdf,
   printPdfBuffer,
