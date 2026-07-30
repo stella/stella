@@ -65,6 +65,7 @@ function Input({
       }
       data-size={size}
       data-slot="input-control"
+      dir={contentDir.dir}
     >
       {props.type === "search" && (
         <SearchIcon
