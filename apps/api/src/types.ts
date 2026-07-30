@@ -13,6 +13,7 @@ type ApiEntityRoutes = ApiV1Routes["entities"];
 type ApiWorkspaceEntityRoutes = ApiEntityRoutes[":workspaceId"];
 type ApiEntityResourceRoutes = ApiWorkspaceEntityRoutes["entity"];
 type ApiEntityByIdRoutes = ApiEntityResourceRoutes[":entityId"];
+type EmptyElysia = Elysia;
 type WebApiRoutes = Omit<ApiRoutes, "v1"> & {
   v1: Omit<ApiV1Routes, "entities"> & {
     entities: Omit<ApiEntityRoutes, ":workspaceId"> & {
@@ -31,13 +32,13 @@ type WebApiRoutes = Omit<ApiRoutes, "v1"> & {
  * budget; their clients validate the shared HTTP contract at runtime.
  */
 export type WebAPI = Elysia<
-  (typeof api)["~Prefix"],
-  (typeof api)["~Singleton"],
-  (typeof api)["~Definitions"],
-  (typeof api)["~Metadata"],
+  EmptyElysia["~Prefix"],
+  EmptyElysia["~Singleton"],
+  EmptyElysia["~Definitions"],
+  EmptyElysia["~Metadata"],
   WebApiRoutes,
-  (typeof api)["~Ephemeral"],
-  (typeof api)["~Volatile"]
+  EmptyElysia["~Ephemeral"],
+  EmptyElysia["~Volatile"]
 >;
 
 export { toSafeId } from "@/api/lib/branded-types";

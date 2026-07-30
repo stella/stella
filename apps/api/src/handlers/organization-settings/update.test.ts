@@ -81,31 +81,21 @@ describe("updateOrganizationSettingsHandler", () => {
 
   test("does not acknowledge OCR opt-out while automatic work is running", async () => {
     let selectCount = 0;
-    const lockedSettings = Object.assign(
-      Promise.resolve([
+    const lockedSettings = {
+      for: async () => [
         {
           documentProcessingMode: "searchable-text" as const,
           promptCachingEnabled: true,
         },
-      ]),
-      {
-        for: async () => [
-          {
-            documentProcessingMode: "searchable-text" as const,
-            promptCachingEnabled: true,
-          },
-        ],
-      },
-    );
+      ],
+    };
     const tx = asTestRaw<Transaction>({
       select: () => ({
         from: () => ({
           where: () => ({
             limit: () => {
               selectCount += 1;
-              return selectCount === 1
-                ? lockedSettings
-                : Promise.resolve([{ id: "run_test" }]);
+              return selectCount === 1 ? lockedSettings : [{ id: "run_test" }];
             },
           }),
         }),
