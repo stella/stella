@@ -1753,7 +1753,7 @@
       "generating": "Ģenerē…",
       "howItRuns": "How it runs",
       "importHelp": "Ielīmējiet publiska GitHub repozitorija, mapes vai SKILL.md faila URL. Pirms instalēšanas pārskatiet atrastās prasmes.",
-      "importPartial": "Importētas: {installed}; neizdevās: {failed}.",
+      "importPartial": "{installedCount, plural, zero {Importētas: {installed}} one {Importēta: {installed}} other {Importētas: {installed}}}; {failedCount, plural, zero {neizdevās: {failed}} one {neizdevās: {failed}} other {neizdevās: {failed}}}.",
       "importSelected": "Importēt atlasītās ({count})",
       "importSkill": "Importēt no URL",
       "importTitle": "Importēt prasmi",

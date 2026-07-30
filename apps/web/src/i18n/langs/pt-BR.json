@@ -1753,7 +1753,7 @@
       "generating": "Gerando…",
       "howItRuns": "How it runs",
       "importHelp": "Cole a URL de um repositório ou pasta pública do GitHub, ou de um arquivo SKILL.md. Revise as habilidades encontradas antes de instalá-las.",
-      "importPartial": "{installed} importadas; {failed} falharam.",
+      "importPartial": "{installedCount, plural, one {{installed} importada} other {{installed} importadas}}; {failedCount, plural, one {{failed} falhou} other {{failed} falharam}}.",
       "importSelected": "Importar selecionadas ({count})",
       "importSkill": "Importar de URL",
       "importTitle": "Importar habilidade",

@@ -1753,7 +1753,7 @@
       "generating": "Generating…",
       "howItRuns": "How it runs",
       "importHelp": "Paste a public GitHub repository, folder, or SKILL.md URL. Review the discovered skills before installing them.",
-      "importPartial": "{installed} imported; {failed} failed.",
+      "importPartial": "{installedCount, plural, one {{installed} imported} other {{installed} imported}}; {failedCount, plural, one {{failed} failed} other {{failed} failed}}.",
       "importSelected": "Import selected ({count})",
       "importSkill": "Import from URL",
       "importTitle": "Import skill",

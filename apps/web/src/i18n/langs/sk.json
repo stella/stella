@@ -1753,7 +1753,7 @@
       "generating": "Generovanie…",
       "howItRuns": "How it runs",
       "importHelp": "Vložte URL verejného repozitára či priečinka na GitHube alebo súboru SKILL.md. Nájdené zručnosti pred inštaláciou skontrolujte.",
-      "importPartial": "{installed} importovaných; {failed} zlyhalo.",
+      "importPartial": "{installedCount, plural, one {{installed} importovaná} few {{installed} importované} many {{installed} importovaných} other {{installed} importovaných}}; {failedCount, plural, one {{failed} zlyhala} few {{failed} zlyhali} many {{failed} zlyhalo} other {{failed} zlyhalo}}.",
       "importSelected": "Importovať vybrané ({count})",
       "importSkill": "Importovať z URL",
       "importTitle": "Importovať zručnosť",

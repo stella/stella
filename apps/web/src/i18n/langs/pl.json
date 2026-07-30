@@ -1753,7 +1753,7 @@
       "generating": "Generowanie…",
       "howItRuns": "How it runs",
       "importHelp": "Wklej adres URL publicznego repozytorium lub folderu GitHub albo pliku SKILL.md. Przejrzyj znalezione umiejętności przed instalacją.",
-      "importPartial": "Zaimportowano: {installed}; niepowodzenia: {failed}.",
+      "importPartial": "{installedCount, plural, one {Zaimportowano: {installed}} few {Zaimportowano: {installed}} many {Zaimportowano: {installed}} other {Zaimportowano: {installed}}}; {failedCount, plural, one {niepowodzenie: {failed}} few {niepowodzenia: {failed}} many {niepowodzenia: {failed}} other {niepowodzenia: {failed}}}.",
       "importSelected": "Importuj wybrane ({count})",
       "importSkill": "Importuj z URL",
       "importTitle": "Importuj umiejętność",

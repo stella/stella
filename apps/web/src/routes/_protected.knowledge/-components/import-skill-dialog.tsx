@@ -165,7 +165,9 @@ const ImportSkillDialogBody = ({
       stellaToast.add({
         title: tSkills("importPartial", {
           failed: format.number(result.failed.length),
+          failedCount: result.failed.length,
           installed: format.number(result.installed.length),
+          installedCount: result.installed.length,
         }),
         description: t("common.unexpectedError"),
         type: "warning",

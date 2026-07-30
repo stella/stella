@@ -1753,7 +1753,7 @@
       "generating": "Generálás…",
       "howItRuns": "How it runs",
       "importHelp": "Illeszd be egy nyilvános GitHub-tároló, mappa vagy SKILL.md fájl URL-jét. Telepítés előtt ellenőrizd a megtalált készségeket.",
-      "importPartial": "{installed} importálva; {failed} sikertelen.",
+      "importPartial": "{installedCount, plural, one {{installed} importálva} other {{installed} importálva}}; {failedCount, plural, one {{failed} sikertelen} other {{failed} sikertelen}}.",
       "importSelected": "Kijelöltek importálása ({count})",
       "importSkill": "Importálás URL-ből",
       "importTitle": "Készség importálása",

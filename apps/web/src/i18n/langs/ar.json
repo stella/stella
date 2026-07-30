@@ -1753,7 +1753,7 @@
       "generating": "جارٍ الإنشاء…",
       "howItRuns": "كيفية تشغيلها",
       "importHelp": "الصق رابط مستودع أو مجلد عام على GitHub، أو رابط ملف SKILL.md. راجع المهارات المكتشفة قبل تثبيتها.",
-      "importPartial": "تم استيراد {installed}؛ وفشل {failed}.",
+      "importPartial": "{installedCount, plural, zero {تم استيراد {installed}} one {تم استيراد {installed}} two {تم استيراد {installed}} few {تم استيراد {installed}} many {تم استيراد {installed}} other {تم استيراد {installed}}}؛ {failedCount, plural, zero {وفشل {failed}} one {وفشل {failed}} two {وفشل {failed}} few {وفشل {failed}} many {وفشل {failed}} other {وفشل {failed}}}.",
       "importSelected": "استيراد المحدد ({count})",
       "importSkill": "استيراد من رابط URL",
       "importTitle": "استيراد مهارة",

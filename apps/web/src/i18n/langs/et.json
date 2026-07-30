@@ -1753,7 +1753,7 @@
       "generating": "Genereerimine…",
       "howItRuns": "How it runs",
       "importHelp": "Kleebi avaliku GitHubi hoidla, kausta või SKILL.md faili URL. Vaata leitud oskused enne installimist üle.",
-      "importPartial": "{installed} imporditud; {failed} nurjus.",
+      "importPartial": "{installedCount, plural, one {{installed} imporditud} other {{installed} imporditud}}; {failedCount, plural, one {{failed} nurjus} other {{failed} nurjus}}.",
       "importSelected": "Impordi valitud ({count})",
       "importSkill": "Impordi URL-ist",
       "importTitle": "Impordi oskus",
