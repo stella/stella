@@ -117,6 +117,31 @@ const configuredChatProviders = (
   return isBYOKProviderValue(activeProvider) ? [activeProvider] : [];
 };
 
+const hasResolvableModelForRole = ({
+  orgAIConfig,
+  role,
+}: {
+  orgAIConfig: OrgAIConfig | null;
+  role: ModelRole;
+}): boolean => {
+  if (!orgAIConfig) {
+    return hasTanStackInstanceProvider();
+  }
+
+  const selection = orgAIConfig.overrideModels[role];
+  return (
+    isBYOKProviderValue(selection.provider) &&
+    orgAIConfig.providers.some(
+      (providerConfig) => providerConfig.provider === selection.provider,
+    ) &&
+    isAllowedBYOKModelForRole({
+      provider: selection.provider,
+      modelId: selection.modelId,
+      role,
+    })
+  );
+};
+
 /**
  * Chat-role model options across every provider currently configured for
  * the org (or the single instance provider when no org BYOK config
@@ -129,8 +154,8 @@ export const getConfiguredChatModelOptions = (
 
 /**
  * The encoded selection a send would use absent a thread override, or
- * `null` when the chat role has no configured provider at all (BYOK
- * unset and no instance provider). Never throws.
+ * `null` when the chat role has no usable configured provider or model.
+ * Unexpected resolver failures propagate to the handler boundary.
  */
 export const getDefaultChatModelValue = ({
   orgAIConfig,
@@ -139,20 +164,17 @@ export const getDefaultChatModelValue = ({
   orgAIConfig: OrgAIConfig | null;
   organizationId: SafeId<"organization"> | null;
 }): string | null => {
-  try {
-    const info = getTanStackTextModelInfoForRole(CHAT_MODEL_ROLE, orgAIConfig, {
-      organizationId,
-    });
-    return encodeChatModelSelection({
-      provider: info.provider,
-      modelId: info.modelId,
-    });
-  } catch {
-    // Boundary: `getTanStackTextModelInfoForRole` throws when the chat
-    // role has no configured provider. Best-effort — same fallback
-    // pattern as `resolveChatCompactionBudget`.
+  if (!hasResolvableModelForRole({ orgAIConfig, role: CHAT_MODEL_ROLE })) {
     return null;
   }
+
+  const info = getTanStackTextModelInfoForRole(CHAT_MODEL_ROLE, orgAIConfig, {
+    organizationId,
+  });
+  return encodeChatModelSelection({
+    provider: info.provider,
+    modelId: info.modelId,
+  });
 };
 
 /**
@@ -169,21 +191,21 @@ export const getChatModeModelValue = ({
   organizationId: SafeId<"organization"> | null;
   role: Extract<ModelRole, "fast" | "reasoning">;
 }): string | null => {
-  try {
-    const info = getTanStackTextModelInfoForRole(role, orgAIConfig, {
-      organizationId,
-    });
-    if (!isBYOKProviderValue(info.provider)) {
-      return null;
-    }
-    const selection = { provider: info.provider, modelId: info.modelId };
-    if (!isChatModelSelectionAvailable({ ...selection, orgAIConfig })) {
-      return null;
-    }
-    return encodeChatModelSelection(selection);
-  } catch {
+  if (!hasResolvableModelForRole({ orgAIConfig, role })) {
     return null;
   }
+
+  const info = getTanStackTextModelInfoForRole(role, orgAIConfig, {
+    organizationId,
+  });
+  if (!isBYOKProviderValue(info.provider)) {
+    return null;
+  }
+  const selection = { provider: info.provider, modelId: info.modelId };
+  if (!isChatModelSelectionAvailable({ ...selection, orgAIConfig })) {
+    return null;
+  }
+  return encodeChatModelSelection(selection);
 };
 
 /**

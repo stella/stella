@@ -4,6 +4,7 @@ import { Result } from "better-result";
 import { Loader2Icon, WandSparklesIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { Button } from "@stll/ui/components/button";
 import { stellaToast } from "@stll/ui/components/toast";
 
@@ -45,7 +46,13 @@ export const ChatPromptImproveButton = ({
 
     setIsPending(true);
     const result = await Result.tryPromise(
-      async () => await api.chat["improve-prompt"].post({ prompt }),
+      async () =>
+        await api.chat["improve-prompt"].post({
+          prompt,
+          sendMode: anonymized
+            ? CHAT_SEND_MODE.anonymized
+            : CHAT_SEND_MODE.rawOverride,
+        }),
     );
     setIsPending(false);
 

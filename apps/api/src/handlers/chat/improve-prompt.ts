@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
+import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
+
 import { resolveCaching } from "@/api/lib/ai-config";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
@@ -25,6 +27,10 @@ const config = {
   mcp: { type: "internal", reason: "assistant_chat" },
   body: t.Object({
     prompt: t.String({ minLength: 1, maxLength: 12_000 }),
+    sendMode: t.Union([
+      t.Literal(CHAT_SEND_MODE.anonymized),
+      t.Literal(CHAT_SEND_MODE.rawOverride),
+    ]),
   }),
   requiresUsage: { actionType: "chat", modelRole: "fast" },
 } satisfies HandlerConfig;
@@ -43,6 +49,15 @@ const improvePrompt = createSafeRootHandler(
     session,
     user,
   }) {
+    if (body.sendMode === CHAT_SEND_MODE.anonymized) {
+      return Result.err(
+        new HandlerError({
+          status: 403,
+          message: "Prompt improvement is unavailable in anonymized mode",
+        }),
+      );
+    }
+
     const prompt = body.prompt.trim();
     if (prompt.length === 0) {
       return Result.err(
