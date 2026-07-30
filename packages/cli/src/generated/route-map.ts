@@ -27945,6 +27945,32 @@ export const generatedRouteMap: RouteNode = {
         "organization-settings": {
           kind: "route",
           children: {
+            "document-ocr-availability-get": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "organization-settings",
+                  "document-ocr-availability-get",
+                ],
+                capabilityId:
+                  "organization-settings.document-ocr-availability.get",
+                description:
+                  "Report whether a document OCR worker is currently ready to accept work.",
+                access: "read",
+                flags: [],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "admin_read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {},
+                },
+                schemaTruncated: false,
+              },
+            },
             get: {
               kind: "capability-leaf",
               spec: {
