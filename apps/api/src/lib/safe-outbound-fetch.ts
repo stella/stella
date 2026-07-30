@@ -6,6 +6,9 @@ import { request as requestHttps } from "node:https";
 import { isIP } from "node:net";
 import * as v from "valibot";
 
+import { TimeoutError } from "@/api/lib/errors/tagged-errors";
+import { withTimeout } from "@/api/lib/with-timeout";
+
 export class SafeOutboundFetchError extends TaggedError(
   "SafeOutboundFetchError",
 )<{
@@ -529,6 +532,10 @@ export type OutboundFetchTarget = {
   url: URL;
 };
 
+type ResolveOutboundAddresses = (
+  hostname: string,
+) => Promise<Result<SafeOutboundAddress[], SafeOutboundFetchError>>;
+
 /**
  * Full SSRF check: parses the URL with `parseSafeOutboundUrl`, then
  * resolves DNS and rejects targets whose resolved addresses fall in
@@ -539,13 +546,45 @@ export type OutboundFetchTarget = {
  */
 export const validateOutboundFetchTarget = async (
   rawUrl: string | URL,
+  {
+    resolveAddresses = resolvePublicAddresses,
+    timeoutMs = 0,
+  }: {
+    resolveAddresses?: ResolveOutboundAddresses;
+    timeoutMs?: number;
+  } = {},
 ): Promise<Result<OutboundFetchTarget, SafeOutboundFetchError>> => {
   const parsed = parseSafeOutboundUrl(rawUrl.toString());
   if (Result.isError(parsed)) {
     return Result.err(parsed.error);
   }
 
-  const addresses = await resolvePublicAddresses(parsed.value.hostname);
+  const resolution = await Result.tryPromise({
+    try: async () =>
+      await withTimeout(
+        async () => await resolveAddresses(parsed.value.hostname),
+        { label: "outbound DNS resolution", timeoutMs },
+      ),
+    catch: (cause) => {
+      if (TimeoutError.is(cause)) {
+        return new SafeOutboundFetchError({
+          message: "Request timed out",
+          cause,
+        });
+      }
+      if (SafeOutboundFetchError.is(cause)) {
+        return cause;
+      }
+      return new SafeOutboundFetchError({
+        message: "URL host could not be resolved",
+        cause,
+      });
+    },
+  });
+  if (Result.isError(resolution)) {
+    return Result.err(resolution.error);
+  }
+  const addresses = resolution.value;
   if (Result.isError(addresses)) {
     return Result.err(addresses.error);
   }
@@ -570,9 +609,16 @@ export const safeOutboundFetchBytes = async ({
   timeoutMs: number;
   url: string | URL;
 }): Promise<Result<SafeOutboundFetchResponse, SafeOutboundFetchError>> => {
-  const target = await validateOutboundFetchTarget(url);
+  const startedAt = Date.now();
+  const target = await validateOutboundFetchTarget(url, { timeoutMs });
   if (Result.isError(target)) {
     return Result.err(target.error);
+  }
+  const remainingTimeoutMs = timeoutMs - (Date.now() - startedAt);
+  if (remainingTimeoutMs <= 0) {
+    return Result.err(
+      new SafeOutboundFetchError({ message: "Request timed out" }),
+    );
   }
 
   return await fetchWithResolvedAddress({
@@ -582,7 +628,7 @@ export const safeOutboundFetchBytes = async ({
     maxBytes,
     method,
     redirect,
-    timeoutMs,
+    timeoutMs: remainingTimeoutMs,
     url: target.value.url,
   });
 };
@@ -606,9 +652,16 @@ export const safeOutboundFetchStream = async ({
 }): Promise<
   Result<SafeOutboundFetchStreamResponse, SafeOutboundFetchError>
 > => {
-  const target = await validateOutboundFetchTarget(url);
+  const startedAt = Date.now();
+  const target = await validateOutboundFetchTarget(url, { timeoutMs });
   if (Result.isError(target)) {
     return Result.err(target.error);
+  }
+  const remainingTimeoutMs = timeoutMs - (Date.now() - startedAt);
+  if (remainingTimeoutMs <= 0) {
+    return Result.err(
+      new SafeOutboundFetchError({ message: "Request timed out" }),
+    );
   }
 
   return await fetchStreamWithResolvedAddress({
@@ -618,7 +671,7 @@ export const safeOutboundFetchStream = async ({
     maxBytes,
     method,
     signal,
-    timeoutMs,
+    timeoutMs: remainingTimeoutMs,
     url: target.value.url,
   });
 };
