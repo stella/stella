@@ -44,7 +44,7 @@ index 37c893b9..d1fbd7cf 100644
                options.logger.errors(
                  `${this.name}.processStreamChunks tool-args JSON parse failed (drain)`,
 diff --git a/dist/esm/adapters/responses-text.js b/dist/esm/adapters/responses-text.js
-index 89f5ed3..7b263b6 100644
+index 89f5ed36472e180766a82e1d53e60ce6a8539abe..bcdb20c6cbd05459b39f9694a9d5f7631c562c76 100644
 --- a/dist/esm/adapters/responses-text.js
 +++ b/dist/esm/adapters/responses-text.js
 @@ -3,7 +3,7 @@ import { BaseTextAdapter } from "@tanstack/ai/adapters";
@@ -145,6 +145,34 @@ index 89f5ed3..7b263b6 100644
                  } catch (parseError) {
                    options.logger.errors(
                      `${this.name}.processStreamChunks tool-args JSON parse failed (response.completed backfill)`,
+@@ -1286,8 +1322,26 @@ class OpenAIBaseResponsesTextAdapter extends BaseTextAdapter {
+           file_data: audioFileData
+         };
+       }
++      case "document": {
++        const documentMetadata = part.metadata;
++        const filename = typeof documentMetadata === "object" && documentMetadata !== null && "filename" in documentMetadata && typeof documentMetadata.filename === "string" ? documentMetadata.filename : void 0;
++        if (part.source.type === "url") {
++          return {
++            type: "input_file",
++            file_url: part.source.value,
++            ...filename === void 0 ? {} : { filename }
++          };
++        }
++        const documentValue = part.source.value;
++        const documentMime = part.source.mimeType || "application/octet-stream";
++        const documentFileData = documentValue.startsWith("data:") ? documentValue : `data:${documentMime};base64,${documentValue}`;
++        return {
++          type: "input_file",
++          file_data: documentFileData,
++          filename: filename ?? "document.pdf"
++        };
++      }
+       case "video":
+-      case "document":
+       default:
+         throw new Error(`Unsupported content part type: ${part.type}`);
+     }
 diff --git a/dist/esm/utils/schema-converter.js b/dist/esm/utils/schema-converter.js
 index 1b1ca40..1e38023 100644
 --- a/dist/esm/utils/schema-converter.js

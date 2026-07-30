@@ -1,3 +1,27 @@
+diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
+index 531af56222de47e46a024ffcaba35ded1c423cba..e92bd68cf1a88a31e48527793094c3c3fad0d916 100644
+--- a/dist/esm/adapters/text.js
++++ b/dist/esm/adapters/text.js
+@@ -329,6 +329,7 @@ class AnthropicTextAdapter extends BaseTextAdapter {
+       }
+       case "document": {
+         const metadata = part.metadata;
++        const title = typeof metadata === "object" && metadata !== null && "title" in metadata && typeof metadata.title === "string" ? metadata.title : typeof metadata === "object" && metadata !== null && "filename" in metadata && typeof metadata.filename === "string" ? metadata.filename : void 0;
+         const docSource = part.source.type === "data" ? {
+           type: "base64",
+           data: part.source.value,
+@@ -340,7 +341,10 @@ class AnthropicTextAdapter extends BaseTextAdapter {
+         return {
+           type: "document",
+           source: docSource,
+-          ...metadata
++          ...typeof metadata === "object" && metadata !== null && "cache_control" in metadata ? { cache_control: metadata.cache_control } : {},
++          ...typeof metadata === "object" && metadata !== null && "citations" in metadata ? { citations: metadata.citations } : {},
++          ...typeof metadata === "object" && metadata !== null && "context" in metadata && typeof metadata.context === "string" ? { context: metadata.context } : {},
++          ...title === void 0 ? {} : { title }
+         };
+       }
+       case "audio":
 diff --git a/dist/esm/tools/tool-converter.js b/dist/esm/tools/tool-converter.js
 index c595d3f..6ea7f7e 100644
 --- a/dist/esm/tools/tool-converter.js

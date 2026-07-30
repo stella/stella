@@ -45,6 +45,7 @@ describe("TanStack AI is the only live app provider SDK boundary", () => {
       // clients; they are not imported by app code.
       "handlers/chat/tools/provider-null-normalization.property.test.ts",
       "handlers/chat/tools/tool-schema.test.ts",
+      "lib/provider-document-adapters.test.ts",
     ]);
     const forbiddenPackages = [
       "@tanstack/ai-anthropic",
