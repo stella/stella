@@ -56,6 +56,14 @@ export const normalizeVisibleFieldIds = (
 
 export const entitiesKeys = {
   all: (workspaceId: string) => ["entities", workspaceId],
+  detail: (workspaceId: string, entityId: string) => [
+    ...entitiesKeys.all(workspaceId),
+    entityId,
+  ],
+  versions: (workspaceId: string, entityId: string) => [
+    ...entitiesKeys.detail(workspaceId, entityId),
+    "versions",
+  ],
   sample: ({
     workspaceId,
     filters,

@@ -76,7 +76,6 @@ import { mcpConnectorsOptions } from "@/routes/_protected.knowledge/-queries";
 import { fileOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
-import { entityVersionsKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entity-versions";
 import { workspacesNavigationOptions } from "@/routes/_protected.workspaces/-queries";
 
 type CreateDocumentInput = ChatUITools["create-document"]["input"];
@@ -656,7 +655,7 @@ export const useChatSession = ({
       detached(
         queryClient.invalidateQueries({
           exact: true,
-          queryKey: [...entitiesKeys.all(tab.workspaceId), tab.entityId],
+          queryKey: entitiesKeys.detail(tab.workspaceId, tab.entityId),
         }),
         "useChatSession.deleteDocument",
       );
@@ -664,10 +663,7 @@ export const useChatSession = ({
         detached(
           queryClient.invalidateQueries({
             exact: true,
-            queryKey: entityVersionsKeys.all({
-              workspaceId: tab.workspaceId,
-              entityId: tab.entityId,
-            }),
+            queryKey: entitiesKeys.versions(tab.workspaceId, tab.entityId),
           }),
           "useChatSession.deleteDocumentVersions",
         );

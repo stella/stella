@@ -315,7 +315,7 @@ export const useEntitiesOptions = (key: EntitiesOptionsInput) =>
 
 export const entityOptions = (workspaceId: string, entityId: string) =>
   queryOptions({
-    queryKey: [...entitiesKeys.all(workspaceId), entityId],
+    queryKey: entitiesKeys.detail(workspaceId, entityId),
     retry: (failureCount, error) =>
       failureCount < 3 && (!APIError.is(error) || error.status >= 500),
     staleTime: ROUTE_QUERY_STALE_TIME_MS,

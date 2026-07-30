@@ -21,6 +21,22 @@ const property = (
   tool: { version: 1, type: "manual-input" },
 });
 
+describe("entity query keys", () => {
+  test("composes detail and version-history keys from the workspace root", () => {
+    expect(entitiesKeys.detail("workspace-1", "entity-1")).toEqual([
+      "entities",
+      "workspace-1",
+      "entity-1",
+    ]);
+    expect(entitiesKeys.versions("workspace-1", "entity-1")).toEqual([
+      "entities",
+      "workspace-1",
+      "entity-1",
+      "versions",
+    ]);
+  });
+});
+
 describe("entity query field selection", () => {
   test("keeps file metadata even when file columns are hidden", () => {
     expect(

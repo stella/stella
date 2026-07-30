@@ -11,11 +11,8 @@ type EntityVersionsKey = {
 };
 
 export const entityVersionsKeys = {
-  all: ({ workspaceId, entityId }: EntityVersionsKey) => [
-    ...entitiesKeys.all(workspaceId),
-    entityId,
-    "versions",
-  ],
+  all: ({ workspaceId, entityId }: EntityVersionsKey) =>
+    entitiesKeys.versions(workspaceId, entityId),
   detail: ({
     workspaceId,
     entityId,
