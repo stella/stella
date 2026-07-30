@@ -11,9 +11,9 @@ describe("documentOcrAvailabilityOptions", () => {
     const organizationId = "organization_test";
     const options = documentOcrAvailabilityOptions({ organizationId });
 
-    expect(options.queryKey).toEqual(
-      documentOcrAvailabilityKeys.byOrganization({ organizationId }),
-    );
+    expect([...options.queryKey]).toEqual([
+      ...documentOcrAvailabilityKeys.byOrganization({ organizationId }),
+    ]);
     expect(options.refetchInterval).toBe(DOCUMENT_OCR_AVAILABILITY_REFRESH_MS);
     expect(options.refetchIntervalInBackground).toBe(false);
     expect(options.staleTime).toBe(DOCUMENT_OCR_AVAILABILITY_REFRESH_MS);
