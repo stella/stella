@@ -3102,6 +3102,27 @@ export default {
           );
         };
 
+        const hasEnclosingSqlTaggedTemplate = (node: AstNode): boolean => {
+          let parent = isAstNode(node.parent) ? node.parent : null;
+          while (
+            parent !== null &&
+            (parent.type === "TemplateLiteral" ||
+              parent.type === "ChainExpression" ||
+              parent.type === "TSAsExpression" ||
+              parent.type === "TSSatisfiesExpression")
+          ) {
+            if (
+              parent.type === "TemplateLiteral" &&
+              isAstNode(parent.parent) &&
+              isApprovedSqlTaggedTemplate(parent.parent)
+            ) {
+              return true;
+            }
+            parent = isAstNode(parent.parent) ? parent.parent : null;
+          }
+          return false;
+        };
+
         return {
           "Program:exit"() {
             for (const [variable, deferred] of deferredConstSqlTemplates) {
@@ -3246,6 +3267,9 @@ export default {
             }
             const tokenPaths = flattenSqlExpression(node, new Set());
             if (tokenPaths === null) {
+              if (hasEnclosingSqlTaggedTemplate(node)) {
+                return;
+              }
               context.report({
                 node,
                 messageId: "unavailableRelation",
