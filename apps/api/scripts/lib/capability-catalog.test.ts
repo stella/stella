@@ -1242,6 +1242,14 @@ describe("serializeCoverageDoc", () => {
       scope: "stella:matters_write",
       mcp: { type: "capability" as const, reason: "workflow_orchestration" },
     },
+    {
+      id: "templates.fill-to-workspace",
+      access: "write" as const,
+      destructive: false,
+      scope: "stella:documents_write",
+      additionalScopes: ["stella:templates"],
+      mcp: { type: "covered" as const, by: "save_filled_template" },
+    },
   ];
 
   const internalWaiverCounts = {
@@ -1292,6 +1300,9 @@ describe("serializeCoverageDoc", () => {
     );
     expect(doc).toContain(
       "| `time-entries.delete` | write, destructive | stella:billing_write | FEATURE_TIME_BILLING | covered by `save_time_entry` |",
+    );
+    expect(doc).toContain(
+      "| `templates.fill-to-workspace` | write | stella:documents_write, stella:templates | — | covered by `save_filled_template` |",
     );
   });
 

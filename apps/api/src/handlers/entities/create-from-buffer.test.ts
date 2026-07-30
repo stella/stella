@@ -8,6 +8,7 @@ import {
   fields,
 } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 const s3WriteMock = mock(async () => {});
@@ -54,6 +55,35 @@ describe("createEntityFromBuffer", () => {
     s3WriteMock.mockClear();
     s3DeleteMock.mockClear();
     processExtractionMock.mockClear();
+  });
+
+  test("rejects oversized documents before database or object-storage work", async () => {
+    const { getCallCount, scopedDb } = createScopedDbMock({});
+
+    const result = await createEntityFromBuffer({
+      scopedDb,
+      organizationId,
+      workspaceId,
+      userId,
+      recordAuditEvent: async () => undefined,
+      buffer: new Uint8Array(FILE_SIZE_LIMIT_BYTES.document + 1),
+      fileName: "Oversized Agreement.docx",
+      mimeType:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error).toEqual(
+        expect.objectContaining({
+          _tag: "DocumentTooLargeError",
+          message: `Document exceeds the ${FILE_SIZE_LIMIT_BYTES.document}-byte size limit`,
+        }),
+      );
+    }
+    expect(getCallCount()).toBe(0);
+    expect(s3WriteMock).not.toHaveBeenCalled();
+    expect(s3DeleteMock).not.toHaveBeenCalled();
   });
 
   test("writes an entity create audit log with the DB insert", async () => {

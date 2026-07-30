@@ -16,6 +16,7 @@ import {
   enqueueImageThumbnailOrMarkFailed,
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { getS3 } from "@/api/lib/s3";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
@@ -25,6 +26,7 @@ import { broadcast } from "@/api/lib/sse";
 class EntityVersionTargetError extends TaggedError("EntityVersionTargetError")<{
   code:
     | "current-version-not-found"
+    | "document-too-large"
     | "entity-not-found"
     | "entity-read-only"
     | "missing-file-field";
@@ -68,6 +70,7 @@ const ENTITY_VERSION_TARGET_MESSAGES = {
   "entity-not-found": "Entity not found",
   "entity-read-only": "Entity is read-only",
   "current-version-not-found": "Current version not found",
+  "document-too-large": `Document exceeds the ${FILE_SIZE_LIMIT_BYTES.document}-byte size limit`,
   "missing-file-field": "Entity has no file field",
 } satisfies Record<EntityVersionTargetErrorCode, string>;
 
@@ -90,6 +93,15 @@ export const createEntityVersionFromBuffer = async ({
   afterWrite,
 }: CreateEntityVersionFromBufferInput): Promise<CreateEntityVersionFromBufferResult> => {
   const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+  if (bytes.byteLength > FILE_SIZE_LIMIT_BYTES.document) {
+    return Result.err(
+      new EntityVersionTargetError({
+        code: "document-too-large",
+        message: messageForStatus("document-too-large"),
+      }),
+    );
+  }
+
   const fileName = sanitizeFilenamePreservingExtension(rawFileName);
   const fileId = allocateFileObject();
   const entityVersionId = createSafeId<"entityVersion">();

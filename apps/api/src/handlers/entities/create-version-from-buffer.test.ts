@@ -5,6 +5,7 @@ import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const writeFileVersionMock = mock();
@@ -93,6 +94,26 @@ describe("createEntityVersionFromBuffer", () => {
     pdfDerivativeMock.mockResolvedValue(undefined);
     thumbnailDerivativeMock.mockResolvedValue(undefined);
     diffStatsMock.mockResolvedValue(undefined);
+  });
+
+  test("rejects oversized documents before object storage or the transaction", async () => {
+    const result = await createEntityVersionFromBuffer({
+      ...baseInput,
+      buffer: new Uint8Array(FILE_SIZE_LIMIT_BYTES.document + 1),
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error).toEqual(
+        expect.objectContaining({
+          code: "document-too-large",
+          message: `Document exceeds the ${FILE_SIZE_LIMIT_BYTES.document}-byte size limit`,
+        }),
+      );
+    }
+    expect(s3WriteMock).not.toHaveBeenCalled();
+    expect(writeFileVersionMock).not.toHaveBeenCalled();
+    expect(s3DeleteMock).not.toHaveBeenCalled();
   });
 
   test("stores bytes and delegates the canonical locked transaction", async () => {

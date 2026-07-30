@@ -55,11 +55,17 @@ export const createBlankDocument = async ({
 
 const toHandlerError = (
   error:
+    | { _tag: "DocumentTooLargeError" }
     | { _tag: "EntityLimitError" }
     | { _tag: "InvalidParentError"; message: string }
     | { _tag: "MissingFilePropertyError" },
 ): HandlerError => {
   switch (error._tag) {
+    case "DocumentTooLargeError":
+      return new HandlerError({
+        status: 413,
+        message: "The generated document exceeds the document size limit.",
+      });
     case "EntityLimitError":
       return new HandlerError({
         status: 409,

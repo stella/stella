@@ -23,7 +23,7 @@ import {
   enqueueImageThumbnailOrMarkFailed,
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
-import { LIMITS } from "@/api/lib/limits";
+import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import { processExtraction } from "@/api/lib/search/process-extraction";
@@ -48,6 +48,10 @@ class EntityLimitError extends TaggedError("EntityLimitError")<{
   message: string;
 }>() {}
 
+class DocumentTooLargeError extends TaggedError("DocumentTooLargeError")<{
+  message: string;
+}>() {}
+
 class MissingFilePropertyError extends TaggedError("MissingFilePropertyError")<{
   message: string;
 }>() {}
@@ -64,7 +68,10 @@ type CreateEntityFromBufferValue = {
 
 export type CreateEntityFromBufferResult = Result<
   CreateEntityFromBufferValue,
-  EntityLimitError | InvalidParentError | MissingFilePropertyError
+  | DocumentTooLargeError
+  | EntityLimitError
+  | InvalidParentError
+  | MissingFilePropertyError
 >;
 
 /**
@@ -87,6 +94,15 @@ export const createEntityFromBuffer = async ({
   scanWarnings,
   afterCreate,
 }: CreateEntityFromBufferInput): Promise<CreateEntityFromBufferResult> => {
+  const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+  if (bytes.byteLength > FILE_SIZE_LIMIT_BYTES.document) {
+    return Result.err(
+      new DocumentTooLargeError({
+        message: `Document exceeds the ${FILE_SIZE_LIMIT_BYTES.document}-byte size limit`,
+      }),
+    );
+  }
+
   const fileName = sanitizeFilenamePreservingExtension(rawFileName);
   const fileId = allocateFileObject();
   const s3Key = createFileKey({
@@ -96,7 +112,6 @@ export const createEntityFromBuffer = async ({
     mimeType,
   });
 
-  const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
   const sha256Hex = new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
 
   // Check for file property before uploading to avoid

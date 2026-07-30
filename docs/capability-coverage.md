@@ -327,45 +327,45 @@ here as its CLI form). Projected from the same handler enumeration that builds
 
 ## templates
 
-| Capability                        | Access             | Scope                  | Feature | Reachable via                                                        |
-| --------------------------------- | ------------------ | ---------------------- | ------- | -------------------------------------------------------------------- |
-| `templates.binding-catalog`       | read               | stella:templates       | —       | generic invoke → `stella capability templates binding-catalog`       |
-| `templates.categories-create`     | write              | stella:templates       | —       | generic invoke → `stella capability templates categories-create`     |
-| `templates.categories-delete`     | write, destructive | stella:templates       | —       | generic invoke → `stella capability templates categories-delete`     |
-| `templates.categories-list`       | read               | stella:templates       | —       | generic invoke → `stella capability templates categories-list`       |
-| `templates.categories-update`     | write              | stella:templates       | —       | generic invoke → `stella capability templates categories-update`     |
-| `templates.check`                 | read               | stella:templates       | —       | generic invoke → `stella capability templates check`                 |
-| `templates.clause-slots`          | read               | stella:templates       | —       | generic invoke → `stella capability templates clause-slots`          |
-| `templates.clauses-link`          | write              | stella:templates       | —       | generic invoke → `stella capability templates clauses-link`          |
-| `templates.clauses-list`          | read               | stella:templates       | —       | generic invoke → `stella capability templates clauses-list`          |
-| `templates.clauses-slot-update`   | write              | stella:templates       | —       | generic invoke → `stella capability templates clauses-slot-update`   |
-| `templates.clauses-sync`          | write              | stella:templates       | —       | generic invoke → `stella capability templates clauses-sync`          |
-| `templates.clauses-sync-all`      | write              | stella:templates       | —       | generic invoke → `stella capability templates clauses-sync-all`      |
-| `templates.clauses-unlink`        | write              | stella:templates       | —       | generic invoke → `stella capability templates clauses-unlink`        |
-| `templates.create`                | write              | stella:templates       | —       | curated tool `save_template`                                         |
-| `templates.create-blank`          | write              | stella:templates       | —       | generic invoke → `stella capability templates create-blank`          |
-| `templates.create-from-style-set` | write              | stella:templates       | —       | generic invoke → `stella capability templates create-from-style-set` |
-| `templates.create-from-styles`    | write              | stella:templates       | —       | generic invoke: file I/O — not runnable via CLI/JSON (describe only) |
-| `templates.delete`                | write, destructive | stella:templates       | —       | generic invoke → `stella capability templates delete`                |
-| `templates.discover`              | read               | stella:templates       | —       | generic invoke: file I/O — not runnable via CLI/JSON (describe only) |
-| `templates.fill`                  | write              | stella:templates       | —       | curated tool `fill_template`                                         |
-| `templates.fill-by-id`            | write              | stella:templates       | —       | covered by `fill_template`                                           |
-| `templates.fill-preview`          | read               | stella:templates       | —       | covered by `fill_template`                                           |
-| `templates.fill-to-workspace`     | write              | stella:documents_write | —       | covered by `save_filled_template`                                    |
-| `templates.get`                   | read               | stella:templates       | —       | covered by `list_templates`                                          |
-| `templates.list`                  | read               | stella:templates       | —       | curated tool `list_templates`                                        |
-| `templates.lookup-preview`        | read               | stella:templates       | —       | generic invoke → `stella capability templates lookup-preview`        |
-| `templates.manifest`              | read               | stella:templates       | —       | generic invoke: file I/O — not runnable via CLI/JSON (describe only) |
-| `templates.prefill`               | write              | stella:templates       | —       | generic invoke: file I/O — not runnable via CLI/JSON (describe only) |
-| `templates.prepare`               | write              | stella:templates       | —       | generic invoke: file I/O — not runnable via CLI/JSON (describe only) |
-| `templates.preview`               | read               | stella:templates       | —       | generic invoke → `stella capability templates preview`               |
-| `templates.save-document`         | write              | stella:templates       | —       | generic invoke: file I/O — not runnable via CLI/JSON (describe only) |
-| `templates.suggest-fields`        | write              | stella:templates       | —       | generic invoke → `stella capability templates suggest-fields`        |
-| `templates.update`                | write              | stella:templates       | —       | generic invoke → `stella capability templates update`                |
-| `templates.versions-diff`         | read               | stella:templates       | —       | generic invoke → `stella capability templates versions-diff`         |
-| `templates.versions-get`          | read               | stella:templates       | —       | generic invoke → `stella capability templates versions-get`          |
-| `templates.versions-list`         | read               | stella:templates       | —       | generic invoke → `stella capability templates versions-list`         |
-| `templates.versions-summarize`    | write              | stella:templates       | —       | generic invoke → `stella capability templates versions-summarize`    |
+| Capability                        | Access             | Scope                                    | Feature | Reachable via                                                        |
+| --------------------------------- | ------------------ | ---------------------------------------- | ------- | -------------------------------------------------------------------- |
+| `templates.binding-catalog`       | read               | stella:templates                         | —       | generic invoke → `stella capability templates binding-catalog`       |
+| `templates.categories-create`     | write              | stella:templates                         | —       | generic invoke → `stella capability templates categories-create`     |
+| `templates.categories-delete`     | write, destructive | stella:templates                         | —       | generic invoke → `stella capability templates categories-delete`     |
+| `templates.categories-list`       | read               | stella:templates                         | —       | generic invoke → `stella capability templates categories-list`       |
+| `templates.categories-update`     | write              | stella:templates                         | —       | generic invoke → `stella capability templates categories-update`     |
+| `templates.check`                 | read               | stella:templates                         | —       | generic invoke → `stella capability templates check`                 |
+| `templates.clause-slots`          | read               | stella:templates                         | —       | generic invoke → `stella capability templates clause-slots`          |
+| `templates.clauses-link`          | write              | stella:templates                         | —       | generic invoke → `stella capability templates clauses-link`          |
+| `templates.clauses-list`          | read               | stella:templates                         | —       | generic invoke → `stella capability templates clauses-list`          |
+| `templates.clauses-slot-update`   | write              | stella:templates                         | —       | generic invoke → `stella capability templates clauses-slot-update`   |
+| `templates.clauses-sync`          | write              | stella:templates                         | —       | generic invoke → `stella capability templates clauses-sync`          |
+| `templates.clauses-sync-all`      | write              | stella:templates                         | —       | generic invoke → `stella capability templates clauses-sync-all`      |
+| `templates.clauses-unlink`        | write              | stella:templates                         | —       | generic invoke → `stella capability templates clauses-unlink`        |
+| `templates.create`                | write              | stella:templates                         | —       | curated tool `save_template`                                         |
+| `templates.create-blank`          | write              | stella:templates                         | —       | generic invoke → `stella capability templates create-blank`          |
+| `templates.create-from-style-set` | write              | stella:templates                         | —       | generic invoke → `stella capability templates create-from-style-set` |
+| `templates.create-from-styles`    | write              | stella:templates                         | —       | generic invoke: file I/O — not runnable via CLI/JSON (describe only) |
+| `templates.delete`                | write, destructive | stella:templates                         | —       | generic invoke → `stella capability templates delete`                |
+| `templates.discover`              | read               | stella:templates                         | —       | generic invoke: file I/O — not runnable via CLI/JSON (describe only) |
+| `templates.fill`                  | write              | stella:templates                         | —       | curated tool `fill_template`                                         |
+| `templates.fill-by-id`            | write              | stella:templates                         | —       | covered by `fill_template`                                           |
+| `templates.fill-preview`          | read               | stella:templates                         | —       | covered by `fill_template`                                           |
+| `templates.fill-to-workspace`     | write              | stella:documents_write, stella:templates | —       | covered by `save_filled_template`                                    |
+| `templates.get`                   | read               | stella:templates                         | —       | covered by `list_templates`                                          |
+| `templates.list`                  | read               | stella:templates                         | —       | curated tool `list_templates`                                        |
+| `templates.lookup-preview`        | read               | stella:templates                         | —       | generic invoke → `stella capability templates lookup-preview`        |
+| `templates.manifest`              | read               | stella:templates                         | —       | generic invoke: file I/O — not runnable via CLI/JSON (describe only) |
+| `templates.prefill`               | write              | stella:templates                         | —       | generic invoke: file I/O — not runnable via CLI/JSON (describe only) |
+| `templates.prepare`               | write              | stella:templates                         | —       | generic invoke: file I/O — not runnable via CLI/JSON (describe only) |
+| `templates.preview`               | read               | stella:templates                         | —       | generic invoke → `stella capability templates preview`               |
+| `templates.save-document`         | write              | stella:templates                         | —       | generic invoke: file I/O — not runnable via CLI/JSON (describe only) |
+| `templates.suggest-fields`        | write              | stella:templates                         | —       | generic invoke → `stella capability templates suggest-fields`        |
+| `templates.update`                | write              | stella:templates                         | —       | generic invoke → `stella capability templates update`                |
+| `templates.versions-diff`         | read               | stella:templates                         | —       | generic invoke → `stella capability templates versions-diff`         |
+| `templates.versions-get`          | read               | stella:templates                         | —       | generic invoke → `stella capability templates versions-get`          |
+| `templates.versions-list`         | read               | stella:templates                         | —       | generic invoke → `stella capability templates versions-list`         |
+| `templates.versions-summarize`    | write              | stella:templates                         | —       | generic invoke → `stella capability templates versions-summarize`    |
 
 ## time-entries
 
