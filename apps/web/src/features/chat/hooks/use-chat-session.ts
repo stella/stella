@@ -27,6 +27,7 @@ import type {
   ToolApprovalGrant,
 } from "@/components/chat/chat-ui-tools";
 import {
+  consumeWholeDocumentDeletionToolCalls,
   getExternalMcpConnectorApprovalGrant,
   getExternalMcpConnectorSlugFromToolName,
   getToolApprovalGrant,
@@ -628,7 +629,38 @@ export const useChatSession = ({
   }, [workspacesNavigation]);
 
   const queryClient = useQueryClient();
+  const handledDocumentDeletionToolCallIdsRef = useRef(new Set<string>());
   const handledDocxReplacementToolCallIdsRef = useRef(new Set<string>());
+
+  // Chat registry writes run outside the workspace route's HTTP mutation, so
+  // they cannot directly name the deleted entity in this browser: tool inputs
+  // contain opaque chat refs by design. Revalidate each open file tab once a
+  // whole-document deletion completes; CurrentFileFieldSync closes whichever
+  // entity now returns 404. Exact keys avoid waking version-history queries for
+  // documents that still exist.
+  useExternalSyncEffect(() => {
+    if (
+      !consumeWholeDocumentDeletionToolCalls({
+        handledToolCallIds: handledDocumentDeletionToolCallIdsRef.current,
+        messages,
+      })
+    ) {
+      return;
+    }
+
+    for (const tab of useInspectorStore.getState().tabs) {
+      if (tab.type !== "pdf") {
+        continue;
+      }
+      detached(
+        queryClient.invalidateQueries({
+          exact: true,
+          queryKey: [...entitiesKeys.all(tab.workspaceId), tab.entityId],
+        }),
+        "useChatSession.deleteDocument",
+      );
+    }
+  }, [messages, queryClient]);
 
   // Server-side automatic DOCX edits replace the entity's file field. Follow
   // that replacement immediately in the inspector and refresh entity-backed

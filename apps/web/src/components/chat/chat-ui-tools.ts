@@ -822,6 +822,45 @@ const isJsonObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 /**
+ * Consume successful whole-document delete calls that have not been handled by
+ * this chat session yet. Version-only deletes are deliberately excluded: their
+ * backing entity remains valid, so the Inspector tab must stay open.
+ */
+export const consumeWholeDocumentDeletionToolCalls = ({
+  handledToolCallIds,
+  messages,
+}: {
+  handledToolCallIds: Set<string>;
+  messages: readonly PersistedChatMessage[];
+}): boolean => {
+  let consumed = false;
+
+  for (const message of messages) {
+    if (message.role !== "assistant") {
+      continue;
+    }
+    for (const part of message.parts) {
+      if (
+        part.type !== "tool-call" ||
+        part.name !== "delete_document" ||
+        part.state !== "complete" ||
+        !isJsonObject(part.input) ||
+        handledToolCallIds.has(part.id)
+      ) {
+        continue;
+      }
+
+      handledToolCallIds.add(part.id);
+      if (!("version_id" in part.input)) {
+        consumed = true;
+      }
+    }
+  }
+
+  return consumed;
+};
+
+/**
  * Fill each tool-call part's typed `input` from its raw `arguments`.
  *
  * TanStack's stream processor and its persisted-message projection

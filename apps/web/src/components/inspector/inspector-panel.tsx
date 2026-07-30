@@ -45,6 +45,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
+import { APIError } from "@/lib/errors/api";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { getCachedAnonymization } from "@/lib/pdf/anonymization-cache";
 import { MatterMetadataPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/matter-metadata-sheet";
@@ -604,13 +605,20 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
 };
 
 const CurrentFileFieldSync = ({ tab }: { tab: FileTab }) => {
+  const closeTabsForEntities = useInspectorStore((s) => s.closeTabsForEntities);
   const replaceFileFieldId = useInspectorStore((s) => s.replaceFileFieldId);
   const [currentFileFieldIdsByProperty] = useState(
     () => new Map<string, string>(),
   );
-  const { data: entity } = useQuery(
+  const { data: entity, error } = useQuery(
     entityOptions(tab.workspaceId, tab.entityId),
   );
+
+  useExternalSyncEffect(() => {
+    if (APIError.is(error) && error.status === 404) {
+      closeTabsForEntities([tab.entityId]);
+    }
+  }, [closeTabsForEntities, error, tab.entityId]);
 
   const activeFileField = entity?.fields.find((field) => {
     if (field.content.type !== "file") {

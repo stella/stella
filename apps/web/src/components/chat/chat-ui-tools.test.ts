@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  consumeWholeDocumentDeletionToolCalls,
   getChatToolTitleKey,
   getApprovalToolName,
   getToolApprovalGrant,
@@ -69,6 +70,75 @@ describe("chat tool titles", () => {
 
   test("uses the translated unknown fallback for unknown tools", () => {
     expect(getChatToolTitleKey("searchCaseLaw")).toBe("chat.tool.unknown");
+  });
+});
+
+describe("consumeWholeDocumentDeletionToolCalls", () => {
+  test("consumes a completed whole-document deletion once", () => {
+    const messages = [
+      {
+        id: "message-1",
+        parts: [
+          {
+            arguments: JSON.stringify({ entity_id: "entity_ref_1" }),
+            id: "tool-call-1",
+            input: { entity_id: "entity_ref_1" },
+            name: "delete_document",
+            output: { deleted: true },
+            state: "complete",
+            type: "tool-call",
+          } satisfies ChatPart,
+        ],
+        role: "assistant",
+      },
+    ] satisfies PersistedChatMessage[];
+    const handledToolCallIds = new Set<string>();
+
+    expect(
+      consumeWholeDocumentDeletionToolCalls({
+        handledToolCallIds,
+        messages,
+      }),
+    ).toBe(true);
+    expect(
+      consumeWholeDocumentDeletionToolCalls({
+        handledToolCallIds,
+        messages,
+      }),
+    ).toBe(false);
+  });
+
+  test("keeps tabs for completed version-only deletions", () => {
+    const messages = [
+      {
+        id: "message-1",
+        parts: [
+          {
+            arguments: JSON.stringify({
+              entity_id: "entity_ref_1",
+              version_id: "version-1",
+            }),
+            id: "tool-call-1",
+            input: {
+              entity_id: "entity_ref_1",
+              version_id: "version-1",
+            },
+            name: "delete_document",
+            output: { deleted: true },
+            state: "complete",
+            type: "tool-call",
+          } satisfies ChatPart,
+        ],
+        role: "assistant",
+      },
+    ] satisfies PersistedChatMessage[];
+
+    expect(
+      consumeWholeDocumentDeletionToolCalls({
+        handledToolCallIds: new Set(),
+        messages,
+      }),
+    ).toBe(false);
   });
 });
 

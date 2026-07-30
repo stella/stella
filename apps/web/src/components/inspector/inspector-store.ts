@@ -1593,7 +1593,12 @@ export const useInspectorStore = create<State & Actions>()(
               null)
             : state.activeId;
 
-        state.tabs = state.tabs.filter((tab) => !isDeletedEntityTab(tab));
+        const remainingTabs = state.tabs.filter(
+          (tab) => !isDeletedEntityTab(tab),
+        );
+        if (remainingTabs.length !== state.tabs.length) {
+          state.tabs = remainingTabs;
+        }
         state.activeId = nextActiveId;
 
         if (

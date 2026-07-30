@@ -753,6 +753,17 @@ describe("closeTabsForEntities", () => {
 
     expect(useInspectorStore.getState().activeId).toBe("thread-keep");
   });
+
+  test("preserves the tabs reference when no open tab was deleted", () => {
+    useInspectorStore.getState().openChat({
+      id: toChatThreadId("thread-keep"),
+    });
+    const tabsBefore = useInspectorStore.getState().tabs;
+
+    useInspectorStore.getState().closeTabsForEntities(["entity-missing"]);
+
+    expect(useInspectorStore.getState().tabs).toBe(tabsBefore);
+  });
 });
 
 describe("Inspector tab broadcast", () => {
