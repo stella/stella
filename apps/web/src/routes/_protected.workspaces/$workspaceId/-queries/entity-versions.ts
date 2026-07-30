@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { APIError, unwrapEden } from "@/lib/errors/api";
+import { shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
 
 import { entitiesKeys } from "./entities";
 
@@ -29,8 +29,7 @@ export const entityVersionsOptions = ({
 }: EntityVersionsKey) =>
   queryOptions({
     queryKey: entityVersionsKeys.all({ workspaceId, entityId }),
-    retry: (failureCount, error) =>
-      failureCount < 3 && (!APIError.is(error) || error.status >= 500),
+    retry: shouldRetryAPIRequest,
     queryFn: async ({ signal }) => {
       const response = await api
         .entities({ workspaceId })
@@ -67,15 +66,16 @@ export const fieldFileOptions = ({
   workspaceId,
   entityId,
   fieldId,
-}: EntityVersionsKey & { fieldId: string }) =>
+  enabled,
+}: EntityVersionsKey & { fieldId: string; enabled?: boolean }) =>
   queryOptions({
     queryKey: [
       ...entityVersionsKeys.all({ workspaceId, entityId }),
       "field-file",
       fieldId,
     ],
-    retry: (failureCount, error) =>
-      failureCount < 3 && (!APIError.is(error) || error.status >= 500),
+    enabled,
+    retry: shouldRetryAPIRequest,
     queryFn: async ({ signal }) => {
       const response = await api
         .entities({ workspaceId })
@@ -94,8 +94,7 @@ export const entityVersionDetailOptions = ({
 }: EntityVersionsKey & { versionId: string }) =>
   queryOptions({
     queryKey: entityVersionsKeys.detail({ workspaceId, entityId, versionId }),
-    retry: (failureCount, error) =>
-      failureCount < 3 && (!APIError.is(error) || error.status >= 500),
+    retry: shouldRetryAPIRequest,
     queryFn: async ({ signal }) => {
       const response = await api
         .entities({ workspaceId })

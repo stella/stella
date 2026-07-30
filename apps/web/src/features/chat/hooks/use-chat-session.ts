@@ -27,7 +27,6 @@ import type {
   ToolApprovalGrant,
 } from "@/components/chat/chat-ui-tools";
 import {
-  consumeDocumentDeletionToolCalls,
   getExternalMcpConnectorApprovalGrant,
   getExternalMcpConnectorSlugFromToolName,
   getToolApprovalGrant,
@@ -41,6 +40,7 @@ import {
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import type { NeedsMatterMatter } from "@/components/chat/needs-matter-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
+import { reconcileDocumentDeletionToolCalls } from "@/features/chat/hooks/use-chat-session-document-deletion.logic";
 import {
   createInitialSendQueueState,
   describeQueuedMessage,
@@ -75,8 +75,11 @@ import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
 import { mcpConnectorsOptions } from "@/routes/_protected.knowledge/-queries";
 import { fileOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
-import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
-import { workspacesNavigationOptions } from "@/routes/_protected.workspaces/-queries";
+import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities.logic";
+import {
+  workspacesKeys,
+  workspacesNavigationOptions,
+} from "@/routes/_protected.workspaces/-queries";
 
 type CreateDocumentInput = ChatUITools["create-document"]["input"];
 type CreateDocumentOutput = ChatUITools["create-document"]["output"];
@@ -634,42 +637,22 @@ export const useChatSession = ({
 
   // Chat registry writes run outside the workspace route's HTTP mutation, so
   // they cannot directly name the deleted entity in this browser: tool inputs
-  // contain opaque chat refs by design. Revalidate each open file tab once a
-  // deletion completes; CurrentFileFieldSync follows a promoted version or
-  // closes whichever entity now returns 404. Version-only deletes also refresh
-  // the exact version-history query without waking unrelated detail queries.
+  // contain opaque chat refs by design. Reconcile affected workspace caches
+  // and open file tabs once per completed deletion tool call.
   useExternalSyncEffect(() => {
-    const { hasVersionDeletion, hasWholeDocumentDeletion } =
-      consumeDocumentDeletionToolCalls({
+    detached(
+      reconcileDocumentDeletionToolCalls({
+        entityKeys: entitiesKeys,
         handledToolCallIds: handledDocumentDeletionToolCallIdsRef.current,
         messages,
-      });
-    if (!hasVersionDeletion && !hasWholeDocumentDeletion) {
-      return;
-    }
-
-    for (const tab of useInspectorStore.getState().tabs) {
-      if (tab.type !== "pdf") {
-        continue;
-      }
-      detached(
-        queryClient.invalidateQueries({
-          exact: true,
-          queryKey: entitiesKeys.detail(tab.workspaceId, tab.entityId),
-        }),
-        "useChatSession.deleteDocument",
-      );
-      if (hasVersionDeletion) {
-        detached(
-          queryClient.invalidateQueries({
-            exact: false,
-            queryKey: entitiesKeys.versions(tab.workspaceId, tab.entityId),
-          }),
-          "useChatSession.deleteDocumentVersions",
-        );
-      }
-    }
-  }, [messages, queryClient]);
+        queryClient,
+        tabs: useInspectorStore.getState().tabs,
+        workspaceKeys: workspacesKeys,
+        workspaceId,
+      }),
+      "useChatSession.deleteDocument",
+    );
+  }, [messages, queryClient, workspaceId]);
 
   // Server-side automatic DOCX edits replace the entity's file field. Follow
   // that replacement immediately in the inspector and refresh entity-backed

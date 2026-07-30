@@ -8,7 +8,7 @@ import {
 
 import { api } from "@/lib/api";
 import { normalizeOptionalArray } from "@/lib/arrays";
-import { APIError, unwrapEden } from "@/lib/errors/api";
+import { shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import type { QueryOptionsInput } from "@/lib/react-query";
@@ -316,8 +316,7 @@ export const useEntitiesOptions = (key: EntitiesOptionsInput) =>
 export const entityOptions = (workspaceId: string, entityId: string) =>
   queryOptions({
     queryKey: entitiesKeys.detail(workspaceId, entityId),
-    retry: (failureCount, error) =>
-      failureCount < 3 && (!APIError.is(error) || error.status >= 500),
+    retry: shouldRetryAPIRequest,
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
     queryFn: async ({ signal }) => {
       const response = await api

@@ -34,3 +34,11 @@ export const shouldReplaceFileFieldAfterSync = ({
   selectedFieldId: string;
 }): boolean =>
   isSelectedFieldMissing || previousCurrentFieldId === selectedFieldId;
+
+export const shouldCloseFileTabAfterSync = ({
+  filePropertyId,
+  isSelectedFieldMissing,
+}: {
+  filePropertyId: string | undefined;
+  isSelectedFieldMissing: boolean;
+}): boolean => isSelectedFieldMissing && filePropertyId === undefined;

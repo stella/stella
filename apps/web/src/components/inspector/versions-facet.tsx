@@ -259,10 +259,9 @@ export const useSelectedFileVersionMissing = ({
   fieldId: string;
   workspaceId: string;
 }): boolean => {
-  const { error } = useQuery({
-    ...fieldFileOptions({ workspaceId, entityId, fieldId }),
-    enabled,
-  });
+  const { error } = useQuery(
+    fieldFileOptions({ workspaceId, entityId, fieldId, enabled }),
+  );
   return APIError.is(error) && error.status === 404;
 };
 

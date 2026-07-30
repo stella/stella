@@ -149,6 +149,36 @@ describe("consumeDocumentDeletionToolCalls", () => {
       hasWholeDocumentDeletion: false,
     });
   });
+
+  test("ignores completed calls without a successful deletion result", () => {
+    const messages = [
+      {
+        id: "message-1",
+        parts: [
+          {
+            arguments: JSON.stringify({ entity_id: "entity_ref_1" }),
+            id: "tool-call-1",
+            input: { entity_id: "entity_ref_1" },
+            name: "delete_document",
+            output: { deleted: false },
+            state: "complete",
+            type: "tool-call",
+          } satisfies ChatPart,
+        ],
+        role: "assistant",
+      },
+    ] satisfies PersistedChatMessage[];
+
+    expect(
+      consumeDocumentDeletionToolCalls({
+        handledToolCallIds: new Set(),
+        messages,
+      }),
+    ).toEqual({
+      hasVersionDeletion: false,
+      hasWholeDocumentDeletion: false,
+    });
+  });
 });
 
 describe("isApprovalPart", () => {

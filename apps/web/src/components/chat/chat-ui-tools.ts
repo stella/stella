@@ -847,6 +847,8 @@ export const consumeDocumentDeletionToolCalls = ({
         part.name !== "delete_document" ||
         part.state !== "complete" ||
         !isJsonObject(part.input) ||
+        !isJsonObject(part.output) ||
+        part.output["deleted"] !== true ||
         handledToolCallIds.has(part.id)
       ) {
         continue;

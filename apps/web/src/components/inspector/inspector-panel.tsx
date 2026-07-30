@@ -22,6 +22,7 @@ import { MetadataPanelSkeleton } from "@/components/inspector/file-facets";
 import { FileTabPanel } from "@/components/inspector/file-tab-panel";
 import {
   resolveFileFieldPropertyId,
+  shouldCloseFileTabAfterSync,
   shouldReplaceFileFieldAfterSync,
 } from "@/components/inspector/inspector-panel.logic";
 import { InspectorRail } from "@/components/inspector/inspector-rail";
@@ -657,7 +658,7 @@ const CurrentFileFieldSync = ({ tab }: { tab: FileTab }) => {
             field.content.type === "file",
         );
   const isSelectedFieldMissing = useSelectedFileVersionMissing({
-    enabled: activeFileField === undefined && filePropertyId !== undefined,
+    enabled: activeFileField === undefined,
     entityId: tab.entityId,
     fieldId: tab.id,
     workspaceId: tab.workspaceId,
@@ -669,6 +670,16 @@ const CurrentFileFieldSync = ({ tab }: { tab: FileTab }) => {
         activeFileField.propertyId,
         activeFileField.id,
       );
+    }
+
+    if (
+      shouldCloseFileTabAfterSync({
+        filePropertyId,
+        isSelectedFieldMissing,
+      })
+    ) {
+      closeTabsForEntities([tab.entityId]);
+      return;
     }
 
     if (
@@ -706,10 +717,13 @@ const CurrentFileFieldSync = ({ tab }: { tab: FileTab }) => {
     });
   }, [
     activeFileField,
+    closeTabsForEntities,
     currentFileFieldIdsByProperty,
+    filePropertyId,
     isSelectedFieldMissing,
     latestFileFieldForProperty,
     replaceFileFieldId,
+    tab.entityId,
     tab.id,
   ]);
 

@@ -1,16 +1,11 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { APIError, unwrapEden } from "@/lib/errors/api";
+import { shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
+import { taskKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/tasks.logic";
 
-export const taskKeys = {
-  all: (workspaceId: string) => ["tasks", workspaceId],
-  detail: (workspaceId: string, taskId: string) => [
-    ...taskKeys.all(workspaceId),
-    taskId,
-  ],
-};
+export { taskKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/tasks.logic";
 
 const getTaskEndpoint = (workspaceId: string, taskId: string) =>
   api.tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })({
@@ -20,8 +15,7 @@ const getTaskEndpoint = (workspaceId: string, taskId: string) =>
 export const taskDetailOptions = (workspaceId: string, taskId: string) =>
   queryOptions({
     queryKey: taskKeys.detail(workspaceId, taskId),
-    retry: (failureCount, error) =>
-      failureCount < 3 && (!APIError.is(error) || error.status >= 500),
+    retry: shouldRetryAPIRequest,
     queryFn: async ({ signal }) => {
       const endpoint = getTaskEndpoint(workspaceId, taskId);
       const response = await endpoint.get({

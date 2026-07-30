@@ -10,8 +10,8 @@ import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import type { EntityKind } from "@/lib/types";
 import type { EditableFieldContent } from "@/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog";
+import { invalidateDeletedEntityQueries } from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities.logic";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
-import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
 
 type CreateEntitiesVars = {
   type: "manual-input";
@@ -69,8 +69,9 @@ export const useDeleteEntities = () => {
     },
     onSuccess: async (_data, { workspaceId, entityIds }) => {
       useInspectorStore.getState().closeTabsForEntities(entityIds);
-      await queryClient.invalidateQueries({
-        queryKey: workspacesKeys.overview(workspaceId),
+      await invalidateDeletedEntityQueries({
+        queryClient,
+        workspaceId,
       });
     },
     onError: (error) => {

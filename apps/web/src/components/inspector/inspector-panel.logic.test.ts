@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   resolveFileFieldPropertyId,
+  shouldCloseFileTabAfterSync,
   shouldReplaceFileFieldAfterSync,
 } from "@/components/inspector/inspector-panel.logic";
 
@@ -63,6 +64,26 @@ describe("shouldReplaceFileFieldAfterSync", () => {
         isSelectedFieldMissing: false,
         previousCurrentFieldId: "current-field",
         selectedFieldId: "historical-field",
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("shouldCloseFileTabAfterSync", () => {
+  test("closes a deleted restored version when its property cannot be recovered", () => {
+    expect(
+      shouldCloseFileTabAfterSync({
+        filePropertyId: undefined,
+        isSelectedFieldMissing: true,
+      }),
+    ).toBe(true);
+  });
+
+  test("keeps a missing historical version when its current property can replace it", () => {
+    expect(
+      shouldCloseFileTabAfterSync({
+        filePropertyId: "property-1",
+        isSelectedFieldMissing: true,
       }),
     ).toBe(false);
   });
