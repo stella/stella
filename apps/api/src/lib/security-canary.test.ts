@@ -256,6 +256,7 @@ describe("security canary alert deduplicator", () => {
 
     const firstClaim = claimAlert();
     expect(await claimAlert()).toEqual({ status: "suppress" });
+    await Promise.resolve();
     expect(send).toHaveBeenCalledTimes(1);
 
     resolveSend([1, 300_000]);
@@ -326,16 +327,22 @@ describe("security canary alert deduplicator", () => {
     });
   });
 
-  test("fails toward alert visibility when Redis cannot connect", async () => {
+  test("fails toward alert visibility and reconnects after Redis recovers", async () => {
     const redisError = new Error("Redis connection unavailable");
+    let connectAttempts = 0;
+    let now = 1000;
     const send = mock(async () => [1, 300_000]);
     const claimAlert = createSecurityCanaryAlertDeduplicator({
       createRedis: () => ({
         connect: async () => {
-          throw redisError;
+          connectAttempts += 1;
+          if (connectAttempts === 1) {
+            throw redisError;
+          }
         },
         send,
       }),
+      now: () => now,
     });
 
     expect(await claimAlert()).toEqual({
@@ -344,5 +351,13 @@ describe("security canary alert deduplicator", () => {
       error: redisError,
     });
     expect(send).not.toHaveBeenCalled();
+
+    now += 300_000;
+    expect(await claimAlert()).toEqual({
+      status: "emit",
+      reason: "claimed",
+    });
+    expect(connectAttempts).toBe(2);
+    expect(send).toHaveBeenCalledTimes(1);
   });
 });
