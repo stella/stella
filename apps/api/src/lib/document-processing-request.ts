@@ -98,20 +98,28 @@ export const persistManualOcrRun = async ({
       });
     let run: PersistedDocumentProcessingRun | null = inserted.at(0) ?? null;
     if (!run) {
-      const existing = await tx.query.documentProcessingRuns.findFirst({
-        where: {
-          organizationId: { eq: organizationId },
-          workspaceId: { eq: workspaceId },
-          entityId: { eq: source.entityId },
-          entityVersionId: { eq: source.entityVersionId },
-          fieldId: { eq: source.fieldId },
-          sourceFileId: { eq: source.sourceFileId },
-          sourceSha256Hex: { eq: source.sourceSha256Hex },
-          kind: { eq: "ocr" },
-          processorVersion: { eq: OCR_PROCESSOR_VERSION },
-        },
-        columns: { errorCode: true, id: true, status: true },
-      });
+      const existingRows = await tx
+        .select({
+          errorCode: documentProcessingRuns.errorCode,
+          id: documentProcessingRuns.id,
+          status: documentProcessingRuns.status,
+        })
+        .from(documentProcessingRuns)
+        .where(
+          and(
+            eq(documentProcessingRuns.organizationId, organizationId),
+            eq(documentProcessingRuns.workspaceId, workspaceId),
+            eq(documentProcessingRuns.entityId, source.entityId),
+            eq(documentProcessingRuns.entityVersionId, source.entityVersionId),
+            eq(documentProcessingRuns.fieldId, source.fieldId),
+            eq(documentProcessingRuns.sourceFileId, source.sourceFileId),
+            eq(documentProcessingRuns.sourceSha256Hex, source.sourceSha256Hex),
+            eq(documentProcessingRuns.kind, "ocr"),
+            eq(documentProcessingRuns.processorVersion, OCR_PROCESSOR_VERSION),
+          ),
+        )
+        .limit(1);
+      const existing = existingRows.at(0);
       const canRetry =
         existing?.status === "failed" ||
         (existing?.status === "cancelled" &&

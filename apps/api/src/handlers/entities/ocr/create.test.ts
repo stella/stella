@@ -150,30 +150,40 @@ describe("requestManualOcrHandler", () => {
     "requeues a %s run after the current source is locked",
     async (errorCode) => {
       let retrySet: unknown;
+      let selectCount = 0;
       const tx = asTestRaw<Transaction>({
-        select: () => ({
-          from: () => ({
-            innerJoin: () => ({
+        select: () => {
+          selectCount += 1;
+          if (selectCount === 1) {
+            return {
+              from: () => ({
+                innerJoin: () => ({
+                  where: () => ({
+                    limit: () => ({ for: async () => [{ id: entityId }] }),
+                  }),
+                }),
+              }),
+            };
+          }
+          return {
+            from: () => ({
               where: () => ({
-                limit: () => ({ for: async () => [{ id: entityId }] }),
+                limit: async () => [
+                  {
+                    errorCode,
+                    id: runId,
+                    status: "cancelled" as const,
+                  },
+                ],
               }),
             }),
-          }),
-        }),
+          };
+        },
         insert: () => ({
           values: () => ({
             onConflictDoNothing: () => ({ returning: async () => [] }),
           }),
         }),
-        query: {
-          documentProcessingRuns: {
-            findFirst: async () => ({
-              errorCode,
-              id: runId,
-              status: "cancelled" as const,
-            }),
-          },
-        },
         update: () => ({
           set: (set: unknown) => {
             retrySet = set;

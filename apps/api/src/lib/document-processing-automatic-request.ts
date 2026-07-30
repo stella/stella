@@ -116,21 +116,25 @@ export const requestAutomaticDocumentOcr = async ({
       return created;
     }
 
-    return await tx.query.documentProcessingRuns.findFirst({
-      where: {
-        organizationId: { eq: organizationId },
-        workspaceId: { eq: workspaceId },
-        entityId: { eq: entityId },
-        entityVersionId: { eq: entityVersionId },
-        fieldId: { eq: fieldId },
-        sourceFileId: { eq: sourceFileId },
-        sourceSha256Hex: { eq: sourceSha256Hex },
-        kind: { eq: "ocr" },
-        processorVersion: { eq: OCR_PROCESSOR_VERSION },
-        status: { eq: "queued" },
-      },
-      columns: { id: true },
-    });
+    const existingRows = await tx
+      .select({ id: documentProcessingRuns.id })
+      .from(documentProcessingRuns)
+      .where(
+        and(
+          eq(documentProcessingRuns.organizationId, organizationId),
+          eq(documentProcessingRuns.workspaceId, workspaceId),
+          eq(documentProcessingRuns.entityId, entityId),
+          eq(documentProcessingRuns.entityVersionId, entityVersionId),
+          eq(documentProcessingRuns.fieldId, fieldId),
+          eq(documentProcessingRuns.sourceFileId, sourceFileId),
+          eq(documentProcessingRuns.sourceSha256Hex, sourceSha256Hex),
+          eq(documentProcessingRuns.kind, "ocr"),
+          eq(documentProcessingRuns.processorVersion, OCR_PROCESSOR_VERSION),
+          eq(documentProcessingRuns.status, "queued"),
+        ),
+      )
+      .limit(1);
+    return existingRows.at(0);
   });
 
   if (run) {

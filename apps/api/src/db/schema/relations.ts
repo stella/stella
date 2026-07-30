@@ -48,7 +48,6 @@ import {
   workspaceMembers,
   workspaces,
 } from "./contacts";
-import { documentProcessingRuns } from "./document-processing";
 import {
   desktopEditHandoffs,
   desktopEditSessions,
@@ -117,7 +116,6 @@ export const relations = defineRelations(
     schedulerJobs,
     schedulerJobRuns,
     infoSoudTrackedCases,
-    documentProcessingRuns,
     properties,
     propertyDependencies,
     playbookDefinitions,
@@ -337,10 +335,6 @@ export const relations = defineRelations(
         from: r.workspaces.id,
         to: r.folioCollabSessions.workspaceId,
       }),
-      documentProcessingRuns: r.many.documentProcessingRuns({
-        from: r.workspaces.id,
-        to: r.documentProcessingRuns.workspaceId,
-      }),
     },
     workspaceMembers: {
       workspace: r.one.workspaces({
@@ -449,10 +443,6 @@ export const relations = defineRelations(
         from: r.entities.id,
         to: r.extractedContent.entityId,
       }),
-      documentProcessingRuns: r.many.documentProcessingRuns({
-        from: r.entities.id,
-        to: r.documentProcessingRuns.entityId,
-      }),
       assignees: r.many.taskAssignees({
         from: r.entities.id,
         to: r.taskAssignees.entityId,
@@ -506,10 +496,6 @@ export const relations = defineRelations(
       aiSummary: r.one.entityVersionAiSummaries({
         from: r.entityVersions.id,
         to: r.entityVersionAiSummaries.entityVersionId,
-      }),
-      documentProcessingRuns: r.many.documentProcessingRuns({
-        from: r.entityVersions.id,
-        to: r.documentProcessingRuns.entityVersionId,
       }),
     },
     entityVersionAiSummaries: {
@@ -630,32 +616,6 @@ export const relations = defineRelations(
       justification: r.one.justifications({
         from: r.fields.id,
         to: r.justifications.fieldId,
-      }),
-      documentProcessingRuns: r.many.documentProcessingRuns({
-        from: r.fields.id,
-        to: r.documentProcessingRuns.fieldId,
-      }),
-    },
-    documentProcessingRuns: {
-      workspace: r.one.workspaces({
-        from: r.documentProcessingRuns.workspaceId,
-        to: r.workspaces.id,
-      }),
-      entity: r.one.entities({
-        from: r.documentProcessingRuns.entityId,
-        to: r.entities.id,
-      }),
-      entityVersion: r.one.entityVersions({
-        from: r.documentProcessingRuns.entityVersionId,
-        to: r.entityVersions.id,
-      }),
-      field: r.one.fields({
-        from: r.documentProcessingRuns.fieldId,
-        to: r.fields.id,
-      }),
-      requestedByUser: r.one.user({
-        from: r.documentProcessingRuns.requestedBy,
-        to: r.user.id,
       }),
     },
     justifications: {
