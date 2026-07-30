@@ -366,7 +366,7 @@ const ComposerModelsSubmenu = ({
         <CpuIcon />
         {t("chat.composerMenu.models")}
       </MenuSubTrigger>
-      <MenuSubPopup className="w-64">
+      <MenuSubPopup className="w-[min(32rem,calc(100vw-2rem))] max-w-(--available-width)">
         <ComposerSubmenuSearch
           onChange={setSearch}
           // Reuses the AI-config role-model picker's placeholder (same
@@ -381,10 +381,9 @@ const ComposerModelsSubmenu = ({
           <MenuRadioGroup value={selectedModel ?? ""}>
             {rows.map((row) => (
               <MenuRadioItem
-                // `minmax(0,1fr)` lets the label cell shrink so `truncate`
-                // applies; the default `1fr` track sizes to the longest model
-                // id and forces horizontal overflow (same fix as the matters
-                // picker's TRUNCATING_ITEM_CLASS).
+                // `minmax(0,1fr)` lets the label cell shrink and wrap; the
+                // default `1fr` track sizes to the longest model id and forces
+                // horizontal overflow.
                 className="grid-cols-[1rem_minmax(0,1fr)]"
                 key={row.value || "default"}
                 onClick={() => {
@@ -392,10 +391,12 @@ const ComposerModelsSubmenu = ({
                 }}
                 value={row.value}
               >
-                {/* `block`: the radio item's own children wrapper is inline,
-                    and `truncate`'s overflow clipping is inert on inline
-                    elements. */}
-                <span className="block truncate">{row.label}</span>
+                {/* Model identifiers are decision-critical and often share a
+                    long provider prefix. Keep the complete value visible;
+                    wrap only when the viewport cannot fit the wider popup. */}
+                <span className="block [overflow-wrap:anywhere] whitespace-normal">
+                  {row.label}
+                </span>
               </MenuRadioItem>
             ))}
           </MenuRadioGroup>

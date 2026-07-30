@@ -40,7 +40,7 @@ export const FileViewerWithAI = ({
 
   return (
     <div
-      className={cn("relative h-full w-full", className)}
+      className={cn("@container/file-viewer relative h-full w-full", className)}
       data-file-viewer-ai="true"
     >
       {children}
