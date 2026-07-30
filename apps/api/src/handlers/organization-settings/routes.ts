@@ -10,6 +10,7 @@ import readAIConfig from "@/api/handlers/organization-settings/read-ai-config";
 import readAnonymizationBlacklist from "@/api/handlers/organization-settings/read-anonymization-blacklist";
 import readDeepLAvailability from "@/api/handlers/organization-settings/read-deepl-availability";
 import readDeepLConfig from "@/api/handlers/organization-settings/read-deepl-config";
+import readDocumentOcrAvailability from "@/api/handlers/organization-settings/read-document-ocr-availability";
 import readWebSearchConfig from "@/api/handlers/organization-settings/read-web-search-config";
 import updateOrganizationSettings from "@/api/handlers/organization-settings/update";
 import updateAIConfig from "@/api/handlers/organization-settings/update-ai-config";
@@ -53,6 +54,9 @@ export const organizationSettingsRoute = new Elysia({
   })
   .get("/ai-availability", readAIAvailability.handler, {
     permissions: readAIAvailability.config.permissions,
+  })
+  .get("/document-ocr-availability", readDocumentOcrAvailability.handler, {
+    permissions: readDocumentOcrAvailability.config.permissions,
   })
   .get("/ai-config", readAIConfig.handler, {
     permissions: readAIConfig.config.permissions,

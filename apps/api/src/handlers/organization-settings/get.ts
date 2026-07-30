@@ -8,7 +8,6 @@ import { DEFAULT_DOCUMENT_PROCESSING_MODE } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
-import { isDocumentOcrWorkerAvailable } from "@/api/lib/document-processing-readiness";
 import {
   DEFAULT_MATTER_NUMBER_PADDING,
   DEFAULT_MATTER_NUMBER_PATTERN,
@@ -30,9 +29,7 @@ type OrganizationSettingsRow = {
 
 export const projectOrganizationSettingsRow = (
   row: OrganizationSettingsRow | null | undefined,
-  documentOcrAvailable: boolean,
 ) => ({
-  documentOcrAvailable,
   documentProcessingMode:
     row?.documentProcessingMode ?? DEFAULT_DOCUMENT_PROCESSING_MODE,
   matterNumberPattern:
@@ -61,9 +58,7 @@ const readOrganizationSettings = createSafeRootHandler(
       ),
     );
 
-    return Result.ok(
-      projectOrganizationSettingsRow(row, await isDocumentOcrWorkerAvailable()),
-    );
+    return Result.ok(projectOrganizationSettingsRow(row));
   },
 );
 

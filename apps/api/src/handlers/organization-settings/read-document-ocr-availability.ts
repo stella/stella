@@ -1,0 +1,26 @@
+import { Result } from "better-result";
+
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { isDocumentOcrWorkerAvailable } from "@/api/lib/document-processing-readiness";
+
+const config = {
+  // Any org member may see whether document OCR can currently accept work.
+  // The response is only an ephemeral availability bit; it exposes no worker
+  // topology or provider configuration.
+  permissions: { workspace: ["read"] },
+  mcp: { type: "capability", reason: "anonymization_admin" },
+  access: "read",
+} satisfies HandlerConfig;
+
+const readDocumentOcrAvailability = createSafeRootHandler(
+  config,
+  // eslint-disable-next-line require-yield -- pure readiness read
+  async function* () {
+    return Result.ok({
+      available: await isDocumentOcrWorkerAvailable(),
+    });
+  },
+);
+
+export default readDocumentOcrAvailability;

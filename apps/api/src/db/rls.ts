@@ -59,7 +59,7 @@ const workspaceAccessCheck = (workspaceId: SQL) => sql`CASE
   )
 END`;
 
-const workspaceCheck = workspaceAccessCheck(sql`workspace_id`);
+export const workspaceCheck = workspaceAccessCheck(sql`workspace_id`);
 
 /** Check the row's `id` against the transaction workspace authorization.
  * Used by `workspaces`, which scopes on `id` rather than `workspace_id`. */

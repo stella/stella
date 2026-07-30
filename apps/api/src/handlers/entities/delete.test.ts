@@ -1,27 +1,18 @@
-import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
-import nodePath from "node:path";
+import { expect, test } from "bun:test";
 
-describe("delete entity document-processing fence", () => {
-  test("holds the entity lock from the running-run check through cleanup and delete", () => {
-    const source = readFileSync(
-      nodePath.join(import.meta.dir, "delete.ts"),
-      "utf-8",
-    );
-    const transactionStart = source.indexOf("safeDb(async (tx) =>");
-    const entityLock = source.indexOf('.for("update")', transactionStart);
-    const runningCheck = source.indexOf(
-      'documentProcessingRuns.status, "running"',
-      entityLock,
-    );
-    const storageCleanup = source.indexOf("deleteS3Objects", runningCheck);
-    const entityDelete = source.indexOf(".delete(entities)", storageCleanup);
+const source = await Bun.file(new URL("./delete.ts", import.meta.url)).text();
 
-    expect(transactionStart).toBeGreaterThan(-1);
-    expect(entityLock).toBeGreaterThan(transactionStart);
-    expect(runningCheck).toBeGreaterThan(entityLock);
-    expect(storageCleanup).toBeGreaterThan(runningCheck);
-    expect(entityDelete).toBeGreaterThan(storageCleanup);
-    expect(source.split("safeDb(").length - 1).toBe(1);
-  });
+test("commits the entity withdrawal fence before storage cleanup is dispatched", () => {
+  const cleanupRequest = source.indexOf(
+    "tx.insert(entityDeletionCleanupRequests)",
+  );
+  const deleteEntity = source.indexOf(".delete(entities)");
+  const dispatch = source.indexOf(
+    "await enqueueCleanup(txOutcome.cleanupRequestId)",
+  );
+
+  expect(cleanupRequest).toBeGreaterThan(-1);
+  expect(deleteEntity).toBeGreaterThan(cleanupRequest);
+  expect(dispatch).toBeGreaterThan(deleteEntity);
+  expect(source).not.toContain("deleteS3Objects(");
 });

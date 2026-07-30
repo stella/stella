@@ -95,6 +95,7 @@ import {
 import { assertMigrationsApplied } from "@/api/lib/db/assert-migrations-applied";
 import { detached } from "@/api/lib/detached";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
+import { initEntityDeletionCleanupWorker } from "@/api/lib/entity-deletion-cleanup-queue";
 import { httpError } from "@/api/lib/errors/http-error";
 import {
   errorFingerprint,
@@ -610,6 +611,9 @@ const startServer = async (): Promise<void> => {
   // BullMQ worker for durable account-deletion storage cleanup.
   const accountDeletionCleanupWorker = initAccountDeletionCleanupWorker();
 
+  // BullMQ worker for durable storage cleanup after entity deletion commits.
+  const entityDeletionCleanupWorker = initEntityDeletionCleanupWorker();
+
   // BullMQ worker for style set packages retained past download URL expiry.
   const styleSetPackageCleanupWorker = initStyleSetPackageCleanupWorker();
 
@@ -645,6 +649,7 @@ const startServer = async (): Promise<void> => {
         flowRunWorker.close(),
         fileDerivativeWorker.close(),
         accountDeletionCleanupWorker.close(),
+        entityDeletionCleanupWorker.close(),
         styleSetPackageCleanupWorker.close(),
         reportExportWorker.close(),
       ]),

@@ -71,7 +71,7 @@ import type {
 } from "@/lib/types";
 import { isFileDisplayable } from "@/lib/types";
 import { downloadFile } from "@/lib/utils";
-import { organizationSettingsOptions } from "@/queries/organization-settings";
+import { documentOcrAvailabilityOptions } from "@/queries/document-ocr-availability";
 import {
   CellLockMenuItem,
   CellMetadataMenuSection,
@@ -182,8 +182,10 @@ export const RowActions = ({
     file !== null &&
     !file.encrypted &&
     file.mimeType === PDF_MIME_TYPE;
-  const { data: organizationSettings } = useQuery({
-    ...organizationSettingsOptions(activeOrganizationId),
+  const { data: documentOcrAvailability } = useQuery({
+    ...documentOcrAvailabilityOptions({
+      organizationId: activeOrganizationId,
+    }),
     enabled: ocrSourceEligible,
   });
   const bulkTargets = isBulk ? selectedEntities : [entity];
@@ -652,7 +654,7 @@ export const RowActions = ({
   const canUploadVersion =
     !isBulk && !isFolder && !entity.readOnly && file !== null;
   const canRunOcr =
-    ocrSourceEligible && organizationSettings?.documentOcrAvailable === true;
+    ocrSourceEligible && documentOcrAvailability?.available === true;
   // Extension-based filter for the OS file picker. Browser-reported MIME
   // strings vary across platforms for the same extension; matching by
   // extension is consistent across Chrome, Safari, Firefox, and Edge.

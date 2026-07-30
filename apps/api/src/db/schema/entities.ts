@@ -1,18 +1,22 @@
 import {
+  ENTITY_DELETION_CLEANUP_STATUSES,
   ENTITY_KINDS,
   TASK_ASSIGNEE_ROLES,
   isNotNull,
   jsonb,
   organization,
+  organizationCheck,
   p,
   pUuid,
   safeOrganizationId,
   safeUuid,
   safeWorkspaceId,
   sql,
-  user,
-  wsPolicies,
+  stella,
   timestamptz,
+  user,
+  workspaceCheck,
+  wsPolicies,
 } from "./common";
 import type {
   AgendaAttendee,
@@ -23,6 +27,7 @@ import type {
   BoundingBoxes,
   CellMetadata,
   DocumentSource,
+  EntityDeletionCleanupStatus,
   FieldContent,
   JustificationContent,
   LinkMetadata,
@@ -172,6 +177,54 @@ export const entities = p.pgTable(
       .on(table.workspaceId, table.externalICalUid)
       .where(isNotNull(table.externalICalUid)),
     ...wsPolicies(),
+  ],
+);
+
+/**
+ * Durable S3 cleanup work created in the same transaction as an entity delete.
+ * It deliberately does not reference the deleted entity: the record must
+ * survive the cascade so a queue retry can complete the storage erasure.
+ */
+export const entityDeletionCleanupRequests = p.pgTable(
+  "entity_deletion_cleanup_requests",
+  {
+    id: pUuid<"entityDeletionCleanupRequest">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    workspaceId: safeWorkspaceId("workspace_id").notNull(),
+    s3Keys: p.text("s3_keys").array().notNull(),
+    status: p
+      .text("status", { enum: ENTITY_DELETION_CLEANUP_STATUSES })
+      .$type<EntityDeletionCleanupStatus>()
+      .notNull()
+      .default("pending"),
+    attemptCount: p.integer("attempt_count").notNull().default(0),
+    errorMessage: p.text("error_message"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    completedAt: timestamptz("completed_at"),
+  },
+  (table) => [
+    p
+      .index("entity_deletion_cleanup_status_created_idx")
+      .on(table.status, table.createdAt, table.id),
+    p.check(
+      "entity_deletion_cleanup_status_values_check",
+      sql`${table.status} IN ('pending', 'processing', 'completed', 'failed')`,
+    ),
+    p.check(
+      "entity_deletion_cleanup_attempt_count_nonnegative_check",
+      sql`${table.attemptCount} >= 0`,
+    ),
+    // The delete request may create this outbox row through its scoped
+    // transaction; all later reads and state transitions are root-worker only.
+    p.pgPolicy("entity_deletion_cleanup_insert", {
+      for: "insert",
+      to: stella,
+      withCheck: sql`${workspaceCheck} AND ${organizationCheck}`,
+    }),
   ],
 );
 

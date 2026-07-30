@@ -36,6 +36,7 @@ import {
   templateChatThreadPolicies,
   userPolicies,
   workspaceIdCheck,
+  workspaceCheck,
   workspaceViewTemplatePolicies,
   wsOrganizationPolicies,
   wsOrganizationReadOnlyPolicies,
@@ -231,6 +232,15 @@ export const ACCOUNT_DELETION_REQUEST_STATUSES = [
 export type AccountDeletionRequestStatus =
   (typeof ACCOUNT_DELETION_REQUEST_STATUSES)[number];
 
+export const ENTITY_DELETION_CLEANUP_STATUSES = [
+  "pending",
+  "processing",
+  "completed",
+  "failed",
+] as const;
+export type EntityDeletionCleanupStatus =
+  (typeof ENTITY_DELETION_CLEANUP_STATUSES)[number];
+
 export type AccountDeletionStorageCleanup = {
   s3Keys: string[];
 };
@@ -405,6 +415,7 @@ export {
   templateChatThreadPolicies,
   userPolicies,
   workspaceIdCheck,
+  workspaceCheck,
   workspaceViewTemplatePolicies,
   wsOrganizationPolicies,
   wsOrganizationReadOnlyPolicies,

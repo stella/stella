@@ -24,6 +24,7 @@ export * from "./schema/usage";
 export * from "./schema/relations";
 export {
   ACCOUNT_DELETION_REQUEST_STATUSES,
+  ENTITY_DELETION_CLEANUP_STATUSES,
   BILLING_STATUS,
   CHAT_TITLE_SOURCE,
   CHAT_TITLE_SOURCES,
@@ -69,6 +70,7 @@ export type {
   DocumentAst,
   EmptyAst,
   EntityKind,
+  EntityDeletionCleanupStatus,
   ExpenseCategory,
   FieldContent,
   JustificationBlock,

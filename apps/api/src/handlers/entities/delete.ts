@@ -6,6 +6,7 @@ import type { Static } from "elysia";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   documentProcessingRuns,
+  entityDeletionCleanupRequests,
   entities,
   entityVersions,
   fields,
@@ -15,14 +16,15 @@ import {
   extractFieldFileRefs,
   filterUnreferencedFieldFileRefs,
 } from "@/api/handlers/files/field-file-refs";
-import { deleteS3Objects } from "@/api/handlers/files/utils";
+import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import type { SafeId } from "@/api/lib/branded-types";
+import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { enqueueEntityDeletionCleanup } from "@/api/lib/entity-deletion-cleanup-queue";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { getSearchProvider } from "@/api/lib/search/provider";
@@ -37,6 +39,9 @@ const deleteEntitiesBodySchema = t.Object({
 type DeleteEntitiesBodySchema = Static<typeof deleteEntitiesBodySchema>;
 
 export type DeleteEntitiesHandlerProps = {
+  enqueueCleanup?: (
+    requestId: SafeId<"entityDeletionCleanupRequest">,
+  ) => Promise<void>;
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
@@ -45,6 +50,7 @@ export type DeleteEntitiesHandlerProps = {
 };
 
 export const deleteEntitiesHandler = async function* ({
+  enqueueCleanup = enqueueEntityDeletionCleanup,
   safeDb,
   organizationId,
   workspaceId,
@@ -54,9 +60,9 @@ export const deleteEntitiesHandler = async function* ({
   const txOutcome = yield* Result.await(
     safeDb(async (tx) => {
       // OCR dispatch takes this same entity fence before changing a run to
-      // `running`. Lock the bounded request in deterministic order and retain
-      // the locks through storage cleanup and the database delete: a withdrawn
-      // document can then never begin processing after cleanup has started.
+      // `running`. The committed entity deletion is the durable withdrawal
+      // fence; storage cleanup happens later from a durable request, never
+      // while this transaction owns locks.
       const lockedEntities = await tx
         .select({ id: entities.id, readOnly: entities.readOnly })
         .from(entities)
@@ -126,18 +132,20 @@ export const deleteEntitiesHandler = async function* ({
         excludedEntityIds: body.entityIds,
       });
 
-      // Storage cannot join the database transaction. Holding the entity fence
-      // across this bounded cleanup is deliberate: cleanup failure rolls the
-      // transaction back, while successful cleanup is immediately followed by
-      // the owning-row delete before any OCR dispatch can acquire the fence.
-      Result.unwrap(
-        await deleteS3Objects({
-          fileRows: unreferencedFileRefs,
+      const cleanupRequestId =
+        unreferencedFileRefs.length > 0
+          ? createSafeId<"entityDeletionCleanupRequest">()
+          : null;
+      if (cleanupRequestId) {
+        await tx.insert(entityDeletionCleanupRequests).values({
+          id: cleanupRequestId,
           organizationId,
           workspaceId,
-        }),
-        "Entity file cleanup must succeed before deleting database records",
-      );
+          s3Keys: unreferencedFileRefs.map(({ fileId, mimeType }) =>
+            createFileKey({ organizationId, workspaceId, fileId, mimeType }),
+          ),
+        });
+      }
 
       // Cascade: entities → entityVersions → fields →
       // justifications (all cascade).
@@ -180,13 +188,31 @@ export const deleteEntitiesHandler = async function* ({
         })),
       );
 
-      return { status: "deleted" as const, entities: deleted };
+      return {
+        status: "deleted" as const,
+        cleanupRequestId,
+        entities: deleted,
+      };
     }),
   );
   if (txOutcome.status === "rejected") {
     return Result.err(txOutcome.error);
   }
   const deletedEntities = txOutcome.entities;
+  if (txOutcome.cleanupRequestId) {
+    const enqueueResult = await Result.tryPromise({
+      try: async () => await enqueueCleanup(txOutcome.cleanupRequestId),
+      catch: (cause) => cause,
+    });
+    if (Result.isError(enqueueResult)) {
+      // The cleanup request is committed and the worker reconciles missed
+      // delivery, so deletion remains successful if this immediate handoff
+      // fails.
+      captureError(enqueueResult.error, {
+        requestId: txOutcome.cleanupRequestId,
+      });
+    }
+  }
 
   // Explicit removal for non-PG providers (CASCADE handles PG)
   const provider = getSearchProvider();

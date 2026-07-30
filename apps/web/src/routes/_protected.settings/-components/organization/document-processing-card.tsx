@@ -10,6 +10,7 @@ import { Frame, FramePanel } from "@stll/ui/components/frame";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unwrapEden } from "@/lib/errors/api";
+import { documentOcrAvailabilityOptions } from "@/queries/document-ocr-availability";
 import {
   organizationSettingsKeys,
   organizationSettingsOptions,
@@ -25,6 +26,9 @@ export const DocumentProcessingCard = () => {
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const { data: settings } = useQuery(
     organizationSettingsOptions(activeOrganizationId),
+  );
+  const { data: documentOcrAvailability } = useQuery(
+    documentOcrAvailabilityOptions({ organizationId: activeOrganizationId }),
   );
 
   const mutation = useSettingsMutation({
@@ -48,7 +52,7 @@ export const DocumentProcessingCard = () => {
   }
 
   const enabled = settings.documentProcessingMode === SEARCHABLE_TEXT_MODE;
-  const unavailable = !settings.documentOcrAvailable;
+  const unavailable = documentOcrAvailability?.available !== true;
 
   return (
     <Frame>
