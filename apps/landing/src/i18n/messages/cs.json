@@ -115,7 +115,7 @@
       "cli-mcp": {
         "blurb": "Vyhledávejte, čtěte a pracujte s aplikací stella z příkazové řádky nebo z libovolného klienta kompatibilního s MCP. Obě rozhraní sdílejí stejný registr schopností, oprávnění i data pracovního prostoru.",
         "eyebrow": "CLI & MCP",
-        "title": "Jeden pracovní prostor, z každého nástroje."
+        "title": "Jeden pracovní prostor, dostupný z každého nástroje."
       },
       "editor": {
         "blurb": "Otevřete a upravte soubory Word .docx přímo v prohlížeči: bez instalace a bez převodu do jiného formátu. Online DOCX editor v aplikaci stella zachovává původní formátování i sledování změn, drží soubor propojený se spisem a každou uloženou úpravu zapisuje do historie verzí dokumentu.",

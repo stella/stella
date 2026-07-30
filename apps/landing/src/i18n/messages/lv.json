@@ -115,7 +115,7 @@
       "cli-mcp": {
         "blurb": "Meklējiet, lasiet un strādājiet ar lietotni stella no komandrindas vai no jebkura ar MCP saderīga klienta. Abas saskarnes izmanto to pašu iespēju reģistru, tās pašas atļaujas un tos pašus darbvietas datus.",
         "eyebrow": "CLI & MCP",
-        "title": "Viena darbvieta, no ikviena rīka."
+        "title": "Viena darbvieta, pieejama no ikviena rīka."
       },
       "editor": {
         "blurb": "Atveriet un rediģējiet Word .docx failus tieši pārlūkā: bez instalēšanas un bez pārveidošanas citā formātā. Lietotnes stella tiešsaistes DOCX redaktors saglabā sākotnējo formatējumu un izmaiņu izsekošanu, patur failu saistītu ar tā lietu un katru saglabājumu ieraksta dokumenta versiju vēsturē.",

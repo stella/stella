@@ -115,7 +115,7 @@
       "cli-mcp": {
         "blurb": "Ieškokite, skaitykite ir dirbkite su programa stella iš komandinės eilutės arba iš bet kurio su MCP suderinamo kliento. Abu paviršiai naudoja tą patį gebėjimų registrą, tas pačias teises ir tuos pačius darbo srities duomenis.",
         "eyebrow": "CLI & MCP",
-        "title": "Viena darbo sritis, iš kiekvieno įrankio."
+        "title": "Viena darbo sritis, pasiekiama iš kiekvieno įrankio."
       },
       "editor": {
         "blurb": "Atverkite ir redaguokite Word .docx failus tiesiai naršyklėje: be diegimo ir be konvertavimo į kitą formatą. Programos stella internetinis DOCX redaktorius išsaugo pirminį formatavimą ir keitimų sekimą, palieka failą susietą su byla ir kiekvieną įrašymą įtraukia į dokumento versijų istoriją.",

@@ -13,10 +13,10 @@ const { class: className, copiedLabel, copyLabel, text } = Astro.props;
 ---
 
 <div class:list={["product-setup-snippet relative", className]} dir="ltr">
-  <pre class="overflow-x-auto whitespace-pre pr-10"><code>{text}</code></pre>
+  <pre class="overflow-x-auto whitespace-pre pe-10"><code>{text}</code></pre>
   <button
     type="button"
-    class="setup-copy absolute right-1.5 top-1.5 inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors"
+    class="setup-copy absolute end-1.5 top-1.5 inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors"
     aria-label={copyLabel}
     title={copyLabel}
     data-copy-snippet={text}

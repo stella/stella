@@ -115,7 +115,7 @@
       "cli-mcp": {
         "blurb": "Cherchez, lisez et travaillez avec stella depuis la ligne de commande ou depuis n’importe quel client compatible MCP. Les deux surfaces partagent le même registre de capacités, les mêmes permissions et les mêmes données d’espace de travail.",
         "eyebrow": "CLI & MCP",
-        "title": "Un seul espace de travail, depuis chaque outil."
+        "title": "Un seul espace de travail, accessible depuis chaque outil."
       },
       "editor": {
         "blurb": "Ouvrez et modifiez des fichiers Word .docx directement dans votre navigateur : sans installation, sans conversion vers un autre format. L’éditeur DOCX en ligne de stella préserve la mise en forme d’origine et le suivi des modifications, garde le fichier rattaché à son dossier et enregistre chaque révision dans l’historique des versions du document.",

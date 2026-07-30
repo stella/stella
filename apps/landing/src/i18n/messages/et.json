@@ -115,7 +115,7 @@
       "cli-mcp": {
         "blurb": "Otsi, loe ja tööta rakendusega stella käsurealt või ükskõik millisest MCP-ga ühilduvast kliendist. Mõlemad pinnad jagavad sama võimekusregistrit, samu õigusi ja samu tööruumi andmeid.",
         "eyebrow": "CLI & MCP",
-        "title": "Üks tööruum, igast tööriistast."
+        "title": "Üks tööruum, kättesaadav igast tööriistast."
       },
       "editor": {
         "blurb": "Ava ja muuda Wordi .docx-faile otse brauseris: ilma paigalduseta ja teise vormingusse teisendamata. Rakenduse stella veebipõhine DOCX-redaktor säilitab algse vormingu ja muudatuste jälgimise, hoiab faili oma toimikuga seotuna ning salvestab iga versiooni dokumendi versiooniajalukku.",

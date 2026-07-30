@@ -115,7 +115,7 @@
       "cli-mcp": {
         "blurb": "Keressen, olvasson és dolgozzon a stella alkalmazással a parancssorból vagy bármely MCP-kompatibilis kliensből. Mindkét felület ugyanazt a képességnyilvántartást, ugyanazokat a jogosultságokat és ugyanazokat a munkaterületi adatokat használja.",
         "eyebrow": "CLI & MCP",
-        "title": "Egyetlen munkaterület, minden eszközből."
+        "title": "Egyetlen munkaterület, minden eszközből elérhető."
       },
       "editor": {
         "blurb": "Nyisson meg és szerkesszen Word .docx fájlokat közvetlenül a böngészőben: telepítés és formátumátalakítás nélkül. A stella alkalmazás online DOCX-szerkesztője megőrzi az eredeti formázást és a változáskövetést, a fájlt az ügyéhez kötve tartja, és minden mentés bekerül a dokumentum verziótörténetébe.",
