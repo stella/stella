@@ -75,15 +75,15 @@ export const TaskDetailPanel = ({
 
   const {
     data: task,
-    error,
+    error: taskError,
     isLoading,
   } = useQuery(taskDetailOptions(workspaceId, taskId));
 
   useExternalSyncEffect(() => {
-    if (APIError.is(error) && error.status === 404) {
+    if (APIError.is(taskError) && taskError.status === 404) {
       closeTabsForEntities([taskId]);
     }
-  }, [closeTabsForEntities, error, taskId]);
+  }, [closeTabsForEntities, taskError, taskId]);
 
   const [isEditingName, setIsEditingName] = useState(false);
   const [editNameValue, setEditNameValue] = useState("");

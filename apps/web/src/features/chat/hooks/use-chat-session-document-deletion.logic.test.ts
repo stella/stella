@@ -1,10 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 
-import type {
-  ChatPart,
-  PersistedChatMessage,
-} from "@/components/chat/chat-ui-tools";
+import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import type { InspectorTab } from "@/components/inspector/inspector-store";
 import { reconcileDocumentDeletionToolCalls } from "@/features/chat/hooks/use-chat-session-document-deletion.logic";
 import { fileMetadataQueryKey } from "@/lib/files/file-metadata-query.logic";
@@ -26,7 +23,7 @@ const deletionMessages = (
         output: { deleted: true },
         state: "complete",
         type: "tool-call",
-      } satisfies ChatPart,
+      },
     ],
     role: "assistant",
   },

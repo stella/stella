@@ -10,8 +10,6 @@ import { fileMetadataQueryRoot } from "@/lib/files/file-metadata-query.logic";
 type ReconcileDocumentDeletionToolCallsOptions = {
   entityKeys: {
     all: (workspaceId: string) => readonly unknown[];
-    detail: (workspaceId: string, entityId: string) => readonly unknown[];
-    versions: (workspaceId: string, entityId: string) => readonly unknown[];
   };
   handledToolCallIds: Set<string>;
   messages: readonly PersistedChatMessage[];
@@ -67,18 +65,6 @@ export const reconcileDocumentDeletionToolCalls = async ({
       invalidations.push(
         queryClient.invalidateQueries({
           queryKey: workspaceKeys.overview(affectedWorkspaceId),
-        }),
-      );
-    }
-  } else {
-    for (const tab of fileTabs) {
-      invalidations.push(
-        queryClient.invalidateQueries({
-          exact: true,
-          queryKey: entityKeys.detail(tab.workspaceId, tab.entityId),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: entityKeys.versions(tab.workspaceId, tab.entityId),
         }),
       );
     }

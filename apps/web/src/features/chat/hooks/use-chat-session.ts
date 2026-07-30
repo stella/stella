@@ -121,6 +121,7 @@ export type ResendLatestMessageOptions = {
 
 const EMPTY_MCP_CONNECTOR_IDENTITIES: readonly McpConnectorApprovalIdentity[] =
   [];
+const EMPTY_CONTEXT_MATTER_IDS: readonly string[] = [];
 
 // `QueuedChatMessage` is the view-facing shape of a queued entry; the
 // canonical definition (plus `QueuedChatEntry` and the send-queue
@@ -642,10 +643,14 @@ export const useChatSession = ({
   // contain opaque chat refs by design. Reconcile affected workspace caches
   // and open file tabs once per completed deletion tool call.
   useExternalSyncEffect(() => {
+    const contextMatterIds =
+      getContextMatterIds === undefined
+        ? EMPTY_CONTEXT_MATTER_IDS
+        : getContextMatterIds();
     detached(
       reconcileDocumentDeletionToolCalls({
         entityKeys: entitiesKeys,
-        contextMatterIds: getContextMatterIds?.() ?? [],
+        contextMatterIds,
         handledToolCallIds: handledDocumentDeletionToolCallIdsRef.current,
         messages,
         queryClient,
