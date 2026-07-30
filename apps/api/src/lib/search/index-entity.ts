@@ -2,8 +2,12 @@ import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
-import { entities, extractedContent } from "@/api/db/schema";
-import type { LinkMetadata, searchDocuments } from "@/api/db/schema";
+import { entities } from "@/api/db/schema";
+import type {
+  extractedContent,
+  LinkMetadata,
+  searchDocuments,
+} from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -246,28 +250,8 @@ export const upsertSearchDocument = async (
     doc.title,
     doc.searchableText,
   );
-  const extractedContentFence =
-    doc.extractedContentSource === null
-      ? sql`NOT EXISTS (
-          SELECT 1
-          FROM ${extractedContent}
-          WHERE ${extractedContent.entityId} = e.id
-        )`
-      : sql`EXISTS (
-          SELECT 1
-          FROM ${extractedContent}
-          WHERE ${extractedContent.entityId} = e.id
-            AND ${extractedContent.sourceEntityVersionId}
-              IS NOT DISTINCT FROM ${doc.extractedContentSource.sourceEntityVersionId}
-            AND ${extractedContent.sourceFieldId}
-              IS NOT DISTINCT FROM ${doc.extractedContentSource.sourceFieldId}
-            AND ${extractedContent.sourceFileId}
-              IS NOT DISTINCT FROM ${doc.extractedContentSource.sourceFileId}
-            AND ${extractedContent.sourceSha256Hex}
-              IS NOT DISTINCT FROM ${doc.extractedContentSource.sourceSha256Hex}
-            AND ${extractedContent.extractedAt}
-              IS NOT DISTINCT FROM ${doc.extractedContentSource.extractedAt}
-        )`;
+  const observedSource = doc.extractedContentSource;
+  const hasObservedSource = observedSource !== null;
 
   await rootDb.transaction(async (tx) => {
     const indexed = await tx.execute<IndexedSearchDocument>(sql`
@@ -278,7 +262,39 @@ export const upsertSearchDocument = async (
           AND e.current_version_id = ${doc.sourceVersionId}
           AND COALESCE(e.updated_at, e.created_at)
             IS NOT DISTINCT FROM ${doc.semanticUpdatedAtToken}::timestamptz
-          AND ${extractedContentFence}
+          AND (
+            (
+              ${hasObservedSource} = false
+              AND NOT EXISTS (
+                SELECT 1
+                FROM extracted_content ec
+                WHERE ec.entity_id = e.id
+                  AND ec.organization_id = ${doc.organizationId}
+                  AND ec.workspace_id = ${doc.workspaceId}
+              )
+            )
+            OR
+            (
+              ${hasObservedSource} = true
+              AND EXISTS (
+                SELECT 1
+                FROM extracted_content ec
+                WHERE ec.entity_id = e.id
+                  AND ec.organization_id = ${doc.organizationId}
+                  AND ec.workspace_id = ${doc.workspaceId}
+                  AND ec.source_entity_version_id
+                    IS NOT DISTINCT FROM ${observedSource?.sourceEntityVersionId ?? null}
+                  AND ec.source_field_id
+                    IS NOT DISTINCT FROM ${observedSource?.sourceFieldId ?? null}
+                  AND ec.source_file_id
+                    IS NOT DISTINCT FROM ${observedSource?.sourceFileId ?? null}
+                  AND ec.source_sha256_hex
+                    IS NOT DISTINCT FROM ${observedSource?.sourceSha256Hex ?? null}
+                  AND ec.extracted_at
+                    IS NOT DISTINCT FROM ${observedSource?.extractedAt ?? null}
+              )
+            )
+          )
         FOR UPDATE
       )
       INSERT INTO search_documents (

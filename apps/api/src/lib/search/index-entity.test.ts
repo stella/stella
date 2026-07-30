@@ -40,8 +40,12 @@ const currentFileField = {
   id: toSafeId<"field">("019864b8-48d0-7f37-94d5-948e3bcf3f46"),
   propertyId: toSafeId<"property">("019864b8-48d0-7f37-94d5-948e3bcf3f47"),
 };
+const noCurrentFileFields: (typeof currentFileField)[] = [];
 const entityRow = {
-  currentVersion: { fields: [], id: toSafeId<"entityVersion">("v_1") },
+  currentVersion: {
+    fields: noCurrentFileFields,
+    id: toSafeId<"entityVersion">("v_1"),
+  },
   createdAt: new Date("2026-04-01T08:00:00.000Z"),
   extractedContent: null as {
     ciphertext: Buffer;
@@ -162,7 +166,7 @@ test("rejects an out-of-order projection against the authoritative entity", asyn
     "WHERE EXISTS (SELECT 1 FROM authoritative_source)",
   );
   expect(compiled.sql).toContain("NOT EXISTS");
-  expect(compiled.sql).toContain('"extracted_content"');
+  expect(compiled.sql).toContain("FROM extracted_content ec");
 });
 
 test("does not advance matter activity when a stale projection is rejected", async () => {
@@ -266,8 +270,8 @@ test("excludes stale extracted text and fences its observed provenance", async (
   }
   const compiled = new PgDialect().sqlToQuery(query);
   expect(compiled.sql).toContain("EXISTS");
-  expect(compiled.sql).toContain('"source_entity_version_id"');
-  expect(compiled.sql).toContain('"extracted_at"');
+  expect(compiled.sql).toContain("ec.source_entity_version_id");
+  expect(compiled.sql).toContain("ec.extracted_at");
   expect(compiled.params).toContain(staleVersionId);
   expect(compiled.params).toContain(extractedAt);
 });
