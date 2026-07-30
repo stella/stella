@@ -260,6 +260,7 @@ export const upsertSearchDocument = async (
   const hasObservedSource = observedSource !== null;
 
   await rootDb.transaction(async (tx) => {
+    // oxlint-disable-next-line require-search-scope/require-search-scope -- atomic INSERT SELECT fences one entity by explicit organization, workspace, entity, version, timestamp, and extracted-content provenance
     const indexed = await tx.execute<IndexedSearchDocument>(sql`
       INSERT INTO search_documents (
         entity_id, organization_id, workspace_id,

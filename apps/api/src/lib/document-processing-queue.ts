@@ -28,7 +28,7 @@ import {
 import type { FieldContent } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
-import { createSafeId, toSafeId } from "@/api/lib/branded-types";
+import { createSafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
 import { detached } from "@/api/lib/detached";
 import {
@@ -53,6 +53,7 @@ import { presignDownloadUrl } from "@/api/lib/s3-presign";
 import { getSearchProvider } from "@/api/lib/search/provider";
 import { broadcast } from "@/api/lib/sse";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
+import { toSafeId } from "@/api/types";
 
 const OCR_SOURCE_URL_TTL_SECONDS = 35 * 60;
 const WORKER_CONCURRENCY = 2;
@@ -866,11 +867,12 @@ const persistRepairableOcrRuns = async (
           ),
           inArray(
             entities.workspaceId,
-            candidates.map(({ workspaceId }) => workspaceId),
+            candidates.map((candidate) => candidate.workspaceId),
           ),
         ),
       )
       .orderBy(asc(entities.id))
+      .limit(RECONCILE_BATCH_SIZE)
       .for("update");
     const lockedEntityById = new Map(
       lockedEntities.map((entity) => [entity.id, entity]),
@@ -891,7 +893,7 @@ const persistRepairableOcrRuns = async (
           ),
           inArray(
             fields.workspaceId,
-            candidates.map(({ workspaceId }) => workspaceId),
+            candidates.map((candidate) => candidate.workspaceId),
           ),
         ),
       );
@@ -1536,9 +1538,11 @@ export const initDocumentProcessingWorker = () => {
   if (isDocumentOcrProviderConfigured()) {
     detached(
       worker.waitUntilReady().then(() => {
-        if (!closing) {
-          readiness = startDocumentOcrWorkerReadiness();
+        if (closing) {
+          return undefined;
         }
+        readiness = startDocumentOcrWorkerReadiness();
+        return undefined;
       }),
       "document-processing.publish-readiness",
     );

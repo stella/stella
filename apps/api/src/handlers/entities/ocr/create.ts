@@ -167,7 +167,7 @@ export const requestManualOcrHandler = async function* ({
   if (!(await workerAvailable())) {
     return Result.err(
       new HandlerError({
-        status: 503,
+        status: 502,
         message: "Document processing is not configured",
       }),
     );

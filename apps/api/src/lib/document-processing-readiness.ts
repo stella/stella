@@ -55,10 +55,9 @@ export const refreshDocumentOcrWorkerReadiness = async (
 export const startDocumentOcrWorkerReadiness = () => {
   const client = createRedisClient();
   const refresh = async (): Promise<void> => {
-    await refreshDocumentOcrWorkerReadiness(
-      async (key, value, ttlSeconds) =>
-        await client.send("SET", [key, value, "EX", String(ttlSeconds)]),
-    );
+    await refreshDocumentOcrWorkerReadiness(async (key, value, ttlSeconds) => {
+      await client.send("SET", [key, value, "EX", String(ttlSeconds)]);
+    });
   };
   const heartbeat = (): void => {
     detached(refresh(), "document-processing.readiness-heartbeat");
