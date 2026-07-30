@@ -54,6 +54,7 @@ type ManualOcrResponse = {
 };
 
 type RequestManualOcrProps = {
+  captureEnqueueError?: typeof captureError;
   enqueue?: (runId: PersistedDocumentProcessingRun["id"]) => Promise<void>;
   entityId: SafeId<"entity">;
   fieldId: SafeId<"field">;
@@ -154,6 +155,7 @@ const findManualOcrSource = async ({
 };
 
 export const requestManualOcrHandler = async function* ({
+  captureEnqueueError = captureError,
   enqueue = enqueueDocumentProcessingRun,
   entityId,
   fieldId,
@@ -212,7 +214,7 @@ export const requestManualOcrHandler = async function* ({
     if (Result.isError(enqueueResult)) {
       // The durable queued run is reconciled even when this immediate delivery
       // attempt fails. Keep the failure observable without retracting the ack.
-      captureError(enqueueResult.error, { runId: run.id });
+      captureEnqueueError(enqueueResult.error, { runId: run.id });
     }
   }
 

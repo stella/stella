@@ -13,7 +13,6 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 const rootTransactionMock = mock();
 const enqueueDocumentProcessingRunMock = mock(async () => undefined);
 const recordAuditEvent = mock(async () => undefined);
-const captureErrorMock = mock(() => undefined);
 
 void mock.module("@/api/db/root", () => ({
   rootDb: { transaction: rootTransactionMock },
@@ -21,10 +20,6 @@ void mock.module("@/api/db/root", () => ({
 void mock.module("@/api/lib/document-processing-enqueue", () => ({
   enqueueDocumentProcessingRun: enqueueDocumentProcessingRunMock,
 }));
-void mock.module("@/api/lib/analytics/capture", () => ({
-  captureError: captureErrorMock,
-}));
-
 const { requestManualOcrHandler } =
   await import("@/api/handlers/entities/ocr/create");
 const { persistManualOcrRun } =
@@ -139,6 +134,7 @@ describe("requestManualOcrHandler", () => {
   });
 
   test("acknowledges a durable run when immediate queue delivery fails", async () => {
+    const captureEnqueueError = mock(() => undefined);
     const enqueueFailure = new Error("queue temporarily unavailable");
     const enqueue = mock(async () => {
       throw enqueueFailure;
@@ -149,6 +145,7 @@ describe("requestManualOcrHandler", () => {
     }));
     const result = await Result.gen(() =>
       requestManualOcrHandler({
+        captureEnqueueError,
         enqueue,
         entityId,
         fieldId,
@@ -181,7 +178,7 @@ describe("requestManualOcrHandler", () => {
 
     expect(result).toEqual(Result.ok({ outcome: "queued", runId }));
     expect(enqueue).toHaveBeenCalledWith(runId);
-    expect(captureErrorMock).toHaveBeenCalledWith(enqueueFailure, {
+    expect(captureEnqueueError).toHaveBeenCalledWith(enqueueFailure, {
       runId,
     });
   });
