@@ -53,6 +53,7 @@ import {
 import { presignDownloadUrl } from "@/api/lib/s3-presign";
 import { getSearchProvider } from "@/api/lib/search/provider";
 import { broadcast } from "@/api/lib/sse";
+import { withTimeout } from "@/api/lib/with-timeout";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { toSafeId } from "@/api/types";
 
@@ -65,9 +66,15 @@ const ENQUEUE_VISIBILITY_TIMEOUT_MS = 5 * 60 * 1000;
 const ENQUEUE_FAILURE_RETRY_MS = 30_000;
 const WORKER_LEASE_TIMEOUT_MS = 40 * 60 * 1000;
 const WORKER_LEASE_HEARTBEAT_MS = 5 * 60 * 1000;
+const WORKER_LEASE_HEARTBEAT_TIMEOUT_MS = 30_000;
 const SEARCH_INDEX_REPLAY_CONCURRENCY = 2;
+const SEARCH_INDEX_REPLAY_BATCH_SIZE = SEARCH_INDEX_REPLAY_CONCURRENCY * 2;
+const SEARCH_INDEX_ATTEMPT_TIMEOUT_MS = 30_000;
+const SEARCH_INDEX_REPLAY_STATE_TRANSITION_TIMEOUT_MS = 5000;
 const REPAIR_SETTLE_DELAY_MS = 5 * 60 * 1000;
 const REPAIR_SCAN_CURSOR_KEY = "document-processing:repair-scan-cursor:v1";
+const REPAIR_SCAN_CURSOR_COMMAND_TIMEOUT_MS = 2000;
+const QUEUE_HANDOFF_TIMEOUT_MS = 2000;
 const REPAIR_SCAN_CURSOR_CAS_SCRIPT = `
   local current = redis.call('GET', KEYS[1])
   local expected = ARGV[1]
@@ -111,11 +118,11 @@ type OcrProjectionProvenance = {
   sourceSha256Hex: string | null;
 };
 
-type OcrProjectionSource = {
+type ProjectionSourceField = {
+  content: FieldContent;
   entityVersionId: SafeId<"entityVersion">;
-  fieldId: SafeId<"field">;
-  sourceFileId: string;
-  sourceSha256Hex: string;
+  id: SafeId<"field">;
+  workspaceId: SafeId<"workspace">;
 };
 
 export class DocumentProcessingJobError extends TaggedError(
@@ -125,6 +132,30 @@ export class DocumentProcessingJobError extends TaggedError(
   message: string;
   cause?: unknown;
 }>() {}
+
+export const indexOcrProjection = async ({
+  indexEntity,
+  timeoutMs = SEARCH_INDEX_ATTEMPT_TIMEOUT_MS,
+}: {
+  indexEntity: () => Promise<void>;
+  timeoutMs?: number;
+}): Promise<void> => {
+  const indexed = await Result.tryPromise({
+    try: async () =>
+      await withTimeout(indexEntity, {
+        label: "document OCR initial search index",
+        timeoutMs,
+      }),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(indexed)) {
+    throw new DocumentProcessingJobError({
+      code: SEARCH_INDEX_FAILURE_CODE,
+      message: "OCR text was stored but search indexing failed",
+      cause: indexed.error,
+    });
+  }
+};
 
 export const isCurrentOcrSource = ({
   run,
@@ -149,12 +180,16 @@ export const isCurrentOcrSource = ({
   source.content.mimeType === PDF_MIME_TYPE &&
   !source.content.encrypted;
 
-export const isRepairProjectionPresent = ({
+export const isPreservableAutomaticProjection = ({
+  currentEntityVersionId,
+  currentWorkspaceId,
   provenance,
-  source,
+  sourceField,
 }: {
+  currentEntityVersionId: SafeId<"entityVersion">;
+  currentWorkspaceId: SafeId<"workspace">;
   provenance: OcrProjectionProvenance;
-  source: OcrProjectionSource;
+  sourceField: ProjectionSourceField | null;
 }): boolean => {
   const isLegacyProjection =
     provenance.sourceEntityVersionId === null &&
@@ -163,14 +198,21 @@ export const isRepairProjectionPresent = ({
     provenance.sourceSha256Hex === null;
   return (
     isLegacyProjection ||
-    (provenance.sourceEntityVersionId === source.entityVersionId &&
-      provenance.sourceFieldId === source.fieldId &&
-      provenance.sourceFileId === source.sourceFileId &&
-      provenance.sourceSha256Hex === source.sourceSha256Hex)
+    (provenance.sourceEntityVersionId === currentEntityVersionId &&
+      provenance.sourceFieldId !== null &&
+      provenance.sourceFileId !== null &&
+      provenance.sourceSha256Hex !== null &&
+      sourceField !== null &&
+      sourceField.id === provenance.sourceFieldId &&
+      sourceField.entityVersionId === currentEntityVersionId &&
+      sourceField.workspaceId === currentWorkspaceId &&
+      sourceField.content.type === "file" &&
+      sourceField.content.id === provenance.sourceFileId &&
+      sourceField.content.sha256Hex === provenance.sourceSha256Hex)
   );
 };
 
-export const shouldPreserveMatchingProjection = (
+export const shouldPreserveCurrentProjection = (
   requestSource: (typeof documentProcessingRuns.$inferSelect)["requestSource"],
 ): boolean => requestSource !== "manual";
 
@@ -205,6 +247,22 @@ export const classifyOcrProjectionSource = ({
     return "workspace_unavailable";
   }
   return isCurrentOcrSource({ run, source }) ? "current" : "source_superseded";
+};
+
+export const classifyOcrWorkspaceDispatch = ({
+  requestSource,
+  workspaceStatus,
+}: {
+  requestSource: (typeof documentProcessingRuns.$inferSelect)["requestSource"];
+  workspaceStatus: (typeof workspaces.$inferSelect)["status"] | undefined;
+}): "available" | "deferred" | "workspace_unavailable" => {
+  if (workspaceStatus === "active") {
+    return "available";
+  }
+  if (workspaceStatus === "deleting" && requestSource === "manual") {
+    return "deferred";
+  }
+  return "workspace_unavailable";
 };
 
 export const isAutomaticOcrRepairCandidate = (
@@ -274,6 +332,55 @@ type DocumentProcessingLeaseHeartbeat = {
   stop: () => void;
 };
 
+export const createDocumentProcessingLeaseRenewal = ({
+  onError,
+  renewLease,
+  timeoutMs = WORKER_LEASE_HEARTBEAT_TIMEOUT_MS,
+}: {
+  onError: (error: unknown) => void;
+  renewLease: () => Promise<void>;
+  timeoutMs?: number;
+}): (() => void) => {
+  // Track the raw DB operation, not the deadline wrapper. A timed-out update
+  // may still be running because the database client cannot cancel it; keeping
+  // this slot occupied prevents later interval ticks from piling on more work.
+  let renewalInFlight: Promise<void> | null = null;
+
+  return () => {
+    if (renewalInFlight) {
+      return;
+    }
+
+    const renewal = renewLease();
+    renewalInFlight = renewal;
+    const releaseRenewal = () => {
+      if (renewalInFlight === renewal) {
+        renewalInFlight = null;
+      }
+    };
+    detached(
+      renewal.then(releaseRenewal, releaseRenewal),
+      "document-processing.lease-heartbeat.release",
+    );
+    detached(
+      (async () => {
+        const result = await Result.tryPromise({
+          try: async () =>
+            await withTimeout(async () => await renewal, {
+              label: "document processing lease heartbeat",
+              timeoutMs,
+            }),
+          catch: (cause) => cause,
+        });
+        if (Result.isError(result)) {
+          onError(result.error);
+        }
+      })(),
+      "document-processing.lease-heartbeat.renew",
+    );
+  };
+};
+
 const startDocumentProcessingLeaseHeartbeat = ({
   claimToken,
   runId,
@@ -281,32 +388,32 @@ const startDocumentProcessingLeaseHeartbeat = ({
   claimToken: string;
   runId: SafeId<"documentProcessingRun">;
 }): DocumentProcessingLeaseHeartbeat => {
-  const renew = async () => {
-    await rootDb
-      .update(documentProcessingRuns)
-      .set({
-        claimedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(documentProcessingRuns.id, runId),
-          eq(documentProcessingRuns.status, "running"),
-          eq(documentProcessingRuns.claimedBy, claimToken),
-        ),
-      );
-  };
+  const renew = createDocumentProcessingLeaseRenewal({
+    renewLease: async () => {
+      await rootDb
+        .update(documentProcessingRuns)
+        .set({
+          claimedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(documentProcessingRuns.id, runId),
+            eq(documentProcessingRuns.status, "running"),
+            eq(documentProcessingRuns.claimedBy, claimToken),
+          ),
+        );
+    },
+    onError: (error) => {
+      logger.warn("document_processing.lease_heartbeat_failed", {
+        "error.type": errorTag(error),
+        runId,
+      });
+    },
+  });
 
   const timer = setInterval(() => {
-    detached(
-      renew().catch((error: unknown) => {
-        logger.warn("document_processing.lease_heartbeat_failed", {
-          "error.type": errorTag(error),
-          runId,
-        });
-      }),
-      "startDocumentProcessingLeaseHeartbeat",
-    );
+    renew();
   }, WORKER_LEASE_HEARTBEAT_MS);
   timer.unref();
 
@@ -472,25 +579,52 @@ const persistOcrProjection = async ({
 
     // Native extraction takes the same entity lock before it persists a
     // projection. An automatic OCR run that lost that race must index the
-    // native text, not replace it; an explicit manual request is intentional
-    // fresh OCR and may replace a matching projection.
-    if (shouldPreserveMatchingProjection(run.requestSource)) {
-      const matchingProjections = await tx
-        .select({ entityId: extractedContent.entityId })
+    // selected current-version text, even when it came from another file
+    // field; an explicit manual request intentionally selects a fresh source.
+    if (shouldPreserveCurrentProjection(run.requestSource)) {
+      const projections = await tx
+        .select({
+          sourceEntityVersionId: extractedContent.sourceEntityVersionId,
+          sourceFieldId: extractedContent.sourceFieldId,
+          sourceFileId: extractedContent.sourceFileId,
+          sourceSha256Hex: extractedContent.sourceSha256Hex,
+        })
         .from(extractedContent)
         .where(
           and(
             eq(extractedContent.entityId, run.entityId),
             eq(extractedContent.organizationId, run.organizationId),
             eq(extractedContent.workspaceId, run.workspaceId),
-            eq(extractedContent.sourceEntityVersionId, run.entityVersionId),
-            eq(extractedContent.sourceFieldId, run.fieldId),
-            eq(extractedContent.sourceFileId, run.sourceFileId),
-            eq(extractedContent.sourceSha256Hex, run.sourceSha256Hex),
           ),
         )
         .limit(1);
-      if (matchingProjections.at(0)) {
+      const projection = projections.at(0);
+      const projectionSourceRows = projection?.sourceFieldId
+        ? await tx
+            .select({
+              content: fields.content,
+              entityVersionId: fields.entityVersionId,
+              id: fields.id,
+              workspaceId: fields.workspaceId,
+            })
+            .from(fields)
+            .where(
+              and(
+                eq(fields.id, projection.sourceFieldId),
+                eq(fields.workspaceId, run.workspaceId),
+              ),
+            )
+            .limit(1)
+        : [];
+      if (
+        projection &&
+        isPreservableAutomaticProjection({
+          currentEntityVersionId: run.entityVersionId,
+          currentWorkspaceId: run.workspaceId,
+          provenance: projection,
+          sourceField: projectionSourceRows.at(0) ?? null,
+        })
+      ) {
         return true;
       }
     }
@@ -618,23 +752,37 @@ export const processDocumentProcessingRun = async (
       .limit(1)
       .for("update");
     const workspace = workspaceRows.at(0);
-    if (workspace?.status !== "active") {
-      await tx
-        .update(documentProcessingRuns)
-        .set({
-          errorAt: new Date(),
-          errorCode: "workspace_unavailable",
-          finishedAt: new Date(),
-          status: "cancelled",
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(documentProcessingRuns.id, runId),
-            inArray(documentProcessingRuns.status, ["queued", "failed"]),
-          ),
-        );
-      return null;
+    const workspaceDispatch = classifyOcrWorkspaceDispatch({
+      requestSource: runContext.requestSource,
+      workspaceStatus: workspace?.status,
+    });
+    switch (workspaceDispatch) {
+      case "available":
+        break;
+      case "deferred":
+        // A deletion seal is reversible until object cleanup and the final
+        // database delete succeed. Keep an acknowledged manual request queued
+        // so reconciliation can deliver it if the workspace returns to active.
+        return null;
+      case "workspace_unavailable":
+        await tx
+          .update(documentProcessingRuns)
+          .set({
+            errorAt: new Date(),
+            errorCode: "workspace_unavailable",
+            finishedAt: new Date(),
+            status: "cancelled",
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(documentProcessingRuns.id, runId),
+              inArray(documentProcessingRuns.status, ["queued", "failed"]),
+            ),
+          );
+        return null;
+      default:
+        workspaceDispatch satisfies never;
     }
 
     // Opt-out takes this same settings lock before checking for running
@@ -770,17 +918,10 @@ export const processDocumentProcessingRun = async (
         return;
       }
 
-      const indexResult = await Result.tryPromise({
-        try: async () => await getSearchProvider().indexEntity(run.entityId),
-        catch: (cause) => cause,
+      await indexOcrProjection({
+        indexEntity: async () =>
+          await getSearchProvider().indexEntity(run.entityId),
       });
-      if (Result.isError(indexResult)) {
-        throw new DocumentProcessingJobError({
-          code: SEARCH_INDEX_FAILURE_CODE,
-          message: "OCR text was stored but search indexing failed",
-          cause: indexResult.error,
-        });
-      }
       const completed = await rootDb
         .update(documentProcessingRuns)
         .set({
@@ -914,30 +1055,52 @@ let reconciliationRedisClient: ReturnType<typeof createRedisClient> | null =
   null;
 
 const getReconciliationRedis = () => {
-  reconciliationRedisClient ??= createRedisClient();
+  reconciliationRedisClient ??= createRedisClient({
+    connectionTimeout: REPAIR_SCAN_CURSOR_COMMAND_TIMEOUT_MS,
+    enableOfflineQueue: false,
+  });
   return reconciliationRedisClient;
 };
 
-const readRepairScanCursor = async (): Promise<SafeId<"field"> | null> => {
-  const cursor = await getReconciliationRedis().get(REPAIR_SCAN_CURSOR_KEY);
+export const readRepairScanCursor = async (
+  readCursor: () => Promise<string | null> = async () =>
+    await getReconciliationRedis().get(REPAIR_SCAN_CURSOR_KEY),
+  timeoutMs = REPAIR_SCAN_CURSOR_COMMAND_TIMEOUT_MS,
+): Promise<SafeId<"field"> | null> => {
+  const cursor = await withTimeout(readCursor, {
+    label: "document OCR repair cursor read",
+    timeoutMs,
+  });
   return cursor === null ? null : toSafeId<"field">(cursor);
 };
 
-const writeRepairScanCursor = async ({
+export const writeRepairScanCursor = async ({
   expectedCursor,
   nextCursor,
+  sendCommand = async (command, args) =>
+    Number(await getReconciliationRedis().send(command, args)),
+  timeoutMs = REPAIR_SCAN_CURSOR_COMMAND_TIMEOUT_MS,
 }: {
   expectedCursor: SafeId<"field"> | null;
   nextCursor: SafeId<"field"> | null;
+  sendCommand?: (command: string, args: string[]) => Promise<unknown>;
+  timeoutMs?: number;
 }): Promise<boolean> =>
   Number(
-    await getReconciliationRedis().send("EVAL", [
-      REPAIR_SCAN_CURSOR_CAS_SCRIPT,
-      "1",
-      REPAIR_SCAN_CURSOR_KEY,
-      expectedCursor ?? "",
-      nextCursor ?? "",
-    ]),
+    await withTimeout(
+      async () =>
+        await sendCommand("EVAL", [
+          REPAIR_SCAN_CURSOR_CAS_SCRIPT,
+          "1",
+          REPAIR_SCAN_CURSOR_KEY,
+          expectedCursor ?? "",
+          nextCursor ?? "",
+        ]),
+      {
+        label: "document OCR repair cursor write",
+        timeoutMs,
+      },
+    ),
   ) === 1;
 
 const isSameAutomaticOcrSource = (
@@ -1052,18 +1215,46 @@ const persistRepairableOcrRuns = async (
     const projectionsByEntityId = new Map(
       projectedRows.map((projection) => [projection.entityId, projection]),
     );
+    const projectionSourceFieldIds = projectedRows.flatMap(
+      ({ sourceFieldId }) => (sourceFieldId === null ? [] : [sourceFieldId]),
+    );
+    const projectionSourceFields =
+      projectionSourceFieldIds.length === 0
+        ? []
+        : await tx
+            .select({
+              content: fields.content,
+              entityVersionId: fields.entityVersionId,
+              id: fields.id,
+              workspaceId: fields.workspaceId,
+            })
+            .from(fields)
+            .where(
+              and(
+                inArray(fields.id, projectionSourceFieldIds),
+                inArray(
+                  fields.workspaceId,
+                  currentCandidates.map((candidate) => candidate.workspaceId),
+                ),
+              ),
+            )
+            .limit(RECONCILE_BATCH_SIZE);
+    const projectionSourceFieldsById = new Map(
+      projectionSourceFields.map((field) => [field.id, field]),
+    );
     const projectedEntityIds = new Set(
       currentCandidates.flatMap((candidate) => {
         const projection = projectionsByEntityId.get(candidate.entityId);
         return projection &&
-          isRepairProjectionPresent({
+          isPreservableAutomaticProjection({
+            currentEntityVersionId: candidate.entityVersionId,
+            currentWorkspaceId: candidate.workspaceId,
             provenance: projection,
-            source: {
-              entityVersionId: candidate.entityVersionId,
-              fieldId: candidate.fieldId,
-              sourceFileId: candidate.content.id,
-              sourceSha256Hex: candidate.content.sha256Hex,
-            },
+            sourceField:
+              projection.sourceFieldId === null
+                ? null
+                : (projectionSourceFieldsById.get(projection.sourceFieldId) ??
+                  null),
           })
           ? [candidate.entityId]
           : [];
@@ -1151,18 +1342,27 @@ type EnqueueAttemptResult =
       runId: SafeId<"documentProcessingRun">;
     };
 
-const tryEnqueueDocumentProcessingRun = async (
-  runId: SafeId<"documentProcessingRun">,
-): Promise<EnqueueAttemptResult> => {
+export const tryEnqueueDocumentProcessingRun = async ({
+  captureEnqueueError = captureError,
+  enqueue = enqueueDocumentProcessingRun,
+  runId,
+  timeoutMs = QUEUE_HANDOFF_TIMEOUT_MS,
+}: {
+  captureEnqueueError?: typeof captureError;
+  enqueue?: typeof enqueueDocumentProcessingRun;
+  runId: SafeId<"documentProcessingRun">;
+  timeoutMs?: number;
+}): Promise<EnqueueAttemptResult> => {
   const result = await Result.tryPromise({
-    try: async () => {
-      await enqueueDocumentProcessingRun(runId);
-      return undefined;
-    },
+    try: async () =>
+      await withTimeout(async () => await enqueue(runId), {
+        label: "document OCR queue handoff",
+        timeoutMs,
+      }),
     catch: (cause) => cause,
   });
   if (Result.isError(result)) {
-    captureError(result.error, { runId });
+    captureEnqueueError(result.error, { runId });
     return { runId, status: "failed" };
   }
   return { runId, status: "enqueued" };
@@ -1246,7 +1446,11 @@ const recoverMissingAutomaticOcrRuns = async (): Promise<number> => {
     return [{ ...candidate, content: candidate.content }];
   });
   const runIds = await persistRepairableOcrRuns(repairCandidates);
-  await Promise.all(runIds.map(tryEnqueueDocumentProcessingRun));
+  await Promise.all(
+    runIds.map(
+      async (runId) => await tryEnqueueDocumentProcessingRun({ runId }),
+    ),
+  );
   await writeRepairScanCursor({
     expectedCursor: cursor,
     nextCursor:
@@ -1305,7 +1509,9 @@ const enqueueQueuedRuns = async (): Promise<number> => {
     .limit(RECONCILE_BATCH_SIZE);
 
   const attempts = await Promise.all(
-    runs.map(async ({ id }) => await tryEnqueueDocumentProcessingRun(id)),
+    runs.map(
+      async ({ id }) => await tryEnqueueDocumentProcessingRun({ runId: id }),
+    ),
   );
   const enqueuedIds: SafeId<"documentProcessingRun">[] = [];
   const failedIds: SafeId<"documentProcessingRun">[] = [];
@@ -1415,6 +1621,11 @@ type FailedSearchIndexCandidate = {
   workspaceId: SafeId<"workspace">;
 };
 
+const searchIndexProjectionSourceFields = alias(
+  fields,
+  "document_processing_search_index_projection_source_fields",
+);
+
 export const mapWithConcurrency = async <Item, Value>({
   items,
   limit,
@@ -1442,80 +1653,116 @@ export const mapWithConcurrency = async <Item, Value>({
   return values;
 };
 
+export const runSearchIndexReplayAttempt = async ({
+  indexEntity,
+  onFailure,
+  onSuccess,
+  timeoutMs = SEARCH_INDEX_ATTEMPT_TIMEOUT_MS,
+  transitionTimeoutMs = SEARCH_INDEX_REPLAY_STATE_TRANSITION_TIMEOUT_MS,
+}: {
+  indexEntity: () => Promise<void>;
+  onFailure: (error: unknown) => Promise<void>;
+  onSuccess: () => Promise<boolean>;
+  timeoutMs?: number;
+  transitionTimeoutMs?: number;
+}): Promise<boolean> => {
+  const indexed = await Result.tryPromise({
+    try: async () =>
+      await withTimeout(indexEntity, {
+        label: "document OCR search-index replay",
+        timeoutMs,
+      }),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(indexed)) {
+    await withTimeout(async () => await onFailure(indexed.error), {
+      label: "document OCR search-index replay failure transition",
+      timeoutMs: transitionTimeoutMs,
+    });
+    return false;
+  }
+  return await withTimeout(onSuccess, {
+    label: "document OCR search-index replay success transition",
+    timeoutMs: transitionTimeoutMs,
+  });
+};
+
 const recoverFailedSearchIndex = async ({
   attemptCount,
   claimToken,
   entityId,
   id,
   workspaceId,
-}: FailedSearchIndexCandidate): Promise<boolean> => {
-  const indexed = await Result.tryPromise({
-    try: async () => await getSearchProvider().indexEntity(entityId),
-    catch: (cause) => cause,
-  });
-  if (Result.isError(indexed)) {
-    captureError(indexed.error, { entityId, runId: id });
-    await rootDb
-      .update(documentProcessingRuns)
-      .set({
-        attemptCount: sql`${documentProcessingRuns.attemptCount} + 1`,
-        claimedAt: null,
-        claimedBy: null,
-        errorAt: new Date(),
-        errorCode: SEARCH_INDEX_FAILURE_CODE,
-        nextAttemptAt: new Date(
-          Date.now() + automaticOcrRetryDelayMs(attemptCount + 1),
-        ),
-        status: "failed",
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(documentProcessingRuns.id, id),
-          eq(documentProcessingRuns.status, "running"),
-          eq(documentProcessingRuns.errorCode, SEARCH_INDEX_FAILURE_CODE),
-          eq(documentProcessingRuns.attemptCount, attemptCount),
-          eq(documentProcessingRuns.claimedBy, claimToken),
-        ),
-      );
-    return false;
-  }
+}: FailedSearchIndexCandidate): Promise<boolean> =>
+  await runSearchIndexReplayAttempt({
+    indexEntity: async () => await getSearchProvider().indexEntity(entityId),
+    onFailure: async (error) => {
+      captureError(error, { entityId, runId: id });
+      await rootDb
+        .update(documentProcessingRuns)
+        .set({
+          attemptCount: sql`${documentProcessingRuns.attemptCount} + 1`,
+          claimedAt: null,
+          claimedBy: null,
+          errorAt: new Date(),
+          errorCode: SEARCH_INDEX_FAILURE_CODE,
+          nextAttemptAt: new Date(
+            Date.now() + automaticOcrRetryDelayMs(attemptCount + 1),
+          ),
+          status: "failed",
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(documentProcessingRuns.id, id),
+            eq(documentProcessingRuns.status, "running"),
+            eq(documentProcessingRuns.errorCode, SEARCH_INDEX_FAILURE_CODE),
+            eq(documentProcessingRuns.attemptCount, attemptCount),
+            eq(documentProcessingRuns.claimedBy, claimToken),
+          ),
+        );
+    },
+    onSuccess: async () => {
+      const completed = await rootDb
+        .update(documentProcessingRuns)
+        .set({
+          claimedAt: null,
+          claimedBy: null,
+          errorAt: null,
+          errorCode: null,
+          finishedAt: new Date(),
+          nextAttemptAt: null,
+          status: "succeeded",
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(documentProcessingRuns.id, id),
+            eq(documentProcessingRuns.status, "running"),
+            eq(documentProcessingRuns.errorCode, SEARCH_INDEX_FAILURE_CODE),
+            eq(documentProcessingRuns.attemptCount, attemptCount),
+            eq(documentProcessingRuns.claimedBy, claimToken),
+          ),
+        )
+        .returning({ id: documentProcessingRuns.id });
+      if (!completed.at(0)) {
+        return false;
+      }
 
-  const completed = await rootDb
-    .update(documentProcessingRuns)
-    .set({
-      claimedAt: null,
-      claimedBy: null,
-      errorAt: null,
-      errorCode: null,
-      finishedAt: new Date(),
-      nextAttemptAt: null,
-      status: "succeeded",
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(documentProcessingRuns.id, id),
-        eq(documentProcessingRuns.status, "running"),
-        eq(documentProcessingRuns.errorCode, SEARCH_INDEX_FAILURE_CODE),
-        eq(documentProcessingRuns.attemptCount, attemptCount),
-        eq(documentProcessingRuns.claimedBy, claimToken),
-      ),
-    )
-    .returning({ id: documentProcessingRuns.id });
-  if (!completed.at(0)) {
-    return false;
-  }
-
-  broadcast(workspaceId, {
-    type: "invalidate-query",
-    data: ["entities", workspaceId],
+      broadcast(workspaceId, {
+        type: "invalidate-query",
+        data: ["entities", workspaceId],
+      });
+      return true;
+    },
   });
-  return true;
-};
 
 const recoverFailedOcrSearchIndexes = async (): Promise<number> => {
   const now = new Date();
+  // The failed run is the durable retry token, but the entity projection is
+  // the indexing source of truth. Automatic OCR may have preserved valid text
+  // from another current field, so replay validates that projection's own
+  // provenance instead of requiring it to match the failed run's source.
   const candidates = await rootDb
     .select({
       attemptCount: documentProcessingRuns.attemptCount,
@@ -1534,16 +1781,6 @@ const recoverFailedOcrSearchIndexes = async (): Promise<number> => {
         ),
         eq(extractedContent.workspaceId, documentProcessingRuns.workspaceId),
         eq(extractedContent.entityId, documentProcessingRuns.entityId),
-        eq(
-          extractedContent.sourceEntityVersionId,
-          documentProcessingRuns.entityVersionId,
-        ),
-        eq(extractedContent.sourceFieldId, documentProcessingRuns.fieldId),
-        eq(extractedContent.sourceFileId, documentProcessingRuns.sourceFileId),
-        eq(
-          extractedContent.sourceSha256Hex,
-          documentProcessingRuns.sourceSha256Hex,
-        ),
       ),
     )
     .innerJoin(
@@ -1554,15 +1791,21 @@ const recoverFailedOcrSearchIndexes = async (): Promise<number> => {
         eq(entities.currentVersionId, documentProcessingRuns.entityVersionId),
       ),
     )
-    .innerJoin(
-      fields,
+    .leftJoin(
+      searchIndexProjectionSourceFields,
       and(
-        eq(fields.id, documentProcessingRuns.fieldId),
-        eq(fields.workspaceId, documentProcessingRuns.workspaceId),
-        eq(fields.entityVersionId, documentProcessingRuns.entityVersionId),
-        sql`${fields.content}->>'type' = 'file'
-          AND ${fields.content}->>'id' = ${documentProcessingRuns.sourceFileId}::text
-          AND ${fields.content}->>'sha256Hex' = ${documentProcessingRuns.sourceSha256Hex}`,
+        eq(
+          searchIndexProjectionSourceFields.id,
+          extractedContent.sourceFieldId,
+        ),
+        eq(
+          searchIndexProjectionSourceFields.workspaceId,
+          extractedContent.workspaceId,
+        ),
+        eq(
+          searchIndexProjectionSourceFields.entityVersionId,
+          entities.currentVersionId,
+        ),
       ),
     )
     .innerJoin(
@@ -1578,6 +1821,23 @@ const recoverFailedOcrSearchIndexes = async (): Promise<number> => {
         eq(documentProcessingRuns.status, "failed"),
         eq(documentProcessingRuns.errorCode, SEARCH_INDEX_FAILURE_CODE),
         or(
+          and(
+            isNull(extractedContent.sourceEntityVersionId),
+            isNull(extractedContent.sourceFieldId),
+            isNull(extractedContent.sourceFileId),
+            isNull(extractedContent.sourceSha256Hex),
+          ),
+          and(
+            eq(
+              extractedContent.sourceEntityVersionId,
+              entities.currentVersionId,
+            ),
+            sql`${searchIndexProjectionSourceFields.content}->>'type' = 'file'
+              AND ${searchIndexProjectionSourceFields.content}->>'id' = ${extractedContent.sourceFileId}::text
+              AND ${searchIndexProjectionSourceFields.content}->>'sha256Hex' = ${extractedContent.sourceSha256Hex}`,
+          ),
+        ),
+        or(
           isNull(documentProcessingRuns.nextAttemptAt),
           lte(documentProcessingRuns.nextAttemptAt, now),
         ),
@@ -1588,7 +1848,7 @@ const recoverFailedOcrSearchIndexes = async (): Promise<number> => {
       asc(documentProcessingRuns.createdAt),
       asc(documentProcessingRuns.id),
     )
-    .limit(RECONCILE_BATCH_SIZE);
+    .limit(SEARCH_INDEX_REPLAY_BATCH_SIZE);
 
   if (candidates.length === 0) {
     return 0;
@@ -1768,30 +2028,103 @@ const handleDocumentProcessingFailure = ({
   });
 };
 
+const RECONCILIATION_PHASE = {
+  DELIVERY: "delivery",
+  REINDEX: "reindex",
+  REPAIR: "repair",
+  RETRY: "retry",
+  STALE_LEASE: "stale-lease",
+} as const;
+
+type ReconciliationPhaseName =
+  (typeof RECONCILIATION_PHASE)[keyof typeof RECONCILIATION_PHASE];
+
+type ReconciliationCounts = Record<ReconciliationPhaseName, number>;
+
+type ReconciliationPhase = {
+  name: ReconciliationPhaseName;
+  run: () => Promise<number>;
+};
+
+export const runDocumentProcessingReconciliationPhases = async ({
+  onPhaseError,
+  phases,
+}: {
+  onPhaseError: (error: unknown, phase: ReconciliationPhaseName) => void;
+  phases: readonly ReconciliationPhase[];
+}): Promise<ReconciliationCounts> => {
+  const counts: ReconciliationCounts = {
+    [RECONCILIATION_PHASE.DELIVERY]: 0,
+    [RECONCILIATION_PHASE.REINDEX]: 0,
+    [RECONCILIATION_PHASE.REPAIR]: 0,
+    [RECONCILIATION_PHASE.RETRY]: 0,
+    [RECONCILIATION_PHASE.STALE_LEASE]: 0,
+  };
+  for (const phase of phases) {
+    // oxlint-disable-next-line no-await-in-loop -- phase order lets recovered durable rows become deliverable in the same pass
+    const result = await Result.tryPromise({
+      try: phase.run,
+      catch: (cause) => cause,
+    });
+    if (Result.isError(result)) {
+      onPhaseError(result.error, phase.name);
+      continue;
+    }
+    counts[phase.name] = result.value;
+  }
+  return counts;
+};
+
 const reconcileDocumentProcessing = async ({
   onComplete,
 }: {
   onComplete: () => void;
 }): Promise<void> => {
   try {
-    const repairedCount = await recoverMissingAutomaticOcrRuns();
-    const reindexedCount = await recoverFailedOcrSearchIndexes();
-    const retriedCount = await recoverRetryableAutomaticOcrFailures();
-    const recoveredCount = await recoverStaleDocumentProcessingRuns();
-    const enqueuedCount = await enqueueQueuedRuns();
+    const counts = await runDocumentProcessingReconciliationPhases({
+      phases: [
+        {
+          name: RECONCILIATION_PHASE.REPAIR,
+          run: recoverMissingAutomaticOcrRuns,
+        },
+        {
+          name: RECONCILIATION_PHASE.REINDEX,
+          run: recoverFailedOcrSearchIndexes,
+        },
+        {
+          name: RECONCILIATION_PHASE.RETRY,
+          run: recoverRetryableAutomaticOcrFailures,
+        },
+        {
+          name: RECONCILIATION_PHASE.STALE_LEASE,
+          run: recoverStaleDocumentProcessingRuns,
+        },
+        {
+          name: RECONCILIATION_PHASE.DELIVERY,
+          run: enqueueQueuedRuns,
+        },
+      ],
+      onPhaseError: (error, phase) => {
+        captureError(error, { phase });
+        logger.error("document_processing.reconcile_phase_failed", {
+          "error.type": errorTag(error),
+          phase,
+        });
+      },
+    });
     if (
-      repairedCount > 0 ||
-      reindexedCount > 0 ||
-      retriedCount > 0 ||
-      recoveredCount > 0 ||
-      enqueuedCount > 0
+      counts[RECONCILIATION_PHASE.REPAIR] > 0 ||
+      counts[RECONCILIATION_PHASE.REINDEX] > 0 ||
+      counts[RECONCILIATION_PHASE.RETRY] > 0 ||
+      counts[RECONCILIATION_PHASE.STALE_LEASE] > 0 ||
+      counts[RECONCILIATION_PHASE.DELIVERY] > 0
     ) {
       logger.info("document_processing.reconciled", {
-        enqueuedCount: String(enqueuedCount),
-        recoveredCount: String(recoveredCount),
-        reindexedCount: String(reindexedCount),
-        repairedCount: String(repairedCount),
-        retriedCount: String(retriedCount),
+        enqueuedCount: String(counts[RECONCILIATION_PHASE.DELIVERY]),
+        recoveredCount: String(counts[RECONCILIATION_PHASE.STALE_LEASE]),
+        reindexedCount: String(counts[RECONCILIATION_PHASE.REINDEX]),
+        repairedCount: String(counts[RECONCILIATION_PHASE.REPAIR]),
+        retriedCount: String(counts[RECONCILIATION_PHASE.RETRY]),
       });
     }
   } catch (error) {

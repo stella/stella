@@ -10,6 +10,7 @@ export const DOCUMENT_PROCESSING_OCR_JOB_NAME = "ocr";
 // Durable run state owns retry classification, backoff, and the attempt cap.
 // BullMQ must deliver each enqueue once so it cannot bypass that policy.
 const DEFAULT_JOB_ATTEMPTS = 1;
+const QUEUE_OPERATION_TIMEOUT_MS = 2000;
 
 export type DocumentProcessingJobData = {
   runId: SafeId<"documentProcessingRun">;
@@ -19,7 +20,10 @@ let queue: Queue<DocumentProcessingJobData> | null = null;
 let queueConnection: ReturnType<typeof createBullMqConnection> | null = null;
 
 const getQueueConnection = () => {
-  queueConnection ??= createBullMqConnection();
+  queueConnection ??= createBullMqConnection({
+    connectionTimeout: QUEUE_OPERATION_TIMEOUT_MS,
+    enableOfflineQueue: false,
+  });
   return queueConnection;
 };
 

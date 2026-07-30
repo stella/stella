@@ -1,4 +1,4 @@
-import { and, eq, inArray, or } from "drizzle-orm";
+import { and, eq, inArray, ne, or } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
 import {
@@ -14,6 +14,15 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 
 const OCR_PROCESSOR_VERSION = 1;
+const RETRYABLE_MANUAL_OCR_CANCELLATION_CODES = [
+  "policy_disabled",
+  "manual_selection_superseded",
+  "source_superseded",
+  "workspace_unavailable",
+] as const;
+const MANUAL_SELECTION_SUPERSEDED_CODE =
+  RETRYABLE_MANUAL_OCR_CANCELLATION_CODES[1];
+const PROMOTABLE_AUTOMATIC_OCR_REQUEST_SOURCES = ["upload", "repair"] as const;
 
 export type ManualOcrSource = {
   entityId: SafeId<"entity">;
@@ -182,26 +191,36 @@ export const persistManualOcrRun = async ({
         existing?.status === "failed" ||
         needsProjectionRestore ||
         (existing?.status === "cancelled" &&
-          (existing.errorCode === "policy_disabled" ||
-            existing.errorCode === "source_superseded" ||
-            existing.errorCode === "workspace_unavailable"));
+          RETRYABLE_MANUAL_OCR_CANCELLATION_CODES.some(
+            (errorCode) => errorCode === existing.errorCode,
+          ));
       const canPromote =
-        existing?.status === "queued" && existing.requestSource !== "manual";
+        existing !== undefined &&
+        (existing.status === "queued" || existing.status === "running") &&
+        PROMOTABLE_AUTOMATIC_OCR_REQUEST_SOURCES.some(
+          (requestSource) => requestSource === existing.requestSource,
+        );
       if (!existing || (!canRetry && !canPromote)) {
         run = existing ?? null;
       } else {
+        const mustRequeue = canRetry || existing.status === "running";
         const promoted = await tx
           .update(documentProcessingRuns)
           .set({
             requestSource: "manual",
             requestedBy: userId,
             updatedAt: new Date(),
-            ...(canRetry
+            ...(mustRequeue
               ? {
+                  claimedAt: null,
+                  claimedBy: null,
                   errorAt: null,
                   errorCode: null,
                   finishedAt: null,
                   nextAttemptAt: null,
+                  progressCompleted: 0,
+                  progressTotal: null,
+                  startedAt: null,
                   status: "queued",
                 }
               : {}),
@@ -215,25 +234,21 @@ export const persistManualOcrRun = async ({
                     eq(documentProcessingRuns.status, "succeeded"),
                     and(
                       eq(documentProcessingRuns.status, "cancelled"),
-                      or(
-                        eq(documentProcessingRuns.errorCode, "policy_disabled"),
-                        eq(
-                          documentProcessingRuns.errorCode,
-                          "source_superseded",
-                        ),
-                        eq(
-                          documentProcessingRuns.errorCode,
-                          "workspace_unavailable",
-                        ),
+                      inArray(
+                        documentProcessingRuns.errorCode,
+                        RETRYABLE_MANUAL_OCR_CANCELLATION_CODES,
                       ),
                     ),
                   )
                 : and(
-                    eq(documentProcessingRuns.status, "queued"),
-                    inArray(documentProcessingRuns.requestSource, [
-                      "upload",
-                      "repair",
+                    inArray(documentProcessingRuns.status, [
+                      "queued",
+                      "running",
                     ]),
+                    inArray(
+                      documentProcessingRuns.requestSource,
+                      PROMOTABLE_AUTOMATIC_OCR_REQUEST_SOURCES,
+                    ),
                   ),
             ),
           )
@@ -243,6 +258,42 @@ export const persistManualOcrRun = async ({
           });
         run = promoted.at(0) ?? existing;
       }
+    }
+
+    const ownsManualSelection =
+      run?.status === "queued" ||
+      run?.status === "running" ||
+      run?.status === "succeeded";
+    if (run && ownsManualSelection) {
+      const supersededAt = new Date();
+      // Manual requests serialize on the entity lock acquired above. Retire
+      // every earlier selection before acknowledging this one; an older worker
+      // already outside the transaction is fenced by its status/claim CAS when
+      // it returns to persist the projection.
+      await tx
+        .update(documentProcessingRuns)
+        .set({
+          claimedAt: null,
+          claimedBy: null,
+          errorAt: supersededAt,
+          errorCode: MANUAL_SELECTION_SUPERSEDED_CODE,
+          finishedAt: supersededAt,
+          nextAttemptAt: null,
+          status: "cancelled",
+          updatedAt: supersededAt,
+        })
+        .where(
+          and(
+            eq(documentProcessingRuns.organizationId, organizationId),
+            eq(documentProcessingRuns.workspaceId, workspaceId),
+            eq(documentProcessingRuns.entityId, source.entityId),
+            eq(documentProcessingRuns.entityVersionId, source.entityVersionId),
+            eq(documentProcessingRuns.kind, "ocr"),
+            eq(documentProcessingRuns.requestSource, "manual"),
+            ne(documentProcessingRuns.id, run.id),
+            inArray(documentProcessingRuns.status, ["queued", "running"]),
+          ),
+        );
     }
 
     if (run) {

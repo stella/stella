@@ -115,4 +115,31 @@ describe("readBoundedOcrJson", () => {
 
     expect(rejection).toMatchObject({ code: "response_too_large" });
   });
+
+  test("rejects malicious tiny chunks before their allocations can exhaust the worker", async () => {
+    let cancelled = false;
+    let emittedChunks = 0;
+    const maxBytes = 20_000;
+    const body = new ReadableStream({
+      cancel() {
+        cancelled = true;
+      },
+      pull(controller) {
+        emittedChunks += 1;
+        controller.enqueue(new Uint8Array([0x20]));
+      },
+    });
+
+    const rejection: unknown = await readBoundedOcrJson(
+      new Response(body),
+      maxBytes,
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(emittedChunks).toBeLessThan(maxBytes);
+    expect(cancelled).toBe(true);
+    expect(rejection).toMatchObject({ code: "response_too_large" });
+  });
 });

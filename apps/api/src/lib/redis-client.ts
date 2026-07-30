@@ -129,10 +129,10 @@ const withColdStartConnectRetries = (
  * client, so a wrapped connection must own its raw client — never share
  * one with code that uses the client directly.
  */
-export const createBullMqConnection = (): ReturnType<
-  typeof createBunRedisClient
-> => {
-  const raw = createRedisClient();
+export const createBullMqConnection = (
+  overrides?: RedisOptions,
+): ReturnType<typeof createBunRedisClient> => {
+  const raw = createRedisClient(overrides);
   const connection = createBunRedisClient(raw, {
     // Railway's Redis proxy can trigger Bun's eager adapter read path before
     // BullMQ has completed its own readiness flow. Let BullMQ connect lazily.

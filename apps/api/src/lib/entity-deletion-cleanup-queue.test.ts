@@ -14,7 +14,7 @@ type RequestRow = {
   status: RequestStatus;
 };
 
-type UpdateValues = { status?: RequestStatus };
+type UpdateValues = { s3Keys?: string[]; status?: RequestStatus };
 
 const requestId = toSafeId<"entityDeletionCleanupRequest">(
   "00000000-0000-0000-0000-000000000001",
@@ -37,6 +37,9 @@ const rootDbMock = {
   update: mock((_table: unknown) => ({
     set: (values: UpdateValues) => ({
       where: () => {
+        if (values.s3Keys && requestRow) {
+          requestRow.s3Keys = values.s3Keys;
+        }
         if (values.status) {
           if (values.status === "processing" && requestRow) {
             requestRow.attemptCount++;
@@ -63,6 +66,8 @@ const rootDbMock = {
 };
 
 const {
+  createEntityDeletionCleanupReconciler,
+  deliverEntityDeletionCleanupCandidates,
   enqueueEntityDeletionCleanupJob,
   getEntityDeletionCleanupRetryAt,
   processEntityDeletionCleanupRequest,
@@ -111,6 +116,18 @@ describe("entity deletion cleanup queue", () => {
     expect(deleteS3KeysMock).toHaveBeenCalledTimes(1);
     expect(statuses).toEqual(["processing", "failed"]);
     expect(requestRow?.status).toBe("failed");
+    expect(requestRow?.s3Keys).toEqual(["org/workspace/file.pdf"]);
+  });
+
+  test("retires storage keys only after cleanup completes", async () => {
+    await processEntityDeletionCleanupRequest(requestId, cleanupDeps);
+
+    expect(deleteS3KeysMock).toHaveBeenCalledWith(["org/workspace/file.pdf"]);
+    expect(statuses).toEqual(["processing", "completed"]);
+    expect(requestRow).toMatchObject({
+      s3Keys: [],
+      status: "completed",
+    });
   });
 
   test("times out a stalled storage deletion and schedules durable recovery", async () => {
@@ -173,6 +190,132 @@ describe("entity deletion cleanup queue", () => {
     expect(add).toHaveBeenCalledTimes(1);
   });
 
+  test("bounds every Redis operation used for deterministic queue delivery", async () => {
+    const neverSettles = new Promise<never>(() => {});
+    const pending = mock(async () => await neverSettles);
+    type CleanupQueue = Parameters<
+      typeof enqueueEntityDeletionCleanupJob
+    >[0]["cleanupQueue"];
+    const queues = [
+      asTestRaw<CleanupQueue>({
+        add: mock(async () => undefined),
+        getJob: pending,
+      }),
+      asTestRaw<CleanupQueue>({
+        add: mock(async () => undefined),
+        getJob: mock(async () => ({
+          getState: pending,
+          remove: mock(async () => undefined),
+        })),
+      }),
+      asTestRaw<CleanupQueue>({
+        add: mock(async () => undefined),
+        getJob: mock(async () => ({
+          getState: mock(async () => "completed" as const),
+          remove: pending,
+        })),
+      }),
+      asTestRaw<CleanupQueue>({
+        add: pending,
+        getJob: mock(async () => undefined),
+      }),
+    ];
+
+    const errors = await Promise.all(
+      queues.map(
+        async (queueWithStall) =>
+          await enqueueEntityDeletionCleanupJob({
+            cleanupQueue: queueWithStall,
+            operationTimeoutMs: 5,
+            requestId,
+          }).then(
+            () => null,
+            (error: unknown) => error,
+          ),
+      ),
+    );
+
+    expect(errors).toEqual([
+      expect.objectContaining({
+        label: "entity-deletion-cleanup.queue.get-job",
+      }),
+      expect.objectContaining({
+        label: "entity-deletion-cleanup.queue.get-state",
+      }),
+      expect.objectContaining({
+        label: "entity-deletion-cleanup.queue.remove-job",
+      }),
+      expect.objectContaining({
+        label: "entity-deletion-cleanup.queue.add-job",
+      }),
+    ]);
+    for (const error of errors) {
+      expect(error).toBeInstanceOf(TimeoutError);
+    }
+  });
+
+  test("allows only one reconciliation pass at a time", async () => {
+    let finishFirstRun: () => void = () => undefined;
+    const firstRun = new Promise<void>((resolve) => {
+      finishFirstRun = resolve;
+    });
+    let runCount = 0;
+    const run = mock(async () => {
+      runCount += 1;
+      if (runCount === 1) {
+        await firstRun;
+      }
+    });
+    const onError = mock((_error: unknown) => undefined);
+    const reconcile = createEntityDeletionCleanupReconciler({ onError, run });
+
+    reconcile();
+    reconcile();
+    expect(run).toHaveBeenCalledTimes(1);
+
+    finishFirstRun();
+    await firstRun;
+    await Promise.resolve();
+    reconcile();
+
+    expect(run).toHaveBeenCalledTimes(2);
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  test("attempts every recovery state before surfacing a delivery failure", async () => {
+    const enqueueCleanup = mock(
+      async (
+        _id: SafeId<"entityDeletionCleanupRequest">,
+        status?: RequestStatus,
+      ) => {
+        if (status === "pending") {
+          throw new TimeoutError({
+            label: "entity-deletion-cleanup.queue.get-job",
+            message: "queue timed out",
+            timeoutMs: 5,
+          });
+        }
+      },
+    );
+    const rejection: unknown = await deliverEntityDeletionCleanupCandidates({
+      enqueueCleanup,
+      failedIds: [requestId],
+      pendingIds: [requestId],
+      processingIds: [requestId],
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toBeInstanceOf(TimeoutError);
+    expect(enqueueCleanup).toHaveBeenCalledTimes(3);
+    expect(enqueueCleanup.mock.calls.map((call) => call.at(1))).toEqual([
+      "pending",
+      "failed",
+      "processing",
+    ]);
+  });
+
   test("keeps failed cleanup recoverable with capped durable backoff", () => {
     const now = new Date("2026-07-30T12:00:00.000Z");
     const firstRetry = getEntityDeletionCleanupRetryAt({
@@ -199,5 +342,6 @@ describe("entity deletion cleanup queue", () => {
     expect(queueSource).toContain(
       "lt(entityDeletionCleanupRequests.updatedAt, staleBefore)",
     );
+    expect(queueSource).toContain("enableOfflineQueue: false");
   });
 });

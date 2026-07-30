@@ -6,7 +6,7 @@
  * captured by the caller via captureError.
  */
 
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
@@ -81,48 +81,106 @@ export const persistNativeExtractionProjection = async ({
   sourceFileId,
   sourceSha256Hex,
   workspaceId,
-}: NativeExtractionProjectionOptions): Promise<boolean> => {
-  const persisted =
-    await rootDb.execute<PersistedNativeExtractionProjection>(sql`
-      INSERT INTO extracted_content (
-        entity_id, organization_id, workspace_id,
-        source_entity_version_id, source_field_id,
-        source_file_id, source_sha256_hex,
-        ciphertext, iv, char_count, language, extracted_at
-      )
-      SELECT
-        ${entityId}, ${organizationId}, ${workspaceId},
-        ${entityVersionId}, ${fieldId},
-        ${sourceFileId}, ${sourceSha256Hex},
-        ${ciphertext}, ${iv}, ${charCount}, NULL, now()
-      FROM entities e
-      INNER JOIN fields f
-        ON f.id = ${fieldId}
-        AND f.workspace_id = ${workspaceId}
-        AND f.entity_version_id = ${entityVersionId}
-      WHERE e.id = ${entityId}
-        AND e.workspace_id = ${workspaceId}
-        AND e.current_version_id = ${entityVersionId}
-        AND f.content->>'type' = 'file'
-        AND f.content->>'id' = ${sourceFileId}
-        AND f.content->>'sha256Hex' = ${sourceSha256Hex}
-      FOR UPDATE OF e
-      ON CONFLICT (entity_id) DO UPDATE SET
-        organization_id = EXCLUDED.organization_id,
-        workspace_id = EXCLUDED.workspace_id,
-        source_entity_version_id = EXCLUDED.source_entity_version_id,
-        source_field_id = EXCLUDED.source_field_id,
-        source_file_id = EXCLUDED.source_file_id,
-        source_sha256_hex = EXCLUDED.source_sha256_hex,
-        ciphertext = EXCLUDED.ciphertext,
-        iv = EXCLUDED.iv,
-        char_count = EXCLUDED.char_count,
-        language = EXCLUDED.language,
-        extracted_at = EXCLUDED.extracted_at
-      RETURNING entity_id AS "entityId"
-    `);
-  return persisted.at(0) !== undefined;
-};
+}: NativeExtractionProjectionOptions): Promise<boolean> =>
+  await rootDb.transaction(async (tx) => {
+    // Manual OCR request and projection transactions take this same lock first.
+    // Keeping the conditional write in the next statement gives it a fresh
+    // READ COMMITTED snapshot after any lock waiter ahead of us commits.
+    const lockedSources =
+      await tx.execute<PersistedNativeExtractionProjection>(sql`
+        SELECT e.id AS "entityId"
+        FROM entities e
+        INNER JOIN fields f
+          ON f.id = ${fieldId}
+          AND f.workspace_id = ${workspaceId}
+          AND f.entity_version_id = ${entityVersionId}
+        WHERE e.id = ${entityId}
+          AND e.workspace_id = ${workspaceId}
+          AND e.current_version_id = ${entityVersionId}
+          AND f.content->>'type' = 'file'
+          AND f.content->>'id' = ${sourceFileId}
+          AND f.content->>'sha256Hex' = ${sourceSha256Hex}
+        FOR UPDATE OF e
+      `);
+    if (!lockedSources.at(0)) {
+      return false;
+    }
+
+    const persisted = await tx.execute<PersistedNativeExtractionProjection>(sql`
+        WITH manual_projection_ownership AS MATERIALIZED (
+          SELECT 1
+          FROM document_processing_runs manual_run
+          WHERE manual_run.organization_id = ${organizationId}
+            AND manual_run.workspace_id = ${workspaceId}
+            AND manual_run.entity_id = ${entityId}
+            AND manual_run.entity_version_id = ${entityVersionId}
+            AND manual_run.kind = 'ocr'
+            AND manual_run.request_source = 'manual'
+            AND (
+              manual_run.status IN ('queued', 'running')
+              OR (
+                (
+                  manual_run.status = 'succeeded'
+                  OR (
+                    manual_run.status = 'failed'
+                    AND manual_run.error_code = 'search_index_failed'
+                  )
+                )
+                AND EXISTS (
+                  SELECT 1
+                  FROM extracted_content selected_projection
+                  WHERE selected_projection.organization_id = ${organizationId}
+                    AND selected_projection.workspace_id = ${workspaceId}
+                    AND selected_projection.entity_id = ${entityId}
+                    AND selected_projection.source_entity_version_id = manual_run.entity_version_id
+                    AND selected_projection.source_field_id = manual_run.field_id
+                    AND selected_projection.source_file_id = manual_run.source_file_id
+                    AND selected_projection.source_sha256_hex = manual_run.source_sha256_hex
+                )
+              )
+            )
+          LIMIT 1
+        )
+        INSERT INTO extracted_content (
+          entity_id, organization_id, workspace_id,
+          source_entity_version_id, source_field_id,
+          source_file_id, source_sha256_hex,
+          ciphertext, iv, char_count, language, extracted_at
+        )
+        SELECT
+          ${entityId}, ${organizationId}, ${workspaceId},
+          ${entityVersionId}, ${fieldId},
+          ${sourceFileId}, ${sourceSha256Hex},
+          ${ciphertext}, ${iv}, ${charCount}, NULL, now()
+        FROM entities e
+        INNER JOIN fields f
+          ON f.id = ${fieldId}
+          AND f.workspace_id = ${workspaceId}
+          AND f.entity_version_id = ${entityVersionId}
+        WHERE e.id = ${entityId}
+          AND e.workspace_id = ${workspaceId}
+          AND e.current_version_id = ${entityVersionId}
+          AND f.content->>'type' = 'file'
+          AND f.content->>'id' = ${sourceFileId}
+          AND f.content->>'sha256Hex' = ${sourceSha256Hex}
+          AND NOT EXISTS (SELECT 1 FROM manual_projection_ownership)
+        ON CONFLICT (entity_id) DO UPDATE SET
+          organization_id = EXCLUDED.organization_id,
+          workspace_id = EXCLUDED.workspace_id,
+          source_entity_version_id = EXCLUDED.source_entity_version_id,
+          source_field_id = EXCLUDED.source_field_id,
+          source_file_id = EXCLUDED.source_file_id,
+          source_sha256_hex = EXCLUDED.source_sha256_hex,
+          ciphertext = EXCLUDED.ciphertext,
+          iv = EXCLUDED.iv,
+          char_count = EXCLUDED.char_count,
+          language = EXCLUDED.language,
+          extracted_at = EXCLUDED.extracted_at
+        WHERE NOT EXISTS (SELECT 1 FROM manual_projection_ownership)
+        RETURNING entity_id AS "entityId"
+      `);
+    return persisted.at(0) !== undefined;
+  });
 
 /**
  * Extract text from the entity's file, encrypt it, store it,
@@ -192,31 +250,44 @@ export const processExtraction = async (
   let shouldRequestAutomaticOcr = false;
 
   if (canExtract) {
-    try {
-      const source = pickExtractionSource(fileField);
-      const orgId = toSafeId<"organization">(workspace.organizationId);
-      const wsId = toSafeId<"workspace">(workspace.id);
-      const key = createFileKey({
-        organizationId: orgId,
-        workspaceId: wsId,
-        fileId: source.fileId,
-        mimeType: source.storageMimeType,
-      });
-
-      const s3File = getS3().file(key);
-      const buffer = await s3File.arrayBuffer();
-
-      const text = await extractFileText(buffer, source.extractionMimeType, {
+    const orgId = toSafeId<"organization">(workspace.organizationId);
+    const wsId = toSafeId<"workspace">(workspace.id);
+    const extraction = await Result.tryPromise({
+      try: async () => {
+        const source = pickExtractionSource(fileField);
+        const key = createFileKey({
+          organizationId: orgId,
+          workspaceId: wsId,
+          fileId: source.fileId,
+          mimeType: source.storageMimeType,
+        });
+        const buffer = await getS3().file(key).arrayBuffer();
+        return await extractFileText(buffer, source.extractionMimeType, {
+          entityId,
+          fileId: source.fileId,
+        });
+      },
+      catch: (cause) => cause,
+    });
+    if (Result.isError(extraction)) {
+      // Extraction failures must not prevent search
+      // indexing; the entity is still searchable by its
+      // field-level text.
+      captureError(extraction.error, {
         entityId,
-        fileId: source.fileId,
+        mimeType: fileField.mimeType,
       });
+      shouldRequestAutomaticOcr = fileField.mimeType === PDF_MIME_TYPE;
+    } else {
+      const text = extraction.value;
       shouldRequestAutomaticOcr = fileField.mimeType === PDF_MIME_TYPE && !text;
-
       if (text) {
+        // Native extraction succeeded. Encryption and durable projection
+        // failures must propagate to the caller; they are not evidence that
+        // the legal document needs to be sent to an external OCR provider.
         const encrypted = await encryptContent(workspace.organizationId, text);
         const sourceField =
           fileFieldRow ?? panic("Extraction source field is missing");
-
         await persistNativeExtractionProjection({
           charCount: text.length,
           ciphertext: encrypted.ciphertext,
@@ -230,15 +301,6 @@ export const processExtraction = async (
           workspaceId: wsId,
         });
       }
-    } catch (error) {
-      // Extraction failures must not prevent search
-      // indexing; the entity is still searchable by its
-      // field-level text.
-      captureError(error, {
-        entityId,
-        mimeType: fileField.mimeType,
-      });
-      shouldRequestAutomaticOcr = fileField.mimeType === PDF_MIME_TYPE;
     }
   }
 

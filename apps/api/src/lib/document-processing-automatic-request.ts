@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { and, eq, isNull } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
@@ -7,12 +8,42 @@ import {
   entityVersions,
   fields,
 } from "@/api/db/schema";
+import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import { detached } from "@/api/lib/detached";
 import { enqueueDocumentProcessingRun } from "@/api/lib/document-processing-enqueue";
+import { withTimeout } from "@/api/lib/with-timeout";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const OCR_PROCESSOR_VERSION = 1;
+const AUTOMATIC_OCR_ENQUEUE_TIMEOUT_MS = 2000;
+
+export const enqueueAutomaticDocumentOcrRun = async ({
+  captureEnqueueError = captureError,
+  enqueue = enqueueDocumentProcessingRun,
+  runId,
+  timeoutMs = AUTOMATIC_OCR_ENQUEUE_TIMEOUT_MS,
+}: {
+  captureEnqueueError?: typeof captureError;
+  enqueue?: typeof enqueueDocumentProcessingRun;
+  runId: SafeId<"documentProcessingRun">;
+  timeoutMs?: number;
+}): Promise<void> => {
+  const enqueueResult = await Result.tryPromise({
+    try: async () =>
+      await withTimeout(async () => await enqueue(runId), {
+        label: "automatic OCR queue handoff",
+        timeoutMs,
+      }),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(enqueueResult)) {
+    // The committed queued run is the source of truth. Reconciliation will
+    // retry delivery; uploads must not wait indefinitely on Redis.
+    captureEnqueueError(enqueueResult.error, { runId });
+  }
+};
 
 export const requestAutomaticDocumentOcr = async ({
   entityId,
@@ -138,6 +169,11 @@ export const requestAutomaticDocumentOcr = async ({
   });
 
   if (run) {
-    await enqueueDocumentProcessingRun(run.id);
+    // This is only a latency optimization: the durable queued row and bounded
+    // reconciler own delivery. Do not extend upload completion by Redis latency.
+    detached(
+      enqueueAutomaticDocumentOcrRun({ runId: run.id }),
+      "automatic-document-ocr.enqueue",
+    );
   }
 };

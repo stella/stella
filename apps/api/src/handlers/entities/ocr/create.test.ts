@@ -275,10 +275,15 @@ describe("requestManualOcrHandler", () => {
     expect(enqueue).not.toHaveBeenCalled();
   });
 
-  test.each(["source_superseded", "workspace_unavailable"] as const)(
+  test.each([
+    "manual_selection_superseded",
+    "source_superseded",
+    "workspace_unavailable",
+  ] as const)(
     "requeues a %s run after the current source is locked",
     async (errorCode) => {
       let retrySet: unknown;
+      let retryWhere: SQL | undefined;
       let selectCount = 0;
       const tx = asTestRaw<Transaction>({
         select: () => {
@@ -325,13 +330,22 @@ describe("requestManualOcrHandler", () => {
         }),
         update: () => ({
           set: (set: unknown) => {
-            retrySet = set;
+            const isRetryUpdate =
+              typeof set === "object" && set && "requestSource" in set;
+            if (isRetryUpdate) {
+              retrySet = set;
+            }
             return {
-              where: () => ({
-                returning: async () => [
-                  { id: runId, status: "queued" as const },
-                ],
-              }),
+              where: (condition: SQL) => {
+                if (isRetryUpdate) {
+                  retryWhere = condition;
+                }
+                return {
+                  returning: async () => [
+                    { id: runId, status: "queued" as const },
+                  ],
+                };
+              },
             };
           },
         }),
@@ -363,6 +377,18 @@ describe("requestManualOcrHandler", () => {
           status: "queued",
         }),
       );
+      expect(retryWhere).toBeDefined();
+      if (retryWhere) {
+        const compiled = new PgDialect().sqlToQuery(retryWhere);
+        expect(compiled.params).toEqual(
+          expect.arrayContaining([
+            "policy_disabled",
+            "manual_selection_superseded",
+            "source_superseded",
+            "workspace_unavailable",
+          ]),
+        );
+      }
       expect(recordAuditEvent).toHaveBeenCalledWith(
         tx,
         expect.objectContaining({
@@ -372,11 +398,17 @@ describe("requestManualOcrHandler", () => {
     },
   );
 
-  test.each(["upload", "repair"] as const)(
-    "promotes a queued %s run to a manual request",
-    async (requestSource) => {
+  test.each([
+    ["upload", "queued"],
+    ["repair", "queued"],
+    ["upload", "running"],
+    ["repair", "running"],
+  ] as const)(
+    "promotes a %s run in %s state to a manual request",
+    async (requestSource, status) => {
       let selectCount = 0;
       let updateSet: unknown;
+      let updateWhere: SQL | undefined;
       const tx = asTestRaw<Transaction>({
         select: () => {
           selectCount += 1;
@@ -407,7 +439,7 @@ describe("requestManualOcrHandler", () => {
                       errorCode: null,
                       id: runId,
                       requestSource,
-                      status: "queued" as const,
+                      status,
                     },
                   ],
                 }),
@@ -422,13 +454,22 @@ describe("requestManualOcrHandler", () => {
         }),
         update: () => ({
           set: (set: unknown) => {
-            updateSet = set;
+            const isPromotion =
+              typeof set === "object" && set && "requestSource" in set;
+            if (isPromotion) {
+              updateSet = set;
+            }
             return {
-              where: () => ({
-                returning: async () => [
-                  { id: runId, status: "queued" as const },
-                ],
-              }),
+              where: (condition: SQL) => {
+                if (isPromotion) {
+                  updateWhere = condition;
+                }
+                return {
+                  returning: async () => [
+                    { id: runId, status: "queued" as const },
+                  ],
+                };
+              },
             };
           },
         }),
@@ -459,6 +500,31 @@ describe("requestManualOcrHandler", () => {
           requestedBy: userId,
         }),
       );
+      expect(updateWhere).toBeDefined();
+      if (updateWhere) {
+        const compiled = new PgDialect().sqlToQuery(updateWhere);
+        expect(compiled.params).toEqual(
+          expect.arrayContaining([
+            runId,
+            "queued",
+            "running",
+            "upload",
+            "repair",
+          ]),
+        );
+      }
+      if (status === "running") {
+        expect(updateSet).toEqual(
+          expect.objectContaining({
+            claimedAt: null,
+            claimedBy: null,
+            progressCompleted: 0,
+            progressTotal: null,
+            startedAt: null,
+            status: "queued",
+          }),
+        );
+      }
     },
   );
 
@@ -524,7 +590,9 @@ describe("requestManualOcrHandler", () => {
         }),
         update: () => ({
           set: (set: unknown) => {
-            updateSet = set;
+            if (typeof set === "object" && set && "requestSource" in set) {
+              updateSet = set;
+            }
             return {
               where: () => ({
                 returning: async () => [
@@ -567,6 +635,102 @@ describe("requestManualOcrHandler", () => {
       );
     },
   );
+
+  test("cancels every competing manual selection before acknowledging the latest request", async () => {
+    const events: string[] = [];
+    let cancellationSet: Record<string, unknown> | undefined;
+    let cancellationWhere: SQL | undefined;
+    let selectCount = 0;
+    const tx = asTestRaw<Transaction>({
+      insert: () => ({
+        values: () => ({
+          onConflictDoNothing: () => ({
+            returning: async () => [{ id: runId, status: "queued" as const }],
+          }),
+        }),
+      }),
+      select: () => {
+        selectCount += 1;
+        if (selectCount <= 2) {
+          return {
+            from: () => ({
+              where: () => ({
+                limit: () => ({ for: async () => [{ id: entityId }] }),
+              }),
+            }),
+          };
+        }
+        return {
+          from: () => ({
+            where: () => ({
+              limit: async () => [{ content: sourceFileContent }],
+            }),
+          }),
+        };
+      },
+      update: () => ({
+        set: (value: Record<string, unknown>) => {
+          cancellationSet = value;
+          return {
+            where: async (condition: SQL) => {
+              cancellationWhere = condition;
+              events.push("cancel");
+            },
+          };
+        },
+      }),
+    });
+    rootTransactionMock.mockImplementationOnce(
+      async (operation: (transaction: Transaction) => Promise<unknown>) =>
+        await operation(tx),
+    );
+
+    const run = await persistManualOcrRun({
+      organizationId,
+      recordAuditEvent: async () => {
+        events.push("audit");
+      },
+      source: {
+        entityId,
+        entityVersionId,
+        fieldId,
+        sourceFileId: sourceFileContent.id,
+        sourceSha256Hex: sourceFileContent.sha256Hex,
+      },
+      userId,
+      workspaceId,
+    });
+
+    expect(run).toEqual({ id: runId, status: "queued" });
+    expect(cancellationSet).toEqual(
+      expect.objectContaining({
+        claimedAt: null,
+        claimedBy: null,
+        errorCode: "manual_selection_superseded",
+        nextAttemptAt: null,
+        status: "cancelled",
+      }),
+    );
+    expect(cancellationWhere).toBeDefined();
+    if (cancellationWhere) {
+      const compiled = new PgDialect().sqlToQuery(cancellationWhere);
+      expect(compiled.sql).toContain('"document_processing_runs"."id" <>');
+      expect(compiled.params).toEqual(
+        expect.arrayContaining([
+          organizationId,
+          workspaceId,
+          entityId,
+          entityVersionId,
+          "ocr",
+          "manual",
+          runId,
+          "queued",
+          "running",
+        ]),
+      );
+    }
+    expect(events).toEqual(["cancel", "audit"]);
+  });
 
   test("rejects a field changed after initial validation", async () => {
     let selectCount = 0;

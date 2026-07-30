@@ -4,6 +4,7 @@ import type { FieldId, PropertyId, WorkspaceEntity } from "@/lib/types";
 export type OcrSource = {
   encrypted: boolean;
   fieldId: FieldId;
+  fileName: string;
   mimeType: string;
 };
 
@@ -33,9 +34,25 @@ export const getOcrSource = ({
   return {
     encrypted: field.content.encrypted,
     fieldId: field.id,
+    fileName: field.content.fileName,
     mimeType: field.content.mimeType,
   };
 };
+
+export const getOcrSources = (fields: WorkspaceEntity["fields"]): OcrSource[] =>
+  Object.values(fields).flatMap((field) => {
+    if (!field || field.content.type !== "file") {
+      return [];
+    }
+    return [
+      {
+        encrypted: field.content.encrypted,
+        fieldId: field.id,
+        fileName: field.content.fileName,
+        mimeType: field.content.mimeType,
+      },
+    ];
+  });
 
 type CanRunManualOcrInput = {
   context: RowActionContext;

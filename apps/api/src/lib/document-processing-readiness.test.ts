@@ -9,6 +9,20 @@ const { readDocumentOcrWorkerAvailability, refreshDocumentOcrWorkerReadiness } =
   await import("@/api/lib/document-processing-readiness");
 
 describe("document OCR worker readiness", () => {
+  test("configures readiness clients to fail fast during Redis outages", async () => {
+    const source = await Bun.file(
+      new URL("document-processing-readiness.ts", import.meta.url),
+    ).text();
+
+    expect(source).toContain(
+      "connectionTimeout: DOCUMENT_OCR_REDIS_COMMAND_TIMEOUT_MS",
+    );
+    expect(source).toContain("enableOfflineQueue: false");
+    expect(source.match(/createDocumentOcrReadinessClient\(\)/gu)).toHaveLength(
+      2,
+    );
+  });
+
   test("reports availability only from a live shared lease", async () => {
     expect(await readDocumentOcrWorkerAvailability(async () => "ready")).toBe(
       true,

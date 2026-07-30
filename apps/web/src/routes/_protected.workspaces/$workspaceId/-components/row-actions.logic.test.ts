@@ -6,6 +6,7 @@ import {
   canRunManualOcr,
   getDesktopEditLockState,
   getOcrSource,
+  getOcrSources,
   getPdfDownloadFileName,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions.logic";
 
@@ -85,6 +86,19 @@ describe("getOcrSource", () => {
   test("does not select an arbitrary file without a selected property", () => {
     expect(getOcrSource({ fields: ocrFields, propertyId: null })).toBeNull();
   });
+
+  test("keeps every file field available for explicit keyboard selection", () => {
+    expect(getOcrSources(ocrFields)).toEqual([
+      expect.objectContaining({
+        fieldId: firstFieldId,
+        fileName: "first.pdf",
+      }),
+      expect.objectContaining({
+        fieldId: selectedFieldId,
+        fileName: "selected.pdf",
+      }),
+    ]);
+  });
 });
 
 describe("manual OCR action visibility", () => {
@@ -113,6 +127,7 @@ describe("manual OCR action visibility", () => {
         ocrSource: {
           encrypted: false,
           fieldId: selectedFieldId,
+          fileName: "selected.pdf",
           mimeType: "application/pdf",
         },
       }),

@@ -12,10 +12,16 @@ const DOCUMENT_OCR_WORKER_READINESS_TTL_SECONDS = 90;
 const DOCUMENT_OCR_WORKER_HEARTBEAT_INTERVAL_MS = 30_000;
 const DOCUMENT_OCR_REDIS_COMMAND_TIMEOUT_MS = 2000;
 
+const createDocumentOcrReadinessClient = () =>
+  createRedisClient({
+    connectionTimeout: DOCUMENT_OCR_REDIS_COMMAND_TIMEOUT_MS,
+    enableOfflineQueue: false,
+  });
+
 let readinessReader: ReturnType<typeof createRedisClient> | null = null;
 
 const getReadinessReader = () => {
-  readinessReader ??= createRedisClient();
+  readinessReader ??= createDocumentOcrReadinessClient();
   return readinessReader;
 };
 
@@ -67,7 +73,7 @@ export const refreshDocumentOcrWorkerReadiness = async (
 };
 
 export const startDocumentOcrWorkerReadiness = () => {
-  const client = createRedisClient();
+  const client = createDocumentOcrReadinessClient();
   let writeInFlight: Promise<unknown> | null = null;
   const refresh = async (): Promise<void> => {
     await refreshDocumentOcrWorkerReadiness(async (key, value, ttlSeconds) => {

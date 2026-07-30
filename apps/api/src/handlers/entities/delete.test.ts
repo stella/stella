@@ -7,7 +7,9 @@ test("commits the entity withdrawal fence before storage cleanup is dispatched",
     "tx.insert(entityDeletionCleanupRequests)",
   );
   const deleteEntity = source.indexOf(".delete(entities)");
-  const dispatch = source.indexOf("await enqueueCleanup(cleanupRequestId)");
+  const dispatch = source.indexOf(
+    "await handoffCommittedEntityDeletionCleanup",
+  );
 
   expect(cleanupRequest).toBeGreaterThan(-1);
   expect(deleteEntity).toBeGreaterThan(cleanupRequest);

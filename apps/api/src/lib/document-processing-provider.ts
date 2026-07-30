@@ -8,6 +8,7 @@ import { isRecord } from "@/api/lib/type-guards";
 const OCR_REQUEST_TIMEOUT_MS = 30 * 60 * 1000;
 const OCR_MAX_PAGES = 500;
 const OCR_MAX_RESPONSE_BYTES = 64 * 1024 * 1024;
+const OCR_MAX_RESPONSE_CHUNKS = 16 * 1024;
 const PAGE_SEPARATOR = "\n\n\f\n\n";
 
 export class DocumentOcrProviderError extends TaggedError(
@@ -88,12 +89,14 @@ export const readBoundedOcrJson = async (
   }
 
   const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
+  const bytes = new Uint8Array(maxBytes);
+  let chunkCount = 0;
   let totalBytes = 0;
-  const readNextChunk = async (): Promise<void> => {
+  while (true) {
+    // oxlint-disable-next-line no-await-in-loop -- a response stream must be pulled sequentially; chunk and byte caps bound the loop
     const chunk = await reader.read();
     if (chunk.done) {
-      return;
+      break;
     }
     const value: unknown = chunk.value;
     if (!(value instanceof Uint8Array)) {
@@ -102,26 +105,24 @@ export const readBoundedOcrJson = async (
         message: "OCR service returned an invalid response body",
       });
     }
-    totalBytes += value.byteLength;
-    if (totalBytes > maxBytes) {
+    chunkCount += 1;
+    if (
+      chunkCount > OCR_MAX_RESPONSE_CHUNKS ||
+      value.byteLength > maxBytes - totalBytes
+    ) {
+      // oxlint-disable-next-line no-await-in-loop -- cancellation must settle before the bounded provider error is surfaced
       await reader.cancel();
       throw new DocumentOcrProviderError({
         code: "response_too_large",
         message: "OCR service response exceeded the allowed size",
       });
     }
-    chunks.push(value);
-    await readNextChunk();
-  };
-  await readNextChunk();
-
-  const bytes = new Uint8Array(totalBytes);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
+    bytes.set(value, totalBytes);
+    totalBytes += value.byteLength;
   }
-  const parsed: unknown = JSON.parse(new TextDecoder().decode(bytes));
+  const parsed: unknown = JSON.parse(
+    new TextDecoder().decode(bytes.subarray(0, totalBytes)),
+  );
   return parsed;
 };
 

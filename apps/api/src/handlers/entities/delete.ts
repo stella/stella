@@ -12,6 +12,7 @@ import {
   fields,
   workspaces,
 } from "@/api/db/schema";
+import { handoffCommittedEntityDeletionCleanup } from "@/api/handlers/entities/entity-deletion-cleanup-handoff";
 import {
   extractFieldFileRefs,
   filterUnreferencedFieldFileRefs,
@@ -201,18 +202,11 @@ export const deleteEntitiesHandler = async function* ({
   const deletedEntities = txOutcome.entities;
   const cleanupRequestId = txOutcome.cleanupRequestId;
   if (cleanupRequestId) {
-    const enqueueResult = await Result.tryPromise({
-      try: async () => await enqueueCleanup(cleanupRequestId),
-      catch: (cause) => cause,
+    await handoffCommittedEntityDeletionCleanup({
+      captureDeliveryError: captureError,
+      enqueueCleanup,
+      requestId: cleanupRequestId,
     });
-    if (Result.isError(enqueueResult)) {
-      // The cleanup request is committed and the worker reconciles missed
-      // delivery, so deletion remains successful if this immediate handoff
-      // fails.
-      captureError(enqueueResult.error, {
-        requestId: cleanupRequestId,
-      });
-    }
   }
 
   // Explicit removal for non-PG providers (CASCADE handles PG)

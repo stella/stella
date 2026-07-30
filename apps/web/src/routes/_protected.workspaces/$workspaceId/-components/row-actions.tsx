@@ -34,6 +34,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@stll/ui/components/alert-dialog";
+import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
 import {
   Menu,
@@ -113,9 +114,12 @@ export type VirtualAnchor = {
   getBoundingClientRect: () => DOMRect;
 };
 
+const EMPTY_OCR_SOURCES: readonly OcrSource[] = [];
+
 type RowActionsProps = {
   entity: WorkspaceEntity;
   ocrSource?: OcrSource | undefined;
+  ocrSources?: readonly OcrSource[] | undefined;
   workspaceId: string;
   open?: boolean | undefined;
   onOpenChange?: ((open: boolean) => void) | undefined;
@@ -154,6 +158,7 @@ export const RowActions = ({
   getAncestorIds,
   cellMetadataTarget,
   ocrSource,
+  ocrSources = EMPTY_OCR_SOURCES,
 }: RowActionsProps) => {
   const t = useTranslations();
   const analytics = useAnalytics();
@@ -191,6 +196,16 @@ export const RowActions = ({
     entity,
     ocrSource,
   });
+  const rowOcrSources = isCellContext
+    ? []
+    : ocrSources.filter((source) =>
+        canRunManualOcr({
+          context: rowActionContext,
+          documentOcrAvailable,
+          entity,
+          ocrSource: source,
+        }),
+      );
   const isDocx = !isBulk && file?.mimeType === DOCX_MIME;
   const desktopEditLockState = getDesktopEditLockState(entity.activeEditBy);
   const isLockedByMe = isDocx && desktopEditLockState === "locked-by-me";
@@ -607,8 +622,8 @@ export const RowActions = ({
     event.target.value = "";
   };
 
-  const handleRunOcr = async () => {
-    if (!ocrSource || isOcrPending) {
+  const handleRunOcr = async (source: OcrSource | undefined) => {
+    if (!source || isOcrPending) {
       return;
     }
 
@@ -616,7 +631,7 @@ export const RowActions = ({
     try {
       const { outcome } = await requestManualOcr({
         entityId: entity.entityId,
-        fieldId: ocrSource.fieldId,
+        fieldId: source.fieldId,
         workspaceId,
       });
       await queryClient.invalidateQueries({
@@ -706,14 +721,40 @@ export const RowActions = ({
         )}
         {canRunOcr && (
           <MenuItem
+            className="min-h-11 sm:min-h-11"
             disabled={isOcrPending}
             onClick={() => {
-              detached(handleRunOcr(), "RowActions");
+              detached(handleRunOcr(ocrSource), "RowActions");
             }}
           >
             <ScanTextIcon />
             {t("workspaces.files.runOcr")}
           </MenuItem>
+        )}
+        {rowOcrSources.length > 0 && (
+          <MenuSub>
+            <MenuSubTrigger className="min-h-11 sm:min-h-11">
+              <ScanTextIcon />
+              {t("workspaces.files.runOcr")}
+            </MenuSubTrigger>
+            <MenuSubPopup>
+              {rowOcrSources.map((source) => (
+                <MenuItem
+                  className="min-h-11 sm:min-h-11"
+                  disabled={isOcrPending}
+                  key={source.fieldId}
+                  onClick={() => {
+                    detached(handleRunOcr(source), "RowActions");
+                  }}
+                >
+                  <ScanTextIcon />
+                  <BidiText as="span" className="max-w-64 truncate">
+                    {source.fileName}
+                  </BidiText>
+                </MenuItem>
+              ))}
+            </MenuSubPopup>
+          </MenuSub>
         )}
         {!isBulk && cellMetadataTarget && (
           <>

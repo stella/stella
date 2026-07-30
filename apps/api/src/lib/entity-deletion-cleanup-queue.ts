@@ -25,6 +25,7 @@ const RETRY_BASE_DELAY_MS = 60_000;
 const RETRY_MAX_DELAY_MS = 24 * 60 * 60_000;
 const STORAGE_DELETE_TIMEOUT_MS = 10 * 60_000;
 const STORAGE_DELETE_TIMEOUT_LABEL = "entity-deletion-cleanup.storage-delete";
+const QUEUE_OPERATION_TIMEOUT_MS = 2000;
 
 type EntityDeletionCleanupJobData = {
   requestId: SafeId<"entityDeletionCleanupRequest">;
@@ -53,7 +54,10 @@ let queue: Queue<EntityDeletionCleanupJobData> | null = null;
 let queueConnection: ReturnType<typeof createBullMqConnection> | null = null;
 
 const getQueueConnection = () => {
-  queueConnection ??= createBullMqConnection();
+  queueConnection ??= createBullMqConnection({
+    connectionTimeout: QUEUE_OPERATION_TIMEOUT_MS,
+    enableOfflineQueue: false,
+  });
   return queueConnection;
 };
 
@@ -93,23 +97,76 @@ export const enqueueEntityDeletionCleanup = async (
 
 export const enqueueEntityDeletionCleanupJob = async ({
   cleanupQueue,
+  operationTimeoutMs = QUEUE_OPERATION_TIMEOUT_MS,
   requestId,
 }: {
   cleanupQueue: EntityDeletionCleanupQueue;
+  operationTimeoutMs?: number;
   requestId: SafeId<"entityDeletionCleanupRequest">;
 }): Promise<void> => {
   const jobId = createBullMqJobId(requestId, STORAGE_CLEANUP_JOB_NAME);
-  const existingJob = await cleanupQueue.getJob(jobId);
+  const existingJob = await withTimeout(
+    async () => await cleanupQueue.getJob(jobId),
+    {
+      label: "entity-deletion-cleanup.queue.get-job",
+      timeoutMs: operationTimeoutMs,
+    },
+  );
   if (existingJob) {
-    const state = await existingJob.getState();
+    const state = await withTimeout(async () => await existingJob.getState(), {
+      label: "entity-deletion-cleanup.queue.get-state",
+      timeoutMs: operationTimeoutMs,
+    });
     if (state === "failed" || state === "completed") {
-      await existingJob.remove();
+      await withTimeout(async () => await existingJob.remove(), {
+        label: "entity-deletion-cleanup.queue.remove-job",
+        timeoutMs: operationTimeoutMs,
+      });
     } else {
       return;
     }
   }
 
-  await cleanupQueue.add(STORAGE_CLEANUP_JOB_NAME, { requestId }, { jobId });
+  await withTimeout(
+    async () =>
+      await cleanupQueue.add(
+        STORAGE_CLEANUP_JOB_NAME,
+        { requestId },
+        { jobId },
+      ),
+    {
+      label: "entity-deletion-cleanup.queue.add-job",
+      timeoutMs: operationTimeoutMs,
+    },
+  );
+};
+
+export const createEntityDeletionCleanupReconciler = ({
+  onError,
+  run,
+}: {
+  onError: (error: unknown) => void;
+  run: () => Promise<void>;
+}): (() => void) => {
+  let reconciling = false;
+  return () => {
+    if (reconciling) {
+      return;
+    }
+    reconciling = true;
+    detached(
+      (async () => {
+        try {
+          await run();
+        } catch (error) {
+          onError(error);
+        } finally {
+          reconciling = false;
+        }
+      })(),
+      "entity-deletion-cleanup.reconcile",
+    );
+  };
 };
 
 export const processEntityDeletionCleanupRequest = async (
@@ -215,6 +272,7 @@ export const processEntityDeletionCleanupRequest = async (
       completedAt: new Date(),
       errorMessage: null,
       nextAttemptAt: null,
+      s3Keys: [],
       status: "completed",
       updatedAt: new Date(),
     })
@@ -240,6 +298,67 @@ export const getEntityDeletionCleanupRetryAt = ({
     RETRY_MAX_DELAY_MS,
   );
   return new Date(now.getTime() + delayMs);
+};
+
+const settleEntityDeletionCleanupDeliveryPhase = async ({
+  candidateIds,
+  enqueueCleanup = enqueueEntityDeletionCleanup,
+  status,
+}: {
+  candidateIds: SafeId<"entityDeletionCleanupRequest">[];
+  enqueueCleanup?: typeof enqueueEntityDeletionCleanup;
+  status: "failed" | "pending" | "processing";
+}): Promise<Error[]> => {
+  const deliveryResults = await Promise.all(
+    candidateIds.map(
+      async (id) =>
+        await Result.tryPromise({
+          try: async () => await enqueueCleanup(id, status),
+          catch: (cause) =>
+            cause instanceof Error ? cause : new UnhandledException({ cause }),
+        }),
+    ),
+  );
+  return deliveryResults.flatMap((deliveryResult) => {
+    if (Result.isOk(deliveryResult)) {
+      return [];
+    }
+    return [deliveryResult.error];
+  });
+};
+
+export const deliverEntityDeletionCleanupCandidates = async ({
+  failedIds,
+  enqueueCleanup = enqueueEntityDeletionCleanup,
+  pendingIds,
+  processingIds,
+}: {
+  failedIds: SafeId<"entityDeletionCleanupRequest">[];
+  enqueueCleanup?: typeof enqueueEntityDeletionCleanup;
+  pendingIds: SafeId<"entityDeletionCleanupRequest">[];
+  processingIds: SafeId<"entityDeletionCleanupRequest">[];
+}): Promise<void> => {
+  const errors = [
+    ...(await settleEntityDeletionCleanupDeliveryPhase({
+      candidateIds: pendingIds,
+      enqueueCleanup,
+      status: "pending",
+    })),
+    ...(await settleEntityDeletionCleanupDeliveryPhase({
+      candidateIds: failedIds,
+      enqueueCleanup,
+      status: "failed",
+    })),
+    ...(await settleEntityDeletionCleanupDeliveryPhase({
+      candidateIds: processingIds,
+      enqueueCleanup,
+      status: "processing",
+    })),
+  ];
+  const firstError = errors.at(0);
+  if (firstError) {
+    throw firstError;
+  }
 };
 
 export const enqueuePendingEntityDeletionCleanupRequests =
@@ -284,21 +403,11 @@ export const enqueuePendingEntityDeletionCleanupRequests =
       )
       .limit(RECONCILE_BATCH_SIZE);
 
-    await Promise.all(
-      pendingRows.map(
-        async (row) => await enqueueEntityDeletionCleanup(row.id, "pending"),
-      ),
-    );
-    await Promise.all(
-      failedRows.map(
-        async (row) => await enqueueEntityDeletionCleanup(row.id, "failed"),
-      ),
-    );
-    await Promise.all(
-      staleRows.map(
-        async (row) => await enqueueEntityDeletionCleanup(row.id, "processing"),
-      ),
-    );
+    await deliverEntityDeletionCleanupCandidates({
+      failedIds: failedRows.map(({ id }) => id),
+      pendingIds: pendingRows.map(({ id }) => id),
+      processingIds: staleRows.map(({ id }) => id),
+    });
     return pendingRows.length + failedRows.length + staleRows.length;
   };
 
@@ -328,21 +437,17 @@ export const initEntityDeletionCleanupWorker = () => {
     );
   });
 
-  const reconcile = () => {
-    detached(
-      (async () => {
-        try {
-          await enqueuePendingEntityDeletionCleanupRequests();
-        } catch (error) {
-          captureError(error);
-          logger.error("entity_deletion_cleanup.reconcile_failed", {
-            "error.type": errorTag(error),
-          });
-        }
-      })(),
-      "entity-deletion-cleanup.reconcile",
-    );
-  };
+  const reconcile = createEntityDeletionCleanupReconciler({
+    run: async () => {
+      await enqueuePendingEntityDeletionCleanupRequests();
+    },
+    onError: (error) => {
+      captureError(error);
+      logger.error("entity_deletion_cleanup.reconcile_failed", {
+        "error.type": errorTag(error),
+      });
+    },
+  });
   reconcile();
   const reconcileInterval = setInterval(reconcile, RECONCILE_INTERVAL_MS);
 

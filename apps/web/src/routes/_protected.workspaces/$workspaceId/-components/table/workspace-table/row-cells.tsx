@@ -28,7 +28,10 @@ import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-compone
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { RowActions } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
 import type { VirtualAnchor } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
-import { getOcrSource } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions.logic";
+import {
+  getOcrSource,
+  getOcrSources,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions.logic";
 import type {
   TableCell,
   TableColumn,
@@ -342,6 +345,7 @@ export const DraggableRow = ({
           propertyId: contextPropertyId,
         }) ?? undefined
       }
+      ocrSources={getOcrSources(entity.fields)}
       onOpenChange={(open) => {
         if (open) {
           setBulkEntities(getBulkSelectedEntities());
@@ -364,7 +368,7 @@ export const DraggableRow = ({
             }
           : null
       }
-      triggerClassName="opacity-0! transition-opacity group-hover/row:opacity-100! focus-visible:opacity-100!"
+      triggerClassName="size-11 min-h-11 min-w-11 opacity-0! transition-opacity group-hover/row:opacity-100! focus-visible:opacity-100!"
       workspaceId={workspaceId}
     />
   );
