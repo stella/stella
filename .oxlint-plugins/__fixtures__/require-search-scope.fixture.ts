@@ -49,6 +49,9 @@ const _unsafeChatPassage =
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves rootDb query builders cannot read private projections outside the SQL scope guard
 const unsafeBuilderEntity = rootDb.select().from(searchDocuments);
 
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a const table alias cannot bypass a rootDb builder guard
+const _unsafeAliasedBuilderEntity = rootDb.select().from(privateSearchTable);
+
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves rootDb joins cannot introduce an unscoped private projection
 const _unsafeJoinedEntity = rootDb
   .select()
@@ -66,6 +69,9 @@ const _unsafeRelationalEntity = rootDb.query.searchDocuments.findFirst();
 const _unsafeComputedRelationalEntity =
   // oxlint-disable-next-line require-search-scope/require-search-scope, typescript/dot-notation -- fixture proves computed rootDb relational reads cannot bypass the private projection scope guard
   rootDb.query["searchDocuments"].findMany({ limit: 1 });
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves imported complete SQL cannot bypass inspection through rootDb.execute
+const _unsafeImportedExecution = rootDb.execute(importedOpaqueRelationFragment);
 
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves PostgreSQL-equivalent uppercase identifiers are protected
 const unsafeUppercaseEntity = sql`SELECT * FROM SEARCH_DOCUMENTS sd`;

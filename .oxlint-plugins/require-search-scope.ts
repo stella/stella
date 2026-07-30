@@ -1800,7 +1800,26 @@ export default {
             return null;
           }
           const table = node.arguments.at(0);
-          return table === undefined ? null : privateProjectionTable(table);
+          return table === undefined
+            ? null
+            : privateProjectionTable(resolveConstInitializer(table));
+        };
+
+        const rootDbExecutionArgument = (node: AstNode): unknown | null => {
+          if (
+            node.type !== "CallExpression" ||
+            !isAstNode(node.callee) ||
+            node.callee.type !== "MemberExpression" ||
+            directMemberPropertyName(node.callee) !== "execute" ||
+            !Array.isArray(node.arguments)
+          ) {
+            return null;
+          }
+          const root = unwrapExpression(node.callee.object);
+          if (!isIdentifier(root) || !isApprovedImport(root, ROOT_DB_IMPORTS)) {
+            return null;
+          }
+          return node.arguments.at(0) ?? null;
         };
 
         const rootDbPrivateRelationalTable = (node: AstNode): string | null => {
@@ -3402,6 +3421,19 @@ export default {
                 node,
                 messageId: "missingScope",
                 data: { table: builderTable },
+              });
+              return;
+            }
+            const executionArgument = rootDbExecutionArgument(node);
+            if (
+              executionArgument !== null &&
+              isImportBackedInterpolation(
+                resolveConstInitializer(executionArgument),
+              )
+            ) {
+              context.report({
+                node,
+                messageId: "unavailableRelation",
               });
               return;
             }

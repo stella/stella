@@ -56,9 +56,22 @@ CREATE POLICY "search_document_preview_passages_workspace_select"
   ON "search_document_preview_passages" FOR SELECT TO stella
   USING (
     organization_id = (SELECT current_setting('app.organization_id', true))
-    AND workspace_id = ANY(
-      (SELECT current_setting('app.workspace_ids', true))::uuid[]
-    )
+    AND CASE
+      WHEN workspace_id = ANY(
+        COALESCE(
+          NULLIF(
+            (SELECT pg_catalog.current_setting('app.workspace_ids', true)),
+            ''
+          )::uuid[],
+          ARRAY[]::uuid[]
+        )
+      )
+      THEN true
+      ELSE workspace_id IN (
+        SELECT aw.authorized_workspace_id
+        FROM public.stella_authorized_workspaces aw
+      )
+    END
   );--> statement-breakpoint
 CREATE POLICY "search_document_preview_passages_no_insert"
   ON "search_document_preview_passages" AS RESTRICTIVE
@@ -123,9 +136,22 @@ CREATE POLICY "workspace_search_document_preview_passages_workspace_select"
   ON "workspace_search_document_preview_passages" FOR SELECT TO stella
   USING (
     organization_id = (SELECT current_setting('app.organization_id', true))
-    AND workspace_id = ANY(
-      (SELECT current_setting('app.workspace_ids', true))::uuid[]
-    )
+    AND CASE
+      WHEN workspace_id = ANY(
+        COALESCE(
+          NULLIF(
+            (SELECT pg_catalog.current_setting('app.workspace_ids', true)),
+            ''
+          )::uuid[],
+          ARRAY[]::uuid[]
+        )
+      )
+      THEN true
+      ELSE workspace_id IN (
+        SELECT aw.authorized_workspace_id
+        FROM public.stella_authorized_workspaces aw
+      )
+    END
   );--> statement-breakpoint
 CREATE POLICY "workspace_search_document_preview_passages_no_insert"
   ON "workspace_search_document_preview_passages" AS RESTRICTIVE
@@ -163,14 +189,52 @@ CREATE POLICY "chat_thread_preview_passage_select"
         (SELECT current_setting('app.organization_id', true))
       AND (
         ct.workspace_id IS NULL
-        OR ct.workspace_id = ANY(
-          (SELECT current_setting('app.workspace_ids', true))::uuid[]
-        )
+        OR CASE
+          WHEN ct.workspace_id = ANY(
+            COALESCE(
+              NULLIF(
+                (SELECT pg_catalog.current_setting(
+                  'app.workspace_ids',
+                  true
+                )),
+                ''
+              )::uuid[],
+              ARRAY[]::uuid[]
+            )
+          )
+          THEN true
+          ELSE ct.workspace_id IN (
+            SELECT aw.authorized_workspace_id
+            FROM public.stella_authorized_workspaces aw
+          )
+        END
       )
-      AND (
-        cardinality(ct.data_workspace_ids) = 0
-        OR ct.data_workspace_ids <@
-          (SELECT current_setting('app.workspace_ids', true))::uuid[]
+      AND NOT EXISTS (
+        SELECT 1
+        FROM pg_catalog.unnest(ct.data_workspace_ids)
+          AS scoped_workspace(workspace_id)
+        WHERE scoped_workspace.workspace_id IS NULL
+          OR NOT (
+            scoped_workspace.workspace_id = ANY(
+              COALESCE(
+                NULLIF(
+                  (SELECT pg_catalog.current_setting(
+                    'app.workspace_ids',
+                    true
+                  )),
+                  ''
+                )::uuid[],
+                ARRAY[]::uuid[]
+              )
+            )
+            OR EXISTS (
+              SELECT 1
+              FROM public.stella_authorized_workspaces aw
+              WHERE aw.authorized_workspace_id =
+                scoped_workspace.workspace_id
+                AND aw.workspace_status <> 'deleting'
+            )
+          )
       )
   ));--> statement-breakpoint
 CREATE POLICY "chat_thread_preview_passage_no_insert"
