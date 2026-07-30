@@ -115,6 +115,26 @@ const isStellaIdentifier = (value: string): boolean =>
   value.trim().toLowerCase() === "stella" ||
   value.trim().toLowerCase() === '"stella"';
 
+type GrantsRequiredPrivilegesOptions = {
+  table: string;
+  privileges: Set<string>;
+  grantsTableDml: boolean;
+};
+
+const grantsRequiredPrivileges = ({
+  table,
+  privileges,
+  grantsTableDml,
+}: GrantsRequiredPrivilegesOptions): boolean => {
+  if (POST_BOOTSTRAP_SELECT_ONLY_TABLES.has(table)) {
+    return privileges.has("select");
+  }
+  if (POST_BOOTSTRAP_INSERT_ONLY_TABLES.has(table)) {
+    return privileges.has("insert");
+  }
+  return grantsTableDml;
+};
+
 const migrationSqlFiles = () =>
   readdirSync(DRIZZLE_DIR, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
@@ -172,14 +192,10 @@ const explicitStellaGrantTables = (statement: string): string[] => {
     (name) => name !== "public",
   );
 
-  // Normal post-bootstrap tables must grant stella full DML; explicit
-  // read-only global tables only need SELECT.
+  // Normal post-bootstrap tables grant full DML; explicit internal categories
+  // enforce their narrower request-role surface.
   return tables.filter((table) =>
-    POST_BOOTSTRAP_SELECT_ONLY_TABLES.has(table)
-      ? privileges.has("select")
-      : POST_BOOTSTRAP_INSERT_ONLY_TABLES.has(table)
-        ? privileges.has("insert")
-        : grantsTableDml,
+    grantsRequiredPrivileges({ table, privileges, grantsTableDml }),
   );
 };
 
