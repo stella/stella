@@ -36,10 +36,15 @@ const BOOTSTRAP_COVERED_RLS_MIGRATIONS = new Set([
   "20260509220000_disabled-native-tools",
 ]);
 
-// Post-bootstrap RLS tables that are global and read-only for `stella`
-// (like the other case_law_* tables, which predate the bootstrap). These
-// correctly grant stella SELECT only, not full DML.
+// Post-bootstrap RLS tables that are read-only for `stella`. Global legal-data
+// tables and derived preview passages are maintained by privileged background
+// writers, so the request role correctly receives SELECT only, not full DML.
 const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
+  "search_document_preview_passages",
+  "contact_search_document_preview_passages",
+  "workspace_search_document_preview_passages",
+  "chat_thread_search_preview_passages",
+  "case_law_search_document_preview_passages",
   "case_law_index_jobs",
   "legislation_sources",
   "legislation_documents",
