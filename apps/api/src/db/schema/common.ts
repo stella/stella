@@ -10,7 +10,7 @@ import type { PersistedDecisionAnalysis } from "@stll/legal-ast/analysis";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { organization, user } from "@/api/db/auth-schema";
-import { jsonb } from "@/api/db/columns";
+import { jsonb, timestamptz } from "@/api/db/columns";
 import {
   agentSkillPolicies,
   agentSkillResourcePolicies,
@@ -375,6 +375,7 @@ export {
   p,
   panic,
   sql,
+  timestamptz,
   unsafeCents,
   user,
 };

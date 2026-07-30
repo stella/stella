@@ -279,7 +279,7 @@ const orderSortKey = ({ direction, expr }: EntitySortKey): SQL =>
   direction === "desc" ? sql`${expr} DESC` : sql`${expr} ASC`;
 
 const timestampCursorExpr = (expr: SQL): SQL =>
-  sql`to_char(${expr}, 'YYYY-MM-DD"T"HH24:MI:SS.US')`;
+  sql`to_char(${expr} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US')`;
 
 const textSortKey = ({
   direction,
@@ -544,7 +544,7 @@ const parseCursorValue = (
 
 const cursorValueSql = (key: EntitySortKey, value: number | string): SQL => {
   if (key.type === "timestamp") {
-    return sql`${value}::timestamp`;
+    return sql`(${value}::timestamp AT TIME ZONE 'UTC')`;
   }
 
   return sql`${value}`;

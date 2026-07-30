@@ -11,6 +11,7 @@ import {
   userPolicies,
   workspaceViewTemplatePolicies,
   wsPolicies,
+  timestamptz,
 } from "./common";
 import type { ViewLayout, ViewTemplateProperty } from "./common";
 import { workspaces } from "./contacts";
@@ -38,9 +39,8 @@ export const userFiles = p.pgTable(
     // image; rendered directly in an <img src> with no client decoder.
     placeholder: p.text("placeholder"),
     scanWarnings: p.text("scan_warnings").array(),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
-    updatedAt: p
-      .timestamp("updated_at")
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at")
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),
@@ -68,7 +68,7 @@ export const workspaceViews = p.pgTable(
     name: p.varchar({ length: 256 }).notNull(),
     layout: jsonb().$type<ViewLayout>().notNull(),
     position: p.integer().notNull(),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
     p
@@ -95,9 +95,8 @@ export const workspaceViewTemplates = p.pgTable(
       .$type<ViewTemplateProperty[]>()
       .notNull()
       .default([]),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
-    updatedAt: p
-      .timestamp("updated_at")
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at")
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),

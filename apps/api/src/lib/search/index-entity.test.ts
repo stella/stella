@@ -135,7 +135,7 @@ test("rejects an out-of-order projection against the authoritative entity", asyn
   expect(compiled.sql).toMatch(
     /COALESCE\(e\.updated_at, e\.created_at\)\s+IS NOT DISTINCT FROM/u,
   );
-  expect(compiled.sql).toContain("::timestamp");
+  expect(compiled.sql).toContain("::timestamptz");
   expect(compiled.sql).toContain("FOR UPDATE");
   expect(compiled.sql).toContain(
     "WHERE EXISTS (SELECT 1 FROM authoritative_source)",

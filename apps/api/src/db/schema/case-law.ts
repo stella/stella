@@ -11,6 +11,7 @@ import {
   tsvector,
   user,
   wsPolicies,
+  timestamptz,
 } from "./common";
 import type {
   CorpusSourceDescriptor,
@@ -29,14 +30,13 @@ export const caseLawSources = p.pgTable(
     name: p.varchar({ length: 256 }).notNull(),
     enabled: p.boolean().default(true).notNull(),
     syncCursor: p.text("sync_cursor"),
-    lastSyncAt: p.timestamp("last_sync_at"),
+    lastSyncAt: timestamptz("last_sync_at"),
     config: jsonb().$type<Record<string, unknown>>().default({}),
     // License / redistribution terms. null = legacy source (public
     // court records, treated as redistributable); see corpus-source.ts.
     descriptor: jsonb().$type<CorpusSourceDescriptor>(),
-    createdAt: p.timestamp("created_at").defaultNow().notNull(),
-    updatedAt: p
-      .timestamp("updated_at")
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+    updatedAt: timestamptz("updated_at")
       .defaultNow()
       .notNull()
       .$onUpdate(() => new Date()),
@@ -106,8 +106,8 @@ export const caseLawDecisions = p.pgTable(
      * another replica from downloading the same document at once, and it
      * expires so a worker that died mid-fetch does not strand the row.
      */
-    documentFetchRequestedAt: p.timestamp("document_fetch_requested_at"),
-    documentFetchAttemptedAt: p.timestamp("document_fetch_attempted_at"),
+    documentFetchRequestedAt: timestamptz("document_fetch_requested_at"),
+    documentFetchAttemptedAt: timestamptz("document_fetch_attempted_at"),
     documentFetchAttempts: p
       .integer("document_fetch_attempts")
       .default(0)
@@ -127,7 +127,7 @@ export const caseLawDecisions = p.pgTable(
       .default(0)
       .notNull(),
     citationCount: p.integer("citation_count").default(0).notNull(),
-    citationAuthorityComputedAt: p.timestamp("citation_authority_computed_at"),
+    citationAuthorityComputedAt: timestamptz("citation_authority_computed_at"),
     /**
      * Object-storage keys for the canonical corpus payloads. Populated
      * by the corpus-storage backfill / ingestion write whenever
@@ -150,10 +150,9 @@ export const caseLawDecisions = p.pgTable(
     contentHash: p.varchar("content_hash", { length: 64 }),
     indexedHash: p.varchar("indexed_hash", { length: 64 }),
     indexedGeneration: p.varchar("indexed_generation", { length: 32 }),
-    indexedAt: p.timestamp("indexed_at"),
-    createdAt: p.timestamp("created_at").defaultNow().notNull(),
-    updatedAt: p
-      .timestamp("updated_at")
+    indexedAt: timestamptz("indexed_at"),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+    updatedAt: timestamptz("updated_at")
       .defaultNow()
       .notNull()
       .$onUpdate(() => new Date()),
@@ -242,7 +241,7 @@ export const caseLawCitations = p.pgTable(
     ).references(() => caseLawPolarityRules.id, {
       onDelete: "set null",
     }),
-    createdAt: p.timestamp("created_at").defaultNow().notNull(),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
   },
   (t) => [
     p.index("case_law_citations_citing_idx").on(t.citingDecisionId),
@@ -273,9 +272,8 @@ export const caseLawPolarityRules = p.pgTable(
     confidence: p.doublePrecision("confidence").notNull().default(1),
     matchCount: p.integer("match_count").notNull().default(0),
     surfaceForms: jsonb("surface_forms").$type<string[]>().default([]),
-    createdAt: p.timestamp("created_at").defaultNow().notNull(),
-    updatedAt: p
-      .timestamp("updated_at")
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+    updatedAt: timestamptz("updated_at")
       .defaultNow()
       .notNull()
       .$onUpdate(() => new Date()),
@@ -316,7 +314,7 @@ export const caseLawMatterLinks = p.pgTable(
       .text("linked_by")
       .notNull()
       .references(() => user.id, { onDelete: "restrict" }),
-    createdAt: p.timestamp("created_at").defaultNow().notNull(),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
   },
   (t) => [
     p
@@ -340,7 +338,7 @@ export const caseLawCourtWeights = p.pgTable(
     tier: p.integer().notNull(),
     tierLabel: p.varchar("tier_label", { length: 64 }).notNull(),
     weight: p.doublePrecision().notNull(),
-    createdAt: p.timestamp("created_at").defaultNow().notNull(),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
   },
   (t) => [
     p
@@ -375,7 +373,7 @@ export const caseLawSearchDocuments = p.pgTable(
     regconfig: p.varchar({ length: 64 }).notNull().default("simple"),
     previewGeneration: p.uuid("preview_generation"),
     tsv: tsvector(),
-    updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
     p.index("case_law_search_docs_tsv_idx").using("gin", table.tsv),
@@ -432,8 +430,8 @@ export const caseLawIngestionEvents = p.pgTable(
     cursorAfter: p.text("cursor_after"),
     durationMs: p.integer("duration_ms").notNull(),
     errorMessage: p.varchar("error_message", { length: 2048 }),
-    startedAt: p.timestamp("started_at").notNull(),
-    finishedAt: p.timestamp("finished_at").defaultNow().notNull(),
+    startedAt: timestamptz("started_at").notNull(),
+    finishedAt: timestamptz("finished_at").defaultNow().notNull(),
   },
   (t) => [
     p.index("case_law_ingestion_events_source_idx").on(t.sourceId),
@@ -454,7 +452,7 @@ export const caseLawIngestionFailures = p.pgTable(
     errorType: p.varchar("error_type", { length: 128 }).notNull(),
     errorMessage: p.varchar("error_message", { length: 2048 }).notNull(),
     cursor: p.text(),
-    createdAt: p.timestamp("created_at").defaultNow().notNull(),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
   },
   (t) => [
     p.index("case_law_ingestion_failures_source_idx").on(t.sourceId),
@@ -487,7 +485,7 @@ export const caseLawIndexJobs = p.pgTable(
     status: p.varchar({ length: 16 }).notNull().$type<"succeeded" | "failed">(),
     contentHash: p.varchar("content_hash", { length: 64 }),
     errorMessage: p.varchar("error_message", { length: 2048 }),
-    createdAt: p.timestamp("created_at").defaultNow().notNull(),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
   },
   (t) => [
     p.index("case_law_index_jobs_decision_idx").on(t.decisionId),

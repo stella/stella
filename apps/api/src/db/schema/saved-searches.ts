@@ -8,6 +8,7 @@ import {
   savedSearchPolicies,
   sql,
   user,
+  timestamptz,
 } from "./common";
 
 export const savedSearches = p.pgTable(
@@ -23,9 +24,8 @@ export const savedSearches = p.pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
     name: p.varchar({ length: 256 }).notNull(),
     criteria: p.jsonb().$type<SavedSearchCriteria>().notNull(),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
-    updatedAt: p
-      .timestamp("updated_at")
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at")
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),

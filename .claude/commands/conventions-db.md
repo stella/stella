@@ -22,6 +22,13 @@ migrations.
   parent with cascade FKs first (removing referencing rows),
   then delete restrict-FK targets last.
 - JSONB columns for flexible content schemas
+- Timestamp columns must use the `timestamptz` helper from
+  `apps/api/src/db/columns.ts` (re-exported via `schema/common.ts`). Stock
+  pg-core `timestamp()` produces a naive timestamp whose meaning depends on
+  the session time zone; the `require-timestamptz-column` lint rule bans it. The companion
+  `no-naive-timestamp-cast` rule bans `::timestamp` casts in SQL text; use
+  `::timestamptz`, or `::timestamp AT TIME ZONE '...'` when deliberately
+  anchoring a zoneless value.
 
 ## Migrations
 

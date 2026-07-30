@@ -216,7 +216,7 @@ const indexer = createCorpusIndexer<"legislationDocument", IndexableRow>({
     const tuples = sql.join(
       rows.map(
         (row) =>
-          sql`(${row.id}::uuid, ${row.contentHash}::text, ${row.indexedHash}::text, ${row.indexedGeneration}::text, ${row.updatedAtToken}::timestamp)`,
+          sql`(${row.id}::uuid, ${row.contentHash}::text, ${row.indexedHash}::text, ${row.indexedGeneration}::text, ${row.updatedAtToken}::timestamptz)`,
       ),
       sql`, `,
     );
@@ -224,7 +224,7 @@ const indexer = createCorpusIndexer<"legislationDocument", IndexableRow>({
       UPDATE ${legislationDocuments} AS d
       SET indexed_hash = v.content_hash,
           indexed_generation = ${indexId},
-          indexed_at = ${now.toISOString()}::timestamp
+          indexed_at = ${now.toISOString()}::timestamptz
       FROM (VALUES ${tuples}) AS v(id, content_hash, expected_hash, expected_generation, expected_updated)
       WHERE d.id = v.id
         AND d.indexed_hash IS NOT DISTINCT FROM v.expected_hash

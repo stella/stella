@@ -109,7 +109,7 @@ const dateExprForProperty = (propertyId: string) => {
     case "_due-date":
       return sql`(${entities.dueDate})::date`;
     case "_start-date":
-      return sql`(COALESCE(${entities.startAt}, ${entities.occurredAt}, ${entities.dueDate}::timestamp))::date`;
+      return sql`(COALESCE(${entities.startAt}, ${entities.occurredAt}, ${entities.dueDate}::timestamptz))::date`;
     default:
       return null;
   }

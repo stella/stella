@@ -9,6 +9,7 @@ import {
   safeUuid,
   tsvector,
   user,
+  timestamptz,
 } from "./common";
 import type {
   AnyPgColumn,
@@ -34,8 +35,8 @@ export const clauseCategories = p.pgTable(
     name: p.varchar({ length: 256 }).notNull(),
     description: p.text(),
     sortOrder: p.integer("sort_order").notNull().default(0),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
-    updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
     p.index("clause_categories_organization_id_idx").on(table.organizationId),
@@ -71,8 +72,8 @@ export const clauses = p.pgTable(
       .text("created_by")
       .notNull()
       .references(() => user.id, { onDelete: "restrict" }),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
-    updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
     p.index("clauses_organization_id_idx").on(table.organizationId),
@@ -97,8 +98,8 @@ export const clauseVariants = p.pgTable(
     label: p.varchar({ length: 256 }).notNull(),
     body: jsonb().$type<ClauseBody>().notNull(),
     sortOrder: p.integer("sort_order").notNull().default(0),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
-    updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
     p.index("clause_variants_clause_id_idx").on(table.clauseId),
@@ -121,7 +122,7 @@ export const clauseVersions = p.pgTable(
     clauseId: safeUuid<"clause">("clause_id").notNull(),
     version: p.integer().notNull(),
     body: jsonb().$type<ClauseBody>().notNull(),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
     p
@@ -157,8 +158,8 @@ export const templateRecipes = p.pgTable(
       .text("created_by")
       .notNull()
       .references(() => user.id, { onDelete: "restrict" }),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
-    updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
     p.index("template_recipes_organization_id_idx").on(table.organizationId),
@@ -196,7 +197,7 @@ export const templateClauses = p.pgTable(
     ),
     slotName: p.varchar("slot_name", { length: 128 }),
     sortOrder: p.integer("sort_order").notNull().default(0),
-    insertedAt: p.timestamp("inserted_at").notNull().defaultNow(),
+    insertedAt: timestamptz("inserted_at").notNull().defaultNow(),
   },
   (table) => [
     p.index("template_clauses_template_id_idx").on(table.templateId),
@@ -240,7 +241,7 @@ export const templateFills = p.pgTable(
     structureErrors: jsonb("structure_errors").$type<
       { message: string; paragraphIndex: number; directive: string }[] | null
     >(),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
     p.index("template_fills_organization_id_idx").on(table.organizationId),

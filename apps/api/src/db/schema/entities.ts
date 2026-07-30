@@ -12,6 +12,7 @@ import {
   sql,
   user,
   wsPolicies,
+  timestamptz,
 } from "./common";
 import type {
   AgendaAttendee,
@@ -68,10 +69,10 @@ export const entities = p.pgTable(
     agendaKind: p.text("agenda_kind", {
       enum: ["task", "deadline", "meeting", "hearing", "event"],
     }),
-    startAt: p.timestamp("start_at", { withTimezone: true }),
-    endAt: p.timestamp("end_at", { withTimezone: true }),
-    occurredAt: p.timestamp("occurred_at", { withTimezone: true }),
-    remindAt: p.timestamp("remind_at", { withTimezone: true }),
+    startAt: timestamptz("start_at"),
+    endAt: timestamptz("end_at"),
+    occurredAt: timestamptz("occurred_at"),
+    remindAt: timestamptz("remind_at"),
     allDay: p.boolean("all_day").notNull().default(false),
     timeZone: p.varchar("time_zone", { length: 64 }),
     location: p.text("location"),
@@ -104,8 +105,8 @@ export const entities = p.pgTable(
     sortOrder: p.varchar("sort_order", { length: 64 }),
     /** Structured metadata for non-document entity kinds (e.g. links). */
     metadata: jsonb().$type<LinkMetadata | null>(),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
-    updatedAt: p.timestamp("updated_at").defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").defaultNow(),
   },
   (table) => [
     p.index("entities_workspace_id_idx").on(table.workspaceId),
@@ -119,7 +120,7 @@ export const entities = p.pgTable(
       .index("entities_ws_updated_at_coalesce_id_idx")
       .on(
         table.workspaceId,
-        sql`COALESCE(${table.updatedAt}, '0001-01-01 00:00:00'::timestamp)`,
+        sql`COALESCE(${table.updatedAt}, '0001-01-01 00:00:00+00'::timestamptz)`,
         table.id,
       ),
     p
@@ -189,7 +190,7 @@ export const taskAssignees = p.pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     role: p.text("role", { enum: TASK_ASSIGNEE_ROLES }).notNull(),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
     p.index("task_assignees_workspace_id_idx").on(table.workspaceId),
@@ -219,7 +220,7 @@ export const entityLinks = p.pgTable(
       .varchar("link_type", { length: 32 })
       .notNull()
       .default("related"),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
     p.index("entity_links_workspace_id_idx").on(table.workspaceId),
@@ -272,7 +273,7 @@ export const entityVersions = p.pgTable(
      * slice. Null on legacy rows and creation paths not yet threaded.
      */
     source: jsonb("source").$type<DocumentSource | null>(),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
     /**
      * Chain-of-custody tombstone. A non-null `deletedAt` hides the version
      * from every read / list / restore / download path while its row and S3
@@ -280,7 +281,7 @@ export const entityVersions = p.pgTable(
      * hard-deleted. `deletedBy` mirrors `createdBy` (plain user id, no FK) so
      * the actor survives a user deletion.
      */
-    deletedAt: p.timestamp("deleted_at"),
+    deletedAt: timestamptz("deleted_at"),
     deletedBy: p.text("deleted_by"),
   },
   (table) => [
@@ -322,7 +323,7 @@ export const entityVersionAiSummaries = p.pgTable(
     language: p.varchar("language", { length: 10 }),
     modelProvider: p.varchar("model_provider", { length: 64 }).notNull(),
     modelId: p.varchar("model_id", { length: 256 }).notNull(),
-    generatedAt: p.timestamp("generated_at").notNull().defaultNow(),
+    generatedAt: timestamptz("generated_at").notNull().defaultNow(),
   },
   (table) => [
     p.index("entity_version_ai_summaries_workspace_idx").on(table.workspaceId),
@@ -389,21 +390,20 @@ export const desktopEditSessions = p.pgTable(
     checkpointScanWarnings: jsonb("checkpoint_scan_warnings").$type<
       string[] | null
     >(),
-    checkpointUpdatedAt: p.timestamp("checkpoint_updated_at"),
+    checkpointUpdatedAt: timestamptz("checkpoint_updated_at"),
     sessionTokenHash: p.varchar("session_token_hash", { length: 64 }).notNull(),
-    tokenExpiresAt: p.timestamp("token_expires_at").notNull(),
+    tokenExpiresAt: timestamptz("token_expires_at").notNull(),
     takeoverRequestedBy: p
       .text("takeover_requested_by")
       .references(() => user.id, { onDelete: "set null" }),
-    takeoverRequestedAt: p.timestamp("takeover_requested_at"),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
-    updatedAt: p
-      .timestamp("updated_at")
+    takeoverRequestedAt: timestamptz("takeover_requested_at"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at")
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),
-    closedAt: p.timestamp("closed_at"),
-    expiryNotificationPublishedAt: p.timestamp(
+    closedAt: timestamptz("closed_at"),
+    expiryNotificationPublishedAt: timestamptz(
       "expiry_notification_published_at",
     ),
   },
@@ -473,15 +473,14 @@ export const desktopEditHandoffs = p.pgTable(
       "linked_account",
     ).$type<DesktopEditLinkedAccountSnapshot | null>(),
     forceTakeover: p.boolean("force_takeover").notNull().default(false),
-    expiresAt: p.timestamp("expires_at").notNull(),
-    consumedAt: p.timestamp("consumed_at"),
+    expiresAt: timestamptz("expires_at").notNull(),
+    consumedAt: timestamptz("consumed_at"),
     desktopSessionId: safeUuid<"desktopEditSession">(
       "desktop_session_id",
     ).references(() => desktopEditSessions.id, { onDelete: "set null" }),
-    openedAt: p.timestamp("opened_at"),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
-    updatedAt: p
-      .timestamp("updated_at")
+    openedAt: timestamptz("opened_at"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at")
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),
@@ -535,7 +534,7 @@ export const folioCollabSessions = p.pgTable(
     fileName: p.varchar("file_name", { length: 256 }).notNull(),
     yjsSnapshotFileId: safeUuid<"userFile">("yjs_snapshot_file_id").notNull(),
     yjsSnapshotSizeBytes: p.integer("yjs_snapshot_size_bytes"),
-    yjsSnapshotUpdatedAt: p.timestamp("yjs_snapshot_updated_at"),
+    yjsSnapshotUpdatedAt: timestamptz("yjs_snapshot_updated_at"),
     docxCheckpointFileId: safeUuid<"userFile">(
       "docx_checkpoint_file_id",
     ).notNull(),
@@ -546,19 +545,18 @@ export const folioCollabSessions = p.pgTable(
     docxCheckpointScanWarnings: jsonb("docx_checkpoint_scan_warnings").$type<
       string[] | null
     >(),
-    docxCheckpointUpdatedAt: p.timestamp("docx_checkpoint_updated_at"),
+    docxCheckpointUpdatedAt: timestamptz("docx_checkpoint_updated_at"),
     seedClaimedBy: p.text("seed_claimed_by").references(() => user.id, {
       onDelete: "set null",
     }),
-    seedClaimedAt: p.timestamp("seed_claimed_at"),
-    seededAt: p.timestamp("seeded_at"),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
-    updatedAt: p
-      .timestamp("updated_at")
+    seedClaimedAt: timestamptz("seed_claimed_at"),
+    seededAt: timestamptz("seeded_at"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at")
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),
-    closedAt: p.timestamp("closed_at"),
+    closedAt: timestamptz("closed_at"),
   },
   (table) => [
     p.index("folio_collab_sessions_workspace_id_idx").on(table.workspaceId),
@@ -605,8 +603,8 @@ export const folioCollabSessionTokens = p.pgTable(
     permissions: jsonb("permissions")
       .$type<FolioCollabTokenPermissions>()
       .notNull(),
-    expiresAt: p.timestamp("expires_at").notNull(),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    expiresAt: timestamptz("expires_at").notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
     p
@@ -726,12 +724,12 @@ export const pendingUploads = p.pgTable(
     ).$type<PendingUploadFinalizedResult | null>(),
     rejectReason: p.text("reject_reason"),
     /** Set inside the claim transaction. Used to detect stuck `scanning` rows. */
-    claimedAt: p.timestamp("claimed_at"),
+    claimedAt: timestamptz("claimed_at"),
     claimedByRequestId: p.varchar("claimed_by_request_id", { length: 64 }),
     /** `createdAt + 5min`. A finalize after this rejects without touching S3. */
-    expiresAt: p.timestamp("expires_at").notNull(),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
-    finalizedAt: p.timestamp("finalized_at"),
+    expiresAt: timestamptz("expires_at").notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    finalizedAt: timestamptz("finalized_at"),
   },
   (table) => [
     p
@@ -794,8 +792,8 @@ export const cellMetadata = p.pgTable(
     updatedBy: p
       .text("updated_by")
       .references(() => user.id, { onDelete: "set null" }),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
-    updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
     p.primaryKey({

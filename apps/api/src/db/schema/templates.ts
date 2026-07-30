@@ -14,6 +14,7 @@ import {
   user,
   wsPolicies,
   wsOrganizationReadOnlyPolicies,
+  timestamptz,
 } from "./common";
 import type { AnyPgColumn, TemplateManifest } from "./common";
 import { contacts, workspaces } from "./contacts";
@@ -35,8 +36,8 @@ export const templateCategories = p.pgTable(
     name: p.varchar({ length: 256 }).notNull(),
     description: p.text(),
     sortOrder: p.integer("sort_order").notNull().default(0),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
-    updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
     p.index("template_categories_organization_id_idx").on(table.organizationId),
@@ -78,13 +79,13 @@ export const templates = p.pgTable(
     whenToUse: p.text("when_to_use"),
     whenNotToUse: p.text("when_not_to_use"),
     useCount: p.integer("use_count").notNull().default(0),
-    lastUsedAt: p.timestamp("last_used_at"),
+    lastUsedAt: timestamptz("last_used_at"),
     createdBy: p
       .text("created_by")
       .notNull()
       .references(() => user.id, { onDelete: "restrict" }),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
-    updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
     p.index("templates_organization_id_idx").on(table.organizationId),
@@ -116,7 +117,7 @@ export const templateVersions = p.pgTable(
       .text("created_by")
       .notNull()
       .references(() => user.id, { onDelete: "restrict" }),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
     p
@@ -154,7 +155,7 @@ export const searchDocuments = p.pgTable(
     language: p.varchar("language", { length: 10 }),
     previewGeneration: p.uuid("preview_generation"),
     tsv: tsvector(),
-    updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
     p.index("search_documents_org_id_idx").on(table.organizationId),
@@ -219,7 +220,7 @@ export const contactSearchDocuments = p.pgTable(
     searchableText: p.text("searchable_text").notNull().default(""),
     previewGeneration: p.uuid("preview_generation"),
     tsv: tsvector(),
-    updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
     p.index("contact_search_docs_org_idx").on(table.organizationId),
@@ -279,7 +280,7 @@ export const workspaceSearchDocuments = p.pgTable(
     searchableText: p.text("searchable_text").notNull().default(""),
     previewGeneration: p.uuid("preview_generation"),
     tsv: tsvector(),
-    updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
     p.index("workspace_search_docs_org_idx").on(table.organizationId),
@@ -347,7 +348,7 @@ export const extractedContent = p.pgTable(
     iv: bytea("iv").notNull(),
     charCount: p.integer("char_count").notNull(),
     language: p.varchar("language", { length: 10 }),
-    extractedAt: p.timestamp("extracted_at").notNull().defaultNow(),
+    extractedAt: timestamptz("extracted_at").notNull().defaultNow(),
   },
   (table) => [
     p.index("extracted_content_org_id_idx").on(table.organizationId),

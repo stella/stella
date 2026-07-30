@@ -8,6 +8,7 @@ import {
   safeUuid,
   sql,
   tsvector,
+  timestamptz,
 } from "./common";
 import type {
   CorpusSourceDescriptor,
@@ -24,12 +25,11 @@ export const legislationSources = p.pgTable(
     name: p.varchar({ length: 256 }).notNull(),
     enabled: p.boolean().default(true).notNull(),
     syncCursor: p.text("sync_cursor"),
-    lastSyncAt: p.timestamp("last_sync_at"),
+    lastSyncAt: timestamptz("last_sync_at"),
     config: jsonb().$type<Record<string, unknown>>().default({}),
     descriptor: jsonb().$type<CorpusSourceDescriptor>(),
-    createdAt: p.timestamp("created_at").defaultNow().notNull(),
-    updatedAt: p
-      .timestamp("updated_at")
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+    updatedAt: timestamptz("updated_at")
       .defaultNow()
       .notNull()
       .$onUpdate(() => new Date()),
@@ -72,17 +72,16 @@ export const legislationDocuments = p.pgTable(
       .default(0)
       .notNull(),
     citationCount: p.integer("citation_count").default(0).notNull(),
-    citationAuthorityComputedAt: p.timestamp("citation_authority_computed_at"),
+    citationAuthorityComputedAt: timestamptz("citation_authority_computed_at"),
     textS3Key: p.varchar("text_s3_key", { length: 512 }),
     normalizedS3Key: p.varchar("normalized_s3_key", { length: 512 }),
     astS3Key: p.varchar("ast_s3_key", { length: 512 }),
     contentHash: p.varchar("content_hash", { length: 64 }),
     indexedHash: p.varchar("indexed_hash", { length: 64 }),
     indexedGeneration: p.varchar("indexed_generation", { length: 32 }),
-    indexedAt: p.timestamp("indexed_at"),
-    createdAt: p.timestamp("created_at").defaultNow().notNull(),
-    updatedAt: p
-      .timestamp("updated_at")
+    indexedAt: timestamptz("indexed_at"),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+    updatedAt: timestamptz("updated_at")
       .defaultNow()
       .notNull()
       .$onUpdate(() => new Date()),
@@ -134,7 +133,7 @@ export const legislationSearchDocuments = p.pgTable(
     language: p.varchar("language", { length: 10 }),
     regconfig: p.varchar({ length: 64 }).notNull().default("simple"),
     tsv: tsvector(),
-    updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
     p.index("legislation_search_docs_tsv_idx").using("gin", table.tsv),
@@ -158,7 +157,7 @@ export const legislationIndexJobs = p.pgTable(
     status: p.varchar({ length: 16 }).notNull().$type<"succeeded" | "failed">(),
     contentHash: p.varchar("content_hash", { length: 64 }),
     errorMessage: p.varchar("error_message", { length: 2048 }),
-    createdAt: p.timestamp("created_at").defaultNow().notNull(),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
   },
   (t) => [
     p.index("legislation_index_jobs_document_idx").on(t.documentId),

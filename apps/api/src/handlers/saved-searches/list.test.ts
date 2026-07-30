@@ -7,12 +7,12 @@ import { savedSearchCursor } from "./list";
 describe("saved search list cursor", () => {
   test("carries the full ordering tuple", () => {
     const id = createSafeId<"savedSearch">();
-    const encoded = savedSearchCursor.encode("2026-07-29T10:11:12.123456", id);
+    const encoded = savedSearchCursor.encode("2026-07-29T10:11:12.123456Z", id);
 
     expect(savedSearchCursor.decode(encoded)).toEqual({
       timestamp: {
         type: "pgTimestampCursor",
-        value: "2026-07-29T10:11:12.123456",
+        value: "2026-07-29T10:11:12.123456Z",
         precision: "microseconds",
       },
       id,

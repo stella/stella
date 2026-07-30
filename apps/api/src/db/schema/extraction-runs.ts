@@ -8,6 +8,7 @@ import {
   safeWorkspaceId,
   user,
   wsOrganizationReadOnlyPolicies,
+  timestamptz,
 } from "./common";
 import { workspaces } from "./contacts";
 
@@ -57,11 +58,10 @@ export const extractionRuns = p.pgTable(
     total: p.integer().notNull().default(0),
     completed: p.integer().notNull().default(0),
     errorCode: p.varchar("error_code", { length: 128 }),
-    startedAt: p.timestamp("started_at", { withTimezone: true }),
-    finishedAt: p.timestamp("finished_at", { withTimezone: true }),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
-    updatedAt: p
-      .timestamp("updated_at")
+    startedAt: timestamptz("started_at"),
+    finishedAt: timestamptz("finished_at"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at")
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),

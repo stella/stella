@@ -1786,9 +1786,9 @@ const handleListPropertiesTool: McpToolHandler = async ({ args, context }) => {
 
   const boundaryCondition = boundary
     ? or(
-        sql`${properties.createdAt} > ${boundary.createdAt}::timestamp`,
+        sql`${properties.createdAt} > (${boundary.createdAt}::timestamp AT TIME ZONE 'UTC')`,
         and(
-          sql`${properties.createdAt} = ${boundary.createdAt}::timestamp`,
+          sql`${properties.createdAt} = (${boundary.createdAt}::timestamp AT TIME ZONE 'UTC')`,
           gt(properties.id, brandPersistedPropertyId(boundary.id)),
         ),
       )
@@ -1797,7 +1797,7 @@ const handleListPropertiesTool: McpToolHandler = async ({ args, context }) => {
   const rows = await context.scopedDb((tx) =>
     tx
       .select({
-        createdAt: sql<string>`to_char(${properties.createdAt}, ${ENTITY_LIST_TIMESTAMP_CURSOR_FORMAT})`,
+        createdAt: sql<string>`to_char(${properties.createdAt} AT TIME ZONE 'UTC', ${ENTITY_LIST_TIMESTAMP_CURSOR_FORMAT})`,
         id: properties.id,
         name: properties.name,
         content: properties.content,

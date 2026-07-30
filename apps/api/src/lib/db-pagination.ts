@@ -8,20 +8,30 @@ import {
 } from "@/api/lib/pagination";
 
 const PG_TIMESTAMP_CURSOR_PATTERN =
+  /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})T(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})\.(?<microseconds>\d{6})Z$/u;
+const LEGACY_NAIVE_CURSOR_PATTERN =
   /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})T(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})\.(?<microseconds>\d{6})$/u;
 const LEGACY_ISO_CURSOR_PATTERN =
   /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})T(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})\.(?<milliseconds>\d{3})Z$/u;
 const THIRTY_DAY_MONTHS = new Set([4, 6, 9, 11]);
 
 /**
- * `microseconds` is the canonical `to_char(..., '...US')` projection this codec
- * emits today; `milliseconds` marks a legacy `date_trunc('milliseconds', ...)`
- * cursor (ISO `…​.123Z`) issued before the microsecond migration. Keyset
- * comparisons truncate the column to match a `milliseconds` boundary so a page
- * cut before the migration resumes without duplicating or skipping the rows
+ * `microseconds` is the canonical projection this codec emits today: a
+ * `to_char(... AT TIME ZONE 'UTC', '...US"Z"')` value whose trailing `Z`
+ * marks it as UTC wall-clock, so the boundary can re-anchor it explicitly.
+ * `microseconds-naive` is the same six-digit value without the `Z`, issued
+ * before the UTC-anchored rendering; its boundary keeps the old
+ * session-zone interpretation, which matches how the timestamptz migration
+ * converted the rows it was cut from. `milliseconds` marks the oldest
+ * `date_trunc('milliseconds', ...)` cursor (ISO `…​.123Z`); keyset
+ * comparisons truncate the column to match it so a page cut before the
+ * microsecond migration resumes without duplicating or skipping the rows
  * that shared its truncated millisecond.
  */
-export type PgTimestampCursorPrecision = "microseconds" | "milliseconds";
+export type PgTimestampCursorPrecision =
+  | "microseconds"
+  | "microseconds-naive"
+  | "milliseconds";
 
 export type ParsedPgTimestampCursor = {
   type: "pgTimestampCursor";
@@ -33,14 +43,29 @@ export type ParsedPgTimestampCursor = {
  * Selects a timestamp in a stable, microsecond-precision format suitable for
  * opaque cursors. Ordering remains on the original indexed column; this
  * expression is only projected for serialization.
+ *
+ * The value is rendered at UTC and the boundary re-anchors it the same way,
+ * so the cursor round-trip never depends on the connection's `TimeZone`: a
+ * self-hosted database defaulting to a DST zone would otherwise serialize
+ * two distinct instants in the repeated fall-back hour identically and
+ * reparse the boundary on only one of them.
  */
 export const pgTimestampCursorValue = (column: SQLWrapper): SQL<string> =>
-  sql<string>`to_char(${column}, 'YYYY-MM-DD"T"HH24:MI:SS.US')`;
+  sql<string>`to_char(${column} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
 
-/** Parameterized timestamp boundary used by keyset comparisons. */
+/**
+ * Parameterized timestamp boundary used by keyset comparisons. A `Z`-marked
+ * canonical cursor re-anchors its UTC wall-clock explicitly; the legacy
+ * forms keep the session-zone interpretation they were issued under (the
+ * casts drop an embedded offset only for the naive re-anchor).
+ */
 export const pgTimestampCursorBoundary = ({
   value,
-}: ParsedPgTimestampCursor): SQL<Date> => sql<Date>`${value}::timestamp`;
+  precision,
+}: ParsedPgTimestampCursor): SQL<Date> =>
+  precision === "microseconds"
+    ? sql<Date>`(${value}::timestamp AT TIME ZONE 'UTC')`
+    : sql<Date>`${value}::timestamptz`;
 
 const isLeapYear = (year: number): boolean =>
   year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
@@ -94,6 +119,15 @@ export const parsePgTimestampCursorValue = (
     return { type: "pgTimestampCursor", value, precision: "microseconds" };
   }
 
+  const legacyNaive = LEGACY_NAIVE_CURSOR_PATTERN.exec(value);
+  if (legacyNaive && hasValidTimestampParts(legacyNaive.groups)) {
+    return {
+      type: "pgTimestampCursor",
+      value,
+      precision: "microseconds-naive",
+    };
+  }
+
   const legacy = LEGACY_ISO_CURSOR_PATTERN.exec(value);
   if (legacy && hasValidTimestampParts(legacy.groups)) {
     return { type: "pgTimestampCursor", value, precision: "milliseconds" };
@@ -107,7 +141,7 @@ export const parsePgTimestampCursorValue = (
 // The `(created_at, id)` (or `(updated_at, id)`) keyset cursor is the same
 // shape everywhere: project a microsecond-precision timestamp for
 // serialization, keep ordering on the indexed column, and compare against a
-// `value::timestamp` boundary. This factory owns that codec so each list
+// UTC-anchored boundary. This factory owns that codec so each list
 // handler only supplies the timestamp column and the branded-id constructor.
 
 const LEGACY_PIPE_SEPARATOR = "|";

@@ -13,6 +13,7 @@ import {
   unsafeCents,
   user,
   wsPolicies,
+  timestamptz,
 } from "./common";
 import { workspaces } from "./contacts";
 import { entities } from "./entities";
@@ -57,14 +58,10 @@ export const timeEntries = p.pgTable(
       onDelete: "set null",
     }),
     splitGroupId: safeUuid<"timeEntry">("split_group_id"),
-    timerStartedAt: p.timestamp("timer_started_at", {
-      withTimezone: true,
-    }),
-    timerStoppedAt: p.timestamp("timer_stopped_at", {
-      withTimezone: true,
-    }),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
-    updatedAt: p.timestamp("updated_at").defaultNow(),
+    timerStartedAt: timestamptz("timer_started_at"),
+    timerStoppedAt: timestamptz("timer_stopped_at"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").defaultNow(),
   },
   (table) => [
     p
@@ -104,7 +101,7 @@ export const billingCodes = p.pgTable(
     label: p.varchar({ length: 256 }).notNull(),
     active: p.boolean().notNull().default(true),
     sortOrder: p.integer("sort_order").notNull().default(0),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
     p
@@ -131,8 +128,8 @@ export const rateTables = p.pgTable(
     currency: p.varchar({ length: 3 }).notNull(),
     isDefault: p.boolean("is_default").notNull().default(false),
     clientId: safeUuid<"contact">("client_id"),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
-    updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
     p
@@ -159,7 +156,7 @@ export const rateEntries = p.pgTable(
     hourlyRate: centsColumn("hourly_rate").notNull(),
     effectiveFrom: p.date("effective_from").notNull(),
     effectiveTo: p.date("effective_to"),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
     p
@@ -202,8 +199,8 @@ export const expenses = p.pgTable(
       onDelete: "set null",
     }),
     receiptFileId: safeUuid<"userFile">("receipt_file_id"),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
-    updatedAt: p.timestamp("updated_at").defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").defaultNow(),
   },
   (table) => [
     p
@@ -257,9 +254,9 @@ export const invoices = p.pgTable(
     // SAFETY: literal zero is a valid minor-unit integer default.
     totalAmount: centsColumn("total_amount").notNull().default(unsafeCents(0)),
     notes: p.text(),
-    paidAt: p.timestamp("paid_at"),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
-    updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
+    paidAt: timestamptz("paid_at"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
     p.index("invoices_ws_status_idx").on(table.workspaceId, table.status),

@@ -88,13 +88,13 @@ const readWorkspaceActivity = createSafeHandler(
     }
 
     // Keep this expression aligned with entities_ws_updated_at_coalesce_id_idx.
-    const entityActivityAt = sql<Date>`coalesce(${entities.updatedAt}, '0001-01-01 00:00:00'::timestamp)`;
+    const entityActivityAt = sql<Date>`coalesce(${entities.updatedAt}, '0001-01-01 00:00:00+00'::timestamptz)`;
     const entityCursorActivityAt = sql<string>`to_char(
-      ${entityActivityAt},
+      ${entityActivityAt} AT TIME ZONE 'UTC',
       'YYYY-MM-DD"T"HH24:MI:SS.US'
     )`;
     const threadCursorActivityAt = sql<string>`to_char(
-      ${chatThreads.updatedAt},
+      ${chatThreads.updatedAt} AT TIME ZONE 'UTC',
       'YYYY-MM-DD"T"HH24:MI:SS.US'
     )`;
     const entityFile = sql<ActivityFile | null>`(
@@ -264,7 +264,7 @@ const activityCursorCondition = ({
     return undefined;
   }
 
-  return sql`(${activityAt}, ${id}, ${type}) < (${cursor.activityAt}::timestamp, ${cursor.id}::uuid, ${cursor.type})`;
+  return sql`(${activityAt}, ${id}, ${type}) < ((${cursor.activityAt}::timestamp AT TIME ZONE 'UTC'), ${cursor.id}::uuid, ${cursor.type})`;
 };
 
 const compareActivity = (

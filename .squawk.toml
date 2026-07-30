@@ -23,11 +23,12 @@ excluded_rules = [
   "ban-truncate-cascade",
   "changing-column-type",
 
-  # Schema house style: drizzle-generated DDL uses varchar, timestamp without
-  # time zone, and int keys throughout. Changing that is a schema-wide
-  # decision, not a per-migration lint.
+  # Schema house style: drizzle-generated DDL uses varchar throughout.
+  # Changing that is a schema-wide decision, not a per-migration lint.
+  # prefer-timestamp-tz is intentionally NOT excluded: since the
+  # timestamptz_everywhere migration every timestamp column is timestamptz,
+  # and new naive-timestamp DDL should fail this lint.
   "prefer-text-field",
-  "prefer-timestamp-tz",
   "prefer-bigint-over-int",
   "prefer-bigint-over-smallint",
 ]

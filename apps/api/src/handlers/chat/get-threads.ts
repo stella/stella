@@ -64,7 +64,7 @@ const getThreads = createSafeRootHandler(
     // deleting workspaces sealed at the product layer.
     if (cursor) {
       conditions.push(
-        sql`(${chatThreads.updatedAt}, ${chatThreads.id}) < (${cursor.updatedAt}::timestamp, ${cursor.id}::uuid)`,
+        sql`(${chatThreads.updatedAt}, ${chatThreads.id}) < ((${cursor.updatedAt}::timestamp AT TIME ZONE 'UTC'), ${cursor.id}::uuid)`,
       );
     }
 
@@ -77,7 +77,7 @@ const getThreads = createSafeRootHandler(
             title: chatThreads.title,
             updatedAt: chatThreads.updatedAt,
             updatedAtCursor: sql<string>`to_char(
-              ${chatThreads.updatedAt},
+              ${chatThreads.updatedAt} AT TIME ZONE 'UTC',
               'YYYY-MM-DD"T"HH24:MI:SS.US'
             )`,
             workspaceId: chatThreads.workspaceId,

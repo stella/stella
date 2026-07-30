@@ -9,6 +9,7 @@ import {
   safeUuid,
   sql,
   user,
+  timestamptz,
 } from "./common";
 import {
   AGENT_SKILL_ORIGINS,
@@ -51,9 +52,8 @@ export const agentSkills = p.pgTable(
     // to auto-invoke this skill. When null, the skill is only
     // user-triggered (via slash command, picker, etc.).
     autoInvokeHint: p.text("auto_invoke_hint"),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
-    updatedAt: p
-      .timestamp("updated_at")
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at")
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),
@@ -105,7 +105,7 @@ export const agentSkillResources = p.pgTable(
       .$type<AgentSkillResourceKind>(),
     content: p.text().notNull(),
     sizeBytes: p.integer("size_bytes").notNull(),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
     p

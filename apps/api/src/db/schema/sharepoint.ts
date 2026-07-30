@@ -7,6 +7,7 @@ import {
   sharepointConnectionPolicies,
   sharepointOAuthStatePolicies,
   user,
+  timestamptz,
 } from "./common";
 
 /**
@@ -48,15 +49,14 @@ export const sharepointConnections = p.pgTable(
     scope: p.text("scope"),
     /** Display-only Microsoft account identifier (userPrincipalName). */
     accountLabel: p.text("account_label"),
-    expiresAt: p.timestamp("expires_at", { withTimezone: true }),
+    expiresAt: timestamptz("expires_at"),
     status: p
       .text("status", { enum: SHAREPOINT_CONNECTION_STATUSES })
       .notNull()
       .$type<SharepointConnectionStatus>(),
-    lastUsedAt: p.timestamp("last_used_at", { withTimezone: true }),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
-    updatedAt: p
-      .timestamp("updated_at")
+    lastUsedAt: timestamptz("last_used_at"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at")
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),
@@ -88,7 +88,7 @@ export const sharepointOAuthState = p.pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
     codeVerifier: p.text("code_verifier").notNull(),
     redirectUri: p.text("redirect_uri").notNull(),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
     p.index("sharepoint_oauth_state_created_idx").on(table.createdAt),

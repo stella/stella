@@ -9,7 +9,7 @@ import type { AnyColumn, SQL } from "drizzle-orm";
  * the value: a row whose timestamp came from SQL `now()` can never match,
  * and the guarded write no-ops without an error. The token is the column's
  * exact text form; treat it as opaque and only feed it back through
- * {@link timestampMatchesCasToken} (or an equivalent `::timestamp` cast in
+ * {@link timestampMatchesCasToken} (or an equivalent `::timestamptz` cast in
  * hand-built statements).
  */
 export type TimestampCasToken = string & {
@@ -24,4 +24,4 @@ export const timestampCasToken = (column: AnyColumn): SQL<TimestampCasToken> =>
 export const timestampMatchesCasToken = (
   column: AnyColumn,
   token: TimestampCasToken,
-): SQL => sql`${column} IS NOT DISTINCT FROM ${token}::timestamp`;
+): SQL => sql`${column} IS NOT DISTINCT FROM ${token}::timestamptz`;

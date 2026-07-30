@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { customType } from "drizzle-orm/pg-core";
+import { customType, timestamp } from "drizzle-orm/pg-core";
 
 /**
  * Safe replacement for `p.jsonb()`.
@@ -39,3 +39,17 @@ export const jsonb = customType<{
     return value;
   },
 });
+
+/**
+ * Safe replacement for `p.timestamp()`.
+ *
+ * A naive `timestamp` column stores no UTC anchoring, so its meaning
+ * silently depends on every writer's session time zone. This helper
+ * always produces `timestamptz`, keeping stored instants unambiguous
+ * regardless of server or tooling configuration.
+ *
+ * Always use this in place of `timestamp()` from drizzle-orm/pg-core;
+ * the `require-timestamptz-column` lint rule enforces it.
+ */
+export const timestamptz = (name: string) =>
+  timestamp(name, { withTimezone: true });
