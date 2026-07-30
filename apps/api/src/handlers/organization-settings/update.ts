@@ -16,6 +16,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isDocumentOcrWorkerAvailable } from "@/api/lib/document-processing-readiness";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { validatePattern } from "@/api/lib/matter-reference";
 
@@ -42,6 +43,7 @@ export type UpdateOrganizationSettingsProps = {
   organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
   body: Static<typeof updateOrganizationSettingsBodySchema>;
+  workerAvailable?: () => Promise<boolean>;
 };
 
 // Shared org-settings update logic reused by the HTTP handler and the
@@ -54,6 +56,7 @@ export const updateOrganizationSettingsHandler = async function* ({
   organizationId,
   recordAuditEvent,
   body,
+  workerAvailable = isDocumentOcrWorkerAvailable,
 }: UpdateOrganizationSettingsProps) {
   const matterPattern = body.matterNumberPattern;
   const matterPadding = body.matterNumberPadding;
@@ -81,6 +84,18 @@ export const updateOrganizationSettingsHandler = async function* ({
         new HandlerError({ status: 400, message: validation.error.message }),
       );
     }
+  }
+
+  if (
+    body.documentProcessingMode === DOCUMENT_PROCESSING_MODE.SEARCHABLE_TEXT &&
+    !(await workerAvailable())
+  ) {
+    return Result.err(
+      new HandlerError({
+        status: 503,
+        message: "Document processing is temporarily unavailable",
+      }),
+    );
   }
 
   const updateOutcome = yield* Result.await(

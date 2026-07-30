@@ -4,6 +4,7 @@ import { t } from "elysia";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { entities, entityVersions, fields } from "@/api/db/schema";
+import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type {
   HandlerConfig,
@@ -204,17 +205,15 @@ export const requestManualOcrHandler = async function* ({
   }
 
   if (run.status === "queued") {
-    yield* Result.await(
-      Result.tryPromise({
-        try: async () => await enqueue(run.id),
-        catch: (cause) =>
-          new HandlerError({
-            status: 502,
-            message: "Document processing queue is unavailable",
-            cause,
-          }),
-      }),
-    );
+    const enqueueResult = await Result.tryPromise({
+      try: async () => await enqueue(run.id),
+      catch: (cause) => cause,
+    });
+    if (Result.isError(enqueueResult)) {
+      // The durable queued run is reconciled even when this immediate delivery
+      // attempt fails. Keep the failure observable without retracting the ack.
+      captureError(enqueueResult.error, { runId: run.id });
+    }
   }
 
   return Result.ok({ outcome: getManualOcrOutcome(run), runId: run.id });

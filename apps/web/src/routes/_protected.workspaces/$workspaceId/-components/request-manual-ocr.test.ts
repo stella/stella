@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { afterEach, describe, expect, mock, test } from "bun:test";
 
 import { requestManualOcr } from "./request-manual-ocr";
@@ -17,13 +18,13 @@ describe("requestManualOcr", () => {
       Response.json({ outcome: "queued", runId: "run_1" }),
     );
 
-    await expect(
-      requestManualOcr({
-        entityId: "entity_1",
-        fieldId: "field_1",
-        workspaceId: "workspace_1",
-      }),
-    ).resolves.toEqual({ outcome: "queued", runId: "run_1" });
+    const result = await requestManualOcr({
+      entityId: "entity_1",
+      fieldId: "field_1",
+      workspaceId: "workspace_1",
+    });
+
+    expect(result).toEqual({ outcome: "queued", runId: "run_1" });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls.at(0) ?? [];
@@ -40,25 +41,39 @@ describe("requestManualOcr", () => {
   test("maps HTTP failures to an API error", async () => {
     setFetch(async () => new Response(null, { status: 409 }));
 
-    await expect(
-      requestManualOcr({
-        entityId: "entity_1",
-        fieldId: "field_1",
-        workspaceId: "workspace_1",
-      }),
-    ).rejects.toMatchObject({ _tag: "ApiError", status: 409 });
+    const result = await Result.tryPromise({
+      try: async () =>
+        await requestManualOcr({
+          entityId: "entity_1",
+          fieldId: "field_1",
+          workspaceId: "workspace_1",
+        }),
+      catch: (cause) => cause,
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error).toMatchObject({ _tag: "ApiError", status: 409 });
+    }
   });
 
   test("rejects malformed success payloads", async () => {
     setFetch(async () => Response.json({ outcome: "queued", runId: null }));
 
-    await expect(
-      requestManualOcr({
-        entityId: "entity_1",
-        fieldId: "field_1",
-        workspaceId: "workspace_1",
-      }),
-    ).rejects.toMatchObject({ _tag: "ApiError", status: 502 });
+    const result = await Result.tryPromise({
+      try: async () =>
+        await requestManualOcr({
+          entityId: "entity_1",
+          fieldId: "field_1",
+          workspaceId: "workspace_1",
+        }),
+      catch: (cause) => cause,
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error).toMatchObject({ _tag: "ApiError", status: 502 });
+    }
   });
 });
 

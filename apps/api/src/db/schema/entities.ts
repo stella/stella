@@ -765,12 +765,11 @@ export const fields = p.pgTable(
       .index("fields_pending_workspace_idx")
       .on(table.workspaceId)
       .where(sql`${table.content}->>'type' = 'pending'`),
-    // Bounded document-processing recovery starts from current PDF candidates.
-    // Keep the tenant/workspace boundary leading so it cannot degrade into a
-    // whole-table JSONB scan as completed documents accumulate.
+    // Bounded document-processing recovery has a global ID cursor, so its
+    // partial candidate index must start with that cursor column.
     p
       .index("fields_document_processing_pdf_candidate_idx")
-      .on(table.workspaceId, table.entityVersionId, table.id)
+      .on(table.id, table.workspaceId, table.entityVersionId)
       .where(
         sql`${table.content}->>'type' = 'file'
           AND ${table.content}->>'mimeType' = 'application/pdf'

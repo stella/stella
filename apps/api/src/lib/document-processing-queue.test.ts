@@ -10,6 +10,7 @@ import {
   isReversibleAutomaticOcrCancellation,
   isRetryableAutomaticOcrFailure,
   isRetryableSearchIndexFailure,
+  revivableAutomaticOcrCancellationCodes,
   requiresOcrPolicy,
 } from "@/api/lib/document-processing-queue";
 
@@ -153,6 +154,21 @@ describe("isReversibleAutomaticOcrCancellation", () => {
         status: "cancelled",
       }),
     ).toBe(false);
+  });
+});
+
+describe("revivableAutomaticOcrCancellationCodes", () => {
+  test("revives a superseded run only after the source is locked and rechecked", () => {
+    expect(
+      revivableAutomaticOcrCancellationCodes({
+        hasLockedExactSource: false,
+      }),
+    ).not.toContain("source_superseded");
+    expect(
+      revivableAutomaticOcrCancellationCodes({
+        hasLockedExactSource: true,
+      }),
+    ).toContain("source_superseded");
   });
 });
 

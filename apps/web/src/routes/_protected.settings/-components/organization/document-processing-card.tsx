@@ -48,6 +48,7 @@ export const DocumentProcessingCard = () => {
   }
 
   const enabled = settings.documentProcessingMode === SEARCHABLE_TEXT_MODE;
+  const unavailable = !settings.documentOcrAvailable;
 
   return (
     <Frame>
@@ -59,10 +60,15 @@ export const DocumentProcessingCard = () => {
           <p className="text-muted-foreground text-xs">
             {t("settings.organization.documentProcessing.description")}
           </p>
+          {unavailable ? (
+            <p className="text-destructive text-xs" role="status">
+              {t("errors.api.serviceUnavailable")}
+            </p>
+          ) : null}
           <Field className="flex-row items-center gap-2">
             <Checkbox
               checked={enabled}
-              disabled={mutation.isPending}
+              disabled={mutation.isPending || (!enabled && unavailable)}
               id={checkboxId}
               onCheckedChange={(next) => {
                 mutation.mutate(next);

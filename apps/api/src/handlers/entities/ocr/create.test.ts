@@ -13,12 +13,16 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 const rootTransactionMock = mock();
 const enqueueDocumentProcessingRunMock = mock(async () => undefined);
 const recordAuditEvent = mock(async () => undefined);
+const captureErrorMock = mock(() => undefined);
 
 void mock.module("@/api/db/root", () => ({
   rootDb: { transaction: rootTransactionMock },
 }));
 void mock.module("@/api/lib/document-processing-enqueue", () => ({
   enqueueDocumentProcessingRun: enqueueDocumentProcessingRunMock,
+}));
+void mock.module("@/api/lib/analytics/capture", () => ({
+  captureError: captureErrorMock,
 }));
 
 const { requestManualOcrHandler } =
@@ -132,6 +136,54 @@ describe("requestManualOcrHandler", () => {
       workspaceId,
     });
     expect(enqueue).toHaveBeenCalledWith(runId);
+  });
+
+  test("acknowledges a durable run when immediate queue delivery fails", async () => {
+    const enqueueFailure = new Error("queue temporarily unavailable");
+    const enqueue = mock(async () => {
+      throw enqueueFailure;
+    });
+    const persistRun = mock(async () => ({
+      id: runId,
+      status: "queued" as const,
+    }));
+    const result = await Result.gen(() =>
+      requestManualOcrHandler({
+        enqueue,
+        entityId,
+        fieldId,
+        organizationId,
+        persistRun,
+        workerAvailable: async () => true,
+        recordAuditEvent,
+        safeDb: createSafeDb({
+          content: {
+            encrypted: false,
+            fileName: "scan.pdf",
+            id: "00000000-0000-4000-8000-000000000001",
+            mimeType: PDF_MIME_TYPE,
+            pdfFileId: null,
+            sha256Hex: "a".repeat(64),
+            sizeBytes: 123,
+            type: "file",
+            version: 1,
+          },
+          entityId,
+          entityVersionId,
+          fieldId,
+          readOnly: false,
+          versionDeletedAt: null,
+        }),
+        userId,
+        workspaceId,
+      }),
+    );
+
+    expect(result).toEqual(Result.ok({ outcome: "queued", runId }));
+    expect(enqueue).toHaveBeenCalledWith(runId);
+    expect(captureErrorMock).toHaveBeenCalledWith(enqueueFailure, {
+      runId,
+    });
   });
 
   test("reports an already processed outcome without enqueueing a succeeded run", async () => {

@@ -1,5 +1,6 @@
--- OCR recovery reads only live, unencrypted PDF field candidates. Keep the
--- partial index bounded to that set and workspace-leading for tenant isolation.
+-- OCR recovery reads only live, unencrypted PDF field candidates. Its cursor
+-- and ordering are global `fields.id`, so keep the bounded partial index
+-- ID-leading rather than workspace-leading.
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 
@@ -18,7 +19,7 @@ DROP INDEX CONCURRENTLY IF EXISTS "fields_document_processing_pdf_candidate_idx"
 --> statement-breakpoint
 -- squawk-ignore prefer-robust-stmts
 CREATE INDEX CONCURRENTLY "fields_document_processing_pdf_candidate_idx"
-  ON "fields" ("workspace_id", "entity_version_id", "id")
+  ON "fields" ("id", "workspace_id", "entity_version_id")
   WHERE "content"->>'type' = 'file'
     AND "content"->>'mimeType' = 'application/pdf'
     AND "content"->>'encrypted' = 'false';

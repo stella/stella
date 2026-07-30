@@ -78,6 +78,7 @@ const REVERSIBLE_AUTOMATIC_OCR_CANCELLATION_CODES = [
   "policy_disabled",
   "workspace_unavailable",
 ] as const;
+const SOURCE_SUPERSEDED_CANCELLATION_CODE = "source_superseded";
 
 type CurrentOcrSource = {
   content: FieldContent;
@@ -160,6 +161,18 @@ export const isReversibleAutomaticOcrCancellation = ({
     errorCode === REVERSIBLE_AUTOMATIC_OCR_CANCELLATION_CODES[1]
   );
 };
+
+export const revivableAutomaticOcrCancellationCodes = ({
+  hasLockedExactSource,
+}: {
+  hasLockedExactSource: boolean;
+}): readonly string[] =>
+  hasLockedExactSource
+    ? [
+        ...REVERSIBLE_AUTOMATIC_OCR_CANCELLATION_CODES,
+        SOURCE_SUPERSEDED_CANCELLATION_CODE,
+      ]
+    : REVERSIBLE_AUTOMATIC_OCR_CANCELLATION_CODES;
 
 const markRunCancelled = async (
   runId: SafeId<"documentProcessingRun">,
@@ -960,15 +973,18 @@ const persistRepairableOcrRuns = async (
       return [];
     }
 
+    // `currentCandidates` passed the exact field/hash check after the entity's
+    // current version was locked above. Only that locked recheck may revive a
+    // source-superseded run for the same immutable source.
+    const cancellationCodes = revivableAutomaticOcrCancellationCodes({
+      hasLockedExactSource: currentCandidates.length > 0,
+    });
     const repairableConflict = or(
       eq(documentProcessingRuns.status, "succeeded"),
       and(
         inArray(documentProcessingRuns.requestSource, ["upload", "repair"]),
         eq(documentProcessingRuns.status, "cancelled"),
-        inArray(
-          documentProcessingRuns.errorCode,
-          REVERSIBLE_AUTOMATIC_OCR_CANCELLATION_CODES,
-        ),
+        inArray(documentProcessingRuns.errorCode, cancellationCodes),
       ),
     );
     if (!repairableConflict) {
