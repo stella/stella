@@ -188,10 +188,10 @@ describe("security canary alert deduplicator", () => {
     let claimed = false;
     const send = mock(async () => {
       if (claimed) {
-        return null;
+        return [0, 299_000];
       }
       claimed = true;
-      return "OK";
+      return [1, 300_000];
     });
     const createRedis = () => ({ send });
     const claimFromReplicaA = createSecurityCanaryAlertDeduplicator({
@@ -209,13 +209,35 @@ describe("security canary alert deduplicator", () => {
     expect(await claimFromReplicaB()).toEqual({ status: "suppress" });
     expect(await claimFromReplicaB()).toEqual({ status: "suppress" });
     expect(send).toHaveBeenCalledTimes(2);
-    expect(send).toHaveBeenCalledWith("SET", [
-      "security:canary:alert:machine-api-key",
+    expect(send).toHaveBeenCalledWith("EVAL", [
+      expect.stringContaining('redis.call("PTTL", KEYS[1])'),
       "1",
-      "NX",
-      "PX",
+      "security:canary:alert:machine-api-key",
       "300000",
     ]);
+  });
+
+  test("aligns local duplicate suppression with the shared claim TTL", async () => {
+    let now = 1000;
+    const send = mock(async () =>
+      send.mock.calls.length === 1 ? [0, 1000] : [1, 300_000],
+    );
+    const claimAlert = createSecurityCanaryAlertDeduplicator({
+      createRedis: () => ({ send }),
+      now: () => now,
+    });
+
+    expect(await claimAlert()).toEqual({ status: "suppress" });
+    now += 999;
+    expect(await claimAlert()).toEqual({ status: "suppress" });
+    expect(send).toHaveBeenCalledTimes(1);
+
+    now += 1;
+    expect(await claimAlert()).toEqual({
+      status: "emit",
+      reason: "claimed",
+    });
+    expect(send).toHaveBeenCalledTimes(2);
   });
 
   test("suppresses concurrent replays while the shared claim is pending", async () => {
@@ -234,7 +256,7 @@ describe("security canary alert deduplicator", () => {
     expect(await claimAlert()).toEqual({ status: "suppress" });
     expect(send).toHaveBeenCalledTimes(1);
 
-    resolveSend("OK");
+    resolveSend([1, 300_000]);
     expect(await firstClaim).toEqual({
       status: "emit",
       reason: "claimed",

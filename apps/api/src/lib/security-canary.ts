@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { Result, TaggedError } from "better-result";
 import type { PreContext } from "elysia";
 import { timingSafeEqual } from "node:crypto";
 
@@ -20,6 +20,13 @@ const MACHINE_API_KEY_CREDENTIAL_LENGTH =
 const ALERT_DEDUP_KEY = "security:canary:alert:machine-api-key";
 const ALERT_DEDUP_WINDOW_MS = 5 * 60 * 1000;
 const REDIS_COMMAND_TIMEOUT_MS = 500;
+const CLAIM_ALERT_SCRIPT = `
+local claimed = redis.call("SET", KEYS[1], "1", "NX", "PX", ARGV[1])
+if claimed then
+  return { 1, tonumber(ARGV[1]) }
+end
+return { 0, redis.call("PTTL", KEYS[1]) }
+`;
 
 export const SECURITY_CANARY_WARNING_HEADER = "x-stella-agent-warning";
 export const SECURITY_CANARY_WARNING =
@@ -55,6 +62,43 @@ type SecurityCanaryAlertDeduplicatorOptions = {
   now?: () => number;
 };
 
+class SecurityCanaryRedisReplyError extends TaggedError(
+  "SecurityCanaryRedisReplyError",
+)<{
+  message: string;
+  reply: unknown;
+}>() {}
+
+type SecurityCanaryRedisClaim =
+  | { status: "claimed"; ttlMs: number }
+  | { status: "duplicate"; ttlMs: number };
+
+const parseRedisClaim = (reply: unknown): SecurityCanaryRedisClaim => {
+  if (!Array.isArray(reply) || reply.length !== 2) {
+    throw new SecurityCanaryRedisReplyError({
+      message: "Redis returned an invalid security canary claim reply",
+      reply,
+    });
+  }
+
+  const claimed = Number(reply.at(0));
+  const ttlMs = Number(reply.at(1));
+  if (
+    (claimed !== 0 && claimed !== 1) ||
+    !Number.isFinite(ttlMs) ||
+    ttlMs < 0
+  ) {
+    throw new SecurityCanaryRedisReplyError({
+      message: "Redis returned invalid security canary claim values",
+      reply,
+    });
+  }
+
+  return claimed === 1
+    ? { status: "claimed", ttlMs }
+    : { status: "duplicate", ttlMs };
+};
+
 export const createSecurityCanaryAlertDeduplicator = ({
   commandTimeoutMs = REDIS_COMMAND_TIMEOUT_MS,
   createRedis = () =>
@@ -77,17 +121,17 @@ export const createSecurityCanaryAlertDeduplicator = ({
     const result = await Result.tryPromise({
       try: async () => {
         const client = (redis ??= createRedis());
-        return await withCommandTimeout({
-          command: client.send("SET", [
-            ALERT_DEDUP_KEY,
+        const reply = await withCommandTimeout({
+          command: client.send("EVAL", [
+            CLAIM_ALERT_SCRIPT,
             "1",
-            "NX",
-            "PX",
+            ALERT_DEDUP_KEY,
             String(ALERT_DEDUP_WINDOW_MS),
           ]),
           commandTimeoutMs,
           label: "security-canary-redis-command",
         });
+        return parseRedisClaim(reply);
       },
       catch: (error: unknown) => error,
     });
@@ -100,7 +144,8 @@ export const createSecurityCanaryAlertDeduplicator = ({
       };
     }
 
-    return result.value === null
+    localClaimExpiresAt = now() + result.value.ttlMs;
+    return result.value.status === "duplicate"
       ? { status: "suppress" }
       : { status: "emit", reason: "claimed" };
   };
