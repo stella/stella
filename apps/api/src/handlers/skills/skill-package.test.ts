@@ -254,6 +254,38 @@ Instructions.`,
     expect(Result.isError(result)).toBe(true);
   });
 
+  test("rejects bidi formatting controls in display metadata", async () => {
+    for (const [field, value] of [
+      ["version", `1.0.0${String.fromCodePoint(8297)}override`],
+      ["license", `MIT${String.fromCodePoint(8238)}override`],
+    ] as const) {
+      // oxlint-disable-next-line no-await-in-loop -- each frontmatter field must independently exercise package validation
+      const result = await parseUploadedSkillPackage(
+        new File(
+          [
+            `---
+name: unsafe-metadata
+description: Metadata must not alter surrounding text direction.
+${field}: ${value}
+---
+
+Instructions.`,
+          ],
+          "SKILL.md",
+          { type: "text/markdown" },
+        ),
+      );
+
+      expect(Result.isError(result)).toBe(true);
+      if (Result.isOk(result)) {
+        throw new Error(`Expected ${field} bidi controls to be rejected`);
+      }
+      expect(result.error.message).toBe(
+        `Skill ${field} contains bidirectional formatting controls`,
+      );
+    }
+  });
+
   test("rejects oversized custom metadata before storage", async () => {
     const result = await parseUploadedSkillPackage(
       new File(

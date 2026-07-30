@@ -25,6 +25,8 @@ const GITHUB_REPO_PATTERN = /^[a-z0-9._-]{1,100}$/iu;
 const GITHUB_DISCOVERY_MAX_SKILLS = 50;
 const GITHUB_DISCOVERY_CONCURRENCY = 6;
 const GITHUB_TREE_MAX_BYTES = 4 * 1024 * 1024;
+const BIDI_FORMATTING_CONTROL_PATTERN =
+  /[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/u;
 const UTF8_DECODER = new TextDecoder("utf-8", { fatal: true });
 const UTF8_ENCODER = new TextEncoder();
 const GITHUB_SKILL_HOSTNAMES = new Set([
@@ -455,12 +457,37 @@ const assertFrontmatterLimits = (metadata: SkillMetadata) => {
     limit: LIMITS.agentSkillLicenseMaxChars,
     value: metadata.license,
   });
+  assertNoBidiFormattingControls({
+    field: "version",
+    value: metadata.version,
+  });
+  assertNoBidiFormattingControls({
+    field: "license",
+    value: metadata.license,
+  });
   assertFrontmatterField({
     field: "compatibility",
     limit: LIMITS.agentSkillCompatibilityMaxChars,
     value: metadata.compatibility,
   });
   assertFrontmatterMetadata(metadata.metadata);
+};
+
+const assertNoBidiFormattingControls = ({
+  field,
+  value,
+}: {
+  field: string;
+  value: string | null | undefined;
+}) => {
+  if (!value || !BIDI_FORMATTING_CONTROL_PATTERN.test(value)) {
+    return;
+  }
+
+  throw new HandlerError({
+    status: 400,
+    message: `Skill ${field} contains bidirectional formatting controls`,
+  });
 };
 
 const assertFrontmatterField = ({
@@ -655,15 +682,22 @@ const fetchGithubTreeOnce = async ({
     const resourceTrees = await mapWithConcurrency({
       items: resourceRoots,
       limit: GITHUB_DISCOVERY_CONCURRENCY,
-      transform: async (resourceRoot) =>
-        await fetchGithubScopedTree({
-          commitSha,
+      transform: async (resourceRoot) => {
+        if (!resourceRoot.sha) {
+          throw new HandlerError({
+            status: 400,
+            message: "GitHub skill resource folder could not be resolved",
+          });
+        }
+        return await fetchGithubTreeAtSha({
           context,
           owner,
+          pathPrefix: resourceRoot.path,
           recursive: true,
           repo,
-          rootPath: resourceRoot.path,
-        }),
+          treeish: resourceRoot.sha,
+        });
+      },
     });
     return [{ path: selectedSkillPath, type: "blob" }, ...resourceTrees.flat()];
   }
@@ -726,6 +760,31 @@ const fetchGithubScopedTree = async ({
     treeish = directory.sha;
   }
 
+  return await fetchGithubTreeAtSha({
+    context,
+    owner,
+    pathPrefix: pathParts.join("/"),
+    recursive,
+    repo,
+    treeish,
+  });
+};
+
+const fetchGithubTreeAtSha = async ({
+  context,
+  owner,
+  pathPrefix,
+  recursive,
+  repo,
+  treeish,
+}: {
+  context: SkillPackageFetchContext;
+  owner: string;
+  pathPrefix: string;
+  recursive: boolean;
+  repo: string;
+  treeish: string;
+}): Promise<GithubTreeItem[]> => {
   const tree = await fetchGithubTreeRequest({
     context,
     owner,
@@ -733,10 +792,10 @@ const fetchGithubScopedTree = async ({
     repo,
     treeish,
   });
-  if (pathParts.length === 0) {
+  if (!pathPrefix) {
     return tree;
   }
-  const prefix = `${pathParts.join("/")}/`;
+  const prefix = `${pathPrefix}/`;
   return tree.map((item) => {
     const scoped: GithubTreeItem = {
       path: `${prefix}${item.path}`,
@@ -1739,19 +1798,32 @@ const mapWithConcurrency = async <T, R>({
   transform: (item: T) => Promise<R>;
 }): Promise<R[]> => {
   const results: R[] = [];
+  const failures: { error: unknown }[] = [];
   let nextIndex = 0;
   const work = async (): Promise<void> => {
+    if (failures.length > 0) {
+      return;
+    }
     const index = nextIndex;
     nextIndex += 1;
     const item = items.at(index);
     if (item === undefined) {
       return;
     }
-    results[index] = await transform(item);
+    try {
+      results[index] = await transform(item);
+    } catch (error) {
+      failures.push({ error });
+      return;
+    }
     return work();
   };
   const workers = Array.from({ length: Math.min(limit, items.length) }, work);
   await Promise.all(workers);
+  const failure = failures.at(0);
+  if (failure) {
+    throw failure.error;
+  }
   return results;
 };
 

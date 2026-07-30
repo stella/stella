@@ -11,11 +11,21 @@ import {
 const COMMIT_SHA = "a".repeat(40);
 const SMALL_TREE_SHA = "b".repeat(40);
 const SCRIPTS_TREE_SHA = "c".repeat(40);
+const MAX_DEPTH_SCRIPTS_TREE_SHA = "d".repeat(40);
 let outboundRequestCount = 0;
 let invalidSkillScenario: "forbidden" | "missing" | "server-error" | "timeout" =
   "missing";
-let treeScenario: "default" | "scoped-folder" | "selected-skill" = "default";
+let activeRawRequests = 0;
+let requestedRawUrls: string[] = [];
+let treeScenario:
+  | "default"
+  | "discovery-failure"
+  | "max-depth-selected-skill"
+  | "scoped-folder"
+  | "selected-skill" = "default";
 let requestedTreeUrls: string[] = [];
+
+const maxDepthTreeSha = (depth: number) => depth.toString(16).padStart(40, "0");
 
 const response = (
   body: unknown,
@@ -47,6 +57,19 @@ void mock.module("@/api/lib/safe-outbound-fetch", () => ({
   safeOutboundFetchBytes: async ({ url }: { url: URL }) => {
     outboundRequestCount += 1;
     if (url.hostname === "raw.githubusercontent.com") {
+      requestedRawUrls.push(url.toString());
+      if (treeScenario === "discovery-failure") {
+        if (url.pathname.endsWith("/failure/SKILL.md")) {
+          return Result.err(
+            new SafeOutboundFetchError({ message: "Request timed out" }),
+          );
+        }
+        activeRawRequests += 1;
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, 5);
+        });
+        activeRawRequests -= 1;
+      }
       if (url.pathname.endsWith("/invalid/SKILL.md")) {
         if (invalidSkillScenario === "timeout") {
           return Result.err(
@@ -74,6 +97,23 @@ Instructions.`);
       if (url.pathname.endsWith("/small/scripts/helper.ts")) {
         return response("export const helper = true;");
       }
+      if (
+        treeScenario === "max-depth-selected-skill" &&
+        url.pathname.endsWith("/scripts/helper.ts")
+      ) {
+        return response("export const helper = true;");
+      }
+      if (
+        treeScenario === "max-depth-selected-skill" &&
+        url.pathname.endsWith("/SKILL.md")
+      ) {
+        return response(`---
+name: max-depth-skill
+description: A selected skill at the directory-depth boundary.
+---
+
+Instructions.`);
+      }
       return response(`---
 name: valid-skill
 description: A valid discovered skill.
@@ -88,6 +128,44 @@ Instructions.`);
       requestedTreeUrls.push(url.toString());
       const treeish = url.pathname.split("/").at(-1);
       const recursive = url.searchParams.get("recursive") === "1";
+      if (treeScenario === "discovery-failure") {
+        return response({
+          tree: Array.from({ length: 12 }, (_, index) => ({
+            path: `${index === 0 ? "failure" : `skill-${index}`}/SKILL.md`,
+            type: "blob",
+          })),
+        });
+      }
+      if (treeScenario === "max-depth-selected-skill") {
+        if (treeish === MAX_DEPTH_SCRIPTS_TREE_SHA && recursive) {
+          return response({ tree: [{ path: "helper.ts", type: "blob" }] });
+        }
+        if (
+          treeish === maxDepthTreeSha(LIMITS.agentSkillGithubDirectoriesMax)
+        ) {
+          return response({
+            tree: [
+              { path: "SKILL.md", type: "blob" },
+              {
+                path: "scripts",
+                sha: MAX_DEPTH_SCRIPTS_TREE_SHA,
+                type: "tree",
+              },
+            ],
+          });
+        }
+        const currentDepth =
+          treeish === COMMIT_SHA ? 0 : Number.parseInt(treeish ?? "", 16);
+        return response({
+          tree: [
+            {
+              path: `directory-${currentDepth}`,
+              sha: maxDepthTreeSha(currentDepth + 1),
+              type: "tree",
+            },
+          ],
+        });
+      }
       if (treeScenario !== "default") {
         if (treeish === COMMIT_SHA && recursive) {
           return response({ truncated: true, tree: [] });
@@ -146,6 +224,8 @@ const {
 describe("GitHub skill package discovery", () => {
   beforeEach(() => {
     invalidSkillScenario = "missing";
+    activeRawRequests = 0;
+    requestedRawUrls = [];
     treeScenario = "default";
     requestedTreeUrls = [];
   });
@@ -184,6 +264,17 @@ describe("GitHub skill package discovery", () => {
       }
       expect(result.error.message).toBe(message);
     }
+  });
+
+  test("stops scheduling discovery work after a source failure", async () => {
+    treeScenario = "discovery-failure";
+    const result = await discoverSkillPackagesFromUrl(
+      "https://github.com/example/skills",
+    );
+
+    expect(Result.isError(result)).toBe(true);
+    expect(requestedRawUrls).toHaveLength(6);
+    expect(activeRawRequests).toBe(0);
   });
 
   test("keeps direct root SKILL.md discovery scoped to that file", async () => {
@@ -272,6 +363,33 @@ describe("GitHub skill package discovery", () => {
           url.includes("recursive=1"),
       ),
     ).toBe(false);
+  });
+
+  test("imports resources for a selected skill at the directory cap", async () => {
+    treeScenario = "max-depth-selected-skill";
+    const nestedPath = Array.from(
+      { length: LIMITS.agentSkillGithubDirectoriesMax },
+      (_, index) => `directory-${index}`,
+    ).join("/");
+    const result = await fetchSkillPackageFromUrl(
+      `https://github.com/example/skills/blob/${COMMIT_SHA}/${nestedPath}/SKILL.md`,
+    );
+
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    expect(result.value.name).toBe("max-depth-skill");
+    expect(result.value.resources.map((resource) => resource.path)).toEqual([
+      "scripts/helper.ts",
+    ]);
+    expect(
+      requestedTreeUrls.some(
+        (url) =>
+          url.includes(`/git/trees/${MAX_DEPTH_SCRIPTS_TREE_SHA}`) &&
+          url.includes("recursive=1"),
+      ),
+    ).toBe(true);
   });
 
   test("stops a batch before exceeding its GitHub request budget", async () => {
