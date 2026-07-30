@@ -821,19 +821,21 @@ const isRegisteredToolCallWithInput = (
 const isJsonObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-/**
- * Consume successful whole-document delete calls that have not been handled by
- * this chat session yet. Version-only deletes are deliberately excluded: their
- * backing entity remains valid, so the Inspector tab must stay open.
- */
-export const consumeWholeDocumentDeletionToolCalls = ({
+export type DocumentDeletionToolCallEffects = {
+  hasVersionDeletion: boolean;
+  hasWholeDocumentDeletion: boolean;
+};
+
+/** Consume successful document delete calls not yet handled by this session. */
+export const consumeDocumentDeletionToolCalls = ({
   handledToolCallIds,
   messages,
 }: {
   handledToolCallIds: Set<string>;
   messages: readonly PersistedChatMessage[];
-}): boolean => {
-  let consumed = false;
+}): DocumentDeletionToolCallEffects => {
+  let hasVersionDeletion = false;
+  let hasWholeDocumentDeletion = false;
 
   for (const message of messages) {
     if (message.role !== "assistant") {
@@ -851,13 +853,15 @@ export const consumeWholeDocumentDeletionToolCalls = ({
       }
 
       handledToolCallIds.add(part.id);
-      if (!("version_id" in part.input)) {
-        consumed = true;
+      if ("version_id" in part.input) {
+        hasVersionDeletion = true;
+      } else {
+        hasWholeDocumentDeletion = true;
       }
     }
   }
 
-  return consumed;
+  return { hasVersionDeletion, hasWholeDocumentDeletion };
 };
 
 /**

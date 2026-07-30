@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  consumeWholeDocumentDeletionToolCalls,
+  consumeDocumentDeletionToolCalls,
   getChatToolTitleKey,
   getApprovalToolName,
   getToolApprovalGrant,
@@ -73,7 +73,7 @@ describe("chat tool titles", () => {
   });
 });
 
-describe("consumeWholeDocumentDeletionToolCalls", () => {
+describe("consumeDocumentDeletionToolCalls", () => {
   test("consumes a completed whole-document deletion once", () => {
     const messages = [
       {
@@ -95,20 +95,26 @@ describe("consumeWholeDocumentDeletionToolCalls", () => {
     const handledToolCallIds = new Set<string>();
 
     expect(
-      consumeWholeDocumentDeletionToolCalls({
+      consumeDocumentDeletionToolCalls({
         handledToolCallIds,
         messages,
       }),
-    ).toBe(true);
+    ).toEqual({
+      hasVersionDeletion: false,
+      hasWholeDocumentDeletion: true,
+    });
     expect(
-      consumeWholeDocumentDeletionToolCalls({
+      consumeDocumentDeletionToolCalls({
         handledToolCallIds,
         messages,
       }),
-    ).toBe(false);
+    ).toEqual({
+      hasVersionDeletion: false,
+      hasWholeDocumentDeletion: false,
+    });
   });
 
-  test("keeps tabs for completed version-only deletions", () => {
+  test("reports completed version-only deletions for cache revalidation", () => {
     const messages = [
       {
         id: "message-1",
@@ -134,11 +140,14 @@ describe("consumeWholeDocumentDeletionToolCalls", () => {
     ] satisfies PersistedChatMessage[];
 
     expect(
-      consumeWholeDocumentDeletionToolCalls({
+      consumeDocumentDeletionToolCalls({
         handledToolCallIds: new Set(),
         messages,
       }),
-    ).toBe(false);
+    ).toEqual({
+      hasVersionDeletion: true,
+      hasWholeDocumentDeletion: false,
+    });
   });
 });
 
