@@ -279,6 +279,32 @@ curl -H "Authorization: Bearer $OPERATOR_METRICS_TOKEN" \
   "https://api.stella.example.com/operator/registrations?since=2026-07-01T00:00:00Z"
 ```
 
+## Security canary
+
+Operators can plant a decoy Stella machine API key in an infrastructure honey
+resource. The API stores only its SHA-256 digest. If any request presents the
+decoy, Stella stops it before authentication, emits an ERROR log named
+`security.canary_triggered`, and returns a 403 response with the warning in both
+the JSON body and `x-stella-agent-warning` header. Repeated events are
+deduplicated across API replicas for five minutes.
+
+Generate a normal-looking decoy and its digest:
+
+```bash
+STELLA_CANARY_KEY="stella_mk_$(openssl rand -hex 32)"
+printf '%s' "$STELLA_CANARY_KEY" | shasum -a 256
+```
+
+Set the resulting digest as `SECURITY_CANARY_API_KEY_SHA256`. Put the plaintext
+key only in a decoy secret that normal application, backup, indexing, and
+support workflows never read. Configure the deployment's log platform to alert
+on the event name. Never put the decoy in customer documents or normal
+workspace data.
+
+The canary is detection and optional agent disruption, not authentication or
+authorization. Leaving the variable unset disables it without changing normal
+requests.
+
 ## Stay informed about updates
 
 stella publishes a [GitHub Release](https://github.com/stella/stella/releases)

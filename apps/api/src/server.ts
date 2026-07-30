@@ -119,6 +119,7 @@ import {
   refreshCorpusS3,
   refreshS3,
 } from "@/api/lib/s3";
+import { securityCanaryInterceptor } from "@/api/lib/security-canary";
 import { setSecurityHeaders } from "@/api/lib/security-headers";
 import { startSse, stopSse } from "@/api/lib/sse";
 import { initStyleSetPackageCleanupWorker } from "@/api/lib/style-set-package-cleanup-queue";
@@ -237,7 +238,9 @@ const buildRequestLogAttributes = ({
 };
 
 const api = new Elysia()
-  .onRequest(({ request, set }) => {
+  .onRequest(async (context) => {
+    const { request, set } = context;
+
     // Start the per-request query counter before any handler (or better-auth
     // session lookup) can issue a query, so those queries are attributed to
     // this request. `enterWith` binds the store to this request's async
@@ -267,6 +270,8 @@ const api = new Elysia()
     if (requestId !== undefined) {
       set.headers[REQUEST_ID_HEADER] = requestId;
     }
+
+    return await securityCanaryInterceptor(context);
   })
   .use(
     cors({
