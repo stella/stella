@@ -127,11 +127,11 @@ export const ChatModelModeSelector = ({
     <Menu onOpenChange={setOpen} open={open}>
       <MenuTrigger
         aria-label={t("chat.modelMode.select")}
-        className="text-muted-foreground hover:text-foreground hover:bg-accent relative inline-flex size-7 shrink-0 items-center justify-center rounded-md transition-colors before:absolute before:-inset-2"
+        className="text-foreground/80 hover:text-foreground hover:bg-accent relative inline-flex size-7 shrink-0 items-center justify-center rounded-md transition-colors before:absolute before:-inset-2"
         disabled={disabled}
         tooltip={triggerLabel}
       >
-        <TriggerIcon aria-hidden="true" className="size-3.5" />
+        <TriggerIcon aria-hidden="true" className="size-4" />
       </MenuTrigger>
       <MenuPopup align="start" className="w-72" side="top" sideOffset={6}>
         {pinnedOption && pinnedLabel && PinnedIcon && (
