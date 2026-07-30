@@ -12,10 +12,19 @@ process.env["GOTENBERG_PASSWORD"] ??= "test";
 
 const semanticUpdatedAt = new Date("2026-04-30T08:00:00.000Z");
 const semanticUpdatedAtToken =
-  // SAFETY: tests fabricate the branded token the relational query normally
-  // selects as `COALESCE(updated_at, created_at)::text`.
+  // SAFETY: tests fabricate the branded token the token select normally
+  // renders as `COALESCE(updated_at, created_at)::text`.
   // eslint-disable-next-line typescript/no-unsafe-type-assertion
   "2026-04-30 08:00:00.000123" as TimestampCasToken;
+// The token select chain: rootDb.select({...}).from(...).where(...).limit(1)
+const selectLimitMock = mock(async (_limit: number) => [
+  { semanticUpdatedAtToken },
+]);
+const selectMock = mock((_fields: unknown) => ({
+  from: (_table: unknown) => ({
+    where: (_where: unknown) => ({ limit: selectLimitMock }),
+  }),
+}));
 const executeMock = mock(async (_query: SQL) => [
   { entityId: toSafeId<"entity">("entity_1") },
 ]);
@@ -36,7 +45,6 @@ const entityRow = {
   kind: "document" as const,
   metadata: null,
   name: "Closing memo",
-  semanticUpdatedAtToken,
   updatedAt: semanticUpdatedAt,
   workspace: { organizationId: toSafeId<"organization">("org_1") },
   workspaceId: toSafeId<"workspace">("ws_1"),
@@ -56,6 +64,7 @@ void mock.module("@/api/db/root", () => ({
         findFirst: findFirstMock,
       },
     },
+    select: selectMock,
     transaction: transactionMock,
   },
 }));
@@ -74,6 +83,9 @@ void mock.module("@/api/lib/search/index-global", () => ({
 
 beforeEach(() => {
   executeMock.mockClear();
+  selectMock.mockClear();
+  selectLimitMock.mockClear();
+  selectLimitMock.mockResolvedValue([{ semanticUpdatedAtToken }]);
   findFirstMock.mockClear();
   findFirstMock.mockResolvedValue(entityRow);
   decryptContentMock.mockClear();
