@@ -12,6 +12,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/components/button";
 import {
   Menu,
   MenuItem,
@@ -95,20 +96,6 @@ export const ChatModelModeSelector = ({
   if (selectedMode) {
     triggerLabel = t(MODE_LABEL_KEY[selectedMode]);
   }
-  const pinnedOption = resolveFavoriteOption({
-    favorite,
-    modeOptions: options,
-    modelOptions: data?.options,
-  });
-  let pinnedLabel: string | null = null;
-  if (pinnedOption?.type === "model") {
-    pinnedLabel = pinnedOption.label;
-  }
-  if (pinnedOption?.type === "mode") {
-    pinnedLabel = t(MODE_LABEL_KEY[pinnedOption.mode]);
-  }
-  const PinnedIcon = pinnedOption?.Icon;
-
   const toggleFavorite = (nextFavorite: ChatModelFavorite) => {
     setFavorite(
       models.activeOrganizationId,
@@ -126,26 +113,20 @@ export const ChatModelModeSelector = ({
   return (
     <Menu onOpenChange={setOpen} open={open}>
       <MenuTrigger
-        aria-label={t("chat.modelMode.select")}
-        className="text-foreground/80 hover:text-foreground hover:bg-accent relative inline-flex size-7 shrink-0 items-center justify-center rounded-md transition-colors before:absolute before:-inset-2"
-        disabled={disabled}
-        tooltip={triggerLabel}
+        render={
+          <Button
+            aria-label={t("chat.modelMode.select")}
+            className="text-muted-foreground hover:text-foreground"
+            disabled={disabled}
+            size="icon-xs"
+            tooltip={triggerLabel}
+            variant="ghost"
+          />
+        }
       >
-        <TriggerIcon aria-hidden="true" className="size-4" />
+        <TriggerIcon aria-hidden="true" className="size-3.5" />
       </MenuTrigger>
       <MenuPopup align="start" className="w-72" side="top" sideOffset={6}>
-        {pinnedOption && pinnedLabel && PinnedIcon && (
-          <>
-            <p className="text-muted-foreground px-2 py-1.5 text-xs font-medium">
-              {t("navigation.pinned")}
-            </p>
-            <MenuItem onClick={() => selectValue(pinnedOption.value)}>
-              <PinnedIcon />
-              <span className="min-w-0 truncate">{pinnedLabel}</span>
-            </MenuItem>
-            <MenuSeparator />
-          </>
-        )}
         <MenuRadioGroup value={models.selectedModel ?? ""}>
           {options.map((option) => {
             const Icon = MODE_ICON[option.mode];
@@ -308,46 +289,6 @@ const resolveSelectedMode = ({
     return CHAT_MODEL_MODE.standard;
   }
   return options.find((option) => option.value === selectedModel)?.mode ?? null;
-};
-
-type FavoriteOption =
-  | { type: "mode"; Icon: LucideIcon; mode: ChatModelMode; value: string }
-  | { type: "model"; Icon: LucideIcon; label: string; value: string };
-
-const resolveFavoriteOption = ({
-  favorite,
-  modeOptions,
-  modelOptions,
-}: {
-  favorite: ChatModelFavorite | undefined;
-  modeOptions: ModelModeOption[];
-  modelOptions: ModelOption[] | undefined;
-}): FavoriteOption | null => {
-  if (!favorite) {
-    return null;
-  }
-  if (favorite.type === "mode") {
-    const option = modeOptions.find(({ mode }) => mode === favorite.mode);
-    if (!option) {
-      return null;
-    }
-    return {
-      type: "mode",
-      Icon: MODE_ICON[favorite.mode],
-      mode: favorite.mode,
-      value: option.value,
-    };
-  }
-  const option = modelOptions?.find(({ value }) => value === favorite.value);
-  if (!option) {
-    return null;
-  }
-  return {
-    type: "model",
-    Icon: CpuIcon,
-    label: formatModelLabel(option),
-    value: option.value,
-  };
 };
 
 const isSameFavorite = (
