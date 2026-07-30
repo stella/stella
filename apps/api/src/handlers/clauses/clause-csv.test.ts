@@ -12,6 +12,14 @@ import {
 } from "./clause-csv";
 
 describe("clause CSV slugs", () => {
+  test("normalizes supplied slugs with the same rules as derived slugs", () => {
+    const clauseId = createSafeId<"clause">();
+
+    expect(deriveClauseSlug("Ignored title", clauseId, " Custom / Slug ")).toBe(
+      "custom-slug",
+    );
+  });
+
   test("uses a clause-specific unique fallback for non-Latin titles", () => {
     const clauseId = createSafeId<"clause">();
 
