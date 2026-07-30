@@ -813,7 +813,7 @@ export const automaticOcrRetryDelayMs = (attemptCount: number): number =>
 
 export const isRetryableAutomaticOcrFailure = ({
   attemptCount,
-  errorCode,
+  errorCode: failureCode,
   requestSource,
 }: {
   attemptCount: number;
@@ -822,8 +822,8 @@ export const isRetryableAutomaticOcrFailure = ({
 }): boolean =>
   requestSource !== "manual" &&
   attemptCount < AUTOMATIC_OCR_MAX_ATTEMPTS &&
-  (errorCode === RETRYABLE_AUTOMATIC_OCR_FAILURE_CODES[0] ||
-    errorCode === RETRYABLE_AUTOMATIC_OCR_FAILURE_CODES[1]);
+  (failureCode === RETRYABLE_AUTOMATIC_OCR_FAILURE_CODES[0] ||
+    failureCode === RETRYABLE_AUTOMATIC_OCR_FAILURE_CODES[1]);
 
 const markRunFailed = async ({
   claimToken,

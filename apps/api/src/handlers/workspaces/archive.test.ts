@@ -37,7 +37,7 @@ describe("archiveWorkspaceHandler", () => {
         };
       },
     });
-    const safeDb: SafeDb = async (callback) => Result.ok(await callback(tx));
+    const safeDb: SafeDb = async (operation) => Result.ok(await operation(tx));
     const recordAuditEvent: AuditRecorder = async () => undefined;
 
     const result = await Result.gen(() =>
