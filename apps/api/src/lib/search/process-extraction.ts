@@ -7,9 +7,9 @@
  */
 
 import { panic } from "better-result";
+import { sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
-import { extractedContent } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -51,6 +51,77 @@ const pickExtractionSource = (
       mimeType: fileField.mimeType,
     }),
   };
+};
+
+type NativeExtractionProjectionOptions = {
+  charCount: number;
+  ciphertext: Buffer;
+  entityId: SafeId<"entity">;
+  entityVersionId: SafeId<"entityVersion">;
+  fieldId: SafeId<"field">;
+  iv: Buffer;
+  organizationId: SafeId<"organization">;
+  sourceFileId: string;
+  sourceSha256Hex: string;
+  workspaceId: SafeId<"workspace">;
+};
+
+type PersistedNativeExtractionProjection = {
+  entityId: SafeId<"entity">;
+};
+
+export const persistNativeExtractionProjection = async ({
+  charCount,
+  ciphertext,
+  entityId,
+  entityVersionId,
+  fieldId,
+  iv,
+  organizationId,
+  sourceFileId,
+  sourceSha256Hex,
+  workspaceId,
+}: NativeExtractionProjectionOptions): Promise<boolean> => {
+  const persisted =
+    await rootDb.execute<PersistedNativeExtractionProjection>(sql`
+      INSERT INTO extracted_content (
+        entity_id, organization_id, workspace_id,
+        source_entity_version_id, source_field_id,
+        source_file_id, source_sha256_hex,
+        ciphertext, iv, char_count, language, extracted_at
+      )
+      SELECT
+        ${entityId}, ${organizationId}, ${workspaceId},
+        ${entityVersionId}, ${fieldId},
+        ${sourceFileId}, ${sourceSha256Hex},
+        ${ciphertext}, ${iv}, ${charCount}, NULL, now()
+      FROM entities e
+      INNER JOIN fields f
+        ON f.id = ${fieldId}
+        AND f.workspace_id = ${workspaceId}
+        AND f.entity_version_id = ${entityVersionId}
+      WHERE e.id = ${entityId}
+        AND e.workspace_id = ${workspaceId}
+        AND e.current_version_id = ${entityVersionId}
+        AND f.content->>'type' = 'file'
+        AND f.content->>'id' = ${sourceFileId}
+        AND f.content->>'sha256Hex' = ${sourceSha256Hex}
+      FOR UPDATE OF e
+      ON CONFLICT (entity_id) DO UPDATE SET
+        organization_id = EXCLUDED.organization_id,
+        workspace_id = EXCLUDED.workspace_id,
+        source_entity_version_id = EXCLUDED.source_entity_version_id,
+        source_field_id = EXCLUDED.source_field_id,
+        source_file_id = EXCLUDED.source_file_id,
+        source_sha256_hex = EXCLUDED.source_sha256_hex,
+        ciphertext = EXCLUDED.ciphertext,
+        iv = EXCLUDED.iv,
+        char_count = EXCLUDED.char_count,
+        language = EXCLUDED.language,
+        extracted_at = EXCLUDED.extracted_at
+      RETURNING entity_id AS "entityId"
+    `);
+  return persisted.at(0) !== undefined;
 };
 
 /**
@@ -146,37 +217,18 @@ export const processExtraction = async (
         const sourceField =
           fileFieldRow ?? panic("Extraction source field is missing");
 
-        await rootDb
-          .insert(extractedContent)
-          .values({
-            workspaceId: wsId,
-            entityId,
-            organizationId: workspace.organizationId,
-            sourceEntityVersionId: version.id,
-            sourceFieldId: sourceField.id,
-            sourceFileId: fileField.id,
-            sourceSha256Hex: fileField.sha256Hex,
-            ciphertext: encrypted.ciphertext,
-            iv: encrypted.iv,
-            charCount: text.length,
-            // Keep null until a reliable language detector is available.
-            language: null,
-            extractedAt: new Date(),
-          })
-          .onConflictDoUpdate({
-            target: extractedContent.entityId,
-            set: {
-              sourceEntityVersionId: version.id,
-              sourceFieldId: sourceField.id,
-              sourceFileId: fileField.id,
-              sourceSha256Hex: fileField.sha256Hex,
-              ciphertext: encrypted.ciphertext,
-              iv: encrypted.iv,
-              charCount: text.length,
-              language: null,
-              extractedAt: new Date(),
-            },
-          });
+        await persistNativeExtractionProjection({
+          charCount: text.length,
+          ciphertext: encrypted.ciphertext,
+          entityId,
+          entityVersionId: version.id,
+          fieldId: sourceField.id,
+          iv: encrypted.iv,
+          organizationId: orgId,
+          sourceFileId: fileField.id,
+          sourceSha256Hex: fileField.sha256Hex,
+          workspaceId: wsId,
+        });
       }
     } catch (error) {
       // Extraction failures must not prevent search

@@ -1,4 +1,6 @@
 import { describe, expect, mock, test } from "bun:test";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 import { toSafeId } from "@/api/lib/branded-types";
 
@@ -10,12 +12,18 @@ import { toSafeId } from "@/api/lib/branded-types";
 // the query, before it would otherwise reach S3/search-provider calls this
 // test does not need to stub.
 const findFirstMock = mock(async () => null);
+const executeMock = mock(async (_query: SQL) => [
+  { entityId: toSafeId<"entity">("entity_1") },
+]);
 
 void mock.module("@/api/db/root", () => ({
-  rootDb: { query: { entities: { findFirst: findFirstMock } } },
+  rootDb: {
+    execute: executeMock,
+    query: { entities: { findFirst: findFirstMock } },
+  },
 }));
 
-const { processExtraction } =
+const { persistNativeExtractionProjection, processExtraction } =
   await import("@/api/lib/search/process-extraction");
 
 describe("processExtraction", () => {
@@ -43,5 +51,67 @@ describe("processExtraction", () => {
         }),
       }),
     );
+  });
+
+  test("persists native text only while its immutable source remains current", async () => {
+    const sourceVersionId = toSafeId<"entityVersion">(
+      "019864b8-48d0-7f37-94d5-948e3bcf3f45",
+    );
+    const sourceFieldId = toSafeId<"field">(
+      "019864b8-48d0-7f37-94d5-948e3bcf3f46",
+    );
+    const sourceFileId = "019864b8-48d0-7f37-94d5-948e3bcf3f44";
+    const sourceSha256Hex = "a".repeat(64);
+
+    const persisted = await persistNativeExtractionProjection({
+      charCount: 14,
+      ciphertext: Buffer.from("ciphertext"),
+      entityId: toSafeId<"entity">("entity_1"),
+      entityVersionId: sourceVersionId,
+      fieldId: sourceFieldId,
+      iv: Buffer.from("iv"),
+      organizationId: toSafeId<"organization">("org_1"),
+      sourceFileId,
+      sourceSha256Hex,
+      workspaceId: toSafeId<"workspace">("workspace_1"),
+    });
+
+    expect(persisted).toBe(true);
+    const query = executeMock.mock.calls.at(0)?.[0];
+    expect(query).toBeDefined();
+    if (!query) {
+      return;
+    }
+    const compiled = new PgDialect().sqlToQuery(query);
+    expect(compiled.sql).toContain("e.current_version_id =");
+    expect(compiled.sql).toContain("f.entity_version_id =");
+    expect(compiled.sql).toContain("f.content->>'id' =");
+    expect(compiled.sql).toContain("f.content->>'sha256Hex' =");
+    expect(compiled.sql).toContain("FOR UPDATE OF e");
+    expect(compiled.params).toContain(sourceVersionId);
+    expect(compiled.params).toContain(sourceFieldId);
+    expect(compiled.params).toContain(sourceFileId);
+    expect(compiled.params).toContain(sourceSha256Hex);
+  });
+
+  test("does not overwrite a newer projection after its source is replaced", async () => {
+    executeMock.mockResolvedValueOnce([]);
+
+    const persisted = await persistNativeExtractionProjection({
+      charCount: 14,
+      ciphertext: Buffer.from("stale ciphertext"),
+      entityId: toSafeId<"entity">("entity_1"),
+      entityVersionId: toSafeId<"entityVersion">(
+        "019864b8-48d0-7f37-94d5-948e3bcf3f45",
+      ),
+      fieldId: toSafeId<"field">("019864b8-48d0-7f37-94d5-948e3bcf3f46"),
+      iv: Buffer.from("stale iv"),
+      organizationId: toSafeId<"organization">("org_1"),
+      sourceFileId: "019864b8-48d0-7f37-94d5-948e3bcf3f44",
+      sourceSha256Hex: "a".repeat(64),
+      workspaceId: toSafeId<"workspace">("workspace_1"),
+    });
+
+    expect(persisted).toBe(false);
   });
 });

@@ -159,6 +159,13 @@ export const documentProcessingRuns = p.pgTable(
           AND ${table.requestSource} IN ('upload', 'repair')`,
       ),
     p
+      .index("document_processing_runs_search_failed_retry_idx")
+      .on(table.nextAttemptAt, table.createdAt, table.id)
+      .where(
+        sql`${table.status} = 'failed'
+          AND ${table.errorCode} = 'search_index_failed'`,
+      ),
+    p
       .foreignKey({
         columns: [table.entityId, table.workspaceId],
         foreignColumns: [entities.id, entities.workspaceId],

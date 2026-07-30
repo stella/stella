@@ -273,3 +273,44 @@ test("excludes stale extracted text and fences its observed provenance", async (
   expect(compiled.params).toContain(staleVersionId);
   expect(compiled.params).toContain(extractedAt);
 });
+
+test("preserves pre-provenance extracted text until a fenced writer replaces it", async () => {
+  const extractedAt = new Date("2026-04-30T08:01:00.000Z");
+  findFirstMock.mockResolvedValueOnce({
+    ...entityRow,
+    currentVersion: {
+      fields: [currentFileField],
+      id: entityRow.currentVersion.id,
+    },
+    extractedContent: {
+      ciphertext: Buffer.from("legacy ciphertext"),
+      extractedAt,
+      iv: Buffer.from("legacy iv"),
+      language: "cs",
+      sourceEntityVersionId: null,
+      sourceFieldId: null,
+      sourceFileId: null,
+      sourceSha256Hex: null,
+    },
+  });
+  const { upsertSearchDocument } =
+    await import("@/api/lib/search/index-entity");
+
+  await upsertSearchDocument(toSafeId<"entity">("entity_1"));
+
+  expect(decryptContentMock).toHaveBeenCalledWith(
+    toSafeId<"organization">("org_1"),
+    Buffer.from("legacy ciphertext"),
+    Buffer.from("legacy iv"),
+  );
+  const query = executeMock.mock.calls.at(0)?.[0];
+  expect(query).toBeDefined();
+  if (!query) {
+    return;
+  }
+  const compiled = new PgDialect().sqlToQuery(query);
+  expect(compiled.params).toContain(extractedAt);
+  expect(
+    compiled.params.filter((parameter) => parameter === null),
+  ).not.toHaveLength(0);
+});

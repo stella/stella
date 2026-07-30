@@ -176,16 +176,22 @@ const buildSearchDocument = async (
   let language: string | null = null;
 
   const extractedContentRow = entity.extractedContent;
+  const isLegacyExtractedContent =
+    extractedContentRow?.sourceEntityVersionId === null &&
+    extractedContentRow.sourceFieldId === null &&
+    extractedContentRow.sourceFileId === null &&
+    extractedContentRow.sourceSha256Hex === null;
   const currentExtractedContent =
     extractedContentRow &&
-    extractedContentRow.sourceEntityVersionId === version.id &&
-    version.fields.some(
-      (field) =>
-        field.id === extractedContentRow.sourceFieldId &&
-        field.content.type === "file" &&
-        field.content.id === extractedContentRow.sourceFileId &&
-        field.content.sha256Hex === extractedContentRow.sourceSha256Hex,
-    )
+    (isLegacyExtractedContent ||
+      (extractedContentRow.sourceEntityVersionId === version.id &&
+        version.fields.some(
+          (field) =>
+            field.id === extractedContentRow.sourceFieldId &&
+            field.content.type === "file" &&
+            field.content.id === extractedContentRow.sourceFileId &&
+            field.content.sha256Hex === extractedContentRow.sourceSha256Hex,
+        )))
       ? extractedContentRow
       : null;
   if (currentExtractedContent) {

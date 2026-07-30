@@ -65,6 +65,7 @@ const REPAIR_SCAN_CURSOR_KEY = "document-processing:repair-scan-cursor:v1";
 const AUTOMATIC_OCR_MAX_ATTEMPTS = 5;
 const AUTOMATIC_OCR_RETRY_BASE_DELAY_MS = 30_000;
 const AUTOMATIC_OCR_RETRY_MAX_DELAY_MS = 30 * 60 * 1000;
+const SEARCH_INDEX_FAILURE_CODE = "search_index_failed";
 const RETRYABLE_AUTOMATIC_OCR_FAILURE_CODES = [
   "not_configured",
   "processing_failed",
@@ -660,7 +661,17 @@ export const processDocumentProcessingRun = async (
         return;
       }
 
-      await getSearchProvider().indexEntity(run.entityId);
+      const indexResult = await Result.tryPromise({
+        try: async () => await getSearchProvider().indexEntity(run.entityId),
+        catch: (cause) => cause,
+      });
+      if (Result.isError(indexResult)) {
+        throw new DocumentProcessingJobError({
+          code: SEARCH_INDEX_FAILURE_CODE,
+          message: "OCR text was stored but search indexing failed",
+          cause: indexResult.error,
+        });
+      }
       const completed = await rootDb
         .update(documentProcessingRuns)
         .set({
@@ -734,6 +745,9 @@ export const isRetryableAutomaticOcrFailure = ({
     failureCode === RETRYABLE_AUTOMATIC_OCR_FAILURE_CODES[1] ||
     failureCode === RETRYABLE_AUTOMATIC_OCR_FAILURE_CODES[2]);
 
+export const isRetryableSearchIndexFailure = (failureCode: string): boolean =>
+  failureCode === SEARCH_INDEX_FAILURE_CODE;
+
 const markRunFailed = async ({
   claimToken,
   error,
@@ -749,6 +763,7 @@ const markRunFailed = async ({
     errorCode: failureCode,
     requestSource: run.requestSource,
   });
+  const retryableSearchIndex = isRetryableSearchIndexFailure(failureCode);
   await rootDb
     .update(documentProcessingRuns)
     .set({
@@ -756,9 +771,10 @@ const markRunFailed = async ({
       claimedBy: null,
       errorAt: new Date(),
       errorCode: failureCode,
-      nextAttemptAt: retryable
-        ? new Date(Date.now() + automaticOcrRetryDelayMs(run.attemptCount))
-        : null,
+      nextAttemptAt:
+        retryable || retryableSearchIndex
+          ? new Date(Date.now() + automaticOcrRetryDelayMs(run.attemptCount))
+          : null,
       status: "failed",
       updatedAt: new Date(),
     })
@@ -1249,6 +1265,157 @@ const recoverRetryableAutomaticOcrFailures = async (): Promise<number> => {
   return recovered.length;
 };
 
+type FailedSearchIndexCandidate = {
+  attemptCount: number;
+  entityId: SafeId<"entity">;
+  id: SafeId<"documentProcessingRun">;
+  workspaceId: SafeId<"workspace">;
+};
+
+const recoverFailedSearchIndex = async ({
+  attemptCount,
+  entityId,
+  id,
+  workspaceId,
+}: FailedSearchIndexCandidate): Promise<boolean> => {
+  const indexed = await Result.tryPromise({
+    try: async () => await getSearchProvider().indexEntity(entityId),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(indexed)) {
+    captureError(indexed.error, { entityId, runId: id });
+    await rootDb
+      .update(documentProcessingRuns)
+      .set({
+        attemptCount: sql`${documentProcessingRuns.attemptCount} + 1`,
+        errorAt: new Date(),
+        nextAttemptAt: new Date(
+          Date.now() + automaticOcrRetryDelayMs(attemptCount + 1),
+        ),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(documentProcessingRuns.id, id),
+          eq(documentProcessingRuns.status, "failed"),
+          eq(documentProcessingRuns.errorCode, SEARCH_INDEX_FAILURE_CODE),
+          eq(documentProcessingRuns.attemptCount, attemptCount),
+        ),
+      );
+    return false;
+  }
+
+  const completed = await rootDb
+    .update(documentProcessingRuns)
+    .set({
+      claimedAt: null,
+      claimedBy: null,
+      errorAt: null,
+      errorCode: null,
+      finishedAt: new Date(),
+      nextAttemptAt: null,
+      status: "succeeded",
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(documentProcessingRuns.id, id),
+        eq(documentProcessingRuns.status, "failed"),
+        eq(documentProcessingRuns.errorCode, SEARCH_INDEX_FAILURE_CODE),
+        eq(documentProcessingRuns.attemptCount, attemptCount),
+      ),
+    )
+    .returning({ id: documentProcessingRuns.id });
+  if (!completed.at(0)) {
+    return false;
+  }
+
+  broadcast(workspaceId, {
+    type: "invalidate-query",
+    data: ["entities", workspaceId],
+  });
+  return true;
+};
+
+const recoverFailedOcrSearchIndexes = async (): Promise<number> => {
+  const now = new Date();
+  const candidates = await rootDb
+    .select({
+      attemptCount: documentProcessingRuns.attemptCount,
+      entityId: documentProcessingRuns.entityId,
+      id: documentProcessingRuns.id,
+      workspaceId: documentProcessingRuns.workspaceId,
+    })
+    .from(documentProcessingRuns)
+    .innerJoin(
+      extractedContent,
+      and(
+        eq(
+          extractedContent.organizationId,
+          documentProcessingRuns.organizationId,
+        ),
+        eq(extractedContent.workspaceId, documentProcessingRuns.workspaceId),
+        eq(extractedContent.entityId, documentProcessingRuns.entityId),
+        eq(
+          extractedContent.sourceEntityVersionId,
+          documentProcessingRuns.entityVersionId,
+        ),
+        eq(extractedContent.sourceFieldId, documentProcessingRuns.fieldId),
+        eq(extractedContent.sourceFileId, documentProcessingRuns.sourceFileId),
+        eq(
+          extractedContent.sourceSha256Hex,
+          documentProcessingRuns.sourceSha256Hex,
+        ),
+      ),
+    )
+    .innerJoin(
+      entities,
+      and(
+        eq(entities.id, documentProcessingRuns.entityId),
+        eq(entities.workspaceId, documentProcessingRuns.workspaceId),
+        eq(entities.currentVersionId, documentProcessingRuns.entityVersionId),
+      ),
+    )
+    .innerJoin(
+      fields,
+      and(
+        eq(fields.id, documentProcessingRuns.fieldId),
+        eq(fields.workspaceId, documentProcessingRuns.workspaceId),
+        eq(fields.entityVersionId, documentProcessingRuns.entityVersionId),
+        sql`${fields.content}->>'type' = 'file'
+          AND ${fields.content}->>'id' = ${documentProcessingRuns.sourceFileId}::text
+          AND ${fields.content}->>'sha256Hex' = ${documentProcessingRuns.sourceSha256Hex}`,
+      ),
+    )
+    .innerJoin(
+      workspaces,
+      and(
+        eq(workspaces.id, documentProcessingRuns.workspaceId),
+        eq(workspaces.organizationId, documentProcessingRuns.organizationId),
+        eq(workspaces.status, "active"),
+      ),
+    )
+    .where(
+      and(
+        eq(documentProcessingRuns.status, "failed"),
+        eq(documentProcessingRuns.errorCode, SEARCH_INDEX_FAILURE_CODE),
+        or(
+          isNull(documentProcessingRuns.nextAttemptAt),
+          lte(documentProcessingRuns.nextAttemptAt, now),
+        ),
+      ),
+    )
+    .orderBy(
+      asc(documentProcessingRuns.nextAttemptAt),
+      asc(documentProcessingRuns.createdAt),
+      asc(documentProcessingRuns.id),
+    )
+    .limit(RECONCILE_BATCH_SIZE);
+
+  const recovered = await Promise.all(candidates.map(recoverFailedSearchIndex));
+  return recovered.filter(Boolean).length;
+};
+
 const recoverStaleDocumentProcessingRuns = async (): Promise<number> => {
   const staleBefore = new Date(Date.now() - WORKER_LEASE_TIMEOUT_MS);
   const staleRuns = await rootDb
@@ -1313,11 +1480,13 @@ const reconcileDocumentProcessing = async ({
 }): Promise<void> => {
   try {
     const repairedCount = await recoverMissingAutomaticOcrRuns();
+    const reindexedCount = await recoverFailedOcrSearchIndexes();
     const retriedCount = await recoverRetryableAutomaticOcrFailures();
     const recoveredCount = await recoverStaleDocumentProcessingRuns();
     const enqueuedCount = await enqueueQueuedRuns();
     if (
       repairedCount > 0 ||
+      reindexedCount > 0 ||
       retriedCount > 0 ||
       recoveredCount > 0 ||
       enqueuedCount > 0
@@ -1325,6 +1494,7 @@ const reconcileDocumentProcessing = async ({
       logger.info("document_processing.reconciled", {
         enqueuedCount: String(enqueuedCount),
         recoveredCount: String(recoveredCount),
+        reindexedCount: String(reindexedCount),
         repairedCount: String(repairedCount),
         retriedCount: String(retriedCount),
       });

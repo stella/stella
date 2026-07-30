@@ -9,6 +9,7 @@ import {
   isCurrentOcrSource,
   isReversibleAutomaticOcrCancellation,
   isRetryableAutomaticOcrFailure,
+  isRetryableSearchIndexFailure,
   requiresOcrPolicy,
 } from "@/api/lib/document-processing-queue";
 
@@ -198,5 +199,10 @@ describe("automatic OCR failure recovery", () => {
         requestSource: "manual",
       }),
     ).toBe(false);
+  });
+
+  test("keeps committed projections recoverable independently of OCR attempts", () => {
+    expect(isRetryableSearchIndexFailure("search_index_failed")).toBe(true);
+    expect(isRetryableSearchIndexFailure("processing_failed")).toBe(false);
   });
 });
