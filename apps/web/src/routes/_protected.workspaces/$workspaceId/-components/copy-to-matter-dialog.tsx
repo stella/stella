@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -52,6 +53,7 @@ export const CopyToMatterDialog = ({
 }: CopyToMatterDialogProps) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [mode, setMode] = useState<MoveMode>("copy");
   const [target, setTarget] = useState<MatterTarget | null>(
     initialTargetWorkspaceId
@@ -146,14 +148,33 @@ export const CopyToMatterDialog = ({
       mode === "copy"
         ? t("workspaces.copyToMatter.copied")
         : t("workspaces.copyToMatter.moved");
+    const goToMatterAction = {
+      label: t("workspaces.copyToMatter.goToMatter"),
+      onClick: () => {
+        detached(
+          navigate({
+            to: "/workspaces/$workspaceId",
+            params: { workspaceId: targetWorkspaceId },
+          }),
+          "goToMatter",
+        );
+      },
+    };
     if (failedCount > 0) {
       stellaToast.add({
         title: successTitle,
         description: t("errors.actionFailed"),
         type: "warning",
+        action: goToMatterAction,
+        timeout: 10_000,
       });
     } else {
-      stellaToast.add({ title: successTitle, type: "success" });
+      stellaToast.add({
+        title: successTitle,
+        type: "success",
+        action: goToMatterAction,
+        timeout: 10_000,
+      });
     }
 
     onOpenChange(false);

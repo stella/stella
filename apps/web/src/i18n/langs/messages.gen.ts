@@ -3109,6 +3109,7 @@ type Messages = {
       "copyOption": "Copy (keep original)";
       "description": "Copy or move \"{name}\" to another Matter";
       "descriptionCount": "Copy or move {count, plural, one {# item} other {# items}} to another Matter";
+      "goToMatter": "Go to matter";
       "menuItem": "Copy/Move to Matter";
       "moveButton": "Move";
       "moveOption": "Move (delete original)";

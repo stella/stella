@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
-import { ArrowLeftIcon, LayoutTemplateIcon, SearchIcon } from "lucide-react";
+import { ArrowLeftIcon, LayoutTemplateIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
@@ -167,20 +167,13 @@ const TemplatePickList = ({
 
   return (
     <div className="flex min-h-0 flex-col gap-2 p-4">
-      <div className="relative">
-        <SearchIcon
-          aria-hidden="true"
-          className="text-muted-foreground pointer-events-none absolute start-2.5 top-1/2 size-3.5 -translate-y-1/2"
-        />
-        <Input
-          autoFocus
-          className="ps-8"
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder={t("templates.searchTemplates")}
-          type="search"
-          value={search}
-        />
-      </div>
+      <Input
+        autoFocus
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder={t("templates.searchTemplates")}
+        type="search"
+        value={search}
+      />
       <ul className="min-h-0 flex-1 divide-y overflow-y-auto rounded-lg border">
         {visibleTemplates.length === 0 && (
           <li className="text-muted-foreground p-3 text-sm">

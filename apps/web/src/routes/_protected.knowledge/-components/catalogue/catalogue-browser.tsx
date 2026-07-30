@@ -302,9 +302,6 @@ export const CatalogueBrowser = ({
       <ResponsiveActionToolbar>
         <ResponsiveActionToolbarItem slot="primary">
           <InputGroup className="min-h-11 sm:min-h-0">
-            <InputGroupAddon>
-              <SearchIcon className="text-muted-foreground" />
-            </InputGroupAddon>
             <InputGroupInput
               className="max-sm:h-11 max-sm:leading-11"
               onChange={(e) => setQuery(e.target.value)}
