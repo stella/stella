@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  PayloadBudgetError,
   zstdCompress,
   zstdCompressAsync,
   zstdDecompressToStringBounded,
@@ -28,8 +29,10 @@ describe("bounded corpus compression", () => {
     // Highly compressible input: a small object that inflates well past the
     // ceiling — the shape of a corrupt or hostile corpus object.
     const compressed = await zstdCompressAsync("a".repeat(1_000_000));
-    expect(zstdDecompressToStringBounded(compressed, 65_536)).rejects.toThrow(
-      /ceiling/u,
-    );
+    const outcome = await zstdDecompressToStringBounded(
+      compressed,
+      65_536,
+    ).catch((error: unknown) => error);
+    expect(outcome).toBeInstanceOf(PayloadBudgetError);
   });
 });

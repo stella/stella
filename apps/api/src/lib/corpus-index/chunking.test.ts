@@ -509,3 +509,12 @@ describe("structural budget", () => {
     expect(last?.headingPath.at(0)).toBe("H36");
   });
 });
+
+describe("AST character budget", () => {
+  test("one oversized block throws instead of chunking", () => {
+    const blocks = [paragraph(0, "x".repeat(30_000_001))];
+    expect(() =>
+      chunkDocument({ ast: astOf(blocks), fallbackText: "" }),
+    ).toThrow(/ceiling/u);
+  });
+});

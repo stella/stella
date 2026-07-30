@@ -289,7 +289,17 @@ const chunkBlocks = (blocks: readonly Block[]): CorpusChunk[] => {
   const accumulator = createChunkAccumulator();
   const headings = createHeadingStack();
 
+  // The block-count ceiling alone does not bound the walk: one block can
+  // carry an arbitrarily long `plainText`, so total characters are budgeted
+  // like the plain-text path's input.
+  let totalChars = 0;
   for (const block of blocks) {
+    totalChars += block.plainText.length;
+    if (totalChars > MAX_CHUNK_INPUT_CHARS) {
+      throw new ChunkBudgetError({
+        message: `Document text exceeds the ${MAX_CHUNK_INPUT_CHARS}-char ceiling`,
+      });
+    }
     if (isBlank(block.plainText)) {
       continue;
     }
