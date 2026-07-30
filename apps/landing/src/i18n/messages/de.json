@@ -625,7 +625,7 @@
       },
       "faqs": {
         "0": {
-          "answer": "Alles, was Sie eine Person fragen würden, die das Dokument prüft: Faktenextraktion wie Daten, Parteien und Beträge, oder Wertungsfragen, etwa ob eine Klausel vorhanden ist und wie sie gefasst ist. Die Antworten kommen mit Fundstellen zum Ausgangstext zurück.",
+          "answer": "Faktenextraktion wie Daten, Parteien und Beträge, oder Wertungsfragen, etwa ob eine Klausel vorhanden ist und wie sie gefasst ist. Die Antworten kommen mit Fundstellen zum Ausgangstext zurück.",
           "question": "Welche Fragen kann eine Spalte stellen?"
         },
         "1": {

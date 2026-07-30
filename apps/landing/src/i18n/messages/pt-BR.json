@@ -625,7 +625,7 @@
       },
       "faqs": {
         "0": {
-          "answer": "Qualquer uma que você faria a alguém revisando o documento: extração de dados, como datas, partes e valores, ou avaliações, como saber se uma cláusula existe e como foi redigida. As respostas voltam fundamentadas em citações ao texto de origem.",
+          "answer": "Extração de dados, como datas, partes e valores, ou avaliações, como saber se uma cláusula existe e como foi redigida. As respostas voltam fundamentadas em citações ao texto de origem.",
           "question": "Que tipo de pergunta uma coluna pode fazer?"
         },
         "1": {

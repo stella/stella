@@ -625,7 +625,7 @@
       },
       "faqs": {
         "0": {
-          "answer": "Kõike, mida küsiksid dokumenti üle vaatavalt inimeselt: faktide eraldamist, näiteks kuupäevi, pooli ja summasid, või kaalutlust nõudvaid küsimusi, näiteks kas klausel on olemas ja kuidas see on sõnastatud. Vastused tulevad koos viidetega lähtetekstile.",
+          "answer": "Faktide eraldamist, näiteks kuupäevi, pooli ja summasid, või kaalutlust nõudvaid küsimusi, näiteks kas klausel on olemas ja kuidas see on sõnastatud. Vastused tulevad koos viidetega lähtetekstile.",
           "question": "Milliseid küsimusi saab veerg esitada?"
         },
         "1": {

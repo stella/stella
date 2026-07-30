@@ -625,7 +625,7 @@
       },
       "faqs": {
         "0": {
-          "answer": "Anything you would ask a person reviewing the document: factual extraction like dates, parties, and amounts, or judgement calls like whether a clause is present and how it is framed. Answers come back grounded by citations to the source text.",
+          "answer": "Factual extraction like dates, parties, and amounts, or judgement calls like whether a clause is present and how it is framed. Answers come back grounded by citations to the source text.",
           "question": "What kinds of questions can a column ask?"
         },
         "1": {

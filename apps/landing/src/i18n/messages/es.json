@@ -625,7 +625,7 @@
       },
       "faqs": {
         "0": {
-          "answer": "Todo lo que le preguntarías a una persona que revisa el documento: extracción factual como fechas, partes e importes, o valoraciones como si una cláusula está presente y cómo está redactada. Las respuestas llegan respaldadas por citas al texto de origen.",
+          "answer": "Extracción factual como fechas, partes e importes, o valoraciones como si una cláusula está presente y cómo está redactada. Las respuestas llegan respaldadas por citas al texto de origen.",
           "question": "¿Qué tipo de preguntas puede hacer una columna?"
         },
         "1": {

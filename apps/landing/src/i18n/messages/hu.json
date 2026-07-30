@@ -625,7 +625,7 @@
       },
       "faqs": {
         "0": {
-          "answer": "Bármit, amit egy dokumentumot ellenőrző kollégától kérdezne: tényadatok kinyerését, például dátumokat, feleket és összegeket, vagy mérlegelést igénylő kérdéseket, például hogy szerepel-e egy kikötés, és hogyan van megfogalmazva. A válaszokat a forrásszövegre mutató hivatkozások támasztják alá.",
+          "answer": "Tényadatok kinyerését, például dátumokat, feleket és összegeket, vagy mérlegelést igénylő kérdéseket, például hogy szerepel-e egy kikötés, és hogyan van megfogalmazva. A válaszokat a forrásszövegre mutató hivatkozások támasztják alá.",
           "question": "Milyen kérdéseket tehet fel egy oszlop?"
         },
         "1": {

@@ -78,7 +78,7 @@ export const tabularReview: Product = {
     {
       question: "What kinds of questions can a column ask?",
       answer:
-        "Anything you would ask a person reviewing the document: factual extraction like dates, parties, and amounts, or judgement calls like whether a clause is present and how it is framed. Answers come back grounded by citations to the source text.",
+        "Factual extraction like dates, parties, and amounts, or judgement calls like whether a clause is present and how it is framed. Answers come back grounded by citations to the source text.",
     },
     {
       question: "Where do the answers come from?",

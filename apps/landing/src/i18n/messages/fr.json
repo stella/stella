@@ -625,7 +625,7 @@
       },
       "faqs": {
         "0": {
-          "answer": "Tout ce que vous demanderiez à une personne qui relit le document : de l’extraction factuelle comme les dates, les parties et les montants, ou des appréciations comme la présence d’une clause et sa formulation. Les réponses reviennent fondées sur des citations du texte source.",
+          "answer": "De l’extraction factuelle comme les dates, les parties et les montants, ou des appréciations comme la présence d’une clause et sa formulation. Les réponses reviennent fondées sur des citations du texte source.",
           "question": "Quelles questions une colonne peut-elle poser ?"
         },
         "1": {

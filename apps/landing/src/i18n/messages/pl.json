@@ -625,7 +625,7 @@
       },
       "faqs": {
         "0": {
-          "answer": "Wszystko, o co zapytasz osobę przeglądającą dokument: o fakty, jak daty, strony i kwoty, albo o ocenę, na przykład czy klauzula występuje i jak ją sformułowano. Odpowiedzi wracają poparte cytowaniami do tekstu źródłowego.",
+          "answer": "O fakty, jak daty, strony i kwoty, albo o ocenę, na przykład czy klauzula występuje i jak ją sformułowano. Odpowiedzi wracają poparte cytowaniami do tekstu źródłowego.",
           "question": "Jakie pytania może zadawać kolumna?"
         },
         "1": {
