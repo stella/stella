@@ -252,7 +252,7 @@ const proofItems = [
                 </div>
               )}
               <a
-                class="story-visual-link absolute inset-0 z-10 flex items-center justify-center"
+                class="story-visual-link absolute inset-0 z-10 flex items-end justify-center"
                 href={productHref(chapter.links[0].slug, locale)}
                 aria-label={`${discoverLabel} ${productNames[chapter.links[0].slug]}`}
               >
@@ -346,31 +346,34 @@ const proofItems = [
     aspect-ratio: 16 / 10;
   }
 
-  /* The visual's link overlay: invisible until the pointer is over the
-     scene, then a light scrim plus the hero's discover chip. */
+  /* The visual's link overlay: nothing until the pointer is over the scene,
+     then the hero's own selection frame (.cli-selected) and discover chip,
+     so both surfaces answer a hover the same way. */
   .story-visual-link {
-    background: transparent;
-    border-radius: 1rem;
-    transition: background 200ms;
+    border-radius: clamp(0.62rem, 1vw, 0.9rem);
+    outline: 2px solid transparent;
+    outline-offset: 5px;
+    transition: outline-color 200ms;
   }
 
   .story-visual-link:hover,
   .story-visual-link:focus-visible {
-    background: color-mix(in srgb, black 10%, transparent);
+    outline-color: var(--primary);
   }
 
+  /* Sits just below the framed scene, the gap the hero's DiscoverTag uses. */
   .story-visual-chip {
     opacity: 0;
     transition:
       opacity 200ms,
       translate 200ms;
-    translate: 0 6px;
+    translate: 0 0.5rem;
   }
 
   .story-visual-link:hover .story-visual-chip,
   .story-visual-link:focus-visible .story-visual-chip {
     opacity: 1;
-    translate: 0 0;
+    translate: 0 calc(100% + 14px);
   }
 
   /* The data chapter renders a static mac-window (reusing the workspace/
