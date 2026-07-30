@@ -26,6 +26,7 @@ let staleIntentRows: {
   };
 }[] = [];
 let persistenceEvents: string[] = [];
+let intentStatuses: string[] = [];
 
 void mock.module("@/api/handlers/entities/write-file-version", () => ({
   writeFileVersion: writeFileVersionMock,
@@ -74,19 +75,27 @@ const createTestTransaction = (): Transaction =>
       }),
     }),
     insert: () => ({
-      values: (values: { id: string }) => {
+      values: (values: { id: string; status?: string }) => {
         persistenceEvents.push("intent-reserved");
+        if (values.status) {
+          intentStatuses.push(values.status);
+        }
         return {
           returning: async () => [{ id: values.id }],
         };
       },
     }),
     update: () => ({
-      set: () => ({
-        where: () => ({
-          returning: async () => [{ id: "intent_1" }],
-        }),
-      }),
+      set: (values: { status?: string }) => {
+        if (values.status) {
+          intentStatuses.push(values.status);
+        }
+        return {
+          where: () => ({
+            returning: async () => [{ id: "intent_1" }],
+          }),
+        };
+      },
     }),
   });
 
@@ -137,6 +146,7 @@ describe("createEntityVersionFromBuffer", () => {
     diffStatsMock.mockResolvedValue(undefined);
     staleIntentRows = [];
     persistenceEvents = [];
+    intentStatuses = [];
   });
 
   test("rejects oversized documents before object storage or the transaction", async () => {
@@ -174,6 +184,25 @@ describe("createEntityVersionFromBuffer", () => {
     }
     expect(s3DeleteMock).toHaveBeenCalledWith("org_1/ws_1/file_1.docx");
     expect(writeFileVersionMock).not.toHaveBeenCalled();
+    expect(intentStatuses).toEqual(["scanning", "rejected"]);
+  });
+
+  test("keeps the durable intent recoverable when ambiguous-write cleanup fails", async () => {
+    const writeError = new Error("object storage timed out");
+    s3WriteMock.mockRejectedValue(writeError);
+    s3DeleteMock.mockRejectedValue(new Error("object deletion timed out"));
+
+    const attempted = await Result.tryPromise({
+      try: async () => await createEntityVersionFromBuffer(baseInput),
+      catch: (cause) => cause,
+    });
+
+    expect(Result.isError(attempted)).toBe(true);
+    if (Result.isError(attempted)) {
+      expect(attempted.error).toBe(writeError);
+    }
+    expect(s3DeleteMock).toHaveBeenCalledWith("org_1/ws_1/file_1.docx");
+    expect(intentStatuses).toEqual(["scanning"]);
   });
 
   test("stores bytes and delegates the canonical locked transaction", async () => {

@@ -18,22 +18,37 @@ export const shouldAllowAndroidEmulatorHttp = ({
   deviceKind === "emulator" &&
   platform === "android";
 
+export const shouldAllowLoopbackHttp = ({
+  buildMode,
+  deviceKind,
+}: MobileRuntime): boolean =>
+  buildMode === "development" && deviceKind === "emulator";
+
 const usesSecureTransport = (
   value: URL,
-  allowAndroidEmulatorHttp: boolean,
+  {
+    allowAndroidEmulatorHttp,
+    allowLoopbackHttp,
+  }: {
+    allowAndroidEmulatorHttp: boolean;
+    allowLoopbackHttp: boolean;
+  },
 ): boolean =>
   value.protocol === "https:" ||
   (value.protocol === "http:" &&
-    (LOOPBACK_API_HOSTS.has(value.hostname) ||
+    ((allowLoopbackHttp && LOOPBACK_API_HOSTS.has(value.hostname)) ||
       (allowAndroidEmulatorHttp && value.hostname === ANDROID_EMULATOR_HOST)));
 
-const createApiUrlSchema = (allowAndroidEmulatorHttp: boolean) =>
+const createApiUrlSchema = (options: {
+  allowAndroidEmulatorHttp: boolean;
+  allowLoopbackHttp: boolean;
+}) =>
   v.pipe(
     v.string("EXPO_PUBLIC_API_URL is required."),
     v.url("EXPO_PUBLIC_API_URL must be a valid URL."),
     v.transform((value) => new URL(value)),
     v.check(
-      (value) => usesSecureTransport(value, allowAndroidEmulatorHttp),
+      (value) => usesSecureTransport(value, options),
       "EXPO_PUBLIC_API_URL must use HTTPS (HTTP is allowed only for a loopback development server or Android emulator alias in development).",
     ),
     v.check(
@@ -49,5 +64,9 @@ const createApiUrlSchema = (allowAndroidEmulatorHttp: boolean) =>
 
 export const parseMobileApiUrl = (
   value: unknown,
-  { allowAndroidEmulatorHttp = false } = {},
-) => v.parse(createApiUrlSchema(allowAndroidEmulatorHttp), value);
+  { allowAndroidEmulatorHttp = false, allowLoopbackHttp = false } = {},
+) =>
+  v.parse(
+    createApiUrlSchema({ allowAndroidEmulatorHttp, allowLoopbackHttp }),
+    value,
+  );

@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { parseMobileApiUrl, shouldAllowAndroidEmulatorHttp } from "./api-url";
+import {
+  parseMobileApiUrl,
+  shouldAllowAndroidEmulatorHttp,
+  shouldAllowLoopbackHttp,
+} from "./api-url";
 
 describe("shouldAllowAndroidEmulatorHttp", () => {
   test.each([
@@ -50,9 +54,15 @@ describe("parseMobileApiUrl", () => {
     "http://localhost:3001",
     "http://127.0.0.1:3001",
     "http://[::1]:3001",
-  ])("allows loopback HTTP for local development: %s", (value) => {
-    expect(parseMobileApiUrl(value)).toBe(`${value}/`);
-  });
+  ])(
+    "allows loopback HTTP only when explicitly in development: %s",
+    (value) => {
+      expect(parseMobileApiUrl(value, { allowLoopbackHttp: true })).toBe(
+        `${value}/`,
+      );
+      expect(() => parseMobileApiUrl(value)).toThrow();
+    },
+  );
 
   test("allows the Android emulator host alias only when explicitly in development", () => {
     expect(
@@ -80,5 +90,31 @@ describe("parseMobileApiUrl", () => {
     "https://api.example.com#config",
   ])("rejects an unsafe API URL: %p", (value) => {
     expect(() => parseMobileApiUrl(value)).toThrow();
+  });
+});
+
+describe("shouldAllowLoopbackHttp", () => {
+  test("allows loopback only in a development simulator runtime", () => {
+    expect(
+      shouldAllowLoopbackHttp({
+        buildMode: "development",
+        deviceKind: "emulator",
+        platform: "ios",
+      }),
+    ).toBe(true);
+    expect(
+      shouldAllowLoopbackHttp({
+        buildMode: "production",
+        deviceKind: "emulator",
+        platform: "ios",
+      }),
+    ).toBe(false);
+    expect(
+      shouldAllowLoopbackHttp({
+        buildMode: "development",
+        deviceKind: "physical",
+        platform: "android",
+      }),
+    ).toBe(false);
   });
 });

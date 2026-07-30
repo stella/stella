@@ -4,6 +4,7 @@ import { Platform } from "react-native";
 import {
   parseMobileApiUrl,
   shouldAllowAndroidEmulatorHttp,
+  shouldAllowLoopbackHttp,
 } from "@/config/api-url";
 
 const isDevelopmentBuild =
@@ -14,6 +15,11 @@ const isDevelopmentBuild =
 export const env = {
   API_URL: parseMobileApiUrl(process.env.EXPO_PUBLIC_API_URL, {
     allowAndroidEmulatorHttp: shouldAllowAndroidEmulatorHttp({
+      buildMode: isDevelopmentBuild ? "development" : "production",
+      deviceKind: Device.isDevice ? "physical" : "emulator",
+      platform: Platform.OS,
+    }),
+    allowLoopbackHttp: shouldAllowLoopbackHttp({
       buildMode: isDevelopmentBuild ? "development" : "production",
       deviceKind: Device.isDevice ? "physical" : "emulator",
       platform: Platform.OS,
