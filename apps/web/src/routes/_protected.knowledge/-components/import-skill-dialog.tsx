@@ -317,7 +317,7 @@ const ImportSkillDialogBody = ({
                       <span className="text-muted-foreground flex flex-wrap items-center gap-x-2 text-xs">
                         {skill.path && (
                           <code dir="ltr">
-                            <bdi>{skill.path}</bdi>
+                            <bdi dir="ltr">{skill.path}</bdi>
                           </code>
                         )}
                         {skill.version && (

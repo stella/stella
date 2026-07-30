@@ -92,6 +92,8 @@ type CatalogueBrowserProps = {
    * for the onboarding flow.
    */
   showAddCustom?: boolean;
+  /** Caller-resolved permission gate for importing private skills. */
+  canImportSkills: boolean;
   /**
    * Caller-resolved permission gate for creating custom team tools. Members
    * can still import private skills. The route owns role loading so this
@@ -123,6 +125,7 @@ export const CatalogueBrowser = ({
   organizationId,
   initialKind,
   showAddCustom = true,
+  canImportSkills,
   canManageCustomTools,
   practiceJurisdictions,
 }: CatalogueBrowserProps) => {
@@ -286,7 +289,8 @@ export const CatalogueBrowser = ({
   );
   const otherFiltered = filtered.filter((entry) => !entry.isRecommendedForOrg);
   const hasMcpEntries = entries.some((entry) => entry.kind === "mcp");
-  const showAddCustomMenu = showAddCustom;
+  const showAddCustomMenu =
+    showAddCustom && (canManageCustomTools || canImportSkills);
   // On a truly empty MCP catalogue, replace the generic "no entries" + reset
   // line with a prominent add-MCP call to action. Gated to admins/owners
   // like the add-custom menu, since members can't create connectors.
@@ -464,10 +468,12 @@ export const CatalogueBrowser = ({
                     </MenuItem>
                   </>
                 ) : null}
-                <MenuItem onClick={() => setImportSkillOpen(true)}>
-                  <FileDownIcon className="size-4" />
-                  {t("knowledge.agentSkills.importSkill")}
-                </MenuItem>
+                {canImportSkills && (
+                  <MenuItem onClick={() => setImportSkillOpen(true)}>
+                    <FileDownIcon className="size-4" />
+                    {t("knowledge.agentSkills.importSkill")}
+                  </MenuItem>
+                )}
               </MenuPopup>
             </Menu>
           </ResponsiveActionToolbarItem>
@@ -610,17 +616,20 @@ export const CatalogueBrowser = ({
         onOpenChange={setBlueprintGalleryOpen}
         open={blueprintGalleryOpen}
       />
-      <ImportSkillDialog
-        canManageTeam={canManageCustomTools}
-        onImported={onSkillSheetChanged}
-        onOpenChange={setImportSkillOpen}
-        open={importSkillOpen}
-      />
+      {canImportSkills && (
+        <ImportSkillDialog
+          canManageTeam={canManageCustomTools}
+          onImported={onSkillSheetChanged}
+          onOpenChange={setImportSkillOpen}
+          open={importSkillOpen}
+        />
+      )}
     </div>
   );
 };
 
 type CatalogueBrowserWithRouteDataProps = {
+  canImportSkills: boolean;
   canManageCustomTools: boolean;
   organizationId: string;
   initialKind?: CatalogueBrowserFilterKind | undefined;
@@ -628,12 +637,14 @@ type CatalogueBrowserWithRouteDataProps = {
 };
 
 export const CatalogueBrowserWithRouteData = ({
+  canImportSkills,
   canManageCustomTools,
   organizationId,
   initialKind,
   practiceJurisdictions,
 }: CatalogueBrowserWithRouteDataProps) => (
   <CatalogueBrowser
+    canImportSkills={canImportSkills}
     canManageCustomTools={canManageCustomTools}
     initialKind={initialKind}
     organizationId={organizationId}
