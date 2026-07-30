@@ -1809,10 +1809,12 @@ export const initDocumentProcessingWorker = () => {
       reason: "ocr_provider_not_configured",
     });
     return {
-      close: (): Promise<void> => {
-        reconciliationRedisClient?.close();
+      close: async (): Promise<void> => {
+        const client = reconciliationRedisClient;
         reconciliationRedisClient = null;
-        return Promise.resolve();
+        if (client) {
+          await client.close();
+        }
       },
     };
   }

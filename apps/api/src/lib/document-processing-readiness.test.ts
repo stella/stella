@@ -26,9 +26,17 @@ describe("document OCR worker readiness", () => {
       // Deliberately pending to exercise the caller's deadline.
     });
 
-    await expect(
-      readDocumentOcrWorkerAvailability(() => neverResolves, 5),
-    ).rejects.toThrow("document OCR readiness read exceeded 5ms");
+    const rejection: unknown = await readDocumentOcrWorkerAvailability(
+      async () => await neverResolves,
+      5,
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toMatchObject({
+      message: "document OCR readiness read exceeded 5ms",
+    });
   });
 
   test("publishes an expiring lease atomically", async () => {
@@ -50,8 +58,16 @@ describe("document OCR worker readiness", () => {
       // Deliberately pending to exercise the caller's deadline.
     });
 
-    await expect(
-      refreshDocumentOcrWorkerReadiness(() => neverResolves, 5),
-    ).rejects.toThrow("document OCR readiness heartbeat exceeded 5ms");
+    const rejection: unknown = await refreshDocumentOcrWorkerReadiness(
+      async () => await neverResolves,
+      5,
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toMatchObject({
+      message: "document OCR readiness heartbeat exceeded 5ms",
+    });
   });
 });
