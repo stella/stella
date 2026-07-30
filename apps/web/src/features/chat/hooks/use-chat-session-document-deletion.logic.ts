@@ -5,7 +5,7 @@ import {
   type DocumentDeletionMessage,
 } from "@/components/chat/chat-ui-tools";
 import type { InspectorTab } from "@/components/inspector/inspector-store";
-import { fileMetadataQueryRoot } from "@/lib/files/file-metadata-query.logic";
+import { filesQueryRoot } from "@/lib/files/file-metadata-query.logic";
 
 type ReconcileDocumentDeletionToolCallsOptions = {
   entityKeys: {
@@ -57,7 +57,7 @@ export const reconcileDocumentDeletionToolCalls = async ({
   }
 
   invalidations.push(
-    queryClient.invalidateQueries({ queryKey: fileMetadataQueryRoot() }),
+    queryClient.invalidateQueries({ queryKey: filesQueryRoot() }),
   );
 
   if (hasWholeDocumentDeletion) {

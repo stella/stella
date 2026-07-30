@@ -18,12 +18,11 @@ import { useTranslations } from "use-intl";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { useInspectorStore } from "@/components/inspector/inspector-store";
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { useMountEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
-import { prefetchFileMetadata } from "@/lib/files/file-metadata-query";
-import { fileMetadataQueryKey } from "@/lib/files/file-metadata-query.logic";
+import { fileContentQueryKey } from "@/lib/files/file-metadata-query.logic";
 import { VersionsSidebar } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/versions-sidebar";
 import type { Version } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/versions-sidebar";
 import {
@@ -270,22 +269,11 @@ export const useSelectedFileVersionMissing = ({
     }
 
     const error = queryClient.getQueryState(
-      fileMetadataQueryKey({ workspaceId, fieldId }),
+      fileContentQueryKey({ workspaceId, fieldId }),
     )?.error;
     return APIError.is(error) && error.status === 404;
   }, [enabled, fieldId, queryClient, workspaceId]);
   const isMissing = useSyncExternalStore(subscribe, getSnapshot, () => false);
-
-  useExternalSyncEffect(() => {
-    if (!enabled) {
-      return;
-    }
-
-    detached(
-      prefetchFileMetadata(queryClient, { workspaceId, fieldId }),
-      "useSelectedFileVersionMissing",
-    );
-  }, [enabled, fieldId, queryClient, workspaceId]);
 
   return isMissing;
 };

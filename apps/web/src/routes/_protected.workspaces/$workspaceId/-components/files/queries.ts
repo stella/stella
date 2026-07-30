@@ -3,7 +3,9 @@ import { queryOptions } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import {
+  fileContentQueryKey,
   fileMetadataQueryKey,
+  filesQueryRoot,
   type FileMetadataQueryKey,
 } from "@/lib/files/file-metadata-query.logic";
 import type { QueryOptionsInput } from "@/lib/react-query";
@@ -36,13 +38,8 @@ type TextFileData = {
 };
 
 export const filesKeys = {
-  all: () => ["files"],
-  byFieldId: (key: FileByFieldIdKey) => [
-    ...filesKeys.all(),
-    key.workspaceId,
-    key.fieldId,
-    key.purpose ?? "display",
-  ],
+  all: filesQueryRoot,
+  byFieldId: fileContentQueryKey,
   metadataByFieldId: fileMetadataQueryKey,
   emailHtmlByFieldId: (key: FileByFieldIdKey) => [
     ...filesKeys.all(),

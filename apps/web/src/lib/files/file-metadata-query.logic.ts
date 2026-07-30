@@ -6,7 +6,16 @@ export type FileMetadataQueryKey = {
   purpose?: StorageFetchPurpose;
 };
 
-export const fileMetadataQueryRoot = () => ["files", "metadata"];
+export const filesQueryRoot = () => ["files"];
+
+export const fileContentQueryKey = (key: FileMetadataQueryKey) => [
+  ...filesQueryRoot(),
+  key.workspaceId,
+  key.fieldId,
+  key.purpose ?? "display",
+];
+
+export const fileMetadataQueryRoot = () => [...filesQueryRoot(), "metadata"];
 
 export const fileMetadataQueryKey = (key: FileMetadataQueryKey) => [
   ...fileMetadataQueryRoot(),

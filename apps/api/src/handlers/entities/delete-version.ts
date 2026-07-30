@@ -345,6 +345,10 @@ export const deleteEntityVersionHandler = async function* ({
     type: "invalidate-query",
     data: ["entities", workspaceId],
   });
+  broadcast(workspaceId, {
+    type: "invalidate-query",
+    data: ["files"],
+  });
 
   return Result.ok({ deleted: true });
 };
