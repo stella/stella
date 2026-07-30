@@ -5,9 +5,13 @@ import { getChangelogReleases } from "./changelog";
 describe("changelog release dates", () => {
   // A release page without a date entry renders dateless silently; the entry
   // lives in src/data/changelog-release-dates.json (GitHub `published_at`,
-  // `gh release view <tag> --json publishedAt`). Add it with the release page.
-  test("every release page has a publication date", () => {
+  // `gh release view <tag> --json publishedAt`). Release automation commits
+  // the page without the date entry, so the newest release gets a grace
+  // window; anything older undated is the staleness this guard exists for
+  // (the file once stopped six feature releases behind).
+  test("every release page except the newest has a publication date", () => {
     const undated = getChangelogReleases()
+      .slice(1)
       .filter((release) => release.publishedAt === null)
       .map((release) => release.tagName);
     expect(undated).toEqual([]);
