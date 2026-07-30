@@ -691,7 +691,7 @@ export const RowActions = ({
             {t("fileDetail.uploadNewVersion")}
           </MenuItem>
         )}
-        {!isCellContext && canRunOcr && file && (
+        {!isCellContext && canRunOcr && (
           <MenuItem
             disabled={isOcrPending}
             onClick={() => {

@@ -5,7 +5,10 @@ import { t } from "elysia";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { entities, entityVersions, fields } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type {
+  HandlerConfig,
+  SafeHandlerGenerator,
+} from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
@@ -42,6 +45,11 @@ type FindManualOcrSourceResult = Result<
   ManualOcrSource,
   HandlerError<400 | 404 | 409> | SafeDbError
 >;
+
+type ManualOcrResponse = {
+  outcome: "already_processed" | "queued";
+  runId: SafeId<"documentProcessingRun">;
+};
 
 type RequestManualOcrProps = {
   enqueue?: (runId: PersistedDocumentProcessingRun["id"]) => Promise<void>;
@@ -152,7 +160,7 @@ export const requestManualOcrHandler = async function* ({
   safeDb,
   userId,
   workspaceId,
-}: RequestManualOcrProps) {
+}: RequestManualOcrProps): SafeHandlerGenerator<ManualOcrResponse> {
   const source = yield* Result.await(
     findManualOcrSource({ entityId, fieldId, safeDb, workspaceId }),
   );
