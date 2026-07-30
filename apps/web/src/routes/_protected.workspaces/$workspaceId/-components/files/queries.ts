@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
 import type { QueryOptionsInput } from "@/lib/react-query";
 import {
   fetchStorageArrayBuffer,
@@ -70,10 +70,13 @@ export const filesKeys = {
 };
 
 type FileOptionsProps = QueryOptionsInput<FileByFieldIdKey>;
+type FileMetadataOptionsProps = FileOptionsProps & { enabled?: boolean };
 
-export const fileMetadataOptions = (props: FileOptionsProps) =>
+export const fileMetadataOptions = (props: FileMetadataOptionsProps) =>
   queryOptions({
     queryKey: filesKeys.metadataByFieldId(props),
+    enabled: props.enabled ?? true,
+    retry: shouldRetryAPIRequest,
     queryFn: async ({ signal }) => {
       const response = await api
         .files({ workspaceId: props.workspaceId })

@@ -659,7 +659,6 @@ const CurrentFileFieldSync = ({ tab }: { tab: FileTab }) => {
         );
   const isSelectedFieldMissing = useSelectedFileVersionMissing({
     enabled: activeFileField === undefined,
-    entityId: tab.entityId,
     fieldId: tab.id,
     workspaceId: tab.workspaceId,
   });
