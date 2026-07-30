@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
-import { fieldSuggestionsSchema } from "./suggest-template-fields";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+
+import {
+  fieldSuggestionsSchema,
+  toSuggestFieldsError,
+} from "./suggest-template-fields";
 
 describe("fieldSuggestionsSchema", () => {
   test("accepts well-formed suggestions (plain, typed, and AI-fillable)", () => {
@@ -53,5 +58,21 @@ describe("fieldSuggestionsSchema", () => {
         suggestions: [{ literalText: "x" }],
       }).success,
     ).toBe(false);
+  });
+});
+
+describe("toSuggestFieldsError", () => {
+  test("a typed HandlerError passes through with its status and message", () => {
+    const typed = new HandlerError({
+      status: 403,
+      message: "AI is not available for this role",
+    });
+    expect(toSuggestFieldsError(typed)).toBe(typed);
+  });
+
+  test("an untyped failure becomes a 500", () => {
+    const mapped = toSuggestFieldsError(new Error("socket hang up"));
+    expect(mapped.status).toBe(500);
+    expect(mapped.message).toBe("Failed to suggest template fields");
   });
 });
