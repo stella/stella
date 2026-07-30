@@ -36,7 +36,7 @@ FOR EACH ROW EXECUTE FUNCTION clear_search_preview_generation();--> statement-br
 
 CREATE TABLE "search_document_preview_passages" (
   "entity_id" uuid NOT NULL REFERENCES "search_documents"("entity_id") ON DELETE CASCADE,
-  "organization_id" text NOT NULL,
+  "organization_id" varchar(128) NOT NULL,
   "workspace_id" uuid NOT NULL,
   "generation" uuid NOT NULL,
   "ordinal" integer NOT NULL,
@@ -72,7 +72,7 @@ CREATE POLICY "search_document_preview_passages_no_delete"
 
 CREATE TABLE "contact_search_document_preview_passages" (
   "contact_id" uuid NOT NULL REFERENCES "contact_search_documents"("contact_id") ON DELETE CASCADE,
-  "organization_id" text NOT NULL,
+  "organization_id" varchar(128) NOT NULL,
   "generation" uuid NOT NULL,
   "ordinal" integer NOT NULL,
   "content" text NOT NULL,
@@ -104,7 +104,7 @@ CREATE POLICY "contact_search_document_preview_passages_no_delete"
 
 CREATE TABLE "workspace_search_document_preview_passages" (
   "workspace_id" uuid NOT NULL REFERENCES "workspace_search_documents"("workspace_id") ON DELETE CASCADE,
-  "organization_id" text NOT NULL,
+  "organization_id" varchar(128) NOT NULL,
   "generation" uuid NOT NULL,
   "ordinal" integer NOT NULL,
   "content" text NOT NULL,
