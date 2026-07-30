@@ -1064,7 +1064,9 @@ const DiscoverTag = ({
     }}
   >
     {label} {productName}
-    <span aria-hidden="true">→</span>
+    <span aria-hidden="true" className="rtl:inline-block rtl:-scale-x-100">
+      →
+    </span>
   </a>
 );
 

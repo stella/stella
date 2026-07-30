@@ -1,6 +1,7 @@
 ---
 import { productHref } from "../data/products/links";
 import type { ProductSlug } from "../data/products/pillars";
+import { resolveProductEyebrows } from "../data/site-nav";
 import { resolveSceneWindowLabels } from "../data/product-story";
 import type { TranslationKey } from "../i18n/utils";
 import { defaultLocale, isLocale } from "../i18n/config";
@@ -12,6 +13,10 @@ const rawLocale = Astro.currentLocale ?? defaultLocale;
 const locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
 const t = getTranslations(locale);
 const sceneWindowLabels = resolveSceneWindowLabels(t);
+// Chapter scenes navigate like the hero's windows: the whole visual links to
+// the chapter's first product page, announced by the same discover chip.
+const discoverLabel = t("story.discover");
+const productNames = resolveProductEyebrows(t);
 // Same <gh>…</gh> contract as the hero: the locale marks its own open-source
 // phrase and the marked span links to the repository.
 const controlBody = requireLinkedSegment(
@@ -177,10 +182,10 @@ const proofItems = [
               data-reveal
               style={`--reveal-delay: ${120 + index * 30}ms`}
               class:list={[
-                "product-chapter-visual lg:col-span-8",
+                "product-chapter-visual relative lg:col-span-8",
                 index % 2 === 1 ? "lg:col-start-1 lg:row-start-1" : "lg:col-start-5",
               ]}
-            >
+>
               {chapter.id === "workspace" && (
                 <div class="story-window">
                   <CliMcpPreview
@@ -246,6 +251,19 @@ const proofItems = [
                   </div>
                 </div>
               )}
+              <a
+                class="story-visual-link absolute inset-0 z-10 flex items-center justify-center"
+                href={productHref(chapter.links[0].slug, locale)}
+                aria-label={`${discoverLabel} ${productNames[chapter.links[0].slug]}`}
+              >
+                <span
+                  class="story-visual-chip inline-flex items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-semibold shadow-md"
+                  style="background: var(--primary); color: var(--primary-foreground)"
+                >
+                  {discoverLabel} {productNames[chapter.links[0].slug]}
+                  <span aria-hidden="true" class="rtl:inline-block rtl:-scale-x-100">→</span>
+                </span>
+              </a>
             </div>
           </article>
         ))
@@ -326,6 +344,33 @@ const proofItems = [
   .story-window {
     position: relative;
     aspect-ratio: 16 / 10;
+  }
+
+  /* The visual's link overlay: invisible until the pointer is over the
+     scene, then a light scrim plus the hero's discover chip. */
+  .story-visual-link {
+    background: transparent;
+    border-radius: 1rem;
+    transition: background 200ms;
+  }
+
+  .story-visual-link:hover,
+  .story-visual-link:focus-visible {
+    background: color-mix(in srgb, black 10%, transparent);
+  }
+
+  .story-visual-chip {
+    opacity: 0;
+    transition:
+      opacity 200ms,
+      translate 200ms;
+    translate: 0 6px;
+  }
+
+  .story-visual-link:hover .story-visual-chip,
+  .story-visual-link:focus-visible .story-visual-chip {
+    opacity: 1;
+    translate: 0 0;
   }
 
   /* The data chapter renders a static mac-window (reusing the workspace/
