@@ -407,24 +407,51 @@ const alignDatabaseNormalizedSource = ({
       break;
     }
 
+    const normalizedCodePoint = normalized.codePointAt(normalizedCursor);
+    const scaffoldCodePoint = scaffold.text.codePointAt(scaffoldCursor);
+    const nextNormalized =
+      normalizedCursor +
+      (normalizedCodePoint !== undefined && normalizedCodePoint > 0xff_ff
+        ? 2
+        : 1);
+    const nextScaffold =
+      scaffoldCursor +
+      (scaffoldCodePoint !== undefined && scaffoldCodePoint > 0xff_ff ? 2 : 1);
+    if (
+      normalized.codePointAt(nextNormalized) ===
+      scaffold.text.codePointAt(nextScaffold)
+    ) {
+      appendChangedAlignment({
+        mappings,
+        normalizedEnd: nextNormalized,
+        normalizedStart: normalizedCursor,
+        scaffold,
+        scaffoldEnd: nextScaffold,
+        scaffoldStart: scaffoldCursor,
+      });
+      normalizedCursor = nextNormalized;
+      scaffoldCursor = nextScaffold;
+      continue;
+    }
+
     const anchor = findAlignmentAnchor({
       normalized,
       normalizedFrom: normalizedCursor,
       scaffold: scaffold.text,
       scaffoldFrom: scaffoldCursor,
     });
-    const nextNormalized = anchor?.normalizedStart ?? normalized.length;
-    const nextScaffold = anchor?.scaffoldStart ?? scaffold.text.length;
+    const nextNormalizedAnchor = anchor?.normalizedStart ?? normalized.length;
+    const nextScaffoldAnchor = anchor?.scaffoldStart ?? scaffold.text.length;
     appendChangedAlignment({
       mappings,
-      normalizedEnd: nextNormalized,
+      normalizedEnd: nextNormalizedAnchor,
       normalizedStart: normalizedCursor,
       scaffold,
-      scaffoldEnd: nextScaffold,
+      scaffoldEnd: nextScaffoldAnchor,
       scaffoldStart: scaffoldCursor,
     });
-    normalizedCursor = nextNormalized;
-    scaffoldCursor = nextScaffold;
+    normalizedCursor = nextNormalizedAnchor;
+    scaffoldCursor = nextScaffoldAnchor;
   }
 
   appendChangedAlignment({

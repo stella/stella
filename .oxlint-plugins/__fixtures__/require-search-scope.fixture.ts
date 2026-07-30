@@ -1,4 +1,5 @@
 import { load } from "cheerio";
+import * as drizzle from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
 import { searchDocuments } from "@/api/db/schema";
@@ -491,6 +492,11 @@ scopedSingleAppendPrivateRead.append(
   sql`SELECT * FROM search_documents sd WHERE true ${entityWorkspaceFilter}`,
 );
 
+const emptyInitializedPrivateRead = sql.empty();
+emptyInitializedPrivateRead.append(sql`SELECT * FROM search_`);
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves sql.empty mutable roots cannot hide relations split across appends
+emptyInitializedPrivateRead.append(sql`documents sd`);
+
 const unrelatedAppendControl = {
   append: (fragment: unknown) => fragment,
 }.append(sql`search_documents sd`);
@@ -597,6 +603,25 @@ const publicStaticIdentifierEntity = sql`
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves even a currently public imported fragment fails closed because its SQL definition is unavailable here
 const unsafeImportedOpaqueRelation = sql`
   SELECT * ${importedOpaqueRelationFragment}
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves namespace-imported Drizzle SQL tags are inspected
+const unsafeNamespaceImportedEntity = drizzle.sql`
+  SELECT * FROM search_documents sd
+`;
+
+const unresolvedCompositionParts = [
+  sql`SELECT * FROM search_`,
+  sql`documents sd`,
+];
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves unresolved root compositions fail closed
+const unsafeUnresolvedRootComposition = sql.join(
+  unresolvedCompositionParts.slice(),
+);
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves COPY TO reads of private projections require authorization
+const unsafeCopyEntityProjection = sql`
+  COPY search_documents TO STDOUT
 `;
 
 const staticPublicRelationControl = sql`SELECT * FROM entities e`;
@@ -1578,6 +1603,9 @@ void [
   unsafeDynamicRawSelectExpression,
   unsafeStaticIdentifierEntity,
   unsafeImportedOpaqueRelation,
+  unsafeNamespaceImportedEntity,
+  unsafeUnresolvedRootComposition,
+  unsafeCopyEntityProjection,
   unsafeDynamicIdentifierRelation,
   unsafeUnicodeEscapedEntity,
   unsafeCustomUnicodeEscapedEntity,

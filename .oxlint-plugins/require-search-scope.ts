@@ -255,7 +255,7 @@ const concatenateSqlTokenPaths = (
   ];
 };
 
-const SQL_READ_CAPABLE_ROOT = /\b(?:delete|merge|select|table|update)\b/iu;
+const SQL_READ_CAPABLE_ROOT = /\b(?:copy|delete|merge|select|table|update)\b/iu;
 
 const SQL_ALIAS_STOP_WORDS = new Set([
   "cross",
@@ -307,6 +307,10 @@ const SQL_RELATION_REFERENCE = new RegExp(
     `(?:only\\s+)?(?:\\(\\s*)*(?:only\\s+)?` +
     `(${SQL_RELATION_PATH_PATTERN})` +
     `(?:\\s+(?:as\\s+)?(${SQL_IDENTIFIER_PATTERN}))?`,
+  "giu",
+);
+const SQL_COPY_TO_RELATION_REFERENCE = new RegExp(
+  `\\bcopy\\s+(${SQL_RELATION_PATH_PATTERN})` + `(?:\\s*\\([^)]*\\))?\\s+to\\b`,
   "giu",
 );
 const SQL_FROM_CLAUSE_BOUNDARY =
@@ -474,6 +478,15 @@ const projectionReadAliases = (
       continue;
     }
     aliases.push(normalizeProjectionAlias(match.at(2)));
+  }
+  for (const match of structuralText.matchAll(SQL_COPY_TO_RELATION_REFERENCE)) {
+    const relationPath = match.at(1);
+    if (
+      relationPath !== undefined &&
+      finalRelationIdentifier(relationPath) === table
+    ) {
+      aliases.push(null);
+    }
   }
   return aliases;
 };
@@ -1445,9 +1458,50 @@ export default {
           );
         };
 
+        const isApprovedNamespaceImport = (
+          identifier: AstNode & { name: string },
+          module: string,
+        ): boolean =>
+          resolveVariable(identifier)?.defs.some(
+            (definition) =>
+              definition.type === "ImportBinding" &&
+              isAstNode(definition.node) &&
+              definition.node.type === "ImportNamespaceSpecifier" &&
+              isAstNode(definition.parent) &&
+              definition.parent.type === "ImportDeclaration" &&
+              isStringLiteral(definition.parent.source) &&
+              definition.parent.source.value === module,
+          ) === true;
+
+        const isApprovedSqlReference = (expression: unknown): boolean => {
+          const unwrapped = unwrapExpression(expression);
+          if (isIdentifier(unwrapped)) {
+            return isApprovedImport(unwrapped, DRIZZLE_SQL_IMPORTS);
+          }
+          if (
+            !isAstNode(unwrapped) ||
+            unwrapped.type !== "MemberExpression" ||
+            !isIdentifier(unwrapped.object)
+          ) {
+            return false;
+          }
+          const property = unwrapped.property;
+          const isSqlProperty =
+            (isIdentifier(property) &&
+              unwrapped.computed !== true &&
+              property.name === "sql") ||
+            (unwrapped.computed === true &&
+              isStringLiteral(property) &&
+              property.value === "sql");
+          return (
+            isSqlProperty &&
+            isApprovedNamespaceImport(unwrapped.object, "drizzle-orm")
+          );
+        };
+
         const isSqlMethodCall = (
           expression: unknown,
-          method: "fromList" | "identifier" | "join" | "raw",
+          method: "empty" | "fromList" | "identifier" | "join" | "raw",
         ): boolean => {
           const unwrapped = unwrapExpression(expression);
           if (
@@ -1462,10 +1516,7 @@ export default {
             return false;
           }
           const object = resolveConstInitializer(callee.object);
-          if (
-            !isIdentifier(object) ||
-            !isApprovedImport(object, DRIZZLE_SQL_IMPORTS)
-          ) {
+          if (!isApprovedSqlReference(object)) {
             return false;
           }
           const property = callee.property;
@@ -1622,8 +1673,7 @@ export default {
           }
           if (
             unwrapped.type === "TaggedTemplateExpression" &&
-            isIdentifier(unwrapped.tag) &&
-            isApprovedImport(unwrapped.tag, DRIZZLE_SQL_IMPORTS)
+            isApprovedSqlReference(unwrapped.tag)
           ) {
             return true;
           }
@@ -1912,6 +1962,13 @@ export default {
                 variable,
               };
             }
+            if (isSqlMethodCall(initializer, "empty")) {
+              return {
+                declarationContainer: definition.parent.parent,
+                initializer,
+                variable,
+              };
+            }
           }
           return null;
         };
@@ -1950,9 +2007,7 @@ export default {
             return false;
           }
           const tag = resolveConstInitializer(node.tag);
-          return (
-            isIdentifier(tag) && isApprovedImport(tag, DRIZZLE_SQL_IMPORTS)
-          );
+          return isApprovedSqlReference(tag);
         };
 
         const FUNCTION_NODE_TYPES = new Set([
@@ -3055,8 +3110,9 @@ export default {
               }
             }
             for (const sequence of mutableSqlAppendSequences.values()) {
-              let tokenPaths =
-                flattenSqlExpression(sequence.initializer, new Set()) ?? [];
+              let tokenPaths = isSqlMethodCall(sequence.initializer, "empty")
+                ? [[]]
+                : (flattenSqlExpression(sequence.initializer, new Set()) ?? []);
               for (const call of sequence.calls) {
                 const fragmentPaths =
                   flattenSqlExpression(call.fragment, new Set()) ??
@@ -3189,9 +3245,14 @@ export default {
               return;
             }
             const tokenPaths = flattenSqlExpression(node, new Set());
-            if (tokenPaths !== null) {
-              inspectSqlTokenPaths(node, tokenPaths);
+            if (tokenPaths === null) {
+              context.report({
+                node,
+                messageId: "unavailableRelation",
+              });
+              return;
             }
+            inspectSqlTokenPaths(node, tokenPaths);
           },
         };
       },

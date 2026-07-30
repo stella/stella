@@ -86,6 +86,22 @@ describe("search result highlighting", () => {
     ).toBe(`Ƶƶ${HIGHLIGHT_START}Ƶƶ${HIGHLIGHT_STOP}`);
   });
 
+  test("aligns repeated PostgreSQL-only folds in linear time", () => {
+    const repetitions = 20_000;
+    const normalizedSource = "Za".repeat(repetitions);
+    const source = "Ƶa".repeat(repetitions);
+
+    expect(
+      restoreOriginalSearchPreview({
+        headline: `${HIGHLIGHT_START}Za${HIGHLIGHT_STOP}`,
+        maxLength: 1000,
+        normalizedSource,
+        source,
+        useUnaccent: true,
+      }),
+    ).toBe(`${HIGHLIGHT_START}Ƶa${HIGHLIGHT_STOP}`);
+  });
+
   test("restores Arabic-folded highlights with original orthography", () => {
     expect(
       restoreOriginalSearchPreview({

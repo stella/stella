@@ -269,28 +269,30 @@ const hasPositiveTerm = (ast: SearchAst, negated = false): boolean => {
   }
 };
 
-const collectPositiveLexemes = (
+const collectPositiveLocatorTerms = (
   ast: SearchAst,
-  lexemes: Set<string>,
+  terms: Set<string>,
   negated = false,
 ): void => {
   switch (ast.type) {
     case "term":
       if (!negated) {
-        for (const group of ast.lexemes) {
-          for (const lexeme of group) {
-            lexemes.add(lexeme);
-          }
+        if (ast.phrase) {
+          terms.add(astToTsQuery(ast));
+          return;
+        }
+        for (const lexemes of ast.lexemes) {
+          terms.add(lexemeGroupToTsQuery(lexemes));
         }
       }
       return;
     case "not":
-      collectPositiveLexemes(ast.child, lexemes, !negated);
+      collectPositiveLocatorTerms(ast.child, terms, !negated);
       return;
     case "and":
     case "or":
-      collectPositiveLexemes(ast.left, lexemes, negated);
-      collectPositiveLexemes(ast.right, lexemes, negated);
+      collectPositiveLocatorTerms(ast.left, terms, negated);
+      collectPositiveLocatorTerms(ast.right, terms, negated);
       return;
     default: {
       const exhaustive: never = ast;
@@ -535,11 +537,11 @@ export const toAdvancedTsQueryText = (query: string): string | null => {
  * different passages of one matching document.
  */
 export const buildSearchPreviewLocatorTsQuery = (query: string): SQL => {
-  const lexemes = new Set<string>();
+  const terms = new Set<string>();
   if (isAdvancedQuery(query.trim())) {
     const ast = parseAdvancedSearchAst(query, "compatible");
     if (ast) {
-      collectPositiveLexemes(ast, lexemes);
+      collectPositiveLocatorTerms(ast, terms);
     }
   } else {
     for (const variant of [query, normalizeFileNameVariantForSearch(query)]) {
@@ -549,13 +551,13 @@ export const buildSearchPreviewLocatorTsQuery = (query: string): SQL => {
       }
       for (const group of toSearchLexemeGroups(trimmed, "compatible")) {
         for (const lexeme of group) {
-          lexemes.add(lexeme);
+          terms.add(`${lexeme}:*`);
         }
       }
     }
   }
 
-  const locator = [...lexemes].map((lexeme) => `${lexeme}:*`).join(" | ");
+  const locator = [...terms].map((term) => `(${term})`).join(" | ");
   return sql`to_tsquery('simple', unaccent(${locator}))`;
 };
 

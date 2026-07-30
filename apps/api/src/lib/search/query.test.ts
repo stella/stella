@@ -25,10 +25,18 @@ describe("search query text", () => {
       ),
     );
 
-    expect(compiled.params).toContain("agreement:* | termination:*");
+    expect(compiled.params).toContain("(agreement:*) | (termination:*)");
     expect(compiled.params).not.toContain(
       expect.stringContaining("superseded"),
     );
+  });
+
+  test("preview locator preserves phrase adjacency", () => {
+    const compiled = new PgDialect().sqlToQuery(
+      buildSearchPreviewLocatorTsQuery('"foo bar" AND baz'),
+    );
+
+    expect(compiled.params).toContain("(foo:* <-> bar:*) | (baz:*)");
   });
 
   test("indexes the full file name and a normalized base name", () => {
