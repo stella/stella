@@ -86,9 +86,11 @@ import { getExtension } from "@/routes/_protected.workspaces/$workspaceId/-compo
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { requestManualOcr } from "@/routes/_protected.workspaces/$workspaceId/-components/request-manual-ocr";
 import {
+  canRunManualOcr,
   getDesktopEditLockState,
   getPdfDownloadFileName,
   type OcrSource,
+  type RowActionContext,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions.logic";
 import type { TableTreeNode } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 import { useEntitiesCountLimit } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-limits";
@@ -174,16 +176,21 @@ export const RowActions = ({
   const isFolder = entity.kind === "folder";
   const isBulk = selectedEntities !== undefined && selectedEntities.length > 1;
   const documentOcrAvailable = useDocumentOcrAvailability();
-  const ocrSourceEligible =
-    !isBulk &&
-    !isFolder &&
-    !entity.readOnly &&
-    ocrSource !== undefined &&
-    !ocrSource.encrypted &&
-    ocrSource.mimeType === PDF_MIME_TYPE;
   const bulkTargets = isBulk ? selectedEntities : [entity];
   const isCellContext =
     !isBulk && cellMetadataTarget !== null && cellMetadataTarget !== undefined;
+  let rowActionContext: RowActionContext = "row";
+  if (isBulk) {
+    rowActionContext = "bulk";
+  } else if (isCellContext) {
+    rowActionContext = "cell";
+  }
+  const canRunOcr = canRunManualOcr({
+    context: rowActionContext,
+    documentOcrAvailable,
+    entity,
+    ocrSource,
+  });
   const isDocx = !isBulk && file?.mimeType === DOCX_MIME;
   const desktopEditLockState = getDesktopEditLockState(entity.activeEditBy);
   const isLockedByMe = isDocx && desktopEditLockState === "locked-by-me";
@@ -646,7 +653,6 @@ export const RowActions = ({
   // Show "Upload new version" for non-folder, non-bulk entities with a file
   const canUploadVersion =
     !isBulk && !isFolder && !entity.readOnly && file !== null;
-  const canRunOcr = ocrSourceEligible && documentOcrAvailable;
   // Extension-based filter for the OS file picker. Browser-reported MIME
   // strings vary across platforms for the same extension; matching by
   // extension is consistent across Chrome, Safari, Firefox, and Edge.
@@ -698,7 +704,7 @@ export const RowActions = ({
             {t("fileDetail.uploadNewVersion")}
           </MenuItem>
         )}
-        {!isCellContext && canRunOcr && (
+        {canRunOcr && (
           <MenuItem
             disabled={isOcrPending}
             onClick={() => {

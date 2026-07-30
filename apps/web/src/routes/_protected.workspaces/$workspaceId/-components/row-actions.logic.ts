@@ -1,3 +1,4 @@
+import { PDF_MIME_TYPE } from "@/consts";
 import type { FieldId, PropertyId, WorkspaceEntity } from "@/lib/types";
 
 export type OcrSource = {
@@ -5,6 +6,8 @@ export type OcrSource = {
   fieldId: FieldId;
   mimeType: string;
 };
+
+export type RowActionContext = "bulk" | "cell" | "row";
 
 type GetOcrSourceInput = {
   fields: WorkspaceEntity["fields"];
@@ -33,6 +36,27 @@ export const getOcrSource = ({
     mimeType: field.content.mimeType,
   };
 };
+
+type CanRunManualOcrInput = {
+  context: RowActionContext;
+  documentOcrAvailable: boolean;
+  entity: Pick<WorkspaceEntity, "kind" | "readOnly">;
+  ocrSource: OcrSource | undefined;
+};
+
+export const canRunManualOcr = ({
+  context,
+  documentOcrAvailable,
+  entity,
+  ocrSource,
+}: CanRunManualOcrInput): boolean =>
+  context !== "bulk" &&
+  documentOcrAvailable &&
+  entity.kind !== "folder" &&
+  !entity.readOnly &&
+  ocrSource !== undefined &&
+  !ocrSource.encrypted &&
+  ocrSource.mimeType === PDF_MIME_TYPE;
 
 export const getPdfDownloadFileName = (fileName: string): string => {
   const dotIndex = fileName.lastIndexOf(".");

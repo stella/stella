@@ -59,6 +59,7 @@ import { toSafeId } from "@/api/types";
 const OCR_SOURCE_URL_TTL_SECONDS = 35 * 60;
 const WORKER_CONCURRENCY = 2;
 const RECONCILE_INTERVAL_MS = 30_000;
+const DORMANT_WORKER_KEEP_ALIVE_MS = 60 * 60_000;
 const RECONCILE_BATCH_SIZE = 100;
 const ENQUEUE_VISIBILITY_TIMEOUT_MS = 5 * 60 * 1000;
 const ENQUEUE_FAILURE_RETRY_MS = 30_000;
@@ -1808,8 +1809,16 @@ export const initDocumentProcessingWorker = () => {
     logger.info("document_processing.worker_not_started", {
       reason: "ocr_provider_not_configured",
     });
+    // Signal listeners do not keep Bun alive. The self-host worker service is
+    // still a long-lived process when OCR is unconfigured, so retain one
+    // dormant handle until the entrypoint asks this lifecycle to close.
+    const keepAliveInterval = setInterval(
+      () => undefined,
+      DORMANT_WORKER_KEEP_ALIVE_MS,
+    );
     return {
       close: async (): Promise<void> => {
+        clearInterval(keepAliveInterval);
         const client = reconciliationRedisClient;
         reconciliationRedisClient = null;
         if (client) {

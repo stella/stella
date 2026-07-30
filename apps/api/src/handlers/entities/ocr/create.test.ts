@@ -7,6 +7,7 @@ import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import type { documentProcessingRuns } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
+import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -190,6 +191,44 @@ describe("requestManualOcrHandler", () => {
     expect(result).toEqual(Result.ok({ outcome: "queued", runId }));
     expect(enqueue).toHaveBeenCalledWith(runId);
     expect(captureEnqueueError).toHaveBeenCalledWith(enqueueFailure, {
+      runId,
+    });
+  });
+
+  test("acknowledges a durable run when immediate queue delivery stalls", async () => {
+    const captureEnqueueError = mock(() => undefined);
+    const enqueue = mock(async () => await new Promise<void>(() => {}));
+    const persistRun = mock(async () => ({
+      id: runId,
+      status: "queued" as const,
+    }));
+    const result = await Result.gen(() =>
+      requestManualOcrHandler({
+        captureEnqueueError,
+        enqueue,
+        enqueueTimeoutMs: 5,
+        entityId,
+        fieldId,
+        organizationId,
+        persistRun,
+        workerAvailable: async () => true,
+        recordAuditEvent,
+        safeDb: createSafeDb({
+          content: sourceFileContent,
+          entityId,
+          entityVersionId,
+          fieldId,
+          readOnly: false,
+          versionDeletedAt: null,
+        }),
+        userId,
+        workspaceId,
+      }),
+    );
+
+    expect(result).toEqual(Result.ok({ outcome: "queued", runId }));
+    expect(enqueue).toHaveBeenCalledWith(runId);
+    expect(captureEnqueueError).toHaveBeenCalledWith(expect.any(TimeoutError), {
       runId,
     });
   });

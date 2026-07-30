@@ -12,6 +12,7 @@ import { detached } from "@/api/lib/detached";
 import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { createBullMqConnection } from "@/api/lib/redis-client";
+import { withTimeout } from "@/api/lib/with-timeout";
 
 const QUEUE_NAME = "entity-deletion-cleanup";
 const STORAGE_CLEANUP_JOB_NAME = "storage-cleanup";
@@ -22,6 +23,8 @@ const STALE_PROCESSING_MS = 15 * 60_000;
 const RECONCILE_BATCH_SIZE = 50;
 const RETRY_BASE_DELAY_MS = 60_000;
 const RETRY_MAX_DELAY_MS = 24 * 60 * 60_000;
+const STORAGE_DELETE_TIMEOUT_MS = 10 * 60_000;
+const STORAGE_DELETE_TIMEOUT_LABEL = "entity-deletion-cleanup.storage-delete";
 
 type EntityDeletionCleanupJobData = {
   requestId: SafeId<"entityDeletionCleanupRequest">;
@@ -36,12 +39,14 @@ type EntityDeletionCleanupRequestDeps = {
   deleteS3Keys: typeof deleteS3Keys;
   logger: Pick<typeof logger, "warn">;
   rootDb: Pick<typeof rootDb, "select" | "update">;
+  storageDeleteTimeoutMs: number;
 };
 
 const defaultCleanupRequestDeps: EntityDeletionCleanupRequestDeps = {
   deleteS3Keys,
   logger,
   rootDb,
+  storageDeleteTimeoutMs: STORAGE_DELETE_TIMEOUT_MS,
 };
 
 let queue: Queue<EntityDeletionCleanupJobData> | null = null;
@@ -166,13 +171,28 @@ export const processEntityDeletionCleanupRequest = async (
     return;
   }
 
-  const deleteResult = await deps.deleteS3Keys(claim.s3Keys);
-  if (Result.isError(deleteResult)) {
+  const deleteAttempt = await Result.tryPromise({
+    try: async () =>
+      await withTimeout(async () => await deps.deleteS3Keys(claim.s3Keys), {
+        label: STORAGE_DELETE_TIMEOUT_LABEL,
+        timeoutMs: deps.storageDeleteTimeoutMs,
+      }),
+    catch: (cause) => cause,
+  });
+  const deleteError = Result.isError(deleteAttempt)
+    ? deleteAttempt.error
+    : Result.isError(deleteAttempt.value)
+      ? deleteAttempt.value.error
+      : null;
+  if (deleteError !== null) {
     const failedAt = new Date();
     await deps.rootDb
       .update(entityDeletionCleanupRequests)
       .set({
-        errorMessage: deleteResult.error.message,
+        errorMessage:
+          deleteError instanceof Error
+            ? deleteError.message
+            : "Storage deletion failed",
         nextAttemptAt: getEntityDeletionCleanupRetryAt({
           attemptCount: claim.attemptCount,
           now: failedAt,
@@ -187,7 +207,7 @@ export const processEntityDeletionCleanupRequest = async (
           eq(entityDeletionCleanupRequests.attemptCount, claim.attemptCount),
         ),
       );
-    throw deleteResult.error;
+    throw deleteError;
   }
 
   await deps.rootDb

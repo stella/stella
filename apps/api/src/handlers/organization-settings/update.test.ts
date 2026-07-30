@@ -154,4 +154,56 @@ describe("updateOrganizationSettingsHandler", () => {
     }
     expect(databaseWasUsed).toBe(false);
   });
+
+  test("preserves OCR mode when updating an unrelated setting", async () => {
+    let insertCount = 0;
+    let updateSet: Record<string, unknown> | undefined;
+    const tx = asTestRaw<Transaction>({
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            limit: () => ({
+              for: async () => [
+                {
+                  documentProcessingMode: "searchable-text" as const,
+                  promptCachingEnabled: true,
+                },
+              ],
+            }),
+          }),
+        }),
+      }),
+      insert: () => ({
+        values: () => {
+          insertCount += 1;
+          return insertCount === 1
+            ? { onConflictDoNothing: async () => {} }
+            : {
+                onConflictDoUpdate: async ({
+                  set,
+                }: {
+                  set: Record<string, unknown>;
+                }) => {
+                  updateSet = set;
+                },
+              };
+        },
+      }),
+    });
+    const safeDb: SafeDb = async (operation) => Result.ok(await operation(tx));
+    const recordAuditEvent: AuditRecorder = async () => {};
+
+    const result = await Result.gen(() =>
+      updateOrganizationSettingsHandler({
+        body: { promptCachingEnabled: false },
+        organizationId,
+        recordAuditEvent,
+        safeDb,
+      }),
+    );
+
+    expect(result).toEqual(Result.ok({ promptCachingEnabled: false }));
+    expect(updateSet).toMatchObject({ promptCachingEnabled: false });
+    expect(updateSet).not.toHaveProperty("documentProcessingMode");
+  });
 });

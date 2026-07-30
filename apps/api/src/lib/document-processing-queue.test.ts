@@ -18,6 +18,10 @@ import {
   shouldPreserveMatchingProjection,
 } from "@/api/lib/document-processing-queue";
 
+const queueSource = await Bun.file(
+  new URL("document-processing-queue.ts", import.meta.url),
+).text();
+
 const fileContent = {
   type: "file",
   version: 1,
@@ -303,5 +307,27 @@ describe("automatic OCR failure recovery", () => {
   test("keeps committed projections recoverable independently of OCR attempts", () => {
     expect(isRetryableSearchIndexFailure("search_index_failed")).toBe(true);
     expect(isRetryableSearchIndexFailure("processing_failed")).toBe(false);
+  });
+});
+
+describe("unconfigured worker lifecycle", () => {
+  test("keeps the entrypoint dormant without constructing a queue consumer", () => {
+    const unconfiguredBranchStart = queueSource.indexOf(
+      "if (!isDocumentOcrProviderConfigured())",
+    );
+    const consumerStart = queueSource.indexOf(
+      "const worker = new Worker<DocumentProcessingJobData>",
+      unconfiguredBranchStart,
+    );
+    const unconfiguredBranch = queueSource.slice(
+      unconfiguredBranchStart,
+      consumerStart,
+    );
+
+    expect(unconfiguredBranchStart).toBeGreaterThan(-1);
+    expect(consumerStart).toBeGreaterThan(unconfiguredBranchStart);
+    expect(unconfiguredBranch).toContain("setInterval(");
+    expect(unconfiguredBranch).toContain("clearInterval(keepAliveInterval)");
+    expect(unconfiguredBranch).not.toContain("new Worker");
   });
 });

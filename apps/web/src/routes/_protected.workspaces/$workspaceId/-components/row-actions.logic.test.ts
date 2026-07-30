@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceEntity } from "@/lib/types";
 import {
+  canRunManualOcr,
   getDesktopEditLockState,
   getOcrSource,
   getPdfDownloadFileName,
@@ -83,5 +84,38 @@ describe("getOcrSource", () => {
 
   test("does not select an arbitrary file without a selected property", () => {
     expect(getOcrSource({ fields: ocrFields, propertyId: null })).toBeNull();
+  });
+});
+
+describe("manual OCR action visibility", () => {
+  test("allows OCR from the selected PDF cell context", () => {
+    const ocrSource = getOcrSource({
+      fields: ocrFields,
+      propertyId: selectedPropertyId,
+    });
+
+    expect(
+      canRunManualOcr({
+        context: "cell",
+        documentOcrAvailable: true,
+        entity: { kind: "document", readOnly: false },
+        ocrSource: ocrSource ?? undefined,
+      }),
+    ).toBe(true);
+  });
+
+  test("does not offer a single-field OCR action for a bulk selection", () => {
+    expect(
+      canRunManualOcr({
+        context: "bulk",
+        documentOcrAvailable: true,
+        entity: { kind: "document", readOnly: false },
+        ocrSource: {
+          encrypted: false,
+          fieldId: selectedFieldId,
+          mimeType: "application/pdf",
+        },
+      }),
+    ).toBe(false);
   });
 });

@@ -2,6 +2,7 @@ import { Result, type Result as BetterResult } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { toSafeId, type SafeId } from "@/api/lib/branded-types";
+import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 type RequestStatus = "pending" | "processing" | "completed" | "failed";
@@ -76,6 +77,7 @@ const cleanupDeps = asTestRaw<
   deleteS3Keys: deleteS3KeysMock,
   logger: { warn: mock(() => {}) },
   rootDb: rootDbMock,
+  storageDeleteTimeoutMs: 1000,
 });
 
 describe("entity deletion cleanup queue", () => {
@@ -107,6 +109,30 @@ describe("entity deletion cleanup queue", () => {
     expect(requestRow?.status).toBe("failed");
 
     expect(deleteS3KeysMock).toHaveBeenCalledTimes(1);
+    expect(statuses).toEqual(["processing", "failed"]);
+    expect(requestRow?.status).toBe("failed");
+  });
+
+  test("times out a stalled storage deletion and schedules durable recovery", async () => {
+    deleteS3KeysMock.mockImplementationOnce(async () => {
+      const neverSettles: Promise<void> = new Promise(() => undefined);
+      await neverSettles;
+      return Result.ok();
+    });
+
+    const rejection: unknown = await processEntityDeletionCleanupRequest(
+      requestId,
+      { ...cleanupDeps, storageDeleteTimeoutMs: 5 },
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toBeInstanceOf(TimeoutError);
+    expect(rejection).toMatchObject({
+      label: "entity-deletion-cleanup.storage-delete",
+      timeoutMs: 5,
+    });
     expect(statuses).toEqual(["processing", "failed"]);
     expect(requestRow?.status).toBe("failed");
   });

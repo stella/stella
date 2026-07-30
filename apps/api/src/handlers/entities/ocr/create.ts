@@ -21,7 +21,10 @@ import {
   type PersistedDocumentProcessingRun,
 } from "@/api/lib/document-processing-request";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { withTimeout } from "@/api/lib/with-timeout";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
+
+const IMMEDIATE_OCR_ENQUEUE_TIMEOUT_MS = 2000;
 
 const createOcrParams = workspaceParams({
   entityId: tSafeId("entity"),
@@ -56,6 +59,7 @@ type ManualOcrResponse = {
 type RequestManualOcrProps = {
   captureEnqueueError?: typeof captureError;
   enqueue?: (runId: PersistedDocumentProcessingRun["id"]) => Promise<void>;
+  enqueueTimeoutMs?: number;
   entityId: SafeId<"entity">;
   fieldId: SafeId<"field">;
   organizationId: SafeId<"organization">;
@@ -157,6 +161,7 @@ const findManualOcrSource = async ({
 export const requestManualOcrHandler = async function* ({
   captureEnqueueError = captureError,
   enqueue = enqueueDocumentProcessingRun,
+  enqueueTimeoutMs = IMMEDIATE_OCR_ENQUEUE_TIMEOUT_MS,
   entityId,
   fieldId,
   organizationId,
@@ -208,7 +213,11 @@ export const requestManualOcrHandler = async function* ({
 
   if (run.status === "queued") {
     const enqueueResult = await Result.tryPromise({
-      try: async () => await enqueue(run.id),
+      try: async () =>
+        await withTimeout(async () => await enqueue(run.id), {
+          label: "immediate OCR queue handoff",
+          timeoutMs: enqueueTimeoutMs,
+        }),
       catch: (cause) => cause,
     });
     if (Result.isError(enqueueResult)) {
