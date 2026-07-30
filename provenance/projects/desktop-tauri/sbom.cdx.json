@@ -30391,7 +30391,7 @@
         "pkg:cargo/libc@0.2.189",
         "pkg:cargo/option-ext@0.2.0",
         "pkg:cargo/redox_users@0.5.2",
-        "pkg:cargo/windows-sys@0.60.2"
+        "pkg:cargo/windows-sys@0.59.0"
       ],
       "ref": "pkg:cargo/dirs-sys@0.5.0"
     },
@@ -31600,7 +31600,7 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/windows-sys@0.60.2"
+        "pkg:cargo/windows-sys@0.59.0"
       ],
       "ref": "pkg:cargo/nu-ansi-term@0.50.3"
     },
