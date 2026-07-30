@@ -21,9 +21,14 @@ import {
 import { fileNameSearchText } from "@/api/lib/search/query";
 
 type SearchDocumentRow = typeof searchDocuments.$inferInsert;
-type BuiltSearchDocument = SearchDocumentRow & {
+type BuiltSearchDocument = Omit<
+  SearchDocumentRow,
+  "searchableText" | "title"
+> & {
+  searchableText: string;
   semanticUpdatedAtToken: TimestampCasToken;
   sourceVersionId: SafeId<"entityVersion">;
+  title: string;
 };
 
 type IndexedSearchDocument = {
