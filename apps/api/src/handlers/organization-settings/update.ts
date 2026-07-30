@@ -1,4 +1,5 @@
 import { Result } from "better-result";
+import { and, eq, inArray } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
@@ -6,6 +7,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import {
   DOCUMENT_PROCESSING_MODE,
   DEFAULT_DOCUMENT_PROCESSING_MODE,
+  documentProcessingRuns,
   organizationSettings,
 } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -81,7 +83,7 @@ export const updateOrganizationSettingsHandler = async function* ({
     }
   }
 
-  yield* Result.await(
+  const updateOutcome = yield* Result.await(
     safeDb(async (tx) => {
       // Only touch promptCachingEnabled when the body carries it;
       // omitting optional settings from the upsert set keeps a concurrent
@@ -89,16 +91,56 @@ export const updateOrganizationSettingsHandler = async function* ({
       const wantsPromptCachingUpdate = body.promptCachingEnabled !== undefined;
       const wantsDocumentProcessingUpdate =
         body.documentProcessingMode !== undefined;
-      const existing =
-        wantsPromptCachingUpdate || wantsDocumentProcessingUpdate
-          ? await tx.query.organizationSettings.findFirst({
-              where: { organizationId: { eq: organizationId } },
-              columns: {
-                documentProcessingMode: true,
-                promptCachingEnabled: true,
-              },
+      const needsSerializedSettingsRead =
+        wantsPromptCachingUpdate || wantsDocumentProcessingUpdate;
+      if (needsSerializedSettingsRead) {
+        // Ensure there is a row to lock. Concurrent first-time updates block
+        // on the unique organization key here, then read the committed
+        // predecessor below; an absent optional settings row cannot bypass
+        // audit serialization.
+        await tx
+          .insert(organizationSettings)
+          .values({
+            id: createSafeId<"organizationSettings">(),
+            organizationId,
+          })
+          .onConflictDoNothing({
+            target: organizationSettings.organizationId,
+          });
+      }
+      const existingRows = needsSerializedSettingsRead
+        ? await tx
+            .select({
+              documentProcessingMode:
+                organizationSettings.documentProcessingMode,
+              promptCachingEnabled: organizationSettings.promptCachingEnabled,
             })
-          : undefined;
+            .from(organizationSettings)
+            .where(eq(organizationSettings.organizationId, organizationId))
+            .limit(1)
+            .for("update")
+        : [];
+      const existing = existingRows.at(0);
+
+      if (body.documentProcessingMode === DOCUMENT_PROCESSING_MODE.OFF) {
+        const runningAutomaticOcrRuns = await tx
+          .select({ id: documentProcessingRuns.id })
+          .from(documentProcessingRuns)
+          .where(
+            and(
+              eq(documentProcessingRuns.organizationId, organizationId),
+              eq(documentProcessingRuns.status, "running"),
+              inArray(documentProcessingRuns.requestSource, [
+                "upload",
+                "repair",
+              ]),
+            ),
+          )
+          .limit(1);
+        if (runningAutomaticOcrRuns.at(0)) {
+          return { type: "automatic_ocr_running" } as const;
+        }
+      }
 
       // Insert path needs schema defaults for any required column
       // the body did not carry. Matter columns are NOT NULL with
@@ -181,8 +223,18 @@ export const updateOrganizationSettingsHandler = async function* ({
             : {}),
         },
       });
+      return { type: "updated" } as const;
     }),
   );
+
+  if (updateOutcome.type === "automatic_ocr_running") {
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        message: "Wait for document processing to finish before disabling OCR",
+      }),
+    );
+  }
 
   return Result.ok({
     ...(body.matterNumberPattern !== undefined

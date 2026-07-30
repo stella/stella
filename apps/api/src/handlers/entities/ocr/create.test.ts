@@ -168,13 +168,16 @@ describe("requestManualOcrHandler", () => {
           return {
             from: () => ({
               where: () => ({
-                limit: async () => [
-                  {
-                    errorCode,
-                    id: runId,
-                    status: "cancelled" as const,
-                  },
-                ],
+                limit: () => ({
+                  for: async () => [
+                    {
+                      errorCode,
+                      id: runId,
+                      requestSource: "upload" as const,
+                      status: "cancelled" as const,
+                    },
+                  ],
+                }),
               }),
             }),
           };
@@ -228,6 +231,89 @@ describe("requestManualOcrHandler", () => {
         tx,
         expect.objectContaining({
           metadata: expect.objectContaining({ operation: "ocr", runId }),
+        }),
+      );
+    },
+  );
+
+  test.each(["upload", "repair"] as const)(
+    "promotes a queued %s run to a manual request",
+    async (requestSource) => {
+      let selectCount = 0;
+      let updateSet: unknown;
+      const tx = asTestRaw<Transaction>({
+        select: () => {
+          selectCount += 1;
+          if (selectCount === 1) {
+            return {
+              from: () => ({
+                innerJoin: () => ({
+                  where: () => ({
+                    limit: () => ({ for: async () => [{ id: entityId }] }),
+                  }),
+                }),
+              }),
+            };
+          }
+          return {
+            from: () => ({
+              where: () => ({
+                limit: () => ({
+                  for: async () => [
+                    {
+                      errorCode: null,
+                      id: runId,
+                      requestSource,
+                      status: "queued" as const,
+                    },
+                  ],
+                }),
+              }),
+            }),
+          };
+        },
+        insert: () => ({
+          values: () => ({
+            onConflictDoNothing: () => ({ returning: async () => [] }),
+          }),
+        }),
+        update: () => ({
+          set: (set: unknown) => {
+            updateSet = set;
+            return {
+              where: () => ({
+                returning: async () => [
+                  { id: runId, status: "queued" as const },
+                ],
+              }),
+            };
+          },
+        }),
+      });
+      rootTransactionMock.mockImplementationOnce(
+        async (operation: (transaction: Transaction) => Promise<unknown>) =>
+          await operation(tx),
+      );
+
+      const run = await persistManualOcrRun({
+        organizationId,
+        recordAuditEvent,
+        source: {
+          entityId,
+          entityVersionId,
+          fieldId,
+          sourceFileId: "00000000-0000-4000-8000-000000000001",
+          sourceSha256Hex: "a".repeat(64),
+        },
+        userId,
+        workspaceId,
+      });
+
+      expect(run).toEqual({ id: runId, status: "queued" });
+      expect(updateSet).toEqual(
+        expect.objectContaining({
+          requestSource: "manual",
+          requestedBy: userId,
         }),
       );
     },

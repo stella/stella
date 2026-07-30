@@ -1,4 +1,4 @@
-import { and, eq, or } from "drizzle-orm";
+import { and, eq, inArray, or } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
 import { documentProcessingRuns, entities, workspaces } from "@/api/db/schema";
@@ -102,6 +102,7 @@ export const persistManualOcrRun = async ({
         .select({
           errorCode: documentProcessingRuns.errorCode,
           id: documentProcessingRuns.id,
+          requestSource: documentProcessingRuns.requestSource,
           status: documentProcessingRuns.status,
         })
         .from(documentProcessingRuns)
@@ -118,7 +119,8 @@ export const persistManualOcrRun = async ({
             eq(documentProcessingRuns.processorVersion, OCR_PROCESSOR_VERSION),
           ),
         )
-        .limit(1);
+        .limit(1)
+        .for("update");
       const existing = existingRows.at(0);
       const canRetry =
         existing?.status === "failed" ||
@@ -126,45 +128,62 @@ export const persistManualOcrRun = async ({
           (existing.errorCode === "policy_disabled" ||
             existing.errorCode === "source_superseded" ||
             existing.errorCode === "workspace_unavailable"));
-      if (!existing || !canRetry) {
+      const canPromote =
+        existing?.status === "queued" && existing.requestSource !== "manual";
+      if (!existing || (!canRetry && !canPromote)) {
         run = existing ?? null;
       } else {
-        const retried = await tx
+        const promoted = await tx
           .update(documentProcessingRuns)
           .set({
-            errorAt: null,
-            errorCode: null,
-            finishedAt: null,
-            nextAttemptAt: null,
             requestSource: "manual",
             requestedBy: userId,
-            status: "queued",
             updatedAt: new Date(),
+            ...(canRetry
+              ? {
+                  errorAt: null,
+                  errorCode: null,
+                  finishedAt: null,
+                  nextAttemptAt: null,
+                  status: "queued",
+                }
+              : {}),
           })
           .where(
             and(
               eq(documentProcessingRuns.id, existing.id),
-              or(
-                eq(documentProcessingRuns.status, "failed"),
-                and(
-                  eq(documentProcessingRuns.status, "cancelled"),
-                  or(
-                    eq(documentProcessingRuns.errorCode, "policy_disabled"),
-                    eq(documentProcessingRuns.errorCode, "source_superseded"),
-                    eq(
-                      documentProcessingRuns.errorCode,
-                      "workspace_unavailable",
+              canRetry
+                ? or(
+                    eq(documentProcessingRuns.status, "failed"),
+                    and(
+                      eq(documentProcessingRuns.status, "cancelled"),
+                      or(
+                        eq(documentProcessingRuns.errorCode, "policy_disabled"),
+                        eq(
+                          documentProcessingRuns.errorCode,
+                          "source_superseded",
+                        ),
+                        eq(
+                          documentProcessingRuns.errorCode,
+                          "workspace_unavailable",
+                        ),
+                      ),
                     ),
+                  )
+                : and(
+                    eq(documentProcessingRuns.status, "queued"),
+                    inArray(documentProcessingRuns.requestSource, [
+                      "upload",
+                      "repair",
+                    ]),
                   ),
-                ),
-              ),
             ),
           )
           .returning({
             id: documentProcessingRuns.id,
             status: documentProcessingRuns.status,
           });
-        run = retried.at(0) ?? existing;
+        run = promoted.at(0) ?? existing;
       }
     }
 

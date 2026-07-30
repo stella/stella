@@ -1,3 +1,5 @@
+import { useId } from "react";
+
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
@@ -19,6 +21,7 @@ const DOCUMENT_PROCESSING_OFF_MODE = "off";
 
 export const DocumentProcessingCard = () => {
   const t = useTranslations();
+  const checkboxId = useId();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const { data: settings } = useQuery(
     organizationSettingsOptions(activeOrganizationId),
@@ -60,11 +63,12 @@ export const DocumentProcessingCard = () => {
             <Checkbox
               checked={enabled}
               disabled={mutation.isPending}
+              id={checkboxId}
               onCheckedChange={(next) => {
                 mutation.mutate(next);
               }}
             />
-            <FieldLabel>
+            <FieldLabel htmlFor={checkboxId}>
               {t("settings.organization.documentProcessing.toggleLabel")}
             </FieldLabel>
           </Field>

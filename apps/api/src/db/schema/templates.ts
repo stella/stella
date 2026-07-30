@@ -371,6 +371,10 @@ export const extractedContent = p.pgTable(
       })
       .onDelete("cascade"),
     p.index("extracted_content_workspace_id_idx").on(table.workspaceId),
+    p
+      .index("extracted_content_source_entity_version_id_idx")
+      .on(table.sourceEntityVersionId),
+    p.index("extracted_content_source_field_id_idx").on(table.sourceFieldId),
     p.check(
       "extracted_content_source_sha256_hex_check",
       sql`${table.sourceSha256Hex} IS NULL OR ${table.sourceSha256Hex} ~ '^[0-9a-f]{64}$'`,

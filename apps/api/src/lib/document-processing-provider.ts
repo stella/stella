@@ -31,6 +31,41 @@ export type DocumentOcrResult = {
   truncated: boolean;
 };
 
+export const createOcrRequestInit = ({
+  idempotencyKey,
+  sourceUrl,
+  token,
+}: {
+  idempotencyKey: string;
+  sourceUrl: string;
+  token?: string | undefined;
+}) => {
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+    "idempotency-key": idempotencyKey,
+  };
+  if (token) {
+    headers["authorization"] = `Bearer ${token}`;
+  }
+
+  return {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      file: sourceUrl,
+      fileType: 0,
+      useDocOrientationClassify: false,
+      useDocUnwarping: false,
+      useTextlineOrientation: false,
+      visualize: false,
+    }),
+    // The payload contains a presigned document URL. Following a provider
+    // redirect could otherwise disclose it to an unvalidated HTTP endpoint.
+    redirect: "error" as const,
+    timeoutMs: OCR_REQUEST_TIMEOUT_MS,
+  };
+};
+
 export const isSupportedOcrPageCount = (pageCount: number): boolean =>
   pageCount > 0 && pageCount <= OCR_MAX_PAGES;
 
@@ -178,27 +213,14 @@ export const recognizePdfText = async ({
 }): Promise<Result<DocumentOcrResult, DocumentOcrProviderError>> =>
   await Result.tryPromise({
     try: async () => {
-      const headers: Record<string, string> = {
-        "content-type": "application/json",
-      };
-      if (env.OCR_SERVICE_TOKEN) {
-        headers["authorization"] = `Bearer ${env.OCR_SERVICE_TOKEN}`;
-      }
-      headers["idempotency-key"] = idempotencyKey;
-
-      const response = await fetchWithTimeout(serviceUrl(), {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          file: sourceUrl,
-          fileType: 0,
-          useDocOrientationClassify: false,
-          useDocUnwarping: false,
-          useTextlineOrientation: false,
-          visualize: false,
+      const response = await fetchWithTimeout(
+        serviceUrl(),
+        createOcrRequestInit({
+          idempotencyKey,
+          sourceUrl,
+          token: env.OCR_SERVICE_TOKEN,
         }),
-        timeoutMs: OCR_REQUEST_TIMEOUT_MS,
-      });
+      );
 
       if (!response.ok) {
         throw new DocumentOcrProviderError({

@@ -62,6 +62,7 @@ const AUTOMATIC_OCR_MAX_ATTEMPTS = 5;
 const AUTOMATIC_OCR_RETRY_BASE_DELAY_MS = 30_000;
 const AUTOMATIC_OCR_RETRY_MAX_DELAY_MS = 30 * 60 * 1000;
 const RETRYABLE_AUTOMATIC_OCR_FAILURE_CODES = [
+  "not_configured",
   "processing_failed",
   "request_failed",
 ] as const;
@@ -439,7 +440,10 @@ export const processDocumentProcessingRun = async (
   const run = await rootDb.transaction(async (tx) => {
     const runRows = await tx
       .select({
+        entityId: documentProcessingRuns.entityId,
+        entityVersionId: documentProcessingRuns.entityVersionId,
         organizationId: documentProcessingRuns.organizationId,
+        requestSource: documentProcessingRuns.requestSource,
         workspaceId: documentProcessingRuns.workspaceId,
       })
       .from(documentProcessingRuns)
@@ -447,6 +451,40 @@ export const processDocumentProcessingRun = async (
       .limit(1);
     const runContext = runRows.at(0);
     if (!runContext) {
+      return null;
+    }
+
+    // Deleting a version takes this same entity lock before tombstoning and
+    // rejects the tombstone while an OCR run is dispatching. Conversely, a
+    // worker that arrives after the tombstone observes the replaced current
+    // version and cancels without sending the withdrawn bytes to a provider.
+    const entityRows = await tx
+      .select({ currentVersionId: entities.currentVersionId })
+      .from(entities)
+      .where(
+        and(
+          eq(entities.id, runContext.entityId),
+          eq(entities.workspaceId, runContext.workspaceId),
+        ),
+      )
+      .limit(1)
+      .for("update");
+    if (entityRows.at(0)?.currentVersionId !== runContext.entityVersionId) {
+      await tx
+        .update(documentProcessingRuns)
+        .set({
+          errorAt: new Date(),
+          errorCode: "source_superseded",
+          finishedAt: new Date(),
+          status: "cancelled",
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(documentProcessingRuns.id, runId),
+            inArray(documentProcessingRuns.status, ["queued", "failed"]),
+          ),
+        );
       return null;
     }
 
@@ -472,6 +510,40 @@ export const processDocumentProcessingRun = async (
         .set({
           errorAt: new Date(),
           errorCode: "workspace_unavailable",
+          finishedAt: new Date(),
+          status: "cancelled",
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(documentProcessingRuns.id, runId),
+            inArray(documentProcessingRuns.status, ["queued", "failed"]),
+          ),
+        );
+      return null;
+    }
+
+    // Opt-out takes this same settings lock before checking for running
+    // automatic jobs. Either it wins and a later worker observes `off` before
+    // claiming, or the worker wins and opt-out refuses until this dispatch is
+    // terminal; neither path can acknowledge opt-out while it sends a file.
+    const settingsRows = await tx
+      .select({
+        documentProcessingMode: organizationSettings.documentProcessingMode,
+      })
+      .from(organizationSettings)
+      .where(eq(organizationSettings.organizationId, runContext.organizationId))
+      .limit(1)
+      .for("update");
+    if (
+      requiresOcrPolicy(runContext.requestSource) &&
+      settingsRows.at(0)?.documentProcessingMode !== "searchable-text"
+    ) {
+      await tx
+        .update(documentProcessingRuns)
+        .set({
+          errorAt: new Date(),
+          errorCode: "policy_disabled",
           finishedAt: new Date(),
           status: "cancelled",
           updatedAt: new Date(),
@@ -655,7 +727,8 @@ export const isRetryableAutomaticOcrFailure = ({
   requestSource !== "manual" &&
   attemptCount < AUTOMATIC_OCR_MAX_ATTEMPTS &&
   (failureCode === RETRYABLE_AUTOMATIC_OCR_FAILURE_CODES[0] ||
-    failureCode === RETRYABLE_AUTOMATIC_OCR_FAILURE_CODES[1]);
+    failureCode === RETRYABLE_AUTOMATIC_OCR_FAILURE_CODES[1] ||
+    failureCode === RETRYABLE_AUTOMATIC_OCR_FAILURE_CODES[2]);
 
 const markRunFailed = async ({
   claimToken,
@@ -1037,7 +1110,11 @@ const enqueueQueuedRuns = async (): Promise<number> => {
 const recoverRetryableAutomaticOcrFailures = async (): Promise<number> => {
   const now = new Date();
   const retryableRuns = await rootDb
-    .select({ id: documentProcessingRuns.id })
+    .select({
+      attemptCount: documentProcessingRuns.attemptCount,
+      id: documentProcessingRuns.id,
+      nextAttemptAt: documentProcessingRuns.nextAttemptAt,
+    })
     .from(documentProcessingRuns)
     .where(
       and(
@@ -1064,7 +1141,21 @@ const recoverRetryableAutomaticOcrFailures = async (): Promise<number> => {
     return 0;
   }
 
-  const ids = retryableRuns.map(({ id }) => id);
+  const capturedSchedules = or(
+    ...retryableRuns.map(({ attemptCount, id, nextAttemptAt }) =>
+      and(
+        eq(documentProcessingRuns.id, id),
+        eq(documentProcessingRuns.attemptCount, attemptCount),
+        nextAttemptAt === null
+          ? isNull(documentProcessingRuns.nextAttemptAt)
+          : eq(documentProcessingRuns.nextAttemptAt, nextAttemptAt),
+      ),
+    ),
+  );
+  if (!capturedSchedules) {
+    return 0;
+  }
+
   const recovered = await rootDb
     .update(documentProcessingRuns)
     .set({
@@ -1074,14 +1165,13 @@ const recoverRetryableAutomaticOcrFailures = async (): Promise<number> => {
     })
     .where(
       and(
-        inArray(documentProcessingRuns.id, ids),
         eq(documentProcessingRuns.status, "failed"),
         inArray(documentProcessingRuns.requestSource, ["upload", "repair"]),
         inArray(
           documentProcessingRuns.errorCode,
           RETRYABLE_AUTOMATIC_OCR_FAILURE_CODES,
         ),
-        lt(documentProcessingRuns.attemptCount, AUTOMATIC_OCR_MAX_ATTEMPTS),
+        capturedSchedules,
       ),
     )
     .returning({ id: documentProcessingRuns.id });

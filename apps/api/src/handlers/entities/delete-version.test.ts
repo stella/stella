@@ -84,6 +84,19 @@ describe("delete-version chain-of-custody guard", () => {
     ).toBeGreaterThan(txStart);
   });
 
+  test("refuses a tombstone while that version is dispatched to OCR", () => {
+    const source = readFileSync(
+      nodePath.join(import.meta.dir, "delete-version.ts"),
+      "utf-8",
+    );
+
+    expect(source).toContain("documentProcessingRuns.entityVersionId");
+    expect(source).toContain('documentProcessingRuns.status, "running"');
+    expect(source).toContain(
+      "Wait for document processing to finish before deleting",
+    );
+  });
+
   test("locks each session kind before the entity row (finalize's order)", () => {
     // Lock-order hierarchy (issue #1139): docx-edit advisory lock ->
     // edit-session rows -> entities row. This handler takes no advisory lock,

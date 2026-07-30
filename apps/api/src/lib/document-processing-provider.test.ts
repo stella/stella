@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  createOcrRequestInit,
   isSupportedOcrPageCount,
   parsePaddleOcrResponse,
   readBoundedOcrJson,
@@ -61,6 +62,17 @@ describe("isSupportedOcrPageCount", () => {
     expect(isSupportedOcrPageCount(1)).toBe(true);
     expect(isSupportedOcrPageCount(500)).toBe(true);
     expect(isSupportedOcrPageCount(501)).toBe(false);
+  });
+});
+
+describe("createOcrRequestInit", () => {
+  test("rejects redirects before they can forward a presigned source URL", () => {
+    const request = createOcrRequestInit({
+      idempotencyKey: "ocr:run_1",
+      sourceUrl: "https://storage.example.test/presigned-document",
+    });
+
+    expect(request.redirect).toBe("error");
   });
 });
 

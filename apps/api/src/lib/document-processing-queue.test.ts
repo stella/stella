@@ -165,6 +165,13 @@ describe("automatic OCR failure recovery", () => {
   test("requeues only retryable automatic failures below the attempt cap", () => {
     expect(
       isRetryableAutomaticOcrFailure({
+        attemptCount: 1,
+        errorCode: "not_configured",
+        requestSource: "upload",
+      }),
+    ).toBe(true);
+    expect(
+      isRetryableAutomaticOcrFailure({
         attemptCount: 4,
         errorCode: "request_failed",
         requestSource: "upload",
