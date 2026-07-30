@@ -1,6 +1,8 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { getReleaseKind } from "./changelog-release";
+
 export type ChangelogRelease = {
   description: string;
   displayName: string;
@@ -11,18 +13,6 @@ export type ChangelogRelease = {
 
 const CHANGELOG_DIR = resolveRepoPath("docs", "changelog");
 const STABLE_CHANGELOG_FILE_PATTERN = /^v\d+\.\d+\.\d+\.md$/u;
-
-export type ReleaseKind = "major" | "minor" | "patch";
-
-export const getReleaseKind = (tagName: string): ReleaseKind => {
-  const [, minor, patch] = tagName.replace(/^v/u, "").split(".").map(Number);
-
-  if (patch !== 0) {
-    return "patch";
-  }
-
-  return minor === 0 ? "major" : "minor";
-};
 
 export const releaseAnchorId = (tagName: string) =>
   tagName

@@ -294,6 +294,10 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
   </style>
 
   <script>
+    import {
+      getReleaseKind,
+      isStellaReleaseTag,
+    } from "../lib/changelog-release";
     import { parseChangelogMarkdown } from "../lib/changelog-markdown";
 
     type GitHubRelease = {
@@ -305,8 +309,6 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
       published_at: string | null;
       tag_name: string;
     };
-
-    type ReleaseKind = "major" | "minor" | "patch";
 
     const RELEASES_PER_PAGE = 12;
     const GITHUB_RELEASES_PER_PAGE = 100;
@@ -355,21 +357,6 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
         .replace(/[^a-z0-9-]/gu, "-")
         .replace(/-+/gu, "-")
         .replace(/^-|-$/gu, "");
-
-    const getReleaseKind = (tagName: string): ReleaseKind => {
-      const version = tagName.match(/^v?(\d+)\.(\d+)\.(\d+)$/iu);
-      if (!version) {
-        return "minor";
-      }
-
-      const minor = Number(version[2]);
-      const patch = Number(version[3]);
-      if (patch !== 0) {
-        return "patch";
-      }
-
-      return minor === 0 ? "major" : "minor";
-    };
 
     const normalizeMarkdownText = (text: string) =>
       text
@@ -756,14 +743,14 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
     const buildReleasesUrl = (githubPage: number) =>
       `${releasesEndpoint}&page=${githubPage}`;
 
-    const fetchStableReleasePage = async () => {
-      const stableReleaseOffset = (currentPage - 1) * RELEASES_PER_PAGE;
-      const stableReleaseLimit = stableReleaseOffset + RELEASES_PER_PAGE + 1;
-      const stableReleases: GitHubRelease[] = [];
+    const fetchStellaReleasePage = async () => {
+      const stellaReleaseOffset = (currentPage - 1) * RELEASES_PER_PAGE;
+      const stellaReleaseLimit = stellaReleaseOffset + RELEASES_PER_PAGE + 1;
+      const stellaReleases: GitHubRelease[] = [];
       let githubPage = 1;
       let hasMoreGithubPages = true;
 
-      while (hasMoreGithubPages && stableReleases.length < stableReleaseLimit) {
+      while (hasMoreGithubPages && stellaReleases.length < stellaReleaseLimit) {
         // eslint-disable-next-line no-await-in-loop -- GitHub pagination is sequential: the next page number and stop condition depend on this page's rel="next" link header, so pages cannot be fetched in parallel
         const response = await fetch(buildReleasesUrl(githubPage), {
           headers: { Accept: "application/vnd.github+json" },
@@ -772,8 +759,13 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
 
         // eslint-disable-next-line no-await-in-loop -- parse this page's body before deciding whether to fetch the next one
         const releases = (await response.json()) as GitHubRelease[];
-        stableReleases.push(
-          ...releases.filter((release) => !release.draft && !release.prerelease),
+        stellaReleases.push(
+          ...releases.filter(
+            (release) =>
+              !release.draft &&
+              !release.prerelease &&
+              isStellaReleaseTag(release.tag_name),
+          ),
         );
         hasMoreGithubPages = responseHasNextPage(response);
         githubPage += 1;
@@ -781,10 +773,10 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
 
       return {
         hasNextPage:
-          stableReleases.length > stableReleaseOffset + RELEASES_PER_PAGE,
-        releases: stableReleases.slice(
-          stableReleaseOffset,
-          stableReleaseOffset + RELEASES_PER_PAGE,
+          stellaReleases.length > stellaReleaseOffset + RELEASES_PER_PAGE,
+        releases: stellaReleases.slice(
+          stellaReleaseOffset,
+          stellaReleaseOffset + RELEASES_PER_PAGE,
         ),
       };
     };
@@ -845,7 +837,7 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
       try {
         releasesContainer.replaceChildren(renderLoading());
 
-        const releasePage = await fetchStableReleasePage();
+        const releasePage = await fetchStellaReleasePage();
         if (!releasePage) {
           hasNextPage = false;
           renderPagination();
