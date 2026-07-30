@@ -21,11 +21,13 @@ import { useInspectorStore } from "@/components/inspector/inspector-store";
 import { useMountEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
+import { APIError } from "@/lib/errors/api";
 import { VersionsSidebar } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/versions-sidebar";
 import type { Version } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/versions-sidebar";
 import {
   entityVersionsOptions,
   fetchOlderVersions,
+  fieldFileOptions,
 } from "@/routes/_protected.workspaces/$workspaceId/-queries/entity-versions";
 
 type VersionsFacetProps = {
@@ -244,6 +246,24 @@ export const VersionsFacet = ({
       />
     </div>
   );
+};
+
+export const useSelectedFileVersionMissing = ({
+  enabled,
+  entityId,
+  fieldId,
+  workspaceId,
+}: {
+  enabled: boolean;
+  entityId: string;
+  fieldId: string;
+  workspaceId: string;
+}): boolean => {
+  const { error } = useQuery({
+    ...fieldFileOptions({ workspaceId, entityId, fieldId }),
+    enabled,
+  });
+  return APIError.is(error) && error.status === 404;
 };
 
 const LoadOlderVersionLifecycle = ({

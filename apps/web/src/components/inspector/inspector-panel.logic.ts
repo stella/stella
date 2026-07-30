@@ -23,3 +23,14 @@ export const resolveFileFieldPropertyId = ({
   }
   return undefined;
 };
+
+export const shouldReplaceFileFieldAfterSync = ({
+  isSelectedFieldMissing,
+  previousCurrentFieldId,
+  selectedFieldId,
+}: {
+  isSelectedFieldMissing: boolean;
+  previousCurrentFieldId: string | undefined;
+  selectedFieldId: string;
+}): boolean =>
+  isSelectedFieldMissing || previousCurrentFieldId === selectedFieldId;

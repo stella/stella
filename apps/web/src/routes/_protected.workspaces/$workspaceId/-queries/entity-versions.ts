@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { APIError, unwrapEden } from "@/lib/errors/api";
 
 import { entitiesKeys } from "./entities";
 
@@ -29,6 +29,8 @@ export const entityVersionsOptions = ({
 }: EntityVersionsKey) =>
   queryOptions({
     queryKey: entityVersionsKeys.all({ workspaceId, entityId }),
+    retry: (failureCount, error) =>
+      failureCount < 3 && (!APIError.is(error) || error.status >= 500),
     queryFn: async ({ signal }) => {
       const response = await api
         .entities({ workspaceId })
@@ -72,6 +74,8 @@ export const fieldFileOptions = ({
       "field-file",
       fieldId,
     ],
+    retry: (failureCount, error) =>
+      failureCount < 3 && (!APIError.is(error) || error.status >= 500),
     queryFn: async ({ signal }) => {
       const response = await api
         .entities({ workspaceId })
@@ -90,6 +94,8 @@ export const entityVersionDetailOptions = ({
 }: EntityVersionsKey & { versionId: string }) =>
   queryOptions({
     queryKey: entityVersionsKeys.detail({ workspaceId, entityId, versionId }),
+    retry: (failureCount, error) =>
+      failureCount < 3 && (!APIError.is(error) || error.status >= 500),
     queryFn: async ({ signal }) => {
       const response = await api
         .entities({ workspaceId })

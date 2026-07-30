@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { resolveFileFieldPropertyId } from "@/components/inspector/inspector-panel.logic";
+import {
+  resolveFileFieldPropertyId,
+  shouldReplaceFileFieldAfterSync,
+} from "@/components/inspector/inspector-panel.logic";
 
 describe("resolveFileFieldPropertyId", () => {
   test("retains the property identity after the active version field disappears", () => {
@@ -40,5 +43,27 @@ describe("resolveFileFieldPropertyId", () => {
         tabPropertyId: "property-tab",
       }),
     ).toBe("property-tab");
+  });
+});
+
+describe("shouldReplaceFileFieldAfterSync", () => {
+  test("switches away from a deleted historical version", () => {
+    expect(
+      shouldReplaceFileFieldAfterSync({
+        isSelectedFieldMissing: true,
+        previousCurrentFieldId: "current-field",
+        selectedFieldId: "deleted-historical-field",
+      }),
+    ).toBe(true);
+  });
+
+  test("keeps a historical version that still exists", () => {
+    expect(
+      shouldReplaceFileFieldAfterSync({
+        isSelectedFieldMissing: false,
+        previousCurrentFieldId: "current-field",
+        selectedFieldId: "historical-field",
+      }),
+    ).toBe(false);
   });
 });

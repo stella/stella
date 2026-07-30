@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { APIError, unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 
 export const taskKeys = {
@@ -20,6 +20,8 @@ const getTaskEndpoint = (workspaceId: string, taskId: string) =>
 export const taskDetailOptions = (workspaceId: string, taskId: string) =>
   queryOptions({
     queryKey: taskKeys.detail(workspaceId, taskId),
+    retry: (failureCount, error) =>
+      failureCount < 3 && (!APIError.is(error) || error.status >= 500),
     queryFn: async ({ signal }) => {
       const endpoint = getTaskEndpoint(workspaceId, taskId);
       const response = await endpoint.get({

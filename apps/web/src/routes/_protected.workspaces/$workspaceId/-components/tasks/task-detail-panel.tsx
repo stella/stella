@@ -13,12 +13,13 @@ import { Skeleton } from "@stll/ui/components/skeleton";
 import { cn } from "@stll/ui/lib/utils";
 
 import { useInspectorStore } from "@/components/inspector/inspector-store";
+import type { TaskTab } from "@/components/inspector/inspector-store";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { APIError, toAPIError, unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import {
   isTaskPriority,
@@ -450,4 +451,17 @@ export const TaskDetailPanel = ({
       </ScrollArea>
     </div>
   );
+};
+
+export const TaskTabSync = ({ tab }: { tab: TaskTab }) => {
+  const closeTabsForEntities = useInspectorStore((s) => s.closeTabsForEntities);
+  const { error } = useQuery(taskDetailOptions(tab.workspaceId, tab.id));
+
+  useExternalSyncEffect(() => {
+    if (APIError.is(error) && error.status === 404) {
+      closeTabsForEntities([tab.id]);
+    }
+  }, [closeTabsForEntities, error, tab.id]);
+
+  return null;
 };

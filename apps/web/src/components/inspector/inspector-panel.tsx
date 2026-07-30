@@ -20,7 +20,10 @@ import {
 import { ExternalReferencePanel } from "@/components/inspector/external-reference-panel";
 import { MetadataPanelSkeleton } from "@/components/inspector/file-facets";
 import { FileTabPanel } from "@/components/inspector/file-tab-panel";
-import { resolveFileFieldPropertyId } from "@/components/inspector/inspector-panel.logic";
+import {
+  resolveFileFieldPropertyId,
+  shouldReplaceFileFieldAfterSync,
+} from "@/components/inspector/inspector-panel.logic";
 import { InspectorRail } from "@/components/inspector/inspector-rail";
 import {
   isGenericInspectorTab,
@@ -29,6 +32,7 @@ import {
 import type {
   FileTab,
   GenericTab,
+  TaskTab,
 } from "@/components/inspector/inspector-store";
 import {
   InspectorTabHeader,
@@ -40,6 +44,7 @@ import { useDocxTabEditSession } from "@/components/inspector/use-docx-tab-edit-
 import { useFileTabRename } from "@/components/inspector/use-file-tab-rename";
 import { usePdfTabZoom } from "@/components/inspector/use-pdf-tab-zoom";
 import { useTabContextMenu } from "@/components/inspector/use-tab-context-menu";
+import { useSelectedFileVersionMissing } from "@/components/inspector/versions-facet";
 import { getInspectorView } from "@/components/inspector/view-registry";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -50,7 +55,10 @@ import { APIError } from "@/lib/errors/api";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { getCachedAnonymization } from "@/lib/pdf/anonymization-cache";
 import { MatterMetadataPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/matter-metadata-sheet";
-import { TaskDetailPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-panel";
+import {
+  TaskDetailPanel,
+  TaskTabSync,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-panel";
 import { entityOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 import { workspaceOptions } from "@/routes/_protected.workspaces/-queries";
@@ -382,6 +390,10 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
     () => tabs.filter((tab): tab is FileTab => tab.type === "pdf"),
     [tabs],
   );
+  const taskTabs = useMemo(
+    () => tabs.filter((tab): tab is TaskTab => tab.type === "task"),
+    [tabs],
+  );
 
   // Ref-backed recency log: "most recent first", capped at
   // MAX_MOUNTED_PDFS. The ref is written inside `useEffect` (commit
@@ -556,6 +568,9 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
           tab={tab}
         />
       ))}
+      {taskTabs.map((tab) => (
+        <TaskTabSync key={`${tab.workspaceId}:${tab.id}`} tab={tab} />
+      ))}
 
       {/* Document content — render all open document tabs, show only the active one. */}
       {pdfTabs.map((tab) => (
@@ -641,6 +656,12 @@ const CurrentFileFieldSync = ({ tab }: { tab: FileTab }) => {
             field.propertyId === filePropertyId &&
             field.content.type === "file",
         );
+  const isSelectedFieldMissing = useSelectedFileVersionMissing({
+    enabled: activeFileField === undefined && filePropertyId !== undefined,
+    entityId: tab.entityId,
+    fieldId: tab.id,
+    workspaceId: tab.workspaceId,
+  });
 
   useLayoutEffect(() => {
     if (activeFileField !== undefined) {
@@ -660,7 +681,13 @@ const CurrentFileFieldSync = ({ tab }: { tab: FileTab }) => {
     const previousCurrentFieldId = currentFileFieldIdsByProperty.get(
       latestFileFieldForProperty.propertyId,
     );
-    if (previousCurrentFieldId !== tab.id) {
+    if (
+      !shouldReplaceFileFieldAfterSync({
+        isSelectedFieldMissing,
+        previousCurrentFieldId,
+        selectedFieldId: tab.id,
+      })
+    ) {
       return;
     }
 
@@ -680,6 +707,7 @@ const CurrentFileFieldSync = ({ tab }: { tab: FileTab }) => {
   }, [
     activeFileField,
     currentFileFieldIdsByProperty,
+    isSelectedFieldMissing,
     latestFileFieldForProperty,
     replaceFileFieldId,
     tab.id,

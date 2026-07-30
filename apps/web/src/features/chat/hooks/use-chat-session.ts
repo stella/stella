@@ -662,7 +662,7 @@ export const useChatSession = ({
       if (hasVersionDeletion) {
         detached(
           queryClient.invalidateQueries({
-            exact: true,
+            exact: false,
             queryKey: entitiesKeys.versions(tab.workspaceId, tab.entityId),
           }),
           "useChatSession.deleteDocumentVersions",
