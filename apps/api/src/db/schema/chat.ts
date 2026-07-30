@@ -17,6 +17,7 @@ import {
   templateChatThreadPolicies,
   tsvector,
   user,
+  timestamptz,
 } from "./common";
 import type {
   ChatCompactionSummary,
@@ -120,11 +121,10 @@ export const chatThreads = p.pgTable(
     recapText: p.text("recap_text"),
     recapMessageId: safeUuid<"chatMessage">("recap_message_id"),
     recapPromptVersion: p.smallint("recap_prompt_version"),
-    recapGeneratedAt: p.timestamp("recap_generated_at"),
+    recapGeneratedAt: timestamptz("recap_generated_at"),
     usedAnonymization: p.boolean("used_anonymization").notNull().default(false),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
-    updatedAt: p
-      .timestamp("updated_at")
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at")
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),
@@ -165,7 +165,7 @@ export const chatMessages = p.pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
     role: p.varchar({ length: 16 }).notNull().$type<ChatMessageRole>(),
     content: jsonb().notNull().$type<PersistedChatMessageContent>(),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
     p
@@ -195,9 +195,8 @@ export const fileChatThreads = p.pgTable(
     chatThreadId: safeUuid<"chatThread">("chat_thread_id")
       .notNull()
       .references(() => chatThreads.id, { onDelete: "cascade" }),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
-    updatedAt: p
-      .timestamp("updated_at")
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at")
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),
@@ -261,9 +260,8 @@ export const templateChatThreads = p.pgTable(
     chatThreadId: safeUuid<"chatThread">("chat_thread_id")
       .notNull()
       .references(() => chatThreads.id, { onDelete: "cascade" }),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
-    updatedAt: p
-      .timestamp("updated_at")
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at")
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),
@@ -295,7 +293,7 @@ export const chatThreadSearchDocuments = p.pgTable(
     searchableText: p.text("searchable_text").notNull().default(""),
     previewGeneration: p.uuid("preview_generation"),
     tsv: tsvector(),
-    updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
     p.index("chat_thread_search_docs_tsv_idx").using("gin", table.tsv),
@@ -341,8 +339,8 @@ export const chatMessageSearchDocuments = p.pgTable(
     role: p.varchar({ length: 16 }).notNull().$type<ChatMessageRole>(),
     searchableText: p.text("searchable_text").notNull().default(""),
     tsv: tsvector(),
-    createdAt: p.timestamp("created_at").notNull(),
-    updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
     p.index("chat_message_search_docs_tsv_idx").using("gin", table.tsv),
@@ -386,7 +384,7 @@ export const chatThreadCompactions = p.pgTable(
     promptVersion: p.smallint("prompt_version").notNull(),
     modelProvider: p.text("model_provider"),
     modelId: p.text("model_id"),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
     p

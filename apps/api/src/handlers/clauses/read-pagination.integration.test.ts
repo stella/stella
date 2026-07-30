@@ -82,8 +82,8 @@ const seedClausesWithinOneMillisecond = async (count: number) => {
           ${title},
           ${JSON.stringify([])}::jsonb,
           ${ids.userA1},
-          ${timestamp}::timestamp,
-          ${timestamp}::timestamp
+          ${timestamp}::timestamptz,
+          ${timestamp}::timestamptz
         )
       `);
     }),

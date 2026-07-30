@@ -13,7 +13,7 @@ import {
 import { brandPersistedInvoiceId } from "@/api/lib/safe-id-boundaries";
 
 const cursorTimestamp = (date: Date, microseconds: number): string =>
-  `${date.toISOString().slice(0, 19)}.${microseconds.toString().padStart(6, "0")}`;
+  `${date.toISOString().slice(0, 19)}.${microseconds.toString().padStart(6, "0")}Z`;
 
 describe("PostgreSQL timestamp cursor values", () => {
   test("INVARIANT: valid microsecond values round-trip without precision loss", () => {
@@ -47,10 +47,21 @@ describe("PostgreSQL timestamp cursor values", () => {
     });
   });
 
+  test("keeps Z-less microsecond cursors readable, tagged naive", () => {
+    // Issued before cursor rendering was UTC-anchored; the boundary keeps the
+    // session-zone interpretation these were cut under.
+    const value = "2026-07-10T08:15:30.123456";
+    expect(parsePgTimestampCursorValue(value)).toEqual({
+      type: "pgTimestampCursor",
+      value,
+      precision: "microseconds-naive",
+    });
+  });
+
   test("rejects non-canonical timestamp values", () => {
     for (const value of [
       "2026-07-10T08:15:30.12345",
-      "2026-07-10T08:15:30.123456Z",
+      "2026-07-10T08:15:30.12345Z",
       "2026-13-10T08:15:30.123456",
       "2026-02-30T08:15:30.123456",
       "2026-07-10T24:15:30.123456",
@@ -125,7 +136,7 @@ describe("createTimestampIdCursorCodec", () => {
       timestamp: {
         type: "pgTimestampCursor",
         value: timestamp,
-        precision: "microseconds",
+        precision: "microseconds-naive",
       },
       id: brandPersistedInvoiceId(id),
     });
@@ -174,17 +185,28 @@ describe("createTimestampIdCursorCodec keysetAfter", () => {
     return dialect.sqlToQuery(predicate).sql;
   };
 
-  test("canonical microsecond cursor compares the raw column", () => {
-    const ascending = renderAfter("2026-07-10T08:15:30.123456", "ascending");
+  test("canonical microsecond cursor compares the raw column, UTC-anchored", () => {
+    const ascending = renderAfter("2026-07-10T08:15:30.123456Z", "ascending");
     expect(ascending).not.toContain("date_trunc");
     // Forward page: timestamp `>` boundary, id `>` on the tie-break.
     expect(ascending).toContain('"created_at" >');
     expect(ascending).toContain('"id" >');
+    // The Z-marked value is explicitly re-anchored, never session-interpreted.
+    expect(ascending).toContain("AT TIME ZONE 'UTC'");
 
-    const descending = renderAfter("2026-07-10T08:15:30.123456", "descending");
+    const descending = renderAfter("2026-07-10T08:15:30.123456Z", "descending");
     expect(descending).not.toContain("date_trunc");
     expect(descending).toContain('"created_at" <');
     expect(descending).toContain('"id" <');
+  });
+
+  test("legacy naive microsecond cursor keeps its session-zone boundary", () => {
+    const rendered = renderAfter("2026-07-10T08:15:30.123456", "ascending");
+    expect(rendered).not.toContain("date_trunc");
+    // Issued under session-zone semantics; re-anchoring it as UTC would move
+    // the boundary on deployments whose server zone is not UTC.
+    expect(rendered).not.toContain("AT TIME ZONE");
+    expect(rendered).toContain("::timestamptz");
   });
 
   test("INVARIANT: legacy millisecond cursor truncates the column on both sides", () => {

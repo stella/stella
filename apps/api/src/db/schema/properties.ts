@@ -12,6 +12,7 @@ import {
   sql,
   user,
   wsPolicies,
+  timestamptz,
 } from "./common";
 import type {
   ConditionNode,
@@ -50,7 +51,7 @@ export const properties = p.pgTable(
     playbookDefinitionId: safeUuid<"playbookDefinition">(
       "playbook_definition_id",
     ).references(() => playbookDefinitions.id, { onDelete: "cascade" }),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
     p.index("properties_workspace_id_idx").on(table.workspaceId),
@@ -142,12 +143,12 @@ export const playbookDefinitions = p.pgTable(
       .notNull()
       .default("draft")
       .$type<PlaybookDefinitionStatus>(),
-    approvedAt: p.timestamp("approved_at"),
+    approvedAt: timestamptz("approved_at"),
     approvedBy: p.text("approved_by").references(() => user.id, {
       onDelete: "set null",
     }),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
-    updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
     p
@@ -183,7 +184,7 @@ export const playbookDefinitionVersions = p.pgTable(
     description: p.text(),
     scope: jsonb().$type<PlaybookScope>(),
     positions: jsonb().$type<PlaybookPositions>().notNull(),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
     createdBy: p
       .text("created_by")
       .notNull()
@@ -230,8 +231,8 @@ export const documentTypes = p.pgTable(
     key: p.varchar({ length: 128 }).notNull(),
     label: p.varchar({ length: 256 }).notNull(),
     sortOrder: p.integer("sort_order").notNull().default(0),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
-    updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
     p

@@ -8,6 +8,7 @@ import {
   safeWorkspaceId,
   user,
   wsPolicies,
+  timestamptz,
 } from "./common";
 import { entities } from "./entities";
 
@@ -97,8 +98,8 @@ export const docxSuggestions = p.pgTable(
     resolvedByUserId: p
       .text("resolved_by_user_id")
       .references(() => user.id, { onDelete: "set null" }),
-    resolvedAt: p.timestamp("resolved_at"),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    resolvedAt: timestamptz("resolved_at"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
     // Status-scoped lookups within an entity (task-specified).

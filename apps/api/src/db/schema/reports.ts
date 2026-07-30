@@ -8,6 +8,7 @@ import {
   safeWorkspaceId,
   user,
   wsPolicies,
+  timestamptz,
 } from "./common";
 import type { AnyPgColumn, SafeId, ViewLayout } from "./common";
 import { workspaces } from "./contacts";
@@ -97,10 +98,9 @@ export const reportExports = p.pgTable(
       .varchar("notification_lang", { length: 10 })
       .notNull()
       .default("en"),
-    notificationAttemptedAt: p.timestamp("notification_attempted_at"),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
-    updatedAt: p
-      .timestamp("updated_at")
+    notificationAttemptedAt: timestamptz("notification_attempted_at"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at")
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),

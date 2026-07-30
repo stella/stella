@@ -67,7 +67,7 @@ export const readFullWorkflowSnapshotCursor = async ({
 }): Promise<string> => {
   const rows = await scopedDb((tx) =>
     tx.execute<{ value: string }>(
-      sql`SELECT to_char(now(), ${WORKFLOW_TIMESTAMP_CURSOR_FORMAT}) AS value`,
+      sql`SELECT to_char(now() AT TIME ZONE 'UTC', ${WORKFLOW_TIMESTAMP_CURSOR_FORMAT}) AS value`,
     ),
   );
   const row = rows.at(0);
@@ -92,7 +92,7 @@ const fetchFullWorkflowTargetBatch = async ({
   await scopedDb((tx) =>
     tx
       .select({
-        createdAt: sql<string>`to_char(${entities.createdAt}, ${WORKFLOW_TIMESTAMP_CURSOR_FORMAT})`,
+        createdAt: sql<string>`to_char(${entities.createdAt} AT TIME ZONE 'UTC', ${WORKFLOW_TIMESTAMP_CURSOR_FORMAT})`,
         id: entities.id,
       })
       .from(entities)
@@ -100,14 +100,14 @@ const fetchFullWorkflowTargetBatch = async ({
         and(
           eq(entities.workspaceId, workspaceId),
           eq(entities.kind, "document"),
-          sql`${entities.createdAt} <= ${createdAtCutoff}::timestamp`,
+          sql`${entities.createdAt} <= (${createdAtCutoff}::timestamp AT TIME ZONE 'UTC')`,
           ...(lastCursor === null
             ? []
             : [
                 or(
-                  sql`${entities.createdAt} > ${lastCursor.createdAt}::timestamp`,
+                  sql`${entities.createdAt} > (${lastCursor.createdAt}::timestamp AT TIME ZONE 'UTC')`,
                   and(
-                    sql`${entities.createdAt} = ${lastCursor.createdAt}::timestamp`,
+                    sql`${entities.createdAt} = (${lastCursor.createdAt}::timestamp AT TIME ZONE 'UTC')`,
                     gt(entities.id, lastCursor.id),
                   ),
                 ),
@@ -172,7 +172,7 @@ const countFullWorkflowTargets = async ({
         and(
           eq(entities.workspaceId, workspaceId),
           eq(entities.kind, "document"),
-          sql`${entities.createdAt} <= ${createdAtCutoff}::timestamp`,
+          sql`${entities.createdAt} <= (${createdAtCutoff}::timestamp AT TIME ZONE 'UTC')`,
         ),
       ),
   );

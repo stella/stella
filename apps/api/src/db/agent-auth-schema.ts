@@ -5,11 +5,10 @@ import {
   integer,
   pgTable,
   text,
-  timestamp,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
-import { jsonb } from "@/api/db/columns";
+import { jsonb, timestamptz } from "@/api/db/columns";
 import { denyStellaAccessPolicies } from "@/api/db/rls";
 
 /**
@@ -55,10 +54,10 @@ export const agentRegistration = pgTable(
     /** better-auth authorization code to exchange at /oauth2/token. */
     authorizationCode: text("authorization_code"),
     pollIntervalSeconds: integer("poll_interval_seconds").notNull().default(5),
-    expiresAt: timestamp("expires_at").notNull(),
-    lastPolledAt: timestamp("last_polled_at"),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at")
+    expiresAt: timestamptz("expires_at").notNull(),
+    lastPolledAt: timestamptz("last_polled_at"),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+    updatedAt: timestamptz("updated_at")
       .defaultNow()
       .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
@@ -99,8 +98,8 @@ export const agentTrustedIssuer = pgTable(
      */
     attestationPolicy: jsonb("attestation_policy"),
     enabled: boolean("enabled").notNull().default(true),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at")
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+    updatedAt: timestamptz("updated_at")
       .defaultNow()
       .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
@@ -125,7 +124,7 @@ export const agentDelegation = pgTable(
     sub: text("sub").notNull(),
     userId: text("user_id").notNull(),
     organizationId: text("organization_id").notNull(),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
   },
   (table) => [
     uniqueIndex("agent_delegation_iss_sub_uidx").on(table.iss, table.sub),
@@ -144,8 +143,8 @@ export const agentAssertionReplay = pgTable(
   "agent_assertion_replay",
   {
     jti: text("jti").primaryKey(),
-    expiresAt: timestamp("expires_at").notNull(),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
+    expiresAt: timestamptz("expires_at").notNull(),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
   },
   (table) => [
     index("agent_assertion_replay_expires_at_idx").on(table.expiresAt),

@@ -1,12 +1,13 @@
 import { expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
-import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text } from "drizzle-orm/pg-core";
 
+import { timestamptz } from "@/api/db/columns";
 import { groupableSql } from "@/api/lib/groupable-sql";
 
 const decisions = pgTable("decisions", {
   id: text("id"),
-  decisionDate: timestamp("decision_date"),
+  decisionDate: timestamptz("decision_date"),
 });
 
 // A grouped SELECT expression is matched by Postgres on rendered text, and

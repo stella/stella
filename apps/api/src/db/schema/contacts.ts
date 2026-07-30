@@ -15,6 +15,7 @@ import {
   user,
   workspaceIdCheck,
   wsPolicies,
+  timestamptz,
 } from "./common";
 import type {
   BankAccount,
@@ -80,9 +81,8 @@ export const contacts = p.pgTable(
     createdBy: p
       .text("created_by")
       .references(() => user.id, { onDelete: "set null" }),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
-    updatedAt: p
-      .timestamp("updated_at")
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at")
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),
@@ -145,7 +145,7 @@ export const contactRelationships = p.pgTable(
     isPrimary: p.boolean("is_primary").notNull().default(false),
     startDate: p.date("start_date"),
     endDate: p.date("end_date"),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
     p.index("contact_relationships_person_id_idx").on(table.personId),
@@ -194,8 +194,8 @@ export const workspaces = p.pgTable(
       .text({ enum: ["active", "deleting", "archived"] })
       .notNull()
       .default("active"),
-    lastActivityAt: p.timestamp("last_activity_at").notNull().defaultNow(),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    lastActivityAt: timestamptz("last_activity_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
     p.index("workspaces_organization_id_idx").on(table.organizationId),
@@ -240,7 +240,7 @@ export const workspaceMembers = p.pgTable(
       .varchar("user_id", { length: 128 })
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
     p
@@ -281,7 +281,7 @@ export const workspaceContacts = p.pgTable(
       .notNull(),
     isPrimary: p.boolean("is_primary").notNull().default(false),
     notes: p.text(),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
     p.index("workspace_contacts_workspace_id_idx").on(table.workspaceId),
@@ -312,7 +312,7 @@ export const auditLogs = p.pgTable(
     resourceId: p.text("resource_id").notNull(),
     metadata: jsonb().$type<Record<string, unknown>>(),
     changes: jsonb().$type<Record<string, unknown>>(),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
     p
@@ -376,17 +376,16 @@ export const schedulerJobs = p.pgTable(
     schedule: jsonb().$type<SchedulerSchedule>().notNull(),
     payload: jsonb().$type<SchedulerPayload | null>(),
     enabled: p.boolean().notNull().default(true),
-    nextRunAt: p.timestamp("next_run_at", { withTimezone: true }).notNull(),
-    lastRunAt: p.timestamp("last_run_at", { withTimezone: true }),
-    lastSuccessAt: p.timestamp("last_success_at", { withTimezone: true }),
-    lastFailureAt: p.timestamp("last_failure_at", { withTimezone: true }),
+    nextRunAt: timestamptz("next_run_at").notNull(),
+    lastRunAt: timestamptz("last_run_at"),
+    lastSuccessAt: timestamptz("last_success_at"),
+    lastFailureAt: timestamptz("last_failure_at"),
     lastError: p.text("last_error"),
-    lockedAt: p.timestamp("locked_at", { withTimezone: true }),
-    lockedUntil: p.timestamp("locked_until", { withTimezone: true }),
+    lockedAt: timestamptz("locked_at"),
+    lockedUntil: timestamptz("locked_until"),
     lockedBy: p.varchar("locked_by", { length: 128 }),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
-    updatedAt: p
-      .timestamp("updated_at")
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at")
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),
@@ -420,11 +419,8 @@ export const schedulerJobRuns = p.pgTable(
       .text({ enum: ["running", "success", "failed", "skipped"] })
       .notNull()
       .default("running"),
-    startedAt: p
-      .timestamp("started_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-    finishedAt: p.timestamp("finished_at", { withTimezone: true }),
+    startedAt: timestamptz("started_at").notNull().defaultNow(),
+    finishedAt: timestamptz("finished_at"),
     durationMs: p.integer("duration_ms"),
     error: p.text(),
   },
@@ -459,14 +455,11 @@ export const infoSoudTrackedCases = p.pgTable(
     createdBy: p
       .text("created_by")
       .references(() => user.id, { onDelete: "set null" }),
-    lastSyncAttemptAt: p.timestamp("last_sync_attempt_at", {
-      withTimezone: true,
-    }),
-    lastSyncedAt: p.timestamp("last_synced_at", { withTimezone: true }),
+    lastSyncAttemptAt: timestamptz("last_sync_attempt_at"),
+    lastSyncedAt: timestamptz("last_synced_at"),
     lastSyncError: p.text("last_sync_error"),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
-    updatedAt: p
-      .timestamp("updated_at")
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at")
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),

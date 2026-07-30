@@ -19,6 +19,7 @@ import {
   safeOrganizationId,
   safeUuid,
   user,
+  timestamptz,
 } from "./common";
 
 export const mcpConnectors = p.pgTable(
@@ -47,9 +48,8 @@ export const mcpConnectors = p.pgTable(
     // oauth2 connectors. Surfaced as the connector's vendor. Server-level
     // and identical for every member, so it lives on the shared row.
     oauthIssuer: p.text("oauth_issuer"),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
-    updatedAt: p
-      .timestamp("updated_at")
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at")
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),
@@ -87,9 +87,8 @@ export const mcpOAuthClients = p.pgTable(
     registrationResponse: jsonb("registration_response")
       .$type<McpOAuthRegistrationResponse>()
       .notNull(),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
-    updatedAt: p
-      .timestamp("updated_at")
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at")
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),
@@ -143,11 +142,11 @@ export const mcpUserConnections = p.pgTable(
     scope: p.text(),
     resourceUrl: p.text("resource_url"),
     authorizationServerUrl: p.text("authorization_server_url"),
-    expiresAt: p.timestamp("expires_at"),
+    expiresAt: timestamptz("expires_at"),
     cachedTools: jsonb("cached_tools").$type<
       CachedMcpToolDefinition[] | null
     >(),
-    cachedToolsRefreshedAt: p.timestamp("cached_tools_refreshed_at"),
+    cachedToolsRefreshedAt: timestamptz("cached_tools_refreshed_at"),
     // Metadata the server reports during the MCP `initialize` handshake,
     // captured with this user's credentials. Stored per-connection (not on
     // the shared connector) since a server may personalise it per account.
@@ -158,10 +157,9 @@ export const mcpUserConnections = p.pgTable(
       .notNull()
       .$type<McpConnectionStatus>(),
     enabled: p.boolean().notNull().default(true),
-    lastUsedAt: p.timestamp("last_used_at"),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
-    updatedAt: p
-      .timestamp("updated_at")
+    lastUsedAt: timestamptz("last_used_at"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at")
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),
@@ -202,7 +200,7 @@ export const mcpOAuthState = p.pgTable(
     redirectUri: p.text("redirect_uri").notNull(),
     resourceUrl: p.text("resource_url").notNull(),
     authorizationServerUrl: p.text("authorization_server_url").notNull(),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
     p.index("mcp_oauth_state_created_idx").on(table.createdAt),

@@ -11,6 +11,7 @@ import {
   sql,
   user,
   wsPolicies,
+  timestamptz,
 } from "./common";
 import type { PracticeJurisdiction } from "./common";
 import { workspaces } from "./contacts";
@@ -131,7 +132,7 @@ export const organizationSettings = p.pgTable(
       .boolean("sharepoint_connection_enabled")
       .notNull()
       .default(false),
-    updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   () => [...orgPolicies()],
 );
@@ -173,7 +174,7 @@ export const anonymizationAllowlistEntries = p.pgTable(
     createdBy: p
       .text("created_by")
       .references(() => user.id, { onDelete: "set null" }),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
     p.index("anonymization_allowlist_entries_org_idx").on(table.organizationId),
@@ -230,9 +231,8 @@ export const anonymizationBlacklistEntries = p.pgTable(
     updatedBy: p
       .text("updated_by")
       .references(() => user.id, { onDelete: "set null" }),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
-    updatedAt: p
-      .timestamp("updated_at")
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at")
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),

@@ -22,6 +22,7 @@ import {
   safeWorkspaceId,
   user,
   wsPolicies,
+  timestamptz,
 } from "./common";
 import { workspaces } from "./contacts";
 
@@ -48,8 +49,8 @@ export const flowDefinitions = p.pgTable(
     createdByUserId: p
       .text("created_by_user_id")
       .references(() => user.id, { onDelete: "set null" }),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
-    updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
     p.index("flow_definitions_organization_id_idx").on(table.organizationId),
@@ -92,9 +93,9 @@ export const flowRuns = p.pgTable(
       .notNull()
       .default([]),
     error: p.text(),
-    startedAt: p.timestamp("started_at", { withTimezone: true }),
-    finishedAt: p.timestamp("finished_at", { withTimezone: true }),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    startedAt: timestamptz("started_at"),
+    finishedAt: timestamptz("finished_at"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
     p
@@ -127,8 +128,8 @@ export const flowRunSteps = p.pgTable(
       .default("pending"),
     output: jsonb().$type<FlowStepOutput>(),
     error: p.text(),
-    startedAt: p.timestamp("started_at", { withTimezone: true }),
-    finishedAt: p.timestamp("finished_at", { withTimezone: true }),
+    startedAt: timestamptz("started_at"),
+    finishedAt: timestamptz("finished_at"),
   },
   (table) => [
     p

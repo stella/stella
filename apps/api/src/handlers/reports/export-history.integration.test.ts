@@ -226,8 +226,8 @@ const seedExport = async ({
       'completed',
       ${mode},
       ${resultS3Key},
-      ${timestamp}::timestamp,
-      ${timestamp}::timestamp
+      ${timestamp}::timestamptz,
+      ${timestamp}::timestamptz
     )
   `);
 };

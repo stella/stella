@@ -101,8 +101,8 @@ const seedTemplate = async ({
       ${`templates/${id}.docx`},
       1024,
       ${userId},
-      ${createdAt}::timestamp,
-      ${createdAt}::timestamp
+      ${createdAt}::timestamptz,
+      ${createdAt}::timestamptz
     )
   `);
 

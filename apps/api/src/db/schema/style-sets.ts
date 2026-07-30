@@ -5,6 +5,7 @@ import {
   pUuid,
   safeOrganizationId,
   user,
+  timestamptz,
 } from "./common";
 
 export const styleSets = p.pgTable(
@@ -23,9 +24,9 @@ export const styleSets = p.pgTable(
       .text("created_by")
       .notNull()
       .references(() => user.id, { onDelete: "restrict" }),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
-    updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
-    deletedAt: p.timestamp("deleted_at"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+    deletedAt: timestamptz("deleted_at"),
   },
   (table) => [
     p.index("style_sets_organization_id_idx").on(table.organizationId),

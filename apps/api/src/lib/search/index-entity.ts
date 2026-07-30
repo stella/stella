@@ -218,7 +218,7 @@ export const upsertSearchDocument = async (
         WHERE e.id = ${doc.entityId}
           AND e.current_version_id = ${doc.sourceVersionId}
           AND COALESCE(e.updated_at, e.created_at)
-            IS NOT DISTINCT FROM ${doc.semanticUpdatedAtToken}::timestamp
+            IS NOT DISTINCT FROM ${doc.semanticUpdatedAtToken}::timestamptz
         FOR UPDATE
       )
       INSERT INTO search_documents (
@@ -234,7 +234,7 @@ export const upsertSearchDocument = async (
         ${doc.title},
         ${doc.searchableText},
         ${doc.language},
-        ${doc.semanticUpdatedAtToken}::timestamp,
+        ${doc.semanticUpdatedAtToken}::timestamptz,
         to_tsvector(
           ${regconfig}::regconfig,
           unaccent(arabic_normalize(

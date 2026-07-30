@@ -1,23 +1,25 @@
-// Require the custom JSONB column in Drizzle schema files.
+// Require the timestamptz column helper in Drizzle schema files.
 //
-// Drizzle's stock `p.jsonb()` from drizzle-orm/pg-core hands the bun-sql
-// driver a JSON-stringified value, so Postgres stores it as a JSON-string
-// primitive (`jsonb_typeof = 'string'`) instead of the parsed object/array.
-// The project ships a safe replacement in apps/api/src/db/columns.ts that
-// routes writes through `${JSON.stringify(value)}::text::jsonb`. Schema
-// files must use that custom column, never the stock pg-core `jsonb`.
+// Drizzle's stock `timestamp()` from drizzle-orm/pg-core defaults to
+// `timestamp without time zone`: the stored value has no UTC anchoring, so
+// its meaning silently depends on every writer's session time zone. The
+// project ships `timestamptz` in apps/api/src/db/columns.ts, which always
+// sets `withTimezone: true`. Schema files must use that helper, never the
+// stock pg-core `timestamp` — even with `{ withTimezone: true }` passed
+// manually, so there is exactly one way to declare a timestamp column.
 //
 // Flagged:
 //   import * as p from "drizzle-orm/pg-core";
-//   value: p.jsonb("value")                       // namespace member call
-//   import { jsonb } from "drizzle-orm/pg-core";   // stock named import
-//   value: jsonb("value")                          // bare stock call
-//   customType<...>({ dataType: () => "jsonb" })   // hand-rolled JSONB type
+//   at: p.timestamp("at")                            // namespace member call
+//   import { timestamp } from "drizzle-orm/pg-core";  // stock named import
+//   at: timestamp("at")                               // bare stock call
+//   at: timestamp("at", { withTimezone: true })       // manual option object
+//   customType<...>({ dataType: () => "timestamp" })  // hand-rolled naive type
 //
 // Allowed:
-//   import { jsonb } from "@/api/db/columns";       // the safe replacement
-//   value: jsonb("value")
-//   apps/api/src/db/columns.ts                      // defines the safe type
+//   import { timestamptz } from "@/api/db/columns";   // the safe helper
+//   at: timestamptz("at")
+//   apps/api/src/db/columns.ts                        // defines the helper
 
 import { getImportedName, isIdentifier, isStringLiteral } from "./utils.ts";
 
@@ -31,9 +33,16 @@ type RuleContext = {
 
 const PG_CORE_MODULE = "drizzle-orm/pg-core";
 
-// The file that legitimately defines the custom JSONB type and may reference
-// pg-core's customType. Matched by suffix so it works from any cwd.
+// The file that legitimately defines the timestamptz helper and may call
+// pg-core's timestamp. Matched by suffix so it works from any cwd.
 const ALLOWLISTED_FILE = "apps/api/src/db/columns.ts";
+
+// A naive timestamp SQL type, with or without precision. `timestamptz` and
+// `timestamp with time zone` do not match. Case-insensitive with flexible
+// whitespace: PostgreSQL accepts `TIMESTAMP` and multi-space/newline forms
+// of the spelled-out type, so those must not bypass the rule.
+const NAIVE_TIMESTAMP_TYPE =
+  /^timestamp(\s*\(\s*\d+\s*\))?(\s+without\s+time\s+zone)?$/iu;
 
 const isAstNode = (node: unknown): node is AstNode =>
   typeof node === "object" &&
@@ -48,8 +57,8 @@ const isAllowlistedFile = (filename: string): boolean =>
   filename.endsWith(ALLOWLISTED_FILE);
 
 // The static text of a string literal or a zero-expression template
-// literal: `` `jsonb` `` and `"jsonb"` name the same SQL type, so a backtick
-// literal must not bypass the rule.
+// literal: `` `timestamp` `` and `"timestamp"` name the same SQL type, so a
+// backtick literal must not bypass the rule.
 const staticStringValue = (node: unknown): string | null => {
   if (isStringLiteral(node)) {
     return node.value;
@@ -77,11 +86,15 @@ const staticStringValue = (node: unknown): string | null => {
   return typeof cooked === "string" ? cooked : null;
 };
 
-const isJsonbLiteral = (node: unknown): boolean =>
-  staticStringValue(node) === "jsonb";
+const isNaiveTimestampLiteral = (node: unknown): boolean => {
+  // PostgreSQL tolerates surrounding whitespace in a spliced type name, so
+  // `" timestamp "` is the same naive type; trim before matching.
+  const value = staticStringValue(node)?.trim();
+  return value !== undefined && NAIVE_TIMESTAMP_TYPE.test(value);
+};
 
-// Static member name of a call target: `p.jsonb`, `p["jsonb"]`, and
-// `` p[`jsonb`] `` all reach the same pg-core export, so computed string
+// Static member name of a call target: `p.timestamp`, `p["timestamp"]`, and
+// `` p[`timestamp`] `` all reach the same pg-core export, so computed string
 // keys must not bypass the rule.
 const staticMemberName = (callee: AstNode): string | null => {
   if (callee.type !== "MemberExpression") {
@@ -91,40 +104,6 @@ const staticMemberName = (callee: AstNode): string | null => {
     return isIdentifier(callee.property) ? callee.property.name : null;
   }
   return staticStringValue(callee.property);
-};
-
-// A `dataType` callback whose body yields the "jsonb" string. Covers the
-// arrow-expression body `() => "jsonb"`, the block-bodied arrow
-// `() => { return "jsonb"; }`, and function expressions / object-method
-// shorthand `function () { return "jsonb"; }` / `dataType() { return "jsonb"; }`.
-// Block bodies are scanned for a `return "jsonb"` so switching function form
-// can't sidestep the guard.
-const returnsJsonbLiteral = (node: unknown): boolean => {
-  if (!isAstNode(node)) {
-    return false;
-  }
-  if (
-    node.type !== "ArrowFunctionExpression" &&
-    node.type !== "FunctionExpression"
-  ) {
-    return false;
-  }
-  if (!isAstNode(node.body)) {
-    return false;
-  }
-  if (node.body.type !== "BlockStatement") {
-    return isJsonbLiteral(node.body);
-  }
-  const statements = node.body.body;
-  if (!Array.isArray(statements)) {
-    return false;
-  }
-  return statements.some(
-    (statement) =>
-      isAstNode(statement) &&
-      statement.type === "ReturnStatement" &&
-      isJsonbLiteral(statement.argument),
-  );
 };
 
 // `dataType` as an identifier, quoted, or statically computed key:
@@ -139,8 +118,41 @@ const isDataTypeProperty = (property: AstNode): boolean => {
   return property.computed === false && isIdentifier(key, "dataType");
 };
 
-// `{ dataType: () => "jsonb" }` config object passed to customType.
-const hasJsonbDataType = (node: unknown): boolean => {
+// A `dataType` callback whose body yields a naive timestamp string. Covers
+// the arrow-expression body `() => "timestamp"`, the block-bodied arrow
+// `() => { return "timestamp"; }`, and function expressions / object-method
+// shorthand. Block bodies are scanned for a matching `return` so switching
+// function form can't sidestep the guard.
+const returnsNaiveTimestampLiteral = (node: unknown): boolean => {
+  if (!isAstNode(node)) {
+    return false;
+  }
+  if (
+    node.type !== "ArrowFunctionExpression" &&
+    node.type !== "FunctionExpression"
+  ) {
+    return false;
+  }
+  if (!isAstNode(node.body)) {
+    return false;
+  }
+  if (node.body.type !== "BlockStatement") {
+    return isNaiveTimestampLiteral(node.body);
+  }
+  const statements = node.body.body;
+  if (!Array.isArray(statements)) {
+    return false;
+  }
+  return statements.some(
+    (statement) =>
+      isAstNode(statement) &&
+      statement.type === "ReturnStatement" &&
+      isNaiveTimestampLiteral(statement.argument),
+  );
+};
+
+// `{ dataType: () => "timestamp" }` config object passed to customType.
+const hasNaiveTimestampDataType = (node: unknown): boolean => {
   if (!isAstNode(node) || node.type !== "ObjectExpression") {
     return false;
   }
@@ -153,23 +165,25 @@ const hasJsonbDataType = (node: unknown): boolean => {
       isAstNode(property) &&
       property.type === "Property" &&
       isDataTypeProperty(property) &&
-      returnsJsonbLiteral(property.value),
+      returnsNaiveTimestampLiteral(property.value),
   );
 };
 
 export default {
-  meta: { name: "require-custom-jsonb-column" },
+  meta: { name: "require-timestamptz-column" },
   rules: {
-    "require-custom-jsonb-column": {
+    "require-timestamptz-column": {
       meta: {
         type: "problem",
         messages: {
-          stockJsonbCall:
-            "Do not use stock `jsonb()` from drizzle-orm/pg-core. " +
-            "Import the safe `jsonb` from @/api/db/columns instead.",
-          handRolledJsonbType:
-            "Do not hand-roll a JSONB customType outside apps/api/src/db/columns.ts. " +
-            "Import the safe `jsonb` from @/api/db/columns instead.",
+          stockTimestampCall:
+            "Do not use stock `timestamp()` from drizzle-orm/pg-core; it " +
+            "defaults to `timestamp without time zone`. Import `timestamptz` " +
+            "from @/api/db/columns instead.",
+          handRolledTimestampType:
+            "Do not hand-roll a naive timestamp customType outside " +
+            "apps/api/src/db/columns.ts. Import `timestamptz` from " +
+            "@/api/db/columns instead.",
         },
       },
       create(context: RuleContext) {
@@ -179,14 +193,15 @@ export default {
 
         // Namespace / default bindings for drizzle-orm/pg-core, e.g. the `p`
         // in `import * as p from "drizzle-orm/pg-core"`. Used to match
-        // `<ns>.jsonb(...)`.
+        // `<ns>.timestamp(...)`.
         const pgCoreNamespaceAliases = new Set<string>();
-        // Local bindings for the named `jsonb` export of pg-core. Used to
-        // match bare `jsonb(...)`. A `jsonb` imported from @/api/db/columns
-        // never lands here, so the safe column is not flagged.
-        const pgCoreJsonbAliases = new Set<string>();
+        // Local bindings for the named `timestamp` export of pg-core. Used to
+        // match bare `timestamp(...)`. A `timestamptz` imported from
+        // @/api/db/columns never lands here, so the safe helper is not
+        // flagged.
+        const pgCoreTimestampAliases = new Set<string>();
         // Local bindings for pg-core `customType`, to detect hand-rolled
-        // JSONB types outside columns.ts.
+        // naive timestamp types outside columns.ts.
         const customTypeAliases = new Set<string>();
 
         return {
@@ -231,8 +246,8 @@ export default {
               if (!isIdentifier(specifier.local)) {
                 continue;
               }
-              if (importedName === "jsonb") {
-                pgCoreJsonbAliases.add(specifier.local.name);
+              if (importedName === "timestamp") {
+                pgCoreTimestampAliases.add(specifier.local.name);
               } else if (importedName === "customType") {
                 customTypeAliases.add(specifier.local.name);
               }
@@ -242,9 +257,12 @@ export default {
           CallExpression(node: AstNode) {
             const callee = node.callee;
 
-            // Bare `jsonb(...)` where `jsonb` came from pg-core.
-            if (isIdentifier(callee) && pgCoreJsonbAliases.has(callee.name)) {
-              context.report({ node, messageId: "stockJsonbCall" });
+            // Bare `timestamp(...)` where `timestamp` came from pg-core.
+            if (
+              isIdentifier(callee) &&
+              pgCoreTimestampAliases.has(callee.name)
+            ) {
+              context.report({ node, messageId: "stockTimestampCall" });
               return;
             }
 
@@ -252,20 +270,21 @@ export default {
               return;
             }
 
-            // `<ns>.jsonb(...)` (or a computed-key equivalent) where `<ns>`
-            // is a pg-core namespace alias.
+            // `<ns>.timestamp(...)` (or a computed-key equivalent) where
+            // `<ns>` is a pg-core namespace alias.
             const namespaceMember =
               callee.type === "MemberExpression" &&
               isIdentifier(callee.object) &&
               pgCoreNamespaceAliases.has(callee.object.name)
                 ? staticMemberName(callee)
                 : null;
-            if (namespaceMember === "jsonb") {
-              context.report({ node, messageId: "stockJsonbCall" });
+            if (namespaceMember === "timestamp") {
+              context.report({ node, messageId: "stockTimestampCall" });
               return;
             }
 
-            // `customType<...>({ dataType: () => "jsonb" })` outside columns.ts.
+            // `customType<...>({ dataType: () => "timestamp" })` outside
+            // columns.ts.
             const bareCustomType =
               isIdentifier(callee) && customTypeAliases.has(callee.name);
             const namespacedCustomType = namespaceMember === "customType";
@@ -275,8 +294,8 @@ export default {
             }
 
             const args = node.arguments;
-            if (Array.isArray(args) && args.some(hasJsonbDataType)) {
-              context.report({ node, messageId: "handRolledJsonbType" });
+            if (Array.isArray(args) && args.some(hasNaiveTimestampDataType)) {
+              context.report({ node, messageId: "handRolledTimestampType" });
             }
           },
         };

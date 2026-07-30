@@ -11,6 +11,7 @@ import {
   stella,
   user,
   userPolicies,
+  timestamptz,
 } from "./common";
 import type {
   AccountDeletionRequestStatus,
@@ -66,7 +67,7 @@ export const usagePolicies = p.pgTable(
       .default("hidden"),
     sortOrder: p.integer("sort_order").notNull().default(0),
     active: p.boolean().notNull().default(true),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
     p.index("usage_policies_key_active_idx").on(table.policyKey, table.active),
@@ -132,12 +133,8 @@ export const usageEntitlements = p.pgTable(
       .references(() => usagePolicies.id, { onDelete: "restrict" }),
     status: p.text({ enum: USAGE_ENTITLEMENT_STATUSES }).notNull(),
     seats: p.integer().notNull(),
-    currentPeriodStart: p
-      .timestamp("current_period_start", { withTimezone: true })
-      .notNull(),
-    currentPeriodEnd: p
-      .timestamp("current_period_end", { withTimezone: true })
-      .notNull(),
+    currentPeriodStart: timestamptz("current_period_start").notNull(),
+    currentPeriodEnd: timestamptz("current_period_end").notNull(),
     hostedAccountRef: p.text("hosted_account_ref"),
     hostedEntitlementExternalId: p.text("hosted_entitlement_external_id"),
     /**
@@ -149,9 +146,7 @@ export const usageEntitlements = p.pgTable(
      * the provider payload carries no timestamp (ordering then remains
      * delivery-order, as before).
      */
-    hostedLastEventAt: p.timestamp("hosted_last_event_at", {
-      withTimezone: true,
-    }),
+    hostedLastEventAt: timestamptz("hosted_last_event_at"),
     /**
      * True when hosted access is scheduled to end but remains
      * usable until `current_period_end`. UI surfaces it as
@@ -163,9 +158,8 @@ export const usageEntitlements = p.pgTable(
       .notNull()
       .default(false),
     source: p.text({ enum: USAGE_ENTITLEMENT_SOURCES }).notNull(),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
-    updatedAt: p
-      .timestamp("updated_at")
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at")
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),
@@ -232,8 +226,8 @@ export const usageAllocations = p.pgTable(
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    periodStart: p.timestamp("period_start", { withTimezone: true }).notNull(),
-    periodEnd: p.timestamp("period_end", { withTimezone: true }).notNull(),
+    periodStart: timestamptz("period_start").notNull(),
+    periodEnd: timestamptz("period_end").notNull(),
     units: p.integer().notNull(),
     reason: p.text({ enum: USAGE_ALLOCATION_REASONS }).notNull(),
     sourceType: p
@@ -250,7 +244,7 @@ export const usageAllocations = p.pgTable(
     allocatedByUserId: p
       .text("allocated_by_user_id")
       .references(() => user.id, { onDelete: "set null" }),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
     p
@@ -323,13 +317,12 @@ export const accountDeletionRequests = p.pgTable(
       .notNull(),
     attemptCount: p.integer("attempt_count").notNull().default(0),
     errorMessage: p.text("error_message"),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
-    updatedAt: p
-      .timestamp("updated_at")
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at")
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),
-    completedAt: p.timestamp("completed_at"),
+    completedAt: timestamptz("completed_at"),
   },
   (table) => [
     p
@@ -357,8 +350,8 @@ export const usageEvents = p.pgTable(
       .text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "restrict" }),
-    periodStart: p.timestamp("period_start", { withTimezone: true }).notNull(),
-    periodEnd: p.timestamp("period_end", { withTimezone: true }).notNull(),
+    periodStart: timestamptz("period_start").notNull(),
+    periodEnd: timestamptz("period_end").notNull(),
     actionType: p.text("action_type", { enum: USAGE_ACTION_TYPES }).notNull(),
     modelRole: p.varchar("model_role", { length: 32 }).notNull(),
     unitsConsumed: p.integer("units_consumed").notNull(),
@@ -369,7 +362,7 @@ export const usageEvents = p.pgTable(
     isByok: p.boolean("is_byok").notNull().default(false),
     traceId: p.text("trace_id"),
     idempotencyKey: p.text("idempotency_key"),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
     p
@@ -420,10 +413,7 @@ export const hostedUsageWebhookEvents = p.pgTable(
     eventId: p.text("event_id").primaryKey(),
     eventType: p.text("event_type").notNull(),
     payload: jsonb().$type<Record<string, unknown>>().notNull(),
-    processedAt: p
-      .timestamp("processed_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    processedAt: timestamptz("processed_at").notNull().defaultNow(),
     result: p.text({ enum: USAGE_PROVIDER_WEBHOOK_RESULTS }).notNull(),
     errorMessage: p.text("error_message"),
   },
