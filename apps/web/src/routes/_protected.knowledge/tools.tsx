@@ -15,6 +15,7 @@ import type {
 } from "@/components/inspector/view-registry";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
+import { authClient } from "@/lib/auth";
 import { BoundedSet } from "@/lib/bounded-set";
 import { detached } from "@/lib/detached";
 import { subscribeToMcpOAuthOutcome } from "@/lib/mcp-oauth-channel";
@@ -176,6 +177,10 @@ export const Route = createFileRoute("/_protected/knowledge/tools")({
     ]);
 
     return {
+      canImportSkills: authClient.organization.checkRolePermission({
+        permissions: { agentSkill: ["create"] },
+        role,
+      }),
       canManageCustomTools: role === "admin" || role === "owner",
       practiceJurisdictions: settings.practiceJurisdictions,
     };
@@ -196,7 +201,12 @@ function ToolsPage() {
     select: (s): CatalogueBrowserFilterKind | undefined => s.kind,
   });
   const routeData = Route.useLoaderData({
-    select: ({ canManageCustomTools, practiceJurisdictions }) => ({
+    select: ({
+      canImportSkills,
+      canManageCustomTools,
+      practiceJurisdictions,
+    }) => ({
+      canImportSkills,
       canManageCustomTools,
       practiceJurisdictions,
     }),
@@ -237,6 +247,7 @@ function ToolsPage() {
       <ToolsPageHeader />
       <Suspense fallback={<ToolsCatalogueSkeleton />}>
         <LazyCatalogueBrowser
+          canImportSkills={routeData.canImportSkills}
           canManageCustomTools={routeData.canManageCustomTools}
           initialKind={initialKind}
           key={initialKind ?? "all"}

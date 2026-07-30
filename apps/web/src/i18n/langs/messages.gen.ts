@@ -1721,6 +1721,10 @@ type Messages = {
       "description": "Install SKILL.md packs that add specialist methods and read-only resources to chat.";
       "disableSkill": "Disable skill";
       "disabled": "Disabled";
+      "discoverSkills": "Find skills";
+      "discoveredSkills": "{count, plural, one {# skill found} other {# skills found}}";
+      "discoveryEmpty": "No skills were found at this repository or folder.";
+      "discoverySkippedInvalid": "{count, plural, one {# invalid skill was skipped} other {# invalid skills were skipped}}";
       "dropFile": "Drop SKILL.md or .zip here";
       "editSkill": "Edit skill";
       "emptyDescription": "Upload a SKILL.md file, a zipped skill folder, or import a public GitHub skill URL.";
@@ -1751,9 +1755,16 @@ type Messages = {
       "generateTitle": "Generate skill with AI";
       "generating": "Generating…";
       "howItRuns": "How it runs";
-      "importHelp": "Paste a direct SKILL.md URL, a GitHub file URL, or a GitHub folder URL that contains SKILL.md.";
+      "importFailureFetch": "The skill source could not be loaded.";
+      "importFailureIntegrity": "The skill source changed after discovery. Review it again.";
+      "importFailureLimit": "The skill limit has been reached.";
+      "importFailureNameConflict": "A skill with this name already exists.";
+      "importHelp": "Paste a public GitHub repository, folder, or SKILL.md URL. Review the discovered skills before installing them.";
+      "importPartial": "{installedCount, plural, one {{installed} imported} other {{installed} imported}}; {failedCount, plural, one {{failed} failed} other {{failed} failed}}.";
+      "importSelected": "Import selected ({count})";
       "importSkill": "Import from URL";
       "importTitle": "Import skill";
+      "importedSkills": "{count, plural, one {Imported # skill} other {Imported # skills}}";
       "invalidPath": "Path must use lowercase letters, digits, dots, hyphens, or underscores";
       "license": "License: {license}";
       "newFile": "New file";
@@ -1767,6 +1778,7 @@ type Messages = {
       "scopeTeam": "Everyone in the team";
       "selectFileHint": "Select a file from the list to open it in the editor panel on the right.";
       "selectedFile": "Selected: {name}";
+      "selectionLimit": "Select up to {count} skills at once.";
       "sourceUpload": "Uploaded";
       "sourceUrl": "Public URL";
       "unsavedChanges": "Unsaved changes — discard?";

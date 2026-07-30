@@ -84,7 +84,7 @@ type McpServerDependencies = {
   readMcpResource: (uri: string, mode: McpMode) => ReadResourceResult;
   resolveMcpSessionContext: (
     session: McpSession,
-    options: { request: Request },
+    options: { clientIp?: string | null; request: Request },
   ) => Promise<McpRequestContext>;
 };
 
@@ -187,15 +187,20 @@ export const createMcpHttpRequestHandler = ({
   resolveMcpSessionContext,
 }: McpServerDependencies) => {
   const createMcpServer = async ({
+    clientIp,
     mode,
     request,
     session,
   }: {
+    clientIp: string | null;
     mode: McpMode;
     request: Request;
     session: McpSession;
   }) => {
-    const context = await resolveMcpSessionContext(session, { request });
+    const context = await resolveMcpSessionContext(session, {
+      clientIp,
+      request,
+    });
 
     // The low-level Server API accepts JSON Schema directly, which keeps the
     // MCP surface independent from the chat tool generics used elsewhere.
@@ -288,7 +293,10 @@ export const createMcpHttpRequestHandler = ({
 
   return async (
     request: Request,
-    { mode = "default" }: { mode?: McpMode } = {},
+    {
+      clientIp = null,
+      mode = "default",
+    }: { clientIp?: string | null; mode?: McpMode } = {},
   ): Promise<Response> => {
     if (request.method === "OPTIONS") {
       return new Response(null, {
@@ -311,7 +319,7 @@ export const createMcpHttpRequestHandler = ({
 
     try {
       const session = await authenticateMcpRequest(token, mode);
-      server = await createMcpServer({ mode, request, session });
+      server = await createMcpServer({ clientIp, mode, request, session });
       transport = new WebStandardStreamableHTTPServerTransport({
         enableJsonResponse: true,
       });

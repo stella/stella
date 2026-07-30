@@ -49711,6 +49711,48 @@ export const generatedRouteMap: RouteNode = {
                 schemaTruncated: false,
               },
             },
+            discover: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "skills", "discover"],
+                capabilityId: "skills.discover",
+                description:
+                  "Discover importable skills from a GitHub repository or SKILL.md URL.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--url",
+                    prop: "url",
+                    required: true,
+                    part: "body",
+                    partPath: "url",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["url"],
+                      properties: {
+                        url: {
+                          minLength: 1,
+                          maxLength: 2048,
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+                schemaTruncated: false,
+              },
+            },
             "from-blueprint": {
               kind: "capability-leaf",
               spec: {
@@ -49909,6 +49951,120 @@ export const generatedRouteMap: RouteNode = {
                           pattern:
                             "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                           type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+                schemaTruncated: false,
+              },
+            },
+            import: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "skills", "import"],
+                capabilityId: "skills.import",
+                description:
+                  "Import one or more discovered skills from source URLs into the selected scope.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "enum",
+                    enum: ["team", "private"],
+                    repeatable: false,
+                    flag: "--scope",
+                    prop: "scope",
+                    required: true,
+                    part: "body",
+                    partPath: "scope",
+                  },
+                ],
+                inputOnly: ["body.items"],
+                paginated: false,
+                destructive: false,
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["items", "scope"],
+                      properties: {
+                        items: {
+                          minItems: 1,
+                          maxItems: 20,
+                          type: "array",
+                          items: {
+                            type: "object",
+                            required: ["integrity", "sourceUrl"],
+                            properties: {
+                              integrity: {
+                                anyOf: [
+                                  {
+                                    type: "object",
+                                    required: ["type", "value"],
+                                    properties: {
+                                      type: {
+                                        const: "content-hash",
+                                        type: "string",
+                                      },
+                                      value: {
+                                        pattern: "^[a-f0-9]{64}$",
+                                        type: "string",
+                                      },
+                                    },
+                                  },
+                                  {
+                                    type: "object",
+                                    required: [
+                                      "entrypointHash",
+                                      "sourceUrl",
+                                      "type",
+                                      "value",
+                                    ],
+                                    properties: {
+                                      entrypointHash: {
+                                        pattern: "^[a-f0-9]{64}$",
+                                        type: "string",
+                                      },
+                                      sourceUrl: {
+                                        minLength: 1,
+                                        maxLength: 2048,
+                                        type: "string",
+                                      },
+                                      type: {
+                                        const: "github-commit",
+                                        type: "string",
+                                      },
+                                      value: {
+                                        pattern: "^[a-f0-9]{40}$",
+                                        type: "string",
+                                      },
+                                    },
+                                  },
+                                ],
+                              },
+                              sourceUrl: {
+                                minLength: 1,
+                                maxLength: 2048,
+                                type: "string",
+                              },
+                            },
+                          },
+                        },
+                        scope: {
+                          enum: ["team", "private"],
+                          type: "string",
+                          anyOf: [
+                            {
+                              const: "team",
+                              type: "string",
+                            },
+                            {
+                              const: "private",
+                              type: "string",
+                            },
+                          ],
                         },
                       },
                     },
