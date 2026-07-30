@@ -112,19 +112,19 @@ export const ChatPromptImproveButton = ({
   );
 };
 
-const PLAIN_TEXT_NODE_NAMES = new Set([
+const PLAIN_TEXT_NODE_NAMES = [
   "doc",
   "hardBreak",
   "paragraph",
   "text",
-]);
+] as const;
 
 const isPlainTextDraft = (
   editor: NonNullable<ChatEditorController["editor"]>,
 ): boolean => {
   let isPlainText = true;
   editor.state.doc.descendants((node) => {
-    if (!PLAIN_TEXT_NODE_NAMES.has(node.type.name)) {
+    if (!PLAIN_TEXT_NODE_NAMES.some((name) => name === node.type.name)) {
       isPlainText = false;
       return false;
     }

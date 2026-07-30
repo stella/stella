@@ -34,7 +34,6 @@ const IMPROVE_PROMPT_MAX_OUTPUT_TOKENS = 4096;
 
 const improvePrompt = createSafeRootHandler(
   config,
-  // eslint-disable-next-line require-yield -- no database operation to unwrap
   async function* ({
     body,
     orgAIConfig,
@@ -67,43 +66,37 @@ const improvePrompt = createSafeRootHandler(
       traceId: Bun.randomUUIDv7(),
     });
 
-    const generated = await Result.tryPromise({
-      try: async () =>
-        await generateTanStackTextForRole({
-          abortSignal: AbortSignal.any([
-            request.signal,
-            AbortSignal.timeout(IMPROVE_PROMPT_TIMEOUT_MS),
-          ]),
-          analytics: aiAnalytics,
-          caching: resolveCaching({
-            promptCachingEnabled,
+    const improvedPrompt = (yield* Result.await(
+      Result.tryPromise({
+        try: async () =>
+          await generateTanStackTextForRole({
+            abortSignal: AbortSignal.any([
+              request.signal,
+              AbortSignal.timeout(IMPROVE_PROMPT_TIMEOUT_MS),
+            ]),
+            analytics: aiAnalytics,
+            caching: resolveCaching({
+              promptCachingEnabled,
+              role: "fast",
+              scopeKey: null,
+            }),
+            messages: [{ role: "user", content: prompt }],
+            maxOutputTokens: IMPROVE_PROMPT_MAX_OUTPUT_TOKENS,
+            organizationId: session.activeOrganizationId,
+            orgAIConfig,
             role: "fast",
-            scopeKey: null,
+            serviceTier: "standard",
+            system: IMPROVE_PROMPT_SYSTEM,
           }),
-          messages: [{ role: "user", content: prompt }],
-          maxOutputTokens: IMPROVE_PROMPT_MAX_OUTPUT_TOKENS,
-          organizationId: session.activeOrganizationId,
-          orgAIConfig,
-          role: "fast",
-          serviceTier: "standard",
-          system: IMPROVE_PROMPT_SYSTEM,
-        }),
-      catch: (error) => {
-        aiAnalytics.captureError(error);
-        return error;
-      },
-    });
-
-    if (Result.isError(generated)) {
-      return Result.err(
-        aiHandlerError(generated.error, {
-          status: 502,
-          message: "Improve prompt failed",
-        }),
-      );
-    }
-
-    const improvedPrompt = generated.value.trim();
+        catch: (error) => {
+          aiAnalytics.captureError(error);
+          return aiHandlerError(error, {
+            status: 502,
+            message: "Improve prompt failed",
+          });
+        },
+      }),
+    )).trim();
     if (improvedPrompt.length === 0) {
       return Result.err(
         new HandlerError({ status: 502, message: "Empty improved prompt" }),
