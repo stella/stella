@@ -46,6 +46,42 @@ import { logger } from "@/api/lib/observability/logger";
 const BASE_URL = "https://vyhledavac.nssoud.cz";
 const RESULTS_PER_PAGE = 20;
 
+/**
+ * How many records the court says its own search matched.
+ *
+ * The count is grouped ("1 234"), so digit runs may be separated by
+ * spaces. `(?:\s\d+)*` keeps the separator and the digits disjoint; a
+ * `[\d\s]*` class would overlap the `\s+` that follows, letting the
+ * engine re-split every trailing space and costing time quadratic in the
+ * length of the page.
+ *
+ * Read from a date-filtered search this is the day's expected total, which
+ * is what makes a partial crawl detectable rather than silent.
+ */
+const RESULT_COUNT_PATTERNS = [
+  /Nalezeno\s+(?<count>\d+(?:\s\d+)*)\s+záznam/iu,
+  /Celkem\s+(?<count>\d+(?:\s\d+)*)\s+záznam/iu,
+  /(?<!\d)(?<count>\d+(?:\s\d+)*)\s+výsledk/iu,
+  /resCount[^>]*>(?<count>\d[\d\s]*)</iu,
+  /myResCount[^>]*>(?<count>\d[\d\s]*)</iu,
+  /pocetZaznamu[^>]*>(?<count>\d[\d\s]*)</iu,
+];
+
+const reportedResultCount = (html: string): number | null => {
+  for (const pattern of RESULT_COUNT_PATTERNS) {
+    const match = pattern.exec(html);
+    const raw = match?.groups?.["count"];
+    if (raw === undefined) {
+      continue;
+    }
+    const parsed = Number.parseInt(raw.replace(/\s/gu, ""), 10);
+    if (!Number.isNaN(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+  return null;
+};
+
 /** Default lookback when no cursor is provided. */
 const DEFAULT_LOOKBACK_DAYS = 30;
 
@@ -823,27 +859,7 @@ export const czNssAdapter: SourceAdapter = {
       // disjoint; a `[\d\s]*` class would overlap the `\s+` that
       // follows, letting the engine re-split every trailing space and
       // costing time quadratic in the length of the page.
-      const countPatterns = [
-        /Nalezeno\s+(?<count>\d+(?:\s\d+)*)\s+záznam/iu,
-        /Celkem\s+(?<count>\d+(?:\s\d+)*)\s+záznam/iu,
-        /(?<!\d)(?<count>\d+(?:\s\d+)*)\s+výsledk/iu,
-        /resCount[^>]*>(?<count>\d[\d\s]*)</iu,
-        /myResCount[^>]*>(?<count>\d[\d\s]*)</iu,
-        /pocetZaznamu[^>]*>(?<count>\d[\d\s]*)</iu,
-      ];
-
-      for (const pattern of countPatterns) {
-        const match = html.match(pattern);
-        if (match?.groups?.["count"]) {
-          const cleaned = match.groups["count"].replace(/\s/gu, "");
-          const parsed = Number.parseInt(cleaned, 10);
-          if (!Number.isNaN(parsed) && parsed > 0) {
-            return parsed;
-          }
-        }
-      }
-
-      return null;
+      return reportedResultCount(html);
     } catch {
       return null;
     }
@@ -947,6 +963,40 @@ export const czNssAdapter: SourceAdapter = {
             decisions,
             nextCursor: `${date}:${page + 1}`,
           };
+        }
+
+        // Day-completeness signal: the court states how many records its
+        // own search matched, so a partial crawl is measurable instead of
+        // inferred. Emitted on the last page of a day, where the running
+        // total is known.
+        if (page === 0 || rows.length < RESULTS_PER_PAGE) {
+          const reported = reportedResultCount(searchResult.html);
+          if (reported !== null) {
+            const collected = page * RESULTS_PER_PAGE + rows.length;
+            logger[collected < reported ? "warn" : "info"](
+              "case_law.ingestion.day_coverage",
+              {
+                adapterKey: ADAPTER_KEYS.CZ_NSS,
+                day: date,
+                reported,
+                collected,
+                missing: Math.max(0, reported - collected),
+              },
+            );
+          }
+        }
+
+        // A full page with no continuation token is not the end of the day
+        // — it is a day whose remainder is unreachable. Advancing here
+        // drops it permanently, because the date cursor only moves forward
+        // and nothing revisits a day once passed. Fail instead: the cursor
+        // is held and the day is retried.
+        if (rows.length >= RESULTS_PER_PAGE) {
+          throw new AdapterFetchError({
+            message: `NSS returned a full page for ${date} (page ${page}) without a continuation token; the rest of the day is unreachable`,
+            adapterKey: ADAPTER_KEYS.CZ_NSS,
+            cursor,
+          });
         }
 
         // No more pages; advance to next day
