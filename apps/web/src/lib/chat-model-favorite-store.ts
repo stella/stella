@@ -67,35 +67,41 @@ const readPersistedFavorites = (
 ): Record<string, ChatModelFavorite> => {
   if (
     !isUnknownRecord(persisted) ||
-    !isUnknownRecord(persisted.favoritesByOrganization)
+    !isUnknownRecord(persisted["favoritesByOrganization"])
   ) {
     return {};
   }
 
   const favorites: Record<string, ChatModelFavorite> = {};
   for (const [organizationId, favorite] of Object.entries(
-    persisted.favoritesByOrganization,
+    persisted["favoritesByOrganization"],
   )) {
     if (!isUnknownRecord(favorite)) {
       continue;
     }
     if (
       "type" in favorite &&
-      favorite.type === "mode" &&
+      favorite["type"] === "mode" &&
       "mode" in favorite &&
-      isChatModelMode(favorite.mode)
+      isChatModelMode(favorite["mode"])
     ) {
-      favorites[organizationId] = { type: "mode", mode: favorite.mode };
+      favorites[organizationId] = {
+        type: "mode",
+        mode: favorite["mode"],
+      };
       continue;
     }
     if (
       "type" in favorite &&
-      favorite.type === "model" &&
+      favorite["type"] === "model" &&
       "value" in favorite &&
-      typeof favorite.value === "string" &&
-      favorite.value.length > 0
+      typeof favorite["value"] === "string" &&
+      favorite["value"].length > 0
     ) {
-      favorites[organizationId] = { type: "model", value: favorite.value };
+      favorites[organizationId] = {
+        type: "model",
+        value: favorite["value"],
+      };
     }
   }
   return favorites;
