@@ -109,9 +109,3 @@ export class InMemoryRateLimitContext implements Context {
     }
   }
 }
-
-/** Shared counter store for every route participating in the standard API
- * abuse budget, including root-mounted plugins that cannot join the large
- * `/v1` Elysia group without exhausting TypeScript's inference depth.
- */
-export const standardApiRateLimitContext = new InMemoryRateLimitContext();

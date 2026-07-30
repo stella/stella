@@ -466,8 +466,8 @@ mechanics, and similar), not gaps in coverage.
 | Reason                 | Count |
 | ---------------------- | ----- |
 | account_lifecycle      | 4     |
-| assistant_chat         | 9     |
-| auth_plumbing          | 8     |
+| assistant_chat         | 11    |
+| auth_plumbing          | 7     |
 | chat_thread_ui         | 1     |
 | compound_consent       | 1     |
 | deploy_mechanics       | 1     |
@@ -484,4 +484,4 @@ mechanics, and similar), not gaps in coverage.
 | upload_mechanics       | 5     |
 | url_preview            | 2     |
 
-Total: 104
+Total: 105

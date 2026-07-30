@@ -144,6 +144,7 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
   })
   .get("/navigation", readWorkspaceNavigation.handler, {
     permissions: readWorkspaceNavigation.config.permissions,
+    query: readWorkspaceNavigation.config.query,
   })
   .put("/", createWorkspaces.handler, {
     body: createWorkspaces.config.body,

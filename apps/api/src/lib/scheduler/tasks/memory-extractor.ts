@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, asc, eq, gte, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, gte, isNotNull, isNull, lte, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { rootDb } from "@/api/db/root";
@@ -42,6 +42,7 @@ import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 export const MEMORY_EXTRACTOR_TASK = "memory.extractor" as const;
 
 const EXTRACTION_BATCH_SIZE = 25;
+const EXTRACTION_PER_ORGANIZATION_LIMIT = 3;
 const EXTRACTION_TIMEOUT_MS = 30_000;
 const MAX_CANDIDATES = 3;
 const MAX_CONTENT_LENGTH = 4000;
@@ -166,11 +167,38 @@ export const extractMemoriesFromCompactions: SchedulerTask = async ({
       await processCompactionAt(index + 1);
       return;
     }
+    const candidates = candidatesResult.value;
 
-    const persistedCount = await persistSuggestions({
-      candidates: candidatesResult.value,
-      compaction,
+    const persistedResult = await Result.tryPromise({
+      try: async () =>
+        await persistSuggestions({
+          candidates,
+          compaction,
+        }),
+      catch: (error: unknown) => error,
     });
+    if (Result.isError(persistedResult)) {
+      // A source row can disappear while the provider call is in flight.
+      // Keep that tenant-local race inside this compaction's failure boundary
+      // so later organizations in the fair batch are still processed.
+      await rootDb
+        .update(chatThreadCompactions)
+        .set({ memoryExtractionAttemptedAt: new Date() })
+        .where(eq(chatThreadCompactions.id, compaction.compactionId));
+      failed += 1;
+      captureError(persistedResult.error, {
+        feature: "memory.extractor.persistence",
+        compactionId: compaction.compactionId,
+      });
+      logger.warn("scheduler.memory_extractor_persistence_failed", {
+        "error.type": errorTag(persistedResult.error),
+        "compaction.id": compaction.compactionId,
+      });
+      await processCompactionAt(index + 1);
+      return;
+    }
+
+    const persistedCount = persistedResult.value;
     if (persistedCount !== null) {
       suggested += persistedCount;
       processed += 1;
@@ -192,7 +220,7 @@ export const extractMemoriesFromCompactions: SchedulerTask = async ({
 };
 
 const loadUnminedCompactions = async (): Promise<CompactionRow[]> => {
-  const rows = await rootDb
+  const rankedCompactions = rootDb
     .select({
       compactionId: chatThreadCompactions.id,
       compactionCreatedAt: chatThreadCompactions.createdAt,
@@ -204,6 +232,15 @@ const loadUnminedCompactions = async (): Promise<CompactionRow[]> => {
       threadWorkspaceId: chatThreads.workspaceId,
       threadOrganizationId: chatThreads.organizationId,
       threadDataWorkspaceIds: chatThreads.dataWorkspaceIds,
+      memoryExtractionAttemptedAt:
+        chatThreadCompactions.memoryExtractionAttemptedAt,
+      organizationRank: sql<number>`row_number() over (
+        partition by ${chatThreads.organizationId}
+        order by
+          ${chatThreadCompactions.memoryExtractionAttemptedAt} ASC NULLS FIRST,
+          ${chatThreadCompactions.createdAt},
+          ${chatThreadCompactions.id}
+      )`.as("organization_rank"),
     })
     .from(chatThreadCompactions)
     .innerJoin(chatThreads, eq(chatThreads.id, chatThreadCompactions.threadId))
@@ -227,9 +264,25 @@ const loadUnminedCompactions = async (): Promise<CompactionRow[]> => {
         ),
       ),
     )
+    .as("ranked_unmined_compactions");
+
+  const rows = await rootDb
+    .select()
+    .from(rankedCompactions)
+    .where(
+      lte(
+        rankedCompactions.organizationRank,
+        EXTRACTION_PER_ORGANIZATION_LIMIT,
+      ),
+    )
+    // Take every organization's oldest candidate before any organization's
+    // second candidate. A busy tenant can consume at most the per-org quota,
+    // while the global batch remains strictly bounded.
     .orderBy(
-      asc(chatThreadCompactions.memoryExtractionAttemptedAt),
-      asc(chatThreadCompactions.createdAt),
+      asc(rankedCompactions.organizationRank),
+      sql`${rankedCompactions.memoryExtractionAttemptedAt} ASC NULLS FIRST`,
+      asc(rankedCompactions.compactionCreatedAt),
+      asc(rankedCompactions.compactionId),
     )
     .limit(EXTRACTION_BATCH_SIZE);
 
@@ -444,6 +497,26 @@ const persistSuggestions = async ({
       return null;
     }
 
+    // Claim in the same transaction as suggestion inserts. Concurrent or
+    // zombie runs race on this conditional update; exactly one can proceed,
+    // and a later insert failure rolls the claim back with the transaction.
+    const [claimed] = await tx
+      .update(chatThreadCompactions)
+      .set({
+        memoryExtractedAt: new Date(),
+        memoryExtractionAttemptedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(chatThreadCompactions.id, compaction.compactionId),
+          isNull(chatThreadCompactions.memoryExtractedAt),
+        ),
+      )
+      .returning({ id: chatThreadCompactions.id });
+    if (!claimed) {
+      return null;
+    }
+
     let insertedCount = 0;
     if (rows.length > 0) {
       const inserted = await tx
@@ -465,13 +538,6 @@ const persistSuggestions = async ({
       });
     }
 
-    await tx
-      .update(chatThreadCompactions)
-      .set({
-        memoryExtractedAt: new Date(),
-        memoryExtractionAttemptedAt: new Date(),
-      })
-      .where(eq(chatThreadCompactions.id, compaction.compactionId));
     return insertedCount;
   });
 };

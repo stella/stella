@@ -14,7 +14,7 @@
  * delimiter and hard-capped before it reaches a prompt.
  */
 
-import { and, asc, eq, gte, inArray, lte } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
 import { chatMessages } from "@/api/db/schema";
@@ -48,9 +48,9 @@ export const loadCompactionTranscript = async ({
   firstSummarizedMessageId,
   lastSummarizedMessageId,
 }: LoadCompactionTranscriptOptions): Promise<string> => {
-  // The range endpoints are message ids, so resolve them to timestamps and
-  // select between those: ids are not ordered, `created_at` is (and is the
-  // leading column of `chat_messages_thread_created_idx`).
+  // Resolve both endpoint tuples in one bounded query. `created_at` alone is
+  // not a stable boundary because messages inserted in one transaction can
+  // share it; UUID id is the same tie-breaker used by chat history.
   const bounds = await rootDb
     .select({ id: chatMessages.id, createdAt: chatMessages.createdAt })
     .from(chatMessages)
@@ -79,11 +79,11 @@ export const loadCompactionTranscript = async ({
     .where(
       and(
         eq(chatMessages.threadId, threadId),
-        gte(chatMessages.createdAt, first.createdAt),
-        lte(chatMessages.createdAt, last.createdAt),
+        sql`(${chatMessages.createdAt}, ${chatMessages.id}) >= (${first.createdAt}, ${first.id})`,
+        sql`(${chatMessages.createdAt}, ${chatMessages.id}) <= (${last.createdAt}, ${last.id})`,
       ),
     )
-    .orderBy(asc(chatMessages.createdAt))
+    .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id))
     .limit(TRANSCRIPT_MAX_MESSAGES);
 
   return renderTranscript(rows);

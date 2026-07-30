@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
-import { aiMemories } from "@/api/db/schema";
+import { aiMemories, workspaces } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -30,6 +30,7 @@ const mem = {
   userA1FromWsA2: memId(),
   wsA1: memId(),
   wsA2: memId(),
+  suggestedWsA2: memId(),
   firmA: memId(),
   wsB1: memId(),
 };
@@ -95,6 +96,19 @@ beforeAll(async () => {
       source: "tool",
     },
     {
+      id: mem.suggestedWsA2,
+      organizationId: ids.orgA,
+      scope: "workspace",
+      workspaceId: ids.wsA2,
+      kind: "fact",
+      content: "private extracted suggestion",
+      dedupKey: dedupKey(),
+      source: "extracted",
+      status: "suggested",
+      createdBy: ids.userA1,
+      sourceDataWorkspaceIds: [ids.wsA2],
+    },
+    {
       id: mem.firmA,
       organizationId: ids.orgA,
       scope: "organization",
@@ -142,6 +156,40 @@ describe("ai_memories ethical wall", () => {
   test("matter memory is visible from its own matter", async () => {
     const c = await countMemory([ids.wsA2], ids.orgA, ids.userA2, mem.wsA2);
     expect(c).toBe(1);
+  });
+
+  test("extracted suggestions stay private to their creator", async () => {
+    const otherMemberCount = await countMemory(
+      [ids.wsA2],
+      ids.orgA,
+      ids.userA2,
+      mem.suggestedWsA2,
+    );
+    const creatorCount = await countMemory(
+      [ids.wsA2],
+      ids.orgA,
+      ids.userA1,
+      mem.suggestedWsA2,
+    );
+
+    expect(otherMemberCount).toBe(0);
+    expect(creatorCount).toBe(1);
+  });
+
+  test("matter memory is hidden once its owner enters deleting", async () => {
+    await testDb
+      .update(workspaces)
+      .set({ status: "deleting" })
+      .where(eq(workspaces.id, ids.wsA2));
+    try {
+      const c = await countMemory([ids.wsA2], ids.orgA, ids.userA2, mem.wsA2);
+      expect(c).toBe(0);
+    } finally {
+      await testDb
+        .update(workspaces)
+        .set({ status: "active" })
+        .where(eq(workspaces.id, ids.wsA2));
+    }
   });
 
   test("user memory is invisible to a different user", async () => {

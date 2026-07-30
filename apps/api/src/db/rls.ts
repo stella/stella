@@ -788,11 +788,25 @@ export const chatThreadPolicies = () => [
 // final clause is the ethical wall — a memory derived from matter
 // content (`source_data_workspace_ids`) disappears once the actor
 // loses access to any contributing matter, even at user scope.
+const aiMemoryWorkspaceCheck = sql`workspace_id IN (
+  SELECT aw.authorized_workspace_id
+  FROM public.${sql.raw(WORKSPACE_ACCESS_VIEW_NAME)} aw
+  WHERE aw.workspace_status <> 'deleting'
+)`;
+
+const aiMemorySuggestionCheck = sql`(
+  status <> 'suggested'
+  OR created_by = (SELECT current_setting(
+    '${sql.raw(SETTING_USER_ID)}', true
+  ))
+)`;
+
 const aiMemoryScopeCheck = sql`(
   ${organizationCheck} AND
+  ${aiMemorySuggestionCheck} AND
   (
     scope = 'organization'
-    OR (scope = 'workspace' AND ${workspaceCheck})
+    OR (scope = 'workspace' AND ${aiMemoryWorkspaceCheck})
     OR (scope = 'user' AND ${userCheck})
   ) AND
   (

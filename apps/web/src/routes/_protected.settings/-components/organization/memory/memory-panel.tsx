@@ -26,7 +26,10 @@ import type {
   MemoryListItem,
   MemoryScope,
 } from "@/routes/_protected.settings/-queries/memories";
-import { workspacesNavigationOptions } from "@/routes/_protected.workspaces/-queries";
+import {
+  WORKSPACE_NAVIGATION_STATUS_SCOPE,
+  workspacesNavigationOptions,
+} from "@/routes/_protected.workspaces/-queries";
 
 type MemoryTab = "mine" | "firm" | "matter";
 type MemoryView = "active" | "stale" | "archived";
@@ -114,7 +117,9 @@ const MatterMemories = ({ canManage }: MatterMemoriesProps) => {
   const commonT = useTranslations("common");
   const activeOrganizationId = useActiveOrganizationId();
   const { data, isError, refetch } = useQuery(
-    workspacesNavigationOptions(activeOrganizationId),
+    workspacesNavigationOptions(activeOrganizationId, {
+      statusScope: WORKSPACE_NAVIGATION_STATUS_SCOPE.ACTIVE_AND_ARCHIVED,
+    }),
   );
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
 

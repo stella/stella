@@ -18,14 +18,14 @@ CREATE TABLE "ai_memories" (
 	"confidence" double precision,
 	"created_by" text,
 	"superseded_by_id" uuid,
-	"created_at" timestamp DEFAULT now() NOT NULL,
-	"updated_at" timestamp DEFAULT now() NOT NULL,
-	"last_used_at" timestamp DEFAULT now() NOT NULL,
-	"archived_at" timestamp
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"last_used_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"archived_at" timestamp with time zone
 );
 --> statement-breakpoint
-ALTER TABLE "chat_thread_compactions" ADD COLUMN "memory_extracted_at" timestamp;--> statement-breakpoint
-ALTER TABLE "chat_thread_compactions" ADD COLUMN "memory_extraction_attempted_at" timestamp;--> statement-breakpoint
+ALTER TABLE "chat_thread_compactions" ADD COLUMN "memory_extracted_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "chat_thread_compactions" ADD COLUMN "memory_extraction_attempted_at" timestamp with time zone;--> statement-breakpoint
 ALTER TABLE "ai_memories" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "ai_memories" TO stella;--> statement-breakpoint
 CREATE INDEX "ai_memories_org_scope_status_idx" ON "ai_memories" ("organization_id", "scope", "status");--> statement-breakpoint
@@ -33,6 +33,7 @@ CREATE UNIQUE INDEX "ai_memories_org_dedup_uidx" ON "ai_memories" ("organization
 CREATE INDEX "ai_memories_org_status_created_idx" ON "ai_memories" ("organization_id", "status", "created_at", "id");--> statement-breakpoint
 CREATE INDEX "ai_memories_user_status_idx" ON "ai_memories" ("user_id", "status") WHERE user_id IS NOT NULL;--> statement-breakpoint
 CREATE INDEX "ai_memories_workspace_status_idx" ON "ai_memories" ("workspace_id", "status") WHERE workspace_id IS NOT NULL;--> statement-breakpoint
+CREATE INDEX "ai_memories_source_message_idx" ON "ai_memories" ("source_message_id") WHERE source_message_id IS NOT NULL;--> statement-breakpoint
 CREATE INDEX "ai_memories_active_lifecycle_idx" ON "ai_memories" ("last_used_at") WHERE status = 'active' AND pinned = false;--> statement-breakpoint
 CREATE INDEX "ai_memories_stale_lifecycle_idx" ON "ai_memories" ("last_used_at") WHERE status = 'stale' AND pinned = false;--> statement-breakpoint
 CREATE INDEX "ai_memories_suggested_lifecycle_idx" ON "ai_memories" ("created_at") WHERE status = 'suggested' AND pinned = false;--> statement-breakpoint
@@ -55,12 +56,16 @@ ALTER TABLE "ai_memories" ADD CONSTRAINT "ai_memories_dedup_key_check" CHECK (de
 CREATE POLICY "ai_memory_select" ON "ai_memories" AS PERMISSIVE FOR SELECT TO "stella" USING (
 	organization_id = (SELECT current_setting('app.organization_id', true))
 	AND (
+		status <> 'suggested'
+		OR created_by = (SELECT current_setting('app.user_id', true))
+	)
+	AND (
 		scope = 'organization'
-		OR (scope = 'workspace' AND CASE
-			WHEN workspace_id = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting('app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[]))
-			THEN true
-			ELSE workspace_id IN (SELECT aw.authorized_workspace_id FROM public.stella_authorized_workspaces aw)
-		END)
+		OR (scope = 'workspace' AND workspace_id IN (
+			SELECT aw.authorized_workspace_id
+			FROM public.stella_authorized_workspaces aw
+			WHERE aw.workspace_status <> 'deleting'
+		))
 		OR (scope = 'user' AND user_id = (SELECT current_setting('app.user_id', true)))
 	)
 	AND (
@@ -83,12 +88,16 @@ CREATE POLICY "ai_memory_select" ON "ai_memories" AS PERMISSIVE FOR SELECT TO "s
 CREATE POLICY "ai_memory_insert" ON "ai_memories" AS PERMISSIVE FOR INSERT TO "stella" WITH CHECK (
 	organization_id = (SELECT current_setting('app.organization_id', true))
 	AND (
+		status <> 'suggested'
+		OR created_by = (SELECT current_setting('app.user_id', true))
+	)
+	AND (
 		scope = 'organization'
-		OR (scope = 'workspace' AND CASE
-			WHEN workspace_id = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting('app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[]))
-			THEN true
-			ELSE workspace_id IN (SELECT aw.authorized_workspace_id FROM public.stella_authorized_workspaces aw)
-		END)
+		OR (scope = 'workspace' AND workspace_id IN (
+			SELECT aw.authorized_workspace_id
+			FROM public.stella_authorized_workspaces aw
+			WHERE aw.workspace_status <> 'deleting'
+		))
 		OR (scope = 'user' AND user_id = (SELECT current_setting('app.user_id', true)))
 	)
 	AND (
@@ -111,12 +120,16 @@ CREATE POLICY "ai_memory_insert" ON "ai_memories" AS PERMISSIVE FOR INSERT TO "s
 CREATE POLICY "ai_memory_update" ON "ai_memories" AS PERMISSIVE FOR UPDATE TO "stella" USING (
 	organization_id = (SELECT current_setting('app.organization_id', true))
 	AND (
+		status <> 'suggested'
+		OR created_by = (SELECT current_setting('app.user_id', true))
+	)
+	AND (
 		scope = 'organization'
-		OR (scope = 'workspace' AND CASE
-			WHEN workspace_id = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting('app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[]))
-			THEN true
-			ELSE workspace_id IN (SELECT aw.authorized_workspace_id FROM public.stella_authorized_workspaces aw)
-		END)
+		OR (scope = 'workspace' AND workspace_id IN (
+			SELECT aw.authorized_workspace_id
+			FROM public.stella_authorized_workspaces aw
+			WHERE aw.workspace_status <> 'deleting'
+		))
 		OR (scope = 'user' AND user_id = (SELECT current_setting('app.user_id', true)))
 	)
 	AND (
@@ -142,4 +155,4 @@ CREATE POLICY "ai_memory_no_delete" ON "ai_memories" AS RESTRICTIVE FOR DELETE T
 -- change on modern Postgres, so no table rewrite and no lock wait.
 ALTER TABLE "organization_settings" ADD COLUMN "memory_extraction_enabled" boolean DEFAULT false NOT NULL;
 --> statement-breakpoint
-ALTER TABLE "organization_settings" ADD COLUMN "memory_extraction_enabled_at" timestamp;
+ALTER TABLE "organization_settings" ADD COLUMN "memory_extraction_enabled_at" timestamp with time zone;

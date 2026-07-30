@@ -53,6 +53,7 @@ const updateMemory = createSafeRootHandler(
             userId: aiMemories.userId,
             workspaceId: aiMemories.workspaceId,
             kind: aiMemories.kind,
+            status: aiMemories.status,
             sourceDataWorkspaceIds: aiMemories.sourceDataWorkspaceIds,
           })
           .from(aiMemories)
@@ -99,6 +100,14 @@ const updateMemory = createSafeRootHandler(
     // fail-closed sanitizer the create paths use.
     let sanitizedContent: string | undefined;
     if (body.content !== undefined) {
+      if (row.status === "archived") {
+        return Result.err(
+          new HandlerError({
+            status: 409,
+            message: "Archived memories must be restored before editing",
+          }),
+        );
+      }
       const sanitized = sanitizeMemoryContent(body.content);
       if (Result.isError(sanitized)) {
         return Result.err(

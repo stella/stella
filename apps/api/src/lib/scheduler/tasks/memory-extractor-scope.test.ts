@@ -37,7 +37,7 @@ describe("memory extraction scope", () => {
     });
   });
 
-  test("retains all contributing matters on workspace suggestions", () => {
+  test("drops matter suggestions when several matters contributed", () => {
     const secondWorkspaceId = toSafeId<"workspace">(
       "44444444-4444-4444-8444-444444444444",
     );
@@ -49,11 +49,22 @@ describe("memory extraction scope", () => {
         threadWorkspaceId: workspaceId,
         threadDataWorkspaceIds: [workspaceId, secondWorkspaceId],
       }),
+    ).toEqual({ type: "drop" });
+  });
+
+  test("keeps matter suggestions only when the home matter is the sole source", () => {
+    expect(
+      resolveExtractedMemoryScope({
+        kind: "fact",
+        threadUserId: userId,
+        threadWorkspaceId: workspaceId,
+        threadDataWorkspaceIds: [workspaceId],
+      }),
     ).toEqual({
       type: "workspace",
       userId: null,
       workspaceId,
-      sourceDataWorkspaceIds: [workspaceId, secondWorkspaceId],
+      sourceDataWorkspaceIds: [workspaceId],
     });
   });
 });

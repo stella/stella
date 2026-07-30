@@ -91,7 +91,8 @@ export const persistExplicitMemory = async ({
         eq(aiMemories.dedupKey, values.dedupKey),
       ),
     )
-    .limit(1);
+    .limit(1)
+    .for("update");
   if (!existing) {
     panic("Memory dedup conflict row disappeared");
   }

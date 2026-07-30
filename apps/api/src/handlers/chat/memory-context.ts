@@ -124,7 +124,12 @@ export const buildMemoryPromptParts = async ({
       ),
     );
 
-    if (rows.length > 0) {
+    const { block, omittedRowCount, renderedRowIds } = renderMemoryBlock({
+      contextMatterIds: effectiveMatterIds,
+      rows,
+    });
+
+    if (renderedRowIds.length > 0) {
       // Keep injected memories out of the curator's stale/archive sweep.
       // The interval guard usually matches zero rows, so the write cost
       // on the per-message chat path stays negligible.
@@ -137,10 +142,7 @@ export const buildMemoryPromptParts = async ({
           .set({ lastUsedAt: new Date() })
           .where(
             and(
-              inArray(
-                aiMemories.id,
-                rows.map((row) => row.id),
-              ),
+              inArray(aiMemories.id, renderedRowIds),
               lt(aiMemories.lastUsedAt, stampCutoff),
             ),
           );
@@ -151,10 +153,6 @@ export const buildMemoryPromptParts = async ({
       }
     }
 
-    const { block, omittedRowCount } = renderMemoryBlock({
-      contextMatterIds: effectiveMatterIds,
-      rows,
-    });
     if (omittedRowCount > 0) {
       // Budget pressure silently shrinks what the assistant knows, and the
       // matter > user > firm ordering means firm policy memories go first.
@@ -181,6 +179,7 @@ export type RenderedMemoryBlock = {
    * silently degrading what the assistant knows.
    */
   omittedRowCount: number;
+  renderedRowIds: SafeId<"aiMemory">[];
 };
 
 export const renderMemoryBlock = ({
@@ -188,7 +187,7 @@ export const renderMemoryBlock = ({
   rows,
 }: RenderMemoryBlockProps): RenderedMemoryBlock => {
   if (rows.length === 0) {
-    return { block: "", omittedRowCount: 0 };
+    return { block: "", omittedRowCount: 0, renderedRowIds: [] };
   }
 
   const matterSet = new Set<string>(contextMatterIds);
@@ -197,6 +196,7 @@ export const renderMemoryBlock = ({
   const grouped = orderMemoryRows({ matterSet, rows });
 
   const bullets: string[] = [];
+  const renderedRowIds: SafeId<"aiMemory">[] = [];
   let usedChars = 0;
   let omittedRowCount = 0;
   for (const row of grouped) {
@@ -224,11 +224,12 @@ export const renderMemoryBlock = ({
       continue;
     }
     bullets.push(bullet);
+    renderedRowIds.push(row.id);
     usedChars += bullet.length;
   }
 
   if (bullets.length === 0) {
-    return { block: "", omittedRowCount };
+    return { block: "", omittedRowCount, renderedRowIds };
   }
 
   return {
@@ -237,6 +238,7 @@ export const renderMemoryBlock = ({
       ...bullets,
     ].join("\n"),
     omittedRowCount,
+    renderedRowIds,
   };
 };
 

@@ -38,7 +38,7 @@ describe("memory prompt rendering", () => {
   test("reports how many rows the budget excluded", () => {
     // Silent truncation was the bug: the block just got shorter, and firm
     // memories (ordered last) disappeared with no signal anywhere.
-    const { block, omittedRowCount } = renderMemoryBlock({
+    const { block, omittedRowCount, renderedRowIds } = renderMemoryBlock({
       contextMatterIds: [],
       rows: Array.from({ length: 8 }, (_unused, index) => ({
         id: toSafeId<"aiMemory">(`memory_${index}`),
@@ -52,10 +52,11 @@ describe("memory prompt rendering", () => {
 
     expect(block.length).toBeLessThanOrEqual(2100);
     expect(omittedRowCount).toBeGreaterThan(0);
+    expect(renderedRowIds).toHaveLength(8 - omittedRowCount);
   });
 
   test("reports nothing omitted when everything fits", () => {
-    const { omittedRowCount } = renderMemoryBlock({
+    const { omittedRowCount, renderedRowIds } = renderMemoryBlock({
       contextMatterIds: [],
       rows: [
         {
@@ -70,5 +71,6 @@ describe("memory prompt rendering", () => {
     });
 
     expect(omittedRowCount).toBe(0);
+    expect(renderedRowIds).toEqual([MEMORY_ID]);
   });
 });

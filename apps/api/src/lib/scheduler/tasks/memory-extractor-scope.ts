@@ -47,7 +47,11 @@ export const resolveExtractedMemoryScope = ({
   }
 
   if (MATTER_KINDS.has(kind)) {
-    if (!threadWorkspaceId) {
+    if (
+      !threadWorkspaceId ||
+      sourceDataWorkspaceIds.length !== 1 ||
+      sourceDataWorkspaceIds.at(0) !== threadWorkspaceId
+    ) {
       return { type: "drop" };
     }
     return {

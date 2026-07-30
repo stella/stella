@@ -1,20 +1,14 @@
 import { Result } from "better-result";
 import type { SQL } from "drizzle-orm";
-import { and, desc, eq, ne, sql } from "drizzle-orm";
+import { and, desc, eq, ne } from "drizzle-orm";
 import { t } from "elysia";
 
 import { aiMemories } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import {
-  decodePaginationCursor,
-  encodePaginationCursor,
-  isMicrosecondTimestampPaginationCursorPart,
-  isUuidPaginationCursorPart,
-} from "@/api/lib/pagination";
 import type { Page } from "@/api/lib/pagination";
 import { brandPersistedAiMemoryId } from "@/api/lib/safe-id-boundaries";
 
@@ -63,22 +57,10 @@ type MemoryListItem = {
   updatedAt: string;
 };
 
-const decodeCursor = (
-  cursor: string,
-): { createdAt: string; id: SafeId<"aiMemory"> } | null => {
-  const parts = decodePaginationCursor(cursor);
-  const createdAt = parts?.at(0);
-  const id = parts?.at(1);
-  if (
-    !isMicrosecondTimestampPaginationCursorPart(createdAt) ||
-    !isUuidPaginationCursorPart(id)
-  ) {
-    return null;
-  }
-  // Keep the microsecond timestamp verbatim for the keyset
-  // `::timestamp` comparison; a Date round-trip would truncate it.
-  return { createdAt, id: brandPersistedAiMemoryId(id) };
-};
+const memoryCursor = createTimestampIdCursorCodec({
+  column: aiMemories.createdAt,
+  brandId: brandPersistedAiMemoryId,
+});
 
 const listMemories = createSafeRootHandler(
   config,
@@ -112,7 +94,7 @@ const listMemories = createSafeRootHandler(
       );
     }
 
-    const cursor = encodedCursor ? decodeCursor(encodedCursor) : null;
+    const cursor = encodedCursor ? memoryCursor.decode(encodedCursor) : null;
     if (encodedCursor && !cursor) {
       return Result.err(
         new HandlerError({ status: 400, message: "Invalid cursor" }),
@@ -135,9 +117,14 @@ const listMemories = createSafeRootHandler(
       conditions.push(eq(aiMemories.workspaceId, workspaceId));
     }
     if (cursor) {
-      conditions.push(
-        sql`(${aiMemories.createdAt}, ${aiMemories.id}) < (${cursor.createdAt}::timestamp, ${cursor.id}::uuid)`,
-      );
+      const keysetCondition = memoryCursor.keysetAfter({
+        cursor,
+        idColumn: aiMemories.id,
+        direction: "descending",
+      });
+      if (keysetCondition) {
+        conditions.push(keysetCondition);
+      }
     }
 
     const rows = yield* Result.await(
@@ -155,10 +142,7 @@ const listMemories = createSafeRootHandler(
             workspaceId: aiMemories.workspaceId,
             sourceDataWorkspaceIds: aiMemories.sourceDataWorkspaceIds,
             createdAt: aiMemories.createdAt,
-            createdAtCursor: sql<string>`to_char(
-              ${aiMemories.createdAt},
-              'YYYY-MM-DD"T"HH24:MI:SS.US'
-            )`,
+            createdAtCursor: memoryCursor.cursorValue.as("created_at_cursor"),
             updatedAt: aiMemories.updatedAt,
           })
           .from(aiMemories)
@@ -173,7 +157,7 @@ const listMemories = createSafeRootHandler(
     const lastItem = pageRows.at(-1);
     const nextCursor =
       hasMore && lastItem
-        ? encodePaginationCursor([lastItem.createdAtCursor, lastItem.id])
+        ? memoryCursor.encode(lastItem.createdAtCursor, lastItem.id)
         : null;
 
     const items: MemoryListItem[] = pageRows.map((row) => ({
