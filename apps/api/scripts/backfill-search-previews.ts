@@ -17,20 +17,25 @@ import { rebuildSupplementalSearchIndex } from "@/api/lib/search/index-global";
 
 const ORGANIZATION_BATCH_SIZE = 100;
 
+type OrganizationRow = {
+  id: string;
+};
+
 const main = async (): Promise<void> => {
   let organizationCursor: string | null = null;
   let processedOrganizations = 0;
 
   for (;;) {
     // oxlint-disable-next-line no-await-in-loop -- sequential keyset pagination: the next organization page depends on this batch's final id
-    const organizationRows = await rootDb.execute<{ id: string }>(sql`
-      SELECT id
-      FROM organization
-      ${organizationCursor ? sql`WHERE id > ${organizationCursor}` : sql``}
-      ORDER BY id
-      LIMIT ${ORGANIZATION_BATCH_SIZE}
-    `);
-    const organizations = [...organizationRows];
+    const organizationRows: Iterable<OrganizationRow> =
+      await rootDb.execute<OrganizationRow>(sql`
+        SELECT id
+        FROM organization
+        ${organizationCursor ? sql`WHERE id > ${organizationCursor}` : sql``}
+        ORDER BY id
+        LIMIT ${ORGANIZATION_BATCH_SIZE}
+      `);
+    const organizations: OrganizationRow[] = [...organizationRows];
     if (organizations.length === 0) {
       break;
     }
@@ -44,7 +49,7 @@ const main = async (): Promise<void> => {
       );
     }
 
-    const lastOrganization = organizations.at(-1);
+    const lastOrganization: OrganizationRow | undefined = organizations.at(-1);
     if (
       lastOrganization === undefined ||
       organizations.length < ORGANIZATION_BATCH_SIZE
