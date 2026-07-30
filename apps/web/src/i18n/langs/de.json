@@ -701,6 +701,8 @@
     "editClause": "Klausel bearbeiten",
     "editVariant": "Variante bearbeiten",
     "export": "Exportieren",
+    "exportAsCsv": "Als CSV exportieren",
+    "exportAsJson": "Als JSON exportieren",
     "exportFailed": "Export der Klauseln fehlgeschlagen",
     "formattingPreviewHint": "Nummerierung und Formatierung sind hier nur eine Vorschau. Das erzeugte Dokument wendet seine eigene Listenformatierung an, geben Sie Nummern daher nicht von Hand ein.",
     "importFailed": "Import der Klauseln fehlgeschlagen",

@@ -701,6 +701,8 @@
     "editClause": "Muuda klauslit",
     "editVariant": "Muuda varianti",
     "export": "Ekspordi",
+    "exportAsCsv": "Ekspordi CSV-vormingus",
+    "exportAsJson": "Ekspordi JSON-vormingus",
     "exportFailed": "Klauslite eksportimine ebaõnnestus",
     "formattingPreviewHint": "Nummerdus ja vormindus on siin eelvaade. Loodud dokument rakendab oma loendivormingu, seega ära sisesta numbreid käsitsi.",
     "importFailed": "Klauslite importimine ebaõnnestus",

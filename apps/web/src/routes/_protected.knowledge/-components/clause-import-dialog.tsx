@@ -19,6 +19,8 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 
+import { getClauseImportPreviewCount } from "./clause-import-dialog.logic";
+
 type ImportResult = {
   created: number;
   skipped: number;
@@ -56,17 +58,7 @@ export const ClauseImportDialog = ({
     selected
       .text()
       .then((text) => {
-        const parsed: unknown = JSON.parse(text);
-        if (
-          typeof parsed !== "object" ||
-          parsed === null ||
-          !("clauses" in parsed)
-        ) {
-          setPreviewCount(0);
-          return;
-        }
-        const { clauses } = parsed;
-        setPreviewCount(Array.isArray(clauses) ? clauses.length : 0);
+        setPreviewCount(getClauseImportPreviewCount(text, selected.name));
         return;
       })
       .catch(() => {
@@ -83,7 +75,7 @@ export const ClauseImportDialog = ({
     }
 
     setImporting(true);
-    const response = await api.clauses.import.put({
+    const response = await api.clauses.import.post({
       file,
     });
     setImporting(false);
@@ -146,7 +138,7 @@ export const ClauseImportDialog = ({
               {t("clauses.selectFile")}
             </Button>
             <input
-              accept=".json"
+              accept=".json,.csv"
               className="hidden"
               onChange={handleFileChange}
               ref={inputRef}

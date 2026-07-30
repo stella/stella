@@ -701,6 +701,8 @@
     "editClause": "Modifier la clause",
     "editVariant": "Modifier la variante",
     "export": "Exporter",
+    "exportAsCsv": "Exporter au format CSV",
+    "exportAsJson": "Exporter au format JSON",
     "exportFailed": "Impossible d'exporter les clauses",
     "formattingPreviewHint": "La numérotation et la mise en forme sont ici un aperçu. Le document généré applique sa propre mise en forme des listes, ne saisissez donc pas les numéros à la main.",
     "importFailed": "Impossible d'importer les clauses",

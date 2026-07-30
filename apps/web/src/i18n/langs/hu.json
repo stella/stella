@@ -701,6 +701,8 @@
     "editClause": "Záradék szerkesztése",
     "editVariant": "Változat szerkesztése",
     "export": "Exportálás",
+    "exportAsCsv": "Exportálás CSV-formátumban",
+    "exportAsJson": "Exportálás JSON-formátumban",
     "exportFailed": "A záradékok exportálása nem sikerült",
     "formattingPreviewHint": "A számozás és a formázás itt csak előnézet. A létrehozott dokumentum saját listaformázást alkalmaz, ezért ne írja be kézzel a számokat.",
     "importFailed": "A záradékok importálása nem sikerült",

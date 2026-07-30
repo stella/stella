@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 import { t } from "elysia";
+import type { Static } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { clauses, clauseVariants } from "@/api/db/schema";
@@ -8,10 +9,13 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
+import { escapeCSV } from "@/api/lib/csv";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedClauseId } from "@/api/lib/safe-id-boundaries";
+import { isRecord } from "@/api/lib/type-guards";
 
 import { buildClauseCategoryPath } from "./category-path";
+import { deriveClauseSlug, serializeClauseTags } from "./clause-csv";
 import type {
   ClauseExportItem,
   ClauseExportPayload,
@@ -21,15 +25,16 @@ import { normalizeClauseMetadata } from "./metadata";
 
 const exportQuerySchema = t.Object({
   ids: t.Optional(t.String()),
+  format: t.Optional(t.Union([t.Literal("csv"), t.Literal("json")])),
 });
 
 type ExportProps = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
-  query: { ids?: string };
+  query: Static<typeof exportQuerySchema>;
 };
 
-const exportHandler = async function* ({
+export const exportHandler = async function* ({
   safeDb,
   organizationId,
   query,
@@ -65,7 +70,52 @@ const exportHandler = async function* ({
     ),
   );
 
-  // Load categories for path building
+  const format = query.format ?? "json";
+
+  if (format === "csv") {
+    const csvRows = ["slug,title,body,tags"];
+
+    for (const row of rows) {
+      let slug = "";
+      let tags: string[] = [];
+      const custom = isRecord(row.metadata) ? row.metadata.custom : undefined;
+      if (isRecord(custom)) {
+        slug = typeof custom["slug"] === "string" ? custom["slug"] : "";
+        if (Array.isArray(custom["tags"])) {
+          tags = custom["tags"].filter(
+            (tag): tag is string => typeof tag === "string",
+          );
+        }
+      }
+
+      slug = deriveClauseSlug(row.title, row.id, slug);
+
+      const bodyText = row.body.map(({ text }) => text).join("\n");
+
+      csvRows.push(
+        [
+          escapeCSV(slug),
+          escapeCSV(row.title),
+          escapeCSV(bodyText),
+          escapeCSV(serializeClauseTags(tags)),
+        ].join(","),
+      );
+    }
+
+    const csvContent = csvRows.join("\n");
+
+    return Result.ok(
+      new Response(csvContent, {
+        status: 200,
+        headers: {
+          "Content-Type": "text/csv",
+          "Content-Disposition": 'attachment; filename="clauses-export.csv"',
+        },
+      }),
+    );
+  }
+
+  // Original JSON export format
   const allCategories = yield* Result.await(
     safeDb((tx) =>
       tx.query.clauseCategories.findMany({
@@ -76,7 +126,6 @@ const exportHandler = async function* ({
     ),
   );
 
-  // Author-curated variant bodies, grouped per clause in display order.
   const clauseIds = rows.map((row) => row.id);
   const variantRows =
     clauseIds.length > 0

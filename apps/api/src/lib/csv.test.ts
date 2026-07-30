@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { escapeCSV } from "@/api/lib/csv";
+import { CSV_PARSE_STATUS, escapeCSV, parseCSV } from "@/api/lib/csv";
 
 // Invariants over a large, fuzzed input space live in csv.property.test.ts
 // (fast-check). These example tests pin the exact emitted strings for the
@@ -46,5 +46,46 @@ describe("escapeCSV", () => {
     for (const v of ["a,b", 'say "hi"', "plain", "1,000.00"]) {
       expect(escapeCSV(v).startsWith('"\t')).toBe(false);
     }
+  });
+});
+
+describe("parseCSV", () => {
+  test("keeps quoted multiline cells in one record", () => {
+    const result = parseCSV(
+      'slug,title,body,tags\r\nclause,Title,"First\r\nSecond","one,two"',
+    );
+
+    expect(result).toEqual({
+      status: CSV_PARSE_STATUS.SUCCESS,
+      rows: [
+        ["slug", "title", "body", "tags"],
+        ["clause", "Title", "First\r\nSecond", "one,two"],
+      ],
+    });
+  });
+
+  test("rejects an unterminated quoted cell", () => {
+    expect(
+      parseCSV(
+        'slug,title,body,tags\nfirst,First,"Body\nsecond,Second,Body,two',
+      ),
+    ).toEqual({ status: CSV_PARSE_STATUS.INVALID });
+  });
+
+  test("rejects characters after a closing quote", () => {
+    expect(
+      parseCSV('slug,title,body,tags\nfirst,"First"suffix,Body,two'),
+    ).toEqual({ status: CSV_PARSE_STATUS.INVALID });
+  });
+
+  test("removes only the formula guard added by the exporter", () => {
+    expect(parseCSV('"\t=SUM(A1:A2)",plain')).toEqual({
+      status: CSV_PARSE_STATUS.SUCCESS,
+      rows: [["=SUM(A1:A2)", "plain"]],
+    });
+    expect(parseCSV('"\tplain",plain')).toEqual({
+      status: CSV_PARSE_STATUS.SUCCESS,
+      rows: [["\tplain", "plain"]],
+    });
   });
 });
