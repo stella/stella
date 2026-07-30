@@ -22,6 +22,7 @@ import {
 } from "@/components/chat/chat-ui-tools";
 import type {
   ChatPart,
+  DocumentDeletionMessage,
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
 
@@ -75,7 +76,7 @@ describe("chat tool titles", () => {
 
 describe("consumeDocumentDeletionToolCalls", () => {
   test("consumes a completed whole-document deletion once", () => {
-    const messages = [
+    const messages: DocumentDeletionMessage[] = [
       {
         id: "message-1",
         parts: [
@@ -87,11 +88,11 @@ describe("consumeDocumentDeletionToolCalls", () => {
             output: { deleted: true },
             state: "complete",
             type: "tool-call",
-          } satisfies ChatPart,
+          },
         ],
         role: "assistant",
       },
-    ] satisfies PersistedChatMessage[];
+    ];
     const handledToolCallIds = new Set<string>();
 
     expect(
@@ -115,7 +116,7 @@ describe("consumeDocumentDeletionToolCalls", () => {
   });
 
   test("reports completed version-only deletions for cache revalidation", () => {
-    const messages = [
+    const messages: DocumentDeletionMessage[] = [
       {
         id: "message-1",
         parts: [
@@ -133,11 +134,11 @@ describe("consumeDocumentDeletionToolCalls", () => {
             output: { deleted: true },
             state: "complete",
             type: "tool-call",
-          } satisfies ChatPart,
+          },
         ],
         role: "assistant",
       },
-    ] satisfies PersistedChatMessage[];
+    ];
 
     expect(
       consumeDocumentDeletionToolCalls({
@@ -151,7 +152,7 @@ describe("consumeDocumentDeletionToolCalls", () => {
   });
 
   test("ignores completed calls without a successful deletion result", () => {
-    const messages = [
+    const messages: DocumentDeletionMessage[] = [
       {
         id: "message-1",
         parts: [
@@ -163,11 +164,11 @@ describe("consumeDocumentDeletionToolCalls", () => {
             output: { deleted: false },
             state: "complete",
             type: "tool-call",
-          } satisfies ChatPart,
+          },
         ],
         role: "assistant",
       },
-    ] satisfies PersistedChatMessage[];
+    ];
 
     expect(
       consumeDocumentDeletionToolCalls({

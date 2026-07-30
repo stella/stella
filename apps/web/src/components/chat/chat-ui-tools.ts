@@ -826,13 +826,18 @@ export type DocumentDeletionToolCallEffects = {
   hasWholeDocumentDeletion: boolean;
 };
 
+export type DocumentDeletionMessage = {
+  role: string;
+  parts: readonly unknown[];
+};
+
 /** Consume successful document delete calls not yet handled by this session. */
 export const consumeDocumentDeletionToolCalls = ({
   handledToolCallIds,
   messages,
 }: {
   handledToolCallIds: Set<string>;
-  messages: readonly PersistedChatMessage[];
+  messages: readonly DocumentDeletionMessage[];
 }): DocumentDeletionToolCallEffects => {
   let hasVersionDeletion = false;
   let hasWholeDocumentDeletion = false;
@@ -843,19 +848,21 @@ export const consumeDocumentDeletionToolCalls = ({
     }
     for (const part of message.parts) {
       if (
-        part.type !== "tool-call" ||
-        part.name !== "delete_document" ||
-        part.state !== "complete" ||
-        !isJsonObject(part.input) ||
-        !isJsonObject(part.output) ||
-        part.output["deleted"] !== true ||
-        handledToolCallIds.has(part.id)
+        !isJsonObject(part) ||
+        part["type"] !== "tool-call" ||
+        part["name"] !== "delete_document" ||
+        part["state"] !== "complete" ||
+        typeof part["id"] !== "string" ||
+        !isJsonObject(part["input"]) ||
+        !isJsonObject(part["output"]) ||
+        part["output"]["deleted"] !== true ||
+        handledToolCallIds.has(part["id"])
       ) {
         continue;
       }
 
-      handledToolCallIds.add(part.id);
-      if ("version_id" in part.input) {
+      handledToolCallIds.add(part["id"]);
+      if ("version_id" in part["input"]) {
         hasVersionDeletion = true;
       } else {
         hasWholeDocumentDeletion = true;

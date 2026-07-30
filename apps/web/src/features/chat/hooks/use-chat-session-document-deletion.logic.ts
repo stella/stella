@@ -2,7 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 
 import {
   consumeDocumentDeletionToolCalls,
-  type PersistedChatMessage,
+  type DocumentDeletionMessage,
 } from "@/components/chat/chat-ui-tools";
 import type { InspectorTab } from "@/components/inspector/inspector-store";
 import { fileMetadataQueryRoot } from "@/lib/files/file-metadata-query.logic";
@@ -12,7 +12,7 @@ type ReconcileDocumentDeletionToolCallsOptions = {
     all: (workspaceId: string) => readonly unknown[];
   };
   handledToolCallIds: Set<string>;
-  messages: readonly PersistedChatMessage[];
+  messages: readonly DocumentDeletionMessage[];
   contextMatterIds: readonly string[];
   queryClient: QueryClient;
   tabs: readonly InspectorTab[];
