@@ -8,7 +8,7 @@ import {
 
 describe("bounded corpus compression", () => {
   test("async round-trip preserves the payload", async () => {
-    const text = `rozsudek — §  čl. 5 ${  "long body ".repeat(1000)}`;
+    const text = `rozsudek — §  čl. 5 ${"long body ".repeat(1000)}`;
     const compressed = await zstdCompressAsync(text);
     expect(await zstdDecompressToStringBounded(compressed, 1024 * 1024)).toBe(
       text,
