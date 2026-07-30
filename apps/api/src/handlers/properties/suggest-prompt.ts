@@ -1,6 +1,10 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
+import {
+  buildSuggestPromptUserMessage,
+  SUGGEST_PROMPT_SYSTEM_PROMPT,
+} from "@/api/handlers/properties/suggest-prompt-message";
 import { resolveCaching } from "@/api/lib/ai-config";
 import {
   loadOrgAIConfig,
@@ -46,47 +50,6 @@ const config = {
 
 const SUGGEST_TIMEOUT_MS = 20_000;
 const MAX_PROMPT_LENGTH = 280;
-
-const SYSTEM_PROMPT = `You write extraction prompts for a legal-document AI tool.
-Given a column name (and optionally the user's current prompt draft), produce
-ONE direct, imperative sentence telling the AI what to extract from the
-document. Rules:
-- Output the prompt only. No preamble, no quotes, no markdown.
-- Single sentence, plain text, ends with a period.
-- If the user supplied a current draft, REFINE it: keep their intent and
-  vocabulary, fix grammar, tighten wording, and align with the result type.
-  Do not invent constraints they didn't ask for.
-- If no draft, write a fresh prompt grounded in the column name.
-- Match the result type:
-  - text → ask for the value as a short string.
-  - int → ask for a number.
-  - date → ask for a date in ISO 8601 (YYYY-MM-DD).
-  - single-select → ask the AI to choose exactly one of the listed options.
-  - multi-select → ask for all matching options from the list.
-- Reference the document implicitly when natural ("from the contract").
-- Stay under 280 characters.`;
-
-const buildUserMessage = ({
-  name,
-  contentType,
-  options,
-  currentPrompt,
-}: {
-  name: string;
-  contentType: string;
-  options: string[] | undefined;
-  currentPrompt: string | undefined;
-}): string => {
-  const lines = [`Column name: ${name}`, `Result type: ${contentType}`];
-  if (options && options.length > 0) {
-    lines.push(`Allowed options: ${options.join(", ")}`);
-  }
-  if (currentPrompt && currentPrompt.length > 0) {
-    lines.push(`Current draft (refine, don't replace): ${currentPrompt}`);
-  }
-  lines.push("Write the extraction prompt:");
-  return lines.join("\n");
-};
 
 const QUOTE_CHARS = new Set(['"', "'", "“", "”", "‘", "’"]);
 
@@ -151,7 +114,7 @@ const suggestPrompt = createSafeHandler(
       traceId: Bun.randomUUIDv7(),
     });
 
-    const userMessage = buildUserMessage({
+    const userMessage = buildSuggestPromptUserMessage({
       name: trimmedName,
       contentType: body.contentType,
       options: body.options?.map((o) => o.value),
@@ -171,7 +134,7 @@ const suggestPrompt = createSafeHandler(
             role: "fast",
             scopeKey: null,
           }),
-          system: SYSTEM_PROMPT,
+          system: SUGGEST_PROMPT_SYSTEM_PROMPT,
           messages: [{ role: "user", content: userMessage }],
           abortSignal: AbortSignal.any([
             request.signal,
