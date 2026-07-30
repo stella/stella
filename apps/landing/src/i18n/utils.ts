@@ -81,7 +81,9 @@ export const splitLinkedSegment = (value: string): LinkedSegment | null => {
   if (!match) {
     return null;
   }
-  const [, before, linked, after] = match;
+  // The pattern's three groups always capture on a match; the outer two may
+  // be empty strings, never absent.
+  const [, before = "", linked = "", after = ""] = match;
   return { before, linked, after };
 };
 
