@@ -8,7 +8,7 @@ import { DEFAULT_DOCUMENT_PROCESSING_MODE } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
-import { isDocumentOcrProviderConfigured } from "@/api/lib/document-processing-provider";
+import { isDocumentOcrWorkerAvailable } from "@/api/lib/document-processing-readiness";
 import {
   DEFAULT_MATTER_NUMBER_PADDING,
   DEFAULT_MATTER_NUMBER_PATTERN,
@@ -62,7 +62,7 @@ const readOrganizationSettings = createSafeRootHandler(
     );
 
     return Result.ok(
-      projectOrganizationSettingsRow(row, isDocumentOcrProviderConfigured()),
+      projectOrganizationSettingsRow(row, await isDocumentOcrWorkerAvailable()),
     );
   },
 );

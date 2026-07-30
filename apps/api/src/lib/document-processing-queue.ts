@@ -38,8 +38,10 @@ import {
 } from "@/api/lib/document-processing-enqueue";
 import {
   DocumentOcrProviderError,
+  isDocumentOcrProviderConfigured,
   recognizePdfText,
 } from "@/api/lib/document-processing-provider";
+import { startDocumentOcrWorkerReadiness } from "@/api/lib/document-processing-readiness";
 import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
 import { createFileKey } from "@/api/lib/file-key";
 import { logger } from "@/api/lib/observability/logger";
@@ -1528,6 +1530,19 @@ export const initDocumentProcessingWorker = () => {
       maxStalledCount: 2,
     },
   );
+  let readiness: ReturnType<typeof startDocumentOcrWorkerReadiness> | null =
+    null;
+  let closing = false;
+  if (isDocumentOcrProviderConfigured()) {
+    detached(
+      worker.waitUntilReady().then(() => {
+        if (!closing) {
+          readiness = startDocumentOcrWorkerReadiness();
+        }
+      }),
+      "document-processing.publish-readiness",
+    );
+  }
 
   worker.on("error", (error) => {
     logger.error(
@@ -1561,8 +1576,10 @@ export const initDocumentProcessingWorker = () => {
 
   return {
     close: async (): Promise<void> => {
+      closing = true;
       clearInterval(reconcileInterval);
       await worker.close();
+      readiness?.close();
       reconciliationRedisClient?.close();
       reconciliationRedisClient = null;
     },

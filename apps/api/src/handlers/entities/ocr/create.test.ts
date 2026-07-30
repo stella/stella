@@ -53,7 +53,7 @@ const createSafeDb =
   };
 
 describe("requestManualOcrHandler", () => {
-  test("rejects before persistence when no OCR provider is configured", async () => {
+  test("rejects before persistence when no OCR worker is ready", async () => {
     const persistRun = mock(async () => ({
       id: runId,
       status: "queued" as const,
@@ -64,7 +64,7 @@ describe("requestManualOcrHandler", () => {
         fieldId,
         organizationId,
         persistRun,
-        providerAvailable: () => false,
+        workerAvailable: async () => false,
         recordAuditEvent,
         safeDb: createSafeDb(null),
         userId,
@@ -92,7 +92,7 @@ describe("requestManualOcrHandler", () => {
         fieldId,
         organizationId,
         persistRun,
-        providerAvailable: () => true,
+        workerAvailable: async () => true,
         recordAuditEvent,
         safeDb: createSafeDb({
           content: {
@@ -147,7 +147,7 @@ describe("requestManualOcrHandler", () => {
         fieldId,
         organizationId,
         persistRun,
-        providerAvailable: () => true,
+        workerAvailable: async () => true,
         recordAuditEvent,
         safeDb: createSafeDb({
           content: {

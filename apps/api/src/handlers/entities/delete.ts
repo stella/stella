@@ -1,10 +1,16 @@
 import { Result } from "better-result";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
+import {
+  documentProcessingRuns,
+  entities,
+  entityVersions,
+  fields,
+  workspaces,
+} from "@/api/db/schema";
 import {
   extractFieldFileRefs,
   filterUnreferencedFieldFileRefs,
@@ -45,28 +51,55 @@ export const deleteEntitiesHandler = async function* ({
   recordAuditEvent,
   body,
 }: DeleteEntitiesHandlerProps) {
-  const readOnlyEntities = yield* Result.await(
-    safeDb((tx) =>
-      // SAFETY: result pinned to body.entityIds via id IN (...), which the body schema caps at LIMITS.entitiesPageSizeMax, so it cannot return more rows than the (bounded) request enumerated
-      // eslint-disable-next-line require-query-limit/require-query-limit
-      tx.query.entities.findMany({
-        where: {
-          id: { in: body.entityIds },
-          readOnly: { eq: true },
-          workspaceId: { eq: workspaceId },
-        },
-        columns: { id: true },
-      }),
-    ),
-  );
-  if (readOnlyEntities.length > 0) {
-    return Result.err(
-      new HandlerError({ status: 409, message: "Entity is read-only" }),
-    );
-  }
+  const txOutcome = yield* Result.await(
+    safeDb(async (tx) => {
+      // OCR dispatch takes this same entity fence before changing a run to
+      // `running`. Lock the bounded request in deterministic order and retain
+      // the locks through storage cleanup and the database delete: a withdrawn
+      // document can then never begin processing after cleanup has started.
+      const lockedEntities = await tx
+        .select({ id: entities.id, readOnly: entities.readOnly })
+        .from(entities)
+        .where(
+          and(
+            eq(entities.workspaceId, workspaceId),
+            inArray(entities.id, body.entityIds),
+          ),
+        )
+        .orderBy(asc(entities.id))
+        .limit(LIMITS.entitiesPageSizeMax)
+        .for("update");
+      if (lockedEntities.some(({ readOnly }) => readOnly)) {
+        return {
+          status: "rejected" as const,
+          error: new HandlerError({
+            status: 409,
+            message: "Entity is read-only",
+          }),
+        };
+      }
 
-  const fieldRows = yield* Result.await(
-    safeDb((tx) => {
+      const runningOcrRuns = await tx
+        .select({ id: documentProcessingRuns.id })
+        .from(documentProcessingRuns)
+        .where(
+          and(
+            eq(documentProcessingRuns.workspaceId, workspaceId),
+            inArray(documentProcessingRuns.entityId, body.entityIds),
+            eq(documentProcessingRuns.status, "running"),
+          ),
+        )
+        .limit(1);
+      if (runningOcrRuns.at(0)) {
+        return {
+          status: "rejected" as const,
+          error: new HandlerError({
+            status: 409,
+            message: "Wait for document processing to finish before deleting",
+          }),
+        };
+      }
+
       const entityVersionIds = tx
         .select({ id: entityVersions.id })
         .from(entityVersions)
@@ -78,44 +111,36 @@ export const deleteEntitiesHandler = async function* ({
           ),
         );
 
-      return tx
+      const fieldRows = await tx
         .select({ content: fields.content })
         .from(fields)
         .where(inArray(fields.entityVersionId, entityVersionIds));
-    }),
-  );
 
-  const fileRefs = fieldRows.flatMap((row) =>
-    extractFieldFileRefs(row.content),
-  );
-  const unreferencedFileRefs = yield* Result.await(
-    safeDb(
-      async (tx) =>
-        await filterUnreferencedFieldFileRefs({
-          tx,
+      const fileRefs = fieldRows.flatMap((row) =>
+        extractFieldFileRefs(row.content),
+      );
+      const unreferencedFileRefs = await filterUnreferencedFieldFileRefs({
+        tx,
+        workspaceId,
+        fileRows: fileRefs,
+        excludedEntityIds: body.entityIds,
+      });
+
+      // Storage cannot join the database transaction. Holding the entity fence
+      // across this bounded cleanup is deliberate: cleanup failure rolls the
+      // transaction back, while successful cleanup is immediately followed by
+      // the owning-row delete before any OCR dispatch can acquire the fence.
+      Result.unwrap(
+        await deleteS3Objects({
+          fileRows: unreferencedFileRefs,
+          organizationId,
           workspaceId,
-          fileRows: fileRefs,
-          excludedEntityIds: body.entityIds,
         }),
-    ),
-  );
+        "Entity file cleanup must succeed before deleting database records",
+      );
 
-  // Delete S3 objects before the DB delete.
-  // On retry, already-deleted objects are no-ops.
-
-  Result.unwrap(
-    await deleteS3Objects({
-      fileRows: unreferencedFileRefs,
-      organizationId,
-      workspaceId,
-    }),
-    "Entity file cleanup must succeed before deleting database records",
-  );
-
-  // Cascade: entities → entityVersions → fields →
-  // justifications (all cascade).
-  const deletedEntities = yield* Result.await(
-    safeDb(async (tx) => {
+      // Cascade: entities → entityVersions → fields →
+      // justifications (all cascade).
       const deleted = await tx
         .delete(entities)
         .where(
@@ -155,9 +180,13 @@ export const deleteEntitiesHandler = async function* ({
         })),
       );
 
-      return deleted;
+      return { status: "deleted" as const, entities: deleted };
     }),
   );
+  if (txOutcome.status === "rejected") {
+    return Result.err(txOutcome.error);
+  }
+  const deletedEntities = txOutcome.entities;
 
   // Explicit removal for non-PG providers (CASCADE handles PG)
   const provider = getSearchProvider();
