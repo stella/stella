@@ -1,14 +1,18 @@
 import { Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import type { Transaction } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db/safe-db";
 import {
   documentCounters,
   entities,
   entityVersions,
   fields,
+  pendingUploads,
 } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 const s3WriteMock = mock(async () => {});
@@ -19,6 +23,16 @@ const enqueueImageThumbnailOrMarkFailedMock = mock(async () => {});
 const enqueuePdfDerivativeMock = mock(async () => {});
 const enqueuePdfDerivativeOrMarkFailedMock = mock(async () => {});
 const broadcastMock = mock();
+let intentStatuses: string[] = [];
+let staleIntentRows: {
+  declaredMime: string;
+  id: ReturnType<typeof toSafeId<"pendingUpload">>;
+  purposeData: {
+    type: "entity_create";
+    propertyId: typeof propertyId;
+    reservedFileId: string;
+  };
+}[] = [];
 
 void mock.module("@/api/lib/s3", () => ({
   getS3: () => ({
@@ -53,12 +67,78 @@ const userId = toSafeId<"user">("00000000-0000-0000-0000-000000000003");
 const propertyId = toSafeId<"property">("00000000-0000-0000-0000-000000000004");
 const parentId = toSafeId<"entity">("00000000-0000-0000-0000-000000000005");
 
+type IntentPersistenceBase = {
+  [key: string]: unknown;
+  insert?: (table: unknown) => unknown;
+  select?: (selection: unknown) => unknown;
+  update?: (table: unknown) => unknown;
+};
+
+const withIntentPersistence = (base: IntentPersistenceBase) => {
+  const baseSelect = base.select;
+  const baseInsert = base.insert;
+  const baseUpdate = base.update;
+  return {
+    ...base,
+    select: (selection: unknown) => {
+      if (
+        typeof selection === "object" &&
+        selection !== null &&
+        "purposeData" in selection
+      ) {
+        return {
+          from: () => ({
+            where: () => ({
+              limit: () => ({ for: async () => staleIntentRows }),
+            }),
+          }),
+        };
+      }
+      return baseSelect?.(selection);
+    },
+    insert: (table: unknown) => {
+      if (table === pendingUploads) {
+        return {
+          values: (values: { id: string; status?: string }) => {
+            if (values.status) {
+              intentStatuses.push(values.status);
+            }
+            return { returning: async () => [{ id: values.id }] };
+          },
+        };
+      }
+      return baseInsert?.(table);
+    },
+    update: (table: unknown) => {
+      if (table === pendingUploads) {
+        return {
+          set: (values: { status?: string }) => {
+            if (values.status) {
+              intentStatuses.push(values.status);
+            }
+            return {
+              where: () => ({
+                returning: async () => [{ id: "intent_1" }],
+              }),
+            };
+          },
+        };
+      }
+      return baseUpdate?.(table);
+    },
+  };
+};
+
 describe("createEntityFromBuffer", () => {
   beforeEach(() => {
-    s3WriteMock.mockClear();
-    s3DeleteMock.mockClear();
+    s3WriteMock.mockReset();
+    s3WriteMock.mockResolvedValue(undefined);
+    s3DeleteMock.mockReset();
+    s3DeleteMock.mockResolvedValue(undefined);
     processExtractionMock.mockClear();
     broadcastMock.mockClear();
+    intentStatuses = [];
+    staleIntentRows = [];
   });
 
   test("rejects oversized documents before database or object-storage work", async () => {
@@ -142,7 +222,7 @@ describe("createEntityFromBuffer", () => {
         }),
       }),
     };
-    const { scopedDb } = createScopedDbMock(tx);
+    const { scopedDb } = createScopedDbMock(withIntentPersistence(tx));
 
     const recordedAuditEvents: unknown[] = [];
     const result = await createEntityFromBuffer({
@@ -211,7 +291,9 @@ describe("createEntityFromBuffer", () => {
         },
       }),
     };
-    const { getCallCount, scopedDb } = createScopedDbMock(tx);
+    const { getCallCount, scopedDb } = createScopedDbMock(
+      withIntentPersistence(tx),
+    );
     const recordAuditEvent = mock(async () => {});
 
     const result = await createEntityFromBuffer({
@@ -236,7 +318,7 @@ describe("createEntityFromBuffer", () => {
         }),
       );
     }
-    expect(getCallCount()).toBe(2);
+    expect(getCallCount()).toBe(5);
     expect(locks).toEqual(["update"]);
     expect(s3WriteMock).toHaveBeenCalledTimes(1);
     expect(s3DeleteMock).toHaveBeenCalledTimes(1);
@@ -271,7 +353,7 @@ describe("createEntityFromBuffer", () => {
         set: () => ({ where: async () => {} }),
       }),
     };
-    const { scopedDb } = createScopedDbMock(tx);
+    const { scopedDb } = createScopedDbMock(withIntentPersistence(tx));
 
     const attempted = await Result.tryPromise({
       try: async () =>
@@ -298,6 +380,139 @@ describe("createEntityFromBuffer", () => {
       expect(attempted.error.message).toBe("audit failed");
     }
     expect(s3DeleteMock).toHaveBeenCalledTimes(1);
+    expect(processExtractionMock).not.toHaveBeenCalled();
+    expect(broadcastMock).not.toHaveBeenCalled();
+  });
+
+  test("keeps a failed-cleanup intent available for bounded reconciliation", async () => {
+    const tx = {
+      query: {
+        properties: {
+          findMany: async () => [
+            { id: propertyId, content: { type: "file" as const } },
+          ],
+        },
+        workspaces: {
+          findFirst: async () => ({ reference: null }),
+        },
+      },
+      $count: async () => 0,
+      select: createParentSelect({ parentKind: "folder" }),
+      insert: (table: unknown) => ({
+        values: () =>
+          table === documentCounters
+            ? {
+                onConflictDoUpdate: () => ({
+                  returning: async () => [{ lastValue: 1 }],
+                }),
+              }
+            : undefined,
+      }),
+      update: () => ({
+        set: () => ({ where: async () => {} }),
+      }),
+    };
+    const { scopedDb } = createScopedDbMock(withIntentPersistence(tx));
+    s3DeleteMock.mockRejectedValue(new Error("object deletion timed out"));
+
+    const attempted = await Result.tryPromise({
+      try: async () =>
+        await createEntityFromBuffer({
+          scopedDb,
+          organizationId,
+          workspaceId,
+          userId,
+          recordAuditEvent: async () => undefined,
+          buffer: new TextEncoder().encode("docx bytes"),
+          fileName: "Generated Agreement.docx",
+          mimeType:
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          parentId,
+          afterCreate: async () => {
+            throw new Error("audit failed");
+          },
+        }),
+      catch: (cause) => cause,
+    });
+
+    expect(Result.isError(attempted)).toBe(true);
+    if (Result.isError(attempted) && attempted.error instanceof Error) {
+      expect(attempted.error.message).toBe("audit failed");
+    }
+    expect(s3DeleteMock).toHaveBeenCalledTimes(1);
+    expect(intentStatuses).toEqual(["scanning"]);
+    expect(processExtractionMock).not.toHaveBeenCalled();
+  });
+
+  test("preserves bytes when the entity commit acknowledgement is ambiguous", async () => {
+    let nextDocumentSequence = 0;
+    const tx = withIntentPersistence({
+      execute: async () => undefined,
+      query: {
+        properties: {
+          findMany: async () => [
+            { id: propertyId, content: { type: "file" as const } },
+          ],
+        },
+        workspaces: {
+          findFirst: async () => ({ reference: null }),
+        },
+      },
+      $count: async () => 0,
+      select: createParentSelect({ parentKind: "folder" }),
+      insert: (table: unknown) => ({
+        values: () =>
+          table === documentCounters
+            ? {
+                onConflictDoUpdate: () => ({
+                  returning: async () => {
+                    nextDocumentSequence += 1;
+                    return [{ lastValue: nextDocumentSequence }];
+                  },
+                }),
+              }
+            : undefined,
+      }),
+      update: () => ({
+        set: () => ({ where: async () => {} }),
+      }),
+    });
+    const commitError = new Error("connection lost after commit");
+    let callCount = 0;
+    const scopedDb = asTestRaw<ScopedDb>(
+      async <T>(run: (transaction: Transaction) => Promise<T>) => {
+        callCount += 1;
+        const value = await run(asTestRaw<Transaction>(tx));
+        if (callCount === 4) {
+          throw commitError;
+        }
+        return value;
+      },
+    );
+
+    const attempted = await Result.tryPromise({
+      try: async () =>
+        await createEntityFromBuffer({
+          scopedDb,
+          organizationId,
+          workspaceId,
+          userId,
+          recordAuditEvent: async () => undefined,
+          buffer: new TextEncoder().encode("docx bytes"),
+          fileName: "Generated Agreement.docx",
+          mimeType:
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          parentId,
+        }),
+      catch: (cause) => cause,
+    });
+
+    expect(Result.isError(attempted)).toBe(true);
+    if (Result.isError(attempted)) {
+      expect(attempted.error).toBe(commitError);
+    }
+    expect(intentStatuses).toEqual(["scanning", "finalized"]);
+    expect(s3DeleteMock).not.toHaveBeenCalled();
     expect(processExtractionMock).not.toHaveBeenCalled();
     expect(broadcastMock).not.toHaveBeenCalled();
   });
