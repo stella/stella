@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { resolveTemperaturePolicy } from "./model-catalog-capabilities-gen";
+import { resolveTemperaturePolicy } from "./model-catalog-capabilities";
 
 describe("temperature emission policy", () => {
   test("omits deprecated sampling parameters for the Gemini cutoff and future releases", () => {

@@ -214,6 +214,45 @@ describe("validateCapabilities", () => {
     expect(result.failures.at(0)?.label).toBe("UNSAFE TEMPERATURE POLICY");
   });
 
+  test("flags emit after the reviewed Google temperature cutoff", () => {
+    const declaredTemperaturePolicies = {
+      ...DECLARED_TEMPERATURE_POLICIES,
+      "gemini-3.6-flash": "emit",
+      "google/gemini-3.6-flash": "emit",
+    } as const satisfies Record<string, TemperaturePolicy>;
+    const result = validateCapabilities({
+      entries: [
+        { provider: "google", modelId: "gemini-3.6-flash" },
+        { provider: "openrouter", modelId: "google/gemini-3.6-flash" },
+      ],
+      checkableProviders: CHECKABLE,
+      upstream: upstreamOf({
+        "google:gemini-3.6-flash": {
+          releaseDate: "2026-07-21",
+          reasoning: true,
+          effortValues: null,
+          temperature: true,
+        },
+        "openrouter:google/gemini-3.6-flash": {
+          releaseDate: "2026-07-21",
+          reasoning: true,
+          effortValues: null,
+          temperature: true,
+        },
+      }),
+      declaredEfforts: {
+        ...DECLARED_EFFORTS,
+        "gemini-3.6-flash": null,
+        "google/gemini-3.6-flash": null,
+      },
+      declaredTemperaturePolicies,
+    });
+    expect(result.failures.map(({ label }) => label)).toEqual([
+      "UNSAFE TEMPERATURE POLICY",
+      "UNSAFE TEMPERATURE POLICY",
+    ]);
+  });
+
   test("allows omit when upstream still accepts an ignored parameter", () => {
     const result = validateCapabilities({
       entries: [{ provider: "openrouter", modelId: "openai/gpt-5.5" }],

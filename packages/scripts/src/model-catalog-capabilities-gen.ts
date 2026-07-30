@@ -36,7 +36,10 @@ import type {
   TemperaturePolicy,
 } from "@stll/ai-catalog";
 
-import { parseUpstreamCapabilities } from "./model-catalog-capabilities";
+import {
+  parseUpstreamCapabilities,
+  resolveTemperaturePolicy,
+} from "./model-catalog-capabilities";
 import type { UpstreamCapabilities } from "./model-catalog-capabilities";
 
 const OUTPUT_PATH = path.resolve(
@@ -58,8 +61,6 @@ const MODELS_DEV_KEY_BY_PROVIDER: Record<
 };
 
 const REASONING_EFFORT_LADDER: readonly string[] = REASONING_EFFORTS;
-const GEMINI_TEMPERATURE_OMISSION_CUTOFF = "2026-07-21";
-const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
 
 const isReasoningEffort = (value: string): value is ReasoningEffort =>
   REASONING_EFFORT_LADDER.includes(value);
@@ -73,46 +74,6 @@ export type CapabilityRow = {
   efforts: readonly ReasoningEffort[] | null;
   temperaturePolicy: TemperaturePolicy;
   overrideReason: string | null;
-};
-
-type ResolveTemperaturePolicyOptions = {
-  modelId: string;
-  provider: keyof typeof BYOK_MODEL_OPTIONS;
-  releaseDate: string | null;
-  upstreamSupportsTemperature: boolean;
-};
-
-/**
- * Google deprecated sampling parameters for Gemini 3.6 Flash,
- * Gemini 3.5 Flash-Lite, and future Gemini releases. models.dev still
- * reports those parameters as accepted while Google ignores them, so the
- * request policy must be stricter than the upstream acceptance bit.
- *
- * https://ai.google.dev/gemini-api/docs/latest-model
- */
-export const resolveTemperaturePolicy = ({
-  modelId,
-  provider,
-  releaseDate,
-  upstreamSupportsTemperature,
-}: ResolveTemperaturePolicyOptions): TemperaturePolicy => {
-  if (!upstreamSupportsTemperature) {
-    return "omit";
-  }
-
-  const isGoogleModel =
-    provider === "google" ||
-    (provider === "openrouter" && modelId.startsWith("google/gemini-"));
-  if (!isGoogleModel) {
-    return "emit";
-  }
-  if (releaseDate === null || !ISO_DATE_PATTERN.test(releaseDate)) {
-    return panic(
-      `${provider}/${modelId}: Google model lacks a valid release_date; ` +
-        "cannot apply the reviewed temperature policy cutoff",
-    );
-  }
-  return releaseDate >= GEMINI_TEMPERATURE_OMISSION_CUTOFF ? "omit" : "emit";
 };
 
 export type BuildCapabilityRowsOptions = {

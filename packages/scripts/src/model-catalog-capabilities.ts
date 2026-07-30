@@ -24,9 +24,54 @@
  * `shouldEmitTemperature`.
  */
 
+import { panic } from "better-result";
+
 import type { ReasoningEffort, TemperaturePolicy } from "@stll/ai-catalog";
 
 import type { CatalogEntry } from "./model-catalog-rates";
+
+const GEMINI_TEMPERATURE_OMISSION_CUTOFF = "2026-07-21";
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
+
+type ResolveTemperaturePolicyOptions = {
+  modelId: string;
+  provider: string;
+  releaseDate: string | null;
+  upstreamSupportsTemperature: boolean;
+};
+
+/**
+ * Google deprecated sampling parameters for Gemini 3.6 Flash,
+ * Gemini 3.5 Flash-Lite, and future Gemini releases. models.dev still
+ * reports those parameters as accepted while Google ignores them, so the
+ * request policy must be stricter than the upstream acceptance bit.
+ *
+ * https://ai.google.dev/gemini-api/docs/latest-model
+ */
+export const resolveTemperaturePolicy = ({
+  modelId,
+  provider,
+  releaseDate,
+  upstreamSupportsTemperature,
+}: ResolveTemperaturePolicyOptions): TemperaturePolicy => {
+  if (!upstreamSupportsTemperature) {
+    return "omit";
+  }
+
+  const isGoogleModel =
+    provider === "google" ||
+    (provider === "openrouter" && modelId.startsWith("google/gemini-"));
+  if (!isGoogleModel) {
+    return "emit";
+  }
+  if (releaseDate === null || !ISO_DATE_PATTERN.test(releaseDate)) {
+    return panic(
+      `${provider}/${modelId}: Google model lacks a valid release_date; ` +
+        "cannot apply the reviewed temperature policy cutoff",
+    );
+  }
+  return releaseDate >= GEMINI_TEMPERATURE_OMISSION_CUTOFF ? "omit" : "emit";
+};
 
 /** Upstream capability metadata for one model, from models.dev. */
 export type UpstreamCapabilities = {
@@ -198,17 +243,20 @@ export const validateCapabilities = ({
       });
     }
 
-    if (
-      temperaturePolicy === "emit" &&
-      upstreamCapabilities.temperature !== true
-    ) {
+    const expectedTemperaturePolicy = resolveTemperaturePolicy({
+      modelId: entry.modelId,
+      provider: entry.provider,
+      releaseDate: upstreamCapabilities.releaseDate,
+      upstreamSupportsTemperature: upstreamCapabilities.temperature === true,
+    });
+    if (temperaturePolicy === "emit" && expectedTemperaturePolicy === "omit") {
       failures.push({
         entry,
         label: "UNSAFE TEMPERATURE POLICY",
         detail:
-          "declared temperature policy emit but upstream does not publish " +
-          "positive support; a stale declaration may send a sampling " +
-          "override the model rejects",
+          "declared temperature policy emit but the reviewed provider policy " +
+          "requires omission; a stale declaration may send a rejected, " +
+          "deprecated, or ignored sampling override",
       });
     }
   }
