@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { Queue, Worker } from "bullmq";
-import { and, asc, eq, inArray, lt, or, sql } from "drizzle-orm";
+import { and, asc, eq, lt, lte, or, sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
 import { entityDeletionCleanupRequests } from "@/api/db/schema";
@@ -20,7 +20,8 @@ const WORKER_CONCURRENCY = 2;
 const RECONCILE_INTERVAL_MS = 60_000;
 const STALE_PROCESSING_MS = 15 * 60_000;
 const RECONCILE_BATCH_SIZE = 50;
-const MAX_RECONCILED_ATTEMPTS = 20;
+const RETRY_BASE_DELAY_MS = 60_000;
+const RETRY_MAX_DELAY_MS = 24 * 60 * 60_000;
 
 type EntityDeletionCleanupJobData = {
   requestId: SafeId<"entityDeletionCleanupRequest">;
@@ -66,7 +67,19 @@ const getQueue = (): Queue<EntityDeletionCleanupJobData> => {
 
 export const enqueueEntityDeletionCleanup = async (
   requestId: SafeId<"entityDeletionCleanupRequest">,
+  status?: (typeof entityDeletionCleanupRequests.$inferSelect)["status"],
 ): Promise<void> => {
+  const durableStatus =
+    status ??
+    (await rootDb
+      .select({ status: entityDeletionCleanupRequests.status })
+      .from(entityDeletionCleanupRequests)
+      .where(eq(entityDeletionCleanupRequests.id, requestId))
+      .limit(1)
+      .then((rows) => rows.at(0)?.status));
+  if (!durableStatus || durableStatus === "completed") {
+    return;
+  }
   await enqueueEntityDeletionCleanupJob({
     cleanupQueue: getQueue(),
     requestId,
@@ -84,8 +97,10 @@ export const enqueueEntityDeletionCleanupJob = async ({
   const existingJob = await cleanupQueue.getJob(jobId);
   if (existingJob) {
     const state = await existingJob.getState();
-    if (state === "failed") {
+    if (state === "failed" || state === "completed") {
       await existingJob.remove();
+    } else {
+      return;
     }
   }
 
@@ -115,12 +130,14 @@ export const processEntityDeletionCleanupRequest = async (
     return;
   }
 
-  const staleBefore = new Date(Date.now() - STALE_PROCESSING_MS);
+  const now = new Date();
+  const staleBefore = new Date(now.getTime() - STALE_PROCESSING_MS);
   const claimed = await deps.rootDb
     .update(entityDeletionCleanupRequests)
     .set({
       attemptCount: sql`${entityDeletionCleanupRequests.attemptCount} + 1`,
       errorMessage: null,
+      nextAttemptAt: null,
       status: "processing",
       updatedAt: new Date(),
     })
@@ -128,7 +145,11 @@ export const processEntityDeletionCleanupRequest = async (
       and(
         eq(entityDeletionCleanupRequests.id, requestId),
         or(
-          inArray(entityDeletionCleanupRequests.status, ["pending", "failed"]),
+          eq(entityDeletionCleanupRequests.status, "pending"),
+          and(
+            eq(entityDeletionCleanupRequests.status, "failed"),
+            lte(entityDeletionCleanupRequests.nextAttemptAt, now),
+          ),
           and(
             eq(entityDeletionCleanupRequests.status, "processing"),
             lt(entityDeletionCleanupRequests.updatedAt, staleBefore),
@@ -147,12 +168,17 @@ export const processEntityDeletionCleanupRequest = async (
 
   const deleteResult = await deps.deleteS3Keys(claim.s3Keys);
   if (Result.isError(deleteResult)) {
+    const failedAt = new Date();
     await deps.rootDb
       .update(entityDeletionCleanupRequests)
       .set({
         errorMessage: deleteResult.error.message,
+        nextAttemptAt: getEntityDeletionCleanupRetryAt({
+          attemptCount: claim.attemptCount,
+          now: failedAt,
+        }),
         status: "failed",
-        updatedAt: new Date(),
+        updatedAt: failedAt,
       })
       .where(
         and(
@@ -169,6 +195,7 @@ export const processEntityDeletionCleanupRequest = async (
     .set({
       completedAt: new Date(),
       errorMessage: null,
+      nextAttemptAt: null,
       status: "completed",
       updatedAt: new Date(),
     })
@@ -181,37 +208,79 @@ export const processEntityDeletionCleanupRequest = async (
     );
 };
 
+export const getEntityDeletionCleanupRetryAt = ({
+  attemptCount,
+  now,
+}: {
+  attemptCount: number;
+  now: Date;
+}): Date => {
+  const exponent = Math.min(Math.max(attemptCount - 1, 0), 30);
+  const delayMs = Math.min(
+    RETRY_BASE_DELAY_MS * 2 ** exponent,
+    RETRY_MAX_DELAY_MS,
+  );
+  return new Date(now.getTime() + delayMs);
+};
+
 export const enqueuePendingEntityDeletionCleanupRequests =
   async (): Promise<number> => {
+    const now = new Date();
     const staleBefore = new Date(Date.now() - STALE_PROCESSING_MS);
-    const rows = await rootDb
+    const pendingRows = await rootDb
+      .select({ id: entityDeletionCleanupRequests.id })
+      .from(entityDeletionCleanupRequests)
+      .where(eq(entityDeletionCleanupRequests.status, "pending"))
+      .orderBy(
+        asc(entityDeletionCleanupRequests.createdAt),
+        asc(entityDeletionCleanupRequests.id),
+      )
+      .limit(RECONCILE_BATCH_SIZE);
+    const failedRows = await rootDb
       .select({ id: entityDeletionCleanupRequests.id })
       .from(entityDeletionCleanupRequests)
       .where(
         and(
-          lt(
-            entityDeletionCleanupRequests.attemptCount,
-            MAX_RECONCILED_ATTEMPTS,
-          ),
-          or(
-            inArray(entityDeletionCleanupRequests.status, [
-              "pending",
-              "failed",
-            ]),
-            and(
-              eq(entityDeletionCleanupRequests.status, "processing"),
-              lt(entityDeletionCleanupRequests.updatedAt, staleBefore),
-            ),
-          ),
+          eq(entityDeletionCleanupRequests.status, "failed"),
+          lte(entityDeletionCleanupRequests.nextAttemptAt, now),
         ),
       )
-      .orderBy(asc(entityDeletionCleanupRequests.createdAt))
+      .orderBy(
+        asc(entityDeletionCleanupRequests.nextAttemptAt),
+        asc(entityDeletionCleanupRequests.id),
+      )
+      .limit(RECONCILE_BATCH_SIZE);
+    const staleRows = await rootDb
+      .select({ id: entityDeletionCleanupRequests.id })
+      .from(entityDeletionCleanupRequests)
+      .where(
+        and(
+          eq(entityDeletionCleanupRequests.status, "processing"),
+          lt(entityDeletionCleanupRequests.updatedAt, staleBefore),
+        ),
+      )
+      .orderBy(
+        asc(entityDeletionCleanupRequests.updatedAt),
+        asc(entityDeletionCleanupRequests.id),
+      )
       .limit(RECONCILE_BATCH_SIZE);
 
     await Promise.all(
-      rows.map(async (row) => await enqueueEntityDeletionCleanup(row.id)),
+      pendingRows.map(
+        async (row) => await enqueueEntityDeletionCleanup(row.id, "pending"),
+      ),
     );
-    return rows.length;
+    await Promise.all(
+      failedRows.map(
+        async (row) => await enqueueEntityDeletionCleanup(row.id, "failed"),
+      ),
+    );
+    await Promise.all(
+      staleRows.map(
+        async (row) => await enqueueEntityDeletionCleanup(row.id, "processing"),
+      ),
+    );
+    return pendingRows.length + failedRows.length + staleRows.length;
   };
 
 export const initEntityDeletionCleanupWorker = () => {

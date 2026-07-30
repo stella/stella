@@ -199,6 +199,7 @@ export const entityDeletionCleanupRequests = p.pgTable(
       .default("pending"),
     attemptCount: p.integer("attempt_count").notNull().default(0),
     errorMessage: p.text("error_message"),
+    nextAttemptAt: timestamptz("next_attempt_at"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at")
       .notNull()
@@ -208,8 +209,17 @@ export const entityDeletionCleanupRequests = p.pgTable(
   },
   (table) => [
     p
-      .index("entity_deletion_cleanup_status_created_idx")
-      .on(table.status, table.createdAt, table.id),
+      .index("entity_deletion_cleanup_pending_schedule_idx")
+      .on(table.createdAt, table.id)
+      .where(sql`${table.status} = 'pending'`),
+    p
+      .index("entity_deletion_cleanup_failed_schedule_idx")
+      .on(table.nextAttemptAt, table.id)
+      .where(sql`${table.status} = 'failed'`),
+    p
+      .index("entity_deletion_cleanup_processing_lease_idx")
+      .on(table.updatedAt, table.id)
+      .where(sql`${table.status} = 'processing'`),
     p.check(
       "entity_deletion_cleanup_status_values_check",
       sql`${table.status} IN ('pending', 'processing', 'completed', 'failed')`,

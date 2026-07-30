@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getRouteApi, useNavigate } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { Result } from "better-result";
 import {
   ArchiveIcon,
@@ -71,7 +71,6 @@ import type {
 } from "@/lib/types";
 import { isFileDisplayable } from "@/lib/types";
 import { downloadFile } from "@/lib/utils";
-import { documentOcrAvailabilityOptions } from "@/queries/document-ocr-availability";
 import {
   CellLockMenuItem,
   CellMetadataMenuSection,
@@ -82,12 +81,14 @@ import {
   resolveAncestorIds,
   type CopyToMatterEntity,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog.logic";
+import { useDocumentOcrAvailability } from "@/routes/_protected.workspaces/$workspaceId/-components/document-ocr-availability";
 import { getExtension } from "@/routes/_protected.workspaces/$workspaceId/-components/file-extension";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { requestManualOcr } from "@/routes/_protected.workspaces/$workspaceId/-components/request-manual-ocr";
 import {
   getDesktopEditLockState,
   getPdfDownloadFileName,
+  type OcrSource,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions.logic";
 import type { TableTreeNode } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 import { useEntitiesCountLimit } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-limits";
@@ -110,10 +111,9 @@ export type VirtualAnchor = {
   getBoundingClientRect: () => DOMRect;
 };
 
-const protectedRouteApi = getRouteApi("/_protected");
-
 type RowActionsProps = {
   entity: WorkspaceEntity;
+  ocrSource?: OcrSource | undefined;
   workspaceId: string;
   open?: boolean | undefined;
   onOpenChange?: ((open: boolean) => void) | undefined;
@@ -151,6 +151,7 @@ export const RowActions = ({
   selectedEntities,
   getAncestorIds,
   cellMetadataTarget,
+  ocrSource,
 }: RowActionsProps) => {
   const t = useTranslations();
   const analytics = useAnalytics();
@@ -172,22 +173,14 @@ export const RowActions = ({
   const name = getEntityName(entity);
   const isFolder = entity.kind === "folder";
   const isBulk = selectedEntities !== undefined && selectedEntities.length > 1;
-  const activeOrganizationId = protectedRouteApi.useRouteContext({
-    select: (context) => context.user.activeOrganizationId,
-  });
+  const documentOcrAvailable = useDocumentOcrAvailability();
   const ocrSourceEligible =
     !isBulk &&
     !isFolder &&
     !entity.readOnly &&
-    file !== null &&
-    !file.encrypted &&
-    file.mimeType === PDF_MIME_TYPE;
-  const { data: documentOcrAvailability } = useQuery({
-    ...documentOcrAvailabilityOptions({
-      organizationId: activeOrganizationId,
-    }),
-    enabled: ocrSourceEligible,
-  });
+    ocrSource !== undefined &&
+    !ocrSource.encrypted &&
+    ocrSource.mimeType === PDF_MIME_TYPE;
   const bulkTargets = isBulk ? selectedEntities : [entity];
   const isCellContext =
     !isBulk && cellMetadataTarget !== null && cellMetadataTarget !== undefined;
@@ -608,7 +601,7 @@ export const RowActions = ({
   };
 
   const handleRunOcr = async () => {
-    if (!file || isOcrPending) {
+    if (!ocrSource || isOcrPending) {
       return;
     }
 
@@ -616,7 +609,7 @@ export const RowActions = ({
     try {
       const { outcome } = await requestManualOcr({
         entityId: entity.entityId,
-        fieldId: file.fieldId,
+        fieldId: ocrSource.fieldId,
         workspaceId,
       });
       await queryClient.invalidateQueries({
@@ -653,8 +646,7 @@ export const RowActions = ({
   // Show "Upload new version" for non-folder, non-bulk entities with a file
   const canUploadVersion =
     !isBulk && !isFolder && !entity.readOnly && file !== null;
-  const canRunOcr =
-    ocrSourceEligible && documentOcrAvailability?.available === true;
+  const canRunOcr = ocrSourceEligible && documentOcrAvailable;
   // Extension-based filter for the OS file picker. Browser-reported MIME
   // strings vary across platforms for the same extension; matching by
   // extension is consistent across Chrome, Safari, Firefox, and Edge.

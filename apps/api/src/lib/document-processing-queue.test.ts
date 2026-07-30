@@ -7,11 +7,15 @@ import {
   classifyOcrProjectionSource,
   isAutomaticOcrRepairCandidate,
   isCurrentOcrSource,
+  isRepairProjectionPresent,
   isReversibleAutomaticOcrCancellation,
   isRetryableAutomaticOcrFailure,
   isRetryableSearchIndexFailure,
+  mapWithConcurrency,
   revivableAutomaticOcrCancellationCodes,
   requiresOcrPolicy,
+  shouldFailStaleAutomaticOcrRun,
+  shouldPreserveMatchingProjection,
 } from "@/api/lib/document-processing-queue";
 
 const fileContent = {
@@ -169,6 +173,85 @@ describe("revivableAutomaticOcrCancellationCodes", () => {
         hasLockedExactSource: true,
       }),
     ).toContain("source_superseded");
+  });
+});
+
+describe("repair projection compatibility", () => {
+  test("keeps all-null legacy text but rejects partial provenance", () => {
+    expect(
+      isRepairProjectionPresent({
+        provenance: {
+          sourceEntityVersionId: null,
+          sourceFieldId: null,
+          sourceFileId: null,
+          sourceSha256Hex: null,
+        },
+        source: run,
+      }),
+    ).toBe(true);
+    expect(
+      isRepairProjectionPresent({
+        provenance: {
+          sourceEntityVersionId: null,
+          sourceFieldId: null,
+          sourceFileId: fileContent.id,
+          sourceSha256Hex: null,
+        },
+        source: run,
+      }),
+    ).toBe(false);
+  });
+
+  test("preserves a matching projection only for automatic OCR", () => {
+    expect(shouldPreserveMatchingProjection("upload")).toBe(true);
+    expect(shouldPreserveMatchingProjection("repair")).toBe(true);
+    expect(shouldPreserveMatchingProjection("manual")).toBe(false);
+  });
+});
+
+describe("bounded search-index replay", () => {
+  test("does not execute more than its concurrency limit", async () => {
+    let active = 0;
+    let peakActive = 0;
+    const values = await mapWithConcurrency({
+      items: [1, 2, 3, 4, 5],
+      limit: 2,
+      operation: async (value) => {
+        active += 1;
+        peakActive = Math.max(peakActive, active);
+        await Promise.resolve();
+        active -= 1;
+        return value;
+      },
+    });
+    expect(values).toEqual([1, 2, 3, 4, 5]);
+    expect(peakActive).toBe(2);
+  });
+});
+
+describe("stale OCR lease recovery", () => {
+  test("terminates capped automatic OCR but leaves manual and index replay claims recoverable", () => {
+    expect(
+      shouldFailStaleAutomaticOcrRun({
+        attemptCount: 5,
+        errorCode: null,
+        requestSource: "upload",
+      }),
+    ).toBe(true);
+    expect(
+      shouldFailStaleAutomaticOcrRun({
+        attemptCount: 5,
+        errorCode: null,
+        requestSource: "manual",
+      }),
+    ).toBe(false);
+    expect(
+      shouldFailStaleAutomaticOcrRun({
+        attemptCount: 5,
+        errorCode: "search_index_failed",
+        requestSource: "repair",
+      }),
+    ).toBe(false);
   });
 });
 

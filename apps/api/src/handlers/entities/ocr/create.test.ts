@@ -33,6 +33,17 @@ const workspaceId = toSafeId<"workspace">("workspace_test");
 const userId = toSafeId<"user">("user_test");
 const runId =
   asTestRaw<(typeof documentProcessingRuns.$inferSelect)["id"]>("run_test");
+const sourceFileContent = {
+  encrypted: false,
+  fileName: "scan.pdf",
+  id: "00000000-0000-4000-8000-000000000001",
+  mimeType: PDF_MIME_TYPE,
+  pdfFileId: null,
+  sha256Hex: "a".repeat(64),
+  sizeBytes: 123,
+  type: "file" as const,
+  version: 1 as const,
+};
 
 const createSafeDb =
   (content: unknown): SafeDb =>
@@ -242,6 +253,15 @@ describe("requestManualOcrHandler", () => {
               }),
             };
           }
+          if (selectCount === 3) {
+            return {
+              from: () => ({
+                where: () => ({
+                  limit: async () => [{ content: sourceFileContent }],
+                }),
+              }),
+            };
+          }
           return {
             from: () => ({
               where: () => ({
@@ -326,6 +346,15 @@ describe("requestManualOcrHandler", () => {
               from: () => ({
                 where: () => ({
                   limit: () => ({ for: async () => [{ id: entityId }] }),
+                }),
+              }),
+            };
+          }
+          if (selectCount === 3) {
+            return {
+              from: () => ({
+                where: () => ({
+                  limit: async () => [{ content: sourceFileContent }],
                 }),
               }),
             };
@@ -418,6 +447,15 @@ describe("requestManualOcrHandler", () => {
             return {
               from: () => ({
                 where: () => ({
+                  limit: async () => [{ content: sourceFileContent }],
+                }),
+              }),
+            };
+          }
+          if (selectCount === 4) {
+            return {
+              from: () => ({
+                where: () => ({
                   limit: () => ({
                     for: async () => [
                       {
@@ -490,6 +528,65 @@ describe("requestManualOcrHandler", () => {
       );
     },
   );
+
+  test("rejects a field changed after initial validation", async () => {
+    let selectCount = 0;
+    const insert = mock(() => ({
+      values: () => ({
+        onConflictDoNothing: () => ({ returning: async () => [] }),
+      }),
+    }));
+    const tx = asTestRaw<Transaction>({
+      insert,
+      select: () => {
+        selectCount += 1;
+        if (selectCount <= 2) {
+          return {
+            from: () => ({
+              where: () => ({
+                limit: () => ({ for: async () => [{ id: entityId }] }),
+              }),
+            }),
+          };
+        }
+        return {
+          from: () => ({
+            where: () => ({
+              limit: async () => [
+                {
+                  content: {
+                    ...sourceFileContent,
+                    sha256Hex: "b".repeat(64),
+                  },
+                },
+              ],
+            }),
+          }),
+        };
+      },
+    });
+    rootTransactionMock.mockImplementationOnce(
+      async (operation: (transaction: Transaction) => Promise<unknown>) =>
+        await operation(tx),
+    );
+
+    const run = await persistManualOcrRun({
+      organizationId,
+      recordAuditEvent,
+      source: {
+        entityId,
+        entityVersionId,
+        fieldId,
+        sourceFileId: sourceFileContent.id,
+        sourceSha256Hex: sourceFileContent.sha256Hex,
+      },
+      userId,
+      workspaceId,
+    });
+
+    expect(run).toBeNull();
+    expect(insert).not.toHaveBeenCalled();
+  });
 
   test("locks the source only while its workspace is active", async () => {
     let selectCount = 0;

@@ -61,8 +61,11 @@ const rootDbMock = {
   })),
 };
 
-const { processEntityDeletionCleanupRequest } =
-  await import("./entity-deletion-cleanup-queue");
+const {
+  enqueueEntityDeletionCleanupJob,
+  getEntityDeletionCleanupRetryAt,
+  processEntityDeletionCleanupRequest,
+} = await import("./entity-deletion-cleanup-queue");
 const queueSource = await Bun.file(
   new URL("entity-deletion-cleanup-queue.ts", import.meta.url),
 ).text();
@@ -88,7 +91,7 @@ describe("entity deletion cleanup queue", () => {
     deleteS3KeysMock.mockImplementation(async () => Result.ok());
   });
 
-  test("retries the committed cleanup record after a storage failure", async () => {
+  test("records a failed cleanup attempt for durable recovery", async () => {
     deleteS3KeysMock.mockImplementationOnce(async () =>
       Result.err(new Error("storage unavailable")),
     );
@@ -103,16 +106,9 @@ describe("entity deletion cleanup queue", () => {
     expect(rejection).toMatchObject({ message: "storage unavailable" });
     expect(requestRow?.status).toBe("failed");
 
-    await processEntityDeletionCleanupRequest(requestId, cleanupDeps);
-
-    expect(deleteS3KeysMock).toHaveBeenCalledTimes(2);
-    expect(statuses).toEqual([
-      "processing",
-      "failed",
-      "processing",
-      "completed",
-    ]);
-    expect(requestRow?.status).toBe("completed");
+    expect(deleteS3KeysMock).toHaveBeenCalledTimes(1);
+    expect(statuses).toEqual(["processing", "failed"]);
+    expect(requestRow?.status).toBe("failed");
   });
 
   test("fences a stale claim from overwriting its successor", () => {
@@ -130,5 +126,52 @@ describe("entity deletion cleanup queue", () => {
     expect(claim).toBeGreaterThan(-1);
     expect(firstFinalization).toBeGreaterThan(claim);
     expect(secondFinalization).toBeGreaterThan(firstFinalization);
+  });
+
+  test("replaces a completed queue job for nonterminal durable cleanup", async () => {
+    const add = mock(async () => undefined);
+    const remove = mock(async () => undefined);
+    const cleanupQueue = asTestRaw<
+      Parameters<typeof enqueueEntityDeletionCleanupJob>[0]["cleanupQueue"]
+    >({
+      add,
+      getJob: mock(async () => ({
+        getState: mock(async () => "completed"),
+        remove,
+      })),
+    });
+
+    await enqueueEntityDeletionCleanupJob({ cleanupQueue, requestId });
+
+    expect(remove).toHaveBeenCalledTimes(1);
+    expect(add).toHaveBeenCalledTimes(1);
+  });
+
+  test("keeps failed cleanup recoverable with capped durable backoff", () => {
+    const now = new Date("2026-07-30T12:00:00.000Z");
+    const firstRetry = getEntityDeletionCleanupRetryAt({
+      attemptCount: 1,
+      now,
+    });
+    const eventualRetry = getEntityDeletionCleanupRetryAt({
+      attemptCount: 100,
+      now,
+    });
+
+    expect(firstRetry).toEqual(new Date("2026-07-30T12:01:00.000Z"));
+    expect(eventualRetry).toEqual(new Date("2026-07-31T12:00:00.000Z"));
+  });
+
+  test("scans each recovery state through its matching bounded schedule", () => {
+    expect(queueSource).not.toContain("MAX_RECONCILED_ATTEMPTS");
+    expect(queueSource).toContain(
+      'eq(entityDeletionCleanupRequests.status, "pending")',
+    );
+    expect(queueSource).toContain(
+      "lte(entityDeletionCleanupRequests.nextAttemptAt, now)",
+    );
+    expect(queueSource).toContain(
+      "lt(entityDeletionCleanupRequests.updatedAt, staleBefore)",
+    );
   });
 });

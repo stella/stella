@@ -1,6 +1,7 @@
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import {
   createFileRoute,
+  getRouteApi,
   Outlet,
   redirect,
   useMatches,
@@ -21,6 +22,7 @@ import {
 } from "@/lib/react-query";
 import { optionalSearchStringSchema } from "@/lib/schema";
 import type { ViewLayout, WorkspaceView } from "@/lib/types";
+import { DocumentOcrAvailabilityProvider } from "@/routes/_protected.workspaces/$workspaceId/-components/document-ocr-availability";
 import { ViewSwitcher } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher";
 import { ViewToolbar } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar";
 import {
@@ -40,6 +42,8 @@ import {
   toISODate,
 } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 import { overviewOptions } from "@/routes/_protected.workspaces/-queries";
+
+const protectedRouteApi = getRouteApi("/_protected");
 
 // v.object: validateSearch receives the full URL search params
 // including params from child routes; strictObject would reject them.
@@ -289,6 +293,9 @@ function VisibleFieldEntityViewContent({
 
 function ViewShell({ activeView, workspaceId }: ViewContentProps) {
   const navigate = Route.useNavigate();
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (context) => context.user.activeOrganizationId,
+  });
   const matches = useMatches();
   const isOnPdfRoute = matches.some((m) => m.fullPath.endsWith("/document"));
 
@@ -299,40 +306,42 @@ function ViewShell({ activeView, workspaceId }: ViewContentProps) {
   }
 
   return (
-    <>
-      <div className="flex min-w-0 flex-col border-b md:flex-row md:items-center md:justify-between">
-        <div
-          className={cn(
-            "flex min-w-0 items-center",
-            TOOLBAR_ROW_HEIGHT,
-            activeView.layout.type !== "overview" && "border-b md:border-b-0",
+    <DocumentOcrAvailabilityProvider organizationId={activeOrganizationId}>
+      <>
+        <div className="flex min-w-0 flex-col border-b md:flex-row md:items-center md:justify-between">
+          <div
+            className={cn(
+              "flex min-w-0 items-center",
+              TOOLBAR_ROW_HEIGHT,
+              activeView.layout.type !== "overview" && "border-b md:border-b-0",
+            )}
+          >
+            <ViewSwitcher
+              activeViewId={activeView.id}
+              onViewChange={(viewId) => {
+                detached(
+                  navigate({
+                    to: "/workspaces/$workspaceId/$viewId",
+                    params: { workspaceId, viewId },
+                    search: { page: undefined },
+                  }),
+                  "ViewShell",
+                );
+              }}
+              workspaceId={workspaceId}
+            />
+          </div>
+          {activeView.layout.type !== "overview" && (
+            <ViewToolbar view={activeView} workspaceId={workspaceId} />
           )}
-        >
-          <ViewSwitcher
-            activeViewId={activeView.id}
-            onViewChange={(viewId) => {
-              detached(
-                navigate({
-                  to: "/workspaces/$workspaceId/$viewId",
-                  params: { workspaceId, viewId },
-                  search: { page: undefined },
-                }),
-                "ViewShell",
-              );
-            }}
-            workspaceId={workspaceId}
-          />
         </div>
-        {activeView.layout.type !== "overview" && (
-          <ViewToolbar view={activeView} workspaceId={workspaceId} />
-        )}
-      </div>
-      <div className="flex min-h-0 flex-1 flex-col">
-        <div className="flex-1 overflow-auto">
-          <Outlet />
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="flex-1 overflow-auto">
+            <Outlet />
+          </div>
         </div>
-      </div>
-    </>
+      </>
+    </DocumentOcrAvailabilityProvider>
   );
 }
 

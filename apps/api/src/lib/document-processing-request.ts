@@ -5,6 +5,7 @@ import {
   documentProcessingRuns,
   entities,
   extractedContent,
+  fields,
   workspaces,
 } from "@/api/db/schema";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -75,6 +76,25 @@ export const persistManualOcrRun = async ({
       .limit(1)
       .for("update");
     if (!workspaceRows.at(0)) {
+      return null;
+    }
+    const sourceFieldRows = await tx
+      .select({ content: fields.content })
+      .from(fields)
+      .where(
+        and(
+          eq(fields.id, source.fieldId),
+          eq(fields.workspaceId, workspaceId),
+          eq(fields.entityVersionId, source.entityVersionId),
+        ),
+      )
+      .limit(1);
+    const sourceField = sourceFieldRows.at(0);
+    if (
+      sourceField?.content.type !== "file" ||
+      sourceField.content.id !== source.sourceFileId ||
+      sourceField.content.sha256Hex !== source.sourceSha256Hex
+    ) {
       return null;
     }
 

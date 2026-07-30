@@ -9,6 +9,7 @@ CREATE TABLE "entity_deletion_cleanup_requests" (
   "status" text DEFAULT 'pending' NOT NULL,
   "attempt_count" integer DEFAULT 0 NOT NULL,
   "error_message" text,
+  "next_attempt_at" timestamptz,
   "created_at" timestamptz DEFAULT now() NOT NULL,
   "updated_at" timestamptz DEFAULT now() NOT NULL,
   "completed_at" timestamptz,
@@ -18,8 +19,17 @@ CREATE TABLE "entity_deletion_cleanup_requests" (
     CHECK ("attempt_count" >= 0)
 );
 --> statement-breakpoint
-CREATE INDEX "entity_deletion_cleanup_status_created_idx"
-  ON "entity_deletion_cleanup_requests" ("status", "created_at", "id");
+CREATE INDEX "entity_deletion_cleanup_pending_schedule_idx"
+  ON "entity_deletion_cleanup_requests" ("created_at", "id")
+  WHERE "status" = 'pending';
+--> statement-breakpoint
+CREATE INDEX "entity_deletion_cleanup_failed_schedule_idx"
+  ON "entity_deletion_cleanup_requests" ("next_attempt_at", "id")
+  WHERE "status" = 'failed';
+--> statement-breakpoint
+CREATE INDEX "entity_deletion_cleanup_processing_lease_idx"
+  ON "entity_deletion_cleanup_requests" ("updated_at", "id")
+  WHERE "status" = 'processing';
 --> statement-breakpoint
 -- Cleanup rows contain storage keys and are only read/transitioned by rootDb
 -- workers. Scoped requests may insert one only for their active tenant.

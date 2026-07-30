@@ -21,6 +21,14 @@ describe("document OCR worker readiness", () => {
     );
   });
 
+  test("bounds readiness reads", async () => {
+    const neverResolves = new Promise<string | null>(() => undefined);
+
+    await expect(
+      readDocumentOcrWorkerAvailability(async () => await neverResolves, 5),
+    ).rejects.toThrow("document OCR readiness read exceeded 5ms");
+  });
+
   test("publishes an expiring lease atomically", async () => {
     const writeLease = mock(
       async (_key: string, _value: string, _ttlSeconds: number) => "OK",
@@ -33,5 +41,13 @@ describe("document OCR worker readiness", () => {
       "ready",
       90,
     );
+  });
+
+  test("bounds readiness heartbeats", async () => {
+    const neverResolves = new Promise<unknown>(() => undefined);
+
+    await expect(
+      refreshDocumentOcrWorkerReadiness(async () => await neverResolves, 5),
+    ).rejects.toThrow("document OCR readiness heartbeat exceeded 5ms");
   });
 });

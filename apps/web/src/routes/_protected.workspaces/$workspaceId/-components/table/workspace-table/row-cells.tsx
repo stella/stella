@@ -28,6 +28,7 @@ import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-compone
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { RowActions } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
 import type { VirtualAnchor } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
+import { getOcrSource } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions.logic";
 import type {
   TableCell,
   TableColumn,
@@ -335,6 +336,12 @@ export const DraggableRow = ({
     <RowActions
       anchor={contextAnchor}
       entity={entity}
+      ocrSource={
+        getOcrSource({
+          fields: entity.fields,
+          propertyId: contextPropertyId,
+        }) ?? undefined
+      }
       onOpenChange={(open) => {
         if (open) {
           setBulkEntities(getBulkSelectedEntities());
