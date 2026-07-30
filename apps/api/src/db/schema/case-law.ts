@@ -202,6 +202,10 @@ export const caseLawDecisions = p.pgTable(
       .where(
         sql`${t.contentHash} is not null and ${t.indexedGeneration} is null`,
       ),
+    p
+      .index("case_law_decisions_citation_key_idx")
+      .on(t.citationKey)
+      .where(isNotNull(t.citationKey)),
     // Deferred-document queue, priority tier: decisions a reader asked
     // for, oldest request first. Partial on the pending predicate, so
     // the index stays proportional to the queue, not to the corpus.
@@ -262,6 +266,12 @@ export const caseLawCitations = p.pgTable(
       .index("case_law_citations_polarity_null_idx")
       .on(t.polarity)
       .where(isNull(t.polarity)),
+    p
+      .index("case_law_citations_unresolved_key_idx")
+      .on(t.citationKey)
+      .where(
+        sql`${t.citedDecisionId} is null and ${t.citationKey} is not null`,
+      ),
     p.check(
       "citations_polarity_values",
       sql`${t.polarity} IN ('positive','supportive','neutral','negative','unknown')`,

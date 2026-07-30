@@ -14,6 +14,7 @@ import {
 } from "@/api/db/schema";
 import { resolveCitationBatch } from "@/api/handlers/case-law/citation-resolution";
 import { createSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import {
   createSchemaPglite,
   installPgliteSchemaPrerequisites,
@@ -196,7 +197,9 @@ afterAll(async () => {
   await client.close();
 });
 
-const citedIdOf = async (id: string): Promise<string | null> => {
+const citedIdOf = async (
+  id: SafeId<"caseLawCitation">,
+): Promise<string | null> => {
   const rows = await db
     .select({ cited: caseLawCitations.citedDecisionId })
     .from(caseLawCitations)
