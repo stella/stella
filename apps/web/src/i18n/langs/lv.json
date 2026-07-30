@@ -3204,6 +3204,7 @@
       "downloadOriginal": "Oriģinālais fails",
       "downloadPdf": "PDF",
       "maxEntitiesReached": "Sasniegts maksimālais ierakstu skaits",
+      "ocrAlreadyProcessed": "Teksta atpazīšana jau ir pabeigta",
       "ocrQueueFailed": "Neizdevās ievietot teksta atpazīšanu rindā",
       "ocrQueued": "Teksta atpazīšana ievietota rindā",
       "rateLimited": "Ātruma ierobežojums; atsākšana pēc {seconds, number} s",

@@ -3204,6 +3204,7 @@
       "downloadOriginal": "Originaldatei",
       "downloadPdf": "PDF",
       "maxEntitiesReached": "Maximale Anzahl an Entitäten erreicht",
+      "ocrAlreadyProcessed": "Texterkennung wurde bereits abgeschlossen",
       "ocrQueueFailed": "Texterkennung konnte nicht in die Warteschlange gestellt werden",
       "ocrQueued": "Texterkennung in Warteschlange gestellt",
       "rateLimited": "Ratenlimit erreicht; Wiederaufnahme in {seconds, number} s",

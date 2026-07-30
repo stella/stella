@@ -3204,6 +3204,7 @@
       "downloadOriginal": "Pôvodný súbor",
       "downloadPdf": "PDF",
       "maxEntitiesReached": "Dosiahnutý maximálny počet entít",
+      "ocrAlreadyProcessed": "Rozpoznávanie textu už bolo dokončené",
       "ocrQueueFailed": "Rozpoznávanie textu sa nepodarilo zaradiť do fronty",
       "ocrQueued": "Rozpoznávanie textu zaradené do fronty",
       "rateLimited": "Obmedzenie rýchlosti; pokračovanie za {seconds, number} s",

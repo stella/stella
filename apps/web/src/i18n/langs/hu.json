@@ -3204,6 +3204,7 @@
       "downloadOriginal": "Eredeti fájl",
       "downloadPdf": "PDF",
       "maxEntitiesReached": "Elérte a maximális entitásszámot",
+      "ocrAlreadyProcessed": "A szövegfelismerés már befejeződött",
       "ocrQueueFailed": "A szövegfelismerést nem sikerült várólistára tenni",
       "ocrQueued": "A szövegfelismerés várólistára került",
       "rateLimited": "Sebességkorlát; folytatás {seconds, number} mp múlva",

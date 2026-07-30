@@ -3204,6 +3204,7 @@
       "downloadOriginal": "Arquivo original",
       "downloadPdf": "PDF",
       "maxEntitiesReached": "Contagem máxima de entidades atingida",
+      "ocrAlreadyProcessed": "O reconhecimento de texto já foi concluído",
       "ocrQueueFailed": "Não foi possível colocar o reconhecimento de texto na fila",
       "ocrQueued": "Reconhecimento de texto colocado na fila",
       "rateLimited": "Limite de taxa atingido; retomando em {seconds, number}s",

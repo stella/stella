@@ -598,12 +598,16 @@ export const RowActions = ({
         .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .entity({ entityId: entity.entityId })
         .ocr.post({ fieldId: file.fieldId });
-      unwrapEden(response);
+      const { outcome } = unwrapEden(response);
       await queryClient.invalidateQueries({
         queryKey: entitiesKeys.all(workspaceId),
       });
       stellaToast.add({
-        title: t("workspaces.files.ocrQueued"),
+        title: t(
+          outcome === "already_processed"
+            ? "workspaces.files.ocrAlreadyProcessed"
+            : "workspaces.files.ocrQueued",
+        ),
         type: "success",
       });
     } catch (error) {

@@ -3204,6 +3204,7 @@
       "downloadOriginal": "Originalus failas",
       "downloadPdf": "PDF",
       "maxEntitiesReached": "Pasiektas didžiausias įrašų skaičius",
+      "ocrAlreadyProcessed": "Teksto atpažinimas jau baigtas",
       "ocrQueueFailed": "Nepavyko įtraukti teksto atpažinimo į eilę",
       "ocrQueued": "Teksto atpažinimas įtrauktas į eilę",
       "rateLimited": "Greičio ribojimas; tęsiama po {seconds, number} s",

@@ -88,7 +88,7 @@ describe("requestManualOcrHandler", () => {
       }),
     );
 
-    expect(result).toEqual(Result.ok({ accepted: true, runId }));
+    expect(result).toEqual(Result.ok({ outcome: "queued", runId }));
     expect(persistRun).toHaveBeenCalledWith({
       organizationId,
       recordAuditEvent,
@@ -105,7 +105,7 @@ describe("requestManualOcrHandler", () => {
     expect(enqueue).toHaveBeenCalledWith(runId);
   });
 
-  test("does not enqueue an already terminal run", async () => {
+  test("reports an already processed outcome without enqueueing a succeeded run", async () => {
     const enqueue = mock(async () => undefined);
     const persistRun = mock(async () => ({
       id: runId,
@@ -142,79 +142,84 @@ describe("requestManualOcrHandler", () => {
       }),
     );
 
-    expect(result).toEqual(Result.ok({ accepted: true, runId }));
+    expect(result).toEqual(Result.ok({ outcome: "already_processed", runId }));
     expect(enqueue).not.toHaveBeenCalled();
   });
 
-  test("requeues a source-superseded run after the current source is locked", async () => {
-    let retrySet: unknown;
-    const tx = asTestRaw<Transaction>({
-      select: () => ({
-        from: () => ({
-          innerJoin: () => ({
-            where: () => ({
-              limit: () => ({ for: async () => [{ id: entityId }] }),
+  test.each(["source_superseded", "workspace_unavailable"] as const)(
+    "requeues a %s run after the current source is locked",
+    async (errorCode) => {
+      let retrySet: unknown;
+      const tx = asTestRaw<Transaction>({
+        select: () => ({
+          from: () => ({
+            innerJoin: () => ({
+              where: () => ({
+                limit: () => ({ for: async () => [{ id: entityId }] }),
+              }),
             }),
           }),
         }),
-      }),
-      insert: () => ({
-        values: () => ({
-          onConflictDoNothing: () => ({ returning: async () => [] }),
-        }),
-      }),
-      query: {
-        documentProcessingRuns: {
-          findFirst: async () => ({
-            errorCode: "source_superseded",
-            id: runId,
-            status: "cancelled" as const,
+        insert: () => ({
+          values: () => ({
+            onConflictDoNothing: () => ({ returning: async () => [] }),
           }),
-        },
-      },
-      update: () => ({
-        set: (set: unknown) => {
-          retrySet = set;
-          return {
-            where: () => ({
-              returning: async () => [{ id: runId, status: "queued" as const }],
+        }),
+        query: {
+          documentProcessingRuns: {
+            findFirst: async () => ({
+              errorCode,
+              id: runId,
+              status: "cancelled" as const,
             }),
-          };
+          },
         },
-      }),
-    });
-    rootTransactionMock.mockImplementationOnce(
-      async (operation: (transaction: Transaction) => Promise<unknown>) =>
-        await operation(tx),
-    );
+        update: () => ({
+          set: (set: unknown) => {
+            retrySet = set;
+            return {
+              where: () => ({
+                returning: async () => [
+                  { id: runId, status: "queued" as const },
+                ],
+              }),
+            };
+          },
+        }),
+      });
+      rootTransactionMock.mockImplementationOnce(
+        async (operation: (transaction: Transaction) => Promise<unknown>) =>
+          await operation(tx),
+      );
 
-    const run = await persistManualOcrRun({
-      organizationId,
-      recordAuditEvent,
-      source: {
-        entityId,
-        entityVersionId,
-        fieldId,
-        sourceFileId: "00000000-0000-4000-8000-000000000001",
-        sourceSha256Hex: "a".repeat(64),
-      },
-      userId,
-      workspaceId,
-    });
+      const run = await persistManualOcrRun({
+        organizationId,
+        recordAuditEvent,
+        source: {
+          entityId,
+          entityVersionId,
+          fieldId,
+          sourceFileId: "00000000-0000-4000-8000-000000000001",
+          sourceSha256Hex: "a".repeat(64),
+        },
+        userId,
+        workspaceId,
+      });
 
-    expect(run).toEqual({ id: runId, status: "queued" });
-    expect(retrySet).toEqual(
-      expect.objectContaining({
-        errorCode: null,
-        requestSource: "manual",
-        status: "queued",
-      }),
-    );
-    expect(recordAuditEvent).toHaveBeenCalledWith(
-      tx,
-      expect.objectContaining({
-        metadata: expect.objectContaining({ operation: "ocr", runId }),
-      }),
-    );
-  });
+      expect(run).toEqual({ id: runId, status: "queued" });
+      expect(retrySet).toEqual(
+        expect.objectContaining({
+          errorCode: null,
+          requestSource: "manual",
+          status: "queued",
+        }),
+      );
+      expect(recordAuditEvent).toHaveBeenCalledWith(
+        tx,
+        expect.objectContaining({
+          metadata: expect.objectContaining({ operation: "ocr", runId }),
+        }),
+      );
+    },
+  );
 });

@@ -51,6 +51,9 @@ type RequestManualOcrProps = {
   workspaceId: SafeId<"workspace">;
 };
 
+const getManualOcrOutcome = ({ status }: PersistedDocumentProcessingRun) =>
+  status === "succeeded" ? "already_processed" : "queued";
+
 const findManualOcrSource = async ({
   entityId,
   fieldId,
@@ -190,7 +193,7 @@ export const requestManualOcrHandler = async function* ({
     );
   }
 
-  return Result.ok({ accepted: true, runId: run.id });
+  return Result.ok({ outcome: getManualOcrOutcome(run), runId: run.id });
 };
 
 const requestOcr = createSafeHandler(

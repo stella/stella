@@ -8,6 +8,7 @@ import {
   isNull,
   lt,
   lte,
+  ne,
   notExists,
   or,
   sql,
@@ -55,6 +56,10 @@ const ENQUEUE_VISIBILITY_TIMEOUT_MS = 5 * 60 * 1000;
 const ENQUEUE_FAILURE_RETRY_MS = 30_000;
 const WORKER_LEASE_TIMEOUT_MS = 40 * 60 * 1000;
 const REPAIR_SETTLE_DELAY_MS = 5 * 60 * 1000;
+const REVERSIBLE_AUTOMATIC_OCR_CANCELLATION_CODES = [
+  "policy_disabled",
+  "workspace_unavailable",
+] as const;
 
 type DocumentProcessingJobData = {
   runId: SafeId<"documentProcessingRun">;
@@ -270,6 +275,22 @@ export const isAutomaticOcrRepairCandidate = (
   content.type === "file" &&
   content.mimeType === PDF_MIME_TYPE &&
   !content.encrypted;
+
+export const isReversibleAutomaticOcrCancellation = ({
+  errorCode,
+  status,
+}: {
+  errorCode: string | null;
+  status: (typeof documentProcessingRuns.$inferSelect)["status"];
+}): boolean => {
+  if (status !== "cancelled") {
+    return false;
+  }
+  return (
+    errorCode === REVERSIBLE_AUTOMATIC_OCR_CANCELLATION_CODES[0] ||
+    errorCode === REVERSIBLE_AUTOMATIC_OCR_CANCELLATION_CODES[1]
+  );
+};
 
 const markRunCancelled = async (
   runId: SafeId<"documentProcessingRun">,
@@ -622,6 +643,55 @@ const earlierFileFields = alias(
   "document_processing_earlier_file_fields",
 );
 
+type AutomaticOcrCandidate = {
+  content: FieldContent;
+  entityId: SafeId<"entity">;
+  entityVersionId: SafeId<"entityVersion">;
+  fieldId: SafeId<"field">;
+  organizationId: SafeId<"organization">;
+  workspaceId: SafeId<"workspace">;
+};
+
+const reviveReversibleAutomaticOcrRun = async (
+  candidate: AutomaticOcrCandidate,
+): Promise<SafeId<"documentProcessingRun"> | null> => {
+  if (!isAutomaticOcrRepairCandidate(candidate.content)) {
+    return null;
+  }
+
+  const revived = await rootDb
+    .update(documentProcessingRuns)
+    .set({
+      errorAt: null,
+      errorCode: null,
+      finishedAt: null,
+      nextAttemptAt: null,
+      status: "queued",
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(documentProcessingRuns.organizationId, candidate.organizationId),
+        eq(documentProcessingRuns.workspaceId, candidate.workspaceId),
+        eq(documentProcessingRuns.entityId, candidate.entityId),
+        eq(documentProcessingRuns.entityVersionId, candidate.entityVersionId),
+        eq(documentProcessingRuns.fieldId, candidate.fieldId),
+        eq(documentProcessingRuns.sourceFileId, candidate.content.id),
+        eq(documentProcessingRuns.sourceSha256Hex, candidate.content.sha256Hex),
+        eq(documentProcessingRuns.kind, "ocr"),
+        eq(documentProcessingRuns.processorVersion, 1),
+        inArray(documentProcessingRuns.requestSource, ["upload", "repair"]),
+        eq(documentProcessingRuns.status, "cancelled"),
+        inArray(
+          documentProcessingRuns.errorCode,
+          REVERSIBLE_AUTOMATIC_OCR_CANCELLATION_CODES,
+        ),
+      ),
+    )
+    .returning({ id: documentProcessingRuns.id });
+  return revived.at(0)?.id ?? null;
+};
+
 type EnqueueAttemptResult =
   | {
       status: "enqueued";
@@ -733,6 +803,22 @@ const recoverMissingAutomaticOcrRuns = async (): Promise<number> => {
                   sql`${fields.content}->>'sha256Hex'`,
                 ),
                 eq(documentProcessingRuns.processorVersion, 1),
+                or(
+                  ne(documentProcessingRuns.status, "cancelled"),
+                  isNull(documentProcessingRuns.errorCode),
+                  and(
+                    eq(documentProcessingRuns.status, "cancelled"),
+                    eq(documentProcessingRuns.requestSource, "manual"),
+                  ),
+                  and(
+                    eq(documentProcessingRuns.status, "cancelled"),
+                    ne(documentProcessingRuns.errorCode, "policy_disabled"),
+                    ne(
+                      documentProcessingRuns.errorCode,
+                      "workspace_unavailable",
+                    ),
+                  ),
+                ),
               ),
             ),
         ),
@@ -770,6 +856,10 @@ const recoverMissingAutomaticOcrRuns = async (): Promise<number> => {
     return 0;
   }
 
+  const revivedIds = await Promise.all(
+    candidates.map(reviveReversibleAutomaticOcrRun),
+  );
+
   const inserted = await rootDb
     .insert(documentProcessingRuns)
     .values(values)
@@ -786,10 +876,14 @@ const recoverMissingAutomaticOcrRuns = async (): Promise<number> => {
     })
     .returning({ id: documentProcessingRuns.id });
 
-  await Promise.all(
-    inserted.map(async ({ id }) => await tryEnqueueDocumentProcessingRun(id)),
-  );
-  return inserted.length;
+  const runIds = [
+    ...inserted.map(({ id }) => id),
+    ...revivedIds.filter(
+      (id): id is SafeId<"documentProcessingRun"> => id !== null,
+    ),
+  ];
+  await Promise.all(runIds.map(tryEnqueueDocumentProcessingRun));
+  return runIds.length;
 };
 
 const updateQueuedRunSchedule = async ({

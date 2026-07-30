@@ -3207,6 +3207,7 @@ type Messages = {
       "downloadOriginal": "Original file";
       "downloadPdf": "PDF";
       "maxEntitiesReached": "Max entities count reached";
+      "ocrAlreadyProcessed": "Text recognition has already completed";
       "ocrQueueFailed": "Couldn't queue text recognition";
       "ocrQueued": "Text recognition queued";
       "rateLimited": "Rate limited; resuming in {seconds, number}s";

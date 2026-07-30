@@ -116,7 +116,8 @@ export const persistManualOcrRun = async ({
         existing?.status === "failed" ||
         (existing?.status === "cancelled" &&
           (existing.errorCode === "policy_disabled" ||
-            existing.errorCode === "source_superseded"));
+            existing.errorCode === "source_superseded" ||
+            existing.errorCode === "workspace_unavailable"));
       if (!existing || !canRetry) {
         run = existing ?? null;
       } else {
@@ -142,6 +143,10 @@ export const persistManualOcrRun = async ({
                   or(
                     eq(documentProcessingRuns.errorCode, "policy_disabled"),
                     eq(documentProcessingRuns.errorCode, "source_superseded"),
+                    eq(
+                      documentProcessingRuns.errorCode,
+                      "workspace_unavailable",
+                    ),
                   ),
                 ),
               ),

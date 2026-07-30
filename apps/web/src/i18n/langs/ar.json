@@ -3204,6 +3204,7 @@
       "downloadOriginal": "الملف الأصلي",
       "downloadPdf": "PDF",
       "maxEntitiesReached": "تم بلوغ الحد الأقصى لعدد العناصر",
+      "ocrAlreadyProcessed": "اكتمل التعرّف على النص بالفعل",
       "ocrQueueFailed": "تعذّرت جدولة التعرّف على النص",
       "ocrQueued": "تمت جدولة التعرّف على النص",
       "rateLimited": "تم تقييد المعدل؛ الاستئناف خلال {seconds, number} ثانية",

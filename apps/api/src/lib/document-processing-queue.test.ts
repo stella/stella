@@ -5,6 +5,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import {
   isAutomaticOcrRepairCandidate,
   isCurrentOcrSource,
+  isReversibleAutomaticOcrCancellation,
   requiresOcrPolicy,
 } from "@/api/lib/document-processing-queue";
 
@@ -93,5 +94,28 @@ describe("requiresOcrPolicy", () => {
     expect(requiresOcrPolicy("upload")).toBe(true);
     expect(requiresOcrPolicy("repair")).toBe(true);
     expect(requiresOcrPolicy("manual")).toBe(false);
+  });
+});
+
+describe("isReversibleAutomaticOcrCancellation", () => {
+  test("revives policy and workspace cancellations, but not source cancellation", () => {
+    expect(
+      isReversibleAutomaticOcrCancellation({
+        errorCode: "policy_disabled",
+        status: "cancelled",
+      }),
+    ).toBe(true);
+    expect(
+      isReversibleAutomaticOcrCancellation({
+        errorCode: "workspace_unavailable",
+        status: "cancelled",
+      }),
+    ).toBe(true);
+    expect(
+      isReversibleAutomaticOcrCancellation({
+        errorCode: "source_superseded",
+        status: "cancelled",
+      }),
+    ).toBe(false);
   });
 });
