@@ -52,7 +52,7 @@ ALTER TABLE "document_processing_runs" ADD CONSTRAINT "document_processing_runs_
   FOREIGN KEY ("workspace_id") REFERENCES "workspaces"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "document_processing_runs" ADD CONSTRAINT "document_processing_runs_entity_workspace_fk"
   FOREIGN KEY ("entity_id", "workspace_id") REFERENCES "entities"("id", "workspace_id") ON DELETE CASCADE;--> statement-breakpoint
-ALTER TABLE "document_processing_runs" ADD CONSTRAINT "document_processing_runs_entity_version_id_entity_versions_id_fk"
+ALTER TABLE "document_processing_runs" ADD CONSTRAINT "document_processing_runs_version_fk"
   FOREIGN KEY ("entity_version_id") REFERENCES "entity_versions"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "document_processing_runs" ADD CONSTRAINT "document_processing_runs_field_workspace_fk"
   FOREIGN KEY ("field_id", "workspace_id") REFERENCES "fields"("id", "workspace_id") ON DELETE CASCADE;--> statement-breakpoint

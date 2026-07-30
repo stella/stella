@@ -60,9 +60,7 @@ export const documentProcessingRuns = p.pgTable(
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
     entityId: safeUuid<"entity">("entity_id").notNull(),
-    entityVersionId: safeUuid<"entityVersion">("entity_version_id")
-      .notNull()
-      .references(() => entityVersions.id, { onDelete: "cascade" }),
+    entityVersionId: safeUuid<"entityVersion">("entity_version_id").notNull(),
     fieldId: safeUuid<"field">("field_id").notNull(),
     /** UUIDv7 stored in `fields.content.id`; deliberately not a table FK. */
     sourceFileId: p.uuid("source_file_id").notNull(),
@@ -146,6 +144,13 @@ export const documentProcessingRuns = p.pgTable(
       .foreignKey({
         columns: [table.entityId, table.workspaceId],
         foreignColumns: [entities.id, entities.workspaceId],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: "document_processing_runs_version_fk",
+        columns: [table.entityVersionId],
+        foreignColumns: [entityVersions.id],
       })
       .onDelete("cascade"),
     p
