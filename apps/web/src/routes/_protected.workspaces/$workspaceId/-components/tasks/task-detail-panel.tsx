@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState, useSyncExternalStore } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
@@ -455,13 +455,32 @@ export const TaskDetailPanel = ({
 
 export const TaskTabSync = ({ tab }: { tab: TaskTab }) => {
   const closeTabsForEntities = useInspectorStore((s) => s.closeTabsForEntities);
-  const { error } = useQuery(taskDetailOptions(tab.workspaceId, tab.id));
+  const queryClient = useQueryClient();
+  const subscribe = useCallback(
+    (onStoreChange: () => void) =>
+      queryClient.getQueryCache().subscribe(() => onStoreChange()),
+    [queryClient],
+  );
+  const getSnapshot = useCallback(() => {
+    const error = queryClient.getQueryState(
+      taskKeys.detail(tab.workspaceId, tab.id),
+    )?.error;
+    return APIError.is(error) && error.status === 404;
+  }, [queryClient, tab.id, tab.workspaceId]);
+  const isMissing = useSyncExternalStore(subscribe, getSnapshot, () => false);
 
   useExternalSyncEffect(() => {
-    if (APIError.is(error) && error.status === 404) {
+    detached(
+      queryClient.prefetchQuery(taskDetailOptions(tab.workspaceId, tab.id)),
+      "TaskTabSync",
+    );
+  }, [queryClient, tab.id, tab.workspaceId]);
+
+  useExternalSyncEffect(() => {
+    if (isMissing) {
       closeTabsForEntities([tab.id]);
     }
-  }, [closeTabsForEntities, error, tab.id]);
+  }, [closeTabsForEntities, isMissing, tab.id]);
 
   return null;
 };

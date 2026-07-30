@@ -54,7 +54,9 @@ export const fileMetadataOptions = (props: FileMetadataOptions) =>
     },
   });
 
-export const prefetchFileMetadata = (
+export const prefetchFileMetadata = async (
   queryClient: QueryClient,
   props: FileMetadataQueryKey,
-) => queryClient.prefetchQuery(fileMetadataOptions(props));
+) => {
+  await queryClient.prefetchQuery(fileMetadataOptions(props));
+};
