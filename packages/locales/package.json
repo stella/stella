@@ -32,6 +32,7 @@
     ".": {
       "types": "./src/index.ts",
       "bun": "./src/index.ts",
+      "react-native": "./src/index.metro.ts",
       "import": "./src/index.ts"
     }
   },
