@@ -89,21 +89,25 @@ export const ChatModelModeSelector = ({
     (option) => option.value === models.selectedModel,
   );
   const TriggerIcon = selectedMode ? MODE_ICON[selectedMode] : CpuIcon;
-  const triggerLabel = selectedMode
-    ? t(MODE_LABEL_KEY[selectedMode])
-    : selectedExactModel
-      ? formatModelLabel(selectedExactModel)
-      : (models.selectedModel ?? t("chat.modelMode.exactModels"));
+  let triggerLabel = models.selectedModel ?? t("chat.modelMode.exactModels");
+  if (selectedExactModel) {
+    triggerLabel = formatModelLabel(selectedExactModel);
+  }
+  if (selectedMode) {
+    triggerLabel = t(MODE_LABEL_KEY[selectedMode]);
+  }
   const pinnedOption = resolveFavoriteOption({
     favorite,
     modeOptions: options,
     modelOptions: data?.options,
   });
-  const pinnedLabel = pinnedOption
-    ? pinnedOption.type === "mode"
-      ? t(MODE_LABEL_KEY[pinnedOption.mode])
-      : pinnedOption.label
-    : null;
+  let pinnedLabel: string | null = null;
+  if (pinnedOption?.type === "model") {
+    pinnedLabel = pinnedOption.label;
+  }
+  if (pinnedOption?.type === "mode") {
+    pinnedLabel = t(MODE_LABEL_KEY[pinnedOption.mode]);
+  }
   const PinnedIcon = pinnedOption?.Icon;
 
   const toggleFavorite = (nextFavorite: ChatModelFavorite) => {
@@ -114,7 +118,7 @@ export const ChatModelModeSelector = ({
   };
 
   const selectValue = (value: string) => {
-    const nextModel = value || null;
+    const nextModel = value === "" ? null : value;
     if (nextModel !== models.selectedModel) {
       models.selectModel(nextModel);
     }

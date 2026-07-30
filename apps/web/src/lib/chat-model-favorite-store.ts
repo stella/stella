@@ -31,10 +31,15 @@ export const useChatModelFavoriteStore = create<ChatModelFavoriteStore>()(
           const nextFavorites = { ...favoritesByOrganization };
           if (favorite) {
             nextFavorites[organizationId] = favorite;
-          } else {
-            delete nextFavorites[organizationId];
+            return { favoritesByOrganization: nextFavorites };
           }
-          return { favoritesByOrganization: nextFavorites };
+          return {
+            favoritesByOrganization: Object.fromEntries(
+              Object.entries(nextFavorites).filter(
+                ([id]) => id !== organizationId,
+              ),
+            ),
+          };
         });
       },
     }),
@@ -54,15 +59,15 @@ export const useChatModelFavoriteStore = create<ChatModelFavoriteStore>()(
 const isChatModelMode = (value: unknown): value is ChatModelMode =>
   Object.values(CHAT_MODEL_MODE).some((mode) => mode === value);
 
+const isUnknownRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
 const readPersistedFavorites = (
   persisted: unknown,
 ): Record<string, ChatModelFavorite> => {
   if (
-    typeof persisted !== "object" ||
-    persisted === null ||
-    !("favoritesByOrganization" in persisted) ||
-    typeof persisted.favoritesByOrganization !== "object" ||
-    persisted.favoritesByOrganization === null
+    !isUnknownRecord(persisted) ||
+    !isUnknownRecord(persisted.favoritesByOrganization)
   ) {
     return {};
   }
@@ -71,7 +76,7 @@ const readPersistedFavorites = (
   for (const [organizationId, favorite] of Object.entries(
     persisted.favoritesByOrganization,
   )) {
-    if (typeof favorite !== "object" || favorite === null) {
+    if (!isUnknownRecord(favorite)) {
       continue;
     }
     if (
