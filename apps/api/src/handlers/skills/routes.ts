@@ -18,13 +18,15 @@ import rewriteSkillResource from "@/api/handlers/skills/resources/rewrite";
 import updateSkillResource from "@/api/handlers/skills/resources/update";
 import uploadSkillResource from "@/api/handlers/skills/resources/upload";
 import seedSkills from "@/api/handlers/skills/seed";
-import { isSkillSourceRateLimitedRequest } from "@/api/handlers/skills/source-rate-limit";
+import {
+  isSkillSourceRateLimitedRequest,
+  skillSourceRateLimitBinding,
+} from "@/api/handlers/skills/source-rate-limit";
 import updateSkill from "@/api/handlers/skills/update";
 import uploadSkill from "@/api/handlers/skills/upload";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
 import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
-import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
 
 export const skillsRoute = new Elysia({ prefix: "/skills" })
   .use(authMacro)
@@ -35,10 +37,7 @@ export const skillsRoute = new Elysia({ prefix: "/skills" })
       scoping: "scoped",
       duration: API_RATE_LIMITS.skillSource.duration,
       max: API_RATE_LIMITS.skillSource.max,
-      ...createRedisRateLimit({
-        failurePolicy: "fail_open_local",
-        scope: "skill-source",
-      }),
+      ...skillSourceRateLimitBinding,
       skip: (request) => !isSkillSourceRateLimitedRequest(request),
     }),
   )

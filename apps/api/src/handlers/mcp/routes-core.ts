@@ -1,5 +1,6 @@
 import Elysia from "elysia";
 
+import { resolveClientIp } from "@/api/lib/client-ip";
 import {
   MCP_ANONYMIZED_DISCOVERY_PATH,
   MCP_ANONYMIZED_HTTP_PATH,
@@ -15,7 +16,7 @@ import {
 
 type HandleMcpHttpRequest = (
   request: Request,
-  options?: { mode?: McpMode },
+  options?: { clientIp?: string | null; mode?: McpMode },
 ) => Promise<Response>;
 
 type RouteSet = {
@@ -64,7 +65,7 @@ export const createMcpRoute = ({
 }) => {
   const handleMcpTransportRoute = async (
     request: Request,
-    options?: { mode?: McpMode },
+    options?: { clientIp?: string | null; mode?: McpMode },
   ) => {
     if (!MCP_HTTP_METHODS.has(request.method)) {
       return new Response("Method Not Allowed", {
@@ -85,11 +86,17 @@ export const createMcpRoute = ({
     .get(MCP_DISCOVERY_PATH, discoveryHandler())
     .all(
       MCP_HTTP_PATH,
-      async ({ request }) => await handleMcpTransportRoute(request),
+      async ({ request, server }) =>
+        await handleMcpTransportRoute(request, {
+          clientIp: resolveClientIp(request, server ?? null),
+        }),
     )
     .all(
       MCP_ANONYMIZED_HTTP_PATH,
-      async ({ request }) =>
-        await handleMcpTransportRoute(request, { mode: "anonymized" }),
+      async ({ request, server }) =>
+        await handleMcpTransportRoute(request, {
+          clientIp: resolveClientIp(request, server ?? null),
+          mode: "anonymized",
+        }),
     );
 };

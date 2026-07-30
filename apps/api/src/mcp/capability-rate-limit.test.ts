@@ -102,15 +102,26 @@ describe("consumeInvokeCapabilityRateLimit", () => {
     ).toBe(true);
   });
 
-  test("skill source capabilities share one outbound-fetch budget", async () => {
-    const guards = freshGuards();
+  test("skill source capabilities share one per-IP budget across organizations", async () => {
     const max = INVOKE_RATE_LIMIT_OVERRIDES["skills.discover"]?.max ?? 0;
+    const counts = new Map<string, number>();
+    const consumeSkillSource = async ({
+      clientIp,
+    }: {
+      clientIp: string | null;
+    }) => {
+      const key = clientIp ?? "unknown";
+      const count = (counts.get(key) ?? 0) + 1;
+      counts.set(key, count);
+      return { ok: count <= max, retryAfterSeconds: 60 };
+    };
     for (let i = 0; i < max - 1; i += 1) {
       // eslint-disable-next-line no-await-in-loop -- sequential counter increments are the unit under test
       await consumeInvokeCapabilityRateLimit({
         capabilityId: "skills.discover",
+        clientIp: "192.0.2.1",
+        consumeSkillSource,
         organizationId: org("org_a"),
-        guards,
       });
     }
 
@@ -118,8 +129,9 @@ describe("consumeInvokeCapabilityRateLimit", () => {
       (
         await consumeInvokeCapabilityRateLimit({
           capabilityId: "skills.import",
-          organizationId: org("org_a"),
-          guards,
+          clientIp: "192.0.2.1",
+          consumeSkillSource,
+          organizationId: org("org_b"),
         })
       ).ok,
     ).toBe(true);
@@ -127,11 +139,13 @@ describe("consumeInvokeCapabilityRateLimit", () => {
       (
         await consumeInvokeCapabilityRateLimit({
           capabilityId: "skills.import-url",
+          clientIp: "192.0.2.1",
+          consumeSkillSource,
           organizationId: org("org_a"),
-          guards,
         })
       ).ok,
     ).toBe(false);
+    expect(counts.get("192.0.2.1")).toBe(max + 1);
   });
 
   test("distinct organizations share no budget", async () => {

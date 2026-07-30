@@ -110,6 +110,7 @@ type GithubRefExists = (options: {
 
 export type GithubTreeItem = {
   path: string;
+  sha?: string | null;
   size?: number | null;
   type: string;
 };
@@ -551,6 +552,8 @@ const fetchGithubSkillFiles = async (
     context,
     owner: target.owner,
     repo: target.repo,
+    rootPath: target.rootPath,
+    selectedSkillPath: target.selectedSkillPath,
   });
 
   for (const item of tree) {
@@ -616,22 +619,157 @@ const fetchGithubTreeOnce = async ({
   context,
   owner,
   repo,
+  rootPath,
+  selectedSkillPath,
 }: {
   commitSha: string;
   context: SkillPackageFetchContext;
   owner: string;
   repo: string;
+  rootPath: string;
+  selectedSkillPath: string | null;
 }): Promise<GithubTreeItem[]> => {
-  const cacheKey = `${owner}\0${repo}\0${commitSha}`;
+  if (selectedSkillPath !== null) {
+    const directoryTree = await fetchGithubScopedTree({
+      commitSha,
+      context,
+      owner,
+      recursive: false,
+      repo,
+      rootPath,
+    });
+    const resourceRoots = directoryTree.filter((item) => {
+      if (item.type !== "tree") {
+        return false;
+      }
+      const relativePath = relativeGithubSkillPath({
+        path: item.path,
+        rootPath,
+      });
+      return (
+        relativePath !== null &&
+        !relativePath.includes("/") &&
+        getSkillResourceKind(`${relativePath}/resource.md`) !== null
+      );
+    });
+    const resourceTrees = await mapWithConcurrency({
+      items: resourceRoots,
+      limit: GITHUB_DISCOVERY_CONCURRENCY,
+      transform: async (resourceRoot) =>
+        await fetchGithubScopedTree({
+          commitSha,
+          context,
+          owner,
+          recursive: true,
+          repo,
+          rootPath: resourceRoot.path,
+        }),
+    });
+    return [{ path: selectedSkillPath, type: "blob" }, ...resourceTrees.flat()];
+  }
+
+  return await fetchGithubScopedTree({
+    commitSha,
+    context,
+    owner,
+    recursive: true,
+    repo,
+    rootPath,
+  });
+};
+
+const fetchGithubScopedTree = async ({
+  commitSha,
+  context,
+  owner,
+  recursive,
+  repo,
+  rootPath,
+}: {
+  commitSha: string;
+  context: SkillPackageFetchContext;
+  owner: string;
+  recursive: boolean;
+  repo: string;
+  rootPath: string;
+}): Promise<GithubTreeItem[]> => {
+  let treeish = commitSha;
+  const pathParts = rootPath.split("/").filter((part) => part.length > 0);
+
+  for (const pathPart of pathParts) {
+    // oxlint-disable-next-line no-await-in-loop -- tree traversal is ordered because each directory SHA resolves the next request
+    const level = await fetchGithubTreeRequest({
+      context,
+      owner,
+      recursive: false,
+      repo,
+      treeish,
+    });
+    const directory = level.find(
+      (item) =>
+        item.path === pathPart &&
+        item.type === "tree" &&
+        typeof item.sha === "string",
+    );
+    if (!directory?.sha) {
+      throw new HandlerError({
+        status: 400,
+        message: "GitHub skill folder could not be resolved",
+      });
+    }
+    treeish = directory.sha;
+  }
+
+  const tree = await fetchGithubTreeRequest({
+    context,
+    owner,
+    recursive,
+    repo,
+    treeish,
+  });
+  if (pathParts.length === 0) {
+    return tree;
+  }
+  const prefix = `${pathParts.join("/")}/`;
+  return tree.map((item) => {
+    const scoped: GithubTreeItem = {
+      path: `${prefix}${item.path}`,
+      type: item.type,
+    };
+    if (item.sha !== undefined) {
+      scoped.sha = item.sha;
+    }
+    if (item.size !== undefined) {
+      scoped.size = item.size;
+    }
+    return scoped;
+  });
+};
+
+const fetchGithubTreeRequest = async ({
+  context,
+  owner,
+  recursive,
+  repo,
+  treeish,
+}: {
+  context: SkillPackageFetchContext;
+  owner: string;
+  recursive: boolean;
+  repo: string;
+  treeish: string;
+}): Promise<GithubTreeItem[]> => {
+  const cacheKey = `${owner}\0${repo}\0${treeish}\0${recursive ? "recursive" : "direct"}`;
   return await getOrCreateGithubTreeRequest({
     cacheKey,
     context,
     load: async () =>
       await fetchGithubTree({
         ...(context.requestBudget ? { budget: context.requestBudget } : {}),
-        commitSha,
         owner,
+        recursive,
         repo,
+        treeish,
       }),
   });
 };
@@ -813,18 +951,22 @@ const githubCommitUrl = ({
   );
 
 const githubTreeUrl = ({
-  commitSha,
   owner,
+  recursive,
   repo,
+  treeish,
 }: {
-  commitSha: string;
   owner: string;
+  recursive: boolean;
   repo: string;
+  treeish: string;
 }) => {
   const url = new URL(
-    `https://api.github.com/repos/${owner}/${repo}/git/trees/${commitSha}`,
+    `https://api.github.com/repos/${owner}/${repo}/git/trees/${treeish}`,
   );
-  url.searchParams.set("recursive", "1");
+  if (recursive) {
+    url.searchParams.set("recursive", "1");
+  }
   return url;
 };
 
@@ -1189,12 +1331,24 @@ const discoverGithubSkillPackages = async (
   budget: SkillSourceRequestBudget,
 ): Promise<SkillPackageDiscovery> => {
   const commitSha = await resolveGithubCommitSha(target, budget);
-  const tree = await fetchGithubTree({ ...target, budget, commitSha });
-  const skillPaths = findGithubSkillEntrypoints({
-    rootPath: target.rootPath,
-    selectedSkillPath: target.selectedSkillPath,
-    tree,
-  });
+  const context: SkillPackageFetchContext = {
+    githubTrees: new Map(),
+    requestBudget: budget,
+  };
+  const skillPaths =
+    target.selectedSkillPath === null
+      ? findGithubSkillEntrypoints({
+          rootPath: target.rootPath,
+          tree: await fetchGithubTreeOnce({
+            commitSha,
+            context,
+            owner: target.owner,
+            repo: target.repo,
+            rootPath: target.rootPath,
+            selectedSkillPath: null,
+          }),
+        })
+      : [target.selectedSkillPath];
   const entries = await mapWithConcurrency({
     transform: async (skillPath): Promise<DiscoveredSkillPackage | null> => {
       try {
@@ -1424,17 +1578,19 @@ const resolveGithubCommitSha = async (
 
 const fetchGithubTree = async ({
   budget,
-  commitSha,
   owner,
+  recursive,
   repo,
+  treeish,
 }: {
   budget?: SkillSourceRequestBudget;
-  commitSha: string;
   owner: string;
+  recursive: boolean;
   repo: string;
+  treeish: string;
 }): Promise<GithubTreeItem[]> => {
   const response = await fetchSafeBytes(
-    githubTreeUrl({ commitSha, owner, repo }),
+    githubTreeUrl({ owner, recursive, repo, treeish }),
     GITHUB_TREE_MAX_BYTES,
     budget,
   );
@@ -1458,11 +1614,13 @@ const fetchGithubTree = async ({
       continue;
     }
     const path = item["path"];
+    const sha = item["sha"];
     const size = item["size"];
     const type = item["type"];
     if (typeof path === "string" && typeof type === "string") {
       parsed.push({
         path,
+        sha: typeof sha === "string" ? sha : null,
         size: typeof size === "number" && Number.isFinite(size) ? size : null,
         type,
       });
@@ -1540,14 +1698,14 @@ const assertGithubRepositoryCoordinates = ({
   });
 };
 
-const mapWithConcurrency = async <R>({
+const mapWithConcurrency = async <T, R>({
   items,
   limit,
   transform,
 }: {
-  items: readonly string[];
+  items: readonly T[];
   limit: number;
-  transform: (item: string) => Promise<R>;
+  transform: (item: T) => Promise<R>;
 }): Promise<R[]> => {
   const results: R[] = [];
   let nextIndex = 0;

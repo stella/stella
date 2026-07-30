@@ -54,6 +54,8 @@ export type McpRequestContext = {
    * `accessibleWorkspaceStatusById` and do not read it.
    */
   accessibleWorkspaces: AccessibleWorkspace[];
+  /** Resolved transport client IP used by shared gateway/REST abuse budgets. */
+  clientIp?: string | null;
   /**
    * OAuth scopes granted to this session (the access token's `scope` claim).
    * `invoke_capability` gates each capability on its catalog scope against this
@@ -127,7 +129,7 @@ export const loadAccessibleMcpWorkspaces = async ({
 
 export const resolveMcpSessionContext = async (
   session: McpSession,
-  { request }: { request: Request },
+  { clientIp = null, request }: { clientIp?: string | null; request: Request },
 ): Promise<McpRequestContext> => {
   const { organizationId, userId } = brandActorSessionIdentity({
     organizationId: session.organizationId,
@@ -217,6 +219,7 @@ export const resolveMcpSessionContext = async (
       usableWorkspaces.map((workspace) => [workspace.id, workspace.status]),
     ),
     accessibleWorkspaces: usableWorkspaces,
+    clientIp,
     createOperationDatabaseScope,
     enabledRegistrySlugs,
     grantedScopes: session.scopes,

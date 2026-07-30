@@ -55,17 +55,31 @@ type ImportSkillDialogProps = {
   open: boolean;
 };
 
-export const ImportSkillDialog = (props: ImportSkillDialogProps) => (
-  <Dialog onOpenChange={props.onOpenChange} open={props.open}>
-    {props.open ? <ImportSkillDialogBody {...props} /> : null}
-  </Dialog>
-);
+export const ImportSkillDialog = (props: ImportSkillDialogProps) => {
+  const [busy, setBusy] = useState(false);
+
+  return (
+    <Dialog
+      onOpenChange={(open) => {
+        if (open || !busy) {
+          props.onOpenChange(open);
+        }
+      }}
+      open={props.open}
+    >
+      {props.open ? (
+        <ImportSkillDialogBody {...props} onBusyChange={setBusy} />
+      ) : null}
+    </Dialog>
+  );
+};
 
 const ImportSkillDialogBody = ({
   canManageTeam,
+  onBusyChange,
   onImported,
   onOpenChange,
-}: ImportSkillDialogProps) => {
+}: ImportSkillDialogProps & { onBusyChange: (busy: boolean) => void }) => {
   const format = useFormatter();
   const t = useTranslations();
   const tSkills = useTranslations("knowledge.agentSkills");
@@ -75,6 +89,8 @@ const ImportSkillDialogBody = ({
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
 
   const discover = useMutation({
+    onMutate: () => onBusyChange(true),
+    onSettled: () => onBusyChange(false),
     mutationFn: async () => {
       const response = await api.skills["discover-url"].post({
         url: url.trim(),
@@ -100,6 +116,8 @@ const ImportSkillDialogBody = ({
   });
 
   const importSkills = useMutation({
+    onMutate: () => onBusyChange(true),
+    onSettled: () => onBusyChange(false),
     mutationFn: async () => {
       const response = await api.skills["import-urls"].post({
         items: discovery
@@ -197,7 +215,7 @@ const ImportSkillDialogBody = ({
   const busy = discover.isPending || importSkills.isPending;
 
   return (
-    <DialogPopup className="sm:max-w-2xl">
+    <DialogPopup className="sm:max-w-2xl" showCloseButton={!busy}>
       <DialogHeader>
         <DialogTitle>{tSkills("importTitle")}</DialogTitle>
         <p className="text-muted-foreground text-sm">{tSkills("importHelp")}</p>

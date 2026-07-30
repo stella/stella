@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
-import { isSkillSourceRateLimitedRequest } from "./source-rate-limit";
+import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
+
+import {
+  consumeSkillSourceRateLimit,
+  isSkillSourceRateLimitedRequest,
+} from "./source-rate-limit";
 
 const request = (method: string, path: string) => ({
   method,
@@ -33,5 +38,48 @@ describe("skill source rate-limit routing", () => {
         request("GET", "/v1/skills/discover-url"),
       ),
     ).toBe(false);
+  });
+
+  test("shares one fixed-window budget by client IP", async () => {
+    const context = new RedisRateLimitContext({
+      createRedis: () => ({
+        send: async () => {
+          throw new Error("redis disabled in test");
+        },
+      }),
+      failurePolicy: "fail_open_local",
+      onRedisError: () => undefined,
+    });
+    try {
+      for (let index = 0; index < 10; index += 1) {
+        // oxlint-disable-next-line no-await-in-loop -- sequential increments exercise one fixed-window counter
+        const result = await consumeSkillSourceRateLimit({
+          clientIp: "192.0.2.1",
+          context,
+          requestId: `request-${index}`,
+        });
+        expect(result.ok).toBe(true);
+      }
+      expect(
+        (
+          await consumeSkillSourceRateLimit({
+            clientIp: "192.0.2.1",
+            context,
+            requestId: "overflow",
+          })
+        ).ok,
+      ).toBe(false);
+      expect(
+        (
+          await consumeSkillSourceRateLimit({
+            clientIp: "192.0.2.2",
+            context,
+            requestId: "other-ip",
+          })
+        ).ok,
+      ).toBe(true);
+    } finally {
+      context.kill();
+    }
   });
 });

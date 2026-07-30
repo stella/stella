@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import * as realSafeFetch from "@/api/lib/safe-outbound-fetch";
 import {
@@ -8,7 +8,11 @@ import {
 } from "@/api/lib/safe-outbound-fetch";
 
 const COMMIT_SHA = "a".repeat(40);
+const SMALL_TREE_SHA = "b".repeat(40);
+const SCRIPTS_TREE_SHA = "c".repeat(40);
 let outboundRequestCount = 0;
+let treeScenario: "default" | "scoped-folder" | "selected-skill" = "default";
+let requestedTreeUrls: string[] = [];
 
 const response = (body: unknown): Result<SafeOutboundFetchResponse, never> => {
   const bytes = new TextEncoder().encode(
@@ -40,6 +44,17 @@ description: A selected repository-root skill.
 
 Instructions.`);
       }
+      if (url.pathname.endsWith(`/${COMMIT_SHA}/small/SKILL.md`)) {
+        return response(`---
+name: small-skill
+description: A skill inside a large repository.
+---
+
+Instructions.`);
+      }
+      if (url.pathname.endsWith("/small/scripts/helper.ts")) {
+        return response("export const helper = true;");
+      }
       return response(`---
 name: valid-skill
 description: A valid discovered skill.
@@ -51,6 +66,46 @@ Instructions.`);
       return response({ sha: COMMIT_SHA });
     }
     if (url.pathname.includes("/git/trees/")) {
+      requestedTreeUrls.push(url.toString());
+      const treeish = url.pathname.split("/").at(-1);
+      const recursive = url.searchParams.get("recursive") === "1";
+      if (treeScenario !== "default") {
+        if (treeish === COMMIT_SHA && recursive) {
+          return response({ truncated: true, tree: [] });
+        }
+        if (treeish === COMMIT_SHA) {
+          return response({
+            tree: [{ path: "small", sha: SMALL_TREE_SHA, type: "tree" }],
+          });
+        }
+        if (treeish === SMALL_TREE_SHA && recursive) {
+          return response({
+            tree:
+              treeScenario === "scoped-folder"
+                ? [{ path: "SKILL.md", type: "blob" }]
+                : [
+                    { path: "SKILL.md", type: "blob" },
+                    {
+                      path: "scripts/helper.ts",
+                      type: "blob",
+                    },
+                  ],
+          });
+        }
+        if (treeish === SMALL_TREE_SHA) {
+          return response({
+            tree: [
+              { path: "SKILL.md", type: "blob" },
+              { path: "scripts", sha: SCRIPTS_TREE_SHA, type: "tree" },
+            ],
+          });
+        }
+        if (treeish === SCRIPTS_TREE_SHA && recursive) {
+          return response({
+            tree: [{ path: "helper.ts", type: "blob" }],
+          });
+        }
+      }
       return response({
         tree: [
           { path: "SKILL.md", type: "blob" },
@@ -70,6 +125,11 @@ const {
 } = await import("./skill-package");
 
 describe("GitHub skill package discovery", () => {
+  beforeEach(() => {
+    treeScenario = "default";
+    requestedTreeUrls = [];
+  });
+
   test("keeps valid siblings when one skill source cannot be fetched", async () => {
     const result = await discoverSkillPackagesFromUrl(
       "https://github.com/example/skills",
@@ -87,6 +147,7 @@ describe("GitHub skill package discovery", () => {
   });
 
   test("keeps direct root SKILL.md discovery scoped to that file", async () => {
+    treeScenario = "selected-skill";
     const result = await discoverSkillPackagesFromUrl(
       `https://github.com/example/skills/blob/${COMMIT_SHA}/SKILL.md`,
     );
@@ -99,6 +160,59 @@ describe("GitHub skill package discovery", () => {
     expect(result.value.skills.map((skill) => skill.name)).toEqual([
       "root-skill",
     ]);
+    expect(requestedTreeUrls).toEqual([]);
+  });
+
+  test("scopes folder discovery below an oversized repository root", async () => {
+    treeScenario = "scoped-folder";
+    const result = await discoverSkillPackagesFromUrl(
+      `https://github.com/example/skills/tree/${COMMIT_SHA}/small`,
+    );
+
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    expect(result.value.skills.map((skill) => skill.name)).toEqual([
+      "small-skill",
+    ]);
+    expect(
+      requestedTreeUrls.some(
+        (url) =>
+          url.includes(`/git/trees/${COMMIT_SHA}`) &&
+          url.includes("recursive=1"),
+      ),
+    ).toBe(false);
+    expect(
+      requestedTreeUrls.some(
+        (url) =>
+          url.includes(`/git/trees/${SMALL_TREE_SHA}`) &&
+          url.includes("recursive=1"),
+      ),
+    ).toBe(true);
+  });
+
+  test("imports a selected skill without recursively fetching the repository root", async () => {
+    treeScenario = "selected-skill";
+    const result = await fetchSkillPackageFromUrl(
+      `https://github.com/example/skills/blob/${COMMIT_SHA}/small/SKILL.md`,
+    );
+
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    expect(result.value.name).toBe("small-skill");
+    expect(result.value.resources.map((resource) => resource.path)).toEqual([
+      "scripts/helper.ts",
+    ]);
+    expect(
+      requestedTreeUrls.some(
+        (url) =>
+          url.includes(`/git/trees/${COMMIT_SHA}`) &&
+          url.includes("recursive=1"),
+      ),
+    ).toBe(false);
   });
 
   test("stops a batch before exceeding its GitHub request budget", async () => {
