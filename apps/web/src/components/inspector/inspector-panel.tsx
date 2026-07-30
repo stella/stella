@@ -58,7 +58,7 @@ import { MatterMetadataPanel } from "@/routes/_protected.workspaces/$workspaceId
 import { TaskDetailPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-panel";
 import { entityOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
-import { workspaceOptions } from "@/routes/_protected.workspaces/-queries";
+import { workspacesKeys } from "@/routes/_protected.workspaces/-queries.logic";
 
 type InspectorPanelProps = {
   /**
@@ -70,6 +70,21 @@ type InspectorPanelProps = {
    */
   workspaceId?: string | undefined;
 };
+
+type InspectorWorkspaceOrigin = {
+  color: string | null;
+  name: string;
+};
+
+const isInspectorWorkspaceOrigin = (
+  value: unknown,
+): value is InspectorWorkspaceOrigin =>
+  typeof value === "object" &&
+  value !== null &&
+  "name" in value &&
+  typeof value.name === "string" &&
+  "color" in value &&
+  (typeof value.color === "string" || value.color === null);
 
 const hasInAppHistoryEntry = (): boolean => {
   const state: unknown = window.history.state;
@@ -120,9 +135,12 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
     if (workspaceId === undefined) {
       return undefined;
     }
-    return panelQueryClient.getQueryData(
-      workspaceOptions(workspaceId).queryKey,
+    const cachedWorkspace = panelQueryClient.getQueryData(
+      workspacesKeys.byId(workspaceId),
     );
+    return isInspectorWorkspaceOrigin(cachedWorkspace)
+      ? cachedWorkspace
+      : undefined;
   }, [panelQueryClient, workspaceId]);
   const workspace = useSyncExternalStore(
     subscribeWorkspace,
