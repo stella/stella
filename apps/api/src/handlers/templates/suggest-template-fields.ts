@@ -171,9 +171,14 @@ export const suggestTemplateFieldsOrEmpty = async (
 const isHandlerError = (error: unknown): error is HandlerError =>
   error instanceof HandlerError;
 
-/** A typed failure keeps its status and message; everything else is a 500. */
+/**
+ * A typed 4xx keeps its status and message (curated client conditions such
+ * as the BYOK 403). Anything else — including provider-run 502s, whose
+ * message is provider-controlled and can echo request content — becomes the
+ * generic 500.
+ */
 export const toSuggestFieldsError = (cause: unknown): HandlerError => {
-  if (isHandlerError(cause)) {
+  if (isHandlerError(cause) && cause.status < 500) {
     return cause;
   }
   return new HandlerError({
