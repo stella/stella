@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import type { ReasoningEffort } from "@stll/ai-catalog";
+import type { ReasoningEffort, TemperaturePolicy } from "@stll/ai-catalog";
 
 import {
   parseUpstreamCapabilities,
@@ -24,16 +24,17 @@ const DECLARED_EFFORTS: Record<string, readonly ReasoningEffort[] | null> = {
   "magistral-medium-latest": null,
 };
 
-const DECLARED_TEMPERATURE: Record<string, boolean> = {
-  "gemini-3.5-flash": true,
-  "openai/gpt-5.5": false,
-  "magistral-medium-latest": true,
+const DECLARED_TEMPERATURE_POLICIES: Record<string, TemperaturePolicy> = {
+  "gemini-3.5-flash": "emit",
+  "openai/gpt-5.5": "omit",
+  "magistral-medium-latest": "emit",
 };
 
 describe("parseUpstreamCapabilities", () => {
   test("extracts effort values and temperature support", () => {
     expect(
       parseUpstreamCapabilities({
+        release_date: "2026-07-21",
         reasoning: true,
         temperature: false,
         reasoning_options: [
@@ -41,6 +42,7 @@ describe("parseUpstreamCapabilities", () => {
         ],
       }),
     ).toEqual({
+      releaseDate: "2026-07-21",
       reasoning: true,
       effortValues: ["minimal", "low", "medium", "high"],
       temperature: false,
@@ -53,10 +55,20 @@ describe("parseUpstreamCapabilities", () => {
         reasoning: true,
         reasoning_options: [{ type: "budget_tokens", min: 1024 }],
       }),
-    ).toEqual({ reasoning: true, effortValues: null, temperature: null });
+    ).toEqual({
+      releaseDate: null,
+      reasoning: true,
+      effortValues: null,
+      temperature: null,
+    });
     expect(
       parseUpstreamCapabilities({ reasoning: false, temperature: true }),
-    ).toEqual({ reasoning: false, effortValues: null, temperature: true });
+    ).toEqual({
+      releaseDate: null,
+      reasoning: false,
+      effortValues: null,
+      temperature: true,
+    });
   });
 
   test("returns null for records without reasoning metadata", () => {
@@ -77,6 +89,7 @@ describe("parseUpstreamCapabilities", () => {
         ],
       }),
     ).toEqual({
+      releaseDate: null,
       reasoning: true,
       effortValues: ["none", "low", "medium", "high"],
       temperature: null,
@@ -87,7 +100,12 @@ describe("parseUpstreamCapabilities", () => {
         reasoning: true,
         reasoning_options: [{ type: "toggle" }],
       }),
-    ).toEqual({ reasoning: true, effortValues: null, temperature: null });
+    ).toEqual({
+      releaseDate: null,
+      reasoning: true,
+      effortValues: null,
+      temperature: null,
+    });
     // No duplicate "none" when the effort list already has it.
     expect(
       parseUpstreamCapabilities({
@@ -98,6 +116,7 @@ describe("parseUpstreamCapabilities", () => {
         ],
       }),
     ).toEqual({
+      releaseDate: null,
       reasoning: true,
       effortValues: ["none", "high"],
       temperature: null,
@@ -108,11 +127,13 @@ describe("parseUpstreamCapabilities", () => {
 describe("validateCapabilities", () => {
   const validUpstream = upstreamOf({
     "google:gemini-3.5-flash": {
+      releaseDate: "2026-05-01",
       reasoning: true,
       effortValues: ["minimal", "low", "medium", "high"],
       temperature: true,
     },
     "openrouter:openai/gpt-5.5": {
+      releaseDate: "2026-06-01",
       reasoning: true,
       effortValues: ["none", "low", "medium", "high", "xhigh"],
       temperature: false,
@@ -128,7 +149,7 @@ describe("validateCapabilities", () => {
       checkableProviders: CHECKABLE,
       upstream: validUpstream,
       declaredEfforts: DECLARED_EFFORTS,
-      declaredTemperature: DECLARED_TEMPERATURE,
+      declaredTemperaturePolicies: DECLARED_TEMPERATURE_POLICIES,
     });
     expect(result.failures).toEqual([]);
     expect(result.skipped).toEqual([]);
@@ -142,13 +163,14 @@ describe("validateCapabilities", () => {
       checkableProviders: CHECKABLE,
       upstream: upstreamOf({
         "openrouter:openai/gpt-5.5": {
+          releaseDate: "2026-06-01",
           reasoning: true,
           effortValues: ["low", "medium", "high", "xhigh"],
           temperature: false,
         },
       }),
       declaredEfforts: DECLARED_EFFORTS,
-      declaredTemperature: DECLARED_TEMPERATURE,
+      declaredTemperaturePolicies: DECLARED_TEMPERATURE_POLICIES,
     });
     expect(result.failures).toHaveLength(1);
     expect(result.failures.at(0)?.label).toBe("REASONING DRIFT");
@@ -160,51 +182,72 @@ describe("validateCapabilities", () => {
       checkableProviders: CHECKABLE,
       upstream: upstreamOf({
         "google:magistral-medium-latest": {
+          releaseDate: "2026-01-01",
           reasoning: true,
           effortValues: ["none", "high"],
           temperature: true,
         },
       }),
       declaredEfforts: DECLARED_EFFORTS,
-      declaredTemperature: DECLARED_TEMPERATURE,
+      declaredTemperaturePolicies: DECLARED_TEMPERATURE_POLICIES,
     });
     expect(result.failures).toHaveLength(1);
     expect(result.failures.at(0)?.label).toBe("REASONING DRIFT");
   });
 
-  test("flags a model whose temperature support flipped upstream", () => {
+  test("flags emit when upstream no longer supports temperature", () => {
     const result = validateCapabilities({
       entries: [{ provider: "google", modelId: "gemini-3.5-flash" }],
       checkableProviders: CHECKABLE,
       upstream: upstreamOf({
         "google:gemini-3.5-flash": {
+          releaseDate: "2026-05-01",
           reasoning: true,
           effortValues: ["minimal", "low", "medium", "high"],
           temperature: false,
         },
       }),
       declaredEfforts: DECLARED_EFFORTS,
-      declaredTemperature: DECLARED_TEMPERATURE,
+      declaredTemperaturePolicies: DECLARED_TEMPERATURE_POLICIES,
     });
     expect(result.failures).toHaveLength(1);
-    expect(result.failures.at(0)?.label).toBe("TEMPERATURE DRIFT");
+    expect(result.failures.at(0)?.label).toBe("UNSAFE TEMPERATURE POLICY");
   });
 
-  test("does not flag temperature when upstream publishes none", () => {
+  test("allows omit when upstream still accepts an ignored parameter", () => {
+    const result = validateCapabilities({
+      entries: [{ provider: "openrouter", modelId: "openai/gpt-5.5" }],
+      checkableProviders: CHECKABLE,
+      upstream: upstreamOf({
+        "openrouter:openai/gpt-5.5": {
+          releaseDate: "2026-06-01",
+          reasoning: true,
+          effortValues: ["none", "low", "medium", "high", "xhigh"],
+          temperature: true,
+        },
+      }),
+      declaredEfforts: DECLARED_EFFORTS,
+      declaredTemperaturePolicies: DECLARED_TEMPERATURE_POLICIES,
+    });
+    expect(result.failures).toEqual([]);
+  });
+
+  test("flags emit when upstream publishes no temperature metadata", () => {
     const result = validateCapabilities({
       entries: [{ provider: "google", modelId: "magistral-medium-latest" }],
       checkableProviders: CHECKABLE,
       upstream: upstreamOf({
         "google:magistral-medium-latest": {
+          releaseDate: "2026-01-01",
           reasoning: false,
           effortValues: null,
           temperature: null,
         },
       }),
       declaredEfforts: DECLARED_EFFORTS,
-      declaredTemperature: DECLARED_TEMPERATURE,
+      declaredTemperaturePolicies: DECLARED_TEMPERATURE_POLICIES,
     });
-    expect(result.failures).toEqual([]);
+    expect(result.failures.at(0)?.label).toBe("UNSAFE TEMPERATURE POLICY");
   });
 
   test("fails coverage for offered models missing either declaration", () => {
@@ -213,7 +256,7 @@ describe("validateCapabilities", () => {
       checkableProviders: CHECKABLE,
       upstream: upstreamOf({}),
       declaredEfforts: DECLARED_EFFORTS,
-      declaredTemperature: DECLARED_TEMPERATURE,
+      declaredTemperaturePolicies: DECLARED_TEMPERATURE_POLICIES,
     });
     expect(efforts.failures.at(0)?.label).toBe("NO REASONING CAPABILITY");
 
@@ -222,9 +265,9 @@ describe("validateCapabilities", () => {
       checkableProviders: CHECKABLE,
       upstream: validUpstream,
       declaredEfforts: DECLARED_EFFORTS,
-      declaredTemperature: {},
+      declaredTemperaturePolicies: {},
     });
-    expect(temperature.failures.at(0)?.label).toBe("NO TEMPERATURE CAPABILITY");
+    expect(temperature.failures.at(0)?.label).toBe("NO TEMPERATURE POLICY");
   });
 
   test("skips models without upstream metadata and uncheckable providers", () => {
@@ -236,7 +279,7 @@ describe("validateCapabilities", () => {
       checkableProviders: CHECKABLE,
       upstream: upstreamOf({}),
       declaredEfforts: DECLARED_EFFORTS,
-      declaredTemperature: DECLARED_TEMPERATURE,
+      declaredTemperaturePolicies: DECLARED_TEMPERATURE_POLICIES,
     });
     expect(result.failures).toEqual([]);
     expect(result.skipped).toEqual([
@@ -250,7 +293,7 @@ describe("validateCapabilities", () => {
       checkableProviders: CHECKABLE,
       upstream: upstreamOf({}),
       declaredEfforts: DECLARED_EFFORTS,
-      declaredTemperature: DECLARED_TEMPERATURE,
+      declaredTemperaturePolicies: DECLARED_TEMPERATURE_POLICIES,
       overriddenIds: new Set(["gemini-3.5-flash"]),
     });
     expect(result.failures).toEqual([]);

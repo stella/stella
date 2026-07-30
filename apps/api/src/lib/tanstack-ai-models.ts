@@ -25,7 +25,7 @@ import {
   isBYOKProviderRoleSupported,
   isChatPdfAttachmentModelSupported,
   resolveReasoningEffort,
-  supportsTemperature,
+  shouldEmitTemperature,
 } from "@stll/ai-catalog";
 import type {
   AIProvider,
@@ -1047,17 +1047,15 @@ const GOOGLE_SAFETY_SETTINGS_BASELINE = [
 ] as const satisfies NonNullable<GeminiTextProviderOptions["safetySettings"]>;
 
 /**
- * `{ temperature: 0 }` only for models with positive evidence they
- * accept a temperature override (`MODEL_TEMPERATURE_SUPPORT`); models
- * declared `false` and unknown ids get nothing and run on provider
- * defaults. This is the sole temperature emission point for role
- * defaults, so a sampling-rejecting model (GPT-5 family, newest
- * Claude) can never receive the 400-ing parameter.
+ * `{ temperature: 0 }` only when the catalog policy says to emit it.
+ * Models that reject, deprecate, or ignore the parameter, plus unknown
+ * model IDs, get nothing and run on provider defaults. This is the sole
+ * temperature emission point for role defaults.
  */
 const deterministicSamplingForModel = (
   modelId: string,
 ): { temperature: 0 } | Record<never, never> =>
-  supportsTemperature(modelId) ? { temperature: 0 } : {};
+  shouldEmitTemperature(modelId) ? { temperature: 0 } : {};
 
 const usesAnthropicAdaptiveThinking = (modelId: string): boolean =>
   ANTHROPIC_ADAPTIVE_THINKING_MODELS.some((adaptiveModelId) =>

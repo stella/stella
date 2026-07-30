@@ -631,8 +631,8 @@ export const mergeGenerationOptions = ({
 }): TanStackModelOptions => {
   // Caller temperature overrides only apply where the role builder
   // itself emitted a temperature. Builder omission is always
-  // deliberate — the model rejects sampling overrides
-  // (`MODEL_TEMPERATURE_SUPPORT`), the id is uncatalogued, or the
+  // deliberate — the model rejects, deprecates, or ignores sampling
+  // overrides (`MODEL_TEMPERATURE_POLICIES`), the id is uncatalogued, or the
   // role runs a thinking/reasoning mode that is incompatible with
   // temperature (Anthropic extended thinking rejects it even on
   // models that accept temperature otherwise). The suppression is

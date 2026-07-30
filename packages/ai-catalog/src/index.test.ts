@@ -20,11 +20,11 @@ import {
   MODEL_RATES,
   MODEL_REASONING_EFFORTS,
   MODEL_ROLES,
-  MODEL_TEMPERATURE_SUPPORT,
+  MODEL_TEMPERATURE_POLICIES,
   REASONING_EFFORTS,
   resolveReasoningEffort,
   resolveWorkingBYOKModelForRole,
-  supportsTemperature,
+  shouldEmitTemperature,
   TANSTACK_AI_PROVIDERS,
 } from "./index";
 
@@ -379,29 +379,32 @@ describe("MODEL_REASONING_EFFORTS", () => {
   });
 });
 
-describe("MODEL_TEMPERATURE_SUPPORT", () => {
+describe("MODEL_TEMPERATURE_POLICIES", () => {
   test("declares every offered BYOK model", () => {
     for (const models of Object.values(BYOK_MODEL_OPTIONS)) {
       for (const modelId of models) {
         expect(
-          MODEL_TEMPERATURE_SUPPORT[modelId],
-          `missing temperature capability for ${modelId}`,
+          MODEL_TEMPERATURE_POLICIES[modelId],
+          `missing temperature policy for ${modelId}`,
         ).not.toBeUndefined();
       }
     }
   });
 
-  test("supportsTemperature answers declared models and denies unknown ids", () => {
-    expect(supportsTemperature("gemini-3.5-flash")).toBe(true);
+  test("shouldEmitTemperature follows declared policy and denies unknown ids", () => {
+    expect(shouldEmitTemperature("gemini-3.5-flash")).toBe(true);
+    expect(shouldEmitTemperature("gemini-3.6-flash")).toBe(false);
+    expect(shouldEmitTemperature("google/gemini-3.6-flash")).toBe(false);
+    expect(shouldEmitTemperature("gemini-3.5-flash-lite")).toBe(false);
     // GPT-5 family and the newest Claude models reject sampling overrides.
-    expect(supportsTemperature("gpt-5.4")).toBe(false);
-    expect(supportsTemperature("openai/gpt-5.4-mini")).toBe(false);
-    expect(supportsTemperature("claude-fable-5")).toBe(false);
+    expect(shouldEmitTemperature("gpt-5.4")).toBe(false);
+    expect(shouldEmitTemperature("openai/gpt-5.4-mini")).toBe(false);
+    expect(shouldEmitTemperature("claude-fable-5")).toBe(false);
     // Unknown ids: no positive evidence, no parameter.
-    expect(supportsTemperature("o3-mini")).toBe(false);
-    expect(supportsTemperature("some-env-override-model")).toBe(false);
-    expect(supportsTemperature("gpt-5.6-sol")).toBe(
-      supportsTemperature("gpt-5.6"),
+    expect(shouldEmitTemperature("o3-mini")).toBe(false);
+    expect(shouldEmitTemperature("some-env-override-model")).toBe(false);
+    expect(shouldEmitTemperature("gpt-5.6-sol")).toBe(
+      shouldEmitTemperature("gpt-5.6"),
     );
   });
 });
