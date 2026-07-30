@@ -25,8 +25,8 @@ const authenticateMcpRequestMock = mock();
 const captureErrorMock = mock();
 const resolveMcpSessionContextMock = mock();
 const getMcpToolDefinitionMock = mock();
-const getMcpToolScopeHintMock = mock(
-  (_toolName: string): ToolScope | undefined => undefined,
+const getMcpToolRequiredScopesHintMock = mock(
+  (_toolName: string): readonly ToolScope[] | undefined => undefined,
 );
 const handleMcpToolCallMock = mock();
 const listMcpToolsMock = mock(async (): Promise<McpTool[]> => []);
@@ -39,7 +39,7 @@ const handleMcpHttpRequest = createMcpHttpRequestHandler({
     captureErrorMock(error, context);
   },
   getMcpToolDefinition: getMcpToolDefinitionMock,
-  getMcpToolScopeHint: getMcpToolScopeHintMock,
+  getMcpToolRequiredScopesHint: getMcpToolRequiredScopesHintMock,
   handleMcpToolCall: handleMcpToolCallMock,
   listMcpResources: listMcpResourcesMock,
   listMcpTools: listMcpToolsMock,
@@ -98,9 +98,9 @@ describe("handleMcpHttpRequest", () => {
     authenticateMcpRequestMock.mockReset();
     captureErrorMock.mockReset();
     getMcpToolDefinitionMock.mockReset();
-    getMcpToolScopeHintMock.mockReset();
-    getMcpToolScopeHintMock.mockImplementation(
-      (_toolName: string): ToolScope | undefined => undefined,
+    getMcpToolRequiredScopesHintMock.mockReset();
+    getMcpToolRequiredScopesHintMock.mockImplementation(
+      (_toolName: string): readonly ToolScope[] | undefined => undefined,
     );
     handleMcpToolCallMock.mockReset();
     listMcpToolsMock.mockReset();
@@ -229,7 +229,7 @@ describe("handleMcpHttpRequest", () => {
       userId: "user_1",
     });
     resolveMcpSessionContextMock.mockResolvedValue(context);
-    getMcpToolScopeHintMock.mockReturnValue(undefined);
+    getMcpToolRequiredScopesHintMock.mockReturnValue(undefined);
     // The dynamic-gateway definition load fails (backing store outage). This
     // must not collapse into a definitive unknown_tool.
     getMcpToolDefinitionMock.mockRejectedValue(
@@ -313,7 +313,7 @@ describe("handleMcpHttpRequest", () => {
       userId: "user_1",
     });
     resolveMcpSessionContextMock.mockResolvedValue(context);
-    getMcpToolScopeHintMock.mockReturnValue("stella:skills");
+    getMcpToolRequiredScopesHintMock.mockReturnValue(["stella:skills"]);
 
     const response = await handleMcpHttpRequest(
       createMcpRequest({
@@ -329,7 +329,7 @@ describe("handleMcpHttpRequest", () => {
     const body = await readTestJson<McpJsonResponse<CallToolResult>>(response);
 
     expect(response.status).toBe(200);
-    expect(getMcpToolScopeHintMock).toHaveBeenCalledWith(
+    expect(getMcpToolRequiredScopesHintMock).toHaveBeenCalledWith(
       "skill__research",
       "default",
     );
@@ -361,7 +361,10 @@ describe("handleMcpHttpRequest", () => {
       userId: "user_1",
     });
     resolveMcpSessionContextMock.mockResolvedValue(context);
-    getMcpToolScopeHintMock.mockReturnValue("stella:documents_write");
+    getMcpToolRequiredScopesHintMock.mockReturnValue([
+      "stella:documents_write",
+      "stella:templates",
+    ]);
     getMcpToolDefinitionMock.mockResolvedValue({
       access: "write",
       additionalScopes: ["stella:templates"],
@@ -398,6 +401,47 @@ describe("handleMcpHttpRequest", () => {
     expect(handleMcpToolCallMock).not.toHaveBeenCalled();
   });
 
+  test("early scope rejection requests the complete compound scope set", async () => {
+    const context = { type: "mcp-context" };
+    authenticateMcpRequestMock.mockResolvedValue({
+      organizationId: "org_1",
+      scopes: ["stella:read"],
+      userId: "user_1",
+    });
+    resolveMcpSessionContextMock.mockResolvedValue(context);
+    getMcpToolRequiredScopesHintMock.mockReturnValue([
+      "stella:documents_write",
+      "stella:templates",
+    ]);
+
+    const response = await handleMcpHttpRequest(
+      createMcpRequest({
+        id: 1,
+        jsonrpc: "2.0",
+        method: "tools/call",
+        params: {
+          arguments: {},
+          name: "save_filled_template",
+        },
+      }),
+    );
+    const body = await readTestJson<McpJsonResponse<CallToolResult>>(response);
+    const item = body.result.content.at(0);
+    const parsed = item?.type === "text" ? JSON.parse(item.text) : undefined;
+
+    expect(response.status).toBe(200);
+    expect(parsed?.error).toEqual(
+      expect.objectContaining({
+        code: "missing_scope",
+        hint: "Grant the 'stella:documents_write' scope by re-running OAuth consent (CLI: 'stella auth login --scopes stella:read,stella:documents_write,stella:templates'), then retry.",
+        message:
+          "Insufficient permissions. Required scope: stella:documents_write",
+      }),
+    );
+    expect(getMcpToolDefinitionMock).not.toHaveBeenCalled();
+    expect(handleMcpToolCallMock).not.toHaveBeenCalled();
+  });
+
   test("returns an unknown_tool envelope with closest-name hints", async () => {
     const context = { type: "mcp-context" };
     authenticateMcpRequestMock.mockResolvedValue({
@@ -408,7 +452,7 @@ describe("handleMcpHttpRequest", () => {
     resolveMcpSessionContextMock.mockResolvedValue(context);
     // No scope hint and no resolved definition: the tool name is unknown. The
     // closest visible name (scope-filtered list) is suggested.
-    getMcpToolScopeHintMock.mockReturnValue(undefined);
+    getMcpToolRequiredScopesHintMock.mockReturnValue(undefined);
     getMcpToolDefinitionMock.mockResolvedValue(undefined);
     listMcpToolsMock.mockResolvedValue([
       {
@@ -448,7 +492,7 @@ describe("handleMcpHttpRequest", () => {
       userId: "user_1",
     });
     resolveMcpSessionContextMock.mockResolvedValue(context);
-    getMcpToolScopeHintMock.mockReturnValue(undefined);
+    getMcpToolRequiredScopesHintMock.mockReturnValue(undefined);
     getMcpToolDefinitionMock.mockResolvedValue(undefined);
     listMcpToolsMock.mockResolvedValue([
       {

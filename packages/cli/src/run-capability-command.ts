@@ -36,7 +36,7 @@ import {
   requestIdLine,
   RESERVED_FLAG_KEYS,
   reservedFlagUsageError,
-  scopeGranted,
+  scopePreflightFailure,
   setExit,
   setPath,
   streamOrRenderAllPages,
@@ -345,13 +345,14 @@ export const runCapabilityCommand = async ({
   }
 
   // Client-side scope precheck (spec S3): fail before any server call.
-  const missingScope = [
-    ...(spec.scope === undefined ? [] : [spec.scope]),
-    ...(spec.additionalScopes ?? []),
-  ].find((scope) => !scopeGranted({ token, scope }));
-  if (missingScope !== undefined) {
+  const scopeFailure = scopePreflightFailure({
+    additionalScopes: spec.additionalScopes,
+    scope: spec.scope,
+    token,
+  });
+  if (scopeFailure !== undefined) {
     writers.stderr(
-      `Missing scope stella:${missingScope}. Re-run 'stella auth login' to grant stella:${missingScope}.\n`,
+      `Missing scope stella:${scopeFailure.missingScope}. Re-run '${scopeFailure.loginCommand}' to grant the complete scope set.\n`,
     );
     setExit(context, EXIT_CODES.auth);
     return;

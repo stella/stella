@@ -23,6 +23,7 @@
   "dependencies": {
     "@better-auth/expo": "catalog:",
     "@expo-google-fonts/dm-sans": "0.4.2",
+    "@noble/hashes": "2.2.0",
     "@react-navigation/native": "^7.1.8",
     "@stll/api": "workspace:*",
     "@stll/api-client": "workspace:*",

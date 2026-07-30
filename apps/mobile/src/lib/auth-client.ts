@@ -14,6 +14,7 @@ import {
 } from "@stll/api-contract";
 
 import { env } from "@/env";
+import { mobileAuthStoragePrefix } from "@/lib/auth-storage";
 
 export const authClient = createAuthClient({
   baseURL: env.API_URL,
@@ -23,7 +24,7 @@ export const authClient = createAuthClient({
       cookiePrefix: [...STELLA_AUTH_COOKIE_PREFIXES],
       scheme: STELLA_MOBILE_SCHEME,
       storage: SecureStore,
-      storagePrefix: "stella-auth",
+      storagePrefix: mobileAuthStoragePrefix(env.API_URL),
     }),
     emailOTPClient(),
     lastLoginMethodClient(),

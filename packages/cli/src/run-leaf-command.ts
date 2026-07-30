@@ -387,6 +387,52 @@ export const scopeGranted = ({
   return claims.scope.split(/\s+/u).includes(`stella:${scope}`);
 };
 
+export const scopePreflightFailure = ({
+  additionalScopes,
+  scope,
+  token,
+}: {
+  additionalScopes?: readonly string[] | undefined;
+  scope?: string | undefined;
+  token: string;
+}): { loginCommand: string; missingScope: string } | undefined => {
+  const claims = decodeAccessTokenClaims(token);
+  if (claims?.scope === undefined) {
+    // Opaque token or no scope claim: cannot verify locally, let the server rule.
+    return undefined;
+  }
+
+  const requiredScopes: string[] = [];
+  if (scope !== undefined) {
+    requiredScopes.push(scope);
+  }
+  if (additionalScopes !== undefined) {
+    requiredScopes.push(...additionalScopes);
+  }
+
+  const grantedScopes = claims.scope
+    .split(/\s+/u)
+    .filter((grantedScope) => grantedScope.length > 0);
+  const grantedScopeSet = new Set(grantedScopes);
+  const missingScope = requiredScopes.find(
+    (requiredScope) => !grantedScopeSet.has(`stella:${requiredScope}`),
+  );
+  if (missingScope === undefined) {
+    return undefined;
+  }
+
+  const requestedScopes = [
+    ...new Set([
+      ...grantedScopes,
+      ...requiredScopes.map((requiredScope) => `stella:${requiredScope}`),
+    ]),
+  ];
+  return {
+    loginCommand: `stella auth login --scopes ${requestedScopes.join(",")}`,
+    missingScope,
+  };
+};
+
 export const confirmDestructive = async ({
   context,
   flags,
@@ -1020,13 +1066,14 @@ export const runLeafCommand = async ({
 
   // Client-side scope precheck (spec S3): fail before any server call. Opaque
   // tokens still defer to the server, which enforces the same full set.
-  const missingScope = [
-    ...(spec.scope === undefined ? [] : [spec.scope]),
-    ...(spec.additionalScopes ?? []),
-  ].find((scope) => !scopeGranted({ token, scope }));
-  if (missingScope !== undefined) {
+  const scopeFailure = scopePreflightFailure({
+    additionalScopes: spec.additionalScopes,
+    scope: spec.scope,
+    token,
+  });
+  if (scopeFailure !== undefined) {
     writers.stderr(
-      `Missing scope stella:${missingScope}. Re-run 'stella auth login' to grant stella:${missingScope}.\n`,
+      `Missing scope stella:${scopeFailure.missingScope}. Re-run '${scopeFailure.loginCommand}' to grant the complete scope set.\n`,
     );
     setExit(context, EXIT_CODES.auth);
     return;

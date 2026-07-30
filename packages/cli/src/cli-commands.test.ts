@@ -1045,6 +1045,9 @@ describe("template persistence discriminator split", () => {
 
     expect(result.exitCode).toBe(EXIT_CODES.auth);
     expect(result.stderr).toContain("Missing scope stella:templates");
+    expect(result.stderr).toContain(
+      "stella auth login --scopes stella:documents_write,stella:templates",
+    );
     expect(server.requests).toHaveLength(0);
   });
 

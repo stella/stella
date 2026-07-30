@@ -82,10 +82,10 @@ type McpServerDependencies = {
     context: McpRequestContext,
     mode?: McpMode,
   ) => Promise<McpToolDefinition | undefined>;
-  getMcpToolScopeHint: (
+  getMcpToolRequiredScopesHint: (
     toolName: string,
     mode?: McpMode,
-  ) => ToolScope | undefined;
+  ) => readonly ToolScope[] | undefined;
   handleMcpToolCall: ({
     args,
     context,
@@ -201,7 +201,7 @@ export const createMcpHttpRequestHandler = ({
   authenticateMcpRequest,
   captureError,
   getMcpToolDefinition,
-  getMcpToolScopeHint,
+  getMcpToolRequiredScopesHint,
   handleMcpToolCall,
   listMcpResources,
   listMcpTools,
@@ -254,12 +254,18 @@ export const createMcpHttpRequestHandler = ({
 
     server.setRequestHandler(CallToolRequestSchema, async (toolRequest) => {
       const toolName = toolRequest.params.name;
-      const hintedScope = getMcpToolScopeHint(toolName, mode);
-      if (hintedScope && !session.scopes.includes(hintedScope)) {
+      const requiredScopesHint = getMcpToolRequiredScopesHint(toolName, mode);
+      const missingHintedScope = requiredScopesHint?.find(
+        (scope) => !session.scopes.includes(scope),
+      );
+      if (
+        missingHintedScope !== undefined &&
+        requiredScopesHint !== undefined
+      ) {
         return missingScopeResult({
           grantedScopes: session.scopes,
-          missingScope: hintedScope,
-          requiredScopes: [hintedScope],
+          missingScope: missingHintedScope,
+          requiredScopes: requiredScopesHint,
         });
       }
 

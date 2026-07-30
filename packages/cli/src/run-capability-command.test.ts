@@ -470,6 +470,9 @@ describe("runCapabilityCommand: compound scope preflight", () => {
     server.stop();
     expect(tty.exitCode()).toBe(EXIT_CODES.auth);
     expect(tty.stderrText()).toContain("stella:templates");
+    expect(tty.stderrText()).toContain(
+      "stella auth login --scopes stella:documents_write,stella:templates",
+    );
     expect(server.calls).toHaveLength(0);
   });
 });
