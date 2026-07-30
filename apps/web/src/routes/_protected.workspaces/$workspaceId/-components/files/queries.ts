@@ -62,7 +62,6 @@ type FileOptionsProps = QueryOptionsInput<FileByFieldIdKey>;
 export const fileMetadataOptions = (props: FileOptionsProps) =>
   queryOptions({
     queryKey: filesKeys.metadataByFieldId(props),
-    enabled: props.enabled ?? true,
     retry: shouldRetryAPIRequest,
     queryFn: async ({ signal }) => {
       const response = await api
