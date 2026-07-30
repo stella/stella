@@ -33,7 +33,7 @@ import {
   getOauthHashFragment,
   getOauthClientDisplayName,
   getOauthRedirectUrl,
-  getSignedOauthQueryFromHash,
+  getSignedOauthQuery,
   oauthClientAllowsScopes,
 } from "@/lib/oauth-provider";
 import type { OAuthScopeDisplayEntry } from "@/lib/oauth-scopes";
@@ -58,12 +58,15 @@ export const Route = createFileRoute("/consent")({
   validateSearch: searchSchema,
   beforeLoad: async ({ context, location }) => {
     const authContext = await loadAuthContext(context.queryClient);
-    const bridgedQuery = getSignedOauthQueryFromHash(location.hash);
+    const oauthQuery = getSignedOauthQuery({
+      hash: location.hash,
+      search: location.searchStr,
+    });
 
     if (!authContext.session) {
-      if (bridgedQuery) {
+      if (oauthQuery) {
         throw redirect({
-          href: `/auth#${getOauthHashFragment(bridgedQuery)}`,
+          href: `/auth#${getOauthHashFragment(oauthQuery)}`,
           replace: true,
         });
       }
@@ -87,18 +90,24 @@ export const Route = createFileRoute("/consent")({
 
 function ConsentPage() {
   const t = useTranslations();
-  const bridgedQuery = useLocation({
-    select: (location) => getSignedOauthQueryFromHash(location.hash),
+  const oauthQuery = useLocation({
+    select: (location) =>
+      getSignedOauthQuery({
+        hash: location.hash,
+        search: location.searchStr,
+      }),
   });
-  const bridgedParams = bridgedQuery ? new URLSearchParams(bridgedQuery) : null;
+  const oauthParams = oauthQuery ? new URLSearchParams(oauthQuery) : null;
   const searchClientId = Route.useSearch({
     select: (search) => search.client_id ?? null,
   });
   const searchScope = Route.useSearch({
     select: (search) => search.scope,
   });
-  const clientId = searchClientId ?? bridgedParams?.get("client_id") ?? null;
-  const scope = searchScope ?? bridgedParams?.get("scope") ?? undefined;
+  // When a signed continuation exists, it is authoritative for both display
+  // and expansion; unrelated search params must not override signed values.
+  const clientId = oauthParams?.get("client_id") ?? searchClientId;
+  const scope = oauthParams?.get("scope") ?? searchScope;
   const activeOrganizationId = Route.useRouteContext({
     select: (ctx) => ctx.session?.activeOrganizationId ?? null,
   });
@@ -162,19 +171,19 @@ function ConsentPage() {
   // being silently skipped.
   const scopeEntries = toOAuthScopeDisplayEntries(scopes);
   const canRequestFullAccess =
-    bridgedQuery !== null &&
+    oauthQuery !== null &&
     requestsStellaWorkspaceAccess(scopes) &&
     !includesFullStellaAccess(scopes) &&
     oauthClientAllowsScopes(clientQuery.data, FULL_STELLA_ACCESS_SCOPES);
 
   const handleRequestFullAccess = () => {
-    if (!bridgedQuery) {
+    if (!oauthQuery) {
       return;
     }
 
     const authorizationUrl = getExpandedOauthAuthorizationUrl({
       apiBaseUrl: env.VITE_API_URL,
-      oauthQuery: bridgedQuery,
+      oauthQuery,
       scopes: FULL_STELLA_ACCESS_SCOPES,
     });
     if (!authorizationUrl) {

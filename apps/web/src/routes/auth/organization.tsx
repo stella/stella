@@ -39,8 +39,7 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import {
   getOauthHashFragment,
   getOauthRedirectUrl,
-  getSignedOauthQueryFromHash,
-  hasSignedOauthQuery,
+  getSignedOauthQuery,
 } from "@/lib/oauth-provider";
 import {
   isAcceptInvitationRedirect,
@@ -59,12 +58,15 @@ const searchSchema = v.object({
 export const Route = createFileRoute("/auth/organization")({
   validateSearch: searchSchema,
   beforeLoad: ({ context, location, search }) => {
-    const bridgedQuery = getSignedOauthQueryFromHash(location.hash);
+    const oauthQuery = getSignedOauthQuery({
+      hash: location.hash,
+      search: location.searchStr,
+    });
 
     if (!context.session) {
-      if (bridgedQuery) {
+      if (oauthQuery) {
         throw redirect({
-          href: `/auth#${getOauthHashFragment(bridgedQuery)}`,
+          href: `/auth#${getOauthHashFragment(oauthQuery)}`,
           replace: true,
         });
       }
@@ -78,8 +80,7 @@ export const Route = createFileRoute("/auth/organization")({
       });
     }
 
-    const isOauthPostLogin =
-      bridgedQuery !== null || hasSignedOauthQuery(location.searchStr);
+    const isOauthPostLogin = oauthQuery !== null;
 
     if (
       !isOauthPostLogin &&
@@ -97,8 +98,10 @@ function Organization() {
   const hasOrganizations = (organizations?.length ?? 0) > 0;
   const isOauthPostLogin =
     typeof window !== "undefined" &&
-    (getSignedOauthQueryFromHash(window.location.hash) !== null ||
-      hasSignedOauthQuery(window.location.search));
+    getSignedOauthQuery({
+      hash: window.location.hash,
+      search: window.location.search,
+    }) !== null;
 
   if (!isPending && !hasOrganizations && !isOauthPostLogin) {
     return <Navigate replace to="/onboarding" />;

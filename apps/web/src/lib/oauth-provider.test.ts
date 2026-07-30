@@ -5,6 +5,7 @@ import {
   getOauthClientDisplayName,
   getOauthHashFragment,
   getOauthRedirectUrl,
+  getSignedOauthQuery,
   getSignedOauthQueryFromHash,
   hasSignedOauthQuery,
   oauthClientAllowsScopes,
@@ -141,6 +142,37 @@ describe("getSignedOauthQueryFromHash", () => {
     expect(getSignedOauthQueryFromHash("#oauth_query=redirectTo%3D%252F")).toBe(
       null,
     );
+  });
+});
+
+describe("getSignedOauthQuery", () => {
+  const directQuery =
+    "client_id=direct-client&scope=openid&sig=direct-signature";
+  const bridgedQuery =
+    "client_id=bridged-client&scope=openid&sig=bridged-signature";
+
+  test("accepts signed continuations carried in the URL search", () => {
+    expect(getSignedOauthQuery({ hash: "", search: `?${directQuery}` })).toBe(
+      directQuery,
+    );
+  });
+
+  test("prefers the explicit hash bridge when both transports are present", () => {
+    expect(
+      getSignedOauthQuery({
+        hash: getOauthHashFragment(bridgedQuery),
+        search: `?${directQuery}`,
+      }),
+    ).toBe(bridgedQuery);
+  });
+
+  test("rejects unsigned search and hash values", () => {
+    expect(
+      getSignedOauthQuery({
+        hash: "#oauth_query=scope%3Dopenid",
+        search: "?scope=openid",
+      }),
+    ).toBe(null);
   });
 });
 

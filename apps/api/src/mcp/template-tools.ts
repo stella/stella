@@ -5,7 +5,7 @@ import * as v from "valibot";
 import { roles } from "@stll/permissions";
 
 import type { Transaction } from "@/api/db/root";
-import { templates } from "@/api/db/schema";
+import { entities, templates } from "@/api/db/schema";
 import { configureTemplateFields } from "@/api/handlers/templates/configure-template-fields-service";
 import { createStoredTemplate } from "@/api/handlers/templates/create-template-service";
 import { containsNull } from "@/api/handlers/templates/fill";
@@ -912,26 +912,37 @@ const validateFilledTemplateDestination = async ({
   workspaceId: McpRequestContext["accessibleWorkspaceIds"][number];
 }): Promise<string | null> => {
   if (action === "create_document") {
-    if (parentId === undefined) {
-      return null;
-    }
-    const parentResult = await context.safeDb((tx) =>
-      tx.query.entities.findFirst({
+    const destinationResult = await context.safeDb(async (tx) => {
+      // Non-authoritative fast-fail: avoid template rendering, AI metering and
+      // use-count writes when the workspace is already full. The shared buffer
+      // writer retains the authoritative locked check against concurrent creates.
+      const entityCount = await tx.$count(
+        entities,
+        eq(entities.workspaceId, workspaceId),
+      );
+      if (entityCount >= LIMITS.entitiesCount) {
+        return "Entities limit reached";
+      }
+      if (parentId === undefined) {
+        return null;
+      }
+
+      const parent = await tx.query.entities.findFirst({
         where: {
           id: { eq: brandPersistedEntityId(parentId) },
           workspaceId: { eq: workspaceId },
         },
         columns: { kind: true },
-      }),
-    );
-    if (Result.isError(parentResult)) {
-      throw parentResult.error;
+      });
+      if (!parent) {
+        return "Parent entity not found in this workspace";
+      }
+      return parent.kind === "folder" ? null : "Parent entity must be a folder";
+    });
+    if (Result.isError(destinationResult)) {
+      throw destinationResult.error;
     }
-    const parent = parentResult.value;
-    if (!parent) {
-      return "Parent entity not found in this workspace";
-    }
-    return parent.kind === "folder" ? null : "Parent entity must be a folder";
+    return destinationResult.value;
   }
 
   const entityResult = await context.safeDb((tx) =>

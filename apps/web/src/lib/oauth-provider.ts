@@ -33,6 +33,23 @@ export const getSignedOauthQueryFromHash = (hash: string): string | null => {
   return query;
 };
 
+/** Resolve a signed consent continuation from either supported transport. */
+export const getSignedOauthQuery = ({
+  hash,
+  search,
+}: {
+  hash: string;
+  search: string;
+}): string | null => {
+  const bridgedQuery = getSignedOauthQueryFromHash(hash);
+  if (bridgedQuery !== null) {
+    return bridgedQuery;
+  }
+
+  const query = search.startsWith("?") ? search.slice(1) : search;
+  return hasSignedOauthQuery(query) ? query : null;
+};
+
 export const getOauthHashFragment = (query: string): string => {
   const fragment = new URLSearchParams();
   fragment.set(OAUTH_QUERY_HASH_PARAM, query);

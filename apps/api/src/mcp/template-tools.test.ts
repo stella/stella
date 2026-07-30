@@ -5,6 +5,7 @@ import JSZip from "jszip";
 import type { Transaction } from "@/api/db/root";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import { LIMITS } from "@/api/lib/limits";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
@@ -129,6 +130,7 @@ type SeededEntityTarget =
 const createScopedDb = (
   templates: unknown[] = [],
   entityTargets: Record<string, SeededEntityTarget> = {},
+  entityCount = 0,
 ) =>
   asTestRaw<McpRequestContext["scopedDb"] & ReturnType<typeof mock>>(
     mock(async (run: (tx: unknown) => unknown) => {
@@ -146,6 +148,7 @@ const createScopedDb = (
       };
       return await run({
         ...builder,
+        $count: async () => entityCount,
         query: {
           entities: {
             findFirst: async ({ where }: { where: { id: { eq: string } } }) => {
@@ -1074,6 +1077,27 @@ describe("MCP template tools", () => {
       text: "Entity has no file field",
     });
     expect(fillStoredTemplateDocxMock).not.toHaveBeenCalled();
+  });
+
+  test("save_filled_template preflights workspace capacity before fill work", async () => {
+    const fullWorkspace = createScopedDb([], {}, LIMITS.entitiesCount);
+
+    const result = await handleMcpToolCall({
+      args: {
+        action: "create_document",
+        template_id: TEMPLATE_ID,
+        matter_id: "ws_1",
+        values: {},
+      },
+      context: createContext({ scopedDb: fullWorkspace }),
+      toolName: "save_filled_template",
+    });
+
+    expect(result.content.at(0)).toMatchObject({
+      text: "Entities limit reached",
+    });
+    expect(fillStoredTemplateDocxMock).not.toHaveBeenCalled();
+    expect(createEntityFromBufferMock).not.toHaveBeenCalled();
   });
 
   test("save_template (create) validates the DOCX and returns the new template id", async () => {
