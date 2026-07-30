@@ -94,7 +94,7 @@ describe("parseMobileApiUrl", () => {
 });
 
 describe("shouldAllowLoopbackHttp", () => {
-  test("allows loopback only in a development simulator runtime", () => {
+  test("allows loopback only in development simulator or web runtimes", () => {
     expect(
       shouldAllowLoopbackHttp({
         buildMode: "development",
@@ -114,6 +114,20 @@ describe("shouldAllowLoopbackHttp", () => {
         buildMode: "development",
         deviceKind: "physical",
         platform: "android",
+      }),
+    ).toBe(false);
+    expect(
+      shouldAllowLoopbackHttp({
+        buildMode: "development",
+        deviceKind: "physical",
+        platform: "web",
+      }),
+    ).toBe(true);
+    expect(
+      shouldAllowLoopbackHttp({
+        buildMode: "production",
+        deviceKind: "physical",
+        platform: "web",
       }),
     ).toBe(false);
   });

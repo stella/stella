@@ -1,10 +1,9 @@
 import { Result, TaggedError, panic } from "better-result";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { pendingUploads } from "@/api/db/schema";
-import type { PendingUploadPurposeData } from "@/api/db/schema";
 import { computeVersionDiffStats } from "@/api/handlers/entities/compute-version-diff";
 import { writeFileVersion } from "@/api/handlers/entities/write-file-version";
 import type { WriteFileVersionResult } from "@/api/handlers/entities/write-file-version";
@@ -14,6 +13,11 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  BUFFER_INTENT_HEARTBEAT_MS,
+  BUFFER_INTENT_TTL_MS,
+  reconcileStaleBufferIntents,
+} from "@/api/lib/buffer-intent-reconciliation";
 import type { DocumentSource } from "@/api/lib/document-source";
 import {
   enqueueImageThumbnailOrMarkFailed,
@@ -25,23 +29,6 @@ import { getS3 } from "@/api/lib/s3";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import { processExtraction } from "@/api/lib/search/process-extraction";
 import { broadcast } from "@/api/lib/sse";
-
-const BUFFER_INTENT_TTL_MS = 5 * 60 * 1000;
-const BUFFER_INTENT_STALE_MS = 60 * 1000;
-const BUFFER_INTENT_HEARTBEAT_MS = 15 * 1000;
-const BUFFER_INTENT_RECONCILE_LIMIT = 25;
-
-type RecoverableVersionIntent = Extract<
-  PendingUploadPurposeData,
-  { type: "entity_version" }
-> & { reservedFileId: string };
-
-const isRecoverableVersionIntent = (
-  value: PendingUploadPurposeData,
-): value is RecoverableVersionIntent =>
-  value.type === "entity_version" &&
-  typeof value.reservedFileId === "string" &&
-  value.reservedFileId.length > 0;
 
 class EntityVersionTargetError extends TaggedError("EntityVersionTargetError")<{
   code:
@@ -100,123 +87,6 @@ const messageForStatus = (status: EntityVersionTargetErrorCode): string =>
 type BufferVersionIntent = {
   claimRequestId: string;
   id: SafeId<"pendingUpload">;
-};
-
-/**
- * Claim and remove a bounded batch of final-key objects whose durable intent
- * proves that no version transaction committed. The intent row is finalized
- * in the same transaction as the version, so a committed reference can never
- * satisfy this stale-scanning predicate.
- */
-const reconcileStaleBufferVersionIntents = async ({
-  safeDb,
-  organizationId,
-  workspaceId,
-}: Pick<
-  CreateEntityVersionFromBufferInput,
-  "safeDb" | "organizationId" | "workspaceId"
->): Promise<void> => {
-  const reconcileClaimId = Bun.randomUUIDv7().slice(0, 64);
-  const timeoutSeconds = Math.floor(BUFFER_INTENT_STALE_MS / 1000);
-  const claimedResult = await safeDb(async (tx) => {
-    const staleRows = await tx
-      .select({
-        declaredMime: pendingUploads.declaredMime,
-        id: pendingUploads.id,
-        purposeData: pendingUploads.purposeData,
-      })
-      .from(pendingUploads)
-      .where(
-        sql`${pendingUploads.organizationId} = ${organizationId}
-          AND ${pendingUploads.workspaceId} = ${workspaceId}
-          AND ${pendingUploads.purpose} = 'entity_version'
-          AND ${pendingUploads.purposeData}->>'reservedFileId' IS NOT NULL
-          AND ${pendingUploads.status} = 'scanning'
-          AND ${pendingUploads.claimedAt} < NOW() - ${timeoutSeconds} * interval '1 second'`,
-      )
-      .limit(BUFFER_INTENT_RECONCILE_LIMIT)
-      .for("update", { skipLocked: true });
-
-    if (staleRows.length === 0) {
-      return [];
-    }
-
-    const ids = staleRows.map((row) => row.id);
-    // audit: skip — crash-recovery claim bookkeeping; no durable entity changes.
-    await tx
-      .update(pendingUploads)
-      .set({
-        claimedAt: new Date(),
-        claimedByRequestId: reconcileClaimId,
-      })
-      .where(
-        and(
-          inArray(pendingUploads.id, ids),
-          eq(pendingUploads.status, "scanning"),
-        ),
-      );
-    return staleRows;
-  });
-  if (Result.isError(claimedResult)) {
-    throw claimedResult.error;
-  }
-
-  const cleanupResults = await Promise.all(
-    claimedResult.value.map(async (row) => {
-      if (!isRecoverableVersionIntent(row.purposeData)) {
-        return null;
-      }
-      const staleObjectKey = createFileKey({
-        organizationId,
-        workspaceId,
-        fileId: row.purposeData.reservedFileId,
-        mimeType: row.declaredMime,
-      });
-      const cleanup = await Result.tryPromise({
-        try: async () => await getS3().delete(staleObjectKey),
-        catch: (cause) => cause,
-      });
-      if (Result.isError(cleanup)) {
-        captureError(cleanup.error, {
-          objectKey: staleObjectKey,
-          pendingUploadId: row.id,
-          stage: "buffer-version-intent-reconcile",
-        });
-        return null;
-      }
-      return row.id;
-    }),
-  );
-  const cleanedIds = cleanupResults.filter(
-    (id): id is SafeId<"pendingUpload"> => id !== null,
-  );
-
-  if (cleanedIds.length === 0) {
-    return;
-  }
-  const finalizedCleanup = await safeDb(async (tx) => {
-    // audit: skip — terminal crash-recovery bookkeeping after object cleanup.
-    await tx
-      .update(pendingUploads)
-      .set({
-        finalizedAt: new Date(),
-        rejectReason: "Reconciled abandoned server-generated version bytes",
-        status: "rejected",
-      })
-      .where(
-        and(
-          inArray(pendingUploads.id, cleanedIds),
-          eq(pendingUploads.status, "scanning"),
-          eq(pendingUploads.claimedByRequestId, reconcileClaimId),
-        ),
-      );
-  });
-  if (Result.isError(finalizedCleanup)) {
-    captureError(finalizedCleanup.error, {
-      pendingUploadIds: cleanedIds.join(","),
-      stage: "buffer-version-intent-reconcile-finalize",
-    });
-  }
 };
 
 const reserveBufferVersionIntent = async ({
@@ -410,10 +280,11 @@ export const createEntityVersionFromBuffer = async ({
   // then durably reserve this exact file id. A hard death after the S3 write
   // can therefore be distinguished from a committed version and cleaned by a
   // later bounded reconciliation pass.
-  await reconcileStaleBufferVersionIntents({
+  await reconcileStaleBufferIntents({
     safeDb,
     organizationId,
     workspaceId,
+    purpose: "entity_version",
   });
   const intent = await reserveBufferVersionIntent({
     safeDb,

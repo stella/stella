@@ -1,5 +1,5 @@
 import { Result, TaggedError, panic } from "better-result";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -10,10 +10,7 @@ import {
   pendingUploads,
   workspaces,
 } from "@/api/db/schema";
-import type {
-  PendingUploadFinalizedResult,
-  PendingUploadPurposeData,
-} from "@/api/db/schema";
+import type { PendingUploadFinalizedResult } from "@/api/db/schema";
 import { validateParentIdForInsert } from "@/api/handlers/entities/validate-parent-id";
 import {
   allocateFileObject,
@@ -27,6 +24,11 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  BUFFER_INTENT_HEARTBEAT_MS,
+  BUFFER_INTENT_TTL_MS,
+  reconcileStaleBufferIntents,
+} from "@/api/lib/buffer-intent-reconciliation";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import {
@@ -39,149 +41,15 @@ import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename
 import { processExtraction } from "@/api/lib/search/process-extraction";
 import { broadcast } from "@/api/lib/sse";
 
-const BUFFER_INTENT_TTL_MS = 5 * 60 * 1000;
-const BUFFER_INTENT_STALE_MS = 60 * 1000;
-const BUFFER_INTENT_HEARTBEAT_MS = 15 * 1000;
-const BUFFER_INTENT_RECONCILE_LIMIT = 25;
-
-type RecoverableEntityCreateIntent = Extract<
-  PendingUploadPurposeData,
-  { type: "entity_create" }
-> & { reservedFileId: string };
-
 type BufferEntityCreateIntent = {
   claimRequestId: string;
   id: SafeId<"pendingUpload">;
 };
 
-const isRecoverableEntityCreateIntent = (
-  value: PendingUploadPurposeData,
-): value is RecoverableEntityCreateIntent =>
-  value.type === "entity_create" &&
-  typeof value.reservedFileId === "string" &&
-  value.reservedFileId.length > 0;
-
 const toSafeDb =
   (scopedDb: ScopedDb): SafeDb =>
   async <T>(run: (tx: Transaction) => Promise<T>) =>
     await Result.tryPromise(async () => await scopedDb(run));
-
-/**
- * Remove a bounded batch of abandoned server-generated entity objects. The
- * intent is finalized atomically with the entity, so a committed reference can
- * never match this stale-scanning predicate.
- */
-const reconcileStaleEntityCreateIntents = async ({
-  safeDb,
-  organizationId,
-  workspaceId,
-}: {
-  safeDb: SafeDb;
-  organizationId: SafeId<"organization">;
-  workspaceId: SafeId<"workspace">;
-}): Promise<void> => {
-  const reconcileClaimId = Bun.randomUUIDv7().slice(0, 64);
-  const timeoutSeconds = Math.floor(BUFFER_INTENT_STALE_MS / 1000);
-  const claimedResult = await safeDb(async (tx) => {
-    const staleRows = await tx
-      .select({
-        declaredMime: pendingUploads.declaredMime,
-        id: pendingUploads.id,
-        purposeData: pendingUploads.purposeData,
-      })
-      .from(pendingUploads)
-      .where(
-        sql`${pendingUploads.organizationId} = ${organizationId}
-          AND ${pendingUploads.workspaceId} = ${workspaceId}
-          AND ${pendingUploads.purpose} = 'entity_create'
-          AND ${pendingUploads.purposeData}->>'reservedFileId' IS NOT NULL
-          AND ${pendingUploads.status} = 'scanning'
-          AND ${pendingUploads.claimedAt} < NOW() - ${timeoutSeconds} * interval '1 second'`,
-      )
-      .limit(BUFFER_INTENT_RECONCILE_LIMIT)
-      .for("update", { skipLocked: true });
-
-    if (staleRows.length === 0) {
-      return [];
-    }
-
-    const ids = staleRows.map((row) => row.id);
-    // audit: skip — crash-recovery claim bookkeeping; no entity changes.
-    await tx
-      .update(pendingUploads)
-      .set({
-        claimedAt: new Date(),
-        claimedByRequestId: reconcileClaimId,
-      })
-      .where(
-        and(
-          inArray(pendingUploads.id, ids),
-          eq(pendingUploads.status, "scanning"),
-        ),
-      );
-    return staleRows;
-  });
-  if (Result.isError(claimedResult)) {
-    throw claimedResult.error;
-  }
-
-  const cleanupResults = await Promise.all(
-    claimedResult.value.map(async (row) => {
-      if (!isRecoverableEntityCreateIntent(row.purposeData)) {
-        return null;
-      }
-      const objectKey = createFileKey({
-        organizationId,
-        workspaceId,
-        fileId: row.purposeData.reservedFileId,
-        mimeType: row.declaredMime,
-      });
-      const cleanup = await Result.tryPromise({
-        try: async () => await getS3().delete(objectKey),
-        catch: (cause) => cause,
-      });
-      if (Result.isError(cleanup)) {
-        captureError(cleanup.error, {
-          objectKey,
-          pendingUploadId: row.id,
-          stage: "buffer-entity-intent-reconcile",
-        });
-        return null;
-      }
-      return row.id;
-    }),
-  );
-  const cleanedIds = cleanupResults.filter(
-    (id): id is SafeId<"pendingUpload"> => id !== null,
-  );
-  if (cleanedIds.length === 0) {
-    return;
-  }
-
-  const finalizedCleanup = await safeDb(async (tx) => {
-    // audit: skip — terminal crash-recovery bookkeeping after object cleanup.
-    await tx
-      .update(pendingUploads)
-      .set({
-        finalizedAt: new Date(),
-        rejectReason: "Reconciled abandoned server-generated entity bytes",
-        status: "rejected",
-      })
-      .where(
-        and(
-          inArray(pendingUploads.id, cleanedIds),
-          eq(pendingUploads.status, "scanning"),
-          eq(pendingUploads.claimedByRequestId, reconcileClaimId),
-        ),
-      );
-  });
-  if (Result.isError(finalizedCleanup)) {
-    captureError(finalizedCleanup.error, {
-      pendingUploadIds: cleanedIds.join(","),
-      stage: "buffer-entity-intent-reconcile-finalize",
-    });
-  }
-};
 
 const reserveEntityCreateIntent = async ({
   safeDb,
@@ -445,10 +313,11 @@ export const createEntityFromBuffer = async ({
   // Reconcile older crash leftovers before publishing another final object,
   // then durably reserve this exact file id. A hard death after the S3 write
   // can therefore be distinguished from a committed entity and cleaned later.
-  await reconcileStaleEntityCreateIntents({
+  await reconcileStaleBufferIntents({
     safeDb,
     organizationId,
     workspaceId,
+    purpose: "entity_create",
   });
   const intent = await reserveEntityCreateIntent({
     safeDb,

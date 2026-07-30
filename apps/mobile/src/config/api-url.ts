@@ -21,8 +21,10 @@ export const shouldAllowAndroidEmulatorHttp = ({
 export const shouldAllowLoopbackHttp = ({
   buildMode,
   deviceKind,
+  platform,
 }: MobileRuntime): boolean =>
-  buildMode === "development" && deviceKind === "emulator";
+  buildMode === "development" &&
+  (deviceKind === "emulator" || platform === "web");
 
 const usesSecureTransport = (
   value: URL,

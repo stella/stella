@@ -268,7 +268,9 @@ describe("createEntityVersionFromBuffer", () => {
 
     expect(Result.isOk(result)).toBe(true);
     expect(s3DeleteMock).toHaveBeenCalledTimes(1);
-    expect(s3DeleteMock).toHaveBeenCalledWith("org_1/ws_1/file_1.docx");
+    expect(s3DeleteMock).toHaveBeenCalledWith(
+      "org_1/ws_1/019c0000-0000-7000-8000-000000000002.docx",
+    );
     expect(persistenceEvents).toEqual(["intent-reserved", "s3-written"]);
   });
 

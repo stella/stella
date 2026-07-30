@@ -128,7 +128,7 @@
           "contains": ["acl: \"private\""]
         },
         {
-          "path": "apps/api/src/handlers/files/utils.ts",
+          "path": "apps/api/src/lib/file-keys.ts",
           "contains": [
             "`${organizationId}/${workspaceId}/${fileId}",
             "export const createFileKey"
