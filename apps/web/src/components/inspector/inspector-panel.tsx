@@ -5,6 +5,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -102,6 +103,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   // route-typed navigation when the inspector is open off-workspace.
   const navigate = useNavigate();
   const setPdfViewerState = useWorkspaceStore((s) => s.setPdfViewerState);
+  const panelQueryClient = useQueryClient();
 
   // Originating matter — surfaced in every tab header as
   // "label · Matter" so users always know which matter the tab
@@ -109,10 +111,24 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   // moving to nullable matter binding in Phase D). Cache hit thanks
   // to the workspace route loader. Fetch is skipped when the pane
   // is mounted off-workspace (e.g. a global chat tab on /chat).
-  const { data: workspace } = useQuery({
-    ...workspaceOptions(workspaceId ?? ""),
-    enabled: workspaceId !== undefined,
-  });
+  const subscribeWorkspace = useCallback(
+    (onStoreChange: () => void) =>
+      panelQueryClient.getQueryCache().subscribe(() => onStoreChange()),
+    [panelQueryClient],
+  );
+  const getWorkspaceSnapshot = useCallback(() => {
+    if (workspaceId === undefined) {
+      return undefined;
+    }
+    return panelQueryClient.getQueryData(
+      workspaceOptions(workspaceId).queryKey,
+    );
+  }, [panelQueryClient, workspaceId]);
+  const workspace = useSyncExternalStore(
+    subscribeWorkspace,
+    getWorkspaceSnapshot,
+    getWorkspaceSnapshot,
+  );
   const matterOrigin = useMemo(
     () =>
       workspaceId !== undefined && workspace?.name
@@ -422,8 +438,6 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   useLayoutEffect(() => {
     pdfRecencyRef.current = Array.from(mountedPdfIds);
   }, [mountedPdfIds]);
-
-  const panelQueryClient = useQueryClient();
 
   // One context menu shared by every ribbon label. Only the active
   // tab's ribbon is mounted at a time so a single instance suffices,
