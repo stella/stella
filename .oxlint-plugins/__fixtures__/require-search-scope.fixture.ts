@@ -30,12 +30,11 @@ const unsafeEntity = sql`SELECT * FROM search_documents sd WHERE sd.organization
 const unsafeBuilderEntity = rootDb.select().from(searchDocuments);
 
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves rootDb relational reads cannot bypass the private projection scope guard
-const unsafeRelationalEntity = rootDb.query.searchDocuments.findFirst();
+const _unsafeRelationalEntity = rootDb.query.searchDocuments.findFirst();
 
-// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves computed rootDb relational reads cannot bypass the private projection scope guard
-const unsafeComputedRelationalEntity = rootDb.query["searchDocuments"].findMany(
-  { limit: 1 },
-);
+const _unsafeComputedRelationalEntity =
+  // oxlint-disable-next-line require-search-scope/require-search-scope, typescript/dot-notation -- fixture proves computed rootDb relational reads cannot bypass the private projection scope guard
+  rootDb.query["searchDocuments"].findMany({ limit: 1 });
 
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves PostgreSQL-equivalent uppercase identifiers are protected
 const unsafeUppercaseEntity = sql`SELECT * FROM SEARCH_DOCUMENTS sd`;
