@@ -280,6 +280,8 @@ export type RawToolsList = {
   cliMinimum?: string;
   /** Effective scopes echoed by the authenticated server response. */
   grantedScopes?: readonly string[];
+  /** Tool names the server attests were omitted solely for missing scope. */
+  scopeOmittedTools?: readonly string[];
 };
 
 /**
@@ -356,12 +358,20 @@ export const fetchToolsListRaw = async ({
     out.grantedScopes =
       scopesHeader.length > 0 ? scopesHeader.split(/\s+/u) : [];
   }
+  const omittedToolsHeader = httpResponse.headers.get(
+    STELLA_SCOPE_OMITTED_TOOLS_HEADER,
+  );
+  if (omittedToolsHeader !== null) {
+    out.scopeOmittedTools =
+      omittedToolsHeader.length > 0 ? omittedToolsHeader.split(/\s+/u) : [];
+  }
   return Result.ok(out);
 };
 
 /** Response headers the server echoes the authenticated session's identity on. */
 const STELLA_ORGANIZATION_HEADER = "x-stella-organization";
 const STELLA_SCOPES_HEADER = "x-stella-scopes";
+const STELLA_SCOPE_OMITTED_TOOLS_HEADER = "x-stella-scope-omitted-tools";
 
 /** The org + granted scopes a credential resolves to, per the server. */
 export type MachineIdentity = {

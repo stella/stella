@@ -8,6 +8,8 @@ import {
   test,
 } from "bun:test";
 
+import { STELLA_MOBILE_AUTH_CHALLENGE_PARAM } from "@stll/api-contract";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import { contacts, workspaceMembers, workspaces } from "@/api/db/schema";
 import {
@@ -362,12 +364,14 @@ describe("isTwoFactorRedirectResponse", () => {
 
 describe("resolveTwoFactorChallengeRedirect", () => {
   test("returns the native challenge route for a stella deep-link callback", () => {
+    const callback = new URL("stella:///");
+    callback.searchParams.set(STELLA_MOBILE_AUTH_CHALLENGE_PARAM, "challenge");
     expect(
       resolveTwoFactorChallengeRedirect({
-        callbackLocation: "stella:///?cookie=session",
+        callbackLocation: callback.toString(),
         frontendUrl: "https://app.example.com",
       }),
-    ).toBe("stella:///two-factor");
+    ).toBe("stella:///two-factor?stella_challenge=challenge");
   });
 
   test.each([null, "https://app.example.com/"])(
@@ -453,6 +457,9 @@ describe("native OAuth plugin order", () => {
 
     expect(pluginIds.indexOf("expo")).toBeGreaterThan(
       pluginIds.indexOf("stella-social-two-factor-redirect"),
+    );
+    expect(pluginIds.indexOf("stella-mobile-session")).toBeGreaterThan(
+      pluginIds.indexOf("expo"),
     );
   });
 

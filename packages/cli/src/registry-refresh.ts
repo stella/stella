@@ -86,25 +86,26 @@ const loadBakedListings = async (): Promise<readonly RegistryToolListing[]> => {
 /**
  * A scoped `tools/list` response is an authorization projection, not proof that
  * a baked tool was removed from the server. Keep a baked compound tool in the
- * runtime tree only when the authenticated response proves the current token
- * lacks one of its grants, so its local all-scopes preflight remains reachable.
- * A fully authorized or unattested omission is definitive and is not restored.
+ * runtime tree only when the authenticated response explicitly names that tool
+ * as omitted for missing scope, so its local all-scopes preflight remains
+ * reachable. Grants alone are insufficient: an older server may lack the tool
+ * entirely while still echoing the same limited grants.
  * Single-scope tools follow the live projection; unknown live tools survive.
  */
 const retainBakedCompoundListings = ({
   fetched,
   baked,
-  grantedScopes,
+  scopeOmittedTools,
 }: {
   fetched: readonly RegistryToolListing[];
   baked: readonly RegistryToolListing[];
-  grantedScopes: readonly string[] | undefined;
+  scopeOmittedTools: readonly string[] | undefined;
 }): readonly RegistryToolListing[] => {
-  if (grantedScopes === undefined) {
+  if (scopeOmittedTools === undefined) {
     return fetched;
   }
   const names = new Set(fetched.map((listing) => listing.name));
-  const granted = new Set(grantedScopes);
+  const omittedForScope = new Set(scopeOmittedTools);
   const retained = baked.filter((listing) => {
     const annotation = TOOL_ANNOTATIONS[listing.name];
     const additionalScopes = annotation?.additionalScopes;
@@ -113,9 +114,7 @@ const retainBakedCompoundListings = ({
       annotation?.scope !== undefined &&
       additionalScopes !== undefined &&
       additionalScopes.length > 0 &&
-      [annotation.scope, ...additionalScopes].some(
-        (scope) => !granted.has(`stella:${scope}`),
-      )
+      omittedForScope.has(listing.name)
     );
   });
   return retained.length === 0 ? fetched : [...fetched, ...retained];
@@ -164,7 +163,7 @@ export const resolveCommandTree = async ({
   const listings = retainBakedCompoundListings({
     fetched: file.listings,
     baked: await loadBakedListings(),
-    grantedScopes: file.grantedScopes,
+    scopeOmittedTools: file.scopeOmittedTools,
   });
   const built = Result.try(
     () =>
@@ -270,6 +269,9 @@ export const refreshRegistryCache = async ({
     ...(raw.value.grantedScopes === undefined
       ? {}
       : { grantedScopes: raw.value.grantedScopes }),
+    ...(raw.value.scopeOmittedTools === undefined
+      ? {}
+      : { scopeOmittedTools: raw.value.scopeOmittedTools }),
     ...(lastNudgedVersion === undefined ? {} : { lastNudgedVersion }),
   };
   await writeCacheFile(filePath, file);

@@ -16,11 +16,13 @@ import {
   toMobileAuthError,
 } from "@/features/auth/auth-result";
 import { useAuthSessionActions } from "@/features/auth/auth-session-boundary";
+import {
+  signInSocialOnMobile,
+  type MobileSocialProvider,
+} from "@/features/auth/mobile-social-auth";
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
 import { useAppColors } from "@/theme";
-
-type SocialProvider = "google" | "microsoft";
 
 const authCapabilitiesQuery = {
   queryKey: ["auth-capabilities"] as const,
@@ -48,20 +50,12 @@ export default function SignInScreen() {
   const capabilities = useQuery(authCapabilitiesQuery);
 
   const socialSignIn = useMutation({
-    mutationFn: async (provider: SocialProvider) => {
-      const result = await authClient.signIn.social({
-        callbackURL: "/",
-        errorCallbackURL: "/sign-in",
-        provider,
-      });
-      if (result.error) {
-        throw toMobileAuthError(result.error, "Social sign-in failed.");
+    mutationFn: async (provider: MobileSocialProvider) => {
+      const result = await signInSocialOnMobile(provider);
+      if (result === "complete") {
+        await refreshSession();
       }
-      if (isTwoFactorRedirect(result.data)) {
-        return "twoFactor" as const;
-      }
-      await refreshSession();
-      return "complete" as const;
+      return result;
     },
     onSuccess: (result) => {
       if (result === "twoFactor") {

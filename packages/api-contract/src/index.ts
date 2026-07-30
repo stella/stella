@@ -4,6 +4,12 @@ export const STELLA_REST_API_CONTRACT_VERSION = 1 as const;
 /** Native deep-link scheme shared by app configuration and auth validation. */
 export const STELLA_MOBILE_SCHEME = "stella" as const;
 export const STELLA_MOBILE_ORIGIN = `${STELLA_MOBILE_SCHEME}://` as const;
+/** Query parameters for the installation-bound native OAuth callback bridge. */
+export const STELLA_MOBILE_AUTH_CHALLENGE_PARAM = "stella_challenge" as const;
+export const STELLA_MOBILE_AUTH_CODE_PARAM = "stella_code" as const;
+/** Better Auth endpoint that atomically redeems a native OAuth bridge code. */
+export const STELLA_MOBILE_AUTH_EXCHANGE_PATH =
+  "/api/auth/mobile-session/exchange" as const;
 
 /** Better Auth cookie namespaces accepted by the native secure-store client. */
 export const STELLA_AUTH_COOKIE_PREFIXES = [

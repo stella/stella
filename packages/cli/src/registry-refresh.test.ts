@@ -93,6 +93,7 @@ const okFetch =
       cliLatest?: string;
       cliMinimum?: string;
       grantedScopes?: readonly string[];
+      scopeOmittedTools?: readonly string[];
     } = {},
   ) =>
   async () =>
@@ -190,7 +191,7 @@ describe("resolveCommandTree (S5.3)", () => {
         removed: ["save_filled_template"],
         changed: [],
       },
-      grantedScopes: ["stella:read", "stella:search"],
+      scopeOmittedTools: ["save_filled_template"],
     });
 
     const { tree } = await resolveCommandTree({ serverOrigin: ORIGIN, env });
@@ -217,7 +218,7 @@ describe("resolveCommandTree (S5.3)", () => {
         removed: ["save_filled_template"],
         changed: [],
       },
-      grantedScopes: ["stella:documents_write", "stella:templates"],
+      scopeOmittedTools: [],
     });
 
     const { tree } = await resolveCommandTree({ serverOrigin: ORIGIN, env });
@@ -234,6 +235,23 @@ describe("resolveCommandTree (S5.3)", () => {
         removed: ["save_filled_template"],
         changed: [],
       },
+    });
+
+    const { tree } = await resolveCommandTree({ serverOrigin: ORIGIN, env });
+
+    expect(curatedLeavesForTool(tree, "save_filled_template")).toHaveLength(0);
+  });
+
+  test("grants-only evidence from an older server does not restore an unsupported tool", async () => {
+    const env = await makeCacheEnv();
+    await writeCache(env, {
+      listings: [listing("list_matters")],
+      delta: {
+        added: [],
+        removed: ["save_filled_template"],
+        changed: [],
+      },
+      grantedScopes: ["stella:read", "stella:search"],
     });
 
     const { tree } = await resolveCommandTree({ serverOrigin: ORIGIN, env });
@@ -296,6 +314,7 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
       force: true,
       fetchRaw: okFetch(toolsBody(["list_matters", "list_widgets"]), {
         grantedScopes: ["stella:read", "stella:search"],
+        scopeOmittedTools: ["save_filled_template"],
       }),
       bakedListings: [listing("list_matters")],
     });
@@ -304,6 +323,7 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
     expect(written?.serverOrigin).toBe(ORIGIN);
     expect(written?.delta.added).toEqual(["list_widgets"]);
     expect(written?.grantedScopes).toEqual(["stella:read", "stella:search"]);
+    expect(written?.scopeOmittedTools).toEqual(["save_filled_template"]);
     expect(written?.toolsListHash).toMatch(/^[0-9a-f]{64}$/u);
   });
 

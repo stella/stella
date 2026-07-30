@@ -103,6 +103,12 @@ export const STELLA_CLI_LATEST_HEADER = "x-stella-cli-latest";
 // that caller's own org and grants, not a disclosure to anyone else.
 export const STELLA_MCP_ORGANIZATION_HEADER = "x-stella-organization";
 export const STELLA_MCP_SCOPES_HEADER = "x-stella-scopes";
+// Exact static tool names that this authenticated tools/list projection omitted
+// solely because the token lacks the tool's primary scope. This is deliberately
+// per-tool evidence: a grants-only header cannot distinguish a scoped omission
+// from a tool that an older server does not implement at all.
+export const STELLA_MCP_SCOPE_OMITTED_TOOLS_HEADER =
+  "x-stella-scope-omitted-tools";
 
 export const MCP_EXPOSE_HEADERS = [
   "WWW-Authenticate",
@@ -111,6 +117,7 @@ export const MCP_EXPOSE_HEADERS = [
   STELLA_CLI_LATEST_HEADER,
   STELLA_MCP_ORGANIZATION_HEADER,
   STELLA_MCP_SCOPES_HEADER,
+  STELLA_MCP_SCOPE_OMITTED_TOOLS_HEADER,
   // The per-request receipt (also on the global CORS exposeHeaders list):
   // browser-based MCP clients correlate a failed/successful call with server
   // logs the same way REST callers do.

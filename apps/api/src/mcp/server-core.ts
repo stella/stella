@@ -17,6 +17,7 @@ import type { McpSession } from "@/api/mcp/auth";
 import {
   type McpMode,
   STELLA_MCP_ORGANIZATION_HEADER,
+  STELLA_MCP_SCOPE_OMITTED_TOOLS_HEADER,
   STELLA_MCP_SCOPES_HEADER,
 } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -25,11 +26,13 @@ import {
   McpGatewayLoadError,
   McpOrganizationAccessError,
 } from "@/api/mcp/errors";
+import { isMcpToolFeatureEnabled } from "@/api/mcp/gateway/list-tools";
 import { getMcpInstructions } from "@/api/mcp/instructions";
 import {
   createMcpCorsHeaders,
   getMcpWwwAuthenticateHeader,
 } from "@/api/mcp/metadata";
+import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
 import type { McpToolDefinition, ToolScope } from "@/api/mcp/tool-types";
 import {
   closestToolNames,
@@ -124,7 +127,26 @@ const extractBearerToken = (request: Request): string | undefined => {
   return token.length > 0 ? token : undefined;
 };
 
-const withMcpCors = (response: Response, session?: McpSession) => {
+const scopeOmittedCompoundToolNames = (
+  session: McpSession,
+  mode: McpMode,
+): readonly string[] =>
+  listStaticMcpToolDefinitions(mode)
+    .filter(
+      (definition) =>
+        definition.additionalScopes !== undefined &&
+        definition.additionalScopes.length > 0 &&
+        isMcpToolFeatureEnabled(definition.feature) &&
+        !session.scopes.includes(definition.scope),
+    )
+    .map((definition) => definition.name)
+    .sort();
+
+const withMcpCors = (
+  response: Response,
+  session?: McpSession,
+  mode: McpMode = "default",
+) => {
   const headers = new Headers(response.headers);
   for (const [key, value] of createMcpCorsHeaders()) {
     if (!headers.has(key)) {
@@ -137,6 +159,10 @@ const withMcpCors = (response: Response, session?: McpSession) => {
   if (session) {
     headers.set(STELLA_MCP_ORGANIZATION_HEADER, session.organizationId);
     headers.set(STELLA_MCP_SCOPES_HEADER, session.scopes.join(" "));
+    headers.set(
+      STELLA_MCP_SCOPE_OMITTED_TOOLS_HEADER,
+      scopeOmittedCompoundToolNames(session, mode).join(" "),
+    );
   }
   return new Response(response.body, {
     headers,
@@ -374,7 +400,7 @@ export const createMcpHttpRequestHandler = ({
         },
       });
 
-      return withMcpCors(response, session);
+      return withMcpCors(response, session, mode);
     } catch (error) {
       if (error instanceof McpOrganizationAccessError) {
         return accessDeniedResponse({

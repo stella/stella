@@ -10,7 +10,7 @@ const toolsListBody = JSON.stringify({
 });
 
 describe("fetchToolsListRaw authenticated scope evidence", () => {
-  test("returns the effective scopes attested by the server", async () => {
+  test("returns effective scopes and exact scope-omitted tools attested by the server", async () => {
     const server = Bun.serve({
       port: 0,
       fetch: () =>
@@ -18,6 +18,7 @@ describe("fetchToolsListRaw authenticated scope evidence", () => {
           headers: {
             "Content-Type": "application/json",
             "x-stella-scopes": "stella:read stella:search",
+            "x-stella-scope-omitted-tools": "save_filled_template",
           },
         }),
     });
@@ -33,6 +34,9 @@ describe("fetchToolsListRaw authenticated scope evidence", () => {
         expect(result.value.grantedScopes).toEqual([
           "stella:read",
           "stella:search",
+        ]);
+        expect(result.value.scopeOmittedTools).toEqual([
+          "save_filled_template",
         ]);
       }
     } finally {
@@ -58,6 +62,7 @@ describe("fetchToolsListRaw authenticated scope evidence", () => {
       expect(Result.isOk(result)).toBe(true);
       if (Result.isOk(result)) {
         expect(result.value.grantedScopes).toBeUndefined();
+        expect(result.value.scopeOmittedTools).toBeUndefined();
       }
     } finally {
       void server.stop(true);

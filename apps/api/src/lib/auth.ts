@@ -24,6 +24,7 @@ import Elysia, { t } from "elysia";
 
 import {
   STELLA_DEV_AUTH_COOKIE_PREFIX,
+  STELLA_MOBILE_AUTH_CHALLENGE_PARAM,
   STELLA_MOBILE_ORIGIN,
   STELLA_MOBILE_SCHEME,
 } from "@stll/api-contract";
@@ -77,6 +78,7 @@ import {
   MACHINE_API_KEY_START_LENGTH,
 } from "@/api/lib/machine-api-key-config";
 import { isMemberRole } from "@/api/lib/member-roles";
+import { mobileAuthSessionPlugin } from "@/api/lib/mobile-auth-session";
 import { enrichRequestContext } from "@/api/lib/observability/request-context";
 import { parseUserAgent } from "@/api/lib/parse-user-agent";
 import {
@@ -161,10 +163,21 @@ export const resolveTwoFactorChallengeRedirect = ({
     URL.canParse(callbackLocation) &&
     new URL(callbackLocation).protocol === `${STELLA_MOBILE_SCHEME}:`
   ) {
-    return new URL(
+    const callback = new URL(callbackLocation);
+    const challenge = callback.searchParams.get(
+      STELLA_MOBILE_AUTH_CHALLENGE_PARAM,
+    );
+    const challengeRedirect = new URL(
       MOBILE_TWO_FACTOR_CHALLENGE_PATH,
       STELLA_MOBILE_ORIGIN,
-    ).toString();
+    );
+    if (challenge !== null) {
+      challengeRedirect.searchParams.set(
+        STELLA_MOBILE_AUTH_CHALLENGE_PARAM,
+        challenge,
+      );
+    }
+    return challengeRedirect.toString();
   }
   return new URL(
     TWO_FACTOR_CHALLENGE_PATH,
@@ -866,6 +879,10 @@ const createAuth = () => {
       // final challenge cookie to the final native deep link, not capture the
       // temporary first-factor session redirect before 2FA replaces it.
       expo(),
+      // Expo's native callback contains the final session cookie. Replace it
+      // with an installation-bound one-time exchange code before redirecting
+      // to a private-use scheme that another Android app could also claim.
+      mobileAuthSessionPlugin,
       organization({
         ac,
         roles,

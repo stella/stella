@@ -16,8 +16,9 @@ import path from "node:path";
 import type { RegistryToolListing } from "./route-types.js";
 
 // Cache schema version; a bump invalidates every existing cache file. Version 2
-// added `lastNudgedVersion`. `grantedScopes` is optional so older v2 caches stay
-// readable but, lacking server-attested scope evidence, cannot restore tools.
+// added `lastNudgedVersion`. Scope evidence fields are optional so older v2
+// caches stay readable, but only explicit per-tool omission evidence may
+// restore a baked command.
 export const CACHE_SCHEMA_VERSION = 2;
 /** Default time-to-live before a cached listing is refetched (spec S5.3). */
 export const DEFAULT_TTL_SECONDS = 86_400;
@@ -40,6 +41,8 @@ export type RegistryCacheFile = {
   delta: RegistryDelta;
   /** Effective grants for the response, absent when the server did not attest them. */
   grantedScopes?: readonly string[];
+  /** Tool names the server attested were omitted solely for missing scope. */
+  scopeOmittedTools?: readonly string[];
   /** The latest CLI version we last nudged about (update-nudge anti-nag key). */
   lastNudgedVersion?: string;
 };
@@ -246,6 +249,14 @@ export const readCacheFile = async (
   ) {
     return undefined;
   }
+  const rawScopeOmittedTools = value["scopeOmittedTools"];
+  if (
+    rawScopeOmittedTools !== undefined &&
+    (!Array.isArray(rawScopeOmittedTools) ||
+      !rawScopeOmittedTools.every((name) => typeof name === "string"))
+  ) {
+    return undefined;
+  }
   const lastNudgedVersion = value["lastNudgedVersion"];
   return {
     version: CACHE_SCHEMA_VERSION,
@@ -258,6 +269,9 @@ export const readCacheFile = async (
     ...(rawGrantedScopes === undefined
       ? {}
       : { grantedScopes: rawGrantedScopes }),
+    ...(rawScopeOmittedTools === undefined
+      ? {}
+      : { scopeOmittedTools: rawScopeOmittedTools }),
     ...(typeof lastNudgedVersion === "string" ? { lastNudgedVersion } : {}),
   };
 };

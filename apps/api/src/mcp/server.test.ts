@@ -303,6 +303,9 @@ describe("handleMcpHttpRequest", () => {
     expect(response.headers.get("x-stella-cli-latest")).toBe(
       STELLA_CLI_LATEST_VERSION,
     );
+    expect(response.headers.get("x-stella-scope-omitted-tools")).toBe(
+      "save_filled_template",
+    );
   });
 
   test("rejects tool calls missing the required scope before dynamic resolution", async () => {
@@ -391,6 +394,9 @@ describe("handleMcpHttpRequest", () => {
     const parsed = item?.type === "text" ? JSON.parse(item.text) : undefined;
 
     expect(response.status).toBe(200);
+    // The tool remains visible when its primary scope is present, so the
+    // server must not claim that it was omitted from tools/list.
+    expect(response.headers.get("x-stella-scope-omitted-tools")).toBe("");
     expect(parsed?.error).toEqual(
       expect.objectContaining({
         code: "missing_scope",

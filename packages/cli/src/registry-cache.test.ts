@@ -104,10 +104,14 @@ describe("readCacheFile / writeCacheFile roundtrip", () => {
     const filePath = path.join(dir, "scopes.json");
     await writeCacheFile(
       filePath,
-      cacheFile({ grantedScopes: ["stella:read", "stella:search"] }),
+      cacheFile({
+        grantedScopes: ["stella:read", "stella:search"],
+        scopeOmittedTools: ["save_filled_template"],
+      }),
     );
     const read = await readCacheFile(filePath);
     expect(read?.grantedScopes).toEqual(["stella:read", "stella:search"]);
+    expect(read?.scopeOmittedTools).toEqual(["save_filled_template"]);
   });
 
   test("a missing file reads as undefined", async () => {
