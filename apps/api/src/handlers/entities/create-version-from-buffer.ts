@@ -114,7 +114,23 @@ export const createEntityVersionFromBuffer = async ({
     mimeType,
   });
 
-  await getS3().write(objectKey, bytes);
+  const cleanupObject = async (): Promise<void> => {
+    await getS3()
+      .delete(objectKey)
+      .catch((cleanupError: unknown) => {
+        captureError(cleanupError, { entityId, objectKey });
+      });
+  };
+
+  try {
+    await getS3().write(objectKey, bytes);
+  } catch (error) {
+    // A timeout or connection failure can be ambiguous: object storage may
+    // have accepted the complete object even though the client saw an error.
+    // Best-effort deletion prevents an unreferenced final-key object.
+    await cleanupObject();
+    throw error;
+  }
 
   const writeResult = await safeDb(
     async (tx) =>
@@ -139,21 +155,13 @@ export const createEntityVersionFromBuffer = async ({
       }),
   );
   if (Result.isError(writeResult)) {
-    await getS3()
-      .delete(objectKey)
-      .catch((cleanupError: unknown) => {
-        captureError(cleanupError, { entityId, objectKey });
-      });
+    await cleanupObject();
     throw writeResult.error;
   }
   const written = writeResult.value;
 
   if (written.status !== "ok") {
-    await getS3()
-      .delete(objectKey)
-      .catch((cleanupError: unknown) => {
-        captureError(cleanupError, { entityId, objectKey });
-      });
+    await cleanupObject();
     return Result.err(
       new EntityVersionTargetError({
         code: written.status,

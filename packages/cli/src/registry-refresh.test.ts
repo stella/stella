@@ -7,6 +7,7 @@ import path from "node:path";
 import { generatedRouteMap } from "./generated/route-map.js";
 import { McpClientError } from "./mcp-client.js";
 import {
+  CACHE_SCHEMA_VERSION,
   cachePathFor,
   readCacheFile,
   writeCacheFile,
@@ -86,7 +87,14 @@ const toolsBody = (names: readonly string[]): string =>
   });
 
 const okFetch =
-  (raw: string, headers: { cliLatest?: string; cliMinimum?: string } = {}) =>
+  (
+    raw: string,
+    headers: {
+      cliLatest?: string;
+      cliMinimum?: string;
+      grantedScopes?: readonly string[];
+    } = {},
+  ) =>
   async () =>
     await Promise.resolve(Result.ok({ rawBody: raw, ...headers }));
 const errFetch = () => async () =>
@@ -100,7 +108,7 @@ const writeCache = async (
 ): Promise<string> => {
   const filePath = cachePathFor(ORIGIN, env);
   const file: RegistryCacheFile = {
-    version: 2,
+    version: CACHE_SCHEMA_VERSION,
     serverOrigin: ORIGIN,
     fetchedAt: new Date().toISOString(),
     ttlSeconds: 86_400,
@@ -182,6 +190,7 @@ describe("resolveCommandTree (S5.3)", () => {
         removed: ["save_filled_template"],
         changed: [],
       },
+      grantedScopes: ["stella:read", "stella:search"],
     });
 
     const { tree } = await resolveCommandTree({ serverOrigin: ORIGIN, env });
@@ -197,6 +206,39 @@ describe("resolveCommandTree (S5.3)", () => {
       { additionalScopes: ["templates"], scope: "documents_write" },
       { additionalScopes: ["templates"], scope: "documents_write" },
     ]);
+  });
+
+  test("a fully authorized omission does not restore a removed compound tool", async () => {
+    const env = await makeCacheEnv();
+    await writeCache(env, {
+      listings: [listing("list_matters")],
+      delta: {
+        added: [],
+        removed: ["save_filled_template"],
+        changed: [],
+      },
+      grantedScopes: ["stella:documents_write", "stella:templates"],
+    });
+
+    const { tree } = await resolveCommandTree({ serverOrigin: ORIGIN, env });
+
+    expect(curatedLeavesForTool(tree, "save_filled_template")).toHaveLength(0);
+  });
+
+  test("an unattested omission does not restore a compound tool", async () => {
+    const env = await makeCacheEnv();
+    await writeCache(env, {
+      listings: [listing("list_matters")],
+      delta: {
+        added: [],
+        removed: ["save_filled_template"],
+        changed: [],
+      },
+    });
+
+    const { tree } = await resolveCommandTree({ serverOrigin: ORIGIN, env });
+
+    expect(curatedLeavesForTool(tree, "save_filled_template")).toHaveLength(0);
   });
 
   test("provenance pin: a cache for a different origin is ignored (rule 5)", async () => {
@@ -252,13 +294,16 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
       token: "t",
       env,
       force: true,
-      fetchRaw: okFetch(toolsBody(["list_matters", "list_widgets"])),
+      fetchRaw: okFetch(toolsBody(["list_matters", "list_widgets"]), {
+        grantedScopes: ["stella:read", "stella:search"],
+      }),
       bakedListings: [listing("list_matters")],
     });
     expect(outcome).toEqual({ status: "refreshed", deltaEmpty: false });
     const written = await readCacheFile(cachePathFor(ORIGIN, env));
     expect(written?.serverOrigin).toBe(ORIGIN);
     expect(written?.delta.added).toEqual(["list_widgets"]);
+    expect(written?.grantedScopes).toEqual(["stella:read", "stella:search"]);
     expect(written?.toolsListHash).toMatch(/^[0-9a-f]{64}$/u);
   });
 

@@ -278,6 +278,8 @@ export type RawToolsList = {
   rawBody: string;
   cliLatest?: string;
   cliMinimum?: string;
+  /** Effective scopes echoed by the authenticated server response. */
+  grantedScopes?: readonly string[];
 };
 
 /**
@@ -348,6 +350,11 @@ export const fetchToolsListRaw = async ({
   const cliMinimum = httpResponse.headers.get(CLI_MINIMUM_HEADER);
   if (cliMinimum !== null) {
     out.cliMinimum = cliMinimum;
+  }
+  const scopesHeader = httpResponse.headers.get(STELLA_SCOPES_HEADER);
+  if (scopesHeader !== null) {
+    out.grantedScopes =
+      scopesHeader.length > 0 ? scopesHeader.split(/\s+/u) : [];
   }
   return Result.ok(out);
 };

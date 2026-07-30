@@ -15,8 +15,9 @@ import path from "node:path";
 
 import type { RegistryToolListing } from "./route-types.js";
 
-// Cache schema version; a bump invalidates every existing cache file. Bumped to
-// 2 when `lastNudgedVersion` (the CLI update-nudge anti-nag key) was added.
+// Cache schema version; a bump invalidates every existing cache file. Version 2
+// added `lastNudgedVersion`. `grantedScopes` is optional so older v2 caches stay
+// readable but, lacking server-attested scope evidence, cannot restore tools.
 export const CACHE_SCHEMA_VERSION = 2;
 /** Default time-to-live before a cached listing is refetched (spec S5.3). */
 export const DEFAULT_TTL_SECONDS = 86_400;
@@ -37,6 +38,8 @@ export type RegistryCacheFile = {
   toolsListHash: string;
   listings: readonly RegistryToolListing[];
   delta: RegistryDelta;
+  /** Effective grants for the response, absent when the server did not attest them. */
+  grantedScopes?: readonly string[];
   /** The latest CLI version we last nudged about (update-nudge anti-nag key). */
   lastNudgedVersion?: string;
 };
@@ -235,6 +238,14 @@ export const readCacheFile = async (
   ) {
     return undefined;
   }
+  const rawGrantedScopes = value["grantedScopes"];
+  if (
+    rawGrantedScopes !== undefined &&
+    (!Array.isArray(rawGrantedScopes) ||
+      !rawGrantedScopes.every((scope) => typeof scope === "string"))
+  ) {
+    return undefined;
+  }
   const lastNudgedVersion = value["lastNudgedVersion"];
   return {
     version: CACHE_SCHEMA_VERSION,
@@ -244,6 +255,9 @@ export const readCacheFile = async (
     toolsListHash,
     listings,
     delta,
+    ...(rawGrantedScopes === undefined
+      ? {}
+      : { grantedScopes: rawGrantedScopes }),
     ...(typeof lastNudgedVersion === "string" ? { lastNudgedVersion } : {}),
   };
 };

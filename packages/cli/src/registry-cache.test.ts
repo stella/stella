@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
+  CACHE_SCHEMA_VERSION,
   cacheDir,
   cachePathFor,
   computeDelta,
@@ -38,7 +39,7 @@ const listing = (
 const cacheFile = (
   over: Partial<RegistryCacheFile> = {},
 ): RegistryCacheFile => ({
-  version: 2,
+  version: CACHE_SCHEMA_VERSION,
   serverOrigin: "https://api.example.com",
   fetchedAt: new Date().toISOString(),
   ttlSeconds: DEFAULT_TTL_SECONDS,
@@ -95,6 +96,18 @@ describe("readCacheFile / writeCacheFile roundtrip", () => {
     await writeCacheFile(filePath, cacheFile({ lastNudgedVersion: "0.2.0" }));
     const read = await readCacheFile(filePath);
     expect(read?.lastNudgedVersion).toBe("0.2.0");
+  });
+
+  test("preserves authenticated scope evidence across a roundtrip", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "stella-cache-"));
+    tempDirs.push(dir);
+    const filePath = path.join(dir, "scopes.json");
+    await writeCacheFile(
+      filePath,
+      cacheFile({ grantedScopes: ["stella:read", "stella:search"] }),
+    );
+    const read = await readCacheFile(filePath);
+    expect(read?.grantedScopes).toEqual(["stella:read", "stella:search"]);
   });
 
   test("a missing file reads as undefined", async () => {

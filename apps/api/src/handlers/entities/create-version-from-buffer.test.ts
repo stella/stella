@@ -116,6 +116,23 @@ describe("createEntityVersionFromBuffer", () => {
     expect(s3DeleteMock).not.toHaveBeenCalled();
   });
 
+  test("best-effort deletes an object after an ambiguous initial write failure", async () => {
+    const writeError = new Error("object storage timed out");
+    s3WriteMock.mockRejectedValue(writeError);
+
+    const attempted = await Result.tryPromise({
+      try: async () => await createEntityVersionFromBuffer(baseInput),
+      catch: (cause) => cause,
+    });
+
+    expect(Result.isError(attempted)).toBe(true);
+    if (Result.isError(attempted)) {
+      expect(attempted.error).toBe(writeError);
+    }
+    expect(s3DeleteMock).toHaveBeenCalledWith("org_1/ws_1/file_1.docx");
+    expect(writeFileVersionMock).not.toHaveBeenCalled();
+  });
+
   test("stores bytes and delegates the canonical locked transaction", async () => {
     writeFileVersionMock.mockImplementation(async (input) => ({
       status: "ok",
