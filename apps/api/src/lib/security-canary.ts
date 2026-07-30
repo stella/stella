@@ -65,12 +65,14 @@ export const createSecurityCanaryAlertDeduplicator = ({
   now = Date.now,
 }: SecurityCanaryAlertDeduplicatorOptions = {}) => {
   let redis: RedisLike | null = null;
-  let localFailureClaimExpiresAt = 0;
+  let localClaimExpiresAt = 0;
 
   return async (): Promise<SecurityCanaryAlertDecision> => {
-    if (localFailureClaimExpiresAt > now()) {
+    const claimTime = now();
+    if (localClaimExpiresAt > claimTime) {
       return { status: "suppress" };
     }
+    localClaimExpiresAt = claimTime + ALERT_DEDUP_WINDOW_MS;
 
     const result = await Result.tryPromise({
       try: async () => {
@@ -91,11 +93,6 @@ export const createSecurityCanaryAlertDeduplicator = ({
     });
 
     if (result.isErr()) {
-      const failureTime = now();
-      if (localFailureClaimExpiresAt > failureTime) {
-        return { status: "suppress" };
-      }
-      localFailureClaimExpiresAt = failureTime + ALERT_DEDUP_WINDOW_MS;
       return {
         status: "emit",
         reason: "deduplication_unavailable",

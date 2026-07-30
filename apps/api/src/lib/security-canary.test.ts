@@ -205,6 +205,8 @@ describe("security canary alert deduplicator", () => {
       status: "emit",
       reason: "claimed",
     });
+    expect(await claimFromReplicaA()).toEqual({ status: "suppress" });
+    expect(await claimFromReplicaB()).toEqual({ status: "suppress" });
     expect(await claimFromReplicaB()).toEqual({ status: "suppress" });
     expect(send).toHaveBeenCalledTimes(2);
     expect(send).toHaveBeenCalledWith("SET", [
@@ -214,6 +216,29 @@ describe("security canary alert deduplicator", () => {
       "PX",
       "300000",
     ]);
+  });
+
+  test("suppresses concurrent replays while the shared claim is pending", async () => {
+    let resolveSend: (value: unknown) => void = () => undefined;
+    const send = mock(
+      async () =>
+        await new Promise<unknown>((resolve) => {
+          resolveSend = resolve;
+        }),
+    );
+    const claimAlert = createSecurityCanaryAlertDeduplicator({
+      createRedis: () => ({ send }),
+    });
+
+    const firstClaim = claimAlert();
+    expect(await claimAlert()).toEqual({ status: "suppress" });
+    expect(send).toHaveBeenCalledTimes(1);
+
+    resolveSend("OK");
+    expect(await firstClaim).toEqual({
+      status: "emit",
+      reason: "claimed",
+    });
   });
 
   test("fails toward alert visibility when Redis rejects the claim", async () => {
