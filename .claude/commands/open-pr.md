@@ -1,7 +1,7 @@
 # Open PR
 
-Prepare the current worktree branch for a pull request: rebase,
-self-review, quality checks, and open a draft PR.
+Prepare the current worktree branch or stack for pull requests: rebase,
+self-review, quality checks, and open draft PRs.
 
 ## Instructions
 
@@ -45,7 +45,18 @@ self-review, quality checks, and open a draft PR.
    accidental lockfile changes out of the PR unless the task
    explicitly requires them.
 
-3. **Rebase onto remote main**:
+3. **Preserve stacked pull requests**:
+
+   GitHub-native stacked pull requests are supported through the
+   `github/gh-stack` CLI extension. Use a stack for a large, dependent
+   change that benefits from small, independently reviewable layers;
+   use one PR for small or unrelated changes.
+
+   Install the extension if needed with
+   `gh extension install github/gh-stack`. Check `gh stack view` before
+   rebasing. If the current branch belongs to a stack, run
+   `gh stack rebase`; never rebase an upper layer directly onto `main`.
+   Otherwise, rebase the single branch normally:
 
    ```bash
    git fetch origin main
@@ -57,7 +68,8 @@ self-review, quality checks, and open a draft PR.
 
 4. **Self-review against CLAUDE.md conventions**:
 
-   Get the full diff against main:
+   Get the full diff against main. For a stack, review every layer
+   against its immediate parent branch so each PR remains focused:
 
    ```bash
    git diff origin/main --name-only
@@ -89,7 +101,14 @@ self-review, quality checks, and open a draft PR.
 
 7. **Open the PR as draft**:
 
-   Push the branch and create the PR as a **draft**:
+   For a stack, push and create or update draft PRs with the correct
+   base branches:
+
+   ```bash
+   gh stack submit --auto
+   ```
+
+   For a single branch, push and create the PR as a **draft**:
 
    ```bash
    git push --force-with-lease -u origin HEAD
