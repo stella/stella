@@ -47,8 +47,9 @@ Handler: `apps/api/src/handlers/entities/delete.ts`
    durable cleanup request and delete the entity row. Cascade FKs remove
    `entityVersions`, `fields`, and `justifications`.
 3. After commit, dispatch the cleanup request to a worker. The worker deletes
-   S3 keys with bounded concurrency; a bounded repair scan recovers missed
-   dispatches and retryable failures.
+   S3 keys with bounded concurrency. Each repair pass scans a bounded batch;
+   durable retry scheduling with capped backoff continues until storage cleanup
+   succeeds.
 
 ### Property deletion
 

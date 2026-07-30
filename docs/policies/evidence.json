@@ -157,7 +157,11 @@
         },
         {
           "path": "apps/api/src/lib/entity-deletion-cleanup-queue.ts",
-          "contains": ["deleteS3Keys", "MAX_RECONCILED_ATTEMPTS"]
+          "contains": [
+            "deleteS3Keys",
+            "RETRY_MAX_DELAY_MS",
+            "nextAttemptAt"
+          ]
         },
         {
           "path": "apps/api/src/handlers/workspaces/delete.ts",
