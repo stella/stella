@@ -3,6 +3,21 @@ import * as v from "valibot";
 const LOOPBACK_API_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 const ANDROID_EMULATOR_HOST = "10.0.2.2";
 
+type MobileRuntime = {
+  buildMode: "development" | "production";
+  deviceKind: "emulator" | "physical";
+  platform: string;
+};
+
+export const shouldAllowAndroidEmulatorHttp = ({
+  buildMode,
+  deviceKind,
+  platform,
+}: MobileRuntime): boolean =>
+  buildMode === "development" &&
+  deviceKind === "emulator" &&
+  platform === "android";
+
 const usesSecureTransport = (
   value: URL,
   allowAndroidEmulatorHttp: boolean,

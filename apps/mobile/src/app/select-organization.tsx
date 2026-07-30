@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import { useMutation } from "@tanstack/react-query";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
@@ -54,17 +54,18 @@ export default function SelectOrganizationScreen() {
     },
   });
 
-  if (organizations.isPending) {
-    return (
-      <FormScreen description="Loading the organizations available to your account…">
-        <ActivityIndicator accessibilityLabel="Connecting" />
-      </FormScreen>
-    );
-  }
+  const rows = organizations.data ?? [];
+  let description =
+    "Select the organization whose chats, tasks, and matters you want to open.";
+  let organizationContent: ReactNode;
 
-  if (organizations.error) {
-    return (
-      <FormScreen description="stella could not load your organizations.">
+  if (organizations.isPending) {
+    description = "Loading the organizations available to your account…";
+    organizationContent = <ActivityIndicator accessibilityLabel="Connecting" />;
+  } else if (organizations.error) {
+    description = "stella could not load your organizations.";
+    organizationContent = (
+      <>
         <InlineMessage message="Check your connection and try again." />
         <ActionButton
           label="Retry"
@@ -72,35 +73,37 @@ export default function SelectOrganizationScreen() {
             organizations.refetch().catch(() => undefined);
           }}
         />
-      </FormScreen>
+      </>
+    );
+  } else if (rows.length === 0) {
+    organizationContent = (
+      <InlineMessage message="This account has no organization yet. Complete onboarding in the stella web app, then retry here." />
+    );
+  } else {
+    organizationContent = (
+      <View style={styles.list}>
+        {rows.map((organization) => (
+          <ActionButton
+            disabled={selectOrganization.isPending || signOut.isPending}
+            key={organization.id}
+            label={organization.name}
+            loading={
+              selectOrganization.isPending &&
+              selectOrganization.variables === organization.id
+            }
+            onPress={() => selectOrganization.mutate(organization.id)}
+            variant="secondary"
+          />
+        ))}
+      </View>
     );
   }
 
-  const rows = organizations.data ?? [];
-
   return (
-    <FormScreen description="Select the organization whose chats, tasks, and matters you want to open.">
-      {rows.length === 0 ? (
-        <InlineMessage message="This account has no organization yet. Complete onboarding in the stella web app, then retry here." />
-      ) : (
-        <View style={styles.list}>
-          {rows.map((organization) => (
-            <ActionButton
-              disabled={selectOrganization.isPending || signOut.isPending}
-              key={organization.id}
-              label={organization.name}
-              loading={
-                selectOrganization.isPending &&
-                selectOrganization.variables === organization.id
-              }
-              onPress={() => selectOrganization.mutate(organization.id)}
-              variant="secondary"
-            />
-          ))}
-        </View>
-      )}
+    <FormScreen description={description}>
+      {organizationContent}
       {errorMessage ? <InlineMessage message={errorMessage} /> : null}
-      {rows.length === 0 ? (
+      {!organizations.isPending && !organizations.error && rows.length === 0 ? (
         <ActionButton
           label="Check again"
           onPress={() => {

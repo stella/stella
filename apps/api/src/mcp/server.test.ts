@@ -344,7 +344,7 @@ describe("handleMcpHttpRequest", () => {
               code: "missing_scope",
               message:
                 "Insufficient permissions. Required scope: stella:skills",
-              hint: "Grant the 'stella:skills' scope by re-running OAuth consent (CLI: 'stella auth login --scopes stella:skills'), then retry.",
+              hint: "Grant the 'stella:skills' scope by re-running OAuth consent (CLI: 'stella auth login --scopes stella:read,stella:skills'), then retry.",
             },
           }),
         },
@@ -391,6 +391,7 @@ describe("handleMcpHttpRequest", () => {
     expect(parsed?.error).toEqual(
       expect.objectContaining({
         code: "missing_scope",
+        hint: "Grant the 'stella:templates' scope by re-running OAuth consent (CLI: 'stella auth login --scopes stella:documents_write,stella:templates'), then retry.",
         message: "Insufficient permissions. Required scope: stella:templates",
       }),
     );

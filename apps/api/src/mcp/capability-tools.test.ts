@@ -371,6 +371,9 @@ describe("invoke_capability gates", () => {
     const error = errorEnvelope(result);
     expect(error.code).toBe("missing_scope");
     expect(error.message).toContain("stella:templates");
+    expect(error.hint).toContain(
+      "--scopes stella:read,stella:documents_write,stella:templates",
+    );
   });
 
   // Scope-gate outcome for a read capability under a given granted-scope set.

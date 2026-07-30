@@ -34,6 +34,7 @@ import type { McpToolDefinition, ToolScope } from "@/api/mcp/tool-types";
 import {
   closestToolNames,
   MCP_INTERNAL_ERROR_HINT,
+  oauthScopeRecoveryHint,
   structuredErrorResult,
 } from "@/api/mcp/tool-utils";
 
@@ -44,13 +45,34 @@ const formatUnknownToolName = (toolName: string): string =>
     ? toolName
     : `${toolName.slice(0, MAX_TOOL_NAME_SUGGESTION_CHARS)}...`;
 
-/** `missing_scope` envelope: the granted scopes do not include `scope`. */
-const missingScopeResult = (scope: ToolScope): CallToolResult =>
+/** `missing_scope` envelope with a CLI command that preserves all grants. */
+const missingScopeResult = ({
+  grantedScopes,
+  missingScope,
+  requiredScopes,
+}: {
+  grantedScopes: readonly string[];
+  missingScope: ToolScope;
+  requiredScopes: readonly ToolScope[];
+}): CallToolResult =>
   structuredErrorResult({
     code: "missing_scope",
-    message: `Insufficient permissions. Required scope: ${scope}`,
-    hint: `Grant the '${scope}' scope by re-running OAuth consent (CLI: 'stella auth login --scopes ${scope}'), then retry.`,
+    message: `Insufficient permissions. Required scope: ${missingScope}`,
+    hint: oauthScopeRecoveryHint({
+      grantedScopes,
+      missingScope,
+      requiredScopes,
+    }),
   });
+
+const requiredScopesForTool = (
+  definition: McpToolDefinition,
+): readonly ToolScope[] => {
+  if (definition.additionalScopes === undefined) {
+    return [definition.scope];
+  }
+  return [definition.scope, ...definition.additionalScopes];
+};
 
 type McpServerDependencies = {
   authenticateMcpRequest: (token: string, mode: McpMode) => Promise<McpSession>;
@@ -234,7 +256,11 @@ export const createMcpHttpRequestHandler = ({
       const toolName = toolRequest.params.name;
       const hintedScope = getMcpToolScopeHint(toolName, mode);
       if (hintedScope && !session.scopes.includes(hintedScope)) {
-        return missingScopeResult(hintedScope);
+        return missingScopeResult({
+          grantedScopes: session.scopes,
+          missingScope: hintedScope,
+          requiredScopes: [hintedScope],
+        });
       }
 
       // Resolving a dynamic-gateway tool reads the backing store. A load fault
@@ -276,14 +302,16 @@ export const createMcpHttpRequestHandler = ({
         });
       }
 
-      const missingAdditionalScope = definition.additionalScopes?.find(
+      const requiredScopes = requiredScopesForTool(definition);
+      const missingScope = requiredScopes.find(
         (scope) => !session.scopes.includes(scope),
       );
-      if (!session.scopes.includes(definition.scope)) {
-        return missingScopeResult(definition.scope);
-      }
-      if (missingAdditionalScope !== undefined) {
-        return missingScopeResult(missingAdditionalScope);
+      if (missingScope !== undefined) {
+        return missingScopeResult({
+          grantedScopes: session.scopes,
+          missingScope,
+          requiredScopes,
+        });
       }
 
       return await handleMcpToolCall({

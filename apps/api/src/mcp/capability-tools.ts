@@ -42,6 +42,7 @@ import {
   MAX_LIST_LIMIT,
   MCP_INTERNAL_ERROR_HINT,
   notFoundResult,
+  oauthScopeRecoveryHint,
   parseOptionalCursor,
   parseOptionalEnum,
   parseOptionalLimit,
@@ -971,14 +972,19 @@ const invokeCapabilityHandler = async ({
   // 4. Scopes: the session must hold every scope in the capability catalog. Read
   // capabilities now resolve to a read scope (see the exporter's access-keyed
   // resolution), so a `stella:read` grant reaches them directly.
-  const missingScope = requiredScopesOf(entry).find(
+  const requiredScopes = requiredScopesOf(entry);
+  const missingScope = requiredScopes.find(
     (scope) => !context.grantedScopes.includes(scope),
   );
   if (missingScope !== undefined) {
     return structuredErrorResult({
       code: "missing_scope",
       message: `Insufficient permissions. Capability "${id}" requires scope: ${missingScope}`,
-      hint: `Grant the '${missingScope}' scope by re-running OAuth consent (CLI: 'stella auth login --scopes ${missingScope}'), then retry.`,
+      hint: oauthScopeRecoveryHint({
+        grantedScopes: context.grantedScopes,
+        missingScope,
+        requiredScopes,
+      }),
     });
   }
 

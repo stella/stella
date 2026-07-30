@@ -144,6 +144,28 @@ export const MCP_INTERNAL_ERROR_HINT =
   "If this looks like a stella bug, report it with the send_feedback tool.";
 
 /**
+ * Preserve the caller's current grants while adding every scope required by an
+ * operation. Explicit CLI scopes replace the default consent bundle, so a hint
+ * containing only the first missing scope can otherwise create another token
+ * that still cannot perform a compound-scope operation.
+ */
+export const oauthScopeRecoveryHint = ({
+  grantedScopes,
+  missingScope,
+  requiredScopes,
+}: {
+  grantedScopes: readonly string[];
+  missingScope: string;
+  requiredScopes: readonly string[];
+}): string => {
+  const requestedScopes = [
+    ...new Set([...grantedScopes, ...requiredScopes]),
+  ].join(",");
+
+  return `Grant the '${missingScope}' scope by re-running OAuth consent (CLI: 'stella auth login --scopes ${requestedScopes}'), then retry.`;
+};
+
+/**
  * Structured tool-error envelope. The single text content is
  * `{"error":{"code","message","hint?","issues?","retryable?","requestId?"}}`;
  * `isError` is set so MCP clients still treat it as a failure. Undefined

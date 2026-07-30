@@ -1,6 +1,43 @@
 import { describe, expect, test } from "bun:test";
 
-import { parseMobileApiUrl } from "./api-url";
+import { parseMobileApiUrl, shouldAllowAndroidEmulatorHttp } from "./api-url";
+
+describe("shouldAllowAndroidEmulatorHttp", () => {
+  test.each([
+    {
+      buildMode: "production" as const,
+      deviceKind: "emulator" as const,
+      platform: "android",
+    },
+    {
+      buildMode: "development" as const,
+      deviceKind: "physical" as const,
+      platform: "android",
+    },
+    {
+      buildMode: "development" as const,
+      deviceKind: "emulator" as const,
+      platform: "ios",
+    },
+    {
+      buildMode: "development" as const,
+      deviceKind: "emulator" as const,
+      platform: "web",
+    },
+  ])("rejects non-development Android emulator runtimes: %o", (runtime) => {
+    expect(shouldAllowAndroidEmulatorHttp(runtime)).toBe(false);
+  });
+
+  test("allows the Android emulator alias in an Android development emulator", () => {
+    expect(
+      shouldAllowAndroidEmulatorHttp({
+        buildMode: "development",
+        deviceKind: "emulator",
+        platform: "android",
+      }),
+    ).toBe(true);
+  });
+});
 
 describe("parseMobileApiUrl", () => {
   test("normalizes an HTTPS API base URL", () => {
