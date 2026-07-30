@@ -22,10 +22,12 @@ describe("document OCR worker readiness", () => {
   });
 
   test("bounds readiness reads", async () => {
-    const neverResolves = new Promise<string | null>(() => undefined);
+    const neverResolves = new Promise<string | null>(() => {
+      // Deliberately pending to exercise the caller's deadline.
+    });
 
     await expect(
-      readDocumentOcrWorkerAvailability(async () => await neverResolves, 5),
+      readDocumentOcrWorkerAvailability(() => neverResolves, 5),
     ).rejects.toThrow("document OCR readiness read exceeded 5ms");
   });
 
@@ -44,10 +46,12 @@ describe("document OCR worker readiness", () => {
   });
 
   test("bounds readiness heartbeats", async () => {
-    const neverResolves = new Promise<unknown>(() => undefined);
+    const neverResolves = new Promise<unknown>(() => {
+      // Deliberately pending to exercise the caller's deadline.
+    });
 
     await expect(
-      refreshDocumentOcrWorkerReadiness(async () => await neverResolves, 5),
+      refreshDocumentOcrWorkerReadiness(() => neverResolves, 5),
     ).rejects.toThrow("document OCR readiness heartbeat exceeded 5ms");
   });
 });

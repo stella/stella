@@ -1426,15 +1426,14 @@ export const mapWithConcurrency = async <Item, Value>({
   const values: Value[] = [];
   let nextIndex = 0;
   const run = async (): Promise<void> => {
-    for (;;) {
-      const index = nextIndex;
-      nextIndex += 1;
-      const item = items.at(index);
-      if (item === undefined) {
-        return;
-      }
-      values[index] = await operation(item);
+    const index = nextIndex;
+    nextIndex += 1;
+    const item = items.at(index);
+    if (item === undefined) {
+      return;
     }
+    values[index] = await operation(item);
+    await run();
   };
   await Promise.all(
     Array.from({ length: Math.min(Math.max(limit, 1), items.length) }, run),
@@ -1631,7 +1630,13 @@ const recoverFailedOcrSearchIndexes = async (): Promise<number> => {
       workspaceId: documentProcessingRuns.workspaceId,
     });
   const recovered = await mapWithConcurrency({
-    items: claimed.map((candidate) => ({ ...candidate, claimToken })),
+    items: claimed.map((candidate) => ({
+      attemptCount: candidate.attemptCount,
+      claimToken,
+      entityId: candidate.entityId,
+      id: candidate.id,
+      workspaceId: candidate.workspaceId,
+    })),
     limit: SEARCH_INDEX_REPLAY_CONCURRENCY,
     operation: recoverFailedSearchIndex,
   });
@@ -1804,9 +1809,10 @@ export const initDocumentProcessingWorker = () => {
       reason: "ocr_provider_not_configured",
     });
     return {
-      close: async (): Promise<void> => {
+      close: (): Promise<void> => {
         reconciliationRedisClient?.close();
         reconciliationRedisClient = null;
+        return Promise.resolve();
       },
     };
   }
