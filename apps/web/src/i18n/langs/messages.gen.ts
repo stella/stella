@@ -2543,9 +2543,9 @@ type Messages = {
       "practiceJurisdictions": "Jurisdictions";
       "practiceJurisdictionsDescription": "Select the jurisdictions relevant to you.";
       "documentProcessing": {
-        "description": "Automatically recognize text in scanned PDFs and images so their contents can be searched.";
+        "description": "Automatically recognize text in scanned PDFs so their contents can be searched.";
         "title": "Document text recognition";
-        "toggleLabel": "Automatically recognize text in scanned PDFs and images";
+        "toggleLabel": "Automatically recognize text in scanned PDFs";
         "updated": "Document text recognition setting updated";
       };
       "promptCaching": {

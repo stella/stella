@@ -3,7 +3,7 @@ import { and, eq, or } from "drizzle-orm";
 import { t } from "elysia";
 
 import { rootDb } from "@/api/db/root";
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
   documentProcessingRuns,
   entities,
@@ -48,6 +48,11 @@ type OcrSource = {
   sourceSha256Hex: string;
 };
 
+type FindManualOcrSourceResult = Result<
+  OcrSource,
+  HandlerError<400 | 404 | 409> | SafeDbError
+>;
+
 type PersistedRun = {
   id: (typeof documentProcessingRuns.$inferSelect)["id"];
   status: (typeof documentProcessingRuns.$inferSelect)["status"];
@@ -81,7 +86,7 @@ const findManualOcrSource = async ({
 }: Pick<
   RequestManualOcrProps,
   "entityId" | "fieldId" | "safeDb" | "workspaceId"
->) => {
+>): Promise<FindManualOcrSourceResult> => {
   const rows = await safeDb((tx) =>
     tx
       .select({
