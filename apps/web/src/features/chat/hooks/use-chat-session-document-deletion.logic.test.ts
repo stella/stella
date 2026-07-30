@@ -7,6 +7,7 @@ import type {
 } from "@/components/chat/chat-ui-tools";
 import type { InspectorTab } from "@/components/inspector/inspector-store";
 import { reconcileDocumentDeletionToolCalls } from "@/features/chat/hooks/use-chat-session-document-deletion.logic";
+import { fileMetadataQueryKey } from "@/lib/files/file-metadata-query.logic";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities.logic";
 import { taskKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/tasks.logic";
 import { workspacesKeys } from "@/routes/_protected.workspaces/-queries.logic";
@@ -79,6 +80,7 @@ describe("document deletion cache reconciliation", () => {
 
     await reconcileDocumentDeletionToolCalls({
       entityKeys: entitiesKeys,
+      contextMatterIds: [],
       handledToolCallIds: new Set(),
       messages: deletionMessages({ entity_id: "entity_ref_1" }),
       queryClient,
@@ -94,18 +96,23 @@ describe("document deletion cache reconciliation", () => {
     expect(isInvalidated(queryClient, taskDetailKey)).toBe(false);
   });
 
-  test("targets open file detail and version queries once for version deletion", async () => {
+  test("invalidates selected matter and file caches for version deletion", async () => {
     const queryClient = new QueryClient();
     const handledToolCallIds = new Set<string>();
     const entityRootKey = entitiesKeys.all("workspace-tab");
     const detailKey = entitiesKeys.detail("workspace-tab", "entity-1");
     const versionsKey = entitiesKeys.versions("workspace-tab", "entity-1");
     const taskDetailKey = taskKeys.detail("workspace-tab", "task-1");
+    const metadataKey = fileMetadataQueryKey({
+      fieldId: "field-1",
+      workspaceId: "workspace-tab",
+    });
     for (const queryKey of [
       entityRootKey,
       detailKey,
       versionsKey,
       taskDetailKey,
+      metadataKey,
     ]) {
       seedQuery(queryClient, queryKey);
     }
@@ -116,6 +123,7 @@ describe("document deletion cache reconciliation", () => {
 
     await reconcileDocumentDeletionToolCalls({
       entityKeys: entitiesKeys,
+      contextMatterIds: [],
       handledToolCallIds,
       messages,
       queryClient,
@@ -124,15 +132,17 @@ describe("document deletion cache reconciliation", () => {
       workspaceId: "workspace-tab",
     });
 
-    expect(isInvalidated(queryClient, entityRootKey)).toBe(false);
+    expect(isInvalidated(queryClient, entityRootKey)).toBe(true);
     expect(isInvalidated(queryClient, detailKey)).toBe(true);
     expect(isInvalidated(queryClient, versionsKey)).toBe(true);
     expect(isInvalidated(queryClient, taskDetailKey)).toBe(false);
+    expect(isInvalidated(queryClient, metadataKey)).toBe(true);
 
     seedQuery(queryClient, detailKey);
     seedQuery(queryClient, versionsKey);
     await reconcileDocumentDeletionToolCalls({
       entityKeys: entitiesKeys,
+      contextMatterIds: [],
       handledToolCallIds,
       messages,
       queryClient,
@@ -143,5 +153,27 @@ describe("document deletion cache reconciliation", () => {
 
     expect(isInvalidated(queryClient, detailKey)).toBe(false);
     expect(isInvalidated(queryClient, versionsKey)).toBe(false);
+  });
+
+  test("invalidates selected global-chat matter collections", async () => {
+    const queryClient = new QueryClient();
+    const contextEntitiesKey = entitiesKeys.all("workspace-context");
+    seedQuery(queryClient, contextEntitiesKey);
+
+    await reconcileDocumentDeletionToolCalls({
+      contextMatterIds: ["workspace-context"],
+      entityKeys: entitiesKeys,
+      handledToolCallIds: new Set(),
+      messages: deletionMessages({
+        entity_id: "entity_ref_1",
+        version_id: "version-1",
+      }),
+      queryClient,
+      tabs: [],
+      workspaceKeys: workspacesKeys,
+      workspaceId: undefined,
+    });
+
+    expect(isInvalidated(queryClient, contextEntitiesKey)).toBe(true);
   });
 });

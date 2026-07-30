@@ -92,6 +92,7 @@ type UseChatSessionOptions = {
     | (() => DocxEditRepresentation | undefined)
     | undefined;
   getEditApplyMode?: (() => ChatEditApplyMode) | undefined;
+  getContextMatterIds?: (() => readonly string[]) | undefined;
   getSendMode?: (() => ChatSendMode) | undefined;
   /** Cursor for the first older page, seeded from the thread fetch. */
   initialOlderCursor: string | null;
@@ -145,6 +146,7 @@ export const useChatSession = ({
   chat,
   conversationId,
   getDocxEditRepresentation,
+  getContextMatterIds,
   getEditApplyMode,
   getSendMode,
   initialOlderCursor,
@@ -643,6 +645,7 @@ export const useChatSession = ({
     detached(
       reconcileDocumentDeletionToolCalls({
         entityKeys: entitiesKeys,
+        contextMatterIds: getContextMatterIds?.() ?? [],
         handledToolCallIds: handledDocumentDeletionToolCallIdsRef.current,
         messages,
         queryClient,
@@ -652,7 +655,7 @@ export const useChatSession = ({
       }),
       "useChatSession.deleteDocument",
     );
-  }, [messages, queryClient, workspaceId]);
+  }, [getContextMatterIds, messages, queryClient, workspaceId]);
 
   // Server-side automatic DOCX edits replace the entity's file field. Follow
   // that replacement immediately in the inspector and refresh entity-backed

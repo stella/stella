@@ -33,7 +33,6 @@ import {
 import type {
   FileTab,
   GenericTab,
-  TaskTab,
 } from "@/components/inspector/inspector-store";
 import {
   InspectorTabHeader,
@@ -56,10 +55,7 @@ import { APIError } from "@/lib/errors/api";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { getCachedAnonymization } from "@/lib/pdf/anonymization-cache";
 import { MatterMetadataPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/matter-metadata-sheet";
-import {
-  TaskDetailPanel,
-  TaskTabSync,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-panel";
+import { TaskDetailPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-panel";
 import { entityOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 import { workspaceOptions } from "@/routes/_protected.workspaces/-queries";
@@ -391,10 +387,6 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
     () => tabs.filter((tab): tab is FileTab => tab.type === "pdf"),
     [tabs],
   );
-  const taskTabs = useMemo(
-    () => tabs.filter((tab): tab is TaskTab => tab.type === "task"),
-    [tabs],
-  );
 
   // Ref-backed recency log: "most recent first", capped at
   // MAX_MOUNTED_PDFS. The ref is written inside `useEffect` (commit
@@ -569,10 +561,6 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
           tab={tab}
         />
       ))}
-      {taskTabs.map((tab) => (
-        <TaskTabSync key={`${tab.workspaceId}:${tab.id}`} tab={tab} />
-      ))}
-
       {/* Document content — render all open document tabs, show only the active one. */}
       {pdfTabs.map((tab) => (
         <FileTabPanel

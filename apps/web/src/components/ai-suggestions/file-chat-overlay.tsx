@@ -1383,6 +1383,7 @@ const FileChatOverlayInner = ({
   } = useChatSession({
     chat,
     conversationId: threadRef.threadId,
+    getContextMatterIds,
     getDocxEditRepresentation,
     getEditApplyMode,
     getSendMode,

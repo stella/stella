@@ -3,14 +3,12 @@ import type { QueryClient } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
+import {
+  fileMetadataQueryKey,
+  type FileMetadataQueryKey,
+} from "@/lib/files/file-metadata-query.logic";
 
-export type StorageFetchPurpose = "display" | "download" | "native-display";
-
-export type FileMetadataQueryKey = {
-  workspaceId: string;
-  fieldId: string;
-  purpose?: StorageFetchPurpose;
-};
+export type { StorageFetchPurpose } from "@/lib/files/file-metadata-query.logic";
 
 type FileMetadataOptions = FileMetadataQueryKey & { enabled?: boolean };
 
@@ -20,14 +18,6 @@ type FileMetadata = {
   mimeType: string;
   originalMimeType: string;
 };
-
-export const fileMetadataQueryKey = (key: FileMetadataQueryKey) => [
-  "files",
-  "metadata",
-  key.workspaceId,
-  key.fieldId,
-  key.purpose ?? "display",
-];
 
 export const fileMetadataOptions = (props: FileMetadataOptions) =>
   queryOptions({

@@ -1,6 +1,6 @@
 import { APIError } from "@/lib/errors/api";
 import { fetchWithTimeout } from "@/lib/fetch";
-import type { StorageFetchPurpose } from "@/lib/files/file-metadata-query";
+import type { StorageFetchPurpose } from "@/lib/files/file-metadata-query.logic";
 
 type FetchStorageArrayBufferOptions = {
   signal: AbortSignal;

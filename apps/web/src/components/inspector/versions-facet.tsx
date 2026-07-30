@@ -22,10 +22,8 @@ import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
-import {
-  fileMetadataQueryKey,
-  prefetchFileMetadata,
-} from "@/lib/files/file-metadata-query";
+import { prefetchFileMetadata } from "@/lib/files/file-metadata-query";
+import { fileMetadataQueryKey } from "@/lib/files/file-metadata-query.logic";
 import { VersionsSidebar } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/versions-sidebar";
 import type { Version } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/versions-sidebar";
 import {

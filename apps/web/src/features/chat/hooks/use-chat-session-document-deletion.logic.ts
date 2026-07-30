@@ -5,6 +5,7 @@ import {
   type PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
 import type { InspectorTab } from "@/components/inspector/inspector-store";
+import { fileMetadataQueryRoot } from "@/lib/files/file-metadata-query.logic";
 
 type ReconcileDocumentDeletionToolCallsOptions = {
   entityKeys: {
@@ -14,6 +15,7 @@ type ReconcileDocumentDeletionToolCallsOptions = {
   };
   handledToolCallIds: Set<string>;
   messages: readonly PersistedChatMessage[];
+  contextMatterIds: readonly string[];
   queryClient: QueryClient;
   tabs: readonly InspectorTab[];
   workspaceKeys: {
@@ -23,6 +25,7 @@ type ReconcileDocumentDeletionToolCallsOptions = {
 };
 
 export const reconcileDocumentDeletionToolCalls = async ({
+  contextMatterIds,
   entityKeys,
   handledToolCallIds,
   messages,
@@ -39,20 +42,29 @@ export const reconcileDocumentDeletionToolCalls = async ({
 
   const fileTabs = tabs.filter((tab) => tab.type === "pdf");
   const invalidations: Promise<unknown>[] = [];
+  const affectedWorkspaceIds = new Set([
+    ...contextMatterIds,
+    ...fileTabs.map((tab) => tab.workspaceId),
+  ]);
+  if (workspaceId !== undefined) {
+    affectedWorkspaceIds.add(workspaceId);
+  }
+
+  for (const affectedWorkspaceId of affectedWorkspaceIds) {
+    invalidations.push(
+      queryClient.invalidateQueries({
+        queryKey: entityKeys.all(affectedWorkspaceId),
+      }),
+    );
+  }
+
+  invalidations.push(
+    queryClient.invalidateQueries({ queryKey: fileMetadataQueryRoot() }),
+  );
 
   if (hasWholeDocumentDeletion) {
-    const affectedWorkspaceIds = new Set(
-      fileTabs.map((tab) => tab.workspaceId),
-    );
-    if (workspaceId !== undefined) {
-      affectedWorkspaceIds.add(workspaceId);
-    }
-
     for (const affectedWorkspaceId of affectedWorkspaceIds) {
       invalidations.push(
-        queryClient.invalidateQueries({
-          queryKey: entityKeys.all(affectedWorkspaceId),
-        }),
         queryClient.invalidateQueries({
           queryKey: workspaceKeys.overview(affectedWorkspaceId),
         }),

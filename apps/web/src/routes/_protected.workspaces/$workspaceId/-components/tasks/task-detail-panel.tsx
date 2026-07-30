@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, useSyncExternalStore } from "react";
+import { useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
@@ -13,7 +13,6 @@ import { Skeleton } from "@stll/ui/components/skeleton";
 import { cn } from "@stll/ui/lib/utils";
 
 import { useInspectorStore } from "@/components/inspector/inspector-store";
-import type { TaskTab } from "@/components/inspector/inspector-store";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -58,6 +57,7 @@ export const TaskDetailPanel = ({
   const t = useTranslations("tasks");
   const tCommon = useTranslations("common");
   const closeTab = useInspectorStore((s) => s.closeTab);
+  const closeTabsForEntities = useInspectorStore((s) => s.closeTabsForEntities);
   const setMinimized = useInspectorStore((s) => s.setMinimized);
   const isNewTask = useInspectorStore((s) => {
     const found = s.tabs.find((tab) => tab.id === taskId);
@@ -73,9 +73,17 @@ export const TaskDetailPanel = ({
     select: (ctx) => ctx.user.id,
   });
 
-  const { data: task, isLoading } = useQuery(
-    taskDetailOptions(workspaceId, taskId),
-  );
+  const {
+    data: task,
+    error,
+    isLoading,
+  } = useQuery(taskDetailOptions(workspaceId, taskId));
+
+  useExternalSyncEffect(() => {
+    if (APIError.is(error) && error.status === 404) {
+      closeTabsForEntities([taskId]);
+    }
+  }, [closeTabsForEntities, error, taskId]);
 
   const [isEditingName, setIsEditingName] = useState(false);
   const [editNameValue, setEditNameValue] = useState("");
@@ -451,36 +459,4 @@ export const TaskDetailPanel = ({
       </ScrollArea>
     </div>
   );
-};
-
-export const TaskTabSync = ({ tab }: { tab: TaskTab }) => {
-  const closeTabsForEntities = useInspectorStore((s) => s.closeTabsForEntities);
-  const queryClient = useQueryClient();
-  const subscribe = useCallback(
-    (onStoreChange: () => void) =>
-      queryClient.getQueryCache().subscribe(() => onStoreChange()),
-    [queryClient],
-  );
-  const getSnapshot = useCallback(() => {
-    const error = queryClient.getQueryState(
-      taskKeys.detail(tab.workspaceId, tab.id),
-    )?.error;
-    return APIError.is(error) && error.status === 404;
-  }, [queryClient, tab.id, tab.workspaceId]);
-  const isMissing = useSyncExternalStore(subscribe, getSnapshot, () => false);
-
-  useExternalSyncEffect(() => {
-    detached(
-      queryClient.prefetchQuery(taskDetailOptions(tab.workspaceId, tab.id)),
-      "TaskTabSync",
-    );
-  }, [queryClient, tab.id, tab.workspaceId]);
-
-  useExternalSyncEffect(() => {
-    if (isMissing) {
-      closeTabsForEntities([tab.id]);
-    }
-  }, [closeTabsForEntities, isMissing, tab.id]);
-
-  return null;
 };
