@@ -89,6 +89,7 @@ describe("provider document transport", () => {
         },
       ],
     });
+    expect(JSON.stringify(recorder.requestBody())).not.toContain("placeholder");
   });
 
   test("maps shared metadata to Anthropic's document contract", async () => {
