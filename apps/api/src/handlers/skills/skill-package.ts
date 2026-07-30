@@ -695,6 +695,12 @@ const fetchGithubScopedTree = async ({
 }): Promise<GithubTreeItem[]> => {
   let treeish = commitSha;
   const pathParts = rootPath.split("/").filter((part) => part.length > 0);
+  if (pathParts.length > LIMITS.agentSkillGithubDirectoriesMax) {
+    throw new HandlerError({
+      status: 400,
+      message: "GitHub skill folder is too deeply nested",
+    });
+  }
 
   for (const pathPart of pathParts) {
     // oxlint-disable-next-line no-await-in-loop -- tree traversal is ordered because each directory SHA resolves the next request

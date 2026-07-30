@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { LIMITS } from "@/api/lib/limits";
 import * as realSafeFetch from "@/api/lib/safe-outbound-fetch";
 import {
   SafeOutboundFetchError,
@@ -190,6 +191,25 @@ describe("GitHub skill package discovery", () => {
           url.includes("recursive=1"),
       ),
     ).toBe(true);
+  });
+
+  test("rejects selected folders deeper than the GitHub directory cap", async () => {
+    const nestedPath = Array.from(
+      { length: LIMITS.agentSkillGithubDirectoriesMax + 1 },
+      (_, index) => `directory-${index}`,
+    ).join("/");
+    const result = await discoverSkillPackagesFromUrl(
+      `https://github.com/example/skills/tree/${COMMIT_SHA}/${nestedPath}`,
+    );
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isOk(result)) {
+      throw new Error("Expected excessive GitHub folder depth to be rejected");
+    }
+    expect(result.error.message).toBe(
+      "GitHub skill folder is too deeply nested",
+    );
+    expect(requestedTreeUrls).toEqual([]);
   });
 
   test("imports a selected skill without recursively fetching the repository root", async () => {
