@@ -31,6 +31,8 @@ import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 
+import { summarizeSkillImportFailures } from "./import-skill-dialog.logic";
+
 const MAX_SELECTED_SKILLS = 20;
 const FIRST_STRONG_ISOLATE = String.fromCodePoint(8296);
 const POP_DIRECTIONAL_ISOLATE = String.fromCodePoint(8297);
@@ -169,7 +171,10 @@ const ImportSkillDialogBody = ({
           installed: format.number(result.installed.length),
           installedCount: result.installed.length,
         }),
-        description: t("common.unexpectedError"),
+        description: summarizeSkillImportFailures(
+          result.failed,
+          t("common.unexpectedError"),
+        ),
         type: "warning",
       });
     },
