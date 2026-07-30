@@ -268,6 +268,47 @@ from scratch, causing an infinite re-scan loop where every
 previously ingested decision is re-fetched, hash-checked,
 and skipped, consuming the page budget with zero progress.
 
+### 14. A missing continuation token is a failure, not an ending
+
+Pagination ends when the source says there is nothing more, never
+because the next-page token is absent. Treating a **full** page
+with no token as "slice complete" silently drops the remainder,
+and a forward-only cursor never returns to it, so the loss is
+permanent and invisible.
+
+The signature is recognisable: stored counts per slice top out at
+a multiple of the page size, with slices piling up on that ceiling.
+
+Fail loudly instead. Throwing holds the cursor and retries the
+slice; a bad crawl that stops is recoverable, a bad crawl that
+skips is not.
+
+### 15. Report coverage against the source's own count
+
+Where a source states how many records a query matched (a result
+count on a search page, a `totalElements` in an API envelope),
+carry it back on the page that completes the slice as
+`SliceCoverage` — `{ slice, reported, collected }`. The pipeline
+persists it, so a shortfall becomes a queryable row rather than
+an inference.
+
+Without it, an incomplete crawl and a genuinely quiet slice are
+indistinguishable, and neither the operator nor a repair pass has
+anything to act on. An adapter whose source publishes no count
+omits the field; that is a known blind spot, not a silent one.
+
+### 16. A forward-only cursor cannot repair history
+
+An adapter that walks dates or ids in one direction and parks at
+the present will never revisit what it passed. Any hole — from a
+failed fetch, a truncated page, or a range crawled before a
+parser fix — stays a hole forever.
+
+So the repair path has to exist separately from the live cursor:
+a reconciliation pass that reads the coverage ledger (rule 15)
+and re-crawls the slices that are short. Do not rely on "it will
+come around again", because it will not.
+
 ## DocumentAst Conventions
 
 ```typescript
@@ -309,6 +350,12 @@ When adding a new country adapter:
 7. **Add adapter key** to `consts.ts` `ADAPTER_KEYS`
 8. **Test with real data** — seed 3+ decisions, verify metadata
    completeness, check AST content retention
+9. **Prove the pagination terminates for the right reason** — force
+   a slice larger than one page and confirm the adapter follows it
+   to the end rather than stopping at a page boundary (rules 14-16)
+10. **Wire the coverage count** — if the source reports a total for
+    a query, return `SliceCoverage`; if it does not, say so in the
+    adapter's doc comment so the blind spot is recorded
 
 ## File Map
 
