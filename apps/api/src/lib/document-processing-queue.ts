@@ -1813,8 +1813,9 @@ export const initDocumentProcessingWorker = () => {
         const client = reconciliationRedisClient;
         reconciliationRedisClient = null;
         if (client) {
-          await client.close();
+          client.close();
         }
+        await Promise.resolve();
       },
     };
   }
