@@ -37,6 +37,7 @@ const emptyScopedDb = asTestRaw<McpRequestContext["scopedDb"]>(
       select: () => builder,
       from: () => builder,
       where: () => builder,
+      for: async () => [],
       orderBy: () => builder,
       limit: async () => [],
     };
