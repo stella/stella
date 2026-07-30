@@ -1,4 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
@@ -52,3 +53,8 @@ export const fileMetadataOptions = (props: FileMetadataOptions) =>
       } satisfies FileMetadata;
     },
   });
+
+export const prefetchFileMetadata = (
+  queryClient: QueryClient,
+  props: FileMetadataQueryKey,
+) => queryClient.prefetchQuery(fileMetadataOptions(props));

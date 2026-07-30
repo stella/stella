@@ -8,9 +8,9 @@
  * the selection). Compare is owned by the document route.
  */
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useState, useSyncExternalStore } from "react";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
@@ -18,11 +18,14 @@ import { useTranslations } from "use-intl";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { useInspectorStore } from "@/components/inspector/inspector-store";
-import { useMountEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
-import { fileMetadataOptions } from "@/lib/files/file-metadata-query";
+import {
+  fileMetadataQueryKey,
+  prefetchFileMetadata,
+} from "@/lib/files/file-metadata-query";
 import { VersionsSidebar } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/versions-sidebar";
 import type { Version } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/versions-sidebar";
 import {
@@ -257,10 +260,36 @@ export const useSelectedFileVersionMissing = ({
   fieldId: string;
   workspaceId: string;
 }): boolean => {
-  const { error } = useQuery(
-    fileMetadataOptions({ workspaceId, fieldId, enabled }),
+  const queryClient = useQueryClient();
+  const subscribe = useCallback(
+    (onStoreChange: () => void) =>
+      queryClient.getQueryCache().subscribe(() => onStoreChange()),
+    [queryClient],
   );
-  return APIError.is(error) && error.status === 404;
+  const getSnapshot = useCallback(() => {
+    if (!enabled) {
+      return false;
+    }
+
+    const error = queryClient.getQueryState(
+      fileMetadataQueryKey({ workspaceId, fieldId }),
+    )?.error;
+    return APIError.is(error) && error.status === 404;
+  }, [enabled, fieldId, queryClient, workspaceId]);
+  const isMissing = useSyncExternalStore(subscribe, getSnapshot, () => false);
+
+  useExternalSyncEffect(() => {
+    if (!enabled) {
+      return;
+    }
+
+    detached(
+      prefetchFileMetadata(queryClient, { workspaceId, fieldId }),
+      "useSelectedFileVersionMissing",
+    );
+  }, [enabled, fieldId, queryClient, workspaceId]);
+
+  return isMissing;
 };
 
 const LoadOlderVersionLifecycle = ({

@@ -5,7 +5,6 @@ import { unwrapEden } from "@/lib/errors/api";
 import {
   fileMetadataQueryKey,
   type FileMetadataQueryKey,
-  type StorageFetchPurpose,
 } from "@/lib/files/file-metadata-query";
 import type { QueryOptionsInput } from "@/lib/react-query";
 import { fetchStorageArrayBuffer } from "@/routes/_protected.workspaces/$workspaceId/-components/files/storage-fetch";
