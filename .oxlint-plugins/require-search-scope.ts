@@ -76,6 +76,10 @@ const CHEERIO_LOAD_IMPORTS = [
   { importedName: "load", module: "cheerio" },
 ] as const satisfies readonly ApprovedImport[];
 
+const ROOT_DB_IMPORTS = [
+  { importedName: "rootDb", module: "@/api/db/root" },
+] as const satisfies readonly ApprovedImport[];
+
 const PRIVATE_SEARCH_PROJECTIONS = {
   search_documents: {
     expectedAlias: "sd",
@@ -1645,6 +1649,69 @@ export default {
             ),
           );
 
+        const privateProjectionTable = (expression: unknown): string | null => {
+          for (const [table, projection] of Object.entries(
+            PRIVATE_SEARCH_PROJECTIONS,
+          )) {
+            if (
+              isPrivateProjectionInterpolation(
+                expression,
+                projection.tableImports,
+              )
+            ) {
+              return table;
+            }
+          }
+          return null;
+        };
+
+        const callChainRoot = (
+          expression: unknown,
+        ): (AstNode & { name: string }) | null => {
+          const unwrapped = unwrapExpression(expression);
+          if (isIdentifier(unwrapped)) {
+            return unwrapped;
+          }
+          if (!isAstNode(unwrapped)) {
+            return null;
+          }
+          if (unwrapped.type === "CallExpression") {
+            return callChainRoot(unwrapped.callee);
+          }
+          if (unwrapped.type === "MemberExpression") {
+            return callChainRoot(unwrapped.object);
+          }
+          return null;
+        };
+
+        const rootDbPrivateBuilderTable = (node: AstNode): string | null => {
+          if (
+            node.type !== "CallExpression" ||
+            !isAstNode(node.callee) ||
+            node.callee.type !== "MemberExpression" ||
+            !Array.isArray(node.arguments)
+          ) {
+            return null;
+          }
+          const property = node.callee.property;
+          const isFrom =
+            (isIdentifier(property) &&
+              node.callee.computed !== true &&
+              property.name === "from") ||
+            (node.callee.computed === true &&
+              isStringLiteral(property) &&
+              property.value === "from");
+          if (!isFrom) {
+            return null;
+          }
+          const root = callChainRoot(node.callee.object);
+          if (root === null || !isApprovedImport(root, ROOT_DB_IMPORTS)) {
+            return null;
+          }
+          const table = node.arguments.at(0);
+          return table === undefined ? null : privateProjectionTable(table);
+        };
+
         const isImportBackedInterpolation = (expression: unknown): boolean => {
           const unwrapped = unwrapExpression(expression);
           if (!isAstNode(unwrapped)) {
@@ -3189,6 +3256,15 @@ export default {
           },
           CallExpression(node: unknown) {
             if (!isAstNode(node)) {
+              return;
+            }
+            const builderTable = rootDbPrivateBuilderTable(node);
+            if (builderTable !== null) {
+              context.report({
+                node,
+                messageId: "missingScope",
+                data: { table: builderTable },
+              });
               return;
             }
             const appendParts = sqlAppendCallParts(node);

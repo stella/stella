@@ -2,6 +2,7 @@ import { load } from "cheerio";
 import * as drizzle from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
+import { rootDb } from "@/api/db/root";
 import { searchDocuments } from "@/api/db/schema";
 import { redistributableCaseLawSource as importedOpaqueRelationFragment } from "@/api/lib/case-law/redistribution";
 import { chatThreadScopeSql } from "@/api/lib/search/chat-thread-scope-sql";
@@ -24,6 +25,9 @@ const singleWorkspaceFilter = searchDocumentsAccessSql({});
 
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves an unscoped private projection read is rejected
 const unsafeEntity = sql`SELECT * FROM search_documents sd WHERE sd.organization_id = ${organizationId}`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves rootDb query builders cannot read private projections outside the SQL scope guard
+const unsafeBuilderEntity = rootDb.select().from(searchDocuments);
 
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves PostgreSQL-equivalent uppercase identifiers are protected
 const unsafeUppercaseEntity = sql`SELECT * FROM SEARCH_DOCUMENTS sd`;
@@ -1530,6 +1534,7 @@ const publicCaseLaw = sql`SELECT * FROM case_law_search_documents clsd`;
 
 void [
   unsafeEntity,
+  unsafeBuilderEntity,
   unsafeUppercaseEntity,
   unsafeQualifiedEntity,
   unsafeQuotedEntity,
