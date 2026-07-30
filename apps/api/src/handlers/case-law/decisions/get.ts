@@ -17,10 +17,10 @@ import {
 } from "@/api/handlers/case-law/corpus-storage";
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
 import type { EmptyAst } from "@/api/handlers/case-law/ingestion/adapter";
-import { redistributableCaseLawSource } from "@/api/handlers/case-law/redistribution";
 import { corpusCarriesDocument } from "@/api/handlers/case-law/stored-payload";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { LIMITS } from "@/api/lib/limits";
 
 type PublicDecisionLanguageAlternate = {

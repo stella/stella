@@ -339,6 +339,32 @@ export const orgPolicies = () => [
   }),
 ];
 
+export const orgReadOnlyPolicies = (tableName: string) => [
+  p.pgPolicy(`${tableName}_organization_select`, {
+    for: "select",
+    to: stella,
+    using: organizationCheck,
+  }),
+  p.pgPolicy(`${tableName}_no_insert`, {
+    as: "restrictive",
+    for: "insert",
+    to: stella,
+    withCheck: sql`false`,
+  }),
+  p.pgPolicy(`${tableName}_no_update`, {
+    as: "restrictive",
+    for: "update",
+    to: stella,
+    using: sql`false`,
+  }),
+  p.pgPolicy(`${tableName}_no_delete`, {
+    as: "restrictive",
+    for: "delete",
+    to: stella,
+    using: sql`false`,
+  }),
+];
+
 export const userPolicies = () => [
   p.pgPolicy("user_select", {
     for: "select",
@@ -773,6 +799,34 @@ export const chatThreadSearchDocumentPolicies = () => [
     using: chatDerivedThreadScopeCheck(
       sql`chat_thread_search_documents.thread_id`,
     ),
+  }),
+];
+
+export const chatThreadPreviewPassagePolicies = () => [
+  p.pgPolicy("chat_thread_preview_passage_select", {
+    for: "select",
+    to: stella,
+    using: chatDerivedThreadScopeCheck(
+      sql`chat_thread_search_preview_passages.thread_id`,
+    ),
+  }),
+  p.pgPolicy("chat_thread_preview_passage_no_insert", {
+    as: "restrictive",
+    for: "insert",
+    to: stella,
+    withCheck: sql`false`,
+  }),
+  p.pgPolicy("chat_thread_preview_passage_no_update", {
+    as: "restrictive",
+    for: "update",
+    to: stella,
+    using: sql`false`,
+  }),
+  p.pgPolicy("chat_thread_preview_passage_no_delete", {
+    as: "restrictive",
+    for: "delete",
+    to: stella,
+    using: sql`false`,
   }),
 ];
 

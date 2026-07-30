@@ -5,6 +5,7 @@ import { entities, searchDocuments } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
+import { searchDocumentsAccessSql } from "@/api/lib/search/contact-workspace-access-sql";
 import { decodeCursor, encodeCursor } from "@/api/lib/search/cursor";
 import {
   escapeAndHighlight,
@@ -23,6 +24,7 @@ import type {
   ContentSearchQuery,
   ContentSearchResult,
   FacetBucket,
+  RemoveEntityOptions,
   SearchHit,
   SearchProvider,
   SearchQuery,
@@ -55,19 +57,17 @@ const search = async (query: SearchQuery): Promise<SearchResult> => {
   const { organizationId, limit } = query;
 
   const orgFilter = sql`sd.organization_id = ${organizationId}`;
-  const workspaceAccessFilter = (() => {
-    if (!query.workspaceIds) {
-      return sql`AND sd.workspace_id = ${query.workspaceId}`;
-    }
-    if (query.workspaceIds.length > 0) {
-      return sql`AND sd.workspace_id = ANY(${typedPgArray(query.workspaceIds, "uuid")})`;
-    }
-    return sql`AND false`;
-  })();
-  const workspaceSelectionFilter =
-    query.workspaceIds && query.workspaceId
-      ? sql`AND sd.workspace_id = ${query.workspaceId}`
-      : sql``;
+  const selectedWorkspaceIds =
+    query.workspaceId === undefined ? [] : [query.workspaceId];
+  const accessibleWorkspaceIds = query.workspaceIds ?? selectedWorkspaceIds;
+  const workspaceAccessFilter = searchDocumentsAccessSql({
+    accessibleWorkspaceIds,
+    selectedWorkspaceIds: [],
+  });
+  const workspaceSelectionFilter = searchDocumentsAccessSql({
+    accessibleWorkspaceIds,
+    selectedWorkspaceIds,
+  });
   const kindFilter =
     query.kinds && query.kinds.length > 0
       ? sql`AND sd.kind = ANY(${typedPgArray(query.kinds, "text")})`
@@ -109,7 +109,6 @@ const search = async (query: SearchQuery): Promise<SearchResult> => {
     FROM search_documents sd
     JOIN workspaces w ON w.id = sd.workspace_id
     WHERE ${orgFilter}
-      ${workspaceAccessFilter}
       ${workspaceSelectionFilter}
       ${kindFilter}
       ${cursorFilter}
@@ -122,7 +121,6 @@ const search = async (query: SearchQuery): Promise<SearchResult> => {
     SELECT count(*)::int AS total
     FROM search_documents sd
     WHERE ${orgFilter}
-      ${workspaceAccessFilter}
       ${workspaceSelectionFilter}
       ${kindFilter}
       AND sd.tsv @@ ${tsQuery}
@@ -135,7 +133,6 @@ const search = async (query: SearchQuery): Promise<SearchResult> => {
     SELECT sd.kind AS value, count(*)::int AS count
     FROM search_documents sd
     WHERE ${orgFilter}
-      ${workspaceAccessFilter}
       ${workspaceSelectionFilter}
       AND sd.tsv @@ ${tsQuery}
     GROUP BY sd.kind
@@ -209,6 +206,10 @@ const searchContent = async (
 ): Promise<ContentSearchResult> => {
   const { organizationId, workspaceId, limit } = query;
   const tsQuery = buildSearchTsQuery(query.query);
+  const singleWorkspaceFilter = searchDocumentsAccessSql({
+    accessibleWorkspaceIds: [workspaceId],
+    selectedWorkspaceIds: [],
+  });
 
   const [hitsResult, countResult] = await Promise.all([
     rootDb.execute(sql`
@@ -225,7 +226,7 @@ const searchContent = async (
         ts_rank(sd.tsv, ${tsQuery})::float8 AS score
       FROM search_documents sd
       WHERE sd.organization_id = ${organizationId}
-        AND sd.workspace_id = ${workspaceId}
+        ${singleWorkspaceFilter}
         AND sd.tsv @@ ${tsQuery}
       ORDER BY score DESC, sd.entity_id DESC
       LIMIT ${limit}
@@ -234,7 +235,7 @@ const searchContent = async (
       SELECT count(*)::int AS total
       FROM search_documents sd
       WHERE sd.organization_id = ${organizationId}
-        AND sd.workspace_id = ${workspaceId}
+        ${singleWorkspaceFilter}
         AND sd.tsv @@ ${tsQuery}
     `),
   ]);
@@ -258,19 +259,15 @@ const indexEntity = async (entityId: SafeId<"entity">): Promise<void> => {
   await upsertSearchDocument(entityId);
 };
 
-const removeEntity = async (entityId: SafeId<"entity">): Promise<void> => {
-  const existing = await rootDb.query.searchDocuments.findFirst({
-    where: { entityId: { eq: entityId } },
-    columns: { workspaceId: true },
-  });
-
+const removeEntity = async ({
+  entityId,
+  workspaceId,
+}: RemoveEntityOptions): Promise<void> => {
   await rootDb
     .delete(searchDocuments)
     .where(eq(searchDocuments.entityId, entityId));
 
-  if (existing) {
-    await syncWorkspaceSearchActivity(existing.workspaceId);
-  }
+  await syncWorkspaceSearchActivity(workspaceId);
 };
 
 // Upsert all entities without deleting first to avoid search

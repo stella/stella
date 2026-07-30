@@ -2,6 +2,7 @@ import {
   chatMessageSearchDocumentPolicies,
   chatMessagePolicies,
   chatThreadCompactionPolicies,
+  chatThreadPreviewPassagePolicies,
   chatThreadSearchDocumentPolicies,
   chatThreadPolicies,
   fileChatThreadPolicies,
@@ -292,12 +293,39 @@ export const chatThreadSearchDocuments = p.pgTable(
       .references(() => chatThreads.id, { onDelete: "cascade" }),
     title: p.text().notNull().default(""),
     searchableText: p.text("searchable_text").notNull().default(""),
+    previewGeneration: p.uuid("preview_generation"),
     tsv: tsvector(),
     updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
   },
   (table) => [
     p.index("chat_thread_search_docs_tsv_idx").using("gin", table.tsv),
     ...chatThreadSearchDocumentPolicies(),
+  ],
+);
+
+export const chatThreadSearchPreviewPassages = p.pgTable(
+  "chat_thread_search_preview_passages",
+  {
+    threadId: safeUuid<"chatThread">("thread_id")
+      .notNull()
+      .references(() => chatThreadSearchDocuments.threadId, {
+        onDelete: "cascade",
+      }),
+    generation: p.uuid().notNull(),
+    ordinal: p.integer().notNull(),
+    content: p.text().notNull(),
+    tsv: tsvector().notNull(),
+  },
+  (table) => [
+    p.primaryKey({
+      columns: [table.threadId, table.generation, table.ordinal],
+      name: "chat_thread_search_preview_passages_pk",
+    }),
+    p
+      .index("chat_thread_preview_passages_lookup_idx")
+      .on(table.threadId, table.generation, table.ordinal),
+    p.index("chat_thread_preview_passages_tsv_idx").using("gin", table.tsv),
+    ...chatThreadPreviewPassagePolicies(),
   ],
 );
 

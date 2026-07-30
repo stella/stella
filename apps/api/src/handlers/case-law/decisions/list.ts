@@ -5,8 +5,8 @@ import type { Static } from "elysia";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { validCaseLawLanguageAlternateCountSql } from "@/api/handlers/case-law/decisions/language";
-import { redistributableCaseLawSource } from "@/api/handlers/case-law/redistribution";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { isUuid, tPaginationLimit, tSafeId } from "@/api/lib/custom-schema";
 import {
   parsePgTimestampCursorValue,

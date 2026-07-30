@@ -341,6 +341,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-raw-user-id-schema.ts",
     "./.oxlint-plugins/no-offset-pagination.ts",
     "./.oxlint-plugins/require-query-limit.ts",
+    "./.oxlint-plugins/require-search-scope.ts",
     "./.oxlint-plugins/no-direct-ingestion-checkpoint-write.ts",
     "./.oxlint-plugins/mcp-security.ts",
     "./.oxlint-plugins/auth-lifecycle.ts",
@@ -996,6 +997,12 @@ export default defineConfig({
       },
     },
     {
+      files: [".oxlint-plugins/__fixtures__/require-search-scope.fixture.ts"],
+      rules: {
+        "require-search-scope/require-search-scope": "error",
+      },
+    },
+    {
       files: [
         ".oxlint-plugins/__fixtures__/no-direct-ingestion-checkpoint-write.fixture.ts",
       ],
@@ -1372,6 +1379,16 @@ export default defineConfig({
       excludeFiles: ["apps/api/src/**/*.test.ts", "apps/api/src/tests/**/*.ts"],
       rules: {
         "require-query-limit/require-query-limit": "error",
+      },
+    },
+    {
+      // Global search reads through rootDb and therefore must reconstruct
+      // workspace/contact/chat authorization inside every private projection
+      // query. Public case-law search is intentionally outside this rule.
+      files: ["apps/api/src/lib/search/**/*.ts"],
+      excludeFiles: ["apps/api/src/lib/search/**/*.test.ts"],
+      rules: {
+        "require-search-scope/require-search-scope": "error",
       },
     },
     {

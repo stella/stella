@@ -66,6 +66,26 @@ describe("search provider workspace scoping", () => {
     }
   });
 
+  test("workspace facets keep accessible siblings outside the current selection", async () => {
+    await pgFtsProvider.search({
+      query: "closing memo",
+      organizationId,
+      workspaceIds: [workspaceId, workspaceIdB],
+      workspaceId,
+      limit: 10,
+    });
+
+    const calls = serializedCalls();
+    expect(calls).toHaveLength(4);
+    for (const selectedQuery of calls.slice(0, 3)) {
+      expect(selectedQuery).toContain(workspaceId);
+      expect(selectedQuery).not.toContain(workspaceIdB);
+    }
+    const workspaceFacetQuery = calls.at(3);
+    expect(workspaceFacetQuery).toContain(workspaceId);
+    expect(workspaceFacetQuery).toContain(workspaceIdB);
+  });
+
   test("an empty accessible set fails closed (no rows) instead of matching every workspace", async () => {
     await pgFtsProvider.search({
       query: "closing memo",

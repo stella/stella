@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useId, useMemo, useRef, useState } from "react";
 
 import type { UseMutationResult } from "@tanstack/react-query";
 import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
@@ -13,6 +13,7 @@ import {
   LoaderIcon,
   MessageSquareIcon,
   MessagesSquareIcon,
+  PanelRightIcon,
   SquareCheckIcon,
   UserIcon,
   WandSparklesIcon,
@@ -36,10 +37,13 @@ import {
   CommandItem,
   CommandList,
 } from "@stll/ui/components/command";
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Input } from "@stll/ui/components/input";
 import { Skeleton } from "@stll/ui/components/skeleton";
 import { stellaToast } from "@stll/ui/components/toast";
 import { contentDir } from "@stll/ui/hooks/use-content-dir";
+import { useIsMobile } from "@stll/ui/hooks/use-mobile";
+import { cn } from "@stll/ui/lib/utils";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { MatterIcon } from "@/components/matter-icon";
@@ -86,6 +90,7 @@ import {
   searchFacetOptions,
   hasSearchQueryOrSelectiveFilter,
   searchInfiniteOptions,
+  searchPreviewOptions,
   TIME_PRESETS,
 } from "@/lib/search";
 import type {
@@ -104,6 +109,16 @@ import type {
   RecentSearch,
   SearchRecentsScope,
 } from "@/lib/search-recents";
+import {
+  getSearchPreviewRenderContent,
+  getSearchPreviewDate,
+  getSearchPreviewTarget,
+  normalizeSearchQuery,
+  selectAuthorizedSearchPreviewData,
+  selectSearchPreviewHit,
+  shouldShowSearchPreview,
+  stripSearchMarkup,
+} from "@/lib/search.logic";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 
 type SearchSummaryCitation = {
@@ -125,8 +140,11 @@ type SearchSummaryData = NonNullable<
 >;
 
 const DEBOUNCE_MS = 300;
+const PREVIEW_HIGHLIGHT_DEBOUNCE_MS = 180;
 const VIRTUAL_HIT_ESTIMATE_PX = 76;
 const VIRTUAL_HIT_OVERSCAN = 6;
+const SEARCH_PREVIEW_CONTENT_CLASS_NAME =
+  "text-foreground/90 [&_mark]:bg-highlight [&_mark]:text-highlight-foreground text-sm leading-6 whitespace-pre-wrap [&_mark]:font-medium";
 
 const KIND_ICONS = {
   contact: UserIcon,
@@ -204,9 +222,6 @@ const isAvailableSearchKind = (
   type: GlobalSearchResultType,
   includePublicLaw: boolean,
 ): boolean => type !== "case-law" || includePublicLaw;
-
-const stripSearchMarkup = (value: string): string =>
-  value.replaceAll("<mark>", " ").replaceAll("</mark>", " ").trim();
 
 const extractHighlightedText = (headline: string): string => {
   const start = headline.indexOf("<mark>");
@@ -291,6 +306,7 @@ export const SearchDialog = ({
   const apiLocale = useI18nStore((s) => s.loadedLang);
   const navigate = useNavigate();
   const user = useAuthenticatedUser();
+  const isMobile = useIsMobile();
   const publicLawPreviewEnabled = usePublicLawPreviewEnabled();
   const searchRecentsScope = useMemo(
     (): SearchRecentsScope => ({
@@ -304,6 +320,8 @@ export const SearchDialog = ({
   );
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [highlightedHitId, setHighlightedHitId] = useState<string | null>(null);
+  const [previewEnabled, setPreviewEnabled] = useState(true);
   const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
   const [recentFiles, setRecentFiles] = useState<RecentFile[]>([]);
   const [filters, setFilters] = useState<SearchFilters>(() =>
@@ -314,8 +332,12 @@ export const SearchDialog = ({
   const debouncedSetQuery = useDebouncedCallback((value: string) => {
     setDebouncedQuery(value);
   }, DEBOUNCE_MS);
+  const debouncedSetHighlightedHitId = useDebouncedCallback(
+    setHighlightedHitId,
+    PREVIEW_HIGHLIGHT_DEBOUNCE_MS,
+  );
 
-  const searchQuery = debouncedQuery;
+  const searchQuery = debouncedQuery.trim();
   // Resolve preset → ISO once per logical search. Memoising on
   // [filters.time, searchQuery] gives us a fresh `now() - duration`
   // whenever the user picks a new preset or runs a new query, while
@@ -375,6 +397,8 @@ export const SearchDialog = ({
     hasNextPage,
     fetchNextPage,
     isFetchingNextPage,
+    isFetchNextPageError,
+    isPlaceholderData,
     refetch: refetchSearch,
   } = useInfiniteQuery(
     searchInfiniteOptions({
@@ -391,6 +415,7 @@ export const SearchDialog = ({
       updatedTo,
     }),
   );
+  const isBlockingSearchError = isSearchError && !isFetchNextPageError;
 
   const allHits = useMemo(() => {
     if (!data) {
@@ -399,12 +424,18 @@ export const SearchDialog = ({
     return data.pages.flatMap((page) => page.hits);
   }, [data]);
   const getHitVirtualKey = (index: number) => allHits.at(index)?.id ?? index;
+  const previewHit = selectSearchPreviewHit({
+    highlightedHitId,
+    hits: allHits,
+    isPlaceholderData,
+  });
+  const showPreview = shouldShowSearchPreview({ isMobile, previewEnabled });
 
   // Counts and facets are computed only on the first page (see backend);
   // ignore them entirely while the query is empty so a cleared input
   // doesn't leave stale numbers in the sidebar.
   const firstPage =
-    hasActiveSearch && !isSearchError ? data?.pages.at(0) : undefined;
+    hasActiveSearch && !isBlockingSearchError ? data?.pages.at(0) : undefined;
   const facets = firstPage?.facets;
   const typeBuckets = facets ? facets.type : EMPTY_FACET_BUCKETS;
   const mimeTypeBuckets = facets ? facets.mimeType : EMPTY_FACET_BUCKETS;
@@ -801,7 +832,7 @@ export const SearchDialog = ({
   const shouldShowResults =
     hasVisibleSearch &&
     !hasUnavailableSelectedType &&
-    !isSearchError &&
+    !isBlockingSearchError &&
     hasResults;
   const commandHits = shouldShowResults ? allHits : [];
   const filterEditorIdsKey = filters.editedByUserIds.join("|");
@@ -894,7 +925,12 @@ export const SearchDialog = ({
       open={open}
     >
       <CommandDialogPopup
-        className="flex h-[calc(100dvh-32px)] w-[calc(100vw-16px)] max-w-none flex-col overflow-hidden sm:h-[min(720px,calc(100dvh-96px))] sm:w-[min(960px,calc(100vw-32px))]"
+        className={cn(
+          "flex h-[calc(100dvh-32px)] w-[calc(100vw-16px)] max-w-none flex-col overflow-hidden sm:h-[min(720px,calc(100dvh-96px))]",
+          showPreview
+            ? "sm:w-[min(1120px,calc(100vw-32px))] xl:w-[min(1280px,calc(100vw-48px))]"
+            : "sm:w-[min(960px,calc(100vw-32px))]",
+        )}
         showCloseButton={false}
       >
         <Command
@@ -903,10 +939,24 @@ export const SearchDialog = ({
           keepHighlight={false}
           mode="none"
           onItemHighlighted={(_, eventDetails) => {
-            if (eventDetails.index < 0 || eventDetails.reason !== "keyboard") {
+            if (eventDetails.index < 0) {
+              debouncedSetHighlightedHitId.cancel();
               return;
             }
-            hitVirtualizer.scrollToIndex(eventDetails.index, { align: "auto" });
+            const highlightedHit = allHits.at(eventDetails.index);
+            if (highlightedHit) {
+              if (eventDetails.reason === "keyboard") {
+                debouncedSetHighlightedHitId.cancel();
+                setHighlightedHitId(highlightedHit.id);
+              } else {
+                debouncedSetHighlightedHitId(highlightedHit.id);
+              }
+            }
+            if (eventDetails.reason === "keyboard") {
+              hitVirtualizer.scrollToIndex(eventDetails.index, {
+                align: "auto",
+              });
+            }
           }}
           onValueChange={(value, eventDetails) => {
             if (eventDetails.reason === "item-press") {
@@ -966,6 +1016,19 @@ export const SearchDialog = ({
               </Button>
             )}
             <Button
+              aria-label={t("common.preview")}
+              aria-pressed={previewEnabled}
+              className="hidden size-8 shrink-0 md:inline-flex"
+              onClick={() => {
+                setPreviewEnabled((enabled) => !enabled);
+              }}
+              size="icon-sm"
+              title={t("common.preview")}
+              variant={previewEnabled ? "secondary" : "ghost"}
+            >
+              <DirectionalIcon className="size-4" icon={PanelRightIcon} />
+            </Button>
+            <Button
               aria-keyshortcuts="Escape"
               aria-label={t("search.escKey")}
               className="border-border bg-muted text-muted-foreground hover:bg-muted/80 hidden h-auto rounded border px-1.5 py-0.5 text-[0.625rem] leading-none sm:inline-flex"
@@ -980,7 +1043,12 @@ export const SearchDialog = ({
           {/* Content area */}
           <div className="flex min-h-0 flex-1">
             {/* Facets sidebar — always present so the layout stays stable. */}
-            <div className="hidden w-56 shrink-0 overflow-y-auto border-e px-3 py-3 sm:block">
+            <div
+              className={cn(
+                "hidden w-56 shrink-0 overflow-y-auto border-e px-3 py-3",
+                showPreview ? "xl:block" : "sm:block",
+              )}
+            >
               <TimeFacetGroup
                 locale={locale}
                 onClearCustom={clearTimeFilter}
@@ -1112,7 +1180,7 @@ export const SearchDialog = ({
               {hasVisibleSearch &&
                 !hasUnavailableSelectedType &&
                 hasActiveSearch &&
-                isSearchError && (
+                isBlockingSearchError && (
                   <div className="flex h-full flex-col items-center justify-center gap-3 px-4 py-8">
                     <p className="text-muted-foreground text-sm">
                       {t("common.somethingWentWrong")}
@@ -1131,7 +1199,7 @@ export const SearchDialog = ({
 
               {hasVisibleSearch &&
                 !hasUnavailableSelectedType &&
-                !isSearchError &&
+                !isBlockingSearchError &&
                 !hasResults &&
                 (!hasActiveSearch || isLoading) && (
                   <div className="space-y-3 px-4 py-3">
@@ -1147,7 +1215,7 @@ export const SearchDialog = ({
 
               {hasVisibleSearch &&
                 hasActiveSearch &&
-                !isSearchError &&
+                !isBlockingSearchError &&
                 !isLoading &&
                 !hasResults && (
                   <div className="flex h-full items-center justify-center px-4 py-8">
@@ -1217,14 +1285,26 @@ export const SearchDialog = ({
                       );
                     })}
                   </div>
-                  {hasNextPage && (
+                  {(hasNextPage || isFetchNextPageError) && (
                     <div
                       className="flex h-10 items-center justify-center px-2 pt-2"
-                      ref={loadMoreRef}
+                      ref={isFetchNextPageError ? undefined : loadMoreRef}
                     >
-                      {isFetchingNextPage ? (
+                      {isFetchNextPageError && (
+                        <Button
+                          onClick={() => {
+                            detached(fetchNextPage(), "SearchDialog");
+                          }}
+                          size="sm"
+                          variant="outline"
+                        >
+                          {t("common.retry")}
+                        </Button>
+                      )}
+                      {!isFetchNextPageError && isFetchingNextPage && (
                         <LoaderIcon className="text-muted-foreground size-4 animate-spin" />
-                      ) : (
+                      )}
+                      {!isFetchNextPageError && !isFetchingNextPage && (
                         <span className="sr-only">{t("common.loadMore")}</span>
                       )}
                     </div>
@@ -1232,10 +1312,205 @@ export const SearchDialog = ({
                 </div>
               )}
             </CommandList>
+            {showPreview && (
+              <SearchPreviewPanel
+                hit={previewHit}
+                onOpen={openSearchResult}
+                organizationId={searchRecentsScope.organizationId}
+                query={searchQuery}
+                userId={searchRecentsScope.userId}
+              />
+            )}
           </div>
         </Command>
       </CommandDialogPopup>
     </CommandDialog>
+  );
+};
+
+type SearchPreviewPanelProps = {
+  hit: GlobalSearchHit | null;
+  organizationId: string;
+  query: string;
+  userId: string;
+  onOpen: (hit: GlobalSearchHit) => void;
+};
+
+const SearchPreviewPanel = ({
+  hit,
+  organizationId,
+  query,
+  userId,
+  onOpen,
+}: SearchPreviewPanelProps) => {
+  const t = useTranslations();
+  const headingId = useId();
+
+  return (
+    <aside
+      aria-labelledby={headingId}
+      className="hidden w-[min(44%,32rem)] min-w-72 shrink-0 flex-col border-s md:flex"
+    >
+      <h2 className="sr-only" id={headingId}>
+        {t("common.preview")}
+      </h2>
+      {hit ? (
+        <SearchPreviewContent
+          hit={hit}
+          key={`${hit.type}:${hit.id}:${hit.updatedAt}:${normalizeSearchQuery(query)}`}
+          onOpen={onOpen}
+          organizationId={organizationId}
+          query={query}
+          userId={userId}
+        />
+      ) : (
+        <>
+          <div className="shrink-0 border-b px-4 py-3 text-sm font-medium">
+            {t("common.preview")}
+          </div>
+          <div className="text-muted-foreground flex flex-1 items-center justify-center px-5 text-center text-sm">
+            {t("search.emptyState")}
+          </div>
+        </>
+      )}
+    </aside>
+  );
+};
+
+type SearchPreviewContentProps = {
+  hit: GlobalSearchHit;
+  organizationId: string;
+  query: string;
+  userId: string;
+  onOpen: (hit: GlobalSearchHit) => void;
+};
+
+const SearchPreviewContent = ({
+  hit,
+  organizationId,
+  query,
+  userId,
+  onOpen,
+}: SearchPreviewContentProps) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  const target = getSearchPreviewTarget(hit);
+  const { data, isError, isFetchedAfterMount, isFetching, refetch } = useQuery(
+    searchPreviewOptions({
+      organizationId,
+      query,
+      resultId: target.resultId,
+      type: target.type,
+      updatedAt: hit.updatedAt,
+      userId,
+    }),
+  );
+  const authorizedData = selectAuthorizedSearchPreviewData({
+    data,
+    isError,
+    isFetchedAfterMount,
+    isFetching,
+  });
+  const renderContent = authorizedData
+    ? getSearchPreviewRenderContent(authorizedData)
+    : null;
+  const location =
+    hit.type === "contact" || hit.type === "case-law"
+      ? null
+      : hit.workspaceName;
+  const previewDate = getSearchPreviewDate(hit);
+  const formattedPreviewDate = previewDate
+    ? format.dateTime(new Date(previewDate.value), {
+        month: "short",
+        year: "numeric",
+        ...(previewDate.type === "calendar-date" ? { timeZone: "UTC" } : {}),
+      })
+    : null;
+
+  return (
+    <>
+      <div className="shrink-0 border-b px-4 py-3">
+        <div className="flex items-start gap-3">
+          <SearchHitIcon hit={hit} />
+          <div className="min-w-0 flex-1">
+            <BidiText as="p" className="line-clamp-2 text-sm font-medium">
+              {hit.title || hit.id}
+            </BidiText>
+            <p className="text-muted-foreground mt-0.5 truncate text-xs">
+              <BidiText>{t(KIND_TRANSLATION_KEYS[hit.type])}</BidiText>
+              {location && (
+                <>
+                  <span aria-hidden="true">{" · "}</span>
+                  <BidiText>{location}</BidiText>
+                </>
+              )}
+              {formattedPreviewDate && (
+                <>
+                  <span aria-hidden="true">{" · "}</span>
+                  <BidiText>{formattedPreviewDate}</BidiText>
+                </>
+              )}
+            </p>
+          </div>
+          <Button
+            className="shrink-0"
+            onClick={() => {
+              onOpen(hit);
+            }}
+            size="sm"
+            variant="outline"
+          >
+            {t("common.open")}
+          </Button>
+        </div>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+        {!isError && authorizedData === undefined && (
+          <div className="space-y-3">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-11/12" />
+            <Skeleton className="h-4 w-4/5" />
+            <Skeleton className="mt-6 h-4 w-full" />
+            <Skeleton className="h-4 w-3/4" />
+          </div>
+        )}
+        {isError && (
+          <div className="flex min-h-48 flex-col items-center justify-center gap-3">
+            <p className="text-muted-foreground text-sm">
+              {t("common.somethingWentWrong")}
+            </p>
+            <Button
+              disabled={isFetching}
+              onClick={() => {
+                detached(refetch(), "SearchPreviewContent");
+              }}
+              size="sm"
+              variant="outline"
+            >
+              {t("common.retry")}
+            </Button>
+          </div>
+        )}
+        {renderContent?.type === "plain-text" && (
+          <div
+            className={SEARCH_PREVIEW_CONTENT_CLASS_NAME}
+            dir={contentDir(renderContent.directionText)}
+          >
+            {renderContent.text}
+          </div>
+        )}
+        {renderContent?.type === "highlighted-html" && (
+          <div
+            className={SEARCH_PREVIEW_CONTENT_CLASS_NAME}
+            dir={contentDir(renderContent.directionText)}
+            dangerouslySetInnerHTML={{
+              // safe-html: preview content is server-escaped before the trusted <mark> tags are inserted
+              __html: renderContent.html,
+            }}
+          />
+        )}
+      </div>
+    </>
   );
 };
 

@@ -24,6 +24,24 @@ export const resolveWorkspaceScope = ({
   return intersection.length > 0 ? intersection : null;
 };
 
+const workspaceAccessSql = ({
+  column,
+  ...scope
+}: WorkspaceScopeArgs & { column: SQL }): SQL => {
+  const effective = resolveWorkspaceScope(scope);
+  if (effective === null) {
+    return sql`AND false`;
+  }
+  return sql`AND ${column} = ANY(${typedPgArray(effective, "uuid")})`;
+};
+
+export const searchDocumentsAccessSql = (scope: WorkspaceScopeArgs): SQL =>
+  workspaceAccessSql({ column: sql`sd.workspace_id`, ...scope });
+
+export const workspaceSearchDocumentsAccessSql = (
+  scope: WorkspaceScopeArgs,
+): SQL => workspaceAccessSql({ column: sql`wsd.workspace_id`, ...scope });
+
 export const contactWorkspaceAccessSql = ({
   organizationId,
   ...scope

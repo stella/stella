@@ -100,6 +100,17 @@ test("persists an entity's semantic updated timestamp when indexing", async () =
   expect(compiled.sql).not.toContain("now()");
   expect(compiled.params).toContain(semanticUpdatedAtToken);
   expect(compiled.params).not.toContain(semanticUpdatedAt);
+  const executedSql = executeMock.mock.calls.map(
+    ([executedQuery]) => new PgDialect().sqlToQuery(executedQuery).sql,
+  );
+  expect(
+    executedSql.some((sqlText) =>
+      sqlText.includes("INSERT INTO search_document_preview_passages"),
+    ),
+  ).toBe(true);
+  expect(
+    executedSql.some((sqlText) => sqlText.includes("SET preview_generation =")),
+  ).toBe(true);
   expect(syncWorkspaceSearchActivityMock).toHaveBeenCalledTimes(1);
   expect(syncWorkspaceSearchActivityMock.mock.calls.at(0)?.at(1)).toEqual({
     execute: executeMock,
@@ -156,7 +167,7 @@ test("propagates workspace activity failures from the projection transaction", a
 
   expect(rejection).toBe(activityFailure);
   expect(transactionMock).toHaveBeenCalledTimes(1);
-  expect(executeMock).toHaveBeenCalledTimes(1);
+  expect(executeMock).toHaveBeenCalledTimes(4);
 });
 
 test("keeps the last complete projection when extracted content cannot decrypt", async () => {

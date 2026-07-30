@@ -162,7 +162,9 @@ export const deleteEntitiesHandler = async function* ({
   // Explicit removal for non-PG providers (CASCADE handles PG)
   const provider = getSearchProvider();
   for (const entity of deletedEntities) {
-    provider.removeEntity(entity.id).catch(captureError);
+    provider
+      .removeEntity({ entityId: entity.id, workspaceId })
+      .catch(captureError);
   }
 
   return Result.ok({});

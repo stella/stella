@@ -10,12 +10,14 @@ import type {
 } from "@/api/db/schema-validators";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
+import { redistributableSourceJoin } from "@/api/lib/case-law/search-sql";
 import { compareCodepoint } from "@/api/lib/collation";
+import { chatThreadScopeSql } from "@/api/lib/search/chat-thread-scope-sql";
 import {
   contactWorkspaceAccessSql,
-  resolveWorkspaceScope,
+  searchDocumentsAccessSql,
+  workspaceSearchDocumentsAccessSql,
 } from "@/api/lib/search/contact-workspace-access-sql";
-import type { WorkspaceScopeArgs } from "@/api/lib/search/contact-workspace-access-sql";
 import { decodeCursor } from "@/api/lib/search/cursor";
 import { mapEntityHit } from "@/api/lib/search/global-search-mappers";
 import {
@@ -26,6 +28,10 @@ import {
   GLOBAL_SEARCH_MAX_OFFSET,
   resolveGlobalSearchNextCursor,
 } from "@/api/lib/search/pagination";
+import {
+  buildSearchPreviewPassages,
+  buildSearchPreviewPassageValueRows,
+} from "@/api/lib/search/preview-passages";
 import { buildSearchTsQuery } from "@/api/lib/search/query";
 import { typedPgArray } from "@/api/lib/search/sql";
 import type {
@@ -220,57 +226,6 @@ const headlineRegconfig = sql`
   'public.stella_unaccent'::regconfig
 `;
 
-const workspaceAccessSql = ({
-  column = sql`workspace_id`,
-  ...scope
-}: WorkspaceScopeArgs & { column?: SQL }) => {
-  const effective = resolveWorkspaceScope(scope);
-  if (effective === null) {
-    return sql`AND false`;
-  }
-  return sql`AND ${column} = ANY(${typedPgArray(effective, "uuid")})`;
-};
-
-type ChatScopeArgs = {
-  userId: SafeId<"user">;
-  organizationId: SafeId<"organization">;
-  accessibleWorkspaceIds: readonly SafeId<"workspace">[];
-  selectedWorkspaceIds: readonly SafeId<"workspace">[];
-};
-
-// Chat threads are private to the calling user, and `searchGlobal`
-// runs on the RLS-bypassing root connection, so this predicate
-// reproduces the chat-thread RLS scope (db/rls.ts) explicitly. It
-// joins back to `chat_threads t`: the row is visible only to its
-// owner, in its organization, and only while every embedded
-// workspace (`data_workspace_ids`) stays within the caller's access.
-export const chatThreadScopeSql = ({
-  userId,
-  organizationId,
-  accessibleWorkspaceIds,
-  selectedWorkspaceIds,
-}: ChatScopeArgs): SQL => {
-  const accessArray = typedPgArray(accessibleWorkspaceIds, "uuid");
-  const selectedArray = typedPgArray(selectedWorkspaceIds, "uuid");
-  const selectedFilter =
-    selectedWorkspaceIds.length > 0
-      ? sql`AND (
-          t.workspace_id = ANY(${selectedArray})
-          OR t.data_workspace_ids && ${selectedArray}
-        )`
-      : sql``;
-  return sql`
-    t.user_id = ${userId}
-    AND t.organization_id = ${organizationId}
-    AND (t.workspace_id IS NULL OR t.workspace_id = ANY(${accessArray}))
-    AND (
-      cardinality(t.data_workspace_ids) = 0
-      OR t.data_workspace_ids <@ ${accessArray}
-    )
-    ${selectedFilter}
-  `;
-};
-
 const mapMatterHit = (row: RawRow): ScoredGlobalSearchHit => {
   const workspaceId = String(row["id"]);
   const hit: MatterGlobalSearchHit = {
@@ -425,9 +380,6 @@ const globalSearchOffset = (cursor: string | undefined): number => {
 
 type FilterFragmentInput = {
   query: string;
-  organizationId: SafeId<"organization">;
-  accessibleWorkspaceIds: readonly SafeId<"workspace">[];
-  selectedWorkspaceIds: readonly SafeId<"workspace">[];
   types: readonly GlobalSearchResultType[];
   editedByUserIds: readonly string[];
   mimeTypes: readonly string[];
@@ -444,9 +396,6 @@ type FilterFragmentInput = {
  */
 const buildSearchFilterFragments = ({
   query,
-  organizationId,
-  accessibleWorkspaceIds,
-  selectedWorkspaceIds,
   types,
   editedByUserIds,
   mimeTypes,
@@ -463,31 +412,6 @@ const buildSearchFilterFragments = ({
     updatedFrom === undefined ? undefined : new Date(updatedFrom).toISOString();
   const normalizedUpdatedTo =
     updatedTo === undefined ? undefined : new Date(updatedTo).toISOString();
-
-  const workspaceScope = { accessibleWorkspaceIds, selectedWorkspaceIds };
-  // Workspace-facet variants ignore the user's workspace selection so all
-  // accessible workspaces stay visible (you can always tick a sibling).
-  const accessOnlyScope = { accessibleWorkspaceIds, selectedWorkspaceIds: [] };
-  const entityWorkspaceFilter = workspaceAccessSql({
-    column: sql`sd.workspace_id`,
-    ...workspaceScope,
-  });
-  const entityWorkspaceFacetFilter = workspaceAccessSql({
-    column: sql`sd.workspace_id`,
-    ...accessOnlyScope,
-  });
-  const matterWorkspaceFilter = workspaceAccessSql({
-    column: sql`wsd.workspace_id`,
-    ...workspaceScope,
-  });
-  const matterWorkspaceFacetFilter = workspaceAccessSql({
-    column: sql`wsd.workspace_id`,
-    ...accessOnlyScope,
-  });
-  const contactWorkspaceFilter = contactWorkspaceAccessSql({
-    organizationId,
-    ...workspaceScope,
-  });
 
   const entityTypes = [...selected].filter(
     (type) => !NON_ENTITY_TYPES.has(type),
@@ -574,11 +498,6 @@ const buildSearchFilterFragments = ({
     hasMimeTypeFilter,
     restrictToEntities,
     tsQuery,
-    entityWorkspaceFilter,
-    entityWorkspaceFacetFilter,
-    matterWorkspaceFilter,
-    matterWorkspaceFacetFilter,
-    contactWorkspaceFilter,
     entityEditorFilter,
     entityMimeFilter,
     entityUpdatedFilter,
@@ -623,11 +542,6 @@ export const searchGlobal = async ({
   const {
     selected,
     restrictToEntities,
-    entityWorkspaceFilter,
-    entityWorkspaceFacetFilter,
-    matterWorkspaceFilter,
-    matterWorkspaceFacetFilter,
-    contactWorkspaceFilter,
     entityEditorFilter,
     entityMimeFilter,
     entityUpdatedFilter,
@@ -648,14 +562,32 @@ export const searchGlobal = async ({
     entityTypeFacetFilter,
   } = buildSearchFilterFragments({
     query,
-    organizationId,
-    accessibleWorkspaceIds,
-    selectedWorkspaceIds,
     types,
     editedByUserIds,
     mimeTypes,
     updatedFrom,
     updatedTo,
+  });
+  const entityWorkspaceFilter = searchDocumentsAccessSql({
+    accessibleWorkspaceIds,
+    selectedWorkspaceIds,
+  });
+  const entityWorkspaceFacetFilter = searchDocumentsAccessSql({
+    accessibleWorkspaceIds,
+    selectedWorkspaceIds: [],
+  });
+  const matterWorkspaceFilter = workspaceSearchDocumentsAccessSql({
+    accessibleWorkspaceIds,
+    selectedWorkspaceIds,
+  });
+  const matterWorkspaceFacetFilter = workspaceSearchDocumentsAccessSql({
+    accessibleWorkspaceIds,
+    selectedWorkspaceIds: [],
+  });
+  const contactWorkspaceFilter = contactWorkspaceAccessSql({
+    organizationId,
+    accessibleWorkspaceIds,
+    selectedWorkspaceIds,
   });
 
   const entityPromise = rowsWhen(hasSelectedEntityType(selected), () =>
@@ -680,12 +612,12 @@ export const searchGlobal = async ({
       LEFT JOIN "user" editor ON editor.id = e.last_edited_by
       ${fileFieldJoin}
       WHERE sd.organization_id = ${organizationId}
-        ${entityWorkspaceFilter}
         ${entityTypeFilter}
         ${entityEditorFilter}
         ${entityMimeFilter}
         ${entityUpdatedFilter}
         ${entityTextSearchFilter}
+        ${entityWorkspaceFilter}
       ORDER BY ${searchOrderBy({ id: sql`sd.entity_id`, updatedAt: sql`sd.updated_at` })}
       LIMIT ${fetchLimit}
     `),
@@ -705,9 +637,9 @@ export const searchGlobal = async ({
       FROM workspace_search_documents wsd
       JOIN workspaces w ON w.id = wsd.workspace_id
       WHERE wsd.organization_id = ${organizationId}
-        ${matterWorkspaceFilter}
         ${matterUpdatedFilter}
         ${matterTextSearchFilter}
+        ${matterWorkspaceFilter}
       ORDER BY ${searchOrderBy({ id: sql`wsd.workspace_id`, updatedAt: sql`wsd.updated_at` })}
       LIMIT ${fetchLimit}
     `),
@@ -728,9 +660,9 @@ export const searchGlobal = async ({
         csd.updated_at
       FROM contact_search_documents csd
       WHERE csd.organization_id = ${organizationId}
-        ${contactWorkspaceFilter}
         ${contactUpdatedFilter}
         ${contactTextSearchFilter}
+        ${contactWorkspaceFilter}
       ORDER BY ${searchOrderBy({ id: sql`csd.contact_id`, updatedAt: sql`csd.updated_at` })}
       LIMIT ${fetchLimit}
     `),
@@ -751,6 +683,7 @@ export const searchGlobal = async ({
         d.updated_at
       FROM case_law_search_documents clsd
       JOIN case_law_decisions d ON d.id = clsd.decision_id
+      ${redistributableSourceJoin}
       ${caseLawBodyPreviewJoin}
       WHERE TRUE
         ${caseLawTextSearchFilter}
@@ -782,9 +715,10 @@ export const searchGlobal = async ({
       FROM chat_thread_search_documents cst
       JOIN chat_threads t ON t.id = cst.thread_id
       LEFT JOIN workspaces w ON w.id = t.workspace_id
-      WHERE ${chatScope}
+      WHERE TRUE
         ${chatUpdatedFilter}
         ${chatTextSearchFilter}
+        AND ${chatScope}
       ORDER BY ${searchOrderBy({ id: sql`t.id`, updatedAt: sql`t.updated_at` })}
       LIMIT ${fetchLimit}
     `),
@@ -798,6 +732,7 @@ export const searchGlobal = async ({
       SELECT 1
       FROM case_law_search_documents clsd
       JOIN case_law_decisions d ON d.id = clsd.decision_id
+      ${redistributableSourceJoin}
       WHERE TRUE
         ${caseLawTextSearchFilter}
         ${caseLawUpdatedFilter}
@@ -815,12 +750,12 @@ export const searchGlobal = async ({
           AND e.workspace_id = sd.workspace_id
         ${fileFieldJoin}
         WHERE sd.organization_id = ${organizationId}
-          ${entityWorkspaceFilter}
           ${entityTypeFilter}
           ${entityEditorFilter}
           ${entityMimeFilter}
           ${entityUpdatedFilter}
           ${entityTextSearchFilter}
+          ${entityWorkspaceFilter}
       `),
     ),
     countWhen(
@@ -832,9 +767,9 @@ export const searchGlobal = async ({
         SELECT count(*)::int AS total
         FROM workspace_search_documents wsd
         WHERE wsd.organization_id = ${organizationId}
-          ${matterWorkspaceFilter}
           ${matterUpdatedFilter}
           ${matterTextSearchFilter}
+          ${matterWorkspaceFilter}
       `),
     ),
     countWhen(
@@ -847,9 +782,9 @@ export const searchGlobal = async ({
         SELECT count(*)::int AS total
         FROM contact_search_documents csd
         WHERE csd.organization_id = ${organizationId}
-          ${contactWorkspaceFilter}
           ${contactUpdatedFilter}
           ${contactTextSearchFilter}
+          ${contactWorkspaceFilter}
       `),
     ),
     countWhen(
@@ -865,9 +800,10 @@ export const searchGlobal = async ({
         SELECT count(*)::int AS total
         FROM chat_thread_search_documents cst
         JOIN chat_threads t ON t.id = cst.thread_id
-        WHERE ${chatScope}
+        WHERE TRUE
           ${chatUpdatedFilter}
           ${chatTextSearchFilter}
+          AND ${chatScope}
       `),
     ),
   ] as const;
@@ -883,12 +819,12 @@ export const searchGlobal = async ({
         AND e.workspace_id = sd.workspace_id
       ${fileFieldJoin}
       WHERE sd.organization_id = ${organizationId}
-        ${entityWorkspaceFilter}
         ${entityTypeFacetFilter}
         ${entityEditorFilter}
         ${entityMimeFilter}
         ${entityUpdatedFilter}
         ${entityTextSearchFilter}
+        ${entityWorkspaceFilter}
       GROUP BY sd.kind
       ORDER BY count DESC, sd.kind ASC
       LIMIT ${GLOBAL_SEARCH_FACET_LIMIT}
@@ -914,9 +850,9 @@ export const searchGlobal = async ({
       SELECT count(*)::int AS total
       FROM workspace_search_documents wsd
       WHERE wsd.organization_id = ${organizationId}
-        ${matterWorkspaceFilter}
         ${matterUpdatedFilter}
         ${matterTextSearchFilter}
+        ${matterWorkspaceFilter}
     `),
   );
 
@@ -928,9 +864,9 @@ export const searchGlobal = async ({
         SELECT count(*)::int AS total
         FROM contact_search_documents csd
         WHERE csd.organization_id = ${organizationId}
-          ${contactWorkspaceFilter}
           ${contactUpdatedFilter}
           ${contactTextSearchFilter}
+          ${contactWorkspaceFilter}
       `),
   );
 
@@ -946,9 +882,10 @@ export const searchGlobal = async ({
       SELECT count(*)::int AS total
       FROM chat_thread_search_documents cst
       JOIN chat_threads t ON t.id = cst.thread_id
-      WHERE ${chatScope}
+      WHERE TRUE
         ${chatUpdatedFilter}
         ${chatTextSearchFilter}
+        AND ${chatScope}
     `),
   );
 
@@ -962,12 +899,12 @@ export const searchGlobal = async ({
         AND e.workspace_id = sd.workspace_id
       ${fileFieldJoin}
       WHERE sd.organization_id = ${organizationId}
-        ${entityWorkspaceFacetFilter}
         ${entityTypeFilter}
         ${entityEditorFilter}
         ${entityMimeFilter}
         ${entityUpdatedFilter}
         ${entityTextSearchFilter}
+        ${entityWorkspaceFacetFilter}
     `
     : emptyWorkspaceFacetQuery;
 
@@ -977,9 +914,9 @@ export const searchGlobal = async ({
       SELECT wsd.workspace_id AS value, wsd.title AS label
       FROM workspace_search_documents wsd
       WHERE wsd.organization_id = ${organizationId}
-        ${matterWorkspaceFacetFilter}
         ${matterUpdatedFilter}
         ${matterTextSearchFilter}
+        ${matterWorkspaceFacetFilter}
     `
       : emptyWorkspaceFacetQuery;
 
@@ -1014,11 +951,11 @@ export const searchGlobal = async ({
       JOIN "user" editor ON editor.id = e.last_edited_by
       ${fileFieldJoin}
       WHERE sd.organization_id = ${organizationId}
-        ${entityWorkspaceFilter}
         ${entityTypeFilter}
         ${entityMimeFilter}
         ${entityUpdatedFilter}
         ${entityTextSearchFilter}
+        ${entityWorkspaceFilter}
       GROUP BY editor.id, editor.name
       ORDER BY count DESC, editor.name ASC
       LIMIT ${GLOBAL_SEARCH_FACET_LIMIT}
@@ -1040,11 +977,11 @@ export const searchGlobal = async ({
         coalesce(file_field.mime_types, ARRAY[]::text[])
       ) AS mime_type(value)
       WHERE sd.organization_id = ${organizationId}
-        ${entityWorkspaceFilter}
         ${entityTypeFilter}
         ${entityEditorFilter}
         ${entityUpdatedFilter}
         ${entityTextSearchFilter}
+        ${entityWorkspaceFilter}
       GROUP BY mime_type.value
       ORDER BY count DESC, mime_type.value ASC
       LIMIT ${GLOBAL_SEARCH_FACET_LIMIT}
@@ -1216,9 +1153,6 @@ export const searchGlobalFacet = async ({
   const {
     selected,
     restrictToEntities,
-    entityWorkspaceFilter,
-    entityWorkspaceFacetFilter,
-    matterWorkspaceFacetFilter,
     entityEditorFilter,
     entityMimeFilter,
     entityUpdatedFilter,
@@ -1228,14 +1162,25 @@ export const searchGlobalFacet = async ({
     entityTypeFilter,
   } = buildSearchFilterFragments({
     query,
-    organizationId,
-    accessibleWorkspaceIds,
-    selectedWorkspaceIds,
     types,
     editedByUserIds,
     mimeTypes,
     updatedFrom,
     updatedTo,
+  });
+  const entityWorkspaceFilter = searchDocumentsAccessSql({
+    accessibleWorkspaceIds,
+    selectedWorkspaceIds,
+  });
+  // Workspace facets intentionally ignore the current workspace selection so
+  // every accessible sibling remains available as a bucket.
+  const entityWorkspaceFacetFilter = searchDocumentsAccessSql({
+    accessibleWorkspaceIds,
+    selectedWorkspaceIds: [],
+  });
+  const matterWorkspaceFacetFilter = workspaceSearchDocumentsAccessSql({
+    accessibleWorkspaceIds,
+    selectedWorkspaceIds: [],
   });
 
   if (facet === "editor") {
@@ -1251,12 +1196,12 @@ export const searchGlobalFacet = async ({
       JOIN "user" editor ON editor.id = e.last_edited_by
       ${fileFieldJoin}
       WHERE sd.organization_id = ${organizationId}
-        ${entityWorkspaceFilter}
         ${entityTypeFilter}
         ${entityMimeFilter}
         ${entityUpdatedFilter}
         ${entityTextSearchFilter}
         ${labelLikeFilter(sql`editor.name`, search)}
+        ${entityWorkspaceFilter}
       GROUP BY editor.id, editor.name
       ORDER BY count DESC, editor.name ASC
       LIMIT ${limit}
@@ -1279,12 +1224,12 @@ export const searchGlobalFacet = async ({
         coalesce(file_field.mime_types, ARRAY[]::text[])
       ) AS mime_type(value)
       WHERE sd.organization_id = ${organizationId}
-        ${entityWorkspaceFilter}
         ${entityTypeFilter}
         ${entityEditorFilter}
         ${entityUpdatedFilter}
         ${entityTextSearchFilter}
         ${labelLikeFilter(sql`mime_type.value`, search)}
+        ${entityWorkspaceFilter}
       GROUP BY mime_type.value
       ORDER BY count DESC, mime_type.value ASC
       LIMIT ${limit}
@@ -1310,12 +1255,12 @@ export const searchGlobalFacet = async ({
         AND e.workspace_id = sd.workspace_id
       ${fileFieldJoin}
       WHERE sd.organization_id = ${organizationId}
-        ${entityWorkspaceFacetFilter}
         ${entityTypeFilter}
         ${entityEditorFilter}
         ${entityMimeFilter}
         ${entityUpdatedFilter}
         ${entityTextSearchFilter}
+        ${entityWorkspaceFacetFilter}
     `
     : emptyWorkspaceFacetQuery;
 
@@ -1324,9 +1269,9 @@ export const searchGlobalFacet = async ({
       SELECT wsd.workspace_id AS value, wsd.title AS label
       FROM workspace_search_documents wsd
       WHERE wsd.organization_id = ${organizationId}
-        ${matterWorkspaceFacetFilter}
         ${matterUpdatedFilter}
         ${matterTextSearchFilter}
+        ${matterWorkspaceFacetFilter}
     `
     : emptyWorkspaceFacetQuery;
 
@@ -1394,34 +1339,61 @@ export const upsertContactSearchDocument = async (
     contact.taxId,
     contact.currency,
   ]);
+  const previewGeneration = Bun.randomUUIDv7();
+  const previewPassages = buildSearchPreviewPassages(
+    contact.displayName,
+    searchableText,
+  );
 
-  await rootDb.execute(sql`
-    INSERT INTO contact_search_documents (
-      contact_id, organization_id, contact_type,
-      title, searchable_text, updated_at, tsv
-    ) VALUES (
-      ${contact.id},
-      ${contact.organizationId},
-      ${contact.type},
-      ${contact.displayName},
-      ${searchableText},
-      ${contact.updatedAt},
-      to_tsvector(
-        'simple',
-        unaccent(arabic_normalize(
-          coalesce(${contact.displayName}, '') || ' ' ||
-          coalesce(${searchableText}, '')
-        ))
+  await rootDb.transaction(async (tx) => {
+    await tx.execute(sql`
+      INSERT INTO contact_search_documents (
+        contact_id, organization_id, contact_type,
+        title, searchable_text, updated_at, tsv
+      ) VALUES (
+        ${contact.id},
+        ${contact.organizationId},
+        ${contact.type},
+        ${contact.displayName},
+        ${searchableText},
+        ${contact.updatedAt},
+        to_tsvector(
+          'simple',
+          unaccent(arabic_normalize(
+            coalesce(${contact.displayName}, '') || ' ' ||
+            coalesce(${searchableText}, '')
+          ))
+        )
       )
-    )
-    ON CONFLICT (contact_id) DO UPDATE SET
-      organization_id = EXCLUDED.organization_id,
-      contact_type = EXCLUDED.contact_type,
-      title = EXCLUDED.title,
-      searchable_text = EXCLUDED.searchable_text,
-      updated_at = EXCLUDED.updated_at,
-      tsv = EXCLUDED.tsv
-  `);
+      ON CONFLICT (contact_id) DO UPDATE SET
+        organization_id = EXCLUDED.organization_id,
+        contact_type = EXCLUDED.contact_type,
+        title = EXCLUDED.title,
+        searchable_text = EXCLUDED.searchable_text,
+        updated_at = EXCLUDED.updated_at,
+        tsv = EXCLUDED.tsv
+    `);
+    await tx.execute(sql`
+      DELETE FROM contact_search_document_preview_passages
+      WHERE contact_id = ${contact.id}
+    `);
+    await tx.execute(sql`
+      INSERT INTO contact_search_document_preview_passages (
+        contact_id, organization_id, generation, ordinal, content, tsv
+      ) VALUES ${buildSearchPreviewPassageValueRows({
+        generation: previewGeneration,
+        leadingValues: [sql`${contact.id}`, sql`${contact.organizationId}`],
+        passages: previewPassages,
+        regconfig: sql`'simple'`,
+        useUnaccent: true,
+      })}
+    `);
+    await tx.execute(sql`
+      UPDATE contact_search_documents
+      SET preview_generation = ${previewGeneration}::uuid
+      WHERE contact_id = ${contact.id}
+    `);
+  });
 };
 
 export const upsertWorkspaceSearchDocument = async (
@@ -1513,32 +1485,59 @@ export const upsertWorkspaceSearchDocument = async (
       client?.updatedAt,
       ...workspace.workspaceContacts.map(({ contact }) => contact?.updatedAt),
     ]) ?? workspace.lastActivityAt;
+  const previewGeneration = Bun.randomUUIDv7();
+  const previewPassages = buildSearchPreviewPassages(
+    workspace.name,
+    searchableText,
+  );
 
-  await rootDb.execute(sql`
-    INSERT INTO workspace_search_documents (
-      workspace_id, organization_id,
-      title, searchable_text, updated_at, tsv
-    ) VALUES (
-      ${workspace.id},
-      ${workspace.organizationId},
-      ${workspace.name},
-      ${searchableText},
-      ${updatedAt},
-      to_tsvector(
-        'simple',
-        unaccent(arabic_normalize(
-          coalesce(${workspace.name}, '') || ' ' ||
-          coalesce(${searchableText}, '')
-        ))
+  await rootDb.transaction(async (tx) => {
+    await tx.execute(sql`
+      INSERT INTO workspace_search_documents (
+        workspace_id, organization_id,
+        title, searchable_text, updated_at, tsv
+      ) VALUES (
+        ${workspace.id},
+        ${workspace.organizationId},
+        ${workspace.name},
+        ${searchableText},
+        ${updatedAt},
+        to_tsvector(
+          'simple',
+          unaccent(arabic_normalize(
+            coalesce(${workspace.name}, '') || ' ' ||
+            coalesce(${searchableText}, '')
+          ))
+        )
       )
-    )
-    ON CONFLICT (workspace_id) DO UPDATE SET
-      organization_id = EXCLUDED.organization_id,
-      title = EXCLUDED.title,
-      searchable_text = EXCLUDED.searchable_text,
-      updated_at = EXCLUDED.updated_at,
-      tsv = EXCLUDED.tsv
-  `);
+      ON CONFLICT (workspace_id) DO UPDATE SET
+        organization_id = EXCLUDED.organization_id,
+        title = EXCLUDED.title,
+        searchable_text = EXCLUDED.searchable_text,
+        updated_at = EXCLUDED.updated_at,
+        tsv = EXCLUDED.tsv
+    `);
+    await tx.execute(sql`
+      DELETE FROM workspace_search_document_preview_passages
+      WHERE workspace_id = ${workspace.id}
+    `);
+    await tx.execute(sql`
+      INSERT INTO workspace_search_document_preview_passages (
+        workspace_id, organization_id, generation, ordinal, content, tsv
+      ) VALUES ${buildSearchPreviewPassageValueRows({
+        generation: previewGeneration,
+        leadingValues: [sql`${workspace.id}`, sql`${workspace.organizationId}`],
+        passages: previewPassages,
+        regconfig: sql`'simple'`,
+        useUnaccent: true,
+      })}
+    `);
+    await tx.execute(sql`
+      UPDATE workspace_search_documents
+      SET preview_generation = ${previewGeneration}::uuid
+      WHERE workspace_id = ${workspace.id}
+    `);
+  });
 };
 
 type SearchActivityDatabase = {

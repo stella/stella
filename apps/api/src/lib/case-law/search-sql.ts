@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 
-import { redistributableCaseLawSource } from "@/api/handlers/case-law/redistribution";
+import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 
 /**
  * Query-time redistribution gate for the raw pg-fts queries (which join

@@ -1,8 +1,8 @@
 import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
-import { redistributableCaseLawSource } from "@/api/handlers/case-law/redistribution";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { LIMITS } from "@/api/lib/limits";
 
 type FacetBucket = {

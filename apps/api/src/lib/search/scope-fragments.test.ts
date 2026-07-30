@@ -1,16 +1,14 @@
 import { describe, expect, test } from "bun:test";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 import { toSafeId } from "@/api/lib/branded-types";
-// `mock-root-db` must be imported before any module that pulls in the real
-// `rootDb` singleton (index-global.ts does), so chatThreadScopeSql can be
-// exercised without opening a database connection.
-import "@/api/tests/helpers/mock-root-db";
+import { chatThreadScopeSql } from "@/api/lib/search/chat-thread-scope-sql";
 import {
   contactWorkspaceAccessSql,
   resolveWorkspaceScope,
+  searchDocumentsAccessSql,
+  workspaceSearchDocumentsAccessSql,
 } from "@/api/lib/search/contact-workspace-access-sql";
-
-const { chatThreadScopeSql } = await import("@/api/lib/search/index-global");
 
 const organizationId = toSafeId<"organization">("org_1");
 const userId = toSafeId<"user">("user_1");
@@ -86,16 +84,41 @@ describe("contactWorkspaceAccessSql", () => {
   });
 });
 
+describe("projection-specific workspace scopes", () => {
+  const dialect = new PgDialect();
+  const scope = {
+    accessibleWorkspaceIds: [wsA],
+    selectedWorkspaceIds: [],
+  };
+
+  test("fixes the entity projection alias", () => {
+    const compiled = dialect.sqlToQuery(searchDocumentsAccessSql(scope));
+    expect(compiled.sql).toContain("sd.workspace_id");
+    expect(compiled.params).toContain(wsA);
+  });
+
+  test("fixes the matter projection alias", () => {
+    const compiled = dialect.sqlToQuery(
+      workspaceSearchDocumentsAccessSql(scope),
+    );
+    expect(compiled.sql).toContain("wsd.workspace_id");
+    expect(compiled.params).toContain(wsA);
+  });
+});
+
 describe("chatThreadScopeSql reproduces the private-thread RLS scope", () => {
   test("always constrains owner, organization, and accessible workspaces", () => {
-    const serialized = JSON.stringify(
-      chatThreadScopeSql({
-        userId,
-        organizationId,
-        accessibleWorkspaceIds: [wsA],
-        selectedWorkspaceIds: [],
-      }),
-    );
+    const fragment = chatThreadScopeSql({
+      userId,
+      organizationId,
+      accessibleWorkspaceIds: [wsA],
+      selectedWorkspaceIds: [],
+    });
+    const serialized = JSON.stringify(fragment);
+    const compiled = new PgDialect().sqlToQuery(fragment);
+    // The helper must bind the authorized thread to the protected projection;
+    // otherwise any visible thread could authorize every search row.
+    expect(compiled.sql).toContain("t.id = cst.thread_id");
     // A chat thread is private to its owner within its org; the fragment must
     // bind all three or a search could surface another user's threads.
     expect(serialized).toContain("user_id");

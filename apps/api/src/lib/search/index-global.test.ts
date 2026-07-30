@@ -2,10 +2,14 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { chatThreadScopeSql } from "@/api/lib/search/chat-thread-scope-sql";
 import { contactWorkspaceAccessSql } from "@/api/lib/search/contact-workspace-access-sql";
 import { mapEntityHit } from "@/api/lib/search/global-search-mappers";
-import { chatThreadScopeSql } from "@/api/lib/search/index-global";
-import { clearRootDbMocks } from "@/api/tests/helpers/mock-root-db";
+import { searchGlobal } from "@/api/lib/search/index-global";
+import {
+  clearRootDbMocks,
+  rootDbExecuteMock,
+} from "@/api/tests/helpers/mock-root-db";
 
 process.env["S3_ENDPOINT"] ??= "http://localhost:9000";
 process.env["S3_BUCKET"] ??= "test";
@@ -113,6 +117,31 @@ describe("global search SQL scope", () => {
       "ws_1",
       "ws_1",
     ]);
+  });
+
+  test("rechecks case-law redistribution on every projected read", async () => {
+    await searchGlobal({
+      query: "proportionality",
+      organizationId: toSafeId<"organization">("org_1"),
+      userId: toSafeId<"user">("user_1"),
+      accessibleWorkspaceIds: [],
+      selectedWorkspaceIds: [],
+      types: ["case-law"],
+      editedByUserIds: [],
+      mimeTypes: [],
+      limit: 10,
+    });
+
+    const dialect = new PgDialect();
+    const caseLawReads = rootDbExecuteMock.mock.calls
+      .map(([query]) => dialect.sqlToQuery(query).sql)
+      .filter((sqlText) => sqlText.includes("case_law_search_documents"));
+    expect(caseLawReads.length).toBeGreaterThan(0);
+    for (const serialized of caseLawReads) {
+      expect(serialized).toContain("case_law_sources");
+      expect(serialized).toContain("allowsRedistribution");
+      expect(serialized).toContain("d.source_id");
+    }
   });
 
   test("maps the last editor avatar for document hits", () => {

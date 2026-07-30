@@ -1,8 +1,11 @@
 import { sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
-import { bodyPreviewJoin } from "@/api/handlers/case-law/decisions/search-sql";
 import { loadFtsSearchConfigs } from "@/api/handlers/case-law/fts-config";
+import {
+  bodyPreviewJoin,
+  redistributableSourceJoin,
+} from "@/api/lib/case-law/search-sql";
 import { loadDocumentContext } from "@/api/lib/legal-search/document-context";
 import { buildPgFtsSearchSql } from "@/api/lib/legal-search/pg-fts-query";
 import type {
@@ -108,6 +111,7 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
     FROM case_law_search_documents sd
     JOIN case_law_decisions d
       ON d.id = sd.decision_id
+    ${redistributableSourceJoin}
     ${bodyPreviewJoin}
     WHERE ${ftsSearch.predicate}
       ${allFilters}
@@ -123,6 +127,7 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
     SELECT d.${sql.raw(column)} AS value, count(*)::int AS count
     FROM case_law_search_documents sd
     JOIN case_law_decisions d ON d.id = sd.decision_id
+    ${redistributableSourceJoin}
     WHERE ${ftsSearch.predicate}
       ${omit === "court" ? sql`` : courtFilter}
       ${omit === "country" ? sql`` : countryFilter}

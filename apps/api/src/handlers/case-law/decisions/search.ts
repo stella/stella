@@ -9,19 +9,19 @@ import { courtWeightSql } from "@/api/handlers/case-law/citation-score";
 import { loadCourtWeightEntriesForSql } from "@/api/handlers/case-law/court-weights";
 import { validCaseLawLanguageAlternateCountSql } from "@/api/handlers/case-law/decisions/language";
 import type { searchDecisionsBodySchema } from "@/api/handlers/case-law/decisions/search-schema";
-import {
-  bodyPreviewJoin,
-  redistributableSourceJoin,
-} from "@/api/handlers/case-law/decisions/search-sql";
 import { loadFtsSearchConfigs } from "@/api/handlers/case-law/fts-config";
-import {
-  redistributableCaseLawSource,
-  redistributableCaseLawSourceSqlFor,
-} from "@/api/handlers/case-law/redistribution";
 import { arrayOrEmpty } from "@/api/lib/array";
 // eslint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
 import { toSafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import {
+  redistributableCaseLawSource,
+  redistributableCaseLawSourceSqlFor,
+} from "@/api/lib/case-law/redistribution";
+import {
+  bodyPreviewJoin,
+  redistributableSourceJoin,
+} from "@/api/lib/case-law/search-sql";
 import { isUuid } from "@/api/lib/custom-schema";
 import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
 import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";

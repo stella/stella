@@ -12,8 +12,8 @@ import {
   decisionMonthSql,
   decisionYearSql,
 } from "@/api/handlers/case-law/decisions/sitemap";
-import { redistributableCaseLawSource } from "@/api/handlers/case-law/redistribution";
 import { createSafeId } from "@/api/lib/branded-types";
+import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import {
   createSchemaPglite,
   installPgliteSchemaPrerequisites,
