@@ -517,3 +517,36 @@ describe("validationSignal", () => {
     ).toBeUndefined();
   });
 });
+
+/**
+ * The ancestor-dedup must not re-stringify whole subtrees per content
+ * element — that is quadratic on flat many-paragraph documents. The bound
+ * below is ~40x the memoized cost and far under the quadratic cost, so it
+ * fails the regression without flaking on slow CI.
+ */
+describe("validateAst scaling", () => {
+  test("a flat many-paragraph document validates in linear-ish time", () => {
+    const count = 6000;
+    const paragraphs = Array.from(
+      { length: count },
+      (_, index) => `<p>Paragraf ${index} sądu okręgowego w sprawie.</p>`,
+    ).join("\n");
+    const html = `<html><body><div>${paragraphs}</div></body></html>`;
+    const blocks: Block[] = Array.from({ length: count }, (_, index) => ({
+      id: `p${index}`,
+      anchorId: `p${index}`,
+      type: "paragraph",
+      inlines: [],
+      plainText: `Paragraf ${index} sądu okręgowego w sprawie.`,
+    }));
+
+    const start = performance.now();
+    const result = validateAst(html, blocks);
+    const elapsed = performance.now() - start;
+
+    expect(result.issues.filter((issue) => issue.severity === "error")).toEqual(
+      [],
+    );
+    expect(elapsed).toBeLessThan(3000);
+  });
+});
