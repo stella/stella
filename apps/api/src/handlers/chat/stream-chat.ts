@@ -83,6 +83,8 @@ import {
   ChatLoopDetectedError,
   HandlerError,
 } from "@/api/lib/errors/tagged-errors";
+import { errorFingerprint } from "@/api/lib/errors/utils";
+import { logger } from "@/api/lib/observability/logger";
 import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
 import {
   abortControllerFromSignal,
@@ -924,9 +926,20 @@ const errorFromRunErrorChunk = (chunk: RunErrorChunk): Error => {
 const classifyRunErrorChunk = (chunk: RunErrorChunk): AIErrorKind =>
   classifyAIError(chunk.rawEvent ?? errorFromRunErrorChunk(chunk));
 
+// Classified kinds (quota, billing, retired model, provider outage) are
+// expected operational states; `unknown` means a failure shape this code
+// does not anticipate, so it is the only kind logged at ERROR severity.
+// Fingerprint only — provider error messages can echo request content.
+const reportStreamFailure = (error: unknown, kind: AIErrorKind): void => {
+  captureError(error, { kind });
+  if (kind === "unknown") {
+    logger.error("chat.stream_failed", { kind, ...errorFingerprint(error) });
+  }
+};
+
 const normalizeRunErrorChunk = (chunk: RunErrorChunk): RunErrorChunk => {
   const kind = classifyRunErrorChunk(chunk);
-  captureError(errorFromRunErrorChunk(chunk), { kind });
+  reportStreamFailure(errorFromRunErrorChunk(chunk), kind);
   return {
     ...chunk,
     message: kind,
@@ -995,8 +1008,11 @@ export const processServerChatStream = async function* ({
   } catch (error) {
     streamFailed = true;
     const kind = classifyAIError(error);
-    captureError(error, { kind });
     if (abortSignal.aborted) {
+      // An aborted stream is an expected exit (metered cutoff, client
+      // disconnect); its rejection shape is not a stream defect even
+      // when the classifier cannot name it.
+      captureError(error, { kind });
       finishInvoked = await finalizeInterruptedResponseMessage({
         abortSignal,
         getResponseMessage,
@@ -1005,6 +1021,8 @@ export const processServerChatStream = async function* ({
         processor,
         usage,
       });
+    } else {
+      reportStreamFailure(error, kind);
     }
     yield {
       type: EventType.RUN_ERROR,
