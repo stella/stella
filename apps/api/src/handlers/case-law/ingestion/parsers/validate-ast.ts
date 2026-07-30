@@ -150,6 +150,20 @@ export const validateAst = (
   const contentSelector = "p, li, td, th, div";
   const seen = new Set<string>();
   const originalParts: string[] = [];
+  // Stringifying a node visits its whole subtree, and the ancestor check
+  // below runs it for every ancestor of every content element — quadratic
+  // on flat many-paragraph documents. Each node's normalized text is
+  // computed once and reused.
+  const normalizedTextCache = new WeakMap<object, string>();
+  const normalizedText = (el: Parameters<typeof $>[0] & object): string => {
+    const cached = normalizedTextCache.get(el);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const value = $(el).text().replace(/\s+/gu, " ").trim();
+    normalizedTextCache.set(el, value);
+    return value;
+  };
   $("body")
     .find(contentSelector)
     .each((_, el) => {
@@ -175,13 +189,11 @@ export const validateAst = (
       const capturedByAncestor = $el
         .parents(contentSelector)
         .toArray()
-        .some((ancestor) =>
-          seen.has($(ancestor).text().replace(/\s+/gu, " ").trim()),
-        );
+        .some((ancestor) => seen.has(normalizedText(ancestor)));
       if (capturedByAncestor) {
         return;
       }
-      const text = $el.text().replace(/\s+/gu, " ").trim();
+      const text = normalizedText(el);
       if (text && !seen.has(text)) {
         seen.add(text);
         originalParts.push(text);
