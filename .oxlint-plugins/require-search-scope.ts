@@ -161,8 +161,8 @@ const PRIVATE_SEARCH_PROJECTIONS = {
     expectedAlias: "passage",
     scopeImports: [
       {
-        importedName: "searchDocumentsAccessSql",
-        module: "@/api/lib/search/contact-workspace-access-sql",
+        importedName: "documentPreviewPassageScopeSql",
+        module: "@/api/lib/search/preview-passage-scope-sql",
       },
     ],
     tableImports: [
@@ -180,8 +180,8 @@ const PRIVATE_SEARCH_PROJECTIONS = {
     expectedAlias: "passage",
     scopeImports: [
       {
-        importedName: "workspaceSearchDocumentsAccessSql",
-        module: "@/api/lib/search/contact-workspace-access-sql",
+        importedName: "workspacePreviewPassageScopeSql",
+        module: "@/api/lib/search/preview-passage-scope-sql",
       },
     ],
     tableImports: [
@@ -199,8 +199,8 @@ const PRIVATE_SEARCH_PROJECTIONS = {
     expectedAlias: "passage",
     scopeImports: [
       {
-        importedName: "contactWorkspaceAccessSql",
-        module: "@/api/lib/search/contact-workspace-access-sql",
+        importedName: "contactPreviewPassageScopeSql",
+        module: "@/api/lib/search/preview-passage-scope-sql",
       },
     ],
     tableImports: [
@@ -218,8 +218,8 @@ const PRIVATE_SEARCH_PROJECTIONS = {
     expectedAlias: "passage",
     scopeImports: [
       {
-        importedName: "chatThreadScopeSql",
-        module: "@/api/lib/search/chat-thread-scope-sql",
+        importedName: "chatPreviewPassageScopeSql",
+        module: "@/api/lib/search/preview-passage-scope-sql",
       },
     ],
     tableImports: [

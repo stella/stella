@@ -198,7 +198,6 @@ export const buildSearchPreviewQuery = ({
         ${previewPassageJoin({
           generation: sql`wsd.preview_generation`,
           locatorTsQuery,
-          parentFilter: sql`passage.workspace_id = wsd.workspace_id`,
           table: "matter",
           tenantFilter: sql`
             AND passage.organization_id = ${organizationId}
@@ -228,7 +227,6 @@ export const buildSearchPreviewQuery = ({
         ${previewPassageJoin({
           generation: sql`csd.preview_generation`,
           locatorTsQuery,
-          parentFilter: sql`passage.contact_id = csd.contact_id`,
           table: "contact",
           tenantFilter: sql`AND passage.organization_id = ${organizationId}`,
         })}
@@ -282,7 +280,6 @@ export const buildSearchPreviewQuery = ({
         ${previewPassageJoin({
           generation: sql`cst.preview_generation`,
           locatorTsQuery,
-          parentFilter: sql`passage.thread_id = cst.thread_id`,
           table: "chat",
         })}
         WHERE cst.thread_id = ${resultId}
@@ -314,7 +311,6 @@ export const buildSearchPreviewQuery = ({
         ${previewPassageJoin({
           generation: sql`sd.preview_generation`,
           locatorTsQuery,
-          parentFilter: sql`passage.entity_id = sd.entity_id`,
           table: "document",
           tenantFilter: sql`
             AND passage.organization_id = ${organizationId}

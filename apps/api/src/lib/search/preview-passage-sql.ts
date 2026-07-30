@@ -1,6 +1,13 @@
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
+import {
+  chatPreviewPassageScopeSql,
+  contactPreviewPassageScopeSql,
+  documentPreviewPassageScopeSql,
+  workspacePreviewPassageScopeSql,
+} from "@/api/lib/search/preview-passage-scope-sql";
+
 export type PreviewPassageTable =
   | "case-law"
   | "chat"
@@ -8,21 +15,31 @@ export type PreviewPassageTable =
   | "document"
   | "matter";
 
-type PreviewPassageJoinOptions = {
+type CommonPreviewPassageJoinOptions = {
   generation: SQL;
   locatorTsQuery: SQL | null;
-  parentFilter: SQL;
-  table: PreviewPassageTable;
   tenantFilter?: SQL | undefined;
 };
 
-export const previewPassageJoin = ({
-  generation,
-  locatorTsQuery,
-  parentFilter,
-  table,
-  tenantFilter = sql.empty(),
-}: PreviewPassageJoinOptions): SQL => {
+type PreviewPassageJoinOptions = CommonPreviewPassageJoinOptions &
+  (
+    | {
+        parentFilter: SQL;
+        table: "case-law";
+      }
+    | {
+        parentFilter?: never;
+        table: Exclude<PreviewPassageTable, "case-law">;
+      }
+  );
+
+export const previewPassageJoin = (options: PreviewPassageJoinOptions): SQL => {
+  const {
+    generation,
+    locatorTsQuery,
+    table,
+    tenantFilter = sql.empty(),
+  } = options;
   if (!locatorTsQuery) {
     return sql.empty();
   }
@@ -33,7 +50,7 @@ export const previewPassageJoin = ({
           (
             SELECT passage.content, passage.ordinal, 0 AS priority
             FROM case_law_search_document_preview_passages passage
-            WHERE ${parentFilter}
+            WHERE ${options.parentFilter}
               AND passage.generation = ${generation}
               ${tenantFilter}
               AND passage.tsv @@ ${locatorTsQuery}
@@ -44,7 +61,7 @@ export const previewPassageJoin = ({
           (
             SELECT passage.content, passage.ordinal, 1 AS priority
             FROM case_law_search_document_preview_passages passage
-            WHERE ${parentFilter}
+            WHERE ${options.parentFilter}
               AND passage.generation = ${generation}
               ${tenantFilter}
               AND passage.ordinal = 0
@@ -55,13 +72,12 @@ export const previewPassageJoin = ({
         ) preview_passage ON true
       `;
     case "chat":
-      // oxlint-disable-next-line require-search-scope/require-search-scope -- centralized helper emits only correlated LATERAL passage reads; the guarded call site scopes the owning chat projection
       return sql`
         LEFT JOIN LATERAL (
           (
             SELECT passage.content, passage.ordinal, 0 AS priority
             FROM chat_thread_search_preview_passages passage
-            WHERE ${parentFilter}
+            WHERE ${chatPreviewPassageScopeSql()}
               AND passage.generation = ${generation}
               ${tenantFilter}
               AND passage.tsv @@ ${locatorTsQuery}
@@ -72,7 +88,7 @@ export const previewPassageJoin = ({
           (
             SELECT passage.content, passage.ordinal, 1 AS priority
             FROM chat_thread_search_preview_passages passage
-            WHERE ${parentFilter}
+            WHERE ${chatPreviewPassageScopeSql()}
               AND passage.generation = ${generation}
               ${tenantFilter}
               AND passage.ordinal = 0
@@ -83,13 +99,12 @@ export const previewPassageJoin = ({
         ) preview_passage ON true
       `;
     case "contact":
-      // oxlint-disable-next-line require-search-scope/require-search-scope -- centralized helper emits only correlated LATERAL passage reads; the guarded call site scopes the owning contact projection
       return sql`
         LEFT JOIN LATERAL (
           (
             SELECT passage.content, passage.ordinal, 0 AS priority
             FROM contact_search_document_preview_passages passage
-            WHERE ${parentFilter}
+            WHERE ${contactPreviewPassageScopeSql()}
               AND passage.generation = ${generation}
               ${tenantFilter}
               AND passage.tsv @@ ${locatorTsQuery}
@@ -100,7 +115,7 @@ export const previewPassageJoin = ({
           (
             SELECT passage.content, passage.ordinal, 1 AS priority
             FROM contact_search_document_preview_passages passage
-            WHERE ${parentFilter}
+            WHERE ${contactPreviewPassageScopeSql()}
               AND passage.generation = ${generation}
               ${tenantFilter}
               AND passage.ordinal = 0
@@ -111,13 +126,12 @@ export const previewPassageJoin = ({
         ) preview_passage ON true
       `;
     case "document":
-      // oxlint-disable-next-line require-search-scope/require-search-scope -- centralized helper emits only correlated LATERAL passage reads; the guarded call site scopes the owning document projection
       return sql`
         LEFT JOIN LATERAL (
           (
             SELECT passage.content, passage.ordinal, 0 AS priority
             FROM search_document_preview_passages passage
-            WHERE ${parentFilter}
+            WHERE ${documentPreviewPassageScopeSql()}
               AND passage.generation = ${generation}
               ${tenantFilter}
               AND passage.tsv @@ ${locatorTsQuery}
@@ -128,7 +142,7 @@ export const previewPassageJoin = ({
           (
             SELECT passage.content, passage.ordinal, 1 AS priority
             FROM search_document_preview_passages passage
-            WHERE ${parentFilter}
+            WHERE ${documentPreviewPassageScopeSql()}
               AND passage.generation = ${generation}
               ${tenantFilter}
               AND passage.ordinal = 0
@@ -139,13 +153,12 @@ export const previewPassageJoin = ({
         ) preview_passage ON true
       `;
     case "matter":
-      // oxlint-disable-next-line require-search-scope/require-search-scope -- centralized helper emits only correlated LATERAL passage reads; the guarded call site scopes the owning workspace projection
       return sql`
         LEFT JOIN LATERAL (
           (
             SELECT passage.content, passage.ordinal, 0 AS priority
             FROM workspace_search_document_preview_passages passage
-            WHERE ${parentFilter}
+            WHERE ${workspacePreviewPassageScopeSql()}
               AND passage.generation = ${generation}
               ${tenantFilter}
               AND passage.tsv @@ ${locatorTsQuery}
@@ -156,7 +169,7 @@ export const previewPassageJoin = ({
           (
             SELECT passage.content, passage.ordinal, 1 AS priority
             FROM workspace_search_document_preview_passages passage
-            WHERE ${parentFilter}
+            WHERE ${workspacePreviewPassageScopeSql()}
               AND passage.generation = ${generation}
               ${tenantFilter}
               AND passage.ordinal = 0

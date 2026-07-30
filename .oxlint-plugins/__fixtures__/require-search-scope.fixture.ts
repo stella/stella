@@ -49,15 +49,15 @@ const _unsafeChatPassage =
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves rootDb query builders cannot read private projections outside the SQL scope guard
 const unsafeBuilderEntity = rootDb.select().from(searchDocuments);
 
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves rootDb joins cannot introduce an unscoped private projection
 const _unsafeJoinedEntity = rootDb
   .select()
   .from(entities)
-  // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves rootDb joins cannot introduce an unscoped private projection
   .innerJoin(searchDocuments, sql`true`);
 
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves preview-passage projections receive the same rootDb builder protection
 const _unsafePreviewPassage = rootDb
   .select()
-  // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves preview-passage projections receive the same rootDb builder protection
   .from(searchDocumentPreviewPassages);
 
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves rootDb relational reads cannot bypass the private projection scope guard
