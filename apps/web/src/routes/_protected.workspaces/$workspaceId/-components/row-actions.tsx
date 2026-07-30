@@ -51,13 +51,14 @@ import { useRequestChatAbout } from "@/components/chat/use-request-chat-about";
 import Tooltip from "@/components/tooltip";
 import { PDF_MIME_TYPE } from "@/consts";
 import { env } from "@/env";
+import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-url";
 import { getFreshLinkedAccount } from "@/lib/auth-session";
 import { DOCX_MIME } from "@/lib/consts";
 import { openDocxInDesktop } from "@/lib/desktop-bridge";
 import { detached } from "@/lib/detached";
-import { toAPIError } from "@/lib/errors/api";
+import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { isUnauthorizedError } from "@/lib/errors/auth";
 import { ClientOperationError } from "@/lib/errors/client";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
@@ -89,7 +90,6 @@ import {
 import type { TableTreeNode } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 import { useEntitiesCountLimit } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-limits";
 import { useRetryCell } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-retry-cell";
-import { useRunOcr } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-run-ocr";
 import { useUploadVersion } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-upload-version";
 import {
   useCreateEntities,
@@ -149,11 +149,11 @@ export const RowActions = ({
   cellMetadataTarget,
 }: RowActionsProps) => {
   const t = useTranslations();
+  const analytics = useAnalytics();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const deleteEntities = useDeleteEntities();
   const uploadVersion = useUploadVersion();
-  const runOcr = useRunOcr();
   const requestChatAbout = useRequestChatAbout(workspaceId);
   const retryCell = useRetryCell(toSafeId<"workspace">(workspaceId));
   const [copyToMatterOpen, setCopyToMatterOpen] = useState(false);
@@ -161,6 +161,7 @@ export const RowActions = ({
     CopyToMatterEntity[]
   >([]);
   const [isRetrying, setIsRetrying] = useState(false);
+  const [isOcrPending, setIsOcrPending] = useState(false);
   const { data: properties } = useQuery(propertiesOptions(workspaceId));
   const uploadVersionInputRef = useRef<HTMLInputElement>(null);
   const file = getFirstFile(entity);
@@ -586,6 +587,37 @@ export const RowActions = ({
     event.target.value = "";
   };
 
+  const handleRunOcr = async () => {
+    if (!file || isOcrPending) {
+      return;
+    }
+
+    setIsOcrPending(true);
+    try {
+      const response = await api
+        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .entity({ entityId: entity.entityId })
+        .ocr.post({ fieldId: file.fieldId });
+      unwrapEden(response);
+      await queryClient.invalidateQueries({
+        queryKey: entitiesKeys.all(workspaceId),
+      });
+      stellaToast.add({
+        title: t("workspaces.files.ocrQueued"),
+        type: "success",
+      });
+    } catch (error) {
+      analytics.captureError(error);
+      stellaToast.add({
+        title: t("workspaces.files.ocrQueueFailed"),
+        description: userErrorFromThrown(error, t("errors.actionFailed")),
+        type: "error",
+      });
+    } finally {
+      setIsOcrPending(false);
+    }
+  };
+
   // Whether any selected entity has a downloadable file.
   const hasAnyFile = isBulk
     ? selectedEntities.some((e) => getFirstFile(e) !== null)
@@ -602,6 +634,7 @@ export const RowActions = ({
     !isFolder &&
     !entity.readOnly &&
     file !== null &&
+    !file.encrypted &&
     file.mimeType === PDF_MIME_TYPE;
   // Extension-based filter for the OS file picker. Browser-reported MIME
   // strings vary across platforms for the same extension; matching by
@@ -656,13 +689,9 @@ export const RowActions = ({
         )}
         {!isCellContext && canRunOcr && file && (
           <MenuItem
-            disabled={runOcr.isPending}
+            disabled={isOcrPending}
             onClick={() => {
-              runOcr.mutate({
-                workspaceId: toSafeId<"workspace">(workspaceId),
-                entityId: entity.entityId,
-                fieldId: file.fieldId,
-              });
+              detached(handleRunOcr(), "RowActions");
             }}
           >
             <ScanTextIcon />

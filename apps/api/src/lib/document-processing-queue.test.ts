@@ -2,7 +2,10 @@ import { describe, expect, test } from "bun:test";
 
 import type { FieldContent } from "@/api/db/schema-validators";
 import { toSafeId } from "@/api/lib/branded-types";
-import { isCurrentOcrSource } from "@/api/lib/document-processing-queue";
+import {
+  isAutomaticOcrRepairCandidate,
+  isCurrentOcrSource,
+} from "@/api/lib/document-processing-queue";
 
 const fileContent = {
   type: "file",
@@ -60,6 +63,25 @@ describe("isCurrentOcrSource", () => {
             "019864b8-48d0-7f37-94d5-948e3bcf3f47",
           ),
         },
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("isAutomaticOcrRepairCandidate", () => {
+  test("only repairs an unencrypted PDF source", () => {
+    expect(isAutomaticOcrRepairCandidate(fileContent)).toBe(true);
+    expect(
+      isAutomaticOcrRepairCandidate({
+        ...fileContent,
+        encrypted: true,
+      }),
+    ).toBe(false);
+    expect(
+      isAutomaticOcrRepairCandidate({
+        ...fileContent,
+        mimeType:
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       }),
     ).toBe(false);
   });

@@ -80,11 +80,12 @@ in one click; no email provider or AI key is needed for the first login.
 
 Run stella on your own infrastructure: see the
 [self-hosting guide](docs/self-hosting.md). The
-self-host Compose file runs the API and Gotenberg only; configure Postgres,
-Redis or Valkey, S3-compatible storage, `GOTENBERG_URL`, and Gotenberg
-credentials in `apps/api/.env`. The frontend is a TanStack Start SSR app:
-build and run `apps/web/Dockerfile`, or run `bun --filter @stll/web build`
-followed by `HOST=0.0.0.0 PORT=3002 bun apps/web/start-runtime.js`.
+self-host Compose file runs the API, document-processing worker, and Gotenberg;
+the guide covers Postgres, S3-compatible storage, Gotenberg, and the supported
+Redis-compatible services. The frontend is a TanStack Start SSR app: build and
+run `apps/web/Dockerfile`, or run
+`bun --filter @stll/web build` followed by
+`HOST=0.0.0.0 PORT=3002 bun apps/web/start-runtime.js`.
 Railway-specific service configuration is documented in
 [docs/railway.md](docs/railway.md).
 

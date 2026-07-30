@@ -17,7 +17,15 @@ import type { PracticeJurisdiction } from "./common";
 import { workspaces } from "./contacts";
 import { entities } from "./entities";
 
-export const DOCUMENT_PROCESSING_MODES = ["off", "searchable-text"] as const;
+export const DOCUMENT_PROCESSING_MODE = {
+  OFF: "off",
+  SEARCHABLE_TEXT: "searchable-text",
+} as const;
+
+export const DOCUMENT_PROCESSING_MODES = [
+  DOCUMENT_PROCESSING_MODE.OFF,
+  DOCUMENT_PROCESSING_MODE.SEARCHABLE_TEXT,
+] as const;
 export type DocumentProcessingMode = (typeof DOCUMENT_PROCESSING_MODES)[number];
 
 export const DEFAULT_DOCUMENT_PROCESSING_MODE =

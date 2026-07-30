@@ -186,6 +186,7 @@ export const processExtraction = async (
       entityVersionId: version.id,
       fieldId: fileFieldRow.id,
       organizationId: workspace.organizationId,
+      requestSource: "upload",
       sourceFileId: fileField.id,
       sourceSha256Hex: fileField.sha256Hex,
       workspaceId: workspace.id,

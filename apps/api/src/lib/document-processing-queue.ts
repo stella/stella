@@ -1,6 +1,18 @@
 import { Result, TaggedError } from "better-result";
 import { Queue, Worker } from "bullmq";
-import { and, asc, eq, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  inArray,
+  isNull,
+  lt,
+  lte,
+  notExists,
+  or,
+  sql,
+} from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 import { rootDb } from "@/api/db/root";
 import {
@@ -9,19 +21,22 @@ import {
   entityVersions,
   extractedContent,
   fields,
+  organizationSettings,
+  workspaces,
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
-import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { encryptContent } from "@/api/lib/content-encryption";
+import { detached } from "@/api/lib/detached";
 import {
   DocumentOcrProviderError,
   recognizePdfText,
 } from "@/api/lib/document-processing-provider";
 import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
+import { createFileKey } from "@/api/lib/file-key";
 import { logger } from "@/api/lib/observability/logger";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 import { presignDownloadUrl } from "@/api/lib/s3-presign";
@@ -39,6 +54,7 @@ const RECONCILE_BATCH_SIZE = 100;
 const ENQUEUE_VISIBILITY_TIMEOUT_MS = 5 * 60 * 1000;
 const ENQUEUE_FAILURE_RETRY_MS = 30_000;
 const WORKER_LEASE_TIMEOUT_MS = 40 * 60 * 1000;
+const REPAIR_SETTLE_DELAY_MS = 5 * 60 * 1000;
 
 type DocumentProcessingJobData = {
   runId: SafeId<"documentProcessingRun">;
@@ -106,6 +122,7 @@ export const requestAutomaticDocumentOcr = async ({
   entityVersionId,
   fieldId,
   organizationId,
+  requestSource,
   sourceFileId,
   sourceSha256Hex,
   workspaceId,
@@ -114,6 +131,7 @@ export const requestAutomaticDocumentOcr = async ({
   entityVersionId: SafeId<"entityVersion">;
   fieldId: SafeId<"field">;
   organizationId: SafeId<"organization">;
+  requestSource: "repair" | "upload";
   sourceFileId: string;
   sourceSha256Hex: string;
   workspaceId: SafeId<"workspace">;
@@ -181,7 +199,7 @@ export const requestAutomaticDocumentOcr = async ({
         sourceSha256Hex,
         kind: "ocr",
         processorVersion: 1,
-        requestSource: "upload",
+        requestSource,
         requestedBy: null,
       })
       .onConflictDoNothing({
@@ -245,6 +263,13 @@ export const isCurrentOcrSource = ({
   source.content.sha256Hex === run.sourceSha256Hex &&
   source.content.mimeType === PDF_MIME_TYPE &&
   !source.content.encrypted;
+
+export const isAutomaticOcrRepairCandidate = (
+  content: FieldContent,
+): content is Extract<FieldContent, { type: "file" }> =>
+  content.type === "file" &&
+  content.mimeType === PDF_MIME_TYPE &&
+  !content.encrypted;
 
 const markRunCancelled = async (
   runId: SafeId<"documentProcessingRun">,
@@ -547,6 +572,190 @@ const markRunFailed = async (
     );
 };
 
+const earlierFileFields = alias(
+  fields,
+  "document_processing_earlier_file_fields",
+);
+
+type MissingAutomaticOcrCandidate = {
+  content: FieldContent;
+  entityId: SafeId<"entity">;
+  entityVersionId: SafeId<"entityVersion">;
+  fieldId: SafeId<"field">;
+  organizationId: SafeId<"organization">;
+  workspaceId: SafeId<"workspace">;
+};
+
+const requestMissingAutomaticOcr = async (
+  candidate: MissingAutomaticOcrCandidate,
+): Promise<void> => {
+  if (!isAutomaticOcrRepairCandidate(candidate.content)) {
+    return;
+  }
+
+  const requestResult = await Result.tryPromise({
+    try: async () => {
+      await requestAutomaticDocumentOcr({
+        entityId: candidate.entityId,
+        entityVersionId: candidate.entityVersionId,
+        fieldId: candidate.fieldId,
+        organizationId: candidate.organizationId,
+        requestSource: "repair",
+        sourceFileId: candidate.content.id,
+        sourceSha256Hex: candidate.content.sha256Hex,
+        workspaceId: candidate.workspaceId,
+      });
+      return undefined;
+    },
+    catch: (cause) => cause,
+  });
+  if (Result.isError(requestResult)) {
+    captureError(requestResult.error, {
+      entityId: candidate.entityId,
+      fieldId: candidate.fieldId,
+    });
+  }
+};
+
+const recoverMissingAutomaticOcrRuns = async (): Promise<number> => {
+  const settledBefore = new Date(Date.now() - REPAIR_SETTLE_DELAY_MS);
+  const candidates = await rootDb
+    .select({
+      content: fields.content,
+      entityId: entities.id,
+      entityVersionId: entityVersions.id,
+      fieldId: fields.id,
+      organizationId: workspaces.organizationId,
+      workspaceId: workspaces.id,
+    })
+    .from(fields)
+    .innerJoin(
+      entityVersions,
+      and(
+        eq(entityVersions.id, fields.entityVersionId),
+        eq(entityVersions.workspaceId, fields.workspaceId),
+        isNull(entityVersions.deletedAt),
+      ),
+    )
+    .innerJoin(
+      entities,
+      and(
+        eq(entities.currentVersionId, entityVersions.id),
+        eq(entities.id, entityVersions.entityId),
+        eq(entities.workspaceId, fields.workspaceId),
+        eq(entities.readOnly, false),
+      ),
+    )
+    .innerJoin(workspaces, eq(workspaces.id, fields.workspaceId))
+    .innerJoin(
+      organizationSettings,
+      and(
+        eq(organizationSettings.organizationId, workspaces.organizationId),
+        eq(organizationSettings.documentProcessingMode, "searchable-text"),
+      ),
+    )
+    .leftJoin(extractedContent, eq(extractedContent.entityId, entities.id))
+    .where(
+      and(
+        or(
+          isNull(extractedContent.entityId),
+          lt(extractedContent.extractedAt, entityVersions.createdAt),
+        ),
+        lt(entityVersions.createdAt, settledBefore),
+        sql`${fields.content}->>'type' = 'file'
+          AND ${fields.content}->>'mimeType' = 'application/pdf'
+          AND ${fields.content}->>'encrypted' = 'false'`,
+        notExists(
+          rootDb
+            .select({ id: earlierFileFields.id })
+            .from(earlierFileFields)
+            .where(
+              and(
+                eq(earlierFileFields.workspaceId, fields.workspaceId),
+                eq(earlierFileFields.entityVersionId, fields.entityVersionId),
+                lt(earlierFileFields.id, fields.id),
+                sql`${earlierFileFields.content}->>'type' = 'file'`,
+              ),
+            ),
+        ),
+        notExists(
+          rootDb
+            .select({ id: documentProcessingRuns.id })
+            .from(documentProcessingRuns)
+            .where(
+              and(
+                eq(
+                  documentProcessingRuns.organizationId,
+                  workspaces.organizationId,
+                ),
+                eq(documentProcessingRuns.kind, "ocr"),
+                eq(documentProcessingRuns.entityVersionId, entityVersions.id),
+                eq(documentProcessingRuns.fieldId, fields.id),
+                eq(
+                  documentProcessingRuns.sourceFileId,
+                  sql`(${fields.content}->>'id')::uuid`,
+                ),
+                eq(
+                  documentProcessingRuns.sourceSha256Hex,
+                  sql`${fields.content}->>'sha256Hex'`,
+                ),
+                eq(documentProcessingRuns.processorVersion, 1),
+              ),
+            ),
+        ),
+      ),
+    )
+    .orderBy(
+      asc(fields.workspaceId),
+      asc(fields.entityVersionId),
+      asc(fields.id),
+    )
+    .limit(RECONCILE_BATCH_SIZE);
+
+  await Promise.all(candidates.map(requestMissingAutomaticOcr));
+  return candidates.length;
+};
+
+const reconcileQueuedRun = async (
+  runId: SafeId<"documentProcessingRun">,
+): Promise<void> => {
+  const enqueueResult = await Result.tryPromise({
+    try: async () => {
+      await enqueueDocumentProcessingRun(runId);
+      return await rootDb
+        .update(documentProcessingRuns)
+        .set({
+          nextAttemptAt: new Date(Date.now() + ENQUEUE_VISIBILITY_TIMEOUT_MS),
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(documentProcessingRuns.id, runId),
+            eq(documentProcessingRuns.status, "queued"),
+          ),
+        );
+    },
+    catch: (cause) => cause,
+  });
+  if (Result.isOk(enqueueResult)) {
+    return;
+  }
+
+  captureError(enqueueResult.error, { runId });
+  await rootDb
+    .update(documentProcessingRuns)
+    .set({
+      nextAttemptAt: new Date(Date.now() + ENQUEUE_FAILURE_RETRY_MS),
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(documentProcessingRuns.id, runId),
+        eq(documentProcessingRuns.status, "queued"),
+      ),
+    );
+};
+
 const enqueueQueuedRuns = async (): Promise<number> => {
   const now = new Date();
   const runs = await rootDb
@@ -567,45 +776,7 @@ const enqueueQueuedRuns = async (): Promise<number> => {
     )
     .limit(RECONCILE_BATCH_SIZE);
 
-  for (const run of runs) {
-    // oxlint-disable-next-line no-await-in-loop -- bounded reconciliation keeps enqueue pressure predictable and records each row's visibility lease
-    const enqueueResult = await Result.tryPromise({
-      try: async () => {
-        await enqueueDocumentProcessingRun(run.id);
-        await rootDb
-          .update(documentProcessingRuns)
-          .set({
-            nextAttemptAt: new Date(Date.now() + ENQUEUE_VISIBILITY_TIMEOUT_MS),
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(documentProcessingRuns.id, run.id),
-              eq(documentProcessingRuns.status, "queued"),
-            ),
-          );
-      },
-      catch: (cause) => cause,
-    });
-    if (Result.isOk(enqueueResult)) {
-      continue;
-    }
-
-    captureError(enqueueResult.error, { runId: run.id });
-    // oxlint-disable-next-line no-await-in-loop -- each failed row gets its own short retry lease so it cannot starve later queued work
-    await rootDb
-      .update(documentProcessingRuns)
-      .set({
-        nextAttemptAt: new Date(Date.now() + ENQUEUE_FAILURE_RETRY_MS),
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(documentProcessingRuns.id, run.id),
-          eq(documentProcessingRuns.status, "queued"),
-        ),
-      );
-  }
+  await Promise.all(runs.map(({ id }) => reconcileQueuedRun(id)));
   return runs.length;
 };
 
@@ -652,6 +823,58 @@ const recoverStaleDocumentProcessingRuns = async (): Promise<number> => {
   return recovered.length;
 };
 
+const handleDocumentProcessingFailure = async ({
+  error,
+  job,
+}: {
+  error: unknown;
+  job: { data: DocumentProcessingJobData } | undefined;
+}): Promise<void> => {
+  if (job) {
+    const markResult = await Result.tryPromise({
+      try: async () => {
+        await markRunFailed(job.data.runId, error);
+        return undefined;
+      },
+      catch: (cause) => cause,
+    });
+    if (Result.isError(markResult)) {
+      captureError(markResult.error, { runId: job.data.runId });
+    }
+  }
+  captureError(error, { runId: job?.data.runId ?? "" });
+  logger.error("document_processing.failed", {
+    "error.type": errorTag(error),
+    runId: job?.data.runId ?? "",
+  });
+};
+
+const reconcileDocumentProcessing = async ({
+  onComplete,
+}: {
+  onComplete: () => void;
+}): Promise<void> => {
+  try {
+    const repairedCount = await recoverMissingAutomaticOcrRuns();
+    const recoveredCount = await recoverStaleDocumentProcessingRuns();
+    const enqueuedCount = await enqueueQueuedRuns();
+    if (repairedCount > 0 || recoveredCount > 0 || enqueuedCount > 0) {
+      logger.info("document_processing.reconciled", {
+        enqueuedCount: String(enqueuedCount),
+        recoveredCount: String(recoveredCount),
+        repairedCount: String(repairedCount),
+      });
+    }
+  } catch (error) {
+    captureError(error);
+    logger.error("document_processing.reconcile_failed", {
+      "error.type": errorTag(error),
+    });
+  } finally {
+    onComplete();
+  }
+};
+
 export const initDocumentProcessingWorker = () => {
   const worker = new Worker<DocumentProcessingJobData>(
     QUEUE_NAME,
@@ -668,16 +891,10 @@ export const initDocumentProcessingWorker = () => {
   );
 
   worker.on("failed", (job, error) => {
-    if (job) {
-      markRunFailed(job.data.runId, error).catch((markError: unknown) => {
-        captureError(markError, { runId: job.data.runId });
-      });
-    }
-    captureError(error, { runId: job?.data.runId ?? "" });
-    logger.error("document_processing.failed", {
-      "error.type": errorTag(error),
-      runId: job?.data.runId ?? "",
-    });
+    detached(
+      handleDocumentProcessingFailure({ error, job }),
+      "document-processing.mark-failed",
+    );
   });
   worker.on("error", (error) => {
     logger.error(
@@ -692,28 +909,14 @@ export const initDocumentProcessingWorker = () => {
       return;
     }
     reconciling = true;
-    (async () => {
-      const recoveredCount = await recoverStaleDocumentProcessingRuns();
-      const enqueuedCount = await enqueueQueuedRuns();
-      return { enqueuedCount, recoveredCount };
-    })()
-      .then(({ enqueuedCount, recoveredCount }) => {
-        if (recoveredCount > 0 || enqueuedCount > 0) {
-          logger.info("document_processing.reconciled", {
-            enqueuedCount: String(enqueuedCount),
-            recoveredCount: String(recoveredCount),
-          });
-        }
-      })
-      .catch((error: unknown) => {
-        captureError(error);
-        logger.error("document_processing.reconcile_failed", {
-          "error.type": errorTag(error),
-        });
-      })
-      .finally(() => {
-        reconciling = false;
-      });
+    detached(
+      reconcileDocumentProcessing({
+        onComplete: () => {
+          reconciling = false;
+        },
+      }),
+      "document-processing.reconcile",
+    );
   };
   reconcile();
   const reconcileInterval = setInterval(reconcile, RECONCILE_INTERVAL_MS);

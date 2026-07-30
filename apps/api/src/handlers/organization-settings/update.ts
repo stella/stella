@@ -4,7 +4,7 @@ import type { Static } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
-  DOCUMENT_PROCESSING_MODES,
+  DOCUMENT_PROCESSING_MODE,
   DEFAULT_DOCUMENT_PROCESSING_MODE,
   organizationSettings,
 } from "@/api/db/schema";
@@ -17,8 +17,13 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { validatePattern } from "@/api/lib/matter-reference";
 
+const documentProcessingModeSchema = t.Union([
+  t.Literal(DOCUMENT_PROCESSING_MODE.OFF),
+  t.Literal(DOCUMENT_PROCESSING_MODE.SEARCHABLE_TEXT),
+]);
+
 const updateOrganizationSettingsBodySchema = t.Object({
-  documentProcessingMode: t.Optional(t.UnionEnum(DOCUMENT_PROCESSING_MODES)),
+  documentProcessingMode: t.Optional(documentProcessingModeSchema),
   matterNumberPattern: t.Optional(t.String({ minLength: 1, maxLength: 128 })),
   matterNumberPadding: t.Optional(t.Integer({ minimum: 1, maximum: 6 })),
   promptCachingEnabled: t.Optional(t.Boolean()),

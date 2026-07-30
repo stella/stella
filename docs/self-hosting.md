@@ -5,11 +5,12 @@ and infrastructure.
 
 ## Overview
 
-The repository includes a production-oriented Compose file for the stella API
-and [Gotenberg](https://gotenberg.dev/), which stella uses for document
-conversion. Supporting services are intentionally not bundled into that file:
-bring your own Postgres, Redis-compatible cache, and S3-compatible object
-storage, then point stella at them with environment variables.
+The repository includes a production-oriented Compose file for the stella API,
+its document-processing worker, and
+[Gotenberg](https://gotenberg.dev/), which stella uses for document conversion.
+Supporting services are intentionally not bundled into that file: bring your
+own Postgres, Redis-compatible cache, and S3-compatible object storage, then
+point stella at them with environment variables.
 
 This keeps the application container simple while letting operators use managed
 services, existing self-hosted services, or a platform such as
@@ -18,10 +19,10 @@ services, existing self-hosted services, or a platform such as
 to deploy common dependencies such as Postgres, Valkey or Redis, and MinIO.
 For Railway, see the dedicated [Railway deployment guide](./railway.md).
 
-Deploy the API and Gotenberg with `docker-compose.selfhost.yml` (see below).
-Deploy the web app as its own long-running server process. The web app is a
-TanStack Start SSR app, so serving `apps/web/dist` as static files is not
-enough.
+Deploy the API, document-processing worker, and Gotenberg with
+`docker-compose.selfhost.yml` (see below). Deploy the web app as its own
+long-running server process. The web app is a TanStack Start SSR app, so
+serving `apps/web/dist` as static files is not enough.
 
 ```bash
 cp apps/web/.env.example apps/web/.env
@@ -98,6 +99,8 @@ docker run --detach \
 - S3-compatible object storage for files. AWS S3, Cloudflare R2, and MinIO work.
 - Gotenberg for document conversion. The Compose file runs this next to the API
   on the private Docker Compose network.
+- An HTTPS PaddleOCR-compatible service is optional. Configure it only when
+  organizations should be able to turn scanned PDFs into searchable text.
 
 For Postgres, Redis/Valkey, and object storage, any self-hosted instance works
 as long as the API container can reach it. Put the service URLs and credentials
@@ -136,6 +139,10 @@ TRANSACTIONAL_EMAIL_FROM="noreply@example.com"
 GOTENBERG_URL="http://gotenberg:3000"
 GOTENBERG_USERNAME="replace-with-a-username"
 GOTENBERG_PASSWORD="replace-with-a-password"
+# Optional: enable searchable-text extraction for scanned PDFs. If the service
+# requires a bearer token, generate one with at least 16 characters.
+# OCR_SERVICE_URL="https://ocr.example.internal"
+# OCR_SERVICE_TOKEN=""
 # Optional: enable desktop edit session endpoints.
 FEATURE_DESKTOP_EDITING="true"
 ```
@@ -154,6 +161,13 @@ Do not expose Gotenberg to the public internet. Gotenberg's installation guide
 recommends treating it like a database: keep it behind your firewall. The
 self-host Compose file intentionally does not publish a `ports` entry for the
 Gotenberg service.
+
+The Compose file also starts the document-processing worker from the API image.
+The worker stays idle when no OCR work is queued. To enable OCR, deploy a
+PaddleOCR-compatible service separately and set `OCR_SERVICE_URL`; non-loopback
+endpoints must use HTTPS because requests carry short-lived access credentials.
+The original PDF remains unchanged: stella stores and indexes only the derived
+searchable text.
 
 ## Desktop editing
 
@@ -193,8 +207,8 @@ source checkout after `bun --filter @stll/web build`.
 
 From the repository root, pass `--env-file apps/api/.env` so Compose can read
 the API environment. The API service also reads `apps/api/.env` by default.
-This Compose file starts the API and Gotenberg only; run the web SSR server
-separately as described above.
+This Compose file starts the API, document-processing worker, and Gotenberg;
+run the web SSR server separately as described above.
 
 ```bash
 docker compose --env-file apps/api/.env -f docker-compose.selfhost.yml up -d --build

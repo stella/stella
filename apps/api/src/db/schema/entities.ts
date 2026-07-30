@@ -765,6 +765,17 @@ export const fields = p.pgTable(
       .index("fields_pending_workspace_idx")
       .on(table.workspaceId)
       .where(sql`${table.content}->>'type' = 'pending'`),
+    // Bounded document-processing recovery starts from current PDF candidates.
+    // Keep the tenant/workspace boundary leading so it cannot degrade into a
+    // whole-table JSONB scan as completed documents accumulate.
+    p
+      .index("fields_document_processing_pdf_candidate_idx")
+      .on(table.workspaceId, table.entityVersionId, table.id)
+      .where(
+        sql`${table.content}->>'type' = 'file'
+          AND ${table.content}->>'mimeType' = 'application/pdf'
+          AND ${table.content}->>'encrypted' = 'false'`,
+      ),
     p
       .foreignKey({
         columns: [table.propertyId, table.workspaceId],

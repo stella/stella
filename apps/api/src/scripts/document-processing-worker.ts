@@ -1,3 +1,4 @@
+import { detached } from "@/api/lib/detached";
 import { initDocumentProcessingWorker } from "@/api/lib/document-processing-queue";
 import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
@@ -13,17 +14,19 @@ const shutdown = async (signal: string): Promise<void> => {
   }
   shuttingDown = true;
   logger.info("document_processing.shutdown_started", { signal });
-  await documentProcessingWorker.close().catch((error: unknown) => {
+  try {
+    await documentProcessingWorker.close();
+  } catch (error) {
     logger.error("document_processing.shutdown_failed", {
       "error.type": errorTag(error),
     });
-  });
+  }
   process.exit(0);
 };
 
 process.once("SIGTERM", () => {
-  void shutdown("SIGTERM");
+  detached(shutdown("SIGTERM"), "document-processing.shutdown-sigterm");
 });
 process.once("SIGINT", () => {
-  void shutdown("SIGINT");
+  detached(shutdown("SIGINT"), "document-processing.shutdown-sigint");
 });

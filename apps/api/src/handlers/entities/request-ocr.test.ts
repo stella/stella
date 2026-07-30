@@ -3,7 +3,7 @@ import { describe, expect, mock, test } from "bun:test";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
-import { documentProcessingRuns } from "@/api/db/schema";
+import type { documentProcessingRuns } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -12,15 +12,17 @@ const rootTransactionMock = mock();
 const enqueueDocumentProcessingRunMock = mock(async () => undefined);
 const recordAuditEvent = mock(async () => undefined);
 
-void mock.module("@/api/db/root", () => ({
+mock.module("@/api/db/root", () => ({
   rootDb: { transaction: rootTransactionMock },
 }));
-void mock.module("@/api/lib/document-processing-queue", () => ({
+mock.module("@/api/lib/document-processing-queue", () => ({
   enqueueDocumentProcessingRun: enqueueDocumentProcessingRunMock,
 }));
 
 const { requestManualOcrHandler } =
   await import("@/api/handlers/entities/request-ocr");
+const { persistManualOcrRun } =
+  await import("@/api/lib/document-processing-request");
 
 const entityId = toSafeId<"entity">("entity_test");
 const entityVersionId = toSafeId<"entityVersion">("version_test");
@@ -142,5 +144,76 @@ describe("requestManualOcrHandler", () => {
 
     expect(result).toEqual(Result.ok({ accepted: true, runId }));
     expect(enqueue).not.toHaveBeenCalled();
+  });
+
+  test("requeues a source-superseded run after the current source is locked", async () => {
+    let retrySet: unknown;
+    const tx = asTestRaw<Transaction>({
+      select: () => ({
+        from: () => ({
+          innerJoin: () => ({
+            where: () => ({
+              limit: () => ({ for: async () => [{ id: entityId }] }),
+            }),
+          }),
+        }),
+      }),
+      insert: () => ({
+        values: () => ({
+          onConflictDoNothing: () => ({ returning: async () => [] }),
+        }),
+      }),
+      query: {
+        documentProcessingRuns: {
+          findFirst: async () => ({
+            errorCode: "source_superseded",
+            id: runId,
+            status: "cancelled" as const,
+          }),
+        },
+      },
+      update: () => ({
+        set: (set: unknown) => {
+          retrySet = set;
+          return {
+            where: () => ({
+              returning: async () => [{ id: runId, status: "queued" as const }],
+            }),
+          };
+        },
+      }),
+    });
+    rootTransactionMock.mockImplementationOnce(
+      async (callback) => await callback(tx),
+    );
+
+    const run = await persistManualOcrRun({
+      organizationId,
+      recordAuditEvent,
+      source: {
+        entityId,
+        entityVersionId,
+        fieldId,
+        sourceFileId: "00000000-0000-4000-8000-000000000001",
+        sourceSha256Hex: "a".repeat(64),
+      },
+      userId,
+      workspaceId,
+    });
+
+    expect(run).toEqual({ id: runId, status: "queued" });
+    expect(retrySet).toEqual(
+      expect.objectContaining({
+        errorCode: null,
+        requestSource: "manual",
+        status: "queued",
+      }),
+    );
+    expect(recordAuditEvent).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({
+        metadata: expect.objectContaining({ operation: "ocr", runId }),
+      }),
+    );
   });
 });
