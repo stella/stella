@@ -24,7 +24,7 @@ export const fileMetadataOptions = (props: FileMetadataOptions) =>
     queryKey: fileMetadataQueryKey(props),
     enabled: props.enabled ?? true,
     retry: shouldRetryAPIRequest,
-    queryFn: async ({ signal }) => {
+    queryFn: async ({ signal }): Promise<FileMetadata> => {
       const response = await api
         .files({ workspaceId: props.workspaceId })
         .url({ fieldId: props.fieldId })
@@ -40,7 +40,7 @@ export const fileMetadataOptions = (props: FileMetadataOptions) =>
         fileName: data.fileName,
         mimeType: data.mimeType,
         originalMimeType: data.originalMimeType,
-      } satisfies FileMetadata;
+      };
     },
   });
 
