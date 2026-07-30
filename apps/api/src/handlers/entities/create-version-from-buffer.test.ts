@@ -176,7 +176,7 @@ describe("createEntityVersionFromBuffer", () => {
     expect(processExtractionMock).not.toHaveBeenCalled();
   });
 
-  test("deletes the object and rethrows when the transaction fails", async () => {
+  test("deletes the object when the transaction callback fails before commit", async () => {
     writeFileVersionMock.mockRejectedValue(new Error("db unavailable"));
 
     const attempted = await Result.tryPromise({
@@ -191,6 +191,38 @@ describe("createEntityVersionFromBuffer", () => {
       }
     }
     expect(s3DeleteMock).toHaveBeenCalledWith("org_1/ws_1/file_1.docx");
+  });
+
+  test("preserves the object when the commit acknowledgement is ambiguous", async () => {
+    writeFileVersionMock.mockImplementation(async (input) => ({
+      status: "ok",
+      entityVersionId: input.entityVersionId,
+      fieldId: input.fieldId,
+      versionNumber: 2,
+    }));
+    const commitError = new Error("connection lost after commit");
+    const ambiguousSafeDb = asTestRaw<SafeDb>(
+      async <T>(run: (tx: Transaction) => Promise<T>) => {
+        await run(asTestRaw<Transaction>({}));
+        return Result.err(commitError);
+      },
+    );
+
+    const attempted = await Result.tryPromise({
+      try: async () =>
+        await createEntityVersionFromBuffer({
+          ...baseInput,
+          safeDb: ambiguousSafeDb,
+        }),
+      catch: (cause) => cause,
+    });
+
+    expect(Result.isError(attempted)).toBe(true);
+    if (Result.isError(attempted)) {
+      expect(attempted.error).toBe(commitError);
+    }
+    expect(s3DeleteMock).not.toHaveBeenCalled();
+    expect(processExtractionMock).not.toHaveBeenCalled();
   });
 
   test("rolls back persistence when the in-transaction callback fails", async () => {

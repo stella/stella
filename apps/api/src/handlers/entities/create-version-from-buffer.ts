@@ -132,30 +132,39 @@ export const createEntityVersionFromBuffer = async ({
     throw error;
   }
 
-  const writeResult = await safeDb(
-    async (tx) =>
-      await writeFileVersion({
-        tx,
-        workspaceId,
-        entityId,
-        userId,
-        recordAuditEvent,
-        entityVersionId,
-        fieldId,
-        fileId,
-        fileName,
-        mimeType,
-        sizeBytes: bytes.byteLength,
-        sha256Hex,
-        source,
-        scanWarnings,
-        ...(afterWrite !== undefined && {
-          afterWrite: async (result) => await afterWrite(tx, result),
-        }),
+  // `safeDb` cannot distinguish a callback failure (which necessarily rolls
+  // back) from a lost COMMIT acknowledgement (which may already be durable).
+  // Track whether our callback returned so cleanup can occur only while a
+  // committed row is structurally impossible. Preserving a possible orphan is
+  // safer than deleting bytes a committed version may reference.
+  const transactionState = { callbackCompleted: false };
+  const writeResult = await safeDb(async (tx) => {
+    const versionWriteResult = await writeFileVersion({
+      tx,
+      workspaceId,
+      entityId,
+      userId,
+      recordAuditEvent,
+      entityVersionId,
+      fieldId,
+      fileId,
+      fileName,
+      mimeType,
+      sizeBytes: bytes.byteLength,
+      sha256Hex,
+      source,
+      scanWarnings,
+      ...(afterWrite !== undefined && {
+        afterWrite: async (result) => await afterWrite(tx, result),
       }),
-  );
+    });
+    transactionState.callbackCompleted = true;
+    return versionWriteResult;
+  });
   if (Result.isError(writeResult)) {
-    await cleanupObject();
+    if (!transactionState.callbackCompleted) {
+      await cleanupObject();
+    }
     throw writeResult.error;
   }
   const written = writeResult.value;
