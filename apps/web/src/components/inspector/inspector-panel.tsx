@@ -22,7 +22,6 @@ import { MetadataPanelSkeleton } from "@/components/inspector/file-facets";
 import { FileTabPanel } from "@/components/inspector/file-tab-panel";
 import {
   resolveFileFieldPropertyId,
-  shouldCloseFileTabAfterSync,
   shouldReplaceFileFieldAfterSync,
 } from "@/components/inspector/inspector-panel.logic";
 import { InspectorRail } from "@/components/inspector/inspector-rail";
@@ -557,6 +556,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
 
       {pdfTabs.map((tab) => (
         <CurrentFileFieldSync
+          isActive={!minimized && tab.id === activeId}
           key={`${tab.workspaceId}:${tab.entityId}:${tab.propertyId ?? tab.id}`}
           tab={tab}
         />
@@ -609,7 +609,13 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   );
 };
 
-const CurrentFileFieldSync = ({ tab }: { tab: FileTab }) => {
+const CurrentFileFieldSync = ({
+  isActive,
+  tab,
+}: {
+  isActive: boolean;
+  tab: FileTab;
+}) => {
   const closeTabsForEntities = useInspectorStore((s) => s.closeTabsForEntities);
   const replaceFileFieldId = useInspectorStore((s) => s.replaceFileFieldId);
   const [currentFileFieldIdsByProperty] = useState(
@@ -646,7 +652,7 @@ const CurrentFileFieldSync = ({ tab }: { tab: FileTab }) => {
             field.content.type === "file",
         );
   const isSelectedFieldMissing = useSelectedFileVersionMissing({
-    enabled: activeFileField === undefined,
+    enabled: isActive && activeFileField === undefined,
     fieldId: tab.id,
     workspaceId: tab.workspaceId,
   });
@@ -657,16 +663,6 @@ const CurrentFileFieldSync = ({ tab }: { tab: FileTab }) => {
         activeFileField.propertyId,
         activeFileField.id,
       );
-    }
-
-    if (
-      shouldCloseFileTabAfterSync({
-        filePropertyId,
-        isSelectedFieldMissing,
-      })
-    ) {
-      closeTabsForEntities([tab.entityId]);
-      return;
     }
 
     if (
@@ -704,7 +700,6 @@ const CurrentFileFieldSync = ({ tab }: { tab: FileTab }) => {
     });
   }, [
     activeFileField,
-    closeTabsForEntities,
     currentFileFieldIdsByProperty,
     filePropertyId,
     isSelectedFieldMissing,

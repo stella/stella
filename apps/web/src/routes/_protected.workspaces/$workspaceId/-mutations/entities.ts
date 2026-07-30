@@ -12,6 +12,7 @@ import type { EntityKind } from "@/lib/types";
 import type { EditableFieldContent } from "@/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog";
 import { invalidateDeletedEntityQueries } from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities.logic";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+import { taskKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/tasks.logic";
 
 type CreateEntitiesVars = {
   type: "manual-input";
@@ -62,6 +63,7 @@ export const useDeleteEntities = () => {
         .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .delete({
           queryKey: entitiesKeys.all(workspaceId),
+          queryKeys: [taskKeys.all(workspaceId)],
           entityIds: entityIds.map((entityId) => toSafeId<"entity">(entityId)),
         });
 
