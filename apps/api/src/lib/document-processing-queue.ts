@@ -781,7 +781,7 @@ type AutomaticOcrCandidate = {
   workspaceId: SafeId<"workspace">;
 };
 
-const reviveReversibleAutomaticOcrRun = async (
+const reviveRepairableOcrRun = async (
   candidate: AutomaticOcrCandidate,
 ): Promise<SafeId<"documentProcessingRun"> | null> => {
   if (!isAutomaticOcrRepairCandidate(candidate.content)) {
@@ -795,6 +795,8 @@ const reviveReversibleAutomaticOcrRun = async (
       errorCode: null,
       finishedAt: null,
       nextAttemptAt: null,
+      requestedBy: null,
+      requestSource: "repair",
       status: "queued",
       updatedAt: new Date(),
     })
@@ -809,11 +811,16 @@ const reviveReversibleAutomaticOcrRun = async (
         eq(documentProcessingRuns.sourceSha256Hex, candidate.content.sha256Hex),
         eq(documentProcessingRuns.kind, "ocr"),
         eq(documentProcessingRuns.processorVersion, 1),
-        inArray(documentProcessingRuns.requestSource, ["upload", "repair"]),
-        eq(documentProcessingRuns.status, "cancelled"),
-        inArray(
-          documentProcessingRuns.errorCode,
-          REVERSIBLE_AUTOMATIC_OCR_CANCELLATION_CODES,
+        or(
+          eq(documentProcessingRuns.status, "succeeded"),
+          and(
+            inArray(documentProcessingRuns.requestSource, ["upload", "repair"]),
+            eq(documentProcessingRuns.status, "cancelled"),
+            inArray(
+              documentProcessingRuns.errorCode,
+              REVERSIBLE_AUTOMATIC_OCR_CANCELLATION_CODES,
+            ),
+          ),
         ),
       ),
     )
@@ -947,8 +954,15 @@ const recoverMissingAutomaticOcrRuns = async (): Promise<number> => {
                 ),
                 eq(documentProcessingRuns.processorVersion, 1),
                 or(
-                  ne(documentProcessingRuns.status, "cancelled"),
-                  isNull(documentProcessingRuns.errorCode),
+                  inArray(documentProcessingRuns.status, [
+                    "queued",
+                    "running",
+                    "failed",
+                  ]),
+                  and(
+                    eq(documentProcessingRuns.status, "cancelled"),
+                    isNull(documentProcessingRuns.errorCode),
+                  ),
                   and(
                     eq(documentProcessingRuns.status, "cancelled"),
                     eq(documentProcessingRuns.requestSource, "manual"),
@@ -999,9 +1013,7 @@ const recoverMissingAutomaticOcrRuns = async (): Promise<number> => {
     return 0;
   }
 
-  const revivedIds = await Promise.all(
-    candidates.map(reviveReversibleAutomaticOcrRun),
-  );
+  const revivedIds = await Promise.all(candidates.map(reviveRepairableOcrRun));
 
   const inserted = await rootDb
     .insert(documentProcessingRuns)

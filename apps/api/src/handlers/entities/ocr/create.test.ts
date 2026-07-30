@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -318,4 +320,145 @@ describe("requestManualOcrHandler", () => {
       );
     },
   );
+
+  test.each([
+    { expectedStatus: "queued" as const, hasProjection: false },
+    { expectedStatus: "succeeded" as const, hasProjection: true },
+  ])(
+    "restores a succeeded run only when its exact projection is missing",
+    async ({ expectedStatus, hasProjection }) => {
+      let selectCount = 0;
+      let updateSet: unknown;
+      const tx = asTestRaw<Transaction>({
+        select: () => {
+          selectCount += 1;
+          if (selectCount === 1) {
+            return {
+              from: () => ({
+                innerJoin: () => ({
+                  where: () => ({
+                    limit: () => ({ for: async () => [{ id: entityId }] }),
+                  }),
+                }),
+              }),
+            };
+          }
+          if (selectCount === 2) {
+            return {
+              from: () => ({
+                where: () => ({
+                  limit: () => ({
+                    for: async () => [
+                      {
+                        errorCode: null,
+                        id: runId,
+                        requestSource: "upload" as const,
+                        status: "succeeded" as const,
+                      },
+                    ],
+                  }),
+                }),
+              }),
+            };
+          }
+          return {
+            from: () => ({
+              where: () => ({
+                limit: async () => (hasProjection ? [{ entityId }] : []),
+              }),
+            }),
+          };
+        },
+        insert: () => ({
+          values: () => ({
+            onConflictDoNothing: () => ({ returning: async () => [] }),
+          }),
+        }),
+        update: () => ({
+          set: (set: unknown) => {
+            updateSet = set;
+            return {
+              where: () => ({
+                returning: async () => [
+                  { id: runId, status: "queued" as const },
+                ],
+              }),
+            };
+          },
+        }),
+      });
+      rootTransactionMock.mockImplementationOnce(
+        async (operation: (transaction: Transaction) => Promise<unknown>) =>
+          await operation(tx),
+      );
+
+      const run = await persistManualOcrRun({
+        organizationId,
+        recordAuditEvent,
+        source: {
+          entityId,
+          entityVersionId,
+          fieldId,
+          sourceFileId: "00000000-0000-4000-8000-000000000001",
+          sourceSha256Hex: "a".repeat(64),
+        },
+        userId,
+        workspaceId,
+      });
+
+      expect(run).toEqual({ id: runId, status: expectedStatus });
+      if (hasProjection) {
+        expect(updateSet).toBeUndefined();
+        return;
+      }
+      expect(updateSet).toEqual(
+        expect.objectContaining({
+          requestSource: "manual",
+          status: "queued",
+        }),
+      );
+    },
+  );
+
+  test("locks the source only while its workspace is active", async () => {
+    let workspaceJoin: SQL | undefined;
+    const tx = asTestRaw<Transaction>({
+      select: () => ({
+        from: () => ({
+          innerJoin: (_table: unknown, condition: SQL) => {
+            workspaceJoin = condition;
+            return {
+              where: () => ({ limit: () => ({ for: async () => [] }) }),
+            };
+          },
+        }),
+      }),
+    });
+    rootTransactionMock.mockImplementationOnce(
+      async (operation: (transaction: Transaction) => Promise<unknown>) =>
+        await operation(tx),
+    );
+
+    const run = await persistManualOcrRun({
+      organizationId,
+      recordAuditEvent,
+      source: {
+        entityId,
+        entityVersionId,
+        fieldId,
+        sourceFileId: "00000000-0000-4000-8000-000000000001",
+        sourceSha256Hex: "a".repeat(64),
+      },
+      userId,
+      workspaceId,
+    });
+
+    expect(run).toBeNull();
+    expect(workspaceJoin).toBeDefined();
+    if (workspaceJoin) {
+      const compiled = new PgDialect().sqlToQuery(workspaceJoin);
+      expect(compiled.sql).toContain('"workspaces"."status" =');
+      expect(compiled.params).toContain("active");
+    }
+  });
 });

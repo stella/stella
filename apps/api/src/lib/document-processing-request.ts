@@ -1,7 +1,12 @@
 import { and, eq, inArray, or } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
-import { documentProcessingRuns, entities, workspaces } from "@/api/db/schema";
+import {
+  documentProcessingRuns,
+  entities,
+  extractedContent,
+  workspaces,
+} from "@/api/db/schema";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -49,6 +54,7 @@ export const persistManualOcrRun = async ({
         and(
           eq(workspaces.id, entities.workspaceId),
           eq(workspaces.organizationId, organizationId),
+          eq(workspaces.status, "active"),
         ),
       )
       .where(
@@ -122,8 +128,32 @@ export const persistManualOcrRun = async ({
         .limit(1)
         .for("update");
       const existing = existingRows.at(0);
+      const matchingProjection =
+        existing?.status === "succeeded"
+          ? await tx
+              .select({ entityId: extractedContent.entityId })
+              .from(extractedContent)
+              .where(
+                and(
+                  eq(extractedContent.organizationId, organizationId),
+                  eq(extractedContent.workspaceId, workspaceId),
+                  eq(extractedContent.entityId, source.entityId),
+                  eq(
+                    extractedContent.sourceEntityVersionId,
+                    source.entityVersionId,
+                  ),
+                  eq(extractedContent.sourceFieldId, source.fieldId),
+                  eq(extractedContent.sourceFileId, source.sourceFileId),
+                  eq(extractedContent.sourceSha256Hex, source.sourceSha256Hex),
+                ),
+              )
+              .limit(1)
+          : [];
+      const needsProjectionRestore =
+        existing?.status === "succeeded" && !matchingProjection.at(0);
       const canRetry =
         existing?.status === "failed" ||
+        needsProjectionRestore ||
         (existing?.status === "cancelled" &&
           (existing.errorCode === "policy_disabled" ||
             existing.errorCode === "source_superseded" ||
@@ -155,6 +185,7 @@ export const persistManualOcrRun = async ({
               canRetry
                 ? or(
                     eq(documentProcessingRuns.status, "failed"),
+                    eq(documentProcessingRuns.status, "succeeded"),
                     and(
                       eq(documentProcessingRuns.status, "cancelled"),
                       or(
@@ -199,5 +230,5 @@ export const persistManualOcrRun = async ({
         },
       });
     }
-    return run;
+    return run ? { id: run.id, status: run.status } : null;
   });

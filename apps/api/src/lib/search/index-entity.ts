@@ -2,7 +2,7 @@ import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
-import { entities } from "@/api/db/schema";
+import { entities, extractedContent } from "@/api/db/schema";
 import type { LinkMetadata, searchDocuments } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -20,10 +20,20 @@ import {
 import { fileNameSearchText } from "@/api/lib/search/query";
 
 type SearchDocumentRow = typeof searchDocuments.$inferInsert;
+type ExtractedContentSource = Pick<
+  typeof extractedContent.$inferSelect,
+  | "extractedAt"
+  | "sourceEntityVersionId"
+  | "sourceFieldId"
+  | "sourceFileId"
+  | "sourceSha256Hex"
+>;
+
 type BuiltSearchDocument = Omit<
   SearchDocumentRow,
   "searchableText" | "title"
 > & {
+  extractedContentSource: ExtractedContentSource | null;
   searchableText: string;
   semanticUpdatedAtToken: TimestampCasToken;
   sourceVersionId: SafeId<"entityVersion">;
@@ -102,15 +112,20 @@ const buildSearchDocument = async (
         columns: { id: true },
         with: {
           fields: {
-            columns: { content: true, propertyId: true },
+            columns: { content: true, id: true, propertyId: true },
           },
         },
       },
       extractedContent: {
         columns: {
           ciphertext: true,
+          extractedAt: true,
           iv: true,
           language: true,
+          sourceEntityVersionId: true,
+          sourceFieldId: true,
+          sourceFileId: true,
+          sourceSha256Hex: true,
         },
       },
     },
@@ -156,9 +171,22 @@ const buildSearchDocument = async (
   // FTS provider can use it directly.
   let language: string | null = null;
 
-  if (entity.extractedContent) {
-    const { ciphertext, iv } = entity.extractedContent;
-    language = isoToRegconfig(entity.extractedContent.language);
+  const extractedContentRow = entity.extractedContent;
+  const currentExtractedContent =
+    extractedContentRow &&
+    extractedContentRow.sourceEntityVersionId === version.id &&
+    version.fields.some(
+      (field) =>
+        field.id === extractedContentRow.sourceFieldId &&
+        field.content.type === "file" &&
+        field.content.id === extractedContentRow.sourceFileId &&
+        field.content.sha256Hex === extractedContentRow.sourceSha256Hex,
+    )
+      ? extractedContentRow
+      : null;
+  if (currentExtractedContent) {
+    const { ciphertext, iv } = currentExtractedContent;
+    language = isoToRegconfig(currentExtractedContent.language);
     try {
       const plaintext = await decryptContent(
         workspace.organizationId,
@@ -179,6 +207,15 @@ const buildSearchDocument = async (
 
   return {
     entityId: entity.id,
+    extractedContentSource: extractedContentRow
+      ? {
+          extractedAt: extractedContentRow.extractedAt,
+          sourceEntityVersionId: extractedContentRow.sourceEntityVersionId,
+          sourceFieldId: extractedContentRow.sourceFieldId,
+          sourceFileId: extractedContentRow.sourceFileId,
+          sourceSha256Hex: extractedContentRow.sourceSha256Hex,
+        }
+      : null,
     organizationId: workspace.organizationId,
     workspaceId: entity.workspaceId,
     kind: entity.kind,
@@ -209,6 +246,28 @@ export const upsertSearchDocument = async (
     doc.title,
     doc.searchableText,
   );
+  const extractedContentFence =
+    doc.extractedContentSource === null
+      ? sql`NOT EXISTS (
+          SELECT 1
+          FROM ${extractedContent}
+          WHERE ${extractedContent.entityId} = e.id
+        )`
+      : sql`EXISTS (
+          SELECT 1
+          FROM ${extractedContent}
+          WHERE ${extractedContent.entityId} = e.id
+            AND ${extractedContent.sourceEntityVersionId}
+              IS NOT DISTINCT FROM ${doc.extractedContentSource.sourceEntityVersionId}
+            AND ${extractedContent.sourceFieldId}
+              IS NOT DISTINCT FROM ${doc.extractedContentSource.sourceFieldId}
+            AND ${extractedContent.sourceFileId}
+              IS NOT DISTINCT FROM ${doc.extractedContentSource.sourceFileId}
+            AND ${extractedContent.sourceSha256Hex}
+              IS NOT DISTINCT FROM ${doc.extractedContentSource.sourceSha256Hex}
+            AND ${extractedContent.extractedAt}
+              IS NOT DISTINCT FROM ${doc.extractedContentSource.extractedAt}
+        )`;
 
   await rootDb.transaction(async (tx) => {
     const indexed = await tx.execute<IndexedSearchDocument>(sql`
@@ -219,6 +278,7 @@ export const upsertSearchDocument = async (
           AND e.current_version_id = ${doc.sourceVersionId}
           AND COALESCE(e.updated_at, e.created_at)
             IS NOT DISTINCT FROM ${doc.semanticUpdatedAtToken}::timestamptz
+          AND ${extractedContentFence}
         FOR UPDATE
       )
       INSERT INTO search_documents (
