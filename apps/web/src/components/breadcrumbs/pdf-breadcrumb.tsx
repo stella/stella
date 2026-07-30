@@ -4,7 +4,7 @@ import { Link, useMatch } from "@tanstack/react-router";
 import { BidiText } from "@stll/ui/components/bidi-text";
 import { BreadcrumbItem } from "@stll/ui/components/breadcrumb";
 
-import { fileMetadataOptions } from "@/lib/files/file-metadata-query";
+import { fileMetadataOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
 
 export const PdfBreadcrumb = () => {
   const pdfMatch = useMatch({
