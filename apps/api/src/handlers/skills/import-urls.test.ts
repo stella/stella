@@ -37,6 +37,24 @@ describe("skill URL import batches", () => {
     });
   });
 
+  test("canonicalizes equivalent content-source URLs before deduplicating", () => {
+    const integrity = contentIntegrity("a".repeat(64));
+    const result = deduplicateSkillImportItems([
+      { integrity, sourceUrl: "https://EXAMPLE.com:443/SKILL.md" },
+      { integrity, sourceUrl: "https://example.com/SKILL.md" },
+    ]);
+
+    expect(result).toEqual({
+      failed: [],
+      items: [
+        {
+          integrity,
+          sourceUrl: "https://example.com/SKILL.md",
+        },
+      ],
+    });
+  });
+
   test("rejects a URL with conflicting preview integrity", () => {
     const sourceUrl = "https://example.com/SKILL.md";
     const result = deduplicateSkillImportItems([

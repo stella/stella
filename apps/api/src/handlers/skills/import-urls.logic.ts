@@ -26,6 +26,14 @@ const skillIntegrityKey = (integrity: SkillSourceIntegrity): string => {
   }
 };
 
+const canonicalizeContentHashSkillUrl = (rawUrl: string): string => {
+  try {
+    return new URL(rawUrl).toString();
+  } catch {
+    return rawUrl;
+  }
+};
+
 export const deduplicateSkillImportItems = (
   requestedItems: readonly SkillImportItem[],
 ): DeduplicateSkillImportItemsResult => {
@@ -34,13 +42,15 @@ export const deduplicateSkillImportItems = (
   const itemsBySourceUrl = new Map<string, SkillImportItem>();
   for (const item of requestedItems) {
     const requestedSourceUrl = item.sourceUrl.trim();
-    let sourceUrl: string | null = requestedSourceUrl;
     let integrity = item.integrity;
+    let sourceUrl =
+      integrity.type === "content-hash"
+        ? canonicalizeContentHashSkillUrl(requestedSourceUrl)
+        : canonicalizeGithubCommitSkillUrl({
+            commitSha: integrity.value,
+            rawUrl: requestedSourceUrl,
+          });
     if (integrity.type === "github-commit") {
-      sourceUrl = canonicalizeGithubCommitSkillUrl({
-        commitSha: integrity.value,
-        rawUrl: requestedSourceUrl,
-      });
       const integritySourceUrl = canonicalizeGithubCommitSkillUrl({
         commitSha: integrity.value,
         rawUrl: integrity.sourceUrl,
