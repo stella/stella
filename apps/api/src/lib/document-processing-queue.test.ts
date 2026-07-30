@@ -5,6 +5,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import {
   isAutomaticOcrRepairCandidate,
   isCurrentOcrSource,
+  requiresOcrPolicy,
 } from "@/api/lib/document-processing-queue";
 
 const fileContent = {
@@ -84,5 +85,13 @@ describe("isAutomaticOcrRepairCandidate", () => {
           "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       }),
     ).toBe(false);
+  });
+});
+
+describe("requiresOcrPolicy", () => {
+  test("applies opt-out to every automatic request source", () => {
+    expect(requiresOcrPolicy("upload")).toBe(true);
+    expect(requiresOcrPolicy("repair")).toBe(true);
+    expect(requiresOcrPolicy("manual")).toBe(false);
   });
 });

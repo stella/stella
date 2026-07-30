@@ -273,7 +273,10 @@ export const isAutomaticOcrRepairCandidate = (
 
 const markRunCancelled = async (
   runId: SafeId<"documentProcessingRun">,
-  cancellationCode: "policy_disabled" | "source_superseded",
+  cancellationCode:
+    | "policy_disabled"
+    | "source_superseded"
+    | "workspace_unavailable",
 ): Promise<void> => {
   await rootDb
     .update(documentProcessingRuns)
@@ -295,10 +298,12 @@ const markRunCancelled = async (
 const readCurrentOcrSource = async ({
   entityId,
   fieldId,
+  organizationId,
   workspaceId,
 }: {
   entityId: SafeId<"entity">;
   fieldId: SafeId<"field">;
+  organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
 }): Promise<CurrentOcrSource | null> => {
   const rows = await rootDb
@@ -310,6 +315,14 @@ const readCurrentOcrSource = async ({
       versionDeletedAt: entityVersions.deletedAt,
     })
     .from(entities)
+    .innerJoin(
+      workspaces,
+      and(
+        eq(workspaces.id, workspaceId),
+        eq(workspaces.organizationId, organizationId),
+        eq(workspaces.status, "active"),
+      ),
+    )
     .innerJoin(
       fields,
       and(eq(fields.id, fieldId), eq(fields.workspaceId, workspaceId)),
@@ -353,6 +366,14 @@ const persistOcrProjection = async ({
         versionDeletedAt: entityVersions.deletedAt,
       })
       .from(entities)
+      .innerJoin(
+        workspaces,
+        and(
+          eq(workspaces.id, run.workspaceId),
+          eq(workspaces.organizationId, run.organizationId),
+          eq(workspaces.status, "active"),
+        ),
+      )
       .innerJoin(
         fields,
         and(
@@ -430,6 +451,10 @@ const persistOcrProjection = async ({
     return true;
   });
 
+export const requiresOcrPolicy = (
+  requestSource: (typeof documentProcessingRuns.$inferSelect)["requestSource"],
+): boolean => requestSource !== "manual";
+
 export const processDocumentProcessingRun = async (
   runId: SafeId<"documentProcessingRun">,
 ): Promise<void> => {
@@ -461,20 +486,40 @@ export const processDocumentProcessingRun = async (
     return;
   }
 
-  if (run.requestSource === "upload") {
-    const settings = await rootDb.query.organizationSettings.findFirst({
-      where: { organizationId: { eq: run.organizationId } },
-      columns: { documentProcessingMode: true },
-    });
-    if (settings?.documentProcessingMode !== "searchable-text") {
-      await markRunCancelled(run.id, "policy_disabled");
-      return;
-    }
+  const contexts = await rootDb
+    .select({
+      documentProcessingMode: organizationSettings.documentProcessingMode,
+      workspaceStatus: workspaces.status,
+    })
+    .from(workspaces)
+    .leftJoin(
+      organizationSettings,
+      eq(organizationSettings.organizationId, workspaces.organizationId),
+    )
+    .where(
+      and(
+        eq(workspaces.id, run.workspaceId),
+        eq(workspaces.organizationId, run.organizationId),
+      ),
+    )
+    .limit(1);
+  const context = contexts.at(0);
+  if (context?.workspaceStatus !== "active") {
+    await markRunCancelled(run.id, "workspace_unavailable");
+    return;
+  }
+  if (
+    requiresOcrPolicy(run.requestSource) &&
+    context.documentProcessingMode !== "searchable-text"
+  ) {
+    await markRunCancelled(run.id, "policy_disabled");
+    return;
   }
 
   const source = await readCurrentOcrSource({
     entityId: run.entityId,
     fieldId: run.fieldId,
+    organizationId: run.organizationId,
     workspaceId: run.workspaceId,
   });
   if (!isCurrentOcrSource({ run, source })) {
@@ -658,6 +703,7 @@ const recoverMissingAutomaticOcrRuns = async (): Promise<number> => {
           lt(extractedContent.extractedAt, entityVersions.createdAt),
         ),
         lt(entityVersions.createdAt, settledBefore),
+        eq(workspaces.status, "active"),
         sql`${fields.content}->>'type' = 'file'
           AND ${fields.content}->>'mimeType' = 'application/pdf'
           AND ${fields.content}->>'encrypted' = 'false'`,
