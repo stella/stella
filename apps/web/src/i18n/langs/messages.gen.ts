@@ -1755,6 +1755,10 @@ type Messages = {
       "generateTitle": "Generate skill with AI";
       "generating": "Generating…";
       "howItRuns": "How it runs";
+      "importFailureFetch": "The skill source could not be loaded.";
+      "importFailureIntegrity": "The skill source changed after discovery. Review it again.";
+      "importFailureLimit": "The skill limit has been reached.";
+      "importFailureNameConflict": "A skill with this name already exists.";
       "importHelp": "Paste a public GitHub repository, folder, or SKILL.md URL. Review the discovered skills before installing them.";
       "importPartial": "{installedCount, plural, one {{installed} imported} other {{installed} imported}}; {failedCount, plural, one {{failed} failed} other {{failed} failed}}.";
       "importSelected": "Import selected ({count})";

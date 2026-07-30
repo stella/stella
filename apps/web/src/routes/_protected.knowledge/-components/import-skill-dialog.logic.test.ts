@@ -3,23 +3,30 @@ import { describe, expect, test } from "bun:test";
 import { summarizeSkillImportFailures } from "./import-skill-dialog.logic";
 
 describe("skill import failure summaries", () => {
-  test("surfaces each distinct actionable server message", () => {
+  test("surfaces each distinct localized failure", () => {
     expect(
       summarizeSkillImportFailures(
         [
-          { message: "Skill limit reached" },
-          { message: "Skill slug already exists" },
-          { message: "Skill limit reached" },
+          { code: "fetch_failed" },
+          { code: "name_conflict" },
+          { code: "fetch_failed" },
         ],
+        ({ code }) =>
+          code === "fetch_failed"
+            ? "Could not load the skill source"
+            : "A skill with this name already exists",
         "Unexpected error",
       ),
-    ).toBe("Skill limit reached; Skill slug already exists");
+    ).toBe(
+      "Could not load the skill source; A skill with this name already exists",
+    );
   });
 
-  test("uses the fallback when the server returns no useful message", () => {
+  test("uses the fallback when localization returns no useful message", () => {
     expect(
       summarizeSkillImportFailures(
-        [{ message: "  " }, { message: "" }],
+        [{ code: "fetch_failed" }],
+        () => "  ",
         "Unexpected error",
       ),
     ).toBe("Unexpected error");

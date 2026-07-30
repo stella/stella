@@ -14,8 +14,27 @@ type DeduplicatedSkillImportItem = SkillImportItem & {
   reportedSourceUrl: string;
 };
 
+export const SKILL_IMPORT_FAILURE_CODE = {
+  FETCH_FAILED: "fetch_failed",
+  INSTALL_FAILED: "install_failed",
+  INTEGRITY_CONFLICT: "integrity_conflict",
+  INTEGRITY_MISMATCH: "integrity_mismatch",
+  NAME_CONFLICT: "name_conflict",
+  SOURCE_CHANGED: "source_changed",
+  TEAM_LIMIT_REACHED: "team_limit_reached",
+  USER_LIMIT_REACHED: "user_limit_reached",
+} as const;
+
+export type SkillImportFailureCode =
+  (typeof SKILL_IMPORT_FAILURE_CODE)[keyof typeof SKILL_IMPORT_FAILURE_CODE];
+
+export type SkillImportFailure = {
+  code: SkillImportFailureCode;
+  sourceUrl: string;
+};
+
 type DeduplicateSkillImportItemsResult = {
-  failed: { message: string; sourceUrl: string }[];
+  failed: SkillImportFailure[];
   items: DeduplicatedSkillImportItem[];
 };
 
@@ -52,7 +71,7 @@ const canonicalizeContentHashSkillUrl = (rawUrl: string): string => {
 export const deduplicateSkillImportItems = (
   requestedItems: readonly SkillImportItem[],
 ): DeduplicateSkillImportItemsResult => {
-  const failed: { message: string; sourceUrl: string }[] = [];
+  const failed: SkillImportFailure[] = [];
   const conflictingSourceUrls = new Set<string>();
   const itemsBySourceUrl = new Map<string, DeduplicatedSkillImportItem>();
   for (const item of requestedItems) {
@@ -78,7 +97,7 @@ export const deduplicateSkillImportItems = (
     }
     if (sourceUrl === null) {
       failed.push({
-        message: "Skill source changed after discovery; review it again",
+        code: SKILL_IMPORT_FAILURE_CODE.SOURCE_CHANGED,
         sourceUrl: requestedSourceUrl,
       });
       continue;
@@ -103,7 +122,7 @@ export const deduplicateSkillImportItems = (
     itemsBySourceUrl.delete(sourceUrl);
     conflictingSourceUrls.add(sourceUrl);
     failed.push({
-      message: "Duplicate skill URL has conflicting integrity values",
+      code: SKILL_IMPORT_FAILURE_CODE.INTEGRITY_CONFLICT,
       sourceUrl: existing.reportedSourceUrl,
     });
   }

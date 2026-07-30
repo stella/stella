@@ -27,6 +27,7 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { useFormatter } from "@/i18n/formatting-context";
+import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
@@ -38,6 +39,17 @@ const FIRST_STRONG_ISOLATE = String.fromCodePoint(8296);
 const POP_DIRECTIONAL_ISOLATE = String.fromCodePoint(8297);
 const isolateBidi = (value: string): string =>
   `${FIRST_STRONG_ISOLATE}${value}${POP_DIRECTIONAL_ISOLATE}`;
+
+const SKILL_IMPORT_FAILURE_MESSAGE_KEY = {
+  fetch_failed: "knowledge.agentSkills.importFailureFetch",
+  install_failed: "common.unexpectedError",
+  integrity_conflict: "knowledge.agentSkills.importFailureIntegrity",
+  integrity_mismatch: "knowledge.agentSkills.importFailureIntegrity",
+  name_conflict: "knowledge.agentSkills.importFailureNameConflict",
+  source_changed: "knowledge.agentSkills.importFailureIntegrity",
+  team_limit_reached: "knowledge.agentSkills.importFailureLimit",
+  user_limit_reached: "knowledge.agentSkills.importFailureLimit",
+} as const satisfies Record<string, TranslationKey>;
 
 type SkillScope = "team" | "private";
 
@@ -173,6 +185,7 @@ const ImportSkillDialogBody = ({
         }),
         description: summarizeSkillImportFailures(
           result.failed,
+          (failure) => t(SKILL_IMPORT_FAILURE_MESSAGE_KEY[failure.code]),
           t("common.unexpectedError"),
         ),
         type: "warning",

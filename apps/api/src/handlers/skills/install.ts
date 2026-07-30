@@ -8,14 +8,17 @@ import type { AgentSkillOrigin, AgentSkillScope } from "@/api/db/schema";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  DatabaseError,
+  HandlerError,
+  unreachable,
+} from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { PG_ERROR } from "@/api/lib/pg-error";
 
 import type { ParsedSkillPackage } from "./skill-package";
 
 type InstallSkillProps = {
-  allowUnchangedUrlReplay?: boolean;
   // Install as a draft (hidden until the user finishes). Defaults to true so
   // existing upload/import callers keep installing enabled skills.
   enabled?: boolean;
@@ -35,7 +38,15 @@ type InstallSkillProps = {
   // blueprints) pass a unique slug to avoid (org, scope, slug) collisions.
   slug?: string;
   user: { id: SafeId<"user"> };
+  urlReplayIdentity?: "content-hash" | "source-url";
 };
+
+export const SKILL_INSTALL_ERROR_CODE = {
+  INSTALL_FAILED: "skill_install_failed",
+  NAME_CONFLICT: "skill_name_conflict",
+  TEAM_LIMIT_REACHED: "skill_team_limit_reached",
+  USER_LIMIT_REACHED: "skill_user_limit_reached",
+} as const;
 
 type InstallSkillTransactionResult =
   | { id: SafeId<"agentSkill">; type: "installed" }
@@ -46,7 +57,6 @@ type InstallSkillTransactionResult =
   | { type: "team-limit-reached" };
 
 export const installSkill = async ({
-  allowUnchangedUrlReplay = false,
   enabled = true,
   memberRole,
   onInstalled,
@@ -58,6 +68,7 @@ export const installSkill = async ({
   session,
   slug,
   user,
+  urlReplayIdentity,
 }: InstallSkillProps) => {
   const authorization = authorizeSkillInstallScope({ memberRole, scope });
   if (Result.isError(authorization)) {
@@ -69,7 +80,7 @@ export const installSkill = async ({
       await tx.transaction(
         async (innerTx): Promise<InstallSkillTransactionResult> => {
           const existingSkill = async () => {
-            if (!allowUnchangedUrlReplay) {
+            if (urlReplayIdentity === undefined) {
               return undefined;
             }
             const rows = await innerTx
@@ -95,7 +106,15 @@ export const installSkill = async ({
           };
           const unchangedSkill = async () => {
             const existing = await existingSkill();
-            return existing && isUnchangedUrlSkill({ existing, origin, parsed })
+            if (!existing || urlReplayIdentity === undefined) {
+              return undefined;
+            }
+            return isUnchangedUrlSkill({
+              existing,
+              origin,
+              parsed,
+              replayIdentity: urlReplayIdentity,
+            })
               ? existing
               : undefined;
           };
@@ -148,7 +167,7 @@ export const installSkill = async ({
             body: parsed.body,
             enabled,
           });
-          const rows = allowUnchangedUrlReplay
+          const rows = urlReplayIdentity
             ? await insert
                 .onConflictDoNothing()
                 .returning({ id: agentSkills.id })
@@ -156,7 +175,7 @@ export const installSkill = async ({
 
           const row = rows.at(0);
           if (!row) {
-            if (allowUnchangedUrlReplay) {
+            if (urlReplayIdentity) {
               const unchangedAfterConflict = await unchangedSkill();
               return unchangedAfterConflict
                 ? { id: unchangedAfterConflict.id, type: "unchanged" }
@@ -209,6 +228,7 @@ export const installSkill = async ({
     ) {
       return Result.err(
         new HandlerError({
+          code: SKILL_INSTALL_ERROR_CODE.NAME_CONFLICT,
           status: 409,
           message: `A skill named "${parsed.name}" already exists`,
         }),
@@ -216,6 +236,7 @@ export const installSkill = async ({
     }
     return Result.err(
       new HandlerError({
+        code: SKILL_INSTALL_ERROR_CODE.INSTALL_FAILED,
         status: 500,
         message: "Failed to install skill",
         cause: insertResult.error,
@@ -226,6 +247,7 @@ export const installSkill = async ({
   if (insertResult.value.type === "limit-reached") {
     return Result.err(
       new HandlerError({
+        code: SKILL_INSTALL_ERROR_CODE.USER_LIMIT_REACHED,
         status: 400,
         message: "Skill limit reached for this user",
       }),
@@ -235,6 +257,7 @@ export const installSkill = async ({
   if (insertResult.value.type === "team-limit-reached") {
     return Result.err(
       new HandlerError({
+        code: SKILL_INSTALL_ERROR_CODE.TEAM_LIMIT_REACHED,
         status: 400,
         message: "Team skill limit reached for this organization",
       }),
@@ -243,13 +266,18 @@ export const installSkill = async ({
 
   if (insertResult.value.type === "insert-failed") {
     return Result.err(
-      new HandlerError({ status: 500, message: "Failed to install skill" }),
+      new HandlerError({
+        code: SKILL_INSTALL_ERROR_CODE.INSTALL_FAILED,
+        status: 500,
+        message: "Failed to install skill",
+      }),
     );
   }
 
   if (insertResult.value.type === "conflict") {
     return Result.err(
       new HandlerError({
+        code: SKILL_INSTALL_ERROR_CODE.NAME_CONFLICT,
         status: 409,
         message: `A skill named "${parsed.name}" already exists`,
       }),
@@ -263,6 +291,7 @@ export const isUnchangedUrlSkill = ({
   existing,
   origin,
   parsed,
+  replayIdentity,
 }: {
   existing: Pick<
     typeof agentSkills.$inferSelect,
@@ -270,12 +299,26 @@ export const isUnchangedUrlSkill = ({
   >;
   origin: AgentSkillOrigin;
   parsed: Pick<ParsedSkillPackage, "contentHash" | "sourceUrl">;
-}): boolean =>
-  origin === "url" &&
-  existing.origin === "url" &&
-  parsed.sourceUrl !== null &&
-  existing.sourceUrl === parsed.sourceUrl &&
-  existing.contentHash === parsed.contentHash;
+  replayIdentity: "content-hash" | "source-url";
+}): boolean => {
+  if (
+    origin !== "url" ||
+    existing.origin !== "url" ||
+    existing.contentHash !== parsed.contentHash
+  ) {
+    return false;
+  }
+  switch (replayIdentity) {
+    case "content-hash":
+      return true;
+    case "source-url":
+      return (
+        parsed.sourceUrl !== null && existing.sourceUrl === parsed.sourceUrl
+      );
+    default:
+      return unreachable("Unknown URL replay identity");
+  }
+};
 
 export const authorizeSkillInstallScope = ({
   memberRole,

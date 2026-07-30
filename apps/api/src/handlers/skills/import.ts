@@ -8,9 +8,15 @@ import { LIMITS } from "@/api/lib/limits";
 
 import {
   deduplicateSkillImportItems,
+  SKILL_IMPORT_FAILURE_CODE,
   skillImportRequestBudget,
 } from "./import-urls.logic";
-import { authorizeSkillInstallScope, installSkill } from "./install";
+import type { SkillImportFailureCode } from "./import-urls.logic";
+import {
+  authorizeSkillInstallScope,
+  installSkill,
+  SKILL_INSTALL_ERROR_CODE,
+} from "./install";
 import {
   createSkillPackageFetchContext,
   fetchSkillPackageFromUrl,
@@ -37,6 +43,21 @@ const importSkillScopeValues = [
   "team",
   "private",
 ] as const satisfies typeof AGENT_SKILL_SCOPES;
+
+const importFailureCodeFromInstallError = (
+  code: string | undefined,
+): SkillImportFailureCode => {
+  switch (code) {
+    case SKILL_INSTALL_ERROR_CODE.NAME_CONFLICT:
+      return SKILL_IMPORT_FAILURE_CODE.NAME_CONFLICT;
+    case SKILL_INSTALL_ERROR_CODE.TEAM_LIMIT_REACHED:
+      return SKILL_IMPORT_FAILURE_CODE.TEAM_LIMIT_REACHED;
+    case SKILL_INSTALL_ERROR_CODE.USER_LIMIT_REACHED:
+      return SKILL_IMPORT_FAILURE_CODE.USER_LIMIT_REACHED;
+    default:
+      return SKILL_IMPORT_FAILURE_CODE.INSTALL_FAILED;
+  }
+};
 
 export const importSkillsBodySchema = t.Object({
   items: t.Array(
@@ -115,7 +136,7 @@ const importSkillsFromUrls = createSafeRootHandler(
       const parsed = await fetchSkillPackageFromUrl(sourceUrl, fetchContext);
       if (Result.isError(parsed)) {
         failed.push({
-          message: parsed.error.message,
+          code: SKILL_IMPORT_FAILURE_CODE.FETCH_FAILED,
           sourceUrl: reportedSourceUrl,
         });
         return importAt(index + 1);
@@ -128,14 +149,13 @@ const importSkillsFromUrls = createSafeRootHandler(
       });
       if (Result.isError(verification)) {
         failed.push({
-          message: verification.error.message,
+          code: SKILL_IMPORT_FAILURE_CODE.INTEGRITY_MISMATCH,
           sourceUrl: reportedSourceUrl,
         });
         return importAt(index + 1);
       }
 
       const result = await installSkill({
-        allowUnchangedUrlReplay: true,
         memberRole,
         origin: "url",
         parsed: parsed.value,
@@ -144,10 +164,12 @@ const importSkillsFromUrls = createSafeRootHandler(
         scope: body.scope,
         session,
         user,
+        urlReplayIdentity:
+          integrity.type === "content-hash" ? "content-hash" : "source-url",
       });
       if (result.isErr()) {
         failed.push({
-          message: result.error.message,
+          code: importFailureCodeFromInstallError(result.error.code),
           sourceUrl: reportedSourceUrl,
         });
         return importAt(index + 1);

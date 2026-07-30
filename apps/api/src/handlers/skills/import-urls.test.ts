@@ -99,7 +99,7 @@ describe("skill URL import batches", () => {
     expect(result.items).toEqual([]);
     expect(result.failed).toEqual([
       {
-        message: "Duplicate skill URL has conflicting integrity values",
+        code: "integrity_conflict",
         sourceUrl,
       },
     ]);
@@ -139,7 +139,7 @@ describe("skill URL import batches", () => {
     expect(result.items).toEqual([]);
     expect(result.failed).toEqual([
       {
-        message: "Duplicate skill URL has conflicting integrity values",
+        code: "integrity_conflict",
         sourceUrl,
       },
     ]);
@@ -191,7 +191,7 @@ describe("skill URL import batches", () => {
     expect(result.items).toEqual([]);
     expect(result.failed).toEqual([
       {
-        message: "Skill source changed after discovery; review it again",
+        code: "source_changed",
         sourceUrl,
       },
     ]);
@@ -215,7 +215,7 @@ describe("skill URL import batches", () => {
     expect(result.items).toEqual([]);
     expect(result.failed).toEqual([
       {
-        message: "Skill source changed after discovery; review it again",
+        code: "source_changed",
         sourceUrl: requestedSourceUrl,
       },
     ]);

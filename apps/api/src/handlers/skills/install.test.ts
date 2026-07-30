@@ -35,11 +35,12 @@ describe("agent skill URL import replay", () => {
         existing: { ...parsed, origin: "url" },
         origin: "url",
         parsed,
+        replayIdentity: "source-url",
       }),
     ).toBe(true);
   });
 
-  test("does not reuse a row with a different source or content hash", () => {
+  test("reuses a content-identical row through a different mirror", () => {
     expect(
       isUnchangedUrlSkill({
         existing: {
@@ -49,8 +50,27 @@ describe("agent skill URL import replay", () => {
         },
         origin: "url",
         parsed,
+        replayIdentity: "content-hash",
+      }),
+    ).toBe(true);
+  });
+
+  test("keeps source identity for commit-pinned replays", () => {
+    expect(
+      isUnchangedUrlSkill({
+        existing: {
+          contentHash: parsed.contentHash,
+          origin: "url",
+          sourceUrl: "https://mirror.example/SKILL.md",
+        },
+        origin: "url",
+        parsed,
+        replayIdentity: "source-url",
       }),
     ).toBe(false);
+  });
+
+  test("does not reuse a row with a different content hash", () => {
     expect(
       isUnchangedUrlSkill({
         existing: {
@@ -60,6 +80,7 @@ describe("agent skill URL import replay", () => {
         },
         origin: "url",
         parsed,
+        replayIdentity: "content-hash",
       }),
     ).toBe(false);
   });
