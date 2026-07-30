@@ -63,12 +63,12 @@
   },
   "hero": {
     "badge": "Aktiv weiterentwickelt",
-    "selfHost": "Selbst hosten",
+    "selfHost": "Self-Hosting",
     "subtitle": "Der juristische <gh>Open-Source</gh>-Arbeitsbereich: Akten, Dokumente, Prüfung und ein KI-Agent, der mit Quellenangaben antwortet.",
     "title": "Setzen Sie KI in jeder Akte ein."
   },
   "home": {
-    "ctaTitle": "Bringen Sie KI in Ihre Kanzlei."
+    "ctaTitle": "Bringen Sie KI in Ihre juristische Praxis."
   },
   "mcpProof": {
     "contextBody": "Bringen Sie freigegebene Akten und Rechtsdaten in Claude oder einen beliebigen kompatiblen MCP-Client.",
@@ -78,7 +78,7 @@
     "subtitle": "Bringen Sie den aktuellen Aktenkontext in die Werkzeuge, mit denen Sie arbeiten.",
     "title": "Arbeitsbereich trifft MCP.",
     "toolsBody": "Suchen, lesen und Vorlagen ausfüllen: alles über dieselbe Registry, aus der die stella CLI generiert wird.",
-    "toolsTitle": "Werkzeuge für Agenten."
+    "toolsTitle": "Werkzeuge für KI-Agenten."
   },
   "meta": {
     "homeDescription": "Juristischer Open-Source-Arbeitsbereich für Kanzleien: Akten, Dokumente, Vertragsanalyse und Recherche. Selbst hosten oder in der Cloud. Nutzungsbasierte KI.",
@@ -95,19 +95,19 @@
     "github": "stella auf GitHub",
     "openMenu": "Navigation öffnen",
     "pillars": {
-      "data": "Dateninfrastruktur",
+      "data": "Daten",
       "intelligence": "Juristische Analytik",
       "workspace": "Arbeitsbereich"
     },
     "product": "Produkt",
     "products": {
       "agent": {
-        "blurb": "Chatten Sie mit Ihren Akten, Dokumenten, Registern und angebundenen Tools an einem Ort. Der Agent handelt mit Freigaben und Quellvorschauen, stützt seine Antworten auf Fundstellen und lässt sich über Skills und externe Konnektoren erweitern.",
+        "blurb": "Chatten Sie mit Ihren Akten, Dokumenten, Registern und angebundenen Tools an einem Ort. Der KI-Agent handelt mit Freigaben und Quellvorschauen, stützt seine Antworten auf Fundstellen und lässt sich über Skills und externe Konnektoren erweitern.",
         "eyebrow": "KI-Agent",
         "title": "Ein KI-Agent, der über Ihre Akten, Dateien und Tools hinweg arbeitet."
       },
       "anonymization": {
-        "blurb": "Entfernen Sie Namen, Entitäten und identifizierende Angaben, bevor Material die KI erreicht, direkt aus dem Chat und der Dokumentenprüfung, mit einem geschwärzten Ergebnis, das Sie prüfen, bevor irgendetwas weitergeht.",
+        "blurb": "Entfernen Sie Namen, Entitäten und identifizierende Angaben, bevor Material die KI erreicht, direkt aus dem Chat und der Dokumentenprüfung, mit einem anonymisierten Ergebnis, das Sie prüfen, bevor irgendetwas weitergeht.",
         "eyebrow": "Anonymisierung",
         "title": "Material für KI vorbereiten, ohne identifizierende Angaben preiszugeben."
       },
@@ -122,9 +122,9 @@
         "title": "Bearbeiten Sie Word-Dokumente im Browser, ohne die Akte zu verlassen."
       },
       "public-data": {
-        "blurb": "Rechtsprechung und Handelsregister aus offiziellen öffentlichen Quellen, gesammelt und strukturerhaltend aufbereitet vom Legal-Atlas-Stack in stella. Lesen Sie eine Entscheidung, schlagen Sie ein Unternehmen nach, folgen Sie Fundstellen und verweisen Sie aus einer Akte auf all das oder übergeben Sie es dem KI-Agenten.",
+        "blurb": "Rechtsprechung und Handelsregister aus offiziellen öffentlichen Quellen, gesammelt von Legal Atlas in stella, mit erhaltener Struktur. Lesen Sie eine Entscheidung, schlagen Sie ein Unternehmen nach, folgen Sie Fundstellen und verweisen Sie aus einer Akte auf all das oder übergeben Sie es dem KI-Agenten.",
         "eyebrow": "Öffentliche Daten",
-        "title": "Offizielle Rechtsdaten, bereit für die Akte."
+        "title": "Rechtsdaten, bereit für die Akte."
       },
       "tabular-review": {
         "blurb": "Stellen Sie Fragen an einen ganzen Dokumentenbestand und erhalten Sie strukturierte Antworten als Tabelle im Rahmen der Akte: sortierbar, filterbar und bis zum Ausgangstext nachvollziehbar. Gebaut für Due Diligence, Discovery und Recherche.",
@@ -166,7 +166,7 @@
           "title": "Über alle Akten hinweg"
         },
         "1": {
-          "body": "Holen Sie Dokumente ins Gespräch und lassen Sie den Agenten sie lesen, vergleichen oder zusammenfassen.",
+          "body": "Holen Sie Dokumente ins Gespräch und lassen Sie den KI-Agenten sie lesen, vergleichen oder zusammenfassen.",
           "title": "Liest Ihre Dateien"
         },
         "2": {
@@ -174,11 +174,11 @@
           "title": "Angebundene Werkzeuge"
         },
         "3": {
-          "body": "Der Agent fragt, bevor er handelt, damit Sie jeden Schritt in der Hand behalten.",
+          "body": "Der KI-Agent fragt, bevor er handelt, damit Sie jeden Schritt in der Hand behalten.",
           "title": "Erst Freigabe, dann Aktion"
         },
         "4": {
-          "body": "Sehen Sie, was der Agent liest: Zu jedem Schritt gehört eine Vorschau der zugrunde liegenden Quelle.",
+          "body": "Sehen Sie, was der KI-Agent liest: Zu jedem Schritt gehört eine Vorschau der zugrunde liegenden Quelle.",
           "title": "Quellvorschauen"
         },
         "5": {
@@ -187,15 +187,15 @@
         }
       },
       "cta": {
-        "heading": "Geben Sie dem Agenten eine echte Akte."
+        "heading": "Geben Sie dem KI-Agenten eine echte Akte."
       },
       "faqs": {
         "0": {
           "answer": "Nein. Er holt vor jeder Aktion eine Freigabe ein und zeigt eine Quellvorschau zu dem, was er liest, sodass Sie jeden Schritt nachvollziehen und bestätigen.",
-          "question": "Handelt der Agent eigenmächtig?"
+          "question": "Handelt der KI-Agent eigenmächtig?"
         },
         "1": {
-          "answer": "Über Skills (wiederverwendbare Prompts und Tool-Definitionen) und externe Konnektoren, die MCP-kompatibel sind. Beides erweitert die Reichweite des Agenten, ohne den Chat selbst zu verändern.",
+          "answer": "Über Skills (wiederverwendbare Anweisungen und Werkzeuge) und externe Konnektoren, die MCP-kompatibel sind. Beides erweitert die Reichweite des KI-Agenten, ohne den Chat selbst zu verändern.",
           "question": "Wie erweitere ich seine Fähigkeiten?"
         },
         "2": {
@@ -203,10 +203,10 @@
           "question": "Woher stammen seine Antworten?"
         }
       },
-      "metaDescription": "Chatten Sie mit Ihren Akten, Dokumenten, Registern und Tools. Der Agent handelt mit Freigaben, belegt Antworten mit Fundstellen und wächst mit Skills.",
+      "metaDescription": "Chatten Sie mit Ihren Akten, Dokumenten, Registern und Tools. Der KI-Agent handelt mit Freigaben, belegt Antworten mit Fundstellen und wächst mit Skills.",
       "metaTitle": "KI für Anwälte: KI-Agent für Akten und Register | stella",
       "quickAnswer": {
-        "answer": "Der Agent chattet mit Ihren Akten, Dateien, Handelsregistern und angebundenen Tools. Er holt vor jeder Aktion eine Freigabe ein, zeigt eine Quellvorschau zu dem, was er liest, und belegt Antworten mit Fundstellen. Erweitern lässt er sich über wiederverwendbare Skills und externe Konnektoren, die MCP-kompatibel sind.",
+        "answer": "Der KI-Agent chattet mit Ihren Akten, Dateien, Handelsregistern und angebundenen Tools. Er holt vor jeder Aktion eine Freigabe ein, zeigt eine Quellvorschau zu dem, was er liest, und belegt Antworten mit Fundstellen. Erweitern lässt er sich über wiederverwendbare Skills und externe Konnektoren, die MCP-kompatibel sind.",
         "question": "Was kann der KI-Agent?"
       },
       "sections": {
@@ -214,7 +214,7 @@
           "bullets": {
             "0": "Akten, Dokumente und Kontakte in einem Gespräch",
             "1": "Unternehmens- und Registerdaten in denselben Verlauf holen",
-            "2": "Eine Tabellenprüfung für Rückfragen an den Agenten übergeben"
+            "2": "Eine Tabellenprüfung für Rückfragen an den KI-Agenten übergeben"
           },
           "heading": "Eine Frage, die ganze Akte"
         },
@@ -228,7 +228,7 @@
         },
         "2": {
           "bullets": {
-            "0": "Skills sind Prompts und Tool-Definitionen für jede Akte",
+            "0": "Skills sind Anweisungen und Werkzeuge für jede Akte",
             "1": "Externe Konnektoren sind MCP-kompatibel und öffnen weitere Tools",
             "2": "Neue Fähigkeiten, ohne den Chat umzubauen"
           },
@@ -257,15 +257,15 @@
           "title": "Identifizierende Angaben bleiben draußen"
         },
         "1": {
-          "body": "Läuft direkt im Chat-Eingabefeld und in der Dokumentenprüfung, nicht in einem separaten Werkzeug.",
+          "body": "Läuft direkt im Chat und in der Dokumentenprüfung, nicht in einem separaten Werkzeug.",
           "title": "Im Chat und in der Prüfung"
         },
         "2": {
-          "body": "Ergänzen Sie die Begriffe und Sperrlisten Ihrer Organisation, damit die für Sie relevanten Namen immer erfasst werden.",
+          "body": "Ergänzen Sie eigene Begriffe und Namenslisten Ihrer Organisation, damit die für Sie relevanten Namen immer erfasst werden.",
           "title": "Ihre eigenen Begriffe"
         },
         "3": {
-          "body": "Zeigt das geschwärzte Dokument im Kontext, damit Sie bestätigen, was die Akte verlässt.",
+          "body": "Zeigt das anonymisierte Dokument im Kontext, damit Sie bestätigen, was die Akte verlässt.",
           "title": "Ergebnis zum Nachprüfen"
         }
       },
@@ -278,14 +278,14 @@
           "question": "Ist die Anonymisierung schon verfügbar?"
         },
         "1": {
-          "answer": "Beim Aufbereiten von Material für KI-Workflows, ohne Namen, Entitäten oder identifizierende Angaben preiszugeben, und das geschwärzte Ergebnis bleibt zur Prüfung verfügbar.",
+          "answer": "Beim Aufbereiten von Material für KI-Workflows, ohne Namen, Entitäten oder identifizierende Angaben preiszugeben, und das anonymisierte Ergebnis bleibt zur Prüfung verfügbar.",
           "question": "Wobei hilft sie?"
         }
       },
       "metaDescription": "Entfernen Sie Namen, Entitäten und identifizierende Angaben, bevor Material die KI erreicht, direkt aus Chat und Prüfung, mit prüfbarem Ergebnis.",
       "metaTitle": "Dokumente anonymisieren für KI in der Kanzlei | stella",
       "quickAnswer": {
-        "answer": "Sie entfernt Namen, Entitäten und identifizierende Angaben, bevor Material in einen KI-Workflow geht, und zeigt Ihnen das geschwärzte Ergebnis, damit Sie bestätigen, was die Akte verlässt. Sie ist direkt in Chat und Dokumentenprüfung integriert.",
+        "answer": "Sie entfernt Namen, Entitäten und identifizierende Angaben, bevor Material in einen KI-Workflow geht, und zeigt Ihnen das anonymisierte Ergebnis, damit Sie bestätigen, was die Akte verlässt. Sie ist direkt in Chat und Dokumentenprüfung integriert.",
         "question": "Was ist Anonymisierung in stella?"
       },
       "sections": {
@@ -293,14 +293,14 @@
           "bullets": {
             "0": "Namen, Entitäten und identifizierende Angaben bleiben aus KI-Schritten heraus",
             "1": "Für juristische KI-Workflows gebaut, nicht für generisches Maskieren",
-            "2": "Vor dem nächsten Schritt liegt ein prüfbares geschwärztes Dokument vor"
+            "2": "Vor dem nächsten Schritt liegt ein prüfbares anonymisiertes Dokument vor"
           },
           "heading": "Material aufbereiten, bevor die KI es sieht"
         },
         "1": {
           "bullets": {
             "0": "Aus dem Chat und der Dokumentenprüfung erreichbar",
-            "1": "Kein Kopieren in ein externes Schwärzungswerkzeug",
+            "1": "Kein Kopieren in ein externes Anonymisierungswerkzeug",
             "2": "Basiert auf der eigenen Open-Source-Anonymisierungs-Engine von stella"
           },
           "heading": "Teil des Arbeitsbereichs, kein Extra-Werkzeug"
@@ -340,7 +340,7 @@
           "title": "Berechtigungen des Arbeitsbereichs gelten"
         },
         "4": {
-          "body": "Befehle liefern maschinenlesbares JSON für Skripte und Agenten sowie lesbare Terminalausgabe für Menschen.",
+          "body": "Befehle liefern maschinenlesbares JSON für Skripte und KI-Agenten sowie lesbare Terminalausgabe für Menschen.",
           "title": "Strukturierte Ausgabe"
         },
         "5": {
@@ -368,7 +368,7 @@
       "metaDescription": "Suchen, lesen und arbeiten Sie mit stella über die Kommandozeile oder jeden MCP-kompatiblen Client. Beide Oberflächen teilen Rechte und Daten.",
       "metaTitle": "MCP-Server und CLI für Ihren Arbeitsbereich | stella",
       "quickAnswer": {
-        "answer": "Zwei Oberflächen auf dieselben Capabilities von stella. Die CLI bildet die MCP-Tool-Registry als Befehle ab, und der MCP-Server lässt kompatible Agenten und Werkzeuge mit Akten, Dokumenten, Vorlagen und öffentlichen Rechtsdaten arbeiten, unter denselben Zugriffsregeln.",
+        "answer": "Zwei Oberflächen auf dieselben Capabilities von stella. Die CLI bildet die MCP-Tool-Registry als Befehle ab, und der MCP-Server lässt kompatible KI-Agenten und Werkzeuge mit Akten, Dokumenten, Vorlagen und öffentlichen Rechtsdaten arbeiten, unter denselben Zugriffsregeln.",
         "question": "Was sind die stella-CLI und der MCP-Server?"
       },
       "sections": {
@@ -384,7 +384,7 @@
           "bullets": {
             "0": "Akten, Dokumente, Rechtsprechung, Vorlagen und weitere freigegebene Tools bereitstellen",
             "1": "Capability-Katalog und CLI-Befehle stammen aus einer Registry",
-            "2": "Kompatible Agenten anbinden, ohne Rechtsdaten in einen anderen Arbeitsbereich zu kopieren"
+            "2": "Kompatible KI-Agenten anbinden, ohne Rechtsdaten in einen anderen Arbeitsbereich zu kopieren"
           },
           "heading": "Dieselben Capabilities über MCP"
         }
@@ -411,7 +411,7 @@
           "title": ".docx-Dateien im Browser bearbeiten"
         },
         "1": {
-          "body": "Das Dokument bleibt durchgehend eine .docx, sodass Schriften, Formatvorlagen und Layout so dargestellt und gespeichert werden, wie Word sie angelegt hat.",
+          "body": "Das Dokument bleibt durchgehend eine .docx, sodass Schriften, Formatvorlagen und Layout so aussehen und gespeichert werden, wie Word sie angelegt hat.",
           "title": "Die Formatierung bleibt"
         },
         "2": {
@@ -505,15 +505,15 @@
       },
       "capabilities": {
         "0": {
-          "body": "Entscheidungen aus offiziellen öffentlichen Rechtsquellen, keine abgegriffenen Zusammenfassungen Dritter.",
+          "body": "Entscheidungen direkt aus den amtlichen Quellen, keine Zusammenfassungen aus zweiter Hand.",
           "title": "Offizielle Rechtsprechung"
         },
         "1": {
-          "body": "Legal Atlas erschließt jede Entscheidung und lässt ihre ursprüngliche Struktur unangetastet.",
+          "body": "Jede Entscheidung behält Überschriften, Absätze und Verweise des Originals.",
           "title": "Struktur bleibt erhalten"
         },
         "2": {
-          "body": "Typisierte Clients für nationale Unternehmens- und Handelsregister, abfragbar aus der Akte.",
+          "body": "Schlagen Sie in nationalen Unternehmens- und Handelsregistern nach, ohne die Akte zu verlassen.",
           "title": "Handelsregister"
         },
         "3": {
@@ -525,7 +525,7 @@
           "title": "Nach Jurisdiktion"
         },
         "5": {
-          "body": "Verweisen Sie aus einer Akte auf jede Quelle, damit die Antworten des Agenten dorthin nachvollziehbar bleiben.",
+          "body": "Verweisen Sie aus einer Akte auf jede Quelle, damit die Antworten des KI-Agenten dorthin nachvollziehbar bleiben.",
           "title": "Belegt für die KI"
         }
       },
@@ -534,11 +534,11 @@
       },
       "faqs": {
         "0": {
-          "answer": "Die Rechtsprechung stammt aus offiziellen öffentlichen Rechtsquellen, eingelesen und aufbereitet vom Legal-Atlas-Stack in stella. Unternehmensdaten kommen über typisierte Clients aus nationalen Unternehmens- und Handelsregistern, nicht aus Kopien Dritter.",
+          "answer": "Die Rechtsprechung stammt aus offiziellen öffentlichen Rechtsquellen und wird von Legal Atlas in stella mit erhaltener Struktur gesammelt. Unternehmensdaten kommen direkt aus den nationalen Unternehmens- und Handelsregistern, nicht aus Kopien Dritter.",
           "question": "Woher stammen die Daten?"
         },
         "1": {
-          "answer": "Zwei Listen, beide wachsend. Zu den typisierten Registry-Clients zählen bereits ARES (Tschechien), Companies House (UK), SEC EDGAR (USA), KRS (Polen), PRH (Finnland) und VIES (EU-USt). Über Register hinaus erscheinen offizielle Quellen je Jurisdiktion aus dem Konnektorkatalog von stella; Tschechien, Spanien und Taiwan haben zum Beispiel bereits angebundene Quellen, und die Leseansicht für Rechtsprechung ist darauf ausgelegt, nach Jurisdiktion zu blättern und zu filtern, während weitere offizielle Quellen hinzukommen.",
+          "answer": "Zwei Listen, beide wachsend. Zu den angebundenen Registern zählen bereits ARES (Tschechien), Companies House (UK), SEC EDGAR (USA), KRS (Polen), PRH (Finnland) und VIES (EU-USt). Über Register hinaus kommen offizielle Quellen Jurisdiktion für Jurisdiktion hinzu; Tschechien, Spanien und Taiwan haben zum Beispiel bereits angebundene Quellen, und die Leseansicht für Rechtsprechung ist darauf ausgelegt, nach Jurisdiktion zu blättern und zu filtern, während weitere offizielle Quellen hinzukommen.",
           "question": "Welche Jurisdiktionen und Register sind abgedeckt?"
         },
         "2": {
@@ -549,33 +549,33 @@
       "metaDescription": "Rechtsprechung und Handelsregister aus offiziellen Quellen. Entscheidungen lesen, Unternehmen nachschlagen, Fundstellen folgen, alles direkt in die Akte.",
       "metaTitle": "Juristische Recherche: Rechtsprechung und Register | stella",
       "quickAnswer": {
-        "answer": "Zweierlei. Offizielle öffentliche Rechtsprechung, eingelesen und strukturerhaltend aufbereitet, sodass Sie Entscheidungen lesen, durchsuchen und ihren Fundstellen folgen. Und typisierten Zugriff auf nationale Unternehmens- und Handelsregister, sodass Sie offizielle Unternehmensdaten direkt in eine Akte holen. Beides sind belegte Quellen, die der KI-Agent zitieren kann.",
+        "answer": "Zweierlei. Offizielle öffentliche Rechtsprechung, mit erhaltener Struktur eingelesen, sodass Sie Entscheidungen lesen, durchsuchen und ihren Fundstellen folgen. Und direkten Zugriff auf nationale Unternehmens- und Handelsregister, sodass Sie offizielle Unternehmensdaten direkt in eine Akte holen. Beides sind belegte Quellen, die der KI-Agent zitieren kann.",
         "question": "Welche öffentlichen Daten bringt stella mit?"
       },
       "sections": {
         "0": {
           "bullets": {
             "0": "Aus offiziellen öffentlichen Rechtsquellen gesammelt",
-            "1": "Strukturerhaltende Parser bewahren Überschriften, Absätze und Verweise",
-            "2": "Basiert auf dem offenen Legal-Atlas-Ingestion-Stack"
+            "1": "Überschriften, Absätze und Verweise bleiben wie im Original",
+            "2": "Basiert auf dem offenen Legal Atlas von stella"
           },
           "heading": "Rechtsprechung aus offiziellen Quellen, mit erhaltener Struktur"
         },
         "1": {
           "bullets": {
-            "0": "Typisierte Clients für nationale Register: ARES, Companies House, SEC EDGAR, KRS, PRH, VIES und mehr",
+            "0": "Angebundene nationale Register: ARES, Companies House, SEC EDGAR, KRS, PRH, VIES und mehr",
             "1": "Offizielle Unternehmensdaten in die Akte holen, statt sie abzutippen",
             "2": "Die Abdeckung wächst mit jeder weiteren offiziellen Quelle"
           },
-          "heading": "Unternehmens- und Handelsregister, abgefragt aus der Akte"
+          "heading": "Unternehmens- und Handelsregister, durchsucht aus der Akte"
         },
         "2": {
           "bullets": {
             "0": "Aus einer Akte auf eine Entscheidung oder einen Registereintrag verweisen",
-            "1": "Der Agent zitiert die zugrunde liegende Quelle, keine Umschreibung",
+            "1": "Der KI-Agent zitiert die zugrunde liegende Quelle, keine Umschreibung",
             "2": "Über alle Quellen hinweg suchen, nicht nur in einer"
           },
-          "heading": "Eine belegte Quelle für den Agenten"
+          "heading": "Eine belegte Quelle für den KI-Agenten"
         }
       }
     },
@@ -852,16 +852,15 @@
     }
   },
   "story": {
-    "agentBody": "Der Agent durchsucht die Akte, liest den relevanten Text und antwortet mit Zitaten, die die Quelle an der genauen Stelle öffnen. Nutzen Sie ihn direkt in stella oder verbinden Sie ihn mit den Werkzeugen, mit denen Sie ohnehin arbeiten.",
+    "agentBody": "Der KI-Agent durchsucht die Akte, liest den relevanten Text und antwortet mit Zitaten, die die Quelle an der genauen Stelle öffnen. Nutzen Sie ihn direkt in stella oder verbinden Sie ihn mit den Werkzeugen, mit denen Sie ohnehin arbeiten.",
     "agentEyebrow": "KI-Agent",
     "agentTitle": "Einmal fragen genügt. Jede Antwort nennt ihre Quelle.",
     "bringEditorToFront": "Editor von stella in den Vordergrund holen",
     "bringTerminalToFront": "Terminal von stella in den Vordergrund holen",
     "bringWorkspaceToFront": "Arbeitsbereich von stella in den Vordergrund holen",
-    "controlBody": "stella ist juristische Open-Source-Software, die Sie selbst hosten können: Prüfen Sie den Code, betreiben Sie sie auf Ihre Weise und exportieren Sie alles in Standardformaten; ohne Lock-in.",
-    "controlEyebrow": "Auf Kontrolle ausgelegt",
-    "controlTitle": "Behalten Sie die Kontrolle über Ihren Stack.",
-    "dataBody": "Amtliche Rechtsprechung und Register, direkt in die Akte geladen, in jeder Jurisdiktion, in der Sie arbeiten. Die Anonymisierung hält identifizierende Angaben von der KI fern.",
+    "controlBody": "stella ist juristische <gh>Open-Source</gh>-Software, die Sie selbst hosten können: Prüfen Sie den Code, betreiben Sie sie auf Ihre Weise und exportieren Sie alles in Standardformaten.",
+    "controlTitle": "Behalten Sie die Technik in der Hand.",
+    "dataBody": "Rechtsprechung und Register, direkt in die Akte geladen, in jeder Jurisdiktion, in der Sie arbeiten. Die Anonymisierung hält identifizierende Angaben von der KI fern.",
     "dataEyebrow": "Juristische Daten",
     "dataMainAlt": "Eine offizielle Gerichtsentscheidung, geöffnet in stella",
     "dataTitle": "Rechtsprechung und Register griffbereit.",
@@ -873,23 +872,23 @@
     "exploreTemplates": "Vorlagen entdecken",
     "exploreWorkspace": "Arbeitsbereich entdecken",
     "eyebrow": "Ein vernetzter Arbeitsbereich",
-    "intro": "Unterlagen, Prüfung und finalisierte Dokumente bleiben in der Akte und bauen aufeinander auf. Sie arbeiten gemeinsam mit der KI an der Akte, und jede Antwort stützt sich auf die genaue Stelle in der Quelle.",
+    "intro": "Unterlagen, Prüfung und finalisierte Dokumente bleiben in der Akte und bauen aufeinander auf. Sie können gemeinsam mit der KI an der Akte arbeiten, und jeder ihrer Schritte lässt sich überprüfen.",
     "openEditor": "Editor öffnen",
     "proofByokBody": "Nutzen Sie für KI-Funktionen Ihre eigenen Anbieter-Schlüssel.",
     "proofByokTitle": "Eigene Modelle nutzen",
     "proofOpenSourceBody": "Prüfen Sie den Code und behalten Sie ein portables System.",
     "proofOpenSourceTitle": "Open Source",
-    "proofPermissionsBody": "Anfragen bleiben auf Nutzer und Arbeitsbereich beschränkt.",
+    "proofPermissionsBody": "Jede Aktion bleibt innerhalb der Rechte des Nutzers und des Arbeitsbereichs.",
     "proofPermissionsTitle": "Respektiert Berechtigungen",
     "proofSelfHostBody": "Betreiben Sie stella auf Infrastruktur, die Sie kontrollieren.",
-    "proofSelfHostTitle": "Selbst hostbar",
+    "proofSelfHostTitle": "Zum Selbsthosten",
     "selfHostGuide": "Self-Hosting-Anleitung lesen",
     "sourceOnGitHub": "Quellcode auf GitHub",
     "title": "Eine Akte. Von den Unterlagen bis zur Antwort.",
     "velocityAll": "Vollständiges Änderungsprotokoll",
     "velocityTitle": "Was wir zuletzt geliefert haben.",
-    "workspaceBody": "Dokumente, Fristen, strukturierte Prüfung und Entwürfe bleiben beisammen und sind über alle Akten hinweg durchsuchbar. Öffnen Sie eine Akte, sehen Sie die Arbeit im Kontext und wechseln Sie von der Tabelle zum zugrunde liegenden Dokument, ohne den Weg neu nachvollziehen zu müssen.",
-    "workspaceEyebrow": "Arbeitsbereich für Akten",
+    "workspaceBody": "Dokumente, Fristen, strukturierte Prüfung und Entwürfe bleiben beisammen und sind über alle Akten hinweg durchsuchbar.",
+    "workspaceEyebrow": "Arbeitsbereich",
     "workspaceTitle": "Führen Sie die ganze Akte an einem Ort."
   }
 }

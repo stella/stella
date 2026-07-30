@@ -68,7 +68,7 @@
     "title": "Mettez l’IA au service de chaque dossier."
   },
   "home": {
-    "ctaTitle": "Apportez l’IA à votre cabinet d’avocats."
+    "ctaTitle": "Apportez l’IA à votre pratique juridique."
   },
   "mcpProof": {
     "contextBody": "Apportez les dossiers approuvés et les données juridiques dans Claude ou tout client compatible MCP.",
@@ -78,7 +78,7 @@
     "subtitle": "Apportez le contexte à jour du dossier dans les outils que vous utilisez.",
     "title": "Quand l’espace de travail rencontre MCP.",
     "toolsBody": "Cherchez, lisez et remplissez des modèles via le registre qui alimente aussi la CLI stella.",
-    "toolsTitle": "Des outils pour les agents."
+    "toolsTitle": "Des outils pour les agents IA."
   },
   "meta": {
     "homeDescription": "Plateforme juridique open source pour avocats : dossiers, documents, analyse de contrats et recherche de jurisprudence. À héberger vous-même ou dans le cloud.",
@@ -95,14 +95,14 @@
     "github": "stella sur GitHub",
     "openMenu": "Ouvrir la navigation",
     "pillars": {
-      "data": "Infrastructure de données",
+      "data": "Données",
       "intelligence": "Intelligence juridique",
       "workspace": "Espace de travail"
     },
     "product": "Produit",
     "products": {
       "agent": {
-        "blurb": "Dialoguez avec vos dossiers, vos documents, les registres et vos outils connectés au même endroit. L’agent agit avec validation et aperçu des sources, fonde ses réponses sur des citations et s’étend via des compétences et des connecteurs externes.",
+        "blurb": "Dialoguez avec vos dossiers, vos documents, les registres et vos outils connectés au même endroit. L’agent IA agit avec validation et aperçu des sources, fonde ses réponses sur des citations et s’étend via des compétences et des connecteurs externes.",
         "eyebrow": "Agent IA",
         "title": "Un agent IA qui travaille sur vos dossiers, vos fichiers et vos outils."
       },
@@ -122,9 +122,9 @@
         "title": "Modifiez des documents Word dans le navigateur, sans quitter le dossier."
       },
       "public-data": {
-        "blurb": "Jurisprudence et registres d’entreprises issus de sources publiques officielles, collectés et analysés en préservant leur structure par le stack Legal Atlas de stella. Lisez une décision, consultez une entreprise, suivez les citations et référencez tout cela depuis un dossier ou confiez-le à l’agent IA.",
+        "blurb": "Jurisprudence et registres d’entreprises issus de sources publiques officielles, collectés par Legal Atlas dans stella en préservant leur structure. Lisez une décision, consultez une entreprise, suivez les citations et référencez tout cela depuis un dossier ou confiez-le à l’agent IA.",
         "eyebrow": "Données publiques",
-        "title": "Des données juridiques officielles, prêtes à verser au dossier."
+        "title": "Des données juridiques, prêtes à verser au dossier."
       },
       "tabular-review": {
         "blurb": "Posez vos questions à un ensemble de documents entier et recevez des réponses structurées sous forme de tableau rattaché au dossier : triable, filtrable et traçable jusqu’au texte source. Conçu pour la due diligence, la discovery et la recherche.",
@@ -166,7 +166,7 @@
           "title": "Travaille sur tous vos dossiers"
         },
         "1": {
-          "body": "Ajoutez des documents à la conversation et demandez à l’agent de les lire, de les comparer ou de les résumer.",
+          "body": "Ajoutez des documents à la conversation et demandez à l’agent IA de les lire, de les comparer ou de les résumer.",
           "title": "Lit vos fichiers"
         },
         "2": {
@@ -174,11 +174,11 @@
           "title": "Outils connectés"
         },
         "3": {
-          "body": "L’agent demande votre accord avant d’agir : vous gardez la main à chaque étape.",
+          "body": "L’agent IA demande votre accord avant d’agir : vous gardez la main à chaque étape.",
           "title": "Validation avant chaque action"
         },
         "4": {
-          "body": "Voyez ce que l’agent lit grâce à un aperçu de la source derrière chaque étape.",
+          "body": "Voyez ce que l’agent IA lit grâce à un aperçu de la source derrière chaque étape.",
           "title": "Aperçu des sources"
         },
         "5": {
@@ -187,15 +187,15 @@
         }
       },
       "cta": {
-        "heading": "Confiez un vrai dossier à l’agent."
+        "heading": "Confiez un vrai dossier à l’agent IA."
       },
       "faqs": {
         "0": {
           "answer": "Non. Il demande votre accord avant d’agir et affiche un aperçu de ce qu’il lit, pour que vous puissiez suivre et confirmer chaque étape.",
-          "question": "L’agent agit-il de lui-même ?"
+          "question": "L’agent IA agit-il de lui-même ?"
         },
         "1": {
-          "answer": "Par des compétences (invites et définitions d’outils réutilisables) et par des connecteurs externes compatibles MCP. Les deux étendent la portée de l’agent sans changer le chat lui-même.",
+          "answer": "Par des compétences (instructions et outils réutilisables) et par des connecteurs externes compatibles MCP. Les deux étendent la portée de l’agent IA sans changer le chat lui-même.",
           "question": "Comment ajouter de nouvelles capacités ?"
         },
         "2": {
@@ -203,10 +203,10 @@
           "question": "D’où viennent ses réponses ?"
         }
       },
-      "metaDescription": "Dialoguez avec vos dossiers, documents et registres. L’agent agit avec validation, fonde ses réponses sur des citations et s’étend via des compétences.",
+      "metaDescription": "Dialoguez avec vos dossiers, documents et registres. L’agent IA agit avec validation, fonde ses réponses sur des citations et s’étend via des compétences.",
       "metaTitle": "Agent IA : assistant juridique pour vos dossiers | stella",
       "quickAnswer": {
-        "answer": "L’agent dialogue avec vos dossiers, vos fichiers, les registres d’entreprises et vos outils connectés. Il demande votre accord avant d’agir, affiche un aperçu de ce qu’il lit et fonde ses réponses sur des citations. Vous pouvez l’étendre avec des compétences réutilisables et des connecteurs externes compatibles MCP.",
+        "answer": "L’agent IA dialogue avec vos dossiers, vos fichiers, les registres d’entreprises et vos outils connectés. Il demande votre accord avant d’agir, affiche un aperçu de ce qu’il lit et fonde ses réponses sur des citations. Vous pouvez l’étendre avec des compétences réutilisables et des connecteurs externes compatibles MCP.",
         "question": "Que sait faire l’agent IA ?"
       },
       "sections": {
@@ -214,22 +214,22 @@
           "bullets": {
             "0": "Dialoguez avec les dossiers, les documents et les contacts en une conversation",
             "1": "Versez les données d’entreprises et de registres dans le même fil",
-            "2": "Confiez une revue tabulaire à l’agent pour la suite des questions"
+            "2": "Confiez une revue tabulaire à l’agent IA pour la suite des questions"
           },
           "heading": "Une seule question, pour tout le dossier"
         },
         "1": {
           "bullets": {
             "0": "Chaque action attend votre validation avant de s’exécuter",
-            "1": "Un aperçu de la source montre ce que l’agent a lu à chaque étape",
+            "1": "Un aperçu de la source montre ce que l’agent IA a lu à chaque étape",
             "2": "Les citations ouvrent le document source au passage exact"
           },
           "heading": "Vous gardez la main"
         },
         "2": {
           "bullets": {
-            "0": "Des compétences réutilisables d’un dossier à l’autre : invites et outils",
-            "1": "Les connecteurs externes sont compatibles MCP : l’agent atteint plus d’outils",
+            "0": "Des compétences réutilisables d’un dossier à l’autre : instructions et outils",
+            "1": "Les connecteurs externes sont compatibles MCP : l’agent IA atteint plus d’outils",
             "2": "Ajoutez des capacités sans changer le fonctionnement du chat"
           },
           "heading": "Étendez-le avec des compétences et des connecteurs"
@@ -257,11 +257,11 @@
           "title": "Aucun élément identifiant ne passe"
         },
         "1": {
-          "body": "S’exécute directement dans le composeur de chat et dans la revue de documents, pas dans un outil à part.",
+          "body": "S’exécute directement dans le chat et dans la revue de documents, pas dans un outil à part.",
           "title": "Fonctionne dans le chat et la revue"
         },
         "2": {
-          "body": "Ajoutez vos propres termes et listes d’exclusion pour que les noms qui comptent pour vous soient toujours détectés.",
+          "body": "Ajoutez les termes et les listes de noms propres à votre organisation pour que les noms qui comptent pour vous soient toujours détectés.",
           "title": "Vos propres termes"
         },
         "3": {
@@ -340,7 +340,7 @@
           "title": "Les permissions de l’espace de travail s’appliquent"
         },
         "4": {
-          "body": "Les commandes renvoient du JSON lisible par machine pour les scripts et les agents, et une sortie lisible dans le terminal pour les humains.",
+          "body": "Les commandes renvoient du JSON lisible par machine pour les scripts et les agents IA, et une sortie lisible dans le terminal pour les humains.",
           "title": "Sortie structurée"
         },
         "5": {
@@ -368,7 +368,7 @@
       "metaDescription": "Cherchez, lisez et travaillez avec stella depuis la ligne de commande ou tout client compatible MCP. Mêmes capacités, mêmes permissions, mêmes données.",
       "metaTitle": "Serveur MCP et CLI pour votre plateforme juridique | stella",
       "quickAnswer": {
-        "answer": "Ce sont deux interfaces vers les mêmes capacités de stella. La CLI reprend le registre d’outils MCP sous forme de commandes, tandis que le serveur MCP permet aux agents et aux outils compatibles de travailler sur les dossiers, les documents, les modèles et les données juridiques publiques, sous les mêmes contrôles d’accès.",
+        "answer": "Ce sont deux interfaces vers les mêmes capacités de stella. La CLI reprend le registre d’outils MCP sous forme de commandes, tandis que le serveur MCP permet aux agents IA et aux outils compatibles de travailler sur les dossiers, les documents, les modèles et les données juridiques publiques, sous les mêmes contrôles d’accès.",
         "question": "Qu’est-ce que la CLI et le serveur MCP de stella ?"
       },
       "sections": {
@@ -384,7 +384,7 @@
           "bullets": {
             "0": "Exposez dossiers, documents, jurisprudence, modèles et autres outils approuvés",
             "1": "Gardez le catalogue de capacités et les commandes CLI générés depuis un seul registre",
-            "2": "Connectez des agents compatibles sans copier vos données juridiques ailleurs"
+            "2": "Connectez des agents IA compatibles sans copier vos données juridiques ailleurs"
           },
           "heading": "Les mêmes capacités via MCP"
         }
@@ -505,15 +505,15 @@
       },
       "capabilities": {
         "0": {
-          "body": "Des décisions issues de sources juridiques publiques officielles, pas de résumés tiers.",
+          "body": "Des décisions issues directement des sources officielles, pas des résumés de seconde main.",
           "title": "Jurisprudence officielle"
         },
         "1": {
-          "body": "Legal Atlas analyse chaque décision en conservant sa structure d’origine.",
+          "body": "Chaque décision conserve les titres, les paragraphes et les références de l’original.",
           "title": "Structure préservée"
         },
         "2": {
-          "body": "Des clients typés pour les registres du commerce et des sociétés nationaux, interrogeables depuis un dossier.",
+          "body": "Consultez les registres du commerce et des sociétés nationaux sans quitter le dossier.",
           "title": "Registres d’entreprises"
         },
         "3": {
@@ -525,7 +525,7 @@
           "title": "Par juridiction"
         },
         "5": {
-          "body": "Référencez n’importe quelle source depuis un dossier pour que les réponses de l’agent y restent traçables.",
+          "body": "Référencez n’importe quelle source depuis un dossier pour que les réponses de l’agent IA y restent traçables.",
           "title": "Une base solide pour l’IA"
         }
       },
@@ -534,11 +534,11 @@
       },
       "faqs": {
         "0": {
-          "answer": "La jurisprudence provient de sources juridiques publiques officielles, collectées et analysées par le stack Legal Atlas de stella. Les données d’entreprises viennent des registres du commerce et des sociétés nationaux via des clients typés, pas de copies tierces.",
+          "answer": "La jurisprudence provient de sources juridiques publiques officielles, collectée par Legal Atlas dans stella en préservant sa structure. Les données d’entreprise viennent directement des registres du commerce et des sociétés nationaux, pas de copies tierces.",
           "question": "D’où proviennent les données ?"
         },
         "1": {
-          "answer": "Deux listes, l’une et l’autre en expansion. Les clients de registres typés couvrent déjà ARES (Tchéquie), Companies House (Royaume-Uni), SEC EDGAR (États-Unis), KRS (Pologne), PRH (Finlande) et VIES (TVA de l’UE). Au-delà des registres, les sources officielles apparaissent par juridiction depuis le catalogue de connecteurs de stella : la Tchéquie, l’Espagne et Taïwan, par exemple, ont déjà des sources connectées, et le lecteur de jurisprudence est conçu pour parcourir et filtrer par juridiction à mesure que d’autres sources officielles s’ajoutent.",
+          "answer": "Deux listes, l’une et l’autre en expansion. Les registres connectés couvrent déjà ARES (Tchéquie), Companies House (Royaume-Uni), SEC EDGAR (États-Unis), KRS (Pologne), PRH (Finlande) et VIES (TVA de l’UE). Au-delà des registres, les sources officielles s’ajoutent juridiction par juridiction : la Tchéquie, l’Espagne et Taïwan, par exemple, ont déjà des sources connectées, et le lecteur de jurisprudence est conçu pour parcourir et filtrer par juridiction à mesure que d’autres sources officielles s’ajoutent.",
           "question": "Quelles juridictions et quels registres sont couverts ?"
         },
         "2": {
@@ -549,33 +549,33 @@
       "metaDescription": "Jurisprudence et registres d’entreprises issus de sources publiques officielles. Lisez les décisions, suivez les citations et versez le tout au dossier.",
       "metaTitle": "Recherche de jurisprudence et registre du commerce | stella",
       "quickAnswer": {
-        "answer": "Deux types. La jurisprudence publique officielle, collectée et analysée en préservant sa structure, pour lire et interroger les décisions et suivre leurs citations. Et l’accès typé aux registres du commerce et des sociétés nationaux, pour verser des données d’entreprise officielles directement au dossier. Les deux sont des sources fondées que l’agent IA peut citer.",
+        "answer": "Deux types. La jurisprudence publique officielle, collectée en préservant sa structure, pour lire et interroger les décisions et suivre leurs citations. Et l’accès direct aux registres du commerce et des sociétés nationaux, pour verser des données d’entreprise officielles directement au dossier. Les deux sont des sources fondées que l’agent IA peut citer.",
         "question": "Quelles données publiques stella apporte-t-elle ?"
       },
       "sections": {
         "0": {
           "bullets": {
             "0": "Collectée auprès de sources juridiques publiques officielles",
-            "1": "Des analyseurs qui préservent titres, paragraphes et références",
-            "2": "Bâtie sur le stack d’ingestion ouvert Legal Atlas"
+            "1": "Titres, paragraphes et références restent tels quels",
+            "2": "Bâtie sur le Legal Atlas ouvert de stella"
           },
           "heading": "La jurisprudence officielle, structure intacte"
         },
         "1": {
           "bullets": {
-            "0": "Clients typés pour les registres nationaux : ARES, Companies House, SEC EDGAR, KRS, PRH, VIES et d’autres",
+            "0": "Registres nationaux connectés : ARES, Companies House, SEC EDGAR, KRS, PRH, VIES et d’autres",
             "1": "Versez les données d’entreprise officielles au dossier plutôt que de les recopier",
             "2": "La couverture s’étend à mesure que d’autres sources officielles s’ajoutent"
           },
-          "heading": "Registres du commerce et des sociétés, interrogés depuis le dossier"
+          "heading": "Registres du commerce et des sociétés, consultés depuis le dossier"
         },
         "2": {
           "bullets": {
             "0": "Référencez une décision ou une fiche d’entreprise depuis un dossier",
-            "1": "L’agent cite la source d’origine, pas une paraphrase",
+            "1": "L’agent IA cite la source d’origine, pas une paraphrase",
             "2": "Cherchez à travers les sources, pas seulement dans l’une d’elles"
           },
-          "heading": "Une seule source fondée pour l’agent"
+          "heading": "Une seule source fondée pour l’agent IA"
         }
       }
     },
@@ -852,16 +852,15 @@
     }
   },
   "story": {
-    "agentBody": "L’agent explore le dossier, lit le texte pertinent et répond avec des citations qui ouvrent la source au passage exact. Utilisez-le directement dans stella, ou reliez-le aux outils avec lesquels vous travaillez déjà.",
+    "agentBody": "L’agent IA explore le dossier, lit le texte pertinent et répond avec des citations qui ouvrent la source au passage exact. Utilisez-le directement dans stella, ou reliez-le aux outils avec lesquels vous travaillez déjà.",
     "agentEyebrow": "Agent IA",
     "agentTitle": "Une question suffit. Chaque réponse cite sa source.",
     "bringEditorToFront": "Mettre l’éditeur stella au premier plan",
     "bringTerminalToFront": "Mettre le terminal stella au premier plan",
     "bringWorkspaceToFront": "Mettre l’espace de travail stella au premier plan",
-    "controlBody": "stella est un logiciel juridique open source que vous pouvez auto-héberger : inspectez le code, exécutez-le à votre façon et exportez tout dans des formats standards ; sans dépendance.",
-    "controlEyebrow": "Conçu pour garder le contrôle",
+    "controlBody": "stella est un logiciel juridique <gh>open source</gh> que vous pouvez auto-héberger : inspectez le code, exécutez-le à votre façon et exportez tout dans des formats standards.",
     "controlTitle": "Gardez le contrôle de votre infrastructure.",
-    "dataBody": "Jurisprudence officielle et registres du commerce chargés directement dans le dossier, dans chaque juridiction où vous travaillez. L’anonymisation tient les données identifiantes à l’écart de l’IA.",
+    "dataBody": "Jurisprudence et registres du commerce chargés directement dans le dossier, dans chaque juridiction où vous travaillez. L’anonymisation tient les données identifiantes à l’écart de l’IA.",
     "dataEyebrow": "Données juridiques",
     "dataMainAlt": "Une décision de justice officielle ouverte dans stella",
     "dataTitle": "Jurisprudence et registres à portée de main.",
@@ -873,13 +872,13 @@
     "exploreTemplates": "Découvrir les modèles",
     "exploreWorkspace": "Découvrir l’espace de travail",
     "eyebrow": "Un espace de travail connecté",
-    "intro": "Les pièces, la revue et les documents finalisés restent dans le dossier et s’enchaînent. Vous travaillez sur le dossier avec l’IA, et chaque réponse s’appuie sur le passage exact de sa source.",
+    "intro": "Les pièces, la revue et les documents finalisés restent dans le dossier et s’enchaînent. Vous pouvez travailler sur le dossier avec l’IA, et chacune de ses étapes est vérifiable.",
     "openEditor": "Ouvrir l’éditeur",
     "proofByokBody": "Utilisez vos propres clés de fournisseur pour les fonctions IA.",
     "proofByokTitle": "Apportez vos propres modèles",
     "proofOpenSourceBody": "Inspectez le code et conservez un système portable.",
     "proofOpenSourceTitle": "Open source",
-    "proofPermissionsBody": "Les requêtes restent limitées à l’utilisateur et à son espace de travail.",
+    "proofPermissionsBody": "Chaque action reste dans les droits de l’utilisateur et de son espace de travail.",
     "proofPermissionsTitle": "Respecte les permissions",
     "proofSelfHostBody": "Exécutez stella sur une infrastructure que vous contrôlez.",
     "proofSelfHostTitle": "Auto-hébergeable",
@@ -888,8 +887,8 @@
     "title": "Un dossier. Des pièces à la réponse.",
     "velocityAll": "Journal des modifications complet",
     "velocityTitle": "Ce que nous avons livré récemment.",
-    "workspaceBody": "Documents, échéances, revue structurée et rédaction restent ensemble et vous les retrouvez d’une simple recherche dans tous les dossiers. Ouvrez un dossier, visualisez le travail dans son contexte et passez d’un tableau au document sous-jacent sans reconstituer le fil.",
-    "workspaceEyebrow": "L’espace du dossier",
+    "workspaceBody": "Documents, échéances, revue structurée et rédaction restent ensemble et vous les retrouvez d’une simple recherche dans tous les dossiers.",
+    "workspaceEyebrow": "Espace de travail",
     "workspaceTitle": "Gérez tout le dossier au même endroit."
   }
 }

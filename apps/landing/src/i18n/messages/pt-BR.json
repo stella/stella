@@ -63,12 +63,12 @@
   },
   "hero": {
     "badge": "Em desenvolvimento ativo",
-    "selfHost": "Auto-hospedar",
+    "selfHost": "Auto-hospedagem",
     "subtitle": "O espaço de trabalho jurídico de <gh>código aberto</gh>: casos, documentos, revisão e um agente de IA que responde com citações.",
     "title": "Coloque a IA para trabalhar em cada caso."
   },
   "home": {
-    "ctaTitle": "Traga a IA para o seu escritório de advocacia."
+    "ctaTitle": "Traga a IA para a sua prática jurídica."
   },
   "mcpProof": {
     "contextBody": "Leve os casos aprovados e os dados jurídicos para o Claude ou para qualquer cliente compatível com MCP.",
@@ -78,7 +78,7 @@
     "subtitle": "Leve o contexto atualizado do caso para as ferramentas com que você trabalha.",
     "title": "Seu espaço de trabalho agora fala MCP.",
     "toolsBody": "Pesquise, leia e preencha modelos pelo mesmo registro que alimenta a CLI da stella.",
-    "toolsTitle": "Ferramentas para agentes."
+    "toolsTitle": "Ferramentas para agentes de IA."
   },
   "meta": {
     "homeDescription": "Espaço de trabalho jurídico de código aberto para advogados: casos, documentos, revisão de contratos e pesquisa. Auto-hospede ou use nossa nuvem. IA por uso.",
@@ -95,14 +95,14 @@
     "github": "stella no GitHub",
     "openMenu": "Abrir navegação",
     "pillars": {
-      "data": "Infraestrutura de dados",
+      "data": "Dados",
       "intelligence": "Inteligência jurídica",
       "workspace": "Espaço de trabalho"
     },
     "product": "Produto",
     "products": {
       "agent": {
-        "blurb": "Converse com seus casos, documentos, registros e ferramentas conectadas em um só lugar. O agente age com aprovações e prévias da fonte, fundamenta as respostas em citações e se estende por habilidades e conectores externos.",
+        "blurb": "Converse com seus casos, documentos, registros e ferramentas conectadas em um só lugar. O agente de IA age com aprovações e prévias da fonte, fundamenta as respostas em citações e se estende por habilidades e conectores externos.",
         "eyebrow": "Agente de IA",
         "title": "Um agente de IA que atua nos seus casos, arquivos e ferramentas."
       },
@@ -122,9 +122,9 @@
         "title": "Edite documentos do Word no navegador, sem sair do caso."
       },
       "public-data": {
-        "blurb": "Jurisprudência e registros de empresas de fontes públicas oficiais, coletados e analisados com a estrutura preservada pelo stack Legal Atlas da stella. Leia uma decisão, consulte uma empresa, siga as citações e referencie qualquer um deles a partir de um caso ou entregue tudo ao agente de IA.",
+        "blurb": "Jurisprudência e registros de empresas de fontes públicas oficiais, coletados pelo Legal Atlas da stella com a estrutura preservada. Leia uma decisão, consulte uma empresa, siga as citações e referencie qualquer um deles a partir de um caso ou entregue tudo ao agente de IA.",
         "eyebrow": "Dados públicos",
-        "title": "Dados jurídicos oficiais, prontos para entrar em um caso."
+        "title": "Dados jurídicos, prontos para entrar em um caso."
       },
       "tabular-review": {
         "blurb": "Faça perguntas a um conjunto inteiro de documentos e receba respostas estruturadas como uma tabela dentro do caso: ordenável, filtrável e rastreável até o texto de origem. Feita para due diligence, discovery e pesquisa.",
@@ -166,7 +166,7 @@
           "title": "Atua em todos os seus casos"
         },
         "1": {
-          "body": "Traga documentos para a conversa e peça ao agente que os leia, compare ou resuma.",
+          "body": "Traga documentos para a conversa e peça ao agente de IA que os leia, compare ou resuma.",
           "title": "Lê seus arquivos"
         },
         "2": {
@@ -174,11 +174,11 @@
           "title": "Ferramentas conectadas"
         },
         "3": {
-          "body": "O agente pergunta antes de agir, então você mantém o controle de cada passo.",
+          "body": "O agente de IA pergunta antes de agir, então você mantém o controle de cada passo.",
           "title": "Aprovação antes de agir"
         },
         "4": {
-          "body": "Veja o que o agente está lendo: cada passo mostra uma prévia da fonte.",
+          "body": "Veja o que o agente de IA está lendo: cada passo mostra uma prévia da fonte.",
           "title": "Prévias da fonte"
         },
         "5": {
@@ -187,15 +187,15 @@
         }
       },
       "cta": {
-        "heading": "Entregue um caso de verdade ao agente."
+        "heading": "Entregue um caso de verdade ao agente de IA."
       },
       "faqs": {
         "0": {
           "answer": "Não. Ele pede aprovação antes de agir e mostra uma prévia da fonte do que lê, então você acompanha e confirma cada passo.",
-          "question": "O agente age por conta própria?"
+          "question": "O agente de IA age por conta própria?"
         },
         "1": {
-          "answer": "Por habilidades (prompts e definições de ferramentas reutilizáveis) e por conectores externos compatíveis com MCP. Os dois ampliam o alcance do agente sem mudar o chat em si.",
+          "answer": "Por habilidades (instruções e ferramentas reutilizáveis) e por conectores externos compatíveis com MCP. Os dois ampliam o alcance do agente de IA sem mudar o chat em si.",
           "question": "Como adiciono novas capacidades?"
         },
         "2": {
@@ -203,10 +203,10 @@
           "question": "De onde vêm as respostas dele?"
         }
       },
-      "metaDescription": "Converse com seus casos, documentos, registros e ferramentas conectadas. O agente age com aprovações, responde com citações e se estende por habilidades.",
+      "metaDescription": "Converse com seus casos, documentos, registros e ferramentas conectadas. O agente de IA age com aprovações, responde com citações e cresce com habilidades.",
       "metaTitle": "Agente de IA: assistente jurídico para seus casos | stella",
       "quickAnswer": {
-        "answer": "O agente conversa com seus casos, arquivos, registros de empresas e ferramentas conectadas. Ele pede aprovação antes de agir, mostra uma prévia da fonte do que lê e fundamenta as respostas em citações. Você pode ampliá-lo com habilidades reutilizáveis e conectores externos compatíveis com MCP.",
+        "answer": "O agente de IA conversa com seus casos, arquivos, registros de empresas e ferramentas conectadas. Ele pede aprovação antes de agir, mostra uma prévia da fonte do que lê e fundamenta as respostas em citações. Você pode ampliá-lo com habilidades reutilizáveis e conectores externos compatíveis com MCP.",
         "question": "O que o agente de IA faz?"
       },
       "sections": {
@@ -214,22 +214,22 @@
           "bullets": {
             "0": "Casos, documentos e contatos em uma única conversa",
             "1": "Traga dados de empresas e de registros para o mesmo tópico",
-            "2": "Entregue uma revisão tabular ao agente para novas perguntas"
+            "2": "Entregue uma revisão tabular ao agente de IA para novas perguntas"
           },
           "heading": "Pergunte uma vez, para tudo que está no caso"
         },
         "1": {
           "bullets": {
             "0": "Cada ação espera a sua aprovação para ser executada",
-            "1": "Uma prévia da fonte mostra o que o agente leu em cada passo",
+            "1": "Uma prévia da fonte mostra o que o agente de IA leu em cada passo",
             "2": "As citações abrem o documento de origem na passagem exata"
           },
           "heading": "O controle continua com você"
         },
         "2": {
           "bullets": {
-            "0": "Habilidades são prompts e ferramentas reutilizáveis entre casos",
-            "1": "Conectores externos compatíveis com MCP ampliam o alcance do agente",
+            "0": "Habilidades são instruções e ferramentas reutilizáveis entre casos",
+            "1": "Conectores externos compatíveis com MCP ampliam o alcance do agente de IA",
             "2": "Novas capacidades sem mudar o funcionamento do chat"
           },
           "heading": "Amplie com habilidades e conectores"
@@ -257,11 +257,11 @@
           "title": "Sem dados identificadores"
         },
         "1": {
-          "body": "Roda direto no campo de mensagem do chat e na revisão de documentos, não em uma ferramenta à parte.",
+          "body": "Roda direto no chat e na revisão de documentos, não em uma ferramenta à parte.",
           "title": "Funciona no chat e na revisão"
         },
         "2": {
-          "body": "Adicione os termos e as listas de bloqueio da sua organização para que os nomes que importam sejam sempre detectados.",
+          "body": "Adicione os termos e as listas de nomes da sua organização para que os nomes que importam sejam sempre detectados.",
           "title": "Seus termos incluídos"
         },
         "3": {
@@ -340,7 +340,7 @@
           "title": "As permissões do espaço de trabalho valem"
         },
         "4": {
-          "body": "Os comandos retornam JSON legível por máquinas para scripts e agentes, além de uma saída de terminal legível para pessoas.",
+          "body": "Os comandos retornam JSON legível por máquinas para scripts e agentes de IA, além de uma saída de terminal legível para pessoas.",
           "title": "Saída estruturada"
         },
         "5": {
@@ -368,7 +368,7 @@
       "metaDescription": "Pesquise, leia e trabalhe com a stella pela linha de comando ou por qualquer cliente MCP. As duas superfícies compartilham capacidades, permissões e dados.",
       "metaTitle": "Servidor MCP e CLI para o trabalho jurídico | stella",
       "quickAnswer": {
-        "answer": "São duas interfaces para as mesmas capacidades da stella. A CLI espelha o registro de ferramentas MCP como comandos, e o servidor MCP permite que agentes e ferramentas compatíveis trabalhem com casos, documentos, modelos e dados jurídicos públicos sob os mesmos controles de acesso.",
+        "answer": "São duas interfaces para as mesmas capacidades da stella. A CLI espelha o registro de ferramentas MCP como comandos, e o servidor MCP permite que agentes de IA e ferramentas compatíveis trabalhem com casos, documentos, modelos e dados jurídicos públicos sob os mesmos controles de acesso.",
         "question": "O que são a CLI e o servidor MCP da stella?"
       },
       "sections": {
@@ -384,7 +384,7 @@
           "bullets": {
             "0": "Exponha casos, documentos, jurisprudência, modelos e outras ferramentas aprovadas",
             "1": "Catálogo de capacidades e comandos da CLI gerados de um só registro",
-            "2": "Conecte agentes compatíveis sem copiar dados jurídicos para outro espaço de trabalho"
+            "2": "Conecte agentes de IA compatíveis sem copiar dados jurídicos para outro espaço de trabalho"
           },
           "heading": "As mesmas capacidades via MCP"
         }
@@ -411,7 +411,7 @@
           "title": "Edite arquivos .docx no navegador"
         },
         "1": {
-          "body": "O documento continua sendo um .docx do começo ao fim, então fontes, estilos e layout são exibidos e salvos como o Word os criou.",
+          "body": "O documento continua sendo um .docx do começo ao fim, então fontes, estilos e layout aparecem e são salvos como o Word os criou.",
           "title": "A formatação permanece intacta"
         },
         "2": {
@@ -505,15 +505,15 @@
       },
       "capabilities": {
         "0": {
-          "body": "Decisões vindas de fontes jurídicas públicas oficiais, não de resumos raspados de terceiros.",
+          "body": "Decisões direto das fontes oficiais, não resumos de segunda mão.",
           "title": "Jurisprudência oficial"
         },
         "1": {
-          "body": "O Legal Atlas analisa cada decisão mantendo a estrutura original intacta.",
+          "body": "Cada decisão mantém os títulos, parágrafos e referências do original.",
           "title": "Estrutura preservada"
         },
         "2": {
-          "body": "Clientes tipados para registros nacionais de empresas e do comércio, consultados a partir do caso.",
+          "body": "Consulte os registros nacionais de empresas e do comércio sem sair do caso.",
           "title": "Registros de empresas"
         },
         "3": {
@@ -525,7 +525,7 @@
           "title": "Por jurisdição"
         },
         "5": {
-          "body": "Referencie qualquer fonte a partir do caso para que as respostas do agente continuem rastreáveis até ela.",
+          "body": "Referencie qualquer fonte a partir do caso para que as respostas do agente de IA continuem rastreáveis até ela.",
           "title": "Fonte para a IA"
         }
       },
@@ -534,11 +534,11 @@
       },
       "faqs": {
         "0": {
-          "answer": "A jurisprudência vem de fontes jurídicas públicas oficiais, coletada e analisada pelo stack Legal Atlas da stella. Os dados de empresas vêm de registros nacionais de empresas e do comércio por meio de clientes tipados, não de cópias de terceiros.",
+          "answer": "A jurisprudência vem de fontes jurídicas públicas oficiais, coletada pelo Legal Atlas da stella com a estrutura preservada. Os dados de empresas vêm direto dos registros nacionais de empresas e do comércio, não de cópias de terceiros.",
           "question": "De onde vêm os dados?"
         },
         "1": {
-          "answer": "Duas listas, ambas em expansão. Os clientes tipados de registros já incluem ARES (Tchéquia), Companies House (Reino Unido), SEC EDGAR (EUA), KRS (Polônia), PRH (Finlândia) e VIES (IVA da UE). Além dos registros, as fontes oficiais aparecem por jurisdição a partir do catálogo de conectores da stella; Tchéquia, Espanha e Taiwan, por exemplo, já têm fontes conectadas, e o leitor de jurisprudência foi feito para navegar e filtrar por jurisdição conforme novas fontes oficiais são adicionadas.",
+          "answer": "Duas listas, ambas em expansão. Os registros conectados já incluem ARES (Tchéquia), Companies House (Reino Unido), SEC EDGAR (EUA), KRS (Polônia), PRH (Finlândia) e VIES (IVA da UE). Além dos registros, as fontes oficiais são conectadas jurisdição por jurisdição; Tchéquia, Espanha e Taiwan, por exemplo, já têm fontes conectadas, e o leitor de jurisprudência foi feito para navegar e filtrar por jurisdição conforme novas fontes oficiais são adicionadas.",
           "question": "Quais jurisdições e registros estão cobertos?"
         },
         "2": {
@@ -549,21 +549,21 @@
       "metaDescription": "Jurisprudência e registros de empresas de fontes públicas oficiais. Leia decisões, consulte empresas, siga citações e leve tudo para um caso ou para a IA.",
       "metaTitle": "Pesquisa de jurisprudência e registros de empresas | stella",
       "quickAnswer": {
-        "answer": "Dois tipos. Jurisprudência pública oficial, coletada e analisada com a estrutura preservada, para você ler e pesquisar decisões e seguir as citações. E acesso tipado a registros nacionais de empresas e do comércio, para puxar dados oficiais direto para um caso. Os dois são fontes fundamentadas que o agente de IA pode citar.",
+        "answer": "Dois tipos. Jurisprudência pública oficial, coletada com a estrutura preservada, para você ler e pesquisar decisões e seguir as citações. E acesso direto a registros nacionais de empresas e do comércio, para puxar dados oficiais direto para um caso. Os dois são fontes fundamentadas que o agente de IA pode citar.",
         "question": "Que dados públicos a stella traz?"
       },
       "sections": {
         "0": {
           "bullets": {
             "0": "Coletada de fontes jurídicas públicas oficiais",
-            "1": "Os analisadores preservam títulos, parágrafos e referências",
-            "2": "Baseada no stack aberto de ingestão Legal Atlas"
+            "1": "Títulos, parágrafos e referências ficam como no original",
+            "2": "Baseada no Legal Atlas aberto da stella"
           },
           "heading": "Jurisprudência oficial, com a estrutura preservada"
         },
         "1": {
           "bullets": {
-            "0": "Clientes tipados para registros nacionais: ARES, Companies House, SEC EDGAR, KRS, PRH, VIES e outros",
+            "0": "Registros nacionais conectados: ARES, Companies House, SEC EDGAR, KRS, PRH, VIES e outros",
             "1": "Puxe dados oficiais de empresas para o caso em vez de copiá-los à mão",
             "2": "A cobertura cresce conforme novas fontes oficiais entram"
           },
@@ -572,10 +572,10 @@
         "2": {
           "bullets": {
             "0": "Referencie uma decisão ou um registro de empresa a partir do caso",
-            "1": "O agente cita a fonte original, não uma paráfrase",
+            "1": "O agente de IA cita a fonte original, não uma paráfrase",
             "2": "Pesquise em todas as fontes, não apenas dentro de uma"
           },
-          "heading": "Uma fonte fundamentada para o agente"
+          "heading": "Uma fonte fundamentada para o agente de IA"
         }
       }
     },
@@ -852,16 +852,15 @@
     }
   },
   "story": {
-    "agentBody": "O agente pesquisa o caso, lê o texto relevante e responde com citações que abrem a fonte na passagem exata. Use-o diretamente na stella ou conecte-o às ferramentas com as quais você já trabalha.",
+    "agentBody": "O agente de IA pesquisa o caso, lê o texto relevante e responde com citações que abrem a fonte na passagem exata. Use-o diretamente na stella ou conecte-o às ferramentas com as quais você já trabalha.",
     "agentEyebrow": "Agente de IA",
     "agentTitle": "Basta perguntar. Cada resposta cita a fonte.",
     "bringEditorToFront": "Trazer o editor da stella para a frente",
     "bringTerminalToFront": "Trazer o terminal da stella para a frente",
     "bringWorkspaceToFront": "Trazer o espaço de trabalho da stella para a frente",
-    "controlBody": "A stella é um software jurídico de código aberto que você pode auto-hospedar: inspecione o código, rode do seu jeito e exporte tudo em formatos padrão; sem dependência de fornecedor.",
-    "controlEyebrow": "Feito para o controle",
+    "controlBody": "A stella é um software jurídico de <gh>código aberto</gh> que você pode auto-hospedar: inspecione o código, rode do seu jeito e exporte tudo em formatos padrão.",
     "controlTitle": "Mantenha o controle da infraestrutura.",
-    "dataBody": "Jurisprudência oficial e registros empresariais carregados direto no caso, em cada jurisdição onde você atua. A anonimização mantém os dados identificáveis longe da IA.",
+    "dataBody": "Jurisprudência e registros empresariais carregados direto no caso, em cada jurisdição onde você atua. A anonimização mantém os dados identificáveis longe da IA.",
     "dataEyebrow": "Dados jurídicos",
     "dataMainAlt": "Uma decisão judicial oficial aberta na stella",
     "dataTitle": "Jurisprudência e registros à mão.",
@@ -873,13 +872,13 @@
     "exploreTemplates": "Explorar os modelos",
     "exploreWorkspace": "Explorar o espaço de trabalho",
     "eyebrow": "Um espaço de trabalho conectado",
-    "intro": "Os materiais, a revisão e os documentos finalizados ficam no caso e se encadeiam. Você trabalha no caso junto com a IA, e cada resposta aponta a passagem exata da fonte.",
+    "intro": "Os materiais, a revisão e os documentos finalizados ficam no caso e se encadeiam. Você pode trabalhar no caso junto com a IA, e cada passo dela é verificável.",
     "openEditor": "Abrir o editor",
     "proofByokBody": "Use suas próprias chaves de provedor para os recursos de IA.",
     "proofByokTitle": "Traga seus próprios modelos",
     "proofOpenSourceBody": "Inspecione o código e mantenha um sistema portátil.",
     "proofOpenSourceTitle": "Código aberto",
-    "proofPermissionsBody": "As solicitações ficam restritas ao usuário e ao espaço de trabalho.",
+    "proofPermissionsBody": "Cada ação fica dentro das permissões do usuário e do espaço de trabalho.",
     "proofPermissionsTitle": "Respeita as permissões",
     "proofSelfHostBody": "Execute a stella em uma infraestrutura que você controla.",
     "proofSelfHostTitle": "Auto-hospedável",
@@ -888,8 +887,8 @@
     "title": "Um caso. Dos documentos à resposta.",
     "velocityAll": "Todas as novidades",
     "velocityTitle": "O que lançamos ultimamente.",
-    "workspaceBody": "Documentos, prazos, revisão estruturada e redação ficam juntos, pesquisáveis em todos os casos. Abra um caso, veja o trabalho em contexto e vá de uma tabela ao documento subjacente sem reconstruir o caminho.",
-    "workspaceEyebrow": "Espaço de trabalho do caso",
+    "workspaceBody": "Documentos, prazos, revisão estruturada e redação ficam juntos, pesquisáveis em todos os casos.",
+    "workspaceEyebrow": "Espaço de trabalho",
     "workspaceTitle": "Conduza o caso inteiro em um só lugar."
   }
 }

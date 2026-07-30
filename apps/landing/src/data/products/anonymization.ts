@@ -30,11 +30,11 @@ export const anonymization: Product = {
     },
     {
       title: "Works in chat and review",
-      body: "Runs directly in the chat composer and in document review, not in a separate tool.",
+      body: "Runs directly in chat and in document review, not in a separate tool.",
     },
     {
       title: "Your terms included",
-      body: "Add your organisation's terms and blacklists so the names that matter to you are always caught.",
+      body: "Add your organisation's own terms and name lists so the names that matter to you are always caught.",
     },
     {
       title: "Reviewable output",

@@ -7,7 +7,7 @@ import { getChangelogReleases, getReleaseKind } from "../lib/changelog";
 import { resolveProductHrefs } from "../data/products/links";
 import { resolveProductEyebrows } from "../data/site-nav";
 import { resolveSceneWindowLabels } from "../data/product-story";
-import { getTranslations } from "../i18n/utils";
+import { getTranslations, requireLinkedSegment } from "../i18n/utils";
 import { defaultLocale, isLocale } from "../i18n/config";
 
 const rawLocale = Astro.currentLocale ?? defaultLocale;
@@ -37,14 +37,7 @@ const githubUrl = "https://github.com/stella/stella";
 // open-source phrase; the marked span renders as a link to the repository.
 // Every catalog must carry exactly one pair — fail loudly rather than
 // rendering a marker to visitors.
-const subtitleRaw = t("hero.subtitle");
-const subtitleMatch = /^(.*)<gh>(.+?)<\/gh>(.*)$/su.exec(subtitleRaw);
-if (!subtitleMatch) {
-  throw new Error(
-    "hero.subtitle must wrap the open-source phrase in <gh>…</gh> markers",
-  );
-}
-const [, subtitleBefore, subtitleLinked, subtitleAfter] = subtitleMatch;
+const subtitle = requireLinkedSegment("hero.subtitle", t("hero.subtitle"));
 ---
 
 <Base
@@ -149,13 +142,13 @@ const [, subtitleBefore, subtitleLinked, subtitleAfter] = subtitleMatch;
             style="color: color-mix(in srgb, var(--foreground) 72%, var(--muted-foreground))"
             class="mt-6 max-w-2xl text-balance text-center text-lg leading-[1.55] sm:text-xl"
           >
-            {subtitleBefore}<a
+            {subtitle.before}<a
               href={githubUrl}
               target="_blank"
               rel="noopener noreferrer"
               class="underline underline-offset-4 transition-opacity hover:opacity-70"
-              >{subtitleLinked}</a
-            >{subtitleAfter}
+              >{subtitle.linked}</a
+            >{subtitle.after}
           </p>
           <div
             data-reveal

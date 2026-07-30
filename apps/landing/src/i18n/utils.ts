@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { createTranslator } from "use-intl/core";
 
 import { defaultLocale, locales, localeCodes, type Locale } from "./config";
@@ -53,6 +54,52 @@ export const getTranslations = (locale: Locale) =>
 // beside the translator rather than in `data/site-nav.ts` so data modules can
 // reference a catalog key without importing the nav (which imports them back).
 export type TranslationKey = Parameters<ReturnType<typeof getTranslations>>[0];
+
+// --- Linked segments inside a translated sentence ---
+
+/**
+ * A catalog value split around its `<gh>…</gh>` marker pair. Copy that carries
+ * a link inside running prose marks the linked words in every locale, because
+ * only the translator knows which words the phrase becomes in their language.
+ */
+export type LinkedSegment = {
+  before: string;
+  linked: string;
+  after: string;
+};
+
+const LINKED_SEGMENT = /^(.*)<gh>(.+?)<\/gh>(.*)$/su;
+
+/**
+ * Split a value around its `<gh>…</gh>` markers, or null when it carries none.
+ * Callers that require the link throw on null rather than rendering a raw
+ * marker to visitors; callers where the link is optional render the plain
+ * value.
+ */
+export const splitLinkedSegment = (value: string): LinkedSegment | null => {
+  const match = LINKED_SEGMENT.exec(value);
+  if (!match) {
+    return null;
+  }
+  const [, before, linked, after] = match;
+  return { before, linked, after };
+};
+
+/**
+ * `splitLinkedSegment` for a key whose every catalog must carry the markers:
+ * a locale that drops them fails the build instead of shipping `<gh>` to a
+ * reader.
+ */
+export const requireLinkedSegment = (
+  key: string,
+  value: string,
+): LinkedSegment => {
+  const segment = splitLinkedSegment(value);
+  if (!segment) {
+    panic(`${key} must wrap the linked phrase in <gh>…</gh> markers`);
+  }
+  return segment;
+};
 
 // --- URL helpers (locale routing + multilingual SEO) ---
 

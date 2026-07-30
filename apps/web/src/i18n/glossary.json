@@ -1033,6 +1033,53 @@
         "fr": "Clair",
         "pt-BR": "Claro"
       }
+    },
+    {
+      "id": "self-hosting",
+      "en": "Self-host",
+      "note": "Running stella on infrastructure the customer controls. Each locale settles one rendering: the English loan where that market's practitioners actually write it (cs/sk/pl `self-hosting`, de `Self-Hosting`), the native term where one genuinely won (fr `auto-hebergement`, es `autoalojamiento`, pt-BR `auto-hospedagem`, hu `sajat uzemeltetes`, ar الاستضافة الذاتية), and a descriptive phrase in et/lt/lv, where no native noun is attested and coining one would be an invention. The forbidden forms are the ones that read as a hosting *plan bought from a provider* rather than running the software yourself (cs `vlastni hosting`, sk `vlastny hosting`, pl `hosting wlasny`), plus de `Eigenbetrieb` (a German public-law term for a municipal enterprise) and two unattested coinages (lt `savarankiskas talpinimas`, which appears only in machine-translated affiliate pages, lv `pasmitinasana`). Lint-only entry (not tabulated in TERMINOLOGY.md).",
+      "keyTriggers": ["selfHost"],
+      "forbidden": {
+        "cs": [
+          "vlastní hosting",
+          "vlastního hostingu",
+          "vlastnímu hostingu",
+          "vlastním hostingu"
+        ],
+        "sk": [
+          "vlastný hosting",
+          "vlastného hostingu",
+          "vlastnému hostingu",
+          "vlastnom hostingu"
+        ],
+        "pl": ["hosting własny", "hostingu własnego", "hostingiem własnym"],
+        "de": ["Eigenbetrieb", "Eigenbetriebs", "Eigenbetriebe"],
+        "lt": [
+          "savarankiškas talpinimas",
+          "savarankiško talpinimo",
+          "savarankišką talpinimą"
+        ],
+        "lv": [
+          "pašmitināšana",
+          "pašmitināšanas",
+          "pašmitināšanai",
+          "pašmitināšanu"
+        ]
+      },
+      "translations": {
+        "ar": "الاستضافة الذاتية",
+        "cs": "self-hosting",
+        "sk": "self-hosting",
+        "pl": "self-hosting",
+        "de": "Self-Hosting",
+        "et": "oma serveris",
+        "hu": "saját üzemeltetés",
+        "lt": "savame serveryje",
+        "lv": "savā serverī",
+        "es": "autoalojamiento",
+        "fr": "auto-hébergement",
+        "pt-BR": "auto-hospedagem"
+      }
     }
   ]
 }

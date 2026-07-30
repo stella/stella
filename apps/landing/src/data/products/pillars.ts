@@ -1,7 +1,9 @@
 // The three pillars from the repo README ("Data infrastructure", "Legal
 // intelligence", "Workspace"). The Product menu, nav ordering, and footer all
 // read the labels and slug ordering from here, so the landing can't drift
-// from the README's structure.
+// from the README's structure. The menu labels are shorter than the README's
+// section names where the longer form reads as jargon on a marketing surface
+// ("Data", not "Data infrastructure"); the ids and slug ordering are the spine.
 //
 // `slugs` lists which product pages belong to each pillar, in order.
 
@@ -24,7 +26,7 @@ export type Pillar = {
 export const pillars = [
   {
     id: "data",
-    label: "Data infrastructure",
+    label: "Data",
     slugs: ["public-data", "anonymization"],
   },
   {

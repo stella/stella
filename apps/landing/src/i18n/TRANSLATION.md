@@ -54,6 +54,40 @@ headline resists translation twice, stop translating it and write the claim
 a native marketer would make; matching the section's actual content beats
 matching the English syntax.
 
+## The reader is a lawyer, not a developer
+
+Developer vocabulary is banned on every marketing surface except the CLI & MCP
+page (`products.cli-mcp.*` and `mcpProof.*`, which render for a technical
+audience and may name registries, capabilities, scopes, and OAuth). Everywhere
+else — the homepage, the other product pages, every meta string — copy is
+written the way a practising lawyer would say it.
+
+The canonical failure is Czech **"typovaný přístup"**, a faithful translation of
+"typed access". No translator invented it: the English source said _typed
+clients_, _typed access_, _structure-parsed_, _queried_, and _stella's Legal
+Atlas stack_, and twelve locales rendered exactly that. The lesson is where the
+fix belongs: **rewrite the English**, then re-render the fixed meaning. Words
+banned outside the CLI & MCP surface, with the replacement that carries the same
+claim:
+
+| Banned in the source           | Say instead                                           |
+| ------------------------------ | ----------------------------------------------------- |
+| typed client, typed access     | connected register, direct access, "look up"          |
+| stack (data / ingestion)       | name the thing itself (`stella's Legal Atlas`)        |
+| parse, parser, structure-parse | "keeps its structure", "with the structure preserved" |
+| query (verb), queried from     | search, look up, consult                              |
+| ingest                         | collect                                               |
+| scraped                        | second-hand, third-party                              |
+| blacklist                      | name list                                             |
+| prompt, tool definition        | instruction, tool                                     |
+| chat composer                  | chat                                                  |
+| scoped to                      | "stays within the permissions of"                     |
+| render (a document)            | look, appear                                          |
+
+The tell for a new one: the word names how stella is built rather than what the
+reader gets. When you catch one, fix the `en` string **and** its twin in
+`data/products/<slug>.ts`; `menu-copy.test.ts` fails if you fix only one.
+
 ## Register per locale
 
 Each catalog has an established register. Stay consistent **within the
@@ -174,6 +208,23 @@ juridique open source_ — the renderings those locales' `meta.homeDescription`
 already uses. Reach for an existing lint-safe wording before coining a new
 one; a third synonym costs more than the repetition it avoids.
 
+### Linking the phrase: the `<gh>…</gh>` markers
+
+Where "open source" appears in running prose on the homepage, the phrase links
+to the repository. Only the translator knows which words carry the term in their
+language, so the catalog marks them: `hero.subtitle` and `story.controlBody`
+wrap each locale's own rendering in `<gh>…</gh>`, and
+`requireLinkedSegment(key, value)` in `i18n/utils.ts` splits the value into
+`before` / `linked` / `after`. It throws when a catalog drops the pair, so a
+missing marker fails the build instead of rendering `<gh>` to a reader; the
+plain `splitLinkedSegment` returns null for surfaces where the link is optional.
+
+Two homepage strings carry the term and are deliberately not marked:
+`meta.homeDescription` (a meta tag, not prose) and `story.proofOpenSourceTitle`
+(a proof-card label whose card already pairs with the `story.sourceOnGitHub`
+link). Product-page copy is out of scope: the markers belong where the homepage
+renders them.
+
 ### "open source" per locale
 
 The term itself is rendered per locale by whichever form that language's
@@ -202,6 +253,64 @@ Arabic have fully dominant native terms; forcing either direction
 everywhere reads foreign in half the markets. A plain "open/otevřené/
 otwarte" adjective is NOT a substitute for the technical term in the
 identity phrase.
+
+### Self-hosting per locale
+
+Three families, chosen by what each market's practitioners actually write, not
+by whether the word is native. `glossary.json` (`nouns` → `self-hosting`) bans
+the wrong renderings, keyed on `selfHost` in the key path plus the English
+trigger, so the split cannot come back silently.
+
+| Locale | Noun (button, card title)                          | Verb phrase (body copy)                 |
+| ------ | -------------------------------------------------- | --------------------------------------- |
+| ar     | الاستضافة الذاتية                                  | استضافته ذاتياً                         |
+| cs     | self-hosting / _Na vlastní infrastruktuře_         | provozovat na vlastní infrastruktuře    |
+| sk     | self-hosting / _Na vlastnej infraštruktúre_        | prevádzkovať na vlastnej infraštruktúre |
+| pl     | self-hosting / _Na własnej infrastrukturze_        | uruchomić na własnej infrastrukturze    |
+| de     | Self-Hosting / _Zum Selbsthosten_                  | selbst hosten                           |
+| fr     | auto-hébergement / _Auto-hébergeable_              | auto-héberger                           |
+| es     | autoalojamiento / _Autoalojable_                   | autoalojar                              |
+| pt-BR  | auto-hospedagem / _Auto-hospedável_                | auto-hospedar                           |
+| hu     | saját üzemeltetés / _Saját üzemeltetésű_           | saját maga is üzemeltetheti             |
+| et     | _Oma serveris_ / _Ise majutatav_                   | ise majutada                            |
+| lt     | _Savame serveryje_ / _Diegiama savo serveryje_     | įdiegti savo serveryje                  |
+| lv     | _Savā serverī_ / _Izvietojams savā infrastruktūrā_ | izvietot savā infrastruktūrā            |
+
+_Loan, because the loan is the term._ German `Self-Hosting` is a naturalized
+German noun (heise's own "Self-Hosting-Kompendium", Hetzner's product page), and
+cs/sk/pl practitioners write it untranslated (interval.cz "Má self-hosting ještě
+smysl?", root.cz "self-hosted řešení", sekurak.pl "aplikacją self-hosted"). None
+of them needs an `identicalToSource` entry: the loan is a noun (`self-hosting`)
+where the English button is a verb (`Self-host`), so the strings differ. If a
+future edit makes them match, that is a genuine cognate and belongs in the
+baseline.
+
+_Native, because the native term won._ French `auto-hébergement` is the
+strongest coinage of the twelve (its own fr.wikipedia article, a standing
+LinuxFr tag, Korben's "logiciels auto-hébergés"); the English loan is absent
+from French tech writing. Same for es `autoalojado` (Genbeta, Nextcloud ES),
+pt-BR `auto-hospedagem` (alongside the loan, which Brazilian pages gloss with
+it), hu `saját üzemeltetés`, and ar الاستضافة الذاتية.
+
+_Descriptive, because no native noun exists._ Estonian, Lithuanian, and Latvian
+have a settled word for hosting (`majutus`, `talpinimas`, `mitināšana`) and none
+for self-hosting. Every candidate found was either a coinage or, for lt
+`savarankiškas talpinimas`, machine-translated affiliate spam. Those three
+locales say where it runs ("in your own server", "on your own infrastructure")
+rather than inventing a noun; revisit if one settles.
+
+Two rejected forms are worth recording. Czech **"Vlastní hosting"** — the string
+this section replaced — reads as _a hosting plan you bought_, because Czech
+`hosting` denotes the purchased service; the one Czech article using it had to
+gloss "(self-hosting)" on first mention. German **"Eigenbetrieb"** is a
+public-law term for a municipal enterprise, which is a live collision on a legal
+product's page.
+
+**Known divergence:** `apps/web`'s `settings.account.desktopSelfHostTitle` uses
+the loan in all twelve locales, including fr, es, hu, and pt-BR, where this table
+takes the native term. That is a technical settings label rather than a settled
+product term, so the landing does not copy it; align the app on this table when
+that screen is next touched.
 
 ## The hero: one structure, every locale
 
@@ -271,6 +380,20 @@ product is named once per locale across the menu, the footer, and its own page.
 | pl     | Obszar roboczy     | Edytor      | Szablony   | Przegląd tabelaryczny | Agent AI              | Anonimizacja   | Dane publiczne    |
 | pt-BR  | Espaço de trabalho | Editor      | Modelos    | Revisão tabular       | Agente de IA          | Anonimização   | Dados públicos    |
 | sk     | Pracovný priestor  | Editor      | Vzory      | Tabuľková revízia     | AI agent              | Anonymizácia   | Verejné dáta      |
+
+**The agent is always named with its AI qualifier on marketing surfaces.** Bare
+"agent" never names the product concept: not in a headline, not in a body
+sentence, not in a FAQ, and not when the eyebrow directly above already says it.
+Take the AI-qualified form from the table's _AI agent_ column and decline it
+(cs _AI agenta_, de _KI-Agenten_, lt _DI agentui_, hu _AI-ügynököt_). Inside one
+string, qualify the first mention only; a repeat a clause later may stay a
+pronoun where the qualified repeat reads clunky. Generic mentions of third-party
+agents follow the same rule ("Tools for AI agents", "Connect compatible AI
+agents"): a reader who meets a bare "agent" on a legal site does not think of
+software. This is a wording rule with no lint behind it, deliberately — bare
+_agent_ is a substring of every qualified form, so a `forbidden` entry would
+fire on the correct copy. Grep each locale for its agent word after touching
+`story.*`, `products.*`, `nav.*`, or `footer.*`.
 
 No cell in that table is a new translation. Each one is the `footer.*`
 descriptor the same locale already used for the same product page, copied

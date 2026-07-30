@@ -25,7 +25,7 @@ export const cliMcp: Product = {
   quickAnswer: {
     question: "What are the stella CLI and MCP server?",
     answer:
-      "They are two interfaces to the same stella capabilities. The CLI mirrors the MCP tool registry as commands, while the MCP server lets compatible agents and tools work with matters, documents, templates, and public legal data under the same access controls.",
+      "They are two interfaces to the same stella capabilities. The CLI mirrors the MCP tool registry as commands, while the MCP server lets compatible AI agents and tools work with matters, documents, templates, and public legal data under the same access controls.",
   },
   capabilities: [
     {
@@ -46,7 +46,7 @@ export const cliMcp: Product = {
     },
     {
       title: "Structured output",
-      body: "Commands return machine-readable JSON for scripts and agents as well as readable terminal output for people.",
+      body: "Commands return machine-readable JSON for scripts and AI agents as well as readable terminal output for people.",
     },
     {
       title: "Self-host friendly",
@@ -72,7 +72,7 @@ export const cliMcp: Product = {
       bullets: [
         "Expose matters, documents, case law, templates, and other approved tools",
         "Keep the capability catalogue and CLI commands generated from one registry",
-        "Connect compatible agents without copying legal data into another workspace",
+        "Connect compatible AI agents without copying legal data into another workspace",
       ],
       media: {
         type: "preview",

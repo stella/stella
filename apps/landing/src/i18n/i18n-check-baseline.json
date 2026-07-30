@@ -20,7 +20,8 @@
     "nav.products.workspace.title",
     "products.cli-mcp.adjacent.0.body",
     "products.workspace.capabilities.0.title",
-    "story.agentEyebrow"
+    "story.agentEyebrow",
+    "story.workspaceEyebrow"
   ],
   "identicalToSource": {
     "demo.documents": [
@@ -84,6 +85,9 @@
       "pl",
       "pt-BR",
       "sk"
+    ],
+    "nav.pillars.data": [
+      "cs"
     ],
     "nav.products.agent.eyebrow": [
       "cs",

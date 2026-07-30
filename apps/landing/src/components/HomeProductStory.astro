@@ -4,7 +4,7 @@ import type { ProductSlug } from "../data/products/pillars";
 import { resolveSceneWindowLabels } from "../data/product-story";
 import type { TranslationKey } from "../i18n/utils";
 import { defaultLocale, isLocale } from "../i18n/config";
-import { getTranslations } from "../i18n/utils";
+import { getTranslations, requireLinkedSegment } from "../i18n/utils";
 import { CliMcpPreview } from "./react/previews/CliMcpPreview";
 import ThemeImage from "./ThemeImage.astro";
 
@@ -12,6 +12,12 @@ const rawLocale = Astro.currentLocale ?? defaultLocale;
 const locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
 const t = getTranslations(locale);
 const sceneWindowLabels = resolveSceneWindowLabels(t);
+// Same <gh>…</gh> contract as the hero: the locale marks its own open-source
+// phrase and the marked span links to the repository.
+const controlBody = requireLinkedSegment(
+  "story.controlBody",
+  t("story.controlBody"),
+);
 
 // Copy is referenced by TranslationKey (not literal strings) so a renamed or
 // removed message key fails typecheck instead of rendering the raw key.
@@ -252,20 +258,20 @@ const proofItems = [
   <div class="control-rail mx-auto max-w-300 overflow-hidden rounded-[1.65rem]">
     <div class="grid gap-8 p-7 sm:p-9 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,2.65fr)] lg:items-center lg:p-12">
       <div data-reveal>
-        <p
-          class="text-xs font-medium uppercase tracking-[0.2em]"
-          style="color: var(--muted-foreground)"
-        >
-          {t("story.controlEyebrow")}
-        </p>
-        <h2 id="control-title" class="mt-3 text-balance font-display text-3xl font-medium leading-[1.08] sm:text-4xl">
+        <h2 id="control-title" class="text-balance font-display text-3xl font-medium leading-[1.08] sm:text-4xl">
           {t("story.controlTitle")}
         </h2>
         <p
           class="mt-4 text-pretty text-base leading-7"
           style="color: var(--muted-foreground)"
         >
-          {t("story.controlBody")}
+          {controlBody.before}<a
+            href="https://github.com/stella/stella"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="underline underline-offset-4 transition-opacity hover:opacity-70"
+            >{controlBody.linked}</a
+          >{controlBody.after}
         </p>
       </div>
       <ul class="proof-list grid sm:grid-cols-2" data-reveal style="--reveal-delay: 100ms">

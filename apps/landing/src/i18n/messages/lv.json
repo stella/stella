@@ -63,12 +63,12 @@
   },
   "hero": {
     "badge": "Aktīvi tiek attīstīts",
-    "selfHost": "Mitināt pašiem",
+    "selfHost": "Savā serverī",
     "subtitle": "<gh>Atvērtā pirmkoda</gh> juridiskā darbvieta: lietas, dokumenti, pārskatīšana un AI aģents, kas atbild, norādot avotus.",
     "title": "Lieciet AI strādāt katrā lietā."
   },
   "home": {
-    "ctaTitle": "Ienesiet AI savā advokātu birojā."
+    "ctaTitle": "Ienesiet AI savā juridiskajā praksē."
   },
   "mcpProof": {
     "contextBody": "Ienesiet apstiprinātās lietas un juridiskos datus Claude vai jebkurā ar MCP saderīgā klientā.",
@@ -78,10 +78,10 @@
     "subtitle": "Ienesiet aktuālo lietas kontekstu rīkos, ar kuriem strādājat.",
     "title": "Darbvieta tagad saprot MCP.",
     "toolsBody": "Meklējiet, lasiet un aizpildiet veidnes, izmantojot to pašu reģistru, uz kura balstās lietotnes stella CLI.",
-    "toolsTitle": "Rīki aģentiem."
+    "toolsTitle": "Rīki AI aģentiem."
   },
   "meta": {
-    "homeDescription": "Atvērtā pirmkoda juridiskā darbvieta: dokumenti, lietas, pārskatīšana un izpēte. Mitiniet paši vai izmantojiet mūsu mākoni. AI pēc lietojuma, bez piesaistes.",
+    "homeDescription": "Atvērtā pirmkoda juridiskā darbvieta: dokumenti, lietas, pārskatīšana un izpēte. Izvietojiet paši vai mūsu mākonī. AI pēc lietojuma, bez piesaistes.",
     "homeTitle": "stella | atvērtā pirmkoda juridiskā darbvieta"
   },
   "nav": {
@@ -95,14 +95,14 @@
     "github": "stella vietnē GitHub",
     "openMenu": "Atvērt navigāciju",
     "pillars": {
-      "data": "Datu infrastruktūra",
+      "data": "Dati",
       "intelligence": "Juridiskā analītika",
       "workspace": "Darbvieta"
     },
     "product": "Produkts",
     "products": {
       "agent": {
-        "blurb": "Sarunājieties ar savām lietām, dokumentiem, reģistriem un pievienotajiem rīkiem vienuviet. Aģents rīkojas ar apstiprinājumu un avotu priekšskatījumiem, atbildes balsta uz citātiem un paplašinās ar prasmēm un ārējiem savienotājiem.",
+        "blurb": "Sarunājieties ar savām lietām, dokumentiem, reģistriem un pievienotajiem rīkiem vienuviet. AI aģents rīkojas ar apstiprinājumu un avotu priekšskatījumiem, atbildes balsta uz citātiem un paplašinās ar prasmēm un ārējiem savienotājiem.",
         "eyebrow": "AI aģents",
         "title": "AI aģents, kas strādā ar jūsu lietām, failiem un rīkiem."
       },
@@ -122,9 +122,9 @@
         "title": "Rediģējiet Word dokumentus pārlūkā, nepametot lietu."
       },
       "public-data": {
-        "blurb": "Tiesu prakse un uzņēmumu reģistri no oficiāliem publiskiem avotiem, ko apkopo un ar saglabātu struktūru apstrādā lietotnes stella Legal Atlas. Izlasiet nolēmumu, pārbaudiet uzņēmumu, sekojiet citātiem un atsaucieties uz jebkuru no tiem lietā vai nododiet to AI aģentam.",
+        "blurb": "Tiesu prakse un uzņēmumu reģistri no oficiāliem publiskiem avotiem, ko, saglabājot to struktūru, apkopo lietotnes stella Legal Atlas. Izlasiet nolēmumu, pārbaudiet uzņēmumu, sekojiet citātiem un atsaucieties uz jebkuru no tiem lietā vai nododiet to AI aģentam.",
         "eyebrow": "Publiskie dati",
-        "title": "Oficiāli juridiskie dati, gatavi ienešanai lietā."
+        "title": "Juridiskie dati, gatavi ienešanai lietā."
       },
       "tabular-review": {
         "blurb": "Uzdodiet jautājumus visai dokumentu kopai un saņemiet strukturētas atbildes kā ar lietu saistītu tabulu: kārtojamu, filtrējamu un izsekojamu līdz pirmavota tekstam. Veidots due diligence, pierādījumu atklāšanas un izpētes darbam.",
@@ -166,7 +166,7 @@
           "title": "Strādā ar visām jūsu lietām"
         },
         "1": {
-          "body": "Ienesiet dokumentus sarunā un lūdziet aģentam tos izlasīt, salīdzināt vai apkopot.",
+          "body": "Ienesiet dokumentus sarunā un lūdziet AI aģentam tos izlasīt, salīdzināt vai apkopot.",
           "title": "Lasa jūsu failus"
         },
         "2": {
@@ -174,11 +174,11 @@
           "title": "Pievienotie rīki"
         },
         "3": {
-          "body": "Aģents pajautā, pirms rīkojas, tāpēc katru soli kontrolējat jūs.",
+          "body": "AI aģents pajautā, pirms rīkojas, tāpēc katru soli kontrolējat jūs.",
           "title": "Apstiprinājums pirms darbības"
         },
         "4": {
-          "body": "Redziet, ko aģents lasa: pie katra soļa tiek rādīts avota priekšskatījums.",
+          "body": "Redziet, ko AI aģents lasa: pie katra soļa tiek rādīts avota priekšskatījums.",
           "title": "Avotu priekšskatījumi"
         },
         "5": {
@@ -187,15 +187,15 @@
         }
       },
       "cta": {
-        "heading": "Uzticiet aģentam īstu lietu."
+        "heading": "Uzticiet AI aģentam īstu lietu."
       },
       "faqs": {
         "0": {
           "answer": "Nē. Pirms rīkoties tas lūdz apstiprinājumu un parāda avota priekšskatījumu tam, ko lasa, tāpēc katru soli varat izsekot un apstiprināt.",
-          "question": "Vai aģents rīkojas patstāvīgi?"
+          "question": "Vai AI aģents rīkojas patstāvīgi?"
         },
         "1": {
-          "answer": "Ar prasmēm (atkārtoti izmantojamām uzvednēm un rīku aprakstiem) un ar MCP saderīgiem ārējiem savienotājiem. Abi paplašina to, ko aģents var sasniegt, nemainot pašu sarunu.",
+          "answer": "Ar prasmēm (atkārtoti izmantojamām instrukcijām un rīkiem) un ar MCP saderīgiem ārējiem savienotājiem. Abi paplašina to, ko AI aģents var sasniegt, nemainot pašu sarunu.",
           "question": "Kā pievienot jaunas iespējas?"
         },
         "2": {
@@ -203,10 +203,10 @@
           "question": "No kurienes nāk tā atbildes?"
         }
       },
-      "metaDescription": "Sarunājieties ar savām lietām, dokumentiem, reģistriem un rīkiem. Aģents rīkojas ar apstiprinājumu, atbild ar citātiem un paplašinās ar prasmēm.",
+      "metaDescription": "Sarunājieties ar savām lietām, dokumentiem, reģistriem un rīkiem. AI aģents rīkojas ar apstiprinājumu, atbild ar citātiem un paplašinās ar prasmēm.",
       "metaTitle": "AI aģents juridiskajām lietām | stella",
       "quickAnswer": {
-        "answer": "Aģents sarunājas ar jūsu lietām, failiem, uzņēmumu reģistriem un pievienotajiem rīkiem. Pirms rīkoties tas lūdz apstiprinājumu, parāda avota priekšskatījumu tam, ko lasa, un atbildes balsta uz citātiem. To varat paplašināt ar atkārtoti izmantojamām prasmēm un ar MCP saderīgiem ārējiem savienotājiem.",
+        "answer": "AI aģents sarunājas ar jūsu lietām, failiem, uzņēmumu reģistriem un pievienotajiem rīkiem. Pirms rīkoties tas lūdz apstiprinājumu, parāda avota priekšskatījumu tam, ko lasa, un atbildes balsta uz citātiem. To varat paplašināt ar atkārtoti izmantojamām prasmēm un ar MCP saderīgiem ārējiem savienotājiem.",
         "question": "Ko spēj AI aģents?"
       },
       "sections": {
@@ -214,22 +214,22 @@
           "bullets": {
             "0": "Sarunājieties par lietām, dokumentiem un kontaktiem vienā sarunā",
             "1": "Ienesiet uzņēmumu un reģistru datus tajā pašā pavedienā",
-            "2": "Nododiet tabulāro pārskatīšanu aģentam papildu jautājumiem"
+            "2": "Nododiet tabulāro pārskatīšanu AI aģentam papildu jautājumiem"
           },
           "heading": "Viens jautājums visai lietai"
         },
         "1": {
           "bullets": {
             "0": "Katra darbība gaida jūsu apstiprinājumu",
-            "1": "Avota priekšskatījums rāda, ko aģents izlasīja katrā solī",
+            "1": "Avota priekšskatījums rāda, ko AI aģents izlasīja katrā solī",
             "2": "Citāti atver avota dokumentu tieši vajadzīgajā vietā"
           },
           "heading": "Kontrole paliek jums"
         },
         "2": {
           "bullets": {
-            "0": "Prasmes ir uzvednes un rīku apraksti, ko izmantot dažādās lietās",
-            "1": "Ārējie savienotāji ir saderīgi ar MCP, tāpēc aģents sasniedz vairāk rīku",
+            "0": "Prasmes ir instrukcijas un rīki, ko izmantot dažādās lietās",
+            "1": "Ārējie savienotāji ir saderīgi ar MCP, tāpēc AI aģents sasniedz vairāk rīku",
             "2": "Pievienojiet iespējas, nemainot sarunas darbību"
           },
           "heading": "Paplašiniet to ar prasmēm un savienotājiem"
@@ -257,11 +257,11 @@
           "title": "Identificējošā informācija paliek ārpusē"
         },
         "1": {
-          "body": "Darbojas tieši tērzēšanas lodziņā un dokumentu pārskatīšanā, nevis atsevišķā rīkā.",
+          "body": "Darbojas tieši sarunā un dokumentu pārskatīšanā, nevis atsevišķā rīkā.",
           "title": "Darbojas tērzēšanā un pārskatīšanā"
         },
         "2": {
-          "body": "Pievienojiet savas organizācijas terminus un sarakstus, lai jums svarīgie vārdi vienmēr tiktu atrasti.",
+          "body": "Pievienojiet savas organizācijas terminus un vārdu sarakstus, lai jums svarīgie vārdi vienmēr tiktu atrasti.",
           "title": "Ar jūsu pašu terminiem"
         },
         "3": {
@@ -340,12 +340,12 @@
           "title": "Darbvietas atļaujas paliek spēkā"
         },
         "4": {
-          "body": "Komandas atgriež mašīnlasāmu JSON skriptiem un aģentiem, kā arī lasāmu termināļa izvadi cilvēkiem.",
+          "body": "Komandas atgriež mašīnlasāmu JSON skriptiem un AI aģentiem, kā arī lasāmu termināļa izvadi cilvēkiem.",
           "title": "Strukturēta izvade"
         },
         "5": {
           "body": "Vērsiet CLI un MCP klientus uz stella serveri, ko darbina jūsu organizācija.",
-          "title": "Der pašmitināšanai"
+          "title": "Der izvietošanai savā infrastruktūrā"
         }
       },
       "cta": {
@@ -368,7 +368,7 @@
       "metaDescription": "Meklējiet, lasiet un strādājiet ar lietotni stella no komandrindas vai ar MCP saderīga klienta. Abas saskarnes izmanto tās pašas iespējas un atļaujas.",
       "metaTitle": "MCP serveris un CLI juridiskajai darbvietai | stella",
       "quickAnswer": {
-        "answer": "Tās ir divas saskarnes uz vienām un tām pašām lietotnes stella iespējām. CLI atveido MCP rīku reģistru kā komandas, savukārt MCP serveris ļauj saderīgiem aģentiem un rīkiem strādāt ar lietām, dokumentiem, veidnēm un publiskiem juridiskiem datiem, ievērojot tos pašus piekļuves noteikumus.",
+        "answer": "Tās ir divas saskarnes uz vienām un tām pašām lietotnes stella iespējām. CLI atveido MCP rīku reģistru kā komandas, savukārt MCP serveris ļauj saderīgiem AI aģentiem un rīkiem strādāt ar lietām, dokumentiem, veidnēm un publiskiem juridiskiem datiem, ievērojot tos pašus piekļuves noteikumus.",
         "question": "Kas ir lietotnes stella CLI un MCP serveris?"
       },
       "sections": {
@@ -384,7 +384,7 @@
           "bullets": {
             "0": "Atveriet lietas, dokumentus, tiesu praksi, veidnes un citus apstiprinātus rīkus",
             "1": "Iespēju katalogs un CLI komandas tiek ģenerētas no viena reģistra",
-            "2": "Pievienojiet saderīgus aģentus, nekopējot juridiskos datus citā darbvietā"
+            "2": "Pievienojiet saderīgus AI aģentus, nekopējot juridiskos datus citā darbvietā"
           },
           "heading": "Tās pašas iespējas caur MCP"
         }
@@ -411,7 +411,7 @@
           "title": "Rediģējiet .docx failus pārlūkā"
         },
         "1": {
-          "body": "Dokuments visu laiku paliek .docx, tāpēc fonti, stili un izkārtojums tiek attēloti un saglabāti tā, kā tos izveidoja Word.",
+          "body": "Dokuments visu laiku paliek .docx, tāpēc fonti, stili un izkārtojums izskatās un tiek saglabāti tā, kā tos izveidoja Word.",
           "title": "Formatējums saglabājas"
         },
         "2": {
@@ -505,15 +505,15 @@
       },
       "capabilities": {
         "0": {
-          "body": "Nolēmumi no oficiāliem publiskiem tiesību avotiem, nevis no trešo pušu kopsavilkumiem.",
+          "body": "Nolēmumi tieši no oficiālajiem avotiem, nevis pārstāstīti kopsavilkumi.",
           "title": "Oficiāla tiesu prakse"
         },
         "1": {
-          "body": "Legal Atlas apstrādā katru nolēmumu, saglabājot tā sākotnējo struktūru.",
+          "body": "Katrs nolēmums saglabā oriģināla virsrakstus, punktus un atsauces.",
           "title": "Ar saglabātu struktūru"
         },
         "2": {
-          "body": "Tipizēti klienti valsts uzņēmumu un komercreģistriem, ko var vaicāt tieši no lietas.",
+          "body": "Meklējiet valsts uzņēmumu un komercreģistros, neizejot no lietas.",
           "title": "Uzņēmumu reģistri"
         },
         "3": {
@@ -525,7 +525,7 @@
           "title": "Pēc jurisdikcijas"
         },
         "5": {
-          "body": "Atsaucieties uz jebkuru avotu lietā, lai aģenta atbildes paliktu izsekojamas līdz tam.",
+          "body": "Atsaucieties uz jebkuru avotu lietā, lai AI aģenta atbildes paliktu izsekojamas līdz tam.",
           "title": "Pamats AI atbildēm"
         }
       },
@@ -534,11 +534,11 @@
       },
       "faqs": {
         "0": {
-          "answer": "Tiesu prakse nāk no oficiāliem publiskiem tiesību avotiem, ko apkopo un apstrādā lietotnes stella Legal Atlas. Uzņēmumu dati nāk no valsts uzņēmumu un komercreģistriem caur tipizētiem klientiem, nevis no trešo pušu kopijām.",
+          "answer": "Tiesu prakse nāk no oficiāliem publiskiem tiesību avotiem, to apkopo lietotnes stella Legal Atlas, saglabājot struktūru. Uzņēmumu dati nāk tieši no valsts uzņēmumu un komercreģistriem, nevis no trešo pušu kopijām.",
           "question": "No kurienes nāk dati?"
         },
         "1": {
-          "answer": "Divi saraksti, abi paplašinās. Tipizētie reģistru klienti jau ietver ARES (Čehija), Companies House (Apvienotā Karaliste), SEC EDGAR (ASV), KRS (Polija), PRH (Somija) un VIES (ES PVN). Papildus reģistriem oficiālie avoti tiek rādīti pēc jurisdikcijas no lietotnes stella savienotāju kataloga; piemēram, Čehijai, Spānijai un Taivānai jau ir pievienoti avoti, un tiesu prakses lasītājs ir veidots tā, lai pārlūkotu un filtrētu pēc jurisdikcijas, pievienojot arvien vairāk oficiālo avotu.",
+          "answer": "Divi saraksti, abi paplašinās. Pievienotie reģistri jau ietver ARES (Čehija), Companies House (Apvienotā Karaliste), SEC EDGAR (ASV), KRS (Polija), PRH (Somija) un VIES (ES PVN). Papildus reģistriem oficiālie avoti tiek pievienoti jurisdikciju pēc jurisdikcijas; piemēram, Čehijai, Spānijai un Taivānai jau ir pievienoti avoti, un tiesu prakses lasītājs ir veidots tā, lai pārlūkotu un filtrētu pēc jurisdikcijas, pievienojot arvien vairāk oficiālo avotu.",
           "question": "Kādas jurisdikcijas un reģistri ir aptverti?"
         },
         "2": {
@@ -549,33 +549,33 @@
       "metaDescription": "Tiesu prakse un uzņēmumu reģistri no oficiāliem publiskiem avotiem. Lasiet nolēmumus, pārbaudiet uzņēmumus, sekojiet citātiem un ienesiet tos lietā.",
       "metaTitle": "Tiesu prakse un uzņēmumu reģistri | stella",
       "quickAnswer": {
-        "answer": "Divu veidu. Oficiāla publiska tiesu prakse, apkopota un ar saglabātu struktūru apstrādāta, tāpēc varat lasīt un meklēt nolēmumus un sekot to citātiem. Un tipizēta piekļuve valsts uzņēmumu un komercreģistriem, lai oficiālus uzņēmumu datus ienestu tieši lietā. Abi ir pamatoti avoti, ko AI aģents var citēt.",
+        "answer": "Divu veidu. Oficiāla publiska tiesu prakse, apkopota, saglabājot tās struktūru, tāpēc varat lasīt un meklēt nolēmumus un sekot to citātiem. Un tieša piekļuve valsts uzņēmumu un komercreģistriem, lai oficiālus uzņēmumu datus ienestu tieši lietā. Abi ir pamatoti avoti, ko AI aģents var citēt.",
         "question": "Kādus publiskos datus stella ienes?"
       },
       "sections": {
         "0": {
           "bullets": {
             "0": "Apkopota no oficiāliem publiskiem tiesību avotiem",
-            "1": "Struktūru saglabājoši parsētāji patur virsrakstus, punktus un atsauces",
-            "2": "Pamatā ir atvērtā Legal Atlas apkopošanas sistēma"
+            "1": "Virsraksti, punkti un atsauces paliek tādi kā oriģinālā",
+            "2": "Pamatā ir lietotnes stella atvērtais Legal Atlas"
           },
           "heading": "Tiesu prakse no oficiāliem avotiem ar saglabātu struktūru"
         },
         "1": {
           "bullets": {
-            "0": "Tipizēti klienti valsts reģistriem: ARES, Companies House, SEC EDGAR, KRS, PRH, VIES un citiem",
+            "0": "Pievienotie valsts reģistri: ARES, Companies House, SEC EDGAR, KRS, PRH, VIES un citi",
             "1": "Ienesiet oficiālus uzņēmumu datus lietā, nevis pārrakstiet tos ar roku",
             "2": "Aptvērums paplašinās, pievienojot arvien vairāk oficiālo avotu"
           },
-          "heading": "Uzņēmumu un komercreģistri, vaicāti tieši no lietas"
+          "heading": "Uzņēmumu un komercreģistri, kuros meklējat tieši no lietas"
         },
         "2": {
           "bullets": {
             "0": "Atsaucieties uz nolēmumu vai uzņēmuma ierakstu tieši lietā",
-            "1": "Aģents citē pašu avotu, nevis pārstāstu",
+            "1": "AI aģents citē pašu avotu, nevis pārstāstu",
             "2": "Meklējiet pāri visiem avotiem, ne tikai vienā"
           },
-          "heading": "Viens pamatots avots aģentam"
+          "heading": "Viens pamatots avots AI aģentam"
         }
       }
     },
@@ -852,16 +852,15 @@
     }
   },
   "story": {
-    "agentBody": "Aģents pārmeklē lietu, izlasa būtisko tekstu un atbild ar atsaucēm, kas atver avotu tieši vajadzīgajā vietā. Izmantojiet to tieši lietotnē stella vai savienojiet ar rīkiem, ar kuriem jau strādājat.",
+    "agentBody": "AI aģents pārmeklē lietu, izlasa būtisko tekstu un atbild ar atsaucēm, kas atver avotu tieši vajadzīgajā vietā. Izmantojiet to tieši lietotnē stella vai savienojiet ar rīkiem, ar kuriem jau strādājat.",
     "agentEyebrow": "AI aģents",
     "agentTitle": "Pietiek pajautāt. Katra atbilde norāda avotu.",
     "bringEditorToFront": "Pārvietot lietotnes stella redaktoru priekšplānā",
     "bringTerminalToFront": "Pārvietot lietotnes stella termināli priekšplānā",
     "bringWorkspaceToFront": "Pārvietot lietotnes stella darbvietu priekšplānā",
-    "controlBody": "stella ir atvērtā pirmkoda juridiskā programmatūra, ko varat mitināt paši: pārbaudiet kodu, darbiniet to pēc saviem noteikumiem un eksportējiet visu standarta formātos; bez piesaistes.",
-    "controlEyebrow": "Radīts kontrolei",
+    "controlBody": "stella ir <gh>atvērtā pirmkoda</gh> juridiskā programmatūra, ko varat izvietot savā infrastruktūrā: pārbaudiet kodu, darbiniet to pēc saviem noteikumiem un eksportējiet visu standarta formātos.",
     "controlTitle": "Saglabājiet kontroli pār infrastruktūru.",
-    "dataBody": "Oficiālā tiesu prakse un uzņēmumu reģistri tieši lietā, katrā jurisdikcijā, kurā strādājat. Anonimizācija tikmēr tur identificējošos datus prom no AI.",
+    "dataBody": "Tiesu prakse un uzņēmumu reģistri tieši lietā, katrā jurisdikcijā, kurā strādājat. Anonimizācija tikmēr tur identificējošos datus prom no AI.",
     "dataEyebrow": "Juridiskie dati",
     "dataMainAlt": "Oficiāls tiesas nolēmums, atvērts lietotnē stella",
     "dataTitle": "Tiesu prakse un reģistri pa rokai.",
@@ -873,23 +872,23 @@
     "exploreTemplates": "Iepazīt veidnes",
     "exploreWorkspace": "Iepazīt darbvietu",
     "eyebrow": "Savienota darbvieta",
-    "intro": "Materiāli, pārskatīšana un finalizētie dokumenti paliek lietā un balstās cits citā. Pie lietas strādājat kopā ar AI, un katra atbilde norāda precīzu avota vietu.",
+    "intro": "Materiāli, pārskatīšana un finalizētie dokumenti paliek lietā un balstās cits citā. Pie lietas varat strādāt kopā ar AI, un katrs tā solis ir pārbaudāms.",
     "openEditor": "Atvērt redaktoru",
     "proofByokBody": "AI funkcijām izmantojiet savas pakalpojumu sniedzēja atslēgas.",
     "proofByokTitle": "Izmantojiet savus modeļus",
     "proofOpenSourceBody": "Pārbaudiet kodu un saglabājiet pārnesamu sistēmu.",
     "proofOpenSourceTitle": "Atvērts pirmkods",
-    "proofPermissionsBody": "Pieprasījumi paliek lietotāja un darbvietas ietvaros.",
+    "proofPermissionsBody": "Katra darbība paliek lietotāja un darbvietas atļauju ietvaros.",
     "proofPermissionsTitle": "Ievēro atļaujas",
     "proofSelfHostBody": "Darbiniet lietotni stella infrastruktūrā, ko pārvaldāt paši.",
-    "proofSelfHostTitle": "Iespējams mitināt pašiem",
-    "selfHostGuide": "Lasīt pašmitināšanas ceļvedi",
+    "proofSelfHostTitle": "Izvietojams savā infrastruktūrā",
+    "selfHostGuide": "Lasīt izvietošanas ceļvedi",
     "sourceOnGitHub": "Pirmkods vietnē GitHub",
     "title": "Viena lieta. No dokumentiem līdz atbildei.",
     "velocityAll": "Pilns izmaiņu žurnāls",
     "velocityTitle": "Ko nesen esam izlaiduši.",
-    "workspaceBody": "Dokumenti, termiņi, strukturēta pārskatīšana un sagatavošana paliek kopā un ir meklējami visās lietās. Atveriet lietu, skatiet darbu kontekstā un pārejiet no tabulas uz pamatā esošo dokumentu, nezaudējot izsekojamību.",
-    "workspaceEyebrow": "Lietas darbvieta",
+    "workspaceBody": "Dokumenti, termiņi, strukturēta pārskatīšana un sagatavošana paliek kopā un ir meklējami visās lietās.",
+    "workspaceEyebrow": "Darbvieta",
     "workspaceTitle": "Pārvaldiet visu lietu vienā vietā."
   }
 }

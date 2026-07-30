@@ -68,7 +68,7 @@
     "title": "Put AI to work on every matter."
   },
   "home": {
-    "ctaTitle": "Bring AI to your law firm."
+    "ctaTitle": "Bring AI to your practice."
   },
   "mcpProof": {
     "contextBody": "Bring approved matters and legal data into Claude or any compatible MCP client.",
@@ -78,7 +78,7 @@
     "subtitle": "Bring live matter context into the tools where you work.",
     "title": "Workspace, meet MCP.",
     "toolsBody": "Search, read, and fill templates through the same registry that powers the stella CLI.",
-    "toolsTitle": "Tools for agents."
+    "toolsTitle": "Tools for AI agents."
   },
   "meta": {
     "homeDescription": "Open source legal workspace for documents, matters, contract review, and case-law research. Self-host or use our cloud. Usage-based AI, no vendor lock-in.",
@@ -95,14 +95,14 @@
     "github": "stella on GitHub",
     "openMenu": "Open navigation",
     "pillars": {
-      "data": "Data infrastructure",
+      "data": "Data",
       "intelligence": "Legal intelligence",
       "workspace": "Workspace"
     },
     "product": "Product",
     "products": {
       "agent": {
-        "blurb": "Chat with your matters, documents, registries, and connected tools in one place. The agent acts with approvals and source previews, grounds its answers in citations, and extends through skills and external connectors.",
+        "blurb": "Chat with your matters, documents, registries, and connected tools in one place. The AI agent acts with approvals and source previews, grounds its answers in citations, and extends through skills and external connectors.",
         "eyebrow": "AI agent",
         "title": "An AI agent that works across your matters, files, and tools."
       },
@@ -122,9 +122,9 @@
         "title": "Edit Word documents in the browser, without leaving the matter."
       },
       "public-data": {
-        "blurb": "Case law and company registries from official public sources, collected and structure-parsed by stella's Legal Atlas stack. Read a decision, look up a company, follow citations, and reference any of it from a matter or hand it to the AI agent.",
+        "blurb": "Case law and company registries from official public sources, collected by stella's Legal Atlas with their structure preserved. Read a decision, look up a company, follow citations, and reference any of it from a matter or hand it to the AI agent.",
         "eyebrow": "Public data",
-        "title": "Official legal data, ready to pull into a matter."
+        "title": "Legal data, ready to pull into a matter."
       },
       "tabular-review": {
         "blurb": "Ask questions across a whole document set and get structured answers back as a matter-scoped table — sortable, filterable, and traceable to the source text. Built for due diligence, discovery, and research.",
@@ -166,7 +166,7 @@
           "title": "Works across your matters"
         },
         "1": {
-          "body": "Bring documents into the conversation and ask the agent to read, compare, or summarise them.",
+          "body": "Bring documents into the conversation and ask the AI agent to read, compare, or summarise them.",
           "title": "Reads your files"
         },
         "2": {
@@ -174,11 +174,11 @@
           "title": "Connected tools"
         },
         "3": {
-          "body": "The agent asks before it acts, so you stay in control of each step.",
+          "body": "The AI agent asks before it acts, so you stay in control of each step.",
           "title": "Approvals before acting"
         },
         "4": {
-          "body": "See what the agent is reading with a preview of the source behind each step.",
+          "body": "See what the AI agent is reading with a preview of the source behind each step.",
           "title": "Source previews"
         },
         "5": {
@@ -187,15 +187,15 @@
         }
       },
       "cta": {
-        "heading": "Hand the agent a real matter."
+        "heading": "Hand the AI agent a real matter."
       },
       "faqs": {
         "0": {
           "answer": "No. It asks for approval before it acts, and it shows a source preview for what it reads, so you can follow and confirm each step.",
-          "question": "Does the agent act on its own?"
+          "question": "Does the AI agent act on its own?"
         },
         "1": {
-          "answer": "Through skills (reusable prompts and tool definitions) and external connectors that are MCP-compatible. Both extend what the agent can reach without changing the chat itself.",
+          "answer": "Through skills (reusable instructions and tools) and external connectors that are MCP-compatible. Both extend what the AI agent can reach without changing the chat itself.",
           "question": "How do I add new capabilities?"
         },
         "2": {
@@ -203,10 +203,10 @@
           "question": "Where do its answers come from?"
         }
       },
-      "metaDescription": "Chat with your matters, documents, registries, and connected tools. The agent acts with approvals, grounds answers in citations, and extends via skills.",
+      "metaDescription": "Chat with your matters, documents, registries, and connected tools. The AI agent acts with approvals, grounds answers in citations, and extends via skills.",
       "metaTitle": "AI agent for legal matters | stella",
       "quickAnswer": {
-        "answer": "The agent chats with your matters, files, company registries, and connected tools. It asks for approval before acting, shows a source preview for what it reads, and grounds answers in citations. You can extend it with reusable skills and external connectors that are MCP-compatible.",
+        "answer": "The AI agent chats with your matters, files, company registries, and connected tools. It asks for approval before acting, shows a source preview for what it reads, and grounds answers in citations. You can extend it with reusable skills and external connectors that are MCP-compatible.",
         "question": "What can the AI agent do?"
       },
       "sections": {
@@ -214,22 +214,22 @@
           "bullets": {
             "0": "Chat over matters, documents, and contacts in one conversation",
             "1": "Pull company and registry data into the same thread",
-            "2": "Hand a tabular review to the agent for follow-up questions"
+            "2": "Hand a tabular review to the AI agent for follow-up questions"
           },
           "heading": "Ask once, across everything in the matter"
         },
         "1": {
           "bullets": {
             "0": "Each action waits for your approval before it runs",
-            "1": "A source preview shows what the agent read for every step",
+            "1": "A source preview shows what the AI agent read for every step",
             "2": "Citations open the source document at the exact passage"
           },
           "heading": "You stay in control"
         },
         "2": {
           "bullets": {
-            "0": "Skills are prompts and tool definitions you can reuse across matters",
-            "1": "External connectors are MCP-compatible, so the agent reaches more tools",
+            "0": "Skills are instructions and tools you can reuse across matters",
+            "1": "External connectors are MCP-compatible, so the AI agent reaches more tools",
             "2": "Add capabilities without changing how the chat works"
           },
           "heading": "Extend it with skills and connectors"
@@ -257,11 +257,11 @@
           "title": "Keeps identifying details out"
         },
         "1": {
-          "body": "Runs directly in the chat composer and in document review, not in a separate tool.",
+          "body": "Runs directly in chat and in document review, not in a separate tool.",
           "title": "Works in chat and review"
         },
         "2": {
-          "body": "Add your organisation's terms and blacklists so the names that matter to you are always caught.",
+          "body": "Add your organisation's own terms and name lists so the names that matter to you are always caught.",
           "title": "Your terms included"
         },
         "3": {
@@ -340,7 +340,7 @@
           "title": "Workspace permissions apply"
         },
         "4": {
-          "body": "Commands return machine-readable JSON for scripts and agents as well as readable terminal output for people.",
+          "body": "Commands return machine-readable JSON for scripts and AI agents as well as readable terminal output for people.",
           "title": "Structured output"
         },
         "5": {
@@ -368,7 +368,7 @@
       "metaDescription": "Search, read, and work with stella from the command line or any MCP-compatible client. Both surfaces share the same capabilities, permissions, and data.",
       "metaTitle": "MCP server and CLI for your legal workspace | stella",
       "quickAnswer": {
-        "answer": "They are two interfaces to the same stella capabilities. The CLI mirrors the MCP tool registry as commands, while the MCP server lets compatible agents and tools work with matters, documents, templates, and public legal data under the same access controls.",
+        "answer": "They are two interfaces to the same stella capabilities. The CLI mirrors the MCP tool registry as commands, while the MCP server lets compatible AI agents and tools work with matters, documents, templates, and public legal data under the same access controls.",
         "question": "What are the stella CLI and MCP server?"
       },
       "sections": {
@@ -384,7 +384,7 @@
           "bullets": {
             "0": "Expose matters, documents, case law, templates, and other approved tools",
             "1": "Keep the capability catalogue and CLI commands generated from one registry",
-            "2": "Connect compatible agents without copying legal data into another workspace"
+            "2": "Connect compatible AI agents without copying legal data into another workspace"
           },
           "heading": "The same capabilities through MCP"
         }
@@ -411,7 +411,7 @@
           "title": "Edit .docx files in the browser"
         },
         "1": {
-          "body": "The document stays a .docx throughout, so fonts, styles, and layout render and save the way Word created them.",
+          "body": "The document stays a .docx throughout, so fonts, styles, and layout look and save the way Word created them.",
           "title": "Formatting stays intact"
         },
         "2": {
@@ -505,15 +505,15 @@
       },
       "capabilities": {
         "0": {
-          "body": "Decisions from official public legal sources, not scraped third-party summaries.",
+          "body": "Decisions straight from the official sources, not second-hand summaries.",
           "title": "Official case law"
         },
         "1": {
-          "body": "Legal Atlas parses each decision while keeping its original structure intact.",
+          "body": "Every decision keeps the headings, paragraphs, and references of the original.",
           "title": "Structure preserved"
         },
         "2": {
-          "body": "Typed clients for national company and commercial registries, queried from a matter.",
+          "body": "Look up national company and commercial registries without leaving the matter.",
           "title": "Company registries"
         },
         "3": {
@@ -525,7 +525,7 @@
           "title": "By jurisdiction"
         },
         "5": {
-          "body": "Reference any source from a matter so the agent's answers stay traceable to it.",
+          "body": "Reference any source from a matter so the AI agent's answers stay traceable to it.",
           "title": "Grounded for AI"
         }
       },
@@ -534,11 +534,11 @@
       },
       "faqs": {
         "0": {
-          "answer": "Case law comes from official public legal sources, ingested and parsed by stella's Legal Atlas stack. Company data comes from national company and commercial registries through typed clients, not third-party copies.",
+          "answer": "Case law comes from official public legal sources, collected by stella's Legal Atlas with its structure preserved. Company data comes straight from the national company and commercial registries, not from third-party copies.",
           "question": "Where does the data come from?"
         },
         "1": {
-          "answer": "Two lists, both expanding. Typed registry clients already include ARES (Czechia), Companies House (UK), SEC EDGAR (US), KRS (Poland), PRH (Finland), and VIES (EU VAT). Beyond registries, official sources surface per jurisdiction from stella's connector catalogue; Czechia, Spain, and Taiwan, for example, already have connected sources, and the case-law reader is built to browse and filter by jurisdiction as more official sources are added.",
+          "answer": "Two lists, both expanding. Connected registries already include ARES (Czechia), Companies House (UK), SEC EDGAR (US), KRS (Poland), PRH (Finland), and VIES (EU VAT). Beyond registries, official sources are connected jurisdiction by jurisdiction; Czechia, Spain, and Taiwan already have them, and the case-law reader lets you browse and filter by jurisdiction as more official sources are added.",
           "question": "Which jurisdictions and registries are covered?"
         },
         "2": {
@@ -549,33 +549,33 @@
       "metaDescription": "Case law and company registries from official public sources. Read decisions, look up companies, follow citations, and pull it into a matter or the AI agent.",
       "metaTitle": "Case law and company registry data | stella",
       "quickAnswer": {
-        "answer": "Two kinds. Official public case law, ingested and structure-parsed so you can read and search decisions and follow their citations. And typed access to national company and commercial registries, so you can pull official company data straight into a matter. Both are grounded sources the AI agent can cite.",
+        "answer": "Two kinds. Official public case law, collected with its structure preserved so you can read and search decisions and follow their citations. And direct access to national company and commercial registries, so you can pull official company data straight into a matter. Both are grounded sources the AI agent can cite.",
         "question": "What public data does stella bring in?"
       },
       "sections": {
         "0": {
           "bullets": {
             "0": "Collected from official public legal sources",
-            "1": "Structure-preserving parsers keep headings, paragraphs, and references",
-            "2": "Built on the open Legal Atlas ingestion stack"
+            "1": "Headings, paragraphs, and references stay as they are in the original",
+            "2": "Built on stella's open Legal Atlas"
           },
-          "heading": "Case law from official sources, parsed with structure intact"
+          "heading": "Case law from official sources, with its structure preserved"
         },
         "1": {
           "bullets": {
-            "0": "Typed clients for national registries: ARES, Companies House, SEC EDGAR, KRS, PRH, VIES, and more",
+            "0": "Connected national registries: ARES, Companies House, SEC EDGAR, KRS, PRH, VIES, and more",
             "1": "Pull official company data into a matter instead of copying it by hand",
             "2": "Coverage expands as more official sources are added"
           },
-          "heading": "Company and commercial registries, queried from a matter"
+          "heading": "Company and commercial registries, searched from a matter"
         },
         "2": {
           "bullets": {
             "0": "Reference a decision or company record from a matter",
-            "1": "The agent cites the underlying source, not a paraphrase",
+            "1": "The AI agent cites the underlying source, not a paraphrase",
             "2": "Search across sources, not just within one"
           },
-          "heading": "One grounded source for the agent"
+          "heading": "One grounded source for the AI agent"
         }
       }
     },
@@ -852,16 +852,15 @@
     }
   },
   "story": {
-    "agentBody": "The agent searches the matter, reads the relevant text, and answers with citations that open the source at the exact passage. Use it in stella, or connect it to the tools you already work in.",
+    "agentBody": "The AI agent searches the matter, reads the relevant text, and answers with citations that open the source at the exact passage. Use it in stella, or connect it to the tools you already work in.",
     "agentEyebrow": "AI agent",
     "agentTitle": "Ask once. Every answer cites its source.",
     "bringEditorToFront": "Bring stella Editor to front",
     "bringTerminalToFront": "Bring stella terminal to front",
     "bringWorkspaceToFront": "Bring stella workspace to front",
-    "controlBody": "stella is open-source legal software you can self-host: inspect the code, run it your way, and export everything in standard formats; no lock-in.",
-    "controlEyebrow": "Built for control",
-    "controlTitle": "Keep control of the stack.",
-    "dataBody": "Official case law and company registries, loaded straight into the matter in every jurisdiction you work in. Anonymization keeps identifying details away from the AI.",
+    "controlBody": "stella is <gh>open-source</gh> legal software you can self-host: inspect the code, run it your way, and export everything in standard formats.",
+    "controlTitle": "Keep control of your technology.",
+    "dataBody": "Case law and company registries, loaded straight into the matter in every jurisdiction you work in. Anonymization keeps identifying details away from the AI.",
     "dataEyebrow": "Legal data",
     "dataMainAlt": "An official court decision open in stella",
     "dataTitle": "Bring the law and the data with you.",
@@ -873,13 +872,13 @@
     "exploreTemplates": "Explore Templates",
     "exploreWorkspace": "Explore Workspace",
     "eyebrow": "A connected workspace",
-    "intro": "Source material, review, and finalized documents stay in the matter and build on each other. You and the AI work on the same matter, and every answer points to the exact passage in its source.",
+    "intro": "Source material, review, and finalized documents stay in the matter and build on each other. You can work on the matter together with the AI, and every step it takes can be verified.",
     "openEditor": "Open Editor",
     "proofByokBody": "Use your own provider keys for AI features.",
     "proofByokTitle": "Bring your own models",
     "proofOpenSourceBody": "Inspect the code and keep a portable system.",
     "proofOpenSourceTitle": "Open source",
-    "proofPermissionsBody": "Requests remain scoped to the user and workspace.",
+    "proofPermissionsBody": "Every action stays within the user's and the workspace's permissions.",
     "proofPermissionsTitle": "Permission-aware",
     "proofSelfHostBody": "Run stella on infrastructure you control.",
     "proofSelfHostTitle": "Self-hostable",
@@ -888,8 +887,8 @@
     "title": "One matter. Every part of the work.",
     "velocityAll": "Full changelog",
     "velocityTitle": "What shipped lately.",
-    "workspaceBody": "Documents, deadlines, structured review, and drafting stay together, searchable across every matter. Open a matter, see the work in context, and move from a table to the underlying document without rebuilding the trail.",
-    "workspaceEyebrow": "Matter workspace",
+    "workspaceBody": "Documents, deadlines, structured review, and drafting stay together, searchable across every matter.",
+    "workspaceEyebrow": "Workspace",
     "workspaceTitle": "Run the whole matter in one place."
   }
 }

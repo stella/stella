@@ -6,10 +6,10 @@ export const agent: Product = {
   eyebrow: "AI agent",
   title: "An AI agent that works across your matters, files, and tools.",
   summary:
-    "Chat with your matters, documents, registries, and connected tools in one place. The agent acts with approvals and source previews, grounds its answers in citations, and extends through skills and external connectors.",
+    "Chat with your matters, documents, registries, and connected tools in one place. The AI agent acts with approvals and source previews, grounds its answers in citations, and extends through skills and external connectors.",
   metaTitle: "AI agent for legal matters | stella",
   metaDescription:
-    "Chat with your matters, documents, registries, and connected tools. The agent acts with approvals, grounds answers in citations, and extends via skills.",
+    "Chat with your matters, documents, registries, and connected tools. The AI agent acts with approvals, grounds answers in citations, and extends via skills.",
   hero: {
     type: "story",
     sceneId: "agent",
@@ -21,7 +21,7 @@ export const agent: Product = {
   quickAnswer: {
     question: "What can the AI agent do?",
     answer:
-      "The agent chats with your matters, files, company registries, and connected tools. It asks for approval before acting, shows a source preview for what it reads, and grounds answers in citations. You can extend it with reusable skills and external connectors that are MCP-compatible.",
+      "The AI agent chats with your matters, files, company registries, and connected tools. It asks for approval before acting, shows a source preview for what it reads, and grounds answers in citations. You can extend it with reusable skills and external connectors that are MCP-compatible.",
   },
   capabilities: [
     {
@@ -30,7 +30,7 @@ export const agent: Product = {
     },
     {
       title: "Reads your files",
-      body: "Bring documents into the conversation and ask the agent to read, compare, or summarise them.",
+      body: "Bring documents into the conversation and ask the AI agent to read, compare, or summarise them.",
     },
     {
       title: "Connected tools",
@@ -38,11 +38,11 @@ export const agent: Product = {
     },
     {
       title: "Approvals before acting",
-      body: "The agent asks before it acts, so you stay in control of each step.",
+      body: "The AI agent asks before it acts, so you stay in control of each step.",
     },
     {
       title: "Source previews",
-      body: "See what the agent is reading with a preview of the source behind each step.",
+      body: "See what the AI agent is reading with a preview of the source behind each step.",
     },
     {
       title: "Grounded by citations",
@@ -55,36 +55,36 @@ export const agent: Product = {
       bullets: [
         "Chat over matters, documents, and contacts in one conversation",
         "Pull company and registry data into the same thread",
-        "Hand a tabular review to the agent for follow-up questions",
+        "Hand a tabular review to the AI agent for follow-up questions",
       ],
     },
     {
       heading: "You stay in control",
       bullets: [
         "Each action waits for your approval before it runs",
-        "A source preview shows what the agent read for every step",
+        "A source preview shows what the AI agent read for every step",
         "Citations open the source document at the exact passage",
       ],
     },
     {
       heading: "Extend it with skills and connectors",
       bullets: [
-        "Skills are prompts and tool definitions you can reuse across matters",
-        "External connectors are MCP-compatible, so the agent reaches more tools",
+        "Skills are instructions and tools you can reuse across matters",
+        "External connectors are MCP-compatible, so the AI agent reaches more tools",
         "Add capabilities without changing how the chat works",
       ],
     },
   ],
   faqs: [
     {
-      question: "Does the agent act on its own?",
+      question: "Does the AI agent act on its own?",
       answer:
         "No. It asks for approval before it acts, and it shows a source preview for what it reads, so you can follow and confirm each step.",
     },
     {
       question: "How do I add new capabilities?",
       answer:
-        "Through skills (reusable prompts and tool definitions) and external connectors that are MCP-compatible. Both extend what the agent can reach without changing the chat itself.",
+        "Through skills (reusable instructions and tools) and external connectors that are MCP-compatible. Both extend what the AI agent can reach without changing the chat itself.",
     },
     {
       question: "Where do its answers come from?",
@@ -129,7 +129,7 @@ export const agent: Product = {
     },
   ],
   cta: {
-    heading: "Hand the agent a real matter.",
+    heading: "Hand the AI agent a real matter.",
     href: "https://my.stll.app",
     label: productCtaLabels.startFree,
   },

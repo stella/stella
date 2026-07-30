@@ -63,12 +63,12 @@
   },
   "hero": {
     "badge": "Aktywnie rozwijany",
-    "selfHost": "Hostuj samodzielnie",
+    "selfHost": "Self-hosting",
     "subtitle": "Prawniczy obszar roboczy <gh>open source</gh>: sprawy, dokumenty, przegląd i agent AI, który odpowiada ze wskazaniem źródeł.",
     "title": "Zaprzęgnij AI do każdej sprawy."
   },
   "home": {
-    "ctaTitle": "Wprowadź AI do Twojej kancelarii."
+    "ctaTitle": "Wprowadź AI do Twojej praktyki prawnej."
   },
   "mcpProof": {
     "contextBody": "Przenieś zatwierdzone sprawy i dane prawne do Claude lub dowolnego klienta zgodnego z MCP.",
@@ -78,7 +78,7 @@
     "subtitle": "Przenieś aktualny kontekst sprawy do narzędzi, w których pracujesz.",
     "title": "Twój obszar roboczy rozumie już MCP.",
     "toolsBody": "Wyszukuj, czytaj i wypełniaj szablony przez ten sam rejestr, z którego powstaje CLI aplikacji stella.",
-    "toolsTitle": "Narzędzia dla agentów."
+    "toolsTitle": "Narzędzia dla agentów AI."
   },
   "meta": {
     "homeDescription": "Prawniczy obszar roboczy open source dla kancelarii prawnych: sprawy, dokumenty, analiza umów i orzecznictwo. Hostuj sam albo w chmurze. AI płatna za użycie.",
@@ -95,14 +95,14 @@
     "github": "stella na GitHubie",
     "openMenu": "Otwórz nawigację",
     "pillars": {
-      "data": "Infrastruktura danych",
+      "data": "Dane",
       "intelligence": "Analityka prawna",
       "workspace": "Obszar roboczy"
     },
     "product": "Produkt",
     "products": {
       "agent": {
-        "blurb": "Rozmawiaj ze swoimi sprawami, dokumentami, rejestrami i podłączonymi narzędziami w jednym miejscu. Agent działa za zatwierdzeniem i z podglądem źródeł, opiera odpowiedzi na cytowaniach i rozszerza się o umiejętności oraz zewnętrzne konektory.",
+        "blurb": "Rozmawiaj ze swoimi sprawami, dokumentami, rejestrami i podłączonymi narzędziami w jednym miejscu. Agent AI działa za zatwierdzeniem i z podglądem źródeł, opiera odpowiedzi na cytowaniach i rozszerza się o umiejętności oraz zewnętrzne konektory.",
         "eyebrow": "Agent AI",
         "title": "Agent AI, który działa w Twoich sprawach, plikach i narzędziach."
       },
@@ -122,9 +122,9 @@
         "title": "Edytuj dokumenty Word w przeglądarce, nie opuszczając sprawy."
       },
       "public-data": {
-        "blurb": "Orzecznictwo i rejestry firm z oficjalnych źródeł publicznych, zbierane i parsowane ze strukturą przez stack Legal Atlas w aplikacji stella. Przeczytaj orzeczenie, sprawdź firmę, prześledź cytowania i powołaj się na dowolne z nich ze sprawy albo przekaż je agentowi AI.",
+        "blurb": "Orzecznictwo i rejestry spółek z oficjalnych źródeł publicznych, zbierane z zachowaniem struktury przez Legal Atlas w aplikacji stella. Przeczytaj orzeczenie, sprawdź spółkę, prześledź cytowania i powołaj się na dowolne z nich ze sprawy albo przekaż je agentowi AI.",
         "eyebrow": "Dane publiczne",
-        "title": "Oficjalne dane prawne gotowe do wciągnięcia do sprawy."
+        "title": "Dane prawne gotowe do wciągnięcia do sprawy."
       },
       "tabular-review": {
         "blurb": "Zadaj pytania całemu zbiorowi dokumentów i otrzymaj ustrukturyzowane odpowiedzi jako tabelę w obrębie sprawy: sortowalną, filtrowalną i możliwą do prześledzenia aż do tekstu źródłowego. Stworzone do due diligence, discovery i badań.",
@@ -166,7 +166,7 @@
           "title": "Działa we wszystkich Twoich sprawach"
         },
         "1": {
-          "body": "Wciągnij dokumenty do rozmowy i poproś agenta, aby je przeczytał, porównał albo streścił.",
+          "body": "Wciągnij dokumenty do rozmowy i poproś agenta AI, aby je przeczytał, porównał albo streścił.",
           "title": "Czyta Twoje pliki"
         },
         "2": {
@@ -174,11 +174,11 @@
           "title": "Podłączone narzędzia"
         },
         "3": {
-          "body": "Agent pyta, zanim zadziała, więc każdy krok pozostaje pod Twoją kontrolą.",
+          "body": "Agent AI pyta, zanim zadziała, więc każdy krok pozostaje pod Twoją kontrolą.",
           "title": "Najpierw zatwierdzenie, potem działanie"
         },
         "4": {
-          "body": "Zobacz, co czyta agent: przy każdym kroku pokazuje podgląd źródła, na którym pracuje.",
+          "body": "Zobacz, co czyta agent AI: przy każdym kroku pokazuje podgląd źródła, na którym pracuje.",
           "title": "Podgląd źródeł"
         },
         "5": {
@@ -187,15 +187,15 @@
         }
       },
       "cta": {
-        "heading": "Powierz agentowi prawdziwą sprawę."
+        "heading": "Powierz agentowi AI prawdziwą sprawę."
       },
       "faqs": {
         "0": {
           "answer": "Nie. Przed każdym działaniem prosi o zatwierdzenie i pokazuje podgląd źródła, które czyta, więc prześledzisz i potwierdzisz każdy krok.",
-          "question": "Czy agent działa samodzielnie?"
+          "question": "Czy agent AI działa samodzielnie?"
         },
         "1": {
-          "answer": "Przez umiejętności (wielokrotnego użytku prompty i definicje narzędzi) oraz zewnętrzne konektory zgodne z MCP. Jedno i drugie poszerza zasięg agenta, nie zmieniając samego czatu.",
+          "answer": "Przez umiejętności (wielokrotnego użytku instrukcje i narzędzia) oraz zewnętrzne konektory zgodne z MCP. Jedno i drugie poszerza zasięg agenta AI, nie zmieniając samego czatu.",
           "question": "Jak dodać nowe możliwości?"
         },
         "2": {
@@ -203,10 +203,10 @@
           "question": "Skąd pochodzą jego odpowiedzi?"
         }
       },
-      "metaDescription": "Rozmawiaj ze swoimi sprawami, dokumentami, rejestrami i narzędziami. Agent działa za zatwierdzeniem, cytuje źródła i rośnie o kolejne umiejętności.",
+      "metaDescription": "Rozmawiaj ze swoimi sprawami, dokumentami, rejestrami i narzędziami. Agent AI działa za zatwierdzeniem, cytuje źródła i rośnie o kolejne umiejętności.",
       "metaTitle": "Agent AI dla prawników: asystent prawny do spraw | stella",
       "quickAnswer": {
-        "answer": "Agent rozmawia z Twoimi sprawami, plikami, rejestrami firm i podłączonymi narzędziami. Przed działaniem prosi o zatwierdzenie, pokazuje podgląd źródła, które czyta, i opiera odpowiedzi na cytowaniach. Rozszerzysz go o umiejętności wielokrotnego użytku i zewnętrzne konektory zgodne z MCP.",
+        "answer": "Agent AI rozmawia z Twoimi sprawami, plikami, rejestrami firm i podłączonymi narzędziami. Przed działaniem prosi o zatwierdzenie, pokazuje podgląd źródła, które czyta, i opiera odpowiedzi na cytowaniach. Rozszerzysz go o umiejętności wielokrotnego użytku i zewnętrzne konektory zgodne z MCP.",
         "question": "Co potrafi agent AI?"
       },
       "sections": {
@@ -214,7 +214,7 @@
           "bullets": {
             "0": "Sprawy, dokumenty i kontakty w jednej rozmowie",
             "1": "Wciągnij dane firm i rejestrów do tego samego wątku",
-            "2": "Przekaż agentowi przegląd tabelaryczny i dopytuj"
+            "2": "Przekaż agentowi AI przegląd tabelaryczny i dopytuj"
           },
           "heading": "Jedno pytanie, cała sprawa"
         },
@@ -228,8 +228,8 @@
         },
         "2": {
           "bullets": {
-            "0": "Umiejętności to prompty i definicje narzędzi do użycia w każdej sprawie",
-            "1": "Zewnętrzne konektory są zgodne z MCP, więc agent sięga po kolejne narzędzia",
+            "0": "Umiejętności to instrukcje i narzędzia do użycia w każdej sprawie",
+            "1": "Zewnętrzne konektory są zgodne z MCP, więc agent AI sięga po kolejne narzędzia",
             "2": "Nowe możliwości bez zmiany działania czatu"
           },
           "heading": "Poszerz go o umiejętności i konektory"
@@ -257,11 +257,11 @@
           "title": "Dane identyfikujące zostają poza AI"
         },
         "1": {
-          "body": "Działa wprost w polu wiadomości czatu i w przeglądzie dokumentów, a nie w osobnym narzędziu.",
+          "body": "Działa wprost na czacie i w przeglądzie dokumentów, a nie w osobnym narzędziu.",
           "title": "Działa w czacie i w przeglądzie"
         },
         "2": {
-          "body": "Dodaj terminy i listy zastrzeżonych nazw swojej organizacji, żeby ważne dla Ciebie nazwy zawsze zostały wychwycone.",
+          "body": "Dodaj własne terminy i listy nazw swojej organizacji, żeby ważne dla Ciebie nazwy zawsze zostały wychwycone.",
           "title": "Twoje własne terminy"
         },
         "3": {
@@ -340,12 +340,12 @@
           "title": "Uprawnienia obszaru roboczego obowiązują"
         },
         "4": {
-          "body": "Polecenia zwracają czytelny dla maszyn JSON dla skryptów i agentów oraz czytelny dla ludzi wynik w terminalu.",
+          "body": "Polecenia zwracają czytelny dla maszyn JSON dla skryptów i agentów AI oraz czytelny dla ludzi wynik w terminalu.",
           "title": "Ustrukturyzowane wyniki"
         },
         "5": {
           "body": "Skieruj CLI i klientów MCP na serwer stella, który prowadzi Twoja organizacja.",
-          "title": "Przyjazne samodzielnemu hostingowi"
+          "title": "Przyjazne self-hostingowi"
         }
       },
       "cta": {
@@ -368,7 +368,7 @@
       "metaDescription": "Szukaj, czytaj i pracuj z aplikacją stella z wiersza poleceń albo z klienta zgodnego z MCP. Oba interfejsy dzielą możliwości, uprawnienia i dane.",
       "metaTitle": "Serwer MCP i CLI do obszaru roboczego | stella",
       "quickAnswer": {
-        "answer": "To dwa interfejsy do tych samych możliwości aplikacji stella. CLI odwzorowuje rejestr narzędzi MCP jako polecenia, a serwer MCP pozwala zgodnym agentom i narzędziom pracować na sprawach, dokumentach, szablonach i publicznych danych prawnych, pod tymi samymi zasadami dostępu.",
+        "answer": "To dwa interfejsy do tych samych możliwości aplikacji stella. CLI odwzorowuje rejestr narzędzi MCP jako polecenia, a serwer MCP pozwala zgodnym agentom AI i narzędziom pracować na sprawach, dokumentach, szablonach i publicznych danych prawnych, pod tymi samymi zasadami dostępu.",
         "question": "Czym są CLI i serwer MCP aplikacji stella?"
       },
       "sections": {
@@ -384,7 +384,7 @@
           "bullets": {
             "0": "Udostępnij sprawy, dokumenty, orzecznictwo, szablony i inne zatwierdzone narzędzia",
             "1": "Katalog możliwości i polecenia CLI powstają z jednego rejestru",
-            "2": "Podłącz zgodne agenty bez kopiowania danych prawnych do innego obszaru roboczego"
+            "2": "Podłącz zgodne agenty AI bez kopiowania danych prawnych do innego obszaru roboczego"
           },
           "heading": "Te same możliwości przez MCP"
         }
@@ -411,7 +411,7 @@
           "title": "Edytuj pliki .docx w przeglądarce"
         },
         "1": {
-          "body": "Dokument przez cały czas pozostaje plikiem .docx, więc czcionki, style i układ wyświetlają się oraz zapisują tak, jak utworzył je Word.",
+          "body": "Dokument przez cały czas pozostaje plikiem .docx, więc czcionki, style i układ wyglądają oraz zapisują się tak, jak utworzył je Word.",
           "title": "Formatowanie zostaje nienaruszone"
         },
         "2": {
@@ -505,15 +505,15 @@
       },
       "capabilities": {
         "0": {
-          "body": "Orzeczenia z oficjalnych publicznych źródeł prawa, a nie zeskrobane streszczenia od podmiotów trzecich.",
+          "body": "Orzeczenia prosto z oficjalnych źródeł, a nie streszczenia z drugiej ręki.",
           "title": "Oficjalne orzecznictwo"
         },
         "1": {
-          "body": "Legal Atlas parsuje każde orzeczenie, zostawiając jego pierwotną strukturę nienaruszoną.",
+          "body": "Każde orzeczenie zachowuje nagłówki, akapity i odesłania oryginału.",
           "title": "Struktura zachowana"
         },
         "2": {
-          "body": "Typowane klienty do krajowych rejestrów przedsiębiorców i rejestrów handlowych, odpytywane ze sprawy.",
+          "body": "Wyszukuj w krajowych rejestrach spółek i rejestrach handlowych bez wychodzenia ze sprawy.",
           "title": "Rejestry firm"
         },
         "3": {
@@ -525,7 +525,7 @@
           "title": "Według jurysdykcji"
         },
         "5": {
-          "body": "Powołaj się ze sprawy na dowolne źródło, żeby odpowiedzi agenta dało się do niego prześledzić.",
+          "body": "Powołaj się ze sprawy na dowolne źródło, żeby odpowiedzi agenta AI dało się do niego prześledzić.",
           "title": "Ugruntowane dla AI"
         }
       },
@@ -534,11 +534,11 @@
       },
       "faqs": {
         "0": {
-          "answer": "Orzecznictwo pochodzi z oficjalnych publicznych źródeł prawa, wczytywanych i parsowanych przez stack Legal Atlas w aplikacji stella. Dane o firmach pochodzą z krajowych rejestrów przedsiębiorców i rejestrów handlowych przez typowane klienty, a nie z kopii od podmiotów trzecich.",
+          "answer": "Orzecznictwo pochodzi z oficjalnych publicznych źródeł prawa, zbiera je Legal Atlas w aplikacji stella z zachowaniem struktury. Dane o spółkach pochodzą wprost z krajowych rejestrów spółek i rejestrów handlowych, a nie z kopii od podmiotów trzecich.",
           "question": "Skąd pochodzą te dane?"
         },
         "1": {
-          "answer": "Dwie listy, obie rosną. Typowane klienty rejestrów obejmują już ARES (Czechy), Companies House (Wielka Brytania), SEC EDGAR (USA), KRS (Polska), PRH (Finlandia) i VIES (VAT w UE). Poza rejestrami oficjalne źródła pojawiają się dla kolejnych jurysdykcji z katalogu konektorów aplikacji stella; podłączone źródła mają już na przykład Czechy, Hiszpania i Tajwan, a czytnik orzecznictwa jest zbudowany tak, aby przeglądać i filtrować według jurysdykcji w miarę dodawania kolejnych oficjalnych źródeł.",
+          "answer": "Dwie listy, obie rosną. Podłączone rejestry obejmują już ARES (Czechy), Companies House (Wielka Brytania), SEC EDGAR (USA), KRS (Polska), PRH (Finlandia) i VIES (VAT w UE). Poza rejestrami oficjalne źródła dochodzą jurysdykcja po jurysdykcji; podłączone źródła mają już na przykład Czechy, Hiszpania i Tajwan, a czytnik orzecznictwa jest zbudowany tak, aby przeglądać i filtrować według jurysdykcji w miarę dodawania kolejnych oficjalnych źródeł.",
           "question": "Które jurysdykcje i rejestry są objęte?"
         },
         "2": {
@@ -549,33 +549,33 @@
       "metaDescription": "Orzecznictwo i rejestry firm z oficjalnych źródeł publicznych. Czytaj orzeczenia, sprawdzaj firmy, śledź cytowania i wciągaj je wprost do sprawy.",
       "metaTitle": "Research prawny: orzecznictwo i rejestry firm | stella",
       "quickAnswer": {
-        "answer": "Dwa rodzaje. Oficjalne publiczne orzecznictwo, wczytane i sparsowane ze strukturą, więc przeczytasz i przeszukasz orzeczenia oraz prześledzisz ich cytowania. Oraz typowany dostęp do krajowych rejestrów przedsiębiorców i rejestrów handlowych, więc wciągniesz oficjalne dane o firmie prosto do sprawy. Jedno i drugie to ugruntowane źródła, które agent AI może cytować.",
+        "answer": "Dwa rodzaje. Oficjalne publiczne orzecznictwo, wczytane z zachowaniem struktury, więc przeczytasz i przeszukasz orzeczenia oraz prześledzisz ich cytowania. Oraz bezpośredni dostęp do krajowych rejestrów spółek i rejestrów handlowych, więc wciągniesz oficjalne dane o spółce prosto do sprawy. Jedno i drugie to ugruntowane źródła, które agent AI może cytować.",
         "question": "Jakie dane publiczne wnosi aplikacja stella?"
       },
       "sections": {
         "0": {
           "bullets": {
             "0": "Zbierane z oficjalnych publicznych źródeł prawa",
-            "1": "Parsery zachowujące strukturę utrzymują nagłówki, akapity i odesłania",
-            "2": "Oparte na otwartym stacku wczytywania Legal Atlas"
+            "1": "Nagłówki, akapity i odesłania zostają takie jak w oryginale",
+            "2": "Oparte na otwartym Legal Atlas aplikacji stella"
           },
           "heading": "Orzecznictwo z oficjalnych źródeł, z zachowaną strukturą"
         },
         "1": {
           "bullets": {
-            "0": "Typowane klienty do krajowych rejestrów: ARES, Companies House, SEC EDGAR, KRS, PRH, VIES i kolejne",
+            "0": "Podłączone rejestry krajowe: ARES, Companies House, SEC EDGAR, KRS, PRH, VIES i kolejne",
             "1": "Wciągaj oficjalne dane o firmie do sprawy zamiast przepisywać je ręcznie",
             "2": "Zasięg rośnie wraz z kolejnymi oficjalnymi źródłami"
           },
-          "heading": "Rejestry przedsiębiorców i handlowe, odpytywane ze sprawy"
+          "heading": "Rejestry spółek i handlowe, przeszukiwane ze sprawy"
         },
         "2": {
           "bullets": {
             "0": "Powołaj się ze sprawy na orzeczenie albo wpis o firmie",
-            "1": "Agent cytuje źródło, a nie parafrazę",
+            "1": "Agent AI cytuje źródło, a nie parafrazę",
             "2": "Szukaj we wszystkich źródłach, nie tylko w jednym"
           },
-          "heading": "Jedno ugruntowane źródło dla agenta"
+          "heading": "Jedno ugruntowane źródło dla agenta AI"
         }
       }
     },
@@ -852,16 +852,15 @@
     }
   },
   "story": {
-    "agentBody": "Agent przeszukuje sprawę, czyta istotny tekst i odpowiada z cytatami, które otwierają źródło dokładnie we wskazanym fragmencie. Korzystaj z niego w aplikacji stella albo połącz go z narzędziami, z których już korzystasz.",
+    "agentBody": "Agent AI przeszukuje sprawę, czyta istotny tekst i odpowiada z cytatami, które otwierają źródło dokładnie we wskazanym fragmencie. Korzystaj z niego w aplikacji stella albo połącz go z narzędziami, z których już korzystasz.",
     "agentEyebrow": "Agent AI",
     "agentTitle": "Wystarczy zapytać. Każda odpowiedź wskazuje źródło.",
     "bringEditorToFront": "Przenieś na wierzch edytor aplikacji stella",
     "bringTerminalToFront": "Przenieś na wierzch terminal aplikacji stella",
     "bringWorkspaceToFront": "Przenieś na wierzch obszar roboczy aplikacji stella",
-    "controlBody": "stella to prawnicze oprogramowanie open source, które możesz hostować samodzielnie: przejrzyj kod, uruchamiaj je po swojemu i eksportuj wszystko w standardowych formatach; bez uzależnienia.",
-    "controlEyebrow": "Zbudowane z myślą o kontroli",
+    "controlBody": "stella to prawnicze oprogramowanie <gh>open source</gh>, które możesz uruchomić na własnej infrastrukturze: przejrzyj kod, uruchamiaj je po swojemu i eksportuj wszystko w standardowych formatach.",
     "controlTitle": "Zachowaj kontrolę nad infrastrukturą.",
-    "dataBody": "Oficjalne orzecznictwo i rejestry wprost w sprawie, w każdej jurysdykcji, w której pracujesz. Anonimizacja trzyma przy tym dane identyfikujące z dala od AI.",
+    "dataBody": "Orzecznictwo i rejestry wprost w sprawie, w każdej jurysdykcji, w której pracujesz. Anonimizacja trzyma przy tym dane identyfikujące z dala od AI.",
     "dataEyebrow": "Dane prawne",
     "dataMainAlt": "Oficjalne orzeczenie sądu otwarte w aplikacji stella",
     "dataTitle": "Orzecznictwo i rejestry pod ręką.",
@@ -873,23 +872,23 @@
     "exploreTemplates": "Poznaj szablony",
     "exploreWorkspace": "Poznaj obszar roboczy",
     "eyebrow": "Połączony obszar roboczy",
-    "intro": "Materiały, przegląd i sfinalizowane dokumenty zostają w sprawie i wzajemnie na sobie bazują. Nad sprawą pracujesz razem z AI, a każda odpowiedź wskazuje dokładny fragment źródła.",
+    "intro": "Materiały, przegląd i sfinalizowane dokumenty zostają w sprawie i wzajemnie na sobie bazują. Nad sprawą możesz pracować razem z AI, a każdy jej krok da się sprawdzić.",
     "openEditor": "Otwórz edytor",
     "proofByokBody": "Używaj własnych kluczy dostawców do funkcji AI.",
     "proofByokTitle": "Własne modele",
     "proofOpenSourceBody": "Przejrzyj kod i zachowaj przenośny system.",
     "proofOpenSourceTitle": "Open source",
-    "proofPermissionsBody": "Żądania pozostają ograniczone do użytkownika i obszaru roboczego.",
+    "proofPermissionsBody": "Każde działanie mieści się w uprawnieniach użytkownika i obszaru roboczego.",
     "proofPermissionsTitle": "Z poszanowaniem uprawnień",
     "proofSelfHostBody": "Uruchamiaj aplikację stella na infrastrukturze, którą kontrolujesz.",
-    "proofSelfHostTitle": "Możliwość samodzielnego hostowania",
-    "selfHostGuide": "Przeczytaj przewodnik po samodzielnym hostingu",
+    "proofSelfHostTitle": "Na własnej infrastrukturze",
+    "selfHostGuide": "Przeczytaj przewodnik po self-hostingu",
     "sourceOnGitHub": "Kod źródłowy na GitHubie",
     "title": "Jedna sprawa. Od materiałów po odpowiedź.",
     "velocityAll": "Pełny dziennik zmian",
     "velocityTitle": "Co ostatnio wydaliśmy.",
-    "workspaceBody": "Dokumenty, terminy, ustrukturyzowany przegląd i redagowanie pozostają razem, a przeszukasz je we wszystkich sprawach. Otwórz sprawę, zobacz pracę w kontekście i przejdź z tabeli do dokumentu źródłowego bez ponownego odtwarzania ścieżki.",
-    "workspaceEyebrow": "Obszar roboczy sprawy",
+    "workspaceBody": "Dokumenty, terminy, ustrukturyzowany przegląd i redagowanie pozostają razem, a przeszukasz je we wszystkich sprawach.",
+    "workspaceEyebrow": "Obszar roboczy",
     "workspaceTitle": "Prowadź całą sprawę w jednym miejscu."
   }
 }

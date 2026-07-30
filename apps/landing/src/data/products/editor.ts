@@ -32,7 +32,7 @@ export const editor: Product = {
     },
     {
       title: "Formatting stays intact",
-      body: "The document stays a .docx throughout, so fonts, styles, and layout render and save the way Word created them.",
+      body: "The document stays a .docx throughout, so fonts, styles, and layout look and save the way Word created them.",
     },
     {
       title: "Track changes",

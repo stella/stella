@@ -63,12 +63,12 @@
   },
   "hero": {
     "badge": "Aktyviai tobulinama",
-    "selfHost": "Talpinkite patys",
+    "selfHost": "Savame serveryje",
     "subtitle": "<gh>Atvirojo kodo</gh> teisinė darbo sritis: bylos, dokumentai, peržiūra ir DI agentas, kuris atsako nurodydamas šaltinius.",
     "title": "Pasitelkite DI kiekvienoje byloje."
   },
   "home": {
-    "ctaTitle": "Atneškite DI į savo advokatų kontorą."
+    "ctaTitle": "Atneškite DI į savo teisinę praktiką."
   },
   "mcpProof": {
     "contextBody": "Perkelkite patvirtintas bylas ir teisinius duomenis į Claude ar bet kurį su MCP suderinamą klientą.",
@@ -78,10 +78,10 @@
     "subtitle": "Perkelkite naujausią bylos kontekstą į įrankius, su kuriais dirbate.",
     "title": "Darbo sritis dabar supranta MCP.",
     "toolsBody": "Ieškokite, skaitykite ir pildykite šablonus per tą patį registrą, iš kurio kuriama programos stella CLI.",
-    "toolsTitle": "Įrankiai agentams."
+    "toolsTitle": "Įrankiai DI agentams."
   },
   "meta": {
-    "homeDescription": "Atvirojo kodo teisinė darbo sritis: dokumentai, bylos, peržiūra ir teisinė paieška. Talpinkite patys arba mūsų debesyje. DI pagal naudojimą, be pririšimo.",
+    "homeDescription": "Atvirojo kodo teisinė darbo sritis: dokumentai, bylos, peržiūra ir teisinė paieška. Diekite patys arba mūsų debesyje. DI pagal naudojimą, be pririšimo.",
     "homeTitle": "stella | atvirojo kodo teisinė darbo sritis"
   },
   "nav": {
@@ -95,14 +95,14 @@
     "github": "stella platformoje GitHub",
     "openMenu": "Atidaryti naršymo meniu",
     "pillars": {
-      "data": "Duomenų infrastruktūra",
+      "data": "Duomenys",
       "intelligence": "Teisinė analitika",
       "workspace": "Darbo sritis"
     },
     "product": "Produktas",
     "products": {
       "agent": {
-        "blurb": "Bendraukite su savo bylomis, dokumentais, registrais ir prijungtais įrankiais vienoje vietoje. Agentas veikia gavęs patvirtinimą ir su šaltinių peržiūromis, atsakymus grindžia citatomis ir plečiasi per gebėjimus bei išorines jungtis.",
+        "blurb": "Bendraukite su savo bylomis, dokumentais, registrais ir prijungtais įrankiais vienoje vietoje. DI agentas veikia gavęs patvirtinimą ir su šaltinių peržiūromis, atsakymus grindžia citatomis ir plečiasi per gebėjimus bei išorines jungtis.",
         "eyebrow": "DI agentas",
         "title": "DI agentas, dirbantis su jūsų bylomis, failais ir įrankiais."
       },
@@ -122,9 +122,9 @@
         "title": "Redaguokite Word dokumentus naršyklėje neišeidami iš bylos."
       },
       "public-data": {
-        "blurb": "Teismų praktika ir įmonių registrai iš oficialių viešų šaltinių, kuriuos surenka ir struktūriškai išanalizuoja programos stella Legal Atlas. Perskaitykite sprendimą, pasitikrinkite įmonę, sekite citatas ir remkitės bet kuriuo iš jų byloje arba perduokite juos DI agentui.",
+        "blurb": "Teismų praktika ir įmonių registrai iš oficialių viešų šaltinių, kuriuos išsaugodamas jų struktūrą surenka programos stella Legal Atlas. Perskaitykite sprendimą, pasitikrinkite įmonę, sekite citatas ir remkitės bet kuriuo iš jų byloje arba perduokite juos DI agentui.",
         "eyebrow": "Viešieji duomenys",
-        "title": "Oficialūs teisiniai duomenys, parengti įtraukti į bylą."
+        "title": "Teisiniai duomenys, parengti įtraukti į bylą."
       },
       "tabular-review": {
         "blurb": "Užduokite klausimus visam dokumentų rinkiniui ir gaukite struktūruotus atsakymus byloje esančioje lentelėje: rikiuojamoje, filtruojamoje ir atsekamoje iki pirminio teksto. Skirta due diligence, discovery ir teisinei paieškai.",
@@ -166,7 +166,7 @@
           "title": "Dirba su visomis jūsų bylomis"
         },
         "1": {
-          "body": "Įtraukite dokumentus į pokalbį ir paprašykite agento juos perskaityti, palyginti ar apibendrinti.",
+          "body": "Įtraukite dokumentus į pokalbį ir paprašykite DI agento juos perskaityti, palyginti ar apibendrinti.",
           "title": "Skaito jūsų failus"
         },
         "2": {
@@ -174,11 +174,11 @@
           "title": "Prijungti įrankiai"
         },
         "3": {
-          "body": "Agentas paklausia prieš veikdamas, todėl kiekvieną žingsnį valdote jūs.",
+          "body": "DI agentas paklausia prieš veikdamas, todėl kiekvieną žingsnį valdote jūs.",
           "title": "Patvirtinimas prieš veiksmą"
         },
         "4": {
-          "body": "Matykite, ką agentas skaito: prie kiekvieno žingsnio rodoma šaltinio peržiūra.",
+          "body": "Matykite, ką DI agentas skaito: prie kiekvieno žingsnio rodoma šaltinio peržiūra.",
           "title": "Šaltinių peržiūros"
         },
         "5": {
@@ -187,15 +187,15 @@
         }
       },
       "cta": {
-        "heading": "Patikėkite agentui tikrą bylą."
+        "heading": "Patikėkite DI agentui tikrą bylą."
       },
       "faqs": {
         "0": {
           "answer": "Ne. Prieš veikdamas jis paprašo patvirtinimo ir šaltinio peržiūroje parodo, ką skaito, todėl kiekvieną žingsnį galite sekti ir patvirtinti.",
-          "question": "Ar agentas veikia savarankiškai?"
+          "question": "Ar DI agentas veikia savarankiškai?"
         },
         "1": {
-          "answer": "Per gebėjimus (pakartotinai naudojamas užklausas ir įrankių aprašus) ir su MCP suderinamas išorines jungtis. Abu būdai praplečia tai, ką agentas pasiekia, nekeisdami paties pokalbio.",
+          "answer": "Per gebėjimus (pakartotinai naudojamus nurodymus ir įrankius) ir su MCP suderinamas išorines jungtis. Abu būdai praplečia tai, ką DI agentas pasiekia, nekeisdami paties pokalbio.",
           "question": "Kaip pridėti naujų gebėjimų?"
         },
         "2": {
@@ -203,10 +203,10 @@
           "question": "Iš kur atsiranda jo atsakymai?"
         }
       },
-      "metaDescription": "Bendraukite su bylomis, dokumentais, registrais ir prijungtais įrankiais. Agentas veikia gavęs patvirtinimą, atsako su citatomis ir plečiasi gebėjimais.",
+      "metaDescription": "Bendraukite su bylomis, dokumentais, registrais ir prijungtais įrankiais. DI agentas veikia gavęs patvirtinimą, atsako su citatomis ir plečiasi gebėjimais.",
       "metaTitle": "DI agentas teisinėms byloms | stella",
       "quickAnswer": {
-        "answer": "Agentas bendrauja su jūsų bylomis, failais, įmonių registrais ir prijungtais įrankiais. Prieš veikdamas paprašo patvirtinimo, šaltinio peržiūroje parodo, ką skaito, ir atsakymus grindžia citatomis. Jį galite praplėsti pakartotinai naudojamais gebėjimais ir su MCP suderinamomis išorinėmis jungtimis.",
+        "answer": "DI agentas bendrauja su jūsų bylomis, failais, įmonių registrais ir prijungtais įrankiais. Prieš veikdamas paprašo patvirtinimo, šaltinio peržiūroje parodo, ką skaito, ir atsakymus grindžia citatomis. Jį galite praplėsti pakartotinai naudojamais gebėjimais ir su MCP suderinamomis išorinėmis jungtimis.",
         "question": "Ką gali DI agentas?"
       },
       "sections": {
@@ -214,22 +214,22 @@
           "bullets": {
             "0": "Kalbėkitės apie bylas, dokumentus ir kontaktus viename pokalbyje",
             "1": "Įtraukite įmonių ir registrų duomenis į tą pačią giją",
-            "2": "Perduokite lentelinę peržiūrą agentui tolesniems klausimams"
+            "2": "Perduokite lentelinę peržiūrą DI agentui tolesniems klausimams"
           },
           "heading": "Vienas klausimas visai bylai"
         },
         "1": {
           "bullets": {
             "0": "Kiekvienas veiksmas laukia jūsų patvirtinimo",
-            "1": "Šaltinio peržiūra parodo, ką agentas perskaitė kiekviename žingsnyje",
+            "1": "Šaltinio peržiūra parodo, ką DI agentas perskaitė kiekviename žingsnyje",
             "2": "Citatos atveria šaltinio dokumentą tiksliai toje vietoje"
           },
           "heading": "Kontrolė lieka jums"
         },
         "2": {
           "bullets": {
-            "0": "Gebėjimai yra užklausos ir įrankių aprašai, naudojami skirtingose bylose",
-            "1": "Išorinės jungtys suderinamos su MCP, todėl agentas pasiekia daugiau įrankių",
+            "0": "Gebėjimai yra nurodymai ir įrankiai, naudojami skirtingose bylose",
+            "1": "Išorinės jungtys suderinamos su MCP, todėl DI agentas pasiekia daugiau įrankių",
             "2": "Pridėkite galimybių nekeisdami pokalbio veikimo"
           },
           "heading": "Praplėskite jį gebėjimais ir jungtimis"
@@ -257,11 +257,11 @@
           "title": "Identifikuojantys duomenys lieka nuošalyje"
         },
         "1": {
-          "body": "Veikia tiesiai pokalbio lauke ir dokumentų peržiūroje, o ne atskirame įrankyje.",
+          "body": "Veikia tiesiai pokalbyje ir dokumentų peržiūroje, o ne atskirame įrankyje.",
           "title": "Veikia pokalbyje ir peržiūroje"
         },
         "2": {
-          "body": "Pridėkite savo organizacijos terminus ir sąrašus, kad jums svarbūs vardai visada būtų aptikti.",
+          "body": "Pridėkite savo organizacijos terminus ir vardų sąrašus, kad jums svarbūs vardai visada būtų aptikti.",
           "title": "Su jūsų pačių terminais"
         },
         "3": {
@@ -340,12 +340,12 @@
           "title": "Galioja darbo srities teisės"
         },
         "4": {
-          "body": "Komandos grąžina mašinai skaitomą JSON scenarijams ir agentams bei įskaitomą terminalo išvestį žmonėms.",
+          "body": "Komandos grąžina mašinai skaitomą JSON scenarijams ir DI agentams bei įskaitomą terminalo išvestį žmonėms.",
           "title": "Struktūruota išvestis"
         },
         "5": {
           "body": "Nukreipkite CLI ir MCP klientus į jūsų organizacijos valdomą stella serverį.",
-          "title": "Tinka talpinti patiems"
+          "title": "Tinka diegti savo serveryje"
         }
       },
       "cta": {
@@ -368,7 +368,7 @@
       "metaDescription": "Ieškokite, skaitykite ir dirbkite su programa stella iš komandinės eilutės ar su MCP suderinamo kliento. Abi sąsajos dalijasi gebėjimais ir teisėmis.",
       "metaTitle": "MCP serveris ir CLI teisinei darbo sričiai | stella",
       "quickAnswer": {
-        "answer": "Tai dvi sąsajos į tuos pačius programos stella gebėjimus. CLI atkartoja MCP įrankių registrą kaip komandas, o MCP serveris leidžia suderinamiems agentams ir įrankiams dirbti su bylomis, dokumentais, šablonais ir viešais teisiniais duomenimis, taikant tas pačias prieigos taisykles.",
+        "answer": "Tai dvi sąsajos į tuos pačius programos stella gebėjimus. CLI atkartoja MCP įrankių registrą kaip komandas, o MCP serveris leidžia suderinamiems DI agentams ir įrankiams dirbti su bylomis, dokumentais, šablonais ir viešais teisiniais duomenimis, taikant tas pačias prieigos taisykles.",
         "question": "Kas yra programos stella CLI ir MCP serveris?"
       },
       "sections": {
@@ -384,7 +384,7 @@
           "bullets": {
             "0": "Atverkite bylas, dokumentus, teismų praktiką, šablonus ir kitus patvirtintus įrankius",
             "1": "Gebėjimų katalogas ir CLI komandos generuojami iš vieno registro",
-            "2": "Prijunkite suderinamus agentus nekopijuodami teisinių duomenų į kitą darbo sritį"
+            "2": "Prijunkite suderinamus DI agentus nekopijuodami teisinių duomenų į kitą darbo sritį"
           },
           "heading": "Tie patys gebėjimai per MCP"
         }
@@ -411,7 +411,7 @@
           "title": "Redaguokite .docx failus naršyklėje"
         },
         "1": {
-          "body": "Dokumentas visą laiką lieka .docx, todėl šriftai, stiliai ir maketas rodomi bei įrašomi taip, kaip juos sukūrė Word.",
+          "body": "Dokumentas visą laiką lieka .docx, todėl šriftai, stiliai ir maketas atrodo bei įrašomi taip, kaip juos sukūrė Word.",
           "title": "Formatavimas išlieka"
         },
         "2": {
@@ -505,15 +505,15 @@
       },
       "capabilities": {
         "0": {
-          "body": "Sprendimai iš oficialių viešų teisės šaltinių, o ne iš trečiųjų šalių santraukų.",
+          "body": "Sprendimai tiesiai iš oficialių šaltinių, o ne perpasakotos santraukos.",
           "title": "Oficiali teismų praktika"
         },
         "1": {
-          "body": "Legal Atlas išanalizuoja kiekvieną sprendimą išsaugodamas jo pirminę struktūrą.",
+          "body": "Kiekvienas sprendimas išsaugo originalo antraštes, punktus ir nuorodas.",
           "title": "Su išsaugota struktūra"
         },
         "2": {
-          "body": "Tipizuotos jungtys su nacionaliniais įmonių ir komerciniais registrais, užklausiamos tiesiai iš bylos.",
+          "body": "Ieškokite nacionaliniuose įmonių ir komerciniuose registruose neišeidami iš bylos.",
           "title": "Įmonių registrai"
         },
         "3": {
@@ -525,7 +525,7 @@
           "title": "Pagal jurisdikciją"
         },
         "5": {
-          "body": "Remkitės bet kuriuo šaltiniu byloje, kad agento atsakymai liktų iki jo atsekami.",
+          "body": "Remkitės bet kuriuo šaltiniu byloje, kad DI agento atsakymai liktų iki jo atsekami.",
           "title": "Pagrindas DI atsakymams"
         }
       },
@@ -534,11 +534,11 @@
       },
       "faqs": {
         "0": {
-          "answer": "Teismų praktika gaunama iš oficialių viešų teisės šaltinių, kuriuos surenka ir išanalizuoja programos stella Legal Atlas. Įmonių duomenys gaunami iš nacionalinių įmonių ir komercinių registrų per tipizuotas jungtis, o ne iš trečiųjų šalių kopijų.",
+          "answer": "Teismų praktika gaunama iš oficialių viešų teisės šaltinių, ją surenka programos stella Legal Atlas išsaugodamas struktūrą. Įmonių duomenys ateina tiesiai iš nacionalinių įmonių ir komercinių registrų, o ne iš trečiųjų šalių kopijų.",
           "question": "Iš kur gaunami duomenys?"
         },
         "1": {
-          "answer": "Du sąrašai, abu vis plečiami. Tipizuotos registrų jungtys jau apima ARES (Čekija), Companies House (Jungtinė Karalystė), SEC EDGAR (JAV), KRS (Lenkija), PRH (Suomija) ir VIES (ES PVM). Be registrų, oficialūs šaltiniai pateikiami pagal jurisdikciją iš programos stella jungčių katalogo; pavyzdžiui, Čekija, Ispanija ir Taivanas jau turi prijungtų šaltinių, o teismų praktikos skaityklė sukurta naršyti ir filtruoti pagal jurisdikciją, prijungiant vis daugiau oficialių šaltinių.",
+          "answer": "Du sąrašai, abu vis plečiami. Prijungti registrai jau apima ARES (Čekija), Companies House (Jungtinė Karalystė), SEC EDGAR (JAV), KRS (Lenkija), PRH (Suomija) ir VIES (ES PVM). Be registrų, oficialūs šaltiniai prijungiami jurisdikcija po jurisdikcijos; pavyzdžiui, Čekija, Ispanija ir Taivanas jau turi prijungtų šaltinių, o teismų praktikos skaityklė sukurta naršyti ir filtruoti pagal jurisdikciją, prijungiant vis daugiau oficialių šaltinių.",
           "question": "Kokios jurisdikcijos ir registrai apimami?"
         },
         "2": {
@@ -549,33 +549,33 @@
       "metaDescription": "Teismų praktika ir įmonių registrai iš oficialių viešų šaltinių. Skaitykite sprendimus, tikrinkite įmones, sekite citatas ir įtraukite juos į bylą.",
       "metaTitle": "Teismų praktika ir įmonių registrai | stella",
       "quickAnswer": {
-        "answer": "Dviejų rūšių. Oficiali vieša teismų praktika, surinkta ir struktūriškai išanalizuota, todėl galite skaityti sprendimus, jų ieškoti ir sekti citatas. Ir tipizuota prieiga prie nacionalinių įmonių bei komercinių registrų, kad oficialius įmonių duomenis įtrauktumėte tiesiai į bylą. Abu yra pagrįsti šaltiniai, kuriuos DI agentas gali cituoti.",
+        "answer": "Dviejų rūšių. Oficiali vieša teismų praktika, surinkta išsaugant jos struktūrą, todėl galite skaityti sprendimus, jų ieškoti ir sekti citatas. Ir tiesioginė prieiga prie nacionalinių įmonių bei komercinių registrų, kad oficialius įmonių duomenis įtrauktumėte tiesiai į bylą. Abu yra pagrįsti šaltiniai, kuriuos DI agentas gali cituoti.",
         "question": "Kokius viešus duomenis pateikia stella?"
       },
       "sections": {
         "0": {
           "bullets": {
             "0": "Surinkta iš oficialių viešų teisės šaltinių",
-            "1": "Struktūrą išsaugantys analizatoriai palieka antraštes, punktus ir nuorodas",
-            "2": "Remiasi atvira Legal Atlas duomenų surinkimo sistema"
+            "1": "Antraštės, punktai ir nuorodos lieka tokios kaip originale",
+            "2": "Remiasi atviru programos stella Legal Atlas"
           },
           "heading": "Teismų praktika iš oficialių šaltinių su išsaugota struktūra"
         },
         "1": {
           "bullets": {
-            "0": "Tipizuotos jungtys su nacionaliniais registrais: ARES, Companies House, SEC EDGAR, KRS, PRH, VIES ir kitais",
+            "0": "Prijungti nacionaliniai registrai: ARES, Companies House, SEC EDGAR, KRS, PRH, VIES ir kiti",
             "1": "Įtraukite oficialius įmonių duomenis į bylą, užuot juos perrašinėję ranka",
             "2": "Aprėptis plečiasi prijungiant vis daugiau oficialių šaltinių"
           },
-          "heading": "Įmonių ir komerciniai registrai, užklausiami tiesiai iš bylos"
+          "heading": "Įmonių ir komerciniai registrai, kuriuose ieškote tiesiai iš bylos"
         },
         "2": {
           "bullets": {
             "0": "Remkitės sprendimu ar įmonės įrašu tiesiai byloje",
-            "1": "Agentas cituoja patį šaltinį, o ne perpasakojimą",
+            "1": "DI agentas cituoja patį šaltinį, o ne perpasakojimą",
             "2": "Ieškokite per visus šaltinius, o ne tik viename"
           },
-          "heading": "Vienas patikimas pagrindas agentui"
+          "heading": "Vienas patikimas pagrindas DI agentui"
         }
       }
     },
@@ -852,16 +852,15 @@
     }
   },
   "story": {
-    "agentBody": "Agentas peržiūri bylą, perskaito aktualų tekstą ir atsako su citatomis, kurios atveria šaltinį tiksliai toje vietoje. Naudokite jį tiesiog programoje stella arba prijunkite prie įrankių, kuriais jau dirbate.",
+    "agentBody": "DI agentas peržiūri bylą, perskaito aktualų tekstą ir atsako su citatomis, kurios atveria šaltinį tiksliai toje vietoje. Naudokite jį tiesiog programoje stella arba prijunkite prie įrankių, kuriais jau dirbate.",
     "agentEyebrow": "DI agentas",
     "agentTitle": "Užtenka paklausti. Kiekvienas atsakymas nurodo šaltinį.",
     "bringEditorToFront": "Perkelti programos stella redaktorių į priekinį planą",
     "bringTerminalToFront": "Perkelti programos stella terminalą į priekinį planą",
     "bringWorkspaceToFront": "Perkelti programos stella darbo sritį į priekinį planą",
-    "controlBody": "stella – atvirojo kodo teisinė programinė įranga, kurią galite talpinti patys: peržiūrėkite kodą, paleiskite ją savaip ir eksportuokite viską standartiniais formatais; be pririšimo.",
-    "controlEyebrow": "Sukurta kontrolei",
+    "controlBody": "stella – <gh>atvirojo kodo</gh> teisinė programinė įranga, kurią galite įdiegti savo serveryje: peržiūrėkite kodą, paleiskite ją savaip ir eksportuokite viską standartiniais formatais.",
     "controlTitle": "Išlaikykite infrastruktūros kontrolę.",
-    "dataBody": "Oficiali teismų praktika ir įmonių registrai tiesiai byloje, kiekvienoje jurisdikcijoje, kurioje dirbate. Anonimizavimas tuo metu saugo identifikuojančius duomenis nuo DI.",
+    "dataBody": "Teismų praktika ir įmonių registrai tiesiai byloje, kiekvienoje jurisdikcijoje, kurioje dirbate. Anonimizavimas tuo metu saugo identifikuojančius duomenis nuo DI.",
     "dataEyebrow": "Teisiniai duomenys",
     "dataMainAlt": "Oficialus teismo sprendimas, atvertas programoje stella",
     "dataTitle": "Teismų praktika ir registrai po ranka.",
@@ -873,23 +872,23 @@
     "exploreTemplates": "Susipažinti su šablonais",
     "exploreWorkspace": "Susipažinti su darbo sritimi",
     "eyebrow": "Susieta darbo sritis",
-    "intro": "Medžiaga, peržiūra ir galutiniai dokumentai lieka byloje ir remiasi vieni kitais. Prie bylos dirbate kartu su DI, o kiekvienas atsakymas nurodo tikslią šaltinio vietą.",
+    "intro": "Medžiaga, peržiūra ir galutiniai dokumentai lieka byloje ir remiasi vieni kitais. Prie bylos galite dirbti kartu su DI, o kiekvieną jo žingsnį galima patikrinti.",
     "openEditor": "Atverti redaktorių",
     "proofByokBody": "DI funkcijoms naudokite savo tiekėjų raktus.",
     "proofByokTitle": "Naudokite savo modelius",
     "proofOpenSourceBody": "Peržiūrėkite kodą ir turėkite perkeliamą sistemą.",
     "proofOpenSourceTitle": "Atviras kodas",
-    "proofPermissionsBody": "Užklausos lieka apribotos naudotoju ir darbo sritimi.",
+    "proofPermissionsBody": "Kiekvienas veiksmas lieka naudotojo ir darbo srities teisių ribose.",
     "proofPermissionsTitle": "Paiso teisių",
     "proofSelfHostBody": "Paleiskite programą stella savo valdomoje infrastruktūroje.",
-    "proofSelfHostTitle": "Galima talpinti patiems",
-    "selfHostGuide": "Skaityti savarankiško talpinimo gidą",
+    "proofSelfHostTitle": "Diegiama savo serveryje",
+    "selfHostGuide": "Skaityti diegimo savo serveryje gidą",
     "sourceOnGitHub": "Pirminis kodas platformoje GitHub",
     "title": "Viena byla. Nuo dokumentų iki atsakymo.",
     "velocityAll": "Visas pakeitimų žurnalas",
     "velocityTitle": "Ką neseniai išleidome.",
-    "workspaceBody": "Dokumentai, terminai, struktūruota peržiūra ir rengimas lieka kartu, juos galima surasti visose bylose. Atverkite bylą, matykite darbą kontekste ir iš lentelės pereikite prie pirminio dokumento iš naujo neatkurdami sekos.",
-    "workspaceEyebrow": "Bylos darbo sritis",
+    "workspaceBody": "Dokumentai, terminai, struktūruota peržiūra ir rengimas lieka kartu, juos galima surasti visose bylose.",
+    "workspaceEyebrow": "Darbo sritis",
     "workspaceTitle": "Tvarkykite visą bylą vienoje vietoje."
   }
 }

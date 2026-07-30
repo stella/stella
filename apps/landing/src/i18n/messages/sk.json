@@ -63,12 +63,12 @@
   },
   "hero": {
     "badge": "Aktívne vyvíjané",
-    "selfHost": "Vlastný hosting",
+    "selfHost": "Self-hosting",
     "subtitle": "<gh>Open source</gh> právny pracovný priestor: spisy, dokumenty, revízia a AI agent, ktorý odpovedá s citáciami.",
     "title": "Zapojte AI do každého spisu."
   },
   "home": {
-    "ctaTitle": "Nasaďte AI vo svojej advokátskej kancelárii."
+    "ctaTitle": "Nasaďte AI vo svojej praxi."
   },
   "mcpProof": {
     "contextBody": "Preneste schválené spisy a právne dáta do nástroja Claude alebo do ľubovoľného klienta kompatibilného s MCP.",
@@ -78,7 +78,7 @@
     "subtitle": "Preneste aktuálny kontext spisu do nástrojov, v ktorých pracujete.",
     "title": "Pracovný priestor teraz rozumie MCP.",
     "toolsBody": "Vyhľadávajte, čítajte a vypĺňajte vzory cez rovnaký register, z ktorého vychádza CLI aplikácie stella.",
-    "toolsTitle": "Nástroje pre agentov."
+    "toolsTitle": "Nástroje pre AI agentov."
   },
   "meta": {
     "homeDescription": "Open source právny pracovný priestor pre advokátov: spisy, dokumenty, kontrola zmlúv aj právne rešerše. Prevádzkujte sami alebo v cloude. AI podľa využitia.",
@@ -95,14 +95,14 @@
     "github": "stella na GitHube",
     "openMenu": "Otvoriť navigáciu",
     "pillars": {
-      "data": "Dátová infraštruktúra",
+      "data": "Dáta",
       "intelligence": "Právna analytika",
       "workspace": "Pracovný priestor"
     },
     "product": "Produkt",
     "products": {
       "agent": {
-        "blurb": "Komunikujte so svojimi spismi, dokumentmi, registrami aj pripojenými nástrojmi na jednom mieste. Agent koná so schválením a s náhľadmi zdrojov, opiera odpovede o citácie a rozširuje sa pomocou zručností a externých konektorov.",
+        "blurb": "Komunikujte so svojimi spismi, dokumentmi, registrami aj pripojenými nástrojmi na jednom mieste. AI agent koná so schválením a s náhľadmi zdrojov, opiera odpovede o citácie a rozširuje sa pomocou zručností a externých konektorov.",
         "eyebrow": "AI agent",
         "title": "AI agent, ktorý pracuje naprieč vašimi spismi, súbormi aj nástrojmi."
       },
@@ -122,9 +122,9 @@
         "title": "Upravujte wordové dokumenty v prehliadači bez toho, aby ste opustili spis."
       },
       "public-data": {
-        "blurb": "Judikatúra a obchodné registre z oficiálnych verejných zdrojov, ktoré zbiera a štruktúrovane spracúva Legal Atlas, dátový stack aplikácie stella. Prečítajte si rozhodnutie, vyhľadajte firmu, sledujte citácie a odkazujte na čokoľvek z toho zo spisu alebo to odovzdajte AI agentovi.",
+        "blurb": "Judikatúra a obchodné registre z oficiálnych verejných zdrojov, ktoré so zachovanou štruktúrou zbiera Legal Atlas aplikácie stella. Prečítajte si rozhodnutie, vyhľadajte spoločnosť, sledujte citácie a odkazujte na čokoľvek z toho zo spisu alebo to odovzdajte AI agentovi.",
         "eyebrow": "Verejné dáta",
-        "title": "Oficiálne právne dáta pripravené na načítanie do spisu."
+        "title": "Právne dáta pripravené na načítanie do spisu."
       },
       "tabular-review": {
         "blurb": "Položte otázky nad celou sadou dokumentov a získajte štruktúrované odpovede ako tabuľku v rámci spisu: zoraditeľnú, filtrovateľnú a dohľadateľnú až k zdrojovému textu. Pre due diligence, discovery aj rešerše.",
@@ -166,7 +166,7 @@
           "title": "Pracuje naprieč vašimi spismi"
         },
         "1": {
-          "body": "Vložte dokumenty do konverzácie a nechajte agenta, nech ich prečíta, porovná alebo zhrnie.",
+          "body": "Vložte dokumenty do konverzácie a nechajte AI agenta, nech ich prečíta, porovná alebo zhrnie.",
           "title": "Prečíta vaše súbory"
         },
         "2": {
@@ -174,11 +174,11 @@
           "title": "Pripojené nástroje"
         },
         "3": {
-          "body": "Agent sa spýta skôr, než niečo urobí, takže každý krok máte pod kontrolou.",
+          "body": "AI agent sa spýta skôr, než niečo urobí, takže každý krok máte pod kontrolou.",
           "title": "Schválenie pred akciou"
         },
         "4": {
-          "body": "Pri každom kroku vidíte v náhľade, čo agent práve číta.",
+          "body": "Pri každom kroku vidíte v náhľade, čo AI agent práve číta.",
           "title": "Náhľady zdrojov"
         },
         "5": {
@@ -187,15 +187,15 @@
         }
       },
       "cta": {
-        "heading": "Dajte agentovi skutočný spis."
+        "heading": "Dajte AI agentovi skutočný spis."
       },
       "faqs": {
         "0": {
           "answer": "Nie. Skôr než niečo urobí, požiada o schválenie, a pri tom, čo číta, ukazuje náhľad zdroja, takže každý krok sledujete a potvrdíte.",
-          "question": "Koná agent sám od seba?"
+          "question": "Koná AI agent sám od seba?"
         },
         "1": {
-          "answer": "Cez zručnosti (opakovane použiteľné prompty a definície nástrojov) a externé konektory kompatibilné s MCP. Oboje rozširuje dosah agenta bez toho, aby sa menil samotný chat.",
+          "answer": "Cez zručnosti (opakovane použiteľné pokyny a nástroje) a externé konektory kompatibilné s MCP. Oboje rozširuje dosah AI agenta bez toho, aby sa menil samotný chat.",
           "question": "Ako pridám nové schopnosti?"
         },
         "2": {
@@ -203,33 +203,33 @@
           "question": "Odkiaľ jeho odpovede pochádzajú?"
         }
       },
-      "metaDescription": "Právny asistent, ktorý komunikuje s vašimi spismi, dokumentmi aj registrami. Agent koná so schválením, opiera odpovede o citácie a rozširuje sa cez zručnosti.",
+      "metaDescription": "Právny asistent, ktorý komunikuje s vašimi spismi, dokumentmi a registrami. AI agent koná so schválením, opiera odpovede o citácie a rastie so zručnosťami.",
       "metaTitle": "AI agent: právny asistent pre vaše spisy | stella",
       "quickAnswer": {
-        "answer": "Agent komunikuje s vašimi spismi, súbormi, obchodnými registrami aj pripojenými nástrojmi. Skôr než niečo urobí, požiada o schválenie, pri tom, čo číta, ukazuje náhľad zdroja, a odpovede opiera o citácie. Rozšírite ho o opakovane použiteľné zručnosti a externé konektory kompatibilné s MCP.",
+        "answer": "AI agent komunikuje s vašimi spismi, súbormi, obchodnými registrami aj pripojenými nástrojmi. Skôr než niečo urobí, požiada o schválenie, pri tom, čo číta, ukazuje náhľad zdroja, a odpovede opiera o citácie. Rozšírite ho o opakovane použiteľné zručnosti a externé konektory kompatibilné s MCP.",
         "question": "Čo AI agent dokáže?"
       },
       "sections": {
         "0": {
           "bullets": {
             "0": "Chat nad spismi, dokumentmi aj kontaktmi v jednej konverzácii",
-            "1": "Načítajte do rovnakého vlákna dáta o firmách aj z registrov",
-            "2": "Odovzdajte agentovi tabuľkovú revíziu a pýtajte sa ďalej"
+            "1": "Načítajte do rovnakého vlákna dáta o spoločnostiach aj z registrov",
+            "2": "Odovzdajte AI agentovi tabuľkovú revíziu a pýtajte sa ďalej"
           },
           "heading": "Spýtajte sa raz, naprieč celým spisom"
         },
         "1": {
           "bullets": {
             "0": "Každá akcia čaká na vaše schválenie",
-            "1": "Náhľad zdroja ukazuje, čo agent v každom kroku čítal",
+            "1": "Náhľad zdroja ukazuje, čo AI agent v každom kroku čítal",
             "2": "Citácie otvoria zdrojový dokument presne v danej pasáži"
           },
           "heading": "Kontrolu máte vy"
         },
         "2": {
           "bullets": {
-            "0": "Zručnosti sú prompty a definície nástrojov, ktoré použijete opakovane naprieč spismi",
-            "1": "Externé konektory sú kompatibilné s MCP, takže agent dosiahne na ďalšie nástroje",
+            "0": "Zručnosti sú pokyny a nástroje, ktoré použijete opakovane naprieč spismi",
+            "1": "Externé konektory sú kompatibilné s MCP, takže AI agent dosiahne na ďalšie nástroje",
             "2": "Pridávajte schopnosti bez toho, aby ste menili spôsob práce s chatom"
           },
           "heading": "Rozšírte ho o zručnosti a konektory"
@@ -257,11 +257,11 @@
           "title": "Identifikačné údaje zostanú bokom"
         },
         "1": {
-          "body": "Beží priamo v okne chatu a v revízii dokumentov, nie v oddelenom nástroji.",
+          "body": "Beží priamo v chate a v revízii dokumentov, nie v oddelenom nástroji.",
           "title": "Funguje v chate aj v revízii"
         },
         "2": {
-          "body": "Pridajte výrazy a čierne listiny svojej organizácie, aby sa vždy zachytili mená, na ktorých vám záleží.",
+          "body": "Pridajte vlastné výrazy a zoznamy mien svojej organizácie, aby sa vždy zachytili mená, na ktorých vám záleží.",
           "title": "S vašimi vlastnými výrazmi"
         },
         "3": {
@@ -340,12 +340,12 @@
           "title": "Platia oprávnenia pracovného priestoru"
         },
         "4": {
-          "body": "Príkazy vracajú strojovo čitateľný JSON pre skripty a agentov aj čitateľný výstup do terminálu pre ľudí.",
+          "body": "Príkazy vracajú strojovo čitateľný JSON pre skripty a AI agentov aj čitateľný výstup do terminálu pre ľudí.",
           "title": "Štruktúrovaný výstup"
         },
         "5": {
           "body": "Nasmerujte CLI aj klientov MCP na server aplikácie stella, ktorý prevádzkuje vaša organizácia.",
-          "title": "Pripravené na vlastný hosting"
+          "title": "Pripravené na self-hosting"
         }
       },
       "cta": {
@@ -368,7 +368,7 @@
       "metaDescription": "Vyhľadávajte, čítajte a pracujte s aplikáciou stella z príkazového riadka alebo z klienta kompatibilného s MCP. Obe rozhrania zdieľajú oprávnenia aj dáta.",
       "metaTitle": "MCP server a CLI pre váš právny pracovný priestor | stella",
       "quickAnswer": {
-        "answer": "Dve rozhrania k rovnakým schopnostiam aplikácie stella. CLI zrkadlí register nástrojov MCP ako príkazy, zatiaľ čo MCP server umožňuje kompatibilným agentom a nástrojom pracovať so spismi, dokumentmi, vzormi aj verejnými právnymi dátami pod rovnakou kontrolou prístupu.",
+        "answer": "Dve rozhrania k rovnakým schopnostiam aplikácie stella. CLI zrkadlí register nástrojov MCP ako príkazy, zatiaľ čo MCP server umožňuje kompatibilným AI agentom a nástrojom pracovať so spismi, dokumentmi, vzormi aj verejnými právnymi dátami pod rovnakou kontrolou prístupu.",
         "question": "Čo je CLI a MCP server aplikácie stella?"
       },
       "sections": {
@@ -384,7 +384,7 @@
           "bullets": {
             "0": "Sprístupnite spisy, dokumenty, judikatúru, vzory aj ďalšie schválené nástroje",
             "1": "Katalóg schopností aj príkazy CLI sa generujú z jedného registra",
-            "2": "Pripojte kompatibilných agentov bez kopírovania právnych dát do iného pracovného priestoru"
+            "2": "Pripojte kompatibilných AI agentov bez kopírovania právnych dát do iného pracovného priestoru"
           },
           "heading": "Tie isté schopnosti cez MCP"
         }
@@ -411,7 +411,7 @@
           "title": "Úpravy .docx priamo v prehliadači"
         },
         "1": {
-          "body": "Dokument zostáva po celý čas vo formáte .docx, takže písma, štýly aj rozloženie sa zobrazia a uložia tak, ako ich vytvoril Word.",
+          "body": "Dokument zostáva po celý čas vo formáte .docx, takže písma, štýly aj rozloženie vyzerajú a uložia sa tak, ako ich vytvoril Word.",
           "title": "Formátovanie zostáva"
         },
         "2": {
@@ -505,15 +505,15 @@
       },
       "capabilities": {
         "0": {
-          "body": "Rozhodnutia z oficiálnych verejných právnych zdrojov, nie výťahy vyťažené od tretích strán.",
+          "body": "Rozhodnutia priamo z oficiálnych zdrojov, nie prevzaté výťahy.",
           "title": "Oficiálna judikatúra"
         },
         "1": {
-          "body": "Legal Atlas každé rozhodnutie spracuje a zachová jeho pôvodnú štruktúru.",
+          "body": "Každé rozhodnutie si zachová nadpisy, odseky aj odkazy pôvodného textu.",
           "title": "So zachovanou štruktúrou"
         },
         "2": {
-          "body": "Typovaní klienti k národným obchodným registrom, dopyt položíte priamo zo spisu.",
+          "body": "Vyhľadávajte v národných obchodných registroch bez toho, aby ste opustili spis.",
           "title": "Obchodné registre"
         },
         "3": {
@@ -525,7 +525,7 @@
           "title": "Podľa jurisdikcie"
         },
         "5": {
-          "body": "Odkážte na ktorýkoľvek zdroj zo spisu, aby odpovede agenta zostali dohľadateľné.",
+          "body": "Odkážte na ktorýkoľvek zdroj zo spisu, aby odpovede AI agenta zostali dohľadateľné.",
           "title": "Podklad pre AI"
         }
       },
@@ -534,11 +534,11 @@
       },
       "faqs": {
         "0": {
-          "answer": "Judikatúra pochádza z oficiálnych verejných právnych zdrojov, ktoré načítava a spracúva Legal Atlas, dátový stack aplikácie stella. Dáta o firmách prichádzajú z národných obchodných registrov cez typovaných klientov, nie z kópií od tretích strán.",
+          "answer": "Judikatúra pochádza z oficiálnych verejných právnych zdrojov, zbiera ju Legal Atlas aplikácie stella a zachováva jej štruktúru. Dáta o spoločnostiach prichádzajú priamo z národných obchodných registrov, nie z kópií od tretích strán.",
           "question": "Odkiaľ dáta pochádzajú?"
         },
         "1": {
-          "answer": "Dva zoznamy a oba rastú. Medzi typovanými klientmi registrov už sú ARES (Česko), Companies House (Spojené kráľovstvo), SEC EDGAR (USA), KRS (Poľsko), PRH (Fínsko) a VIES (DPH v EÚ). Okrem registrov sa oficiálne zdroje objavujú podľa jurisdikcie z katalógu konektorov aplikácie stella; pripojené zdroje má napríklad Česko, Španielsko aj Taiwan a čítačka judikatúry vie prechádzať a filtrovať podľa jurisdikcie, ako ďalších oficiálnych zdrojov pribúda.",
+          "answer": "Dva zoznamy a oba rastú. Medzi pripojenými registrami už sú ARES (Česko), Companies House (Spojené kráľovstvo), SEC EDGAR (USA), KRS (Poľsko), PRH (Fínsko) a VIES (DPH v EÚ). Okrem registrov pribúdajú oficiálne zdroje jurisdikciu po jurisdikcii; pripojené zdroje má napríklad Česko, Španielsko aj Taiwan a čítačka judikatúry vie prechádzať a filtrovať podľa jurisdikcie, ako ďalších oficiálnych zdrojov pribúda.",
           "question": "Ktoré jurisdikcie a registre sú pokryté?"
         },
         "2": {
@@ -549,33 +549,33 @@
       "metaDescription": "Judikatúra a obchodné registre z oficiálnych verejných zdrojov. Čítajte rozhodnutia, vyhľadávajte firmy, sledujte citácie a načítajte ich priamo do spisu.",
       "metaTitle": "Právne rešerše judikatúry a obchodné registre | stella",
       "quickAnswer": {
-        "answer": "Dvojaké. Oficiálnu verejnú judikatúru, ktorú stella načítava a štruktúrovane spracúva, takže si rozhodnutia prečítate, vyhľadáte v nich a prejdete ich citácie. A typovaný prístup do národných obchodných registrov, takže oficiálne údaje o firme načítate priamo do spisu. Oboje je podložený zdroj, na ktorý sa AI agent môže odvolať.",
+        "answer": "Dvojaké. Oficiálnu verejnú judikatúru, ktorú stella načítava so zachovanou štruktúrou, takže si rozhodnutia prečítate, vyhľadáte v nich a prejdete ich citácie. A priamy prístup do národných obchodných registrov, takže oficiálne údaje o spoločnosti načítate priamo do spisu. Oboje je podložený zdroj, na ktorý sa AI agent môže odvolať.",
         "question": "Aké verejné dáta prináša stella?"
       },
       "sections": {
         "0": {
           "bullets": {
             "0": "Zbierané z oficiálnych verejných právnych zdrojov",
-            "1": "Parsery zachovávajú nadpisy, odseky aj odkazy",
-            "2": "Postavené na otvorenom dátovom stacku Legal Atlas"
+            "1": "Nadpisy, odseky aj odkazy zostávajú tak, ako sú v origináli",
+            "2": "Postavené na otvorenom Legal Atlas aplikácie stella"
           },
           "heading": "Judikatúra z oficiálnych zdrojov so zachovanou štruktúrou"
         },
         "1": {
           "bullets": {
-            "0": "Typovaní klienti k národným registrom: ARES, Companies House, SEC EDGAR, KRS, PRH, VIES a ďalšie",
-            "1": "Načítajte oficiálne dáta o firme do spisu namiesto ručného prepisovania",
+            "0": "Pripojené národné registre: ARES, Companies House, SEC EDGAR, KRS, PRH, VIES a ďalšie",
+            "1": "Načítajte oficiálne dáta o spoločnosti do spisu namiesto ručného prepisovania",
             "2": "Pokrytie sa rozširuje s každým ďalším oficiálnym zdrojom"
           },
-          "heading": "Obchodné registre, dopytované priamo zo spisu"
+          "heading": "Obchodné registre, v ktorých hľadáte priamo zo spisu"
         },
         "2": {
           "bullets": {
-            "0": "Odkážte zo spisu na rozhodnutie alebo záznam o firme",
-            "1": "Agent cituje pôvodný zdroj, nie parafrázu",
+            "0": "Odkážte zo spisu na rozhodnutie alebo záznam o spoločnosti",
+            "1": "AI agent cituje pôvodný zdroj, nie parafrázu",
             "2": "Hľadajte naprieč zdrojmi, nielen v jednom"
           },
-          "heading": "Jeden podložený zdroj pre agenta"
+          "heading": "Jeden podložený zdroj pre AI agenta"
         }
       }
     },
@@ -852,16 +852,15 @@
     }
   },
   "story": {
-    "agentBody": "Agent prehľadá spis, prečíta relevantný text a odpovie s citáciami, ktoré otvoria zdroj presne v danej pasáži. Použijete ho priamo v aplikácii stella, alebo si ho pripojíte k nástrojom, ktoré už používate.",
+    "agentBody": "AI agent prehľadá spis, prečíta relevantný text a odpovie s citáciami, ktoré otvoria zdroj presne v danej pasáži. Použijete ho priamo v aplikácii stella, alebo si ho pripojíte k nástrojom, ktoré už používate.",
     "agentEyebrow": "AI agent",
     "agentTitle": "Stačí sa spýtať. Každá odpoveď uvádza svoj zdroj.",
     "bringEditorToFront": "Preniesť do popredia editor aplikácie stella",
     "bringTerminalToFront": "Preniesť do popredia terminál aplikácie stella",
     "bringWorkspaceToFront": "Preniesť do popredia pracovný priestor aplikácie stella",
-    "controlBody": "stella je open source právny softvér, ktorý si môžete hostovať sami: nahliadnite do kódu, prevádzkujte ho po svojom a exportujte všetko v štandardných formátoch; bez viazanosti.",
-    "controlEyebrow": "Navrhnuté pre plnú kontrolu",
+    "controlBody": "stella je <gh>open source</gh> právny softvér, ktorý si môžete prevádzkovať na vlastnej infraštruktúre: nahliadnite do kódu, prevádzkujte ho po svojom a exportujte všetko v štandardných formátoch.",
     "controlTitle": "Majte technológie pod kontrolou.",
-    "dataBody": "Oficiálna judikatúra a obchodné registre priamo v spise, v každej jurisdikcii, kde pracujete. Anonymizácia pritom drží identifikačné údaje mimo dosahu AI.",
+    "dataBody": "Judikatúra a obchodné registre priamo v spise, v každej jurisdikcii, kde pracujete. Anonymizácia pritom drží identifikačné údaje mimo dosahu AI.",
     "dataEyebrow": "Právne dáta",
     "dataMainAlt": "Oficiálne súdne rozhodnutie otvorené v aplikácii stella",
     "dataTitle": "Judikatúra a registre po ruke.",
@@ -873,23 +872,23 @@
     "exploreTemplates": "Preskúmať vzory",
     "exploreWorkspace": "Preskúmať pracovný priestor",
     "eyebrow": "Prepojený pracovný priestor",
-    "intro": "Podklady, revízia aj finalizované dokumenty zostávajú v spise a nadväzujú na seba. Nad spisom pracujete spoločne s AI a každá odpoveď sa opiera o konkrétnu pasáž v zdroji.",
+    "intro": "Podklady, revízia aj finalizované dokumenty zostávajú v spise a nadväzujú na seba. Nad spisom môžete pracovať spoločne s AI a každý jej krok si overíte.",
     "openEditor": "Otvoriť editor",
     "proofByokBody": "Pre AI funkcie používajte vlastné kľúče od poskytovateľov.",
     "proofByokTitle": "Vlastné AI modely",
     "proofOpenSourceBody": "Nahliadnite do kódu a majte systém, ktorý si môžete preniesť.",
     "proofOpenSourceTitle": "Open source",
-    "proofPermissionsBody": "Požiadavky zostávajú obmedzené na daného používateľa a pracovný priestor.",
+    "proofPermissionsBody": "Každá akcia zostáva v medziach oprávnení používateľa a pracovného priestoru.",
     "proofPermissionsTitle": "Rešpektuje oprávnenia",
     "proofSelfHostBody": "Prevádzkujte aplikáciu stella na infraštruktúre, ktorú máte pod kontrolou.",
-    "proofSelfHostTitle": "Možnosť vlastného hostingu",
-    "selfHostGuide": "Prečítať návod na vlastný hosting",
+    "proofSelfHostTitle": "Na vlastnej infraštruktúre",
+    "selfHostGuide": "Prečítať návod na self-hosting",
     "sourceOnGitHub": "Zdrojový kód na GitHube",
     "title": "Jeden spis. Od podkladov po odpoveď.",
     "velocityAll": "Celý zoznam zmien",
     "velocityTitle": "Čo sme nedávno vydali.",
-    "workspaceBody": "Dokumenty, termíny, štruktúrovaná revízia aj príprava dokumentov zostávajú pokope a vyhľadávať v nich môžete naprieč všetkými spismi. Otvoríte spis, vidíte prácu v kontexte a z tabuľky prejdete priamo k podkladovému dokumentu bez toho, aby ste museli súvislosti hľadať odznova.",
-    "workspaceEyebrow": "Pracovný priestor spisu",
+    "workspaceBody": "Dokumenty, termíny, štruktúrovaná revízia aj príprava dokumentov zostávajú pokope a vyhľadávať v nich môžete naprieč všetkými spismi.",
+    "workspaceEyebrow": "Pracovný priestor",
     "workspaceTitle": "Veďte celý spis na jednom mieste."
   }
 }

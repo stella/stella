@@ -68,7 +68,7 @@
     "title": "Állítsa munkába az AI-t minden ügyben."
   },
   "home": {
-    "ctaTitle": "Hozza el az AI-t az Ön ügyvédi irodájába."
+    "ctaTitle": "Hozza el az AI-t a jogi munkájába."
   },
   "mcpProof": {
     "contextBody": "Vigye a jóváhagyott ügyeket és jogi adatokat a Claude-ba vagy bármely MCP-kompatibilis kliensbe.",
@@ -78,7 +78,7 @@
     "subtitle": "Vigye az ügy naprakész kontextusát azokba az eszközökbe, amelyekkel dolgozik.",
     "title": "A munkaterület mostantól érti az MCP-t.",
     "toolsBody": "Keressen, olvasson és töltsön ki sablonokat ugyanabból a nyilvántartásból, amelyből a stella alkalmazás CLI-je készül.",
-    "toolsTitle": "Eszközök ügynököknek."
+    "toolsTitle": "Eszközök AI-ügynököknek."
   },
   "meta": {
     "homeDescription": "Nyílt forráskódú jogi munkaterület ügyvédeknek: dokumentumok, ügyek, ellenőrzés és kutatás. Futtassa saját szerverén vagy a felhőnkben. Használatalapú AI.",
@@ -95,14 +95,14 @@
     "github": "stella a GitHubon",
     "openMenu": "Navigáció megnyitása",
     "pillars": {
-      "data": "Adatinfrastruktúra",
+      "data": "Adatok",
       "intelligence": "Jogi analitika",
       "workspace": "Munkaterület"
     },
     "product": "Termék",
     "products": {
       "agent": {
-        "blurb": "Beszélgessen az ügyeivel, dokumentumaival, nyilvántartásokkal és a csatlakoztatott eszközökkel egy helyen. Az ügynök jóváhagyással és forrás-előnézettel cselekszik, válaszait hivatkozásokra alapozza, és készségekkel, valamint külső csatlakozókkal bővül.",
+        "blurb": "Beszélgessen az ügyeivel, dokumentumaival, nyilvántartásokkal és a csatlakoztatott eszközökkel egy helyen. Az AI-ügynök jóváhagyással és forrás-előnézettel cselekszik, válaszait hivatkozásokra alapozza, és készségekkel, valamint külső csatlakozókkal bővül.",
         "eyebrow": "AI-ügynök",
         "title": "AI-ügynök, amely az ügyein, fájljain és eszközein át dolgozik."
       },
@@ -122,9 +122,9 @@
         "title": "Szerkesszen Word-dokumentumokat a böngészőben, az ügy elhagyása nélkül."
       },
       "public-data": {
-        "blurb": "Ítélkezési gyakorlat és cégnyilvántartások hivatalos nyilvános forrásokból, amelyeket a stella Legal Atlas rendszere gyűjt össze és dolgoz fel a szerkezet megőrzésével. Olvasson el egy határozatot, nézzen utána egy cégnek, kövesse a hivatkozásokat, és hivatkozzon bármelyikre az ügyből, vagy adja át az AI-ügynöknek.",
+        "blurb": "Ítélkezési gyakorlat és cégnyilvántartások hivatalos nyilvános forrásokból, amelyeket a stella Legal Atlas szolgáltatása gyűjt össze a szerkezet megőrzésével. Olvasson el egy határozatot, nézzen utána egy cégnek, kövesse a hivatkozásokat, és hivatkozzon bármelyikre az ügyből, vagy adja át az AI-ügynöknek.",
         "eyebrow": "Nyilvános adatok",
-        "title": "Hivatalos jogi adatok, készen arra, hogy az ügybe kerüljenek."
+        "title": "Jogi adatok, készen arra, hogy az ügybe kerüljenek."
       },
       "tabular-review": {
         "blurb": "Tegyen fel kérdéseket egy teljes dokumentumhalmazra, és kapjon strukturált válaszokat az ügyhöz kötött táblázatban: rendezhető, szűrhető és a forrásszövegig visszakövethető. Átvilágításhoz, iratfeltáráshoz és kutatáshoz készült.",
@@ -166,7 +166,7 @@
           "title": "Átfogja az összes ügyét"
         },
         "1": {
-          "body": "Vonjon be dokumentumokat a beszélgetésbe, és kérje meg az ügynököt, hogy olvassa el, hasonlítsa össze vagy foglalja össze őket.",
+          "body": "Vonjon be dokumentumokat a beszélgetésbe, és kérje meg az AI-ügynököt, hogy olvassa el, hasonlítsa össze vagy foglalja össze őket.",
           "title": "Elolvassa a fájljait"
         },
         "2": {
@@ -174,11 +174,11 @@
           "title": "Csatlakoztatott eszközök"
         },
         "3": {
-          "body": "Az ügynök kérdez, mielőtt cselekszik, így minden lépés az Ön kezében marad.",
+          "body": "Az AI-ügynök kérdez, mielőtt cselekszik, így minden lépés az Ön kezében marad.",
           "title": "Jóváhagyás a művelet előtt"
         },
         "4": {
-          "body": "Minden lépésnél előnézetben látja, mit olvas éppen az ügynök.",
+          "body": "Minden lépésnél előnézetben látja, mit olvas éppen az AI-ügynök.",
           "title": "Forrás-előnézetek"
         },
         "5": {
@@ -187,15 +187,15 @@
         }
       },
       "cta": {
-        "heading": "Bízzon az ügynökre egy valódi ügyet."
+        "heading": "Bízzon az AI-ügynökre egy valódi ügyet."
       },
       "faqs": {
         "0": {
           "answer": "Nem. Jóváhagyást kér, mielőtt cselekszik, és forrás-előnézetet mutat arról, amit olvas, így minden lépést nyomon követhet és megerősíthet.",
-          "question": "Cselekszik az ügynök önállóan?"
+          "question": "Cselekszik az AI-ügynök önállóan?"
         },
         "1": {
-          "answer": "Készségekkel (újrafelhasználható promptokkal és eszközdefiníciókkal), valamint MCP-kompatibilis külső csatlakozókkal. Mindkettő bővíti az ügynök hatókörét anélkül, hogy magát a csevegést megváltoztatná.",
+          "answer": "Készségekkel (újrafelhasználható utasításokkal és eszközökkel), valamint MCP-kompatibilis külső csatlakozókkal. Mindkettő bővíti az AI-ügynök hatókörét anélkül, hogy magát a csevegést megváltoztatná.",
           "question": "Hogyan adhatok hozzá új képességeket?"
         },
         "2": {
@@ -203,10 +203,10 @@
           "question": "Honnan származnak a válaszai?"
         }
       },
-      "metaDescription": "Beszélgessen ügyeivel, dokumentumaival, a nyilvántartásokkal és a csatlakoztatott eszközökkel. Az ügynök jóváhagyással cselekszik, hivatkozásokkal válaszol.",
+      "metaDescription": "Beszélgessen ügyeivel, dokumentumaival, nyilvántartásokkal és csatlakoztatott eszközökkel. Az AI-ügynök jóváhagyással cselekszik, hivatkozásokkal válaszol.",
       "metaTitle": "AI-ügynök jogi ügyekhez | stella",
       "quickAnswer": {
-        "answer": "Az ügynök az Ön ügyeivel, fájljaival, a cégnyilvántartásokkal és a csatlakoztatott eszközökkel dolgozik. Jóváhagyást kér, mielőtt cselekszik, forrás-előnézetet mutat arról, amit olvas, és hivatkozásokkal támasztja alá a válaszait. Újrafelhasználható készségekkel és MCP-kompatibilis külső csatlakozókkal bővítheti.",
+        "answer": "Az AI-ügynök az Ön ügyeivel, fájljaival, a cégnyilvántartásokkal és a csatlakoztatott eszközökkel dolgozik. Jóváhagyást kér, mielőtt cselekszik, forrás-előnézetet mutat arról, amit olvas, és hivatkozásokkal támasztja alá a válaszait. Újrafelhasználható készségekkel és MCP-kompatibilis külső csatlakozókkal bővítheti.",
         "question": "Mit tud az AI-ügynök?"
       },
       "sections": {
@@ -214,22 +214,22 @@
           "bullets": {
             "0": "Csevegés az ügyekről, dokumentumokról és kapcsolatokról egy beszélgetésben",
             "1": "Cég- és nyilvántartási adatok betöltése ugyanabba a szálba",
-            "2": "Adjon át egy táblázatos ellenőrzést az ügynöknek további kérdésekhez"
+            "2": "Adjon át egy táblázatos ellenőrzést az AI-ügynöknek további kérdésekhez"
           },
           "heading": "Kérdezzen egyszer, az egész ügyre"
         },
         "1": {
           "bullets": {
             "0": "Minden művelet megvárja az Ön jóváhagyását",
-            "1": "A forrás-előnézet minden lépésnél megmutatja, mit olvasott az ügynök",
+            "1": "A forrás-előnézet minden lépésnél megmutatja, mit olvasott az AI-ügynök",
             "2": "A hivatkozások pontosan a megfelelő szövegrésznél nyitják meg a forrásdokumentumot"
           },
           "heading": "Az irányítás az Öné"
         },
         "2": {
           "bullets": {
-            "0": "A készségek promptok és eszközdefiníciók, amelyeket több ügyben is felhasználhat",
-            "1": "A külső csatlakozók MCP-kompatibilisek, így az ügynök több eszközt ér el",
+            "0": "A készségek utasítások és eszközök, amelyeket több ügyben is felhasználhat",
+            "1": "A külső csatlakozók MCP-kompatibilisek, így az AI-ügynök több eszközt ér el",
             "2": "Új képességek anélkül, hogy a csevegés működése változna"
           },
           "heading": "Bővítse készségekkel és csatlakozókkal"
@@ -257,11 +257,11 @@
           "title": "Az azonosító adatok kívül maradnak"
         },
         "1": {
-          "body": "Közvetlenül a csevegés szerkesztőmezőjében és a dokumentumok ellenőrzésében fut, nem külön eszközben.",
+          "body": "Közvetlenül a csevegésben és a dokumentumok ellenőrzésében fut, nem külön eszközben.",
           "title": "Működik a csevegésben és az ellenőrzésben"
         },
         "2": {
-          "body": "Adja hozzá szervezete kifejezéseit és tiltólistáit, hogy az Önnek fontos nevek mindig fennakadjanak.",
+          "body": "Adja hozzá szervezete saját kifejezéseit és névlistáit, hogy az Önnek fontos nevek mindig fennakadjanak.",
           "title": "A saját kifejezéseivel"
         },
         "3": {
@@ -340,7 +340,7 @@
           "title": "A munkaterületi jogosultságok érvényesek"
         },
         "4": {
-          "body": "A parancsok géppel olvasható JSON-t adnak vissza a szkripteknek és az ügynököknek, valamint olvasható terminálkimenetet az embereknek.",
+          "body": "A parancsok géppel olvasható JSON-t adnak vissza a szkripteknek és az AI-ügynököknek, valamint olvasható terminálkimenetet az embereknek.",
           "title": "Strukturált kimenet"
         },
         "5": {
@@ -368,7 +368,7 @@
       "metaDescription": "Keressen, olvasson és dolgozzon a stella alkalmazással a parancssorból vagy bármely MCP-kompatibilis kliensből. Ugyanazok a képességek és jogosultságok.",
       "metaTitle": "MCP-szerver és CLI a jogi munkaterülethez | stella",
       "quickAnswer": {
-        "answer": "Két felület ugyanazokhoz a képességekhez a stella alkalmazásban. A CLI parancsokként tükrözi az MCP-eszköznyilvántartást, az MCP-szerver pedig lehetővé teszi, hogy a kompatibilis ügynökök és eszközök ügyekkel, dokumentumokkal, sablonokkal és nyilvános jogi adatokkal dolgozzanak, ugyanazon hozzáférési szabályok mellett.",
+        "answer": "Két felület ugyanazokhoz a képességekhez a stella alkalmazásban. A CLI parancsokként tükrözi az MCP-eszköznyilvántartást, az MCP-szerver pedig lehetővé teszi, hogy a kompatibilis AI-ügynökök és eszközök ügyekkel, dokumentumokkal, sablonokkal és nyilvános jogi adatokkal dolgozzanak, ugyanazon hozzáférési szabályok mellett.",
         "question": "Mi a stella CLI és az MCP-szerver?"
       },
       "sections": {
@@ -384,7 +384,7 @@
           "bullets": {
             "0": "Ügyek, dokumentumok, ítélkezési gyakorlat, sablonok és más jóváhagyott eszközök közzététele",
             "1": "A képességkatalógus és a CLI-parancsok egyetlen nyilvántartásból generálódnak",
-            "2": "Kompatibilis ügynökök csatlakoztatása anélkül, hogy a jogi adatok másik munkaterületre kerülnének"
+            "2": "Kompatibilis AI-ügynökök csatlakoztatása anélkül, hogy a jogi adatok másik munkaterületre kerülnének"
           },
           "heading": "Ugyanazok a képességek MCP-n keresztül"
         }
@@ -411,7 +411,7 @@
           "title": ".docx fájlok szerkesztése a böngészőben"
         },
         "1": {
-          "body": "A dokumentum végig .docx marad, így a betűtípusok, a stílusok és az elrendezés úgy jelennek meg és úgy mentődnek, ahogyan a Word létrehozta őket.",
+          "body": "A dokumentum végig .docx marad, így a betűtípusok, a stílusok és az elrendezés úgy néznek ki és úgy mentődnek, ahogyan a Word létrehozta őket.",
           "title": "A formázás érintetlen marad"
         },
         "2": {
@@ -505,15 +505,15 @@
       },
       "capabilities": {
         "0": {
-          "body": "Határozatok hivatalos nyilvános jogforrásokból, nem harmadik felektől begyűjtött összefoglalókból.",
+          "body": "Határozatok közvetlenül a hivatalos forrásokból, nem másodkézből származó összefoglalók.",
           "title": "Hivatalos ítélkezési gyakorlat"
         },
         "1": {
-          "body": "A Legal Atlas úgy dolgozza fel a határozatokat, hogy az eredeti szerkezetük érintetlen marad.",
+          "body": "Minden határozat megőrzi az eredeti címeit, bekezdéseit és hivatkozásait.",
           "title": "Megőrzött szerkezet"
         },
         "2": {
-          "body": "Típusos kliensek a nemzeti cég- és kereskedelmi nyilvántartásokhoz, közvetlenül az ügyből lekérdezve.",
+          "body": "Keressen a nemzeti cég- és kereskedelmi nyilvántartásokban anélkül, hogy elhagyná az ügyet.",
           "title": "Cégnyilvántartások"
         },
         "3": {
@@ -525,7 +525,7 @@
           "title": "Joghatóság szerint"
         },
         "5": {
-          "body": "Hivatkozzon bármelyik forrásra az ügyből, hogy az ügynök válaszai visszakövethetők maradjanak.",
+          "body": "Hivatkozzon bármelyik forrásra az ügyből, hogy az AI-ügynök válaszai visszakövethetők maradjanak.",
           "title": "Megalapozott alap az AI-nak"
         }
       },
@@ -534,11 +534,11 @@
       },
       "faqs": {
         "0": {
-          "answer": "Az ítélkezési gyakorlat hivatalos nyilvános jogforrásokból származik, amelyeket a stella Legal Atlas rendszere gyűjt be és dolgoz fel. A cégadatok a nemzeti cég- és kereskedelmi nyilvántartásokból érkeznek típusos klienseken keresztül, nem harmadik felek másolataiból.",
+          "answer": "Az ítélkezési gyakorlat hivatalos nyilvános jogforrásokból származik, a stella Legal Atlas szolgáltatása gyűjti össze a szerkezet megőrzésével. A cégadatok közvetlenül a nemzeti cég- és kereskedelmi nyilvántartásokból érkeznek, nem harmadik felek másolataiból.",
           "question": "Honnan származnak az adatok?"
         },
         "1": {
-          "answer": "Két lista, mindkettő bővül. A típusos nyilvántartás-kliensek között már ott van az ARES (Csehország), a Companies House (Egyesült Királyság), a SEC EDGAR (Egyesült Államok), a KRS (Lengyelország), a PRH (Finnország) és a VIES (uniós áfa). A nyilvántartásokon túl a hivatalos források joghatóságonként jelennek meg a stella csatlakozókatalógusából; Csehországnak, Spanyolországnak és Tajvannak például már vannak összekapcsolt forrásai, az ítélkezési gyakorlat olvasója pedig úgy készült, hogy joghatóság szerint lehessen böngészni és szűrni, ahogy újabb hivatalos források kerülnek be.",
+          "answer": "Két lista, mindkettő bővül. A csatlakoztatott nyilvántartások között már ott van az ARES (Csehország), a Companies House (Egyesült Királyság), a SEC EDGAR (Egyesült Államok), a KRS (Lengyelország), a PRH (Finnország) és a VIES (uniós áfa). A nyilvántartásokon túl a hivatalos források joghatóságról joghatóságra kerülnek be; Csehországnak, Spanyolországnak és Tajvannak például már vannak összekapcsolt forrásai, az ítélkezési gyakorlat olvasója pedig úgy készült, hogy joghatóság szerint lehessen böngészni és szűrni, ahogy újabb hivatalos források kerülnek be.",
           "question": "Mely joghatóságokra és nyilvántartásokra terjed ki?"
         },
         "2": {
@@ -549,33 +549,33 @@
       "metaDescription": "Ítélkezési gyakorlat és cégnyilvántartások hivatalos forrásokból. Olvasson határozatokat, keressen cégeket, kövesse a hivatkozásokat, és hozza az ügybe.",
       "metaTitle": "Ítélkezési gyakorlat és cégadatok | stella",
       "quickAnswer": {
-        "answer": "Kétfélét. Hivatalos nyilvános ítélkezési gyakorlatot, begyűjtve és a szerkezetét megőrizve feldolgozva, hogy határozatokat olvashasson, kereshessen bennük, és követhesse a hivatkozásaikat. És típusos hozzáférést a nemzeti cég- és kereskedelmi nyilvántartásokhoz, hogy a hivatalos cégadatokat egyenesen az ügybe hozhassa. Mindkettő megalapozott forrás, amelyre az AI-ügynök hivatkozni tud.",
+        "answer": "Kétfélét. Hivatalos nyilvános ítélkezési gyakorlatot, a szerkezetét megőrizve begyűjtve, hogy határozatokat olvashasson, kereshessen bennük, és követhesse a hivatkozásaikat. És közvetlen hozzáférést a nemzeti cég- és kereskedelmi nyilvántartásokhoz, hogy a hivatalos cégadatokat egyenesen az ügybe hozhassa. Mindkettő megalapozott forrás, amelyre az AI-ügynök hivatkozni tud.",
         "question": "Milyen nyilvános adatokat hoz be a stella?"
       },
       "sections": {
         "0": {
           "bullets": {
             "0": "Hivatalos nyilvános jogforrásokból gyűjtve",
-            "1": "A szerkezetőrző feldolgozók megtartják a címeket, bekezdéseket és hivatkozásokat",
-            "2": "A nyílt Legal Atlas begyűjtő rendszerére épül"
+            "1": "A címek, a bekezdések és a hivatkozások úgy maradnak, ahogy az eredetiben",
+            "2": "A stella nyílt Legal Atlas szolgáltatására épül"
           },
           "heading": "Ítélkezési gyakorlat hivatalos forrásból, megőrzött szerkezettel"
         },
         "1": {
           "bullets": {
-            "0": "Típusos kliensek a nemzeti nyilvántartásokhoz: ARES, Companies House, SEC EDGAR, KRS, PRH, VIES és további",
+            "0": "Csatlakoztatott nemzeti nyilvántartások: ARES, Companies House, SEC EDGAR, KRS, PRH, VIES és további",
             "1": "Hozza a hivatalos cégadatokat az ügybe kézi másolás helyett",
             "2": "A lefedettség nő, ahogy újabb hivatalos források kerülnek be"
           },
-          "heading": "Cég- és kereskedelmi nyilvántartások, lekérdezve az ügyből"
+          "heading": "Cég- és kereskedelmi nyilvántartások, az ügyből keresve"
         },
         "2": {
           "bullets": {
             "0": "Hivatkozzon határozatra vagy cégbejegyzésre az ügyből",
-            "1": "Az ügynök az alapul szolgáló forrásra hivatkozik, nem átfogalmazásra",
+            "1": "Az AI-ügynök az alapul szolgáló forrásra hivatkozik, nem átfogalmazásra",
             "2": "Keressen a források között, ne csak egyen belül"
           },
-          "heading": "Egyetlen megalapozott forrás az ügynöknek"
+          "heading": "Egyetlen megalapozott forrás az AI-ügynöknek"
         }
       }
     },
@@ -852,16 +852,15 @@
     }
   },
   "story": {
-    "agentBody": "Az ügynök átkutatja az ügyet, elolvassa a releváns szöveget, és olyan hivatkozásokkal válaszol, amelyek pontosan a megfelelő szövegrésznél nyitják meg a forrást. Használja közvetlenül a stella alkalmazásban, vagy kapcsolja össze a már használt eszközeivel.",
+    "agentBody": "Az AI-ügynök átkutatja az ügyet, elolvassa a releváns szöveget, és olyan hivatkozásokkal válaszol, amelyek pontosan a megfelelő szövegrésznél nyitják meg a forrást. Használja közvetlenül a stella alkalmazásban, vagy kapcsolja össze a már használt eszközeivel.",
     "agentEyebrow": "AI-ügynök",
     "agentTitle": "Egy kérdés elég. Minden válasz megjelöli a forrását.",
     "bringEditorToFront": "A stella alkalmazás szerkesztőjének előtérbe hozása",
     "bringTerminalToFront": "A stella alkalmazás termináljának előtérbe hozása",
     "bringWorkspaceToFront": "A stella alkalmazás munkaterületének előtérbe hozása",
-    "controlBody": "A stella nyílt forráskódú jogi szoftver, amelyet saját maga is üzemeltethet: vizsgálja meg a kódot, futtassa a maga módján, és exportáljon mindent szabványos formátumokban; bezártság nélkül.",
-    "controlEyebrow": "Irányításra tervezve",
+    "controlBody": "A stella <gh>nyílt forráskódú</gh> jogi szoftver, amelyet saját maga is üzemeltethet: vizsgálja meg a kódot, futtassa a maga módján, és exportáljon mindent szabványos formátumokban.",
     "controlTitle": "Tartsa kézben a rendszerét.",
-    "dataBody": "Hivatalos ítélkezési gyakorlat és cégnyilvántartások közvetlenül az ügyben, minden joghatóságban, ahol dolgozik. Az anonimizálás közben távol tartja az azonosító adatokat az AI-tól.",
+    "dataBody": "Ítélkezési gyakorlat és cégnyilvántartások közvetlenül az ügyben, minden joghatóságban, ahol dolgozik. Az anonimizálás közben távol tartja az azonosító adatokat az AI-tól.",
     "dataEyebrow": "Jogi adatok",
     "dataMainAlt": "Egy hivatalos bírósági határozat a stella alkalmazásban megnyitva",
     "dataTitle": "Ítélkezési gyakorlat és nyilvántartások kéznél.",
@@ -873,23 +872,23 @@
     "exploreTemplates": "Sablonok felfedezése",
     "exploreWorkspace": "Munkaterület felfedezése",
     "eyebrow": "Összekapcsolt munkaterület",
-    "intro": "Az iratok, az ellenőrzés és a véglegesített dokumentumok az ügyben maradnak és egymásra épülnek. Az ügyön az AI-jal együtt dolgozik, és minden válasz a forrás pontos szövegrészére támaszkodik.",
+    "intro": "Az iratok, az ellenőrzés és a véglegesített dokumentumok az ügyben maradnak és egymásra épülnek. Az ügyön az AI-jal együtt dolgozhat, és annak minden lépése ellenőrizhető.",
     "openEditor": "Szerkesztő megnyitása",
     "proofByokBody": "Az AI-funkciókhoz használja saját szolgáltatói kulcsait.",
     "proofByokTitle": "Saját modellek használata",
     "proofOpenSourceBody": "Vizsgálja meg a kódot, és tartson meg egy hordozható rendszert.",
     "proofOpenSourceTitle": "Nyílt forráskód",
-    "proofPermissionsBody": "A kérések a felhasználóra és a munkaterületre korlátozódnak.",
+    "proofPermissionsBody": "Minden művelet a felhasználó és a munkaterület jogosultságain belül marad.",
     "proofPermissionsTitle": "Tiszteletben tartja a jogosultságokat",
     "proofSelfHostBody": "Futtassa a stella alkalmazást olyan infrastruktúrán, amelyet Ön felügyel.",
-    "proofSelfHostTitle": "Saját szerveren üzemeltethető",
+    "proofSelfHostTitle": "Saját üzemeltetésű",
     "selfHostGuide": "Saját üzemeltetési útmutató elolvasása",
     "sourceOnGitHub": "Forráskód a GitHubon",
     "title": "Egy ügy. Az iratoktól a válaszig.",
     "velocityAll": "Teljes változásnapló",
     "velocityTitle": "Amit mostanában kiadtunk.",
-    "workspaceBody": "A dokumentumok, a határidők, a strukturált ellenőrzés és a szövegezés együtt maradnak, és minden ügyben kereshetők. Nyisson meg egy ügyet, lássa a munkát a maga kontextusában, és lépjen a táblázatból az alapul szolgáló dokumentumra anélkül, hogy újra össze kellene raknia az előzményeket.",
-    "workspaceEyebrow": "Az ügy munkaterülete",
+    "workspaceBody": "A dokumentumok, a határidők, a strukturált ellenőrzés és a szövegezés együtt maradnak, és minden ügyben kereshetők.",
+    "workspaceEyebrow": "Munkaterület",
     "workspaceTitle": "Intézze az egész ügyet egy helyen."
   }
 }
