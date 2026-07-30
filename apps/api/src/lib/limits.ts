@@ -269,6 +269,11 @@ export const LIMITS = {
    *  a slow-but-live transfer. Bounds every corpus S3 call so a wedged
    *  transfer can never freeze a daemon loop. */
   corpusObjectIoTimeoutMs: 60_000,
+  /** Max decompressed bytes for one corpus object. Real payloads are a few
+   *  MB; anything past this ceiling is a corrupt or hostile object, and
+   *  rejecting it here keeps a giant string away from JSON.parse and the
+   *  chunker, whose cost scales with input size on the daemon's thread. */
+  corpusPayloadMaxDecompressedBytes: 128 * 1024 * 1024,
   infoSoudEventsMax: 200,
   infoSoudHearingsMax: 50,
   infoSoudRelatedCasesMax: 50,

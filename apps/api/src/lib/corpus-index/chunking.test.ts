@@ -447,3 +447,74 @@ describe("chunkDocument fallbacks", () => {
     ]);
   });
 });
+
+describe("structural budget", () => {
+  test("a block count past the ceiling throws instead of walking", () => {
+    const block = paragraph(0, "body text");
+    const blocks = Array.from({ length: 400_001 }, () => block);
+    expect(() =>
+      chunkDocument({ ast: astOf(blocks), fallbackText: "" }),
+    ).toThrow(/ceiling/u);
+  });
+
+  test("fallback text past the ceiling throws instead of splitting", () => {
+    expect(() =>
+      chunkDocument({ ast: null, fallbackText: "x".repeat(30_000_001) }),
+    ).toThrow(/ceiling/u);
+  });
+
+  test("heading ancestry is clamped to the deepest entries", () => {
+    // Persisted junk can carry any numeric level; ever-ascending levels grow
+    // the ancestry stack without bound, which is what made path
+    // materialization quadratic. The clamp keeps the deepest entries.
+    // Parsed through the production guard rather than cast, so the test
+    // proves the real path: `isDocumentAst` validates the envelope only, and
+    // any numeric level reaches the chunker.
+    const ast = parseDocumentAst(
+      JSON.stringify({
+        version: 1,
+        source: { system: "t", documentId: "d", webUrl: "", printUrl: "" },
+        metadata: {
+          caseNumber: null,
+          ecli: null,
+          court: null,
+          decisionDate: null,
+          decisionType: null,
+          keywords: [],
+          statutes: [],
+        },
+        blocks: [
+          ...Array.from({ length: 100 }, (_, index) => ({
+            id: `h${index}`,
+            anchorId: `h${index}-anchor`,
+            type: "heading",
+            level: index + 1,
+            inlines: [],
+            plainText: `H${index}`,
+          })),
+          {
+            id: "p100",
+            anchorId: "p100-anchor",
+            type: "paragraph",
+            inlines: [],
+            plainText: "body under deep headings",
+          },
+        ],
+      }),
+    );
+    const chunks = chunkDocument({ ast, fallbackText: "" });
+    const last = chunks.at(-1);
+    expect(last?.headingPath.length).toBe(64);
+    expect(last?.headingPath.at(-1)).toBe("H99");
+    expect(last?.headingPath.at(0)).toBe("H36");
+  });
+});
+
+describe("AST character budget", () => {
+  test("one oversized block throws instead of chunking", () => {
+    const blocks = [paragraph(0, "x".repeat(30_000_001))];
+    expect(() =>
+      chunkDocument({ ast: astOf(blocks), fallbackText: "" }),
+    ).toThrow(/ceiling/u);
+  });
+});
