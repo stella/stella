@@ -13411,6 +13411,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "entities", "ocr-create"],
                 capabilityId: "entities.ocr.create",
+                description:
+                  "Queue searchable-text recognition for an unencrypted PDF field on a document. Returns the durable run and reports when that source was already processed.",
                 access: "write",
                 flags: [
                   {

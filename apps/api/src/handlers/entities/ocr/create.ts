@@ -27,6 +27,10 @@ const createOcrBody = t.Object({
 });
 
 const config = {
+  description:
+    "Queue searchable-text recognition for an unencrypted PDF field on a " +
+    "document. Returns the durable run and reports when that source was " +
+    "already processed.",
   permissions: { entity: ["update"] },
   mcp: { type: "capability", reason: "document_processing" },
   access: "write",
