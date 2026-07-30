@@ -150,7 +150,7 @@ describe("updateOrganizationSettingsHandler", () => {
 
     expect(Result.isError(result)).toBe(true);
     if (Result.isError(result)) {
-      expect(result.error).toMatchObject({ status: 503 });
+      expect(result.error).toMatchObject({ status: 502 });
     }
     expect(databaseWasUsed).toBe(false);
   });

@@ -92,7 +92,7 @@ export const updateOrganizationSettingsHandler = async function* ({
   ) {
     return Result.err(
       new HandlerError({
-        status: 503,
+        status: 502,
         message: "Document processing is temporarily unavailable",
       }),
     );
