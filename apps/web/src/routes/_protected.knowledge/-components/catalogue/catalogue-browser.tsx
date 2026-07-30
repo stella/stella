@@ -5,6 +5,7 @@ import { useNavigate } from "@tanstack/react-router";
 import {
   CheckIcon,
   ChevronDownIcon,
+  FileDownIcon,
   GlobeIcon,
   GraduationCapIcon,
   LoaderIcon,
@@ -58,6 +59,7 @@ import {
   BlueprintGallerySheet,
   type BlueprintCreatedSkill,
 } from "@/routes/_protected.knowledge/-components/blueprint-gallery-sheet";
+import { ImportSkillDialog } from "@/routes/_protected.knowledge/-components/import-skill-dialog";
 import { knowledgeKeys } from "@/routes/_protected.knowledge/-queries";
 import {
   catalogueKeys,
@@ -90,10 +92,12 @@ type CatalogueBrowserProps = {
    * for the onboarding flow.
    */
   showAddCustom?: boolean;
+  /** Caller-resolved permission gate for importing private skills. */
+  canImportSkills: boolean;
   /**
-   * Caller-resolved permission gate for creating custom team tools. The route
-   * owns role loading so this browser cannot trigger a cold non-suspense query
-   * during mount.
+   * Caller-resolved permission gate for creating custom team tools. Members
+   * can still import private skills. The route owns role loading so this
+   * browser cannot trigger a cold non-suspense query during mount.
    */
   canManageCustomTools: boolean;
   /**
@@ -121,6 +125,7 @@ export const CatalogueBrowser = ({
   organizationId,
   initialKind,
   showAddCustom = true,
+  canImportSkills,
   canManageCustomTools,
   practiceJurisdictions,
 }: CatalogueBrowserProps) => {
@@ -172,6 +177,7 @@ export const CatalogueBrowser = ({
   const [jurisdictionQuery, setJurisdictionQuery] = useState("");
   const [addMcpOpen, setAddMcpOpen] = useState(false);
   const [blueprintGalleryOpen, setBlueprintGalleryOpen] = useState(false);
+  const [importSkillOpen, setImportSkillOpen] = useState(false);
 
   const entries = data.entries;
 
@@ -283,7 +289,8 @@ export const CatalogueBrowser = ({
   );
   const otherFiltered = filtered.filter((entry) => !entry.isRecommendedForOrg);
   const hasMcpEntries = entries.some((entry) => entry.kind === "mcp");
-  const canShowAddCustom = showAddCustom && canManageCustomTools;
+  const showAddCustomMenu =
+    showAddCustom && (canManageCustomTools || canImportSkills);
   // On a truly empty MCP catalogue, replace the generic "no entries" + reset
   // line with a prominent add-MCP call to action. Gated to admins/owners
   // like the add-custom menu, since members can't create connectors.
@@ -435,7 +442,7 @@ export const CatalogueBrowser = ({
           </Popover>
         </ResponsiveActionToolbarItem>
 
-        {canShowAddCustom && (
+        {showAddCustomMenu && (
           <ResponsiveActionToolbarItem
             className="ms-auto sm:ms-0"
             slot="action"
@@ -449,14 +456,24 @@ export const CatalogueBrowser = ({
                 <ChevronDownIcon className="size-3.5" />
               </MenuTrigger>
               <MenuPopup align="end" className="w-56">
-                <MenuItem onClick={() => setAddMcpOpen(true)}>
-                  <McpIcon className="size-4" />
-                  {t("catalogue.addCustomMcp")}
-                </MenuItem>
-                <MenuItem onClick={() => setBlueprintGalleryOpen(true)}>
-                  <GraduationCapIcon className="size-4" />
-                  {t("catalogue.addCustomSkill")}
-                </MenuItem>
+                {canManageCustomTools ? (
+                  <>
+                    <MenuItem onClick={() => setAddMcpOpen(true)}>
+                      <McpIcon className="size-4" />
+                      {t("catalogue.addCustomMcp")}
+                    </MenuItem>
+                    <MenuItem onClick={() => setBlueprintGalleryOpen(true)}>
+                      <GraduationCapIcon className="size-4" />
+                      {t("catalogue.addCustomSkill")}
+                    </MenuItem>
+                  </>
+                ) : null}
+                {canImportSkills && (
+                  <MenuItem onClick={() => setImportSkillOpen(true)}>
+                    <FileDownIcon className="size-4" />
+                    {t("knowledge.agentSkills.importSkill")}
+                  </MenuItem>
+                )}
               </MenuPopup>
             </Menu>
           </ResponsiveActionToolbarItem>
@@ -599,11 +616,20 @@ export const CatalogueBrowser = ({
         onOpenChange={setBlueprintGalleryOpen}
         open={blueprintGalleryOpen}
       />
+      {canImportSkills && (
+        <ImportSkillDialog
+          canManageTeam={canManageCustomTools}
+          onImported={onSkillSheetChanged}
+          onOpenChange={setImportSkillOpen}
+          open={importSkillOpen}
+        />
+      )}
     </div>
   );
 };
 
 type CatalogueBrowserWithRouteDataProps = {
+  canImportSkills: boolean;
   canManageCustomTools: boolean;
   organizationId: string;
   initialKind?: CatalogueBrowserFilterKind | undefined;
@@ -611,12 +637,14 @@ type CatalogueBrowserWithRouteDataProps = {
 };
 
 export const CatalogueBrowserWithRouteData = ({
+  canImportSkills,
   canManageCustomTools,
   organizationId,
   initialKind,
   practiceJurisdictions,
 }: CatalogueBrowserWithRouteDataProps) => (
   <CatalogueBrowser
+    canImportSkills={canImportSkills}
     canManageCustomTools={canManageCustomTools}
     initialKind={initialKind}
     organizationId={organizationId}

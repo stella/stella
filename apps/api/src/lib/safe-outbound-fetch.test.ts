@@ -341,6 +341,25 @@ describe("parseSafeOutboundUrl", () => {
 });
 
 describe("validateOutboundFetchTarget", () => {
+  test("applies the request timeout while DNS resolution is pending", async () => {
+    const result = await validateOutboundFetchTarget(
+      "https://example.com/skill.md",
+      {
+        resolveAddresses: async () =>
+          await new Promise(() => {
+            // Intentionally never resolves: the validation deadline must win.
+          }),
+        timeoutMs: 5,
+      },
+    );
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isOk(result)) {
+      throw new Error("Expected DNS validation to time out");
+    }
+    expect(result.error.message).toBe("Request timed out");
+  });
+
   test("rejects an IP-literal private host before any DNS lookup", async () => {
     const result = await validateOutboundFetchTarget("https://127.0.0.1/x");
     expect(Result.isError(result)).toBe(true);

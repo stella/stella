@@ -1,10 +1,13 @@
 import Elysia from "elysia";
+import { rateLimit } from "elysia-rate-limit";
 
 import createSkill from "@/api/handlers/skills/create";
 import deleteSkill from "@/api/handlers/skills/delete";
+import discoverSkillUrl from "@/api/handlers/skills/discover";
 import fromBlueprint from "@/api/handlers/skills/from-blueprint";
 import generateSkillDraft from "@/api/handlers/skills/generate-draft";
 import getSkill from "@/api/handlers/skills/get";
+import importSkillsFromUrls from "@/api/handlers/skills/import";
 import importSkillFromUrl from "@/api/handlers/skills/import-url";
 import listSkills from "@/api/handlers/skills/list";
 import listSkillCommands from "@/api/handlers/skills/list-commands";
@@ -15,15 +18,29 @@ import rewriteSkillResource from "@/api/handlers/skills/resources/rewrite";
 import updateSkillResource from "@/api/handlers/skills/resources/update";
 import uploadSkillResource from "@/api/handlers/skills/resources/upload";
 import seedSkills from "@/api/handlers/skills/seed";
+import {
+  isSkillSourceRateLimitedRequest,
+  skillSourceRateLimitBinding,
+} from "@/api/handlers/skills/source-rate-limit";
 import updateSkill from "@/api/handlers/skills/update";
 import uploadSkill from "@/api/handlers/skills/upload";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
 import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
+import { API_RATE_LIMITS } from "@/api/lib/limits";
 
 export const skillsRoute = new Elysia({ prefix: "/skills" })
   .use(authMacro)
   .use(permissionMacro)
   .use(invalidateQuery)
+  .use(
+    rateLimit({
+      scoping: "scoped",
+      duration: API_RATE_LIMITS.skillSource.duration,
+      max: API_RATE_LIMITS.skillSource.max,
+      ...skillSourceRateLimitBinding,
+      skip: (request) => !isSkillSourceRateLimitedRequest(request),
+    }),
+  )
   .guard({ validateAuth: true })
   .get("/", listSkills.handler, {
     permissions: listSkills.config.permissions,
@@ -59,6 +76,15 @@ export const skillsRoute = new Elysia({ prefix: "/skills" })
     body: importSkillFromUrl.config.body,
     invalidateQuery: true,
     permissions: importSkillFromUrl.config.permissions,
+  })
+  .post("/discover-url", discoverSkillUrl.handler, {
+    body: discoverSkillUrl.config.body,
+    permissions: discoverSkillUrl.config.permissions,
+  })
+  .post("/import-urls", importSkillsFromUrls.handler, {
+    body: importSkillsFromUrls.config.body,
+    invalidateQuery: true,
+    permissions: importSkillsFromUrls.config.permissions,
   })
   .post("/generate-draft", generateSkillDraft.handler, {
     body: generateSkillDraft.config.body,

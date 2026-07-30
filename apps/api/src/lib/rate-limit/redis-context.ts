@@ -80,6 +80,7 @@ type RedisRateLimitContextOptions = {
 };
 
 type CreateRedisRateLimitOptions = {
+  counterKeyGenerator?: Generator;
   failurePolicy: RedisRateLimitFailurePolicy;
   scope: string;
 };
@@ -362,12 +363,14 @@ const parseRequestScopedKey = (key: string): ParsedRequestScopedKey => {
   };
 };
 
-const requestScopedGenerator = (scope: string): Generator => {
-  const generateCounterKey = scopedGenerator(scope);
+const requestScopedGenerator = (
+  scope: string,
+  counterKeyGenerator = scopedGenerator(scope),
+): Generator => {
   const requestIds = new WeakMap<Request, string>();
 
   return async (request, server, derived) => {
-    const counterKey = await generateCounterKey(request, server, derived);
+    const counterKey = await counterKeyGenerator(request, server, derived);
     let requestId = requestIds.get(request);
     if (requestId === undefined) {
       requestId = Bun.randomUUIDv7();
@@ -378,13 +381,14 @@ const requestScopedGenerator = (scope: string): Generator => {
 };
 
 export const createRedisRateLimit = ({
+  counterKeyGenerator,
   failurePolicy,
   scope,
 }: CreateRedisRateLimitOptions): RedisRateLimitBinding => ({
   // Keep the context and request-token generator paired: the token lets a
   // failed request refund only the specific increment attempt it made.
   context: new RedisRateLimitContext({ failurePolicy }),
-  generator: requestScopedGenerator(scope),
+  generator: requestScopedGenerator(scope, counterKeyGenerator),
 });
 
 const redisRateLimitKey = (counterKey: string): string =>

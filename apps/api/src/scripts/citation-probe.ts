@@ -45,10 +45,14 @@ const settleInBatches = async <T>(
 ): Promise<T[]> => {
   const results: T[] = [];
   let failures = 0;
-  for (let i = 0; i < thunks.length; i += 8) {
-    // oxlint-disable-next-line no-await-in-loop -- bounded batches: each 8-wide slice settles before the next to cap S3 pressure
+  const settleFrom = async (offset: number): Promise<void> => {
+    const batch = thunks.slice(offset, offset + 8);
+    if (batch.length === 0) {
+      return;
+    }
+
     const settled = await Promise.allSettled(
-      thunks.slice(i, i + 8).map(async (thunk) => await thunk()),
+      batch.map(async (thunk) => await thunk()),
     );
     for (const outcome of settled) {
       if (outcome.status === "fulfilled") {
@@ -57,7 +61,10 @@ const settleInBatches = async <T>(
         failures += 1;
       }
     }
-  }
+    return settleFrom(offset + 8);
+  };
+
+  await settleFrom(0);
   if (failures > 0) {
     console.error(
       `citation-probe: ${failures} S3 operations failed; continuing`,

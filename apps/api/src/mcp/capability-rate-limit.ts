@@ -1,6 +1,7 @@
 /**
- * Gateway-side rate limit for `invoke_capability`, keyed per
- * (organization, capability id).
+ * Gateway-side rate limit for `invoke_capability`. Most capabilities are keyed
+ * per (organization, capability id); outbound skill-source capabilities consume
+ * the REST routes' shared client-IP budget instead.
  *
  * The generic invoke path bypasses the per-route rate-limit middleware some REST
  * routes install (e.g. `entities.translate`, `entities.upload`), so it needs its
@@ -19,6 +20,10 @@ import {
   createFeedbackIntakeGuards,
   type FeedbackIntakeGuards,
 } from "@/api/handlers/feedback/intake-guards";
+import {
+  consumeSkillSourceRateLimit,
+  type SkillSourceRateLimitResult,
+} from "@/api/handlers/skills/source-rate-limit";
 import type { SafeId } from "@/api/lib/branded-types";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 
@@ -61,7 +66,29 @@ export const INVOKE_RATE_LIMIT_OVERRIDES: Record<string, InvokeRateLimit> = {
     windowMs: API_RATE_LIMITS.upload.duration,
     max: API_RATE_LIMITS.upload.max,
   },
+  // Skill discovery/import fetches third-party URLs. Their REST routes share
+  // the dedicated source-fetch budget; generic capability invocation must not
+  // fall back to the looser default budget and amplify outbound traffic.
+  "skills.discover": {
+    windowMs: API_RATE_LIMITS.skillSource.duration,
+    max: API_RATE_LIMITS.skillSource.max,
+  },
+  "skills.import": {
+    windowMs: API_RATE_LIMITS.skillSource.duration,
+    max: API_RATE_LIMITS.skillSource.max,
+  },
+  "skills.import-url": {
+    windowMs: API_RATE_LIMITS.skillSource.duration,
+    max: API_RATE_LIMITS.skillSource.max,
+  },
 };
+
+/** Capabilities whose REST routes consume one shared client-IP budget. */
+const SKILL_SOURCE_CAPABILITY_IDS = new Set([
+  "skills.discover",
+  "skills.import",
+  "skills.import-url",
+]);
 
 export const resolveInvokeRateLimit = (capabilityId: string): InvokeRateLimit =>
   INVOKE_RATE_LIMIT_OVERRIDES[capabilityId] ?? DEFAULT_INVOKE_RATE_LIMIT;
@@ -72,19 +99,30 @@ const invokeCapabilityGuards = createFeedbackIntakeGuards();
 export type InvokeRateLimitResult = { ok: boolean; retryAfterSeconds: number };
 
 /**
- * Consume one unit of the (organization, capability) invoke budget. `ok: false`
- * once the window is exhausted; `retryAfterSeconds` is the window length so the
- * caller can render a retry hint. `guards` is injectable for tests.
+ * Consume one unit of the applicable invoke budget. Skill-source capabilities
+ * share the REST client-IP counter; all others use the (organization,
+ * capability) counter. `ok: false` once the window is exhausted;
+ * `retryAfterSeconds` lets the caller render a retry hint. Dependencies are
+ * injectable for tests.
  */
 export const consumeInvokeCapabilityRateLimit = async ({
   capabilityId,
+  clientIp = null,
   organizationId,
   guards = invokeCapabilityGuards,
+  consumeSkillSource = consumeSkillSourceRateLimit,
 }: {
   capabilityId: string;
+  clientIp?: string | null;
   organizationId: SafeId<"organization">;
   guards?: FeedbackIntakeGuards;
+  consumeSkillSource?: (input: {
+    clientIp: string | null;
+  }) => Promise<SkillSourceRateLimitResult>;
 }): Promise<InvokeRateLimitResult> => {
+  if (SKILL_SOURCE_CAPABILITY_IDS.has(capabilityId)) {
+    return await consumeSkillSource({ clientIp });
+  }
   const limit = resolveInvokeRateLimit(capabilityId);
   const ok = await guards.consumeCounter({
     bucket: INVOKE_CAPABILITY_BUCKET,

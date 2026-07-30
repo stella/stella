@@ -1144,19 +1144,20 @@ const executeInvoke = async ({
     });
   }
 
-  // 8. Gateway rate limit, per (organization, capability). Mirrors the explicit
-  // per-route limits some REST routes carry (e.g. entities.translate); capped
-  // before execution so a runaway agent cannot drive backend cost through the
-  // generic path. validateOnly (above) is exempt: it never executes.
+  // 8. Gateway rate limit. Most capabilities are scoped per organization and
+  // capability; skill-source calls share the REST client-IP budget. Capping
+  // before execution prevents a runaway agent from driving backend cost through
+  // the generic path. validateOnly (above) is exempt: it never executes.
   const rate = await consumeInvokeCapabilityRateLimit({
     capabilityId: id,
+    clientIp: context.clientIp ?? null,
     organizationId: context.organizationId,
   });
   if (!rate.ok) {
     return structuredErrorResult({
       code: "rate_limited",
       message: `Rate limit exceeded for capability "${id}"`,
-      hint: `Too many invocations of this capability for your organization; retry in about ${rate.retryAfterSeconds} seconds.`,
+      hint: `Too many invocations of this capability; retry in about ${rate.retryAfterSeconds} seconds.`,
     });
   }
 

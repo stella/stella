@@ -161,7 +161,7 @@ describe("handleMcpHttpRequest", () => {
         scopes: ["stella:read"],
         userId: "user_1",
       },
-      { request: mcpRequest },
+      { clientIp: null, request: mcpRequest },
     );
     expect(captureErrorMock).not.toHaveBeenCalled();
   });
