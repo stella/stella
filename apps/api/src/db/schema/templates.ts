@@ -1,3 +1,5 @@
+import { sql } from "drizzle-orm";
+
 import {
   ENTITY_KINDS,
   bytea,
@@ -18,7 +20,7 @@ import {
 } from "./common";
 import type { AnyPgColumn, TemplateManifest } from "./common";
 import { contacts, workspaces } from "./contacts";
-import { TEMPLATE_KINDS, entities } from "./entities";
+import { TEMPLATE_KINDS, entities, entityVersions, fields } from "./entities";
 
 export const templateCategories = p.pgTable(
   "template_categories",
@@ -344,6 +346,16 @@ export const extractedContent = p.pgTable(
         onDelete: "cascade",
       }),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
+    /** Immutable source identity; null only for pre-provenance rows. */
+    sourceEntityVersionId: safeUuid<"entityVersion">(
+      "source_entity_version_id",
+    ).references(() => entityVersions.id, { onDelete: "set null" }),
+    sourceFieldId: safeUuid<"field">("source_field_id").references(
+      () => fields.id,
+      { onDelete: "set null" },
+    ),
+    sourceFileId: p.uuid("source_file_id"),
+    sourceSha256Hex: p.varchar("source_sha256_hex", { length: 64 }),
     ciphertext: bytea("ciphertext").notNull(),
     iv: bytea("iv").notNull(),
     charCount: p.integer("char_count").notNull(),
@@ -359,6 +371,10 @@ export const extractedContent = p.pgTable(
       })
       .onDelete("cascade"),
     p.index("extracted_content_workspace_id_idx").on(table.workspaceId),
+    p.check(
+      "extracted_content_source_sha256_hex_check",
+      sql`${table.sourceSha256Hex} IS NULL OR ${table.sourceSha256Hex} ~ '^[0-9a-f]{64}$'`,
+    ),
     ...wsPolicies(),
   ],
 );

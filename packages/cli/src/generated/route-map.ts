@@ -1404,6 +1404,16 @@ export const generatedRouteMap: RouteNode = {
                   "Toggle AI prompt caching for the organization (update_org_settings)",
                 required: false,
               },
+              {
+                flag: "--document-processing-mode",
+                prop: "document_processing_mode",
+                kind: "enum",
+                enum: ["off", "searchable-text"],
+                repeatable: false,
+                description:
+                  "Set automatic PDF searchable-text extraction for the organization (update_org_settings)",
+                required: false,
+              },
             ],
             inputOnly: [],
             paginated: false,

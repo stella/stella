@@ -2167,7 +2167,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "name": "manage_organization",
     "scope": "stella:admin_write",
     "access": "write",
-    "description": "Administer the organization (owner/admin actions). Set action to add_member or remove_member to add/remove a workspace member (matter_id and user_id required); or update_org_settings to change non-secret organization settings: matter_number_pattern with matter_number_padding (sent together) and/or prompt_caching_enabled. Provider API keys and other secrets are managed only in the dashboard, not here.",
+    "description": "Manage organization members and non-secret settings. Member actions require matter_id and user_id. update_org_settings controls matter numbering, prompt caching, and document processing. Manage provider secrets in the dashboard.",
     "annotations": {
       "idempotentHint": false,
       "openWorldHint": false
@@ -2206,6 +2206,14 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "prompt_caching_enabled": {
           "type": "boolean",
           "description": "Toggle AI prompt caching for the organization (update_org_settings)"
+        },
+        "document_processing_mode": {
+          "type": "string",
+          "enum": [
+            "off",
+            "searchable-text"
+          ],
+          "description": "Set automatic PDF searchable-text extraction for the organization (update_org_settings)"
         },
         "confirm": {
           "type": "boolean",

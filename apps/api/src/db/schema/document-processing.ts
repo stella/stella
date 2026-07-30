@@ -141,6 +141,17 @@ export const documentProcessingRuns = p.pgTable(
       .on(table.claimedAt, table.id)
       .where(sql`${table.status} = 'running'`),
     p
+      .index("document_processing_runs_running_workspace_idx")
+      .on(table.workspaceId, table.id)
+      .where(sql`${table.status} = 'running'`),
+    p
+      .index("document_processing_runs_auto_failed_retry_idx")
+      .on(table.nextAttemptAt, table.createdAt, table.id)
+      .where(
+        sql`${table.status} = 'failed'
+          AND ${table.requestSource} IN ('upload', 'repair')`,
+      ),
+    p
       .foreignKey({
         columns: [table.entityId, table.workspaceId],
         foreignColumns: [entities.id, entities.workspaceId],

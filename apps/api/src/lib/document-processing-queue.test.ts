@@ -3,9 +3,12 @@ import { describe, expect, test } from "bun:test";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
+  automaticOcrRetryDelayMs,
+  classifyOcrProjectionSource,
   isAutomaticOcrRepairCandidate,
   isCurrentOcrSource,
   isReversibleAutomaticOcrCancellation,
+  isRetryableAutomaticOcrFailure,
   requiresOcrPolicy,
 } from "@/api/lib/document-processing-queue";
 
@@ -70,6 +73,38 @@ describe("isCurrentOcrSource", () => {
   });
 });
 
+describe("classifyOcrProjectionSource", () => {
+  test("preserves an inactive workspace cancellation for recovery", () => {
+    expect(
+      classifyOcrProjectionSource({
+        run,
+        source,
+        workspaceStatus: "archived",
+      }),
+    ).toBe("workspace_unavailable");
+    expect(
+      classifyOcrProjectionSource({
+        run,
+        source,
+        workspaceStatus: "deleting",
+      }),
+    ).toBe("workspace_unavailable");
+  });
+
+  test("classifies only an active stale source as superseded", () => {
+    expect(
+      classifyOcrProjectionSource({
+        run,
+        source: {
+          ...source,
+          content: { ...fileContent, sha256Hex: "b".repeat(64) },
+        },
+        workspaceStatus: "active",
+      }),
+    ).toBe("source_superseded");
+  });
+});
+
 describe("isAutomaticOcrRepairCandidate", () => {
   test("only repairs an unencrypted PDF source", () => {
     expect(isAutomaticOcrRepairCandidate(fileContent)).toBe(true);
@@ -115,6 +150,45 @@ describe("isReversibleAutomaticOcrCancellation", () => {
       isReversibleAutomaticOcrCancellation({
         errorCode: "source_superseded",
         status: "cancelled",
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("automatic OCR failure recovery", () => {
+  test("uses bounded exponential backoff", () => {
+    expect(automaticOcrRetryDelayMs(1)).toBe(30_000);
+    expect(automaticOcrRetryDelayMs(2)).toBe(60_000);
+    expect(automaticOcrRetryDelayMs(10)).toBe(30 * 60 * 1000);
+  });
+
+  test("requeues only retryable automatic failures below the attempt cap", () => {
+    expect(
+      isRetryableAutomaticOcrFailure({
+        attemptCount: 4,
+        errorCode: "request_failed",
+        requestSource: "upload",
+      }),
+    ).toBe(true);
+    expect(
+      isRetryableAutomaticOcrFailure({
+        attemptCount: 5,
+        errorCode: "request_failed",
+        requestSource: "upload",
+      }),
+    ).toBe(false);
+    expect(
+      isRetryableAutomaticOcrFailure({
+        attemptCount: 1,
+        errorCode: "invalid_response",
+        requestSource: "repair",
+      }),
+    ).toBe(false);
+    expect(
+      isRetryableAutomaticOcrFailure({
+        attemptCount: 1,
+        errorCode: "processing_failed",
+        requestSource: "manual",
       }),
     ).toBe(false);
   });

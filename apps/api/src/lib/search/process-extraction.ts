@@ -143,6 +143,8 @@ export const processExtraction = async (
 
       if (text) {
         const encrypted = await encryptContent(workspace.organizationId, text);
+        const sourceField =
+          fileFieldRow ?? panic("Extraction source field is missing");
 
         await rootDb
           .insert(extractedContent)
@@ -150,6 +152,10 @@ export const processExtraction = async (
             workspaceId: wsId,
             entityId,
             organizationId: workspace.organizationId,
+            sourceEntityVersionId: version.id,
+            sourceFieldId: sourceField.id,
+            sourceFileId: fileField.id,
+            sourceSha256Hex: fileField.sha256Hex,
             ciphertext: encrypted.ciphertext,
             iv: encrypted.iv,
             charCount: text.length,
@@ -160,6 +166,10 @@ export const processExtraction = async (
           .onConflictDoUpdate({
             target: extractedContent.entityId,
             set: {
+              sourceEntityVersionId: version.id,
+              sourceFieldId: sourceField.id,
+              sourceFileId: fileField.id,
+              sourceSha256Hex: fileField.sha256Hex,
               ciphertext: encrypted.ciphertext,
               iv: encrypted.iv,
               charCount: text.length,

@@ -193,13 +193,10 @@ export const RESEARCH_ADMIN_TOOL_DEFINITIONS = [
   },
   {
     description:
-      "Administer the organization (owner/admin actions). Set action to " +
-      "add_member or remove_member to add/remove a workspace member (matter_id " +
-      "and user_id required); or update_org_settings to change non-secret " +
-      "organization settings: matter_number_pattern with matter_number_padding " +
-      "(sent together), prompt_caching_enabled, and/or " +
-      "document_processing_mode. Provider API keys and other secrets are " +
-      "managed only in the dashboard, not here.",
+      "Manage organization members and non-secret settings. Member actions " +
+      "require matter_id and user_id. update_org_settings controls matter " +
+      "numbering, prompt caching, and document processing. Manage provider " +
+      "secrets in the dashboard.",
     inputSchema: {
       type: "object",
       properties: {

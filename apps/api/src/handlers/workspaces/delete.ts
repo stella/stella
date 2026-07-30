@@ -1,10 +1,11 @@
 import { Result } from "better-result";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { member } from "@/api/db/auth-schema";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   chatThreads,
+  documentProcessingRuns,
   entities,
   entityVersions,
   fields,
@@ -33,14 +34,40 @@ const changeWorkspaceStatus = async (
   scopedDb: ScopedDb,
   workspaceId: SafeId<"workspace">,
   newStatus: "deleting" | "active",
-) =>
+): Promise<boolean> =>
   await scopedDb(async (tx) => {
+    // Lock the workspace before inspecting dispatches. OCR takes this same
+    // lock immediately before it claims a run, so a delete either seals first
+    // or observes the in-flight run and leaves the workspace active.
+    const workspaceRows = await tx
+      .select({ id: workspaces.id })
+      .from(workspaces)
+      .where(eq(workspaces.id, workspaceId))
+      .limit(1)
+      .for("update");
+    if (newStatus === "deleting" && workspaceRows.at(0)) {
+      const runningOcrRuns = await tx
+        .select({ id: documentProcessingRuns.id })
+        .from(documentProcessingRuns)
+        .where(
+          and(
+            eq(documentProcessingRuns.workspaceId, workspaceId),
+            eq(documentProcessingRuns.status, "running"),
+          ),
+        )
+        .limit(1);
+      if (runningOcrRuns.at(0)) {
+        return false;
+      }
+    }
+
     // audit: skip — internal seal/unseal toggle wrapping the workspace
     // delete; the audited DELETE below records the user-visible event.
     await tx
       .update(workspaces)
       .set({ status: newStatus })
       .where(eq(workspaces.id, workspaceId));
+    return true;
   });
 
 type FileRef = { fileId: string; mimeType: string };
@@ -99,7 +126,15 @@ export const deleteWorkspaceHandler = async function* ({
 }: DeleteWorkspaceHandlerProps) {
   // Seal workspace: no new uploads.
   // Uses scopedDb so the rollback helper can restore on failure.
-  await changeWorkspaceStatus(scopedDb, workspaceId, "deleting");
+  const sealed = await changeWorkspaceStatus(scopedDb, workspaceId, "deleting");
+  if (!sealed) {
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        message: "Wait for document processing to finish before deleting",
+      }),
+    );
+  }
 
   // Query file metadata from fields.content JSONB.
   // Workspace is sealed by status: "deleting", so no

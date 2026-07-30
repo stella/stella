@@ -208,6 +208,7 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
               "matter_number_pattern",
               "matter_number_padding",
               "prompt_caching_enabled",
+              "document_processing_mode",
             ],
           },
         },
