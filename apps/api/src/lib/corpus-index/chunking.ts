@@ -71,20 +71,13 @@ const CHUNK_MIN_CHARS = 250 * CHARS_PER_TOKEN;
 const BLOCK_SEPARATOR = "\n\n";
 
 /**
- * Structural ceilings for one document's chunking work.
- *
- * The chunker runs synchronously on the ingestion daemon's event loop, so
- * its cost per document must be bounded up front: one pathological document
- * that chunks for minutes starves every sibling loop, trips the daemon's
- * own starvation watchdog, and turns into a restart loop because the same
- * row is re-picked on every start. A document past either ceiling throws
- * `ChunkBudgetError` instead, which the indexer's per-row isolation records
- * as a failed index job — the poison document is named in the audit trail
- * and skipped, and its batch-mates still commit.
- *
- * The ceilings are far above any legitimate decision or statute: the
- * longest real judgments run to a few hundred thousand characters and a
- * few thousand blocks.
+ * Structural ceilings for one document's chunking work: the chunker runs
+ * synchronously, so per-document cost must be bounded up front. A document
+ * past either ceiling throws `ChunkBudgetError`, which the indexer's
+ * per-row isolation records as a failed index job naming the row, and its
+ * batch-mates still commit. The ceilings are far above any legitimate
+ * decision or statute (the longest real judgments run to a few hundred
+ * thousand characters and a few thousand blocks).
  */
 const MAX_CHUNK_INPUT_CHARS = 30_000_000;
 const MAX_CHUNK_BLOCKS = 400_000;

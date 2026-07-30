@@ -8,8 +8,7 @@ import { zstdDecompress } from "node:zlib";
  *
  * The corpus read/write paths use the async variants: they run on Bun's
  * thread pool, so a pathological payload costs wall-clock but never blocks
- * the event loop — the ingestion daemon's heartbeats, watchdog, and sibling
- * loops keep running. The sync variants remain for one-shot scripts where
+ * the event loop. The sync variants remain for one-shot scripts where
  * event-loop latency is irrelevant.
  */
 
