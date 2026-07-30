@@ -15,10 +15,10 @@ const config = {
 
 const readDocumentOcrAvailability = createSafeRootHandler(
   config,
-  // eslint-disable-next-line require-yield -- pure readiness read
   async function* () {
+    const available = yield* Result.await(isDocumentOcrWorkerAvailable());
     return Result.ok({
-      available: await isDocumentOcrWorkerAvailable(),
+      available,
     });
   },
 );

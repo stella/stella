@@ -37,10 +37,8 @@ const rootDbMock = {
     set: (values: UpdateValues) => ({
       where: () => {
         if (values.status) {
-          if (values.status === "processing") {
-            if (requestRow) {
-              requestRow.attemptCount++;
-            }
+          if (values.status === "processing" && requestRow) {
+            requestRow.attemptCount++;
           }
           statuses.push(values.status);
           if (requestRow) {
@@ -66,7 +64,7 @@ const rootDbMock = {
 const { processEntityDeletionCleanupRequest } =
   await import("./entity-deletion-cleanup-queue");
 const queueSource = await Bun.file(
-  new URL("./entity-deletion-cleanup-queue.ts", import.meta.url),
+  new URL("entity-deletion-cleanup-queue.ts", import.meta.url),
 ).text();
 
 const cleanupDeps = asTestRaw<

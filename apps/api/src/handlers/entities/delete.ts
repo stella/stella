@@ -199,9 +199,10 @@ export const deleteEntitiesHandler = async function* ({
     return Result.err(txOutcome.error);
   }
   const deletedEntities = txOutcome.entities;
-  if (txOutcome.cleanupRequestId) {
+  const cleanupRequestId = txOutcome.cleanupRequestId;
+  if (cleanupRequestId) {
     const enqueueResult = await Result.tryPromise({
-      try: async () => await enqueueCleanup(txOutcome.cleanupRequestId),
+      try: async () => await enqueueCleanup(cleanupRequestId),
       catch: (cause) => cause,
     });
     if (Result.isError(enqueueResult)) {
@@ -209,7 +210,7 @@ export const deleteEntitiesHandler = async function* ({
       // delivery, so deletion remains successful if this immediate handoff
       // fails.
       captureError(enqueueResult.error, {
-        requestId: txOutcome.cleanupRequestId,
+        requestId: cleanupRequestId,
       });
     }
   }
