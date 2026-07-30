@@ -1,5 +1,4 @@
 import { sql } from "drizzle-orm";
-import { randomUUID } from "node:crypto";
 
 import { rootDb } from "@/api/db/root";
 import { normalizePersistedChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
@@ -99,7 +98,7 @@ export const upsertChatThreadSearchDocument = async (
     threadId: thread.id,
     threadUpdatedAt: thread.updatedAt,
   });
-  const previewGeneration = randomUUID();
+  const previewGeneration = Bun.randomUUIDv7();
   const previewPassages = buildSearchPreviewPassages(
     thread.title,
     searchableText,

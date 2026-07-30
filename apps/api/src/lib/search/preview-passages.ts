@@ -32,7 +32,7 @@ const utf16EndForCodePoints = (
     if (codePoint === undefined) {
       break;
     }
-    end += codePoint > 0xffff ? 2 : 1;
+    end += codePoint > 0xff_ff ? 2 : 1;
     remaining -= 1;
   }
   return end;
@@ -46,7 +46,7 @@ const codePointLength = (text: string): number => {
     if (codePoint === undefined) {
       break;
     }
-    index += codePoint > 0xffff ? 2 : 1;
+    index += codePoint > 0xff_ff ? 2 : 1;
     count += 1;
   }
   return count;

@@ -37,7 +37,7 @@ describe("search preview rendering contract", () => {
       },
     ]);
 
-    await expect(readSearchPreview(previewQuery)).resolves.toEqual({
+    expect(await readSearchPreview(previewQuery)).toEqual({
       type: "plain-text",
       content,
     });
@@ -55,9 +55,9 @@ describe("search preview rendering contract", () => {
       },
     ]);
 
-    await expect(
-      readSearchPreview({ ...previewQuery, query: "resume" }),
-    ).resolves.toEqual({
+    expect(
+      await readSearchPreview({ ...previewQuery, query: "resume" }),
+    ).toEqual({
       type: "highlighted-html",
       content: "<mark>résumé</mark>",
     });
@@ -75,6 +75,6 @@ describe("search preview rendering contract", () => {
       },
     ]);
 
-    await expect(readSearchPreview(previewQuery)).resolves.toBeNull();
+    expect(await readSearchPreview(previewQuery)).toBeNull();
   });
 });

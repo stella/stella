@@ -1,6 +1,5 @@
 import { panic } from "better-result";
 import { sql } from "drizzle-orm";
-import { randomUUID } from "node:crypto";
 
 import { rootDb } from "@/api/db/root";
 import { entities } from "@/api/db/schema";
@@ -205,7 +204,7 @@ export const upsertSearchDocument = async (
   }
 
   const regconfig = doc.language ?? "simple";
-  const previewGeneration = randomUUID();
+  const previewGeneration = Bun.randomUUIDv7();
   const previewPassages = buildSearchPreviewPassages(
     doc.title,
     doc.searchableText,

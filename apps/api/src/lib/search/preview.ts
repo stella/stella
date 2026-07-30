@@ -83,8 +83,7 @@ const normalizeCaseLawPreviewText = (text: SQL): SQL => sql`
 // PostgreSQL finds and marks passages in index-normalized text. The original
 // bounded source travels beside it so readSearchPreview can restore the exact
 // legal text around those markers before HTML rendering.
-const previewHeadline = (options: PreviewHeadlineOptions) => {
-  return sql`
+const previewHeadline = (options: PreviewHeadlineOptions) => sql`
     (
       SELECT json_build_object(
         'content',
@@ -113,7 +112,6 @@ const previewHeadline = (options: PreviewHeadlineOptions) => {
       ) normalized_preview_source
     ) AS preview
   `;
-};
 
 const previewUnhighlighted = (title: SQL, body: SQL) => sql`
   left(
@@ -166,12 +164,38 @@ const previewContent = ({
 const previewTextFilter = (searchVector: SQL, tsQuery: SQL | null): SQL =>
   tsQuery ? sql`AND ${searchVector} @@ ${tsQuery}` : sql.empty();
 
+type PreviewPassageTable =
+  | "case-law"
+  | "chat"
+  | "contact"
+  | "document"
+  | "matter";
+
 type PreviewPassageJoinOptions = {
   generation: SQL;
   locatorTsQuery: SQL | null;
   parentFilter: SQL;
-  table: SQL;
+  table: PreviewPassageTable;
   tenantFilter?: SQL | undefined;
+};
+
+const previewPassageTableSql = (table: PreviewPassageTable): SQL => {
+  switch (table) {
+    case "case-law":
+      return sql`case_law_search_document_preview_passages`;
+    case "chat":
+      return sql`chat_thread_search_preview_passages`;
+    case "contact":
+      return sql`contact_search_document_preview_passages`;
+    case "document":
+      return sql`search_document_preview_passages`;
+    case "matter":
+      return sql`workspace_search_document_preview_passages`;
+    default: {
+      const exhaustive: never = table;
+      return exhaustive;
+    }
+  }
 };
 
 const previewPassageJoin = ({
@@ -188,7 +212,7 @@ const previewPassageJoin = ({
     LEFT JOIN LATERAL (
       (
         SELECT passage.content, passage.ordinal, 0 AS priority
-        FROM ${table} passage
+        FROM ${previewPassageTableSql(table)} passage
         WHERE ${parentFilter}
           AND passage.generation = ${generation}
           ${tenantFilter}
@@ -199,7 +223,7 @@ const previewPassageJoin = ({
       UNION ALL
       (
         SELECT passage.content, passage.ordinal, 1 AS priority
-        FROM ${table} passage
+        FROM ${previewPassageTableSql(table)} passage
         WHERE ${parentFilter}
           AND passage.generation = ${generation}
           ${tenantFilter}
@@ -246,7 +270,7 @@ export const buildSearchPreviewQuery = ({
           generation: sql`wsd.preview_generation`,
           locatorTsQuery,
           parentFilter: sql`passage.workspace_id = wsd.workspace_id`,
-          table: sql`workspace_search_document_preview_passages`,
+          table: "matter",
           tenantFilter: sql`
             AND passage.organization_id = ${organizationId}
             AND passage.workspace_id = wsd.workspace_id
@@ -276,7 +300,7 @@ export const buildSearchPreviewQuery = ({
           generation: sql`csd.preview_generation`,
           locatorTsQuery,
           parentFilter: sql`passage.contact_id = csd.contact_id`,
-          table: sql`contact_search_document_preview_passages`,
+          table: "contact",
           tenantFilter: sql`AND passage.organization_id = ${organizationId}`,
         })}
         WHERE csd.contact_id = ${resultId}
@@ -307,7 +331,7 @@ export const buildSearchPreviewQuery = ({
           generation: sql`clsd.preview_generation`,
           locatorTsQuery,
           parentFilter: sql`passage.decision_id = clsd.decision_id`,
-          table: sql`case_law_search_document_preview_passages`,
+          table: "case-law",
         })}
         WHERE clsd.decision_id = ${resultId}
           ${previewTextFilter(sql`clsd.tsv`, tsQuery)}
@@ -330,7 +354,7 @@ export const buildSearchPreviewQuery = ({
           generation: sql`cst.preview_generation`,
           locatorTsQuery,
           parentFilter: sql`passage.thread_id = cst.thread_id`,
-          table: sql`chat_thread_search_preview_passages`,
+          table: "chat",
         })}
         WHERE cst.thread_id = ${resultId}
           ${previewTextFilter(sql`cst.tsv`, tsQuery)}
@@ -362,7 +386,7 @@ export const buildSearchPreviewQuery = ({
           generation: sql`sd.preview_generation`,
           locatorTsQuery,
           parentFilter: sql`passage.entity_id = sd.entity_id`,
-          table: sql`search_document_preview_passages`,
+          table: "document",
           tenantFilter: sql`
             AND passage.organization_id = ${organizationId}
             AND passage.workspace_id = sd.workspace_id

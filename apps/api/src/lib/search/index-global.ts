@@ -1,6 +1,5 @@
 import { and, asc, eq, gt, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import { randomUUID } from "node:crypto";
 
 import { rootDb } from "@/api/db/root";
 import { contacts, workspaceContacts, workspaces } from "@/api/db/schema";
@@ -1340,7 +1339,7 @@ export const upsertContactSearchDocument = async (
     contact.taxId,
     contact.currency,
   ]);
-  const previewGeneration = randomUUID();
+  const previewGeneration = Bun.randomUUIDv7();
   const previewPassages = buildSearchPreviewPassages(
     contact.displayName,
     searchableText,
@@ -1486,7 +1485,7 @@ export const upsertWorkspaceSearchDocument = async (
       client?.updatedAt,
       ...workspace.workspaceContacts.map(({ contact }) => contact?.updatedAt),
     ]) ?? workspace.lastActivityAt;
-  const previewGeneration = randomUUID();
+  const previewGeneration = Bun.randomUUIDv7();
   const previewPassages = buildSearchPreviewPassages(
     workspace.name,
     searchableText,

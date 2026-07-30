@@ -378,12 +378,18 @@ const alignDatabaseNormalizedSource = ({
     const exactScaffoldStart = scaffoldCursor;
     while (
       normalizedCursor < normalized.length &&
-      scaffoldCursor < scaffold.text.length &&
-      normalized.charCodeAt(normalizedCursor) ===
-        scaffold.text.charCodeAt(scaffoldCursor)
+      scaffoldCursor < scaffold.text.length
     ) {
-      normalizedCursor += 1;
-      scaffoldCursor += 1;
+      const normalizedCodePoint = normalized.codePointAt(normalizedCursor);
+      if (normalizedCodePoint !== scaffold.text.codePointAt(scaffoldCursor)) {
+        break;
+      }
+      const codeUnitLength =
+        normalizedCodePoint !== undefined && normalizedCodePoint > 0xff_ff
+          ? 2
+          : 1;
+      normalizedCursor += codeUnitLength;
+      scaffoldCursor += codeUnitLength;
     }
     appendPositionAlignedMappings({
       mappings,

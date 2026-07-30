@@ -1,5 +1,4 @@
 import { and, asc, eq, gt, notExists, or, sql } from "drizzle-orm";
-import { randomUUID } from "node:crypto";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -92,7 +91,7 @@ export const indexDecision = async (
     : sql`arabic_normalize(coalesce(${title}, '') || ' ' || coalesce(${searchableText}, ''))`;
 
   const tsvExpr = sql`to_tsvector(${fts.regconfig}, ${textExpr})`;
-  const previewGeneration = randomUUID();
+  const previewGeneration = Bun.randomUUIDv7();
   const previewPassages = buildSearchPreviewPassages(title, searchableText);
 
   await scopedDb(async (tx) => {
