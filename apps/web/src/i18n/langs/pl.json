@@ -3106,6 +3106,7 @@
       "copyOption": "Kopiuj (zachowaj oryginał)",
       "description": "Skopiuj lub przenieś \"{name}\" do innej sprawy",
       "descriptionCount": "Skopiuj lub przenieś {count, plural, one {# element} few {# elementy} many {# elementów} other {# elementów}} do innej sprawy",
+      "goToMatter": "Przejdź do sprawy",
       "menuItem": "Kopiuj/Przenieś do sprawy",
       "moveButton": "Przenieś",
       "moveOption": "Przenieś (usuń oryginał)",

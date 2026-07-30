@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRightIcon, FolderIcon, SearchIcon } from "lucide-react";
+import { ChevronRightIcon, FolderIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/components/bidi-text";
@@ -71,19 +71,12 @@ export const MatterTargetPicker = ({
     <div className="space-y-4">
       <div className="space-y-2">
         <Label>{t("workspaces.copyToMatter.targetMatter")}</Label>
-        <div className="relative">
-          <SearchIcon
-            aria-hidden="true"
-            className="text-muted-foreground pointer-events-none absolute start-2.5 top-1/2 size-3.5 -translate-y-1/2"
-          />
-          <Input
-            className="ps-8"
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={t("inspector.matterPicker.searchPlaceholder")}
-            type="search"
-            value={search}
-          />
-        </div>
+        <Input
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder={t("inspector.matterPicker.searchPlaceholder")}
+          type="search"
+          value={search}
+        />
         <ScrollArea className="border-border h-48 rounded-md border">
           <div className="p-1">
             {(() => {

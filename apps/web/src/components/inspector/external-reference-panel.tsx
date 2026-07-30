@@ -823,7 +823,6 @@ export const ExternalReferencePanel = ({
           </div>
           {findOpen && (
             <div className="flex h-10 shrink-0 items-center gap-1 border-b px-2">
-              <SearchIcon className="text-muted-foreground size-3.5 shrink-0" />
               <Input
                 aria-label={t("folio.findReplace.findText")}
                 className="h-7 flex-1 rounded-md"

@@ -3,6 +3,7 @@
 import type * as React from "react";
 
 import { Input as InputPrimitive } from "@base-ui/react/input";
+import { SearchIcon } from "lucide-react";
 
 import {
   isStructuredInputType,
@@ -48,7 +49,7 @@ function Input({
       "h-7.5 px-[calc(--spacing(2.5)-1px)] leading-7.5 sm:h-6.5 sm:leading-6.5",
     size === "lg" && "h-9.5 leading-9.5 sm:h-8.5 sm:leading-8.5",
     props.type === "search" &&
-      "[&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:appearance-none [&::-webkit-search-results-button]:appearance-none [&::-webkit-search-results-decoration]:appearance-none",
+      "ps-8 [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:appearance-none [&::-webkit-search-results-button]:appearance-none [&::-webkit-search-results-decoration]:appearance-none",
     props.type === "file" &&
       "text-muted-foreground file:text-foreground file:me-3 file:bg-transparent file:text-sm file:font-medium",
   );
@@ -65,6 +66,13 @@ function Input({
       data-size={size}
       data-slot="input-control"
     >
+      {props.type === "search" && (
+        <SearchIcon
+          aria-hidden="true"
+          className="text-muted-foreground pointer-events-none absolute start-2.5 top-1/2 z-1 size-3.5 -translate-y-1/2"
+          data-slot="input-search-icon"
+        />
+      )}
       {nativeInput ? (
         <input
           className={inputClassName}

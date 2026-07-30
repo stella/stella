@@ -3106,6 +3106,7 @@
       "copyOption": "نسخ (مع الاحتفاظ بالأصل)",
       "description": "نسخ «{name}» أو نقله إلى ملف آخر",
       "descriptionCount": "نسخ {count, plural, zero {لا عناصر} one {عنصر واحد} two {عنصرين} few {# عناصر} many {# عنصرًا} other {# عنصر}} أو نقلها إلى ملف آخر",
+      "goToMatter": "الانتقال إلى الملف",
       "menuItem": "نسخ/نقل إلى ملف",
       "moveButton": "نقل",
       "moveOption": "نقل (حذف الأصل)",

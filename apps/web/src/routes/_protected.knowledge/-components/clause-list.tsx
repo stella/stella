@@ -3,7 +3,6 @@ import { useState } from "react";
 import {
   DownloadIcon,
   PlusIcon,
-  SearchIcon,
   TextQuoteIcon,
   UploadIcon,
 } from "lucide-react";
@@ -11,11 +10,7 @@ import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupInput,
-} from "@stll/ui/components/input-group";
+import { InputGroup, InputGroupInput } from "@stll/ui/components/input-group";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import {
@@ -162,9 +157,6 @@ export const ClauseList = ({
                   type="search"
                   value={searchInput}
                 />
-                <InputGroupAddon>
-                  <SearchIcon />
-                </InputGroupAddon>
               </InputGroup>
             </ResponsiveActionToolbarItem>
             <ResponsiveActionToolbarItem
