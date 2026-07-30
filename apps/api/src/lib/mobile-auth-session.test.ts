@@ -82,6 +82,7 @@ describe("installation-bound mobile OAuth callback", () => {
         consumeVerificationValue,
         findVerificationValue: async () =>
           await Promise.resolve({
+            expiresAt: new Date(Date.now() + 60_000),
             value: JSON.stringify({
               challenge: CHALLENGE,
               cookie: "better-auth.session_token=secret",
@@ -96,6 +97,7 @@ describe("installation-bound mobile OAuth callback", () => {
 
   test("the verifier redeems the session cookie exactly once", async () => {
     const stored = {
+      expiresAt: new Date(Date.now() + 60_000),
       value: JSON.stringify({
         challenge: CHALLENGE,
         cookie: "better-auth.session_token=secret",
@@ -120,5 +122,28 @@ describe("installation-bound mobile OAuth callback", () => {
     expect(
       await redeemMobileSession({ code: CODE, store, verifier: VERIFIER }),
     ).toBeUndefined();
+  });
+
+  test("an expired grant is consumed without returning its session cookie", async () => {
+    const stored = {
+      expiresAt: new Date(0),
+      value: JSON.stringify({
+        challenge: CHALLENGE,
+        cookie: "better-auth.session_token=secret",
+      }),
+    };
+    const consumeVerificationValue = mock(async () => stored);
+
+    expect(
+      await redeemMobileSession({
+        code: CODE,
+        verifier: VERIFIER,
+        store: {
+          consumeVerificationValue,
+          findVerificationValue: async () => stored,
+        },
+      }),
+    ).toBeUndefined();
+    expect(consumeVerificationValue).toHaveBeenCalledTimes(1);
   });
 });

@@ -26,7 +26,7 @@ const isExpoCookieCallbackPath = (path: string | undefined): boolean =>
 
 export type MobileAuthBridgeValue = { challenge: string; cookie: string };
 
-type VerificationValue = { value: string };
+type VerificationValue = { expiresAt: Date; value: string };
 type MobileAuthVerificationStore = {
   findVerificationValue: (
     identifier: string,
@@ -126,7 +126,11 @@ export const redeemMobileSession = async ({
 
   const consumed = await store.consumeVerificationValue(identifier);
   const consumedValue = consumed && parseBridgeValue(consumed.value);
-  if (!consumedValue || !challengesMatch(verifier, consumedValue.challenge)) {
+  if (
+    !consumedValue ||
+    !challengesMatch(verifier, consumedValue.challenge) ||
+    consumed.expiresAt.getTime() <= Date.now()
+  ) {
     return undefined;
   }
   return consumedValue.cookie;
