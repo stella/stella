@@ -225,6 +225,9 @@ export const CAPABILITY_DISPATCH = {
   "entities.move": {
     load: async () => await import("@/api/handlers/entities/move"),
   },
+  "entities.ocr.create": {
+    load: async () => await import("@/api/handlers/entities/ocr/create"),
+  },
   "entities.organize-suggestions": {
     load: async () =>
       await import("@/api/handlers/entities/organize-suggestions"),

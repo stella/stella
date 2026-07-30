@@ -20,7 +20,7 @@ void mock.module("@/api/lib/document-processing-queue", () => ({
 }));
 
 const { requestManualOcrHandler } =
-  await import("@/api/handlers/entities/request-ocr");
+  await import("@/api/handlers/entities/ocr/create");
 const { persistManualOcrRun } =
   await import("@/api/lib/document-processing-request");
 

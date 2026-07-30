@@ -18,11 +18,11 @@ import {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
-const requestOcrParams = workspaceParams({
+const createOcrParams = workspaceParams({
   entityId: tSafeId("entity"),
 });
 
-const requestOcrBody = t.Object({
+const createOcrBody = t.Object({
   fieldId: tSafeId("field"),
 });
 
@@ -30,8 +30,8 @@ const config = {
   permissions: { entity: ["update"] },
   mcp: { type: "capability", reason: "document_processing" },
   access: "write",
-  body: requestOcrBody,
-  params: requestOcrParams,
+  body: createOcrBody,
+  params: createOcrParams,
 } satisfies HandlerConfig;
 
 type FindManualOcrSourceResult = Result<

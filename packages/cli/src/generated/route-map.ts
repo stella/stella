@@ -13406,6 +13406,87 @@ export const generatedRouteMap: RouteNode = {
                 schemaTruncated: false,
               },
             },
+            "ocr-create": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "entities", "ocr-create"],
+                capabilityId: "entities.ocr.create",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--workspace-id",
+                    prop: "workspaceId",
+                    required: true,
+                    part: "params",
+                    partPath: "workspaceId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--entity-id",
+                    prop: "entityId",
+                    required: true,
+                    part: "params",
+                    partPath: "entityId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--field-id",
+                    prop: "fieldId",
+                    required: true,
+                    part: "body",
+                    partPath: "fieldId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["fieldId"],
+                      properties: {
+                        fieldId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["workspaceId", "entityId"],
+                      properties: {
+                        workspaceId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        entityId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+                schemaTruncated: false,
+              },
+            },
             "organize-suggestions": {
               kind: "capability-leaf",
               spec: {
@@ -28024,7 +28105,10 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "promptCachingEnabled",
                   },
                 ],
-                inputOnly: ["body.matterNumberPadding"],
+                inputOnly: [
+                  "body.documentProcessingMode",
+                  "body.matterNumberPadding",
+                ],
                 paginated: false,
                 destructive: false,
                 scope: "admin_write",
@@ -28035,6 +28119,18 @@ export const generatedRouteMap: RouteNode = {
                     body: {
                       type: "object",
                       properties: {
+                        documentProcessingMode: {
+                          anyOf: [
+                            {
+                              const: "off",
+                              type: "string",
+                            },
+                            {
+                              const: "searchable-text",
+                              type: "string",
+                            },
+                          ],
+                        },
                         matterNumberPattern: {
                           minLength: 1,
                           maxLength: 128,
