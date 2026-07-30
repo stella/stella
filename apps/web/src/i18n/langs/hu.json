@@ -474,6 +474,11 @@
     "greeting": "Min szeretne dolgozni?",
     "greetingSubtitle": "Kezdje egy üggyel, dokumentummal vagy egyszerű kérdéssel.",
     "hideThread": "Beszélgetés elrejtése",
+    "improvePrompt": "Prompt javítása",
+    "improvePromptDraftChanged": "A piszkozat megváltozott, ezért a javítás nem lett alkalmazva.",
+    "improvePromptPlainTextOnly": "A prompt javítása csak egyszerű szövegnél érhető el.",
+    "improvePromptUnavailableAnonymized": "A prompt javítása anonimizált módban nem érhető el.",
+    "improvingPrompt": "Prompt javítása…",
     "inDocument": "A dokumentumban",
     "jumpToMessage": "Ugrás ehhez az üzenethez",
     "landing": {
@@ -494,6 +499,14 @@
         "entities": "Ebben az ügyben"
       },
       "loadError": "Az entitások betöltése sikertelen"
+    },
+    "modelMode": {
+      "deepThinking": "Mély gondolkodás",
+      "deepThinkingDescription": "Összetett érvelés és elemzés",
+      "fastDescription": "Gyors, mindennapi kérdések",
+      "select": "Válaszmód kiválasztása",
+      "standard": "Általános",
+      "standardDescription": "A legtöbb feladathoz ideális"
     },
     "modelSelector": {
       "defaultLabel": "Alapértelmezett (csevegési szerepkör)",

@@ -14,6 +14,8 @@ import type {
 } from "@/components/chat-editor-provider";
 import { ChatComposerActionButton } from "@/components/chat/chat-composer-action-button";
 import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachment-chips";
+import { ChatModelModeSelector } from "@/components/chat/chat-model-mode-selector";
+import { ChatPromptImproveButton } from "@/components/chat/chat-prompt-improve-button";
 import {
   ComposerPlusMenu,
   type ComposerContextMenuProps,
@@ -269,33 +271,42 @@ export const ChatInputSurface = ({
           )}
         </div>
         <div className="flex items-center justify-end gap-0.5 px-1.5 pb-1.5">
-          <ComposerPlusMenu
-            context={
-              context
-                ? {
-                    activeOrganizationId: context.activeOrganizationId,
-                    editor,
-                    threadRef: context.threadRef,
-                  }
-                : undefined
-            }
-            disabled={inputDisabled}
-            mcp={
-              mcpOrganizationId
-                ? { activeOrganizationId: mcpOrganizationId }
-                : undefined
-            }
-            models={models}
-            onOpenFilePicker={openFilePicker}
-            onProgrammaticMenuClose={focus}
-            ref={plusMenuRef}
-            skills={
-              skillsOrganizationId
-                ? { activeOrganizationId: skillsOrganizationId, editor }
-                : undefined
-            }
-            triggerClassName="me-auto"
-          />
+          <div className="me-auto flex min-w-0 items-center gap-0.5">
+            <ComposerPlusMenu
+              context={
+                context
+                  ? {
+                      activeOrganizationId: context.activeOrganizationId,
+                      editor,
+                      threadRef: context.threadRef,
+                    }
+                  : undefined
+              }
+              disabled={inputDisabled}
+              mcp={
+                mcpOrganizationId
+                  ? { activeOrganizationId: mcpOrganizationId }
+                  : undefined
+              }
+              models={models}
+              onOpenFilePicker={openFilePicker}
+              onProgrammaticMenuClose={focus}
+              ref={plusMenuRef}
+              skills={
+                skillsOrganizationId
+                  ? { activeOrganizationId: skillsOrganizationId, editor }
+                  : undefined
+              }
+            />
+            {models && (
+              <ChatModelModeSelector disabled={inputDisabled} models={models} />
+            )}
+            <ChatPromptImproveButton
+              anonymized={anonymized}
+              controller={controller}
+              disabled={inputDisabled || isBlank}
+            />
+          </div>
           <input
             accept={fileInputAccept}
             className="hidden"

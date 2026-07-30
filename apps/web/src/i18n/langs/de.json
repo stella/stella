@@ -474,6 +474,11 @@
     "greeting": "Woran möchten Sie arbeiten?",
     "greetingSubtitle": "Beginnen Sie mit einer Akte, einem Dokument oder einer einfachen Frage.",
     "hideThread": "Konversation ausblenden",
+    "improvePrompt": "Prompt verbessern",
+    "improvePromptDraftChanged": "Der Entwurf wurde geändert, daher wurde die Verbesserung nicht übernommen.",
+    "improvePromptPlainTextOnly": "Prompts können nur als Klartext verbessert werden.",
+    "improvePromptUnavailableAnonymized": "Im anonymisierten Modus können Prompts nicht verbessert werden.",
+    "improvingPrompt": "Prompt wird verbessert…",
     "inDocument": "Im Dokument",
     "jumpToMessage": "Zu dieser Nachricht springen",
     "landing": {
@@ -494,6 +499,14 @@
         "entities": "In dieser Akte"
       },
       "loadError": "Entitäten konnten nicht geladen werden"
+    },
+    "modelMode": {
+      "deepThinking": "Tiefes Denken",
+      "deepThinkingDescription": "Komplexe Argumentation und Analyse",
+      "fastDescription": "Schnelle, alltägliche Fragen",
+      "select": "Antwortmodus auswählen",
+      "standard": "Normal",
+      "standardDescription": "Am besten für die meisten Aufgaben"
     },
     "modelSelector": {
       "defaultLabel": "Standard (Chat-Rolle)",

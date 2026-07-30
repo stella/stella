@@ -474,6 +474,11 @@
     "greeting": "Nad czym chcesz pracować?",
     "greetingSubtitle": "Zacznij od sprawy, dokumentu albo prostego pytania.",
     "hideThread": "Ukryj konwersację",
+    "improvePrompt": "Ulepsz prompt",
+    "improvePromptDraftChanged": "Wersja robocza się zmieniła, więc ulepszenie nie zostało zastosowane.",
+    "improvePromptPlainTextOnly": "Ulepszanie promptu jest dostępne tylko dla zwykłego tekstu.",
+    "improvePromptUnavailableAnonymized": "Ulepszanie promptu jest niedostępne w trybie anonimizacji.",
+    "improvingPrompt": "Ulepszanie promptu…",
     "inDocument": "W dokumencie",
     "jumpToMessage": "Przejdź do tej wiadomości",
     "landing": {
@@ -494,6 +499,14 @@
         "entities": "W tej sprawie"
       },
       "loadError": "Nie udało się załadować elementów"
+    },
+    "modelMode": {
+      "deepThinking": "Głębokie myślenie",
+      "deepThinkingDescription": "Złożone rozumowanie i analiza",
+      "fastDescription": "Szybkie, codzienne pytania",
+      "select": "Wybierz tryb odpowiedzi",
+      "standard": "Standardowy",
+      "standardDescription": "Najlepszy do większości zadań"
     },
     "modelSelector": {
       "defaultLabel": "Domyślny (rola czatu)",

@@ -474,6 +474,11 @@
     "greeting": "¿En qué le gustaría trabajar?",
     "greetingSubtitle": "Empiece con un asunto, un documento o una pregunta sencilla.",
     "hideThread": "Ocultar conversación",
+    "improvePrompt": "Mejorar prompt",
+    "improvePromptDraftChanged": "El borrador cambió, por lo que no se aplicó la mejora.",
+    "improvePromptPlainTextOnly": "La mejora de prompts solo está disponible para texto sin formato.",
+    "improvePromptUnavailableAnonymized": "La mejora de prompts no está disponible en modo anonimizado.",
+    "improvingPrompt": "Mejorando prompt…",
     "inDocument": "En el documento",
     "jumpToMessage": "Ir a este mensaje",
     "landing": {
@@ -494,6 +499,14 @@
         "entities": "En este asunto"
       },
       "loadError": "Error al cargar entidades"
+    },
+    "modelMode": {
+      "deepThinking": "Razonamiento profundo",
+      "deepThinkingDescription": "Razonamiento y análisis complejos",
+      "fastDescription": "Consultas rápidas y cotidianas",
+      "select": "Seleccionar modo de respuesta",
+      "standard": "Estándar",
+      "standardDescription": "Ideal para la mayoría de las tareas"
     },
     "modelSelector": {
       "defaultLabel": "Predeterminado (rol de chat)",

@@ -156,6 +156,37 @@ export const getDefaultChatModelValue = ({
 };
 
 /**
+ * The concrete configured model behind a friendly composer mode. These are
+ * still persisted as ordinary provider/model overrides, so old clients and
+ * the existing "all models" picker remain fully interoperable.
+ */
+export const getChatModeModelValue = ({
+  orgAIConfig,
+  organizationId,
+  role,
+}: {
+  orgAIConfig: OrgAIConfig | null;
+  organizationId: SafeId<"organization"> | null;
+  role: Extract<ModelRole, "fast" | "reasoning">;
+}): string | null => {
+  try {
+    const info = getTanStackTextModelInfoForRole(role, orgAIConfig, {
+      organizationId,
+    });
+    if (!isBYOKProviderValue(info.provider)) {
+      return null;
+    }
+    const selection = { provider: info.provider, modelId: info.modelId };
+    if (!isChatModelSelectionAvailable({ ...selection, orgAIConfig })) {
+      return null;
+    }
+    return encodeChatModelSelection(selection);
+  } catch {
+    return null;
+  }
+};
+
+/**
  * Resolves the effective chat model override for a turn: the dev
  * override (local-only, already validated by
  * `validateTanStackDevModelOverride`) always wins; otherwise a valid

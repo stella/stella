@@ -3,6 +3,7 @@ import { Result } from "better-result";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import {
+  getChatModeModelValue,
   getConfiguredChatModelOptions,
   getDefaultChatModelValue,
 } from "@/api/lib/chat-model-selection";
@@ -25,6 +26,18 @@ const getModelOptions = createSafeRootHandler(
         orgAIConfig,
         organizationId: session.activeOrganizationId,
       }),
+      modeValues: {
+        deepThinking: getChatModeModelValue({
+          orgAIConfig,
+          organizationId: session.activeOrganizationId,
+          role: "reasoning",
+        }),
+        fast: getChatModeModelValue({
+          orgAIConfig,
+          organizationId: session.activeOrganizationId,
+          role: "fast",
+        }),
+      },
     });
   },
 );

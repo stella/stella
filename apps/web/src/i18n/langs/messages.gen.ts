@@ -477,6 +477,11 @@ type Messages = {
     "greeting": "What would you like to work on?";
     "greetingSubtitle": "Start with a matter, document, or plain question.";
     "hideThread": "Hide conversation";
+    "improvePrompt": "Improve prompt";
+    "improvePromptDraftChanged": "Draft changed, so the improvement wasn't applied.";
+    "improvePromptPlainTextOnly": "Prompt improvement is available for plain text only.";
+    "improvePromptUnavailableAnonymized": "Prompt improvement is unavailable in anonymized mode.";
+    "improvingPrompt": "Improving prompt…";
     "inDocument": "In document";
     "jumpToMessage": "Jump to this message";
     "landing": {
@@ -497,6 +502,14 @@ type Messages = {
         "entities": "In this matter";
       };
       "loadError": "Failed to load entities";
+    };
+    "modelMode": {
+      "deepThinking": "Deep Thinking";
+      "deepThinkingDescription": "Complex reasoning and analysis";
+      "fastDescription": "Quick, everyday questions";
+      "select": "Select response mode";
+      "standard": "Standard";
+      "standardDescription": "Best for most tasks";
     };
     "modelSelector": {
       "defaultLabel": "Default (chat role)";

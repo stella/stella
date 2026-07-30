@@ -22,6 +22,7 @@ env.OPENAI_API_KEY = "test-openai-instance-key";
 const {
   decodeChatModelSelection,
   encodeChatModelSelection,
+  getChatModeModelValue,
   getConfiguredChatModelOptions,
   getDefaultChatModelValue,
   isChatModelSelectionAvailable,
@@ -189,6 +190,46 @@ describe("getDefaultChatModelValue", () => {
       getDefaultChatModelValue({
         orgAIConfig: orgConfigForProviders([]),
         organizationId: null,
+      }),
+    ).toBeNull();
+  });
+});
+
+describe("getChatModeModelValue", () => {
+  test("resolves configured fast and reasoning role models", () => {
+    const orgAIConfig = orgConfigForProviders(["anthropic"]);
+    orgAIConfig.overrideModels.fast = {
+      provider: "anthropic",
+      modelId: "claude-haiku-4-5-20251001",
+    };
+    orgAIConfig.overrideModels.reasoning = {
+      provider: "anthropic",
+      modelId: "claude-opus-4-7",
+    };
+
+    expect(
+      getChatModeModelValue({
+        orgAIConfig,
+        organizationId: null,
+        role: "fast",
+      }),
+    ).toBe("anthropic::claude-haiku-4-5-20251001");
+    expect(
+      getChatModeModelValue({
+        orgAIConfig,
+        organizationId: null,
+        role: "reasoning",
+      }),
+    ).toBe("anthropic::claude-opus-4-7");
+  });
+
+  test("omits a mode whose configured model is outside the chat catalog", () => {
+    const orgAIConfig = orgConfigForProviders(["anthropic"]);
+    expect(
+      getChatModeModelValue({
+        orgAIConfig,
+        organizationId: null,
+        role: "fast",
       }),
     ).toBeNull();
   });

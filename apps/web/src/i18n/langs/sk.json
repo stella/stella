@@ -474,6 +474,11 @@
     "greeting": "Na čom chcete pracovať?",
     "greetingSubtitle": "Začnite spisom, dokumentom alebo obyčajnou otázkou.",
     "hideThread": "Skryť konverzáciu",
+    "improvePrompt": "Vylepšiť zadanie",
+    "improvePromptDraftChanged": "Zadanie sa zmenilo, preto vylepšenie nebolo použité.",
+    "improvePromptPlainTextOnly": "Vylepšenie zadania je dostupné iba pre obyčajný text.",
+    "improvePromptUnavailableAnonymized": "Vylepšenie zadania nie je dostupné v anonymizovanom režime.",
+    "improvingPrompt": "Vylepšujem zadanie…",
     "inDocument": "V dokumente",
     "jumpToMessage": "Prejsť na túto správu",
     "landing": {
@@ -494,6 +499,14 @@
         "entities": "V tomto spise"
       },
       "loadError": "Nepodarilo sa načítať entity"
+    },
+    "modelMode": {
+      "deepThinking": "Hĺbkové myslenie",
+      "deepThinkingDescription": "Zložité uvažovanie a analýza",
+      "fastDescription": "Rýchle každodenné otázky",
+      "select": "Vybrať režim odpovede",
+      "standard": "Štandardný",
+      "standardDescription": "Najlepší pre väčšinu úloh"
     },
     "modelSelector": {
       "defaultLabel": "Predvolené (rola chatu)",

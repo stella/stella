@@ -474,6 +474,11 @@
     "greeting": "Millega soovite tegeleda?",
     "greetingSubtitle": "Alustage toimikust, dokumendist või lihtsast küsimusest.",
     "hideThread": "Peida vestlus",
+    "improvePrompt": "Täiusta viipa",
+    "improvePromptDraftChanged": "Mustand muutus, seega täiustust ei rakendatud.",
+    "improvePromptPlainTextOnly": "Viipa saab täiustada ainult lihttekstina.",
+    "improvePromptUnavailableAnonymized": "Anonüümitud režiimis ei saa viipa täiustada.",
+    "improvingPrompt": "Viiba täiustamine…",
     "inDocument": "Dokumendis",
     "jumpToMessage": "Liigu selle sõnumi juurde",
     "landing": {
@@ -494,6 +499,14 @@
         "entities": "Selles toimikus"
       },
       "loadError": "Üksuste laadimine ebaõnnestus"
+    },
+    "modelMode": {
+      "deepThinking": "Süvamõtlemine",
+      "deepThinkingDescription": "Keerukas arutlus ja analüüs",
+      "fastDescription": "Kiired igapäevased küsimused",
+      "select": "Vali vastamisrežiim",
+      "standard": "Standardne",
+      "standardDescription": "Parim enamiku ülesannete jaoks"
     },
     "modelSelector": {
       "defaultLabel": "Vaikimisi (vestluse roll)",

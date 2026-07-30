@@ -474,6 +474,11 @@
     "greeting": "Prie ko norėtumėte dirbti?",
     "greetingSubtitle": "Pradėkite nuo bylos, dokumento arba paprasto klausimo.",
     "hideThread": "Slėpti pokalbį",
+    "improvePrompt": "Patobulinti užklausą",
+    "improvePromptDraftChanged": "Juodraštis pasikeitė, todėl patobulinimas nebuvo pritaikytas.",
+    "improvePromptPlainTextOnly": "Užklausą galima tobulinti tik kaip paprastą tekstą.",
+    "improvePromptUnavailableAnonymized": "Anonimizuotu režimu užklausos tobulinti negalima.",
+    "improvingPrompt": "Užklausa tobulinama…",
     "inDocument": "Dokumente",
     "jumpToMessage": "Pereiti prie šios žinutės",
     "landing": {
@@ -494,6 +499,14 @@
         "entities": "Šioje byloje"
       },
       "loadError": "Nepavyko įkelti objektų"
+    },
+    "modelMode": {
+      "deepThinking": "Gilus mąstymas",
+      "deepThinkingDescription": "Sudėtingas samprotavimas ir analizė",
+      "fastDescription": "Greiti kasdieniai klausimai",
+      "select": "Pasirinkti atsakymo režimą",
+      "standard": "Standartinis",
+      "standardDescription": "Tinka daugumai užduočių"
     },
     "modelSelector": {
       "defaultLabel": "Numatytasis (pokalbio vaidmuo)",
