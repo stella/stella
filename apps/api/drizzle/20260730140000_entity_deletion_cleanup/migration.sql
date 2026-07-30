@@ -1,3 +1,6 @@
+SET LOCAL lock_timeout = '1s';--> statement-breakpoint
+SET LOCAL statement_timeout = '5s';--> statement-breakpoint
+
 CREATE TABLE "entity_deletion_cleanup_requests" (
   "id" uuid PRIMARY KEY NOT NULL,
   "organization_id" varchar(128) NOT NULL,

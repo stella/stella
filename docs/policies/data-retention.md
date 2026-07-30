@@ -33,9 +33,8 @@ views, and associated metadata.
 
 3. **Storage cleanup.** Deletion handlers remove referenced S3 objects
    and database rows rather than leaving inaccessible objects behind.
-   Cross-store deletion is retriable when object removal fails; it is not
-   a single atomic transaction, so operators must treat a later database
-   failure as a reconciliation event.
+   Cross-store deletion uses durable cleanup records and bounded
+   reconciliation because object storage cannot join a database transaction.
 
 ## Deletion flows
 
@@ -44,11 +43,12 @@ views, and associated metadata.
 Handler: `apps/api/src/handlers/entities/delete.ts`
 
 1. Query all files referenced by the entity's versions.
-2. Delete deduplicated S3 keys with bounded concurrency.
-3. Within a database transaction: delete the entity row.
-   Cascade FKs remove `entityVersions`, `fields`, and
-   `justifications`. Orphaned `files` rows are then deleted
-   explicitly.
+2. Within one database transaction, record the deduplicated S3 keys in a
+   durable cleanup request and delete the entity row. Cascade FKs remove
+   `entityVersions`, `fields`, and `justifications`.
+3. After commit, dispatch the cleanup request to a worker. The worker deletes
+   S3 keys with bounded concurrency; a bounded repair scan recovers missed
+   dispatches and retryable failures.
 
 ### Property deletion
 

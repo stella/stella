@@ -150,7 +150,14 @@
       "evidence": [
         {
           "path": "apps/api/src/handlers/entities/delete.ts",
-          "contains": ["deleteS3Objects", ".delete(entities)"]
+          "contains": [
+            "entityDeletionCleanupRequests",
+            ".delete(entities)"
+          ]
+        },
+        {
+          "path": "apps/api/src/lib/entity-deletion-cleanup-queue.ts",
+          "contains": ["deleteS3Keys", "MAX_RECONCILED_ATTEMPTS"]
         },
         {
           "path": "apps/api/src/handlers/workspaces/delete.ts",
