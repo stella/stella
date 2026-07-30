@@ -57,6 +57,30 @@ describe("installation-bound mobile OAuth callback", () => {
     );
   });
 
+  test("protects Expo Go callbacks with the same verifier-bound bridge", async () => {
+    const createGrant = mock(async () => await Promise.resolve(CODE));
+    const callback = new URL("exp://192.168.1.20:8081/--/");
+    callback.searchParams.set(STELLA_MOBILE_AUTH_CHALLENGE_PARAM, CHALLENGE);
+    callback.searchParams.set("cookie", "better-auth.session_token=secret");
+
+    const protectedLocation = await protectMobileCallbackLocation({
+      createGrant,
+      location: callback.toString(),
+    });
+
+    expect(createGrant).toHaveBeenCalledWith({
+      challenge: CHALLENGE,
+      cookie: "better-auth.session_token=secret",
+    });
+    const protectedUrl = new URL(protectedLocation ?? "exp://invalid/");
+    expect(protectedUrl.protocol).toBe("exp:");
+    expect(protectedUrl.host).toBe("192.168.1.20:8081");
+    expect(protectedUrl.searchParams.get("cookie")).toBeNull();
+    expect(protectedUrl.searchParams.get(STELLA_MOBILE_AUTH_CODE_PARAM)).toBe(
+      CODE,
+    );
+  });
+
   test("does not rewrite browser redirects", async () => {
     const createGrant = mock(async () => await Promise.resolve(CODE));
     expect(

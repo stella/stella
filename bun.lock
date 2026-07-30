@@ -204,6 +204,7 @@
         "@stll/api": "workspace:*",
         "@stll/api-client": "workspace:*",
         "@stll/api-contract": "workspace:*",
+        "@stll/locales": "workspace:*",
         "@stll/ui": "workspace:*",
         "@tanstack/ai-client": "catalog:",
         "@tanstack/react-query": "^5.101.4",

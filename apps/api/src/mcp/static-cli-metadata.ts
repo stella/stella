@@ -134,6 +134,9 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
     save_filled_template: {
       command: ["template", "save-filled"],
       additionalScopes: ["templates"],
+      // The server caps render work at five minutes. Leave 30 seconds for the
+      // persistence response while retaining a finite transport deadline.
+      requestTimeoutMs: 330_000,
       scope: "documents_write",
       inputOnly: ["values"],
       discriminator: {

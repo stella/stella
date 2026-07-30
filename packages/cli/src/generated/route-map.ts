@@ -1609,6 +1609,7 @@ export const generatedRouteMap: RouteNode = {
                 windowedText: false,
                 destructive: false,
                 additionalScopes: ["templates"],
+                requestTimeoutMs: 330000,
                 scope: "documents_write",
                 inputSchema: {
                   type: "object",
@@ -1701,6 +1702,7 @@ export const generatedRouteMap: RouteNode = {
                 windowedText: false,
                 destructive: false,
                 additionalScopes: ["templates"],
+                requestTimeoutMs: 330000,
                 scope: "documents_write",
                 inputSchema: {
                   type: "object",

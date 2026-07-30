@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { pendingUploads } from "@/api/db/schema";
@@ -16,12 +16,18 @@ const BUFFER_INTENT_RECONCILE_LIMIT = 25;
 
 export type BufferIntentPurpose = "entity_create" | "entity_version";
 
+type BufferIntentScope = {
+  organizationId: SafeId<"organization">;
+  purpose: BufferIntentPurpose;
+  workspaceId: SafeId<"workspace">;
+};
+
 type RecoverableBufferIntent = PendingUploadPurposeData & {
   reservedFileId: string;
   type: BufferIntentPurpose;
 };
 
-const isRecoverableBufferIntent = (
+export const isRecoverableBufferIntent = (
   value: PendingUploadPurposeData,
   purpose: BufferIntentPurpose,
 ): value is RecoverableBufferIntent =>
@@ -35,42 +41,47 @@ const rejectionReason = (purpose: BufferIntentPurpose): string =>
     ? "Reconciled abandoned server-generated entity bytes"
     : "Reconciled abandoned server-generated version bytes";
 
-/**
- * Claim and remove one bounded workspace batch of final-key objects whose
- * durable intent proves that no entity/version transaction committed. The
- * intent is finalized atomically with the reference, so a committed object
- * can never satisfy this stale-scanning predicate.
- */
-export const reconcileStaleBufferIntents = async ({
+export const isBufferIntentPurpose = (
+  purpose: string,
+): purpose is BufferIntentPurpose =>
+  purpose === "entity_create" || purpose === "entity_version";
+
+const reconcileStaleBufferIntentBatch = async ({
   safeDb,
-  organizationId,
-  workspaceId,
-  purpose,
+  scope,
+  limit,
 }: {
   safeDb: SafeDb;
-  organizationId: SafeId<"organization">;
-  workspaceId: SafeId<"workspace">;
-  purpose: BufferIntentPurpose;
-}): Promise<void> => {
+  scope?: BufferIntentScope | undefined;
+  limit: number;
+}): Promise<number> => {
   const reconcileClaimId = Bun.randomUUIDv7().slice(0, 64);
   const timeoutSeconds = Math.floor(BUFFER_INTENT_STALE_MS / 1000);
+  const ownershipPredicate =
+    scope === undefined
+      ? sql`${pendingUploads.purpose} IN ('entity_create', 'entity_version')`
+      : sql`${pendingUploads.organizationId} = ${scope.organizationId}
+          AND ${pendingUploads.workspaceId} = ${scope.workspaceId}
+          AND ${pendingUploads.purpose} = ${scope.purpose}`;
   const claimedResult = await safeDb(async (tx) => {
     const staleRows = await tx
       .select({
         declaredMime: pendingUploads.declaredMime,
         id: pendingUploads.id,
+        organizationId: pendingUploads.organizationId,
+        purpose: pendingUploads.purpose,
         purposeData: pendingUploads.purposeData,
+        workspaceId: pendingUploads.workspaceId,
       })
       .from(pendingUploads)
       .where(
-        sql`${pendingUploads.organizationId} = ${organizationId}
-          AND ${pendingUploads.workspaceId} = ${workspaceId}
-          AND ${pendingUploads.purpose} = ${purpose}
+        sql`${ownershipPredicate}
           AND ${pendingUploads.purposeData}->>'reservedFileId' IS NOT NULL
           AND ${pendingUploads.status} = 'scanning'
           AND ${pendingUploads.claimedAt} < NOW() - ${timeoutSeconds} * interval '1 second'`,
       )
-      .limit(BUFFER_INTENT_RECONCILE_LIMIT)
+      .orderBy(asc(pendingUploads.claimedAt), asc(pendingUploads.id))
+      .limit(limit)
       .for("update", { skipLocked: true });
 
     if (staleRows.length === 0) {
@@ -99,12 +110,15 @@ export const reconcileStaleBufferIntents = async ({
 
   const cleanupResults = await Promise.all(
     claimedResult.value.map(async (row) => {
-      if (!isRecoverableBufferIntent(row.purposeData, purpose)) {
+      if (
+        !isBufferIntentPurpose(row.purpose) ||
+        !isRecoverableBufferIntent(row.purposeData, row.purpose)
+      ) {
         return null;
       }
       const objectKey = createFileKey({
-        organizationId,
-        workspaceId,
+        organizationId: row.organizationId,
+        workspaceId: row.workspaceId,
         fileId: row.purposeData.reservedFileId,
         mimeType: row.declaredMime,
       });
@@ -116,7 +130,7 @@ export const reconcileStaleBufferIntents = async ({
         captureError(cleanup.error, {
           objectKey,
           pendingUploadId: row.id,
-          stage: `buffer-${purpose}-intent-reconcile`,
+          stage: `buffer-${row.purpose}-intent-reconcile`,
         });
         return null;
       }
@@ -127,7 +141,7 @@ export const reconcileStaleBufferIntents = async ({
     (id): id is SafeId<"pendingUpload"> => id !== null,
   );
   if (cleanedIds.length === 0) {
-    return;
+    return claimedResult.value.length;
   }
 
   const finalizedCleanup = await safeDb(async (tx) => {
@@ -136,7 +150,11 @@ export const reconcileStaleBufferIntents = async ({
       .update(pendingUploads)
       .set({
         finalizedAt: new Date(),
-        rejectReason: rejectionReason(purpose),
+        rejectReason: sql<string>`CASE
+          WHEN ${pendingUploads.purpose} = 'entity_create'
+            THEN ${rejectionReason("entity_create")}
+          ELSE ${rejectionReason("entity_version")}
+        END`,
         status: "rejected",
       })
       .where(
@@ -150,7 +168,46 @@ export const reconcileStaleBufferIntents = async ({
   if (Result.isError(finalizedCleanup)) {
     captureError(finalizedCleanup.error, {
       pendingUploadIds: cleanedIds.join(","),
-      stage: `buffer-${purpose}-intent-reconcile-finalize`,
+      stage: "buffer-intent-reconcile-finalize",
     });
   }
+  return claimedResult.value.length;
 };
+
+/**
+ * Claim and remove one bounded workspace batch of final-key objects whose
+ * durable intent proves that no entity/version transaction committed. The
+ * intent is finalized atomically with the reference, so a committed object
+ * can never satisfy this stale-scanning predicate.
+ */
+export const reconcileStaleBufferIntents = async ({
+  safeDb,
+  organizationId,
+  workspaceId,
+  purpose,
+}: {
+  safeDb: SafeDb;
+  organizationId: SafeId<"organization">;
+  workspaceId: SafeId<"workspace">;
+  purpose: BufferIntentPurpose;
+}): Promise<void> => {
+  await reconcileStaleBufferIntentBatch({
+    safeDb,
+    scope: { organizationId, workspaceId, purpose },
+    limit: BUFFER_INTENT_RECONCILE_LIMIT,
+  });
+};
+
+/**
+ * Fair global scheduler entrypoint. It claims the oldest stale rows directly,
+ * rather than rediscovering a fixed prefix of tenant scopes. Every attempted
+ * cleanup advances `claimedAt`, so a persistently failing object rotates behind
+ * older untouched rows and cannot starve the rest of the table.
+ */
+export const reconcileStaleBufferIntentsGlobally = async ({
+  safeDb,
+  limit,
+}: {
+  safeDb: SafeDb;
+  limit: number;
+}): Promise<number> => await reconcileStaleBufferIntentBatch({ safeDb, limit });

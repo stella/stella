@@ -80,7 +80,10 @@ export const protectMobileCallbackLocation = async ({
     return undefined;
   }
   const redirect = new URL(location);
-  if (redirect.protocol !== `${STELLA_MOBILE_SCHEME}:`) {
+  if (
+    redirect.protocol !== `${STELLA_MOBILE_SCHEME}:` &&
+    redirect.protocol !== "exp:"
+  ) {
     return undefined;
   }
   const cookie = redirect.searchParams.get("cookie");
@@ -139,8 +142,9 @@ export const redeemMobileSession = async ({
 /**
  * Replaces the Expo plugin's raw session-cookie callback parameter with a
  * one-time code bound to a verifier that never leaves the initiating app.
- * A second Android app can still steal focus by claiming `stella://`, but it
- * receives no credential and cannot redeem the code without that verifier.
+ * Another app can still steal focus by claiming `stella://` or receiving an
+ * Expo development URL, but it receives no credential and cannot redeem the
+ * code without that verifier.
  */
 export const mobileAuthSessionPlugin = {
   id: "stella-mobile-session",

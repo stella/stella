@@ -1,7 +1,9 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
+import { Link } from "expo-router";
 import {
   ActivityIndicator,
   FlatList,
+  Pressable,
   StyleSheet,
   Text,
   View,
@@ -9,6 +11,7 @@ import {
 
 import { ActionButton } from "@/components/action-button";
 import { useActiveOrganizationId } from "@/features/auth/auth-session-boundary";
+import { getMobileLocale, mobileMessage } from "@/i18n/messages";
 import { useAppColors } from "@/theme";
 
 import { formatRecentChatDate } from "./recent-chat-date";
@@ -95,9 +98,9 @@ const RecentChatsEmptyState = ({ state }: { state: EmptyState }) => {
   if (state.type === "loading") {
     return (
       <View style={styles.emptyState}>
-        <ActivityIndicator accessibilityLabel="Loading conversations" />
+        <ActivityIndicator accessibilityLabel={mobileMessage("loading")} />
         <Text style={[styles.emptyDescription, { color: colors.muted }]}>
-          Loading recent conversations…
+          {mobileMessage("loading")}
         </Text>
       </View>
     );
@@ -107,14 +110,14 @@ const RecentChatsEmptyState = ({ state }: { state: EmptyState }) => {
     return (
       <View style={styles.emptyState}>
         <Text style={[styles.emptyTitle, { color: colors.text }]}>
-          Conversations unavailable
+          {mobileMessage("loadError")}
         </Text>
         <Text style={[styles.emptyDescription, { color: colors.muted }]}>
-          Check your connection and try again.
+          {mobileMessage("genericError")}
         </Text>
         <View style={styles.retryButton}>
           <ActionButton
-            label="Retry"
+            label={mobileMessage("retry")}
             onPress={state.onRetry}
             variant="secondary"
           />
@@ -126,10 +129,10 @@ const RecentChatsEmptyState = ({ state }: { state: EmptyState }) => {
   return (
     <View style={styles.emptyState}>
       <Text style={[styles.emptyTitle, { color: colors.text }]}>
-        No conversations yet
+        {mobileMessage("noThreads")}
       </Text>
       <Text style={[styles.emptyDescription, { color: colors.muted }]}>
-        Conversations started on the web will appear here.
+        {mobileMessage("openThread")}
       </Text>
     </View>
   );
@@ -141,7 +144,7 @@ const ListHeader = ({ refreshFailed }: { refreshFailed: boolean }) => {
   return (
     <View style={styles.listHeader}>
       <Text style={[styles.description, { color: colors.muted }]}>
-        Continue your most recently updated conversations.
+        {mobileMessage("openThread")}
       </Text>
       {refreshFailed ? (
         <View
@@ -151,7 +154,7 @@ const ListHeader = ({ refreshFailed }: { refreshFailed: boolean }) => {
           ]}
         >
           <Text selectable style={{ color: colors.danger }}>
-            Could not refresh. Showing saved conversations.
+            {mobileMessage("loadError")}
           </Text>
         </View>
       ) : null}
@@ -161,34 +164,51 @@ const ListHeader = ({ refreshFailed }: { refreshFailed: boolean }) => {
 
 const RecentChatRow = ({ thread }: { thread: RecentChatThread }) => {
   const colors = useAppColors();
-  const context = thread.scope === "global" ? "General" : thread.workspaceName;
+  const context = thread.scope === "global" ? "stella" : thread.workspaceName;
+  const href = {
+    pathname: "/(tabs)/(chats)/[threadId]" as const,
+    params: {
+      threadId: thread.id,
+      title: thread.title,
+      ...(thread.scope === "workspace"
+        ? { scope: "workspace", workspaceId: thread.workspaceId }
+        : { scope: "global" }),
+    },
+  };
 
   return (
-    <View
-      style={[
-        styles.row,
-        { backgroundColor: colors.card, borderColor: colors.border },
-      ]}
-    >
-      <View style={styles.metadata}>
-        <Text
-          numberOfLines={1}
-          style={[styles.context, { color: colors.muted }]}
-        >
-          {context}
-        </Text>
-        <Text style={[styles.date, { color: colors.muted }]}>
-          {formatRecentChatDate(thread.updatedAt)}
-        </Text>
-      </View>
-      <Text
-        numberOfLines={2}
-        selectable
-        style={[styles.title, { color: colors.text }]}
+    <Link asChild href={href}>
+      <Pressable
+        accessibilityLabel={`${mobileMessage("openThread")}: ${thread.title}`}
+        accessibilityRole="button"
+        style={({ pressed }) => [
+          styles.row,
+          { backgroundColor: colors.card, borderColor: colors.border },
+          pressed ? styles.rowPressed : null,
+        ]}
       >
-        {thread.title.trim() || "Untitled conversation"}
-      </Text>
-    </View>
+        <View style={styles.metadata}>
+          <Text
+            numberOfLines={1}
+            style={[styles.context, { color: colors.muted }]}
+          >
+            {context}
+          </Text>
+          <Text style={[styles.date, { color: colors.muted }]}>
+            {formatRecentChatDate(thread.updatedAt, {
+              locale: getMobileLocale(),
+            })}
+          </Text>
+        </View>
+        <Text
+          numberOfLines={2}
+          selectable
+          style={[styles.title, { color: colors.text }]}
+        >
+          {thread.title.trim() || mobileMessage("openThread")}
+        </Text>
+      </Pressable>
+    </Link>
   );
 };
 
@@ -206,18 +226,18 @@ const PaginationFooter = ({ state }: { state: PaginationState }) => {
   if (state.type === "loading") {
     return (
       <View style={styles.paginationFooter}>
-        <ActivityIndicator accessibilityLabel="Loading more conversations" />
+        <ActivityIndicator accessibilityLabel={mobileMessage("loading")} />
       </View>
     );
   }
   return (
     <View style={styles.paginationFooter}>
       <Text style={[styles.paginationError, { color: colors.danger }]}>
-        More conversations could not be loaded.
+        {mobileMessage("loadError")}
       </Text>
       <View style={styles.retryButton}>
         <ActionButton
-          label="Try again"
+          label={mobileMessage("tryAgain")}
           onPress={state.onRetry}
           variant="secondary"
         />
@@ -300,6 +320,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: 8,
     padding: 16,
+  },
+  rowPressed: {
+    opacity: 0.72,
   },
   title: {
     fontSize: 17,

@@ -48,6 +48,8 @@ export type DiscriminatorSubcommand = {
 export type ToolAnnotation = {
   command: readonly string[];
   additionalScopes?: readonly ToolScope[];
+  /** API-owned finite transport deadline for this generated tool. */
+  requestTimeoutMs?: number;
   excluded?: true;
   scope?: ToolScope;
   itemsKey?: string;
@@ -105,6 +107,7 @@ export type FlagSpec = {
 export type LeafCommandSpec = {
   commandPath: readonly string[];
   additionalScopes?: readonly ToolScope[];
+  requestTimeoutMs?: number;
   toolName: string;
   discriminatorInject?: Record<string, string>;
   flags: readonly FlagSpec[];

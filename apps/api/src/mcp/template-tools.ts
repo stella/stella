@@ -48,6 +48,7 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
+import { withTimeout } from "@/api/lib/with-timeout";
 import type { McpRequestContext } from "@/api/mcp/context";
 import {
   persistFilledTemplateDocument,
@@ -87,6 +88,7 @@ type TemplateToolName =
 
 /** Max assembled-text length returned inline; full bytes ride along as base64. */
 const TEMPLATE_FILL_TEXT_MAX_CHARS = 16_000;
+const SAVE_FILLED_TEMPLATE_RENDER_TIMEOUT_MS = 300_000;
 
 /**
  * One field-configuration overlay entry. Each object configures the field at
@@ -1094,37 +1096,67 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
           })
       : undefined;
 
-  const filled = await fillStoredTemplateDocx({
-    templateId,
-    values: input.values,
-    scopedDb: context.scopedDb,
-    organizationId: context.organizationId,
-    workspaceId,
-    assertUsageAvailable,
-    generateAiValue: buildAiFieldGenerator({
-      orgAIConfig,
-      organizationId: context.organizationId,
-      skillContext,
-      aiAnalytics,
-    }),
-    decideAiCondition: buildAiConditionDecider({
-      orgAIConfig,
-      organizationId: context.organizationId,
-      skillContext,
-      aiAnalytics,
-    }),
-    adaptAiValue: buildAiOccurrenceAdapter({
-      orgAIConfig,
-      organizationId: context.organizationId,
-      skillContext,
-      aiAnalytics,
-    }),
-  });
+  const renderDeadline = AbortSignal.timeout(
+    SAVE_FILLED_TEMPLATE_RENDER_TIMEOUT_MS,
+  );
+  const operationSignal =
+    context.request === undefined
+      ? renderDeadline
+      : AbortSignal.any([context.request.signal, renderDeadline]);
+  const filledResult = await Result.tryPromise(
+    async () =>
+      await withTimeout(
+        async () =>
+          await fillStoredTemplateDocx({
+            templateId,
+            values: input.values,
+            scopedDb: context.scopedDb,
+            organizationId: context.organizationId,
+            workspaceId,
+            assertUsageAvailable,
+            generateAiValue: buildAiFieldGenerator({
+              orgAIConfig,
+              organizationId: context.organizationId,
+              skillContext,
+              aiAnalytics,
+              operationSignal,
+            }),
+            decideAiCondition: buildAiConditionDecider({
+              orgAIConfig,
+              organizationId: context.organizationId,
+              skillContext,
+              aiAnalytics,
+              operationSignal,
+            }),
+            adaptAiValue: buildAiOccurrenceAdapter({
+              orgAIConfig,
+              organizationId: context.organizationId,
+              skillContext,
+              aiAnalytics,
+              operationSignal,
+            }),
+          }),
+        {
+          label: "save filled template render",
+          timeoutMs: SAVE_FILLED_TEMPLATE_RENDER_TIMEOUT_MS,
+        },
+      ),
+  );
+  if (Result.isError(filledResult)) {
+    return internalFailureResult(filledResult.error);
+  }
+  const filled = filledResult.value;
   if ("usageRejection" in filled) {
     return errorResult(filled.usageRejection.message);
   }
   if ("error" in filled) {
     return errorResult(filled.error);
+  }
+  // Never cross the non-idempotent persistence boundary after either the
+  // caller disconnects or the server-owned render deadline expires, even if
+  // the abandoned fill operation settles later.
+  if (operationSignal.aborted) {
+    return errorResult("Request cancelled before document persistence");
   }
 
   const fileName = resolveFilledDocxName({

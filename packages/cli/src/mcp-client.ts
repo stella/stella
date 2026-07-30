@@ -11,8 +11,10 @@ import { Result } from "better-result";
 import { CliBaseError } from "./auth/errors.js";
 import { MCP_HTTP_PATH } from "./mcp-constants.js";
 
-// `tools/call` can drive a long server operation (e.g. fill_template), so it
-// keeps a generous ceiling. The `tools/list` metadata fetch, by contrast, runs
+// Most `tools/call` requests keep the default bounded client ceiling. A
+// generated leaf may carry a larger API-owned finite deadline when its bounded
+// server work cannot complete within that generic budget. The `tools/list`
+// metadata fetch, by contrast, runs
 // on the startup refresh path and is awaited before the command executes, so a
 // tighter ceiling bounds how long an offline/slow client stalls before it falls
 // back to the baked-in tree.
@@ -99,13 +101,16 @@ const callRpc = async ({
   token,
   method,
   params,
+  timeoutMs,
 }: {
   serverUrl: string;
   token: string;
   method: string;
   params: Record<string, unknown>;
+  timeoutMs?: number;
 }): Promise<Result<unknown, McpClientError>> => {
   const body: JsonRpcRequest = { jsonrpc: "2.0", id: 1, method, params };
+  const signal = AbortSignal.timeout(timeoutMs ?? REQUEST_TIMEOUT_MS);
 
   const response = await Result.tryPromise({
     try: async () =>
@@ -118,7 +123,7 @@ const callRpc = async ({
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        signal,
       }),
     catch: (cause) => cause,
   });
@@ -214,17 +219,20 @@ export const callTool = async ({
   token,
   name,
   args,
+  timeoutMs,
 }: {
   serverUrl: string;
   token: string;
   name: string;
   args: Record<string, unknown>;
+  timeoutMs?: number;
 }): Promise<Result<CallToolResult, McpClientError>> => {
   const result = await callRpc({
     serverUrl,
     token,
     method: "tools/call",
     params: { name, arguments: args },
+    ...(timeoutMs === undefined ? {} : { timeoutMs }),
   });
   if (Result.isError(result)) {
     return Result.err(result.error);

@@ -755,6 +755,7 @@ export const followAll = async ({
   toolName,
   cursorInto,
   stream,
+  requestTimeoutMs,
 }: {
   windowedText: boolean;
   itemsKey: string | undefined;
@@ -769,6 +770,7 @@ export const followAll = async ({
     cursor: string,
   ) => Record<string, unknown>;
   stream?: (item: unknown) => void;
+  requestTimeoutMs?: number;
 }): Promise<Result<AllOutcome, McpClientError>> => {
   const items: unknown[] = [];
   let text = "";
@@ -782,7 +784,15 @@ export const followAll = async ({
   do {
     const args = cursor === null ? baseArgs : cursorInto(baseArgs, cursor);
     // eslint-disable-next-line no-await-in-loop -- each page's cursor comes from the previous response
-    const call = await callTool({ serverUrl, token, name: toolName, args });
+    const call = await callTool({
+      serverUrl,
+      token,
+      name: toolName,
+      args,
+      ...(requestTimeoutMs === undefined
+        ? {}
+        : { timeoutMs: requestTimeoutMs }),
+    });
     if (Result.isError(call)) {
       return Result.err(call.error);
     }
@@ -854,6 +864,7 @@ export const streamOrRenderAllPages = async ({
   token,
   toolName,
   cursorInto,
+  requestTimeoutMs,
 }: {
   context: Context;
   writers: Writers;
@@ -868,6 +879,7 @@ export const streamOrRenderAllPages = async ({
     base: Record<string, unknown>,
     cursor: string,
   ) => Record<string, unknown>;
+  requestTimeoutMs?: number;
 }): Promise<void> => {
   const streaming = format === "jsonl" && !windowedText;
   const outcome = await followAll({
@@ -878,6 +890,7 @@ export const streamOrRenderAllPages = async ({
     token,
     toolName,
     cursorInto,
+    ...(requestTimeoutMs === undefined ? {} : { requestTimeoutMs }),
     ...(streaming
       ? {
           stream: (item: unknown) => {
@@ -1127,11 +1140,22 @@ export const runLeafCommand = async ({
       token,
       toolName: spec.toolName,
       cursorInto: (base, cursor) => ({ ...base, cursor }),
+      ...(spec.requestTimeoutMs === undefined
+        ? {}
+        : { requestTimeoutMs: spec.requestTimeoutMs }),
     });
     return;
   }
 
-  const call = await callTool({ serverUrl, token, name: spec.toolName, args });
+  const call = await callTool({
+    serverUrl,
+    token,
+    name: spec.toolName,
+    args,
+    ...(spec.requestTimeoutMs === undefined
+      ? {}
+      : { timeoutMs: spec.requestTimeoutMs }),
+  });
   if (Result.isError(call)) {
     writers.stderr(`${call.error.message}\n`);
     setExit(context, mapClientErrorExit(call.error));
@@ -1269,6 +1293,9 @@ const maybeConfirmRetry = async ({
     token,
     name: spec.toolName,
     args: { ...args, confirm: true },
+    ...(spec.requestTimeoutMs === undefined
+      ? {}
+      : { timeoutMs: spec.requestTimeoutMs }),
   });
   if (Result.isError(retry)) {
     writers.stderr(`${retry.error.message}\n`);

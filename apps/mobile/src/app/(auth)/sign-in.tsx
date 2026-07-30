@@ -20,6 +20,7 @@ import {
   signInSocialOnMobile,
   type MobileSocialProvider,
 } from "@/features/auth/mobile-social-auth";
+import { mobileMessage } from "@/i18n/messages";
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
 import { useAppColors } from "@/theme";
@@ -30,7 +31,7 @@ const authCapabilitiesQuery = {
     const response = await api.auth.capabilities.get({ fetch: { signal } });
     if (response.error) {
       throw new MobileAuthError({
-        message: "stella sign-in methods are unavailable.",
+        message: mobileMessage("genericError"),
       });
     }
     return response.data;
@@ -73,7 +74,7 @@ export default function SignInScreen() {
         password,
       });
       if (result.error) {
-        throw toMobileAuthError(result.error, "Password sign-in failed.");
+        throw toMobileAuthError(result.error, mobileMessage("genericError"));
       }
       if (isTwoFactorRedirect(result.data)) {
         return "twoFactor" as const;
@@ -82,7 +83,9 @@ export default function SignInScreen() {
       return "complete" as const;
     },
     onError: (error) => {
-      setPasswordEmailError(authErrorMessage(error, "Sign-in failed."));
+      setPasswordEmailError(
+        authErrorMessage(error, mobileMessage("genericError")),
+      );
     },
     onSuccess: (result) => {
       setPasswordEmailError(null);
@@ -100,17 +103,12 @@ export default function SignInScreen() {
         type: "sign-in",
       });
       if (result.error) {
-        throw toMobileAuthError(
-          result.error,
-          "The sign-in code could not be sent.",
-        );
+        throw toMobileAuthError(result.error, mobileMessage("genericError"));
       }
       return normalizedEmail;
     },
     onError: (error) => {
-      setOtpEmailError(
-        authErrorMessage(error, "Could not send the sign-in code."),
-      );
+      setOtpEmailError(authErrorMessage(error, mobileMessage("genericError")));
     },
     onSuccess: (normalizedEmail) => {
       setOtpEmailError(null);
@@ -120,18 +118,18 @@ export default function SignInScreen() {
 
   if (capabilities.isPending) {
     return (
-      <FormScreen description="Loading the sign-in methods enabled for this stella deployment…">
-        <ActivityIndicator accessibilityLabel="Connecting" />
+      <FormScreen description={mobileMessage("loading")}>
+        <ActivityIndicator accessibilityLabel={mobileMessage("loading")} />
       </FormScreen>
     );
   }
 
   if (capabilities.error) {
     return (
-      <FormScreen description="stella could not load the available sign-in methods.">
-        <InlineMessage message="Check your connection and try again." />
+      <FormScreen description={mobileMessage("genericError")}>
+        <InlineMessage message={mobileMessage("genericError")} />
         <ActionButton
-          label="Retry"
+          label={mobileMessage("retry")}
           onPress={() => {
             capabilities.refetch().catch(() => undefined);
           }}
@@ -142,7 +140,7 @@ export default function SignInScreen() {
 
   const methods = capabilities.data;
   const mutationError = socialSignIn.error
-    ? authErrorMessage(socialSignIn.error, "Social sign-in failed.")
+    ? authErrorMessage(socialSignIn.error, mobileMessage("genericError"))
     : null;
   const anyMutationPending =
     socialSignIn.isPending ||
@@ -150,11 +148,11 @@ export default function SignInScreen() {
     sendEmailOtp.isPending;
 
   return (
-    <FormScreen description="Use the same account you use on the web. Your session is stored in the device's secure storage.">
+    <FormScreen description={mobileMessage("authDescription")}>
       {methods.social.google ? (
         <ActionButton
           disabled={anyMutationPending}
-          label="Continue with Google"
+          label={mobileMessage("continueGoogle")}
           loading={
             socialSignIn.isPending && socialSignIn.variables === "google"
           }
@@ -165,7 +163,7 @@ export default function SignInScreen() {
       {methods.social.microsoft ? (
         <ActionButton
           disabled={anyMutationPending}
-          label="Continue with Microsoft"
+          label={mobileMessage("continueMicrosoft")}
           loading={
             socialSignIn.isPending && socialSignIn.variables === "microsoft"
           }
@@ -177,14 +175,14 @@ export default function SignInScreen() {
       {methods.localPassword && !methods.bootstrap ? (
         <View style={styles.section}>
           <Text style={[styles.sectionLabel, { color: colors.muted }]}>
-            Password
+            {mobileMessage("password")}
           </Text>
           <FormField
             autoCapitalize="none"
             autoComplete="email"
             error={passwordEmailError}
             keyboardType="email-address"
-            label="Email"
+            label={mobileMessage("email")}
             onChangeText={(value) => {
               setEmail(value);
               setPasswordEmailError(null);
@@ -196,7 +194,7 @@ export default function SignInScreen() {
           />
           <FormField
             autoComplete="current-password"
-            label="Password"
+            label={mobileMessage("password")}
             onChangeText={setPassword}
             onSubmitEditing={() => passwordSignIn.mutate()}
             returnKeyType="go"
@@ -206,7 +204,7 @@ export default function SignInScreen() {
           />
           <ActionButton
             disabled={anyMutationPending || password.length === 0}
-            label="Sign in with password"
+            label={mobileMessage("signInWithPassword")}
             loading={passwordSignIn.isPending}
             onPress={() => passwordSignIn.mutate()}
           />
@@ -216,14 +214,14 @@ export default function SignInScreen() {
       {methods.emailOtp ? (
         <View style={styles.section}>
           <Text style={[styles.sectionLabel, { color: colors.muted }]}>
-            Email code
+            {mobileMessage("email")}
           </Text>
           <FormField
             autoCapitalize="none"
             autoComplete="email"
             error={otpEmailError}
             keyboardType="email-address"
-            label="Email"
+            label={mobileMessage("email")}
             onChangeText={(value) => {
               setEmail(value);
               setPasswordEmailError(null);
@@ -236,7 +234,7 @@ export default function SignInScreen() {
           />
           <ActionButton
             disabled={anyMutationPending}
-            label="Email me a sign-in code"
+            label={mobileMessage("continueWithEmail")}
             loading={sendEmailOtp.isPending}
             onPress={() => sendEmailOtp.mutate()}
           />
@@ -244,7 +242,7 @@ export default function SignInScreen() {
       ) : null}
 
       {methods.bootstrap ? (
-        <InlineMessage message="Create the first self-hosted account in the web app, then return here to sign in." />
+        <InlineMessage message={mobileMessage("createFirstAccount")} />
       ) : null}
       {mutationError ? <InlineMessage message={mutationError} /> : null}
     </FormScreen>

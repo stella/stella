@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { fetchToolsListRaw } from "./mcp-client.js";
+import { callTool, fetchToolsListRaw } from "./mcp-client.js";
 
 const toolsListBody = JSON.stringify({
   jsonrpc: "2.0",
@@ -64,6 +64,39 @@ describe("fetchToolsListRaw authenticated scope evidence", () => {
         expect(result.value.grantedScopes).toBeUndefined();
         expect(result.value.scopeOmittedTools).toBeUndefined();
       }
+    } finally {
+      void server.stop(true);
+    }
+  });
+});
+
+describe("tools/call timeout policy", () => {
+  test("a tool-specific finite deadline can exceed the generic deadline", async () => {
+    const server = Bun.serve({
+      port: 0,
+      fetch: async () => {
+        await Bun.sleep(20);
+        return Response.json({
+          jsonrpc: "2.0",
+          id: 1,
+          result: { content: [{ type: "text", text: "ok" }] },
+        });
+      },
+    });
+    const input = {
+      serverUrl: `http://localhost:${server.port}`,
+      token: "test-token",
+      name: "save_filled_template",
+      args: {},
+    };
+
+    try {
+      expect(Result.isError(await callTool({ ...input, timeoutMs: 1 }))).toBe(
+        true,
+      );
+      expect(Result.isOk(await callTool({ ...input, timeoutMs: 100 }))).toBe(
+        true,
+      );
     } finally {
       void server.stop(true);
     }

@@ -135,6 +135,8 @@ export type McpCliDiscriminatorSubcommand = {
 export type McpCliToolAnnotation = {
   command: readonly string[];
   additionalScopes?: readonly McpCliToolScope[];
+  /** API-owned finite transport deadline projected into generated CLI leaves. */
+  requestTimeoutMs?: number;
   excluded?: true;
   scope?: McpCliToolScope;
   itemsKey?: string;

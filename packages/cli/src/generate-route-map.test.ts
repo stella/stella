@@ -235,6 +235,8 @@ describe("generateRouteMap: discriminator split (S2)", () => {
 
     expect(newDocument?.toolName).toBe("save_filled_template");
     expect(newVersion?.toolName).toBe("save_filled_template");
+    expect(newDocument?.requestTimeoutMs).toBe(330_000);
+    expect(newVersion?.requestTimeoutMs).toBe(330_000);
     expect(newDocument?.scope).toBe("documents_write");
     expect(newVersion?.scope).toBe("documents_write");
     expect(newDocument?.additionalScopes).toEqual(["templates"]);

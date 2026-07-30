@@ -15,6 +15,7 @@ import {
   toMobileAuthError,
 } from "@/features/auth/auth-result";
 import { useAuthSessionActions } from "@/features/auth/auth-session-boundary";
+import { mobileMessage, mobileMessageWithEmail } from "@/i18n/messages";
 import { authClient } from "@/lib/auth-client";
 import { useAppColors } from "@/theme";
 
@@ -35,10 +36,7 @@ export default function EmailOtpScreen() {
       const otp = parseEmailOtp(code);
       const result = await authClient.signIn.emailOtp({ email, otp });
       if (result.error) {
-        throw toMobileAuthError(
-          result.error,
-          "The code could not be verified.",
-        );
+        throw toMobileAuthError(result.error, mobileMessage("invalidCode"));
       }
       if (isTwoFactorRedirect(result.data)) {
         return "twoFactor" as const;
@@ -48,9 +46,7 @@ export default function EmailOtpScreen() {
     },
     onError: (error) => {
       setCode("");
-      setErrorMessage(
-        authErrorMessage(error, "The code could not be verified."),
-      );
+      setErrorMessage(authErrorMessage(error, mobileMessage("invalidCode")));
     },
     onSuccess: (result) => {
       setErrorMessage(null);
@@ -68,21 +64,21 @@ export default function EmailOtpScreen() {
         type: "sign-in",
       });
       if (result.error) {
-        throw toMobileAuthError(result.error, "A new code could not be sent.");
+        throw toMobileAuthError(result.error, mobileMessage("genericError"));
       }
     },
     onError: (error) => {
-      setErrorMessage(authErrorMessage(error, "A new code could not be sent."));
+      setErrorMessage(authErrorMessage(error, mobileMessage("genericError")));
     },
     onSuccess: () => setErrorMessage(null),
   });
 
   if (!emailParam) {
     return (
-      <FormScreen description="This verification link is missing its email address.">
-        <InlineMessage message="Return to sign in and request a new code." />
+      <FormScreen description={mobileMessage("genericError")}>
+        <InlineMessage message={mobileMessage("genericError")} />
         <ActionButton
-          label="Back to sign in"
+          label={mobileMessage("signIn")}
           onPress={() => router.replace("/sign-in")}
         />
       </FormScreen>
@@ -90,12 +86,12 @@ export default function EmailOtpScreen() {
   }
 
   return (
-    <FormScreen description={`Enter the six-digit code sent to ${emailParam}.`}>
+    <FormScreen description={mobileMessageWithEmail("codeSentTo", emailParam)}>
       <FormField
         autoComplete="one-time-code"
         error={errorMessage}
         keyboardType="number-pad"
-        label="Verification code"
+        label={mobileMessage("verify")}
         maxLength={6}
         onChangeText={(value) => {
           setCode(value.replace(/\D/gu, "").slice(0, 6));
@@ -109,19 +105,19 @@ export default function EmailOtpScreen() {
       />
       <ActionButton
         disabled={code.length !== 6 || resendOtp.isPending}
-        label="Verify"
+        label={mobileMessage("verify")}
         loading={verifyOtp.isPending}
         onPress={() => verifyOtp.mutate()}
       />
       <ActionButton
         disabled={verifyOtp.isPending}
-        label="Send a new code"
+        label={mobileMessage("tryAgain")}
         loading={resendOtp.isPending}
         onPress={() => resendOtp.mutate()}
         variant="secondary"
       />
       <Text selectable style={[styles.hint, { color: colors.muted }]}>
-        Codes expire and can only be used once.
+        {mobileMessage("checkSpamHint")}
       </Text>
     </FormScreen>
   );

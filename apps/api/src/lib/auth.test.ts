@@ -374,6 +374,26 @@ describe("resolveTwoFactorChallengeRedirect", () => {
     ).toBe("stella:///two-factor?stella_challenge=challenge");
   });
 
+  test("preserves an Expo Go host and router boundary for social 2FA", () => {
+    const callback = new URL("exp://192.168.1.4:8081/--/");
+    callback.searchParams.set(STELLA_MOBILE_AUTH_CHALLENGE_PARAM, "challenge");
+    expect(
+      resolveTwoFactorChallengeRedirect({
+        callbackLocation: callback.toString(),
+        frontendUrl: "https://app.example.com",
+      }),
+    ).toBe("exp://192.168.1.4:8081/--/two-factor?stella_challenge=challenge");
+  });
+
+  test("does not project an arbitrary exp path into the native challenge", () => {
+    expect(
+      resolveTwoFactorChallengeRedirect({
+        callbackLocation: "exp://192.168.1.4:8081/untrusted",
+        frontendUrl: "https://app.example.com",
+      }),
+    ).toBe("https://app.example.com/auth/two-factor");
+  });
+
   test.each([null, "https://app.example.com/"])(
     "returns the web challenge route for callback %p",
     (callbackLocation) => {

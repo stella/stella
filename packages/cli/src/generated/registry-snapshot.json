@@ -638,6 +638,7 @@
     "cli": {
       "command": ["template", "save-filled"],
       "additionalScopes": ["templates"],
+      "requestTimeoutMs": 330000,
       "scope": "documents_write",
       "inputOnly": ["values"],
       "discriminator": {

@@ -150,27 +150,39 @@ type TwoFactorChallengeRedirectOptions = {
 /**
  * Keep a social sign-in's second-factor challenge on the surface that started
  * it. Better Auth stores the origin-validated callback in OAuth state and
- * exposes it as the callback response's Location header; only Stella's native
- * scheme is projected to the native challenge route. All browser and missing
- * locations use the configured web frontend.
+ * exposes it as the callback response's Location header. Stella's installed
+ * scheme and Expo Go's validated host/router boundary are projected to their
+ * native challenge routes. Browser, malformed, and missing locations use the
+ * configured web frontend.
  */
 export const resolveTwoFactorChallengeRedirect = ({
   callbackLocation,
   frontendUrl,
 }: TwoFactorChallengeRedirectOptions): string => {
-  if (
-    callbackLocation !== null &&
-    URL.canParse(callbackLocation) &&
-    new URL(callbackLocation).protocol === `${STELLA_MOBILE_SCHEME}:`
-  ) {
+  if (callbackLocation !== null && URL.canParse(callbackLocation)) {
     const callback = new URL(callbackLocation);
+    const isInstalledApp = callback.protocol === `${STELLA_MOBILE_SCHEME}:`;
+    const isExpoGo =
+      callback.protocol === "exp:" &&
+      callback.host.length > 0 &&
+      callback.pathname === "/--/";
+    if (!isInstalledApp && !isExpoGo) {
+      return new URL(
+        TWO_FACTOR_CHALLENGE_PATH,
+        `${frontendUrl.replace(/\/$/u, "")}/`,
+      ).toString();
+    }
     const challenge = callback.searchParams.get(
       STELLA_MOBILE_AUTH_CHALLENGE_PARAM,
     );
-    const challengeRedirect = new URL(
-      MOBILE_TWO_FACTOR_CHALLENGE_PATH,
-      STELLA_MOBILE_ORIGIN,
-    );
+    const challengeRedirect = isExpoGo
+      ? new URL(callback)
+      : new URL(MOBILE_TWO_FACTOR_CHALLENGE_PATH, STELLA_MOBILE_ORIGIN);
+    if (isExpoGo) {
+      challengeRedirect.pathname = `/--${MOBILE_TWO_FACTOR_CHALLENGE_PATH}`;
+      challengeRedirect.search = "";
+      challengeRedirect.hash = "";
+    }
     if (challenge !== null) {
       challengeRedirect.searchParams.set(
         STELLA_MOBILE_AUTH_CHALLENGE_PARAM,

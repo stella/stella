@@ -824,6 +824,43 @@ describe("MCP template tools", () => {
     expect(JSON.stringify(parseToolPayload(result))).not.toContain("base64");
   });
 
+  test("save_filled_template does not persist after its caller disconnects", async () => {
+    const controller = new AbortController();
+    const request = new Request("http://localhost/mcp", {
+      signal: controller.signal,
+    });
+    fillStoredTemplateDocxMock.mockImplementation(async () => {
+      controller.abort();
+      return {
+        fileName: "lease.docx",
+        buffer: Buffer.from("filled docx"),
+        unmatchedPlaceholders: [],
+        unusedValues: [],
+      };
+    });
+
+    const result = await handleMcpToolCall({
+      args: {
+        action: "create_document",
+        template_id: TEMPLATE_ID,
+        matter_id: "ws_1",
+        values: { "tenant.name": "ACME" },
+      },
+      context: { ...createContext(), request },
+      toolName: "save_filled_template",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content).toEqual([
+      {
+        type: "text",
+        text: "Request cancelled before document persistence",
+      },
+    ]);
+    expect(createEntityFromBufferMock).not.toHaveBeenCalled();
+    expect(createEntityVersionFromBufferMock).not.toHaveBeenCalled();
+  });
+
   test("save_filled_template appends a version through the shared buffer service", async () => {
     fillStoredTemplateDocxMock.mockResolvedValue({
       fileName: "lease.docx",

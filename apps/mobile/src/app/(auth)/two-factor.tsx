@@ -12,6 +12,7 @@ import {
   toMobileAuthError,
 } from "@/features/auth/auth-result";
 import { useAuthSessionActions } from "@/features/auth/auth-session-boundary";
+import { mobileMessage } from "@/i18n/messages";
 import { authClient } from "@/lib/auth-client";
 import { useAppColors } from "@/theme";
 
@@ -29,7 +30,7 @@ export default function TwoFactorScreen() {
     mutationFn: async () => {
       const normalizedCode = code.trim();
       if (normalizedCode.length === 0) {
-        throw new MobileAuthError({ message: "Enter a verification code." });
+        throw new MobileAuthError({ message: mobileMessage("invalidCode") });
       }
       const result =
         mode === "totp"
@@ -42,18 +43,13 @@ export default function TwoFactorScreen() {
               trustDevice,
             });
       if (result.error) {
-        throw toMobileAuthError(
-          result.error,
-          "The code could not be verified.",
-        );
+        throw toMobileAuthError(result.error, mobileMessage("invalidCode"));
       }
       await refreshSession();
     },
     onError: (error) => {
       setCode("");
-      setErrorMessage(
-        authErrorMessage(error, "The code could not be verified."),
-      );
+      setErrorMessage(authErrorMessage(error, mobileMessage("invalidCode")));
     },
     onSuccess: () => setErrorMessage(null),
   });
@@ -62,8 +58,8 @@ export default function TwoFactorScreen() {
     <FormScreen
       description={
         mode === "totp"
-          ? "Enter the current code from your authenticator app."
-          : "Enter one of your unused backup codes."
+          ? mobileMessage("enterAuthenticatorCode")
+          : mobileMessage("enterBackupCode")
       }
     >
       <FormField
@@ -71,7 +67,11 @@ export default function TwoFactorScreen() {
         autoFocus
         error={errorMessage}
         keyboardType={mode === "totp" ? "number-pad" : "default"}
-        label={mode === "totp" ? "Authenticator code" : "Backup code"}
+        label={
+          mode === "totp"
+            ? mobileMessage("verify")
+            : mobileMessage("backupCode")
+        }
         maxLength={mode === "totp" ? 6 : undefined}
         onChangeText={(value) => {
           setCode(
@@ -90,10 +90,10 @@ export default function TwoFactorScreen() {
       />
       <View style={styles.trustRow}>
         <Text style={[styles.trustLabel, { color: colors.text }]}>
-          Trust this device
+          {mobileMessage("trustDevice")}
         </Text>
         <Switch
-          accessibilityLabel="Trust this device"
+          accessibilityLabel={mobileMessage("trustDevice")}
           disabled={verify.isPending}
           onValueChange={setTrustDevice}
           value={trustDevice}
@@ -101,13 +101,17 @@ export default function TwoFactorScreen() {
       </View>
       <ActionButton
         disabled={code.trim().length === 0}
-        label="Verify"
+        label={mobileMessage("verify")}
         loading={verify.isPending}
         onPress={() => verify.mutate()}
       />
       <ActionButton
         disabled={verify.isPending}
-        label={mode === "totp" ? "Use a backup code" : "Use authenticator app"}
+        label={
+          mode === "totp"
+            ? mobileMessage("useBackupCode")
+            : mobileMessage("useAuthenticatorApp")
+        }
         onPress={() => {
           setMode(mode === "totp" ? "backupCode" : "totp");
           setCode("");

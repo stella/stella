@@ -1,5 +1,6 @@
 import { getSetCookie, storageAdapter } from "@better-auth/expo/client";
 import * as Crypto from "expo-crypto";
+import * as Linking from "expo-linking";
 import * as SecureStore from "expo-secure-store";
 import * as WebBrowser from "expo-web-browser";
 import { Platform } from "react-native";
@@ -7,10 +8,8 @@ import { Platform } from "react-native";
 import {
   buildApiUrl,
   STELLA_AUTH_COOKIE_PREFIXES,
-  STELLA_MOBILE_AUTH_CHALLENGE_PARAM,
   STELLA_MOBILE_AUTH_CODE_PARAM,
   STELLA_MOBILE_AUTH_EXCHANGE_PATH,
-  STELLA_MOBILE_ORIGIN,
 } from "@stll/api-contract";
 
 import { env } from "@/env";
@@ -19,6 +18,10 @@ import {
   MobileAuthError,
   toMobileAuthError,
 } from "@/features/auth/auth-result";
+import {
+  isMobileTwoFactorCallback,
+  mobileAuthCallbackFor,
+} from "@/features/auth/mobile-auth-callback";
 import { authClient } from "@/lib/auth-client";
 import { mobileAuthStoragePrefix } from "@/lib/auth-storage";
 
@@ -75,12 +78,6 @@ const challengeFor = async (verifier: string): Promise<string> => {
   // A SHA-256 digest is 32 bytes, so its base64 form has exactly one padding
   // character. Avoid a variable-width suffix regex on this security boundary.
   return base64Url.endsWith("=") ? base64Url.slice(0, -1) : base64Url;
-};
-
-const callbackFor = (challenge: string): string => {
-  const callback = new URL("/", STELLA_MOBILE_ORIGIN);
-  callback.searchParams.set(STELLA_MOBILE_AUTH_CHALLENGE_PARAM, challenge);
-  return callback.toString();
 };
 
 const exchangeSession = async ({
@@ -145,7 +142,10 @@ export const signInSocialOnMobile = async (
   }
 
   const verifier = createVerifier();
-  const callbackURL = callbackFor(await challengeFor(verifier));
+  const callbackURL = mobileAuthCallbackFor({
+    challenge: await challengeFor(verifier),
+    runtimeLinkingUrl: Linking.getLinkingURL(),
+  });
   const started = await authClient.signIn.social({
     callbackURL,
     disableRedirect: true,
@@ -195,5 +195,7 @@ export const signInSocialOnMobile = async (
     });
   }
   await exchangeSession({ code, verifier });
-  return callback.pathname === "/two-factor" ? "twoFactor" : "complete";
+  return isMobileTwoFactorCallback(callback.toString())
+    ? "twoFactor"
+    : "complete";
 };

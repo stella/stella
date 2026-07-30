@@ -750,6 +750,14 @@ export const pendingUploads = p.pgTable(
     p
       .index("pending_uploads_org_created_idx")
       .on(table.organizationId, table.createdAt),
+    p
+      .index("pending_uploads_buffer_intent_recovery_idx")
+      .on(table.claimedAt, table.id)
+      .where(
+        sql`${table.status} = 'scanning'
+          AND ${table.purpose} IN ('entity_create', 'entity_version')
+          AND ${table.purposeData}->>'reservedFileId' IS NOT NULL`,
+      ),
     ...wsPolicies(),
   ],
 );

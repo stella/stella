@@ -53,6 +53,16 @@ const AI_FIELD_MAX_TOKENS = 800;
 // a skill-referencing prompt cannot loop the model indefinitely.
 const SKILL_TOOL_MAX_STEPS = 4;
 
+const boundedAiSignal = (
+  timeoutMs: number,
+  operationSignal: AbortSignal | undefined,
+): AbortSignal => {
+  const perCallSignal = AbortSignal.timeout(timeoutMs);
+  return operationSignal === undefined
+    ? perCallSignal
+    : AbortSignal.any([operationSignal, perCallSignal]);
+};
+
 /**
  * Shared TanStack `chat()` setup for the one-shot field generators: resolves the
  * fast-role model, disables prompt caching (these calls are not cache-shared),
@@ -160,6 +170,7 @@ export const buildAiFieldGenerator = ({
   organizationId,
   skillContext,
   aiAnalytics,
+  operationSignal,
 }: {
   orgAIConfig: OrgAIConfig | null;
   organizationId: SafeId<"organization">;
@@ -167,6 +178,8 @@ export const buildAiFieldGenerator = ({
   skillContext?: SkillToolsContext | undefined;
   /** When present, model usage is metered and failures are captured. */
   aiAnalytics?: AiFieldAnalytics | undefined;
+  /** Whole-fill cancellation/deadline, composed with each per-call bound. */
+  operationSignal?: AbortSignal | undefined;
 }): AiFieldGenerator | undefined => {
   // Resolve via org BYOK or the deployment's instance provider; skip (leave AI
   // fields unfilled) only when neither can supply a model.
@@ -189,7 +202,7 @@ export const buildAiFieldGenerator = ({
           ? `\nThis is item ${String(item.index)} of ${String(item.count)}.\n`
           : "";
       const text = await generateFieldText({
-        abortSignal: AbortSignal.timeout(AI_FIELD_TIMEOUT_MS),
+        abortSignal: boundedAiSignal(AI_FIELD_TIMEOUT_MS, operationSignal),
         aiAnalytics,
         maxOutputTokens: AI_FIELD_MAX_TOKENS,
         orgAIConfig,
@@ -232,6 +245,7 @@ export const buildAiConditionDecider = ({
   organizationId,
   skillContext,
   aiAnalytics,
+  operationSignal,
 }: {
   orgAIConfig: OrgAIConfig | null;
   organizationId: SafeId<"organization">;
@@ -239,6 +253,8 @@ export const buildAiConditionDecider = ({
   skillContext?: SkillToolsContext | undefined;
   /** When present, model usage is metered and failures are captured. */
   aiAnalytics?: AiFieldAnalytics | undefined;
+  /** Whole-fill cancellation/deadline, composed with each per-call bound. */
+  operationSignal?: AbortSignal | undefined;
 }): AiConditionDecider | undefined => {
   // Resolve via org BYOK or the deployment's instance provider; skip (leave AI
   // fields unfilled) only when neither can supply a model.
@@ -249,7 +265,7 @@ export const buildAiConditionDecider = ({
     try {
       const skillTools = maybeSkillTools(prompt, skillContext);
       const { decision } = await generateFieldObject({
-        abortSignal: AbortSignal.timeout(AI_CONDITION_TIMEOUT_MS),
+        abortSignal: boundedAiSignal(AI_CONDITION_TIMEOUT_MS, operationSignal),
         aiAnalytics,
         maxOutputTokens: AI_CONDITION_MAX_TOKENS,
         orgAIConfig,
@@ -329,6 +345,7 @@ export const buildAiOccurrenceAdapter = ({
   documentLanguages = [],
   skillContext,
   aiAnalytics,
+  operationSignal,
 }: {
   orgAIConfig: OrgAIConfig | null;
   organizationId: SafeId<"organization">;
@@ -340,6 +357,8 @@ export const buildAiOccurrenceAdapter = ({
   skillContext?: SkillToolsContext | undefined;
   /** When present, model usage is metered and failures are captured. */
   aiAnalytics?: AiFieldAnalytics | undefined;
+  /** Whole-fill cancellation/deadline, composed with each per-call bound. */
+  operationSignal?: AbortSignal | undefined;
 }): AiOccurrenceAdapter | undefined => {
   // Resolve via org BYOK or the deployment's instance provider; skip (leave AI
   // fields unfilled) only when neither can supply a model.
@@ -350,7 +369,7 @@ export const buildAiOccurrenceAdapter = ({
     try {
       const skillTools = maybeSkillTools(input.prompt ?? "", skillContext);
       const { renderings } = await generateFieldObject({
-        abortSignal: AbortSignal.timeout(AI_ADAPT_TIMEOUT_MS),
+        abortSignal: boundedAiSignal(AI_ADAPT_TIMEOUT_MS, operationSignal),
         aiAnalytics,
         maxOutputTokens: AI_ADAPT_MAX_TOKENS,
         orgAIConfig,

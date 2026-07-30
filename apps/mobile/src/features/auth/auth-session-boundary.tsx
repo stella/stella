@@ -7,6 +7,7 @@ import { ActivityIndicator } from "react-native";
 import { ActionButton } from "@/components/action-button";
 import { FormScreen } from "@/components/form-screen";
 import { InlineMessage } from "@/components/inline-message";
+import { mobileMessage } from "@/i18n/messages";
 import { authClient } from "@/lib/auth-client";
 
 import { MobileAuthError } from "./auth-result";
@@ -25,7 +26,7 @@ export const useAuthSessionActions = () => {
   const value = use(AuthSessionActionsContext);
   if (value === null) {
     throw new MobileAuthError({
-      message: "Auth session actions are unavailable outside the boundary.",
+      message: mobileMessage("genericError"),
     });
   }
   return value;
@@ -35,7 +36,7 @@ export const useActiveOrganizationId = () => {
   const value = use(ActiveOrganizationIdContext);
   if (value === null) {
     throw new MobileAuthError({
-      message: "An active organization is required for this route.",
+      message: mobileMessage("genericError"),
     });
   }
   return value;
@@ -67,18 +68,18 @@ export const AuthSessionBoundary = () => {
 
   if (state.type === "loading") {
     return (
-      <FormScreen description="Restoring your secure stella session…">
-        <ActivityIndicator accessibilityLabel="Connecting" />
+      <FormScreen description={mobileMessage("loading")}>
+        <ActivityIndicator accessibilityLabel={mobileMessage("loading")} />
       </FormScreen>
     );
   }
 
   if (state.type === "unavailable") {
     return (
-      <FormScreen description="stella could not verify your session. Your signed-in state has not been changed.">
-        <InlineMessage message="Check your connection and try again." />
+      <FormScreen description={mobileMessage("genericError")}>
+        <InlineMessage message={mobileMessage("genericError")} />
         <ActionButton
-          label="Retry"
+          label={mobileMessage("retry")}
           onPress={() => {
             session.refetch().catch(() => undefined);
           }}
@@ -102,7 +103,7 @@ export const AuthSessionBoundary = () => {
                 headerShadowVisible: false,
                 headerShown: true,
                 headerTransparent: true,
-                title: "Choose organization",
+                title: mobileMessage("selectOrganization"),
               }}
             />
           </Stack.Protected>

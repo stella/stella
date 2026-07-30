@@ -503,6 +503,7 @@ const leafSpecsForTool = ({
 
   const command = annotation?.command ?? heuristicCommandPath(listing.name);
   const additionalScopes = annotation?.additionalScopes;
+  const requestTimeoutMs = annotation?.requestTimeoutMs;
   const scope = annotation ? scopeOf(annotation) : undefined;
   const itemsKey = annotation?.itemsKey;
   const windowedText = annotation?.windowedText === true;
@@ -571,6 +572,7 @@ const leafSpecsForTool = ({
         destructive: sub?.destructive === true || destructiveHint,
         ...(confirmPassthrough === undefined ? {} : { confirmPassthrough }),
         ...(additionalScopes === undefined ? {} : { additionalScopes }),
+        ...(requestTimeoutMs === undefined ? {} : { requestTimeoutMs }),
         ...(scope === undefined ? {} : { scope }),
         inputSchema: schema,
       });
@@ -597,6 +599,7 @@ const leafSpecsForTool = ({
       destructive: destructiveHint,
       ...(confirmPassthrough === undefined ? {} : { confirmPassthrough }),
       ...(additionalScopes === undefined ? {} : { additionalScopes }),
+      ...(requestTimeoutMs === undefined ? {} : { requestTimeoutMs }),
       ...(scope === undefined ? {} : { scope }),
       inputSchema: schema,
     },
