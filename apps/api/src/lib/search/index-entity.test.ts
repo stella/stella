@@ -155,16 +155,14 @@ test("rejects an out-of-order projection against the authoritative entity", asyn
   }
 
   const compiled = new PgDialect().sqlToQuery(query);
-  expect(compiled.sql).toContain("WITH authoritative_source AS MATERIALIZED");
+  expect(compiled.sql).toContain("FROM entities e");
   expect(compiled.sql).toContain("e.current_version_id =");
   expect(compiled.sql).toMatch(
     /COALESCE\(e\.updated_at, e\.created_at\)\s+IS NOT DISTINCT FROM/u,
   );
   expect(compiled.sql).toContain("::timestamptz");
   expect(compiled.sql).toContain("FOR UPDATE");
-  expect(compiled.sql).toContain(
-    "WHERE EXISTS (SELECT 1 FROM authoritative_source)",
-  );
+  expect(compiled.sql).toContain("FOR UPDATE OF e");
   expect(compiled.sql).toContain("NOT EXISTS");
   expect(compiled.sql).toContain("FROM extracted_content ec");
 });

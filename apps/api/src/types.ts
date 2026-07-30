@@ -37,8 +37,7 @@ export type WebAPI = Elysia<
   EmptyElysia["~Definitions"],
   EmptyElysia["~Metadata"],
   WebApiRoutes,
-  EmptyElysia["~Ephemeral"],
-  EmptyElysia["~Volatile"]
+  EmptyElysia["~Ephemeral"]
 >;
 
 export { toSafeId } from "@/api/lib/branded-types";

@@ -3,6 +3,9 @@ import { afterEach, describe, expect, mock, test } from "bun:test";
 import { requestManualOcr } from "./request-manual-ocr";
 
 const originalFetch = globalThis.fetch;
+type FetchHandler = (
+  ...args: Parameters<typeof fetch>
+) => ReturnType<typeof fetch>;
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
@@ -10,10 +13,9 @@ afterEach(() => {
 
 describe("requestManualOcr", () => {
   test("posts the source field and validates the queued response", async () => {
-    const fetchMock = mock(async () =>
+    const fetchMock = setFetch(async () =>
       Response.json({ outcome: "queued", runId: "run_1" }),
     );
-    globalThis.fetch = fetchMock;
 
     await expect(
       requestManualOcr({
@@ -36,7 +38,7 @@ describe("requestManualOcr", () => {
   });
 
   test("maps HTTP failures to an API error", async () => {
-    globalThis.fetch = mock(async () => new Response(null, { status: 409 }));
+    setFetch(async () => new Response(null, { status: 409 }));
 
     await expect(
       requestManualOcr({
@@ -48,9 +50,7 @@ describe("requestManualOcr", () => {
   });
 
   test("rejects malformed success payloads", async () => {
-    globalThis.fetch = mock(async () =>
-      Response.json({ outcome: "queued", runId: null }),
-    );
+    setFetch(async () => Response.json({ outcome: "queued", runId: null }));
 
     await expect(
       requestManualOcr({
@@ -61,3 +61,11 @@ describe("requestManualOcr", () => {
     ).rejects.toMatchObject({ _tag: "ApiError", status: 502 });
   });
 });
+
+const setFetch = (handler: FetchHandler) => {
+  const fetchMock = mock(handler);
+  globalThis.fetch = Object.assign(fetchMock, {
+    preconnect: originalFetch.preconnect,
+  });
+  return fetchMock;
+};

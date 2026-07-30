@@ -58,7 +58,7 @@ import { getFreshLinkedAccount } from "@/lib/auth-session";
 import { DOCX_MIME } from "@/lib/consts";
 import { openDocxInDesktop } from "@/lib/desktop-bridge";
 import { detached } from "@/lib/detached";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { toAPIError } from "@/lib/errors/api";
 import { isUnauthorizedError } from "@/lib/errors/auth";
 import { ClientOperationError } from "@/lib/errors/client";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";

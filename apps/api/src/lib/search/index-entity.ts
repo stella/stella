@@ -255,48 +255,6 @@ export const upsertSearchDocument = async (
 
   await rootDb.transaction(async (tx) => {
     const indexed = await tx.execute<IndexedSearchDocument>(sql`
-      WITH authoritative_source AS MATERIALIZED (
-        SELECT e.id
-        FROM entities e
-        WHERE e.id = ${doc.entityId}
-          AND e.current_version_id = ${doc.sourceVersionId}
-          AND COALESCE(e.updated_at, e.created_at)
-            IS NOT DISTINCT FROM ${doc.semanticUpdatedAtToken}::timestamptz
-          AND (
-            (
-              ${hasObservedSource} = false
-              AND NOT EXISTS (
-                SELECT 1
-                FROM extracted_content ec
-                WHERE ec.entity_id = e.id
-                  AND ec.organization_id = ${doc.organizationId}
-                  AND ec.workspace_id = ${doc.workspaceId}
-              )
-            )
-            OR
-            (
-              ${hasObservedSource} = true
-              AND EXISTS (
-                SELECT 1
-                FROM extracted_content ec
-                WHERE ec.entity_id = e.id
-                  AND ec.organization_id = ${doc.organizationId}
-                  AND ec.workspace_id = ${doc.workspaceId}
-                  AND ec.source_entity_version_id
-                    IS NOT DISTINCT FROM ${observedSource?.sourceEntityVersionId ?? null}
-                  AND ec.source_field_id
-                    IS NOT DISTINCT FROM ${observedSource?.sourceFieldId ?? null}
-                  AND ec.source_file_id
-                    IS NOT DISTINCT FROM ${observedSource?.sourceFileId ?? null}
-                  AND ec.source_sha256_hex
-                    IS NOT DISTINCT FROM ${observedSource?.sourceSha256Hex ?? null}
-                  AND ec.extracted_at
-                    IS NOT DISTINCT FROM ${observedSource?.extractedAt ?? null}
-              )
-            )
-          )
-        FOR UPDATE
-      )
       INSERT INTO search_documents (
         entity_id, organization_id, workspace_id,
         kind, title, searchable_text, language,
@@ -318,7 +276,47 @@ export const upsertSearchDocument = async (
             coalesce(${doc.searchableText}, '')
           ))
         )
-      FROM authoritative_source
+      FROM entities e
+      WHERE e.id = ${doc.entityId}
+        AND e.organization_id = ${doc.organizationId}
+        AND e.workspace_id = ${doc.workspaceId}
+        AND e.current_version_id = ${doc.sourceVersionId}
+        AND COALESCE(e.updated_at, e.created_at)
+          IS NOT DISTINCT FROM ${doc.semanticUpdatedAtToken}::timestamptz
+        AND (
+          (
+            ${hasObservedSource} = false
+            AND NOT EXISTS (
+              SELECT 1
+              FROM extracted_content ec
+              WHERE ec.entity_id = e.id
+                AND ec.organization_id = ${doc.organizationId}
+                AND ec.workspace_id = ${doc.workspaceId}
+            )
+          )
+          OR
+          (
+            ${hasObservedSource} = true
+            AND EXISTS (
+              SELECT 1
+              FROM extracted_content ec
+              WHERE ec.entity_id = e.id
+                AND ec.organization_id = ${doc.organizationId}
+                AND ec.workspace_id = ${doc.workspaceId}
+                AND ec.source_entity_version_id
+                  IS NOT DISTINCT FROM ${observedSource?.sourceEntityVersionId ?? null}
+                AND ec.source_field_id
+                  IS NOT DISTINCT FROM ${observedSource?.sourceFieldId ?? null}
+                AND ec.source_file_id
+                  IS NOT DISTINCT FROM ${observedSource?.sourceFileId ?? null}
+                AND ec.source_sha256_hex
+                  IS NOT DISTINCT FROM ${observedSource?.sourceSha256Hex ?? null}
+                AND ec.extracted_at
+                  IS NOT DISTINCT FROM ${observedSource?.extractedAt ?? null}
+            )
+          )
+        )
+      FOR UPDATE OF e
       ON CONFLICT (entity_id) DO UPDATE SET
         organization_id = EXCLUDED.organization_id,
         workspace_id = EXCLUDED.workspace_id,
@@ -328,7 +326,6 @@ export const upsertSearchDocument = async (
         language = EXCLUDED.language,
         updated_at = EXCLUDED.updated_at,
         tsv = EXCLUDED.tsv
-      WHERE EXISTS (SELECT 1 FROM authoritative_source)
       RETURNING entity_id AS "entityId"
     `);
 
