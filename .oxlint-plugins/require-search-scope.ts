@@ -558,17 +558,6 @@ const interpolationMayIntroduceReadRelation = (
   return /\bselect\s+(?:distinct\s+)?\*\s*$/iu.test(precedingText);
 };
 
-const interpolationHasFollowingTokenBoundary = (
-  tokens: readonly SqlTemplateToken[],
-  expressionIndex: number,
-): boolean => {
-  const nextToken = tokens.at(expressionIndex + 1);
-  if (nextToken === undefined || nextToken.type !== "text") {
-    return true;
-  }
-  return nextToken.value.length === 0 || /^(?:\s|[,;)])/u.test(nextToken.value);
-};
-
 const interpolationIsDeleteTarget = (
   tokens: readonly SqlTemplateToken[],
   expressionIndex: number,
@@ -2704,8 +2693,6 @@ export default {
                 (token, index) =>
                   token.type === "expression" &&
                   interpolationMayIntroduceReadRelation(tokens, index) &&
-                  (isImportBackedInterpolation(token.value) ||
-                    interpolationHasFollowingTokenBoundary(tokens, index)) &&
                   !interpolationIsDeleteTarget(tokens, index) &&
                   !isKnownPrivateProjectionInterpolation(token.value),
               ),

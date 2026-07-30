@@ -554,6 +554,13 @@ const unsafeComposedDynamicRawEntity = sql`
   SELECT * ${sql.raw(dynamicRawSql)}
 `;
 
+let opaqueRelationWithAttachedAlias = sql.raw("FROM search_documents ");
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves an attached alias cannot hide an opaque relation fragment
+const unsafeOpaqueRelationWithAttachedAlias = sql`
+  SELECT * ${opaqueRelationWithAttachedAlias}sd
+`;
+opaqueRelationWithAttachedAlias = sql.raw("FROM entities ");
+
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves dynamic raw expressions cannot inject a private FROM clause into an otherwise public root
 const unsafeDynamicRawSelectExpression = sql`
   SELECT ${sql.raw(dynamicRawSql)}
@@ -1566,6 +1573,7 @@ void [
   unsafeDynamicRawRoot,
   unsafeAliasedDynamicRawRoot,
   unsafeComposedDynamicRawEntity,
+  unsafeOpaqueRelationWithAttachedAlias,
   unsafeDynamicRawSelectExpression,
   unsafeStaticIdentifierEntity,
   unsafeImportedOpaqueRelation,

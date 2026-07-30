@@ -1,12 +1,14 @@
 import { normalizeSearchText, stripDiacritics } from "@stll/text-normalize";
 
-// Non-HTML delimiters injected by ts_headline / pdb.snippet().
-// The headline is HTML-escaped server-side, then these markers
-// are replaced with <mark> tags — safe because the markers
-// consist only of alphanumerics and underscores.
-export const HIGHLIGHT_START = "__HL_START__";
-export const HIGHLIGHT_STOP = "__HL_STOP__";
-export const SEARCH_PREVIEW_FRAGMENT_DELIMITER = "__HL_FRAGMENT__";
+// Non-HTML delimiters injected by ts_headline / pdb.snippet(). Keep these
+// high-entropy internal tokens distinct from user-typable source text: common
+// code and log strings such as "__HL_START__" must remain literal content.
+export const HIGHLIGHT_START =
+  "__STELLA_HIGHLIGHT_START_516ec7a37cb44bb4b268f27323d58136__";
+export const HIGHLIGHT_STOP =
+  "__STELLA_HIGHLIGHT_STOP_516ec7a37cb44bb4b268f27323d58136__";
+export const SEARCH_PREVIEW_FRAGMENT_DELIMITER =
+  "__STELLA_HIGHLIGHT_FRAGMENT_516ec7a37cb44bb4b268f27323d58136__";
 export const SEARCH_PREVIEW_FRAGMENT_SEPARATOR = "...\n\n";
 
 // `MaxFragments=3` splits the headline into up to 3 separate

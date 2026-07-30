@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { HIGHLIGHT_START, HIGHLIGHT_STOP } from "@/api/lib/search/highlight";
 import {
   clearRootDbMocks,
   rootDbExecuteMock,
@@ -47,7 +48,7 @@ describe("search preview rendering contract", () => {
     rootDbExecuteMock.mockResolvedValueOnce([
       {
         preview: {
-          content: "__HL_START__resume__HL_STOP__",
+          content: `${HIGHLIGHT_START}resume${HIGHLIGHT_STOP}`,
           normalizedSourceContent: "resume",
           sourceContent: "résumé",
           useUnaccent: true,
@@ -60,6 +61,27 @@ describe("search preview rendering contract", () => {
     ).toEqual({
       type: "highlighted-html",
       content: "<mark>résumé</mark>",
+    });
+  });
+
+  test("preserves legacy sentinel-like source text in highlighted previews", async () => {
+    const literal = "__HL_START__code__HL_STOP__";
+    rootDbExecuteMock.mockResolvedValueOnce([
+      {
+        preview: {
+          content: `${literal} ${HIGHLIGHT_START}resume${HIGHLIGHT_STOP}`,
+          normalizedSourceContent: `${literal} resume`,
+          sourceContent: `${literal} résumé`,
+          useUnaccent: true,
+        },
+      },
+    ]);
+
+    expect(
+      await readSearchPreview({ ...previewQuery, query: "resume" }),
+    ).toEqual({
+      type: "highlighted-html",
+      content: `${literal} <mark>résumé</mark>`,
     });
   });
 
