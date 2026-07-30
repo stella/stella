@@ -76,3 +76,15 @@ describe("toSuggestFieldsError", () => {
     expect(mapped.message).toBe("Failed to suggest template fields");
   });
 });
+
+describe("toSuggestFieldsError provider-run errors", () => {
+  test("a 5xx HandlerError is remapped to the generic 500", () => {
+    const providerRun = new HandlerError({
+      status: 502,
+      message: "provider text that could echo request content",
+    });
+    const mapped = toSuggestFieldsError(providerRun);
+    expect(mapped.status).toBe(500);
+    expect(mapped.message).toBe("Failed to suggest template fields");
+  });
+});
