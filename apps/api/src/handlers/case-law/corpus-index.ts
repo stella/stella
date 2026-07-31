@@ -548,10 +548,8 @@ export const acquireCaseLawCorpusGenerationLease = async ({
           leaseExpiresAt: nextLeaseExpiry(),
           leaseToken,
         },
-        setWhere: or(
-          isNull(caseLawCorpusIndexWriterLeases.leaseExpiresAt),
-          lte(caseLawCorpusIndexWriterLeases.leaseExpiresAt, sql`now()`),
-        ),
+        setWhere: sql`${caseLawCorpusIndexWriterLeases.leaseExpiresAt} IS NULL
+          OR ${caseLawCorpusIndexWriterLeases.leaseExpiresAt} <= now()`,
       })
       .returning({ generation: caseLawCorpusIndexWriterLeases.generation });
     return rows.at(0);
