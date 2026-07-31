@@ -21,6 +21,7 @@ export type RecentSearch = {
 export type RecentFile = {
   entityId: string;
   fileFieldId?: string | null | undefined;
+  filePropertyId?: string | null | undefined;
   workspaceId: string;
   workspaceName: string;
   title: string;
@@ -51,6 +52,9 @@ const isRecentFile = (value: unknown): value is RecentFile =>
   (value["fileFieldId"] === undefined ||
     value["fileFieldId"] === null ||
     typeof value["fileFieldId"] === "string") &&
+  (value["filePropertyId"] === undefined ||
+    value["filePropertyId"] === null ||
+    typeof value["filePropertyId"] === "string") &&
   typeof value["workspaceId"] === "string" &&
   typeof value["workspaceName"] === "string" &&
   typeof value["title"] === "string" &&

@@ -13,6 +13,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
+import { CHAT_SEARCH_DISPLAY_METADATA_GENERATION } from "@/api/lib/search/chat-search-generation";
 
 const BACKFILL_BATCH_SIZE = 200;
 const ZERO_UUID = "00000000-0000-0000-0000-000000000000";
@@ -206,6 +207,12 @@ export const upsertChatThreadSearchDocument = async (
       tsv = EXCLUDED.tsv
     WHERE EXCLUDED.updated_at >= chat_thread_search_documents.updated_at
   `);
+  await rootDb.execute(sql`
+    UPDATE chat_thread_search_documents
+    SET preview_generation = ${CHAT_SEARCH_DISPLAY_METADATA_GENERATION}::uuid
+    WHERE thread_id = ${thread.id}
+      AND updated_at = ${thread.updatedAt}
+  `);
 };
 
 /** Page through a thread's messages by `(created_at, id)`, write the
@@ -362,11 +369,11 @@ export const backfillChatThreadSearchIndex = async ({
       LEFT JOIN chat_thread_search_documents d ON d.thread_id = t.id
       WHERE (
           d.thread_id IS NULL
-          -- The previous writer always stored a preview generation. The live
-          -- preview no longer consumes those passages, so non-null doubles as
-          -- a rolling-deploy freshness marker: old tasks mark their writes
-          -- stale, while the current upsert clears the marker after rebuilding.
-          OR d.preview_generation IS NOT NULL
+          -- The previous writer stored UUIDv7 passage generations. The
+          -- reserved display-metadata generation therefore distinguishes the
+          -- current projection without rewriting existing rows in a migration.
+          OR d.preview_generation IS DISTINCT FROM
+            ${CHAT_SEARCH_DISPLAY_METADATA_GENERATION}::uuid
           OR EXISTS (
             SELECT 1
             FROM chat_messages m

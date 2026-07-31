@@ -87,6 +87,8 @@ type SearchOwner = Pick<SearchParams, "organizationId" | "userId">;
 
 type RecentFilePreviewFieldParams = SearchOwner & {
   entityId: string;
+  fileFieldId?: string | null | undefined;
+  filePropertyId?: string | null | undefined;
   mimeType: string | null;
   workspaceId: string;
 };
@@ -157,6 +159,8 @@ const searchKeys = {
       "recent-file-preview-field",
       {
         entityId: params.entityId,
+        fileFieldId: params.fileFieldId,
+        filePropertyId: params.filePropertyId,
         mimeType: params.mimeType,
         workspaceId: params.workspaceId,
       },
@@ -272,10 +276,55 @@ export const searchPreviewOptions = ({
     staleTime: 0,
   });
 
+type RecentFilePreviewCandidate = {
+  content: { mimeType?: string | null | undefined; type: string };
+  id: string;
+  propertyId: string;
+};
+
+type ResolveRecentFilePreviewFieldIdOptions = Pick<
+  RecentFilePreviewFieldParams,
+  "fileFieldId" | "filePropertyId" | "mimeType"
+> & {
+  fields: readonly RecentFilePreviewCandidate[];
+};
+
+export const resolveRecentFilePreviewFieldId = ({
+  fields,
+  fileFieldId,
+  filePropertyId,
+  mimeType,
+}: ResolveRecentFilePreviewFieldIdOptions): string | null => {
+  const matchesFile = ({ content }: RecentFilePreviewCandidate) =>
+    content.type === "file" &&
+    (mimeType === null || content.mimeType === mimeType);
+  const exactField = fileFieldId
+    ? fields.find(
+        (candidate) => candidate.id === fileFieldId && matchesFile(candidate),
+      )
+    : undefined;
+  if (exactField) {
+    return exactField.id;
+  }
+  const replacementField = filePropertyId
+    ? fields.find(
+        (candidate) =>
+          candidate.propertyId === filePropertyId && matchesFile(candidate),
+      )
+    : undefined;
+  if (replacementField) {
+    return replacementField.id;
+  }
+  if (fileFieldId || filePropertyId) {
+    return null;
+  }
+  return fields.find(matchesFile)?.id ?? null;
+};
+
 /**
- * Resolves legacy recent-file entries recorded before recents persisted their
- * file field id. The entity endpoint reauthorizes the workspace on every
- * cache miss; the owner-scoped key prevents reuse across org/user switches.
+ * Reauthorizes a recent file against the entity's current version. Exact field
+ * identity wins; a stable property id follows replacement revisions; the MIME
+ * fallback remains only for legacy recent entries without either identifier.
  */
 export const recentFilePreviewFieldOptions = (
   params: RecentFilePreviewFieldParams,
@@ -288,14 +337,12 @@ export const recentFilePreviewFieldOptions = (
         .entity({ entityId: toSafeId<"entity">(params.entityId) })
         .get({ fetch: { signal } });
       const entity = unwrapEden(response);
-      const field = entity.fields.find(
-        (candidate) =>
-          candidate.content.type === "file" &&
-          (params.mimeType === null ||
-            candidate.content.mimeType === params.mimeType),
-      );
-
-      return field?.id ?? null;
+      return resolveRecentFilePreviewFieldId({
+        fields: entity.fields,
+        fileFieldId: params.fileFieldId,
+        filePropertyId: params.filePropertyId,
+        mimeType: params.mimeType,
+      });
     },
   });
 

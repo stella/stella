@@ -13,6 +13,7 @@ import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { redistributableSourceJoin } from "@/api/lib/case-law/search-sql";
 import { compareCodepoint } from "@/api/lib/collation";
+import { CHAT_SEARCH_DISPLAY_METADATA_GENERATION } from "@/api/lib/search/chat-search-generation";
 import { chatThreadScopeSql } from "@/api/lib/search/chat-thread-scope-sql";
 import {
   contactWorkspaceAccessSql,
@@ -198,6 +199,7 @@ const fileFieldJoin = (mimeTypes: readonly string[]) => {
     WITH files AS (
       SELECT
         f.id AS field_id,
+        f.property_id,
         field_content.content ->> 'mimeType' AS mime_type,
         EXISTS (
           SELECT 1
@@ -223,6 +225,7 @@ const fileFieldJoin = (mimeTypes: readonly string[]) => {
     )
     SELECT
       files.field_id,
+      files.property_id,
       files.mime_type,
       (
         SELECT array_agg(DISTINCT available.mime_type ORDER BY available.mime_type)
@@ -679,6 +682,7 @@ export const searchGlobal = async ({
         editor.name AS last_edited_by_name,
         editor.image AS last_edited_by_image,
         file_field.field_id AS file_field_id,
+        file_field.property_id AS file_property_id,
         file_field.mime_type,
         ${searchHeadline(sql`sd.title || ' ' || left(sd.searchable_text, 2000)`)},
         ${searchScore({ tsv: sql`sd.tsv`, updatedAt: sql`sd.updated_at` })},
@@ -833,7 +837,8 @@ export const searchGlobal = async ({
       LEFT JOIN workspaces w ON w.id = t.workspace_id
       WHERE TRUE
         AND ${chatScope}
-        AND cst.preview_generation IS NULL
+        AND cst.preview_generation =
+          ${CHAT_SEARCH_DISPLAY_METADATA_GENERATION}::uuid
         ${chatUpdatedFilter}
         ${chatTextSearchFilter}
         ${globalSearchCursorSql({
@@ -927,7 +932,8 @@ export const searchGlobal = async ({
         JOIN chat_threads t ON t.id = cst.thread_id
         WHERE TRUE
           AND ${chatScope}
-          AND cst.preview_generation IS NULL
+          AND cst.preview_generation =
+            ${CHAT_SEARCH_DISPLAY_METADATA_GENERATION}::uuid
           ${chatUpdatedFilter}
           ${chatTextSearchFilter}
       `),
@@ -1010,7 +1016,8 @@ export const searchGlobal = async ({
       JOIN chat_threads t ON t.id = cst.thread_id
       WHERE TRUE
         AND ${chatScope}
-        AND cst.preview_generation IS NULL
+        AND cst.preview_generation =
+          ${CHAT_SEARCH_DISPLAY_METADATA_GENERATION}::uuid
         ${chatUpdatedFilter}
         ${chatTextSearchFilter}
     `),

@@ -23,6 +23,7 @@ process.env["VITE_API_URL"] ??= "http://localhost:3001";
 const {
   hasSearchQueryOrSelectiveFilter,
   recentFilePreviewFieldOptions,
+  resolveRecentFilePreviewFieldId,
   searchInfiniteOptions,
   searchPreviewOptions,
 } = await import("@/lib/search");
@@ -194,6 +195,7 @@ describe("search preview targets", () => {
     lastEditedByName: null,
     lastEditedByImage: null,
     fileFieldId: null,
+    filePropertyId: null,
     mimeType: null,
   } as const satisfies GlobalSearchHit;
 
@@ -220,6 +222,8 @@ describe("search preview targets", () => {
   test("isolates legacy recent-file field resolution by owner", () => {
     const params = {
       entityId: "entity_1",
+      fileFieldId: "field_2",
+      filePropertyId: "property_2",
       mimeType: "application/pdf",
       organizationId: "org_1",
       userId: "user_1",
@@ -237,6 +241,62 @@ describe("search preview targets", () => {
 
     expect(organizationB.queryKey).not.toEqual(ownerA.queryKey);
     expect(userB.queryKey).not.toEqual(ownerA.queryKey);
+    expect(
+      recentFilePreviewFieldOptions({ ...params, fileFieldId: "field_1" })
+        .queryKey,
+    ).not.toEqual(ownerA.queryKey);
+    expect(
+      recentFilePreviewFieldOptions({
+        ...params,
+        filePropertyId: "property_1",
+      }).queryKey,
+    ).not.toEqual(ownerA.queryKey);
+  });
+
+  test("preserves recent attachment identity across current revisions", () => {
+    const fields = [
+      {
+        content: { mimeType: "application/pdf", type: "file" },
+        id: "field_1",
+        propertyId: "property_1",
+      },
+      {
+        content: { mimeType: "application/pdf", type: "file" },
+        id: "field_2",
+        propertyId: "property_2",
+      },
+    ];
+
+    expect(
+      resolveRecentFilePreviewFieldId({
+        fields,
+        fileFieldId: "field_2",
+        filePropertyId: "property_1",
+        mimeType: "application/pdf",
+      }),
+    ).toBe("field_2");
+    expect(
+      resolveRecentFilePreviewFieldId({
+        fields,
+        fileFieldId: "deleted_field",
+        filePropertyId: "deleted_property",
+        mimeType: "application/pdf",
+      }),
+    ).toBeNull();
+    expect(
+      resolveRecentFilePreviewFieldId({
+        fields,
+        fileFieldId: "field_from_old_revision",
+        filePropertyId: "property_2",
+        mimeType: "application/pdf",
+      }),
+    ).toBe("field_2");
+    expect(
+      resolveRecentFilePreviewFieldId({
+        fields,
+        mimeType: "application/pdf",
+      }),
+    ).toBe("field_1");
   });
 
   test("reauthorizes cached previews whenever they mount", () => {
@@ -333,6 +393,7 @@ describe("search preview targets", () => {
       getNativeSearchDocumentPreviewTarget({
         ...previewHit,
         fileFieldId: null,
+        filePropertyId: null,
         mimeType: "application/pdf",
       }),
     ).toBeNull();
@@ -505,6 +566,7 @@ describe("search preview targets", () => {
         lastEditedByName: null,
         lastEditedByImage: null,
         fileFieldId: null,
+        filePropertyId: null,
         mimeType: null,
       },
     ] as const satisfies readonly GlobalSearchHit[];

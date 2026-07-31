@@ -84,6 +84,7 @@ describe("recent file previews", () => {
       getRecentFilePreviewHit({
         entityId: "entity-1",
         fileFieldId: "field-1",
+        filePropertyId: "property-1",
         mimeType: "application/pdf",
         openedAt: "2026-07-31T05:00:00.000Z",
         title: "Disclosure.pdf",
@@ -94,6 +95,7 @@ describe("recent file previews", () => {
     ).toEqual({
       entityId: "entity-1",
       fileFieldId: "field-1",
+      filePropertyId: "property-1",
       headline: null,
       id: "document:entity-1",
       lastEditedByImage: null,

@@ -5,6 +5,7 @@ import { rootDb } from "@/api/db/root";
 import type { SafeId } from "@/api/lib/branded-types";
 import { redistributableSourceJoin } from "@/api/lib/case-law/search-sql";
 import { LIMITS } from "@/api/lib/limits";
+import { CHAT_SEARCH_DISPLAY_METADATA_GENERATION } from "@/api/lib/search/chat-search-generation";
 import { chatThreadScopeSql } from "@/api/lib/search/chat-thread-scope-sql";
 import {
   contactWorkspaceAccessSql,
@@ -460,7 +461,8 @@ export const buildSearchPreviewQuery = ({
         FROM chat_thread_search_documents cst
         JOIN chat_threads t ON t.id = cst.thread_id
         WHERE cst.thread_id = ${resultId}
-          AND cst.preview_generation IS NULL
+          AND cst.preview_generation =
+            ${CHAT_SEARCH_DISPLAY_METADATA_GENERATION}::uuid
           ${previewTextFilter(sql`cst.tsv`, tsQuery)}
           AND ${chatThreadScopeSql({
             userId,

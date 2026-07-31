@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { CHAT_SEARCH_DISPLAY_METADATA_GENERATION } from "@/api/lib/search/chat-search-generation";
 import { chatThreadScopeSql } from "@/api/lib/search/chat-thread-scope-sql";
 import { contactWorkspaceAccessSql } from "@/api/lib/search/contact-workspace-access-sql";
 import { encodeCursor } from "@/api/lib/search/cursor";
@@ -159,6 +160,7 @@ describe("global search SQL scope", () => {
       last_edited_by_name: "Clara Novak",
       last_edited_by_image: "https://example.test/clara.png",
       file_field_id: "field_1",
+      file_property_id: "property_1",
       mime_type: "application/pdf",
       headline: "Interim injunction memo",
       score: 0.9,
@@ -170,6 +172,7 @@ describe("global search SQL scope", () => {
       lastEditedByName: "Clara Novak",
       lastEditedByImage: "https://example.test/clara.png",
       fileFieldId: "field_1",
+      filePropertyId: "property_1",
     });
   });
 
@@ -244,7 +247,10 @@ describe("global search SQL scope", () => {
       3,
     );
     expect(sourceQueries.at(4)?.compiled.sql).toContain(
-      "cst.preview_generation IS NULL",
+      "cst.preview_generation =",
+    );
+    expect(sourceQueries.at(4)?.compiled.params).toContain(
+      CHAT_SEARCH_DISPLAY_METADATA_GENERATION,
     );
   });
 
@@ -383,6 +389,7 @@ describe("global search SQL scope", () => {
     for (const compiled of entityQueries) {
       expect(compiled.sql).toContain("FROM extracted_content ec");
       expect(compiled.sql).toContain("ec.source_field_id = f.id");
+      expect(compiled.sql).toContain("f.property_id");
       expect(compiled.sql).toContain("files.mime_type = ANY");
       expect(compiled.sql).toContain("array_agg(DISTINCT available.mime_type");
       expect(compiled.sql).toContain("files.is_extracted_source DESC");
@@ -392,5 +399,10 @@ describe("global search SQL scope", () => {
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       );
     }
+    expect(
+      entityQueries.some((compiled) =>
+        compiled.sql.includes("file_field.property_id AS file_property_id"),
+      ),
+    ).toBeTrue();
   });
 });

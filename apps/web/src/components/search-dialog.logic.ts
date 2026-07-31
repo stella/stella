@@ -45,6 +45,7 @@ export const getRecentFilePreviewHit = (
   ({
     entityId: file.entityId,
     fileFieldId: resolvedFileFieldId ?? file.fileFieldId ?? null,
+    filePropertyId: file.filePropertyId ?? null,
     headline: null,
     id: `document:${file.entityId}`,
     lastEditedByImage: null,

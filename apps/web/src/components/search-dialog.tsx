@@ -869,6 +869,7 @@ export const SearchDialog = ({
           {
             entityId: hit.entityId,
             fileFieldId: hit.fileFieldId,
+            filePropertyId: hit.filePropertyId,
             mimeType: hit.mimeType,
             title: hit.title || hit.id,
             workspaceId: hit.workspaceId,
@@ -1481,6 +1482,8 @@ const RecentFilePreviewPanel = ({
   const fieldQuery = useQuery({
     ...recentFilePreviewFieldOptions({
       entityId: file.entityId,
+      fileFieldId: file.fileFieldId,
+      filePropertyId: file.filePropertyId,
       mimeType: file.mimeType ?? null,
       organizationId,
       userId,

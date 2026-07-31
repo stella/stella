@@ -73,6 +73,7 @@ describe("search recents", () => {
       {
         entityId: "entity-1",
         fileFieldId: "field-draft",
+        filePropertyId: "property-file",
         mimeType:
           "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         title: "Draft.docx",
@@ -87,6 +88,7 @@ describe("search recents", () => {
       {
         entityId: "entity-1",
         fileFieldId: "field-final",
+        filePropertyId: "property-file",
         mimeType: "application/pdf",
         title: "Final.docx",
         updatedAt: "2021-02-01T00:00:00.000Z",
@@ -101,6 +103,7 @@ describe("search recents", () => {
       readRecentFiles(scope, storage).map((item) => ({
         entityId: item.entityId,
         fileFieldId: item.fileFieldId,
+        filePropertyId: item.filePropertyId,
         mimeType: item.mimeType,
         title: item.title,
         updatedAt: item.updatedAt,
@@ -109,6 +112,7 @@ describe("search recents", () => {
       {
         entityId: "entity-1",
         fileFieldId: "field-final",
+        filePropertyId: "property-file",
         mimeType: "application/pdf",
         title: "Final.docx",
         updatedAt: "2021-02-01T00:00:00.000Z",

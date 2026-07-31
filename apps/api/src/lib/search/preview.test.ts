@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { CHAT_SEARCH_DISPLAY_METADATA_GENERATION } from "@/api/lib/search/chat-search-generation";
 import { buildSearchPreviewQuery } from "@/api/lib/search/preview";
 import type { GlobalSearchResultType } from "@/api/lib/search/types";
 
@@ -188,7 +189,8 @@ describe("search preview authorization scope", () => {
     const compiled = compilePreview("chat");
     expect(compiled.sql).toContain("FROM chat_thread_search_documents cst");
     expect(compiled.sql).toContain("FROM chat_message_search_documents");
-    expect(compiled.sql).toContain("cst.preview_generation IS NULL");
+    expect(compiled.sql).toContain("cst.preview_generation =");
+    expect(compiled.params).toContain(CHAT_SEARCH_DISPLAY_METADATA_GENERATION);
     expect(compiled.sql).toContain("JOIN chat_messages message");
     expect(compiled.sql).toContain("ts_rank_cd(matching.tsv");
     expect(compiled.sql).toContain('AS "isTitleOnlyMatch"');

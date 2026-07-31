@@ -190,6 +190,7 @@ export type EntityGlobalSearchHit = GlobalSearchHitBase & {
   lastEditedByName: string | null;
   lastEditedByImage: string | null;
   fileFieldId: string | null;
+  filePropertyId: string | null;
   mimeType: string | null;
 };
 

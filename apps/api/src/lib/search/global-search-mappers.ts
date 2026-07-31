@@ -53,6 +53,7 @@ export const mapEntityHit = (row: RawRow): ScoredEntityGlobalSearchHit => {
     lastEditedByName: toNullableString(row["last_edited_by_name"]),
     lastEditedByImage: toNullableString(row["last_edited_by_image"]),
     fileFieldId: toNullableString(row["file_field_id"]),
+    filePropertyId: toNullableString(row["file_property_id"]),
     mimeType: toNullableString(row["mime_type"]),
   };
 
