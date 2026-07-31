@@ -60,6 +60,11 @@ type ChatModelModeSelectorProps = {
   models: ComposerModelsMenuProps;
 };
 
+type ChatModelSelectionIntent = {
+  choice: ChatModelFavorite;
+  threadId: string;
+};
+
 /**
  * Compact access to friendly modes and exact models. Modes resolve to the
  * organization's configured role model; pinned modes therefore follow later
@@ -72,6 +77,8 @@ export const ChatModelModeSelector = ({
   const t = useTranslations();
   const [open, setOpen] = useState(false);
   const [detailsRequested, setDetailsRequested] = useState(false);
+  const [selectionIntent, setSelectionIntent] =
+    useState<ChatModelSelectionIntent | null>(null);
   const { data } = useQuery({
     ...modelOptionsOptions(models.activeOrganizationId),
     enabled: open || detailsRequested || models.selectedModel !== null,
@@ -82,14 +89,27 @@ export const ChatModelModeSelector = ({
   const setFavorite = useChatModelFavoriteStore((state) => state.setFavorite);
 
   const options = resolveModeOptions(data?.modeValues);
-  const selectedMode = resolveSelectedMode({
+  const intendedChoice =
+    selectionIntent?.threadId === models.threadRef.threadId
+      ? selectionIntent.choice
+      : null;
+  const selectedChoice =
+    intendedChoice ??
+    resolveSelectedChoice({
+      favorite,
+      options,
+      selectedModel: models.selectedModel,
+    });
+  const selectedMode =
+    selectedChoice.type === "mode" ? selectedChoice.mode : null;
+  const selectedValue = resolveChoiceModelValue({
+    choice: selectedChoice,
     options,
-    selectedModel: models.selectedModel,
   });
   const effectiveModelValue =
     selectedMode === CHAT_MODEL_MODE.standard
       ? data?.defaultValue
-      : models.selectedModel;
+      : selectedValue;
   const effectiveModel = data?.options.find(
     (option) => option.value === effectiveModelValue,
   );
@@ -99,18 +119,25 @@ export const ChatModelModeSelector = ({
     : selectedMode
       ? t(MODE_LABEL_KEY[selectedMode])
       : (models.selectedModel ?? t("chat.modelMode.exactModels"));
-  const toggleFavorite = (nextFavorite: ChatModelFavorite) => {
-    setFavorite(
-      models.activeOrganizationId,
-      isSameFavorite(favorite, nextFavorite) ? null : nextFavorite,
-    );
-  };
 
-  const selectValue = (value: string) => {
-    const nextModel = value === "" ? null : value;
+  const selectChoice = (choice: ChatModelFavorite) => {
+    const nextModel = resolveChoiceModelValue({ choice, options });
+    if (nextModel === undefined) {
+      return;
+    }
+    setSelectionIntent({ choice, threadId: models.threadRef.threadId });
     if (nextModel !== models.selectedModel) {
       models.selectModel(nextModel);
     }
+  };
+
+  const toggleFavorite = (nextFavorite: ChatModelFavorite) => {
+    if (isSameFavorite(favorite, nextFavorite)) {
+      setFavorite(models.activeOrganizationId, null);
+      return;
+    }
+    setFavorite(models.activeOrganizationId, nextFavorite);
+    selectChoice(nextFavorite);
   };
 
   return (
@@ -132,7 +159,7 @@ export const ChatModelModeSelector = ({
         <TriggerIcon aria-hidden="true" className="size-3.5" />
       </MenuTrigger>
       <MenuPopup align="start" className="w-72" side="top" sideOffset={6}>
-        <MenuRadioGroup value={models.selectedModel ?? ""}>
+        <MenuRadioGroup value={selectionKey(selectedChoice)}>
           {options.map((option) => {
             const Icon = MODE_ICON[option.mode];
             const label = t(MODE_LABEL_KEY[option.mode]);
@@ -148,8 +175,8 @@ export const ChatModelModeSelector = ({
               >
                 <MenuRadioItem
                   className="data-highlighted:bg-transparent pe-2"
-                  onClick={() => selectValue(option.value)}
-                  value={option.value}
+                  onClick={() => selectChoice(optionFavorite)}
+                  value={selectionKey(optionFavorite)}
                 >
                   <span className="flex min-w-0 items-start gap-2 py-0.5">
                     <Icon className="mt-0.5 size-3.5 shrink-0" />
@@ -178,7 +205,7 @@ export const ChatModelModeSelector = ({
           </MenuSubTrigger>
           <MenuSubPopup className="w-[min(32rem,calc(100vw-2rem))] max-w-(--available-width)">
             {data ? (
-              <MenuRadioGroup value={models.selectedModel ?? ""}>
+              <MenuRadioGroup value={selectionKey(selectedChoice)}>
                 {data.options.map((option) => {
                   const label = formatModelLabel(option);
                   const optionFavorite = {
@@ -193,8 +220,8 @@ export const ChatModelModeSelector = ({
                     >
                       <MenuRadioItem
                         className="data-highlighted:bg-transparent grid-cols-[1rem_minmax(0,1fr)] pe-2"
-                        onClick={() => selectValue(option.value)}
-                        value={option.value}
+                        onClick={() => selectChoice(optionFavorite)}
+                        value={selectionKey(optionFavorite)}
                       >
                         <span className="block [overflow-wrap:anywhere] whitespace-normal">
                           <bdi>{label}</bdi>
@@ -247,6 +274,7 @@ const FavoriteMenuItem = ({
     <MenuItem
       aria-label={`${action}: ${label}`}
       className="data-highlighted:bg-transparent justify-center px-2"
+      closeOnClick={false}
       onClick={onClick}
       title={`${action}: ${label}`}
     >
@@ -277,24 +305,57 @@ const resolveModeOptions = (
       value: modeValues.deepThinking,
     });
   }
-  if (modeValues?.fast && modeValues.fast !== modeValues.deepThinking) {
+  if (modeValues?.fast) {
     options.push({ mode: CHAT_MODEL_MODE.fast, value: modeValues.fast });
   }
   return options;
 };
 
-const resolveSelectedMode = ({
+const resolveChoiceModelValue = ({
+  choice,
+  options,
+}: {
+  choice: ChatModelFavorite;
+  options: ModelModeOption[];
+}): string | null | undefined => {
+  if (choice.type === "model") {
+    return choice.value;
+  }
+  const option = options.find(({ mode }) => mode === choice.mode);
+  if (!option) {
+    return undefined;
+  }
+  return option.value === "" ? null : option.value;
+};
+
+const resolveSelectedChoice = ({
+  favorite,
   options,
   selectedModel,
 }: {
+  favorite: ChatModelFavorite | undefined;
   options: ModelModeOption[];
   selectedModel: string | null;
-}): ChatModelMode | null => {
-  if (selectedModel === null) {
-    return CHAT_MODEL_MODE.standard;
+}): ChatModelFavorite => {
+  if (
+    favorite &&
+    resolveChoiceModelValue({ choice: favorite, options }) === selectedModel
+  ) {
+    return favorite;
   }
-  return options.find((option) => option.value === selectedModel)?.mode ?? null;
+  if (selectedModel === null) {
+    return { type: "mode", mode: CHAT_MODEL_MODE.standard };
+  }
+  const mode = options.find(({ value }) => value === selectedModel)?.mode;
+  return mode
+    ? { type: "mode", mode }
+    : { type: "model", value: selectedModel };
 };
+
+const selectionKey = (selection: ChatModelFavorite): string =>
+  selection.type === "mode"
+    ? `mode:${selection.mode}`
+    : `model:${selection.value}`;
 
 const isSameFavorite = (
   current: ChatModelFavorite | undefined,
