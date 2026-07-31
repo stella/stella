@@ -142,4 +142,33 @@ describe("createBackgroundAuditRecorder", () => {
 
     expect(inserted[0]).toMatchObject({ activityCategory: "tasks" });
   });
+
+  test("categorizes task field edits from the owning entity kind", async () => {
+    let inserted: Record<string, unknown>[] = [];
+    const tx = asTestRaw<Transaction>({
+      insert: () => ({
+        values: async (rows: Record<string, unknown>[]) => {
+          inserted = rows;
+        },
+      }),
+    });
+    const recorder = createBackgroundAuditRecorder({
+      execution: {
+        performer: { id: safeId<"user">("user-1"), type: "user" },
+        trigger: { type: "direct" },
+      },
+      organizationId: safeId<"organization">("org-1"),
+      userId: safeId<"user">("user-1"),
+      workspaceId: safeId<"workspace">("workspace-1"),
+    });
+
+    await recorder(tx, {
+      action: AUDIT_ACTION.UPDATE,
+      metadata: { entityId: "task-1", kind: "task" },
+      resourceId: "version-1:property-1",
+      resourceType: AUDIT_RESOURCE_TYPE.FIELD,
+    });
+
+    expect(inserted[0]).toMatchObject({ activityCategory: "tasks" });
+  });
 });

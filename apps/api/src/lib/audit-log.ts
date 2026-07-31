@@ -242,8 +242,9 @@ const activityCategoryForEvent = (event: AuditEvent): AuditActivityCategory => {
         ? "tasks"
         : "documents";
     }
-    case "entity_version":
     case "field":
+      return event.metadata?.["kind"] === "task" ? "tasks" : "documents";
+    case "entity_version":
     case "user_file":
       return "documents";
     case "workspace_member":

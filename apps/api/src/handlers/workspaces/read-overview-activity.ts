@@ -13,7 +13,7 @@ import {
 } from "drizzle-orm";
 import { t } from "elysia";
 
-import { member, user } from "@/api/db/auth-schema";
+import { user } from "@/api/db/auth-schema";
 import { auditLogs, entityVersions, fields } from "@/api/db/schema";
 import type { entities } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
@@ -396,13 +396,6 @@ const readOverviewActivity = createSafeHandler(
                   name: user.name,
                 })
                 .from(user)
-                .innerJoin(
-                  member,
-                  and(
-                    eq(member.userId, user.id),
-                    eq(member.organizationId, session.activeOrganizationId),
-                  ),
-                )
                 .where(inArray(user.id, actorIds));
 
         return {
