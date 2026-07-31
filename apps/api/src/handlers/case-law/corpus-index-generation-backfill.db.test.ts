@@ -157,6 +157,20 @@ const readCheckpoint = async (generation: string) =>
       .limit(1)
   ).at(0);
 
+const nextBackfillSnapshotAt = async (): Promise<Date> => {
+  const snapshot = (
+    await db
+      .select({
+        value: sql<Date>`coalesce(max(${caseLawCorpusIndexBackfills.snapshotAt}), clock_timestamp()) + interval '1 second'`,
+      })
+      .from(caseLawCorpusIndexBackfills)
+  ).at(0)?.value;
+  if (!snapshot) {
+    throw new Error("expected database backfill snapshot");
+  }
+  return snapshot;
+};
+
 const ignoreProjectionRemoval = async () => undefined;
 
 test(
@@ -235,7 +249,7 @@ test(
     const generation = "case_law_v2_generation_pending";
     await db.insert(caseLawCorpusIndexBackfills).values({
       generation,
-      snapshotAt: new Date("2026-07-31T12:00:00.000Z"),
+      snapshotAt: await nextBackfillSnapshotAt(),
       status: "complete",
     });
     await db.insert(caseLawCorpusIndexProjections).values({
@@ -413,7 +427,7 @@ test(
     const indexId = corpusIndexId(generation, "CZE");
     await db.insert(caseLawCorpusIndexBackfills).values({
       generation,
-      snapshotAt: new Date("2026-07-31T14:00:00.000Z"),
+      snapshotAt: await nextBackfillSnapshotAt(),
       status: "complete",
     });
     await db.insert(caseLawCorpusIndexProjections).values({
