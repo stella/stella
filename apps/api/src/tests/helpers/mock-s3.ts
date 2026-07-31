@@ -27,6 +27,14 @@ const realS3 = await import("@/api/lib/s3");
 
 type S3Module = typeof realS3;
 
+/**
+ * Override keys are checked against the real module, so a typo cannot quietly
+ * add a export that nothing reads. Values are not: a test stubs only the few
+ * client methods its own path calls, and requiring the full client type back
+ * would make every such stub unwritable.
+ */
+type S3ModuleOverrides = { [K in keyof S3Module]?: unknown };
+
 /** A storage client with every method stubbed, for tests that name none. */
 const inertClient = () => ({
   delete: mock(async () => undefined),
@@ -37,7 +45,7 @@ const inertClient = () => ({
   })),
 });
 
-export const mockS3Module = (overrides: Partial<S3Module> = {}): S3Module => ({
+export const mockS3Module = (overrides: S3ModuleOverrides = {}) => ({
   ...realS3,
   // Every export that reaches storage, neutralised. A test that cares passes
   // its own; a test that does not cannot accidentally hit a real bucket.
