@@ -6,11 +6,12 @@ import { env } from "@/api/env";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import {
   createSafeRootHandler,
+  errorCauseChainAttributes,
   resolveMeteringContext,
 } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
-import { DatabaseError } from "@/api/lib/errors/tagged-errors";
+import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const noopAuditRecorder: AuditRecorder = async () => undefined;
 
@@ -254,5 +255,47 @@ describe("createSafeRootHandler permission gate", () => {
 
     expect(bodyRan).toBe(true);
     expect(result).toEqual({ ok: true });
+  });
+});
+
+describe("errorCauseChainAttributes", () => {
+  test("records the status of a typed cause behind a generic wrapper", () => {
+    const cause = new HandlerError({ status: 403, message: "byok missing" });
+    const wrapper = new HandlerError({
+      status: 500,
+      message: "Failed to suggest template fields",
+      cause,
+    });
+
+    expect(errorCauseChainAttributes(wrapper)).toEqual({
+      "error.cause.type": "HandlerError",
+      "error.cause.status_code": 403,
+    });
+  });
+
+  test("walks nested causes and omits the status of untyped levels", () => {
+    const root = new HandlerError({ status: 502, message: "upstream" });
+    const middle = new Error("adapter", { cause: root });
+    const wrapper = new HandlerError({
+      status: 500,
+      message: "generic",
+      cause: middle,
+    });
+
+    expect(errorCauseChainAttributes(wrapper)).toEqual({
+      "error.cause.type": "Error",
+      "error.cause2.type": "HandlerError",
+      "error.cause2.status_code": 502,
+    });
+  });
+
+  test("stops on a cause cycle", () => {
+    const first = new Error("first");
+    const second = new Error("second", { cause: first });
+    Object.defineProperty(first, "cause", { value: second });
+
+    expect(errorCauseChainAttributes(first)).toEqual({
+      "error.cause.type": "Error",
+    });
   });
 });
