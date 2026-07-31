@@ -4,6 +4,7 @@ import {
   FlaskConicalIcon,
   GaugeIcon,
   HashIcon,
+  KeyRoundIcon,
   MonitorIcon,
   PlugIcon,
   ScrollTextIcon,
@@ -42,7 +43,8 @@ type NavTo =
   | "/settings/organization/ai"
   | "/settings/organization/anonymization"
   | "/settings/organization/usage"
-  | "/settings/organization/audit-logs";
+  | "/settings/organization/audit-logs"
+  | "/settings/organization/sso";
 
 type NavItem = {
   readonly to: NavTo;
@@ -109,6 +111,11 @@ const ORGANIZATION_SECTION = {
       to: "/settings/organization/ai",
       labelKey: "settings.organization.ai",
       icon: SparklesIcon,
+    },
+    {
+      to: "/settings/organization/sso",
+      labelKey: "settings.organization.sso.title",
+      icon: KeyRoundIcon,
     },
     {
       to: "/settings/organization/anonymization",

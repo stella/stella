@@ -65,6 +65,7 @@ import { sharepointRoute } from "@/api/handlers/sharepoint/routes";
 import { skillsRoute } from "@/api/handlers/skills/routes";
 import { isSkillSourceRateLimitedRequest } from "@/api/handlers/skills/source-rate-limit";
 import { smokeRoute } from "@/api/handlers/smoke/routes";
+import { ssoConnectionsRoute } from "@/api/handlers/sso/routes";
 import { styleSetsRoute } from "@/api/handlers/style-sets/routes";
 import { isStyleSetUploadRateLimitedRequest } from "@/api/handlers/style-sets/upload-rate-limit";
 import { myTasksRoute } from "@/api/handlers/tasks/my-tasks-route";
@@ -529,6 +530,7 @@ const api = new Elysia()
       .use(sharepointRoute)
       .use(catalogueRoute)
       .use(organizationSettingsRoute)
+      .use(ssoConnectionsRoute)
       .use(apiKeysRoute)
       .use(aiConfigPublicRoute)
       .use(clauseCategoriesRoute)

@@ -109,6 +109,7 @@
     "@base-ui/react": "1.6.0",
     "@better-auth/api-key": "1.6.25",
     "@better-auth/oauth-provider": "1.6.25",
+    "@better-auth/sso": "1.6.25",
     "@libpdf/core": "0.4.1",
     "@stll/anonymize-data": "0.0.9",
     "@stll/anonymize-wasm": "2.7.3",
