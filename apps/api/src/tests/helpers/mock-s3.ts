@@ -37,11 +37,11 @@ type S3ModuleOverrides = { [K in keyof S3Module]?: unknown };
 
 /** A storage client with every method stubbed, for tests that name none. */
 const inertClient = () => ({
-  delete: mock(() => Promise.resolve(undefined)),
-  write: mock(() => Promise.resolve(undefined)),
+  delete: mock(async () => await Promise.resolve(undefined)),
+  write: mock(async () => await Promise.resolve(undefined)),
   file: mock(() => ({
-    arrayBuffer: mock(() => Promise.resolve(new ArrayBuffer(0))),
-    text: mock(() => Promise.resolve("")),
+    arrayBuffer: mock(async () => await Promise.resolve(new ArrayBuffer(0))),
+    text: mock(async () => await Promise.resolve("")),
   })),
 });
 
@@ -51,8 +51,8 @@ export const mockS3Module = (overrides: S3ModuleOverrides = {}) => ({
   // its own; a test that does not cannot accidentally hit a real bucket.
   getS3: inertClient,
   getCorpusS3: inertClient,
-  deleteS3ObjectWithSignal: mock(() => Promise.resolve(undefined)),
-  putS3ObjectWithSignal: mock(() => Promise.resolve(undefined)),
+  deleteS3ObjectWithSignal: mock(async () => await Promise.resolve(undefined)),
+  putS3ObjectWithSignal: mock(async () => await Promise.resolve(undefined)),
   refreshS3: mock(() => undefined),
   refreshCorpusS3: mock(() => undefined),
   presignDownloadUrl: mock(() =>
