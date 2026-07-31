@@ -3,6 +3,141 @@ import type {
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
 
+const USER_MESSAGE_FALLBACK_BLOCK_TAGS = Object.freeze([
+  "blockquote",
+  "div",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "li",
+  "ol",
+  "p",
+  "pre",
+  "ul",
+]);
+const USER_MESSAGE_FALLBACK_INLINE_TAGS = Object.freeze([
+  "a",
+  "code",
+  "del",
+  "em",
+  "entity-mention",
+  "pasted-text",
+  "s",
+  "span",
+  "strong",
+  "u",
+]);
+const USER_MESSAGE_FALLBACK_TAGS = Object.freeze([
+  ...USER_MESSAGE_FALLBACK_BLOCK_TAGS,
+  ...USER_MESSAGE_FALLBACK_INLINE_TAGS,
+  "br",
+]);
+
+const escapeRegExp = (value: string) =>
+  value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+
+export const getMentionTagAttr = (
+  attrs: string,
+  name: string,
+): string | null => {
+  const attrName = escapeRegExp(name);
+  const match = new RegExp(
+    `(?:^|\\s)${attrName}\\s*=\\s*(["'])(.*?)\\1`,
+    "iu",
+  ).exec(attrs);
+
+  return match?.[2] ?? null;
+};
+
+const findTagEnd = (html: string, start: number): number => {
+  let quote: '"' | "'" | null = null;
+  for (let index = start; index < html.length; index += 1) {
+    const character = html.charAt(index);
+    if (quote !== null) {
+      if (character === quote) {
+        quote = null;
+      }
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      quote = character;
+      continue;
+    }
+    if (character === ">") {
+      return index;
+    }
+  }
+  return -1;
+};
+
+/**
+ * Turns TipTap HTML into readable text without using DOMParser, so the same
+ * result is safe during server rendering. Only known TipTap tags are removed,
+ * so Markdown autolinks and comparison operators remain literal text.
+ */
+export const userMessageFallbackText = (html: string): string => {
+  let output = "";
+  let cursor = 0;
+
+  while (cursor < html.length) {
+    const tagStart = html.indexOf("<", cursor);
+    if (tagStart === -1) {
+      output += html.slice(cursor);
+      break;
+    }
+
+    output += html.slice(cursor, tagStart);
+    const tagEnd = findTagEnd(html, tagStart + 1);
+    if (tagEnd === -1) {
+      output += html.slice(tagStart);
+      break;
+    }
+
+    const rawTag = html.slice(tagStart + 1, tagEnd).trimStart();
+    const closing = rawTag.startsWith("/");
+    const nameStart = closing ? 1 : 0;
+    let nameEnd = nameStart;
+    while (/[\dA-Za-z-]/u.test(rawTag.charAt(nameEnd))) {
+      nameEnd += 1;
+    }
+    const tagName = rawTag.slice(nameStart, nameEnd).toLowerCase();
+    if (!USER_MESSAGE_FALLBACK_TAGS.some((name) => name === tagName)) {
+      output += html.slice(tagStart, tagEnd + 1);
+      cursor = tagEnd + 1;
+      continue;
+    }
+    if (!closing && tagName === "entity-mention") {
+      const label = getMentionTagAttr(rawTag, "data-label");
+      if (label) {
+        output += label;
+      }
+    }
+    if (
+      tagName === "br" ||
+      (closing &&
+        USER_MESSAGE_FALLBACK_BLOCK_TAGS.some(
+          (blockTagName) => blockTagName === tagName,
+        ))
+    ) {
+      output += "\n";
+    }
+    cursor = tagEnd + 1;
+  }
+
+  return output
+    .replaceAll("&nbsp;", " ")
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .replaceAll("&quot;", '"')
+    .replaceAll("&#39;", "'")
+    .replaceAll("&amp;", "&")
+    .replace(/\n{3,}/gu, "\n\n")
+    .trim();
+};
+
 type TurnBodyItem = {
   message: PersistedChatMessage;
   /** Position in the flat `messages` list, kept so anon-restoration lookups

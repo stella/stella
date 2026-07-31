@@ -33,6 +33,8 @@ import {
   collectAnonRestorations,
   EMPTY_RESTORATION_PAIRS,
   getFollowingAssistantRestorations,
+  getMentionTagAttr,
+  userMessageFallbackText,
 } from "@/components/chat/chat-thread-messages.logic";
 import type {
   AskUserOutput,
@@ -429,7 +431,10 @@ const StickyUserTurn = ({
   };
 
   return (
-    <section className="relative flex flex-col gap-3">
+    <section
+      className="relative flex flex-col gap-3"
+      data-chat-turn-id={headerMessage.id}
+    >
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-x-0 top-0 h-px"
@@ -565,19 +570,6 @@ const USER_STREAMDOWN_COMPONENTS = {
   ),
 };
 
-const escapeRegExp = (value: string) =>
-  value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
-
-const getMentionTagAttr = (attrs: string, name: string) => {
-  const attrName = escapeRegExp(name);
-  const match = new RegExp(
-    `(?:^|\\s)${attrName}\\s*=\\s*(["'])(.*?)\\1`,
-    "iu",
-  ).exec(attrs);
-
-  return match?.[2] ?? null;
-};
-
 const replaceMentionTag = (rawAttrs: string) => {
   const id = getMentionTagAttr(rawAttrs, "data-id");
   const label = getMentionTagAttr(rawAttrs, "data-label");
@@ -624,78 +616,6 @@ const normalizeUserMessageTextForDisplay = (text: string) => {
   }
 
   return result;
-};
-
-const USER_MESSAGE_FALLBACK_BLOCK_TAGS = Object.freeze([
-  "blockquote",
-  "div",
-  "h1",
-  "h2",
-  "h3",
-  "h4",
-  "h5",
-  "h6",
-  "li",
-  "ol",
-  "p",
-  "pre",
-  "ul",
-]);
-
-/**
- * The optimistic user message still contains TipTap HTML until the API returns
- * its normalized Markdown copy. Streamdown is lazy-loaded, so its Suspense
- * fallback needs a plain-text preview instead of briefly printing raw tags.
- * This only produces text nodes; the original string still goes to Streamdown
- * and the API, preserving formatting and mention validation.
- */
-const userMessageFallbackText = (html: string): string => {
-  let output = "";
-  let cursor = 0;
-
-  while (cursor < html.length) {
-    const tagStart = html.indexOf("<", cursor);
-    if (tagStart === -1) {
-      output += html.slice(cursor);
-      break;
-    }
-
-    output += html.slice(cursor, tagStart);
-    const tagEnd = html.indexOf(">", tagStart + 1);
-    if (tagEnd === -1) {
-      output += html.slice(tagStart);
-      break;
-    }
-
-    const rawTag = html.slice(tagStart + 1, tagEnd).trimStart();
-    const closing = rawTag.startsWith("/");
-    const nameStart = closing ? 1 : 0;
-    let nameEnd = nameStart;
-    while (/[\dA-Za-z-]/u.test(rawTag.charAt(nameEnd))) {
-      nameEnd += 1;
-    }
-    const tagName = rawTag.slice(nameStart, nameEnd).toLowerCase();
-    if (
-      tagName === "br" ||
-      (closing &&
-        USER_MESSAGE_FALLBACK_BLOCK_TAGS.some(
-          (blockTagName) => blockTagName === tagName,
-        ))
-    ) {
-      output += "\n";
-    }
-    cursor = tagEnd + 1;
-  }
-
-  return output
-    .replaceAll("&nbsp;", " ")
-    .replaceAll("&lt;", "<")
-    .replaceAll("&gt;", ">")
-    .replaceAll("&quot;", '"')
-    .replaceAll("&#39;", "'")
-    .replaceAll("&amp;", "&")
-    .replace(/\n{3,}/gu, "\n\n")
-    .trim();
 };
 
 const IMAGE_MEDIA_TYPES = Object.freeze([

@@ -74,6 +74,7 @@ import { matchReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
 import { roleOptions } from "@/routes/-queries";
 import { ChatThreadRecap } from "@/routes/_protected.chat/-components/chat-thread-recap";
+import { ChatTurnNavigator } from "@/routes/_protected.chat/-components/chat-turn-navigator";
 import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet";
 import { managementRoles } from "@/routes/_protected.organization/-consts";
 import { usageEntitlementOptions } from "@/routes/_protected.settings/-queries/usage";
@@ -566,7 +567,7 @@ export const ChatThreadPage = ({
             className="relative flex min-h-0 flex-1 flex-col"
             ref={pageContainerRef}
           >
-            <Conversation className="isolate min-h-0">
+            <Conversation className="@container isolate min-h-0">
               <ConversationContent className="mx-auto w-full max-w-5xl gap-3 px-4 pb-36">
                 {messages.length === 0 && !isGenerating && !error ? (
                   <div className="m-auto w-full max-w-md px-4">
@@ -614,6 +615,7 @@ export const ChatThreadPage = ({
                   </>
                 )}
               </ConversationContent>
+              <ChatTurnNavigator messages={messages} />
               <ConversationScrollButton className="bottom-[calc(var(--composer-block-h,7rem)+0.75rem)]" />
             </Conversation>
 

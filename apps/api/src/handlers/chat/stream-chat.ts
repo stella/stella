@@ -976,6 +976,22 @@ export const processServerChatStream = async function* ({
     });
 
     for await (const sourceChunk of normalizedSource) {
+      if (
+        sourceChunk.type === EventType.RUN_STARTED &&
+        deferredRunFinishedChunks.length > 0
+      ) {
+        // Continuation events such as `approval-requested` belong before the
+        // run's finish, but a later run does not. Flush the prior boundary
+        // before starting a fallback/next attempt so run lifecycles cannot
+        // interleave as START(A), START(B), FINISH(A).
+        const priorRunFinishedChunks = deferredRunFinishedChunks.splice(0);
+        for (const chunk of priorRunFinishedChunks) {
+          processor.processChunk(chunk);
+        }
+        for (const chunk of priorRunFinishedChunks) {
+          yield chunk;
+        }
+      }
       const chunk =
         sourceChunk.type === EventType.RUN_ERROR
           ? normalizeRunErrorChunk(sourceChunk)
@@ -983,11 +999,19 @@ export const processServerChatStream = async function* ({
       if (chunk.type === EventType.RUN_FINISHED && chunk.usage) {
         usage = chunk.usage;
       }
-      processor.processChunk(chunk);
       if (chunk.type === EventType.RUN_FINISHED) {
+        // TanStack's agent loop can emit continuation events after a model
+        // run finishes, notably `approval-requested` for a gated server tool.
+        // The client already receives RUN_FINISHED only after the source is
+        // drained; keep the server-side processor on that same ordering too.
+        // Processing this now would finalize `responseMessage` before the
+        // later approval event changes the tool call from `input-complete` to
+        // `approval-requested`, persisting a turn that hydration then treats
+        // as interrupted.
         deferredRunFinishedChunks.push(chunk);
         continue;
       }
+      processor.processChunk(chunk);
       yield chunk;
       if (chunk.type === EventType.RUN_ERROR) {
         streamFailed = true;
@@ -995,6 +1019,10 @@ export const processServerChatStream = async function* ({
       }
     }
 
+    const finalRunFinishedChunks = deferredRunFinishedChunks.splice(0);
+    for (const chunk of finalRunFinishedChunks) {
+      processor.processChunk(chunk);
+    }
     finishInvoked = await finishResponseMessage({
       abortSignal,
       getResponseMessage,
@@ -1002,7 +1030,7 @@ export const processServerChatStream = async function* ({
       onFinish,
       usage,
     });
-    for (const chunk of deferredRunFinishedChunks) {
+    for (const chunk of finalRunFinishedChunks) {
       yield chunk;
     }
   } catch (error) {

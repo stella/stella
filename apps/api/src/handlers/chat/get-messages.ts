@@ -39,6 +39,9 @@ const unwrapTxRead = <T>(result: Result<T, SafeDbError>): T =>
       )
     : result.value;
 
+const serializeThreadRevision = (updatedAt: Date | null): string | null =>
+  updatedAt?.toISOString() ?? null;
+
 const config = {
   permissions: { chat: ["create"] },
   access: "read",
@@ -137,6 +140,7 @@ const getMessages = createSafeRootHandler(
             webSearchEnabled: true,
             usedAnonymization: true,
             chatModel: true,
+            updatedAt: true,
           },
         });
 
@@ -243,6 +247,8 @@ const getMessages = createSafeRootHandler(
           olderCursor: null,
           contextMatterIds: [],
           lastActivityAt: null,
+          threadRevision: null,
+          threadExists: false,
           webSearchAvailable: reads.webSearchAvailable,
           webSearchEnabled: false,
           model: null,
@@ -307,6 +313,8 @@ const getMessages = createSafeRootHandler(
       olderCursor: page.olderCursor,
       contextMatterIds: thread.contextMatterIds,
       lastActivityAt: page.lastActivityAt,
+      threadRevision: serializeThreadRevision(thread.updatedAt),
+      threadExists: true,
       webSearchAvailable,
       webSearchEnabled: thread.webSearchEnabled,
       model: thread.chatModel,

@@ -1118,6 +1118,8 @@ describe("acquireChatRuntime reconcile", () => {
     olderCursor: null,
     contextMatterIds: [],
     lastActivityAt: null,
+    threadRevision: null,
+    threadExists: true,
     webSearchAvailable: false,
     webSearchEnabled: false,
     context: null,
@@ -1152,6 +1154,50 @@ describe("acquireChatRuntime reconcile", () => {
     },
     { type: "TEXT_MESSAGE_END", messageId: assistantMessageId },
     { type: "RUN_FINISHED", threadId, runId: "run-A", finishReason: "stop" },
+  ];
+
+  const createApprovalSseChunks = () => [
+    { type: "RUN_STARTED", threadId, runId: "run-A" },
+    {
+      type: "TEXT_MESSAGE_START",
+      messageId: assistantMessageId,
+      role: "assistant",
+    },
+    {
+      type: "TOOL_CALL_START",
+      parentMessageId: assistantMessageId,
+      toolCallId: "tool-A",
+      toolCallName: "web_search",
+      toolName: "web_search",
+    },
+    {
+      type: "TOOL_CALL_ARGS",
+      delta: '{"query":"Winston Churchill quotes"}',
+      toolCallId: "tool-A",
+    },
+    {
+      type: "TOOL_CALL_END",
+      input: { query: "Winston Churchill quotes" },
+      toolCallId: "tool-A",
+      toolCallName: "web_search",
+      toolName: "web_search",
+    },
+    {
+      type: "CUSTOM",
+      name: "approval-requested",
+      value: {
+        approval: { id: "approval_tool-A", needsApproval: true },
+        input: { query: "Winston Churchill quotes" },
+        toolCallId: "tool-A",
+        toolName: "web_search",
+      },
+    },
+    {
+      type: "RUN_FINISHED",
+      threadId,
+      runId: "run-A",
+      finishReason: "tool_calls",
+    },
   ];
 
   test("reattaches to the same runtime when the freshness signal is unchanged", () => {
@@ -1306,6 +1352,235 @@ describe("acquireChatRuntime reconcile", () => {
       queryClient,
     });
     expect(afterRefetch).not.toBe(handoff);
+  });
+
+  test("replaces stale local approval state with a resolved authoritative transcript", async () => {
+    const queryClient = new QueryClient();
+    globalThis.fetch = createFetchMock(async () =>
+      createSseResponse(createApprovalSseChunks()),
+    );
+    const context = { allowMissingThread: true };
+    const runtime = acquireChatRuntime({
+      activeOrganizationId,
+      context,
+      data: buildThreadData(),
+      key: threadRef,
+      queryClient,
+    });
+
+    const started = runtime.startRouteHandoffMessage(
+      createOutgoingMessage("22222222-2222-4222-8222-2222222222c1"),
+    );
+    await started.stream;
+
+    expect(runtime.getSnapshot().messages.at(-1)?.parts.at(0)).toMatchObject({
+      name: "web_search",
+      state: "approval-requested",
+      type: "tool-call",
+    });
+    const reconciled = acquireChatRuntime({
+      activeOrganizationId,
+      context,
+      data: newerThreadData(),
+      key: threadRef,
+      queryClient,
+    });
+    expect(reconciled).not.toBe(runtime);
+    expect(reconciled.getSnapshot().messages.at(-1)?.parts).toEqual([
+      { type: "text", content: "Ahoj!" },
+    ]);
+  });
+
+  test("replaces a persisted pending approval when its id and timestamp are unchanged", () => {
+    const queryClient = new QueryClient();
+    const lastActivityAt = "2026-07-08T10:00:00.000Z";
+    const pendingMessages = [
+      createMessage(),
+      {
+        id: assistantMessageId,
+        role: "assistant",
+        parts: [
+          {
+            approval: { id: "approval-A", needsApproval: true },
+            arguments: '{"query":"Winston Churchill quotes"}',
+            id: "tool-A",
+            input: { query: "Winston Churchill quotes" },
+            name: "web_search",
+            state: "approval-requested",
+            type: "tool-call",
+          },
+        ],
+      },
+    ] satisfies PersistedChatMessage[];
+    const runtime = acquireChatRuntime({
+      activeOrganizationId,
+      context: { allowMissingThread: true },
+      data: buildThreadData({
+        lastActivityAt,
+        messages: pendingMessages,
+        threadRevision: "revision-before-resolution",
+      }),
+      key: threadRef,
+      queryClient,
+    });
+
+    const reconciled = acquireChatRuntime({
+      activeOrganizationId,
+      context: { allowMissingThread: true },
+      data: buildThreadData({
+        lastActivityAt,
+        threadRevision: "revision-after-resolution",
+        messages: [
+          createMessage(),
+          {
+            id: assistantMessageId,
+            role: "assistant",
+            parts: [{ type: "text", content: "Resolved elsewhere" }],
+          },
+        ],
+      }),
+      key: threadRef,
+      queryClient,
+    });
+
+    expect(reconciled).not.toBe(runtime);
+    expect(reconciled.getSnapshot().messages.at(-1)?.parts).toEqual([
+      { type: "text", content: "Resolved elsewhere" },
+    ]);
+  });
+
+  test("retains a local pending approval while the query still has its pre-send seed", async () => {
+    const queryClient = new QueryClient();
+    globalThis.fetch = createFetchMock(async () =>
+      createSseResponse(createApprovalSseChunks()),
+    );
+    const context = { allowMissingThread: true };
+    const preSendData = buildThreadData();
+    const runtime = acquireChatRuntime({
+      activeOrganizationId,
+      context,
+      data: preSendData,
+      key: threadRef,
+      queryClient,
+    });
+
+    const started = runtime.startRouteHandoffMessage(
+      createOutgoingMessage("22222222-2222-4222-8222-2222222222c3"),
+    );
+    await started.stream;
+
+    const reattached = acquireChatRuntime({
+      activeOrganizationId,
+      context,
+      data: preSendData,
+      key: threadRef,
+      queryClient,
+    });
+
+    expect(reattached).toBe(runtime);
+    expect(reattached.getSnapshot().messages.at(-1)?.parts.at(0)).toMatchObject(
+      {
+        state: "approval-requested",
+        type: "tool-call",
+      },
+    );
+  });
+
+  test("keeps a runtime awaiting approval present in the authoritative transcript", async () => {
+    const queryClient = new QueryClient();
+    globalThis.fetch = createFetchMock(async () =>
+      createSseResponse(createApprovalSseChunks()),
+    );
+    const context = { allowMissingThread: true };
+    const runtime = acquireChatRuntime({
+      activeOrganizationId,
+      context,
+      data: buildThreadData(),
+      key: threadRef,
+      queryClient,
+    });
+
+    const started = runtime.startRouteHandoffMessage(
+      createOutgoingMessage("22222222-2222-4222-8222-2222222222c2"),
+    );
+    await started.stream;
+
+    const reattached = acquireChatRuntime({
+      activeOrganizationId,
+      context,
+      data: buildThreadData({
+        lastActivityAt: "2026-07-08T10:00:00.000Z",
+        messages: runtime.getSnapshot().messages,
+      }),
+      key: threadRef,
+      queryClient,
+    });
+
+    expect(reattached).toBe(runtime);
+  });
+
+  test("keeps a resolved continuation while acknowledged approval data is stale", async () => {
+    const queryClient = new QueryClient();
+    let responseIndex = 0;
+    globalThis.fetch = createFetchMock(async () => {
+      const chunks =
+        responseIndex === 0
+          ? createApprovalSseChunks()
+          : createFinishedSseChunks();
+      responseIndex += 1;
+      return createSseResponse(chunks);
+    });
+    const context = { allowMissingThread: true };
+    const runtime = acquireChatRuntime({
+      activeOrganizationId,
+      context,
+      data: buildThreadData(),
+      key: threadRef,
+      queryClient,
+    });
+
+    const started = runtime.startRouteHandoffMessage(
+      createOutgoingMessage("22222222-2222-4222-8222-2222222222c4"),
+    );
+    await started.stream;
+
+    const persistedPendingData = buildThreadData({
+      lastActivityAt: "2026-07-08T10:00:00.000Z",
+      messages: runtime.getSnapshot().messages,
+      threadRevision: "revision-pending-approval",
+    });
+    expect(
+      acquireChatRuntime({
+        activeOrganizationId,
+        context,
+        data: persistedPendingData,
+        key: threadRef,
+        queryClient,
+      }),
+    ).toBe(runtime);
+
+    await runtime.addToolApprovalResponse({
+      approved: true,
+      id: "approval_tool-A",
+    });
+
+    const afterResolution = acquireChatRuntime({
+      activeOrganizationId,
+      context,
+      data: persistedPendingData,
+      key: threadRef,
+      queryClient,
+    });
+    expect(afterResolution).toBe(runtime);
+    expect(
+      afterResolution
+        .getSnapshot()
+        .messages.flatMap(({ parts }) => parts)
+        .some(
+          (part) =>
+            part.type === "tool-call" && part.state === "approval-requested",
+        ),
+    ).toBe(false);
   });
 
   test("keeps distinct runtimes per context capability set and sweeps them all on query GC", () => {
