@@ -533,7 +533,7 @@ const readOverviewActivity = createSafeHandler(
           where ${fields.workspaceId} = ${entities.workspaceId}
             and ${fields.entityVersionId} = ${entities.currentVersionId}
             and ${fields.content}->>'type' = 'file'
-          order by ${fields.propertyId}
+          order by ${fields.id}
           limit 1
         )`;
         const entityRows =

@@ -36,7 +36,7 @@ export const SegmentedIconToggle = <T extends string>({
   <div
     className={cn(
       "border-border/70 bg-muted/30 inline-flex shrink-0 items-center overflow-hidden rounded-md border p-0.5",
-      size === "touch" ? "h-7 [@media(any-pointer:coarse)]:h-11" : "h-7",
+      size === "touch" ? "h-7 [@media(any-pointer:coarse)]:h-12" : "h-7",
     )}
   >
     {options.map((option) => {
@@ -52,7 +52,7 @@ export const SegmentedIconToggle = <T extends string>({
                 className={cn(
                   "text-muted-foreground h-6 min-h-0 w-7 rounded-[4px] p-0",
                   size === "touch" &&
-                    "[@media(any-pointer:coarse)]:h-10 [@media(any-pointer:coarse)]:min-h-10 [@media(any-pointer:coarse)]:w-11",
+                    "[@media(any-pointer:coarse)]:h-11 [@media(any-pointer:coarse)]:min-h-11 [@media(any-pointer:coarse)]:w-11",
                   isActive &&
                     "bg-muted text-foreground ring-border/80 hover:bg-muted hover:text-foreground shadow-xs ring-1",
                 )}
