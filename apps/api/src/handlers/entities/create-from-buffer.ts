@@ -30,6 +30,7 @@ import {
   BUFFER_INTENT_DELETE_TIMEOUT_MS,
   BUFFER_INTENT_HEARTBEAT_MS,
   BUFFER_INTENT_TTL_MS,
+  BUFFER_INTENT_WRITE_TIMEOUT_MS,
   lockActiveWorkspaceForBufferIntent,
 } from "@/api/lib/buffer-intent-reconciliation";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
@@ -39,7 +40,7 @@ import {
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
-import { deleteS3ObjectWithSignal, getS3 } from "@/api/lib/s3";
+import { deleteS3ObjectWithSignal, putS3ObjectWithSignal } from "@/api/lib/s3";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import { processExtraction } from "@/api/lib/search/process-extraction";
 import { broadcast } from "@/api/lib/sse";
@@ -363,7 +364,13 @@ export const createEntityFromBuffer = async ({
     };
 
     try {
-      await getS3().write(s3Key, bytes);
+      await withTimeout(
+        async (signal) => await putS3ObjectWithSignal(s3Key, bytes, signal),
+        {
+          label: "buffer-entity-writer-put",
+          timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,
+        },
+      );
     } catch (error) {
       // A transport failure is ambiguous: S3 may have accepted the object.
       // Keep the intent recoverable unless deletion is confirmed.

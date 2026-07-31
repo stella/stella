@@ -25,6 +25,10 @@ REVOKE ALL PRIVILEGES ON TABLE "buffer_object_cleanup_intents" FROM stella;
 --> statement-breakpoint
 GRANT INSERT, DELETE ON TABLE "buffer_object_cleanup_intents" TO stella;
 --> statement-breakpoint
+-- The writer's DELETE predicate references only the opaque intent id. Grant
+-- column-level read rather than exposing retained tenant storage keys.
+GRANT SELECT ("id") ON TABLE "buffer_object_cleanup_intents" TO stella;
+--> statement-breakpoint
 CREATE POLICY "buffer_object_cleanup_insert"
   ON "buffer_object_cleanup_intents"
   AS PERMISSIVE FOR INSERT TO stella

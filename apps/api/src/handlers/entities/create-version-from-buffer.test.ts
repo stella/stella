@@ -31,7 +31,7 @@ void mock.module("@/api/handlers/files/utils", () => ({
 }));
 void mock.module("@/api/lib/s3", () => ({
   deleteS3ObjectWithSignal: s3DeleteMock,
-  getS3: () => ({ write: s3WriteMock }),
+  putS3ObjectWithSignal: s3WriteMock,
 }));
 void mock.module("@/api/lib/search/process-extraction", () => ({
   processExtraction: processExtractionMock,
@@ -226,6 +226,11 @@ describe("createEntityVersionFromBuffer", () => {
 
     expect(Result.isOk(result)).toBe(true);
     expect(s3WriteMock).toHaveBeenCalledTimes(1);
+    expect(s3WriteMock).toHaveBeenCalledWith(
+      "org_1/ws_1/file_1.docx",
+      expect.any(Uint8Array),
+      expect.any(AbortSignal),
+    );
     expect(persistenceEvents).toEqual(["intent-reserved", "s3-written"]);
     expect(writeFileVersionMock).toHaveBeenCalledWith(
       expect.objectContaining({

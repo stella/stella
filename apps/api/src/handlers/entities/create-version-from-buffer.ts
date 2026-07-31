@@ -21,6 +21,7 @@ import {
   BUFFER_INTENT_DELETE_TIMEOUT_MS,
   BUFFER_INTENT_HEARTBEAT_MS,
   BUFFER_INTENT_TTL_MS,
+  BUFFER_INTENT_WRITE_TIMEOUT_MS,
   lockActiveWorkspaceForBufferIntent,
 } from "@/api/lib/buffer-intent-reconciliation";
 import type { DocumentSource } from "@/api/lib/document-source";
@@ -30,7 +31,7 @@ import {
 } from "@/api/lib/file-derivative-queue";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
-import { deleteS3ObjectWithSignal, getS3 } from "@/api/lib/s3";
+import { deleteS3ObjectWithSignal, putS3ObjectWithSignal } from "@/api/lib/s3";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import { processExtraction } from "@/api/lib/search/process-extraction";
 import { broadcast } from "@/api/lib/sse";
@@ -331,7 +332,13 @@ export const createEntityVersionFromBuffer = async ({
     };
 
     try {
-      await getS3().write(objectKey, bytes);
+      await withTimeout(
+        async (signal) => await putS3ObjectWithSignal(objectKey, bytes, signal),
+        {
+          label: "buffer-version-writer-put",
+          timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,
+        },
+      );
     } catch (error) {
       // A timeout or connection failure can be ambiguous: object storage may
       // have accepted the complete object even though the client saw an error.

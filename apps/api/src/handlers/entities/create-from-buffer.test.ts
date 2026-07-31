@@ -29,9 +29,7 @@ let intentStatuses: string[] = [];
 
 void mock.module("@/api/lib/s3", () => ({
   deleteS3ObjectWithSignal: s3DeleteMock,
-  getS3: () => ({
-    write: s3WriteMock,
-  }),
+  putS3ObjectWithSignal: s3WriteMock,
 }));
 
 void mock.module("@/api/lib/search/process-extraction", () => ({

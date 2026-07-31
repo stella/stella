@@ -44,12 +44,22 @@ const changeWorkspaceStatus = async (
     // lock immediately before it claims a run, so a delete either seals first
     // or observes the in-flight run and leaves the workspace active.
     const workspaceRows = await tx
-      .select({ id: workspaces.id })
+      .select({ id: workspaces.id, status: workspaces.status })
       .from(workspaces)
       .where(eq(workspaces.id, workspaceId))
       .limit(1)
       .for("update");
-    if (newStatus === "deleting" && workspaceRows.at(0)) {
+    const workspace = workspaceRows.at(0);
+    if (!workspace) {
+      return false;
+    }
+    // Only one request may own the deletion seal. A concurrent request must
+    // not proceed to its own snapshot or later reactivate this workspace when
+    // its cleanup fails.
+    if (newStatus === "deleting" && workspace.status === "deleting") {
+      return false;
+    }
+    if (newStatus === "deleting") {
       const runningOcrRuns = await tx
         .select({ id: documentProcessingRuns.id })
         .from(documentProcessingRuns)
@@ -135,7 +145,8 @@ export const deleteWorkspaceHandler = async function* ({
     return Result.err(
       new HandlerError({
         status: 409,
-        message: "Wait for document processing to finish before deleting",
+        message:
+          "Wait for document processing or another deletion attempt to finish",
       }),
     );
   }

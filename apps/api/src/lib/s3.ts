@@ -1,5 +1,6 @@
 import {
   DeleteObjectCommand,
+  PutObjectCommand,
   S3Client as AwsS3Client,
 } from "@aws-sdk/client-s3";
 import { S3Client } from "bun";
@@ -399,6 +400,23 @@ export const deleteS3ObjectWithSignal = async (
   _abortableClient ??= buildAbortableS3Client(staticCredentialsFromEnv());
   await _abortableClient.send(
     new DeleteObjectCommand({ Bucket: envBase.S3_BUCKET, Key: key }),
+    { abortSignal: signal },
+  );
+};
+
+/** Publish one object while allowing the caller to cancel the HTTP request. */
+export const putS3ObjectWithSignal = async (
+  key: string,
+  bytes: Uint8Array,
+  signal: AbortSignal,
+): Promise<void> => {
+  _abortableClient ??= buildAbortableS3Client(staticCredentialsFromEnv());
+  await _abortableClient.send(
+    new PutObjectCommand({
+      Body: bytes,
+      Bucket: envBase.S3_BUCKET,
+      Key: key,
+    }),
     { abortSignal: signal },
   );
 };
