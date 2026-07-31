@@ -221,30 +221,24 @@ const HorizontalActivityMilestone = ({
 
   if (first.runId === null) {
     const openTarget = getOpenTarget(first, workspaceId);
+    const detail = triggerDetail(first, t);
     const target = (
       <BidiText as="span" className="font-medium">
         {targetName(first, t)}
       </BidiText>
     );
     const content = (
-      <span className="flex items-start gap-2 text-sm leading-5">
-        <span className="text-muted-foreground mt-0.5 flex size-5 shrink-0 items-center justify-center">
-          {targetIcon(first.target.kind)}
+      <span className="min-w-0">
+        <span className="flex min-h-5 items-center text-[13px] font-medium leading-5">
+          <Performer item={first} />
         </span>
-        <span className="min-w-0">
-          <span className="block">
-            {actionSentence(
-              first.action,
-              <Performer item={first} />,
-              target,
-              t,
-            )}
+        {detail && (
+          <span className="text-muted-foreground mt-0.5 block text-[11px] leading-4">
+            {detail}
           </span>
-          {triggerDetail(first, t) && (
-            <span className="text-muted-foreground mt-1 block text-xs">
-              {triggerDetail(first, t)}
-            </span>
-          )}
+        )}
+        <span className="mt-2 block text-[13px] leading-5">
+          {actionSentence(first.action, null, target, t)}
         </span>
       </span>
     );
@@ -253,14 +247,14 @@ const HorizontalActivityMilestone = ({
       <HorizontalMilestoneFrame activityAt={first.activityAt} dateAt={dateAt}>
         {openTarget ? (
           <button
-            className="hover:bg-muted/40 -ms-2 flex min-h-11 w-[calc(100%+0.5rem)] items-center rounded-md px-2 text-start transition-colors"
+            className="hover:bg-muted/40 -ms-2 flex min-h-11 w-[calc(100%+0.5rem)] items-start rounded-md px-2 py-1 text-start transition-colors"
             onClick={openTarget}
             type="button"
           >
             {content}
           </button>
         ) : (
-          <div className="flex min-h-11 items-center">{content}</div>
+          <div className="min-h-11 py-1">{content}</div>
         )}
       </HorizontalMilestoneFrame>
     );
@@ -275,7 +269,7 @@ const HorizontalActivityMilestone = ({
   const detail = triggerDetail(first, t);
   return (
     <HorizontalMilestoneFrame activityAt={first.activityAt} dateAt={dateAt}>
-      <div className="flex min-h-6 items-center gap-2 text-sm font-medium">
+      <div className="flex min-h-5 items-center gap-1.5 text-[13px] font-medium leading-5">
         <span className="text-muted-foreground">{marker}</span>
         <span>{first.performer.name}</span>
         <span className="text-muted-foreground">·</span>
@@ -284,7 +278,9 @@ const HorizontalActivityMilestone = ({
         </span>
       </div>
       {detail && (
-        <p className="text-muted-foreground mt-1 text-xs">{detail}</p>
+        <p className="text-muted-foreground mt-0.5 text-[11px] leading-4">
+          {detail}
+        </p>
       )}
       <div className="mt-3 space-y-1">
         {items.map((item) => (
@@ -311,8 +307,8 @@ const HorizontalMilestoneFrame = ({
   const format = useFormatter();
   const date = new Date(activityAt);
   return (
-    <article className="w-72 shrink-0 snap-start">
-      <div className="text-muted-foreground h-5 pe-8 text-xs font-medium tabular-nums">
+    <article className="w-64 shrink-0 snap-start">
+      <div className="text-muted-foreground h-5 pe-8 text-[13px] font-medium tabular-nums">
         {dateAt
           ? format.dateTime(new Date(dateAt), { dateStyle: "long" })
           : null}
@@ -335,7 +331,7 @@ const HorizontalMilestoneFrame = ({
         <span className="bg-border absolute start-0 end-0 top-1/2 h-px" />
         <span className="bg-muted-foreground absolute start-0 top-0 h-3 w-px" />
       </div>
-      <div className="mt-4 min-w-0 pe-8">{children}</div>
+      <div className="mt-3 min-w-0 pe-8">{children}</div>
     </article>
   );
 };
@@ -356,7 +352,7 @@ const HorizontalRunActivityItem = ({
   );
   const sentence = actionSentence(item.action, null, target, t);
   if (!openTarget) {
-    return <div className="text-sm leading-5">{sentence}</div>;
+    return <div className="text-[13px] leading-5">{sentence}</div>;
   }
   return (
     <button
@@ -364,7 +360,7 @@ const HorizontalRunActivityItem = ({
       onClick={openTarget}
       type="button"
     >
-      <span className="text-sm leading-5">{sentence}</span>
+      <span className="text-[13px] leading-5">{sentence}</span>
     </button>
   );
 };
