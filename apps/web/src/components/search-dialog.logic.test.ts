@@ -5,6 +5,7 @@ import type { GlobalSearchHit } from "@stll/api/types";
 import {
   createDialogCloseActionQueue,
   getChatHitRoute,
+  getRecentFilePreviewDateVisibility,
   getRecentFilePreviewHit,
 } from "./search-dialog.logic";
 
@@ -86,6 +87,7 @@ describe("recent file previews", () => {
         mimeType: "application/pdf",
         openedAt: "2026-07-31T05:00:00.000Z",
         title: "Disclosure.pdf",
+        updatedAt: "2021-03-15T10:00:00.000Z",
         workspaceId: "workspace-1",
         workspaceName: "Disclosure review",
       }),
@@ -99,9 +101,34 @@ describe("recent file previews", () => {
       mimeType: "application/pdf",
       title: "Disclosure.pdf",
       type: "document",
-      updatedAt: "2026-07-31T05:00:00.000Z",
+      updatedAt: "2021-03-15T10:00:00.000Z",
       workspaceId: "workspace-1",
       workspaceName: "Disclosure review",
     });
+  });
+
+  test("omits dates for legacy recents that only store the open timestamp", () => {
+    expect(
+      getRecentFilePreviewDateVisibility({
+        entityId: "entity-1",
+        openedAt: "2026-07-31T05:00:00.000Z",
+        title: "Disclosure.pdf",
+        workspaceId: "workspace-1",
+        workspaceName: "Disclosure review",
+      }),
+    ).toBe("hide");
+  });
+
+  test("shows the persisted document update timestamp", () => {
+    expect(
+      getRecentFilePreviewDateVisibility({
+        entityId: "entity-1",
+        openedAt: "2026-07-31T05:00:00.000Z",
+        title: "Disclosure.pdf",
+        updatedAt: "2021-03-15T10:00:00.000Z",
+        workspaceId: "workspace-1",
+        workspaceName: "Disclosure review",
+      }),
+    ).toBe("show");
   });
 });

@@ -76,6 +76,7 @@ describe("search recents", () => {
         mimeType:
           "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         title: "Draft.docx",
+        updatedAt: "2021-01-01T00:00:00.000Z",
         workspaceId: "workspace-1",
         workspaceName: "Matter A",
       },
@@ -88,6 +89,7 @@ describe("search recents", () => {
         fileFieldId: "field-final",
         mimeType: "application/pdf",
         title: "Final.docx",
+        updatedAt: "2021-02-01T00:00:00.000Z",
         workspaceId: "workspace-1",
         workspaceName: "Matter A",
       },
@@ -101,6 +103,7 @@ describe("search recents", () => {
         fileFieldId: item.fileFieldId,
         mimeType: item.mimeType,
         title: item.title,
+        updatedAt: item.updatedAt,
       })),
     ).toEqual([
       {
@@ -108,6 +111,7 @@ describe("search recents", () => {
         fileFieldId: "field-final",
         mimeType: "application/pdf",
         title: "Final.docx",
+        updatedAt: "2021-02-01T00:00:00.000Z",
       },
     ]);
   });

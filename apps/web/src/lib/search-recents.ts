@@ -26,6 +26,7 @@ export type RecentFile = {
   title: string;
   mimeType?: string | null | undefined;
   openedAt: string;
+  updatedAt?: string | undefined;
 };
 
 type RecentFileInput = Omit<RecentFile, "openedAt">;
@@ -56,7 +57,8 @@ const isRecentFile = (value: unknown): value is RecentFile =>
   (value["mimeType"] === undefined ||
     value["mimeType"] === null ||
     typeof value["mimeType"] === "string") &&
-  typeof value["openedAt"] === "string";
+  typeof value["openedAt"] === "string" &&
+  (value["updatedAt"] === undefined || typeof value["updatedAt"] === "string");
 
 // Top-level shape only: each item is validated individually below via
 // `isItem`, so one malformed entry drops just that entry rather than the

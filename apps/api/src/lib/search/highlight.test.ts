@@ -25,6 +25,29 @@ describe("search result highlighting", () => {
     expect(preview).not.toBe("a".repeat(16_000));
   });
 
+  test("anchors locator prefixes at lexical boundaries", () => {
+    const source = `educate ${"a".repeat(20_000)} catapult`;
+    const preview = truncateSearchPreviewAroundLexemes({
+      lexemes: ["cat"],
+      maxLength: 16_000,
+      source,
+    });
+
+    expect(preview).toContain("catapult");
+    expect(preview).not.toContain("educate");
+  });
+
+  test("maps length-changing Arabic folds back to the source", () => {
+    const source = `${"a".repeat(20_000)} مـحـمـد`;
+    const preview = truncateSearchPreviewAroundLexemes({
+      lexemes: ["محمد"],
+      maxLength: 16_000,
+      source,
+    });
+
+    expect(preview).toContain("مـحـمـد");
+  });
+
   test("escapes HTML before inserting highlight tags", () => {
     const highlighted = escapeAndHighlight(
       `<script>alert("x")</script> ${HIGHLIGHT_START}Privileged & confidential${HIGHLIGHT_STOP}`,

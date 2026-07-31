@@ -1,5 +1,6 @@
 import {
   applyArabicFolds,
+  applyArabicFoldsWithOffsets,
   normalizeSearchText,
   stripDiacritics,
 } from "@stll/text-normalize";
@@ -206,6 +207,37 @@ const isLowSurrogate = (value: number): boolean =>
 const isHighSurrogate = (value: number): boolean =>
   value >= 0xd8_00 && value <= 0xdb_ff;
 
+const SEARCH_LEXEME_CHARACTER = /[\p{L}\p{N}]/u;
+
+const characterBefore = (text: string, index: number): string | null => {
+  if (index <= 0) {
+    return null;
+  }
+  const previousUnit = text.charCodeAt(index - 1);
+  const previousIndex = isLowSurrogate(previousUnit) ? index - 2 : index - 1;
+  const codePoint = text.codePointAt(previousIndex);
+  return codePoint === undefined ? null : String.fromCodePoint(codePoint);
+};
+
+const findLexemePrefix = (text: string, lexeme: string): number => {
+  let searchFrom = 0;
+  while (searchFrom <= text.length - lexeme.length) {
+    const start = text.indexOf(lexeme, searchFrom);
+    if (start === -1) {
+      return -1;
+    }
+    const previousCharacter = characterBefore(text, start);
+    if (
+      previousCharacter === null ||
+      !SEARCH_LEXEME_CHARACTER.test(previousCharacter)
+    ) {
+      return start;
+    }
+    searchFrom = start + lexeme.length;
+  }
+  return -1;
+};
+
 export const truncateSearchPreviewAroundLexemes = ({
   lexemes,
   maxLength,
@@ -220,9 +252,9 @@ export const truncateSearchPreviewAroundLexemes = ({
   }
 
   const normalizedSource = normalizeSourceWithMappings(source, true);
-  const foldedSource = applyArabicFolds(normalizedSource.text);
-  let normalizedMatchStart = Number.POSITIVE_INFINITY;
-  let normalizedMatchLength = 0;
+  const foldedSource = applyArabicFoldsWithOffsets(normalizedSource.text);
+  let foldedMatchStart = Number.POSITIVE_INFINITY;
+  let foldedMatchLength = 0;
   for (const lexeme of lexemes) {
     const normalizedLexeme = applyArabicFolds(
       normalizePreviewUnit(lexeme.trim(), true),
@@ -230,21 +262,29 @@ export const truncateSearchPreviewAroundLexemes = ({
     if (!normalizedLexeme) {
       continue;
     }
-    const start = foldedSource.indexOf(normalizedLexeme);
-    if (start !== -1 && start < normalizedMatchStart) {
-      normalizedMatchStart = start;
-      normalizedMatchLength = normalizedLexeme.length;
+    const start = findLexemePrefix(foldedSource.text, normalizedLexeme);
+    if (start !== -1 && start < foldedMatchStart) {
+      foldedMatchStart = start;
+      foldedMatchLength = normalizedLexeme.length;
     }
   }
 
-  if (!Number.isFinite(normalizedMatchStart)) {
+  if (!Number.isFinite(foldedMatchStart)) {
+    return source.slice(0, boundedLength);
+  }
+  const normalizedMatchStart = foldedSource.sourceIndex.at(foldedMatchStart);
+  const normalizedMatchEnd = foldedSource.sourceEndIndex.at(
+    foldedMatchStart + foldedMatchLength - 1,
+  );
+  if (
+    normalizedMatchStart === undefined ||
+    normalizedMatchEnd === undefined ||
+    normalizedMatchEnd <= normalizedMatchStart
+  ) {
     return source.slice(0, boundedLength);
   }
   const firstSpan = sourceSpanAt(normalizedSource, normalizedMatchStart);
-  const lastSpan = sourceSpanAt(
-    normalizedSource,
-    normalizedMatchStart + normalizedMatchLength - 1,
-  );
+  const lastSpan = sourceSpanAt(normalizedSource, normalizedMatchEnd - 1);
   if (!firstSpan || !lastSpan) {
     return source.slice(0, boundedLength);
   }
@@ -255,11 +295,11 @@ export const truncateSearchPreviewAroundLexemes = ({
     Math.min(source.length - boundedLength, matchCenter - boundedLength / 2),
   );
   start = Math.floor(start);
-  if (isLowSurrogate(source.codePointAt(start))) {
+  if (isLowSurrogate(source.charCodeAt(start))) {
     start += 1;
   }
   let end = Math.min(source.length, start + boundedLength);
-  if (isHighSurrogate(source.codePointAt(end - 1))) {
+  if (isHighSurrogate(source.charCodeAt(end - 1))) {
     end -= 1;
   }
   return source.slice(start, end);

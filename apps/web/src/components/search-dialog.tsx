@@ -63,6 +63,7 @@ import {
 import {
   createDialogCloseActionQueue,
   getChatHitRoute,
+  getRecentFilePreviewDateVisibility,
   getRecentFilePreviewHit,
 } from "@/components/search-dialog.logic";
 import {
@@ -869,6 +870,7 @@ export const SearchDialog = ({
             title: hit.title || hit.id,
             workspaceId: hit.workspaceId,
             workspaceName: hit.workspaceName,
+            updatedAt: hit.updatedAt,
           },
           searchRecentsScope,
         ),
@@ -1415,6 +1417,7 @@ export const SearchDialog = ({
 };
 
 type SearchPreviewPanelProps = {
+  dateVisibility?: "hide" | "show" | undefined;
   hit: GlobalSearchHit;
   organizationId: string;
   query: string;
@@ -1471,6 +1474,7 @@ const RecentFilePreviewPanel = ({
 
   return (
     <SearchPreviewPanel
+      dateVisibility={getRecentFilePreviewDateVisibility(file)}
       hit={hit}
       onOpen={onOpen}
       organizationId={organizationId}
@@ -1481,6 +1485,7 @@ const RecentFilePreviewPanel = ({
 };
 
 const SearchPreviewPanel = ({
+  dateVisibility = "show",
   hit,
   organizationId,
   query,
@@ -1499,6 +1504,7 @@ const SearchPreviewPanel = ({
         {t("common.preview")}
       </h2>
       <SearchPreviewContent
+        dateVisibility={dateVisibility}
         hit={hit}
         key={`${hit.type}:${hit.id}:${hit.updatedAt}:${normalizeSearchQuery(query)}`}
         onOpen={onOpen}
@@ -1511,6 +1517,7 @@ const SearchPreviewPanel = ({
 };
 
 type SearchPreviewContentProps = {
+  dateVisibility: "hide" | "show";
   hit: GlobalSearchHit;
   organizationId: string;
   query: string;
@@ -1519,6 +1526,7 @@ type SearchPreviewContentProps = {
 };
 
 const SearchPreviewContent = ({
+  dateVisibility,
   hit,
   organizationId,
   query,
@@ -1531,7 +1539,8 @@ const SearchPreviewContent = ({
     hit.type === "contact" || hit.type === "case-law"
       ? null
       : hit.workspaceName;
-  const previewDate = getSearchPreviewDate(hit);
+  const previewDate =
+    dateVisibility === "show" ? getSearchPreviewDate(hit) : null;
   const formattedPreviewDate = previewDate
     ? format.dateTime(new Date(previewDate.value), {
         month: "short",

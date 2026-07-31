@@ -52,10 +52,14 @@ export const getRecentFilePreviewHit = (
     mimeType: file.mimeType ?? null,
     title: file.title,
     type: "document",
-    updatedAt: file.openedAt,
+    updatedAt: file.updatedAt ?? file.openedAt,
     workspaceId: file.workspaceId,
     workspaceName: file.workspaceName,
   }) satisfies EntityGlobalSearchHit;
+
+export const getRecentFilePreviewDateVisibility = (
+  file: RecentFile,
+): "hide" | "show" => (file.updatedAt ? "show" : "hide");
 
 export type ChatHitRoute =
   | {
