@@ -12,15 +12,18 @@ SET statement_timeout = '5s';--> statement-breakpoint
 ALTER TABLE "case_law_citations"
   ADD COLUMN IF NOT EXISTS "kind" varchar(16) DEFAULT 'precedent' NOT NULL;--> statement-breakpoint
 
+-- Added NOT VALID so it takes only a brief lock and does not scan the
+-- table here; the scan happens after the commit below.
 -- squawk-ignore prefer-robust-stmts
 ALTER TABLE "case_law_citations"
   ADD CONSTRAINT "citations_kind_values"
   CHECK ("kind" IN ('precedent','procedural')) NOT VALID;--> statement-breakpoint
 
--- Validated separately: NOT VALID avoids the full-table scan taking an
--- ACCESS EXCLUSIVE lock, and VALIDATE takes only a SHARE UPDATE EXCLUSIVE.
-ALTER TABLE "case_law_citations" VALIDATE CONSTRAINT "citations_kind_values";--> statement-breakpoint
-
+-- Drizzle wraps pending migrations in one transaction. Both statements
+-- below must run outside it: VALIDATE CONSTRAINT inside the same
+-- transaction as the ADD would hold the lock through the scan, which is
+-- exactly what NOT VALID exists to avoid, and CREATE INDEX CONCURRENTLY
+-- cannot run in a transaction at all.
 -- squawk-ignore transaction-nesting
 COMMIT;
 --> statement-breakpoint
@@ -29,8 +32,13 @@ SET statement_timeout = 0;
 SET lock_timeout = 0;
 --> statement-breakpoint
 
+-- Takes SHARE UPDATE EXCLUSIVE: concurrent reads and writes continue.
+ALTER TABLE "case_law_citations" VALIDATE CONSTRAINT "citations_kind_values";--> statement-breakpoint
+
 -- stella-migration-safety: reviewed destructive-change - drops only this
--- migration's own index by name before recreating it.
+-- migration's own index by name before recreating it. A cancelled
+-- concurrent build leaves an INVALID index behind, and IF NOT EXISTS
+-- would then skip recreating it.
 DROP INDEX CONCURRENTLY IF EXISTS "case_law_citations_precedent_cited_idx";--> statement-breakpoint
 -- squawk-ignore prefer-robust-stmts
 CREATE INDEX CONCURRENTLY "case_law_citations_precedent_cited_idx"
