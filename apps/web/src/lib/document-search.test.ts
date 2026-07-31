@@ -61,6 +61,15 @@ describe("document search highlighting", () => {
     ]);
   });
 
+  test("prefers the longest marked term when candidates overlap", () => {
+    expect(
+      findSearchTextMatches("foobar", {
+        type: "separate-terms",
+        terms: ["foo", "foobar"],
+      }),
+    ).toEqual([{ start: 0, end: 6 }]);
+  });
+
   test("maps a diacritic-insensitive match back to original offsets", () => {
     expect(
       findNormalizedSearchTextMatches("zápis odštepení", "odštěpení"),

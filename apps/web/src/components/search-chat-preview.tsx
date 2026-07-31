@@ -40,10 +40,12 @@ export const SearchChatPreview = ({
   const [matchSummary, setMatchSummary] =
     useState<SearchMatchSummary>(EMPTY_MATCH_SUMMARY);
   const searchTextKey = searchTextQueryKey(searchText);
-  const rehypePlugins = useMemo<PluggableList>(
-    () => [[rehypeSearchMatches, { searchText }]],
-    [searchText],
-  );
+  const rehypePluginsByMessage = useMemo<PluggableList[]>(() => {
+    const matchBudget = { remaining: MAX_SEARCH_PREVIEW_MATCHES + 1 };
+    return messages.map(() => [
+      [rehypeSearchMatches, { matchBudget, searchText }],
+    ]);
+  }, [messages, searchText]);
 
   useExternalSyncEffect(() => {
     setActiveIndex(0);
@@ -72,7 +74,7 @@ export const SearchChatPreview = ({
     const observer = new MutationObserver(syncMatchSummary);
     observer.observe(root, { childList: true, subtree: true });
     return () => observer.disconnect();
-  }, [rehypePlugins]);
+  }, [rehypePluginsByMessage]);
 
   useExternalSyncEffect(() => {
     const root = rootRef.current;
@@ -149,10 +151,10 @@ export const SearchChatPreview = ({
           />
         </div>
       )}
-      {messages.map((message) => (
+      {messages.map((message, index) => (
         <Message from={message.role} key={message.id}>
           <MessageContent>
-            <MessageResponse rehypePlugins={rehypePlugins}>
+            <MessageResponse rehypePlugins={rehypePluginsByMessage[index]}>
               {message.content}
             </MessageResponse>
           </MessageContent>

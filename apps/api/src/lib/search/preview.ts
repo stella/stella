@@ -67,7 +67,7 @@ type SearchPreviewChatMessageRow = {
 };
 
 type SearchPreviewChatRow = {
-  hasMessageMatch: unknown;
+  isTitleOnlyMatch: unknown;
   messages: SearchPreviewChatMessageRow[];
   title: unknown;
 };
@@ -266,17 +266,23 @@ const chatPreviewTargetMessageId = (tsQuery: SQL | null): SQL => {
   `;
 };
 
-const chatPreviewHasMatchingMessage = (tsQuery: SQL | null): SQL =>
+const chatPreviewTitleOnlyMatch = (tsQuery: SQL | null): SQL =>
   tsQuery
     ? sql`
-        EXISTS (
-          SELECT 1
-          FROM chat_message_search_documents matching
-          WHERE matching.thread_id = cst.thread_id
-            AND matching.tsv @@ ${tsQuery}
-        ) AS "hasMessageMatch"
+        (
+          to_tsvector(
+            'simple',
+            unaccent(arabic_normalize(coalesce(cst.title, '')))
+          ) @@ ${tsQuery}
+          AND NOT EXISTS (
+            SELECT 1
+            FROM chat_message_search_documents matching
+            WHERE matching.thread_id = cst.thread_id
+              AND matching.tsv @@ ${tsQuery}
+          )
+        ) AS "isTitleOnlyMatch"
       `
-    : sql`true AS "hasMessageMatch"`;
+    : sql`false AS "isTitleOnlyMatch"`;
 
 const chatPreviewMessages = (tsQuery: SQL | null): SQL => {
   const precedingLimit = tsQuery
@@ -446,7 +452,7 @@ export const buildSearchPreviewQuery = ({
       return sql`
         SELECT
           cst.title,
-          ${chatPreviewHasMatchingMessage(tsQuery)},
+          ${chatPreviewTitleOnlyMatch(tsQuery)},
           ${chatPreviewMessages(locatorTsQuery)}
         FROM chat_thread_search_documents cst
         JOIN chat_threads t ON t.id = cst.thread_id
@@ -540,7 +546,7 @@ export const readSearchPreview = async (
       return null;
     }
 
-    if (row.hasMessageMatch === false && typeof row.title === "string") {
+    if (row.isTitleOnlyMatch === true && typeof row.title === "string") {
       const title = row.title.trim();
       if (title) {
         return { type: "plain-text", content: title };

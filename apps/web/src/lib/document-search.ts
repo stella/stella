@@ -3,7 +3,6 @@ import { getAllParagraphs } from "@stll/folio-core/docx/documentParser";
 import { getParagraphPlainText } from "@stll/folio-core/docx/serializer/paragraphSerializer";
 import {
   createDefaultFindOptions,
-  findAllMatches,
   findInParagraph,
 } from "@stll/folio-core/utils/findReplace";
 import type { FindMatch } from "@stll/folio-core/utils/findReplace";
@@ -28,40 +27,77 @@ const searchTextMatchKey = ({ end, start }: SearchTextMatch) =>
 const sortSearchTextMatches = (
   first: SearchTextMatch,
   second: SearchTextMatch,
-) => first.start - second.start || first.end - second.end;
+) => first.start - second.start || second.end - first.end;
 
-const findTextCandidateMatches = (content: string, candidate: string) => {
-  const matches = new Map<string, SearchTextMatch>();
-  for (const match of findAllMatches(
-    content,
-    candidate,
-    documentSearchOptions,
-  )) {
-    matches.set(searchTextMatchKey(match), match);
+const selectNonOverlappingSearchTextMatches = (
+  matches: Iterable<SearchTextMatch>,
+  maxMatches: number,
+): SearchTextMatch[] => {
+  const selected: SearchTextMatch[] = [];
+  let previousEnd = -1;
+  for (const match of [...matches].toSorted(sortSearchTextMatches)) {
+    if (match.start < previousEnd) {
+      continue;
+    }
+    selected.push(match);
+    previousEnd = match.end;
+    if (selected.length >= maxMatches) {
+      break;
+    }
   }
-  for (const match of findNormalizedSearchTextMatches(content, candidate)) {
-    matches.set(searchTextMatchKey(match), match);
-  }
-  return [...matches.values()].toSorted(sortSearchTextMatches);
+  return selected;
+};
+
+type FindTextCandidateMatchesOptions = {
+  candidate: string;
+  content: string;
+  maxMatches: number;
+};
+
+const findTextCandidateMatches = ({
+  candidate,
+  content,
+  maxMatches,
+}: FindTextCandidateMatchesOptions) =>
+  findNormalizedSearchTextMatches(content, candidate, { maxMatches });
+
+type FindSearchTextMatchesOptions = {
+  maxMatches?: number | undefined;
 };
 
 export const findSearchTextMatches = (
   content: string,
   searchText: SearchTextQuery,
+  options: FindSearchTextMatchesOptions = {},
 ) => {
+  const maxMatches = Math.max(
+    0,
+    Math.floor(options.maxMatches ?? Number.MAX_SAFE_INTEGER),
+  );
+  if (maxMatches === 0) {
+    return [];
+  }
   const candidates = getSearchTextCandidates(searchText);
   if (typeof searchText !== "string") {
     const matches = new Map<string, SearchTextMatch>();
     for (const candidate of candidates) {
-      for (const match of findTextCandidateMatches(content, candidate)) {
+      for (const match of findTextCandidateMatches({
+        candidate,
+        content,
+        maxMatches,
+      })) {
         matches.set(searchTextMatchKey(match), match);
       }
     }
-    return [...matches.values()].toSorted(sortSearchTextMatches);
+    return selectNonOverlappingSearchTextMatches(matches.values(), maxMatches);
   }
   const phraseCandidate = candidates.at(0);
   const phraseMatches = phraseCandidate
-    ? findTextCandidateMatches(content, phraseCandidate)
+    ? findTextCandidateMatches({
+        candidate: phraseCandidate,
+        content,
+        maxMatches,
+      })
     : [];
   if (phraseMatches.length > 0 || candidates.length <= 1) {
     return phraseMatches;
@@ -69,11 +105,15 @@ export const findSearchTextMatches = (
 
   const matches = new Map<string, SearchTextMatch>();
   for (const candidate of candidates.slice(1)) {
-    for (const match of findTextCandidateMatches(content, candidate)) {
+    for (const match of findTextCandidateMatches({
+      candidate,
+      content,
+      maxMatches,
+    })) {
       matches.set(searchTextMatchKey(match), match);
     }
   }
-  return [...matches.values()].toSorted(sortSearchTextMatches);
+  return selectNonOverlappingSearchTextMatches(matches.values(), maxMatches);
 };
 
 type DocumentMatchPosition = Pick<

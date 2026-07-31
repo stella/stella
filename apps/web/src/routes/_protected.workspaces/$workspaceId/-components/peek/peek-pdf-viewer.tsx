@@ -183,7 +183,10 @@ const PeekPdfViewerContent = ({
     [activePropertyId, entityId, fieldId, onPeekNavigate, viewId, workspaceId],
   );
 
-  if (fileQuery.isError || !file) {
+  if (fileQuery.isError) {
+    throw fileQuery.error;
+  }
+  if (!file) {
     return null;
   }
 

@@ -400,7 +400,7 @@ describe("search preview rendering contract", () => {
   test("returns a title preview when a chat thread has no matching messages", async () => {
     rootDbExecuteMock.mockResolvedValueOnce([
       {
-        hasMessageMatch: false,
+        isTitleOnlyMatch: true,
         messages: [],
         title: "Closing memorandum review",
       },
@@ -409,6 +409,51 @@ describe("search preview rendering contract", () => {
     expect(await readSearchPreview({ ...previewQuery, type: "chat" })).toEqual({
       type: "plain-text",
       content: "Closing memorandum review",
+    });
+  });
+
+  test("keeps the selected message window for cross-message matches", async () => {
+    rootDbExecuteMock.mockResolvedValueOnce([
+      {
+        isTitleOnlyMatch: false,
+        messages: [
+          {
+            id: "00000000-0000-4000-8000-000000000010",
+            isTarget: true,
+            role: "user",
+            content: {
+              version: 2,
+              data: [{ type: "text", content: "indemnity" }],
+            },
+          },
+          {
+            id: "00000000-0000-4000-8000-000000000011",
+            isTarget: false,
+            role: "assistant",
+            content: {
+              version: 2,
+              data: [{ type: "text", content: "liability" }],
+            },
+          },
+        ],
+        title: "Unrelated title",
+      },
+    ]);
+
+    expect(await readSearchPreview({ ...previewQuery, type: "chat" })).toEqual({
+      type: "chat-messages",
+      messages: [
+        {
+          id: "00000000-0000-4000-8000-000000000010",
+          role: "user",
+          content: "indemnity",
+        },
+        {
+          id: "00000000-0000-4000-8000-000000000011",
+          role: "assistant",
+          content: "liability",
+        },
+      ],
     });
   });
 

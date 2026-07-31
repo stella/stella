@@ -13,15 +13,22 @@ const isText = (node: ElementContent | RootContent): node is Text =>
   node.type === "text";
 
 type SearchMatchPluginOptions = {
+  matchBudget: { remaining: number };
   searchText: SearchTextQuery;
 };
 
 export function rehypeSearchMatches(
   this: unknown,
-  { searchText }: SearchMatchPluginOptions,
+  { matchBudget, searchText }: SearchMatchPluginOptions,
 ) {
   const splitTextNode = (text: Text): ElementContent[] => {
-    const matches = findSearchTextMatches(text.value, searchText);
+    if (matchBudget.remaining <= 0) {
+      return [text];
+    }
+    const matches = findSearchTextMatches(text.value, searchText, {
+      maxMatches: matchBudget.remaining,
+    });
+    matchBudget.remaining -= matches.length;
     if (matches.length === 0) {
       return [text];
     }

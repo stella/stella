@@ -63,6 +63,50 @@ describe("canonical PDF search", () => {
     expect(result?.matches.map((match) => match.pageIndex)).toEqual([0, 1, 1]);
   });
 
+  test("combines fallback terms in document order before applying the cap", async () => {
+    const pdf = PDF.create();
+    const page = pdf.addPage({ size: "letter" });
+    page.drawText(`rare ${"common ".repeat(MAX_SEARCH_PREVIEW_MATCHES + 1)}`, {
+      x: 20,
+      y: 700,
+      size: 8,
+    });
+
+    const result = await findPDFSearchResults({
+      bytes: await pdf.save(),
+      searchText: "common rare",
+      signal: new AbortController().signal,
+    });
+
+    expect(result?.matches).toHaveLength(MAX_SEARCH_PREVIEW_MATCHES);
+    expect(result?.truncated).toBe(true);
+    expect(result?.matches.at(0)?.boxes.at(0)?.x).toBeLessThan(
+      result?.matches.at(1)?.boxes.at(0)?.x ?? 0,
+    );
+  });
+
+  test("preserves extracted text order instead of imposing an x-axis order", async () => {
+    const pdf = PDF.create();
+    const page = pdf.addPage({ size: "letter" });
+    page.drawText("needle", { x: 400, y: 700, size: 12 });
+    page.drawText("needle", { x: 100, y: 700, size: 12 });
+
+    const result = await findPDFSearchResults({
+      bytes: await pdf.save(),
+      searchText: "needle",
+      signal: new AbortController().signal,
+    });
+
+    expect(result?.matches.map((match) => match.boxes.at(0)?.x)).toEqual([
+      100, 400,
+    ]);
+    const offsets = result?.matches.map((match) => match.textOffset) ?? [];
+    expect(offsets).toHaveLength(2);
+    expect(offsets.at(0) ?? Number.POSITIVE_INFINITY).toBeLessThan(
+      offsets.at(1) ?? Number.NEGATIVE_INFINITY,
+    );
+  });
+
   test("finds every independently marked term even when one forms a phrase", async () => {
     const result = await findPDFSearchResults({
       bytes: await createSearchablePDF(),
