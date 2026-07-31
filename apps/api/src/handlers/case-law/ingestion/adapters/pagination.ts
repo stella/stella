@@ -464,18 +464,21 @@ export const createPagePaginatedFetch = <TResponse>(
         // the one that follows it, starting at its own beginning. Handing
         // over only here is what makes the switch a fact about the crawl
         // rather than a guess: the collection has demonstrably been seen.
-        if (!signal?.aborted && !hasMore && walk?.mode.followedBy !== null) {
-          const successor = walk?.mode.followedBy;
-          if (successor !== undefined) {
-            logger.info("case_law.ingestion.traversal_advanced", {
-              adapterKey: opts.adapterKey,
-              from: walk?.mode.name,
-              to: successor,
-              offset: fetched,
-              ...(total !== undefined ? { sourceTotal: total } : {}),
-            });
-            nextCursor = encodeTraversalCursor(successor, 0);
-          }
+        const successor = walk === null ? null : walk.mode.followedBy;
+        if (
+          walk !== null &&
+          successor !== null &&
+          !signal?.aborted &&
+          !hasMore
+        ) {
+          logger.info("case_law.ingestion.traversal_advanced", {
+            adapterKey: opts.adapterKey,
+            from: walk.mode.name,
+            to: successor,
+            offset: fetched,
+            ...(total !== undefined ? { sourceTotal: total } : {}),
+          });
+          nextCursor = encodeTraversalCursor(successor, 0);
         }
 
         return { decisions, nextCursor };
