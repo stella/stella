@@ -187,7 +187,7 @@ const structuredData = {
     <script>
       import { initializeLandingLocale } from "../lib/landing-locale";
 
-      initializeLandingLocale();
+      document.addEventListener("astro:page-load", initializeLandingLocale);
     </script>
     <meta name="description" content={description} />
     <meta name="robots" content={robotsContent} />
