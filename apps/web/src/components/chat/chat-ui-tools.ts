@@ -821,6 +821,59 @@ const isRegisteredToolCallWithInput = (
 const isJsonObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+export type DocumentDeletionToolCallEffects = {
+  hasVersionDeletion: boolean;
+  hasWholeDocumentDeletion: boolean;
+};
+
+export type DocumentDeletionMessage = {
+  id: string;
+  role: string;
+  parts: readonly unknown[];
+};
+
+/** Consume successful document delete calls not yet handled by this session. */
+export const consumeDocumentDeletionToolCalls = ({
+  handledToolCallIds,
+  messages,
+}: {
+  handledToolCallIds: Set<string>;
+  messages: readonly DocumentDeletionMessage[];
+}): DocumentDeletionToolCallEffects => {
+  let hasVersionDeletion = false;
+  let hasWholeDocumentDeletion = false;
+
+  for (const message of messages) {
+    if (message.role !== "assistant") {
+      continue;
+    }
+    for (const part of message.parts) {
+      if (
+        !isJsonObject(part) ||
+        part["type"] !== "tool-call" ||
+        part["name"] !== "delete_document" ||
+        part["state"] !== "complete" ||
+        typeof part["id"] !== "string" ||
+        !isJsonObject(part["input"]) ||
+        !isJsonObject(part["output"]) ||
+        part["output"]["deleted"] !== true ||
+        handledToolCallIds.has(part["id"])
+      ) {
+        continue;
+      }
+
+      handledToolCallIds.add(part["id"]);
+      if ("version_id" in part["input"]) {
+        hasVersionDeletion = true;
+      } else {
+        hasWholeDocumentDeletion = true;
+      }
+    }
+  }
+
+  return { hasVersionDeletion, hasWholeDocumentDeletion };
+};
+
 /**
  * Fill each tool-call part's typed `input` from its raw `arguments`.
  *

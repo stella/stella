@@ -1897,6 +1897,46 @@ export const useInspectorStore = create<State & Actions>()(
   })),
 );
 
+/** Close file and task tabs whose backing entities were deleted. */
+export const closeInspectorTabsForEntities = (entityIds: string[]): void => {
+  const deletedEntityIds = new Set(entityIds);
+  const isDeletedEntityTab = (tab: InspectorTab) =>
+    (tab.type === "pdf" && deletedEntityIds.has(tab.entityId)) ||
+    (tab.type === "task" && deletedEntityIds.has(tab.id));
+  const state = useInspectorStore.getState();
+  const activeIndex = state.tabs.findIndex((tab) => tab.id === state.activeId);
+  const activeTab = state.tabs[activeIndex];
+  const nextActiveId =
+    activeTab !== undefined && isDeletedEntityTab(activeTab)
+      ? (state.tabs
+          .slice(activeIndex + 1)
+          .find((tab) => !isDeletedEntityTab(tab))?.id ??
+        state.tabs
+          .slice(0, activeIndex)
+          .findLast((tab) => !isDeletedEntityTab(tab))?.id ??
+        null)
+      : state.activeId;
+  const remainingTabs = state.tabs.filter((tab) => !isDeletedEntityTab(tab));
+  const nextReviveSuggestion =
+    state.reviveSuggestion !== null &&
+    isDeletedEntityTab(state.reviveSuggestion)
+      ? null
+      : state.reviveSuggestion;
+
+  if (
+    remainingTabs.length === state.tabs.length &&
+    nextReviveSuggestion === state.reviveSuggestion
+  ) {
+    return;
+  }
+
+  useInspectorStore.setState({
+    activeId: nextActiveId,
+    reviveSuggestion: nextReviveSuggestion,
+    tabs: remainingTabs,
+  });
+};
+
 export const useIsAnonymizationActive = (): boolean =>
   useInspectorStore((s) => s.anonymizationActiveMountCount > 0);
 

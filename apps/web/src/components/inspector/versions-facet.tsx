@@ -8,9 +8,9 @@
  * the selection). Compare is owned by the document route.
  */
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useState, useSyncExternalStore } from "react";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
@@ -21,6 +21,8 @@ import { useInspectorStore } from "@/components/inspector/inspector-store";
 import { useMountEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
+import { APIError } from "@/lib/errors/api";
+import { fileContentQueryKey } from "@/lib/files/file-metadata-query.logic";
 import { VersionsSidebar } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/versions-sidebar";
 import type { Version } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/versions-sidebar";
 import {
@@ -244,6 +246,36 @@ export const VersionsFacet = ({
       />
     </div>
   );
+};
+
+export const useSelectedFileVersionMissing = ({
+  enabled,
+  fieldId,
+  workspaceId,
+}: {
+  enabled: boolean;
+  fieldId: string;
+  workspaceId: string;
+}): boolean => {
+  const queryClient = useQueryClient();
+  const subscribe = useCallback(
+    (onStoreChange: () => void) =>
+      queryClient.getQueryCache().subscribe(() => onStoreChange()),
+    [queryClient],
+  );
+  const getSnapshot = useCallback(() => {
+    if (!enabled) {
+      return false;
+    }
+
+    const error = queryClient.getQueryState(
+      fileContentQueryKey({ workspaceId, fieldId }),
+    )?.error;
+    return APIError.is(error) && error.status === 404;
+  }, [enabled, fieldId, queryClient, workspaceId]);
+  const isMissing = useSyncExternalStore(subscribe, getSnapshot, () => false);
+
+  return isMissing;
 };
 
 const LoadOlderVersionLifecycle = ({

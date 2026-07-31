@@ -4,38 +4,12 @@ import type { QueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
-import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities.logic";
+import {
+  type WorkspaceActivityKey,
+  workspacesKeys,
+} from "@/routes/_protected.workspaces/-queries.logic";
 
-export const workspacesKeys = {
-  all: ["workspaces"],
-  list: (activeOrganizationId: string) => [
-    ...workspacesKeys.all,
-    "list",
-    activeOrganizationId,
-  ],
-  navigation: (activeOrganizationId: string) => [
-    ...workspacesKeys.all,
-    "navigation",
-    activeOrganizationId,
-  ],
-  byId: (workspaceId: string) => [...workspacesKeys.all, workspaceId],
-  overview: (workspaceId: string) => [
-    ...workspacesKeys.byId(workspaceId),
-    "overview",
-  ],
-  activityAll: (workspaceId: string) => [
-    ...entitiesKeys.all(workspaceId),
-    "activity",
-  ],
-  activity: (activeOrganizationId: string, key: WorkspaceActivityKey) => [
-    ...workspacesKeys.activityAll(key.workspaceId),
-    activeOrganizationId,
-  ],
-};
-
-type WorkspaceActivityKey = {
-  workspaceId: string;
-};
+export { workspacesKeys } from "@/routes/_protected.workspaces/-queries.logic";
 
 type WorkspaceActivityOptions = {
   activeOrganizationId: string;

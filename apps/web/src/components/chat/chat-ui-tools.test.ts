@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  consumeDocumentDeletionToolCalls,
   getChatToolTitleKey,
   getApprovalToolName,
   getToolApprovalGrant,
@@ -21,6 +22,7 @@ import {
 } from "@/components/chat/chat-ui-tools";
 import type {
   ChatPart,
+  DocumentDeletionMessage,
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
 
@@ -69,6 +71,114 @@ describe("chat tool titles", () => {
 
   test("uses the translated unknown fallback for unknown tools", () => {
     expect(getChatToolTitleKey("searchCaseLaw")).toBe("chat.tool.unknown");
+  });
+});
+
+describe("consumeDocumentDeletionToolCalls", () => {
+  test("consumes a completed whole-document deletion once", () => {
+    const messages: DocumentDeletionMessage[] = [
+      {
+        id: "message-1",
+        parts: [
+          {
+            arguments: JSON.stringify({ entity_id: "entity_ref_1" }),
+            id: "tool-call-1",
+            input: { entity_id: "entity_ref_1" },
+            name: "delete_document",
+            output: { deleted: true },
+            state: "complete",
+            type: "tool-call",
+          },
+        ],
+        role: "assistant",
+      },
+    ];
+    const handledToolCallIds = new Set<string>();
+
+    expect(
+      consumeDocumentDeletionToolCalls({
+        handledToolCallIds,
+        messages,
+      }),
+    ).toEqual({
+      hasVersionDeletion: false,
+      hasWholeDocumentDeletion: true,
+    });
+    expect(
+      consumeDocumentDeletionToolCalls({
+        handledToolCallIds,
+        messages,
+      }),
+    ).toEqual({
+      hasVersionDeletion: false,
+      hasWholeDocumentDeletion: false,
+    });
+  });
+
+  test("reports completed version-only deletions for cache revalidation", () => {
+    const messages: DocumentDeletionMessage[] = [
+      {
+        id: "message-1",
+        parts: [
+          {
+            arguments: JSON.stringify({
+              entity_id: "entity_ref_1",
+              version_id: "version-1",
+            }),
+            id: "tool-call-1",
+            input: {
+              entity_id: "entity_ref_1",
+              version_id: "version-1",
+            },
+            name: "delete_document",
+            output: { deleted: true },
+            state: "complete",
+            type: "tool-call",
+          },
+        ],
+        role: "assistant",
+      },
+    ];
+
+    expect(
+      consumeDocumentDeletionToolCalls({
+        handledToolCallIds: new Set(),
+        messages,
+      }),
+    ).toEqual({
+      hasVersionDeletion: true,
+      hasWholeDocumentDeletion: false,
+    });
+  });
+
+  test("ignores completed calls without a successful deletion result", () => {
+    const messages: DocumentDeletionMessage[] = [
+      {
+        id: "message-1",
+        parts: [
+          {
+            arguments: JSON.stringify({ entity_id: "entity_ref_1" }),
+            id: "tool-call-1",
+            input: { entity_id: "entity_ref_1" },
+            name: "delete_document",
+            output: { deleted: false },
+            state: "complete",
+            type: "tool-call",
+          },
+        ],
+        role: "assistant",
+      },
+    ];
+
+    expect(
+      consumeDocumentDeletionToolCalls({
+        handledToolCallIds: new Set(),
+        messages,
+      }),
+    ).toEqual({
+      hasVersionDeletion: false,
+      hasWholeDocumentDeletion: false,
+    });
   });
 });
 

@@ -241,6 +241,7 @@ export const ChatTabPanel = ({
   } = useChatSession({
     chat,
     conversationId: threadRef.threadId,
+    getContextMatterIds,
     getSendMode,
     initialOlderCursor: data.olderCursor,
     threadRef,

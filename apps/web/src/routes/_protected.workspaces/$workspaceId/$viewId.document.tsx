@@ -398,7 +398,7 @@ function RouteComponentInner({
     select: (s) => s.editing ?? false,
   });
   const pageNumber = Route.useSearch({ select: (s) => s.pdfPage ?? 1 });
-  const { data: entity } = useSuspenseQuery(
+  const { data: entity, error: entityError } = useSuspenseQuery(
     entityOptions(workspaceId, entityId),
   );
   const versionDataQuery = useQuery(
@@ -414,6 +414,21 @@ function RouteComponentInner({
   );
   currentFileFieldIdsByPropertyRef.current ??= new Map();
   const navigate = Route.useNavigate();
+
+  useExternalSyncEffect(() => {
+    if (!(APIError.is(entityError) && entityError.status === 404)) {
+      return;
+    }
+
+    detached(
+      navigate({
+        to: "/workspaces/$workspaceId",
+        params: { workspaceId },
+        replace: true,
+      }),
+      "RouteComponentInner.entityDeleted",
+    );
+  }, [entityError, navigate, workspaceId]);
 
   useLayoutEffect(() => {
     if (!justificationId || justificationPage === undefined) {
@@ -491,10 +506,14 @@ function RouteComponentInner({
     activeFileField === undefined &&
     activeVersionFile === null &&
     versionDataQuery.isSuccess;
-  const fieldFileQuery = useQuery({
-    ...fieldFileOptions({ workspaceId, entityId, fieldId }),
-    enabled: needsFieldFileLookup,
-  });
+  const fieldFileQuery = useQuery(
+    fieldFileOptions({
+      workspaceId,
+      entityId,
+      fieldId,
+      enabled: needsFieldFileLookup,
+    }),
+  );
   const resolvedVersionFile =
     activeVersionFile ?? fieldFileQuery.data?.file ?? null;
   const activeFileContent =

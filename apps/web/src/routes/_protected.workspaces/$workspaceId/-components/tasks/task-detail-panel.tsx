@@ -12,13 +12,16 @@ import { ScrollArea } from "@stll/ui/components/scroll-area";
 import { Skeleton } from "@stll/ui/components/skeleton";
 import { cn } from "@stll/ui/lib/utils";
 
-import { useInspectorStore } from "@/components/inspector/inspector-store";
+import {
+  closeInspectorTabsForEntities,
+  useInspectorStore,
+} from "@/components/inspector/inspector-store";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { APIError, toAPIError, unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import {
   isTaskPriority,
@@ -72,9 +75,17 @@ export const TaskDetailPanel = ({
     select: (ctx) => ctx.user.id,
   });
 
-  const { data: task, isLoading } = useQuery(
-    taskDetailOptions(workspaceId, taskId),
-  );
+  const {
+    data: task,
+    error: taskError,
+    isLoading,
+  } = useQuery(taskDetailOptions(workspaceId, taskId));
+
+  useExternalSyncEffect(() => {
+    if (APIError.is(taskError) && taskError.status === 404) {
+      closeInspectorTabsForEntities([taskId]);
+    }
+  }, [taskError, taskId]);
 
   const [isEditingName, setIsEditingName] = useState(false);
   const [editNameValue, setEditNameValue] = useState("");

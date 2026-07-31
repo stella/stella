@@ -3,14 +3,16 @@ import { useTranslations } from "use-intl";
 
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { closeInspectorTabsForEntities } from "@/components/inspector/inspector-store";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import type { EntityKind } from "@/lib/types";
 import type { EditableFieldContent } from "@/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog";
+import { invalidateDeletedEntityQueries } from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities.logic";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
-import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
+import { taskKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/tasks.logic";
 
 type CreateEntitiesVars = {
   type: "manual-input";
@@ -61,14 +63,17 @@ export const useDeleteEntities = () => {
         .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .delete({
           queryKey: entitiesKeys.all(workspaceId),
+          queryKeys: [taskKeys.all(workspaceId)],
           entityIds: entityIds.map((entityId) => toSafeId<"entity">(entityId)),
         });
 
       return unwrapEden(response);
     },
-    onSuccess: async (_data, { workspaceId }) => {
-      await queryClient.invalidateQueries({
-        queryKey: workspacesKeys.overview(workspaceId),
+    onSuccess: async (_data, { workspaceId, entityIds }) => {
+      closeInspectorTabsForEntities(entityIds);
+      await invalidateDeletedEntityQueries({
+        queryClient,
+        workspaceId,
       });
     },
     onError: (error) => {

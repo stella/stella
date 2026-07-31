@@ -40,6 +40,7 @@ import {
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import type { NeedsMatterMatter } from "@/components/chat/needs-matter-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
+import { reconcileDocumentDeletionToolCalls } from "@/features/chat/hooks/use-chat-session-document-deletion.logic";
 import {
   createInitialSendQueueState,
   describeQueuedMessage,
@@ -74,8 +75,11 @@ import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
 import { mcpConnectorsOptions } from "@/routes/_protected.knowledge/-queries";
 import { fileOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
-import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
-import { workspacesNavigationOptions } from "@/routes/_protected.workspaces/-queries";
+import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities.logic";
+import {
+  workspacesKeys,
+  workspacesNavigationOptions,
+} from "@/routes/_protected.workspaces/-queries";
 
 type CreateDocumentInput = ChatUITools["create-document"]["input"];
 type CreateDocumentOutput = ChatUITools["create-document"]["output"];
@@ -88,6 +92,7 @@ type UseChatSessionOptions = {
     | (() => DocxEditRepresentation | undefined)
     | undefined;
   getEditApplyMode?: (() => ChatEditApplyMode) | undefined;
+  getContextMatterIds?: (() => readonly string[]) | undefined;
   getSendMode?: (() => ChatSendMode) | undefined;
   /** Cursor for the first older page, seeded from the thread fetch. */
   initialOlderCursor: string | null;
@@ -116,6 +121,7 @@ export type ResendLatestMessageOptions = {
 
 const EMPTY_MCP_CONNECTOR_IDENTITIES: readonly McpConnectorApprovalIdentity[] =
   [];
+const EMPTY_CONTEXT_MATTER_IDS: readonly string[] = [];
 
 // `QueuedChatMessage` is the view-facing shape of a queued entry; the
 // canonical definition (plus `QueuedChatEntry` and the send-queue
@@ -141,6 +147,7 @@ export const useChatSession = ({
   chat,
   conversationId,
   getDocxEditRepresentation,
+  getContextMatterIds,
   getEditApplyMode,
   getSendMode,
   initialOlderCursor,
@@ -628,7 +635,32 @@ export const useChatSession = ({
   }, [workspacesNavigation]);
 
   const queryClient = useQueryClient();
+  const handledDocumentDeletionToolCallIdsRef = useRef(new Set<string>());
   const handledDocxReplacementToolCallIdsRef = useRef(new Set<string>());
+
+  // Chat registry writes run outside the workspace route's HTTP mutation, so
+  // they cannot directly name the deleted entity in this browser: tool inputs
+  // contain opaque chat refs by design. Reconcile affected workspace caches
+  // and open file tabs once per completed deletion tool call.
+  useExternalSyncEffect(() => {
+    const contextMatterIds =
+      getContextMatterIds === undefined
+        ? EMPTY_CONTEXT_MATTER_IDS
+        : getContextMatterIds();
+    detached(
+      reconcileDocumentDeletionToolCalls({
+        entityKeys: entitiesKeys,
+        contextMatterIds,
+        handledToolCallIds: handledDocumentDeletionToolCallIdsRef.current,
+        messages,
+        queryClient,
+        tabs: useInspectorStore.getState().tabs,
+        workspaceKeys: workspacesKeys,
+        workspaceId,
+      }),
+      "useChatSession.deleteDocument",
+    );
+  }, [getContextMatterIds, messages, queryClient, workspaceId]);
 
   // Server-side automatic DOCX edits replace the entity's file field. Follow
   // that replacement immediately in the inspector and refresh entity-backed

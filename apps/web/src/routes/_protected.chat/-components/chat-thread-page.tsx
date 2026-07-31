@@ -221,6 +221,7 @@ export const ChatThreadPage = ({
   } = useChatSession({
     chat,
     conversationId: threadRef.threadId,
+    getContextMatterIds,
     getSendMode,
     initialOlderCursor: data.olderCursor,
     onError: (nextError) => {
