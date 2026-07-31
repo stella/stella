@@ -213,7 +213,7 @@ export const ChatModelModeSelector = ({
                 key={option.mode}
               >
                 <MenuRadioItem
-                  className="data-highlighted:bg-transparent pe-2"
+                  className="pe-2 data-highlighted:bg-transparent"
                   indicator="none"
                   onClick={() => selectChoice(optionFavorite)}
                   value={selectionKey(optionFavorite)}
@@ -259,7 +259,7 @@ export const ChatModelModeSelector = ({
                       key={option.value}
                     >
                       <MenuRadioItem
-                        className="data-highlighted:bg-transparent grid-cols-[1rem_minmax(0,1fr)] pe-2"
+                        className="grid-cols-[1rem_minmax(0,1fr)] pe-2 data-highlighted:bg-transparent"
                         onClick={() => selectChoice(optionFavorite)}
                         value={selectionKey(optionFavorite)}
                       >
@@ -313,7 +313,7 @@ const FavoriteMenuItem = ({
   return (
     <MenuItem
       aria-label={`${action}: ${label}`}
-      className="data-highlighted:bg-transparent justify-center px-2"
+      className="justify-center px-2 data-highlighted:bg-transparent"
       closeOnClick={false}
       onClick={onClick}
       title={`${action}: ${label}`}
