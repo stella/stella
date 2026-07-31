@@ -10,7 +10,7 @@ import {
 } from "@/api/db/scoped";
 import { resolveAgentAuditExecution } from "@/api/lib/agent-audit-principal";
 import { createAuditRecorder } from "@/api/lib/audit-log";
-import type { AuditRecorder } from "@/api/lib/audit-log";
+import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import { resolveMemberAuthorization } from "@/api/lib/auth";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -38,6 +38,7 @@ export type McpOperationDatabaseScope = {
 };
 
 export type McpRequestContext = {
+  auditExecution?: AuditExecutionContext;
   accessibleWorkspaceIds: SafeId<"workspace">[];
   accessibleWorkspaceIdSet: ReadonlySet<string>;
   /**
@@ -219,6 +220,7 @@ export const resolveMcpSessionContext = async (
         ).map((handler) => handler.slug);
 
   return {
+    ...(auditExecution ? { auditExecution } : {}),
     accessibleWorkspaceIds: usableWorkspaceIds,
     accessibleWorkspaceIdSet: workspaceAccessBoundary.accessibleWorkspaceIdSet,
     accessibleWorkspaceStatusById: new Map(

@@ -102,4 +102,34 @@ describe("createBackgroundAuditRecorder", () => {
       triggerUserId: null,
     });
   });
+
+  test("categorizes deleted task entities from the persisted diff", async () => {
+    let inserted: Record<string, unknown>[] = [];
+    const tx = asTestRaw<Transaction>({
+      insert: () => ({
+        values: async (rows: Record<string, unknown>[]) => {
+          inserted = rows;
+        },
+      }),
+    });
+    const recorder = createBackgroundAuditRecorder({
+      organizationId: safeId<"organization">("org-1"),
+      userId: safeId<"user">("user-1"),
+      workspaceId: safeId<"workspace">("workspace-1"),
+    });
+
+    await recorder(tx, {
+      action: AUDIT_ACTION.DELETE,
+      changes: {
+        deleted: {
+          new: null,
+          old: { id: "task-1", kind: "task" },
+        },
+      },
+      resourceId: "task-1",
+      resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+    });
+
+    expect(inserted[0]).toMatchObject({ activityCategory: "tasks" });
+  });
 });

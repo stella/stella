@@ -529,22 +529,24 @@ const targetForRow = ({
   versionEntityMap,
 }: TargetForRowOptions): ActivityTarget => {
   if (resourceType === AUDIT_RESOURCE_TYPE.ENTITY) {
-    return entityMap.get(resourceId) ?? deletedEntityTarget(resourceId);
+    return (
+      entityMap.get(resourceId) ?? deletedEntityTarget(resourceId, category)
+    );
   }
   if (resourceType === AUDIT_RESOURCE_TYPE.ENTITY_VERSION) {
     const entityId = versionEntityMap.get(resourceId);
     if (entityId) {
-      return entityMap.get(entityId) ?? deletedEntityTarget(entityId);
+      return entityMap.get(entityId) ?? deletedEntityTarget(entityId, category);
     }
-    return deletedEntityTarget(resourceId);
+    return deletedEntityTarget(resourceId, category);
   }
   if (resourceType === AUDIT_RESOURCE_TYPE.FIELD) {
     const versionId = fieldVersionMap.get(resourceId);
     const entityId = versionId ? versionEntityMap.get(versionId) : null;
     if (entityId) {
-      return entityMap.get(entityId) ?? deletedEntityTarget(entityId);
+      return entityMap.get(entityId) ?? deletedEntityTarget(entityId, category);
     }
-    return deletedEntityTarget(resourceId);
+    return deletedEntityTarget(resourceId, category);
   }
   if (resourceType === AUDIT_RESOURCE_TYPE.USER_FILE) {
     return documentTarget(resourceId);
@@ -566,12 +568,15 @@ const targetForRow = ({
   return genericTarget("automation", resourceId, null);
 };
 
-const deletedEntityTarget = (id: string): EntityTarget => ({
+const deletedEntityTarget = (
+  id: string,
+  category: ActivityCategory = "documents",
+): EntityTarget => ({
   deleted: true,
   entityId: null,
   fieldId: null,
   id,
-  kind: "document",
+  kind: category === "tasks" ? "task" : "document",
   mimeType: null,
   name: null,
   pdfFileId: null,

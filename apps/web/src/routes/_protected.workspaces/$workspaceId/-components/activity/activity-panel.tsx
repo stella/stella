@@ -36,12 +36,14 @@ import {
   SheetPopup,
   SheetTitle,
 } from "@stll/ui/components/sheet";
+import { stellaToast } from "@stll/ui/components/toast";
 
 import { PersonMentionLabel } from "@/components/person-mention-label";
 import Tooltip from "@/components/tooltip";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import type {
   MatterActivityCategory,
@@ -258,7 +260,32 @@ const ActivityTimeline = ({
           <Button
             disabled={query.isFetchingNextPage}
             onClick={() => {
-              detached(query.fetchNextPage(), "ActivityPanel.fetchNextPage");
+              const request = query
+                .fetchNextPage()
+                .then((result) => {
+                  if (result.isError) {
+                    stellaToast.add({
+                      description: userErrorFromThrown(
+                        result.error,
+                        t("common.unexpectedError"),
+                      ),
+                      title: t("errors.actionFailed"),
+                      type: "error",
+                    });
+                  }
+                })
+                .catch((error: unknown) => {
+                  stellaToast.add({
+                    description: userErrorFromThrown(
+                      error,
+                      t("common.unexpectedError"),
+                    ),
+                    title: t("errors.actionFailed"),
+                    type: "error",
+                  });
+                  throw error;
+                });
+              detached(request, "ActivityPanel.fetchNextPage");
             }}
             size="sm"
             variant="ghost"
@@ -702,59 +729,61 @@ const ActivityList = ({
   const format = useFormatter();
   const t = useTranslations();
   return (
-    <div role="list">
-      <div
-        aria-hidden="true"
-        className="text-muted-foreground hidden border-b px-4 py-2 text-[11px] font-medium md:grid md:grid-cols-[10rem_12rem_minmax(16rem,1fr)_14rem] md:gap-4"
-      >
-        <span>{t("workspaces.overview.activity.list.dateTime")}</span>
-        <span>{t("workspaces.overview.activity.list.actor")}</span>
-        <span>{t("workspaces.overview.activity.list.event")}</span>
-        <span>{t("workspaces.overview.activity.list.provenance")}</span>
-      </div>
-      {items.map((item) => {
-        const target = (
-          <BidiText as="span" className="font-medium">
-            {targetName(item, t)}
-          </BidiText>
-        );
-        const provenance = triggerDetail(item, t);
-        return (
-          <div
-            className="border-b last:border-b-0"
-            key={item.id}
-            role="listitem"
-          >
-            <button
-              className="hover:bg-muted/40 focus-visible:bg-muted/40 grid min-h-14 w-full gap-1 px-4 py-2.5 text-start transition-colors md:grid-cols-[10rem_12rem_minmax(16rem,1fr)_14rem] md:items-center md:gap-4"
-              onClick={() => onSelectItem(item)}
-              type="button"
+    <div className="overflow-x-auto" role="list">
+      <div className="min-w-full md:w-max md:min-w-[57rem]">
+        <div
+          aria-hidden="true"
+          className="text-muted-foreground hidden border-b px-4 py-2 text-[11px] font-medium md:grid md:grid-cols-[10rem_12rem_minmax(16rem,1fr)_14rem] md:gap-4"
+        >
+          <span>{t("workspaces.overview.activity.list.dateTime")}</span>
+          <span>{t("workspaces.overview.activity.list.actor")}</span>
+          <span>{t("workspaces.overview.activity.list.event")}</span>
+          <span>{t("workspaces.overview.activity.list.provenance")}</span>
+        </div>
+        {items.map((item) => {
+          const target = (
+            <BidiText as="span" className="font-medium">
+              {targetName(item, t)}
+            </BidiText>
+          );
+          const provenance = triggerDetail(item, t);
+          return (
+            <div
+              className="border-b last:border-b-0"
+              key={item.id}
+              role="listitem"
             >
-              <time
-                className="text-muted-foreground text-xs tabular-nums"
-                dateTime={item.activityAt}
+              <button
+                className="hover:bg-muted/40 focus-visible:bg-muted/40 grid min-h-14 w-full gap-1 px-4 py-2.5 text-start transition-colors md:grid-cols-[10rem_12rem_minmax(16rem,1fr)_14rem] md:items-center md:gap-4"
+                onClick={() => onSelectItem(item)}
+                type="button"
               >
-                {format.dateTime(new Date(item.activityAt), {
-                  dateStyle: "medium",
-                  timeStyle: "short",
-                })}
-              </time>
-              <span className="min-w-0 text-sm">
-                <Performer item={item} />
-              </span>
-              <span className="min-w-0 text-sm leading-5">
-                {actionSentence(item.action, null, target, t)}
-              </span>
-              <span className="text-muted-foreground min-w-0 text-xs leading-4">
-                {provenance ??
-                  (item.trigger.source
-                    ? sourceName(item.trigger.source, t)
-                    : "—")}
-              </span>
-            </button>
-          </div>
-        );
-      })}
+                <time
+                  className="text-muted-foreground text-xs tabular-nums"
+                  dateTime={item.activityAt}
+                >
+                  {format.dateTime(new Date(item.activityAt), {
+                    dateStyle: "medium",
+                    timeStyle: "short",
+                  })}
+                </time>
+                <span className="min-w-0 text-sm">
+                  <Performer item={item} />
+                </span>
+                <span className="min-w-0 text-sm leading-5">
+                  {actionSentence(item.action, null, target, t)}
+                </span>
+                <span className="text-muted-foreground min-w-0 text-xs leading-4">
+                  {provenance ??
+                    (item.trigger.source
+                      ? sourceName(item.trigger.source, t)
+                      : "—")}
+                </span>
+              </button>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 };

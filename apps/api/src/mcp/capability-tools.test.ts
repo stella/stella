@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
+import type { Transaction } from "@/api/db/root";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { runWithRequestId } from "@/api/lib/observability/request-context";
@@ -613,6 +614,49 @@ describe("invoke_capability workspace resolution", () => {
 });
 
 describe("synthesized capability authorization lifetime", () => {
+  test("preserves MCP provenance in recorders rebound to another workspace", async () => {
+    let inserted: Record<string, unknown>[] = [];
+    const context = createContext({ workspaceIds: ["ws_1", "ws_2"] });
+    context.auditExecution = {
+      performer: { id: "agent-1", name: "Agent 1", type: "agent" },
+      trigger: {
+        ownerUserId: toSafeId<"user">("user_1"),
+        source: "mcp",
+        type: "credential",
+      },
+    };
+    const synthesized = await synthesizeCapabilityContext({
+      capabilityId: "entities.copy-to-workspace",
+      context,
+      input: { body: {}, params: {}, query: {} },
+      request: new Request("http://localhost/mcp"),
+      workspaceId: toSafeId<"workspace">("ws_1"),
+    });
+    const tx = asTestRaw<Transaction>({
+      insert: () => ({
+        values: async (rows: Record<string, unknown>[]) => {
+          inserted = rows;
+        },
+      }),
+    });
+
+    await synthesized.createAuditRecorder({
+      workspaceId: toSafeId<"workspace">("ws_2"),
+    })(tx, {
+      action: "create",
+      resourceId: "entity-1",
+      resourceType: "entity",
+    });
+
+    expect(inserted[0]).toMatchObject({
+      performerId: "agent-1",
+      performerType: "agent",
+      triggerSource: "mcp",
+      triggerType: "credential",
+      workspaceId: "ws_2",
+    });
+  });
+
   test("pins only the resolved workspace and later validated targets", async () => {
     const pinnedWorkspaceIds: string[] = [];
     const context = createContext({

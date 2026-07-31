@@ -221,8 +221,18 @@ const executionColumns = (
 
 const activityCategoryForEvent = (event: AuditEvent): AuditActivityCategory => {
   switch (event.resourceType) {
-    case "entity":
-      return event.metadata?.["kind"] === "task" ? "tasks" : "documents";
+    case "entity": {
+      const deletedEntity = event.changes?.["deleted"]?.old;
+      const deletedKind =
+        typeof deletedEntity === "object" &&
+        deletedEntity !== null &&
+        "kind" in deletedEntity
+          ? deletedEntity.kind
+          : null;
+      return event.metadata?.["kind"] === "task" || deletedKind === "task"
+        ? "tasks"
+        : "documents";
+    }
     case "entity_version":
     case "field":
     case "user_file":

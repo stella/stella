@@ -997,7 +997,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
         />
       )}
 
-      <ActivityPanel workspaceId={workspaceId} />
+      <ActivityPanel key={workspaceId} workspaceId={workspaceId} />
       <input
         className="hidden"
         multiple
