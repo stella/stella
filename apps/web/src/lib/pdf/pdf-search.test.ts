@@ -143,6 +143,31 @@ describe("canonical PDF search", () => {
     expect(result?.matches.map((match) => match.pageIndex)).toEqual([0, 1]);
   });
 
+  test("prefers the longest independently marked term when ranges overlap", async () => {
+    const pdf = PDF.create();
+    const page = pdf.addPage({ size: "letter" });
+    page.drawText("bar foobar", { x: 50, y: 700, size: 18 });
+
+    const result = await findPDFSearchResults({
+      bytes: await pdf.save(),
+      searchText: {
+        type: "separate-terms",
+        terms: ["bar", "foobar"],
+      },
+      signal: new AbortController().signal,
+    });
+
+    expect(
+      result?.matches.map(({ textEndOffset, textOffset }) => ({
+        textEndOffset,
+        textOffset,
+      })),
+    ).toEqual([
+      { textEndOffset: 3, textOffset: 0 },
+      { textEndOffset: 10, textOffset: 4 },
+    ]);
+  });
+
   test("searches PDF portfolio pages in viewer render order", async () => {
     const createAttachment = async (
       pages: readonly { text: string; y: number }[],

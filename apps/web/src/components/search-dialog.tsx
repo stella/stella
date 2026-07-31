@@ -993,15 +993,14 @@ export const SearchDialog = ({
       open={open}
     >
       <CommandDialogPopup
-        backdropClassName="z-[100]"
         className={cn(
           "flex h-[calc(100dvh-32px)] w-[calc(100vw-16px)] max-w-none flex-col overflow-clip sm:h-[min(720px,calc(100dvh-96px))]",
           showPreview
             ? "sm:w-[min(1120px,calc(100vw-32px))] xl:w-[min(1280px,calc(100vw-48px))]"
             : "sm:w-[min(960px,calc(100vw-32px))]",
         )}
+        layer="search"
         showCloseButton={false}
-        viewportClassName="z-[100]"
       >
         <Command
           itemToStringValue={(hit) => hit.title}
@@ -1073,6 +1072,7 @@ export const SearchDialog = ({
               filters={filters}
               isOpen={open}
               onApply={applySavedSearch}
+              overlayLayer="search-child"
               query={query}
               showList={false}
             />
@@ -1228,6 +1228,7 @@ export const SearchDialog = ({
                     filters={filters}
                     isOpen={open}
                     onApply={applySavedSearch}
+                    overlayLayer="search-child"
                     query={query}
                     showTrigger={false}
                   />
@@ -1398,7 +1399,9 @@ export const SearchDialog = ({
               <RecentFilePreviewPanel
                 file={displayedRecentFile}
                 organizationId={searchRecentsScope.organizationId}
-                onOpen={openSearchResult}
+                onOpen={() => {
+                  openRecentFile(displayedRecentFile);
+                }}
                 userId={searchRecentsScope.userId}
               />
             )}
@@ -1427,7 +1430,7 @@ type SearchPreviewPanelProps = {
 
 type RecentFilePreviewPanelProps = {
   file: RecentFile;
-  onOpen: (hit: GlobalSearchHit) => void;
+  onOpen: () => void;
   organizationId: string;
   userId: string;
 };
@@ -1504,7 +1507,9 @@ const RecentFilePreviewPanel = ({
     <SearchPreviewPanel
       dateVisibility={getRecentFilePreviewDateVisibility(file)}
       hit={hit}
-      onOpen={onOpen}
+      onOpen={() => {
+        onOpen();
+      }}
       organizationId={organizationId}
       query=""
       userId={userId}
@@ -2142,6 +2147,7 @@ const TimeFacetGroup = ({
               {t("search.dateFrom")}
             </p>
             <DatePickerPopover
+              layer="search-child"
               locale={locale}
               onChange={handleFromChange}
               value={customFromValue}
@@ -2153,6 +2159,7 @@ const TimeFacetGroup = ({
               {t("search.dateTo")}
             </p>
             <DatePickerPopover
+              layer="search-child"
               locale={locale}
               onChange={handleToChange}
               value={customToValue}

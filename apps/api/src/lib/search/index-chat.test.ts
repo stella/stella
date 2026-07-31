@@ -77,6 +77,28 @@ const findExecutedQuery = (needle: string): string | undefined => {
 };
 
 describe("chat search indexing", () => {
+  test("indexes only source-document metadata that previews can display", async () => {
+    const { extractMessageSearchText } = await import("./index-chat");
+
+    expect(
+      extractMessageSearchText({
+        version: 2,
+        data: [],
+        metadata: {
+          sourceDocuments: [
+            {
+              entityRef: "internal-entity-reference",
+              kind: "document",
+              matterRef: "internal-matter-reference",
+              mention: "@closing-memo",
+              title: "Closing memorandum",
+            },
+          ],
+        },
+      }),
+    ).toBe("Closing memorandum @closing-memo document");
+  });
+
   test("filters malformed version 2 source-document metadata", async () => {
     const { normalizeSearchableChatMessageContent } =
       await import("./index-chat");

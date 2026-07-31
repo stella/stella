@@ -8,6 +8,50 @@ export type SearchTextMatch = {
   end: number;
 };
 
+type SearchMatchRange = SearchTextMatch & { group: number };
+
+type SelectNonOverlappingSearchMatchesOptions<T> = {
+  getRange: (match: T) => SearchMatchRange;
+  matches: Iterable<T>;
+  maxMatches: number;
+};
+
+export const selectNonOverlappingSearchMatches = <T>({
+  getRange,
+  matches,
+  maxMatches,
+}: SelectNonOverlappingSearchMatchesOptions<T>): T[] => {
+  if (maxMatches <= 0) {
+    return [];
+  }
+  const selected: T[] = [];
+  let previousEnd = -1;
+  let previousGroup = -1;
+  const ordered = [...matches]
+    .map((match) => ({ match, range: getRange(match) }))
+    .toSorted(
+      (first, second) =>
+        first.range.group - second.range.group ||
+        first.range.start - second.range.start ||
+        second.range.end - first.range.end,
+    );
+  for (const { match, range } of ordered) {
+    if (range.group !== previousGroup) {
+      previousGroup = range.group;
+      previousEnd = -1;
+    }
+    if (range.start < previousEnd) {
+      continue;
+    }
+    selected.push(match);
+    previousEnd = range.end;
+    if (selected.length >= maxMatches) {
+      break;
+    }
+  }
+  return selected;
+};
+
 export type SearchTextQuery =
   | string
   | { type: "separate-terms"; terms: readonly string[] };

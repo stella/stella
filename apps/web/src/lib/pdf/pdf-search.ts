@@ -5,6 +5,7 @@ import { MAX_SEARCH_PREVIEW_MATCHES } from "@/lib/search-match-navigation";
 import {
   findNormalizedSearchTextMatches,
   getSearchTextCandidates,
+  selectNonOverlappingSearchMatches,
 } from "@/lib/search-text";
 import type { SearchTextQuery } from "@/lib/search-text";
 
@@ -18,6 +19,7 @@ export type PDFSearchBox = {
 export type PDFSearchMatch = {
   pageIndex: number;
   boxes: PDFSearchBox[];
+  textEndOffset: number;
   textOffset: number;
 };
 
@@ -131,13 +133,18 @@ const buildPageSearchText = (pageText: PageText): PageSearchText => {
 
 const getPDFSearchMatchKey = ({
   pageIndex,
+  textEndOffset,
   textOffset,
-}: PDFSearchMatch): string => `${String(pageIndex)}:${String(textOffset)}`;
+}: PDFSearchMatch): string =>
+  `${String(pageIndex)}:${String(textOffset)}:${String(textEndOffset)}`;
 
 const comparePDFSearchMatches = (
   first: PDFSearchMatch,
   second: PDFSearchMatch,
-) => first.pageIndex - second.pageIndex || first.textOffset - second.textOffset;
+) =>
+  first.pageIndex - second.pageIndex ||
+  first.textOffset - second.textOffset ||
+  second.textEndOffset - first.textEndOffset;
 
 type ToPDFSearchMatchOptions = {
   end: number;
@@ -158,6 +165,7 @@ const toPDFSearchMatch = ({
   return {
     pageIndex,
     boxes: mergePDFSearchBoxes(boxes),
+    textEndOffset: end,
     textOffset: start,
   };
 };
@@ -297,12 +305,22 @@ export const findPDFSearchResults = async ({
   const toResult = (
     matches: ReadonlyMap<string, PDFSearchMatch>,
     truncated: boolean,
-  ): PDFSearchResult => ({
-    matches: [...matches.values()]
-      .toSorted(comparePDFSearchMatches)
-      .slice(0, MAX_SEARCH_PREVIEW_MATCHES),
-    truncated: truncated || matches.size > MAX_SEARCH_PREVIEW_MATCHES,
-  });
+  ): PDFSearchResult => {
+    const selectedMatches = selectNonOverlappingSearchMatches({
+      getRange: ({
+        pageIndex: group,
+        textEndOffset: end,
+        textOffset: start,
+      }) => ({ end, group, start }),
+      matches: matches.values(),
+      maxMatches: MAX_SEARCH_PREVIEW_MATCHES + 1,
+    }).toSorted(comparePDFSearchMatches);
+    return {
+      matches: selectedMatches.slice(0, MAX_SEARCH_PREVIEW_MATCHES),
+      truncated:
+        truncated || selectedMatches.length > MAX_SEARCH_PREVIEW_MATCHES,
+    };
+  };
 
   const collectCandidates = (searchCandidates: readonly string[]) => {
     const matches = new Map<string, PDFSearchMatch>();

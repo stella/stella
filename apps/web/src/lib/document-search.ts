@@ -10,6 +10,7 @@ import type { FindMatch } from "@stll/folio-core/utils/findReplace";
 import {
   findNormalizedSearchTextMatches,
   getSearchTextCandidates,
+  selectNonOverlappingSearchMatches,
 } from "@/lib/search-text";
 import type { SearchTextMatch, SearchTextQuery } from "@/lib/search-text";
 
@@ -24,29 +25,15 @@ const documentSearchOptions = createDefaultFindOptions();
 const searchTextMatchKey = ({ end, start }: SearchTextMatch) =>
   `${String(start)}:${String(end)}`;
 
-const sortSearchTextMatches = (
-  first: SearchTextMatch,
-  second: SearchTextMatch,
-) => first.start - second.start || second.end - first.end;
-
 const selectNonOverlappingSearchTextMatches = (
   matches: Iterable<SearchTextMatch>,
   maxMatches: number,
-): SearchTextMatch[] => {
-  const selected: SearchTextMatch[] = [];
-  let previousEnd = -1;
-  for (const match of [...matches].toSorted(sortSearchTextMatches)) {
-    if (match.start < previousEnd) {
-      continue;
-    }
-    selected.push(match);
-    previousEnd = match.end;
-    if (selected.length >= maxMatches) {
-      break;
-    }
-  }
-  return selected;
-};
+) =>
+  selectNonOverlappingSearchMatches({
+    getRange: ({ end, start }) => ({ end, group: 0, start }),
+    matches,
+    maxMatches,
+  });
 
 type FindTextCandidateMatchesOptions = {
   candidate: string;
@@ -130,11 +117,6 @@ const documentMatchPositionKey = ({
 
 const documentMatchKey = (match: FindMatch) => documentMatchPositionKey(match);
 
-const sortDocumentMatches = (first: FindMatch, second: FindMatch) =>
-  first.paragraphIndex - second.paragraphIndex ||
-  first.startOffset - second.startOffset ||
-  first.endOffset - second.endOffset;
-
 type FindDocumentCandidateMatchesOptions = {
   candidates: readonly string[];
   document: Document;
@@ -205,9 +187,15 @@ const findDocumentCandidateMatches = ({
       for (const match of candidateMatches.values()) {
         paragraphMatches.set(documentMatchKey(match), match);
       }
-      const orderedParagraphMatches = [...paragraphMatches.values()]
-        .toSorted(sortDocumentMatches)
-        .slice(0, paragraphLimit);
+      const orderedParagraphMatches = selectNonOverlappingSearchMatches({
+        getRange: ({ endOffset, paragraphIndex: group, startOffset }) => ({
+          end: endOffset,
+          group,
+          start: startOffset,
+        }),
+        matches: paragraphMatches.values(),
+        maxMatches: paragraphLimit,
+      });
       paragraphMatches.clear();
       for (const match of orderedParagraphMatches) {
         paragraphMatches.set(documentMatchKey(match), match);

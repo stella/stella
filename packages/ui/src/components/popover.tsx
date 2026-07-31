@@ -6,6 +6,10 @@ import type { ComponentProps } from "react";
 import { Popover as PopoverPrimitive } from "@base-ui/react/popover";
 
 import { renderTooltipTrigger } from "@stll/ui/components/tooltip-trigger-helper";
+import {
+  OVERLAY_LAYER_CLASS_NAMES,
+  type OverlayLayer,
+} from "@stll/ui/lib/overlay-layer";
 import { cn } from "@stll/ui/lib/utils";
 
 const PopoverCreateHandle = PopoverPrimitive.createHandle;
@@ -33,6 +37,7 @@ function PopoverPopup({
   alignOffset = 0,
   tooltipStyle = false,
   anchor,
+  layer = "default",
   ...props
 }: PopoverPrimitive.Popup.Props & {
   side?: PopoverPrimitive.Positioner.Props["side"];
@@ -40,6 +45,7 @@ function PopoverPopup({
   sideOffset?: PopoverPrimitive.Positioner.Props["sideOffset"];
   alignOffset?: PopoverPrimitive.Positioner.Props["alignOffset"];
   anchor?: PopoverPrimitive.Positioner.Props["anchor"];
+  layer?: OverlayLayer;
   tooltipStyle?: boolean;
 }) {
   return (
@@ -49,7 +55,8 @@ function PopoverPopup({
         alignOffset={alignOffset}
         anchor={anchor}
         className={cn(
-          "z-50 h-(--positioner-height) w-(--positioner-width) max-w-(--available-width) transition-[top,left,right,bottom,transform] data-instant:transition-none",
+          "h-(--positioner-height) w-(--positioner-width) max-w-(--available-width) transition-[top,left,right,bottom,transform] data-instant:transition-none",
+          OVERLAY_LAYER_CLASS_NAMES[layer],
           anchor && "transition-none",
         )}
         data-slot="popover-positioner"

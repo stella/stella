@@ -68,6 +68,17 @@ describe("document search highlighting", () => {
         terms: ["foo", "foobar"],
       }),
     ).toEqual([{ start: 0, end: 6 }]);
+
+    const document = createEmptyDocument({ initialText: "bar foobar" });
+    expect(
+      findDocumentSearchMatches(document, {
+        type: "separate-terms",
+        terms: ["bar", "foobar"],
+      }),
+    ).toMatchObject([
+      { startOffset: 0, endOffset: 3 },
+      { startOffset: 4, endOffset: 10 },
+    ]);
   });
 
   test("maps a diacritic-insensitive match back to original offsets", () => {

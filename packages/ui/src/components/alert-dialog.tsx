@@ -5,6 +5,10 @@ import type * as React from "react";
 import { AlertDialog as AlertDialogPrimitive } from "@base-ui/react/alert-dialog";
 
 import { renderTooltipTrigger } from "@stll/ui/components/tooltip-trigger-helper";
+import {
+  OVERLAY_LAYER_CLASS_NAMES,
+  type OverlayLayer,
+} from "@stll/ui/lib/overlay-layer";
 import { cn } from "@stll/ui/lib/utils";
 
 const AlertDialogCreateHandle = AlertDialogPrimitive.createHandle;
@@ -31,12 +35,14 @@ function AlertDialogTrigger({
 
 function AlertDialogBackdrop({
   className,
+  layer = "default",
   ...props
-}: AlertDialogPrimitive.Backdrop.Props) {
+}: AlertDialogPrimitive.Backdrop.Props & { layer?: OverlayLayer }) {
   return (
     <AlertDialogPrimitive.Backdrop
       className={cn(
-        "fixed inset-0 z-50 bg-black/32 backdrop-blur-sm transition-opacity duration-200 ease-out data-ending-style:opacity-0 data-starting-style:opacity-0",
+        "fixed inset-0 bg-black/32 backdrop-blur-sm transition-opacity duration-200 ease-out data-ending-style:opacity-0 data-starting-style:opacity-0",
+        OVERLAY_LAYER_CLASS_NAMES[layer],
         className,
       )}
       data-slot="alert-dialog-backdrop"
@@ -47,12 +53,14 @@ function AlertDialogBackdrop({
 
 function AlertDialogViewport({
   className,
+  layer = "default",
   ...props
-}: AlertDialogPrimitive.Viewport.Props) {
+}: AlertDialogPrimitive.Viewport.Props & { layer?: OverlayLayer }) {
   return (
     <AlertDialogPrimitive.Viewport
       className={cn(
-        "fixed inset-0 z-50 grid grid-rows-[1fr_auto_3fr] justify-items-center p-4",
+        "fixed inset-0 grid grid-rows-[1fr_auto_3fr] justify-items-center p-4",
+        OVERLAY_LAYER_CLASS_NAMES[layer],
         className,
       )}
       data-slot="alert-dialog-viewport"
@@ -64,18 +72,21 @@ function AlertDialogViewport({
 function AlertDialogPopup({
   className,
   bottomStickOnMobile = true,
+  layer = "default",
   ...props
 }: AlertDialogPrimitive.Popup.Props & {
   bottomStickOnMobile?: boolean;
+  layer?: OverlayLayer;
 }) {
   return (
     <AlertDialogPortal>
-      <AlertDialogBackdrop />
+      <AlertDialogBackdrop layer={layer} />
       <AlertDialogViewport
         className={cn(
           bottomStickOnMobile &&
             "max-sm:grid-rows-[1fr_auto] max-sm:p-0 max-sm:pt-12",
         )}
+        layer={layer}
       >
         <AlertDialogPrimitive.Popup
           className={cn(

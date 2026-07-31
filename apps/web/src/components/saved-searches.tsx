@@ -34,6 +34,7 @@ import {
 import { Input } from "@stll/ui/components/input";
 import { stellaToast } from "@stll/ui/components/toast";
 import { contentDir } from "@stll/ui/hooks/use-content-dir";
+import type { OverlayLayer } from "@stll/ui/lib/overlay-layer";
 
 import {
   canSaveSearch,
@@ -70,6 +71,7 @@ type SavedSearchesProps = {
   isOpen: boolean;
   query: string;
   onApply: (criteria: SavedSearch["criteria"]) => void;
+  overlayLayer?: OverlayLayer;
   showList?: boolean;
   showTrigger?: boolean;
 };
@@ -79,6 +81,7 @@ export const SavedSearches = ({
   isOpen,
   query,
   onApply,
+  overlayLayer = "default",
   showList = true,
   showTrigger = true,
 }: SavedSearchesProps) => {
@@ -340,7 +343,7 @@ export const SavedSearches = ({
         }}
         open={dialog.type === "create" || dialog.type === "rename"}
       >
-        <DialogPopup>
+        <DialogPopup layer={overlayLayer}>
           <DialogHeader>
             <DialogTitle>
               {dialog.type === "rename"
@@ -400,7 +403,7 @@ export const SavedSearches = ({
         }}
         open={dialog.type === "delete"}
       >
-        <AlertDialogPopup>
+        <AlertDialogPopup layer={overlayLayer}>
           <AlertDialogHeader>
             <AlertDialogTitle>{t("search.deleteSearchTitle")}</AlertDialogTitle>
             <AlertDialogDescription>

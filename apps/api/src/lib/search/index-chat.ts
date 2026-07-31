@@ -102,7 +102,7 @@ export const normalizeSearchableChatMessageContent = (content: unknown) => {
   };
 };
 
-const extractMessageSearchText = (
+export const extractMessageSearchText = (
   content: PersistedChatMessageContent,
 ): string => {
   const parts: string[] = [];
@@ -127,8 +127,6 @@ const extractMessageSearchText = (
     for (const value of [
       sourceDocumentData.title,
       sourceDocumentData.mention,
-      sourceDocumentData.entityRef,
-      sourceDocumentData.matterRef,
       sourceDocumentData.kind,
     ]) {
       if (typeof value !== "string") {
