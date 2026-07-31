@@ -93,8 +93,8 @@ describe("search preview rendering contract", () => {
             id: "00000000-0000-4000-8000-000000000010",
             role: "user",
             content: {
-              version: 2,
-              data: [{ type: "text", content: "Review this agreement" }],
+              version: 1,
+              data: [{ type: "text", text: "Review this agreement" }],
             },
           },
           {

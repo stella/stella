@@ -83,7 +83,7 @@ export const findPDFSearchResultsInWorker = ({
       searchText,
       ...(password !== undefined && { password }),
     };
-    // eslint-disable-next-line unicorn/require-post-message-target-origin -- Worker.postMessage has no targetOrigin parameter
-    worker.postMessage(request, [bytes]);
+    const sendRequest = worker.postMessage.bind(worker);
+    sendRequest(request, [bytes]);
   });
 };

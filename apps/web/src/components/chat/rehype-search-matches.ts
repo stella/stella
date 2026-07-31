@@ -2,13 +2,12 @@ import type { Element, ElementContent, Root, RootContent, Text } from "hast";
 
 import { findSearchTextMatches } from "@/lib/document-search";
 
-const SKIP_PARENT_TAGS: ReadonlySet<string> = new Set([
-  "a",
-  "button",
-  "pre",
-  "script",
-  "style",
-]);
+const skipsSearchHighlight = (tagName: string): boolean =>
+  tagName === "a" ||
+  tagName === "button" ||
+  tagName === "pre" ||
+  tagName === "script" ||
+  tagName === "style";
 
 const isElement = (node: ElementContent | RootContent): node is Element =>
   node.type === "element";
@@ -60,13 +59,13 @@ export function rehypeSearchMatches(
     for (const child of parent.children) {
       if (isText(child)) {
         next.push(
-          ...(SKIP_PARENT_TAGS.has(parent.tagName)
+          ...(skipsSearchHighlight(parent.tagName)
             ? [child]
             : splitTextNode(child)),
         );
         continue;
       }
-      if (isElement(child) && !SKIP_PARENT_TAGS.has(child.tagName)) {
+      if (isElement(child) && !skipsSearchHighlight(child.tagName)) {
         walkElement(child);
       }
       next.push(child);
@@ -81,7 +80,7 @@ export function rehypeSearchMatches(
         next.push(...splitTextNode(child));
         continue;
       }
-      if (isElement(child) && !SKIP_PARENT_TAGS.has(child.tagName)) {
+      if (isElement(child) && !skipsSearchHighlight(child.tagName)) {
         walkElement(child);
       }
       next.push(child);

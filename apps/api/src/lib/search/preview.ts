@@ -2,11 +2,6 @@ import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
-import { normalizePersistedChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
-import type {
-  ChatMessageRole,
-  PersistedChatMessageContent,
-} from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { redistributableSourceJoin } from "@/api/lib/case-law/search-sql";
 import { LIMITS } from "@/api/lib/limits";
@@ -58,17 +53,46 @@ type SearchPreview =
 type SearchPreviewChatMessage = {
   content: string;
   id: string;
-  role: ChatMessageRole;
+  role: SearchPreviewChatRole;
 };
 
 type SearchPreviewChatMessageRow = {
-  content: PersistedChatMessageContent;
+  content: unknown;
   id: SafeId<"chatMessage">;
-  role: ChatMessageRole;
+  role: unknown;
 };
 
 type SearchPreviewChatRow = {
   messages: SearchPreviewChatMessageRow[];
+};
+
+type SearchPreviewChatRole = "assistant" | "system" | "user";
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const isSearchPreviewChatRole = (
+  value: unknown,
+): value is SearchPreviewChatRole =>
+  value === "assistant" || value === "system" || value === "user";
+
+const extractChatPreviewTextParts = (content: unknown): string[] => {
+  if (!isRecord(content) || !Array.isArray(content["data"])) {
+    return [];
+  }
+
+  const textParts: string[] = [];
+  for (const part of content["data"]) {
+    if (!isRecord(part) || part["type"] !== "text") {
+      continue;
+    }
+    const text =
+      typeof part["content"] === "string" ? part["content"] : part["text"];
+    if (typeof text === "string" && text.trim()) {
+      textParts.push(text);
+    }
+  }
+  return textParts;
 };
 
 const SEARCH_PREVIEW_BODY_CHARACTER_LIMIT =
@@ -479,20 +503,18 @@ export const readSearchPreview = async (
     }
 
     const messages: SearchPreviewChatMessage[] = [];
-    let remainingCharacters = Number(
+    let remainingCharacters = Math.max(
+      0,
       LIMITS.searchPreviewResponseCharacterLimit,
     );
     for (const rawMessage of row.messages) {
       if (remainingCharacters <= 0) {
         break;
       }
-      const message = normalizePersistedChatMessageContent(rawMessage.content);
-      const textParts: string[] = [];
-      for (const part of message.parts) {
-        if (part.type === "text" && part.content.trim()) {
-          textParts.push(part.content);
-        }
+      if (!isSearchPreviewChatRole(rawMessage.role)) {
+        continue;
       }
+      const textParts = extractChatPreviewTextParts(rawMessage.content);
       if (textParts.length > 0) {
         const content = textParts.join("\n\n").slice(0, remainingCharacters);
         messages.push({

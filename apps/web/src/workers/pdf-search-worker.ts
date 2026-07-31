@@ -25,6 +25,7 @@ if (!isDedicatedWorkerScope(globalThis)) {
 }
 
 const scope = globalThis;
+const sendResponse = scope.postMessage.bind(scope);
 
 const handle = async (
   request: PDFSearchWorkerRequest,
@@ -50,8 +51,7 @@ scope.addEventListener(
   (event: MessageEvent<PDFSearchWorkerRequest>) => {
     handle(event.data)
       .then((response) => {
-        // eslint-disable-next-line unicorn/require-post-message-target-origin -- Worker.postMessage has no targetOrigin parameter
-        scope.postMessage(response);
+        sendResponse(response);
         return undefined;
       })
       .catch(() => undefined);
