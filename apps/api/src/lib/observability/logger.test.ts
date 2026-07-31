@@ -3,9 +3,11 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { logger, sanitizeLogAttributes } from "@/api/lib/observability/logger";
 
 const originalStderrWrite = process.stderr.write;
+const originalStdoutWrite = process.stdout.write;
 
 afterEach(() => {
   process.stderr.write = originalStderrWrite;
+  process.stdout.write = originalStdoutWrite;
 });
 
 describe("logger attributes", () => {
@@ -67,5 +69,66 @@ describe("logger attributes", () => {
     expect(output).not.toContain("secret.pdf");
     expect(output).not.toContain("fileName");
     expect(output).not.toContain('"body"');
+  });
+
+  test("request sink emits only structured operational fields", () => {
+    const chunks: string[] = [];
+    process.stdout.write = (chunk: string | Uint8Array): boolean => {
+      chunks.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    };
+
+    logger.request({
+      durationMs: 42,
+      errorFingerprint: {
+        errorClass: "TaggedError",
+        errorCode: "DATABASE_UNAVAILABLE",
+        errorFrame: "src/server.ts:10:2",
+        pgCode: "08006",
+      },
+      errorType: "TaggedError",
+      message: "request.completed",
+      method: "GET",
+      requestId: "safe-request-id",
+      route: "/test/:id",
+      severity: "INFO",
+      statusCode: 200,
+    });
+
+    const output = chunks.join("");
+    expect(JSON.parse(output)).toEqual({
+      severity: "INFO",
+      message: "request.completed",
+      "error.type": "TaggedError",
+      "error.class": "TaggedError",
+      "error.code": "DATABASE_UNAVAILABLE",
+      "error.frame": "src/server.ts:10:2",
+      "error.cause.pg_code": "08006",
+      "http.method": "GET",
+      "http.route": "/test/:id",
+      "http.status_code": 200,
+      "request.duration_ms": 42,
+      "request.id": "safe-request-id",
+    });
+  });
+
+  test("request sink never falls back to a raw unmatched URL", () => {
+    const chunks: string[] = [];
+    process.stdout.write = (chunk: string | Uint8Array): boolean => {
+      chunks.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    };
+
+    logger.request({
+      durationMs: 1,
+      message: "request.failed",
+      method: "GET",
+      severity: "WARN",
+      statusCode: 404,
+    });
+
+    expect(JSON.parse(chunks.join(""))).toMatchObject({
+      "http.route": "unmatched",
+    });
   });
 });

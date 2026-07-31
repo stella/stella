@@ -20,6 +20,33 @@ type LoggerAttributeValue = boolean | number | string;
 
 export type LoggerAttributes = Record<string, LoggerAttributeValue>;
 
+export type RequestErrorFingerprint = {
+  errorCauseFrame?: string | undefined;
+  errorClass?: string | undefined;
+  errorCode?: string | undefined;
+  errorFrame?: string | undefined;
+  pgCode?: string | undefined;
+  pgColumn?: string | undefined;
+  pgConstraint?: string | undefined;
+  pgRoutine?: string | undefined;
+  pgSchema?: string | undefined;
+  pgSeverity?: string | undefined;
+  pgTable?: string | undefined;
+};
+
+type RequestLogOptions = {
+  durationMs: number;
+  errorFingerprint?: RequestErrorFingerprint | undefined;
+  elysiaCode?: string | undefined;
+  errorType?: string | undefined;
+  message: "request.completed" | "request.failed";
+  method: string;
+  requestId?: string | undefined;
+  route?: string | undefined;
+  severity: "ERROR" | "INFO" | "WARN";
+  statusCode: number;
+};
+
 export const sanitizeLogAttributes = (
   attributes: LoggerAttributes | undefined,
 ): LoggerAttributes | undefined => {
@@ -90,6 +117,78 @@ const emit = ({
   }
 };
 
+const REQUEST_SEVERITY = {
+  ERROR: SeverityNumber.ERROR,
+  INFO: SeverityNumber.INFO,
+  WARN: SeverityNumber.WARN,
+} as const;
+
+const emitRequest = ({
+  durationMs,
+  elysiaCode,
+  errorFingerprint,
+  errorType,
+  message,
+  method,
+  requestId,
+  route,
+  severity,
+  statusCode,
+}: RequestLogOptions): void => {
+  const safeAttributes: LoggerAttributes = {
+    "http.method": method,
+    "http.route": route ?? "unmatched",
+    "http.status_code": statusCode,
+    "request.duration_ms": durationMs,
+    ...(elysiaCode === undefined ? {} : { "http.elysia_code": elysiaCode }),
+    ...(errorType === undefined ? {} : { "error.type": errorType }),
+    ...(errorFingerprint?.errorCauseFrame === undefined
+      ? {}
+      : { "error.cause.frame": errorFingerprint.errorCauseFrame }),
+    ...(errorFingerprint?.errorClass === undefined
+      ? {}
+      : { "error.class": errorFingerprint.errorClass }),
+    ...(errorFingerprint?.errorCode === undefined
+      ? {}
+      : { "error.code": errorFingerprint.errorCode }),
+    ...(errorFingerprint?.errorFrame === undefined
+      ? {}
+      : { "error.frame": errorFingerprint.errorFrame }),
+    ...(errorFingerprint?.pgCode === undefined
+      ? {}
+      : { "error.cause.pg_code": errorFingerprint.pgCode }),
+    ...(errorFingerprint?.pgColumn === undefined
+      ? {}
+      : { "error.cause.pg_column": errorFingerprint.pgColumn }),
+    ...(errorFingerprint?.pgConstraint === undefined
+      ? {}
+      : { "error.cause.pg_constraint": errorFingerprint.pgConstraint }),
+    ...(errorFingerprint?.pgRoutine === undefined
+      ? {}
+      : { "error.cause.pg_routine": errorFingerprint.pgRoutine }),
+    ...(errorFingerprint?.pgSchema === undefined
+      ? {}
+      : { "error.cause.pg_schema": errorFingerprint.pgSchema }),
+    ...(errorFingerprint?.pgSeverity === undefined
+      ? {}
+      : { "error.cause.pg_severity": errorFingerprint.pgSeverity }),
+    ...(errorFingerprint?.pgTable === undefined
+      ? {}
+      : { "error.cause.pg_table": errorFingerprint.pgTable }),
+    ...(requestId === undefined ? {} : { "request.id": requestId }),
+  };
+
+  otelLogger.emit({
+    attributes: safeAttributes,
+    body: message,
+    severityNumber: REQUEST_SEVERITY[severity],
+    severityText: severity,
+  });
+  process.stdout.write(
+    `${JSON.stringify({ severity, message, ...safeAttributes })}\n`,
+  );
+};
+
 export const logger = {
   debug: (message: string, attributes?: LoggerAttributes) =>
     emit({
@@ -119,4 +218,5 @@ export const logger = {
       severityNumber: SeverityNumber.ERROR,
       severityText: "ERROR",
     }),
+  request: (options: RequestLogOptions) => emitRequest(options),
 };
