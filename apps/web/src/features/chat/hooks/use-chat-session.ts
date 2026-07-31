@@ -736,7 +736,14 @@ export const useChatSession = ({
         return;
       }
 
-      await invalidateCreatedDocumentQueries({ matterId, queryClient });
+      await invalidateCreatedDocumentQueries({
+        queryClient,
+        queryKeys: [
+          entitiesKeys.all(matterId),
+          workspacesKeys.activityAll(matterId),
+          workspacesKeys.overviewActivityAll(matterId),
+        ],
+      });
 
       // Prime the file-bytes cache the moment the server returns —
       // there's typically a multi-second gap before the user clicks

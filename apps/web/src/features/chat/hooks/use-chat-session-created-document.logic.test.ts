@@ -1,26 +1,22 @@
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 
-import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities.logic";
-import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
-
 import { invalidateCreatedDocumentQueries } from "./use-chat-session-created-document.logic";
 
 describe("invalidateCreatedDocumentQueries", () => {
   test("invalidates entity and activity caches only for the target matter", async () => {
     const queryClient = new QueryClient();
-    const targetEntityKey = [...entitiesKeys.all("matter-a"), "list"];
-    const otherEntityKey = [...entitiesKeys.all("matter-b"), "list"];
-    const targetActivityKey = workspacesKeys.overviewActivity(
-      "organization-a",
-      "matter-a",
-      "all",
-    );
-    const otherActivityKey = workspacesKeys.overviewActivity(
-      "organization-a",
+    const targetEntityRootKey = ["entities", "matter-a"];
+    const targetEntityKey = [...targetEntityRootKey, "list"];
+    const otherEntityKey = ["entities", "matter-b", "list"];
+    const targetActivityRootKey = ["workspaces", "matter-a", "activity"];
+    const targetActivityKey = [...targetActivityRootKey, "organization-a"];
+    const otherActivityKey = [
+      "workspaces",
       "matter-b",
-      "all",
-    );
+      "activity",
+      "organization-a",
+    ];
     for (const key of [
       targetEntityKey,
       otherEntityKey,
@@ -31,8 +27,8 @@ describe("invalidateCreatedDocumentQueries", () => {
     }
 
     await invalidateCreatedDocumentQueries({
-      matterId: "matter-a",
       queryClient,
+      queryKeys: [targetEntityRootKey, targetActivityRootKey],
     });
 
     expect(queryClient.getQueryState(targetEntityKey)?.isInvalidated).toBe(

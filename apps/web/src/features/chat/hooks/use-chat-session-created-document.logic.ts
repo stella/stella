@@ -1,19 +1,15 @@
-import type { QueryClient } from "@tanstack/react-query";
-
-import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities.logic";
-import { invalidateWorkspaceActivity } from "@/routes/_protected.workspaces/-queries";
+import type { QueryClient, QueryKey } from "@tanstack/react-query";
 
 type InvalidateCreatedDocumentQueriesOptions = {
-  matterId: string;
+  queryKeys: readonly QueryKey[];
   queryClient: QueryClient;
 };
 
 export const invalidateCreatedDocumentQueries = async ({
-  matterId,
+  queryKeys,
   queryClient,
 }: InvalidateCreatedDocumentQueriesOptions): Promise<void> => {
-  await Promise.all([
-    queryClient.invalidateQueries({ queryKey: entitiesKeys.all(matterId) }),
-    invalidateWorkspaceActivity(queryClient, matterId),
-  ]);
+  await Promise.all(
+    queryKeys.map((queryKey) => queryClient.invalidateQueries({ queryKey })),
+  );
 };
