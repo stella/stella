@@ -38,7 +38,7 @@ export type TraversalMode = {
    * Where to continue once this walk reaches the end of the collection, or
    * null to park within it and re-scan its recent window (rule 13).
    */
-  then: string | null;
+  followedBy: string | null;
 };
 
 type PagePaginationOptions<TResponse> = {
@@ -464,8 +464,8 @@ export const createPagePaginatedFetch = <TResponse>(
         // the one that follows it, starting at its own beginning. Handing
         // over only here is what makes the switch a fact about the crawl
         // rather than a guess: the collection has demonstrably been seen.
-        if (!signal?.aborted && !hasMore && walk?.mode.then !== null) {
-          const successor = walk?.mode.then;
+        if (!signal?.aborted && !hasMore && walk?.mode.followedBy !== null) {
+          const successor = walk?.mode.followedBy;
           if (successor !== undefined) {
             logger.info("case_law.ingestion.traversal_advanced", {
               adapterKey: opts.adapterKey,

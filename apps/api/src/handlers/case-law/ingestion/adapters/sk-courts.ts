@@ -370,12 +370,12 @@ export const skCourtsAdapter: SourceAdapter = {
       {
         name: "backfill",
         buildRequest: (page) => listRequest(page, "ASC"),
-        then: "live",
+        followedBy: "live",
       },
       {
         name: "live",
         buildRequest: (page) => listRequest(page, "DESC"),
-        then: null,
+        followedBy: null,
       },
     ],
 

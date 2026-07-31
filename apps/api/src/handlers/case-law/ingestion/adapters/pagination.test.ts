@@ -395,8 +395,12 @@ describe("offset cursor codec", () => {
 
 describe("traversal modes", () => {
   const modes = [
-    { name: "backfill", buildRequest: () => ({ url: "a" }), then: "live" },
-    { name: "live", buildRequest: () => ({ url: "b" }), then: null },
+    {
+      name: "backfill",
+      buildRequest: () => ({ url: "a" }),
+      followedBy: "live",
+    },
+    { name: "live", buildRequest: () => ({ url: "b" }), followedBy: null },
   ] as const;
 
   test("a cursor names the walk it belongs to", () => {
