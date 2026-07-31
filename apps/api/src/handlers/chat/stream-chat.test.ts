@@ -685,6 +685,71 @@ describe("outgoing chat stream message ids", () => {
     ]);
   });
 
+  test("classifies a run error whose body arrives in the message", async () => {
+    const messageId = toSafeId<"chatMessage">(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    const stream = processServerChatStream({
+      abortSignal: new AbortController().signal,
+      getResponseMessage: () => null,
+      mapMessageId: createChatMessageIdMapper(() => messageId),
+      onFinish: () => {
+        throw new Error("Expected run error not to finish");
+      },
+      processor: new StreamProcessor(),
+      source: streamChunks([
+        { type: EventType.RUN_STARTED, runId: "run-1", threadId: "thread-1" },
+        {
+          type: EventType.RUN_ERROR,
+          message: JSON.stringify({
+            error: {
+              code: 503,
+              message: "The model is currently overloaded.",
+              status: "UNAVAILABLE",
+            },
+          }),
+        },
+      ]),
+    });
+
+    expect(stripTimestamps(await collectChunks(stream))).toEqual([
+      { type: EventType.RUN_STARTED, runId: "run-1", threadId: "thread-1" },
+      {
+        type: EventType.RUN_ERROR,
+        message: "provider_unavailable",
+        code: "provider_unavailable",
+      },
+    ]);
+  });
+
+  test("leaves a plain-text run error unclassified", async () => {
+    const messageId = toSafeId<"chatMessage">(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    const stream = processServerChatStream({
+      abortSignal: new AbortController().signal,
+      getResponseMessage: () => null,
+      mapMessageId: createChatMessageIdMapper(() => messageId),
+      onFinish: () => {
+        throw new Error("Expected run error not to finish");
+      },
+      processor: new StreamProcessor(),
+      source: streamChunks([
+        { type: EventType.RUN_STARTED, runId: "run-1", threadId: "thread-1" },
+        { type: EventType.RUN_ERROR, message: "something went wrong" },
+      ]),
+    });
+
+    expect(stripTimestamps(await collectChunks(stream))).toEqual([
+      { type: EventType.RUN_STARTED, runId: "run-1", threadId: "thread-1" },
+      {
+        type: EventType.RUN_ERROR,
+        message: "unknown",
+        code: "unknown",
+      },
+    ]);
+  });
+
   test("does not finish successfully after an in-band run error", async () => {
     const messageId = toSafeId<"chatMessage">(
       "11111111-1111-4111-8111-111111111111",

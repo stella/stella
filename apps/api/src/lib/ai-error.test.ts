@@ -15,6 +15,15 @@ const tanStackProviderError = (status: number) =>
     message: `provider responded ${status}`,
   }) satisfies Record<string, unknown>;
 
+const providerErrorBody = (code: number, status: string) =>
+  ({
+    error: {
+      code,
+      message: `provider responded ${code}`,
+      status,
+    },
+  }) satisfies Record<string, unknown>;
+
 describe("classifyAIError", () => {
   test("maps chat loop stops to a stable stream error kind", () => {
     const error = new ChatLoopDetectedError({
@@ -65,5 +74,38 @@ describe("classifyAIError", () => {
     expect(classifyAIError(tanStackProviderError(503))).toBe(
       "provider_unavailable",
     );
+  });
+
+  test("reads the status from a nested provider error body", () => {
+    expect(classifyAIError(providerErrorBody(503, "UNAVAILABLE"))).toBe(
+      "provider_unavailable",
+    );
+    expect(classifyAIError(providerErrorBody(429, "RESOURCE_EXHAUSTED"))).toBe(
+      "quota_exhausted",
+    );
+    expect(classifyAIError(providerErrorBody(404, "NOT_FOUND"))).toBe(
+      "model_unavailable",
+    );
+  });
+
+  test("finds a nested provider error body through wrapped causes", () => {
+    const error = new Error("stream failed", {
+      cause: providerErrorBody(503, "UNAVAILABLE"),
+    });
+
+    expect(classifyAIError(error)).toBe("provider_unavailable");
+  });
+
+  test("ignores a nested code that is not an HTTP status", () => {
+    // OpenAI-shaped bodies put a symbolic code where Google puts the status,
+    // and gRPC-shaped ones put a small application code there.
+    expect(
+      classifyAIError({
+        error: { code: "insufficient_quota", message: "out of credits" },
+      }),
+    ).toBe("unknown");
+    expect(
+      classifyAIError({ error: { code: 14, message: "unavailable" } }),
+    ).toBe("unknown");
   });
 });
