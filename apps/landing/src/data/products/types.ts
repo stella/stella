@@ -24,6 +24,8 @@ export type ProductMedia =
        *  as a centred portrait window instead of the wide app scene. */
       variant?: "portrait";
       aspect?: string;
+      /** Optional mobile ratio for scenes whose windows recompose vertically. */
+      mobileAspect?: string;
     }
   | { type: "placeholder"; note: string; aspect?: string }
   | {

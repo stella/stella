@@ -41,6 +41,8 @@ const rawLocale = Astro.currentLocale ?? defaultLocale;
 const locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
 const sceneWindowLabels = resolveSceneWindowLabels(getTranslations(locale));
 const aspect = media.aspect ?? "16 / 9";
+const mobileAspect =
+  media.type === "story" ? media.mobileAspect ?? aspect : aspect;
 
 // A video slot upgrades from skeleton to <video> the moment its file lands in
 // public/. The build's cwd is the Astro project dir (apps/landing), so resolve
@@ -51,7 +53,10 @@ const posterReady = media.type === "video" && media.poster !== undefined && vide
 const storyThumbnail = media.type === "story" ? productStoryThumbnails[media.sceneId] : undefined;
 ---
 
-<div class="product-media relative" style={`aspect-ratio: ${aspect}`}>
+<div
+  class="product-media relative"
+  style={`--product-media-aspect: ${aspect}; --product-media-mobile-aspect: ${mobileAspect}`}
+>
   {
     media.type === "preview" && (
       <div class="absolute inset-0">
@@ -204,7 +209,14 @@ const storyThumbnail = media.type === "story" ? productStoryThumbnails[media.sce
      on the plain <img>/<video> element) instead of relying on a shared ring
      here. */
   .product-media {
+    aspect-ratio: var(--product-media-aspect);
     overflow: visible;
+  }
+
+  @media (max-width: 639px) {
+    .product-media {
+      aspect-ratio: var(--product-media-mobile-aspect);
+    }
   }
 
   /* Portrait document window: full frame height, width derived from the
