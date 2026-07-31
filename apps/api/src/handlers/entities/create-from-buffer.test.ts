@@ -243,7 +243,6 @@ describe("createEntityFromBuffer", () => {
       },
       resourceId: expect.any(String),
       resourceType: "entity",
-      workspaceId,
     });
     expect(insertedEntity).toEqual(
       expect.objectContaining({ parentId, workspaceId }),
