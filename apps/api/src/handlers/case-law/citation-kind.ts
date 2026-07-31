@@ -15,6 +15,8 @@
  * to be appealed, which is the opposite of what authority means.
  */
 
+import { isRecord } from "@/api/lib/type-guards";
+
 /** Closed set; persisted, so a CHECK constraint mirrors it in the schema. */
 export const CITATION_KIND = {
   PRECEDENT: "precedent",
@@ -107,22 +109,51 @@ const registryOf = (citationText: string): string | null => {
   return raw === undefined ? null : raw.toLowerCase();
 };
 
+/**
+ * Case numbers the publisher itself names as this decision's procedural
+ * history — SAOS `lowerCourtJudgments`, for instance. Canonical keys, so
+ * they compare against a citation's own key regardless of how either side
+ * spells the number.
+ *
+ * This is the only evidence that is not inference: the court is stating
+ * which judgments the case passed through. Where it exists it settles the
+ * question, and the cues below never get consulted.
+ */
+export type ProceduralKeys = ReadonlySet<string>;
+
 export type ClassifyCitationInput = {
   /** The citation as it appears, prefix and all. */
   citationText: string;
   /** Text around the citation; null when it could not be located. */
   context: string | null;
+  /** The citation under `bareCitationKey`, for comparing against publisher keys. */
+  citationKey?: string | null | undefined;
+  /** Publisher-declared procedural history; see `ProceduralKeys`. */
+  proceduralKeys?: ProceduralKeys | undefined;
 };
 
 /**
- * Context decides when it speaks unambiguously, because the same registry
- * can appear in either role. Where context is silent or says both, the
- * registry's publication status is the fallback.
+ * Evidence in descending order of authority: what the publisher declares,
+ * then what the surrounding sentence says, then whether the cited court
+ * publishes at all. Each step only runs because the one above it was
+ * silent.
  */
 export const classifyCitation = ({
   citationText,
   context,
+  citationKey,
+  proceduralKeys,
 }: ClassifyCitationInput): CitationKind => {
+  // The publisher's own account of the case's history outranks anything
+  // read out of the prose: it is a statement, not a reading of one.
+  if (
+    citationKey !== null &&
+    citationKey !== undefined &&
+    proceduralKeys?.has(citationKey) === true
+  ) {
+    return CITATION_KIND.PROCEDURAL;
+  }
+
   if (context !== null) {
     const procedural = PROCEDURAL_CUE.test(context);
     const precedent = PRECEDENT_CUE.test(context);
@@ -136,4 +167,52 @@ export const classifyCitation = ({
     return CITATION_KIND.PRECEDENT;
   }
   return CITATION_KIND.PROCEDURAL;
+};
+
+/**
+ * Case numbers a publisher names as the decision's own procedural history.
+ *
+ * Only fields that mean exactly that are read. `referencedCourtCases` is
+ * deliberately excluded: it is the publisher's list of authorities the
+ * decision cites, which is the opposite claim.
+ */
+const PROCEDURAL_METADATA_FIELDS = ["lowerCourtJudgments"] as const;
+
+/** Publishers list these either as bare strings or as `{ caseNumber }`. */
+const caseNumberOf = (entry: unknown): string | null => {
+  if (typeof entry === "string") {
+    return entry;
+  }
+  if (!isRecord(entry)) {
+    return null;
+  }
+  const caseNumber = entry["caseNumber"];
+  return typeof caseNumber === "string" ? caseNumber : null;
+};
+
+export const proceduralKeysFromMetadata = (
+  metadata: Record<string, unknown> | null | undefined,
+  toKey: (caseNumber: string) => string,
+): ProceduralKeys => {
+  const keys = new Set<string>();
+  if (!metadata) {
+    return keys;
+  }
+  for (const field of PROCEDURAL_METADATA_FIELDS) {
+    const value = metadata[field];
+    if (!Array.isArray(value)) {
+      continue;
+    }
+    for (const entry of value) {
+      const caseNumber = caseNumberOf(entry);
+      if (caseNumber === null) {
+        continue;
+      }
+      const key = toKey(caseNumber);
+      if (key.length > 0) {
+        keys.add(key);
+      }
+    }
+  }
+  return keys;
 };

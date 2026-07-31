@@ -11,7 +11,11 @@ import {
   type caseLawSources,
 } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
-import { classifyCitation } from "@/api/handlers/case-law/citation-kind";
+import {
+  classifyCitation,
+  proceduralKeysFromMetadata,
+} from "@/api/handlers/case-law/citation-kind";
+import type { ProceduralKeys } from "@/api/handlers/case-law/citation-kind";
 import {
   ADAPTER_TIMEOUT,
   MAX_SYNC_PAGES,
@@ -294,20 +298,26 @@ const citationRow = (
   citingDecisionId: SafeId<"caseLawDecision">,
   citation: { citationText: string; sectionIndex: number | null },
   sections: { index: number; text: string }[],
-) => ({
-  citingDecisionId,
-  citationText: citation.citationText,
-  citationKey: citationKeyOf(citation.citationText),
-  kind: classifyCitation({
+  proceduralKeys: ProceduralKeys,
+) => {
+  const citationKey = citationKeyOf(citation.citationText);
+  return {
+    citingDecisionId,
     citationText: citation.citationText,
-    context: extractContext(
-      sections,
-      citation.citationText,
-      citation.sectionIndex,
-    ),
-  }),
-  sectionIndex: citation.sectionIndex,
-});
+    citationKey,
+    kind: classifyCitation({
+      citationText: citation.citationText,
+      citationKey,
+      proceduralKeys,
+      context: extractContext(
+        sections,
+        citation.citationText,
+        citation.sectionIndex,
+      ),
+    }),
+    sectionIndex: citation.sectionIndex,
+  };
+};
 
 type PreserveCorpusWriteRetryInput = {
   decisionId: SafeId<"caseLawDecision">;
@@ -700,6 +710,13 @@ export const processDecision = async (
     }
   }
 
+  // The publisher's own statement of the case's procedural history, where
+  // it supplies one; classification consults it before any heuristic.
+  const proceduralKeys = proceduralKeysFromMetadata(
+    result.metadata,
+    (caseNumber) => bareCitationKey(caseNumber),
+  );
+
   const citations = extractCitations(
     sections.map((s) => ({ index: s.index, text: s.text })),
   ).filter(
@@ -889,7 +906,9 @@ export const processDecision = async (
           await tx
             .insert(caseLawCitations)
             .values(
-              citations.map((c) => citationRow(existing.id, c, sections)),
+              citations.map((c) =>
+                citationRow(existing.id, c, sections, proceduralKeys),
+              ),
             );
         }
 
@@ -947,7 +966,9 @@ export const processDecision = async (
         await tx
           .insert(caseLawCitations)
           .values(
-            citations.map((c) => citationRow(decisionRow.id, c, sections)),
+            citations.map((c) =>
+              citationRow(decisionRow.id, c, sections, proceduralKeys),
+            ),
           );
       }
     });

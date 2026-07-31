@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   CITATION_KIND,
   classifyCitation,
+  proceduralKeysFromMetadata,
 } from "@/api/handlers/case-law/citation-kind";
 
 /**
@@ -97,5 +98,65 @@ describe("the registry decides when context does not", () => {
           "proti rozsudku odvolacího soudu, srov. rozsudek Nejvyššího soudu sp. zn. 30 Cdo 1417/2016",
       }),
     ).toBe(CITATION_KIND.PRECEDENT);
+  });
+});
+
+describe("the publisher outranks every heuristic", () => {
+  const keys = new Set(["iiaca 123/19"]);
+
+  test("a case the publisher lists as procedural history is procedural", () => {
+    // Cues and registry both argue for precedent; the court's own
+    // statement that this judgment is below it in the same case wins.
+    expect(
+      classifyCitation({
+        citationText: "sygn. akt II ACa 123/19",
+        citationKey: "iiaca 123/19",
+        proceduralKeys: keys,
+        context: "srov. wyrok Sądu Apelacyjnego, sygn. akt II ACa 123/19",
+      }),
+    ).toBe(CITATION_KIND.PROCEDURAL);
+  });
+
+  test("a case absent from that list still falls through to the cues", () => {
+    expect(
+      classifyCitation({
+        citationText: "sygn. akt II CSK 999/20",
+        citationKey: "iicsk 999/20",
+        proceduralKeys: keys,
+        context: "srov. wyrok Sądu Najwyższego, sygn. akt II CSK 999/20",
+      }),
+    ).toBe(CITATION_KIND.PRECEDENT);
+  });
+});
+
+describe("proceduralKeysFromMetadata", () => {
+  const identity = (caseNumber: string) => caseNumber.toLowerCase();
+
+  test("reads the publisher's lower-court judgments", () => {
+    expect([
+      ...proceduralKeysFromMetadata(
+        { lowerCourtJudgments: [{ caseNumber: "II ACa 123/19" }] },
+        identity,
+      ),
+    ]).toEqual(["ii aca 123/19"]);
+  });
+
+  test("ignores the publisher's list of cited authorities", () => {
+    // referencedCourtCases is the opposite claim: authorities the decision
+    // cites, not judgments it passed through.
+    expect(
+      proceduralKeysFromMetadata(
+        { referencedCourtCases: [{ caseNumber: "II CSK 1/20" }] },
+        identity,
+      ).size,
+    ).toBe(0);
+  });
+
+  test("tolerates absent or malformed metadata", () => {
+    expect(proceduralKeysFromMetadata(null, identity).size).toBe(0);
+    expect(
+      proceduralKeysFromMetadata({ lowerCourtJudgments: "nope" }, identity)
+        .size,
+    ).toBe(0);
   });
 });
