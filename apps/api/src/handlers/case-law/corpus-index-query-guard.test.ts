@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
 
+import { CASE_LAW_CORPUS_INDEX_BACKFILL_STATUSES } from "@/api/db/schema";
+
 const caseLawCorpusIndexSource = new URL("corpus-index.ts", import.meta.url);
 const generationMigrationSource = new URL(
   "../../../drizzle/20260731170000_case_law_corpus_generation_backfill/migration.sql",
@@ -26,5 +28,22 @@ test("generation checkpoint migration preserves replay and role invariants", asy
   expect(source.match(/SELECT 1 FROM pg_policies/gu)).toHaveLength(2);
   expect(source).toContain(
     'DROP INDEX CONCURRENTLY IF EXISTS "case_law_decisions_corpus_generation_cursor_idx"',
+  );
+  expect(source).toContain(
+    'CREATE INDEX CONCURRENTLY "case_law_decisions_corpus_generation_cursor_idx"\n  ON "case_law_decisions" ("created_at", "id")',
+  );
+  expect(source).toContain(
+    'CREATE INDEX CONCURRENTLY "case_law_decisions_corpus_pending_idx"\n  ON "case_law_decisions" ("id")\n  WHERE "content_hash" IS NOT NULL AND "indexed_hash" IS NULL',
+  );
+  expect(source).toContain(
+    'CREATE INDEX CONCURRENTLY "legislation_documents_corpus_pending_idx"\n  ON "legislation_documents" ("id")\n  WHERE "content_hash" IS NOT NULL AND "indexed_hash" IS NULL',
+  );
+  expect(source).not.toContain(
+    '"content_hash" IS NOT NULL AND "indexed_generation" IS NULL',
+  );
+  expect(source).toContain(
+    `CHECK ("status" IN (${CASE_LAW_CORPUS_INDEX_BACKFILL_STATUSES.map(
+      (status) => `'${status}'`,
+    ).join(",")}))`,
   );
 });

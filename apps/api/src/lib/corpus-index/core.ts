@@ -213,6 +213,24 @@ export type FetchFulltext<TBrand extends SafeIdType> = (
 
 type SelectBatchArgs = { generation: string; limit: number };
 
+type BeforeRemoteEffect = () => Promise<void>;
+
+type BackfillSelectedRowsOptions =
+  | {
+      type: "incremental";
+      readConcurrency?: number;
+    }
+  | {
+      type: "generation-rebuild";
+      beforeRemoteEffect: BeforeRemoteEffect;
+      readConcurrency?: number;
+    };
+
+type GenerationBackfillRowsOptions = {
+  beforeRemoteEffect: BeforeRemoteEffect;
+  readConcurrency?: number;
+};
+
 /**
  * Family-specific surface consumed by the shared core. Everything that touches
  * a family's Drizzle tables or its per-document shape lives here; the core
@@ -391,18 +409,24 @@ export const createCorpusIndexer = <
   // have confirmed this process so we don't probe corpus index every batch.
   const ensuredIndexes = new Set<string>();
 
-  const ensureIndex = async (
-    indexId: string,
-  ): Promise<Result<void, CorpusIndexError>> => {
+  const ensureIndex = async ({
+    beforeRemoteEffect,
+    indexId,
+  }: {
+    beforeRemoteEffect?: BeforeRemoteEffect;
+    indexId: string;
+  }): Promise<Result<void, CorpusIndexError>> => {
     if (ensuredIndexes.has(indexId)) {
       return Result.ok(undefined);
     }
     const client = getCorpusIndexClient();
+    await beforeRemoteEffect?.();
     const exists = await client.indexExists(indexId);
     if (exists.isErr()) {
       return Result.err(exists.error);
     }
     if (!exists.value) {
+      await beforeRemoteEffect?.();
       const created = await client.createIndex(
         corpusIndexConfig(adapter.family, indexId),
       );
@@ -553,12 +577,20 @@ export const createCorpusIndexer = <
    * stable Postgres id keeps erasure and re-index correct without that
    * bookkeeping.
    */
-  const remove = async (
-    entityId: SafeId<TBrand>,
-    scopedDb: ScopedDb,
-    indexId: string,
-    operation: "delete" | "redact" = "delete",
-  ): Promise<Result<void, CorpusIndexError>> => {
+  const removeWithOptions = async ({
+    beforeRemoteEffect,
+    entityId,
+    indexId,
+    operation,
+    scopedDb,
+  }: {
+    beforeRemoteEffect?: BeforeRemoteEffect;
+    entityId: SafeId<TBrand>;
+    indexId: string;
+    operation: "delete" | "redact";
+    scopedDb: ScopedDb;
+  }): Promise<Result<void, CorpusIndexError>> => {
+    await beforeRemoteEffect?.();
     const result = await getCorpusIndexClient().deleteByQuery(
       indexId,
       corpusDocumentDeleteQuery(entityId),
@@ -581,6 +613,14 @@ export const createCorpusIndexer = <
     return result;
   };
 
+  const remove = async (
+    entityId: SafeId<TBrand>,
+    scopedDb: ScopedDb,
+    indexId: string,
+    operation: "delete" | "redact" = "delete",
+  ): Promise<Result<void, CorpusIndexError>> =>
+    await removeWithOptions({ entityId, scopedDb, indexId, operation });
+
   /**
    * Index a batch of corpus-backed rows into the given generation. Two-query
    * missing/stale split mirrors backfillSearchIndex: `missing` = not yet in
@@ -596,7 +636,6 @@ export const createCorpusIndexer = <
     generation: string,
     options: {
       readConcurrency?: number;
-      replaceExistingInGeneration?: boolean;
     } = {},
   ): Promise<number> => {
     const staleReserved = Math.max(1, Math.floor(batchSize / 4));
@@ -654,17 +693,17 @@ export const createCorpusIndexer = <
       return 0;
     }
 
-    return await backfillSelectedRows(scopedDb, rows, generation, options);
+    return await backfillSelectedRows(scopedDb, rows, generation, {
+      ...options,
+      type: "incremental",
+    });
   };
 
   const backfillSelectedRows = async (
     scopedDb: ScopedDb,
     rows: TRow[],
     generation: string,
-    options: {
-      readConcurrency?: number;
-      replaceExistingInGeneration?: boolean;
-    },
+    options: BackfillSelectedRowsOptions,
   ): Promise<number> => {
     if (rows.length === 0) {
       return 0;
@@ -730,18 +769,33 @@ export const createCorpusIndexer = <
           // A generation page can be replayed after the external append but
           // before its database mark commits. Delete its deterministic target
           // copies first, so a retry converges instead of appending duplicates.
-          if (options.replaceExistingInGeneration) {
-            return [{ id: row.id, oldIndexId: indexId }];
+          const previousIndexes = new Set<string>();
+          if (options.type === "generation-rebuild") {
+            previousIndexes.add(indexId);
           }
-          return row.indexedGeneration !== null &&
+          if (
+            row.indexedGeneration !== null &&
             row.indexedGeneration.startsWith(`${generation}_`)
-            ? [{ id: row.id, oldIndexId: row.indexedGeneration }]
-            : [];
+          ) {
+            previousIndexes.add(row.indexedGeneration);
+          }
+          return [...previousIndexes].map((oldIndexId) => ({
+            id: row.id,
+            oldIndexId,
+          }));
         });
         let staleError: CorpusIndexError | null = null;
         for (const entry of moved) {
           // oxlint-disable-next-line no-await-in-loop -- sequential deletes that early-break on the first error
-          const removed = await remove(entry.id, scopedDb, entry.oldIndexId);
+          const removed = await removeWithOptions({
+            ...(options.type === "generation-rebuild"
+              ? { beforeRemoteEffect: options.beforeRemoteEffect }
+              : {}),
+            entityId: entry.id,
+            indexId: entry.oldIndexId,
+            operation: "delete",
+            scopedDb,
+          });
           if (removed.isErr()) {
             staleError = removed.error;
             break;
@@ -753,7 +807,12 @@ export const createCorpusIndexer = <
         }
 
         // oxlint-disable-next-line no-await-in-loop -- per-jurisdiction indexes are ensured/ingested sequentially to avoid overwhelming the search backend
-        const ensured = await ensureIndex(indexId);
+        const ensured = await ensureIndex({
+          ...(options.type === "generation-rebuild"
+            ? { beforeRemoteEffect: options.beforeRemoteEffect }
+            : {}),
+          indexId,
+        });
         if (ensured.isErr()) {
           firstError ??= ensured.error;
           groupFailures.push(...failedIndexJobs(group, ensured.error));
@@ -771,6 +830,9 @@ export const createCorpusIndexer = <
           LIMITS.corpusIndexIngestMaxBytes,
         )) {
           // oxlint-disable-next-line no-await-in-loop -- sequential ingest paces NDJSON pushes to the search backend
+          if (options.type === "generation-rebuild") {
+            await options.beforeRemoteEffect();
+          }
           const ingest = await getCorpusIndexClient().ingestBatch(
             indexId,
             ndjson,
@@ -821,7 +883,15 @@ export const createCorpusIndexer = <
           // re-indexed by a later cycle.
           for (const missedId of casMissed) {
             // oxlint-disable-next-line no-await-in-loop -- sequential cleanup deletes of the unrecorded copies; matches this file's established sequential-vs-search-backend design (see ensureIndex/ingestBatch above)
-            const removed = await remove(missedId, scopedDb, indexId);
+            const removed = await removeWithOptions({
+              ...(options.type === "generation-rebuild"
+                ? { beforeRemoteEffect: options.beforeRemoteEffect }
+                : {}),
+              entityId: missedId,
+              indexId,
+              operation: "delete",
+              scopedDb,
+            });
             if (removed.isErr()) {
               firstError ??= removed.error;
             }
@@ -853,13 +923,12 @@ export const createCorpusIndexer = <
     scopedDb: ScopedDb,
     rows: readonly TRow[],
     generation: string,
-    options: {
-      readConcurrency?: number;
-      /** Rebuild retry: delete deterministic target copies before append. */
-      replaceExistingInGeneration?: boolean;
-    } = {},
+    options: GenerationBackfillRowsOptions,
   ): Promise<number> =>
-    await backfillSelectedRows(scopedDb, [...rows], generation, options);
+    await backfillSelectedRows(scopedDb, [...rows], generation, {
+      ...options,
+      type: "generation-rebuild",
+    });
 
   return { loadDocsForBatch, backfill, backfillRows, remove };
 };

@@ -111,9 +111,7 @@ export const legislationDocuments = p.pgTable(
     p
       .index("legislation_documents_corpus_pending_idx")
       .on(t.id)
-      .where(
-        sql`${t.contentHash} is not null and ${t.indexedGeneration} is null`,
-      ),
+      .where(sql`${t.contentHash} is not null and ${t.indexedHash} is null`),
     p.check(
       "legislation_documents_status_values",
       sql`${t.status} IN ('current','historical','repealed','draft')`,

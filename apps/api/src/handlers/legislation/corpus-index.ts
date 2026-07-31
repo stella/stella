@@ -1,4 +1,4 @@
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
 
 import {
   legislationDocuments,
@@ -128,8 +128,9 @@ const indexer = createCorpusIndexer<"legislationDocument", IndexableRow>({
   // row-by-row heap filtering; the selective content-hash index is what
   // these scans need.
   selectMissing: async (scopedDb, { generation, limit }) => {
-    // Two arms for the same reason as the case-law twin: the never-indexed
-    // arm rides the partial pending index; the older-generation arm is only
+    // Hash-null rows are the durable pending set: new rows and every refresh
+    // clear this field while retaining the old generation pointer needed to
+    // delete a moved jurisdiction copy. The older-generation arm is only
     // non-empty across a generation cutover.
     const fresh = await scopedDb((tx) =>
       tx
@@ -143,7 +144,7 @@ const indexer = createCorpusIndexer<"legislationDocument", IndexableRow>({
           and(
             hasContent,
             redistributableLegislationSource,
-            isNull(legislationDocuments.indexedGeneration),
+            isNull(legislationDocuments.indexedHash),
           ),
         )
         .limit(limit),
@@ -163,6 +164,7 @@ const indexer = createCorpusIndexer<"legislationDocument", IndexableRow>({
           and(
             hasContent,
             redistributableLegislationSource,
+            isNotNull(legislationDocuments.indexedHash),
             sql`${legislationDocuments.indexedGeneration} <> (${generation} || '_' || lower(${legislationDocuments.country}))`,
           ),
         )
@@ -188,6 +190,7 @@ const indexer = createCorpusIndexer<"legislationDocument", IndexableRow>({
           and(
             hasContent,
             redistributableLegislationSource,
+            isNotNull(legislationDocuments.indexedHash),
             sql`${legislationDocuments.indexedGeneration} = (${generation} || '_' || lower(${legislationDocuments.country}))`,
             sql`${legislationDocuments.indexedHash} IS DISTINCT FROM ${legislationDocuments.contentHash}`,
           ),

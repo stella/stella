@@ -272,7 +272,7 @@ describe("failed index jobs always reach the audit trail", () => {
     expect(czJobs.at(0)?.jobs.at(0)?.operation).toBe("index");
   });
 
-  test("a replay deletes target copies before appending replacements", async () => {
+  test("a replay deletes each target and prior jurisdiction copy before appending", async () => {
     const calls: { method: string; url: string; body?: string }[] = [];
     const stub = async (
       input: Parameters<typeof fetch>[0],
@@ -302,7 +302,10 @@ describe("failed index jobs always reach the audit trail", () => {
       preconnect: originalFetch.preconnect,
     });
 
-    const row = makeRow("dec-replay", "CZ");
+    const row = {
+      ...makeRow("dec-replay", "CZ"),
+      indexedGeneration: corpusIndexId(GENERATION, "SK"),
+    };
     const scopedDb: ScopedDb = async (callback) =>
       // SAFETY: this test's adapter ignores the transaction; the callback
       // boundary itself is what the indexer must cross before reporting success.
@@ -323,19 +326,48 @@ describe("failed index jobs always reach the audit trail", () => {
       recordJobs: async () => undefined,
     });
 
+    let guardedEffects = 0;
     const indexed = await indexer.backfillRows(scopedDb, [row], GENERATION, {
-      replaceExistingInGeneration: true,
+      beforeRemoteEffect: async () => {
+        guardedEffects += 1;
+      },
     });
 
     expect(indexed).toBe(1);
-    const deleteCall = calls.findIndex(({ url }) =>
-      url.includes("/delete-tasks"),
-    );
+    const deleteCalls = calls
+      .map(({ url, body }, index) => ({ url, body, index }))
+      .filter(({ url }) => url.includes("/delete-tasks"));
     const ingestCall = calls.findIndex(({ url }) => url.includes("/ingest"));
-    expect(deleteCall).toBeGreaterThanOrEqual(0);
-    expect(ingestCall).toBeGreaterThan(deleteCall);
-    expect(calls.at(deleteCall)?.body).toBe(
-      JSON.stringify({ query: 'document_id:"dec-replay"' }),
+    expect(deleteCalls).toHaveLength(2);
+    expect(deleteCalls.map(({ url }) => new URL(url).pathname).sort()).toEqual(
+      [
+        `/api/v1/${corpusIndexId(GENERATION, "CZ")}/delete-tasks`,
+        `/api/v1/${corpusIndexId(GENERATION, "SK")}/delete-tasks`,
+      ].sort(),
     );
+    expect(deleteCalls.every(({ index }) => index < ingestCall)).toBe(true);
+    expect(deleteCalls.map(({ body }) => body)).toEqual([
+      JSON.stringify({ query: 'document_id:"dec-replay"' }),
+      JSON.stringify({ query: 'document_id:"dec-replay"' }),
+    ]);
+    expect(guardedEffects).toBe(calls.length);
+
+    calls.length = 0;
+    guardedEffects = 0;
+    const sameIndexRow = {
+      ...makeRow("dec-replay-same", "CZ"),
+      indexedGeneration: corpusIndexId(GENERATION, "CZ"),
+    };
+    expect(
+      await indexer.backfillRows(scopedDb, [sameIndexRow], GENERATION, {
+        beforeRemoteEffect: async () => {
+          guardedEffects += 1;
+        },
+      }),
+    ).toBe(1);
+    expect(
+      calls.filter(({ url }) => url.includes("/delete-tasks")),
+    ).toHaveLength(1);
+    expect(guardedEffects).toBe(calls.length);
   });
 });

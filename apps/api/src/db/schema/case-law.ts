@@ -217,6 +217,9 @@ export const caseLawDecisions = p.pgTable(
       .where(isNotNull(t.languageGroupKey)),
     p.index("case_law_decisions_created_at_idx").on(t.createdAt),
     p
+      .index("case_law_decisions_corpus_generation_cursor_idx")
+      .on(t.createdAt, t.id),
+    p
       .index("case_law_decisions_updated_id_idx")
       .on(t.updatedAt.desc(), t.id.desc()),
     p
@@ -233,9 +236,7 @@ export const caseLawDecisions = p.pgTable(
     p
       .index("case_law_decisions_corpus_pending_idx")
       .on(t.id)
-      .where(
-        sql`${t.contentHash} is not null and ${t.indexedGeneration} is null`,
-      ),
+      .where(sql`${t.contentHash} is not null and ${t.indexedHash} is null`),
     p
       .index("case_law_decisions_citation_key_idx")
       .on(t.citationKey)
@@ -614,6 +615,19 @@ export const caseLawIndexJobs = p.pgTable(
   ],
 );
 
+export const CASE_LAW_CORPUS_INDEX_BACKFILL_STATUSES = [
+  "running",
+  "complete",
+] as const;
+
+export type CaseLawCorpusIndexBackfillStatus =
+  (typeof CASE_LAW_CORPUS_INDEX_BACKFILL_STATUSES)[number];
+
+export const CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS = {
+  RUNNING: CASE_LAW_CORPUS_INDEX_BACKFILL_STATUSES[0],
+  COMPLETE: CASE_LAW_CORPUS_INDEX_BACKFILL_STATUSES[1],
+} as const satisfies Record<string, CaseLawCorpusIndexBackfillStatus>;
+
 /** Durable cursor for a blue-green corpus-index generation rebuild. */
 export const caseLawCorpusIndexBackfills = p.pgTable(
   "case_law_corpus_index_backfills",
@@ -623,10 +637,9 @@ export const caseLawCorpusIndexBackfills = p.pgTable(
     cursorCreatedAt: timestamptz("cursor_created_at"),
     cursorId: safeUuid<"caseLawDecision">("cursor_id"),
     status: p
-      .varchar({ length: 16 })
+      .text({ enum: CASE_LAW_CORPUS_INDEX_BACKFILL_STATUSES })
       .notNull()
-      .default("running")
-      .$type<"running" | "complete">(),
+      .default(CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.RUNNING),
     /**
      * A rebuild page owns external index writes. Persisting this lease before
      * the write prevents two workers from appending the same documents; the
@@ -642,7 +655,12 @@ export const caseLawCorpusIndexBackfills = p.pgTable(
   (t) => [
     p.check(
       "case_law_corpus_index_backfills_status_values",
-      sql`${t.status} IN ('running','complete')`,
+      sql`${t.status} IN (${sql.join(
+        CASE_LAW_CORPUS_INDEX_BACKFILL_STATUSES.map((status) =>
+          sql.raw(`'${status}'`),
+        ),
+        sql.raw(","),
+      )})`,
     ),
     p.check(
       "case_law_corpus_index_backfills_cursor_pair",
@@ -654,7 +672,9 @@ export const caseLawCorpusIndexBackfills = p.pgTable(
     ),
     p.check(
       "case_law_corpus_index_backfills_completed_unleased",
-      sql`${t.status} <> 'complete' OR ${t.leaseToken} IS NULL`,
+      sql`${t.status} <> ${sql.raw(
+        `'${CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.COMPLETE}'`,
+      )} OR ${t.leaseToken} IS NULL`,
     ),
     ...globalCaseLawPolicies(),
   ],

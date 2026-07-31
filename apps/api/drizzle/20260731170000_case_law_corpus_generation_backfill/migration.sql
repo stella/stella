@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS "case_law_corpus_index_backfills" (
   "snapshot_at" timestamptz NOT NULL DEFAULT now(),
   "cursor_created_at" timestamptz,
   "cursor_id" uuid,
-  "status" varchar(16) NOT NULL DEFAULT 'running',
+  "status" text NOT NULL DEFAULT 'running',
   "lease_token" uuid,
   "lease_expires_at" timestamptz,
   "updated_at" timestamptz NOT NULL DEFAULT now(),
@@ -61,6 +61,20 @@ DROP INDEX CONCURRENTLY IF EXISTS "case_law_decisions_corpus_generation_cursor_i
 -- squawk-ignore prefer-robust-stmts
 CREATE INDEX CONCURRENTLY "case_law_decisions_corpus_generation_cursor_idx"
   ON "case_law_decisions" ("created_at", "id");--> statement-breakpoint
+-- Refreshes clear indexed_hash while retaining indexed_generation so the
+-- indexer can remove a prior jurisdiction copy. Make that durable pending
+-- signal the bounded partial-index predicate for both corpus families.
+-- stella-migration-safety: reviewed destructive-change - replacing derived-state indexes only; source rows are untouched and replay recreates either index.
+DROP INDEX CONCURRENTLY IF EXISTS "case_law_decisions_corpus_pending_idx";--> statement-breakpoint
+-- squawk-ignore prefer-robust-stmts
+CREATE INDEX CONCURRENTLY "case_law_decisions_corpus_pending_idx"
+  ON "case_law_decisions" ("id")
+  WHERE "content_hash" IS NOT NULL AND "indexed_hash" IS NULL;--> statement-breakpoint
+DROP INDEX CONCURRENTLY IF EXISTS "legislation_documents_corpus_pending_idx";--> statement-breakpoint
+-- squawk-ignore prefer-robust-stmts
+CREATE INDEX CONCURRENTLY "legislation_documents_corpus_pending_idx"
+  ON "legislation_documents" ("id")
+  WHERE "content_hash" IS NOT NULL AND "indexed_hash" IS NULL;--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 SET lock_timeout = '1s';--> statement-breakpoint
 -- squawk-ignore transaction-nesting, ban-uncommitted-transaction
