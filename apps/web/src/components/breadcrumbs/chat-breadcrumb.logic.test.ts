@@ -3,6 +3,15 @@ import { describe, expect, test } from "bun:test";
 import { shouldFetchChatThreadTitle } from "@/components/breadcrumbs/chat-breadcrumb.logic";
 
 describe("chat breadcrumb title lookup", () => {
+  test("waits for the grouped thread lookup before requesting a title", () => {
+    expect(
+      shouldFetchChatThreadTitle({
+        groupedTitle: undefined,
+        lastActivityAt: "2026-07-31T04:30:08.968Z",
+      }),
+    ).toBe(false);
+  });
+
   test("does not request a title before a draft thread has been persisted", () => {
     expect(
       shouldFetchChatThreadTitle({

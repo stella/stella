@@ -30,7 +30,7 @@ export const ChatTurnNavigator = ({ messages }: ChatTurnNavigatorProps) => {
 
     const turn = [
       ...container.querySelectorAll<HTMLElement>("[data-chat-turn-id]"),
-    ].find((candidate) => candidate.dataset.chatTurnId === turnId);
+    ].find((candidate) => candidate.dataset["chatTurnId"] === turnId);
     if (!turn) {
       return;
     }
