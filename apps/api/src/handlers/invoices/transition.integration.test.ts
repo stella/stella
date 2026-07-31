@@ -205,7 +205,7 @@ const createContext = ({
     getAccessibleWorkspaces: async () => [{ id: ids.wsA1, status: "active" }],
     getWorkspaceAccess: async () => ({ id: ids.wsA1, status: "active" }),
     body: { action },
-    createAuditRecorder: () => async () => undefined,
+    createAuditRecorder: () => recordAuditEvent,
     memberRole: { role: "owner" },
     orgAIConfig: null,
     params: { workspaceId: ids.wsA1, invoiceId },
