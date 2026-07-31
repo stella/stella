@@ -175,15 +175,16 @@ if (!databaseUrl || !runPostgresTests) {
       });
 
       let firstCallCount = 0;
-      const firstScopedDb: ScopedDb = async (callback) => {
+      const firstScopedDb: ScopedDb = async (transactionWork) => {
         const call = firstCallCount;
         firstCallCount += 1;
         const value = await scopedDb(async (tx) => {
-          const result = await callback(tx);
           if (call === 0) {
+            const result = await transactionWork(tx);
             await synchronizeInitialRead();
+            return result;
           }
-          return result;
+          return await transactionWork(tx);
         });
         if (call === 1) {
           releaseFirstWrite();
@@ -192,16 +193,17 @@ if (!databaseUrl || !runPostgresTests) {
       };
 
       let secondCallCount = 0;
-      const secondScopedDb: ScopedDb = async (callback) => {
+      const secondScopedDb: ScopedDb = async (transactionWork) => {
         const call = secondCallCount;
         secondCallCount += 1;
         return await scopedDb(async (tx) => {
-          const result = await callback(tx);
           if (call === 0) {
+            const result = await transactionWork(tx);
             await synchronizeInitialRead();
             await firstWriteCompleted;
+            return result;
           }
-          return result;
+          return await transactionWork(tx);
         });
       };
 
