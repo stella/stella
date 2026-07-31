@@ -31,14 +31,18 @@ const sortSearchTextMatches = (
 ) => first.start - second.start || first.end - second.end;
 
 const findTextCandidateMatches = (content: string, candidate: string) => {
-  const exactMatches = findAllMatches(
+  const matches = new Map<string, SearchTextMatch>();
+  for (const match of findAllMatches(
     content,
     candidate,
     documentSearchOptions,
-  );
-  return exactMatches.length > 0
-    ? exactMatches
-    : findNormalizedSearchTextMatches(content, candidate);
+  )) {
+    matches.set(searchTextMatchKey(match), match);
+  }
+  for (const match of findNormalizedSearchTextMatches(content, candidate)) {
+    matches.set(searchTextMatchKey(match), match);
+  }
+  return [...matches.values()].toSorted(sortSearchTextMatches);
 };
 
 export const findSearchTextMatches = (content: string, searchText: string) => {
@@ -60,12 +64,19 @@ export const findSearchTextMatches = (content: string, searchText: string) => {
   return [...matches.values()].toSorted(sortSearchTextMatches);
 };
 
-const documentMatchKey = ({
+type DocumentMatchPosition = Pick<
+  FindMatch,
+  "endOffset" | "paragraphIndex" | "startOffset"
+>;
+
+const documentMatchPositionKey = ({
   endOffset,
   paragraphIndex,
   startOffset,
-}: FindMatch) =>
+}: DocumentMatchPosition) =>
   `${String(paragraphIndex)}:${String(startOffset)}:${String(endOffset)}`;
+
+const documentMatchKey = (match: FindMatch) => documentMatchPositionKey(match);
 
 const sortDocumentMatches = (first: FindMatch, second: FindMatch) =>
   first.paragraphIndex - second.paragraphIndex ||
@@ -73,13 +84,13 @@ const sortDocumentMatches = (first: FindMatch, second: FindMatch) =>
   first.endOffset - second.endOffset;
 
 type FindDocumentCandidateMatchesOptions = {
-  candidate: string;
+  candidates: readonly string[];
   document: Document;
   limit: number;
 };
 
 const findDocumentCandidateMatches = ({
-  candidate,
+  candidates,
   document,
   limit,
 }: FindDocumentCandidateMatchesOptions): FindMatch[] => {
@@ -87,48 +98,74 @@ const findDocumentCandidateMatches = ({
   const matches: FindMatch[] = [];
 
   for (const [paragraphIndex, paragraph] of paragraphs.entries()) {
-    for (const match of findInParagraph(
-      paragraph,
-      candidate,
-      documentSearchOptions,
-      paragraphIndex,
-    )) {
-      matches.push(match);
-      if (matches.length >= limit) {
-        return matches;
+    const paragraphLimit = limit - matches.length;
+    const paragraphMatches = new Map<string, FindMatch>();
+    const nativeMatchesByText = new Map<string, Map<string, FindMatch>>();
+    const getNativeMatches = (text: string) => {
+      const cachedMatches = nativeMatchesByText.get(text);
+      if (cachedMatches) {
+        return cachedMatches;
       }
-    }
-  }
-  if (matches.length > 0) {
-    return matches;
-  }
 
-  for (const [paragraphIndex, paragraph] of paragraphs.entries()) {
-    const paragraphText = getParagraphPlainText(paragraph);
-    for (const normalizedMatch of findNormalizedSearchTextMatches(
-      paragraphText,
-      candidate,
-    )) {
-      const originalText = paragraphText.slice(
-        normalizedMatch.start,
-        normalizedMatch.end,
-      );
-      const match = findInParagraph(
+      const nativeMatches = new Map<string, FindMatch>();
+      for (const match of findInParagraph(
         paragraph,
-        originalText,
+        text,
         documentSearchOptions,
         paragraphIndex,
-      ).find(
-        (item) =>
-          item.startOffset === normalizedMatch.start &&
-          item.endOffset === normalizedMatch.end,
-      );
-      if (match) {
-        matches.push(match);
-        if (matches.length >= limit) {
-          return matches;
+      )) {
+        nativeMatches.set(documentMatchKey(match), match);
+        if (nativeMatches.size >= paragraphLimit) {
+          break;
         }
       }
+      nativeMatchesByText.set(text, nativeMatches);
+      return nativeMatches;
+    };
+    const paragraphText = getParagraphPlainText(paragraph);
+    for (const candidate of candidates) {
+      const candidateMatches = new Map<string, FindMatch>();
+      for (const match of getNativeMatches(candidate).values()) {
+        candidateMatches.set(documentMatchKey(match), match);
+      }
+      const normalizedMatches = findNormalizedSearchTextMatches(
+        paragraphText,
+        candidate,
+        { maxMatches: paragraphLimit },
+      );
+      for (const normalizedMatch of normalizedMatches) {
+        const originalText = paragraphText.slice(
+          normalizedMatch.start,
+          normalizedMatch.end,
+        );
+        const match = getNativeMatches(originalText).get(
+          documentMatchPositionKey({
+            paragraphIndex,
+            startOffset: normalizedMatch.start,
+            endOffset: normalizedMatch.end,
+          }),
+        );
+        if (match) {
+          candidateMatches.set(documentMatchKey(match), match);
+        }
+      }
+
+      for (const match of candidateMatches.values()) {
+        paragraphMatches.set(documentMatchKey(match), match);
+      }
+      const orderedParagraphMatches = [...paragraphMatches.values()]
+        .toSorted(sortDocumentMatches)
+        .slice(0, paragraphLimit);
+      paragraphMatches.clear();
+      for (const match of orderedParagraphMatches) {
+        paragraphMatches.set(documentMatchKey(match), match);
+      }
+    }
+    for (const match of paragraphMatches.values()) {
+      matches.push(match);
+    }
+    if (matches.length >= limit) {
+      return matches;
     }
   }
 
@@ -161,7 +198,7 @@ export const findDocumentSearchResult = ({
   const phraseCandidate = candidates.at(0);
   const phraseMatches = phraseCandidate
     ? findDocumentCandidateMatches({
-        candidate: phraseCandidate,
+        candidates: [phraseCandidate],
         document,
         limit: collectionLimit,
       })
@@ -173,37 +210,15 @@ export const findDocumentSearchResult = ({
     };
   }
 
-  const matches = new Map<string, FindMatch>();
-  let truncated = false;
-  for (const candidate of candidates.slice(1)) {
-    const candidateMatches = findDocumentCandidateMatches({
-      candidate,
-      document,
-      limit: collectionLimit,
-    });
-    const candidateWasTruncated =
-      candidateMatches.length > normalizedMaxMatches;
-    for (const match of candidateMatches) {
-      matches.set(documentMatchKey(match), match);
-      if (matches.size > normalizedMaxMatches) {
-        truncated = true;
-        break;
-      }
-    }
-    if (truncated) {
-      break;
-    }
-    if (candidateWasTruncated) {
-      truncated = true;
-      break;
-    }
-  }
+  const matches = findDocumentCandidateMatches({
+    candidates: candidates.slice(1),
+    document,
+    limit: collectionLimit,
+  });
 
   return {
-    matches: [...matches.values()]
-      .toSorted(sortDocumentMatches)
-      .slice(0, normalizedMaxMatches),
-    truncated,
+    matches: matches.slice(0, normalizedMaxMatches),
+    truncated: matches.length > normalizedMaxMatches,
   };
 };
 

@@ -1,21 +1,24 @@
 import { PDFViewerError } from "@/lib/pdf/pdf-errors";
 import type { PDFSearchResult } from "@/lib/pdf/pdf-search";
+import {
+  isPDFSearchWorkerResponseForRequest,
+  type PDFSearchWorkerRequest,
+  type PDFSearchWorkerResponse,
+} from "@/lib/pdf/pdf-search-worker-protocol";
 
-type PDFSearchWorkerRequest = {
-  bytes: ArrayBuffer;
-  password?: string | undefined;
-  searchText: string;
-};
-
-type PDFSearchWorkerResponse =
-  | { status: "error"; message: string }
-  | { status: "success"; result: PDFSearchResult | null };
-
-type FindPDFSearchResultsInWorkerOptions = PDFSearchWorkerRequest & {
-  signal: AbortSignal;
-};
+type FindPDFSearchResultsInWorkerOptions = Omit<
+  PDFSearchWorkerRequest,
+  "requestId"
+> & { signal: AbortSignal };
 
 const abortError = () => new DOMException("PDF search cancelled", "AbortError");
+
+let nextPDFSearchRequestId = 0;
+
+const createPDFSearchRequestId = (): number => {
+  nextPDFSearchRequestId += 1;
+  return nextPDFSearchRequestId;
+};
 
 export const findPDFSearchResultsInWorker = async ({
   bytes,
@@ -31,6 +34,7 @@ export const findPDFSearchResultsInWorker = async ({
     new URL("../../workers/pdf-search-worker.ts", import.meta.url),
     { type: "module" },
   );
+  const requestId = createPDFSearchRequestId();
 
   const result = await new Promise<PDFSearchResult | null>(
     (resolve, reject) => {
@@ -50,6 +54,9 @@ export const findPDFSearchResultsInWorker = async ({
       worker.addEventListener(
         "message",
         (event: MessageEvent<PDFSearchWorkerResponse>) => {
+          if (!isPDFSearchWorkerResponseForRequest(event.data, requestId)) {
+            return;
+          }
           dispose();
           if (event.data.status === "success") {
             resolve(event.data.result);
@@ -62,7 +69,6 @@ export const findPDFSearchResultsInWorker = async ({
             }),
           );
         },
-        { once: true },
       );
       worker.addEventListener(
         "error",
@@ -82,6 +88,7 @@ export const findPDFSearchResultsInWorker = async ({
 
       const request: PDFSearchWorkerRequest = {
         bytes,
+        requestId,
         searchText,
         ...(password !== undefined && { password }),
       };

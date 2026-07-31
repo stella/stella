@@ -1,7 +1,10 @@
 import { sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
-import { normalizePersistedChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
+import {
+  isChatPart,
+  normalizePersistedChatMessageContent,
+} from "@/api/handlers/chat/chat-message-parts";
 import type {
   ChatMessageRole,
   PersistedChatMessageContent,
@@ -18,11 +21,35 @@ import {
 const BACKFILL_BATCH_SIZE = 200;
 const ZERO_UUID = "00000000-0000-0000-0000-000000000000";
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const isPersistedChatMessageContent = (
+  value: unknown,
+): value is PersistedChatMessageContent =>
+  isRecord(value) &&
+  (value["version"] === 1 || value["version"] === 2) &&
+  Array.isArray(value["data"]);
+
+export const normalizeSearchableChatMessageContent = (content: unknown) => {
+  if (!isPersistedChatMessageContent(content)) {
+    return null;
+  }
+  const normalized = normalizePersistedChatMessageContent(content);
+  return {
+    metadata: normalized.metadata,
+    parts: normalized.parts.filter(isChatPart),
+  };
+};
+
 const extractMessageSearchText = (
   content: PersistedChatMessageContent,
 ): string => {
   const parts: string[] = [];
-  const message = normalizePersistedChatMessageContent(content);
+  const message = normalizeSearchableChatMessageContent(content);
+  if (!message) {
+    return "";
+  }
   for (const part of message.parts) {
     if (part.type === "text") {
       const trimmed = part.content.trim();

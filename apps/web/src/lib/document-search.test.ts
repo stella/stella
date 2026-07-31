@@ -68,6 +68,16 @@ describe("document search highlighting", () => {
     ]);
   });
 
+  test("unions exact and normalized matches without duplicating exact spans", () => {
+    expect(
+      findSearchTextMatches("odštěpení odstepeni ODŠTĚPENÍ", "odštěpení"),
+    ).toEqual([
+      { start: 0, end: 9 },
+      { start: 10, end: 19 },
+      { start: 20, end: 29 },
+    ]);
+  });
+
   test("bounds DOCX matches at one past the display cap", () => {
     const exactlyAtCap = createEmptyDocument({
       initialText: "hit ".repeat(200),
@@ -90,5 +100,45 @@ describe("document search highlighting", () => {
         searchText: "hit",
       }),
     ).toMatchObject({ matches: { length: 200 }, truncated: true });
+  });
+
+  test("keeps DOCX matches ordered when normalized and exact hits coexist", () => {
+    const document = createEmptyDocument({
+      initialText: "odštěpení odstepeni ODŠTĚPENÍ",
+    });
+
+    expect(findDocumentSearchMatches(document, "odštěpení")).toMatchObject([
+      { startOffset: 0, endOffset: 9 },
+      { startOffset: 10, endOffset: 19 },
+      { startOffset: 20, endOffset: 29 },
+    ]);
+    expect(
+      findDocumentSearchResult({
+        document,
+        maxMatches: 2,
+        searchText: "odštěpení",
+      }),
+    ).toMatchObject({
+      matches: [
+        { startOffset: 0, endOffset: 9 },
+        { startOffset: 10, endOffset: 19 },
+      ],
+      truncated: true,
+    });
+  });
+
+  test("applies the DOCX cap after globally ordering fallback-term matches", () => {
+    const document = createEmptyDocument({ initialText: "beta alpha alpha" });
+
+    expect(
+      findDocumentSearchResult({
+        document,
+        maxMatches: 1,
+        searchText: "alpha beta",
+      }),
+    ).toMatchObject({
+      matches: [{ startOffset: 0, endOffset: 4 }],
+      truncated: true,
+    });
   });
 });

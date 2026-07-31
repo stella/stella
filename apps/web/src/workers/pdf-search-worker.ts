@@ -1,19 +1,10 @@
 /// <reference lib="webworker" />
 
 import { findPDFSearchResults } from "@/lib/pdf/pdf-search";
-
-type PDFSearchWorkerRequest = {
-  bytes: ArrayBuffer;
-  password?: string | undefined;
-  searchText: string;
-};
-
-type PDFSearchWorkerResponse =
-  | { status: "error"; message: string }
-  | {
-      status: "success";
-      result: Awaited<ReturnType<typeof findPDFSearchResults>>;
-    };
+import type {
+  PDFSearchWorkerRequest,
+  PDFSearchWorkerResponse,
+} from "@/lib/pdf/pdf-search-worker-protocol";
 
 const isDedicatedWorkerScope = (
   value: typeof globalThis,
@@ -26,21 +17,24 @@ if (!isDedicatedWorkerScope(globalThis)) {
 
 const scope = globalThis;
 const sendResponse = scope.postMessage.bind(scope);
+let activeController: AbortController | null = null;
 
 const handle = async (
   request: PDFSearchWorkerRequest,
+  signal: AbortSignal,
 ): Promise<PDFSearchWorkerResponse> => {
   try {
     const result = await findPDFSearchResults({
       bytes: new Uint8Array(request.bytes),
       password: request.password,
       searchText: request.searchText,
-      signal: new AbortController().signal,
+      signal,
     });
-    return { status: "success", result };
+    return { status: "success", requestId: request.requestId, result };
   } catch (error) {
     return {
       status: "error",
+      requestId: request.requestId,
       message: error instanceof Error ? error.message : String(error),
     };
   }
@@ -49,14 +43,25 @@ const handle = async (
 scope.addEventListener(
   "message",
   (event: MessageEvent<PDFSearchWorkerRequest>) => {
-    handle(event.data)
+    activeController?.abort();
+    const controller = new AbortController();
+    activeController = controller;
+
+    handle(event.data, controller.signal)
       .then((response) => {
+        if (controller.signal.aborted) {
+          return undefined;
+        }
         sendResponse(response);
         return undefined;
       })
       .catch((error: unknown) => {
+        if (controller.signal.aborted) {
+          return;
+        }
         sendResponse({
           status: "error",
+          requestId: event.data.requestId,
           message: error instanceof Error ? error.message : String(error),
         });
       });

@@ -7,6 +7,7 @@ import {
   mergePDFSearchBoxes,
   toPDFSearchViewportBox,
 } from "@/lib/pdf/pdf-search";
+import { MAX_SEARCH_PREVIEW_MATCHES } from "@/lib/search-match-navigation";
 
 const createSearchablePDF = async () => {
   const pdf = PDF.create();
@@ -62,7 +63,79 @@ describe("canonical PDF search", () => {
     expect(result?.matches.map((match) => match.pageIndex)).toEqual([0, 1, 1]);
   });
 
-  test("reports truncation only after observing the cap plus one", async () => {
+  test("searches PDF portfolio pages in viewer render order", async () => {
+    const createAttachment = async (
+      pages: readonly { text: string; y: number }[],
+    ) => {
+      const pdf = PDF.create();
+      for (const { text, y } of pages) {
+        const page = pdf.addPage({ size: "letter" });
+        page.drawText(text, { x: 50, y, size: 18 });
+      }
+      return await pdf.save();
+    };
+
+    const portfolio = PDF.create();
+    const containerPage = portfolio.addPage({ size: "letter" });
+    containerPage.drawText("needle in container", {
+      x: 50,
+      y: 700,
+      size: 18,
+    });
+    portfolio.addAttachment(
+      "z-second.pdf",
+      await createAttachment([{ text: "needle second", y: 500 }]),
+    );
+    portfolio.addAttachment(
+      "a-first.pdf",
+      await createAttachment([
+        { text: "needle first page", y: 700 },
+        { text: "needle next page", y: 600 },
+      ]),
+    );
+    portfolio.addAttachment("ignored.txt", new TextEncoder().encode("needle"));
+
+    const result = await findPDFSearchResults({
+      bytes: await portfolio.save(),
+      searchText: "needle",
+      signal: new AbortController().signal,
+    });
+
+    expect(result?.matches).toHaveLength(3);
+    expect(result?.matches.map((match) => match.pageIndex)).toEqual([0, 1, 2]);
+    expect(result?.matches.at(0)?.boxes.at(0)?.y).toBeGreaterThan(
+      result?.matches.at(1)?.boxes.at(0)?.y ?? Number.POSITIVE_INFINITY,
+    );
+    expect(result?.matches.at(1)?.boxes.at(0)?.y).toBeGreaterThan(
+      result?.matches.at(2)?.boxes.at(0)?.y ?? Number.POSITIVE_INFINITY,
+    );
+  });
+
+  test("searches root pages when attachments do not form a portfolio", async () => {
+    const attachment = PDF.create();
+    const attachmentPage = attachment.addPage({ size: "letter" });
+    attachmentPage.drawText("needle in attachment", {
+      x: 50,
+      y: 700,
+      size: 18,
+    });
+
+    const pdf = PDF.create();
+    const firstPage = pdf.addPage({ size: "letter" });
+    firstPage.drawText("needle in root", { x: 50, y: 700, size: 18 });
+    pdf.addPage({ size: "letter" });
+    pdf.addAttachment("attachment.pdf", await attachment.save());
+
+    const result = await findPDFSearchResults({
+      bytes: await pdf.save(),
+      searchText: "needle",
+      signal: new AbortController().signal,
+    });
+
+    expect(result?.matches.map((match) => match.pageIndex)).toEqual([0]);
+  });
+
+  test("bounds one page at the global cap plus one", async () => {
     const createPDFWithHits = async (count: number) => {
       const pdf = PDF.create();
       const page = pdf.addPage({ size: "letter" });
@@ -71,20 +144,39 @@ describe("canonical PDF search", () => {
     };
 
     const atCap = await findPDFSearchResults({
-      bytes: await createPDFWithHits(200),
+      bytes: await createPDFWithHits(MAX_SEARCH_PREVIEW_MATCHES),
       searchText: "hit",
       signal: new AbortController().signal,
     });
     const overCap = await findPDFSearchResults({
-      bytes: await createPDFWithHits(201),
+      bytes: await createPDFWithHits(MAX_SEARCH_PREVIEW_MATCHES + 1),
       searchText: "hit",
       signal: new AbortController().signal,
     });
 
-    expect(atCap?.matches).toHaveLength(200);
+    expect(atCap?.matches).toHaveLength(MAX_SEARCH_PREVIEW_MATCHES);
     expect(atCap?.truncated).toBe(false);
-    expect(overCap?.matches).toHaveLength(200);
+    expect(overCap?.matches).toHaveLength(MAX_SEARCH_PREVIEW_MATCHES);
     expect(overCap?.truncated).toBe(true);
+  });
+
+  test("bounds normalized-only matches at the global cap plus one", async () => {
+    const pdf = PDF.create();
+    const page = pdf.addPage({ size: "letter" });
+    page.drawText("odstepeni ".repeat(MAX_SEARCH_PREVIEW_MATCHES + 1), {
+      x: 20,
+      y: 700,
+      size: 8,
+    });
+
+    const result = await findPDFSearchResults({
+      bytes: await pdf.save(),
+      searchText: "odštěpení",
+      signal: new AbortController().signal,
+    });
+
+    expect(result?.matches).toHaveLength(MAX_SEARCH_PREVIEW_MATCHES);
+    expect(result?.truncated).toBe(true);
   });
 
   test("stops before loading LibPDF when the search is cancelled", async () => {

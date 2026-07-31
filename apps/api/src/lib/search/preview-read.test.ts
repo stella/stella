@@ -317,4 +317,79 @@ describe("search preview rendering contract", () => {
       ],
     });
   });
+
+  test("normalizes legacy source-document metadata for chat previews", async () => {
+    rootDbExecuteMock.mockResolvedValueOnce([
+      {
+        messages: [
+          {
+            id: "00000000-0000-4000-8000-000000000010",
+            isTarget: true,
+            role: "assistant",
+            content: {
+              version: 1,
+              data: [
+                { type: "text", text: "The answer cites:" },
+                {
+                  type: "data-stella-source-document",
+                  data: {
+                    title: "Closing memorandum",
+                    mention: "@closing-memo",
+                    kind: "document",
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ]);
+
+    expect(await readSearchPreview({ ...previewQuery, type: "chat" })).toEqual({
+      type: "chat-messages",
+      messages: [
+        {
+          id: "00000000-0000-4000-8000-000000000010",
+          role: "assistant",
+          content:
+            "The answer cites:\n\nClosing memorandum\n\n@closing-memo\n\ndocument",
+        },
+      ],
+    });
+  });
+
+  test("returns a title preview when a chat thread has no matching messages", async () => {
+    rootDbExecuteMock.mockResolvedValueOnce([
+      {
+        hasMessageMatch: false,
+        messages: [],
+        title: "Closing memorandum review",
+      },
+    ]);
+
+    expect(await readSearchPreview({ ...previewQuery, type: "chat" })).toEqual({
+      type: "plain-text",
+      content: "Closing memorandum review",
+    });
+  });
+
+  test("skips malformed persisted chat parts", async () => {
+    rootDbExecuteMock.mockResolvedValueOnce([
+      {
+        messages: [
+          {
+            id: "00000000-0000-4000-8000-000000000010",
+            isTarget: true,
+            role: "assistant",
+            content: { version: 2, data: [null] },
+          },
+        ],
+      },
+    ]);
+
+    expect(await readSearchPreview({ ...previewQuery, type: "chat" })).toEqual({
+      type: "chat-messages",
+      messages: [],
+    });
+  });
 });

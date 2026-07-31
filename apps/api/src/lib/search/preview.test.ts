@@ -190,6 +190,8 @@ describe("search preview authorization scope", () => {
     expect(compiled.sql).toContain("FROM chat_message_search_documents");
     expect(compiled.sql).toContain("JOIN chat_messages message");
     expect(compiled.sql).toContain("ts_rank_cd(matching.tsv");
+    expect(compiled.sql).toContain('AS "hasMessageMatch"');
+    expect(compiled.sql).toContain("cst.title");
     expect(compiled.sql).toContain("ORDER BY nearby.created_at");
     expect(compiled.sql).toContain("LIMIT");
     expect(compiled.sql).toContain("t.user_id =");

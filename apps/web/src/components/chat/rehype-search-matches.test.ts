@@ -43,6 +43,42 @@ describe("chat search highlighting", () => {
     ]);
   });
 
+  test("unions exact and normalized hits without duplicating exact spans", () => {
+    const tree: Root = {
+      type: "root",
+      children: [
+        {
+          type: "element",
+          tagName: "p",
+          properties: {},
+          children: [{ type: "text", value: "odstepeni odštěpení ODŠTĚPENÍ" }],
+        },
+      ],
+    };
+
+    rehypeSearchMatches({ searchText: "odštěpení" })(tree);
+
+    const paragraph = tree.children.at(0);
+    expect(paragraph).toMatchObject({
+      children: [
+        {
+          type: "element",
+          children: [{ value: "odstepeni" }],
+        },
+        { type: "text", value: " " },
+        {
+          type: "element",
+          children: [{ value: "odštěpení" }],
+        },
+        { type: "text", value: " " },
+        {
+          type: "element",
+          children: [{ value: "ODŠTĚPENÍ" }],
+        },
+      ],
+    });
+  });
+
   test("highlights visible text inside links and fenced code", () => {
     const tree: Root = {
       type: "root",

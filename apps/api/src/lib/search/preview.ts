@@ -16,6 +16,7 @@ import {
   restoreOriginalSearchPreview,
   SEARCH_PREVIEW_HEADLINE_CONFIG,
 } from "@/api/lib/search/highlight";
+import { normalizeSearchableChatMessageContent } from "@/api/lib/search/index-chat";
 import { previewPassageJoin } from "@/api/lib/search/preview-passage-sql";
 import {
   SEARCH_PREVIEW_SOURCE_CHARACTER_LIMIT,
@@ -64,7 +65,9 @@ type SearchPreviewChatMessageRow = {
 };
 
 type SearchPreviewChatRow = {
+  hasMessageMatch: unknown;
   messages: SearchPreviewChatMessageRow[];
+  title: unknown;
 };
 
 type SearchPreviewChatRole = "assistant" | "system" | "user";
@@ -78,27 +81,26 @@ const isSearchPreviewChatRole = (
   value === "assistant" || value === "system" || value === "user";
 
 const extractChatPreviewTextParts = (content: unknown): string[] => {
-  if (!isRecord(content) || !Array.isArray(content["data"])) {
+  const normalized = normalizeSearchableChatMessageContent(content);
+  if (!normalized) {
     return [];
   }
 
   const textParts: string[] = [];
-  for (const part of content["data"]) {
-    if (!isRecord(part) || part["type"] !== "text") {
+  for (const part of normalized.parts) {
+    if (part.type !== "text") {
       continue;
     }
-    const text =
-      typeof part["content"] === "string" ? part["content"] : part["text"];
-    if (typeof text === "string" && text.trim()) {
-      textParts.push(text);
+    if (part.content.trim()) {
+      textParts.push(part.content);
     }
   }
 
-  const metadata = content["metadata"];
-  if (!isRecord(metadata) || !Array.isArray(metadata["sourceDocuments"])) {
+  const sourceDocuments = normalized.metadata.sourceDocuments;
+  if (!sourceDocuments) {
     return textParts;
   }
-  for (const sourceDocument of metadata["sourceDocuments"]) {
+  for (const sourceDocument of sourceDocuments) {
     if (!isRecord(sourceDocument)) {
       continue;
     }
@@ -261,6 +263,18 @@ const chatPreviewTargetMessageId = (tsQuery: SQL | null): SQL => {
     )
   `;
 };
+
+const chatPreviewHasMatchingMessage = (tsQuery: SQL | null): SQL =>
+  tsQuery
+    ? sql`
+        EXISTS (
+          SELECT 1
+          FROM chat_message_search_documents matching
+          WHERE matching.thread_id = cst.thread_id
+            AND matching.tsv @@ ${tsQuery}
+        ) AS "hasMessageMatch"
+      `
+    : sql`true AS "hasMessageMatch"`;
 
 const chatPreviewMessages = (tsQuery: SQL | null): SQL => {
   const precedingLimit = tsQuery
@@ -428,7 +442,10 @@ export const buildSearchPreviewQuery = ({
       `;
     case "chat":
       return sql`
-        SELECT ${chatPreviewMessages(locatorTsQuery)}
+        SELECT
+          cst.title,
+          ${chatPreviewHasMatchingMessage(tsQuery)},
+          ${chatPreviewMessages(locatorTsQuery)}
         FROM chat_thread_search_documents cst
         JOIN chat_threads t ON t.id = cst.thread_id
         WHERE cst.thread_id = ${resultId}
@@ -519,6 +536,13 @@ export const readSearchPreview = async (
     const row = rows.at(0);
     if (!row || !Array.isArray(row.messages)) {
       return null;
+    }
+
+    if (row.hasMessageMatch === false && typeof row.title === "string") {
+      const title = row.title.trim();
+      if (title) {
+        return { type: "plain-text", content: title };
+      }
     }
 
     const candidates: (SearchPreviewChatMessage & {

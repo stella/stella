@@ -1,4 +1,4 @@
-import type { PDFPage } from "@libpdf/core";
+import type { PDF, PDFPage } from "@libpdf/core";
 
 import type { PageViewport } from "@/lib/pdf/pdfjs-loader";
 import { MAX_SEARCH_PREVIEW_MATCHES } from "@/lib/search-match-navigation";
@@ -36,6 +36,11 @@ type FindPDFSearchResultsOptions = {
   password?: string | undefined;
   searchText: string;
   signal: AbortSignal;
+};
+
+type ViewerSearchPage = {
+  page: PDFPage;
+  pageIndex: number;
 };
 
 const MIN_SAME_LINE_OVERLAP_RATIO = 0.5;
@@ -145,49 +150,170 @@ const comparePDFSearchMatches = (
   return secondBox.y - firstBox.y || firstBox.x - secondBox.x;
 };
 
-const findNormalizedPageMatches = (
-  page: PDFPage,
-  candidate: string,
-): PDFSearchMatch[] => {
-  const pageSearchText = buildPageSearchText(page.extractText());
+type FindCaseInsensitiveSearchTextMatchesOptions = {
+  content: string;
+  maxMatches: number;
+  searchText: string;
+};
 
-  return findNormalizedSearchTextMatches(pageSearchText.text, candidate)
-    .map((match) => {
-      const boxes = pageSearchText.boxesByOffset
-        .slice(match.start, match.end)
-        .filter((box): box is PDFSearchBox => box !== null);
-      return {
-        pageIndex: page.index,
-        boxes: mergePDFSearchBoxes(boxes),
-      };
-    })
+const findCaseInsensitiveSearchTextMatches = ({
+  content,
+  maxMatches,
+  searchText,
+}: FindCaseInsensitiveSearchTextMatchesOptions) => {
+  const matches: { start: number; end: number }[] = [];
+  const normalizedContent = content.toLowerCase();
+  const normalizedSearchText = searchText.toLowerCase();
+  let searchFrom = 0;
+
+  while (matches.length < maxMatches) {
+    const start = normalizedContent.indexOf(normalizedSearchText, searchFrom);
+    if (start === -1) {
+      break;
+    }
+    matches.push({ start, end: start + normalizedSearchText.length });
+    searchFrom = start + 1;
+  }
+
+  return matches;
+};
+
+type ToPDFSearchMatchOptions = {
+  end: number;
+  pageIndex: number;
+  pageSearchText: PageSearchText;
+  start: number;
+};
+
+const toPDFSearchMatch = ({
+  end,
+  pageIndex,
+  pageSearchText,
+  start,
+}: ToPDFSearchMatchOptions): PDFSearchMatch => {
+  const boxes = pageSearchText.boxesByOffset
+    .slice(start, end)
+    .filter((box): box is PDFSearchBox => box !== null);
+  return {
+    pageIndex,
+    boxes: mergePDFSearchBoxes(boxes),
+  };
+};
+
+type FindNormalizedPageMatchesOptions = {
+  candidate: string;
+  maxMatches: number;
+  pageIndex: number;
+  pageSearchText: PageSearchText;
+};
+
+const findNormalizedPageMatches = ({
+  candidate,
+  maxMatches,
+  pageIndex,
+  pageSearchText,
+}: FindNormalizedPageMatchesOptions): PDFSearchMatch[] => {
+  return findNormalizedSearchTextMatches(pageSearchText.text, candidate, {
+    maxMatches,
+  })
+    .map(({ end, start }) =>
+      toPDFSearchMatch({ end, pageIndex, pageSearchText, start }),
+    )
     .filter((match) => match.boxes.length > 0);
 };
 
-const findPageMatches = (
-  page: PDFPage,
-  candidate: string,
-): PDFSearchMatch[] => {
-  const exactMatches = page
-    .findText(candidate, { caseSensitive: false })
-    .map((match) => ({
-      pageIndex: page.index,
-      boxes: mergePDFSearchBoxes(
-        match.charBoxes.length > 0 ? match.charBoxes : [match.bbox],
-      ),
-    }));
+type FindPageMatchesOptions = {
+  candidate: string;
+  maxMatches: number;
+  pageIndex: number;
+  pageSearchText: PageSearchText;
+};
+
+const findPageMatches = ({
+  candidate,
+  maxMatches,
+  pageIndex,
+  pageSearchText,
+}: FindPageMatchesOptions): PDFSearchMatch[] => {
   const matches = new Map<string, PDFSearchMatch>();
 
-  for (const match of [
-    ...exactMatches,
-    ...findNormalizedPageMatches(page, candidate),
-  ]) {
+  const exactMatches = findCaseInsensitiveSearchTextMatches({
+    content: pageSearchText.text,
+    maxMatches,
+    searchText: candidate,
+  });
+  for (const { end, start } of exactMatches) {
+    const match = toPDFSearchMatch({
+      end,
+      pageIndex,
+      pageSearchText,
+      start,
+    });
     if (match.boxes.length > 0) {
       matches.set(getPDFSearchMatchKey(match), match);
     }
   }
 
+  if (matches.size < maxMatches) {
+    for (const match of findNormalizedPageMatches({
+      candidate,
+      maxMatches,
+      pageSearchText,
+      pageIndex,
+    })) {
+      if (match.boxes.length > 0) {
+        matches.set(getPDFSearchMatchKey(match), match);
+      }
+      if (matches.size >= maxMatches) {
+        break;
+      }
+    }
+  }
+
   return [...matches.values()].toSorted(comparePDFSearchMatches);
+};
+
+const getViewerSearchPages = async (
+  pdf: PDF,
+  signal: AbortSignal,
+): Promise<ViewerSearchPage[]> => {
+  const rootPages = pdf.getPages();
+  const pdfAttachments: Uint8Array[] = [];
+
+  for (const [name, attachment] of pdf.getAttachments()) {
+    signal.throwIfAborted();
+    if (!attachment.filename.trim().toLowerCase().endsWith(".pdf")) {
+      continue;
+    }
+    const content = pdf.getAttachment(name);
+    if (content) {
+      pdfAttachments.push(content);
+    }
+  }
+
+  if (rootPages.length > 1 || pdfAttachments.length === 0) {
+    return rootPages.map((page, pageIndex) => ({ page, pageIndex }));
+  }
+
+  const { PDF } = await import("@libpdf/core");
+  const pages: ViewerSearchPage[] = [];
+  const attachments = await Promise.all(
+    pdfAttachments.map((content) => {
+      signal.throwIfAborted();
+      // Embedded portfolio PDFs are loaded without the container password,
+      // just like the viewer's attachment loading path. Promise.all preserves
+      // the name-tree order used by the viewer.
+      return PDF.load(content);
+    }),
+  );
+  signal.throwIfAborted();
+  for (const attachment of attachments) {
+    for (const page of attachment.getPages()) {
+      signal.throwIfAborted();
+      pages.push({ page, pageIndex: pages.length });
+    }
+  }
+  return pages;
 };
 
 export const findPDFSearchResults = async ({
@@ -205,16 +331,32 @@ export const findPDFSearchResults = async ({
   );
   signal.throwIfAborted();
 
-  const pages = pdf.getPages();
+  const pages = await getViewerSearchPages(pdf, signal);
+  signal.throwIfAborted();
   const candidates = getSearchTextCandidates(searchText);
+  const pageSearchTextCache = new WeakMap<PDFPage, PageSearchText>();
 
   const collectCandidateMatches = (
     candidate: string,
     matches: Map<string, PDFSearchMatch>,
   ): boolean => {
-    for (const page of pages) {
+    for (const { page, pageIndex } of pages) {
       signal.throwIfAborted();
-      for (const match of findPageMatches(page, candidate)) {
+      const remainingMatchLimit = MAX_SEARCH_PREVIEW_MATCHES + 1 - matches.size;
+      if (remainingMatchLimit <= 0) {
+        return true;
+      }
+      let pageSearchText = pageSearchTextCache.get(page);
+      if (!pageSearchText) {
+        pageSearchText = buildPageSearchText(page.extractText());
+        pageSearchTextCache.set(page, pageSearchText);
+      }
+      for (const match of findPageMatches({
+        candidate,
+        maxMatches: remainingMatchLimit,
+        pageSearchText,
+        pageIndex,
+      })) {
         matches.set(getPDFSearchMatchKey(match), match);
         if (matches.size > MAX_SEARCH_PREVIEW_MATCHES) {
           return true;

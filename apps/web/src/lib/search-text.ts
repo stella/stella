@@ -6,6 +6,10 @@ export type SearchTextMatch = {
   end: number;
 };
 
+type FindNormalizedSearchTextMatchesOptions = {
+  maxMatches?: number;
+};
+
 export const normalizeSearchText = (value: string): string =>
   value.normalize("NFKD").replace(COMBINING_MARKS, "").toLowerCase();
 
@@ -30,7 +34,16 @@ export const getSearchTextCandidates = (searchText: string): string[] => {
 export const findNormalizedSearchTextMatches = (
   content: string,
   searchText: string,
+  options: FindNormalizedSearchTextMatchesOptions = {},
 ): SearchTextMatch[] => {
+  const maxMatches = Math.max(
+    0,
+    Math.floor(options.maxMatches ?? Number.MAX_SAFE_INTEGER),
+  );
+  if (maxMatches === 0) {
+    return [];
+  }
+
   const normalizedContentParts: string[] = [];
   const originalRanges: SearchTextMatch[] = [];
   let originalOffset = 0;
@@ -66,6 +79,9 @@ export const findNormalizedSearchTextMatches = (
     const lastRange = originalRanges.at(normalizedEnd - 1);
     if (firstRange && lastRange) {
       matches.push({ start: firstRange.start, end: lastRange.end });
+      if (matches.length >= maxMatches) {
+        break;
+      }
     }
     searchFrom = normalizedEnd;
   }
