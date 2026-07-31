@@ -1,5 +1,5 @@
 import { Result, panic } from "better-result";
-import { and, eq, notInArray, sql } from "drizzle-orm";
+import { and, eq, isNull, lt, notInArray, or, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -146,8 +146,35 @@ type ProcessDecisionAttemptOptions = {
   input: IngestionResult;
   sourceId: SafeId<"caseLawSource">;
   scopedDb: ScopedDb;
+  observedAt: Date;
   identityReconciliation: IdentityReconciliation;
 };
+
+type ProcessDecisionOptions = Omit<
+  ProcessDecisionAttemptOptions,
+  "identityReconciliation"
+>;
+
+type SourceObservation = {
+  observedAt: Date;
+  sourceHash: string;
+};
+
+const storedObservationPrecedes = ({
+  observedAt,
+  sourceHash,
+}: SourceObservation) =>
+  or(
+    isNull(caseLawDecisions.sourceObservedAt),
+    lt(caseLawDecisions.sourceObservedAt, observedAt),
+    and(
+      eq(caseLawDecisions.sourceObservedAt, observedAt),
+      or(
+        isNull(caseLawDecisions.sourceObservationHash),
+        lt(caseLawDecisions.sourceObservationHash, sourceHash),
+      ),
+    ),
+  );
 
 /**
  * Upload sourceRaw to S3 under a content-addressable key.
@@ -464,6 +491,7 @@ const processDecisionAttempt = async ({
   input,
   sourceId,
   scopedDb,
+  observedAt,
   identityReconciliation,
 }: ProcessDecisionAttemptOptions): Promise<ProcessResult> => {
   const result = sanitizeResult(input);
@@ -489,6 +517,8 @@ const processDecisionAttempt = async ({
         id: true,
         metadata: true,
         sourceHash: true,
+        sourceObservedAt: true,
+        sourceObservationHash: true,
         sourceRawS3Key: true,
         sourceRawContentType: true,
       },
@@ -504,6 +534,23 @@ const processDecisionAttempt = async ({
       incomingRawHash: result.rawHash,
     })
   ) {
+    await scopedDb((tx) =>
+      tx
+        .update(caseLawDecisions)
+        .set({
+          sourceObservedAt: observedAt,
+          sourceObservationHash: result.rawHash,
+        })
+        .where(
+          and(
+            eq(caseLawDecisions.id, existing.id),
+            storedObservationPrecedes({
+              observedAt,
+              sourceHash: result.rawHash,
+            }),
+          ),
+        ),
+    );
     return {
       inserted: false,
       searchVectorFailed: false,
@@ -731,7 +778,7 @@ const processDecisionAttempt = async ({
     }
   })();
 
-  const writeDecisionRow = async (slug?: string): Promise<void> => {
+  const writeDecisionRow = async (slug?: string): Promise<boolean> =>
     await scopedDb(async (tx) => {
       // audit: skip — background case-law ingestion pipeline; public case-law data, not user actions
       if (existing) {
@@ -747,7 +794,7 @@ const processDecisionAttempt = async ({
         const payloadNeedsGuard =
           !incomingCarriesDocument && Object.keys(payloadColumns).length > 0;
 
-        await tx
+        const updated = await tx
           .update(caseLawDecisions)
           .set({
             ecli: result.ecli,
@@ -769,13 +816,28 @@ const processDecisionAttempt = async ({
             // next ingestion cycle sees a hash mismatch and retries
             // the upload instead of permanently skipping the decision.
             sourceHash: s3UploadFailed ? existing.sourceHash : result.rawHash,
+            sourceObservedAt: observedAt,
+            sourceObservationHash: result.rawHash,
             // Clear indexedHash so the corpus indexer re-picks this row even
             // when only metadata changed (its staleness check compares
             // indexedHash to contentHash, which only tracks the payload).
             indexedHash: null,
             updatedAt: new Date(),
           })
-          .where(eq(caseLawDecisions.id, existing.id));
+          .where(
+            and(
+              eq(caseLawDecisions.id, existing.id),
+              storedObservationPrecedes({
+                observedAt,
+                sourceHash: result.rawHash,
+              }),
+            ),
+          )
+          .returning({ id: caseLawDecisions.id });
+
+        if (updated.length === 0) {
+          return false;
+        }
 
         if (payloadNeedsGuard) {
           await tx
@@ -792,7 +854,7 @@ const processDecisionAttempt = async ({
         // Citations are read out of the document, so a refresh that
         // carries no document has nothing to say about them either.
         if (!incomingCarriesDocument) {
-          return;
+          return true;
         }
 
         await tx
@@ -809,7 +871,7 @@ const processDecisionAttempt = async ({
             );
         }
 
-        return;
+        return true;
       }
 
       if (slug === undefined) {
@@ -841,6 +903,8 @@ const processDecisionAttempt = async ({
           sourceRawS3Key,
           sourceRawContentType,
           sourceHash: result.rawHash,
+          sourceObservedAt: observedAt,
+          sourceObservationHash: result.rawHash,
         })
         .returning({ id: caseLawDecisions.id });
 
@@ -857,8 +921,8 @@ const processDecisionAttempt = async ({
             ),
           );
       }
+      return true;
     });
-  };
 
   // Pass the original error through: the pipeline's halt semantics inspect
   // its type (a TimeoutError holds the cursor), which a wrapper would hide.
@@ -925,6 +989,7 @@ const processDecisionAttempt = async ({
         input,
         sourceId,
         scopedDb,
+        observedAt,
         identityReconciliation: IDENTITY_RECONCILIATION.RETRY,
       });
     }
@@ -938,6 +1003,14 @@ const processDecisionAttempt = async ({
       await discardOrphanedCorpusObjects(corpusPlan.written, decisionId);
     }
     throw rowWrite.error;
+  }
+
+  if (!rowWrite.value) {
+    return {
+      inserted: false,
+      searchVectorFailed: false,
+      s3UploadFailed: false,
+    };
   }
 
   // Mirror text/sections/AST to object storage, then record the keys +
@@ -1019,14 +1092,10 @@ const processDecisionAttempt = async ({
 };
 
 export const processDecision = async (
-  input: IngestionResult,
-  sourceId: SafeId<"caseLawSource">,
-  scopedDb: ScopedDb,
+  options: ProcessDecisionOptions,
 ): Promise<ProcessResult> =>
   await processDecisionAttempt({
-    input,
-    sourceId,
-    scopedDb,
+    ...options,
     identityReconciliation: IDENTITY_RECONCILIATION.INITIAL,
   });
 
@@ -1095,6 +1164,7 @@ export const runIngestionPipeline = async ({
       source.config ?? {},
       pageSignal,
     );
+    const observedAt = new Date();
 
     if (Result.isError(pageResult)) {
       captureError(pageResult.error, {
@@ -1154,7 +1224,12 @@ export const runIngestionPipeline = async ({
         }
         try {
           // oxlint-disable-next-line no-await-in-loop -- sequential decision inserts: consecutive-failure halting and per-page counters depend on ordering
-          const outcome = await processDecision(result, source.id, scopedDb);
+          const outcome = await processDecision({
+            input: result,
+            sourceId: source.id,
+            scopedDb,
+            observedAt,
+          });
 
           if (outcome.inserted) {
             inserted++;

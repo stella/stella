@@ -181,11 +181,12 @@ const scopedDb: ScopedDb = async (callback) => {
 
 describe("processDecision — canonical storage mode", () => {
   test("writes the corpus objects before the row, and nulls the text columns", async () => {
-    const outcome = await processDecision(
-      decision,
-      createSafeId<"caseLawSource">(),
+    const outcome = await processDecision({
+      input: decision,
+      sourceId: createSafeId<"caseLawSource">(),
       scopedDb,
-    );
+      observedAt: new Date("2026-07-31T12:00:00.000Z"),
+    });
 
     expect(outcome).toEqual({
       inserted: true,
@@ -216,11 +217,12 @@ describe("processDecision — canonical storage mode", () => {
       return await Promise.reject(new Error("bucket unreachable"));
     });
 
-    const outcome = await processDecision(
-      decision,
-      createSafeId<"caseLawSource">(),
+    const outcome = await processDecision({
+      input: decision,
+      sourceId: createSafeId<"caseLawSource">(),
       scopedDb,
-    );
+      observedAt: new Date("2026-07-31T12:00:00.000Z"),
+    });
 
     expect(outcome).toEqual({
       inserted: false,
@@ -256,11 +258,12 @@ describe("processDecision — canonical storage mode", () => {
       return await Promise.reject(new Error("bucket unreachable"));
     });
 
-    const outcome = await processDecision(
-      decision,
-      createSafeId<"caseLawSource">(),
+    const outcome = await processDecision({
+      input: decision,
+      sourceId: createSafeId<"caseLawSource">(),
       scopedDb,
-    );
+      observedAt: new Date("2026-07-31T12:00:00.000Z"),
+    });
 
     expect(outcome.s3UploadFailed).toBe(true);
     expect(events).toEqual(["corpus-write-failed"]);
@@ -270,11 +273,12 @@ describe("processDecision — canonical storage mode", () => {
   // bun-types declares `.rejects.toBe` as void, so awaiting it trips
   // type-aware lint; capture the rejection explicitly instead.
   const rejectionFrom = async (): Promise<unknown> =>
-    await processDecision(
-      decision,
-      createSafeId<"caseLawSource">(),
+    await processDecision({
+      input: decision,
+      sourceId: createSafeId<"caseLawSource">(),
       scopedDb,
-    ).then(
+      observedAt: new Date("2026-07-31T12:00:00.000Z"),
+    }).then(
       () => null,
       (error: unknown) => error,
     );

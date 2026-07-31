@@ -100,16 +100,18 @@ if (!databaseUrl || !runPostgresTests) {
     });
 
     test("keeps decisions that share a docket across courts", async () => {
-      await processDecision(
-        decisionAt("Okresný súd Prievidza", "g1"),
+      await processDecision({
+        input: decisionAt("Okresný súd Prievidza", "g1"),
         sourceId,
         scopedDb,
-      );
-      await processDecision(
-        decisionAt("Okresný súd Trenčín", "g2"),
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
+      await processDecision({
+        input: decisionAt("Okresný súd Trenčín", "g2"),
         sourceId,
         scopedDb,
-      );
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
 
       expect(await storedCourts()).toEqual([
         "Okresný súd Prievidza",
@@ -119,13 +121,89 @@ if (!databaseUrl || !runPostgresTests) {
 
     test("treats the same publisher id as the same decision on replay", async () => {
       const before = await storedCourts();
-      await processDecision(
-        decisionAt("Okresný súd Prievidza", "g1"),
+      await processDecision({
+        input: decisionAt("Okresný súd Prievidza", "g1"),
         sourceId,
         scopedDb,
-      );
+        observedAt: new Date("2026-07-31T12:00:01.000Z"),
+      });
 
       expect(await storedCourts()).toEqual(before);
+    });
+
+    test("an older overlapping observation cannot overwrite a newer winner", async () => {
+      const publisherId = "observed-order";
+      const newer = decisionAt("Newest observation", publisherId);
+      const older = decisionAt("Older observation", publisherId);
+
+      await processDecision({
+        input: newer,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:01.000Z"),
+      });
+      await processDecision({
+        input: older,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
+
+      const [row] = await db.execute(sql<{ court: string }>`
+        SELECT court FROM case_law_decisions
+        WHERE source_id = ${sourceId} AND source_document_id = ${publisherId}
+      `);
+      expect(isRecord(row) ? row["court"] : undefined).toBe(
+        "Newest observation",
+      );
+    });
+
+    test("an identical replay advances the observation watermark", async () => {
+      const publisherId = "observed-replay";
+      const current = decisionAt("Current observation", publisherId);
+
+      await processDecision({
+        input: current,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:02:00.000Z"),
+      });
+      await processDecision({
+        input: current,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:02:02.000Z"),
+      });
+      await processDecision({
+        input: decisionAt("Stale observation", publisherId),
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:02:01.000Z"),
+      });
+
+      const [row] = await db.execute(sql<{ court: string }>`
+        SELECT court FROM case_law_decisions
+        WHERE source_id = ${sourceId} AND source_document_id = ${publisherId}
+      `);
+      expect(isRecord(row) ? row["court"] : undefined).toBe(
+        "Current observation",
+      );
+    });
+
+    test("equal observation timestamps converge by source hash", async () => {
+      const publisherId = "observed-tie";
+      const lower = decisionAt("Lower hash", publisherId);
+      const higher = decisionAt("Higher hash", publisherId);
+      const observedAt = new Date("2026-07-31T12:01:00.000Z");
+
+      await processDecision({ input: lower, sourceId, scopedDb, observedAt });
+      await processDecision({ input: higher, sourceId, scopedDb, observedAt });
+
+      const [row] = await db.execute(sql<{ court: string }>`
+        SELECT court FROM case_law_decisions
+        WHERE source_id = ${sourceId} AND source_document_id = ${publisherId}
+      `);
+      expect(isRecord(row) ? row["court"] : undefined).toBe("Lower hash");
     });
 
     test("concurrent collision inserts converge to unique stable slugs", async () => {
@@ -133,8 +211,18 @@ if (!databaseUrl || !runPostgresTests) {
       const second = decisionAt("Okresný súd B", "concurrent-b");
 
       await Promise.all([
-        processDecision(first, sourceId, scopedDb),
-        processDecision(second, sourceId, scopedDb),
+        processDecision({
+          input: first,
+          sourceId,
+          scopedDb,
+          observedAt: new Date("2026-07-31T12:00:00.000Z"),
+        }),
+        processDecision({
+          input: second,
+          sourceId,
+          scopedDb,
+          observedAt: new Date("2026-07-31T12:00:00.000Z"),
+        }),
       ]);
 
       const slugs = await storedSlugs(["concurrent-a", "concurrent-b"]);
@@ -143,8 +231,18 @@ if (!databaseUrl || !runPostgresTests) {
 
       const beforeReplay = [...slugs];
       await Promise.all([
-        processDecision(first, sourceId, scopedDb),
-        processDecision(second, sourceId, scopedDb),
+        processDecision({
+          input: first,
+          sourceId,
+          scopedDb,
+          observedAt: new Date("2026-07-31T12:00:01.000Z"),
+        }),
+        processDecision({
+          input: second,
+          sourceId,
+          scopedDb,
+          observedAt: new Date("2026-07-31T12:00:01.000Z"),
+        }),
       ]);
       expect(await storedSlugs(["concurrent-a", "concurrent-b"])).toEqual(
         beforeReplay,
@@ -208,8 +306,18 @@ if (!databaseUrl || !runPostgresTests) {
       };
 
       await Promise.all([
-        processDecision(first, sourceId, firstScopedDb),
-        processDecision(second, sourceId, secondScopedDb),
+        processDecision({
+          input: first,
+          sourceId,
+          scopedDb: firstScopedDb,
+          observedAt: new Date("2026-07-31T12:00:00.000Z"),
+        }),
+        processDecision({
+          input: second,
+          sourceId,
+          scopedDb: secondScopedDb,
+          observedAt: new Date("2026-07-31T12:00:01.000Z"),
+        }),
       ]);
 
       const rows = await db.execute(

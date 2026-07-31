@@ -150,6 +150,8 @@ export const caseLawDecisions = p.pgTable(
       .notNull(),
     metadata: jsonb().$type<Record<string, unknown>>().default({}),
     sourceHash: p.varchar("source_hash", { length: 64 }),
+    sourceObservedAt: timestamptz("source_observed_at"),
+    sourceObservationHash: p.varchar("source_observation_hash", { length: 64 }),
     /**
      * Materialized citation-authority ranking signal: the
      * ln(1 + weighted-citation-density) value that `citationScore()`

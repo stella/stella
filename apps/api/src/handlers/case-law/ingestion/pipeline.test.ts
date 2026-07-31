@@ -481,8 +481,8 @@ describe("processDecision — corpus storage off", () => {
       return await callback(tx as unknown as Transaction);
     };
 
-    const outcome = await processDecision(
-      {
+    const outcome = await processDecision({
+      input: {
         caseNumber: "X/1/2026",
         court: "Test Court",
         country: "SVK",
@@ -492,9 +492,10 @@ describe("processDecision — corpus storage off", () => {
         rawHash: "new-hash",
         documentAst: EMPTY_AST,
       },
-      createSafeId<"caseLawSource">(),
+      sourceId: createSafeId<"caseLawSource">(),
       scopedDb,
-    );
+      observedAt: new Date("2026-07-31T12:00:00.000Z"),
+    });
 
     expect(outcome.inserted).toBe(true);
     expect(updated).toMatchObject({

@@ -110,7 +110,12 @@ if (!databaseUrl || !runPostgresTests) {
     });
 
     test("stores adapter documentAst output as a jsonb object", async () => {
-      await processDecision(ingestionResult, sourceId, scopedDb);
+      await processDecision({
+        input: ingestionResult,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
 
       const [row] = await db.execute(sql<JsonbStorageRow>`
         SELECT
@@ -128,7 +133,12 @@ if (!databaseUrl || !runPostgresTests) {
     });
 
     test("keeps adapter documentAst as an object when refreshing a decision", async () => {
-      await processDecision(ingestionResult, sourceId, scopedDb);
+      await processDecision({
+        input: ingestionResult,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
       await db.execute(sql`
         UPDATE case_law_decisions
         SET indexed_hash = 'stale-indexed-hash'
@@ -136,15 +146,16 @@ if (!databaseUrl || !runPostgresTests) {
           AND case_number = ${ingestionResult.caseNumber}
           AND language = ${ingestionResult.language}
       `);
-      await processDecision(
-        {
+      await processDecision({
+        input: {
           ...ingestionResult,
           rawHash: "jsonb-regression-hash-refresh",
           metadata: { source: "regression-refresh" },
         },
         sourceId,
         scopedDb,
-      );
+        observedAt: new Date("2026-07-31T12:00:01.000Z"),
+      });
 
       const [row] = await db.execute(sql<JsonbStorageRow>`
         SELECT
