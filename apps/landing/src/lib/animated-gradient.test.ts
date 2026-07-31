@@ -14,9 +14,27 @@ const originalNavigator = Object.getOwnPropertyDescriptor(
   "navigator",
 );
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+const originalGetComputedStyle = Object.getOwnPropertyDescriptor(
+  globalThis,
+  "getComputedStyle",
+);
+const originalIntersectionObserver = Object.getOwnPropertyDescriptor(
+  globalThis,
+  "IntersectionObserver",
+);
+const originalMutationObserver = Object.getOwnPropertyDescriptor(
+  globalThis,
+  "MutationObserver",
+);
 
 const restoreGlobal = (
-  property: "document" | "navigator" | "window",
+  property:
+    | "document"
+    | "getComputedStyle"
+    | "IntersectionObserver"
+    | "MutationObserver"
+    | "navigator"
+    | "window",
   descriptor: PropertyDescriptor | undefined,
 ) => {
   if (descriptor === undefined) {
@@ -32,14 +50,21 @@ afterEach(() => {
   restoreGlobal("document", originalDocument);
   restoreGlobal("navigator", originalNavigator);
   restoreGlobal("window", originalWindow);
+  restoreGlobal("getComputedStyle", originalGetComputedStyle);
+  restoreGlobal("IntersectionObserver", originalIntersectionObserver);
+  restoreGlobal("MutationObserver", originalMutationObserver);
 });
 
 test("iOS gradients animate one original SVG surface", () => {
   const cancel = mock(() => undefined);
+  const pause = mock(() => undefined);
+  const play = mock(() => undefined);
   const animate = mock((keyframes: unknown, options: unknown) => ({
     cancel,
     keyframes,
     options,
+    pause,
+    play,
   }));
   const image = {
     alt: "",
@@ -49,14 +74,60 @@ test("iOS gradients animate one original SVG surface", () => {
     style: {},
   };
   const renderedChildren: unknown[] = [];
+  const root = {};
+  let syncTransition = () => undefined;
+  const removeEventListener = mock(() => undefined);
   const container = {
+    addEventListener: (event: string, listener: () => void) => {
+      if (event === "transitionend") {
+        syncTransition = listener;
+      }
+    },
     dataset: { animatedGradient: "" },
     id: "gradient-light",
     isConnected: true,
+    removeEventListener,
     replaceChildren: (...children: unknown[]) => {
       renderedChildren.push(...children);
     },
   };
+  const visibilityDisconnect = mock(() => undefined);
+  const themeDisconnect = mock(() => undefined);
+  let opacity = "0";
+  let syncTheme = () => undefined;
+
+  Object.defineProperty(globalThis, "getComputedStyle", {
+    configurable: true,
+    value: () => ({ opacity }),
+  });
+  Object.defineProperty(globalThis, "IntersectionObserver", {
+    configurable: true,
+    value: class {
+      disconnect = visibilityDisconnect;
+
+      constructor(
+        private readonly callback: (
+          entries: { isIntersecting: boolean; target: Element }[],
+        ) => void,
+      ) {}
+
+      observe(target: Element) {
+        this.callback([{ isIntersecting: true, target }]);
+      }
+    },
+  });
+  Object.defineProperty(globalThis, "MutationObserver", {
+    configurable: true,
+    value: class {
+      disconnect = themeDisconnect;
+
+      constructor(callback: () => void) {
+        syncTheme = callback;
+      }
+
+      observe() {}
+    },
+  });
 
   Object.defineProperty(globalThis, "navigator", {
     configurable: true,
@@ -76,6 +147,7 @@ test("iOS gradients animate one original SVG surface", () => {
     configurable: true,
     value: {
       createElement: () => image,
+      documentElement: root,
       querySelector: (selector: string) =>
         selector === "#gradient-light" ? container : null,
     },
@@ -86,6 +158,16 @@ test("iOS gradients animate one original SVG surface", () => {
   expect(renderedChildren).toEqual([image]);
   expect(image.src).toBe("/images/gradients/hero-light.svg");
   expect(animate).toHaveBeenCalledTimes(1);
+  expect(pause).toHaveBeenCalledTimes(2);
+  expect(play).toHaveBeenCalledTimes(0);
+
+  opacity = "1";
+  syncTheme();
+  expect(play).toHaveBeenCalledTimes(1);
+
+  opacity = "0";
+  syncTransition();
+  expect(pause).toHaveBeenCalledTimes(3);
   expect(animate.mock.calls.at(0)?.at(0)).toEqual({
     opacity: ["0.96", "1", "0.93", "1", "0.96"],
     transform: [
@@ -99,4 +181,7 @@ test("iOS gradients animate one original SVG surface", () => {
 
   cleanupPageGradients();
   expect(cancel).toHaveBeenCalledTimes(1);
+  expect(removeEventListener).toHaveBeenCalledTimes(1);
+  expect(visibilityDisconnect).toHaveBeenCalledTimes(1);
+  expect(themeDisconnect).toHaveBeenCalledTimes(1);
 });
