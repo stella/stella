@@ -3,6 +3,97 @@ import type {
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
 
+const USER_MESSAGE_FALLBACK_BLOCK_TAGS = Object.freeze([
+  "blockquote",
+  "div",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "li",
+  "ol",
+  "p",
+  "pre",
+  "ul",
+]);
+const USER_MESSAGE_FALLBACK_INLINE_TAGS = Object.freeze([
+  "a",
+  "code",
+  "del",
+  "em",
+  "entity-mention",
+  "s",
+  "span",
+  "strong",
+  "u",
+]);
+const USER_MESSAGE_FALLBACK_TAGS = new Set([
+  ...USER_MESSAGE_FALLBACK_BLOCK_TAGS,
+  ...USER_MESSAGE_FALLBACK_INLINE_TAGS,
+  "br",
+]);
+
+/**
+ * Turns TipTap HTML into readable text without using DOMParser, so the same
+ * result is safe during server rendering. Only known TipTap tags are removed,
+ * so Markdown autolinks and comparison operators remain literal text.
+ */
+export const userMessageFallbackText = (html: string): string => {
+  let output = "";
+  let cursor = 0;
+
+  while (cursor < html.length) {
+    const tagStart = html.indexOf("<", cursor);
+    if (tagStart === -1) {
+      output += html.slice(cursor);
+      break;
+    }
+
+    output += html.slice(cursor, tagStart);
+    const tagEnd = html.indexOf(">", tagStart + 1);
+    if (tagEnd === -1) {
+      output += html.slice(tagStart);
+      break;
+    }
+
+    const rawTag = html.slice(tagStart + 1, tagEnd).trimStart();
+    const closing = rawTag.startsWith("/");
+    const nameStart = closing ? 1 : 0;
+    let nameEnd = nameStart;
+    while (/[\dA-Za-z-]/u.test(rawTag.charAt(nameEnd))) {
+      nameEnd += 1;
+    }
+    const tagName = rawTag.slice(nameStart, nameEnd).toLowerCase();
+    if (!USER_MESSAGE_FALLBACK_TAGS.has(tagName)) {
+      output += html.slice(tagStart, tagEnd + 1);
+      cursor = tagEnd + 1;
+      continue;
+    }
+    if (
+      tagName === "br" ||
+      (closing &&
+        USER_MESSAGE_FALLBACK_BLOCK_TAGS.some(
+          (blockTagName) => blockTagName === tagName,
+        ))
+    ) {
+      output += "\n";
+    }
+    cursor = tagEnd + 1;
+  }
+
+  return output
+    .replaceAll("&nbsp;", " ")
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .replaceAll("&quot;", '"')
+    .replaceAll("&#39;", "'")
+    .replaceAll("&amp;", "&")
+    .replace(/\n{3,}/gu, "\n\n")
+    .trim();
+};
+
 type TurnBodyItem = {
   message: PersistedChatMessage;
   /** Position in the flat `messages` list, kept so anon-restoration lookups

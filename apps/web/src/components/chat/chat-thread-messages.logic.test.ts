@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   collectAnonRestorations,
   getFollowingAssistantRestorations,
+  userMessageFallbackText,
 } from "@/components/chat/chat-thread-messages.logic";
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 
@@ -20,6 +21,28 @@ const assistantMessage = (
   metadata: pairs.length > 0 ? { anonRestorations: { pairs } } : undefined,
   parts: [{ type: "text", content: "reply" }],
   role: "assistant",
+});
+
+describe("userMessageFallbackText", () => {
+  test("strips TipTap markup without corrupting Markdown autolinks or comparisons", () => {
+    expect(
+      userMessageFallbackText(
+        "<p>Compare a &lt; b and c &gt; d</p><p>See &lt;https://example.com&gt; now</p>",
+      ),
+    ).toBe("Compare a < b and c > d\nSee <https://example.com> now");
+    expect(userMessageFallbackText("Compare a < b and c > d")).toBe(
+      "Compare a < b and c > d",
+    );
+    expect(userMessageFallbackText("See <https://example.com> now")).toBe(
+      "See <https://example.com> now",
+    );
+  });
+
+  test("preserves non-Latin and right-to-left prompt text", () => {
+    expect(userMessageFallbackText("<p>مرحبا světe こんにちは</p>")).toBe(
+      "مرحبا světe こんにちは",
+    );
+  });
 });
 
 describe("collectAnonRestorations", () => {
