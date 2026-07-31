@@ -67,10 +67,7 @@ export const resolveLandingLocaleRedirect = ({
   );
   const preferredRoute =
     savedRoute ?? matchBrowserRoute(browserLanguages, localizedRoutes);
-  if (
-    preferredRoute === undefined ||
-    preferredRoute.locale === currentLocale
-  ) {
+  if (preferredRoute === undefined || preferredRoute.locale === currentLocale) {
     return undefined;
   }
 
@@ -118,9 +115,7 @@ export const initializeLandingLocale = () => {
   }
 
   const browserLanguages =
-    navigator.languages.length > 0
-      ? navigator.languages
-      : [navigator.language];
+    navigator.languages.length > 0 ? navigator.languages : [navigator.language];
   const destination = resolveLandingLocaleRedirect({
     browserLanguages,
     currentLocale,
