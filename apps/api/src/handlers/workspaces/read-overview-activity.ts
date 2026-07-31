@@ -11,6 +11,7 @@ import {
   sql,
   type SQL,
 } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { t } from "elysia";
 
 // eslint-disable-next-line security-guards/no-unscoped-user-query -- actor IDs come only from audit rows already scoped to this authorized organization and workspace; a membership join would erase retained attribution after account deletion.
@@ -43,6 +44,11 @@ const ACTIVITY_FILTERS = [
   "court",
   "automation",
 ] as const;
+
+const versionSnapshotAuditLogs = alias(
+  auditLogs,
+  "version_snapshot_audit_logs",
+);
 
 const VISIBLE_ACTIONS = [
   AUDIT_ACTION.CREATE,
@@ -82,6 +88,70 @@ const legacyEntityVersionIdText = () => sql<string>`coalesce(
     when ${auditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.FIELD}
       then split_part(${auditLogs.resourceId}, ':', 1)
   end
+)`;
+
+const auditEntityIdSnapshot = () => sql<string | null>`coalesce(
+  ${auditLogs.metadata} ->> 'entityId',
+  ${auditLogs.changes} -> 'created' -> 'new' ->> 'entityId',
+  ${auditLogs.changes} -> 'deleted' -> 'old' ->> 'entityId',
+  case
+    when ${auditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.ENTITY}
+      then ${auditLogs.resourceId}
+  end
+)`;
+
+const siblingVersionEntityIdSnapshot = () => sql<string | null>`(
+  select coalesce(
+    ${versionSnapshotAuditLogs.metadata} ->> 'entityId',
+    ${versionSnapshotAuditLogs.changes} -> 'created' -> 'new' ->> 'entityId',
+    ${versionSnapshotAuditLogs.changes} -> 'deleted' -> 'old' ->> 'entityId'
+  )
+  from ${versionSnapshotAuditLogs}
+  where ${versionSnapshotAuditLogs.organizationId} = ${auditLogs.organizationId}
+    and ${versionSnapshotAuditLogs.workspaceId} = ${auditLogs.workspaceId}
+    and ${auditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.ENTITY_VERSION}
+    and ${versionSnapshotAuditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.ENTITY_VERSION}
+    and ${versionSnapshotAuditLogs.resourceId} = ${auditLogs.resourceId}
+    and coalesce(
+      ${versionSnapshotAuditLogs.metadata} ->> 'entityId',
+      ${versionSnapshotAuditLogs.changes} -> 'created' -> 'new' ->> 'entityId',
+      ${versionSnapshotAuditLogs.changes} -> 'deleted' -> 'old' ->> 'entityId'
+    ) is not null
+  order by ${versionSnapshotAuditLogs.createdAt}, ${versionSnapshotAuditLogs.id}
+  limit 1
+)`;
+
+const auditEntityNameSnapshot = () => sql<string | null>`coalesce(
+  ${auditLogs.metadata} ->> 'entityName',
+  ${auditLogs.metadata} ->> 'fileName',
+  ${auditLogs.changes} -> 'created' -> 'new' ->> 'name',
+  ${auditLogs.changes} -> 'created' -> 'new' ->> 'fileName',
+  ${auditLogs.changes} -> 'deleted' -> 'old' ->> 'name'
+)`;
+
+const siblingVersionEntityNameSnapshot = () => sql<string | null>`(
+  select coalesce(
+    ${versionSnapshotAuditLogs.metadata} ->> 'entityName',
+    ${versionSnapshotAuditLogs.metadata} ->> 'fileName',
+    ${versionSnapshotAuditLogs.changes} -> 'created' -> 'new' ->> 'name',
+    ${versionSnapshotAuditLogs.changes} -> 'created' -> 'new' ->> 'fileName',
+    ${versionSnapshotAuditLogs.changes} -> 'deleted' -> 'old' ->> 'name'
+  )
+  from ${versionSnapshotAuditLogs}
+  where ${versionSnapshotAuditLogs.organizationId} = ${auditLogs.organizationId}
+    and ${versionSnapshotAuditLogs.workspaceId} = ${auditLogs.workspaceId}
+    and ${auditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.ENTITY_VERSION}
+    and ${versionSnapshotAuditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.ENTITY_VERSION}
+    and ${versionSnapshotAuditLogs.resourceId} = ${auditLogs.resourceId}
+    and coalesce(
+      ${versionSnapshotAuditLogs.metadata} ->> 'entityName',
+      ${versionSnapshotAuditLogs.metadata} ->> 'fileName',
+      ${versionSnapshotAuditLogs.changes} -> 'created' -> 'new' ->> 'name',
+      ${versionSnapshotAuditLogs.changes} -> 'created' -> 'new' ->> 'fileName',
+      ${versionSnapshotAuditLogs.changes} -> 'deleted' -> 'old' ->> 'name'
+    ) is not null
+  order by ${versionSnapshotAuditLogs.createdAt}, ${versionSnapshotAuditLogs.id}
+  limit 1
 )`;
 
 const legacyRelatedEntityKind = () => sql<string | null>`(
@@ -228,6 +298,7 @@ const config = {
 
 type ActivityTarget = {
   deleted: boolean;
+  encrypted: boolean | null;
   entityId: string | null;
   fieldId: string | null;
   id: string;
@@ -322,9 +393,14 @@ const readOverviewActivity = createSafeHandler(
             approvedByUserId: auditLogs.approvedByUserId,
             createdAt: auditLogs.createdAt,
             createdAtCursor: activityCursor.cursorValue.as("created_at_cursor"),
-            deletedEntityName: sql<
-              string | null
-            >`${auditLogs.changes} -> 'deleted' -> 'old' ->> 'name'`,
+            entityIdSnapshot: sql<string | null>`coalesce(
+              ${auditEntityIdSnapshot()},
+              ${siblingVersionEntityIdSnapshot()}
+            )`,
+            entityNameSnapshot: sql<string | null>`coalesce(
+              ${auditEntityNameSnapshot()},
+              ${siblingVersionEntityNameSnapshot()}
+            )`,
             id: auditLogs.id,
             legacyKind: legacyResourceKind(),
             legacyWorkspaceTeamEvent: legacyWorkspaceTeamEvent(),
@@ -408,6 +484,11 @@ const readOverviewActivity = createSafeHandler(
           ...new Set([
             ...directEntityIds,
             ...versionRows.map((row) => row.entityId),
+            ...rows.flatMap((row) =>
+              row.entityIdSnapshot
+                ? [brandPersistedEntityId(row.entityIdSnapshot)]
+                : [],
+            ),
           ]),
         ];
         const entityFile = sql<EntityFile | null>`(
@@ -416,7 +497,8 @@ const readOverviewActivity = createSafeHandler(
             'propertyId', ${fields.propertyId},
             'fileName', ${fields.content}->>'fileName',
             'mimeType', ${fields.content}->>'mimeType',
-            'pdfFileId', ${fields.content}->>'pdfFileId'
+            'pdfFileId', ${fields.content}->>'pdfFileId',
+            'encrypted', ${fields.content}->'encrypted'
           )
           from ${fields}
           where ${fields.workspaceId} = ${entities.workspaceId}
@@ -557,8 +639,9 @@ const readOverviewActivity = createSafeHandler(
           runId: row.runId,
           target: targetForRow({
             category,
-            deletedEntityName: row.deletedEntityName,
             entityMap,
+            entityIdSnapshot: row.entityIdSnapshot,
+            entityNameSnapshot: row.entityNameSnapshot,
             fieldVersionMap,
             matterName: result.workspace?.name ?? null,
             resourceId: row.resourceId,
@@ -588,6 +671,7 @@ type EntityRow = {
 };
 
 type EntityFile = {
+  encrypted: boolean;
   fileName: string;
   id: string;
   mimeType: string;
@@ -598,6 +682,7 @@ type EntityFile = {
 const toEntityTarget = (entity: EntityRow): EntityTarget => {
   return {
     deleted: false,
+    encrypted: entity.file?.encrypted ?? null,
     entityId: entity.id,
     fieldId: entity.file?.id ?? null,
     id: entity.id,
@@ -611,8 +696,9 @@ const toEntityTarget = (entity: EntityRow): EntityTarget => {
 
 type TargetForRowOptions = {
   category: ActivityCategory;
-  deletedEntityName: string | null;
   entityMap: Map<string, EntityTarget>;
+  entityIdSnapshot: string | null;
+  entityNameSnapshot: string | null;
   fieldVersionMap: Map<string, string>;
   matterName: string | null;
   resourceId: string;
@@ -622,8 +708,9 @@ type TargetForRowOptions = {
 
 const targetForRow = ({
   category,
-  deletedEntityName,
   entityMap,
+  entityIdSnapshot,
+  entityNameSnapshot,
   fieldVersionMap,
   matterName,
   resourceId,
@@ -636,27 +723,36 @@ const targetForRow = ({
       deletedEntityTarget({
         category,
         id: resourceId,
-        name: deletedEntityName,
+        name: entityNameSnapshot,
       })
     );
   }
   if (resourceType === AUDIT_RESOURCE_TYPE.ENTITY_VERSION) {
-    const entityId = versionEntityMap.get(resourceId);
+    const entityId = versionEntityMap.get(resourceId) ?? entityIdSnapshot;
     if (entityId) {
       return (
         entityMap.get(entityId) ??
-        deletedEntityTarget({ category, id: entityId, name: null })
+        deletedEntityTarget({
+          category,
+          id: entityId,
+          name: entityNameSnapshot,
+        })
       );
     }
     return deletedEntityTarget({ category, id: resourceId, name: null });
   }
   if (resourceType === AUDIT_RESOURCE_TYPE.FIELD) {
     const versionId = fieldVersionMap.get(resourceId);
-    const entityId = versionId ? versionEntityMap.get(versionId) : null;
+    const entityId =
+      (versionId ? versionEntityMap.get(versionId) : null) ?? entityIdSnapshot;
     if (entityId) {
       return (
         entityMap.get(entityId) ??
-        deletedEntityTarget({ category, id: entityId, name: null })
+        deletedEntityTarget({
+          category,
+          id: entityId,
+          name: entityNameSnapshot,
+        })
       );
     }
     return deletedEntityTarget({ category, id: resourceId, name: null });
@@ -693,6 +789,7 @@ const deletedEntityTarget = ({
   name = null,
 }: DeletedEntityTargetOptions): EntityTarget => ({
   deleted: true,
+  encrypted: null,
   entityId: null,
   fieldId: null,
   id,
@@ -706,6 +803,7 @@ const deletedEntityTarget = ({
 const documentTarget = (id: string): EntityTarget => ({
   ...deletedEntityTarget({ id }),
   deleted: false,
+  encrypted: null,
 });
 
 const genericTarget = (
@@ -714,6 +812,7 @@ const genericTarget = (
   name: string | null,
 ): ActivityTarget => ({
   deleted: false,
+  encrypted: null,
   entityId: null,
   fieldId: null,
   id,

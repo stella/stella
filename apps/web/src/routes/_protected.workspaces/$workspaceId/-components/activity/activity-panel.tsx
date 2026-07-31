@@ -45,6 +45,7 @@ import type { getTranslator } from "@/i18n/i18n-store";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { isFileDisplayable } from "@/lib/types";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import type {
   MatterActivityCategory,
@@ -1159,7 +1160,19 @@ const getOpenTarget = (item: MatterActivityItem, workspaceId: string) => {
         workspaceId,
       });
   }
-  if (target.kind !== "document" || !target.fieldId || !target.name) {
+  if (
+    target.kind !== "document" ||
+    !target.fieldId ||
+    !target.name ||
+    !target.mimeType ||
+    target.encrypted === null ||
+    !isFileDisplayable({
+      encrypted: target.encrypted,
+      fileName: target.name,
+      mimeType: target.mimeType,
+      pdfFileId: target.pdfFileId,
+    })
+  ) {
     return undefined;
   }
   return () =>

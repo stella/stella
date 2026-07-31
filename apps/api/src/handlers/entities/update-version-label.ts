@@ -50,7 +50,11 @@ export const updateVersionLabelHandler = async function* ({
   const result = yield* Result.await(
     safeDb(async (tx) => {
       const existing = await tx
-        .select({ kind: entities.kind, label: entityVersions.label })
+        .select({
+          entityName: entities.name,
+          kind: entities.kind,
+          label: entityVersions.label,
+        })
         .from(entityVersions)
         .innerJoin(
           entities,
@@ -96,7 +100,11 @@ export const updateVersionLabelHandler = async function* ({
           action: AUDIT_ACTION.UPDATE,
           resourceType: AUDIT_RESOURCE_TYPE.ENTITY_VERSION,
           resourceId: params.versionId,
-          metadata: { kind: previous.kind },
+          metadata: {
+            entityId: params.entityId,
+            entityName: previous.entityName,
+            kind: previous.kind,
+          },
           changes: {
             label: {
               old: previous.label,

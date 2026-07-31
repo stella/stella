@@ -52,6 +52,7 @@ export const updateVersionDescriptionHandler = async function* ({
       const existing = await tx
         .select({
           description: entityVersions.description,
+          entityName: entities.name,
           kind: entities.kind,
         })
         .from(entityVersions)
@@ -99,7 +100,11 @@ export const updateVersionDescriptionHandler = async function* ({
           action: AUDIT_ACTION.UPDATE,
           resourceType: AUDIT_RESOURCE_TYPE.ENTITY_VERSION,
           resourceId: params.versionId,
-          metadata: { kind: previous.kind },
+          metadata: {
+            entityId: params.entityId,
+            entityName: previous.entityName,
+            kind: previous.kind,
+          },
           changes: {
             description: {
               old: previous.description,
