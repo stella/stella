@@ -42,7 +42,9 @@ void mock.module("@/api/lib/tanstack-ai-generate", () => ({
   generateTanStackTextForRole: mock(async () => await Promise.resolve("")),
 }));
 void mock.module("@/api/lib/s3", () => ({
+  deleteS3ObjectWithSignal: mock(async () => undefined),
   getS3: () => ({ write: mock(async () => {}), delete: mock(async () => {}) }),
+  putS3ObjectWithSignal: mock(async () => undefined),
 }));
 void mock.module("@/api/lib/search/process-extraction", () => ({
   processExtraction: mock(async () => {}),

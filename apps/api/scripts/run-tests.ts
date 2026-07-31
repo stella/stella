@@ -1,6 +1,12 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import {
+  batchModuleMockTests,
+  readModuleMockMetadata,
+  type ModuleMockTest,
+} from "../src/tests/module-mock-batching";
+
 const PROPERTY_FLAG = "--property";
 const TEST_FILE_GLOB = "src/**/*.test.{ts,tsx}";
 // Non-test helper modules live here; some install a module mock at import.
@@ -57,31 +63,54 @@ const BYTES_PER_MB = 1024 * 1024;
 const apiRoot = path.resolve(import.meta.dir, "..");
 
 // A `mock.module(...)` call runs at import time and, because bun's module-mock
-// registry is process-wide, leaks to every other file sharing that process. The
-// runner isolates such tests — but only sees `mock.module` when it is written
-// in the test's OWN source. A helper module (e.g. tests/helpers/mock-root-db)
+// registry is process-wide, leaks to every other file sharing that process,
+// even with `--isolate`. The batcher therefore keeps tests that mock the same
+// target apart. It only sees `mock.module` when written in the test's OWN
+// source, though. A helper module (e.g. tests/helpers/mock-root-db)
 // that calls `mock.module` at import hides the call from that text scan, so a
 // test importing it would otherwise land in the shared-process batch and clobber
 // a module (e.g. rootDb) that concurrent tests depend on. Detect those helpers
 // by their import path so any importer is isolated too. Keyed by the path
 // suffix as it appears in an import specifier (`@/api/<suffix>` or a relative
 // path ending in `<suffix>`).
-const moduleMockHelperSuffixes = [
+const moduleMockHelpers = [
   ...new Bun.Glob(TEST_HELPER_GLOB).scanSync({ cwd: apiRoot, onlyFiles: true }),
 ]
   .filter((helperPath) => !/\.test\.tsx?$/u.test(helperPath))
-  .filter((helperPath) =>
-    MODULE_MOCK_PATTERN.test(
-      readFileSync(path.join(apiRoot, helperPath), "utf-8"),
-    ),
-  )
-  .map((helperPath) =>
-    helperPath.replace(/^src\//u, "").replace(/\.tsx?$/u, ""),
-  );
+  .map((helperPath) => ({
+    source: readFileSync(path.join(apiRoot, helperPath), "utf-8"),
+    suffix: helperPath.replace(/^src\//u, "").replace(/\.tsx?$/u, ""),
+  }))
+  .filter(({ source }) => MODULE_MOCK_PATTERN.test(source))
+  .map(({ source, suffix }) => {
+    const metadata = readModuleMockMetadata(source);
+    return {
+      hasUnknownMock: metadata.hasUnknownMock,
+      mockedModules: metadata.mockedModules,
+      suffix,
+    };
+  });
 
 const installsModuleMock = (source: string): boolean =>
   MODULE_MOCK_PATTERN.test(source) ||
-  moduleMockHelperSuffixes.some((suffix) => source.includes(suffix));
+  moduleMockHelpers.some(({ suffix }) => source.includes(suffix));
+const readTestModuleMockMetadata = (source: string) => {
+  const directMetadata = readModuleMockMetadata(source);
+  const metadata = {
+    hasUnknownMock: directMetadata.hasUnknownMock,
+    mockedModules: new Set(directMetadata.mockedModules),
+  };
+  for (const helper of moduleMockHelpers) {
+    if (!source.includes(helper.suffix)) {
+      continue;
+    }
+    metadata.hasUnknownMock ||= helper.hasUnknownMock;
+    for (const mockedModule of helper.mockedModules) {
+      metadata.mockedModules.add(mockedModule);
+    }
+  }
+  return metadata;
+};
 const preloadPath = path.join(apiRoot, "src/tests/setup-env.ts");
 const runnerArguments = Bun.argv.slice(2);
 const propertyOnly = runnerArguments.includes(PROPERTY_FLAG);
@@ -113,14 +142,17 @@ const isDbTest = (testPath: string, source: string): boolean => {
 
 const regularTests: string[] = [];
 const dbTests: string[] = [];
-const moduleMockTests: string[] = [];
+const moduleMockTests: ModuleMockTest[] = [];
 for (const { source, testPath } of classifiedTests) {
   if (propertyOnly && !source.includes(PROPERTY_TEST_MARKER)) {
     continue;
   }
 
   if (installsModuleMock(source)) {
-    moduleMockTests.push(testPath);
+    moduleMockTests.push({
+      ...readTestModuleMockMetadata(source),
+      testPath,
+    });
     continue;
   }
 
@@ -223,6 +255,37 @@ const runTestBatches = async ({
   });
 };
 
+type RunPreparedTestBatchesOptions = {
+  batchStart: number;
+  isolate: boolean;
+  testBatches: readonly string[][];
+};
+
+const runPreparedTestBatches = async ({
+  batchStart,
+  isolate,
+  testBatches,
+}: RunPreparedTestBatchesOptions): Promise<number> => {
+  if (batchStart >= testBatches.length) {
+    return 0;
+  }
+
+  const batch = testBatches.at(batchStart);
+  if (batch === undefined) {
+    return 0;
+  }
+  const exitCode = await runTests(batch, isolate);
+  if (exitCode !== 0) {
+    return exitCode;
+  }
+
+  return runPreparedTestBatches({
+    batchStart: batchStart + 1,
+    isolate,
+    testBatches,
+  });
+};
+
 // A fresh process per test batch makes module memory reclaimable. One
 // process for the full suite grows until the hosted runner terminates it.
 const regularExitCode = await runTestBatches({
@@ -246,10 +309,12 @@ if (dbExitCode !== 0) {
 }
 
 process.exit(
-  await runTestBatches({
-    batchSize: MODULE_MOCK_TEST_BATCH_SIZE,
+  await runPreparedTestBatches({
     batchStart: 0,
     isolate: true,
-    testFiles: moduleMockTests,
+    testBatches: batchModuleMockTests(
+      moduleMockTests,
+      MODULE_MOCK_TEST_BATCH_SIZE,
+    ),
   }),
 );

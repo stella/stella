@@ -57,7 +57,9 @@ const s3DeleteMock = mock(async () => undefined);
 const workspaceId = toSafeId<"workspace">("workspace_1");
 
 void mock.module("@/api/lib/s3", () => ({
+  deleteS3ObjectWithSignal: s3DeleteMock,
   getS3: () => ({ delete: s3DeleteMock, file: fileMock, write: writeMock }),
+  putS3ObjectWithSignal: writeMock,
 }));
 
 const {

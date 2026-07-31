@@ -24,7 +24,9 @@ const writeMock = mock(async () => undefined);
 const s3DeleteMock = mock(async () => undefined);
 
 void mock.module("@/api/lib/s3", () => ({
+  deleteS3ObjectWithSignal: s3DeleteMock,
   getS3: () => ({ delete: s3DeleteMock, file: fileMock, write: writeMock }),
+  putS3ObjectWithSignal: writeMock,
 }));
 
 const { default: duplicateEntity } = await import("./duplicate");

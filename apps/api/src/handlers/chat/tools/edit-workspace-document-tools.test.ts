@@ -25,6 +25,7 @@ let fileScanResult: ScanResult = { verdict: "pass", findings: [] };
 const scanFileMock = mock(async () => Result.ok(fileScanResult));
 
 void mock.module("@/api/lib/s3", () => ({
+  deleteS3ObjectWithSignal: s3DeleteMock,
   getS3: () => ({
     write: s3WriteMock,
     delete: s3DeleteMock,
@@ -33,6 +34,7 @@ void mock.module("@/api/lib/s3", () => ({
       return { arrayBuffer: async () => s3FileBuffer };
     },
   }),
+  putS3ObjectWithSignal: s3WriteMock,
 }));
 void mock.module("@/api/lib/search/process-extraction", () => ({
   processExtraction: processExtractionMock,
