@@ -11,14 +11,17 @@ class TestFileEntry {
   readonly isFile = true;
   readonly name: string;
   private readonly fileValue: File;
+  private readonly onRead: (() => void) | undefined;
 
-  constructor(name: string, fileValue?: File) {
+  constructor(name: string, fileValue?: File, onRead?: () => void) {
     this.name = name;
     this.fileValue =
       fileValue ?? new File(["test"], name, { type: "text/plain" });
+    this.onRead = onRead;
   }
 
   file(successCallback: (file: File) => void) {
+    this.onRead?.();
     successCallback(this.fileValue);
   }
 }
@@ -105,5 +108,35 @@ describe("external folder drops", () => {
 
     expect(tree.directoryPaths).toEqual([]);
     expect(tree.files).toEqual([{ file, pathSegments: ["loose.eml"] }]);
+  });
+
+  test("snapshots every dropped item before asynchronous entry reads", async () => {
+    let dragDataReadable = true;
+    const files = [
+      new File(["one"], "one.pdf"),
+      new File(["two"], "two.pdf"),
+      new File(["three"], "three.pdf"),
+    ];
+    const entries = files.map(
+      (file, index) =>
+        new TestFileEntry(
+          file.name,
+          file,
+          index === 0
+            ? () => {
+                dragDataReadable = false;
+              }
+            : undefined,
+        ),
+    );
+    const items = entries.map((entry) => ({
+      kind: "file",
+      getAsFile: () => null,
+      webkitGetAsEntry: () => (dragDataReadable ? entry : null),
+    }));
+
+    const tree = await collectDroppedFileTree({ items });
+
+    expect(tree.files.map(({ file }) => file)).toEqual(files);
   });
 });

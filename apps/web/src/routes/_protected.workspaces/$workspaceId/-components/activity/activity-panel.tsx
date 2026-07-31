@@ -1,4 +1,4 @@
-import { Suspense, useDeferredValue, useMemo, useState } from "react";
+import { Suspense, useCallback, useDeferredValue, useState } from "react";
 import type { ReactElement, ReactNode } from "react";
 
 import { useSuspenseInfiniteQuery } from "@tanstack/react-query";
@@ -38,14 +38,17 @@ import {
 } from "@stll/ui/components/sheet";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { MatterIcon } from "@/components/matter-icon";
 import { PersonMentionLabel } from "@/components/person-mention-label";
 import Tooltip from "@/components/tooltip";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { getTranslator } from "@/i18n/i18n-store";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { isFileDisplayable } from "@/lib/types";
+import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import type {
   MatterActivityCategory,
@@ -53,15 +56,33 @@ import type {
 } from "@/routes/_protected.workspaces/-queries";
 import { overviewActivityOptions } from "@/routes/_protected.workspaces/-queries";
 
-import { activityDayKey, groupActivityRuns } from "./activity-panel.logic";
+import type { ActivityGroup } from "./activity-panel.logic";
+import { activityDayKey, groupActivityItems } from "./activity-panel.logic";
 
 type ActivityPanelProps = { workspaceId: string };
-type ActivityDay = [MatterActivityItem, ...MatterActivityItem[]];
+type ActivityDay = [ActivityGroup, ...ActivityGroup[]];
 type ActivityViewMode = "timeline" | "list";
 type ActivityTranslator = ReturnType<typeof getTranslator>;
 
+const groupActivityDays = (groups: ActivityGroup[]): ActivityDay[] => {
+  const result = new Map<string, ActivityDay>();
+  for (const group of groups) {
+    const key = activityDayKey(group.items[0].activityAt);
+    const dayGroups = result.get(key);
+    if (dayGroups) {
+      dayGroups.push(group);
+      continue;
+    }
+    result.set(key, [group]);
+  }
+  return [...result.values()];
+};
+
 const FIRST_STRONG_ISOLATE = String.fromCodePoint(8296);
 const POP_DIRECTIONAL_ISOLATE = String.fromCodePoint(8297);
+const EMPTY_ACTIVITY_SENTENCE_PART = (
+  <span aria-hidden="true" className="hidden" />
+);
 const isolateBidi = (value: string): string =>
   `${FIRST_STRONG_ISOLATE}${value}${POP_DIRECTIONAL_ISOLATE}`;
 
@@ -104,7 +125,7 @@ const categoryLabel = (
 export const ActivityPanel = ({ workspaceId }: ActivityPanelProps) => {
   const t = useTranslations();
   const [category, setCategory] = useState<MatterActivityCategory>("all");
-  const [selectedItem, setSelectedItem] = useState<MatterActivityItem | null>(
+  const [selectedGroup, setSelectedGroup] = useState<ActivityGroup | null>(
     null,
   );
   const [viewMode, setViewMode] = useState<ActivityViewMode>("timeline");
@@ -155,7 +176,7 @@ export const ActivityPanel = ({ workspaceId }: ActivityPanelProps) => {
                   <MenuRadioItem
                     key={value}
                     onClick={() => {
-                      setSelectedItem(null);
+                      setSelectedGroup(null);
                       setCategory(value);
                     }}
                     value={value}
@@ -180,17 +201,17 @@ export const ActivityPanel = ({ workspaceId }: ActivityPanelProps) => {
         <Suspense fallback={<ActivityTimelineSkeleton />}>
           <ActivityTimeline
             category={deferredCategory}
-            onSelectItem={setSelectedItem}
+            onSelectGroup={setSelectedGroup}
             viewMode={viewMode}
             workspaceId={workspaceId}
           />
         </Suspense>
       </div>
       <ActivityDetailsSheet
-        item={selectedItem}
+        group={selectedGroup}
         onOpenChange={(open) => {
           if (!open) {
-            setSelectedItem(null);
+            setSelectedGroup(null);
           }
         }}
         workspaceId={workspaceId}
@@ -201,12 +222,12 @@ export const ActivityPanel = ({ workspaceId }: ActivityPanelProps) => {
 
 const ActivityTimeline = ({
   category,
-  onSelectItem,
+  onSelectGroup,
   viewMode,
   workspaceId,
 }: {
   category: MatterActivityCategory;
-  onSelectItem: (item: MatterActivityItem) => void;
+  onSelectGroup: (group: ActivityGroup) => void;
   viewMode: ActivityViewMode;
   workspaceId: string;
 }) => {
@@ -216,19 +237,34 @@ const ActivityTimeline = ({
     overviewActivityOptions({ activeOrganizationId, category, workspaceId }),
   );
   const items = query.data.pages.flatMap((page) => page.items);
-  const days = useMemo(() => {
-    const result = new Map<string, ActivityDay>();
-    for (const item of items) {
-      const key = activityDayKey(item.activityAt);
-      const dayItems = result.get(key);
-      if (dayItems) {
-        dayItems.push(item);
-      } else {
-        result.set(key, [item]);
-      }
-    }
-    return [...result.values()];
-  }, [items]);
+  const groups = groupActivityItems(items);
+  const days = groupActivityDays(groups);
+  const loadEarlier = () => {
+    const request = query
+      .fetchNextPage()
+      .then((result) => {
+        if (result.isError) {
+          stellaToast.add({
+            description: userErrorFromThrown(
+              result.error,
+              t("common.unexpectedError"),
+            ),
+            title: t("errors.actionFailed"),
+            type: "error",
+          });
+        }
+        return result;
+      })
+      .catch((error: unknown) => {
+        stellaToast.add({
+          description: userErrorFromThrown(error, t("common.unexpectedError")),
+          title: t("errors.actionFailed"),
+          type: "error",
+        });
+        throw error;
+      });
+    detached(request, "ActivityPanel.fetchNextPage");
+  };
 
   let activityContent: ReactNode;
   if (days.length === 0) {
@@ -239,83 +275,136 @@ const ActivityTimeline = ({
     );
   } else if (viewMode === "list") {
     activityContent = (
-      <ActivityList items={items} onSelectItem={onSelectItem} />
+      <>
+        <ActivityList groups={groups} onSelectGroup={onSelectGroup} />
+        {query.hasNextPage && (
+          <ActivityLoadSentinel
+            isFetching={query.isFetchingNextPage}
+            onLoadEarlier={loadEarlier}
+          />
+        )}
+      </>
     );
   } else {
     activityContent = (
       <>
-        <HorizontalTimeline days={days} onSelectItem={onSelectItem} />
+        <HorizontalTimeline
+          days={days}
+          hasNextPage={query.hasNextPage}
+          isFetchingNextPage={query.isFetchingNextPage}
+          onLoadEarlier={loadEarlier}
+          onSelectGroup={onSelectGroup}
+        />
         <div className="md:hidden">
-          {days.map((dayItems) => (
-            <div key={activityDayKey(dayItems[0].activityAt)}>
-              <TimelineDateMarker activityAt={dayItems[0].activityAt} />
-              {groupActivityRuns(dayItems).map((run) => (
+          {days.map((dayGroups) => (
+            <div key={activityDayKey(dayGroups[0].items[0].activityAt)}>
+              <TimelineDateMarker
+                activityAt={dayGroups[0].items[0].activityAt}
+              />
+              {dayGroups.map((group) => (
                 <ActivityRunRow
-                  items={run.items}
-                  key={run.id}
-                  onSelectItem={onSelectItem}
+                  group={group}
+                  key={group.id}
+                  onSelectGroup={onSelectGroup}
                 />
               ))}
             </div>
           ))}
+          {query.hasNextPage && (
+            <ActivityLoadSentinel
+              isFetching={query.isFetchingNextPage}
+              onLoadEarlier={loadEarlier}
+            />
+          )}
         </div>
       </>
     );
   }
 
   return (
-    <>
-      <div className="bg-background ring-foreground/5 overflow-hidden rounded-xl shadow-sm ring-1">
-        {activityContent}
-      </div>
+    <div className="bg-background ring-foreground/5 overflow-hidden rounded-xl shadow-sm ring-1">
+      {activityContent}
+    </div>
+  );
+};
 
-      {query.hasNextPage && (
-        <div className="mt-2 flex justify-center">
-          <Button
-            disabled={query.isFetchingNextPage}
-            onClick={() => {
-              const request = query
-                .fetchNextPage()
-                .then((result) => {
-                  if (result.isError) {
-                    stellaToast.add({
-                      description: userErrorFromThrown(
-                        result.error,
-                        t("common.unexpectedError"),
-                      ),
-                      title: t("errors.actionFailed"),
-                      type: "error",
-                    });
-                  }
-                  return result;
-                })
-                .catch((error: unknown) => {
-                  stellaToast.add({
-                    description: userErrorFromThrown(
-                      error,
-                      t("common.unexpectedError"),
-                    ),
-                    title: t("errors.actionFailed"),
-                    type: "error",
-                  });
-                  throw error;
-                });
-              detached(request, "ActivityPanel.fetchNextPage");
-            }}
-            size="sm"
-            variant="ghost"
-          >
-            {query.isFetchingNextPage
-              ? t("workspaces.overview.activity.loading")
-              : t("workspaces.overview.activity.loadEarlier")}
-          </Button>
-        </div>
-      )}
-    </>
+type ActivityLoadSentinelProps = {
+  horizontal?: boolean;
+  isFetching: boolean;
+  onLoadEarlier: () => void;
+};
+
+type ObserveActivityIntersectionOptions = {
+  node: HTMLSpanElement;
+  onIntersect: () => void;
+  root: Element | null;
+};
+
+const observeActivityIntersection = ({
+  node,
+  onIntersect,
+  root,
+}: ObserveActivityIntersectionOptions) => {
+  const observer = new IntersectionObserver(
+    (entries) => {
+      if (!entries.at(0)?.isIntersecting) {
+        return;
+      }
+      observer.disconnect();
+      onIntersect();
+    },
+    { root },
+  );
+  observer.observe(node);
+  return () => observer.disconnect();
+};
+
+const ActivityLoadSentinel = ({
+  horizontal = false,
+  isFetching,
+  onLoadEarlier,
+}: ActivityLoadSentinelProps) => {
+  const loadEarlier = useLatestCallback(onLoadEarlier);
+  const sentinelRef = useCallback(
+    (node: HTMLSpanElement | null) => {
+      if (!node || isFetching) {
+        return undefined;
+      }
+      const root = horizontal ? node.closest("[data-activity-scroll]") : null;
+      if (horizontal && !root) {
+        return undefined;
+      }
+      return observeActivityIntersection({
+        node,
+        onIntersect: loadEarlier,
+        root,
+      });
+    },
+    [horizontal, isFetching, loadEarlier],
+  );
+
+  return (
+    <span
+      aria-hidden="true"
+      className={horizontal ? "h-px w-px shrink-0" : "block h-px w-px"}
+      ref={sentinelRef}
+    />
   );
 };
 
 const ACTIVITY_SKELETON_WIDTHS = ["w-24", "w-32", "w-28", "w-36"] as const;
+
+const revealCurrentActivity = (node: HTMLSpanElement | null) => {
+  const scrollArea = node?.closest<HTMLElement>("[data-activity-scroll]");
+  if (!scrollArea) {
+    return;
+  }
+  const behavior = scrollArea.dataset["activityPositioned"]
+    ? "smooth"
+    : "instant";
+  scrollArea.dataset["activityPositioned"] = "true";
+  node.scrollIntoView({ behavior, block: "nearest", inline: "end" });
+};
 
 const ActivityTimelineSkeleton = () => (
   <div
@@ -372,73 +461,94 @@ const ActivityTimelineSkeleton = () => (
 
 const HorizontalTimeline = ({
   days,
-  onSelectItem,
+  hasNextPage,
+  isFetchingNextPage,
+  onLoadEarlier,
+  onSelectGroup,
 }: {
   days: ActivityDay[];
-  onSelectItem: (item: MatterActivityItem) => void;
+  hasNextPage: boolean;
+  isFetchingNextPage: boolean;
+  onLoadEarlier: () => void;
+  onSelectGroup: (group: ActivityGroup) => void;
 }) => (
-  <div className="hidden overflow-x-auto overscroll-x-contain md:block">
-    <div className="flex min-w-max snap-x snap-proximity px-5 pt-4 pb-5">
-      {days.flatMap((dayItems) =>
-        groupActivityRuns(dayItems).map((run, index) => (
+  <div
+    className="hidden overflow-x-auto overscroll-x-contain md:block"
+    data-activity-scroll=""
+  >
+    <div className="flex min-w-max snap-x snap-proximity flex-row-reverse px-5 pt-4 pb-5">
+      <HorizontalTodayMarker />
+      <span
+        aria-hidden="true"
+        className="size-px shrink-0"
+        key={days[0][0].id}
+        ref={revealCurrentActivity}
+      />
+      {days.flatMap((dayGroups) =>
+        dayGroups.map((group, index) => (
           <HorizontalActivityMilestone
-            dateAt={index === 0 ? dayItems[0].activityAt : undefined}
-            items={run.items}
-            key={run.id}
-            onSelectItem={onSelectItem}
+            dateAt={
+              index === dayGroups.length - 1
+                ? group.items[0].activityAt
+                : undefined
+            }
+            group={group}
+            key={group.id}
+            onSelectGroup={onSelectGroup}
           />
         )),
+      )}
+      {hasNextPage && (
+        <ActivityLoadSentinel
+          horizontal
+          isFetching={isFetchingNextPage}
+          onLoadEarlier={onLoadEarlier}
+        />
       )}
     </div>
   </div>
 );
 
+const HorizontalTodayMarker = () => {
+  const t = useTranslations();
+  return (
+    <div className="w-20 shrink-0 snap-end">
+      <div className="h-5" />
+      <div className="text-destructive mt-1 h-4 text-end text-[11px] font-medium">
+        {t("common.today")}
+      </div>
+      <div aria-hidden="true" className="relative mt-2 h-3">
+        <span className="bg-border absolute start-0 end-0 top-1/2 h-px" />
+        <span className="bg-destructive absolute end-0 top-0 h-3 w-px" />
+      </div>
+    </div>
+  );
+};
+
 const HorizontalActivityMilestone = ({
   dateAt,
-  items,
-  onSelectItem,
+  group,
+  onSelectGroup,
 }: {
   dateAt: string | undefined;
-  items: MatterActivityItem[];
-  onSelectItem: (item: MatterActivityItem) => void;
+  group: ActivityGroup;
+  onSelectGroup: (group: ActivityGroup) => void;
 }) => {
   const t = useTranslations();
+  const { items } = group;
   const first = items[0];
-  if (!first) {
-    return null;
-  }
 
-  if (first.runId === null) {
+  if (group.type !== "automation_run") {
     const detail = triggerDetail(first, t);
-    const target = (
-      <BidiText as="span" className="font-medium">
-        {targetName(first, t)}
-      </BidiText>
-    );
-    const content = (
-      <span className="min-w-0">
-        <span className="flex min-h-5 items-center text-[13px] leading-5 font-medium">
-          <Performer item={first} />
-        </span>
-        {detail && (
-          <span className="text-muted-foreground mt-0.5 block text-[11px] leading-4">
-            {detail}
-          </span>
-        )}
-        <span className="mt-2 block text-[13px] leading-5">
-          {actionSentence(first, <Performer item={first} />, target, t)}
-        </span>
-      </span>
-    );
 
     return (
       <HorizontalMilestoneFrame activityAt={first.activityAt} dateAt={dateAt}>
         <button
           className="hover:bg-muted/40 -ms-2 flex min-h-11 w-[calc(100%+0.5rem)] items-start rounded-md px-2 py-1 text-start transition-colors"
-          onClick={() => onSelectItem(first)}
+          onClick={() => onSelectGroup(group)}
           type="button"
         >
-          {content}
+          <ActivityTriplet detail={detail} group={group} size="compact" />
         </button>
       </HorizontalMilestoneFrame>
     );
@@ -474,7 +584,7 @@ const HorizontalActivityMilestone = ({
           <HorizontalRunActivityItem
             item={item}
             key={item.id}
-            onSelectItem={onSelectItem}
+            onSelectGroup={onSelectGroup}
           />
         ))}
       </div>
@@ -494,7 +604,7 @@ const HorizontalMilestoneFrame = ({
   const format = useFormatter();
   const date = new Date(activityAt);
   return (
-    <article className="w-64 shrink-0 snap-start">
+    <article className="animate-in fade-in-0 slide-in-from-right-1 rtl:slide-in-from-left-1 w-64 shrink-0 snap-start duration-300 motion-reduce:animate-none">
       <div className="text-muted-foreground h-5 pe-8 text-[13px] font-medium tabular-nums">
         {dateAt
           ? format.dateTime(new Date(dateAt), { dateStyle: "long" })
@@ -503,7 +613,7 @@ const HorizontalMilestoneFrame = ({
       <Tooltip
         content={format.dateTime(date, {
           dateStyle: "full",
-          timeStyle: "medium",
+          timeStyle: "long",
         })}
         render={
           <time
@@ -525,43 +635,32 @@ const HorizontalMilestoneFrame = ({
 
 const HorizontalRunActivityItem = ({
   item,
-  onSelectItem,
+  onSelectGroup,
 }: {
   item: MatterActivityItem;
-  onSelectItem: (item: MatterActivityItem) => void;
-}) => {
-  const t = useTranslations();
-  const target = (
-    <BidiText as="span" className="font-medium">
-      {targetName(item, t)}
-    </BidiText>
-  );
-  const sentence = actionSentence(item, <Performer item={item} />, target, t);
-  return (
-    <button
-      className="hover:bg-muted/40 -ms-2 flex min-h-11 w-[calc(100%+0.5rem)] items-center rounded-md px-2 text-start transition-colors"
-      onClick={() => onSelectItem(item)}
-      type="button"
-    >
-      <span className="text-[13px] leading-5">{sentence}</span>
-    </button>
-  );
-};
+  onSelectGroup: (group: ActivityGroup) => void;
+}) => (
+  <button
+    className="hover:bg-muted/40 -ms-2 flex min-h-11 w-[calc(100%+0.5rem)] items-center rounded-md px-2 text-start transition-colors"
+    onClick={() => onSelectGroup(toSingleActivityGroup(item))}
+    type="button"
+  >
+    <ActivityTriplet group={toSingleActivityGroup(item)} size="compact" />
+  </button>
+);
 
 const ActivityRunRow = ({
-  items,
-  onSelectItem,
+  group,
+  onSelectGroup,
 }: {
-  items: MatterActivityItem[];
-  onSelectItem: (item: MatterActivityItem) => void;
+  group: ActivityGroup;
+  onSelectGroup: (group: ActivityGroup) => void;
 }) => {
   const t = useTranslations();
+  const { items } = group;
   const first = items[0];
-  if (!first) {
-    return null;
-  }
-  if (first.runId === null) {
-    return <ActivityItemRow item={first} onSelectItem={onSelectItem} />;
+  if (group.type !== "automation_run") {
+    return <ActivityItemRow group={group} onSelectGroup={onSelectGroup} />;
   }
 
   const detail = triggerDetail(first, t);
@@ -593,7 +692,7 @@ const ActivityRunRow = ({
             <RunActivityItem
               item={item}
               key={item.id}
-              onSelectItem={onSelectItem}
+              onSelectGroup={onSelectGroup}
             />
           ))}
         </div>
@@ -643,7 +742,7 @@ const TimelineEntry = ({
       <Tooltip
         content={format.dateTime(date, {
           dateStyle: "full",
-          timeStyle: "medium",
+          timeStyle: "long",
         })}
         render={
           <time
@@ -670,28 +769,19 @@ const TimelineEntry = ({
 
 const RunActivityItem = ({
   item,
-  onSelectItem,
+  onSelectGroup,
 }: {
   item: MatterActivityItem;
-  onSelectItem: (item: MatterActivityItem) => void;
-}) => {
-  const t = useTranslations();
-  const target = (
-    <BidiText as="span" className="font-medium">
-      {targetName(item, t)}
-    </BidiText>
-  );
-  const sentence = actionSentence(item, <Performer item={item} />, target, t);
-  return (
-    <button
-      className="hover:bg-muted/40 -ms-2 flex min-h-11 w-[calc(100%+0.5rem)] items-center rounded-md px-2 text-start transition-colors"
-      onClick={() => onSelectItem(item)}
-      type="button"
-    >
-      <span className="text-sm leading-5">{sentence}</span>
-    </button>
-  );
-};
+  onSelectGroup: (group: ActivityGroup) => void;
+}) => (
+  <button
+    className="hover:bg-muted/40 -ms-2 flex min-h-11 w-[calc(100%+0.5rem)] items-center rounded-md px-2 text-start transition-colors"
+    onClick={() => onSelectGroup(toSingleActivityGroup(item))}
+    type="button"
+  >
+    <ActivityTriplet group={toSingleActivityGroup(item)} size="default" />
+  </button>
+);
 
 const RunCount = ({ count }: { count: number }) => {
   const t = useTranslations();
@@ -699,59 +789,42 @@ const RunCount = ({ count }: { count: number }) => {
 };
 
 const ActivityItemRow = ({
-  item,
-  onSelectItem,
+  group,
+  onSelectGroup,
 }: {
-  item: MatterActivityItem;
-  onSelectItem: (item: MatterActivityItem) => void;
+  group: ActivityGroup;
+  onSelectGroup: (group: ActivityGroup) => void;
 }) => {
+  const item = group.items[0];
   const t = useTranslations();
-  const actor = <Performer item={item} />;
-  const target = (
-    <BidiText as="span" className="font-medium">
-      {targetName(item, t)}
-    </BidiText>
-  );
-  const sentence = actionSentence(item, actor, target, t);
   const detail = triggerDetail(item, t);
-  const icon = targetIcon(item.target.kind);
-
-  const content = (
-    <span className="min-w-0 text-sm">
-      <span className="block leading-5">{sentence}</span>
-      {detail && (
-        <span className="text-muted-foreground mt-0.5 block text-xs">
-          {detail}
-        </span>
-      )}
-    </span>
-  );
+  const icon = activityGroupTargetIcon(group);
 
   return (
     <TimelineEntry activityAt={item.activityAt} marker={icon}>
       <button
         className="hover:bg-muted/40 flex min-h-11 w-full items-center rounded-md py-2 ps-3 pe-4 text-start transition-colors"
-        onClick={() => onSelectItem(item)}
+        onClick={() => onSelectGroup(group)}
         type="button"
       >
-        {content}
+        <ActivityTriplet detail={detail} group={group} size="default" />
       </button>
     </TimelineEntry>
   );
 };
 
 const ActivityList = ({
-  items,
-  onSelectItem,
+  groups,
+  onSelectGroup,
 }: {
-  items: MatterActivityItem[];
-  onSelectItem: (item: MatterActivityItem) => void;
+  groups: ActivityGroup[];
+  onSelectGroup: (group: ActivityGroup) => void;
 }) => {
   const format = useFormatter();
   const t = useTranslations();
   return (
     <div className="overflow-x-auto" role="list">
-      <div className="min-w-full md:w-max md:min-w-[57rem]">
+      <div className="w-full min-w-[57rem]">
         <div
           aria-hidden="true"
           className="text-muted-foreground hidden border-b px-4 py-2 text-[11px] font-medium md:grid md:grid-cols-[10rem_12rem_minmax(16rem,1fr)_14rem] md:gap-4"
@@ -761,22 +834,18 @@ const ActivityList = ({
           <span>{t("workspaces.overview.activity.list.event")}</span>
           <span>{t("workspaces.overview.activity.list.provenance")}</span>
         </div>
-        {items.map((item) => {
-          const target = (
-            <BidiText as="span" className="font-medium">
-              {targetName(item, t)}
-            </BidiText>
-          );
+        {groups.map((group) => {
+          const item = group.items[0];
           const provenance = triggerDetail(item, t);
           return (
             <div
               className="border-b last:border-b-0"
-              key={item.id}
+              key={group.id}
               role="listitem"
             >
               <button
                 className="hover:bg-muted/40 focus-visible:bg-muted/40 grid min-h-14 w-full gap-1 px-4 py-2.5 text-start transition-colors md:grid-cols-[10rem_12rem_minmax(16rem,1fr)_14rem] md:items-center md:gap-4"
-                onClick={() => onSelectItem(item)}
+                onClick={() => onSelectGroup(group)}
                 type="button"
               >
                 <time
@@ -792,7 +861,15 @@ const ActivityList = ({
                   <Performer item={item} />
                 </span>
                 <span className="min-w-0 text-sm leading-5">
-                  {actionSentence(item, <Performer item={item} />, target, t)}
+                  <span className="block">{activityAction(item, t)}</span>
+                  <span className="mt-1 grid grid-cols-[1.25rem_minmax(0,1fr)] items-start gap-x-1.5 font-medium">
+                    <span className="flex size-5 items-center justify-center">
+                      {activityGroupTargetIcon(group)}
+                    </span>
+                    <BidiText as="span">
+                      {activityGroupTargetName(group, t)}
+                    </BidiText>
+                  </span>
                 </span>
                 <span className="text-muted-foreground min-w-0 text-xs leading-4">
                   {provenance ??
@@ -810,26 +887,24 @@ const ActivityList = ({
 };
 
 const ActivityDetailsSheet = ({
-  item,
+  group,
   onOpenChange,
   workspaceId,
 }: {
-  item: MatterActivityItem | null;
+  group: ActivityGroup | null;
   onOpenChange: (open: boolean) => void;
   workspaceId: string;
 }) => {
   const format = useFormatter();
   const t = useTranslations();
-  if (!item) {
+  if (!group) {
     return null;
   }
 
-  const target = (
-    <BidiText as="span" className="font-medium">
-      {targetName(item, t)}
-    </BidiText>
-  );
-  const openTarget = getOpenTarget(item, workspaceId);
+  const item = group.items[0];
+  const provenance = triggerDetail(item, t);
+  const openTarget =
+    group.items.length === 1 ? getOpenTarget(item, workspaceId) : undefined;
   const rows = [
     {
       label: t("workspaces.overview.activity.details.dateTime"),
@@ -842,30 +917,69 @@ const ActivityDetailsSheet = ({
         </time>
       ),
     },
-    {
-      label: t("workspaces.overview.activity.details.actor"),
-      value: <Performer item={item} />,
-    },
-    {
-      label: t("workspaces.overview.activity.details.target"),
-      value: target,
-    },
-    {
-      label: t("common.category"),
-      value: categoryLabel(item.category, t),
-    },
-    {
-      label: t("workspaces.overview.activity.details.trigger"),
-      value: triggerName(item, t),
-    },
-    {
-      label: t("workspaces.overview.activity.details.channel"),
-      value: sourceName(item.trigger.source, t),
-    },
-    {
-      label: t("workspaces.overview.activity.details.approval"),
-      value: approvalName(item.approval.status, t),
-    },
+    ...(group.type === "document_batch" && group.items.length > 1
+      ? [
+          {
+            label: t("workspaces.overview.activity.filters.documents"),
+            value: (
+              <div className="space-y-1">
+                {group.items.map((batchItem) => {
+                  const batchOpenTarget = getOpenTarget(batchItem, workspaceId);
+                  const content = (
+                    <>
+                      <span className="flex size-5 shrink-0 items-center justify-center">
+                        {activityTargetIcon(batchItem)}
+                      </span>
+                      <BidiText as="span" className="min-w-0 break-words">
+                        {targetName(batchItem, t)}
+                      </BidiText>
+                    </>
+                  );
+                  if (!batchOpenTarget) {
+                    return (
+                      <div
+                        className="grid grid-cols-[1.25rem_minmax(0,1fr)] gap-x-1.5 py-1"
+                        key={batchItem.id}
+                      >
+                        {content}
+                      </div>
+                    );
+                  }
+                  return (
+                    <button
+                      className="hover:bg-muted -ms-2 grid min-h-11 w-[calc(100%+0.5rem)] grid-cols-[1.25rem_minmax(0,1fr)] items-center gap-x-1.5 rounded-md px-2 py-1 text-start transition-colors"
+                      key={batchItem.id}
+                      onClick={() => {
+                        onOpenChange(false);
+                        batchOpenTarget();
+                      }}
+                      type="button"
+                    >
+                      {content}
+                    </button>
+                  );
+                })}
+              </div>
+            ),
+          },
+        ]
+      : []),
+    ...(provenance
+      ? [
+          {
+            label: t("workspaces.overview.activity.details.trigger"),
+            value: provenance,
+          },
+        ]
+      : []),
+    ...(item.approval.status !== "not_required"
+      ? [
+          {
+            label: t("workspaces.overview.activity.details.approval"),
+            value: approvalName(item.approval.status, t),
+          },
+        ]
+      : []),
     ...(item.approval.user
       ? [
           {
@@ -874,18 +988,6 @@ const ActivityDetailsSheet = ({
           },
         ]
       : []),
-    ...(item.runId
-      ? [
-          {
-            label: t("workspaces.overview.activity.details.runId"),
-            value: <BidiText as="span">{item.runId}</BidiText>,
-          },
-        ]
-      : []),
-    {
-      label: t("workspaces.overview.activity.details.eventId"),
-      value: <BidiText as="span">{item.id}</BidiText>,
-    },
   ];
 
   return (
@@ -895,8 +997,8 @@ const ActivityDetailsSheet = ({
           <SheetTitle>
             {t("workspaces.overview.activity.details.title")}
           </SheetTitle>
-          <SheetDescription className="pe-8">
-            {actionSentence(item, <Performer item={item} />, target, t)}
+          <SheetDescription className="text-foreground pe-8">
+            <ActivityTriplet group={group} size="default" />
           </SheetDescription>
         </SheetHeader>
         <SheetPanel>
@@ -948,23 +1050,6 @@ const sourceName = (
   }
 };
 
-const triggerName = (item: MatterActivityItem, t: ActivityTranslator) => {
-  const detail = triggerDetail(item, t);
-  if (detail) {
-    return detail;
-  }
-  switch (item.trigger.type) {
-    case "direct":
-      return t("workspaces.overview.activity.details.direct");
-    case "webhook":
-      return t("workspaces.overview.activity.details.webhook");
-    case "system":
-      return t("workspaces.overview.activity.details.system");
-    default:
-      return t("workspaces.overview.activity.details.notAvailable");
-  }
-};
-
 const approvalName = (
   status: MatterActivityItem["approval"]["status"],
   t: ActivityTranslator,
@@ -1005,25 +1090,82 @@ const Performer = ({ item }: { item: MatterActivityItem }) => {
     );
   }
   return (
-    <BidiText as="span" className="inline-flex items-center gap-1 font-medium">
-      {item.performer.type === "agent" ? (
-        <BotIcon className="size-3.5" />
-      ) : (
-        <WorkflowIcon className="size-3.5" />
-      )}
+    <BidiText
+      as="span"
+      className="inline-flex items-center gap-1.5 font-medium"
+    >
+      <span className="flex size-5 items-center justify-center">
+        {item.performer.type === "agent" ? (
+          <BotIcon className="size-3.5" />
+        ) : (
+          <WorkflowIcon className="size-3.5" />
+        )}
+      </span>
       {item.performer.name ??
         t("workspaces.overview.activity.automatedService")}
     </BidiText>
   );
 };
 
-const actionSentence = (
+type ActivityTripletProps = {
+  detail?: ReactNode;
+  group: ActivityGroup;
+  size: "compact" | "default";
+};
+
+const toSingleActivityGroup = (item: MatterActivityItem): ActivityGroup => ({
+  id: `item:${item.id}`,
+  items: [item],
+  type: "single",
+});
+
+const ActivityTriplet = ({ detail, group, size }: ActivityTripletProps) => {
+  const t = useTranslations();
+  const item = group.items[0];
+  const compact = size === "compact";
+  return (
+    <span
+      className={
+        compact ? "min-w-0 text-[13px] leading-5" : "min-w-0 text-sm leading-5"
+      }
+    >
+      <span className="block min-h-5 font-medium">
+        <Performer item={item} />
+      </span>
+      <span className="mt-1 grid grid-cols-[1.25rem_minmax(0,1fr)] gap-x-1.5">
+        <span aria-hidden="true" />
+        <span>{activityAction(item, t)}</span>
+      </span>
+      <span className="mt-1 grid grid-cols-[1.25rem_minmax(0,1fr)] items-start gap-x-1.5 font-medium">
+        <span className="flex size-5 items-center justify-center">
+          {activityGroupTargetIcon(group)}
+        </span>
+        <BidiText as="span">{activityGroupTargetName(group, t)}</BidiText>
+      </span>
+      {detail && (
+        <span
+          className={
+            compact
+              ? "text-muted-foreground mt-0.5 grid grid-cols-[1.25rem_minmax(0,1fr)] gap-x-1.5 text-[11px] leading-4"
+              : "text-muted-foreground mt-0.5 grid grid-cols-[1.25rem_minmax(0,1fr)] gap-x-1.5 text-xs leading-4"
+          }
+        >
+          <span aria-hidden="true" />
+          <span>{detail}</span>
+        </span>
+      )}
+    </span>
+  );
+};
+
+const activityAction = (
   item: MatterActivityItem,
-  actor: ReactElement | null,
-  target: ReactElement,
   t: ActivityTranslator,
 ): ReactElement => {
-  const values = { actor: () => actor, target: () => target };
+  const values = {
+    actor: () => EMPTY_ACTIVITY_SENTENCE_PART,
+    target: () => EMPTY_ACTIVITY_SENTENCE_PART,
+  };
   switch (item.action) {
     case "add":
       return (
@@ -1058,7 +1200,7 @@ const actionSentence = (
         <>{t.rich("workspaces.overview.activity.actions.cancelled", values)}</>
       );
     default:
-      return target;
+      return item.action satisfies never;
   }
 };
 
@@ -1120,14 +1262,16 @@ const triggerDetail = (item: MatterActivityItem, t: ActivityTranslator) => {
   }
 };
 
-const targetIcon = (kind: MatterActivityItem["target"]["kind"]) => {
-  switch (kind) {
+const targetIcon = (item: MatterActivityItem) => {
+  switch (item.target.kind) {
     case "document":
       return <FileTextIcon className="text-muted-foreground size-3.5" />;
     case "task":
       return <SquareCheckIcon className="text-muted-foreground size-3.5" />;
     case "matter":
-      return <ScaleIcon className="text-muted-foreground size-3.5" />;
+      return (
+        <MatterIcon className="text-muted-foreground size-3.5" variant="none" />
+      );
     case "team":
       return <UsersIcon className="text-muted-foreground size-3.5" />;
     case "court":
@@ -1135,10 +1279,54 @@ const targetIcon = (kind: MatterActivityItem["target"]["kind"]) => {
     case "automation":
       return <WorkflowIcon className="text-muted-foreground size-3.5" />;
     default: {
-      const exhaustive: never = kind;
+      const exhaustive: never = item.target.kind;
       return exhaustive;
     }
   }
+};
+
+const activityTargetIcon = (item: MatterActivityItem) => {
+  if (item.target.kind === "document" && item.target.mimeType) {
+    return (
+      <DocumentIcon
+        className="size-3.5"
+        fileName={item.target.name}
+        mimeType={item.target.mimeType}
+      />
+    );
+  }
+  return targetIcon(item);
+};
+
+const activityGroupTargetIcon = (group: ActivityGroup) => {
+  if (group.type === "document_batch" && group.items.length > 1) {
+    return (
+      <span
+        aria-hidden="true"
+        className="flex w-5 items-center [&>*+*]:-ms-2.5"
+      >
+        {group.items.slice(0, 3).map((item) => (
+          <span
+            className="bg-background flex size-3.5 shrink-0 items-center justify-center rounded-[2px]"
+            key={item.id}
+          >
+            {activityTargetIcon(item)}
+          </span>
+        ))}
+      </span>
+    );
+  }
+  return activityTargetIcon(group.items[0]);
+};
+
+const activityGroupTargetName = (
+  group: ActivityGroup,
+  t: ActivityTranslator,
+) => {
+  if (group.type === "document_batch" && group.items.length > 1) {
+    return t("workspaces.documentsCount", { count: group.items.length });
+  }
+  return targetName(group.items[0], t);
 };
 
 const getOpenTarget = (item: MatterActivityItem, workspaceId: string) => {

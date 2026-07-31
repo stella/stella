@@ -42,6 +42,11 @@ type FileSystemDirectoryEntryLike = {
   createReader: () => FileSystemDirectoryReaderLike;
 };
 
+type DroppedItemSnapshot =
+  | { entry: FileSystemDirectoryEntryLike; type: "directory" }
+  | { entry: FileSystemFileEntryLike; type: "file_entry" }
+  | { file: File; type: "file" };
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
@@ -152,6 +157,33 @@ const collectDirectory = async ({
   }
 };
 
+const snapshotDroppedItems = (
+  items: DroppedDataTransferItem[],
+): DroppedItemSnapshot[] => {
+  const snapshots: DroppedItemSnapshot[] = [];
+  for (const item of items) {
+    if (item.kind !== "file") {
+      continue;
+    }
+
+    const entry = item.webkitGetAsEntry?.();
+    if (isDirectoryEntry(entry)) {
+      snapshots.push({ entry, type: "directory" });
+      continue;
+    }
+    if (isFileEntry(entry)) {
+      snapshots.push({ entry, type: "file_entry" });
+      continue;
+    }
+
+    const file = item.getAsFile();
+    if (file) {
+      snapshots.push({ file, type: "file" });
+    }
+  }
+  return snapshots;
+};
+
 export const collectDroppedFileTree = async ({
   items,
 }: DroppedDataTransferSource): Promise<DroppedFileTree> => {
@@ -160,35 +192,36 @@ export const collectDroppedFileTree = async ({
     directoryPaths: [],
   };
 
-  for (const item of items) {
-    if (item.kind !== "file") {
-      continue;
-    }
-
-    const entry = item.webkitGetAsEntry?.();
-    if (isDirectoryEntry(entry)) {
-      // oxlint-disable-next-line no-await-in-loop -- ordered traversal: dropped items append to a shared tree in deterministic order
-      await collectDirectory({
-        entry,
-        path: pathWithSegment([], entry.name),
-        tree,
-      });
-      continue;
-    }
-
-    if (isFileEntry(entry)) {
-      // oxlint-disable-next-line no-await-in-loop -- ordered traversal: dropped files append to a shared tree in deterministic order
-      const file = await readFileEntry(entry);
-      tree.files.push({
-        file,
-        pathSegments: [file.name || entry.name],
-      });
-      continue;
-    }
-
-    const file = item.getAsFile();
-    if (file) {
-      tree.files.push({ file, pathSegments: [file.name] });
+  const snapshots = snapshotDroppedItems(items);
+  for (const snapshot of snapshots) {
+    switch (snapshot.type) {
+      case "directory":
+        // oxlint-disable-next-line no-await-in-loop -- ordered traversal: dropped items append to a shared tree in deterministic order
+        await collectDirectory({
+          entry: snapshot.entry,
+          path: pathWithSegment([], snapshot.entry.name),
+          tree,
+        });
+        break;
+      case "file_entry": {
+        // oxlint-disable-next-line no-await-in-loop -- ordered traversal: dropped files append to a shared tree in deterministic order
+        const file = await readFileEntry(snapshot.entry);
+        tree.files.push({
+          file,
+          pathSegments: [file.name || snapshot.entry.name],
+        });
+        break;
+      }
+      case "file":
+        tree.files.push({
+          file: snapshot.file,
+          pathSegments: [snapshot.file.name],
+        });
+        break;
+      default: {
+        const exhaustive: never = snapshot;
+        return exhaustive;
+      }
     }
   }
 

@@ -22,14 +22,16 @@ import {
   buildDroppedFolderUploadPlan,
   type DroppedFolderUploadPlan,
 } from "@/routes/_protected.workspaces/$workspaceId/-hooks/create-file-tree-upload.logic";
-import { buildEntityCreatePresignPayload } from "@/routes/_protected.workspaces/$workspaceId/-hooks/create-file-upload-payload.logic";
+import {
+  buildEntityCreateInvalidationPayload,
+  buildEntityCreatePresignPayload,
+} from "@/routes/_protected.workspaces/$workspaceId/-hooks/create-file-upload-payload.logic";
 import { useStartWorkflow } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-start-workflow";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import {
   propertiesKeys,
   propertiesOptions,
 } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
-import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
 
 const MAX_DISPLAYED_FAILURES = 5;
 // Matches the versions-sidebar PUT-to-S3 upload budget (same flow, uploaded
@@ -354,7 +356,7 @@ const uploadPreparedFileEntity = async ({
 
   // 4. Finalize.
   const finalize = await wsClient({ uploadId }).finalize.post(
-    { queryKey: entitiesKeys.all(workspaceId) },
+    buildEntityCreateInvalidationPayload(workspaceId),
     { fetch: { signal } },
   );
   if (finalize.error) {
@@ -745,16 +747,14 @@ export const useCreateFileEntities = (workspaceId: string) => {
       analytics.captureError(error);
     },
     onSettled: () => {
+      const { queryKey, queryKeys } =
+        buildEntityCreateInvalidationPayload(workspaceId);
       detached(
-        queryClient.invalidateQueries({
-          queryKey: entitiesKeys.all(workspaceId),
-        }),
-        "onSettled",
-      );
-      detached(
-        queryClient.invalidateQueries({
-          queryKey: workspacesKeys.overview(workspaceId),
-        }),
+        Promise.all(
+          [queryKey, ...queryKeys].map((key) =>
+            queryClient.invalidateQueries({ queryKey: key }),
+          ),
+        ),
         "onSettled",
       );
     },
