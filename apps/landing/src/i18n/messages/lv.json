@@ -793,7 +793,8 @@
       "capabilities": "Iespējas",
       "exploreMore": "Uzziniet vairāk",
       "faq": "Biežāk uzdotie jautājumi",
-      "inShort": "Īsumā"
+      "inShort": "Īsumā",
+      "preview": "Priekšskatījums"
     },
     "workspace": {
       "adjacent": {

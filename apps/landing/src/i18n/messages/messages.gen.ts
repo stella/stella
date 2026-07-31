@@ -797,6 +797,7 @@ type Messages = {
       "exploreMore": "Explore more";
       "faq": "FAQ";
       "inShort": "In short";
+      "preview": "Preview";
     };
     "workspace": {
       "adjacent": {

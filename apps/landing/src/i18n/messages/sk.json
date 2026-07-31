@@ -793,7 +793,8 @@
       "capabilities": "Čo to dokáže",
       "exploreMore": "Preskúmajte ďalej",
       "faq": "Časté otázky",
-      "inShort": "V skratke"
+      "inShort": "V skratke",
+      "preview": "Náhľad"
     },
     "workspace": {
       "adjacent": {

@@ -793,7 +793,8 @@
       "capabilities": "الإمكانات",
       "exploreMore": "استكشف المزيد",
       "faq": "الأسئلة الشائعة",
-      "inShort": "باختصار"
+      "inShort": "باختصار",
+      "preview": "معاينة"
     },
     "workspace": {
       "adjacent": {

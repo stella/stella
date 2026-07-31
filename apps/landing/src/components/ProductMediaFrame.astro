@@ -39,7 +39,9 @@ const { media, compact = false, deferThemeImage = false, thumbnail = false } = A
 // catalog keys.
 const rawLocale = Astro.currentLocale ?? defaultLocale;
 const locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
-const sceneWindowLabels = resolveSceneWindowLabels(getTranslations(locale));
+const t = getTranslations(locale);
+const sceneWindowLabels = resolveSceneWindowLabels(t);
+const staticEditorLabel = `${t("nav.products.editor.eyebrow")} · ${t("products.ui.preview")}`;
 const aspect = media.aspect ?? "16 / 9";
 const mobileAspect =
   media.type === "story" ? media.mobileAspect ?? aspect : aspect;
@@ -178,13 +180,13 @@ const storyThumbnail = media.type === "story" ? productStoryThumbnails[media.sce
             mobile hero. Show its theme-aware capture there so the preview is
             clearly illustrative; larger viewports retain the live editor. */}
         <div class="absolute inset-0 sm:hidden" data-editor-preview="static">
-          <MacWindow class="h-full" label={media.alt}>
+          <MacWindow class="h-full" label={staticEditorLabel}>
             <ThemeImage
               lightSrc="/media/products/editor.png"
               darkSrc="/media/products/editor-dark.png"
-              alt={media.alt}
+              alt=""
               class="h-full w-full object-contain object-top"
-              loading="eager"
+              media="(max-width: 639px)"
             />
           </MacWindow>
         </div>

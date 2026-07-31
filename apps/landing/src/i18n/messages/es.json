@@ -793,7 +793,8 @@
       "capabilities": "Funcionalidades",
       "exploreMore": "Sigue explorando",
       "faq": "Preguntas frecuentes",
-      "inShort": "En resumen"
+      "inShort": "En resumen",
+      "preview": "Vista previa"
     },
     "workspace": {
       "adjacent": {

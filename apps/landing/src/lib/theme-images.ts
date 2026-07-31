@@ -3,6 +3,7 @@ const LOAD_THEME_IMAGES_EVENT = "stella:load-theme-images";
 
 let themeObserver: MutationObserver | undefined;
 let visibilityObserver: IntersectionObserver | undefined;
+let mediaQueryCleanups: (() => void)[] = [];
 let loadEventBound = false;
 
 export const initializeThemeImages = () => {
@@ -31,6 +32,31 @@ export const initializeThemeImages = () => {
     if (!Object.hasOwn(image.dataset, "themeImageLoaded")) {
       visibilityObserver.observe(image);
     }
+  }
+
+  for (const cleanup of mediaQueryCleanups) {
+    cleanup();
+  }
+  mediaQueryCleanups = [];
+  for (const image of document.querySelectorAll<HTMLImageElement>(
+    `${THEME_IMAGE_SELECTOR}[data-theme-image-media]`,
+  )) {
+    const media = image.dataset.themeImageMedia;
+    if (media === undefined) {
+      continue;
+    }
+
+    const query = window.matchMedia(media);
+    const loadWhenMatched = () => {
+      if (query.matches) {
+        loadThemeImage(image);
+      }
+    };
+    query.addEventListener("change", loadWhenMatched);
+    mediaQueryCleanups.push(() => {
+      query.removeEventListener("change", loadWhenMatched);
+    });
+    loadWhenMatched();
   }
 
   themeObserver?.disconnect();

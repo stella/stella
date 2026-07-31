@@ -793,7 +793,8 @@
       "capabilities": "Võimalused",
       "exploreMore": "Avasta veel",
       "faq": "KKK",
-      "inShort": "Lühidalt"
+      "inShort": "Lühidalt",
+      "preview": "Eelvaade"
     },
     "workspace": {
       "adjacent": {

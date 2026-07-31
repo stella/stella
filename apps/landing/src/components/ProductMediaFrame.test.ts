@@ -12,4 +12,6 @@ test("editor media is static on mobile and interactive on larger viewports", asy
     'class="absolute inset-0 hidden sm:block"\n          data-editor-preview="interactive"',
   );
   expect(component).toContain('<EditorLiveDemoShell client:only="react" />');
+  expect(component).toContain('media="(max-width: 639px)"');
+  expect(component).toContain("label={staticEditorLabel}");
 });
