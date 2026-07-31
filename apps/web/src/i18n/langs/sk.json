@@ -3399,7 +3399,43 @@
           "reviewed": "<actor>Používateľ</actor> skontroloval <target>položku</target>",
           "updated": "<actor>Používateľ</actor> upravil <target>položku</target>"
         },
+        "approvals": {
+          "approved": "Schválené",
+          "notRequired": "Nevyžaduje sa",
+          "pending": "Čaká na schválenie",
+          "rejected": "Zamietnuté"
+        },
         "automatedService": "Automatizovaná služba",
+        "details": {
+          "actor": "Vykonal(a)",
+          "approval": "Schválenie",
+          "approvedBy": "Schválil(a)",
+          "category": "Kategória",
+          "dateTime": "Dátum a čas",
+          "direct": "Priama aktivita",
+          "eventId": "ID udalosti",
+          "notAvailable": "Nie je k dispozícii",
+          "openTarget": "Otvoriť položku",
+          "runId": "ID behu",
+          "source": "Zdroj",
+          "system": "Systémová aktivita",
+          "target": "Cieľ",
+          "title": "Podrobnosti aktivity",
+          "trigger": "Spustil(a)",
+          "webhook": "Webhook"
+        },
+        "list": {
+          "activity": "Aktivita",
+          "actor": "Aktér",
+          "dateTime": "Dátum a čas",
+          "provenance": "Pôvod"
+        },
+        "sources": {
+          "chat": "Chat",
+          "flow": "Pracovný postup",
+          "mcp": "Pripojený nástroj"
+        },
+        "views": { "list": "Zoznam", "timeline": "Časová os" },
         "deletedUser": "Odstránený používateľ",
         "empty": "V tejto veci zatiaľ nie je žiadna aktivita.",
         "filterLabel": "Filtrovať aktivitu",

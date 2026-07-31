@@ -3399,7 +3399,46 @@
           "reviewed": "<actor>Naudotojas</actor> peržiūrėjo <target>elementą</target>",
           "updated": "<actor>Naudotojas</actor> atnaujino <target>elementą</target>"
         },
+        "approvals": {
+          "approved": "Patvirtinta",
+          "notRequired": "Nereikalinga",
+          "pending": "Laukiama",
+          "rejected": "Atmesta"
+        },
         "automatedService": "Automatinė paslauga",
+        "details": {
+          "actor": "Atliko",
+          "approval": "Patvirtinimas",
+          "approvedBy": "Patvirtino",
+          "category": "Kategorija",
+          "dateTime": "Data ir laikas",
+          "direct": "Tiesioginė veikla",
+          "eventId": "Įvykio ID",
+          "notAvailable": "Nėra",
+          "openTarget": "Atidaryti elementą",
+          "runId": "Vykdymo ID",
+          "source": "Šaltinis",
+          "system": "Sistemos veikla",
+          "target": "Objektas",
+          "title": "Veiklos informacija",
+          "trigger": "Inicijavo",
+          "webhook": "Saityno jungtis"
+        },
+        "list": {
+          "activity": "Veikla",
+          "actor": "Atlikėjas",
+          "dateTime": "Data ir laikas",
+          "provenance": "Kilmė"
+        },
+        "sources": {
+          "chat": "Pokalbis",
+          "flow": "Darbo eiga",
+          "mcp": "Prijungtas įrankis"
+        },
+        "views": {
+          "list": "Sąrašo rodinys",
+          "timeline": "Laiko juostos rodinys"
+        },
         "deletedUser": "Ištrintas naudotojas",
         "empty": "Šioje byloje veiklos dar nėra.",
         "filterLabel": "Filtruoti veiklą",

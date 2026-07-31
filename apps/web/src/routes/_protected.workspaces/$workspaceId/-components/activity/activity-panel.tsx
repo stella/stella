@@ -5,7 +5,9 @@ import { useSuspenseInfiniteQuery } from "@tanstack/react-query";
 import {
   BotIcon,
   ChevronDownIcon,
+  Clock3Icon,
   FileTextIcon,
+  ListIcon,
   ListFilterIcon,
   ScaleIcon,
   SquareCheckIcon,
@@ -23,6 +25,17 @@ import {
   MenuRadioItem,
   MenuTrigger,
 } from "@stll/ui/components/menu";
+import { SegmentedIconToggle } from "@stll/ui/components/segmented-icon-toggle";
+import {
+  Sheet,
+  SheetClose,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetPanel,
+  SheetPopup,
+  SheetTitle,
+} from "@stll/ui/components/sheet";
 
 import { PersonMentionLabel } from "@/components/person-mention-label";
 import Tooltip from "@/components/tooltip";
@@ -40,6 +53,7 @@ import { activityDayKey, groupActivityRuns } from "./activity-panel.logic";
 
 type ActivityPanelProps = { workspaceId: string };
 type ActivityDay = [MatterActivityItem, ...MatterActivityItem[]];
+type ActivityViewMode = "timeline" | "list";
 
 const CATEGORIES: MatterActivityCategory[] = [
   "all",
@@ -80,8 +94,24 @@ const categoryLabel = (
 export const ActivityPanel = ({ workspaceId }: ActivityPanelProps) => {
   const t = useTranslations();
   const [category, setCategory] = useState<MatterActivityCategory>("all");
+  const [selectedItem, setSelectedItem] = useState<MatterActivityItem | null>(
+    null,
+  );
+  const [viewMode, setViewMode] = useState<ActivityViewMode>("timeline");
   const deferredCategory = useDeferredValue(category);
   const isFilterPending = category !== deferredCategory;
+  const viewOptions = [
+    {
+      icon: Clock3Icon,
+      label: t("workspaces.overview.activity.views.timeline"),
+      value: "timeline",
+    },
+    {
+      icon: ListIcon,
+      label: t("workspaces.overview.activity.views.list"),
+      value: "list",
+    },
+  ] as const;
 
   return (
     <section aria-labelledby="matter-activity-heading">
@@ -92,30 +122,40 @@ export const ActivityPanel = ({ workspaceId }: ActivityPanelProps) => {
         >
           {t("workspaces.overview.activity.title")}
         </h2>
-        <Menu>
-          <MenuTrigger
-            aria-label={t("workspaces.overview.activity.filterLabel")}
-            className="h-7 gap-1.5 text-xs"
-            render={<Button size="sm" variant="ghost" />}
-          >
-            <ListFilterIcon className="size-3.5" />
-            {categoryLabel(category, t)}
-            <ChevronDownIcon className="size-3" />
-          </MenuTrigger>
-          <MenuPopup align="end">
-            <MenuRadioGroup value={category}>
-              {CATEGORIES.map((value) => (
-                <MenuRadioItem
-                  key={value}
-                  onClick={() => setCategory(value)}
-                  value={value}
-                >
-                  {categoryLabel(value, t)}
-                </MenuRadioItem>
-              ))}
-            </MenuRadioGroup>
-          </MenuPopup>
-        </Menu>
+        <div className="flex items-center gap-1.5">
+          <SegmentedIconToggle
+            onChange={setViewMode}
+            options={viewOptions}
+            value={viewMode}
+          />
+          <Menu>
+            <MenuTrigger
+              aria-label={t("workspaces.overview.activity.filterLabel")}
+              className="h-7 gap-1.5 text-xs"
+              render={<Button size="sm" variant="ghost" />}
+            >
+              <ListFilterIcon className="size-3.5" />
+              {categoryLabel(category, t)}
+              <ChevronDownIcon className="size-3" />
+            </MenuTrigger>
+            <MenuPopup align="end">
+              <MenuRadioGroup value={category}>
+                {CATEGORIES.map((value) => (
+                  <MenuRadioItem
+                    key={value}
+                    onClick={() => {
+                      setSelectedItem(null);
+                      setCategory(value);
+                    }}
+                    value={value}
+                  >
+                    {categoryLabel(value, t)}
+                  </MenuRadioItem>
+                ))}
+              </MenuRadioGroup>
+            </MenuPopup>
+          </Menu>
+        </div>
       </div>
 
       <div
@@ -129,19 +169,34 @@ export const ActivityPanel = ({ workspaceId }: ActivityPanelProps) => {
         <Suspense fallback={<ActivityTimelineSkeleton />}>
           <ActivityTimeline
             category={deferredCategory}
+            onSelectItem={setSelectedItem}
+            viewMode={viewMode}
             workspaceId={workspaceId}
           />
         </Suspense>
       </div>
+      <ActivityDetailsSheet
+        item={selectedItem}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedItem(null);
+          }
+        }}
+        workspaceId={workspaceId}
+      />
     </section>
   );
 };
 
 const ActivityTimeline = ({
   category,
+  onSelectItem,
+  viewMode,
   workspaceId,
 }: {
   category: MatterActivityCategory;
+  onSelectItem: (item: MatterActivityItem) => void;
+  viewMode: ActivityViewMode;
   workspaceId: string;
 }) => {
   const t = useTranslations();
@@ -166,28 +221,34 @@ const ActivityTimeline = ({
 
   return (
     <>
-      <div className="bg-background overflow-hidden rounded-xl shadow-sm ring-1 ring-foreground/5">
+      <div className="bg-background ring-foreground/5 overflow-hidden rounded-xl shadow-sm ring-1">
         {days.length === 0 ? (
           <p className="text-muted-foreground px-4 py-8 text-center text-sm">
             {t("workspaces.overview.activity.empty")}
           </p>
         ) : (
           <>
-            <HorizontalTimeline days={days} workspaceId={workspaceId} />
-            <div className="md:hidden">
-              {days.map((dayItems) => (
-                <div key={activityDayKey(dayItems[0].activityAt)}>
-                  <TimelineDateMarker activityAt={dayItems[0].activityAt} />
-                  {groupActivityRuns(dayItems).map((run) => (
-                    <ActivityRunRow
-                      items={run.items}
-                      key={run.id}
-                      workspaceId={workspaceId}
-                    />
+            {viewMode === "list" ? (
+              <ActivityList items={items} onSelectItem={onSelectItem} />
+            ) : (
+              <>
+                <HorizontalTimeline days={days} onSelectItem={onSelectItem} />
+                <div className="md:hidden">
+                  {days.map((dayItems) => (
+                    <div key={activityDayKey(dayItems[0].activityAt)}>
+                      <TimelineDateMarker activityAt={dayItems[0].activityAt} />
+                      {groupActivityRuns(dayItems).map((run) => (
+                        <ActivityRunRow
+                          items={run.items}
+                          key={run.id}
+                          onSelectItem={onSelectItem}
+                        />
+                      ))}
+                    </div>
                   ))}
                 </div>
-              ))}
-            </div>
+              </>
+            )}
           </>
         )}
       </div>
@@ -217,7 +278,7 @@ const ACTIVITY_SKELETON_WIDTHS = ["w-24", "w-32", "w-28", "w-36"] as const;
 const ActivityTimelineSkeleton = () => (
   <div
     aria-hidden="true"
-    className="bg-background overflow-hidden rounded-xl shadow-sm ring-1 ring-foreground/5"
+    className="bg-background ring-foreground/5 overflow-hidden rounded-xl shadow-sm ring-1"
   >
     <div className="hidden overflow-hidden md:block">
       <div className="flex min-w-max px-5 pt-4 pb-5">
@@ -251,11 +312,11 @@ const ActivityTimelineSkeleton = () => (
           className="grid min-h-16 grid-cols-[5.5rem_1.5rem_minmax(0,1fr)]"
           key={width}
         >
-          <span className="bg-muted mt-3 ms-auto me-1 h-2 w-12 animate-pulse rounded-sm" />
+          <span className="bg-muted ms-auto me-1 mt-3 h-2 w-12 animate-pulse rounded-sm" />
           <span className="relative flex justify-center">
             <span className="bg-border absolute inset-y-0 start-1/2 w-px" />
           </span>
-          <span className="py-3 pe-4 ps-3">
+          <span className="py-3 ps-3 pe-4">
             <span
               className={`bg-muted block h-3 animate-pulse rounded-sm ${width}`}
             />
@@ -269,10 +330,10 @@ const ActivityTimelineSkeleton = () => (
 
 const HorizontalTimeline = ({
   days,
-  workspaceId,
+  onSelectItem,
 }: {
   days: ActivityDay[];
-  workspaceId: string;
+  onSelectItem: (item: MatterActivityItem) => void;
 }) => (
   <div className="hidden overflow-x-auto overscroll-x-contain md:block">
     <div className="flex min-w-max snap-x snap-proximity px-5 pt-4 pb-5">
@@ -282,7 +343,7 @@ const HorizontalTimeline = ({
             dateAt={index === 0 ? dayItems[0].activityAt : undefined}
             items={run.items}
             key={run.id}
-            workspaceId={workspaceId}
+            onSelectItem={onSelectItem}
           />
         )),
       )}
@@ -293,11 +354,11 @@ const HorizontalTimeline = ({
 const HorizontalActivityMilestone = ({
   dateAt,
   items,
-  workspaceId,
+  onSelectItem,
 }: {
   dateAt: string | undefined;
   items: MatterActivityItem[];
-  workspaceId: string;
+  onSelectItem: (item: MatterActivityItem) => void;
 }) => {
   const t = useTranslations();
   const first = items[0];
@@ -306,7 +367,6 @@ const HorizontalActivityMilestone = ({
   }
 
   if (first.runId === null) {
-    const openTarget = getOpenTarget(first, workspaceId);
     const detail = triggerDetail(first, t);
     const target = (
       <BidiText as="span" className="font-medium">
@@ -315,7 +375,7 @@ const HorizontalActivityMilestone = ({
     );
     const content = (
       <span className="min-w-0">
-        <span className="flex min-h-5 items-center text-[13px] font-medium leading-5">
+        <span className="flex min-h-5 items-center text-[13px] leading-5 font-medium">
           <Performer item={first} />
         </span>
         {detail && (
@@ -331,17 +391,13 @@ const HorizontalActivityMilestone = ({
 
     return (
       <HorizontalMilestoneFrame activityAt={first.activityAt} dateAt={dateAt}>
-        {openTarget ? (
-          <button
-            className="hover:bg-muted/40 -ms-2 flex min-h-11 w-[calc(100%+0.5rem)] items-start rounded-md px-2 py-1 text-start transition-colors"
-            onClick={openTarget}
-            type="button"
-          >
-            {content}
-          </button>
-        ) : (
-          <div className="min-h-11 py-1">{content}</div>
-        )}
+        <button
+          className="hover:bg-muted/40 -ms-2 flex min-h-11 w-[calc(100%+0.5rem)] items-start rounded-md px-2 py-1 text-start transition-colors"
+          onClick={() => onSelectItem(first)}
+          type="button"
+        >
+          {content}
+        </button>
       </HorizontalMilestoneFrame>
     );
   }
@@ -355,7 +411,7 @@ const HorizontalActivityMilestone = ({
   const detail = triggerDetail(first, t);
   return (
     <HorizontalMilestoneFrame activityAt={first.activityAt} dateAt={dateAt}>
-      <div className="flex min-h-5 items-center gap-1.5 text-[13px] font-medium leading-5">
+      <div className="flex min-h-5 items-center gap-1.5 text-[13px] leading-5 font-medium">
         <span className="text-muted-foreground">{marker}</span>
         <span>{first.performer.name}</span>
         <span className="text-muted-foreground">·</span>
@@ -373,7 +429,7 @@ const HorizontalActivityMilestone = ({
           <HorizontalRunActivityItem
             item={item}
             key={item.id}
-            workspaceId={workspaceId}
+            onSelectItem={onSelectItem}
           />
         ))}
       </div>
@@ -424,26 +480,22 @@ const HorizontalMilestoneFrame = ({
 
 const HorizontalRunActivityItem = ({
   item,
-  workspaceId,
+  onSelectItem,
 }: {
   item: MatterActivityItem;
-  workspaceId: string;
+  onSelectItem: (item: MatterActivityItem) => void;
 }) => {
   const t = useTranslations();
-  const openTarget = getOpenTarget(item, workspaceId);
   const target = (
     <BidiText as="span" className="font-medium">
       {targetName(item, t)}
     </BidiText>
   );
   const sentence = actionSentence(item.action, null, target, t);
-  if (!openTarget) {
-    return <div className="text-[13px] leading-5">{sentence}</div>;
-  }
   return (
     <button
       className="hover:bg-muted/40 -ms-2 flex min-h-11 w-[calc(100%+0.5rem)] items-center rounded-md px-2 text-start transition-colors"
-      onClick={openTarget}
+      onClick={() => onSelectItem(item)}
       type="button"
     >
       <span className="text-[13px] leading-5">{sentence}</span>
@@ -453,10 +505,10 @@ const HorizontalRunActivityItem = ({
 
 const ActivityRunRow = ({
   items,
-  workspaceId,
+  onSelectItem,
 }: {
   items: MatterActivityItem[];
-  workspaceId: string;
+  onSelectItem: (item: MatterActivityItem) => void;
 }) => {
   const t = useTranslations();
   const first = items[0];
@@ -464,7 +516,7 @@ const ActivityRunRow = ({
     return null;
   }
   if (first.runId === null) {
-    return <ActivityItemRow item={first} workspaceId={workspaceId} />;
+    return <ActivityItemRow item={first} onSelectItem={onSelectItem} />;
   }
 
   const detail = triggerDetail(first, t);
@@ -477,7 +529,7 @@ const ActivityRunRow = ({
 
   return (
     <TimelineEntry activityAt={first.activityAt} marker={marker}>
-      <div className="min-w-0 py-2.5 pe-4 ps-3">
+      <div className="min-w-0 py-2.5 ps-3 pe-4">
         <div className="flex min-h-6 items-center gap-1.5 text-sm font-medium">
           <span>{first.performer.name}</span>
           <span className="text-muted-foreground">·</span>
@@ -493,7 +545,7 @@ const ActivityRunRow = ({
             <RunActivityItem
               item={item}
               key={item.id}
-              workspaceId={workspaceId}
+              onSelectItem={onSelectItem}
             />
           ))}
         </div>
@@ -518,7 +570,7 @@ const TimelineDateMarker = ({ activityAt }: { activityAt: string }) => {
         />
       </span>
       <time
-        className="text-muted-foreground flex items-center pe-4 ps-3 text-xs font-medium tabular-nums"
+        className="text-muted-foreground flex items-center ps-3 pe-4 text-xs font-medium tabular-nums"
         dateTime={activityAt}
       >
         {format.dateTime(new Date(activityAt), { dateStyle: "long" })}
@@ -547,7 +599,7 @@ const TimelineEntry = ({
         })}
         render={
           <time
-            className="text-muted-foreground flex items-start justify-end pt-3 pe-1 text-[11px] tabular-nums"
+            className="text-muted-foreground flex items-start justify-end pe-1 pt-3 text-[11px] tabular-nums"
             dateTime={activityAt}
           >
             {format.dateTime(date, { timeStyle: "short" })}
@@ -570,26 +622,22 @@ const TimelineEntry = ({
 
 const RunActivityItem = ({
   item,
-  workspaceId,
+  onSelectItem,
 }: {
   item: MatterActivityItem;
-  workspaceId: string;
+  onSelectItem: (item: MatterActivityItem) => void;
 }) => {
   const t = useTranslations();
-  const openTarget = getOpenTarget(item, workspaceId);
   const target = (
     <BidiText as="span" className="font-medium">
       {targetName(item, t)}
     </BidiText>
   );
   const sentence = actionSentence(item.action, null, target, t);
-  if (!openTarget) {
-    return <div className="py-1.5 text-sm leading-5">{sentence}</div>;
-  }
   return (
     <button
       className="hover:bg-muted/40 -ms-2 flex min-h-11 w-[calc(100%+0.5rem)] items-center rounded-md px-2 text-start transition-colors"
-      onClick={openTarget}
+      onClick={() => onSelectItem(item)}
       type="button"
     >
       <span className="text-sm leading-5">{sentence}</span>
@@ -604,13 +652,12 @@ const RunCount = ({ count }: { count: number }) => {
 
 const ActivityItemRow = ({
   item,
-  workspaceId,
+  onSelectItem,
 }: {
   item: MatterActivityItem;
-  workspaceId: string;
+  onSelectItem: (item: MatterActivityItem) => void;
 }) => {
   const t = useTranslations();
-  const openTarget = getOpenTarget(item, workspaceId);
   const actor = <Performer item={item} />;
   const target = (
     <BidiText as="span" className="font-medium">
@@ -632,26 +679,263 @@ const ActivityItemRow = ({
     </span>
   );
 
-  if (!openTarget) {
-    return (
-      <TimelineEntry activityAt={item.activityAt} marker={icon}>
-        <div className="flex min-h-11 items-center py-2 pe-4 ps-3">
-          {content}
-        </div>
-      </TimelineEntry>
-    );
-  }
   return (
     <TimelineEntry activityAt={item.activityAt} marker={icon}>
       <button
-        className="hover:bg-muted/40 flex min-h-11 w-full items-center rounded-md py-2 pe-4 ps-3 text-start transition-colors"
-        onClick={openTarget}
+        className="hover:bg-muted/40 flex min-h-11 w-full items-center rounded-md py-2 ps-3 pe-4 text-start transition-colors"
+        onClick={() => onSelectItem(item)}
         type="button"
       >
         {content}
       </button>
     </TimelineEntry>
   );
+};
+
+const ActivityList = ({
+  items,
+  onSelectItem,
+}: {
+  items: MatterActivityItem[];
+  onSelectItem: (item: MatterActivityItem) => void;
+}) => {
+  const format = useFormatter();
+  const t = useTranslations();
+  return (
+    <div role="list">
+      <div
+        aria-hidden="true"
+        className="text-muted-foreground hidden border-b px-4 py-2 text-[11px] font-medium md:grid md:grid-cols-[10rem_12rem_minmax(16rem,1fr)_14rem] md:gap-4"
+      >
+        <span>{t("workspaces.overview.activity.list.dateTime")}</span>
+        <span>{t("workspaces.overview.activity.list.actor")}</span>
+        <span>{t("workspaces.overview.activity.list.activity")}</span>
+        <span>{t("workspaces.overview.activity.list.provenance")}</span>
+      </div>
+      {items.map((item) => {
+        const target = (
+          <BidiText as="span" className="font-medium">
+            {targetName(item, t)}
+          </BidiText>
+        );
+        const provenance = triggerDetail(item, t);
+        return (
+          <div
+            className="border-b last:border-b-0"
+            key={item.id}
+            role="listitem"
+          >
+            <button
+              className="hover:bg-muted/40 focus-visible:bg-muted/40 grid min-h-14 w-full gap-1 px-4 py-2.5 text-start transition-colors md:grid-cols-[10rem_12rem_minmax(16rem,1fr)_14rem] md:items-center md:gap-4"
+              onClick={() => onSelectItem(item)}
+              type="button"
+            >
+              <time
+                className="text-muted-foreground text-xs tabular-nums"
+                dateTime={item.activityAt}
+              >
+                {format.dateTime(new Date(item.activityAt), {
+                  dateStyle: "medium",
+                  timeStyle: "short",
+                })}
+              </time>
+              <span className="min-w-0 text-sm">
+                <Performer item={item} />
+              </span>
+              <span className="min-w-0 text-sm leading-5">
+                {actionSentence(item.action, null, target, t)}
+              </span>
+              <span className="text-muted-foreground min-w-0 text-xs leading-4">
+                {provenance ??
+                  (item.trigger.source
+                    ? sourceName(item.trigger.source, t)
+                    : "—")}
+              </span>
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+const ActivityDetailsSheet = ({
+  item,
+  onOpenChange,
+  workspaceId,
+}: {
+  item: MatterActivityItem | null;
+  onOpenChange: (open: boolean) => void;
+  workspaceId: string;
+}) => {
+  const format = useFormatter();
+  const t = useTranslations();
+  if (!item) {
+    return null;
+  }
+
+  const target = (
+    <BidiText as="span" className="font-medium">
+      {targetName(item, t)}
+    </BidiText>
+  );
+  const openTarget = getOpenTarget(item, workspaceId);
+  const rows = [
+    {
+      label: t("workspaces.overview.activity.details.dateTime"),
+      value: (
+        <time dateTime={item.activityAt}>
+          {format.dateTime(new Date(item.activityAt), {
+            dateStyle: "full",
+            timeStyle: "long",
+          })}
+        </time>
+      ),
+    },
+    {
+      label: t("workspaces.overview.activity.details.actor"),
+      value: <Performer item={item} />,
+    },
+    {
+      label: t("workspaces.overview.activity.details.target"),
+      value: target,
+    },
+    {
+      label: t("workspaces.overview.activity.details.category"),
+      value: categoryLabel(item.category, t),
+    },
+    {
+      label: t("workspaces.overview.activity.details.trigger"),
+      value: triggerName(item, t),
+    },
+    {
+      label: t("workspaces.overview.activity.details.source"),
+      value: sourceName(item.trigger.source, t),
+    },
+    {
+      label: t("workspaces.overview.activity.details.approval"),
+      value: approvalName(item.approval.status, t),
+    },
+    ...(item.approval.user
+      ? [
+          {
+            label: t("workspaces.overview.activity.details.approvedBy"),
+            value: item.approval.user.name,
+          },
+        ]
+      : []),
+    ...(item.runId
+      ? [
+          {
+            label: t("workspaces.overview.activity.details.runId"),
+            value: <BidiText as="span">{item.runId}</BidiText>,
+          },
+        ]
+      : []),
+    {
+      label: t("workspaces.overview.activity.details.eventId"),
+      value: <BidiText as="span">{item.id}</BidiText>,
+    },
+  ];
+
+  return (
+    <Sheet onOpenChange={onOpenChange} open>
+      <SheetPopup side="inline-end" variant="inset">
+        <SheetHeader>
+          <SheetTitle>
+            {t("workspaces.overview.activity.details.title")}
+          </SheetTitle>
+          <SheetDescription className="pe-8">
+            {actionSentence(item.action, null, target, t)}
+          </SheetDescription>
+        </SheetHeader>
+        <SheetPanel>
+          <dl className="divide-y">
+            {rows.map((row) => (
+              <div className="grid gap-1 py-3" key={row.label}>
+                <dt className="text-muted-foreground text-xs font-medium">
+                  {row.label}
+                </dt>
+                <dd className="min-w-0 text-sm break-words">{row.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </SheetPanel>
+        <SheetFooter>
+          <SheetClose render={<Button variant="ghost" />}>
+            {t("common.close")}
+          </SheetClose>
+          {openTarget && (
+            <SheetClose
+              onClick={openTarget}
+              render={<Button variant="default" />}
+            >
+              {t("workspaces.overview.activity.details.openTarget")}
+            </SheetClose>
+          )}
+        </SheetFooter>
+      </SheetPopup>
+    </Sheet>
+  );
+};
+
+const sourceName = (
+  source: MatterActivityItem["trigger"]["source"],
+  t: ReturnType<typeof useTranslations>,
+) => {
+  if (!source) {
+    return t("workspaces.overview.activity.details.notAvailable");
+  }
+  switch (source) {
+    case "chat":
+      return t("workspaces.overview.activity.sources.chat");
+    case "flow":
+      return t("workspaces.overview.activity.sources.flow");
+    case "mcp":
+      return t("workspaces.overview.activity.sources.mcp");
+    default:
+      return <BidiText as="span">{source}</BidiText>;
+  }
+};
+
+const triggerName = (
+  item: MatterActivityItem,
+  t: ReturnType<typeof useTranslations>,
+) => {
+  const detail = triggerDetail(item, t);
+  if (detail) {
+    return detail;
+  }
+  switch (item.trigger.type) {
+    case "direct":
+      return t("workspaces.overview.activity.details.direct");
+    case "webhook":
+      return t("workspaces.overview.activity.details.webhook");
+    case "system":
+      return t("workspaces.overview.activity.details.system");
+    default:
+      return t("workspaces.overview.activity.details.notAvailable");
+  }
+};
+
+const approvalName = (
+  status: MatterActivityItem["approval"]["status"],
+  t: ReturnType<typeof useTranslations>,
+) => {
+  switch (status) {
+    case "not_required":
+      return t("workspaces.overview.activity.approvals.notRequired");
+    case "pending":
+      return t("workspaces.overview.activity.approvals.pending");
+    case "approved":
+      return t("workspaces.overview.activity.approvals.approved");
+    case "rejected":
+      return t("workspaces.overview.activity.approvals.rejected");
+    default: {
+      const exhaustive: never = status;
+      return exhaustive;
+    }
+  }
 };
 
 const Performer = ({ item }: { item: MatterActivityItem }) => {

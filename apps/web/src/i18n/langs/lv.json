@@ -3399,7 +3399,43 @@
           "reviewed": "<actor>Lietotājs</actor> pārskatīja <target>vienumu</target>",
           "updated": "<actor>Lietotājs</actor> atjaunināja <target>vienumu</target>"
         },
+        "approvals": {
+          "approved": "Apstiprināts",
+          "notRequired": "Nav nepieciešams",
+          "pending": "Gaida",
+          "rejected": "Noraidīts"
+        },
         "automatedService": "Automatizēts pakalpojums",
+        "details": {
+          "actor": "Veica",
+          "approval": "Apstiprinājums",
+          "approvedBy": "Apstiprināja",
+          "category": "Kategorija",
+          "dateTime": "Datums un laiks",
+          "direct": "Tieša darbība",
+          "eventId": "Notikuma ID",
+          "notAvailable": "Nav pieejams",
+          "openTarget": "Atvērt vienumu",
+          "runId": "Izpildes ID",
+          "source": "Avots",
+          "system": "Sistēmas darbība",
+          "target": "Mērķis",
+          "title": "Darbības informācija",
+          "trigger": "Uzsāka",
+          "webhook": "Tīmekļa aizķere"
+        },
+        "list": {
+          "activity": "Darbība",
+          "actor": "Veicējs",
+          "dateTime": "Datums un laiks",
+          "provenance": "Izcelsme"
+        },
+        "sources": {
+          "chat": "Tērzēšana",
+          "flow": "Darbplūsma",
+          "mcp": "Pievienots rīks"
+        },
+        "views": { "list": "Saraksta skats", "timeline": "Laika skalas skats" },
         "deletedUser": "Dzēsts lietotājs",
         "empty": "Šajā lietā vēl nav darbību.",
         "filterLabel": "Filtrēt darbības",

@@ -3399,7 +3399,43 @@
           "reviewed": "<actor>Kasutaja</actor> vaatas üle <target>üksuse</target>",
           "updated": "<actor>Kasutaja</actor> uuendas <target>üksust</target>"
         },
+        "approvals": {
+          "approved": "Kinnitatud",
+          "notRequired": "Pole nõutav",
+          "pending": "Ootel",
+          "rejected": "Tagasi lükatud"
+        },
         "automatedService": "Automaatne teenus",
+        "details": {
+          "actor": "Täitja",
+          "approval": "Kinnitus",
+          "approvedBy": "Kinnitaja",
+          "category": "Kategooria",
+          "dateTime": "Kuupäev ja kellaaeg",
+          "direct": "Otsene tegevus",
+          "eventId": "Sündmuse ID",
+          "notAvailable": "Pole saadaval",
+          "openTarget": "Ava üksus",
+          "runId": "Käivituse ID",
+          "source": "Allikas",
+          "system": "Süsteemi tegevus",
+          "target": "Siht",
+          "title": "Tegevuse üksikasjad",
+          "trigger": "Algataja",
+          "webhook": "Veebihaak"
+        },
+        "list": {
+          "activity": "Tegevus",
+          "actor": "Täitja",
+          "dateTime": "Kuupäev ja kellaaeg",
+          "provenance": "Päritolu"
+        },
+        "sources": {
+          "chat": "Vestlus",
+          "flow": "Töövoog",
+          "mcp": "Ühendatud tööriist"
+        },
+        "views": { "list": "Loendivaade", "timeline": "Ajajoone vaade" },
         "deletedUser": "Kustutatud kasutaja",
         "empty": "Selles asjas pole veel tegevust.",
         "filterLabel": "Filtreeri tegevust",

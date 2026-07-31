@@ -3399,7 +3399,43 @@
           "reviewed": "<actor>Persona</actor> revisó <target>elemento</target>",
           "updated": "<actor>Persona</actor> actualizó <target>elemento</target>"
         },
+        "approvals": {
+          "approved": "Aprobado",
+          "notRequired": "No requerida",
+          "pending": "Pendiente",
+          "rejected": "Rechazado"
+        },
         "automatedService": "Servicio automatizado",
+        "details": {
+          "actor": "Realizado por",
+          "approval": "Aprobación",
+          "approvedBy": "Aprobado por",
+          "category": "Categoría",
+          "dateTime": "Fecha y hora",
+          "direct": "Actividad directa",
+          "eventId": "ID del evento",
+          "notAvailable": "No disponible",
+          "openTarget": "Abrir elemento",
+          "runId": "ID de ejecución",
+          "source": "Fuente",
+          "system": "Actividad del sistema",
+          "target": "Objetivo",
+          "title": "Detalles de la actividad",
+          "trigger": "Iniciado por",
+          "webhook": "Webhook"
+        },
+        "list": {
+          "activity": "Actividad",
+          "actor": "Actor",
+          "dateTime": "Fecha y hora",
+          "provenance": "Origen"
+        },
+        "sources": {
+          "chat": "Chat",
+          "flow": "Flujo de trabajo",
+          "mcp": "Herramienta conectada"
+        },
+        "views": { "list": "Vista de lista", "timeline": "Vista cronológica" },
         "deletedUser": "Usuario eliminado",
         "empty": "Aún no hay actividad en este asunto.",
         "filterLabel": "Filtrar actividad",

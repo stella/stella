@@ -3399,7 +3399,43 @@
           "reviewed": "<actor>Personne</actor> a vérifié <target>élément</target>",
           "updated": "<actor>Personne</actor> a mis à jour <target>élément</target>"
         },
+        "approvals": {
+          "approved": "Approuvée",
+          "notRequired": "Non requise",
+          "pending": "En attente",
+          "rejected": "Rejetée"
+        },
         "automatedService": "Service automatisé",
+        "details": {
+          "actor": "Effectuée par",
+          "approval": "Approbation",
+          "approvedBy": "Approuvée par",
+          "category": "Catégorie",
+          "dateTime": "Date et heure",
+          "direct": "Activité directe",
+          "eventId": "ID de l’événement",
+          "notAvailable": "Non disponible",
+          "openTarget": "Ouvrir l’élément",
+          "runId": "ID d’exécution",
+          "source": "Source",
+          "system": "Activité système",
+          "target": "Cible",
+          "title": "Détails de l’activité",
+          "trigger": "Initiée par",
+          "webhook": "Webhook"
+        },
+        "list": {
+          "activity": "Activité",
+          "actor": "Acteur",
+          "dateTime": "Date et heure",
+          "provenance": "Origine"
+        },
+        "sources": {
+          "chat": "Chat",
+          "flow": "Flux de travail",
+          "mcp": "Outil connecté"
+        },
+        "views": { "list": "Vue en liste", "timeline": "Vue chronologique" },
         "deletedUser": "Utilisateur supprimé",
         "empty": "Aucune activité dans ce dossier pour le moment.",
         "filterLabel": "Filtrer l’activité",

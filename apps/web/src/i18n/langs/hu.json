@@ -3399,7 +3399,43 @@
           "reviewed": "<actor>Felhasználó</actor> ellenőrizte: <target>elem</target>",
           "updated": "<actor>Felhasználó</actor> frissítette: <target>elem</target>"
         },
+        "approvals": {
+          "approved": "Jóváhagyva",
+          "notRequired": "Nem szükséges",
+          "pending": "Függőben",
+          "rejected": "Elutasítva"
+        },
         "automatedService": "Automatizált szolgáltatás",
+        "details": {
+          "actor": "Végrehajtotta",
+          "approval": "Jóváhagyás",
+          "approvedBy": "Jóváhagyta",
+          "category": "Kategória",
+          "dateTime": "Dátum és idő",
+          "direct": "Közvetlen tevékenység",
+          "eventId": "Eseményazonosító",
+          "notAvailable": "Nem érhető el",
+          "openTarget": "Elem megnyitása",
+          "runId": "Futásazonosító",
+          "source": "Forrás",
+          "system": "Rendszertevékenység",
+          "target": "Cél",
+          "title": "Tevékenység részletei",
+          "trigger": "Kezdeményezte",
+          "webhook": "Webhook"
+        },
+        "list": {
+          "activity": "Tevékenység",
+          "actor": "Szereplő",
+          "dateTime": "Dátum és idő",
+          "provenance": "Eredet"
+        },
+        "sources": {
+          "chat": "Csevegés",
+          "flow": "Munkafolyamat",
+          "mcp": "Csatlakoztatott eszköz"
+        },
+        "views": { "list": "Listanézet", "timeline": "Idővonalnézet" },
         "deletedUser": "Törölt felhasználó",
         "empty": "Ebben az ügyben még nincs tevékenység.",
         "filterLabel": "Tevékenység szűrése",

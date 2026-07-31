@@ -3399,7 +3399,43 @@
           "reviewed": "راجع <actor>المستخدم</actor> <target>العنصر</target>",
           "updated": "حدّث <actor>المستخدم</actor> <target>العنصر</target>"
         },
+        "approvals": {
+          "approved": "تمت الموافقة",
+          "notRequired": "غير مطلوب",
+          "pending": "قيد الانتظار",
+          "rejected": "مرفوض"
+        },
         "automatedService": "خدمة آلية",
+        "details": {
+          "actor": "نفّذها",
+          "approval": "الموافقة",
+          "approvedBy": "وافق عليها",
+          "category": "الفئة",
+          "dateTime": "التاريخ والوقت",
+          "direct": "نشاط مباشر",
+          "eventId": "معرّف الحدث",
+          "notAvailable": "غير متاح",
+          "openTarget": "فتح العنصر",
+          "runId": "معرّف التشغيل",
+          "source": "المصدر",
+          "system": "نشاط النظام",
+          "target": "الهدف",
+          "title": "تفاصيل النشاط",
+          "trigger": "بدأه",
+          "webhook": "خطاف ويب"
+        },
+        "list": {
+          "activity": "النشاط",
+          "actor": "الفاعل",
+          "dateTime": "التاريخ والوقت",
+          "provenance": "المنشأ"
+        },
+        "sources": {
+          "chat": "المحادثة",
+          "flow": "سير العمل",
+          "mcp": "أداة متصلة"
+        },
+        "views": { "list": "عرض القائمة", "timeline": "عرض الخط الزمني" },
         "deletedUser": "مستخدم محذوف",
         "empty": "لا يوجد نشاط في هذه المسألة بعد.",
         "filterLabel": "تصفية النشاط",

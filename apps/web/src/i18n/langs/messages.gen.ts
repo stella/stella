@@ -3402,7 +3402,46 @@ type Messages = {
           "reviewed": "<actor>Actor</actor> reviewed <target>target</target>";
           "updated": "<actor>Actor</actor> updated <target>target</target>";
         };
+        "approvals": {
+          "approved": "Approved";
+          "notRequired": "Not required";
+          "pending": "Pending";
+          "rejected": "Rejected";
+        };
         "automatedService": "Automated service";
+        "details": {
+          "actor": "Performed by";
+          "approval": "Approval";
+          "approvedBy": "Approved by";
+          "category": "Category";
+          "dateTime": "Date and time";
+          "direct": "Direct activity";
+          "eventId": "Event ID";
+          "notAvailable": "Not available";
+          "openTarget": "Open item";
+          "runId": "Run ID";
+          "source": "Source";
+          "system": "System activity";
+          "target": "Target";
+          "title": "Activity details";
+          "trigger": "Initiated by";
+          "webhook": "Webhook";
+        };
+        "list": {
+          "activity": "Activity";
+          "actor": "Actor";
+          "dateTime": "Date and time";
+          "provenance": "Origin";
+        };
+        "sources": {
+          "chat": "Chat";
+          "flow": "Workflow";
+          "mcp": "Connected tool";
+        };
+        "views": {
+          "list": "List view";
+          "timeline": "Timeline view";
+        };
         "deletedUser": "Deleted user";
         "empty": "No activity in this matter yet.";
         "filterLabel": "Filter activity";
