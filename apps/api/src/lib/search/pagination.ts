@@ -7,7 +7,10 @@ import { decodeCursor, encodeCursor } from "@/api/lib/search/cursor";
 export type GlobalSearchCursor = {
   score: number;
   id: string;
+  seen: number;
 };
+
+export const GLOBAL_SEARCH_RESULT_LIMIT = 1000;
 
 const GLOBAL_SEARCH_HIT_ID_PREFIXES = [
   "entity:",
@@ -42,18 +45,30 @@ export const decodeGlobalSearchCursor = (
   }
 
   const decoded = decodeCursor(cursor);
+  const separatorIndex = decoded?.id.indexOf(":") ?? -1;
+  const seen = Number(decoded?.id.slice(0, separatorIndex));
+  const id = decoded?.id.slice(separatorIndex + 1) ?? "";
   if (
     decoded === null ||
+    separatorIndex === -1 ||
+    !Number.isInteger(seen) ||
+    seen <= 0 ||
+    seen >= GLOBAL_SEARCH_RESULT_LIMIT ||
     !GLOBAL_SEARCH_HIT_ID_PREFIXES.some(
-      (prefix) =>
-        decoded.id.startsWith(prefix) && decoded.id.length > prefix.length,
+      (prefix) => id.startsWith(prefix) && id.length > prefix.length,
     )
   ) {
     return null;
   }
 
-  return decoded;
+  return { score: decoded.score, id, seen };
 };
+
+export const encodeGlobalSearchCursor = ({
+  score,
+  id,
+  seen,
+}: GlobalSearchCursor): string => encodeCursor(score, `${seen}:${id}`);
 
 export const globalSearchCursorSql = ({
   cursor,
@@ -79,15 +94,36 @@ export const globalSearchCursorSql = ({
   `;
 };
 
-export const paginateScoredSearchHits = <T extends { id: string }>(
-  scoredHits: readonly ScoredSearchHit<T>[],
-  limit: number,
-): { items: T[]; nextCursor: string | null } => {
-  const page = scoredHits.slice(0, limit);
+type PaginateScoredSearchHitsOptions<T extends { id: string }> = {
+  scoredHits: readonly ScoredSearchHit<T>[];
+  limit: number;
+  seen: number;
+};
+
+export const paginateScoredSearchHits = <T extends { id: string }>({
+  scoredHits,
+  limit,
+  seen,
+}: PaginateScoredSearchHitsOptions<T>): {
+  items: T[];
+  nextCursor: string | null;
+} => {
+  const pageLimit = Math.max(
+    0,
+    Math.min(limit, GLOBAL_SEARCH_RESULT_LIMIT - seen),
+  );
+  const page = scoredHits.slice(0, pageLimit);
   const last = page.at(-1);
+  const nextSeen = seen + page.length;
   const nextCursor =
-    scoredHits.length > limit && last !== undefined
-      ? encodeCursor(last.score, last.hit.id)
+    scoredHits.length > pageLimit &&
+    last !== undefined &&
+    nextSeen < GLOBAL_SEARCH_RESULT_LIMIT
+      ? encodeGlobalSearchCursor({
+          score: last.score,
+          id: last.hit.id,
+          seen: nextSeen,
+        })
       : null;
 
   return {

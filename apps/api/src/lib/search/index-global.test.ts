@@ -4,9 +4,12 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import { chatThreadScopeSql } from "@/api/lib/search/chat-thread-scope-sql";
 import { contactWorkspaceAccessSql } from "@/api/lib/search/contact-workspace-access-sql";
-import { encodeCursor } from "@/api/lib/search/cursor";
 import { mapEntityHit } from "@/api/lib/search/global-search-mappers";
 import { searchGlobal } from "@/api/lib/search/index-global";
+import {
+  decodeGlobalSearchCursor,
+  encodeGlobalSearchCursor,
+} from "@/api/lib/search/pagination";
 import {
   clearRootDbMocks,
   rootDbExecuteMock,
@@ -169,44 +172,72 @@ describe("global search SQL scope", () => {
 
   test("applies the score/id cursor and bounded lookahead to every source", async () => {
     const sourceCases = [
-      { type: "document", idSql: "'entity:' || sd.entity_id::text" },
-      { type: "matter", idSql: "'matter:' || wsd.workspace_id::text" },
-      { type: "contact", idSql: "'contact:' || csd.contact_id::text" },
       {
-        type: "case-law",
+        tableSql: "FROM search_documents sd",
+        idSql: "'entity:' || sd.entity_id::text",
+      },
+      {
+        tableSql: "FROM workspace_search_documents wsd",
+        idSql: "'matter:' || wsd.workspace_id::text",
+      },
+      {
+        tableSql: "FROM contact_search_documents csd",
+        idSql: "'contact:' || csd.contact_id::text",
+      },
+      {
+        tableSql: "FROM case_law_search_documents clsd",
         idSql: "'case-law:' || clsd.decision_id::text",
       },
-      { type: "chat", idSql: "'chat:' || cst.thread_id::text" },
+      {
+        tableSql: "FROM chat_thread_search_documents cst",
+        idSql: "'chat:' || cst.thread_id::text",
+      },
     ] as const;
     const dialect = new PgDialect();
 
-    for (const source of sourceCases) {
-      clearRootDbMocks();
-      await searchGlobal({
-        query: "contract",
-        organizationId: toSafeId<"organization">("org_1"),
-        userId: toSafeId<"user">("user_1"),
-        accessibleWorkspaceIds: [toSafeId<"workspace">("ws_1")],
-        selectedWorkspaceIds: [],
-        types: [source.type],
-        editedByUserIds: [],
-        mimeTypes: [],
-        updatedTo: "2026-07-29T08:00:00.000Z",
-        cursor: encodeCursor(0.75, "entity:boundary"),
-        limit: 3,
-      });
+    await searchGlobal({
+      query: "contract",
+      organizationId: toSafeId<"organization">("org_1"),
+      userId: toSafeId<"user">("user_1"),
+      accessibleWorkspaceIds: [toSafeId<"workspace">("ws_1")],
+      selectedWorkspaceIds: [],
+      types: [],
+      editedByUserIds: [],
+      mimeTypes: [],
+      updatedTo: "2026-07-29T08:00:00.000Z",
+      cursor: encodeGlobalSearchCursor({
+        score: 0.75,
+        id: "entity:boundary",
+        seen: 3,
+      }),
+      limit: 3,
+    });
 
-      expect(rootDbExecuteMock).toHaveBeenCalledTimes(1);
-      const query = rootDbExecuteMock.mock.calls.at(0)?.at(0);
-      if (query === undefined) {
-        throw new Error(`Missing ${source.type} search query`);
+    expect(rootDbExecuteMock).toHaveBeenCalledTimes(5);
+    const compiledQueries = rootDbExecuteMock.mock.calls.map(([query]) =>
+      dialect.sqlToQuery(query),
+    );
+    const sourceQueries = sourceCases.map((source) => {
+      const compiled = compiledQueries.find(({ sql }) =>
+        sql.includes(source.tableSql),
+      );
+      if (compiled === undefined) {
+        throw new Error(`Missing query for ${source.tableSql}`);
       }
-      const compiled = dialect.sqlToQuery(query);
+      return { source, compiled };
+    });
+
+    for (const { source, compiled } of sourceQueries) {
       expect(compiled.sql).toContain(source.idSql);
       expect(compiled.sql).toContain('COLLATE "C" <');
       expect(compiled.params).toContain(0.75);
       expect(compiled.params.at(-1)).toBe(4);
     }
+
+    const matterQuery = sourceQueries.at(1)?.compiled;
+    expect(matterQuery?.params.filter((param) => param === 0.15)).toHaveLength(
+      3,
+    );
   });
 
   test("uses updated time as the keyset value for empty-query search", async () => {
@@ -222,7 +253,11 @@ describe("global search SQL scope", () => {
       types: ["document"],
       editedByUserIds: [],
       mimeTypes: [],
-      cursor: encodeCursor(cursorValue, "entity:boundary"),
+      cursor: encodeGlobalSearchCursor({
+        score: cursorValue,
+        id: "entity:boundary",
+        seen: 3,
+      }),
       limit: 3,
     });
 
@@ -238,5 +273,60 @@ describe("global search SQL scope", () => {
     expect(compiled.sql).not.toContain("sd.tsv @@");
     expect(compiled.params).toContain(cursorValue);
     expect(compiled.params.at(-1)).toBe(4);
+  });
+
+  test("preserves the SQL timestamp score in filter-only cursors", async () => {
+    const dialect = new PgDialect();
+    const preciseScore = Date.parse("2026-07-29T08:00:00.999Z") + 0.5;
+    rootDbExecuteMock.mockImplementation(async (query) => {
+      const compiled = dialect.sqlToQuery(query);
+      if (
+        compiled.sql.includes("FROM search_documents sd") &&
+        compiled.sql.includes("JOIN workspaces w")
+      ) {
+        return [
+          {
+            id: "entity_1",
+            workspace_id: "ws_1",
+            workspace_name: "Matter",
+            type: "document",
+            title: "First",
+            headline: null,
+            score: preciseScore,
+            updated_at: new Date("2026-07-29T08:00:00.999Z"),
+          },
+          {
+            id: "entity_2",
+            workspace_id: "ws_1",
+            workspace_name: "Matter",
+            type: "document",
+            title: "Second",
+            headline: null,
+            score: preciseScore - 0.4,
+            updated_at: new Date("2026-07-29T08:00:00.999Z"),
+          },
+        ];
+      }
+      return [];
+    });
+
+    const result = await searchGlobal({
+      query: "",
+      organizationId: toSafeId<"organization">("org_1"),
+      userId: toSafeId<"user">("user_1"),
+      accessibleWorkspaceIds: [toSafeId<"workspace">("ws_1")],
+      selectedWorkspaceIds: [],
+      types: ["document"],
+      editedByUserIds: [],
+      mimeTypes: [],
+      limit: 1,
+    });
+
+    expect(result.hits.map(({ id }) => id)).toEqual(["entity:entity_1"]);
+    expect(decodeGlobalSearchCursor(result.nextCursor ?? undefined)).toEqual({
+      score: preciseScore,
+      id: "entity:entity_1",
+      seen: 1,
+    });
   });
 });

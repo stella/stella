@@ -26,6 +26,7 @@ import {
 import {
   compareScoredSearchHits,
   decodeGlobalSearchCursor,
+  GLOBAL_SEARCH_RESULT_LIMIT,
   globalSearchCursorSql,
   paginateScoredSearchHits,
 } from "@/api/lib/search/pagination";
@@ -48,7 +49,7 @@ import type {
 const REINDEX_BATCH_SIZE = 100;
 const WORKSPACE_REINDEX_CONCURRENCY = 4;
 const GLOBAL_SEARCH_FACET_LIMIT = 20;
-const GLOBAL_SEARCH_COUNT_LIMIT = 1000;
+const MATTER_RELEVANCE_BOOST = 0.15;
 
 type RawRow = Record<string, unknown>;
 type CountRow = { total?: unknown };
@@ -459,20 +460,28 @@ const buildSearchFilterFragments = ({
           ${TS_HEADLINE_CONFIG}
         ) AS headline`
       : sql`NULL::text AS headline`;
-  const searchScore = (tsv: SQL): SQL =>
-    hasSearchQuery
-      ? sql`ts_rank(${tsv}, ${tsQuery})::float8 AS score`
-      : sql`0::float8 AS score`;
-  const searchCursorValue = ({
+  const searchScoreValue = ({
     tsv,
     updatedAt,
+    relevanceBoost,
   }: {
     tsv: SQL;
     updatedAt: SQL;
-  }): SQL =>
-    hasSearchQuery
-      ? sql`ts_rank(${tsv}, ${tsQuery})::float8`
-      : sql`extract(epoch from ${updatedAt})::float8 * 1000`;
+    relevanceBoost?: number | undefined;
+  }): SQL => {
+    if (!hasSearchQuery) {
+      return sql`extract(epoch from ${updatedAt})::float8 * 1000`;
+    }
+    if (relevanceBoost === undefined) {
+      return sql`ts_rank(${tsv}, ${tsQuery})::float8`;
+    }
+    return sql`ts_rank(${tsv}, ${tsQuery})::float8 + ${relevanceBoost}::float8`;
+  };
+  const searchScore = (options: {
+    tsv: SQL;
+    updatedAt: SQL;
+    relevanceBoost?: number | undefined;
+  }): SQL => sql`${searchScoreValue(options)} AS score`;
   const searchOrderBy = ({
     id,
     updatedAt,
@@ -512,7 +521,7 @@ const buildSearchFilterFragments = ({
     chatTextSearchFilter,
     searchHeadline,
     searchScore,
-    searchCursorValue,
+    searchScoreValue,
     searchOrderBy,
     hasSearchQuery,
     entityTypeFilter,
@@ -535,7 +544,9 @@ export const searchGlobal = async ({
   limit,
 }: GlobalSearchQuery): Promise<GlobalSearchResult> => {
   const searchCursor = decodeGlobalSearchCursor(cursor);
-  const fetchLimit = limit + 1;
+  const seen = searchCursor?.seen ?? 0;
+  const pageLimit = Math.min(limit, GLOBAL_SEARCH_RESULT_LIMIT - seen);
+  const fetchLimit = pageLimit + 1;
   // Counts and facets are computed only on the first page. Subsequent
   // pages reuse the values the client already has, saving ~7 of the
   // 15 SQL round-trips per request.
@@ -557,7 +568,7 @@ export const searchGlobal = async ({
     chatTextSearchFilter,
     searchHeadline,
     searchScore,
-    searchCursorValue,
+    searchScoreValue,
     searchOrderBy,
     hasSearchQuery,
     entityTypeFilter,
@@ -604,7 +615,7 @@ export const searchGlobal = async ({
         editor.image AS last_edited_by_image,
         file_field.mime_type,
         ${searchHeadline(sql`sd.title || ' ' || left(sd.searchable_text, 2000)`)},
-        ${searchScore(sql`sd.tsv`)},
+        ${searchScore({ tsv: sql`sd.tsv`, updatedAt: sql`sd.updated_at` })},
         sd.updated_at
       FROM search_documents sd
       JOIN workspaces w ON w.id = sd.workspace_id
@@ -622,7 +633,7 @@ export const searchGlobal = async ({
         ${entityWorkspaceFilter}
         ${globalSearchCursorSql({
           cursor: searchCursor,
-          score: searchCursorValue({
+          score: searchScoreValue({
             tsv: sql`sd.tsv`,
             updatedAt: sql`sd.updated_at`,
           }),
@@ -642,7 +653,11 @@ export const searchGlobal = async ({
         wsd.title,
         w.color,
         ${searchHeadline(sql`wsd.title || ' ' || left(wsd.searchable_text, 2000)`)},
-        ${searchScore(sql`wsd.tsv`)},
+        ${searchScore({
+          tsv: sql`wsd.tsv`,
+          updatedAt: sql`wsd.updated_at`,
+          relevanceBoost: MATTER_RELEVANCE_BOOST,
+        })},
         wsd.updated_at
       FROM workspace_search_documents wsd
       JOIN workspaces w ON w.id = wsd.workspace_id
@@ -652,9 +667,10 @@ export const searchGlobal = async ({
         ${matterWorkspaceFilter}
         ${globalSearchCursorSql({
           cursor: searchCursor,
-          score: searchCursorValue({
+          score: searchScoreValue({
             tsv: sql`wsd.tsv`,
             updatedAt: sql`wsd.updated_at`,
+            relevanceBoost: MATTER_RELEVANCE_BOOST,
           }),
           id: sql`'matter:' || wsd.workspace_id::text`,
         })}
@@ -674,7 +690,7 @@ export const searchGlobal = async ({
         csd.contact_type,
         csd.title,
         ${searchHeadline(sql`csd.title || ' ' || left(csd.searchable_text, 2000)`)},
-        ${searchScore(sql`csd.tsv`)},
+        ${searchScore({ tsv: sql`csd.tsv`, updatedAt: sql`csd.updated_at` })},
         csd.updated_at
       FROM contact_search_documents csd
       WHERE csd.organization_id = ${organizationId}
@@ -683,7 +699,7 @@ export const searchGlobal = async ({
         ${contactWorkspaceFilter}
         ${globalSearchCursorSql({
           cursor: searchCursor,
-          score: searchCursorValue({
+          score: searchScoreValue({
             tsv: sql`csd.tsv`,
             updatedAt: sql`csd.updated_at`,
           }),
@@ -705,7 +721,7 @@ export const searchGlobal = async ({
         d.country,
         d.decision_date,
         ${searchHeadline(sql`coalesce(nullif(body_preview.text, ''), d.fulltext, clsd.searchable_text)`)},
-        ${searchScore(sql`clsd.tsv`)},
+        ${searchScore({ tsv: sql`clsd.tsv`, updatedAt: sql`d.updated_at` })},
         d.updated_at
       FROM case_law_search_documents clsd
       JOIN case_law_decisions d ON d.id = clsd.decision_id
@@ -716,7 +732,7 @@ export const searchGlobal = async ({
         ${caseLawUpdatedFilter}
         ${globalSearchCursorSql({
           cursor: searchCursor,
-          score: searchCursorValue({
+          score: searchScoreValue({
             tsv: sql`clsd.tsv`,
             updatedAt: sql`d.updated_at`,
           }),
@@ -744,7 +760,7 @@ export const searchGlobal = async ({
         w.name AS workspace_name,
         cst.title,
         ${searchHeadline(sql`cst.title || ' ' || left(cst.searchable_text, 2000)`)},
-        ${searchScore(sql`cst.tsv`)},
+        ${searchScore({ tsv: sql`cst.tsv`, updatedAt: sql`t.updated_at` })},
         t.updated_at
       FROM chat_thread_search_documents cst
       JOIN chat_threads t ON t.id = cst.thread_id
@@ -755,7 +771,7 @@ export const searchGlobal = async ({
         AND ${chatScope}
         ${globalSearchCursorSql({
           cursor: searchCursor,
-          score: searchCursorValue({
+          score: searchScoreValue({
             tsv: sql`cst.tsv`,
             updatedAt: sql`t.updated_at`,
           }),
@@ -778,7 +794,7 @@ export const searchGlobal = async ({
       WHERE TRUE
         ${caseLawTextSearchFilter}
         ${caseLawUpdatedFilter}
-      LIMIT ${GLOBAL_SEARCH_COUNT_LIMIT}
+      LIMIT ${GLOBAL_SEARCH_RESULT_LIMIT}
     ) bounded_case_law
   `;
 
@@ -1073,18 +1089,9 @@ export const searchGlobal = async ({
     ...caseLawRows.map(mapCaseLawHit),
     ...chatRows.map(mapChatHit),
     // hit.id tiebreak for deterministic ranking, not display text
-  ].sort((a, b) =>
-    hasSearchQuery
-      ? compareScoredSearchHits(a, b)
-      : compareCodepoint(b.hit.updatedAt, a.hit.updatedAt) ||
-        compareCodepoint(b.hit.id, a.hit.id),
-  );
+  ].sort(compareScoredSearchHits);
 
-  const paginationHits = scoredHits.map(({ hit, score }) => ({
-    hit,
-    score: hasSearchQuery ? score : new Date(hit.updatedAt).getTime(),
-  }));
-  const page = paginateScoredSearchHits(paginationHits, limit);
+  const page = paginateScoredSearchHits({ scoredHits, limit, seen });
   const totalEntities = totalFrom(entityCount);
   const totalMatters = totalFrom(matterCount);
   const totalContacts = totalFrom(contactCount);

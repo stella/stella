@@ -9,6 +9,8 @@ import { encodeCursor } from "@/api/lib/search/cursor";
 import {
   compareScoredSearchHits,
   decodeGlobalSearchCursor,
+  encodeGlobalSearchCursor,
+  GLOBAL_SEARCH_RESULT_LIMIT,
   globalSearchCursorSql,
   isAfterGlobalSearchCursor,
   paginateScoredSearchHits,
@@ -18,6 +20,35 @@ type TestHit = {
   id: string;
 };
 
+type TestScoredHit = {
+  hit: TestHit;
+  score: number;
+};
+
+const candidatesAfterCursor = ({
+  sorted,
+  prefixes,
+  cursor,
+  limit,
+}: {
+  sorted: readonly TestScoredHit[];
+  prefixes: readonly string[];
+  cursor: ReturnType<typeof decodeGlobalSearchCursor>;
+  limit: number;
+}) =>
+  prefixes
+    .flatMap((prefix) =>
+      sorted
+        .filter(
+          ({ hit, score }) =>
+            hit.id.startsWith(prefix) &&
+            (cursor === null ||
+              isAfterGlobalSearchCursor({ id: hit.id, score }, cursor)),
+        )
+        .slice(0, limit + 1),
+    )
+    .sort(compareScoredSearchHits);
+
 const pageThrough = (
   source: readonly { hit: TestHit; score: number }[],
   limit: number,
@@ -25,22 +56,20 @@ const pageThrough = (
   const sorted = source.toSorted(compareScoredSearchHits);
   const prefixes = ["entity:", "matter:", "contact:", "case-law:", "chat:"];
   const collected: TestHit[] = [];
-  let cursor: { score: number; id: string } | null = null;
+  let cursor: ReturnType<typeof decodeGlobalSearchCursor> = null;
 
   for (;;) {
-    const candidates = prefixes
-      .flatMap((prefix) =>
-        sorted
-          .filter(
-            ({ hit, score }) =>
-              hit.id.startsWith(prefix) &&
-              (cursor === null ||
-                isAfterGlobalSearchCursor({ id: hit.id, score }, cursor)),
-          )
-          .slice(0, limit + 1),
-      )
-      .sort(compareScoredSearchHits);
-    const page = paginateScoredSearchHits(candidates, limit);
+    const candidates = candidatesAfterCursor({
+      sorted,
+      prefixes,
+      cursor,
+      limit,
+    });
+    const page = paginateScoredSearchHits({
+      scoredHits: candidates,
+      limit,
+      seen: cursor?.seen ?? 0,
+    });
     collected.push(...page.items);
     if (page.nextCursor === null) {
       return collected;
@@ -54,38 +83,58 @@ const pageThrough = (
 
 describe("global search keyset pagination", () => {
   test("encodes the last returned score and globally unique id", () => {
-    const page = paginateScoredSearchHits(
-      [
+    const page = paginateScoredSearchHits({
+      scoredHits: [
         { hit: { id: "matter:3" }, score: 0.9 },
         { hit: { id: "entity:2" }, score: 0.8 },
         { hit: { id: "contact:1" }, score: 0.7 },
       ],
-      2,
-    );
+      limit: 2,
+      seen: 0,
+    });
 
     expect(page).toEqual({
       items: [{ id: "matter:3" }, { id: "entity:2" }],
-      nextCursor: encodeCursor(0.8, "entity:2"),
+      nextCursor: encodeGlobalSearchCursor({
+        score: 0.8,
+        id: "entity:2",
+        seen: 2,
+      }),
     });
   });
 
   test("stops when the merged candidates contain no lookahead row", () => {
     expect(
-      paginateScoredSearchHits(
-        [
+      paginateScoredSearchHits({
+        scoredHits: [
           { hit: { id: "matter:2" }, score: 0.9 },
           { hit: { id: "entity:1" }, score: 0.8 },
         ],
-        2,
-      ).nextCursor,
+        limit: 2,
+        seen: 0,
+      }).nextCursor,
     ).toBeNull();
+  });
+
+  test("stops at the established global result horizon", () => {
+    const page = paginateScoredSearchHits({
+      scoredHits: Array.from({ length: 11 }, (_, index) => ({
+        hit: { id: `entity:${index}` },
+        score: 11 - index,
+      })),
+      limit: 25,
+      seen: GLOBAL_SEARCH_RESULT_LIMIT - 10,
+    });
+
+    expect(page.items).toHaveLength(10);
+    expect(page.nextCursor).toBeNull();
   });
 
   test("compiles a descending score/id boundary with C collation", () => {
     const dialect = new PgDialect();
     const compiled = dialect.sqlToQuery(
       globalSearchCursorSql({
-        cursor: { score: 0.75, id: "case-law:decision_1" },
+        cursor: { score: 0.75, id: "case-law:decision_1", seen: 10 },
         score: sql`ts_rank(document, query)::float8`,
         id: sql`'case-law:' || decision_id::text`,
       }),
@@ -99,6 +148,11 @@ describe("global search keyset pagination", () => {
   test("rejects cursors that do not identify a global search hit", () => {
     expect(decodeGlobalSearchCursor(encodeCursor(0.5, "global"))).toBeNull();
     expect(decodeGlobalSearchCursor(encodeCursor(0.5, "unknown:1"))).toBeNull();
+    expect(
+      decodeGlobalSearchCursor(
+        encodeCursor(0.5, `${GLOBAL_SEARCH_RESULT_LIMIT}:entity:1`),
+      ),
+    ).toBeNull();
   });
 
   test("repeated pages preserve the complete deterministic order", () => {

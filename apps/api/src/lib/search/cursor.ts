@@ -8,7 +8,7 @@ export const decodeCursor = (
 ): { score: number; id: string } | null => {
   const decoded = Buffer.from(cursor, "base64").toString();
   const separatorIndex = decoded.indexOf(":");
-  if (separatorIndex < 0) {
+  if (separatorIndex === -1) {
     return null;
   }
 
