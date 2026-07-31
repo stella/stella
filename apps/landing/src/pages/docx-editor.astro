@@ -1,0 +1,297 @@
+---
+import Base from "../layouts/Base.astro";
+import LandingFooter from "../components/LandingFooter.astro";
+import MacWindow from "../components/MacWindow.astro";
+import { DocxEditorTool } from "../components/react/DocxEditorTool";
+
+// A standalone, tool-first SEO landing for the browser DOCX editor (folio),
+// targeting the tool queries ("docx editor", "edit docx online", "open docx
+// without Word") and the AI angle ("llm edit docx" / "edit docx with AI").
+//
+// Split of intent against /product/editor, which is deliberate and must stay
+// that way: this page answers "open and edit a .docx right now, free, without
+// an account, without the file leaving the browser"; the product page answers
+// "editing inside the workspace" (matter context, track changes as a review
+// workflow, version history, the desktop bridge). The two FAQ sets are
+// disjoint — every question lives on exactly one of the pages, so the two
+// FAQPage nodes never restate each other.
+
+const faqs = [
+  {
+    q: "Can I edit a .docx file in the browser?",
+    a: "Yes. Open a Word document on this page and edit it straight away: no install, no account, and nothing to convert first.",
+  },
+  {
+    q: "Do I need Microsoft Word?",
+    a: "No. The editor reads and writes .docx directly in the browser, so Microsoft Word does not have to be installed.",
+  },
+  {
+    q: "Does my file get uploaded anywhere?",
+    a: "No. The document is opened, rendered, and edited in your browser; it stays on your device, and no copy is sent to a server.",
+  },
+  {
+    q: "Is the original formatting preserved?",
+    a: "Yes. The file stays a .docx from open to save, so fonts, styles, and page layout survive instead of being converted to another format and back.",
+  },
+  {
+    q: "Is it free to use?",
+    a: "Yes. Opening and editing a .docx here is free and needs no account.",
+  },
+  {
+    q: "Can an LLM edit my DOCX?",
+    a: "Yes. An LLM proposes edits as tracked changes you accept or reject, so nothing is rewritten silently. It works in chat and programmatically over MCP.",
+  },
+];
+
+const features = [
+  {
+    title: "Edit .docx in the browser",
+    body: "Open a Word document and edit it directly. No install, no separate app, and nothing to convert.",
+  },
+  {
+    title: "Formatting stays intact",
+    body: "Fonts, styles, and page layout render and save the way Word created them.",
+  },
+  {
+    title: "Track changes",
+    body: "Tracked insertions and deletions render in place, the way Word shows them.",
+  },
+  {
+    title: "Edit DOCX with an LLM",
+    body: "An LLM proposes edits as tracked changes you accept or reject, in chat or over MCP.",
+  },
+  {
+    title: "The .docx stays a .docx",
+    body: "No converting to a proprietary format and back, so nothing is lost in a round-trip.",
+  },
+  {
+    title: "Open engine",
+    body: "Powered by folio, stella's open-source DOCX engine.",
+  },
+];
+
+// Trailing slash on purpose: `build.format: "directory"` emits the page at
+// /docx-editor/, which is what the <link rel="canonical"> and the sitemap both
+// point at. A slashless URL here would name a second, non-canonical variant.
+const canonicalUrl = new URL("/docx-editor/", Astro.site).href;
+
+const softwareJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  // Its own @id: this is the DOCX editor, not the stella workspace the
+  // site-wide `#software` node describes.
+  "@id": `${canonicalUrl}#docx-editor`,
+  name: "stella DOCX editor",
+  applicationCategory: "BusinessApplication",
+  operatingSystem: "Web browser",
+  url: canonicalUrl,
+  description:
+    "Open and edit Word .docx files in the browser with track changes, no install and no format conversion. AI-proposed edits arrive as tracked changes you accept or reject.",
+};
+
+const faqJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: faqs.map((faq) => ({
+    "@type": "Question",
+    name: faq.q,
+    acceptedAnswer: { "@type": "Answer", text: faq.a },
+  })),
+};
+---
+
+<Base
+  title="Free Online DOCX Editor: Edit .docx in Your Browser | stella"
+  description="Open and edit a Word .docx in your browser: free, no signup, no install. The file never leaves your device, and its formatting survives the round trip."
+>
+  <script
+    is:inline
+    type="application/ld+json"
+    set:html={JSON.stringify(softwareJsonLd)}
+  />
+  <script
+    is:inline
+    type="application/ld+json"
+    set:html={JSON.stringify(faqJsonLd)}
+  />
+
+  <div class="flex min-h-dvh flex-col">
+    <main class="flex-1">
+      {/* ——— Hero ——— */}
+      <section class="px-6 pt-16 pb-8 lg:pt-24 lg:pb-10">
+        <div class="mx-auto max-w-4xl text-center">
+          <span
+            class="font-mono text-xs uppercase tracking-[0.2em]"
+            style="color: var(--muted-foreground)">DOCX editor</span
+          >
+          <h1
+            class="mt-4 font-display text-4xl font-medium tracking-tight text-balance sm:text-5xl"
+          >
+            Online DOCX editor, in your browser
+          </h1>
+          <p
+            class="mx-auto mt-6 max-w-2xl text-lg leading-[1.8]"
+            style="color: var(--muted-foreground)"
+          >
+            Open a Word .docx and edit it right here: free, no account, and the
+            file never leaves your browser. Formatting and track changes stay
+            intact, with no converting to another format. When you want AI in
+            the loop, an LLM proposes changes as tracked edits you accept or
+            reject.
+          </p>
+        </div>
+
+        <div class="mx-auto mt-10 max-w-6xl">
+          <div class="aspect-[16/11] w-full">
+            <MacWindow class="h-full" label="stella · DOCX editor">
+              <DocxEditorTool client:only="react" />
+            </MacWindow>
+          </div>
+          <p
+            class="mt-3 text-center text-xs"
+            style="color: var(--muted-foreground)"
+          >
+            Open your own .docx or edit the sample. Your file stays in your
+            browser.
+          </p>
+        </div>
+      </section>
+
+      {/* ——— Edit DOCX with an LLM ——— */}
+      <section class="px-6 py-10 lg:py-14">
+        <div
+          class="mx-auto max-w-3xl border-t pt-10"
+          style="border-color: var(--border)"
+        >
+          <span class="font-mono text-xs" style="color: var(--muted-foreground)"
+            >01</span
+          >
+          <h2
+            class="mt-1 font-display text-2xl font-medium tracking-tight sm:text-3xl"
+          >
+            Edit DOCX with an LLM
+          </h2>
+          <p
+            class="mt-5 text-base leading-[1.8]"
+            style="color: var(--muted-foreground)"
+          >
+            AI edits land as tracked changes, not silent rewrites. Point an LLM
+            at a .docx and it proposes insertions and deletions in place; you
+            review each one and accept or reject it, the same way you would a
+            colleague's redline. The editor speaks the Word format directly, so
+            what the model changes stays a .docx.
+          </p>
+          <ul class="mt-5 space-y-3">
+            {
+              [
+                "AI-proposed edits arrive as track changes you accept or reject",
+                "The document stays a .docx: no conversion, no lossy round-trip",
+                "Drive it programmatically over MCP, so agents edit documents the way you do",
+              ].map((bullet) => (
+                <li
+                  class="flex items-start gap-2.5 text-sm leading-[1.7]"
+                  style="color: var(--muted-foreground)"
+                >
+                  <span
+                    class="mt-[7px] block h-2 w-2 shrink-0 rounded-full"
+                    style="background: var(--primary)"
+                    aria-hidden="true"
+                  />
+                  <span>{bullet}</span>
+                </li>
+              ))
+            }
+          </ul>
+        </div>
+      </section>
+
+      {/* ——— Features ——— */}
+      <section class="px-6 py-10 lg:py-14">
+        <div class="mx-auto max-w-5xl">
+          <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {
+              features.map((feature) => (
+                <div
+                  class="rounded-2xl p-6"
+                  style="background: var(--card); border: 1px solid var(--border)"
+                >
+                  <h3 class="font-display text-lg font-medium tracking-tight">
+                    {feature.title}
+                  </h3>
+                  <p
+                    class="mt-2 text-sm leading-[1.7]"
+                    style="color: var(--muted-foreground)"
+                  >
+                    {feature.body}
+                  </p>
+                </div>
+              ))
+            }
+          </div>
+        </div>
+      </section>
+
+      {/* ——— FAQ ——— */}
+      <section class="px-6 py-10 lg:py-12">
+        <div class="mx-auto max-w-3xl">
+          <h2
+            class="mb-2 text-xs font-medium tracking-[0.2em] uppercase"
+            style="color: var(--muted-foreground)"
+          >
+            FAQ
+          </h2>
+          {
+            faqs.map((faq) => (
+              <div
+                class="border-t py-5"
+                style="border-color: var(--border)"
+              >
+                <h3 class="font-display text-lg font-medium tracking-tight">
+                  {faq.q}
+                </h3>
+                <p
+                  class="mt-2 text-sm leading-[1.7]"
+                  style="color: var(--muted-foreground)"
+                >
+                  {faq.a}
+                </p>
+              </div>
+            ))
+          }
+        </div>
+      </section>
+
+      {/* ——— CTA ——— */}
+      <section class="px-6 py-20 lg:py-28">
+        <div class="mx-auto max-w-3xl text-center">
+          <h2
+            class="font-display text-3xl font-medium tracking-tight text-balance sm:text-4xl"
+          >
+            Bring the editor to your matters.
+          </h2>
+          <p
+            class="mx-auto mt-5 max-w-2xl text-base leading-[1.8]"
+            style="color: var(--muted-foreground)"
+          >
+            This editor is <a
+              href="/product/editor"
+              class="underline underline-offset-4"
+              style="color: var(--foreground)">part of the stella workspace</a
+            >, where a .docx opens from its matter, track changes become a review
+            workflow, and every save lands in the document's version history.
+          </p>
+          <div class="mt-8">
+            <a
+              href="https://my.stll.app"
+              class="inline-flex h-10 items-center rounded-[0.625rem] px-5 text-sm font-medium transition-opacity hover:opacity-90"
+              style="background: var(--primary); color: var(--primary-foreground)"
+            >
+              Start free
+            </a>
+          </div>
+        </div>
+      </section>
+    </main>
+    <LandingFooter />
+  </div>
+</Base>

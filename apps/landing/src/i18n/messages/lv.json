@@ -1,0 +1,921 @@
+{
+  "appearance": {
+    "dark": "Tumšs",
+    "light": "Gaišs",
+    "toggle": "Mainīt motīvu"
+  },
+  "askAi": {
+    "copy": "Kopēt uzvedni",
+    "label": "Jautāt AI par lietotni stella"
+  },
+  "common": {
+    "copied": "Nokopēts",
+    "copy": "Kopēt",
+    "getCli": "Iegūt CLI",
+    "startFree": "Sākt bez maksas"
+  },
+  "demo": {
+    "addView": "Pievienot skatu",
+    "askStella": "Jautāt lietotnei stella",
+    "close": "Aizvērt",
+    "documentType": "Dokumenta veids",
+    "documents": "Dokumenti",
+    "dueDate": "Termiņš",
+    "files": "Faili",
+    "filter": "Filtrēt",
+    "matters": "Lietas",
+    "notes": "Piezīmes",
+    "overview": "Pārskats",
+    "sectionBody": "Uzņemts tieši no strādājoša produkta. Tas, ko redzat šeit, ir tas, ko lietojat.",
+    "sectionLabel": "Īstais produkts",
+    "sectionTitle": "stella tāda, kāda tā ir.",
+    "sort": "Kārtot",
+    "source": "Avots",
+    "sources": "Avoti",
+    "status": "Statuss",
+    "statusActive": "Aktīvs",
+    "statusClosed": "Slēgts",
+    "statusInReview": "Pārskatīšanā",
+    "statusOnHold": "Apturēts",
+    "table": "Tabula",
+    "todos": "Uzdevumi"
+  },
+  "footer": {
+    "agent": "AI aģents",
+    "anonymization": "Anonimizācija",
+    "clarity": "Skaidrība ikvienā lietā.",
+    "connect": "Sazināties",
+    "contact": "Sazinieties ar mums",
+    "documentation": "Dokumentācija",
+    "editor": "Redaktors",
+    "imprint": "Rekvizīti",
+    "legal": "Juridiskā informācija",
+    "navLabel": "Kājene",
+    "press": "Presei",
+    "publicData": "Publiskie dati",
+    "resources": "Resursi",
+    "sourceCode": "Pirmkods",
+    "status": "Statuss",
+    "tabularReview": "Tabulāra pārskatīšana",
+    "tagline": "Atvērta juridiskā darbvieta darbam, kam ir nozīme.",
+    "templates": "Veidnes",
+    "terms": "Noteikumi",
+    "workspace": "Darbvieta"
+  },
+  "hero": {
+    "badge": "Aktīvā izstrādē",
+    "selfHost": "Savā serverī",
+    "subtitle": "<gh>Atvērtā pirmkoda</gh> juridiskā darbvieta: lietas, dokumenti, pārskatīšana un AI aģents, kas atbild, norādot avotus.",
+    "title": "Lieciet AI strādāt katrā lietā."
+  },
+  "home": {
+    "ctaTitle": "Ieviesiet AI savā juridiskajā praksē."
+  },
+  "mcpProof": {
+    "contextBody": "Ienesiet apstiprinātās lietas un juridiskos datus Claude vai jebkurā ar MCP saderīgā klientā.",
+    "contextTitle": "Lietas konteksts.",
+    "scopeBody": "Autentificējieties ar OAuth; katrs izsaukums paliek ierobežots ar piešķirtajiem tvērumiem un darbvietas atļaujām.",
+    "scopeTitle": "Tikai Jūsu piešķirtā piekļuve.",
+    "subtitle": "Ienesiet aktuālo lietas kontekstu rīkos, ar kuriem strādājat.",
+    "title": "Darbvieta tagad saprot MCP.",
+    "toolsBody": "Meklējiet, lasiet un aizpildiet veidnes, izmantojot to pašu reģistru, uz kura balstās lietotnes stella CLI.",
+    "toolsTitle": "Rīki AI aģentiem."
+  },
+  "meta": {
+    "homeDescription": "Atvērtā pirmkoda juridiskā darbvieta: dokumenti, lietas, pārskatīšana un izpēte. Izvietojiet paši vai mūsu mākonī. AI pēc lietojuma, bez piesaistes.",
+    "homeTitle": "stella | atvērtā pirmkoda juridiskā darbvieta"
+  },
+  "nav": {
+    "aiFactSheet": "AI faktu lapa",
+    "aiFactSheetBlurb": "stella mašīnlasāmā formā.",
+    "beta": "Beta",
+    "blog": "Blogs",
+    "changelog": "Izmaiņu žurnāls",
+    "chooseLanguage": "Izvēlieties valodu",
+    "docxEditor": "Atsevišķs DOCX redaktors",
+    "github": "stella vietnē GitHub",
+    "openMenu": "Atvērt navigāciju",
+    "pillars": {
+      "data": "Dati",
+      "intelligence": "Juridiskā analītika",
+      "workspace": "Darbvieta"
+    },
+    "product": "Produkts",
+    "products": {
+      "agent": {
+        "blurb": "Sarunājieties ar savām lietām, dokumentiem, reģistriem un pievienotajiem rīkiem vienuviet. AI aģents rīkojas ar apstiprinājumu un avotu priekšskatījumiem, atbildes balsta uz citātiem un paplašinās ar prasmēm un ārējiem savienotājiem.",
+        "discover": "Atklājiet AI aģentu",
+        "eyebrow": "AI aģents",
+        "title": "AI aģents, kas strādā ar jūsu lietām, failiem un rīkiem."
+      },
+      "anonymization": {
+        "blurb": "Noņemiet vārdus, subjektus un identificējošu informāciju, pirms materiāls nonāk pie AI, tieši no tērzēšanas un dokumentu pārskatīšanas, ar aizklātu rezultātu, ko pārbaudāt, pirms turpināt.",
+        "discover": "Atklājiet Anonimizāciju",
+        "eyebrow": "Anonimizācija",
+        "title": "Sagatavojiet materiālu AI, neatklājot identificējošu informāciju."
+      },
+      "cli-mcp": {
+        "blurb": "Meklējiet, lasiet un strādājiet ar lietotni stella no komandrindas vai no jebkura ar MCP saderīga klienta. Abas saskarnes izmanto to pašu iespēju reģistru, tās pašas atļaujas un tos pašus darbvietas datus.",
+        "discover": "Atklājiet CLI & MCP",
+        "eyebrow": "CLI & MCP",
+        "title": "Viena darbvieta, pieejama no ikviena rīka."
+      },
+      "editor": {
+        "blurb": "Atveriet un rediģējiet Word .docx failus tieši pārlūkā: bez instalēšanas un bez pārveidošanas citā formātā. Lietotnes stella tiešsaistes DOCX redaktors saglabā sākotnējo formatējumu un izmaiņu izsekošanu, patur failu saistītu ar tā lietu un katru saglabājumu ieraksta dokumenta versiju vēsturē.",
+        "discover": "Atklājiet Redaktoru",
+        "eyebrow": "Redaktors",
+        "title": "Rediģējiet Word dokumentus pārlūkā, nepametot lietu."
+      },
+      "public-data": {
+        "blurb": "Tiesu prakse un uzņēmumu reģistri no oficiāliem publiskiem avotiem, ko lietotnes stella Legal Atlas apkopo, saglabājot to struktūru. Izlasiet nolēmumu, pārbaudiet uzņēmumu, sekojiet citātiem un atsaucieties uz jebkuru no tiem lietā vai nododiet to AI aģentam.",
+        "discover": "Atklājiet Publiskos datus",
+        "eyebrow": "Publiskie dati",
+        "title": "Juridiskie dati, gatavi Jūsu darbam."
+      },
+      "tabular-review": {
+        "blurb": "Uzdodiet jautājumus visai dokumentu kopai un saņemiet strukturētas atbildes tabulā tieši lietā: to var kārtot, filtrēt un izsekot līdz avota tekstam. Veidota due diligence pārbaudēm, pierādījumu analīzei un izpētei.",
+        "discover": "Atklājiet Tabulāro pārskatīšanu",
+        "eyebrow": "Tabulāra pārskatīšana",
+        "title": "Pārvērtiet dokumentu kaudzi tabulā, ko var pārskatīt."
+      },
+      "templates": {
+        "blurb": "Definējiet veidni vienu reizi, ar laukiem un nosacījuma klauzulām, un pēc tam aizpildiet to manuāli vai ļaujiet lietotnei stella sagatavot projektu no lietas datiem. Gatavais dokuments nonāk lietā, un to varat turpināt rediģēt.",
+        "discover": "Atklājiet Veidnes",
+        "eyebrow": "Veidnes",
+        "title": "Veidojiet atkārtoti izmantojamas veidnes un ļaujiet AI tās aizpildīt."
+      },
+      "workspace": {
+        "blurb": "Darbvieta vienuviet satur lietas dokumentus, Word .docx rediģēšanu, pārskatīšanu, izpēti un tērzēšanu, tāpēc darbs paliek kontekstā no avota materiāliem līdz atbildei.",
+        "discover": "Atklājiet Darbvietu",
+        "eyebrow": "Darbvieta",
+        "title": "Lietas, dokumenti, pārskatīšana un tērzēšana vienā darbvietā."
+      }
+    },
+    "security": "Drošība"
+  },
+  "products": {
+    "agent": {
+      "adjacent": {
+        "0": {
+          "body": "Pārvērtiet dokumentu kopu tabulā, ko var kārtot, filtrēt un izsekot līdz avotam."
+        },
+        "1": {
+          "body": "Lietas, dokumenti, .docx rediģēšana, pārskatīšana un tērzēšana vienā darbvietā."
+        },
+        "2": {
+          "body": "Lasiet un meklējiet oficiālā tiesu praksē, tiesību avotos un uzņēmumu reģistros."
+        },
+        "3": {
+          "body": "stella mašīnlasāmā formā AI meklētājprogrammām."
+        }
+      },
+      "capabilities": {
+        "0": {
+          "body": "Jautājiet par lietām, dokumentiem un kontaktiem, kas jums jau ir lietotnē stella. Viena saruna var aptvert katru lietu, kurai jums ir piekļuve, ievērojot tās pašas atļaujas kā pārējā darbvietā.",
+          "title": "Strādā ar visām jūsu lietām"
+        },
+        "1": {
+          "body": "Ienesiet dokumentus sarunā un lūdziet AI aģentam tos izlasīt, salīdzināt vai apkopot.",
+          "title": "Lasa jūsu failus"
+        },
+        "2": {
+          "body": "Piekļūstiet uzņēmumu reģistriem un citiem pievienotajiem avotiem, nepametot sarunu.",
+          "title": "Pievienotie rīki"
+        },
+        "3": {
+          "body": "AI aģents pajautā, pirms rīkojas, tāpēc katru soli kontrolējat jūs.",
+          "title": "Apstiprinājums pirms darbības"
+        },
+        "4": {
+          "body": "Redziet, ko AI aģents lasa: pie katra soļa tiek rādīts avota priekšskatījums.",
+          "title": "Avotu priekšskatījumi"
+        },
+        "5": {
+          "body": "Atbildes ved atpakaļ uz avotu, un citāts atver dokumentu tieši vajadzīgajā vietā.",
+          "title": "Pamatotas ar citātiem"
+        }
+      },
+      "cta": {
+        "heading": "Uzticiet AI aģentam īstu lietu."
+      },
+      "faqs": {
+        "0": {
+          "answer": "Nē. Pirms rīkoties tas lūdz apstiprinājumu un parāda avota priekšskatījumu tam, ko lasa, tāpēc katru soli varat izsekot un apstiprināt.",
+          "question": "Vai AI aģents rīkojas patstāvīgi?"
+        },
+        "1": {
+          "answer": "Ar prasmēm (atkārtoti izmantojamām instrukcijām un rīkiem) un ar MCP saderīgiem ārējiem savienotājiem. Abi paplašina to, ko AI aģents var sasniegt, nemainot pašu sarunu.",
+          "question": "Kā pievienot jaunas iespējas?"
+        },
+        "2": {
+          "answer": "No jūsu lietām, failiem, reģistriem un pievienotajiem rīkiem. AI funkcijas darbojas ar jūsu pašu pakalpojumu sniedzēja atslēgām, un atbildes ir pamatotas ar citātiem, kas ved atpakaļ uz avotu.",
+          "question": "No kurienes nāk tā atbildes?"
+        }
+      },
+      "metaDescription": "Sarunājieties ar savām lietām, dokumentiem, reģistriem un rīkiem. AI aģents rīkojas ar apstiprinājumu, atbild ar citātiem un paplašinās ar prasmēm.",
+      "metaTitle": "AI aģents juridiskajām lietām | stella",
+      "quickAnswer": {
+        "answer": "AI aģents sarunājas ar jūsu lietām, failiem, uzņēmumu reģistriem un pievienotajiem rīkiem. Pirms rīkoties tas lūdz apstiprinājumu, parāda avota priekšskatījumu tam, ko lasa, un atbildes balsta uz citātiem. To varat paplašināt ar atkārtoti izmantojamām prasmēm un ar MCP saderīgiem ārējiem savienotājiem.",
+        "question": "Ko spēj AI aģents?"
+      },
+      "sections": {
+        "0": {
+          "bullets": {
+            "0": "Sarunājieties par lietām, dokumentiem un kontaktiem vienā sarunā",
+            "1": "Ienesiet uzņēmumu un reģistru datus tajā pašā pavedienā",
+            "2": "Nododiet tabulāro pārskatīšanu AI aģentam papildu jautājumiem"
+          },
+          "heading": "Viens jautājums visai lietai"
+        },
+        "1": {
+          "bullets": {
+            "0": "Katra darbība gaida jūsu apstiprinājumu",
+            "1": "Avota priekšskatījums rāda, ko AI aģents izlasīja katrā solī",
+            "2": "Citāti atver avota dokumentu tieši vajadzīgajā vietā"
+          },
+          "heading": "Kontrole paliek jums"
+        },
+        "2": {
+          "bullets": {
+            "0": "Prasmes ir instrukcijas un rīki, ko izmantot dažādās lietās",
+            "1": "Ārējie savienotāji ir saderīgi ar MCP, tāpēc AI aģents sasniedz vairāk rīku",
+            "2": "Pievienojiet iespējas, nemainot sarunas darbību"
+          },
+          "heading": "Paplašiniet to ar prasmēm un savienotājiem"
+        }
+      }
+    },
+    "anonymization": {
+      "adjacent": {
+        "0": {
+          "body": "Sarunājieties par lietām, failiem un pievienotajiem rīkiem, ar apstiprinājumiem un avotu priekšskatījumiem."
+        },
+        "1": {
+          "body": "Lietas, dokumenti, .docx rediģēšana, pārskatīšana un tērzēšana vienā darbvietā."
+        },
+        "2": {
+          "body": "Pārvērtiet dokumentu kopu tabulā, ko var kārtot, filtrēt un izsekot līdz avotam."
+        },
+        "3": {
+          "body": "stella mašīnlasāmā formā AI meklētājprogrammām."
+        }
+      },
+      "capabilities": {
+        "0": {
+          "body": "Noņem vārdus, subjektus un identificējošu informāciju, pirms materiāls nonāk AI solī.",
+          "title": "Identificējošā informācija paliek ārpusē"
+        },
+        "1": {
+          "body": "Darbojas tieši sarunā un dokumentu pārskatīšanā, nevis atsevišķā rīkā.",
+          "title": "Darbojas tērzēšanā un pārskatīšanā"
+        },
+        "2": {
+          "body": "Pievienojiet savas organizācijas terminus un vārdu sarakstus, lai jums svarīgie vārdi vienmēr tiktu atrasti.",
+          "title": "Ar jūsu pašu terminiem"
+        },
+        "3": {
+          "body": "Parāda aizklāto dokumentu kontekstā, tāpēc jūs apstiprināt, kas atstāj lietu.",
+          "title": "Rezultāts, ko varat pārbaudīt"
+        }
+      },
+      "cta": {
+        "heading": "Neļaujiet identificējošai informācijai nonākt AI darbplūsmās."
+      },
+      "faqs": {
+        "0": {
+          "answer": "Jā. Anonimizācija ir pieejama jau šodien un iekļauta tērzēšanā un dokumentu pārskatīšanā.",
+          "question": "Vai anonimizācija jau ir pieejama?"
+        },
+        "1": {
+          "answer": "Tā palīdz sagatavot materiālu AI darbplūsmām, neatklājot vārdus, subjektus vai identificējošu informāciju; aizklātais rezultāts paliek pieejams pārbaudei.",
+          "question": "Kam tā noder?"
+        }
+      },
+      "metaDescription": "Noņemiet vārdus, subjektus un identificējošu informāciju, pirms materiāls nonāk pie AI, tieši no tērzēšanas un pārskatīšanas, ar pārbaudāmu rezultātu.",
+      "metaTitle": "Dokumentu anonimizācija juridiskajam AI | stella",
+      "quickAnswer": {
+        "answer": "Tā noņem vārdus, subjektus un identificējošu informāciju, pirms materiāls nonāk AI darbplūsmā, un parāda aizklāto rezultātu, lai apstiprinātu, kas atstāj lietu. Tā ir iekļauta tieši tērzēšanā un dokumentu pārskatīšanā.",
+        "question": "Kas ir anonimizācija lietotnē stella?"
+      },
+      "sections": {
+        "0": {
+          "bullets": {
+            "0": "Vārdi, subjekti un identificējoša informācija nenonāk AI soļos",
+            "1": "Veidota juridiskām AI darbplūsmām, nevis vispārīgai dokumentu aizklāšanai",
+            "2": "Pirms nākamā soļa atstāj aizklātu dokumentu pārbaudei"
+          },
+          "heading": "Sagatavojiet materiālu, pirms tas nonāk pie AI"
+        },
+        "1": {
+          "bullets": {
+            "0": "Pieejama no tērzēšanas un dokumentu pārskatīšanas",
+            "1": "Nekas nav jākopē ārējā aizklāšanas rīkā",
+            "2": "Darbojas ar lietotnes stella atvērtā pirmkoda anonimizācijas dzini"
+          },
+          "heading": "Darbvietas daļa, nevis atsevišķs rīks"
+        }
+      }
+    },
+    "cli-mcp": {
+      "adjacent": {
+        "0": {
+          "body": "Lietas, dokumenti, pārskatīšana un tērzēšana vienā darbvietā."
+        },
+        "1": {
+          "body": "Strādājiet ar lietām un pievienotajiem rīkiem, ar apstiprinājumiem un citātiem."
+        },
+        "2": {
+          "body": "Aizpildiet atkārtoti izmantojamus juridiskus dokumentus lietotnē, komandrindā vai pievienotajos rīkos."
+        },
+        "3": {
+          "body": "stella mašīnlasāmā formā AI meklētājprogrammām."
+        }
+      },
+      "capabilities": {
+        "0": {
+          "body": "Izmantojiet ģenerētas komandas, piemēram, stella search matters, document read un template fill, no skriptiem vai termināļa.",
+          "title": "Darbs terminālī"
+        },
+        "1": {
+          "body": "Savienojiet lietotni stella ar MCP saderīgiem klientiem, neveidojot atsevišķu integrāciju katram.",
+          "title": "Saderība ar MCP"
+        },
+        "2": {
+          "body": "CLI komandas tiek ģenerētas no MCP rīku reģistra, tāpēc abas saskarnes paliek saskaņotas, lietotnei stella attīstoties.",
+          "title": "Viens iespēju reģistrs"
+        },
+        "3": {
+          "body": "Autentifikācijas tvērumi un darbvietas atļaujas paliek robeža neatkarīgi no izmantotās saskarnes.",
+          "title": "Darbvietas atļaujas paliek spēkā"
+        },
+        "4": {
+          "body": "Komandas atgriež mašīnlasāmu JSON skriptiem un AI aģentiem, kā arī lasāmu termināļa izvadi cilvēkiem.",
+          "title": "Strukturēta izvade"
+        },
+        "5": {
+          "body": "Vērsiet CLI un MCP klientus uz stella serveri, ko darbina jūsu organizācija.",
+          "title": "Piemērots izvietošanai savā infrastruktūrā"
+        }
+      },
+      "cta": {
+        "heading": "Ienesiet lietotni stella rīkos, kuros jau strādājat."
+      },
+      "faqs": {
+        "0": {
+          "answer": "Nē. Tās ir atsevišķas saskarnes, kas ģenerētas no viena un tā paša iespēju reģistra un savienotas ar to pašu stella serveri.",
+          "question": "Vai CLI ir atsevišķs produkts no MCP servera?"
+        },
+        "1": {
+          "answer": "Jā. CLI atbalsta strukturētu JSON izvadi, lapošanu, paredzamus izejas kodus un neinteraktīvu lietojumu, kas piemērots automatizācijai.",
+          "question": "Vai CLI var izmantot skriptos?"
+        },
+        "2": {
+          "answer": "Nē. Serveris pārbauda autentifikācijas tvērumus un lietotnes stella atļaujas, pirms iespēja tiek izpildīta.",
+          "question": "Vai MCP klienta pievienošana apiet darbvietas atļaujas?"
+        }
+      },
+      "metaDescription": "Meklējiet, lasiet un strādājiet ar lietotni stella no komandrindas vai ar MCP saderīga klienta. Abas saskarnes izmanto tās pašas iespējas un atļaujas.",
+      "metaTitle": "MCP serveris un CLI juridiskajai darbvietai | stella",
+      "quickAnswer": {
+        "answer": "Tās ir divas saskarnes uz vienām un tām pašām lietotnes stella iespējām. CLI atveido MCP rīku reģistru kā komandas, savukārt MCP serveris ļauj saderīgiem AI aģentiem un rīkiem strādāt ar lietām, dokumentiem, veidnēm un publiskiem juridiskiem datiem, ievērojot tos pašus piekļuves noteikumus.",
+        "question": "Kas ir lietotnes stella CLI un MCP serveris?"
+      },
+      "sections": {
+        "0": {
+          "bullets": {
+            "0": "Atrodiet teksta vietas lietas dokumentos ar stella search matters",
+            "1": "Lasiet dokumentus, skatiet lietu sarakstu un veidnes, nemainot kontekstu",
+            "2": "Izmantojiet lapotus, strukturētus rezultātus skriptos un automatizētās darbplūsmās"
+          },
+          "heading": "Meklējiet visā lietā tieši no termināļa"
+        },
+        "1": {
+          "bullets": {
+            "0": "Atveriet lietas, dokumentus, tiesu praksi, veidnes un citus apstiprinātus rīkus",
+            "1": "Iespēju katalogs un CLI komandas tiek ģenerētas no viena reģistra",
+            "2": "Pievienojiet saderīgus AI aģentus, nekopējot juridiskos datus citā darbvietā"
+          },
+          "heading": "Tās pašas iespējas caur MCP"
+        }
+      },
+      "setup": {
+        "clients": {
+          "0": {
+            "body": "Ieslēdziet izstrādātāja režīmu sadaļā Settings → Connectors → Advanced un pēc tam pievienojiet savienotāju ar iepriekš norādīto adresi."
+          },
+          "1": {
+            "body": "Sadaļā Settings → Connectors pievienojiet pielāgotu savienotāju ar iepriekš norādīto adresi."
+          },
+          "2": {
+            "body": "Pievienojiet serveri un pierakstieties:"
+          },
+          "3": {
+            "body": "Serveri pievienosiet ar vienu komandu:"
+          }
+        },
+        "heading": "Pievienojiet MI aģentu",
+        "intro": "Norādiet jebkuram ar MCP saderīgam klientam zemāk redzamo adresi vai sava servera /mcp ceļu, ja izvietojat lietotni stella savā infrastruktūrā. Pirmais savienojums atver pierakstīšanos pārlūkā, un MI aģents saņem tikai tās atļaujas, kuras apstiprināt.",
+        "outro": "Tāpat pieslēdzas jebkurš klients, kas atbalsta Streamable HTTP ar OAuth 2.1. Ērtāk terminālī? Instalējiet CLI un pierakstieties:"
+      }
+    },
+    "editor": {
+      "adjacent": {
+        "0": {
+          "body": "Apskatiet, kur lietas, dokumenti un rīki atrodas kopā."
+        },
+        "1": {
+          "body": "Veidojiet atkārtoti izmantojamus Word dokumentus ar laukiem un nosacījuma klauzulām."
+        },
+        "2": {
+          "body": "Izmēģiniet to pašu redaktoru atsevišķi: atveriet un rediģējiet .docx pārlūkā, konts nav vajadzīgs."
+        },
+        "3": {
+          "body": "stella mašīnlasāmā formā AI meklētājprogrammām."
+        }
+      },
+      "capabilities": {
+        "0": {
+          "body": "Atveriet un rediģējiet Word dokumentus tieši lietotnes stella tiešsaistes redaktorā: bez instalēšanas un bez faila pārveidošanas atsevišķā slēgtā formātā.",
+          "title": "Rediģējiet .docx failus pārlūkā"
+        },
+        "1": {
+          "body": "Dokuments visu laiku paliek .docx, tāpēc fonti, stili un izkārtojums izskatās un tiek saglabāti tā, kā tos izveidoja Word.",
+          "title": "Formatējums saglabājas"
+        },
+        "2": {
+          "body": "Izsekotie iestarpinājumi un dzēsumi tiek rādīti uz vietas, un AI ieteiktie labojumi nonāk kā izsekotas izmaiņas, ko dokumentā pieņemat vai noraidāt.",
+          "title": "Izmaiņu izsekošana"
+        },
+        "3": {
+          "body": "Saglabātie labojumi kļūst par dokumenta versijām, tāpēc pašreizējais fails un visa tā vēsture paliek kopā.",
+          "title": "Versiju vēsture katrai saglabāšanai"
+        },
+        "4": {
+          "body": "Dokuments paliek saistīts ar savu lietu, līdzās tās failiem, rekvizītiem, uzdevumiem un sarunām.",
+          "title": "Lietas konteksts paliek redzams"
+        },
+        "5": {
+          "body": "Kad dokumentam nepieciešams Microsoft Word, izmantojiet tiltu uz datoru un atgrieziet atjaunināto failu tajā pašā lietā.",
+          "title": "Tilts uz vietējo Office"
+        }
+      },
+      "cta": {
+        "heading": "Rediģējiet Word dokumentu tieši tā lietā."
+      },
+      "faqs": {
+        "0": {
+          "answer": "Jā. Dokuments tiek rediģēts tur, kur tas glabājas, līdzās pārējiem lietas failiem, rekvizītiem, uzdevumiem un sarunām, tāpēc izmaiņu veikšanai nav jālejupielādē vietēja kopija un tā atkal jāaugšupielādē.",
+          "question": "Vai rediģēšanas laikā dokuments paliek saistīts ar lietu?"
+        },
+        "1": {
+          "answer": "Jā. Izsekotie iestarpinājumi un dzēsumi tiek rādīti uz vietas, tāpat kā tos rāda Word. Lietotnes stella AI ieteiktie labojumi nonāk tādā pašā veidā, tāpēc labojumi tiek pārskatīti un pieņemti vai noraidīti, pirms tie kļūst par dokumenta daļu.",
+          "question": "Vai redaktors saglabā izmaiņu izsekošanu?"
+        },
+        "2": {
+          "answer": "Saglabātais fails paliek saistīts ar to pašu lietu un dokumentu, un saglabāšana kļūst par versiju šī dokumenta versiju vēsturē.",
+          "question": "Kas notiek, kad saglabāju?"
+        },
+        "3": {
+          "answer": "Jā. Saglabātās versijas paliek dokumenta versiju vēsturē, tāpēc pašreizējais fails un tie, kurus tas aizstāja, paliek kopā pie viena dokumenta.",
+          "question": "Vai varu atgriezties pie agrākas versijas?"
+        },
+        "4": {
+          "answer": "Jā. Lietotnes stella tilts uz datoru atver dokumentu vietējā Office, kad vajadzīgas programmai Word raksturīgas darbības, un atgriež rediģēto failu tajā pašā lietā.",
+          "question": "Vai to pašu dokumentu varu atvērt programmā Microsoft Word?"
+        },
+        "5": {
+          "answer": "Jā. Dokuments ir daļa no lietas, tāpēc AI aģents var to izlasīt un ieteikt labojumus kā izsekotas izmaiņas tajā pašā dokumentā.",
+          "question": "Vai lietotnes stella AI var strādāt ar dokumentu, ko rediģēju?"
+        }
+      },
+      "metaDescription": "Rediģējiet lietas Word dokumentus lietotnē stella: izmaiņu izsekošana uz vietas, katra saglabāšana kā versija vēsturē un tilts uz vietējo Word.",
+      "metaTitle": "Word dokumentu rediģēšana lietā | stella",
+      "quickAnswer": {
+        "answer": "Jā. Atveriet .docx failu no lietas un rediģējiet to pārlūkā. stella patur dokumentu sākotnējā Word formātā un ieraksta saglabātās versijas tā paša dokumenta versiju vēsturē.",
+        "question": "Vai lietotnē stella var rediģēt Word dokumentus?"
+      },
+      "sections": {
+        "0": {
+          "bullets": {
+            "0": "Atveriet .docx tieši no lietas",
+            "1": "Rediģējiet dokumentu ar pierastajām lappuses un formatējuma vadīklām",
+            "2": "Pārskatiet izsekotās izmaiņas uz vietas, arī AI ieteiktos labojumus",
+            "3": "Saglabājiet sākotnējo Word faila formātu",
+            "4": "Saglabājiet izmaiņas dokumenta versiju vēsturē"
+          },
+          "heading": ".docx paliek .docx"
+        },
+        "1": {
+          "bullets": {
+            "0": "Pārejiet starp dokumentu un tā lietu, neaugšupielādējot kopijas",
+            "1": "Turiet dokumenta rekvizītus un versijas kopā ar failu",
+            "2": "Vajadzības gadījumā atveriet to pašu dokumentu caur tiltu uz datoru",
+            "3": "Izmantojiet dokumentu kā kontekstu AI aģentam"
+          },
+          "heading": "Saistīts ar pārējo lietu"
+        }
+      }
+    },
+    "public-data": {
+      "adjacent": {
+        "0": {
+          "body": "Sagatavojiet sensitīvu materiālu AI, neatklājot identificējošu informāciju."
+        },
+        "1": {
+          "body": "Sarunājieties par lietām, failiem un avotiem, ar apstiprinājumiem un citātiem."
+        },
+        "2": {
+          "body": "Pārvērtiet dokumentu kopu pārskatīšanas tabulā tieši lietā."
+        },
+        "3": {
+          "body": "stella mašīnlasāmā formā AI meklētājprogrammām."
+        }
+      },
+      "capabilities": {
+        "0": {
+          "body": "Nolēmumi tieši no oficiālajiem avotiem, nevis pārstāstīti kopsavilkumi.",
+          "title": "Oficiāla tiesu prakse"
+        },
+        "1": {
+          "body": "Katrs nolēmums saglabā oriģināla virsrakstus, punktus un atsauces.",
+          "title": "Ar saglabātu struktūru"
+        },
+        "2": {
+          "body": "Meklējiet valsts uzņēmumu un komercreģistros, neizejot no lietas.",
+          "title": "Uzņēmumu reģistri"
+        },
+        "3": {
+          "body": "Pārejiet no nolēmuma uz tajā citētajiem nolēmumiem, neizejot no lasīšanas skata.",
+          "title": "Sekojiet citātiem"
+        },
+        "4": {
+          "body": "Pārlūkojiet un filtrējiet tiesu praksi un reģistrus pēc jurisdikcijas, kurā strādājat.",
+          "title": "Pēc jurisdikcijas"
+        },
+        "5": {
+          "body": "Atsaucieties uz jebkuru avotu lietā, lai AI aģenta atbildes paliktu izsekojamas līdz tam.",
+          "title": "Pamats AI atbildēm"
+        }
+      },
+      "cta": {
+        "heading": "Ienesiet oficiālus juridiskos datus savās lietās."
+      },
+      "faqs": {
+        "0": {
+          "answer": "Tiesu prakse nāk no oficiāliem publiskiem tiesību avotiem, to apkopo lietotnes stella Legal Atlas, saglabājot struktūru. Uzņēmumu dati nāk tieši no valsts uzņēmumu un komercreģistriem, nevis no trešo pušu kopijām.",
+          "question": "No kurienes nāk dati?"
+        },
+        "1": {
+          "answer": "Divi saraksti, abi paplašinās. Pievienotie reģistri jau ietver ARES (Čehija), Companies House (Apvienotā Karaliste), SEC EDGAR (ASV), KRS (Polija), PRH (Somija) un VIES (ES PVN). Papildus reģistriem oficiālie avoti tiek pievienoti jurisdikciju pēc jurisdikcijas; piemēram, Čehijai, Spānijai un Taivānai jau ir pievienoti avoti, un tiesu prakses lasītājs ir veidots tā, lai pārlūkotu un filtrētu pēc jurisdikcijas, pievienojot arvien vairāk oficiālo avotu.",
+          "question": "Kādas jurisdikcijas un reģistri ir aptverti?"
+        },
+        "2": {
+          "answer": "Jā. Publiskie dati, uz kuriem atsaucas lietā, kļūst par pamatotu avotu: AI aģents citē pašu nolēmumu vai ierakstu, tāpēc tā atbildes paliek izsekojamas.",
+          "question": "Vai AI var izmantot šos datus?"
+        }
+      },
+      "metaDescription": "Tiesu prakse un uzņēmumu reģistri no oficiāliem publiskiem avotiem. Lasiet nolēmumus, pārbaudiet uzņēmumus, sekojiet citātiem un ienesiet tos lietā.",
+      "metaTitle": "Tiesu prakse un uzņēmumu reģistri | stella",
+      "quickAnswer": {
+        "answer": "Divu veidu. Oficiāla publiska tiesu prakse, apkopota, saglabājot tās struktūru, tāpēc varat lasīt un meklēt nolēmumus un sekot to citātiem. Un tieša piekļuve valsts uzņēmumu un komercreģistriem, lai oficiālus uzņēmumu datus ienestu tieši lietā. Abi ir pamatoti avoti, ko AI aģents var citēt.",
+        "question": "Kādus publiskos datus stella ienes?"
+      },
+      "sections": {
+        "0": {
+          "bullets": {
+            "0": "Apkopota no oficiāliem publiskiem tiesību avotiem",
+            "1": "Virsraksti, punkti un atsauces paliek tādi kā oriģinālā",
+            "2": "Pamatā ir lietotnes stella atvērtais Legal Atlas"
+          },
+          "heading": "Tiesu prakse no oficiāliem avotiem ar saglabātu struktūru"
+        },
+        "1": {
+          "bullets": {
+            "0": "Pievienotie valsts reģistri: ARES, Companies House, SEC EDGAR, KRS, PRH, VIES un citi",
+            "1": "Ienesiet oficiālus uzņēmumu datus lietā, nevis pārrakstiet tos ar roku",
+            "2": "Aptvērums paplašinās, pievienojot arvien vairāk oficiālo avotu"
+          },
+          "heading": "Uzņēmumu un komercreģistri, kuros meklējat tieši no lietas"
+        },
+        "2": {
+          "bullets": {
+            "0": "Atsaucieties uz nolēmumu vai uzņēmuma ierakstu tieši lietā",
+            "1": "AI aģents citē pašu avotu, nevis pārstāstu",
+            "2": "Meklējiet pāri visiem avotiem, ne tikai vienā"
+          },
+          "heading": "Viens pamatots avots AI aģentam"
+        }
+      }
+    },
+    "tabular-review": {
+      "adjacent": {
+        "0": {
+          "body": "Sarunājieties par lietām, failiem un pievienotajiem avotiem, ar apstiprinājumiem un avotu priekšskatījumiem."
+        },
+        "1": {
+          "body": "Oficiāla tiesu prakse un uzņēmumu reģistri, ienesti tieši lietā."
+        },
+        "2": {
+          "body": "Sagatavojiet sensitīvu materiālu AI, neatklājot identificējošu informāciju."
+        },
+        "3": {
+          "body": "stella mašīnlasāmā formā AI meklētājprogrammām."
+        }
+      },
+      "capabilities": {
+        "0": {
+          "body": "Kolonnu definējiet vienkāršā valodā, un stella atbild uz to par katru kopas dokumentu.",
+          "title": "Kolonnas ir jautājumi"
+        },
+        "1": {
+          "body": "Katra šūna ved uz tieši to teksta vietu, no kuras tā iegūta, tāpēc pārbaudāt ar vienu klikšķi.",
+          "title": "Ar atsauci uz avotu"
+        },
+        "2": {
+          "body": "Pārskatīšana glabājas lietā, līdzās dokumentiem, kontaktiem un sarunām, uz kurām tā attiecas.",
+          "title": "Daļa no lietas"
+        },
+        "3": {
+          "body": "Izturieties pret atbildēm kā pret datiem: kārtojiet pēc jebkuras kolonnas, filtrējiet līdz rindām, kurām vajadzīga uzmanība.",
+          "title": "Kārtošana un filtri"
+        },
+        "4": {
+          "body": "Uzdodiet tos pašus jautājumus lielām dokumentu kopām, nevis atveriet failus pa vienam.",
+          "title": "Piemērota lieliem apjomiem"
+        },
+        "5": {
+          "body": "Paņemiet tabulu līdzi standarta formātos: nekādas piesaistes jūsu pašu darba rezultātam.",
+          "title": "Eksports jebkurp"
+        }
+      },
+      "cta": {
+        "heading": "Pārskatiet nākamo dokumentu kopu lietotnē stella."
+      },
+      "faqs": {
+        "0": {
+          "answer": "Faktu izguvi, piemēram, datumus, puses un summas, vai vērtējumus, piemēram, vai klauzula ir un kā tā formulēta. Atbildes atgriežas pamatotas ar citātiem no pirmavota teksta.",
+          "question": "Kādus jautājumus var uzdot kolonna?"
+        },
+        "1": {
+          "answer": "No jūsu lietas dokumentiem. AI funkcijas darbojas ar jūsu pašu pakalpojumu sniedzēja atslēgām, tāpēc izguve notiek caur jūsu izvēlēto AI pakalpojumu sniedzēju, un katra atbilde ved atpakaļ uz teksta vietu, no kuras tā iegūta.",
+          "question": "No kurienes nāk atbildes?"
+        },
+        "2": {
+          "answer": "Jā. Tabulārās pārskatīšanas rezultātu var eksportēt standarta formātos, tāpēc jūsu darba rezultāts paliek pārnesams, bez piesaistes.",
+          "question": "Vai pārskatīšanu var eksportēt?"
+        }
+      },
+      "metaDescription": "Uzdodiet jautājumus visai dokumentu kopai un saņemiet strukturētas atbildes kārtojamā, līdz avotam izsekojamā tabulā. Veidots due diligence un izpētei.",
+      "metaTitle": "Tabulāra dokumentu pārskatīšana due diligence | stella",
+      "quickAnswer": {
+        "answer": "Tabulāro pārskatīšanu vēršat uz dokumentu kopu lietā un kolonnas definējat kā jautājumus, piemēram, „piemērojamie tiesību akti”, „uzteikuma termiņš” vai „kontroles maiņas klauzula”. stella katram dokumentam izgūst atbildi tabulā, ko varat kārtot, filtrēt un eksportēt, un katra šūna ved atpakaļ uz teksta vietu, no kuras tā nāk.",
+        "question": "Kā darbojas tabulāra pārskatīšana?"
+      },
+      "sections": {
+        "0": {
+          "bullets": {
+            "0": "Pievienojiet kolonnu, ierakstot jautājumu, ko uzdotu jaunākajam kolēģim",
+            "1": "Izmantojiet tos pašus kolonnu komplektus citās lietās kā pārskatīšanas metodiku",
+            "2": "Apvienojiet faktu izguvi (datumi, puses, summas) ar vērtējuma jautājumiem"
+          },
+          "heading": "Definējiet jautājumus vienreiz, atbildes būs visur"
+        },
+        "1": {
+          "bullets": {
+            "0": "Noklikšķiniet uz šūnas, lai atvērtu avota dokumentu citētajā vietā",
+            "1": "Atbildes ir pamatotas ar citātiem, nevis brīvi peldošiem kopsavilkumiem",
+            "2": "Ar vienu skatienu pamaniet pretrunas starp dokumentiem"
+          },
+          "heading": "Katra atbilde ved atpakaļ uz tekstu"
+        },
+        "2": {
+          "bullets": {
+            "0": "Pārskatīšana glabājas lietā, līdzās tās failiem un sarunām",
+            "1": "Nododiet pārskatīšanu AI aģentam papildu jautājumiem",
+            "2": "Eksportējiet tabulu vai turpiniet to precizēt uz vietas"
+          },
+          "heading": "Tur, kur norit darbs"
+        }
+      }
+    },
+    "templates": {
+      "adjacent": {
+        "0": {
+          "body": "Lietas, dokumenti un Word rediģēšana vienuviet."
+        },
+        "1": {
+          "body": "Pārvērtiet dokumentu kopu pārskatīšanas tabulā tieši lietā."
+        },
+        "2": {
+          "body": "Sarunājieties par lietām, failiem un avotiem, saņemot citātus."
+        },
+        "3": {
+          "body": "stella mašīnlasāmā formā AI meklētājprogrammām."
+        }
+      },
+      "capabilities": {
+        "0": {
+          "body": "Sāciet atkārtotus dokumentus no pārbaudīta pamata, nevis no kopēta faila.",
+          "title": "Atkārtoti izmantojamas veidnes"
+        },
+        "1": {
+          "body": "Nosakiet, kādas vērtības dokumentam vajadzīgas, un ievadiet tās, kad to sagatavojat.",
+          "title": "Lauki un vietturi"
+        },
+        "2": {
+          "body": "Iekļaujiet vai izlaidiet klauzulas atkarībā no ievadītajām vērtībām, lai viena veidne aptvertu vairākus variantus.",
+          "title": "Nosacījuma klauzulas"
+        },
+        "3": {
+          "body": "Ļaujiet lietotnei stella sagatavot aizpildītu dokumentu no lietas datiem un pēc tam to precizējiet.",
+          "title": "Aizpildīšana ar AI"
+        },
+        "4": {
+          "body": "Veidojiet un pielāgojiet veidnes redaktorā un pēc tam sagatavojiet no tām dokumentus.",
+          "title": "Rediģēšana uz vietas"
+        },
+        "5": {
+          "body": "Projekts nonāk lietā, gatavs rediģēšanai līdzās pārējam darbam.",
+          "title": "Tieši lietā"
+        }
+      },
+      "cta": {
+        "heading": "Sāciet no veidnes, nevis no tukšas lapas."
+      },
+      "faqs": {
+        "0": {
+          "answer": "Jā. Veidnes tiek veidotas un pielāgotas redaktorā, un pēc tam no tām sagatavojat dokumentus.",
+          "question": "Vai veidni var rediģēt?"
+        },
+        "1": {
+          "answer": "Atkārtoti izmantojama dokumenta daļa. Klauzulas var iekļaut dažādās veidnēs un pievienot pēc nosacījumiem atkarībā no vērtībām, ko norādāt sagatavošanas laikā.",
+          "question": "Kas ir klauzula?"
+        },
+        "2": {
+          "answer": "Lietā, kā projekts, ko varat turpināt rediģēt līdzās pārējiem lietas dokumentiem.",
+          "question": "Kur nonāk sagatavotais dokuments?"
+        }
+      },
+      "metaDescription": "Definējiet veidni ar laukiem un nosacījuma klauzulām, aizpildiet to manuāli vai ļaujiet lietotnei stella sagatavot to no lietas datiem. Projekts nonāk lietā.",
+      "metaTitle": "Juridisko dokumentu veidnes ar AI | stella",
+      "quickAnswer": {
+        "answer": "Veidne ir dokuments ar laukiem un klauzulām, ko var iekļaut pēc nosacījumiem. Laukus aizpildāt manuāli vai ļaujat lietotnei stella sagatavot tos no lietas datiem; tiek iekļautas vajadzīgās klauzulas, un jūs saņemat dokumentu, ar ko turpināt darbu lietā. Veidnes un klauzulas ir atkārtoti izmantojamas, tāpēc atkārtoti dokumenti sākas no pārbaudīta pamata.",
+        "question": "Kā lietotnē stella darbojas veidnes?"
+      },
+      "sections": {
+        "0": {
+          "bullets": {
+            "0": "Sagatavojiet dokumentu no veidnes, nevis sāciet no tukšas lapas",
+            "1": "Izmantojiet vienas un tās pašas klauzulas dažādās veidnēs",
+            "2": "Saglabājiet atkārtoto dokumentu vienveidību"
+          },
+          "heading": "Veidojiet no veidnēm un klauzulām"
+        },
+        "1": {
+          "bullets": {
+            "0": "Aizpildiet laukus no dokumenta, kas jau glabājas lietā",
+            "1": "Pirms projekta sagatavošanas pārskatiet un pielāgojiet katru vērtību",
+            "2": "Nosacījuma klauzulas arvien tiek iekļautas pēc vērtībām, ko paturat"
+          },
+          "heading": "Aizpildiet to ar lietas datiem"
+        },
+        "2": {
+          "bullets": {
+            "0": "Veidojiet un pielāgojiet veidnes redaktorā",
+            "1": "Sagatavojiet projektu tieši lietā",
+            "2": "Turpiniet rediģēt rezultātu līdzās lietas failiem"
+          },
+          "heading": "Rediģējiet un sagatavojiet uz vietas"
+        }
+      }
+    },
+    "ui": {
+      "capabilities": "Iespējas",
+      "exploreMore": "Uzziniet vairāk",
+      "faq": "Biežāk uzdotie jautājumi",
+      "inShort": "Īsumā"
+    },
+    "workspace": {
+      "adjacent": {
+        "0": {
+          "body": "Sarunājieties par lietām, failiem un pievienotajiem rīkiem, ar apstiprinājumiem un avotu priekšskatījumiem."
+        },
+        "1": {
+          "body": "Pārvērtiet dokumentu kopu tabulā, ko var kārtot, filtrēt un izsekot līdz avotam."
+        },
+        "2": {
+          "body": "Piekļūstiet tām pašām lietām, dokumentiem un tiesu praksei no komandrindas un ar MCP saderīgiem rīkiem."
+        },
+        "3": {
+          "body": "stella mašīnlasāmā formā AI meklētājprogrammām."
+        }
+      },
+      "capabilities": {
+        "0": {
+          "body": "Kārtojiet dokumentus, kontaktus, pārskatīšanu un tērzēšanu ap lietu, kurai tie pieder. Viss, kas pievienots lietai, paliek pie tās un ir atrodams visā darbvietā, tāpēc, atgriežoties, konteksts ir uz vietas.",
+          "title": "Lietas"
+        },
+        "1": {
+          "body": "Atveriet, rediģējiet un pārskatiet Word .docx dokumentus tieši darbvietā.",
+          "title": "Dokumenti un .docx rediģēšana"
+        },
+        "2": {
+          "body": "Veiciet tabulāro pārskatīšanu un izpēti līdzās dokumentiem, uz kuriem tā attiecas.",
+          "title": "Pārskatīšana un izpēte"
+        },
+        "3": {
+          "body": "Turiet AI aģentu un zināšanu rīkus tajā pašā darbvietā, kur atrodas faili.",
+          "title": "Tērzēšana un zināšanu rīki"
+        },
+        "4": {
+          "body": "Datora lietotne darbojas kā vietējs tilts Office dokumentu rediģēšanai no lietotnes stella.",
+          "title": "Tilts uz datoru"
+        },
+        "5": {
+          "body": "Saglabātie labojumi un augšupielādes kļūst par dokumenta versijām, tāpēc pašreizējais fails un tā vēsture paliek kopā.",
+          "title": "Versiju vēsture"
+        }
+      },
+      "cta": {
+        "heading": "Apvienojiet visas lietas vienā darbvietā."
+      },
+      "faqs": {
+        "0": {
+          "answer": "Jā. Tīmekļa lietotne ļauj rediģēt un pārskatīt Word .docx failus. Vietējai rediģēšanai ar Office datora lietotne darbojas kā tilts: dokumentu atverat no lietotnes stella un rediģējat savā datorā.",
+          "question": "Vai lietotnē stella var rediģēt Word dokumentus?"
+        },
+        "1": {
+          "answer": "Dokumenti, kontakti, pārskatīšanas tabulas, tērzēšanas pavedieni un dokumentu vēsture. Viss, kas pievienots lietai, paliek pie tās, tāpēc, atgriežoties, konteksts ir uz vietas.",
+          "question": "Kas atrodas lietā?"
+        },
+        "2": {
+          "answer": "Jā. Lietotnes stella CLI un MCP serveris pievienotajiem rīkiem atver tās pašas lietas, dokumentus un tiesu praksi, ievērojot tās pašas atļaujas. Sīkāk skatiet sadaļā CLI & MCP.",
+          "question": "Vai darbvietai var piekļūt citi rīki?"
+        }
+      },
+      "metaDescription": "Lietas, dokumenti, Word .docx rediģēšana, pārskatīšana, izpēte un tērzēšana vienā juridiskā darbvietā. Darbs paliek kontekstā no avotiem līdz atbildei.",
+      "metaTitle": "Juridisko lietu pārvaldība vienuviet | stella",
+      "quickAnswer": {
+        "answer": "Tīmekļa lietotne, kurā vienuviet ir lietas, dokumenti, Word .docx rediģēšana, pārskatīšana, izpēte un tērzēšana. Viss, kas pievienots lietai, paliek pie tās, tāpēc, atgriežoties, konteksts ir uz vietas. Kad dokumentam nepieciešams Microsoft Word, datora lietotne darbojas kā vietējs tilts.",
+        "question": "Kas ir lietotnes stella darbvieta?"
+      },
+      "sections": {
+        "0": {
+          "bullets": {
+            "0": "Dokumenti, kontakti, pārskatīšana un tērzēšana glabājas lietā",
+            "1": "Rediģējiet Word .docx dokumentus, nepametot darbvietu",
+            "2": "Pārejiet starp izpēti, pārskatīšanu un tērzēšanu, nemainot lietotnes"
+          },
+          "heading": "Visa lieta vienuviet"
+        },
+        "1": {
+          "bullets": {
+            "0": "Atveriet un rediģējiet Word .docx dokumentus tieši darbvietā",
+            "1": "Labojumi paliek Word failā: bez pārveidošanas un bez kopijām",
+            "2": "Kad dokumentam nepieciešams Microsoft Word, izmantojiet tiltu uz datoru"
+          },
+          "heading": "Word dokumenti rediģēti tur, kur tie vajadzīgi"
+        }
+      }
+    }
+  },
+  "story": {
+    "agentBody": "AI aģents pārmeklē lietu, izlasa būtisko tekstu un atbild ar citātiem, kas atver avotu tieši vajadzīgajā vietā. Izmantojiet to tieši lietotnē stella vai savienojiet ar rīkiem, ar kuriem jau strādājat.",
+    "agentEyebrow": "AI aģents",
+    "agentTitle": "Pietiek pajautāt. Katra atbilde norāda avotu.",
+    "bringEditorToFront": "Pārvietot lietotnes stella redaktoru priekšplānā",
+    "bringTerminalToFront": "Pārvietot lietotnes stella termināli priekšplānā",
+    "bringWorkspaceToFront": "Pārvietot lietotnes stella darbvietu priekšplānā",
+    "controlBody": "stella ir <gh>atvērtā pirmkoda</gh> juridiskā programmatūra, ko varat izvietot savā infrastruktūrā: pārbaudiet kodu, darbiniet to pēc saviem noteikumiem un eksportējiet visu standarta formātos.",
+    "controlTitle": "Tehnoloģija paliek jūsu rokās.",
+    "dataBody": "Tiesu prakse un uzņēmumu reģistri no visām jurisdikcijām, kurās strādājat, nonāk tieši lietā. Anonimizācija neļauj identificējošai informācijai nonākt pie AI.",
+    "dataEyebrow": "Juridiskie dati",
+    "dataMainAlt": "Oficiāls tiesas nolēmums, atvērts lietotnē stella",
+    "dataTitle": "Tiesu prakse un reģistri pa rokai.",
+    "exploreAgent": "Iepazīt AI aģentu",
+    "exploreAnonymization": "Iepazīt anonimizāciju",
+    "explorePublicData": "Iepazīt publiskos datus",
+    "exploreTabularReview": "Iepazīt tabulāro pārskatīšanu",
+    "exploreTemplates": "Iepazīt veidnes",
+    "exploreWorkspace": "Iepazīt darbvietu",
+    "eyebrow": "Savienota darbvieta",
+    "intro": "Avota materiāli, pārskatīšana un gala dokumenti paliek lietā un balstās cits uz cita. Pie lietas strādājiet kopā ar AI aģentu un pārbaudiet katru tā soli.",
+    "openEditor": "Atvērt redaktoru",
+    "proofByokBody": "AI funkcijām izmantojiet savas pakalpojumu sniedzēja atslēgas.",
+    "proofByokTitle": "Izmantojiet savus modeļus",
+    "proofOpenSourceBody": "Pārbaudiet kodu un saglabājiet pārnesamu sistēmu.",
+    "proofOpenSourceTitle": "Atvērts pirmkods",
+    "proofPermissionsBody": "Katra darbība paliek lietotāja un darbvietas atļauju ietvaros.",
+    "proofPermissionsTitle": "Ievēro atļaujas",
+    "proofSelfHostBody": "Darbiniet lietotni stella infrastruktūrā, ko pārvaldāt paši.",
+    "proofSelfHostTitle": "Izvietojams savā infrastruktūrā",
+    "selfHostGuide": "Lasīt izvietošanas ceļvedi",
+    "sourceOnGitHub": "Pirmkods vietnē GitHub",
+    "title": "Viena lieta. No dokumentiem līdz atbildei.",
+    "velocityAll": "Pilns izmaiņu žurnāls",
+    "velocityTitle": "Kas jauns lietotnē stella.",
+    "workspaceBody": "Dokumenti, termiņi, strukturēta pārskatīšana un sagatavošana paliek kopā un ir meklējami visās lietās.",
+    "workspaceEyebrow": "Darbvieta",
+    "workspaceTitle": "Pārvaldiet visu lietu vienā vietā."
+  }
+}

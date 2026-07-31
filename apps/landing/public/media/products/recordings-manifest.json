@@ -1,0 +1,668 @@
+{
+  "entries": [
+    {
+      "captureId": "agent",
+      "theme": "dark",
+      "viewport": {
+        "height": 720,
+        "width": 1280
+      },
+      "dpr": 2,
+      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "watchedPaths": [
+        "apps/web/e2e/marketing/captures.ts",
+        "apps/web/e2e/marketing/record-product-story.ts",
+        "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
+        "apps/web/src/components/app-sidebar.tsx",
+        "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
+        "apps/web/src/routes/_protected.chat",
+        "apps/web/src/components/chat",
+        "apps/web/src/components/ai-elements"
+      ]
+    },
+    {
+      "captureId": "agent",
+      "theme": "light",
+      "viewport": {
+        "height": 720,
+        "width": 1280
+      },
+      "dpr": 2,
+      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "watchedPaths": [
+        "apps/web/e2e/marketing/captures.ts",
+        "apps/web/e2e/marketing/record-product-story.ts",
+        "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
+        "apps/web/src/components/app-sidebar.tsx",
+        "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
+        "apps/web/src/routes/_protected.chat",
+        "apps/web/src/components/chat",
+        "apps/web/src/components/ai-elements"
+      ]
+    },
+    {
+      "captureId": "agent-hero",
+      "theme": "dark",
+      "viewport": {
+        "height": 764,
+        "width": 1280
+      },
+      "dpr": 2,
+      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "watchedPaths": [
+        "apps/web/e2e/marketing/captures.ts",
+        "apps/web/e2e/marketing/record-product-story.ts",
+        "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
+        "apps/web/src/components/app-sidebar.tsx",
+        "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
+        "apps/web/src/routes/_protected.chat",
+        "apps/web/src/components/chat",
+        "apps/web/src/components/ai-elements"
+      ]
+    },
+    {
+      "captureId": "agent-hero",
+      "theme": "light",
+      "viewport": {
+        "height": 764,
+        "width": 1280
+      },
+      "dpr": 2,
+      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "watchedPaths": [
+        "apps/web/e2e/marketing/captures.ts",
+        "apps/web/e2e/marketing/record-product-story.ts",
+        "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
+        "apps/web/src/components/app-sidebar.tsx",
+        "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
+        "apps/web/src/routes/_protected.chat",
+        "apps/web/src/components/chat",
+        "apps/web/src/components/ai-elements"
+      ]
+    },
+    {
+      "captureId": "cli",
+      "theme": "dark",
+      "viewport": {
+        "height": 720,
+        "width": 1280
+      },
+      "dpr": 2,
+      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "watchedPaths": [
+        "apps/web/e2e/marketing/captures.ts",
+        "apps/web/e2e/marketing/record-product-story.ts",
+        "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
+        "apps/web/src/components/app-sidebar.tsx",
+        "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
+        "apps/web/src/routes/_protected.knowledge"
+      ]
+    },
+    {
+      "captureId": "cli",
+      "theme": "light",
+      "viewport": {
+        "height": 720,
+        "width": 1280
+      },
+      "dpr": 2,
+      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "watchedPaths": [
+        "apps/web/e2e/marketing/captures.ts",
+        "apps/web/e2e/marketing/record-product-story.ts",
+        "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
+        "apps/web/src/components/app-sidebar.tsx",
+        "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
+        "apps/web/src/routes/_protected.knowledge"
+      ]
+    },
+    {
+      "captureId": "cli-hero",
+      "theme": "dark",
+      "viewport": {
+        "height": 764,
+        "width": 1280
+      },
+      "dpr": 2,
+      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "watchedPaths": [
+        "apps/web/e2e/marketing/captures.ts",
+        "apps/web/e2e/marketing/record-product-story.ts",
+        "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
+        "apps/web/src/components/app-sidebar.tsx",
+        "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
+        "apps/web/src/routes/_protected.knowledge"
+      ]
+    },
+    {
+      "captureId": "cli-hero",
+      "theme": "light",
+      "viewport": {
+        "height": 764,
+        "width": 1280
+      },
+      "dpr": 2,
+      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "watchedPaths": [
+        "apps/web/e2e/marketing/captures.ts",
+        "apps/web/e2e/marketing/record-product-story.ts",
+        "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
+        "apps/web/src/components/app-sidebar.tsx",
+        "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
+        "apps/web/src/routes/_protected.knowledge"
+      ]
+    },
+    {
+      "captureId": "editor",
+      "theme": "dark",
+      "viewport": {
+        "height": 720,
+        "width": 1280
+      },
+      "dpr": 2,
+      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "watchedPaths": [
+        "apps/web/e2e/marketing/captures.ts",
+        "apps/web/e2e/marketing/record-product-story.ts",
+        "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
+        "apps/web/src/components/app-sidebar.tsx",
+        "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId"
+      ]
+    },
+    {
+      "captureId": "editor",
+      "theme": "light",
+      "viewport": {
+        "height": 720,
+        "width": 1280
+      },
+      "dpr": 2,
+      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "watchedPaths": [
+        "apps/web/e2e/marketing/captures.ts",
+        "apps/web/e2e/marketing/record-product-story.ts",
+        "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
+        "apps/web/src/components/app-sidebar.tsx",
+        "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId"
+      ]
+    },
+    {
+      "captureId": "editor-hero",
+      "theme": "dark",
+      "viewport": {
+        "height": 764,
+        "width": 1280
+      },
+      "dpr": 2,
+      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "watchedPaths": [
+        "apps/web/e2e/marketing/captures.ts",
+        "apps/web/e2e/marketing/record-product-story.ts",
+        "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
+        "apps/web/src/components/app-sidebar.tsx",
+        "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId"
+      ]
+    },
+    {
+      "captureId": "editor-hero",
+      "theme": "light",
+      "viewport": {
+        "height": 764,
+        "width": 1280
+      },
+      "dpr": 2,
+      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "watchedPaths": [
+        "apps/web/e2e/marketing/captures.ts",
+        "apps/web/e2e/marketing/record-product-story.ts",
+        "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
+        "apps/web/src/components/app-sidebar.tsx",
+        "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId"
+      ]
+    },
+    {
+      "captureId": "editor-portrait",
+      "theme": "dark",
+      "viewport": {
+        "height": 1036,
+        "width": 900
+      },
+      "dpr": 2,
+      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "watchedPaths": [
+        "apps/web/e2e/marketing/captures.ts",
+        "apps/web/e2e/marketing/record-product-story.ts",
+        "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
+        "apps/web/src/components/app-sidebar.tsx",
+        "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId"
+      ]
+    },
+    {
+      "captureId": "editor-portrait",
+      "theme": "light",
+      "viewport": {
+        "height": 1036,
+        "width": 900
+      },
+      "dpr": 2,
+      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "watchedPaths": [
+        "apps/web/e2e/marketing/captures.ts",
+        "apps/web/e2e/marketing/record-product-story.ts",
+        "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
+        "apps/web/src/components/app-sidebar.tsx",
+        "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId"
+      ]
+    },
+    {
+      "captureId": "review",
+      "theme": "dark",
+      "viewport": {
+        "height": 720,
+        "width": 1280
+      },
+      "dpr": 2,
+      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "watchedPaths": [
+        "apps/web/e2e/marketing/captures.ts",
+        "apps/web/e2e/marketing/record-product-story.ts",
+        "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
+        "apps/web/src/components/app-sidebar.tsx",
+        "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId"
+      ]
+    },
+    {
+      "captureId": "review",
+      "theme": "light",
+      "viewport": {
+        "height": 720,
+        "width": 1280
+      },
+      "dpr": 2,
+      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "watchedPaths": [
+        "apps/web/e2e/marketing/captures.ts",
+        "apps/web/e2e/marketing/record-product-story.ts",
+        "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
+        "apps/web/src/components/app-sidebar.tsx",
+        "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId"
+      ]
+    },
+    {
+      "captureId": "review-citation",
+      "theme": "dark",
+      "viewport": {
+        "height": 720,
+        "width": 1280
+      },
+      "dpr": 2,
+      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "watchedPaths": [
+        "apps/web/e2e/marketing/captures.ts",
+        "apps/web/e2e/marketing/record-product-story.ts",
+        "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
+        "apps/web/src/components/app-sidebar.tsx",
+        "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId",
+        "apps/web/src/components/inspector",
+        "apps/web/src/routes/_protected.tsx"
+      ]
+    },
+    {
+      "captureId": "review-citation",
+      "theme": "light",
+      "viewport": {
+        "height": 720,
+        "width": 1280
+      },
+      "dpr": 2,
+      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "watchedPaths": [
+        "apps/web/e2e/marketing/captures.ts",
+        "apps/web/e2e/marketing/record-product-story.ts",
+        "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
+        "apps/web/src/components/app-sidebar.tsx",
+        "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId",
+        "apps/web/src/components/inspector",
+        "apps/web/src/routes/_protected.tsx"
+      ]
+    },
+    {
+      "captureId": "review-hero",
+      "theme": "dark",
+      "viewport": {
+        "height": 764,
+        "width": 1280
+      },
+      "dpr": 2,
+      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "watchedPaths": [
+        "apps/web/e2e/marketing/captures.ts",
+        "apps/web/e2e/marketing/record-product-story.ts",
+        "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
+        "apps/web/src/components/app-sidebar.tsx",
+        "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId"
+      ]
+    },
+    {
+      "captureId": "review-hero",
+      "theme": "light",
+      "viewport": {
+        "height": 764,
+        "width": 1280
+      },
+      "dpr": 2,
+      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "watchedPaths": [
+        "apps/web/e2e/marketing/captures.ts",
+        "apps/web/e2e/marketing/record-product-story.ts",
+        "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
+        "apps/web/src/components/app-sidebar.tsx",
+        "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId"
+      ]
+    },
+    {
+      "captureId": "template-fill",
+      "theme": "dark",
+      "viewport": {
+        "height": 720,
+        "width": 1280
+      },
+      "dpr": 2,
+      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "watchedPaths": [
+        "apps/web/e2e/marketing/captures.ts",
+        "apps/web/e2e/marketing/record-product-story.ts",
+        "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
+        "apps/web/src/components/app-sidebar.tsx",
+        "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId",
+        "apps/web/src/routes/_protected.knowledge",
+        "apps/api/scripts/seed-templates.ts",
+        "apps/api/src/dev/register-mock-ai.ts"
+      ]
+    },
+    {
+      "captureId": "template-fill",
+      "theme": "light",
+      "viewport": {
+        "height": 720,
+        "width": 1280
+      },
+      "dpr": 2,
+      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "watchedPaths": [
+        "apps/web/e2e/marketing/captures.ts",
+        "apps/web/e2e/marketing/record-product-story.ts",
+        "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
+        "apps/web/src/components/app-sidebar.tsx",
+        "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId",
+        "apps/web/src/routes/_protected.knowledge",
+        "apps/api/scripts/seed-templates.ts",
+        "apps/api/src/dev/register-mock-ai.ts"
+      ]
+    },
+    {
+      "captureId": "templates",
+      "theme": "dark",
+      "viewport": {
+        "height": 720,
+        "width": 1280
+      },
+      "dpr": 2,
+      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "watchedPaths": [
+        "apps/web/e2e/marketing/captures.ts",
+        "apps/web/e2e/marketing/record-product-story.ts",
+        "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
+        "apps/web/src/components/app-sidebar.tsx",
+        "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
+        "apps/web/src/routes/_protected.knowledge",
+        "apps/api/scripts/seed-templates.ts"
+      ]
+    },
+    {
+      "captureId": "templates",
+      "theme": "light",
+      "viewport": {
+        "height": 720,
+        "width": 1280
+      },
+      "dpr": 2,
+      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "watchedPaths": [
+        "apps/web/e2e/marketing/captures.ts",
+        "apps/web/e2e/marketing/record-product-story.ts",
+        "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
+        "apps/web/src/components/app-sidebar.tsx",
+        "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
+        "apps/web/src/routes/_protected.knowledge",
+        "apps/api/scripts/seed-templates.ts"
+      ]
+    },
+    {
+      "captureId": "workspace",
+      "theme": "dark",
+      "viewport": {
+        "height": 720,
+        "width": 1280
+      },
+      "dpr": 2,
+      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "watchedPaths": [
+        "apps/web/e2e/marketing/captures.ts",
+        "apps/web/e2e/marketing/record-product-story.ts",
+        "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
+        "apps/web/src/components/app-sidebar.tsx",
+        "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId"
+      ]
+    },
+    {
+      "captureId": "workspace",
+      "theme": "light",
+      "viewport": {
+        "height": 720,
+        "width": 1280
+      },
+      "dpr": 2,
+      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "watchedPaths": [
+        "apps/web/e2e/marketing/captures.ts",
+        "apps/web/e2e/marketing/record-product-story.ts",
+        "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
+        "apps/web/src/components/app-sidebar.tsx",
+        "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId"
+      ]
+    },
+    {
+      "captureId": "workspace-hero",
+      "theme": "dark",
+      "viewport": {
+        "height": 764,
+        "width": 1280
+      },
+      "dpr": 2,
+      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "watchedPaths": [
+        "apps/web/e2e/marketing/captures.ts",
+        "apps/web/e2e/marketing/record-product-story.ts",
+        "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
+        "apps/web/src/components/app-sidebar.tsx",
+        "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId"
+      ]
+    },
+    {
+      "captureId": "workspace-hero",
+      "theme": "light",
+      "viewport": {
+        "height": 764,
+        "width": 1280
+      },
+      "dpr": 2,
+      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "watchedPaths": [
+        "apps/web/e2e/marketing/captures.ts",
+        "apps/web/e2e/marketing/record-product-story.ts",
+        "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
+        "apps/web/src/components/app-sidebar.tsx",
+        "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId"
+      ]
+    }
+  ]
+}

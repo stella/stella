@@ -1,6 +1,6 @@
 ---
 import Base from "../layouts/Base.astro";
-import ThemeToggle from "../components/ThemeToggle.astro";
+import LandingFooter from "../components/LandingFooter.astro";
 
 const contactEmail = "jan.kubica@stll.app";
 
@@ -82,24 +82,8 @@ const gradients = [
   description="Press kit for stella: logos, colours, typography, and a short company description for media and partners."
 >
   <div class="flex min-h-dvh flex-col">
-    <nav class="mx-auto flex w-full max-w-300 items-center justify-between px-6 py-5">
-      <a href="/">
-        <img src="/images/stella-logo.svg" alt="stella" class="h-6 dark:invert" />
-      </a>
-      <div class="flex items-center gap-4">
-        <ThemeToggle />
-        <a
-          href={`mailto:${contactEmail}`}
-          class="inline-flex h-9 items-center rounded-[0.625rem] px-4 text-sm font-medium transition-opacity hover:opacity-90"
-          style="background: var(--primary); color: var(--primary-foreground)"
-        >
-          Contact
-        </a>
-      </div>
-    </nav>
-
     <main class="flex-1">
-      <!-- ——— Hero ——— -->
+      {/* ——— Hero ——— */}
       <section class="px-6 pt-16 pb-8 lg:pt-24 lg:pb-10">
         <div class="mx-auto max-w-300">
           <div class="max-w-4xl">
@@ -113,7 +97,7 @@ const gradients = [
         </div>
       </section>
 
-      <!-- ——— About stella ——— -->
+      {/* ——— About stella ——— */}
       <section class="px-6 py-10 lg:py-12">
         <div class="mx-auto max-w-300">
           <div class="mb-6 flex items-center justify-between gap-4">
@@ -154,7 +138,7 @@ const gradients = [
         </div>
       </section>
 
-      <!-- ——— At a glance ——— -->
+      {/* ——— At a glance ——— */}
       <section class="px-6 py-10 lg:py-12">
         <div class="mx-auto max-w-300">
           <h2 class="mb-6 text-xs font-medium uppercase tracking-[0.2em]" style="color: var(--muted-foreground)">At a glance</h2>
@@ -175,7 +159,7 @@ const gradients = [
         </div>
       </section>
 
-      <!-- ——— Contact ——— -->
+      {/* ——— Contact ——— */}
       <section class="px-6 py-10 lg:py-12">
         <div class="mx-auto max-w-300">
           <h2 class="mb-6 text-xs font-medium uppercase tracking-[0.2em]" style="color: var(--muted-foreground)">Contact</h2>
@@ -226,7 +210,7 @@ const gradients = [
         </div>
       </section>
 
-      <!-- ——— Logo ——— -->
+      {/* ——— Logo ——— */}
       <section class="px-6 py-10 lg:py-12">
         <div class="mx-auto max-w-300">
           <div class="mb-6 flex items-center justify-between gap-4">
@@ -275,7 +259,7 @@ const gradients = [
         </div>
       </section>
 
-      <!-- ——— Colours ——— -->
+      {/* ——— Colours ——— */}
       <section class="px-6 py-10 lg:py-12">
         <div class="mx-auto max-w-300">
           <div class="mb-6 flex items-baseline justify-between gap-4">
@@ -290,7 +274,7 @@ const gradients = [
                   <span class="font-display text-base font-medium">{s.name}</span>
                   <button
                     type="button"
-                    class="copy-hex group flex items-center gap-2 text-left text-xs tabular-nums transition-opacity hover:opacity-70"
+                    class="copy-hex group flex items-center gap-2 text-start text-xs tabular-nums transition-opacity hover:opacity-70"
                     data-hex={s.hex}
                     style="color: var(--muted-foreground)"
                   >
@@ -305,7 +289,7 @@ const gradients = [
         </div>
       </section>
 
-      <!-- ——— Typography ——— -->
+      {/* ——— Typography ——— */}
       <section class="px-6 py-10 lg:py-12">
         <div class="mx-auto max-w-300">
           <h2 class="mb-6 text-xs font-medium uppercase tracking-[0.2em]" style="color: var(--muted-foreground)">Typography</h2>
@@ -336,7 +320,7 @@ const gradients = [
         </div>
       </section>
 
-      <!-- ——— Gradients ——— -->
+      {/* ——— Gradients ——— */}
       <section class="px-6 py-10 lg:py-12">
         <div class="mx-auto max-w-300">
           <div class="mb-6 flex items-baseline justify-between gap-4">
@@ -359,7 +343,7 @@ const gradients = [
                   loading="lazy"
                 />
                 <span
-                  class="absolute right-2 bottom-2 inline-flex h-7 items-center rounded-md px-2.5 text-xs font-medium opacity-0 transition-opacity group-hover:opacity-100"
+                  class="absolute end-2 bottom-2 inline-flex h-7 items-center rounded-md px-2.5 text-xs font-medium opacity-0 transition-opacity group-hover:opacity-100"
                   style="background: var(--primary); color: var(--primary-foreground)"
                 >
                   Download
@@ -372,60 +356,63 @@ const gradients = [
 
     </main>
 
-    <!-- ——— Footer ——— -->
-    <footer class="relative px-6 py-12" style="border-top: 1px solid var(--border)">
-      <div class="mx-auto max-w-300 text-center">
-        <p class="text-sm" style="color: var(--muted-foreground)">
-          <a href="/imprint" class="transition-opacity hover:opacity-70">stella labs, s.r.o.</a>
-          <span aria-hidden="true"> · </span>
-          <a href="/security" class="transition-opacity hover:opacity-70">Security</a>
-          <span aria-hidden="true"> · </span>
-          <a href="/terms" class="transition-opacity hover:opacity-70">Terms</a>
-          <span aria-hidden="true"> · </span>
-          <a href="/changelog" class="transition-opacity hover:opacity-70">Changelog</a>
-        </p>
-      </div>
-      <div
-        class="pointer-events-none absolute inset-x-0 bottom-0 h-32"
-        style="background: linear-gradient(to bottom, transparent, var(--auth-gradient-end))"
-      ></div>
-    </footer>
+    <LandingFooter />
   </div>
 
-  <script is:inline>
-    // Copy boilerplate paragraph
-    for (const btn of document.querySelectorAll(".copy-btn")) {
-      btn.addEventListener("click", async () => {
-        const targetId = btn.dataset.copyTarget;
-        if (!targetId) {return;}
-        const el = document.querySelector(`#${targetId}`);
-        if (!el?.textContent) {return;}
-        await navigator.clipboard.writeText(el.textContent.trim());
-        const label = btn.querySelector(".copy-label");
-        if (!label) {return;}
-        const original = label.textContent;
-        label.textContent = "Copied";
-        setTimeout(() => {
-          label.textContent = original;
-        }, 1500);
-      });
-    }
+  <script>
+    document.addEventListener("astro:page-load", () => {
+      // Copy boilerplate paragraph
+      for (const btn of document.querySelectorAll<HTMLElement>(".copy-btn")) {
+        if (btn.dataset.copyBound) {
+          continue;
+        }
+        btn.dataset.copyBound = "true";
+        btn.addEventListener("click", async () => {
+          const targetId = btn.dataset.copyTarget;
+          if (!targetId) {
+            return;
+          }
+          const el = document.querySelector(`#${CSS.escape(targetId)}`);
+          if (!el?.textContent) {
+            return;
+          }
+          await navigator.clipboard.writeText(el.textContent.trim());
+          const label = btn.querySelector(".copy-label");
+          if (!label) {
+            return;
+          }
+          const original = label.textContent;
+          label.textContent = "Copied";
+          setTimeout(() => {
+            label.textContent = original;
+          }, 1500);
+        });
+      }
 
-    // Copy hex on click
-    for (const btn of document.querySelectorAll(".copy-hex")) {
-      btn.addEventListener("click", async () => {
-        const hex = btn.dataset.hex;
-        if (!hex) {return;}
-        await navigator.clipboard.writeText(hex);
-        const fb = btn.querySelector(".copy-hex-feedback");
-        if (!fb) {return;}
-        fb.classList.remove("opacity-0");
-        fb.classList.add("opacity-100");
-        setTimeout(() => {
-          fb.classList.add("opacity-0");
-          fb.classList.remove("opacity-100");
-        }, 1200);
-      });
-    }
+      // Copy hex on click
+      for (const btn of document.querySelectorAll<HTMLElement>(".copy-hex")) {
+        if (btn.dataset.copyBound) {
+          continue;
+        }
+        btn.dataset.copyBound = "true";
+        btn.addEventListener("click", async () => {
+          const hex = btn.dataset.hex;
+          if (!hex) {
+            return;
+          }
+          await navigator.clipboard.writeText(hex);
+          const fb = btn.querySelector(".copy-hex-feedback");
+          if (!fb) {
+            return;
+          }
+          fb.classList.remove("opacity-0");
+          fb.classList.add("opacity-100");
+          setTimeout(() => {
+            fb.classList.add("opacity-0");
+            fb.classList.remove("opacity-100");
+          }, 1200);
+        });
+      }
+    });
   </script>
 </Base>

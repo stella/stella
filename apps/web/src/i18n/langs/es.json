@@ -3632,7 +3632,7 @@
       "exportXlsx": "Exportar XLSX",
       "fields": "Campos:",
       "fieldsSelected": "{count, plural, one {# seleccionado} other {# seleccionados}}",
-      "filter": "Filter",
+      "filter": "Filtrar",
       "filterByPlaceholder": "Filter by…",
       "filtersWithCount": "{count, plural, one {# filter} other {# filters}}",
       "groupBy": "Agrupar por:",

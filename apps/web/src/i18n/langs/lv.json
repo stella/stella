@@ -3632,7 +3632,7 @@
       "exportXlsx": "Eksportēt XLSX",
       "fields": "Lauki:",
       "fieldsSelected": "{count, plural, zero {# atlasīti} one {# atlasīts} other {# atlasīti}}",
-      "filter": "Filter",
+      "filter": "Filtrēt",
       "filterByPlaceholder": "Filter by…",
       "filtersWithCount": "{count, plural, one {# filter} other {# filters}}",
       "groupBy": "Grupēt pēc:",

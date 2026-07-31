@@ -1,16 +1,27 @@
-<!--
-  Theme toggle button with dark/light label swap.
-  Include once per page; the script handles the click.
--->
+---
+// Theme toggle button with dark/light label swap. The visible label names the
+// theme the click switches TO, so both renderings ship in the markup and CSS
+// picks one; no client-side translation lookup is involved.
+// Safe to include more than once per page (e.g. header + footer): the
+// button is marked with a data attribute, not a unique id, and a single
+// delegated click listener handles every instance.
+import { defaultLocale, isLocale } from "../i18n/config";
+import { getTranslations } from "../i18n/utils";
+
+const rawLocale = Astro.currentLocale ?? defaultLocale;
+const locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
+const t = getTranslations(locale);
+---
+
 <button
-  id="theme-toggle"
   type="button"
-  class="cursor-pointer text-sm transition-colors"
+  data-theme-toggle
+  class="inline-flex min-h-11 min-w-11 cursor-pointer items-center justify-center px-2 text-sm whitespace-nowrap transition-colors"
   style="color: var(--muted-foreground)"
-  aria-label="Toggle theme"
+  aria-label={t("appearance.toggle")}
 >
-  <span class="dark-hidden">Dark</span>
-  <span class="light-hidden">Light</span>
+  <span class="dark-hidden">{t("appearance.dark")}</span>
+  <span class="light-hidden">{t("appearance.light")}</span>
 </button>
 
 <style>
@@ -21,16 +32,23 @@
 </style>
 
 <script is:inline>
-  document.querySelector("#theme-toggle").addEventListener("click", () => {
-    const d = document.documentElement.classList;
-    const isDark = d.contains("dark");
-    const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    d.toggle("dark", !isDark);
-    // If toggling back to what the system prefers, clear the override
-    if ((!isDark && systemDark) || (isDark && !systemDark)) {
-      localStorage.removeItem("theme");
-    } else {
-      localStorage.setItem("theme", isDark ? "light" : "dark");
-    }
-  });
+  // Delegated + guarded so multiple toggles on one page bind exactly one
+  // listener, and repeated component includes don't double-bind.
+  if (!window.__themeToggleBound) {
+    window.__themeToggleBound = true;
+    document.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-theme-toggle]");
+      if (!btn) {return;}
+      const d = document.documentElement.classList;
+      const isDark = d.contains("dark");
+      const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      d.toggle("dark", !isDark);
+      // If toggling back to what the system prefers, clear the override
+      if ((!isDark && systemDark) || (isDark && !systemDark)) {
+        localStorage.removeItem("theme");
+      } else {
+        localStorage.setItem("theme", isDark ? "light" : "dark");
+      }
+    });
+  }
 </script>

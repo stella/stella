@@ -1,0 +1,128 @@
+{
+  "duplicatesCommon": [],
+  "duplicateValues": [
+    "demo.matters",
+    "demo.status",
+    "footer.agent",
+    "footer.anonymization",
+    "footer.editor",
+    "footer.publicData",
+    "footer.status",
+    "footer.templates",
+    "footer.workspace",
+    "nav.pillars.workspace",
+    "nav.products.agent.eyebrow",
+    "nav.products.anonymization.eyebrow",
+    "nav.products.editor.eyebrow",
+    "nav.products.public-data.eyebrow",
+    "nav.products.templates.eyebrow",
+    "nav.products.workspace.eyebrow",
+    "nav.products.workspace.title",
+    "products.cli-mcp.adjacent.0.body",
+    "products.workspace.capabilities.0.title",
+    "story.agentEyebrow",
+    "story.workspaceEyebrow"
+  ],
+  "identicalToSource": {
+    "demo.documents": [
+      "fr"
+    ],
+    "demo.notes": [
+      "fr"
+    ],
+    "demo.source": [
+      "fr"
+    ],
+    "demo.sources": [
+      "fr"
+    ],
+    "demo.status": [
+      "de",
+      "pl",
+      "pt-BR"
+    ],
+    "footer.agent": [
+      "cs",
+      "sk"
+    ],
+    "footer.documentation": [
+      "fr"
+    ],
+    "footer.editor": [
+      "cs",
+      "de",
+      "es",
+      "pt-BR",
+      "sk"
+    ],
+    "footer.legal": [
+      "es"
+    ],
+    "footer.press": [
+      "et"
+    ],
+    "footer.status": [
+      "de",
+      "pl",
+      "pt-BR"
+    ],
+    "nav.beta": [
+      "cs",
+      "de",
+      "es",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "nav.blog": [
+      "cs",
+      "de",
+      "es",
+      "fr",
+      "hu",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "nav.pillars.data": [
+      "cs"
+    ],
+    "nav.products.agent.eyebrow": [
+      "cs",
+      "sk"
+    ],
+    "nav.products.cli-mcp.eyebrow": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "nav.products.editor.eyebrow": [
+      "cs",
+      "de",
+      "es",
+      "pt-BR",
+      "sk"
+    ],
+    "story.agentEyebrow": [
+      "cs",
+      "sk"
+    ],
+    "story.proofOpenSourceTitle": [
+      "cs",
+      "fr",
+      "pl",
+      "sk"
+    ]
+  }
+}

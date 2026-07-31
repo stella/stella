@@ -280,14 +280,14 @@
       "court": "Bíróság"
     },
     "decisionNotFound": "A határozat nem található",
-    "emptyState": "Nem található határozat. Adjon meg egy forrást, és futtasson szinkronizálást a joggyakorlat importálásához.",
+    "emptyState": "Nem található határozat. Adjon meg egy forrást, és futtasson szinkronizálást az ítélkezési gyakorlat importálásához.",
     "filters": {
       "court": "Bíróság",
       "searchPlaceholder": "Keresés ügyszám alapján..."
     },
     "loadingMore": "Betöltés folyamatban...",
     "seo": {
-      "browse": "Jogesetek böngészése",
+      "browse": "Ítélkezési gyakorlat böngészése",
       "countries": "Országok",
       "courts": "Bíróságok",
       "years": "Évek"
@@ -803,7 +803,7 @@
     "back": "Vissza",
     "cancel": "Mégse",
     "captions": "Feliratok",
-    "caseLaw": "Joggyakorlat",
+    "caseLaw": "Ítélkezési gyakorlat",
     "category": "Kategória",
     "categoryName": "Kategória neve",
     "changeColor": "Szín módosítása",
@@ -2006,7 +2006,7 @@
     },
     "sections": {
       "caseLaw": {
-        "description": "Bírósági határozatok és joggyakorlati adatbázis"
+        "description": "Bírósági határozatok és ítélkezési gyakorlat adatbázisa"
       },
       "clauses": {
         "description": "Újrafelhasználható mintakikötések"
@@ -2384,7 +2384,7 @@
   "settings": {
     "account": {
       "beta": "Béta funkciók",
-      "betaCaseLawDescription": "Nyilvános joggyakorlat-keresés és -olvasó megjelenítése az oldalsávban",
+      "betaCaseLawDescription": "A nyilvános ítélkezési gyakorlat keresőjének és olvasójának megjelenítése az oldalsávban",
       "betaDescription": "Próbálja ki a még fejlesztés alatt álló funkciókat",
       "betaTimeBillingDescription": "Időkövetés, számlák és költségek megjelenítése",
       "confirmDelete": "Fiók törlésének megerősítése",
@@ -3632,7 +3632,7 @@
       "exportXlsx": "XLSX exportálása",
       "fields": "Mezők:",
       "fieldsSelected": "{count, plural, one {# kiválasztva} other {# kiválasztva}}",
-      "filter": "Filter",
+      "filter": "Szűrés",
       "filterByPlaceholder": "Filter by…",
       "filtersWithCount": "{count, plural, one {# filter} other {# filters}}",
       "groupBy": "Csoportosítás:",

@@ -1676,7 +1676,7 @@
       "unavailable": "Viidatud sait ei luba turvalist eelvaadet. Kui tööriist tagastas dokumendi teksti, kuvatakse see siin; muul juhul avage originaal."
     },
     "facet": {
-      "anonymization": "Anonüümistamine",
+      "anonymization": "Anonüümimine",
       "previewInFullViewToast": "Eelvaade on siin põhivaade. Klõpsa minimeerimisnuppu, et näha seda metaandmete kõrval."
     },
     "hidePane": "Peida paneel",
@@ -2497,7 +2497,7 @@
         "labelPickerEmpty": "Sobivat tüüpi pole.",
         "labelPickerPlaceholder": "Tüüp",
         "termAddedToast": "„{value}“ lisati meeskonna keelduloendisse.",
-        "title": "Anonüümistamine"
+        "title": "Anonüümimine"
       },
       "auditLogs": "Tegevuslogid",
       "auditLogsAction": "Tegevus",
@@ -3632,7 +3632,7 @@
       "exportXlsx": "Ekspordi XLSX",
       "fields": "Väljad:",
       "fieldsSelected": "{count, plural, one {# valitud} other {# valitud}}",
-      "filter": "Filter",
+      "filter": "Filtreeri",
       "filterByPlaceholder": "Filter by…",
       "filtersWithCount": "{count, plural, one {# filter} other {# filters}}",
       "groupBy": "Rühmita:",

@@ -172,10 +172,33 @@ export const buildChatAnonPipelineConfig = ({
   hasGazetteer,
   locale,
   workspaceId,
+  enableDenyList = false,
+  denyListCountries,
+  standaloneStreetDetection,
 }: {
   hasGazetteer: boolean;
   locale?: string | undefined;
   workspaceId: string;
+  /**
+   * Opt in to the deny-list detection layer (Places, orgs, courts,
+   * …). Off by default: the chat→AI path stays light (names + regex
+   * + coreference + legal-forms) and keeps low-sensitivity context
+   * like city names. Enable it — together with the matching
+   * dictionaries — when the caller wants place/deny-list coverage,
+   * e.g. a capability showcase.
+   */
+  enableDenyList?: boolean | undefined;
+  /**
+   * Country codes whose deny-list/city dictionaries the caller has
+   * loaded. Only meaningful when `enableDenyList` is on.
+   */
+  denyListCountries?: readonly string[] | undefined;
+  /**
+   * Opt in to detecting a street with a house number even when no
+   * known city anchors it ("14 Rue de la Paix"). Off by default —
+   * mirrors the engine's own default.
+   */
+  standaloneStreetDetection?: PipelineConfig["standaloneStreetDetection"];
 }): PipelineConfig => {
   const nameCorpusLanguage = normalizeChatAnonLocaleLanguage(locale);
   const config: PipelineConfig = {
@@ -183,7 +206,7 @@ export const buildChatAnonPipelineConfig = ({
     enableTriggerPhrases: true,
     enableRegex: true,
     enableNameCorpus: true,
-    enableDenyList: false,
+    enableDenyList,
     enableGazetteer: hasGazetteer,
     enableConfidenceBoost: false,
     enableCoreference: true,
@@ -193,6 +216,12 @@ export const buildChatAnonPipelineConfig = ({
   };
   if (nameCorpusLanguage !== null) {
     config.nameCorpusLanguages = [nameCorpusLanguage];
+  }
+  if (denyListCountries !== undefined && denyListCountries.length > 0) {
+    config.denyListCountries = [...denyListCountries];
+  }
+  if (standaloneStreetDetection !== undefined) {
+    config.standaloneStreetDetection = standaloneStreetDetection;
   }
   return config;
 };
@@ -371,6 +400,9 @@ export const runChatAnonPipeline = async ({
   text,
   locale,
   workspaceId,
+  enableDenyList,
+  denyListCountries,
+  standaloneStreetDetection,
 }: {
   runtime: ChatAnonRuntime;
   dictionaries: NonNullable<PipelineConfig["dictionaries"]>;
@@ -379,6 +411,12 @@ export const runChatAnonPipeline = async ({
   workspaceId: string;
   gazetteerEntries?: GazetteerEntry[] | undefined;
   context?: PipelineContext | undefined;
+  /** Opt in to deny-list detection; see {@link buildChatAnonPipelineConfig}. */
+  enableDenyList?: boolean | undefined;
+  /** Country codes whose deny-list/city dictionaries are loaded. */
+  denyListCountries?: readonly string[] | undefined;
+  /** Opt-in standalone street detection; see {@link buildChatAnonPipelineConfig}. */
+  standaloneStreetDetection?: PipelineConfig["standaloneStreetDetection"];
   /**
    * Surface forms the caller has marked as never-anonymize. After
    * the combined detect+redact call, any entity whose normalized
@@ -403,6 +441,9 @@ export const runChatAnonPipeline = async ({
       hasGazetteer: gazetteerEntries.length > 0,
       locale,
       workspaceId,
+      enableDenyList,
+      denyListCountries,
+      standaloneStreetDetection,
     }),
     dictionaries,
   };

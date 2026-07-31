@@ -1,42 +1,207 @@
 ---
 import "../styles/global.css";
+import { ClientRouter } from "astro:transitions";
+import {
+  defaultLocale,
+  isLocale,
+  locales,
+  localeCodes,
+  type Locale,
+} from "../i18n/config";
+import { catalogs, getAlternates, stripLocale } from "../i18n/utils";
+import SiteHeader from "../components/SiteHeader.astro";
+
+/** One ancestor on the trail from the site root to the current page. */
+type BreadcrumbAncestor = { name: string; path: string };
+
+/**
+ * A page's position in the site hierarchy. The current page's own crumb takes
+ * its URL from the canonical rather than a hand-written path, so the trail
+ * cannot drift from the URL the page actually canonicalizes to; only its
+ * label is supplied. Ancestors and label travel together in one object because
+ * neither is meaningful alone.
+ */
+type BreadcrumbTrail = {
+  ancestors: readonly BreadcrumbAncestor[];
+  name: string;
+};
 
 type Props = {
   title?: string;
   description?: string;
   socialImage?: string;
   socialImageAlt?: string;
+  header?: boolean;
+  headerOverlay?: boolean;
+  current?: string;
+  translationScope?: "all-locales" | "source-only";
+  /** Crawler indexing directive; "noindex" for thin or duplicate pages. */
+  robots?: "index" | "noindex";
+  /** Canonical path override for pages whose canonical is not themselves. */
+  canonicalPath?: string;
+  /** Open Graph object type; blog posts pass "article". */
+  ogType?: "website" | "article";
+  /** ISO publication timestamp; emits article:published_time for articles. */
+  publishedTime?: string;
+  /**
+   * Position in the site hierarchy; emits BreadcrumbList structured data.
+   * Omit on top-level pages, which have no trail to describe.
+   */
+  breadcrumbTrail?: BreadcrumbTrail;
 };
+
+// The product's own description, distinct from the per-page meta description.
+// Every page emits the same `#software` node, so feeding it the page
+// description would give one @id as many conflicting values as there are
+// pages. Doubles as the default meta description on pages that pass none.
+// Read from the source catalog rather than restated here: it was a verbatim
+// copy of `en.meta.homeDescription`, which is the kind of duplicate that
+// survives one edit and not the second.
+const PRODUCT_DESCRIPTION = catalogs.en.meta.homeDescription;
 
 const {
   title = "stella | open source legal workspace",
-  description = "Open source legal workspace for documents, matters, review, and research. Self-host or use our cloud. Usage-based AI, no lock-in.",
+  description = PRODUCT_DESCRIPTION,
   socialImage = "/images/og-card.png",
   socialImageAlt = description,
+  header = true,
+  headerOverlay = false,
+  current = undefined,
+  translationScope = "source-only",
+  robots = "index",
+  canonicalPath = undefined,
+  ogType = "website",
+  publishedTime = undefined,
+  breadcrumbTrail = undefined,
 } = Astro.props;
 
-const canonicalUrl = new URL(Astro.url.pathname, Astro.site);
+const robotsContent =
+  robots === "noindex"
+    ? "noindex"
+    : "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1";
+const canonicalUrl = new URL(canonicalPath ?? Astro.url.pathname, Astro.site);
+// A noindex page has no index entry to consolidate onto, so it emits a
+// canonical only when it explicitly points at another page (the changelog
+// release stubs). The 404 would otherwise self-canonicalize whichever missing
+// URL the host served it for.
+const canonicalHref =
+  robots === "index" || canonicalPath ? canonicalUrl.href : undefined;
 const socialImageUrl = new URL(socialImage, Astro.site);
+
+const rawLocale = Astro.currentLocale ?? defaultLocale;
+const locale: Locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
+const localeConfig = locales[locale];
+const basePath = stripLocale(Astro.url.pathname);
+const hasLocalizedAlternates = translationScope === "all-locales";
+const alternates =
+  Astro.site && hasLocalizedAlternates
+    ? getAlternates(basePath, Astro.site)
+    : [];
+const ogAlternates = hasLocalizedAlternates
+  ? localeCodes
+      .filter((code) => code !== locale)
+      .map((code) => locales[code].og)
+  : [];
+
+// Site-wide structured data. Stable @ids let every page contribute to one
+// entity graph instead of restating standalone copies, so node values must be
+// page-independent (see PRODUCT_DESCRIPTION). No WebSite SearchAction: the
+// landing has no site search, and Google retired the sitelinks search box.
+const organizationId = new URL("#organization", Astro.site).href;
+const websiteId = new URL("#website", Astro.site).href;
+const softwareId = new URL("#software", Astro.site).href;
+const siteUrl = new URL("/", Astro.site).href;
+
+const breadcrumbNode = breadcrumbTrail
+  ? {
+      "@type": "BreadcrumbList",
+      "@id": `${canonicalUrl.href}#breadcrumb`,
+      itemListElement: [
+        ...breadcrumbTrail.ancestors.map((ancestor) => ({
+          name: ancestor.name,
+          item: new URL(ancestor.path, Astro.site).href,
+        })),
+        { name: breadcrumbTrail.name, item: canonicalUrl.href },
+      ].map((crumb, index) => ({
+        "@type": "ListItem",
+        position: index + 1,
+        name: crumb.name,
+        item: crumb.item,
+      })),
+    }
+  : undefined;
+
+const structuredData = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": organizationId,
+      name: "stella labs, s.r.o.",
+      url: siteUrl,
+      logo: {
+        "@type": "ImageObject",
+        url: new URL("/images/stella-logo.svg", Astro.site).href,
+      },
+      sameAs: [
+        "https://github.com/stella/stella",
+        "https://x.com/stll_app",
+        "https://www.linkedin.com/company/stella-app",
+      ],
+    },
+    {
+      "@type": "WebSite",
+      "@id": websiteId,
+      name: "stella",
+      url: siteUrl,
+      publisher: { "@id": organizationId },
+    },
+    {
+      "@type": "SoftwareApplication",
+      "@id": softwareId,
+      name: "stella",
+      applicationCategory: "BusinessApplication",
+      operatingSystem: "Web",
+      description: PRODUCT_DESCRIPTION,
+      url: siteUrl,
+      publisher: { "@id": organizationId },
+    },
+    ...(breadcrumbNode ? [breadcrumbNode] : []),
+  ],
+};
 ---
 
-<!--
+{/*
   stll.app — stella landing page
--->
+*/}
 <!doctype html>
-<html lang="en" class="scroll-smooth">
+<html lang={localeConfig.hreflang} dir={localeConfig.dir} class="scroll-smooth">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content={description} />
-    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <meta name="robots" content={robotsContent} />
     <title>{title}</title>
 
-    <!-- Canonical -->
-    <link rel="canonical" href={canonicalUrl.href} />
+    {/* Canonical */}
+    {canonicalHref && <link rel="canonical" href={canonicalHref} />}
 
-    <!-- Open Graph -->
-    <meta property="og:type" content="website" />
-    <meta property="og:locale" content="en_US" />
+    {/* hreflang alternates for multilingual SEO */}
+    {
+      alternates.map((alt) => (
+        <link rel="alternate" hreflang={alt.hreflang} href={alt.href} />
+      ))
+    }
+
+    {/* Open Graph */}
+    <meta property="og:type" content={ogType} />
+    {
+      publishedTime && (
+        <meta property="article:published_time" content={publishedTime} />
+      )
+    }
+    <meta property="og:locale" content={localeConfig.og} />
+    {ogAlternates.map((og) => <meta property="og:locale:alternate" content={og} />)}
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:site_name" content="stella" />
@@ -45,8 +210,9 @@ const socialImageUrl = new URL(socialImage, Astro.site);
     <meta property="og:image:type" content="image/png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content={socialImageAlt} />
 
-    <!-- Twitter -->
+    {/* Twitter */}
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@stll_app" />
     <meta name="twitter:title" content={title} />
@@ -54,76 +220,103 @@ const socialImageUrl = new URL(socialImage, Astro.site);
     <meta name="twitter:image" content={socialImageUrl.href} />
     <meta name="twitter:image:alt" content={socialImageAlt} />
 
-    <!-- Favicons -->
+    {/* Favicons */}
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
 
-    <!-- Fonts: self-hosted, no external requests -->
+    {/* Fonts: self-hosted, no external requests */}
     <link rel="preload" href="/fonts/CabinetGrotesk-Variable.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/fonts/dm-sans-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
 
-    <!--
+    {/*
       Reveal capability gate. The [data-reveal] hidden initial state in
       global.css is scoped under .js-reveal so it only applies when JS
       is available. Without JS, reveal content renders at its natural
       visible state instead of being trapped at opacity 0.
-    -->
+    */}
     <script is:inline>
       document.documentElement.classList.add("js-reveal");
     </script>
 
-    <!-- Theme: follow system preference, allow manual override -->
+    {/* Theme: follow system preference, allow manual override */}
     <script is:inline>
       (function() {
         const t = localStorage.getItem("theme");
-        const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        const systemTheme = window.matchMedia("(prefers-color-scheme: dark)");
+        const prefersDark = systemTheme.matches;
         if (t === "dark" || (!t && prefersDark)) {
           document.documentElement.classList.add("dark");
         }
         // When no manual override, follow system changes in real time
-        window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (e) => {
-          if (localStorage.getItem("theme")) {return;}
+        if (window.__systemThemeBound) {
+          return;
+        }
+        window.__systemThemeBound = true;
+        systemTheme.addEventListener("change", (e) => {
+          if (localStorage.getItem("theme")) {
+            return;
+          }
           document.documentElement.classList.toggle("dark", e.matches);
         });
       })();
     </script>
 
-    <!-- Structured data -->
-    <script is:inline type="application/ld+json" set:html={JSON.stringify({
-      "@context": "https://schema.org",
-      "@graph": [
-        {
-          "@type": "Organization",
-          "@id": new URL("#organization", Astro.site).href,
-          "name": "stella labs, s.r.o.",
-          "url": new URL("/", Astro.site).href,
-          "logo": {
-            "@type": "ImageObject",
-            "url": new URL("/images/stella-logo.svg", Astro.site).href,
-          },
-          "sameAs": [
-            "https://github.com/stella/stella",
-            "https://x.com/stll_app",
-            "https://www.linkedin.com/company/stella-app",
-          ],
-        },
-        {
-          "@type": "SoftwareApplication",
-          "@id": new URL("#software", Astro.site).href,
-          "name": "stella",
-          "applicationCategory": "BusinessApplication",
-          "operatingSystem": "Web",
-          "description": description,
-          "url": new URL("/", Astro.site).href,
-          "offers": {
-            "@type": "Offer",
-            "price": "0",
-            "priceCurrency": "USD",
-          },
-          "publisher": { "@id": new URL("#organization", Astro.site).href },
-        },
-      ],
-    })} />
+    {/*
+      Re-apply theme + reveal gate to the incoming document before it is
+      swapped in, so the crossfade never shows a wrong-theme flash.
+    */}
+    <script is:inline>
+      if (!window.__themeSwapBound) {
+        window.__themeSwapBound = true;
+        document.addEventListener("astro:before-swap", (e) => {
+          const t = localStorage.getItem("theme");
+          const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+          const dark = t === "dark" || (!t && prefersDark);
+          e.newDocument.documentElement.classList.toggle("dark", dark);
+          e.newDocument.documentElement.classList.add("js-reveal");
+        });
+      }
+    </script>
+
+    {/*
+      Dev-only stylesheet persistence across ClientRouter swaps. In dev,
+      Astro inlines every Vite-managed stylesheet into the served HTML as
+      <style data-vite-dev-id> snapshots, while Vite keeps the live copies
+      in this document HMR-synced (Tailwind utilities for hydrated islands
+      arrive after the server snapshot). Astro's head swap only persists a
+      live <style> when the incoming copy is byte-identical, so a stale
+      server snapshot would replace the fresh element, detach it from HMR,
+      and leave islands unstyled until the next file edit. Copying the live
+      content onto the incoming element makes the swap recognize and keep
+      the live element (content and HMR registration survive). No-op in
+      production: styles ship as <link> tags persisted by href, and
+      data-vite-dev-id does not exist.
+    */}
+    <script is:inline>
+      if (!window.__devStyleSwapBound) {
+        window.__devStyleSwapBound = true;
+        document.addEventListener("astro:before-swap", (e) => {
+          for (const live of document.querySelectorAll("head style[data-vite-dev-id]")) {
+            const incoming = e.newDocument.head.querySelector(
+              `style[data-vite-dev-id="${CSS.escape(live.dataset.viteDevId)}"]`,
+            );
+            if (incoming) {
+              incoming.textContent = live.textContent;
+            }
+          }
+        });
+      }
+    </script>
+
+    {/* Client-side routing: crossfade between pages instead of full reloads. */}
+    <ClientRouter />
+
+    {/* Structured data */}
+    <script
+      is:inline
+      type="application/ld+json"
+      set:html={JSON.stringify(structuredData)}
+    />
 
     <style is:global>
       /* Cabinet Grotesk — display headings */
@@ -194,12 +387,13 @@ const socialImageUrl = new URL(socialImage, Astro.site);
     </style>
   </head>
   <body class="antialiased">
+    {header && <SiteHeader current={current} overlay={headerOverlay} />}
     <slot />
 
-    <!--
+    {/*
       Disable transitions on first load so the theme
       applies instantly, then enable after paint.
-    -->
+    */}
     <script is:inline>
       document.documentElement.classList.add("no-transitions");
       requestAnimationFrame(() => {
@@ -216,21 +410,97 @@ const socialImageUrl = new URL(socialImage, Astro.site);
     */}
     <script is:inline>
       (function () {
-        const targets = document.querySelectorAll("[data-reveal]");
-        if (!targets.length) {return;}
-        if (typeof IntersectionObserver === "undefined") {
-          for (const el of targets) { el.dataset.inView = ""; }
+        if (window.__revealBound) {
           return;
         }
-        const io = new IntersectionObserver((entries) => {
-          for (const entry of entries) {
-            if (!entry.isIntersecting) {continue;}
-            entry.target.dataset.inView = "";
-            io.unobserve(entry.target);
+        window.__revealBound = true;
+
+        let observer = null;
+        let pendingReveal = null;
+
+        function revealCleanup() {
+          if (pendingReveal !== null) {
+            clearTimeout(pendingReveal);
+            pendingReveal = null;
           }
-        }, { rootMargin: "0px 0px -8% 0px", threshold: 0.05 });
-        for (const el of targets) { io.observe(el); }
+          if (observer) {
+            observer.disconnect();
+            observer = null;
+          }
+        }
+
+        function revealSetup() {
+          revealCleanup();
+          const targets = document.querySelectorAll("[data-reveal]");
+          if (!targets.length) {
+            return;
+          }
+          const reveal = (el) => { el.dataset.inView = ""; };
+          if (typeof IntersectionObserver === "undefined") {
+            for (const el of targets) {
+              reveal(el);
+            }
+            return;
+          }
+          observer = new IntersectionObserver((entries) => {
+            for (const entry of entries) {
+              if (!entry.isIntersecting) {
+                continue;
+              }
+              reveal(entry.target);
+              observer?.unobserve(entry.target);
+            }
+          }, { rootMargin: "0px 0px -8% 0px", threshold: 0.05 });
+          // Reveal whatever is already in (or above) the viewport on load so the
+          // hero never depends on the observer firing; defer the rest to the IO
+          // for scroll reveal. Fixes a cold-load race where above-the-fold
+          // [data-reveal] elements stayed at opacity 0. setTimeout (not
+          // requestAnimationFrame) because rAF is fully paused in a backgrounded
+          // tab, which would leave the hero invisible until the tab is focused;
+          // the 0ms task still yields a paint first, so the transition animates.
+          pendingReveal = setTimeout(() => {
+            pendingReveal = null;
+            for (const el of targets) {
+              if (!el.isConnected) {
+                continue;
+              }
+              if (el.getBoundingClientRect().top < window.innerHeight) {
+                reveal(el);
+              } else {
+                observer?.observe(el);
+              }
+            }
+          }, 0);
+        }
+
+        // Astro's history restoration can paint the swapped document before
+        // the page-load task above runs. Reveal the new viewport synchronously
+        // after the swap so Back/Forward never leaves the hero in its hidden
+        // entrance state; the normal setup still observes everything below it.
+        function revealViewportAfterSwap() {
+          document.documentElement.classList.add("reveal-without-motion");
+          for (const el of document.querySelectorAll("[data-reveal]")) {
+            if (el.getBoundingClientRect().top < window.innerHeight) {
+              el.dataset.inView = "";
+            }
+          }
+          setTimeout(() => {
+            document.documentElement.classList.remove("reveal-without-motion");
+          }, 0);
+        }
+
+        document.addEventListener("astro:page-load", revealSetup);
+        document.addEventListener("astro:after-swap", revealViewportAfterSwap);
+        document.addEventListener("astro:before-swap", revealCleanup);
       })();
+    </script>
+
+    <script>
+      import { initializePageGradients } from "../lib/animated-gradient";
+      import { initializeThemeImages } from "../lib/theme-images";
+
+      document.addEventListener("astro:page-load", initializePageGradients);
+      document.addEventListener("astro:page-load", initializeThemeImages);
     </script>
   </body>
 </html>

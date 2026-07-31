@@ -19,6 +19,10 @@
     "i18n:sync": "bun ../../packages/scripts/src/i18n-check.ts src/i18n/langs --sync && bun ../../packages/scripts/src/i18n-typegen.ts src/i18n/langs && bun ../../packages/scripts/src/glossary-gen.ts src/i18n",
     "test": "bun test --path-ignore-patterns='e2e/**'",
     "test:e2e": "playwright test --config e2e/playwright.config.ts",
+    "test:e2e:marketing": "playwright test --config e2e/playwright.marketing.config.ts --project app",
+    "test:e2e:marketing:update": "playwright test --config e2e/playwright.marketing.config.ts --project app --update-snapshots",
+    "test:e2e:landing": "playwright test --config e2e/playwright.marketing.config.ts --project landing",
+    "capture:product-story": "bun e2e/marketing/record-product-story.ts",
     "test:e2e:staging": "playwright test --config e2e/playwright.staging.config.ts",
     "test:e2e:ui": "playwright test --config e2e/playwright.config.ts --ui"
   },
@@ -59,6 +63,7 @@
     "@stll/text-normalize": "workspace:*",
     "@stll/time": "workspace:*",
     "@stll/ui": "workspace:*",
+    "@stll/workspace-ui": "workspace:*",
     "@streamdown/cjk": "^1.0.2",
     "@streamdown/math": "^1.0.2",
     "@streamdown/mermaid": "^1.0.2",

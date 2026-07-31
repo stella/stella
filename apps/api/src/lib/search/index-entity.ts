@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
 import { entities } from "@/api/db/schema";
@@ -92,6 +92,27 @@ const extractFieldText = (content: FieldContent): string => {
 const buildSearchDocument = async (
   entityId: SafeId<"entity">,
 ): Promise<BuiltSearchDocument | null> => {
+  // The CAS token must be rendered to text by Postgres: a JS Date round-trip
+  // truncates microseconds and the upsert's compare-at-full-precision guard
+  // would then never match. A core select is used because the relational
+  // builder's `extras` emits the column into SQL but drops it from the mapped
+  // row (and its object form emits an unaliased reference the database
+  // rejects). Reading the token in a separate query is safe: the upsert
+  // re-checks version and token under FOR UPDATE, so a concurrent update
+  // makes the CAS miss and the follow-up index event re-runs the build.
+  const [tokenRow] = await rootDb
+    .select({
+      semanticUpdatedAtToken: sql<TimestampCasToken>`
+        COALESCE(${entities.updatedAt}, ${entities.createdAt})::text
+      `,
+    })
+    .from(entities)
+    .where(eq(entities.id, entityId))
+    .limit(1);
+  if (!tokenRow) {
+    return null;
+  }
+
   const entity = await rootDb.query.entities.findFirst({
     where: { id: { eq: entityId } },
     columns: {
@@ -102,11 +123,6 @@ const buildSearchDocument = async (
       metadata: true,
       createdAt: true,
       updatedAt: true,
-    },
-    extras: {
-      semanticUpdatedAtToken: sql<TimestampCasToken>`
-        COALESCE(${entities.updatedAt}, ${entities.createdAt})::text
-      `.as("semantic_updated_at_token"),
     },
     with: {
       workspace: {
@@ -233,7 +249,7 @@ const buildSearchDocument = async (
     searchableText: fieldTexts.join(" "),
     language,
     sourceVersionId: version.id,
-    semanticUpdatedAtToken: entity.semanticUpdatedAtToken,
+    semanticUpdatedAtToken: tokenRow.semanticUpdatedAtToken,
     updatedAt: entity.updatedAt ?? entity.createdAt,
   };
 };

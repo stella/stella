@@ -1001,7 +1001,7 @@
     "allow": "Povolit",
     "completeSetup": "Dokončit nastavení",
     "defaultClientName": "Aplikace",
-    "description": "{clientName} žádá o přístup k vašemu pracovnímu prostoru ve stelle",
+    "description": "{clientName} žádá o přístup k vašemu pracovnímu prostoru stella",
     "error": "Něco se pokazilo. Zkuste to prosím znovu.",
     "missingJurisdictions": "Vaše organizace stella zatím nemá nastavené jurisdikce, ve kterých působí. Dokud nastavení nedokončíte, nebudou některé nástroje závislé na jurisdikci dostupné.",
     "permissions": "Tím aplikaci umožníte:",
@@ -2713,7 +2713,7 @@
     "status": "Stav",
     "statusValues": {
       "cancelled": "Zrušený",
-      "done": "Hotovo",
+      "done": "Hotový",
       "in_progress": "Rozpracovaný",
       "in_review": "V revizi",
       "open": "Otevřený"
@@ -3632,7 +3632,7 @@
       "exportXlsx": "Exportovat XLSX",
       "fields": "Pole:",
       "fieldsSelected": "{count, plural, one {# vybraný} few {# vybrané} other {# vybraných}}",
-      "filter": "Filter",
+      "filter": "Filtrovat",
       "filterByPlaceholder": "Filter by…",
       "filtersWithCount": "{count, plural, one {# filter} other {# filters}}",
       "groupBy": "Seskupit podle:",

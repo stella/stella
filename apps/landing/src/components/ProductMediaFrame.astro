@@ -1,0 +1,221 @@
+---
+import { existsSync } from "node:fs";
+import path from "node:path";
+import type { FrameAccent, FrameVariant, ProductMedia } from "../data/products/types";
+import { productStoryThumbnails, resolveSceneWindowLabels } from "../data/product-story";
+import { defaultLocale, isLocale } from "../i18n/config";
+import { getTranslations } from "../i18n/utils";
+import MacWindow from "./MacWindow.astro";
+import MediaSkeleton from "./MediaSkeleton.astro";
+import ThemeImage from "./ThemeImage.astro";
+import { AnonymizeLiveDemo } from "./react/AnonymizeLiveDemo";
+import { EditorLiveDemo } from "./react/EditorLiveDemo";
+import { ProductPreview } from "./react/previews/ProductPreview";
+import { CliMcpPreview } from "./react/previews/CliMcpPreview";
+import { RecordedStellaScene } from "./react/product-story/RecordedStellaScene";
+
+type Props = {
+  media: ProductMedia;
+  compact?: boolean;
+  deferThemeImage?: boolean;
+  thumbnail?: boolean;
+  /**
+   * Frame recipe inputs (kept for call-site/type compatibility only).
+   * Product pages now use the homepage's frameless language: each media
+   * type paints its own window (chrome, border, shadow) and this component
+   * no longer wraps it in a glass ring, so `variant` and `accent` render
+   * nothing here. They stay wired through the data files, `types.ts`, and
+   * every call site for a planned faint background-accent pass; do not
+   * delete them as dead props before that pass lands.
+   */
+  variant?: FrameVariant;
+  accent?: FrameAccent;
+};
+const { media, compact = false, deferThemeImage = false, thumbnail = false } = Astro.props;
+
+// The scene previews below are React islands with no translator; their window
+// handles take accessible names as a prop. Resolved here rather than defaulted
+// in the island, so the /product pages and any localized mount read the same
+// catalog keys.
+const rawLocale = Astro.currentLocale ?? defaultLocale;
+const locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
+const sceneWindowLabels = resolveSceneWindowLabels(getTranslations(locale));
+const aspect = media.aspect ?? "16 / 9";
+
+// A video slot upgrades from skeleton to <video> the moment its file lands in
+// public/. The build's cwd is the Astro project dir (apps/landing), so resolve
+// public assets from there; this runs at build time with no data edits.
+const videoOnDisk = (p: string) => existsSync(path.join(process.cwd(), "public", p));
+const videoReady = media.type === "video" && videoOnDisk(media.src);
+const posterReady = media.type === "video" && media.poster !== undefined && videoOnDisk(media.poster);
+const storyThumbnail = media.type === "story" ? productStoryThumbnails[media.sceneId] : undefined;
+---
+
+<div class="product-media relative" style={`aspect-ratio: ${aspect}`}>
+  {
+    media.type === "preview" && (
+      <div class="absolute inset-0">
+        <ProductPreview client:visible previewKey={media.key} windowLabels={sceneWindowLabels} />
+      </div>
+    )
+  }
+
+  {
+    media.type === "story" && media.variant === "portrait" && !thumbnail && (
+      <div class="absolute inset-0 flex items-center justify-center py-4">
+        {/* Only the editor has a portrait document capture; the media type
+            documents this and the literal keeps the scene union honest. */}
+        <MacWindow class="portrait-doc-window" label="stella · Supplier Agreement">
+          <RecordedStellaScene
+            client:visible
+            isActive
+            sceneId="editor"
+            variant="portrait"
+          />
+        </MacWindow>
+      </div>
+    )
+  }
+
+  {
+    media.type === "story" && media.variant !== "portrait" && !thumbnail && !compact && (
+      <div class="absolute inset-0">
+        <CliMcpPreview
+          client:visible
+          sceneId={media.sceneId}
+          showCompanions={media.showCompanions ?? false}
+          sideWindows={media.sideWindows ?? true}
+          windowLabels={sceneWindowLabels}
+        />
+      </div>
+    )
+  }
+
+  {
+    media.type === "story" && media.variant !== "portrait" && !thumbnail && compact && (
+      <div class="absolute inset-0">
+        <CliMcpPreview
+          includeStyles={false}
+          sceneId={media.sceneId}
+          showCompanions={media.showCompanions ?? false}
+          sideWindows={media.sideWindows ?? true}
+          windowLabels={sceneWindowLabels}
+        />
+      </div>
+    )
+  }
+
+  {
+    media.type === "story" && thumbnail && storyThumbnail && (
+      <ThemeImage
+        lightSrc={storyThumbnail.src}
+        darkSrc={storyThumbnail.darkSrc}
+        alt={storyThumbnail.alt}
+        class="h-full w-full rounded-lg border object-cover"
+        style="border-color: color-mix(in srgb, var(--border) 70%, transparent); box-shadow: 0 18px 42px -30px rgba(0, 0, 0, 0.5); object-position: 0% 0%"
+        loading="lazy"
+        decoding="async"
+        defer={deferThemeImage ? "manual" : undefined}
+      />
+    )
+  }
+
+  {
+    media.type === "image" && (
+      <ThemeImage
+        lightSrc={media.src}
+        darkSrc={media.darkSrc}
+        alt={media.alt}
+        class={`h-full w-full border object-cover object-top ${compact ? "rounded-lg" : "rounded-[1.1rem]"}`}
+        style="border-color: color-mix(in srgb, var(--foreground) 11%, transparent); box-shadow: 0 42px 110px -54px rgba(15, 23, 42, 0.5)"
+        loading="lazy"
+        decoding="async"
+        defer={deferThemeImage ? "manual" : undefined}
+      />
+    )
+  }
+
+  {
+    media.type === "video" && videoReady && (
+      <video
+        class={`absolute inset-0 h-full w-full border object-cover ${compact ? "rounded-lg" : "rounded-[1.1rem]"}`}
+        style="border-color: color-mix(in srgb, var(--foreground) 11%, transparent); box-shadow: 0 42px 110px -54px rgba(15, 23, 42, 0.5)"
+        poster={posterReady ? media.poster : undefined}
+        aria-label={media.alt}
+        autoplay
+        muted
+        loop
+        playsinline
+      >
+        <source src={media.src} type="video/mp4" />
+      </video>
+    )
+  }
+
+  {media.type === "video" && !videoReady && <MediaSkeleton note={media.alt} />}
+
+  {media.type === "placeholder" && <MediaSkeleton note={media.note} />}
+
+  {
+    media.type === "live-anonymize" && !thumbnail && (
+      <div class="absolute inset-0">
+        <MacWindow class="h-full" label={media.alt}>
+          <AnonymizeLiveDemo client:visible />
+        </MacWindow>
+      </div>
+    )
+  }
+
+  {
+    media.type === "live-editor" && !thumbnail && (
+      <div class="absolute inset-0">
+        <MacWindow class="h-full" label={media.alt}>
+          <EditorLiveDemo client:only="react" />
+        </MacWindow>
+      </div>
+    )
+  }
+
+  {/* Menu/thumbnail cards can't mount the live islands, so fall back to the
+      product's static capture (the same theme-aware pair used elsewhere). */}
+  {
+    (media.type === "live-anonymize" || media.type === "live-editor") &&
+      thumbnail && (
+        <ThemeImage
+          lightSrc={`/media/products/${media.type === "live-editor" ? "editor" : "anonymization"}.png`}
+          darkSrc={`/media/products/${media.type === "live-editor" ? "editor" : "anonymization"}-dark.png`}
+          alt={media.alt}
+          class="h-full w-full rounded-lg border object-cover"
+          style="border-color: color-mix(in srgb, var(--border) 70%, transparent); box-shadow: 0 18px 42px -30px rgba(0, 0, 0, 0.5); object-position: 0% 0%"
+          loading="lazy"
+          decoding="async"
+          defer={deferThemeImage ? "manual" : undefined}
+        />
+      )
+  }
+</div>
+
+<style>
+  /* Frameless: the wrapper only reserves the aspect ratio and stays visible
+     (no clipping), so every media type's own window shadow can breathe past
+     its box edge, matching HomeProductStory's .story-window. Each branch
+     above supplies its own chrome, border, and shadow (MacWindow, the
+     mac-window scenes in CliMcpPreview, PreviewSurface, or the border+shadow
+     on the plain <img>/<video> element) instead of relying on a shared ring
+     here. */
+  .product-media {
+    overflow: visible;
+  }
+
+  /* Portrait document window: full frame height, width derived from the
+     recording's 0.869 content aspect via the window body, so the Word page
+     renders at its native proportions centred in the wide frame. */
+  .portrait-doc-window {
+    block-size: 100%;
+    max-inline-size: 100%;
+  }
+
+  .portrait-doc-window :global(.macwin-body) {
+    aspect-ratio: 0.869;
+  }
+</style>

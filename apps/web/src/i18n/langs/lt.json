@@ -658,7 +658,7 @@
       "input": "Įvestis",
       "interrupted": "Nutraukta nebaigus",
       "output": "Išvestis",
-      "sourceCode": "Pradinis kodas",
+      "sourceCode": "Pirminis kodas",
       "toggleDetails": "Perjungti detales"
     },
     "unsupportedFileType": "Nepalaikomas failo tipas",
@@ -3632,7 +3632,7 @@
       "exportXlsx": "Eksportuoti XLSX",
       "fields": "Laukai:",
       "fieldsSelected": "{count, plural, one {# pasirinktas} few {# pasirinkti} many {# pasirinktų} other {# pasirinktų}}",
-      "filter": "Filter",
+      "filter": "Filtruoti",
       "filterByPlaceholder": "Filter by…",
       "filtersWithCount": "{count, plural, one {# filter} other {# filters}}",
       "groupBy": "Grupuoti pagal:",

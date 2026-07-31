@@ -264,11 +264,21 @@
     {
       "id": "matter",
       "en": "Matter",
-      "note": "Load-bearing term (the client-engagement workspace); must not drift into synonyms. The internal `workspace` alias means the same thing where user-facing (createNewWorkspace = \"Create new matter\"); render it with the Matter term, not a literal \"workspace\" translation. ar uses ملف (file/dossier); avoid قضية (lawsuit) and مسألة (abstract legal question).",
+      "note": "Load-bearing term (the client-engagement workspace); must not drift into synonyms. The internal `workspace` alias means the same thing where user-facing (createNewWorkspace = \"Create new matter\"); render it with the Matter term, not a literal \"workspace\" translation. ar uses ملف قانوني (legal file/dossier): bare ملف is also the everyday word for a computer file, so labels, pickers, and scope options rendered with it collided with Files; the qualifier carries the concept, and the short form stays only where the sentence already names the matter. Avoid قضية (lawsuit) and مسألة (abstract legal question). cs \"případ\" / sk \"prípad\" are banned in the nominative singular and plural only: those are the forms a label or term takes (a landing nav label had drifted to \"Případy\"), while the oblique forms carry the everyday idiom \"v případě\" (\"in case of\") and would false-fire.",
       "forbidden": {
         "ar": ["قضية", "قضايا", "مسألة", "مسائل"],
-        "cs": ["pracovní prostor"],
-        "sk": ["Vec", "veci", "vecou", "vecí", "veciam", "vecami", "veciach"],
+        "cs": ["pracovní prostor", "případ", "případy"],
+        "sk": [
+          "Vec",
+          "veci",
+          "vecou",
+          "vecí",
+          "veciam",
+          "vecami",
+          "veciach",
+          "prípad",
+          "prípady"
+        ],
         "de": [
           "Sache",
           "Sachen",
@@ -294,7 +304,7 @@
         "fr": ["espace de travail"]
       },
       "translations": {
-        "ar": "ملف",
+        "ar": "ملف قانوني",
         "cs": "Spis",
         "sk": "Spis",
         "pl": "Sprawa",
@@ -573,9 +583,21 @@
     {
       "id": "clause",
       "en": "Clause",
-      "note": "cs uses \"Ustanovení\" / sk \"Ustanovenie\" (the clause library renders as \"Vzorová ustanovení\" / \"Vzorové ustanovenia\"); \"Klauzule\" / \"Klauzula\" and their inflected forms must not be used. ar بند for a generic contract clause; reserve مادة for statutes/codes and شرط for genuinely conditional stipulations.",
+      "note": "cs uses \"Ustanovení\" / sk \"Ustanovenie\" (the clause library renders as \"Vzorová ustanovení\" / \"Vzorové ustanovenia\"); \"Klauzule\" / \"Klauzula\" and their inflected forms must not be used. ar بند for a generic contract clause; reserve مادة for statutes/codes and شرط for genuinely conditional stipulations. lt \"nuostata\" and its inflected forms must not render Clause (the clauses feature says \"sąlyga\"); the ban is scoped to clause strings, so statutory provisions elsewhere may still say nuostata.",
       "forbidden": {
         "ar": ["مادة"],
+        "lt": [
+          "nuostata",
+          "nuostatos",
+          "nuostatai",
+          "nuostatą",
+          "nuostatoje",
+          "nuostatų",
+          "nuostatoms",
+          "nuostatas",
+          "nuostatomis",
+          "nuostatose"
+        ],
         "cs": [
           "klauzule",
           "klauzuli",
@@ -848,6 +870,60 @@
   ],
   "nouns": [
     {
+      "id": "workspace",
+      "en": "Workspace",
+      "note": "\"Workspace\" as product positioning (the category stella belongs to: the landing's identity phrase, the app's own \"your stella workspace\"), NOT the Matter alias — where English \"workspace\" names a matter, the Matter term wins and this concept's bans do not help. Each locale settles one rendering and reuses it; the forms banned here are the near-synonyms the landing had drifted to (cs \"pracovní prostředí\" is Czech for a desktop environment or for workplace conditions, pl \"przestrzeń robocza\"/\"środowisko pracy\", lt \"darbo erdvė\", lv \"darba vide\", hu \"munkatér\"). pt-BR \"ambiente de trabalho\" (a desktop environment, or a physical workplace) is banned now that the app's `consent.description` no longer uses it. Lint-only entry (not tabulated in TERMINOLOGY.md).",
+      "forbidden": {
+        "cs": [
+          "pracovní prostředí",
+          "pracovního prostředí",
+          "pracovnímu prostředí",
+          "pracovním prostředí"
+        ],
+        "pl": [
+          "przestrzeń robocza",
+          "przestrzeń roboczą",
+          "przestrzeni roboczej",
+          "przestrzenią roboczą",
+          "środowisko pracy",
+          "środowiska pracy",
+          "środowisku pracy",
+          "środowiskiem pracy"
+        ],
+        "lt": [
+          "darbo erdvė",
+          "darbo erdvės",
+          "darbo erdvę",
+          "darbo erdve",
+          "darbo erdvei",
+          "darbo erdvėje"
+        ],
+        "lv": [
+          "darba vide",
+          "darba vidi",
+          "darba vides",
+          "darba videi",
+          "darba vidē"
+        ],
+        "hu": ["munkatér", "munkateret", "munkatéren", "munkatere"],
+        "pt-BR": ["ambiente de trabalho"]
+      },
+      "translations": {
+        "ar": "مساحة عمل",
+        "cs": "pracovní prostor",
+        "sk": "pracovný priestor",
+        "pl": "obszar roboczy",
+        "de": "Arbeitsbereich",
+        "et": "tööruum",
+        "hu": "munkaterület",
+        "lt": "darbo sritis",
+        "lv": "darbvieta",
+        "es": "espacio de trabajo",
+        "fr": "espace de travail",
+        "pt-BR": "espaço de trabalho"
+      }
+    },
+    {
       "id": "column",
       "en": "Column",
       "note": "Table/grid/board column. Latvian standardises on `kolonna` (Microsoft lv usage); `sleja` is the print/newspaper-column sense and must not be used for a data-grid column. Lint-only entry (not tabulated in TERMINOLOGY.md).",
@@ -902,6 +978,119 @@
         "es": "Cargando",
         "fr": "Chargement",
         "pt-BR": "Carregando"
+      }
+    },
+    {
+      "id": "theme-dark",
+      "en": "Dark",
+      "note": "Standalone dark-theme label (app `appearance.dark`, landing `appearance.dark`). It names a mode, so every locale uses the platform-conventional ADJECTIVE that agrees with that locale's word for mode/theme, matching Windows and macOS. The abstract noun (`Tma`, `Ciemność`, `Dunkelheit`, `ظلام`) is the wrong reading and is forbidden. Lint-only entry (not tabulated in TERMINOLOGY.md).",
+      "forbidden": {
+        "ar": ["ظلام", "مظلم"],
+        "cs": ["Tma", "Temný"],
+        "sk": ["Tma", "Temný"],
+        "pl": ["Ciemność"],
+        "de": ["Dunkelheit"],
+        "et": ["Pimedus"],
+        "hu": ["Sötétség"],
+        "lt": ["Tamsa"],
+        "lv": ["Tumsa"],
+        "es": ["Oscuridad"],
+        "fr": ["Obscurité"],
+        "pt-BR": ["Escuridão"]
+      },
+      "translations": {
+        "ar": "داكن",
+        "cs": "Tmavý",
+        "sk": "Tmavý",
+        "pl": "Ciemny",
+        "de": "Dunkel",
+        "et": "Tume",
+        "hu": "Sötét",
+        "lt": "Tamsus",
+        "lv": "Tumšs",
+        "es": "Oscuro",
+        "fr": "Sombre",
+        "pt-BR": "Escuro"
+      }
+    },
+    {
+      "id": "theme-light",
+      "en": "Light",
+      "note": "Standalone light-theme label (app `appearance.light`, landing `appearance.light`). Same rule as `theme-dark`: the platform-conventional adjective, never the noun for illumination (`Světlo`, `Licht`, `Lumière`, `ضوء`). Lint-only entry (not tabulated in TERMINOLOGY.md).",
+      "forbidden": {
+        "ar": ["ضوء"],
+        "cs": ["Světlo"],
+        "sk": ["Svetlo"],
+        "pl": ["Światło"],
+        "de": ["Licht"],
+        "et": ["Valgus"],
+        "hu": ["Fény"],
+        "lt": ["Šviesa"],
+        "lv": ["Gaisma"],
+        "es": ["Luz"],
+        "fr": ["Lumière"],
+        "pt-BR": ["Luz"]
+      },
+      "translations": {
+        "ar": "فاتح",
+        "cs": "Světlý",
+        "sk": "Svetlý",
+        "pl": "Jasny",
+        "de": "Hell",
+        "et": "Hele",
+        "hu": "Világos",
+        "lt": "Šviesus",
+        "lv": "Gaišs",
+        "es": "Claro",
+        "fr": "Clair",
+        "pt-BR": "Claro"
+      }
+    },
+    {
+      "id": "self-hosting",
+      "en": "Self-host",
+      "note": "Running stella on infrastructure the customer controls. Each locale settles one rendering: the English loan where that market's practitioners actually write it (cs/sk/pl `self-hosting`, de `Self-Hosting`), the native term where one genuinely won (fr `auto-hebergement`, es `autoalojamiento`, pt-BR `auto-hospedagem`, hu `sajat uzemeltetes`, ar الاستضافة الذاتية), and a descriptive phrase in et/lt/lv, where no native noun is attested and coining one would be an invention. The forbidden forms are the ones that read as a hosting *plan bought from a provider* rather than running the software yourself (cs `vlastni hosting`, sk `vlastny hosting`, pl `hosting wlasny`), plus de `Eigenbetrieb` (a German public-law term for a municipal enterprise) and two unattested coinages (lt `savarankiskas talpinimas`, which appears only in machine-translated affiliate pages, lv `pasmitinasana`). Lint-only entry (not tabulated in TERMINOLOGY.md).",
+      "keyTriggers": ["selfHost"],
+      "forbidden": {
+        "cs": [
+          "vlastní hosting",
+          "vlastního hostingu",
+          "vlastnímu hostingu",
+          "vlastním hostingu"
+        ],
+        "sk": [
+          "vlastný hosting",
+          "vlastného hostingu",
+          "vlastnému hostingu",
+          "vlastnom hostingu"
+        ],
+        "pl": ["hosting własny", "hostingu własnego", "hostingiem własnym"],
+        "de": ["Eigenbetrieb", "Eigenbetriebs", "Eigenbetriebe"],
+        "lt": [
+          "savarankiškas talpinimas",
+          "savarankiško talpinimo",
+          "savarankišką talpinimą"
+        ],
+        "lv": [
+          "pašmitināšana",
+          "pašmitināšanas",
+          "pašmitināšanai",
+          "pašmitināšanu"
+        ]
+      },
+      "translations": {
+        "ar": "الاستضافة الذاتية",
+        "cs": "self-hosting",
+        "sk": "self-hosting",
+        "pl": "self-hosting",
+        "de": "Self-Hosting",
+        "et": "oma serveris",
+        "hu": "saját üzemeltetés",
+        "lt": "savame serveryje",
+        "lv": "savā serverī",
+        "es": "autoalojamiento",
+        "fr": "auto-hébergement",
+        "pt-BR": "auto-hospedagem"
       }
     }
   ]

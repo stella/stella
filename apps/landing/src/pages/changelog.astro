@@ -1,16 +1,31 @@
 ---
 import Base from "../layouts/Base.astro";
-import ThemeToggle from "../components/ThemeToggle.astro";
-import { getChangelogReleases } from "../lib/changelog";
+import { getChangelogReleases, type ChangelogRelease } from "../lib/changelog";
+import { getReleaseKind } from "../lib/changelog-release";
+import LandingFooter from "../components/LandingFooter.astro";
 
 const githubUrl = "https://github.com/stella/stella";
 const releasesUrl = `${githubUrl}/releases`;
-const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug);
+const releases = getChangelogReleases();
+const previewReleaseSlugs = releases.map((release) => release.slug);
+
+// Server-rendered first page of the changelog: real content for crawlers and
+// the no-JS/pre-JS state. The client script below replaces it with the live
+// GitHub feed once fresh data arrives (same page size as the live feed).
+const STATIC_RELEASES_PER_PAGE = 12;
+const staticReleases = releases.slice(0, STATIC_RELEASES_PER_PAGE);
+const releaseUrl = (release: ChangelogRelease) =>
+  `${releasesUrl}/tag/${release.tagName}`;
+const formatReleaseDate = (publishedAt: string) =>
+  new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(
+    new Date(publishedAt),
+  );
 ---
 
 <Base
   title="stella | changelog"
-  description="Latest Stella releases, product changes, fixes, and release notes."
+  description="Latest stella releases, product changes, fixes, and release notes."
+  current="changelog"
 >
   <div class="flex min-h-dvh flex-col">
     <main class="flex-1">
@@ -33,19 +48,6 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
         >
         </div>
 
-        <nav
-          class="relative z-10 mx-auto flex w-full max-w-300 items-center justify-between py-5"
-        >
-          <a href="/" aria-label="stella home">
-            <img
-              src="/images/stella-logo.svg"
-              alt="stella"
-              class="h-6 dark:invert"
-            />
-          </a>
-          <ThemeToggle />
-        </nav>
-
         <div
           class="relative z-10 mx-auto flex w-full max-w-300 flex-1 items-center justify-center py-20"
         >
@@ -63,23 +65,112 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
       <section class="px-6 pb-20 lg:pb-24">
         <div class="mx-auto max-w-5xl">
           <div id="changelog-releases" class="space-y-5" aria-live="polite">
-            <article
-              class="rounded-lg p-6"
-              style="background: var(--card); border: 1px solid var(--border)"
-            >
-              <div class="h-3 w-28 rounded-full" style="background: var(--muted)">
-              </div>
-              <div class="mt-5 h-7 w-48 rounded-full" style="background: var(--muted)">
-              </div>
-              <div class="mt-6 space-y-3">
-                <div class="h-3 w-full rounded-full" style="background: var(--muted)">
-                </div>
-                <div class="h-3 w-5/6 rounded-full" style="background: var(--muted)">
-                </div>
-                <div class="h-3 w-2/3 rounded-full" style="background: var(--muted)">
-                </div>
-              </div>
-            </article>
+            {
+              staticReleases.map((release) => {
+                if (getReleaseKind(release.tagName) === "patch") {
+                  return (
+                    <details
+                      id={release.slug}
+                      class="changelog-entry changelog-patch-release rounded-lg"
+                      data-static-release
+                    >
+                      <summary class="changelog-patch-summary flex min-h-14 cursor-pointer flex-wrap items-center gap-x-4 gap-y-1 px-5 py-3 sm:flex-nowrap sm:px-6">
+                        <span
+                          class="shrink-0 tabular-nums text-sm font-medium"
+                          style="color: var(--muted-foreground)"
+                        >
+                          {release.tagName}
+                        </span>
+                        <h2
+                          class="min-w-0 flex-1 truncate font-display text-base font-medium sm:text-lg"
+                          style="color: var(--foreground)"
+                        >
+                          {release.heading ?? release.displayName}
+                        </h2>
+                        {release.publishedAt && (
+                          <time
+                            datetime={release.publishedAt}
+                            class="shrink-0 text-sm tabular-nums"
+                            style="color: var(--muted-foreground)"
+                          >
+                            {formatReleaseDate(release.publishedAt)}
+                          </time>
+                        )}
+                        <span
+                          class="changelog-patch-marker inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-lg leading-none"
+                          aria-hidden="true"
+                          style="background: var(--muted); color: var(--foreground)"
+                        >
+                          +
+                        </span>
+                      </summary>
+                      <div
+                        class="changelog-body px-5 pb-5 pt-1 sm:px-6"
+                        style="border-top: 1px solid var(--border)"
+                      >
+                        <p>{release.description}</p>
+                        <div class="mt-5 flex flex-wrap items-center gap-3">
+                          <a
+                            href={releaseUrl(release)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="inline-flex h-9 shrink-0 items-center justify-center rounded-[0.625rem] px-3 text-sm font-medium transition-opacity hover:opacity-80 whitespace-nowrap"
+                            style="background: var(--background); border: 1px solid var(--border); color: var(--foreground)"
+                          >
+                            View release on GitHub
+                          </a>
+                        </div>
+                      </div>
+                    </details>
+                  );
+                }
+
+                return (
+                  <article
+                    id={release.slug}
+                    class="changelog-entry changelog-feature-release rounded-lg p-6 sm:p-8"
+                    data-static-release
+                  >
+                    <div
+                      class="flex flex-wrap items-center gap-3 text-sm font-medium"
+                      style="color: var(--muted-foreground)"
+                    >
+                      <h2>
+                        <a
+                          href={releaseUrl(release)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="font-display text-3xl font-medium transition-opacity hover:opacity-70 sm:text-4xl"
+                          style="color: var(--foreground)"
+                        >
+                          {release.heading ?? release.displayName}
+                        </a>
+                      </h2>
+                      {release.publishedAt && (
+                        <time datetime={release.publishedAt}>
+                          {formatReleaseDate(release.publishedAt)}
+                        </time>
+                      )}
+                    </div>
+                    <div class="changelog-body mt-7 space-y-3">
+                      <h3>{release.displayName}</h3>
+                      <p>{release.description}</p>
+                      <div class="mt-5 flex flex-wrap items-center gap-3">
+                        <a
+                          href={releaseUrl(release)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="inline-flex h-9 shrink-0 items-center justify-center rounded-[0.625rem] px-3 text-sm font-medium transition-opacity hover:opacity-80 whitespace-nowrap"
+                          style="background: var(--background); border: 1px solid var(--border); color: var(--foreground)"
+                        >
+                          View release on GitHub
+                        </a>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })
+            }
           </div>
           <nav
             id="changelog-pagination"
@@ -90,12 +181,12 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
 
           <noscript>
             <div
-              class="rounded-lg p-6"
+              class="mt-6 rounded-lg p-6"
               style="background: var(--card); border: 1px solid var(--border)"
             >
               <p class="text-sm leading-[1.8]" style="color: var(--muted-foreground)">
-                JavaScript is required to load the live changelog feed. You can
-                still read every release on
+                Showing the latest releases. The full history and complete
+                release notes are on
                 <a
                   href={releasesUrl}
                   class="font-medium transition-opacity hover:opacity-70"
@@ -109,31 +200,7 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
       </section>
     </main>
 
-    <footer class="relative px-6 py-12" style="border-top: 1px solid var(--border)">
-      <div
-        class="mx-auto flex max-w-300 flex-col items-center justify-between gap-4 text-sm sm:flex-row"
-        style="color: var(--muted-foreground)"
-      >
-        <a href="/imprint" class="transition-opacity hover:opacity-70">
-          stella labs, s.r.o.
-        </a>
-        <nav class="flex flex-wrap items-center justify-center gap-4" aria-label="Footer">
-          <a href="/blog" class="transition-opacity hover:opacity-70">Blog</a>
-          <a href="/changelog" class="transition-opacity hover:opacity-70">Changelog</a>
-          <a href="/security" class="transition-opacity hover:opacity-70">Security</a>
-          <a href="/terms" class="transition-opacity hover:opacity-70">Terms</a>
-          <a href="/imprint" class="transition-opacity hover:opacity-70">Imprint</a>
-          <a href="mailto:contact@stll.app" class="transition-opacity hover:opacity-70">
-            Contact
-          </a>
-        </nav>
-      </div>
-      <div
-        class="pointer-events-none absolute inset-x-0 bottom-0 h-32"
-        style="background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--auth-gradient-end) 42%, transparent))"
-      >
-      </div>
-    </footer>
+    <LandingFooter />
   </div>
 
   <script
@@ -315,10 +382,9 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
     const releasesApiBase = "https://api.github.com/repos/stella/stella/releases";
     const releasesEndpoint =
       `${releasesApiBase}?per_page=${GITHUB_RELEASES_PER_PAGE}`;
-    const releasesContainer = document.querySelector("#changelog-releases");
-    const paginationContainer = document.querySelector("#changelog-pagination");
-    const previewReleaseSlugsElement = document.querySelector("#changelog-preview-release-slugs",
-    );
+    let releasesContainer: HTMLElement | null = null;
+    let paginationContainer: HTMLElement | null = null;
+    let previewReleaseSlugsElement: HTMLElement | null = null;
     const readPreviewReleaseSlugs = () => {
       if (!previewReleaseSlugsElement?.textContent) {
         return [];
@@ -331,19 +397,24 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
 
       return parsed.filter((value): value is string => typeof value === "string");
     };
-    const previewReleaseSlugs = new Set<string>(readPreviewReleaseSlugs());
-
-    let currentPage = (() => {
+    let previewReleaseSlugs = new Set<string>();
+    const readCurrentPage = () => {
       const page = Number(new URLSearchParams(window.location.search).get("page"));
-      if (!Number.isInteger(page) || page < 1) {return 1;}
+      if (!Number.isInteger(page) || page < 1) {
+        return 1;
+      }
       return page;
-    })();
+    };
+    let currentPage = 1;
     let hasNextPage = false;
+    let activeReleaseLoad: AbortController | null = null;
 
     const safeHttpsUrl = (value: string) => {
       try {
         const url = new URL(value);
-        if (url.protocol !== "https:") {return null;}
+        if (url.protocol !== "https:") {
+          return null;
+        }
         return url.href;
       } catch {
         return null;
@@ -446,7 +517,9 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
       for (const block of parseChangelogMarkdown(body)) {
         if (block.type === "video") {
           const safeSrc = safeHttpsUrl(block.src);
-          if (!safeSrc) {continue;}
+          if (!safeSrc) {
+            continue;
+          }
 
           const video = document.createElement("video");
           video.controls = true;
@@ -529,7 +602,9 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
     };
 
     const formatDate = (publishedAt: string | null) => {
-      if (!publishedAt) {return "Unpublished";}
+      if (!publishedAt) {
+        return "Unpublished";
+      }
       return new Intl.DateTimeFormat("en", {
         dateStyle: "medium",
       }).format(new Date(publishedAt));
@@ -727,6 +802,10 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
     };
 
     const updatePageUrl = () => {
+      const isChangelogRoute = /^\/changelog\/?$/u.test(window.location.pathname);
+      if (!releasesContainer?.isConnected || !isChangelogRoute) {
+        return;
+      }
       const url = new URL(window.location.href);
       url.pathname = "/changelog";
       if (currentPage === 1) {
@@ -743,8 +822,11 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
     const buildReleasesUrl = (githubPage: number) =>
       `${releasesEndpoint}&page=${githubPage}`;
 
-    const fetchStellaReleasePage = async () => {
-      const stellaReleaseOffset = (currentPage - 1) * RELEASES_PER_PAGE;
+    const fetchStellaReleasePage = async (
+      page: number,
+      signal: AbortSignal,
+    ) => {
+      const stellaReleaseOffset = (page - 1) * RELEASES_PER_PAGE;
       const stellaReleaseLimit = stellaReleaseOffset + RELEASES_PER_PAGE + 1;
       const stellaReleases: GitHubRelease[] = [];
       let githubPage = 1;
@@ -754,10 +836,13 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
         // eslint-disable-next-line no-await-in-loop -- GitHub pagination is sequential: the next page number and stop condition depend on this page's rel="next" link header, so pages cannot be fetched in parallel
         const response = await fetch(buildReleasesUrl(githubPage), {
           headers: { Accept: "application/vnd.github+json" },
+          signal,
         });
-        if (!response.ok) {return null;}
+        if (!response.ok) {
+          return null;
+        }
 
-        // eslint-disable-next-line no-await-in-loop -- parse this page's body before deciding whether to fetch the next one
+        // eslint-disable-next-line no-await-in-loop -- body of the sequentially fetched page; see above
         const releases = (await response.json()) as GitHubRelease[];
         stellaReleases.push(
           ...releases.filter(
@@ -782,7 +867,9 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
     };
 
     const renderPagination = () => {
-      if (!paginationContainer) {return;}
+      if (!paginationContainer) {
+        return;
+      }
       paginationContainer.replaceChildren();
 
       if (currentPage === 1 && !hasNextPage) {
@@ -801,7 +888,9 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
       previousButton.disabled = currentPage === 1;
       previousButton.textContent = "Previous";
       previousButton.addEventListener("click", () => {
-        if (currentPage === 1) {return;}
+        if (currentPage === 1) {
+          return;
+        }
         currentPage -= 1;
         loadReleases();
       });
@@ -821,7 +910,9 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
       nextButton.disabled = !hasNextPage;
       nextButton.textContent = "Next";
       nextButton.addEventListener("click", () => {
-        if (!hasNextPage) {return;}
+        if (!hasNextPage) {
+          return;
+        }
         currentPage += 1;
         loadReleases();
       });
@@ -832,25 +923,59 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
     };
 
     const loadReleases = async () => {
-      if (!releasesContainer) {return;}
+      const loadContainer = releasesContainer;
+      if (!loadContainer?.isConnected) {
+        return;
+      }
+
+      activeReleaseLoad?.abort();
+      const controller = new AbortController();
+      activeReleaseLoad = controller;
+      const loadPage = currentPage;
+
+      // The server-rendered list is the pre-JS content for page 1: keep it
+      // visible while the live feed loads and only swap once data arrives.
+      // Paginating (or landing on ?page=N) replaces it with the skeleton.
+      const hasStaticList = (container: HTMLElement) =>
+        container.querySelector("[data-static-release]") !== null;
 
       try {
-        releasesContainer.replaceChildren(renderLoading());
+        if (loadPage !== 1 || !hasStaticList(loadContainer)) {
+          loadContainer.replaceChildren(renderLoading());
+        }
 
-        const releasePage = await fetchStellaReleasePage();
+        const releasePage = await fetchStellaReleasePage(
+          loadPage,
+          controller.signal,
+        );
+        if (
+          controller !== activeReleaseLoad ||
+          controller.signal.aborted ||
+          !loadContainer.isConnected ||
+          releasesContainer !== loadContainer ||
+          currentPage !== loadPage
+        ) {
+          return;
+        }
+
         if (!releasePage) {
           hasNextPage = false;
           renderPagination();
-          releasesContainer.replaceChildren(
-            renderMessage("Release notes could not be loaded right now. Read them directly on"),
-          );
+          // With the server-rendered list still up, keep it over an error card.
+          if (!hasStaticList(loadContainer)) {
+            loadContainer.replaceChildren(
+              renderMessage(
+                "Release notes could not be loaded right now. Read them directly on",
+              ),
+            );
+          }
           return;
         }
 
         hasNextPage = releasePage.hasNextPage;
         if (releasePage.releases.length === 0) {
           renderPagination();
-          releasesContainer.replaceChildren(
+          loadContainer.replaceChildren(
             renderMessage("No public releases are published yet. Check"),
           );
           return;
@@ -858,27 +983,48 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
 
         updatePageUrl();
         renderPagination();
-        releasesContainer.replaceChildren(
+        loadContainer.replaceChildren(
           ...releasePage.releases.map(renderRelease),
         );
         scrollToCurrentHash();
       } catch {
+        if (
+          controller !== activeReleaseLoad ||
+          controller.signal.aborted ||
+          !loadContainer.isConnected ||
+          releasesContainer !== loadContainer
+        ) {
+          return;
+        }
+
         hasNextPage = false;
         renderPagination();
-        releasesContainer.replaceChildren(
-          renderMessage("Release notes could not be loaded right now. Read them directly on"),
-        );
+        if (!hasStaticList(loadContainer)) {
+          loadContainer.replaceChildren(
+            renderMessage(
+              "Release notes could not be loaded right now. Read them directly on",
+            ),
+          );
+        }
+      } finally {
+        if (activeReleaseLoad === controller) {
+          activeReleaseLoad = null;
+        }
       }
     };
 
     const scrollToCurrentHash = () => {
       const id = decodeURIComponent(window.location.hash.slice(1));
-      if (!id) {return;}
+      if (!id) {
+        return;
+      }
 
-      const target = document.querySelector<HTMLElement>(`#${CSS.escape(id)}`);
-      if (!target) {return;}
+      const target = document.querySelector(`#${CSS.escape(id)}`);
+      if (!target) {
+        return;
+      }
 
-      let ancestor: HTMLElement | null = target;
+      let ancestor: Element | null = target;
       while (ancestor) {
         if (ancestor instanceof HTMLDetailsElement) {
           ancestor.open = true;
@@ -889,106 +1035,29 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
       target.scrollIntoView({ block: "start" });
     };
 
-    loadReleases();
-
-    const initGradient = async (containerId: string, svgUrl: string) => {
-      const container = document.querySelector(`#${containerId}`);
-      if (!container) {return;}
-
-      const resp = await fetch(svgUrl);
-      if (!resp.ok) {return;}
-      const svg = await resp.text();
-      // safe-html: first-party build-time gradient SVG fetched from the site's own /images/gradients asset, never user content
-      container.innerHTML = svg;
-
-      const svgEl = container.querySelector("svg");
-      if (svgEl) {
-        svgEl.style.width = "100%";
-        svgEl.style.height = "100%";
+    const initializeChangelog = () => {
+      activeReleaseLoad?.abort();
+      activeReleaseLoad = null;
+      releasesContainer = document.querySelector("#changelog-releases");
+      paginationContainer = document.querySelector("#changelog-pagination");
+      previewReleaseSlugsElement = document.querySelector(
+        "#changelog-preview-release-slugs",
+      );
+      if (!releasesContainer) {
+        return;
       }
 
-      const groups = [...container.querySelectorAll<SVGGElement>("svg g")];
-      const group = groups.at(-1) ?? null;
-      const rects = group
-        ? [...group.querySelectorAll<SVGRectElement>("rect")]
-        : [];
-      const filterId =
-        group?.getAttribute("filter")?.match(/url\(#([^)]+)\)/u)?.[1] ?? "";
-      const n = rects.length;
-      if (n === 0) {return;}
-
-      const bases = rects.map((r) => {
-        const gradId = r.getAttribute("fill")?.match(/#(\w+)/u)?.[1];
-        if (!gradId) {return 0.5;}
-        const grad = container.querySelector(`#${gradId}`);
-        if (!grad) {return 0.5;}
-        let max = 0;
-        for (const stop of grad.querySelectorAll("stop")) {
-          max = Math.max(
-            max,
-            Number.parseFloat(stop.getAttribute("stop-opacity") ?? "0"),
-          );
-        }
-        return max;
-      });
-
-      const startTime = performance.now();
-
-      function loop() {
-        const layerEl = document.querySelector(`#${containerId}`);
-        if (layerEl && getComputedStyle(layerEl).opacity === "0") {
-          requestAnimationFrame(loop);
-          return;
-        }
-
-        const t = (performance.now() - startTime) / 1000;
-
-        const peak1 =
-          0.3 + Math.sin(t * 0.04) * 0.25 + Math.sin(t * 0.067) * 0.1;
-        const peak2 =
-          0.7 + Math.sin(t * 0.053 + 2) * 0.2 + Math.cos(t * 0.037) * 0.15;
-        const w1 = 0.18 + Math.sin(t * 0.03) * 0.06;
-        const w2 = 0.15 + Math.cos(t * 0.045) * 0.05;
-        const hueShift = Math.sin(t * 0.06) * 6.5 - 1.5;
-
-        if (group) {
-          group.style.filter = `url(#${filterId}) hue-rotate(${hueShift.toFixed(1)}deg)`;
-        }
-
-        for (let i = 0; i < n; i++) {
-          const r = rects[i];
-          const norm = i / n;
-          const base = bases[i];
-          const isOdd = i % 2 === 1;
-
-          const d1 = Math.abs(norm - peak1);
-          const d2 = Math.abs(norm - peak2);
-          const envelope = Math.max(
-            Math.exp(-(d1 * d1) / (2 * w1 * w1)),
-            Math.exp(-(d2 * d2) / (2 * w2 * w2)),
-          );
-          const breathe = Math.sin(t * 0.35 + i * 0.2) * 0.08;
-          const opacity = base + envelope * 0.45 + breathe;
-
-          const dir = isOdd ? 1 : -1;
-          const sway = Math.sin(t * 0.22 + i * 0.25) * dir * 6;
-          const ySway = Math.cos(t * 0.15 + i * 0.18) * dir * 3;
-          const scaleX = 1 + Math.sin(t * 0.2 + i * 0.3) * 0.06;
-
-          r.setAttribute(
-            "transform",
-            `translate(${sway.toFixed(1)}, ${ySway.toFixed(1)}) scale(${scaleX.toFixed(3)}, 1)`,
-          );
-          r.style.opacity = Math.min(1.2, Math.max(0.08, opacity)).toFixed(3);
-        }
-
-        requestAnimationFrame(loop);
-      }
-
-      requestAnimationFrame(loop);
+      previewReleaseSlugs = new Set(readPreviewReleaseSlugs());
+      currentPage = readCurrentPage();
+      hasNextPage = false;
+      void loadReleases();
     };
 
-    initGradient("gradient-light", "/images/gradients/hero-light.svg");
-    initGradient("gradient-dark", "/images/gradients/hero-dark.svg");
+    document.addEventListener("astro:page-load", initializeChangelog);
+    document.addEventListener("astro:before-swap", () => {
+      activeReleaseLoad?.abort();
+      activeReleaseLoad = null;
+    });
+
   </script>
 </Base>

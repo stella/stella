@@ -614,7 +614,64 @@
       "slug": null,
       "court": "Okresný súd Banská Bystrica",
       "country": "SVK",
-      "analysis": null,
+      "analysis": {
+        "version": 1,
+        "generatedAt": "2026-07-20T12:00:00.000Z",
+        "model": "seed-analysis",
+        "tree": [
+          {
+            "id": "seed-h-h-holding",
+            "label": "rozhodol:",
+            "category": "holding",
+            "startAnchorId": "h-holding",
+            "endAnchorId": "p2",
+            "annotations": [
+              {
+                "id": "seed-a-p2",
+                "summary": "Vymazáva obchodnú spoločnosť DREVOVÝROBA Plus, s.r.o., so sídlom ul.",
+                "startAnchorId": "p2",
+                "endAnchorId": "p2",
+                "textSnippet": "Vymazáva obchodnú spoločnosť DREVOVÝROBA Plus, s.r.o., so sídlom ul. 29. augusta 1524/24, 974 01 Banská Bystrica, IČO: 46 265 074, zapísanú v obchodnom registri Okresného súdu Banská Bystrica, v oddie"
+              }
+            ],
+            "children": []
+          },
+          {
+            "id": "seed-h-h-reasoning",
+            "label": "odôvodnenie:",
+            "category": "reasoning",
+            "startAnchorId": "h-reasoning",
+            "endAnchorId": "p14",
+            "annotations": [
+              {
+                "id": "seed-a-p3",
+                "summary": "1.",
+                "startAnchorId": "p3",
+                "endAnchorId": "p3",
+                "textSnippet": "1. Okresný súd Banská Bystrica uznesením č.k. 25Cbr/166/2024-25 zo dňa 24.04.2025, právoplatným dňa 28.05.2025 zrušil obchodnú spoločnosť DREVOVÝROBA Plus, s.r.o., so sídlom ul. 29. augusta 1524/24, 9"
+              }
+            ],
+            "children": []
+          },
+          {
+            "id": "seed-h-h-instruction",
+            "label": "Poučenie:",
+            "category": "procedural-history",
+            "startAnchorId": "h-instruction",
+            "endAnchorId": "p15",
+            "annotations": [
+              {
+                "id": "seed-a-p15",
+                "summary": "Proti tomuto uzneseniu nie je prípustné odvolanie.",
+                "startAnchorId": "p15",
+                "endAnchorId": "p15",
+                "textSnippet": "Proti tomuto uzneseniu nie je prípustné odvolanie."
+              }
+            ],
+            "children": []
+          }
+        ]
+      },
       "fulltext": "Uznesenie\n\nOkresný súd Banská Bystrica v právnej veci obchodnej spoločnosti DREVOVÝROBA Plus, s.r.o., so sídlom ul. 29. augusta 1524/24, 974 01 Banská Bystrica, IČO: 46 265 074, zapísanej v Obchodnom registri Okresného súdu Banská Bystrica, v oddiele Sro, vložke číslo 51523/S, v konaní o zrušení obchodnej spoločnosti, takto\n\nrozhodol:\n\nVymazáva obchodnú spoločnosť DREVOVÝROBA Plus, s.r.o., so sídlom ul. 29. augusta 1524/24, 974 01 Banská Bystrica, IČO: 46 265 074, zapísanú v obchodnom registri Okresného súdu Banská Bystrica, v oddiele Sro, vložke číslo 51523/S podľa § 309h ods. 1 Civilného mimosporového poriadku z obchodného registra bez likvidácie.\n\nodôvodnenie:\n\n1. Okresný súd Banská Bystrica uznesením č.k. 25Cbr/166/2024-25 zo dňa 24.04.2025, právoplatným dňa 28.05.2025 zrušil obchodnú spoločnosť DREVOVÝROBA Plus, s.r.o., so sídlom ul. 29. augusta 1524/24, 974 01 Banská Bystrica, IČO: 46 265 074 (ďalej len \"spoločnosť\") z dôvodu, že zanikli predpoklady ustanovené zákonom pre vznik spoločnosti podľa § 68b ods. 1 písm. a) Obchodného zákonníka a že spoločnosť nespĺňa podmienky podľa § 68b ods. 1 písm. c) Obchodného zákonníka v spojení s § 2 ods. 3 Obchodného zákonníka.\n\n2. Podľa § 309e zák.č. 161/2015 Z.z. Civilného mimosporového poriadku v znení neskorších predpisov (ďalej len \"CMP\"), ak rozhodnutie súdu o zrušení spoločnosti nadobudlo právoplatnosť, súd zverejní oznámenie o zrušení spoločnosti v Obchodnom vestníku.\n\n3. Oznámenie o zrušení spoločnosti bolo zverejnené v Obchodnom vestníku dňa 05.06.2025 pod č. 106/2025.\n\n4. Podľa § 309f CMP, ak spoločnosť do 90 dní od zverejnenia oznámenia o zrušení spoločnosti v Obchodnom vestníku nevstúpi do likvidácie, predpokladá sa, že je v úpadku.\n\n5. Podľa § 309g CMP, ak sa predpokladá úpadok spoločnosti, súd bezodkladne zverejní v Obchodnom vestníku oznámenie o predpoklade úpadku spoločnosti. V oznámení poučí veriteľov spoločnosti, osoby, ktoré majú právo na likvidačný zostatok, a iné orgány a osoby dotknuté zrušením spoločnosti, že ak do šiestich mesiacov od zverejnenia tohto oznámenia v Obchodnom vestníku nebude podaný návrh na ustanovenie likvidátora spolu s osvedčením o zložení preddavku na jeho odmenu a náhradu výdavkov alebo nebude podaný návrh na vyhlásenie konkurzu na majetok spoločnosti, spoločnosť bude vymazaná z obchodného registra.\n\n6. Oznámenie o predpoklade úpadku spoločnosti bolo zverejnené v Obchodnom vestníku dňa 23.09.2025 pod č. 182/2025.\n\n7. Podľa § 309h ods. 1 CMP, ak odseky 2 a 3 neustanovujú inak, súd po uplynutí šiestich mesiacov od zverejnenia oznámenia o predpoklade úpadku spoločnosti v Obchodnom vestníku rozhodne o výmaze spoločnosti z obchodného registra bez likvidácie.\n\n8. Podľa § 309h ods. 2 CMP, ak veriteľ spoločnosti, osoba, ktorá má právo na likvidačný zostatok, orgán štátnej správy v oblasti daní, poplatkov a colníctva podľa osobitného zákona, alebo ten, kto je dotknutý zrušením spoločnosti do výmazu spoločnosti z obchodného registra, navrhne ustanovenie likvidátora, súd ustanoví likvidátora. Na návrh na ustanovenie likvidátora sa neprihliada, ak nie je zložený preddavok na úhrady odmeny a výdavkov likvidátora. Proti rozhodnutiu o ustanovení likvidátora nie je prípustné odvolanie.\n\n9. Podľa § 309h ods. 3 CMP, ak voči spoločnosti prebieha konkurzné konanie, súd pred rozhodnutím o výmaze spoločnosti postupuje v závislosti od jeho výsledku. Ak sa na majetok spoločnosti vyhlási konkurz, konanie o zrušení spoločnosti sa zastavuje.\n\n10. Podľa § 309h ods. 5 CMP, rozhodnutie súdu o výmaze spoločnosti sa doručí uložením v spise. Proti tomuto rozhodnutiu nie je prípustné odvolanie.\n\n11. Na základe vyššie uvedeného súd v predmetnej veci konštatuje, že do šiestich mesiacov od zverejnenia oznámenia o predpoklade úpadku spoločnosti v Obchodnom vestníku nebol podaný návrh na ustanovenie likvidátora spolu s osvedčením o zložení preddavku na jeho odmenu a náhradu výdavkov, ani nebol podaný návrh na vyhlásenie konkurzu na majetok spoločnosti.\n\n12. Vzhľadom na vyššie uvedené skutočnosti a citované zákonné ustanovenia súd rozhodol tak, ako je uvedené vo výrokovej časti tohto uznesenia.\n\nPoučenie:\n\nProti tomuto uzneseniu nie je prípustné odvolanie.",
       "language": "sk",
       "metadata": {

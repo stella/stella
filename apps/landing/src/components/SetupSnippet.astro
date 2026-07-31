@@ -1,0 +1,112 @@
+---
+// A copyable code snippet for the agent-setup section: the block is always
+// LTR (it is code), the button sits in the code's own top-right corner, and
+// its label comes pre-localized from the caller.
+type Props = {
+  class?: string;
+  copiedLabel: string;
+  copyLabel: string;
+  text: string;
+};
+
+const { class: className, copiedLabel, copyLabel, text } = Astro.props;
+---
+
+<div class:list={["product-setup-snippet relative", className]} dir="ltr">
+  <pre class="overflow-x-auto whitespace-pre pe-10"><code>{text}</code></pre>
+  <button
+    type="button"
+    class="setup-copy absolute end-1.5 top-1.5 inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors"
+    aria-label={copyLabel}
+    title={copyLabel}
+    data-copy-snippet={text}
+    data-copy-label={copyLabel}
+    data-copied-label={copiedLabel}
+  >
+    <svg
+      class="setup-copy-icon h-3.5 w-3.5"
+      aria-hidden="true"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      stroke-width="1.8"
+    >
+      <path
+        d="M9 9.5A1.5 1.5 0 0 1 10.5 8h8A1.5 1.5 0 0 1 20 9.5v9a1.5 1.5 0 0 1-1.5 1.5h-8A1.5 1.5 0 0 1 9 18.5v-9Z"
+      ></path>
+      <path d="M6 15.5H5.5A1.5 1.5 0 0 1 4 14V5.5A1.5 1.5 0 0 1 5.5 4H14a1.5 1.5 0 0 1 1.5 1.5V6"></path>
+    </svg>
+    <svg
+      class="setup-copied-icon h-3.5 w-3.5"
+      aria-hidden="true"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      stroke-width="2"
+    >
+      <path d="m5 12.5 5 5L19 7"></path>
+    </svg>
+  </button>
+</div>
+
+<style>
+  .product-setup-snippet {
+    background: color-mix(in srgb, var(--muted) 55%, transparent);
+    border: 1px solid color-mix(in srgb, var(--border) 90%, transparent);
+    border-radius: 0.75rem;
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 0.8125rem;
+    line-height: 1.6;
+    padding: 0.75rem 1rem;
+  }
+
+  .setup-copy {
+    color: var(--muted-foreground);
+  }
+
+  .setup-copy:hover {
+    background: color-mix(in srgb, var(--muted) 80%, transparent);
+    color: var(--foreground);
+  }
+
+  .setup-copied-icon {
+    display: none;
+  }
+
+  .setup-copy.is-copied .setup-copy-icon {
+    display: none;
+  }
+
+  .setup-copy.is-copied .setup-copied-icon {
+    display: block;
+    color: var(--success);
+  }
+</style>
+
+<script>
+  for (const button of document.querySelectorAll<HTMLButtonElement>(
+    "[data-copy-snippet]",
+  )) {
+    button.addEventListener("click", async () => {
+      const text = button.dataset["copySnippet"];
+      if (!text) {
+        return;
+      }
+      await navigator.clipboard?.writeText(text);
+      button.classList.add("is-copied");
+      const copied = button.dataset["copiedLabel"];
+      if (copied) {
+        button.setAttribute("aria-label", copied);
+        button.setAttribute("title", copied);
+      }
+      setTimeout(() => {
+        button.classList.remove("is-copied");
+        const label = button.dataset["copyLabel"];
+        if (label) {
+          button.setAttribute("aria-label", label);
+          button.setAttribute("title", label);
+        }
+      }, 1400);
+    });
+  }
+</script>

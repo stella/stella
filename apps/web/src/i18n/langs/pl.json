@@ -3632,7 +3632,7 @@
       "exportXlsx": "Eksportuj XLSX",
       "fields": "Pola:",
       "fieldsSelected": "{count, plural, one {# wybrany} few {# wybrane} many {# wybranych} other {# wybranych}}",
-      "filter": "Filter",
+      "filter": "Filtruj",
       "filterByPlaceholder": "Filter by…",
       "filtersWithCount": "{count, plural, one {# filter} other {# filters}}",
       "groupBy": "Grupuj według:",

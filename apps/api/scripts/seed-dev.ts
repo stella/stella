@@ -6,8 +6,9 @@
  * entities, files (PDF/DOCX uploaded to S3), fields, workspace
  * parties, and time entries.
  *
- * Deterministic IDs via `seedId()` so re-running is idempotent
- * (uses `onConflictDoNothing()`).
+ * Deterministic IDs via `seedId()` so re-running is idempotent. Seed-owned
+ * document names and content are upserted so fixture changes reach existing
+ * development databases as well as fresh CI databases.
  *
  * Usage:
  *   bun apps/api/scripts/seed-dev.ts
@@ -40,6 +41,7 @@ import {
   fields,
   invoices,
   justifications,
+  organizationSettings,
   playbookDefinitions,
   properties,
   propertyDependencies,
@@ -51,7 +53,10 @@ import {
   workspaces,
   workspaceViews,
 } from "@/api/db/schema";
-import type { JustificationContent } from "@/api/db/schema";
+import type {
+  JustificationContent,
+  PracticeJurisdiction,
+} from "@/api/db/schema";
 import type {
   EntityKind,
   FieldContent,
@@ -105,7 +110,11 @@ const EXPORT_TABLE_FOLDER_COUNT = 6;
 // "Document Type" classifier uses the org taxonomy labels so playbook gating
 // can match the SPA document.
 const AKVIZICE_MATTER_LABEL = "ws-akvizice-energo";
-const AKVIZICE_SPA_DOC_NAME = "Smlouva_o_akvizici_akcii.pdf";
+// English filename over a Czech-language body: the workspace stills film this
+// file list, and the marketing cast files documents in English; the body stays
+// Czech (like Due_Diligence_Report.pdf) so the Czech playbook demo keeps a
+// Czech-law SPA to review.
+const AKVIZICE_SPA_DOC_NAME = "Share_Acquisition_Agreement.pdf";
 // The taxonomy key the Czech playbook is scoped to; its label classifies the
 // akvizice SPA document so the gate matches. Derived from the single source of
 // truth so the field value never drifts from the taxonomy.
@@ -445,6 +454,470 @@ export const createMockDocx = async (
   return buf;
 };
 
+// ─── Supplier Agreement (negotiated redline) ────────────
+
+// The negotiated Supplier Agreement filmed by the marketing editor scenes
+// (apps/web/e2e/marketing/record-product-story.ts) and mirrored by the
+// landing page's DOM mocks (apps/landing/src/data/product-story.ts:
+// storyTeamsExchange + storyEditorDocument). Unlike the generic mock DOCX
+// files, this one carries real OOXML tracked changes (w:ins / w:del) and
+// margin comments so the editor renders an actual redline: clause 12's
+// liability cap is redlined from 300% of fees to the playbook cap of 100%
+// of annual fees, and clause 14.1's thirty-day termination notice is the
+// second playbook deviation. Keep the clause 12 wording in sync with
+// storyEditorDocument.
+const SUPPLIER_AGREEMENT_DOC_NAME = "Supplier_Agreement.docx";
+
+// Reviewer identity stamped on the tracked changes and margin comments;
+// Clara Novak is a seeded colleague (clara@stella.dev).
+const SUPPLIER_AGREEMENT_REVIEWER = {
+  author: "Clara Novak",
+  date: "2026-07-16T09:30:00Z",
+  initials: "CN",
+} as const;
+
+type SupplierAgreementComment = {
+  id: number;
+  text: string;
+};
+
+const SUPPLIER_AGREEMENT_COMMENTS: SupplierAgreementComment[] = [
+  {
+    id: 1,
+    text:
+      "Above the approved liability cap: the Procurement Playbook allows at " +
+      "most 100% of annual fees. Redlined to the playbook position; needs " +
+      "Legal sign-off.",
+  },
+  {
+    id: 2,
+    text:
+      "Playbook requires at least ninety (90) days' termination notice for " +
+      "supply-critical agreements. Second deviation flagged for Legal " +
+      "review.",
+  },
+];
+
+type SupplierAgreementRun =
+  | { kind: "deleted"; text: string }
+  | { kind: "inserted"; text: string }
+  | { kind: "text"; text: string };
+
+type SupplierAgreementParagraph = {
+  /** Margin comment (id in SUPPLIER_AGREEMENT_COMMENTS) anchored to the paragraph. */
+  commentId?: number;
+  runs: SupplierAgreementRun[];
+  style: "body" | "heading" | "title";
+};
+
+const body = (text: string): SupplierAgreementParagraph => ({
+  runs: [{ kind: "text", text }],
+  style: "body",
+});
+
+const heading = (text: string): SupplierAgreementParagraph => ({
+  runs: [{ kind: "text", text }],
+  style: "heading",
+});
+
+const SUPPLIER_AGREEMENT_PARAGRAPHS: SupplierAgreementParagraph[] = [
+  { runs: [{ kind: "text", text: "Supplier Agreement" }], style: "title" },
+  body("NEGOTIATION DRAFT v4 — CONTAINS TRACKED CHANGES"),
+  body(
+    "This Supplier Agreement (the “Agreement”) is entered into as of 1 July " +
+      "2026 (the “Effective Date”) by and between:",
+  ),
+  body(
+    "(1) Northstar Robotics, Inc., a Delaware corporation with offices at " +
+      "548 Market Street, San Francisco, California 94104, United States " +
+      "(the “Customer”); and",
+  ),
+  body(
+    "(2) Meridian Precision Components GmbH, a company organised under the " +
+      "laws of Germany with registered offices at Werkstrasse 12, 80339 " +
+      "Munich, Germany (the “Supplier”),",
+  ),
+  body("each a “Party” and together the “Parties”."),
+  body(
+    "WHEREAS the Customer designs and manufactures autonomous mobile robots " +
+      "and requires a reliable supply of precision drive components; and " +
+      "WHEREAS the Supplier manufactures harmonic drive gears, actuator " +
+      "housings and related components meeting the Specifications; NOW, " +
+      "THEREFORE, the Parties agree as follows.",
+  ),
+  heading("1. Definitions and interpretation"),
+  body(
+    "1.1 In this Agreement: “Affiliate” means any entity that directly or " +
+      "indirectly controls, is controlled by, or is under common control " +
+      "with a Party; “Annual Fees” means the aggregate fees paid or payable " +
+      "by the Customer under this Agreement during the twelve (12) months " +
+      "immediately preceding the event giving rise to the relevant claim; " +
+      "“Business Day” means a day other than a Saturday, Sunday or public " +
+      "holiday in San Francisco or Munich; “Order” means a purchase order " +
+      "issued by the Customer under Clause 3; “Products” means the " +
+      "components listed in Annex 1; and “Specifications” means the " +
+      "technical specifications set out in Annex 1, as amended in " +
+      "accordance with Clause 2.3.",
+  ),
+  body(
+    "1.2 Headings are for convenience only and do not affect " +
+      "interpretation. References to Clauses and Annexes are to the clauses " +
+      "of, and annexes to, this Agreement.",
+  ),
+  heading("2. Supply of products"),
+  body(
+    "2.1 The Supplier shall manufacture and supply the Products in " +
+      "accordance with the Specifications, the agreed quality standards and " +
+      "the terms of this Agreement.",
+  ),
+  body(
+    "2.2 The Supplier shall maintain sufficient production capacity to " +
+      "satisfy the Customer's rolling forecast, up to one hundred and " +
+      "twenty per cent (120%) of the most recent quarterly forecast volume.",
+  ),
+  body(
+    "2.3 Neither Party may change the Specifications without the prior " +
+      "written approval of the other Party. The Supplier shall give the " +
+      "Customer at least twelve (12) months' written notice before " +
+      "discontinuing any Product.",
+  ),
+  heading("3. Forecasts and orders"),
+  body(
+    "3.1 The Customer shall provide a rolling twelve (12) month forecast, " +
+      "updated monthly. The first three (3) months of each forecast are " +
+      "binding on the Customer.",
+  ),
+  body(
+    "3.2 The Customer shall order Products by issuing an Order stating " +
+      "quantities, delivery dates and delivery locations. The Supplier " +
+      "shall accept or reject an Order within five (5) Business Days; an " +
+      "Order not rejected within that period is deemed accepted.",
+  ),
+  body(
+    "3.3 The Customer may cancel or reschedule an accepted Order more than " +
+      "sixty (60) days before the scheduled delivery date at no charge.",
+  ),
+  heading("4. Delivery, title and risk"),
+  body(
+    "4.1 The Supplier shall deliver the Products DAP (Incoterms 2020) to " +
+      "the Customer's facility identified in the Order. Delivery dates are " +
+      "of the essence.",
+  ),
+  body(
+    "4.2 If the Supplier fails to deliver by the confirmed delivery date, " +
+      "the Customer is entitled to a delay credit of 0.5% of the Order " +
+      "value per commenced week of delay, up to 5% of the Order value.",
+  ),
+  body(
+    "4.3 Title to and risk in the Products pass to the Customer on " +
+      "completed delivery under Clause 4.1.",
+  ),
+  heading("5. Prices and payment"),
+  body(
+    "5.1 Prices are set out in Annex 2 and are fixed until 31 December " +
+      "2026. Price changes thereafter require ninety (90) days' written " +
+      "notice and the Customer's written agreement.",
+  ),
+  body(
+    "5.2 The Supplier shall invoice monthly in arrears. Undisputed invoices " +
+      "are payable within forty-five (45) days of receipt of a correct " +
+      "invoice.",
+  ),
+  body(
+    "5.3 The Parties shall review prices annually in good faith, targeting " +
+      "a productivity improvement of two per cent (2%) per year.",
+  ),
+  heading("6. Quality, inspection and non-conforming products"),
+  body(
+    "6.1 The Supplier shall maintain a quality management system certified " +
+      "to ISO 9001 (or equivalent) and shall retain quality records for " +
+      "each Product lot for at least ten (10) years.",
+  ),
+  body(
+    "6.2 The Customer may perform incoming inspection within ten (10) " +
+      "Business Days of delivery. Rejection of non-conforming Products " +
+      "within that period does not limit the Customer's warranty rights.",
+  ),
+  body(
+    "6.3 For non-conforming Products the Supplier shall, at the Customer's " +
+      "election, replace the Products or refund the price, in each case " +
+      "within ten (10) Business Days of notice.",
+  ),
+  heading("7. Warranties"),
+  body(
+    "7.1 The Supplier warrants that for twenty-four (24) months from " +
+      "delivery each Product conforms to the Specifications, is free from " +
+      "defects in materials and workmanship, and complies with applicable " +
+      "law.",
+  ),
+  body(
+    "7.2 The remedies in Clause 6.3 apply to any breach of the warranty in " +
+      "Clause 7.1, without prejudice to the Customer's other rights under " +
+      "this Agreement.",
+  ),
+  heading("8. Intellectual property"),
+  body(
+    "8.1 Each Party retains all rights in its background intellectual " +
+      "property. Tooling, designs and Specifications provided by the " +
+      "Customer remain the Customer's property and may be used by the " +
+      "Supplier solely to perform this Agreement.",
+  ),
+  heading("9. Confidentiality"),
+  body(
+    "9.1 Each Party shall keep the other Party's confidential information " +
+      "secret, use it solely to perform this Agreement, and disclose it " +
+      "only to personnel and advisers who need it and are bound by " +
+      "equivalent obligations. This Clause survives for five (5) years " +
+      "after termination.",
+  ),
+  heading("10. Data protection and security"),
+  body(
+    "10.1 Each Party shall comply with applicable data protection law in " +
+      "connection with this Agreement and shall implement appropriate " +
+      "technical and organisational measures to protect personal data it " +
+      "processes for the other Party.",
+  ),
+  heading("11. Insurance"),
+  body(
+    "11.1 The Supplier shall maintain product liability insurance of at " +
+      "least EUR 5,000,000 per occurrence with a reputable insurer and " +
+      "shall provide certificates of insurance on request.",
+  ),
+  heading("12. Limitation of liability"),
+  body(
+    "12.1 Nothing in this Agreement excludes or limits either Party's " +
+      "liability for death or personal injury caused by negligence, for " +
+      "fraud or fraudulent misrepresentation, or for any other liability " +
+      "that may not be excluded or limited as a matter of law. Each party " +
+      "remains responsible for its obligations under this Agreement.",
+  ),
+  {
+    commentId: 1,
+    runs: [
+      {
+        kind: "text",
+        text: "12.2 The Supplier’s aggregate liability shall not exceed ",
+      },
+      { kind: "deleted", text: "300% of the fees" },
+      { kind: "inserted", text: "100% of the annual fees" },
+      { kind: "text", text: " paid under this Agreement." },
+    ],
+    style: "body",
+  },
+  body(
+    "12.3 Neither Party is liable for loss of profits, loss of revenue, " +
+      "loss of data, or any indirect or consequential loss, however " +
+      "arising.",
+  ),
+  body(
+    "12.4 The exclusions in this section survive termination of the Agreement.",
+  ),
+  heading("13. Indemnities"),
+  body(
+    "13.1 The Supplier shall indemnify the Customer against third-party " +
+      "claims that a Product as delivered infringes intellectual property " +
+      "rights, provided the Customer notifies the Supplier promptly and " +
+      "gives the Supplier control of the defence.",
+  ),
+  heading("14. Term and termination"),
+  {
+    commentId: 2,
+    runs: [
+      {
+        kind: "text",
+        text:
+          "14.1 This Agreement starts on the Effective Date and continues " +
+          "for an initial term of three (3) years, renewing automatically " +
+          "for successive one (1) year periods. Either Party may terminate " +
+          "this Agreement for convenience by giving the other Party thirty " +
+          "(30) days' prior written notice.",
+      },
+    ],
+    style: "body",
+  },
+  body(
+    "14.2 Either Party may terminate this Agreement with immediate effect " +
+      "by written notice if the other Party undergoes a change of control " +
+      "without the terminating Party's prior written approval, becomes " +
+      "insolvent, or commits a material breach that remains uncured thirty " +
+      "(30) days after written notice of the breach.",
+  ),
+  body(
+    "14.3 Termination does not affect accrued rights. On termination the " +
+      "Supplier shall return the Customer's tooling, designs and " +
+      "confidential information, and shall support an orderly transition " +
+      "of supply for up to six (6) months.",
+  ),
+  heading("15. Force majeure"),
+  body(
+    "15.1 Neither Party is liable for delay or failure to perform caused " +
+      "by events beyond its reasonable control, provided it notifies the " +
+      "other Party without undue delay and uses reasonable efforts to " +
+      "mitigate. If a force majeure event continues for more than sixty " +
+      "(60) days, either Party may terminate affected Orders.",
+  ),
+  heading("16. General"),
+  body(
+    "16.1 This Agreement is governed by the laws of England and Wales, and " +
+      "the courts of London have exclusive jurisdiction.",
+  ),
+  body(
+    "16.2 This Agreement, including its Annexes, is the entire agreement " +
+      "between the Parties regarding its subject matter. Amendments must " +
+      "be in writing and signed by both Parties. Notices must be in " +
+      "writing to the addresses above.",
+  ),
+  body("SIGNED for and on behalf of NORTHSTAR ROBOTICS, INC."),
+  body("Elena Park, Chief Executive Officer"),
+  body("SIGNED for and on behalf of MERIDIAN PRECISION COMPONENTS GMBH"),
+  body("Katrin Vogel, Managing Director"),
+];
+
+/**
+ * Plain-text rendition of the Supplier Agreement with the tracked changes
+ * applied (insertions kept, deletions dropped): the single source for
+ * extracted content and the search index, same as `documentTexts` entries.
+ */
+const buildSupplierAgreementText = (): string =>
+  SUPPLIER_AGREEMENT_PARAGRAPHS.filter(
+    (paragraph) => paragraph.style !== "title",
+  )
+    .map((paragraph) =>
+      paragraph.runs
+        .filter((run) => run.kind !== "deleted")
+        .map((run) => run.text)
+        .join(""),
+    )
+    .join("\n\n");
+
+/**
+ * Build the Supplier Agreement DOCX with real tracked changes and margin
+ * comments. Mirrors `createMockDocx`'s minimal OOXML package, plus a
+ * `word/comments.xml` part (folio reads it by path) and its content-type
+ * override and relationship for Word compatibility.
+ */
+const createSupplierAgreementDocx = async (): Promise<Buffer> => {
+  const JSZip = (await import("jszip")).default;
+  const zip = new JSZip();
+  const { author, date } = SUPPLIER_AGREEMENT_REVIEWER;
+
+  zip.file(
+    "[Content_Types].xml",
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Default Extension="xml" ContentType="application/xml"/>' +
+      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+      '<Override PartName="/word/comments.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml"/>' +
+      "</Types>",
+  );
+
+  zip
+    .folder("_rels")
+    ?.file(
+      ".rels",
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
+        "</Relationships>",
+    );
+
+  let revisionId = 100;
+  const runXml = (run: SupplierAgreementRun, bold: boolean): string => {
+    const boldXml = bold ? "<w:b/>" : "";
+    const sizeXml = '<w:sz w:val="22"/>';
+    const runProps = `<w:rPr>${boldXml}${sizeXml}</w:rPr>`;
+    const escaped = xmlEscape(run.text);
+    if (run.kind === "deleted") {
+      revisionId++;
+      return (
+        `<w:del w:id="${revisionId}" w:author="${xmlEscape(author)}" w:date="${date}">` +
+        `<w:r>${runProps}<w:delText xml:space="preserve">${escaped}</w:delText></w:r>` +
+        "</w:del>"
+      );
+    }
+    if (run.kind === "inserted") {
+      revisionId++;
+      return (
+        `<w:ins w:id="${revisionId}" w:author="${xmlEscape(author)}" w:date="${date}">` +
+        `<w:r>${runProps}<w:t xml:space="preserve">${escaped}</w:t></w:r>` +
+        "</w:ins>"
+      );
+    }
+    return `<w:r>${runProps}<w:t xml:space="preserve">${escaped}</w:t></w:r>`;
+  };
+
+  const paragraphXml = (paragraph: SupplierAgreementParagraph): string => {
+    if (paragraph.style === "title") {
+      const titleRuns = paragraph.runs
+        .map((run) => runXml(run, false))
+        .join("");
+      return `<w:p><w:pPr><w:pStyle w:val="Title"/></w:pPr>${titleRuns}</w:p>`;
+    }
+    const isHeading = paragraph.style === "heading";
+    const spacing = isHeading
+      ? '<w:spacing w:before="360" w:after="160"/>'
+      : '<w:spacing w:after="140"/>';
+    const runProps = isHeading ? '<w:rPr><w:b/><w:sz w:val="26"/></w:rPr>' : "";
+    const paragraphProps = `<w:pPr>${spacing}${runProps}</w:pPr>`;
+    const runsXml = paragraph.runs
+      .map((run) => runXml(run, isHeading))
+      .join("");
+    if (paragraph.commentId === undefined) {
+      return `<w:p>${paragraphProps}${runsXml}</w:p>`;
+    }
+    return (
+      `<w:p>${paragraphProps}<w:commentRangeStart w:id="${paragraph.commentId}"/>${
+        runsXml
+      }<w:commentRangeEnd w:id="${paragraph.commentId}"/>` +
+      `<w:r><w:commentReference w:id="${paragraph.commentId}"/></w:r>` +
+      `</w:p>`
+    );
+  };
+
+  const paragraphs = SUPPLIER_AGREEMENT_PARAGRAPHS.map(paragraphXml).join("");
+
+  zip
+    .folder("word")
+    ?.file(
+      "document.xml",
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+        `<w:body>${paragraphs}</w:body>` +
+        "</w:document>",
+    );
+
+  const commentsXml = SUPPLIER_AGREEMENT_COMMENTS.map(
+    (comment) =>
+      `<w:comment w:id="${comment.id}" w:author="${xmlEscape(author)}" ` +
+      `w:initials="${SUPPLIER_AGREEMENT_REVIEWER.initials}" w:date="${date}">` +
+      `<w:p><w:r><w:t xml:space="preserve">${xmlEscape(comment.text)}</w:t></w:r></w:p>` +
+      "</w:comment>",
+  ).join("");
+  zip
+    .folder("word")
+    ?.file(
+      "comments.xml",
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<w:comments xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+        `${commentsXml}</w:comments>`,
+    );
+
+  zip
+    .folder("word")
+    ?.folder("_rels")
+    ?.file(
+      "document.xml.rels",
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+        '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments" Target="comments.xml"/>' +
+        "</Relationships>",
+    );
+
+  const buf = await zip.generateAsync({ type: "nodebuffer" });
+  return buf;
+};
+
 // ─── Document names per workspace ───────────────────────
 
 const buildHeavyMatterDocNames = (): string[] => {
@@ -543,18 +1016,34 @@ const EXPORT_REVIEW_EVIDENCE_QUALITY = [
   "Conflicting evidence",
 ] as const;
 
+// File names read like a real data room: the row's counterparty and document
+// type joined with a vintage year, e.g. Aurora_Retail_Shareholder_Register_2018.docx.
+// The counterparty/type indices mirror buildExportReviewMetadata exactly so a
+// row's name always matches its metadata columns, and the year advances once
+// per full (type, counterparty) cycle so all names stay unique. The marketing
+// recorder's content markers reference these names; keep them in sync
+// (apps/web/e2e/marketing/record-product-story.ts).
 const buildExportReviewDocNames = (): string[] => {
   const result: string[] = [];
 
   for (let i = 0; i < EXPORT_TABLE_FILE_COUNT; i++) {
-    const folder = at(EXPORT_REVIEW_FOLDERS, i % EXPORT_REVIEW_FOLDERS.length);
     const documentType = at(
       EXPORT_REVIEW_DOCUMENT_TYPES,
       i % EXPORT_REVIEW_DOCUMENT_TYPES.length,
     );
+    const counterparty = at(
+      EXPORT_REVIEW_COUNTERPARTIES,
+      (i * 3) % EXPORT_REVIEW_COUNTERPARTIES.length,
+    );
+    const counterpartyName = counterparty
+      .split(" ")
+      .slice(0, 2)
+      .join("_")
+      .replaceAll(/[^\w]/gu, "");
+    const year = 2018 + Math.floor(i / EXPORT_REVIEW_DOCUMENT_TYPES.length);
     const extension = i % 9 === 0 ? "docx" : "pdf";
     result.push(
-      `atlas_${String(i + 1).padStart(3, "0")}_${folder.replaceAll(" ", "_")}_${documentType.replaceAll(" ", "_")}.${extension}`,
+      `${counterpartyName}_${documentType.replaceAll(" ", "_")}_${year}.${extension}`,
     );
   }
 
@@ -599,7 +1088,12 @@ export const buildExportReviewMetadata = (
   );
   const jurisdiction = at(
     EXPORT_REVIEW_JURISDICTIONS,
-    (index * 5 + 2) % EXPORT_REVIEW_JURISDICTIONS.length,
+    // Stride must stay coprime with the list length or the "cycle" is a
+    // constant: the old *5 stride on this length-5 list pinned every row to
+    // Netherlands, which read as filler on camera. *2 varies row by row and
+    // keeps index 0 on Netherlands, which the review-citation recording's
+    // paint predicate quotes verbatim.
+    (index * 2 + 2) % EXPORT_REVIEW_JURISDICTIONS.length,
   );
   const riskLevel = at(
     EXPORT_REVIEW_RISK_LEVELS,
@@ -648,8 +1142,11 @@ export const buildExportReviewDocumentText = (
   index: number,
 ): string => {
   const metadata = buildExportReviewMetadata(index);
-  return `PROJECT ATLAS DATA ROOM REVIEW
+  return `${metadata.documentType.toUpperCase()} — REVIEW EXTRACT
 
+${metadata.counterparty}, based in ${metadata.jurisdiction}, is party to this ${metadata.documentType.toLowerCase()} under review as part of the Project Atlas data room.
+
+Key terms
 Document: ${fileName}
 Document type: ${metadata.documentType}
 Counterparty: ${metadata.counterparty}
@@ -663,25 +1160,25 @@ Review status: ${metadata.reviewStatus}
 Evidence quality: ${metadata.evidenceQuality}
 Tags: ${metadata.tags.join(", ")}
 
-Key obligation:
+Key obligation
 ${metadata.keyObligation}
 
-Risk finding:
+Risk finding
 ${metadata.riskFinding}
 
-Direct citation text:
-"${metadata.counterparty} must comply with the obligation identified above and the governing law is ${metadata.governingLaw}."
-
-Reviewer note:
-This seeded file exists so table export can be tested with many rows, attached documents, extracted metadata, and direct citations.`;
+Extract under review:
+"${metadata.counterparty} must comply with the obligation identified above and the governing law is ${metadata.governingLaw}."`;
 };
 
 const workspaceDocNames: Record<string, string[]> = {
   "ws-akvizice-energo": [
-    "Smlouva_o_akvizici_akcii.pdf",
+    AKVIZICE_SPA_DOC_NAME,
     "Due_Diligence_Report.pdf",
-    "Plna_moc_zastupce.docx",
-    "Znalecky_posudek_hodnota.pdf",
+    "Board_Consent_Northstar.docx",
+    "Expert_Valuation_Report.pdf",
+    "Internal_SAFE_Agreement.docx",
+    "Redacted_Due_Diligence_Extract.docx",
+    SUPPLIER_AGREEMENT_DOC_NAME,
   ],
   "ws-stavebni-spor": [
     "Zaloba_o_nahradu_skody.pdf",
@@ -736,7 +1233,7 @@ const workspaceDocNames: Record<string, string[]> = {
  */
 const documentTexts: Record<string, string> = {
   // ws-akvizice-energo
-  "Smlouva_o_akvizici_akcii.pdf": `SMLOUVA O AKVIZICI AKCIÍ
+  [AKVIZICE_SPA_DOC_NAME]: `SMLOUVA O AKVIZICI AKCIÍ
 
 Smluvní strany:
 1. Kupující: InvestCo Capital, a.s., IČO: 28456789, se sídlem Praha 1, Národní 15
@@ -801,28 +1298,92 @@ Právní prověrka byla provedena v období 1.–28. února 2025. Celkem bylo p�
 Zpracoval: Advokátní kancelář Novák & Partners
 Datum: 28. února 2025`,
 
-  "Plna_moc_zastupce.docx": `PLNÁ MOC
+  "Board_Consent_Northstar.docx": `NORTHSTAR ROBOTICS, INC.
 
-Já, níže podepsaný Ing. Martin Horák, dat. nar. 15. 5. 1975, bytem Praha 5, Janáčkovo nábřeží 18, jakožto jednatel společnosti InvestCo Capital, a.s., IČO: 28456789,
+UNANIMOUS WRITTEN CONSENT OF THE BOARD OF DIRECTORS
 
-tímto uděluji plnou moc
+The undersigned, constituting all members of the Board of Directors, approve the issuance of a Simple Agreement for Future Equity to Northstar Seed Fund I, L.P. for a purchase amount of EUR 500,000, subject to a post-money valuation cap of EUR 8,000,000.
 
-JUDr. Tomáši Novákovi, advokátu, ev. č. ČAK 12456, se sídlem Praha 2, Anglická 7,
+The officers of the Company are authorized to execute the agreement and take any action reasonably necessary to complete the financing.
 
-aby mě zastupoval ve všech právních úkonech souvisejících s akvizicí 100 % akcií společnosti EnerGo Distribuce, a.s., a to zejména:
-- jednání s prodávajícím a jeho právními zástupci;
-- podání návrhů a žádostí u ÚOHS a ERÚ;
-- podpis veškerých smluvních dokumentů;
-- zastupování před soudy a správními orgány.
+Approved on 15 July 2026.
 
-Tato plná moc je udělena v plném rozsahu a je platná do odvolání.
+Elena Park, Director
+Daniel Ortiz, Director`,
 
-V Praze dne 10. ledna 2025
+  "Internal_SAFE_Agreement.docx": `INTERNAL DRAFT — FOR REVIEW ONLY
 
-Ing. Martin Horák
-jednatel InvestCo Capital, a.s.`,
+SAFE
+(Simple Agreement for Future Equity)
 
-  "Znalecky_posudek_hodnota.pdf": `ZNALECKÝ POSUDEK č. 127-15/2025
+THIS CERTIFIES THAT in exchange for the payment by Northstar Seed Fund I, L.P. (the “Investor”) of EUR 500,000 on or about 15 July 2026, Northstar Robotics, Inc., a Delaware corporation (the “Company”), issues to the Investor the right to certain shares of the Company’s capital stock, subject to the terms below.
+
+1. EVENTS
+
+Equity Financing. If there is an Equity Financing before this instrument terminates, the Company will automatically issue to the Investor the number of shares of Safe Preferred Stock equal to the Purchase Amount divided by the Conversion Price.
+
+Liquidity Event. If there is a Liquidity Event before this instrument terminates, the Investor will be entitled to receive, immediately before or concurrently with the closing, the greater of the Purchase Amount or the amount payable on the number of shares of Common Stock equal to the Purchase Amount divided by the Liquidity Price.
+
+Dissolution Event. If there is a Dissolution Event before this instrument terminates, the Investor will be entitled to receive the Purchase Amount immediately before the consummation of the Dissolution Event.
+
+2. DEFINITIONS
+
+“Company Capitalization” means the total number of issued and outstanding shares of capital stock of the Company, calculated on a fully diluted basis immediately before the Equity Financing.
+
+“Post-Money Valuation Cap” means EUR 8,000,000.
+
+“Discount Rate” means 80%.
+
+3. COMPANY REPRESENTATIONS
+
+The Company is duly incorporated, validly existing, and in good standing under the laws of Delaware. The execution and performance of this instrument have been duly authorized by the Company’s board of directors.
+
+4. INVESTOR REPRESENTATIONS
+
+The Investor has full legal capacity and authority to execute this instrument and is acquiring it for investment purposes, not with a view to distribution.
+
+5. MISCELLANEOUS
+
+This instrument is governed by the laws of the State of Delaware. Any amendment or waiver must be in writing and signed by the Company and either the Investor or holders of a majority of the aggregate purchase amounts of outstanding instruments with the same Post-Money Valuation Cap and Discount Rate.
+
+NORTHSTAR ROBOTICS, INC.
+
+By: Elena Park, Chief Executive Officer
+
+NORTHSTAR SEED FUND I, L.P.
+
+By: Marcus Chen, General Partner`,
+
+  [SUPPLIER_AGREEMENT_DOC_NAME]: buildSupplierAgreementText(),
+
+  "Redacted_Due_Diligence_Extract.docx": `CONFIDENTIAL — REDACTED REVIEW COPY
+
+PROJECT NORTHSTAR
+LEGAL DUE DILIGENCE EXTRACT
+
+1. PARTIES
+
+Target company: ████████████████████████
+Seller: ████████████████████████████████
+Buyer: Northstar Robotics, Inc.
+
+2. TRANSACTION VALUE
+
+The proposed purchase price is EUR ███████████, subject to the working-capital adjustment described in Schedule 4.
+
+3. KEY FINDINGS
+
+The target is party to a material supply agreement with ███████████████. The agreement contains a change-of-control clause requiring written consent before completion.
+
+An employment dispute involving █████████████ remains pending. External counsel estimates the maximum exposure at EUR ████████.
+
+4. RECOMMENDATION
+
+Obtain change-of-control consent, require a specific indemnity for the pending dispute, and retain EUR █████████ from the purchase price until the claim is resolved.
+
+Prepared for internal review. Personal names, counterparties, account numbers, and commercially sensitive amounts have been redacted.`,
+
+  "Expert_Valuation_Report.pdf": `ZNALECKÝ POSUDEK č. 127-15/2025
 O stanovení hodnoty 100 % akcií společnosti EnerGo Distribuce, a.s.
 
 Znalec: doc. Ing. Karel Fiala, Ph.D., znalec v oboru ekonomika
@@ -1802,6 +2363,34 @@ const orgContacts = [
     ],
     color: "emerald",
   },
+  {
+    id: seedId("contact-org-northstar-robotics"),
+    type: "organization" as const,
+    displayName: "Northstar Robotics, Inc.",
+    organizationName: "Northstar Robotics, Inc.",
+    registrationNumber: "7483921",
+    taxId: "US-94-7483921",
+    bankAccounts: [],
+    billingAddress: {
+      line1: "548 Market Street",
+      city: "San Francisco",
+      state: "California",
+      postalCode: "94104",
+      country: "United States",
+    },
+    defaultHourlyRate: 450,
+    currency: "USD",
+    paymentTermDays: 30,
+    emails: [
+      {
+        type: "work" as const,
+        address: "legal@northstar-robotics.example",
+        isPrimary: true,
+      },
+    ],
+    phones: [],
+    color: "violet",
+  },
 ];
 
 // Additional org contacts for overview stress-testing
@@ -2193,10 +2782,13 @@ const personContacts = [
 const seedWorkspaces = [
   {
     id: seedId("ws-akvizice-energo"),
-    name: "Akvizice EnerGo Distribuce",
-    reference: "2024/001",
-    clientId: at(orgContacts, 1).id, // Česká Energie
-    billingReference: "CE-ACQ-2024",
+    // The matter the marketing editor scenes film: its breadcrumb frames the
+    // Supplier_Agreement.docx redline (Northstar Robotics buying drive
+    // components from Meridian Precision), so the name stays supplier-themed.
+    name: "Meridian supply agreement",
+    reference: "2026/031",
+    clientId: at(orgContacts, 4).id, // Northstar Robotics
+    billingReference: "NS-SUPPLY-2026",
   },
   {
     id: seedId("ws-stavebni-spor"),
@@ -2260,6 +2852,91 @@ const seedWorkspaces = [
     billingReference: "PERF-VIRT-1000",
   },
 ];
+
+// ─── Sidebar recents ordering ───────────────────────────
+// The app sidebar's "Recent matters" list is ordered by
+// workspaces.lastActivityAt (apps/web/src/components/app-sidebar.logic.ts),
+// and the marketing recordings film that sidebar. Relying on the column's
+// defaultNow() orders matters by seed insertion time, which surfaced the
+// last few MORE_WORKSPACES entries (Czech-named) in every recording. Every
+// workspace therefore gets a deterministic lastActivityAt: the matters
+// below (English names, English client names) are pinned to the newest
+// dates so they fill all visible recents slots (sidebar limit is 5) with
+// margin, and every other matter falls back to an older date derived from
+// its insertion index. Keyed by the org-unique matter reference.
+const RECENT_MATTER_ACTIVITY: Record<string, string> = {
+  "2024/059": "2026-07-17T09:00:00.000Z", // Export Review - Project Atlas Data Room (Greenleaf)
+  "2026/031": "2026-07-16T15:00:00.000Z", // Meridian supply agreement (Northstar Robotics)
+  "2024/058": "2026-07-16T11:00:00.000Z", // Fund IV Structuring (Greenleaf)
+  "2024/046": "2026-07-15T16:00:00.000Z", // Sanctions Screening Programme (Crown Shipping)
+  "2024/018": "2026-07-15T10:30:00.000Z", // Post-Acquisition Integration (Thames Advisory)
+  "2024/003": "2026-07-14T14:00:00.000Z", // Due Diligence - Greenleaf Fund III (Greenleaf)
+  "2024/043": "2026-07-14T09:00:00.000Z", // Charter Party Dispute (Crown Shipping)
+  "2024/020": "2026-07-13T15:00:00.000Z", // Anti-Bribery Compliance Review (Thames Advisory)
+  "2024/007": "2026-07-13T10:00:00.000Z", // Cross-border M&A Advisory (Greenleaf)
+  "2024/016": "2026-07-12T14:00:00.000Z", // Shareholder Dispute Resolution (Thames Advisory)
+};
+
+const HOUR_MS = 3_600_000;
+const DAY_MS = 24 * HOUR_MS;
+
+// Non-cast matters: deterministic and strictly older than every pinned
+// date above (2026-02-02 base + one hour per insertion index).
+const FALLBACK_ACTIVITY_BASE_MS = Date.UTC(2026, 1, 2, 8, 0, 0);
+const FALLBACK_ACTIVITY_STEP_MS = HOUR_MS;
+
+const workspaceLastActivityAt = (reference: string, index: number): Date => {
+  const pinned = RECENT_MATTER_ACTIVITY[reference];
+  return pinned
+    ? new Date(pinned)
+    : new Date(FALLBACK_ACTIVITY_BASE_MS + index * FALLBACK_ACTIVITY_STEP_MS);
+};
+
+// ─── Entity timestamp pinning ───────────────────────────
+// The files views show per-document Created/Last-updated columns, the list
+// endpoints sort by asc(entities.createdAt) (see
+// apps/api/src/handlers/entities/list-files.ts), and the marketing stills
+// film that ordering. With the columns' defaultNow(), every fresh seed
+// produced "N min ago" values that varied with seed wall-clock time, so
+// re-seeded screenshots drifted. Entities therefore get deterministic
+// timestamps (same pattern as workspaces.lastActivityAt above): createdAt
+// steps forward 9 minutes per entity from 30 days before the workspace's
+// pinned lastActivityAt, so createdAt-sorted views render the seed's
+// insertion order (folders first, then documents in listing order) exactly
+// as the pre-pinning seed did; updatedAt lands a deterministic (hashed from
+// the entity id) few minutes under one hour before the workspace's activity
+// date, so created < updated <= workspace activity always holds. Exported
+// for scripts that re-pin the shared dev DB without a full reseed.
+const ENTITY_CREATED_STEP_MS = 9 * 60_000;
+const ENTITY_CREATED_BASE_OFFSET_MS = 30 * DAY_MS;
+
+type SeedEntityTimestampsOptions = {
+  entityId: string;
+  /** Insertion index of the entity within its workspace. */
+  indexInWorkspace: number;
+  workspaceActivityAt: Date;
+};
+
+export const seedEntityTimestamps = ({
+  entityId,
+  indexInWorkspace,
+  workspaceActivityAt,
+}: SeedEntityTimestampsOptions): { createdAt: Date; updatedAt: Date } => {
+  // First 12 hex chars of the deterministic entity UUID: a stable, well-mixed
+  // 48-bit value that is safely inside Number precision.
+  const hash = Number.parseInt(entityId.replaceAll("-", "").slice(0, 12), 16);
+  const createdAt = new Date(
+    workspaceActivityAt.getTime() -
+      ENTITY_CREATED_BASE_OFFSET_MS +
+      indexInWorkspace * ENTITY_CREATED_STEP_MS,
+  );
+  const updatedAt = new Date(
+    workspaceActivityAt.getTime() - HOUR_MS - (hash % (59 * 60_000)),
+  );
+  return { createdAt, updatedAt };
+};
+
+const MARKETING_AGENT_THREAD_TITLE = "Project Atlas · Change-of-control review";
 
 // ─── Properties (per-workspace) ─────────────────────────
 
@@ -2590,7 +3267,7 @@ const buildEntities = (wsId: WorkspaceId, wsLabel: string): EntitySeed[] => {
   }
 
   const docNames = workspaceDocNames[wsLabel] ?? [];
-  return [
+  const standardEntities: EntitySeed[] = [
     {
       entityId: folderId,
       versionId: seedId(`${wsLabel}-folder-1-v`),
@@ -2629,6 +3306,18 @@ const buildEntities = (wsId: WorkspaceId, wsLabel: string): EntitySeed[] => {
       name: docNames[3] ?? "Document 4",
     },
   ];
+
+  for (let i = 4; i < docNames.length; i++) {
+    standardEntities.push({
+      entityId: seedId(`${wsLabel}-doc-${i + 1}`),
+      versionId: seedId(`${wsLabel}-doc-${i + 1}-v`),
+      workspaceId: wsId,
+      kind: "document",
+      name: at(docNames, i),
+    });
+  }
+
+  return standardEntities;
 };
 
 // ─── Fields (status, due date, notes for each entity) ───
@@ -2842,6 +3531,12 @@ const buildFields = (
 
   for (let i = 0; i < docs.length; i++) {
     const doc = at(docs, i);
+    // The Supplier Agreement redline is mid-negotiation: pin its status and
+    // note to the review story instead of the rotating generic values, so
+    // the filmed files view matches the landing mock's framing.
+    const isSupplierAgreement =
+      wsLabel === AKVIZICE_MATTER_LABEL &&
+      doc.name === SUPPLIER_AGREEMENT_DOC_NAME;
 
     // Status field
     result.push({
@@ -2852,7 +3547,9 @@ const buildFields = (
       content: {
         version: 1,
         type: "single-select",
-        value: at(statuses, i % statuses.length),
+        value: isSupplierAgreement
+          ? "In Review"
+          : at(statuses, i % statuses.length),
       },
     });
 
@@ -2883,7 +3580,9 @@ const buildFields = (
       content: {
         version: 1,
         type: "text",
-        value: at(notes, noteIndex),
+        value: isSupplierAgreement
+          ? "Two positions outside playbook"
+          : at(notes, noteIndex),
       },
     });
 
@@ -2948,79 +3647,79 @@ export const buildExportReviewCitationSeeds = (
     fieldSuffix: "document-type",
     statement: `Document type extracted as ${metadata.documentType}.`,
     quote: `Document type: ${metadata.documentType}`,
-    blockIndex: 4,
+    blockIndex: 6,
   },
   {
     fieldSuffix: "counterparty",
     statement: `Counterparty extracted as ${metadata.counterparty}.`,
     quote: `Counterparty: ${metadata.counterparty}`,
-    blockIndex: 5,
+    blockIndex: 7,
   },
   {
     fieldSuffix: "jurisdiction",
     statement: `Jurisdiction extracted as ${metadata.jurisdiction}.`,
     quote: `Jurisdiction: ${metadata.jurisdiction}`,
-    blockIndex: 6,
+    blockIndex: 8,
   },
   {
     fieldSuffix: "governing-law",
     statement: `Governing law extracted as ${metadata.governingLaw}.`,
     quote: `Governing law: ${metadata.governingLaw}`,
-    blockIndex: 7,
+    blockIndex: 9,
   },
   {
     fieldSuffix: "effective-date",
     statement: `Effective date extracted as ${metadata.effectiveDate}.`,
     quote: `Effective date: ${metadata.effectiveDate}`,
-    blockIndex: 8,
+    blockIndex: 10,
   },
   {
     fieldSuffix: "expiry-date",
     statement: `Expiry date extracted as ${metadata.expiryDate}.`,
     quote: `Expiry date: ${metadata.expiryDate}`,
-    blockIndex: 9,
+    blockIndex: 11,
   },
   {
     fieldSuffix: "contract-value",
     statement: `Contract value extracted as EUR ${metadata.contractValue}.`,
     quote: `Contract value: EUR ${metadata.contractValue}`,
-    blockIndex: 10,
+    blockIndex: 12,
   },
   {
     fieldSuffix: "risk-level",
     statement: `Risk level classified as ${metadata.riskLevel}.`,
     quote: `Risk level: ${metadata.riskLevel}`,
-    blockIndex: 11,
+    blockIndex: 13,
   },
   {
     fieldSuffix: "evidence-quality",
     statement: `Evidence quality classified as ${metadata.evidenceQuality}.`,
     quote: `Evidence quality: ${metadata.evidenceQuality}`,
-    // Position 12 is "Review status: ..." (not a citation field); evidence
+    // Position 14 is "Review status: ..." (not a citation field); evidence
     // quality is the next line.
-    blockIndex: 13,
+    blockIndex: 15,
   },
   {
     fieldSuffix: "tags",
     statement: `Tags extracted as ${metadata.tags.join(", ")}.`,
     quote: `Tags: ${metadata.tags.join(", ")}`,
-    blockIndex: 14,
+    blockIndex: 16,
   },
   {
     fieldSuffix: "key-obligation",
     statement: "Key obligation extracted from the obligation section.",
     quote: metadata.keyObligation,
-    // Position 15 is the "Key obligation:" heading; the obligation text
+    // Position 17 is the "Key obligation" heading; the obligation text
     // itself is the next line.
-    blockIndex: 16,
+    blockIndex: 18,
   },
   {
     fieldSuffix: "risk-finding",
     statement: "Risk finding extracted from the risk section.",
     quote: metadata.riskFinding,
-    // Position 17 is the "Risk finding:" heading; the finding text itself
+    // Position 19 is the "Risk finding" heading; the finding text itself
     // is the next line.
-    blockIndex: 18,
+    blockIndex: 20,
   },
 ];
 
@@ -4263,8 +4962,37 @@ export async function seed(organizationId?: string, userId?: string) {
     `  Contacts: ${totalContacts} (${orgContacts.length + moreOrgContacts.length} orgs, ${personContacts.length} people)`,
   );
 
-  // 2. Workspaces
-  for (const ws of seedWorkspaces) {
+  // 1c. Organization settings: pin the practice jurisdiction (the seeded
+  // cast is a Czech firm) so jurisdiction-derived surfaces, notably the
+  // Knowledge tools catalogue's recommended section that the marketing cli
+  // scene films, render identically on every fresh seed instead of
+  // depending on whatever settings live dev usage left behind. Re-pinned on
+  // conflict; other settings columns stay untouched.
+  const practiceJurisdictions: PracticeJurisdiction[] = [
+    { countryCode: "CZ", isPrimary: true },
+  ];
+  await rootDb
+    .insert(organizationSettings)
+    .values({
+      id: seedId("org-settings"),
+      organizationId: ORG_ID,
+      practiceJurisdictions,
+    })
+    .onConflictDoUpdate({
+      target: organizationSettings.organizationId,
+      set: { practiceJurisdictions },
+    });
+  console.log("  Organization settings: practice jurisdiction CZ pinned");
+
+  // 2. Workspaces. lastActivityAt is pinned (never defaultNow()) so the
+  // sidebar "Recent matters" ordering the marketing recordings film stays
+  // deterministic; the conflict path re-pins it so a reseed restores the
+  // ordering even when live activity bumped it in the shared dev DB.
+  // Collected per workspace because entity timestamps below derive from it.
+  const workspaceActivityById = new Map<WorkspaceId, Date>();
+  for (const [wsIndex, ws] of seedWorkspaces.entries()) {
+    const lastActivityAt = workspaceLastActivityAt(ws.reference, wsIndex);
+    workspaceActivityById.set(ws.id, lastActivityAt);
     // oxlint-disable-next-line no-await-in-loop -- sequential seeding preserves insert order / FK dependencies
     await rootDb
       .insert(workspaces)
@@ -4276,14 +5004,23 @@ export async function seed(organizationId?: string, userId?: string) {
         clientId: ws.clientId,
         billingReference:
           "billingReference" in ws ? ws.billingReference : undefined,
+        lastActivityAt,
       })
-      .onConflictDoNothing();
+      .onConflictDoUpdate({
+        target: workspaces.id,
+        set: { lastActivityAt },
+      });
   }
   // 2b. Additional workspaces (overview stress-testing)
   let moreWsCount = 0;
   for (const mw of MORE_WORKSPACES) {
     const clientId = seedId(mw.clientLabel);
     const wsId = seedId(`extra-ws-${mw.reference}`);
+    const lastActivityAt = workspaceLastActivityAt(
+      mw.reference,
+      seedWorkspaces.length + moreWsCount,
+    );
+    workspaceActivityById.set(wsId, lastActivityAt);
     // oxlint-disable-next-line no-await-in-loop -- sequential seeding preserves insert order / FK dependencies
     await rootDb
       .insert(workspaces)
@@ -4293,14 +5030,99 @@ export async function seed(organizationId?: string, userId?: string) {
         name: mw.name,
         reference: mw.reference,
         clientId,
+        lastActivityAt,
       })
-      .onConflictDoNothing();
+      .onConflictDoUpdate({
+        target: workspaces.id,
+        set: { lastActivityAt },
+      });
 
     moreWsCount++;
   }
   console.log(
     `  Workspaces: ${seedWorkspaces.length} + ${moreWsCount} extra = ${seedWorkspaces.length + moreWsCount}`,
   );
+
+  const marketingAgentWorkspace = at(seedWorkspaces, 8);
+  const marketingAgentThreadId = seedId("marketing-agent-thread");
+  const marketingAgentCreatedAt = new Date("2026-07-16T09:30:00.000Z");
+  await rootDb.insert(chatThreads).values({
+    id: marketingAgentThreadId,
+    organizationId: ORG_ID,
+    userId: USER_ID,
+    workspaceId: marketingAgentWorkspace.id,
+    title: MARKETING_AGENT_THREAD_TITLE,
+    createdAt: marketingAgentCreatedAt,
+    updatedAt: marketingAgentCreatedAt,
+  });
+  await rootDb.insert(chatMessages).values([
+    {
+      id: seedId("marketing-agent-message-user"),
+      threadId: marketingAgentThreadId,
+      workspaceId: marketingAgentWorkspace.id,
+      userId: USER_ID,
+      role: "user",
+      content: {
+        version: 1,
+        data: [
+          {
+            type: "text",
+            text: "Compare the change-of-control clauses across this matter.",
+          },
+        ],
+      },
+      createdAt: marketingAgentCreatedAt,
+    },
+    {
+      id: seedId("marketing-agent-message-assistant"),
+      threadId: marketingAgentThreadId,
+      workspaceId: marketingAgentWorkspace.id,
+      userId: USER_ID,
+      role: "assistant",
+      content: {
+        version: 1,
+        data: [
+          {
+            type: "text",
+            text: "Across the cited agreements, assignment or a material service change requires written notice. The higher-risk agreements also require consent or termination review before signing.",
+          },
+          {
+            type: "data-stella-source-document",
+            data: {
+              entityId: seedId(`${EXPORT_TABLE_MATTER_LABEL}-doc-1`),
+              kind: "document",
+              mimeType:
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+              title: at(EXPORT_REVIEW_DOC_NAMES, 0),
+              workspaceId: marketingAgentWorkspace.id,
+            },
+          },
+          {
+            type: "data-stella-source-document",
+            data: {
+              entityId: seedId(`${EXPORT_TABLE_MATTER_LABEL}-doc-5`),
+              kind: "document",
+              mimeType: "application/pdf",
+              title: at(EXPORT_REVIEW_DOC_NAMES, 4),
+              workspaceId: marketingAgentWorkspace.id,
+            },
+          },
+          {
+            type: "data-stella-source-document",
+            data: {
+              entityId: seedId(`${EXPORT_TABLE_MATTER_LABEL}-doc-9`),
+              kind: "document",
+              mimeType: "application/pdf",
+              title: at(EXPORT_REVIEW_DOC_NAMES, 8),
+              workspaceId: marketingAgentWorkspace.id,
+            },
+          },
+        ],
+      },
+      createdAt: new Date(marketingAgentCreatedAt.getTime() + 2500),
+    },
+  ]);
+  console.log("  Marketing agent story: 1 thread, 2 messages");
 
   // 2c. Workspace members — add all seed users to every workspace
   const allWsIds = [
@@ -4408,7 +5230,21 @@ export async function seed(organizationId?: string, userId?: string) {
     const label = `extra-ws-${mw.reference}`;
     allEntities.push(...buildEntities(wsId, label));
   }
+  const entityIndexByWorkspace = new Map<WorkspaceId, number>();
   for (const [ei, e] of allEntities.entries()) {
+    const workspaceActivityAt = workspaceActivityById.get(e.workspaceId);
+    if (!workspaceActivityAt) {
+      panic(`No pinned activity date for workspace ${e.workspaceId}`);
+    }
+    const indexInWorkspace = entityIndexByWorkspace.get(e.workspaceId) ?? 0;
+    entityIndexByWorkspace.set(e.workspaceId, indexInWorkspace + 1);
+    // Pinned like workspaces.lastActivityAt, re-pinned on conflict, so the
+    // filmed Created/Modified columns match a fresh seed exactly.
+    const { createdAt, updatedAt } = seedEntityTimestamps({
+      entityId: e.entityId,
+      indexInWorkspace,
+      workspaceActivityAt,
+    });
     // oxlint-disable-next-line no-await-in-loop -- entity row must exist before its version + currentVersion link below
     await rootDb
       .insert(entities)
@@ -4420,8 +5256,18 @@ export async function seed(organizationId?: string, userId?: string) {
         name: e.name,
         createdBy: pickAuthor(seedUserIds, ei),
         lastEditedBy: pickAuthor(seedUserIds, ei + 1),
+        createdAt,
+        updatedAt,
       })
-      .onConflictDoNothing();
+      .onConflictDoUpdate({
+        target: entities.id,
+        set: {
+          name: e.name,
+          parentId: e.parentId ?? null,
+          createdAt,
+          updatedAt,
+        },
+      });
 
     // oxlint-disable-next-line no-await-in-loop -- version row depends on the entity inserted just above
     await rootDb
@@ -4458,7 +5304,14 @@ export async function seed(organizationId?: string, userId?: string) {
   const pdfTwinCount = 0;
   let extractedCount = 0;
 
-  const allDocNames = Object.values(workspaceDocNames).flat();
+  // Pool for the extra workspaces' pseudo-random doc picks. The Supplier
+  // Agreement is excluded twice over: including it would reshuffle every
+  // previously seeded extra workspace's picks (they index into this list
+  // modulo its length), and the redlined marketing document should not be
+  // cloned into unrelated matters.
+  const allDocNames = Object.values(workspaceDocNames)
+    .flat()
+    .filter((name) => name !== SUPPLIER_AGREEMENT_DOC_NAME);
 
   /** Seed all document content for a single workspace. */
   const seedDocumentsForWorkspace = async (
@@ -4484,10 +5337,19 @@ export async function seed(organizationId?: string, userId?: string) {
       const docText = documentTexts[fileName];
 
       // ── S3 file ──
-      const content = isDocx
-        ? // oxlint-disable-next-line no-await-in-loop -- bounded memory: build one document's bytes at a time
-          await createMockDocx(title, docText)
-        : createMockPdf(title, docText);
+      // The Supplier Agreement ships real tracked changes and comments, so
+      // it has a dedicated builder instead of the generic paragraph mock.
+      const buildContent = async () => {
+        if (fileName === SUPPLIER_AGREEMENT_DOC_NAME) {
+          return await createSupplierAgreementDocx();
+        }
+        if (isDocx) {
+          return await createMockDocx(title, docText);
+        }
+        return createMockPdf(title, docText);
+      };
+      // oxlint-disable-next-line no-await-in-loop -- bounded memory: build one document's bytes at a time
+      const content = await buildContent();
 
       const sha256Hex = new Bun.CryptoHasher("sha256")
         .update(content)
@@ -4501,6 +5363,17 @@ export async function seed(organizationId?: string, userId?: string) {
       // DOCX files are rendered natively via Folio — no PDF twin needed.
       // Non-DOCX convertible types still get a PDF twin from Gotenberg.
       const pdfFileId: UserFileId | null = null;
+      const fileContent = {
+        version: 1,
+        type: "file",
+        id: fileId,
+        fileName,
+        mimeType,
+        sizeBytes: content.length,
+        encrypted: false,
+        sha256Hex,
+        pdfFileId,
+      } as const satisfies FieldContent;
 
       // ── File field ──
       // oxlint-disable-next-line no-await-in-loop -- references the fileId/sha256 produced by the S3 write above
@@ -4511,19 +5384,12 @@ export async function seed(organizationId?: string, userId?: string) {
           workspaceId: toWs(entity.workspaceId),
           propertyId: filePropertyId,
           entityVersionId: entity.versionId,
-          content: {
-            version: 1,
-            type: "file",
-            id: fileId,
-            fileName,
-            mimeType,
-            sizeBytes: content.length,
-            encrypted: false,
-            sha256Hex,
-            pdfFileId,
-          },
+          content: fileContent,
         })
-        .onConflictDoNothing();
+        .onConflictDoUpdate({
+          target: fields.id,
+          set: { content: fileContent },
+        });
       fileCount++;
 
       // ── Extracted content (AI reads this) ──
@@ -4552,7 +5418,14 @@ export async function seed(organizationId?: string, userId?: string) {
             language: null,
             extractedAt: new Date(),
           })
-          .onConflictDoNothing();
+          .onConflictDoUpdate({
+            target: extractedContent.entityId,
+            set: {
+              ciphertext: Buffer.from(docText, "utf-8"),
+              charCount: docText.length,
+              extractedAt: new Date(),
+            },
+          });
         extractedCount++;
       }
     }

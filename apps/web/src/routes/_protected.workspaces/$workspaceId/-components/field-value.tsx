@@ -479,7 +479,9 @@ const getSelectPropertyColor = (
 
   const color = property.content.options.find((o) => o.value === option)?.color;
 
-  if (!color) {
+  // `OptionColor` widens to `string` (arbitrary hex), so `!color` would also
+  // treat an empty string as "no color"; only `undefined` means "not found".
+  if (color === undefined) {
     return undefined;
   }
 

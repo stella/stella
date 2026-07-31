@@ -1,0 +1,921 @@
+{
+  "appearance": {
+    "dark": "Dark",
+    "light": "Light",
+    "toggle": "Toggle theme"
+  },
+  "askAi": {
+    "copy": "Copy prompt",
+    "label": "Ask AI about stella"
+  },
+  "common": {
+    "copied": "Copied",
+    "copy": "Copy",
+    "getCli": "Get the CLI",
+    "startFree": "Start free"
+  },
+  "demo": {
+    "addView": "Add view",
+    "askStella": "Ask stella",
+    "close": "Close",
+    "documentType": "Document type",
+    "documents": "Documents",
+    "dueDate": "Due date",
+    "files": "Files",
+    "filter": "Filter",
+    "matters": "Matters",
+    "notes": "Notes",
+    "overview": "Overview",
+    "sectionBody": "Captured directly from the running product. What you see here is what you use.",
+    "sectionLabel": "The actual product",
+    "sectionTitle": "stella, as it is.",
+    "sort": "Sort",
+    "source": "Source",
+    "sources": "Sources",
+    "status": "Status",
+    "statusActive": "Active",
+    "statusClosed": "Closed",
+    "statusInReview": "In review",
+    "statusOnHold": "On hold",
+    "table": "Table",
+    "todos": "Todos"
+  },
+  "footer": {
+    "agent": "AI agent",
+    "anonymization": "Anonymization",
+    "clarity": "Clarity for every matter.",
+    "connect": "Connect",
+    "contact": "Contact us",
+    "documentation": "Documentation",
+    "editor": "Editor",
+    "imprint": "Imprint",
+    "legal": "Legal",
+    "navLabel": "Footer",
+    "press": "Press",
+    "publicData": "Public data",
+    "resources": "Resources",
+    "sourceCode": "Source code",
+    "status": "Status",
+    "tabularReview": "Tabular review",
+    "tagline": "Open legal workspace for work that matters.",
+    "templates": "Templates",
+    "terms": "Terms",
+    "workspace": "Workspace"
+  },
+  "hero": {
+    "badge": "Actively developed",
+    "selfHost": "Self-host",
+    "subtitle": "The <gh>open-source</gh> legal workspace: matters, documents, review, and an AI agent that answers with citations.",
+    "title": "Put AI to work on every matter."
+  },
+  "home": {
+    "ctaTitle": "Bring AI to your practice."
+  },
+  "mcpProof": {
+    "contextBody": "Bring approved matters and legal data into Claude or any compatible MCP client.",
+    "contextTitle": "Matter context.",
+    "scopeBody": "Authenticate with OAuth; every call remains constrained by granted scopes and workspace permissions.",
+    "scopeTitle": "Only the access you grant.",
+    "subtitle": "Bring live matter context into the tools where you work.",
+    "title": "Workspace, meet MCP.",
+    "toolsBody": "Search, read, and fill templates through the same registry that powers the stella CLI.",
+    "toolsTitle": "Tools for AI agents."
+  },
+  "meta": {
+    "homeDescription": "Open-source legal workspace for documents, matters, contract review, and case-law research. Self-host or use our cloud. Usage-based AI, no vendor lock-in.",
+    "homeTitle": "stella | open-source legal workspace"
+  },
+  "nav": {
+    "aiFactSheet": "AI fact sheet",
+    "aiFactSheetBlurb": "stella in machine-readable form.",
+    "beta": "Beta",
+    "blog": "Blog",
+    "changelog": "Changelog",
+    "chooseLanguage": "Choose a language",
+    "docxEditor": "Standalone DOCX editor",
+    "github": "stella on GitHub",
+    "openMenu": "Open navigation",
+    "pillars": {
+      "data": "Data",
+      "intelligence": "Legal intelligence",
+      "workspace": "Workspace"
+    },
+    "product": "Product",
+    "products": {
+      "agent": {
+        "blurb": "Chat with your matters, documents, registries, and connected tools in one place. The AI agent acts with approvals and source previews, grounds its answers in citations, and extends through skills and external connectors.",
+        "discover": "Discover the AI agent",
+        "eyebrow": "AI agent",
+        "title": "An AI agent that works across your matters, files, and tools."
+      },
+      "anonymization": {
+        "blurb": "Remove names, entities, and identifying details before material reaches AI, directly from chat and document review, with a redacted result you can check before anything moves on.",
+        "discover": "Discover Anonymization",
+        "eyebrow": "Anonymization",
+        "title": "Prepare material for AI without exposing identifying details."
+      },
+      "cli-mcp": {
+        "blurb": "Search, read, and work with stella from the command line or any MCP-compatible client. Both surfaces share the same capability registry, permissions, and workspace data.",
+        "discover": "Discover CLI & MCP",
+        "eyebrow": "CLI & MCP",
+        "title": "One workspace, from every tool."
+      },
+      "editor": {
+        "blurb": "Open and edit Word .docx files right in your browser: no install, no converting to another format. stella's online DOCX editor preserves the original formatting and track changes, keeps the file connected to its matter, and saves each revision into the document's version history.",
+        "discover": "Discover the Editor",
+        "eyebrow": "Editor",
+        "title": "Edit Word documents in the browser, without leaving the matter."
+      },
+      "public-data": {
+        "blurb": "Case law and company registries from official public sources, collected by stella's Legal Atlas with their structure preserved. Read a decision, look up a company, follow citations, and reference any of it from a matter or hand it to the AI agent.",
+        "discover": "Discover Public data",
+        "eyebrow": "Public data",
+        "title": "Legal data, ready for your work."
+      },
+      "tabular-review": {
+        "blurb": "Ask questions across a whole document set and get structured answers back as a table in the matter — sortable, filterable, and traceable to the source text. Built for due diligence, discovery, and research.",
+        "discover": "Discover Tabular Review",
+        "eyebrow": "Tabular Review",
+        "title": "Turn a pile of documents into a table you can review."
+      },
+      "templates": {
+        "blurb": "Define a template once with fields and conditional clauses, then fill it in by hand or let stella draft it from a matter's data. The finished document lands in the matter, ready to keep editing.",
+        "discover": "Discover Templates",
+        "eyebrow": "Templates",
+        "title": "Build reusable templates, and let AI fill them in."
+      },
+      "workspace": {
+        "blurb": "The workspace holds a matter's documents, Word .docx editing, review, research, and chat in one place, so the work stays in context from source material to answer.",
+        "discover": "Discover Workspace",
+        "eyebrow": "Workspace",
+        "title": "Matters, documents, review, and chat in one workspace."
+      }
+    },
+    "security": "Security"
+  },
+  "products": {
+    "agent": {
+      "adjacent": {
+        "0": {
+          "body": "Turn a document set into a table you can sort, filter, and trace back to the source."
+        },
+        "1": {
+          "body": "Matters, documents, .docx editing, review, and chat in one workspace."
+        },
+        "2": {
+          "body": "Read and search official case law, legal sources, and company registries."
+        },
+        "3": {
+          "body": "stella in machine-readable form for AI search engines."
+        }
+      },
+      "capabilities": {
+        "0": {
+          "body": "Ask questions over the matters, documents, and contacts you already have in stella. One conversation can reach every matter you have access to, with the same permissions that govern the rest of your workspace.",
+          "title": "Works across your matters"
+        },
+        "1": {
+          "body": "Bring documents into the conversation and ask the AI agent to read, compare, or summarise them.",
+          "title": "Reads your files"
+        },
+        "2": {
+          "body": "Reach company registries and other connected sources without leaving the chat.",
+          "title": "Connected tools"
+        },
+        "3": {
+          "body": "The AI agent asks before it acts, so you stay in control of each step.",
+          "title": "Approvals before acting"
+        },
+        "4": {
+          "body": "See what the AI agent is reading with a preview of the source behind each step.",
+          "title": "Source previews"
+        },
+        "5": {
+          "body": "Answers link back to the source, and a citation opens the document at the exact passage.",
+          "title": "Grounded by citations"
+        }
+      },
+      "cta": {
+        "heading": "Hand the AI agent a real matter."
+      },
+      "faqs": {
+        "0": {
+          "answer": "No. It asks for approval before it acts, and it shows a source preview for what it reads, so you can follow and confirm each step.",
+          "question": "Does the AI agent act on its own?"
+        },
+        "1": {
+          "answer": "Through skills (reusable instructions and tools) and external connectors that are MCP-compatible. Both extend what the AI agent can reach without changing the chat itself.",
+          "question": "How do I add new capabilities?"
+        },
+        "2": {
+          "answer": "From your matters, files, registries, and connected tools. AI features use your own provider keys, and answers are grounded by citations back to the source.",
+          "question": "Where do its answers come from?"
+        }
+      },
+      "metaDescription": "Chat with your matters, documents, registries, and connected tools. The AI agent acts with approvals, grounds answers in citations, and extends via skills.",
+      "metaTitle": "AI agent for legal matters | stella",
+      "quickAnswer": {
+        "answer": "The AI agent chats with your matters, files, company registries, and connected tools. It asks for approval before acting, shows a source preview for what it reads, and grounds answers in citations. You can extend it with reusable skills and external connectors that are MCP-compatible.",
+        "question": "What can the AI agent do?"
+      },
+      "sections": {
+        "0": {
+          "bullets": {
+            "0": "Chat over matters, documents, and contacts in one conversation",
+            "1": "Pull company and registry data into the same thread",
+            "2": "Hand a tabular review to the AI agent for follow-up questions"
+          },
+          "heading": "Ask once, across everything in the matter"
+        },
+        "1": {
+          "bullets": {
+            "0": "Each action waits for your approval before it runs",
+            "1": "A source preview shows what the AI agent read for every step",
+            "2": "Citations open the source document at the exact passage"
+          },
+          "heading": "You stay in control"
+        },
+        "2": {
+          "bullets": {
+            "0": "Skills are instructions and tools you can reuse across matters",
+            "1": "External connectors are MCP-compatible, so the AI agent reaches more tools",
+            "2": "Add capabilities without changing how the chat works"
+          },
+          "heading": "Extend it with skills and connectors"
+        }
+      }
+    },
+    "anonymization": {
+      "adjacent": {
+        "0": {
+          "body": "Chat across matters, files, and connected tools with approvals and source previews."
+        },
+        "1": {
+          "body": "Matters, documents, .docx editing, review, and chat in one workspace."
+        },
+        "2": {
+          "body": "Turn a document set into a table you can sort, filter, and trace back to the source."
+        },
+        "3": {
+          "body": "stella in machine-readable form for AI search engines."
+        }
+      },
+      "capabilities": {
+        "0": {
+          "body": "Removes names, entities, and identifying details before material reaches an AI step.",
+          "title": "Keeps identifying details out"
+        },
+        "1": {
+          "body": "Runs directly in chat and in document review, not in a separate tool.",
+          "title": "Works in chat and review"
+        },
+        "2": {
+          "body": "Add your organisation's own terms and name lists so the names that matter to you are always caught.",
+          "title": "Your terms included"
+        },
+        "3": {
+          "body": "Shows the redacted document in context, so you confirm what leaves the matter.",
+          "title": "Reviewable output"
+        }
+      },
+      "cta": {
+        "heading": "Keep identifying details out of your AI workflows."
+      },
+      "faqs": {
+        "0": {
+          "answer": "Yes. Anonymization is available today, integrated in chat and document review.",
+          "question": "Is anonymization available now?"
+        },
+        "1": {
+          "answer": "Preparing material for AI workflows without exposing names, entities, or identifying details, while keeping the redacted result available for review.",
+          "question": "What does it help with?"
+        }
+      },
+      "metaDescription": "Remove names, entities, and identifying details before material reaches AI, directly from chat and document review, with a redacted result you can check.",
+      "metaTitle": "Document anonymization for legal AI | stella",
+      "quickAnswer": {
+        "answer": "It removes names, entities, and identifying details before material enters an AI workflow, and shows you the redacted result so you can confirm what leaves the matter. It is integrated directly into chat and document review.",
+        "question": "What is anonymization in stella?"
+      },
+      "sections": {
+        "0": {
+          "bullets": {
+            "0": "Keeps names, entities, and identifying details out of AI steps",
+            "1": "Built for legal AI workflows rather than generic document masking",
+            "2": "Leaves a reviewable redacted document before the next step"
+          },
+          "heading": "Prepare material before it reaches AI"
+        },
+        "1": {
+          "bullets": {
+            "0": "Available from chat and document review",
+            "1": "No copy-pasting into an external redaction tool",
+            "2": "Built on stella's own open-source anonymization engine"
+          },
+          "heading": "Part of the workspace, not a separate tool"
+        }
+      }
+    },
+    "cli-mcp": {
+      "adjacent": {
+        "0": {
+          "body": "Matters, documents, review, and chat in one workspace."
+        },
+        "1": {
+          "body": "Work across matters and connected tools with approvals and citations."
+        },
+        "2": {
+          "body": "Fill reusable legal documents through the app, CLI, or connected tools."
+        },
+        "3": {
+          "body": "stella in machine-readable form for AI search engines."
+        }
+      },
+      "capabilities": {
+        "0": {
+          "body": "Use generated commands such as stella search matters, document read, and template fill from scripts or your terminal.",
+          "title": "Work from the terminal"
+        },
+        "1": {
+          "body": "Connect stella to MCP-compatible clients without building a separate integration for each one.",
+          "title": "MCP-compatible"
+        },
+        "2": {
+          "body": "The CLI command surface is generated from the MCP tool registry, so the two interfaces stay aligned as stella evolves.",
+          "title": "One capability registry"
+        },
+        "3": {
+          "body": "Authentication scopes and workspace permissions remain the boundary, whichever interface you use.",
+          "title": "Workspace permissions apply"
+        },
+        "4": {
+          "body": "Commands return machine-readable JSON for scripts and AI agents as well as readable terminal output for people.",
+          "title": "Structured output"
+        },
+        "5": {
+          "body": "Point the CLI and MCP clients at the stella server your organisation operates.",
+          "title": "Self-host friendly"
+        }
+      },
+      "cta": {
+        "heading": "Bring stella into the tools where you already work."
+      },
+      "faqs": {
+        "0": {
+          "answer": "No. They are separate interfaces generated from the same capability registry and connected to the same stella server.",
+          "question": "Is the CLI a separate product from the MCP server?"
+        },
+        "1": {
+          "answer": "Yes. The CLI supports structured JSON output, pagination, predictable exit codes, and non-interactive use suitable for automation.",
+          "question": "Can I use the CLI in scripts?"
+        },
+        "2": {
+          "answer": "No. The server checks authentication scopes and stella permissions before a capability runs.",
+          "question": "Does connecting an MCP client bypass workspace permissions?"
+        }
+      },
+      "metaDescription": "Search, read, and work with stella from the command line or any MCP-compatible client. Both surfaces share the same capabilities, permissions, and data.",
+      "metaTitle": "MCP server and CLI for your legal workspace | stella",
+      "quickAnswer": {
+        "answer": "They are two interfaces to the same stella capabilities. The CLI mirrors the MCP tool registry as commands, while the MCP server lets compatible AI agents and tools work with matters, documents, templates, and public legal data under the same access controls.",
+        "question": "What are the stella CLI and MCP server?"
+      },
+      "sections": {
+        "0": {
+          "bullets": {
+            "0": "Find passages across matter documents with stella search matters",
+            "1": "Read documents, list matters, and inspect templates without switching context",
+            "2": "Use paginated, structured results in scripts and automated workflows"
+          },
+          "heading": "Search the whole matter from your terminal"
+        },
+        "1": {
+          "bullets": {
+            "0": "Expose matters, documents, case law, templates, and other approved tools",
+            "1": "Keep the capability catalogue and CLI commands generated from one registry",
+            "2": "Connect compatible AI agents without copying legal data into another workspace"
+          },
+          "heading": "The same capabilities through MCP"
+        }
+      },
+      "setup": {
+        "clients": {
+          "0": {
+            "body": "Turn on developer mode under Settings → Connectors → Advanced, then add a connector with the endpoint address."
+          },
+          "1": {
+            "body": "In Settings → Connectors, add a custom connector with the endpoint address."
+          },
+          "2": {
+            "body": "Add the server and sign in:"
+          },
+          "3": {
+            "body": "Add the server with one command:"
+          }
+        },
+        "heading": "Connect an AI agent",
+        "intro": "Point any MCP-compatible client at the endpoint below, or at your own server's /mcp path when self-hosting. The first connection opens a browser sign-in, and the agent holds only the scopes you approve.",
+        "outro": "Any client that speaks Streamable HTTP with OAuth 2.1 connects the same way. Prefer the terminal? Install the CLI and sign in:"
+      }
+    },
+    "editor": {
+      "adjacent": {
+        "0": {
+          "body": "See where matters, documents, and tools live together."
+        },
+        "1": {
+          "body": "Create reusable Word documents with fields and conditional clauses."
+        },
+        "2": {
+          "body": "Try the same editor on its own: open and edit a .docx in the browser, no account needed."
+        },
+        "3": {
+          "body": "stella in machine-readable form for AI search engines."
+        }
+      },
+      "capabilities": {
+        "0": {
+          "body": "Open and edit Word documents directly in stella's online editor: no install, and no converting the file into a separate proprietary format.",
+          "title": "Edit .docx files in the browser"
+        },
+        "1": {
+          "body": "The document stays a .docx throughout, so fonts, styles, and layout look and save the way Word created them.",
+          "title": "Formatting stays intact"
+        },
+        "2": {
+          "body": "Tracked insertions and deletions appear in place, and AI-proposed edits arrive as tracked changes you accept or reject in the document.",
+          "title": "Track changes"
+        },
+        "3": {
+          "body": "Saved edits become document revisions, so the current file and its full history stay together.",
+          "title": "Version history for every save"
+        },
+        "4": {
+          "body": "The document remains attached to its matter, alongside its files, properties, tasks, and conversations.",
+          "title": "Matter context stays visible"
+        },
+        "5": {
+          "body": "Use the desktop bridge when a document needs Microsoft Word, then return the updated file to the same matter.",
+          "title": "Local Office bridge"
+        }
+      },
+      "cta": {
+        "heading": "Edit a Word document in its matter."
+      },
+      "faqs": {
+        "0": {
+          "answer": "Yes. The document is edited where it lives, alongside the matter's other files, properties, tasks, and conversations, so no local copy is downloaded and re-uploaded to make a change.",
+          "question": "Does the document stay attached to its matter while I edit?"
+        },
+        "1": {
+          "answer": "Yes. Tracked insertions and deletions appear in place, the way Word shows them. Edits proposed by stella's AI arrive the same way, so a redline is reviewed and accepted or rejected before it becomes part of the document.",
+          "question": "Does the editor keep track changes?"
+        },
+        "2": {
+          "answer": "The saved file remains connected to the same matter and document, and the save becomes a revision in that document's version history.",
+          "question": "What happens when I save?"
+        },
+        "3": {
+          "answer": "Yes. Saved revisions stay in the document's version history, so the current file and the ones it replaced remain together on the same document.",
+          "question": "Can I get back to an earlier revision?"
+        },
+        "4": {
+          "answer": "Yes. The stella desktop bridge opens the document in local Office for Word-specific workflows and returns the edited file to the same matter.",
+          "question": "Can I open the same document in Microsoft Word?"
+        },
+        "5": {
+          "answer": "Yes. The document is part of its matter, so the AI agent can read it and propose edits as tracked changes in the same document.",
+          "question": "Can stella's AI work on the document I am editing?"
+        }
+      },
+      "metaDescription": "Edit a matter's Word documents inside stella: track changes reviewed in place, a revision in the version history for every save, and a bridge to local Word.",
+      "metaTitle": "Edit Word documents in your legal workspace | stella",
+      "quickAnswer": {
+        "answer": "Yes. Open a .docx file from a matter and edit it in the browser. stella keeps the document in its original Word format and records saved revisions in the same document's version history.",
+        "question": "Can I edit Word documents in stella?"
+      },
+      "sections": {
+        "0": {
+          "bullets": {
+            "0": "Open a .docx directly from a matter",
+            "1": "Edit the document with familiar page and formatting controls",
+            "2": "Review track changes in place, including edits proposed by AI",
+            "3": "Keep the original Word file format",
+            "4": "Save changes into the document's version history"
+          },
+          "heading": "The .docx stays a .docx"
+        },
+        "1": {
+          "bullets": {
+            "0": "Move between the document and its matter without uploading copies",
+            "1": "Keep document properties and revisions with the file",
+            "2": "Open the same document through the desktop bridge when needed",
+            "3": "Use the document as context for the AI agent"
+          },
+          "heading": "Connected to the rest of the matter"
+        }
+      }
+    },
+    "public-data": {
+      "adjacent": {
+        "0": {
+          "body": "Prepare sensitive material for AI without exposing identifying details."
+        },
+        "1": {
+          "body": "Chat across matters, files, and sources with approvals and citations."
+        },
+        "2": {
+          "body": "Turn a document set into a review table in the matter."
+        },
+        "3": {
+          "body": "stella in machine-readable form for AI search engines."
+        }
+      },
+      "capabilities": {
+        "0": {
+          "body": "Decisions straight from the official sources, not second-hand summaries.",
+          "title": "Official case law"
+        },
+        "1": {
+          "body": "Every decision keeps the headings, paragraphs, and references of the original.",
+          "title": "Structure preserved"
+        },
+        "2": {
+          "body": "Look up national company and commercial registries without leaving the matter.",
+          "title": "Company registries"
+        },
+        "3": {
+          "body": "Move between a decision and the cases it cites without leaving the reader.",
+          "title": "Follow citations"
+        },
+        "4": {
+          "body": "Browse and filter case law and registries by the jurisdiction you work in.",
+          "title": "By jurisdiction"
+        },
+        "5": {
+          "body": "Reference any source from a matter so the AI agent's answers stay traceable to it.",
+          "title": "Grounded for AI"
+        }
+      },
+      "cta": {
+        "heading": "Bring official legal data into your matters."
+      },
+      "faqs": {
+        "0": {
+          "answer": "Case law comes from official public legal sources, collected by stella's Legal Atlas with its structure preserved. Company data comes straight from the national company and commercial registries, not from third-party copies.",
+          "question": "Where does the data come from?"
+        },
+        "1": {
+          "answer": "Two lists, both expanding. Connected registries already include ARES (Czechia), Companies House (UK), SEC EDGAR (US), KRS (Poland), PRH (Finland), and VIES (EU VAT). Beyond registries, official sources are connected jurisdiction by jurisdiction; Czechia, Spain, and Taiwan already have them, and the case-law reader lets you browse and filter by jurisdiction as more official sources are added.",
+          "question": "Which jurisdictions and registries are covered?"
+        },
+        "2": {
+          "answer": "Yes. Public data referenced from a matter becomes a grounded source: the AI agent cites the underlying decision or record so its answers stay traceable.",
+          "question": "Can the AI use this data?"
+        }
+      },
+      "metaDescription": "Case law and company registries from official public sources. Read decisions, look up companies, follow citations, and pull it into a matter or the AI agent.",
+      "metaTitle": "Case law and company registry data | stella",
+      "quickAnswer": {
+        "answer": "Two kinds. Official public case law, collected with its structure preserved so you can read and search decisions and follow their citations. And direct access to national company and commercial registries, so you can pull official company data straight into a matter. Both are grounded sources the AI agent can cite.",
+        "question": "What public data does stella bring in?"
+      },
+      "sections": {
+        "0": {
+          "bullets": {
+            "0": "Collected from official public legal sources",
+            "1": "Headings, paragraphs, and references stay as they are in the original",
+            "2": "Built on stella's open Legal Atlas"
+          },
+          "heading": "Case law from official sources, with its structure preserved"
+        },
+        "1": {
+          "bullets": {
+            "0": "Connected national registries: ARES, Companies House, SEC EDGAR, KRS, PRH, VIES, and more",
+            "1": "Pull official company data into a matter instead of copying it by hand",
+            "2": "Coverage expands as more official sources are added"
+          },
+          "heading": "Company and commercial registries, searched from a matter"
+        },
+        "2": {
+          "bullets": {
+            "0": "Reference a decision or company record from a matter",
+            "1": "The AI agent cites the underlying source, not a paraphrase",
+            "2": "Search across sources, not just within one"
+          },
+          "heading": "One grounded source for the AI agent"
+        }
+      }
+    },
+    "tabular-review": {
+      "adjacent": {
+        "0": {
+          "body": "Chat across matters, files, and connected sources with approvals and source previews."
+        },
+        "1": {
+          "body": "Official case law and company registries, pulled into a matter."
+        },
+        "2": {
+          "body": "Prepare sensitive material for AI without exposing identifying details."
+        },
+        "3": {
+          "body": "stella in machine-readable form for AI search engines."
+        }
+      },
+      "capabilities": {
+        "0": {
+          "body": "Define a column in plain language; stella answers it for every document in the set.",
+          "title": "Columns are questions"
+        },
+        "1": {
+          "body": "Each cell links to the exact passage it was extracted from, so you can verify in one click.",
+          "title": "Cited to the source"
+        },
+        "2": {
+          "body": "Reviews live inside a matter alongside the documents, contacts, and chat they relate to.",
+          "title": "Part of the matter"
+        },
+        "3": {
+          "body": "Treat answers like data: sort by any column, filter to the rows that need attention.",
+          "title": "Sort and filter"
+        },
+        "4": {
+          "body": "Run the same questions across large document sets instead of opening files one by one.",
+          "title": "Built for scale"
+        },
+        "5": {
+          "body": "Take the table with you in standard formats — no lock-in on your own work product.",
+          "title": "Export anywhere"
+        }
+      },
+      "cta": {
+        "heading": "Review your next document set in stella."
+      },
+      "faqs": {
+        "0": {
+          "answer": "Factual extraction like dates, parties, and amounts, or judgement calls like whether a clause is present and how it is framed. Answers come back grounded by citations to the source text.",
+          "question": "What kinds of questions can a column ask?"
+        },
+        "1": {
+          "answer": "From the documents in your matter. AI features use your own provider keys, so extraction runs through the AI provider you choose, and every answer links back to the passage it was drawn from.",
+          "question": "Where do the answers come from?"
+        },
+        "2": {
+          "answer": "Yes. Tabular Review output is exportable in standard formats, so your work product stays portable with no lock-in.",
+          "question": "Can I export the review?"
+        }
+      },
+      "metaDescription": "Ask questions across a whole document set and get structured answers as a sortable, source-traceable table. Built for due diligence, discovery, and research.",
+      "metaTitle": "Tabular document review for due diligence | stella",
+      "quickAnswer": {
+        "answer": "You point Tabular Review at a set of documents in a matter and define columns as questions — for example 'governing law', 'termination notice period', or 'change-of-control clause'. stella extracts an answer for each document into a table you can sort, filter, and export, with every cell linked back to the passage it came from.",
+        "question": "How does Tabular Review work?"
+      },
+      "sections": {
+        "0": {
+          "bullets": {
+            "0": "Add a column by writing the question you would ask a junior",
+            "1": "Reuse column sets across matters for repeatable review playbooks",
+            "2": "Mix extraction (dates, parties, amounts) with judgement questions"
+          },
+          "heading": "Define the questions once, answer them everywhere"
+        },
+        "1": {
+          "bullets": {
+            "0": "Click a cell to open the source document at the cited passage",
+            "1": "Answers are grounded by citations, not free-floating summaries",
+            "2": "Spot disagreements across documents at a glance"
+          },
+          "heading": "Every answer traces back to the text"
+        },
+        "2": {
+          "bullets": {
+            "0": "Reviews live in the matter, next to its files and chat",
+            "1": "Hand a review to the AI agent for follow-up questions",
+            "2": "Export the table or keep refining it in place"
+          },
+          "heading": "It lives where the work lives"
+        }
+      }
+    },
+    "templates": {
+      "adjacent": {
+        "0": {
+          "body": "Matters, documents, and Word editing in one place."
+        },
+        "1": {
+          "body": "Turn a document set into a review table in the matter."
+        },
+        "2": {
+          "body": "Chat across matters, files, and sources with citations."
+        },
+        "3": {
+          "body": "stella in machine-readable form for AI search engines."
+        }
+      },
+      "capabilities": {
+        "0": {
+          "body": "Start repeat documents from a known-good base instead of a copied file.",
+          "title": "Reusable templates"
+        },
+        "1": {
+          "body": "Define the values a document needs and fill them in when you assemble it.",
+          "title": "Fields and placeholders"
+        },
+        "2": {
+          "body": "Include or omit clauses based on the values you provide, so a template covers variants.",
+          "title": "Conditional clauses"
+        },
+        "3": {
+          "body": "Let stella draft a filled document from a matter's data, then refine it.",
+          "title": "Fill with AI"
+        },
+        "4": {
+          "body": "Author and adjust templates in the editor, then assemble from them.",
+          "title": "Edit in place"
+        },
+        "5": {
+          "body": "The draft lands in the matter, ready to edit alongside the rest of the work.",
+          "title": "Into a matter"
+        }
+      },
+      "cta": {
+        "heading": "Start from a template, not a blank page."
+      },
+      "faqs": {
+        "0": {
+          "answer": "Yes. Templates are authored and adjusted in the editor, then you assemble documents from them.",
+          "question": "Can I edit a template?"
+        },
+        "1": {
+          "answer": "A reusable piece of a document. Clauses can be included across templates and added conditionally based on the values you provide when assembling.",
+          "question": "What is a clause?"
+        },
+        "2": {
+          "answer": "Into a matter, as a draft you can keep editing alongside the rest of the matter's documents.",
+          "question": "Where does the assembled document go?"
+        }
+      },
+      "metaDescription": "Define a template with fields and conditional clauses, then fill it by hand or let stella draft it from a matter's data. The draft lands in the matter.",
+      "metaTitle": "Legal document templates with AI drafting | stella",
+      "quickAnswer": {
+        "answer": "A template is a document with fields and clauses you can include conditionally. You fill the fields in by hand or let stella draft them from a matter's data; the right clauses are included, and you get a document to keep working on in the matter. Templates and clauses are reusable, so repeat documents start from a known-good base.",
+        "question": "How do templates work in stella?"
+      },
+      "sections": {
+        "0": {
+          "bullets": {
+            "0": "Assemble a document from a template instead of starting blank",
+            "1": "Reuse clauses across templates",
+            "2": "Keep repeat documents consistent"
+          },
+          "heading": "Build from templates and clauses"
+        },
+        "1": {
+          "bullets": {
+            "0": "Prefill fields from a document already stored in the matter",
+            "1": "Review and adjust every value before producing the draft",
+            "2": "Conditional clauses still follow the values you keep"
+          },
+          "heading": "Fill it from the matter's data"
+        },
+        "2": {
+          "bullets": {
+            "0": "Author and adjust templates in the editor",
+            "1": "Assemble the draft directly in the matter",
+            "2": "Keep editing the result alongside the matter's files"
+          },
+          "heading": "Edit and assemble in place"
+        }
+      }
+    },
+    "ui": {
+      "capabilities": "Capabilities",
+      "exploreMore": "Explore more",
+      "faq": "FAQ",
+      "inShort": "In short"
+    },
+    "workspace": {
+      "adjacent": {
+        "0": {
+          "body": "Chat across matters, files, and connected tools with approvals and source previews."
+        },
+        "1": {
+          "body": "Turn a document set into a table you can sort, filter, and trace back to the source."
+        },
+        "2": {
+          "body": "Reach the same matters, documents, and case law from the CLI and MCP-compatible tools."
+        },
+        "3": {
+          "body": "stella in machine-readable form for AI search engines."
+        }
+      },
+      "capabilities": {
+        "0": {
+          "body": "Organise documents, contacts, review, and chat around the matter they belong to. Everything added to a matter stays attached to it, searchable across the whole workspace, so the context is there when you come back.",
+          "title": "Matters"
+        },
+        "1": {
+          "body": "Open, edit, and review Word .docx documents directly in the workspace.",
+          "title": "Documents and .docx editing"
+        },
+        "2": {
+          "body": "Run tabular review and research alongside the documents they relate to.",
+          "title": "Review and research"
+        },
+        "3": {
+          "body": "Bring the AI agent and knowledge tools into the same workspace as your files.",
+          "title": "Chat and knowledge tools"
+        },
+        "4": {
+          "body": "A desktop app acts as a local bridge for editing Office documents from stella.",
+          "title": "Desktop bridge"
+        },
+        "5": {
+          "body": "Saved edits and uploads become document revisions, so the current file and its history stay together.",
+          "title": "Version history"
+        }
+      },
+      "cta": {
+        "heading": "Bring your matters into one workspace."
+      },
+      "faqs": {
+        "0": {
+          "answer": "Yes. The web app supports Word .docx editing and review. For local Office editing, the desktop app acts as a bridge so you can open a document from stella and edit it on your computer.",
+          "question": "Can I edit Word documents in stella?"
+        },
+        "1": {
+          "answer": "Documents, contacts, review tables, chat threads, and document history. Everything added to a matter stays attached to it, so the context is there when you return.",
+          "question": "What lives inside a matter?"
+        },
+        "2": {
+          "answer": "Yes. The stella CLI and MCP server expose the same matters, documents, and case law to connected tools, under the same permissions. See CLI & MCP for details.",
+          "question": "Can other tools reach the workspace?"
+        }
+      },
+      "metaDescription": "Matters, documents, Word .docx editing, review, research, and chat in one legal workspace. The work stays in context from source material to answer.",
+      "metaTitle": "Legal matter management workspace | stella",
+      "quickAnswer": {
+        "answer": "A web app that holds matters, documents, Word .docx editing, review, research, and chat in one place. Everything added to a matter stays attached to it, so the context is there when you return. A companion desktop app acts as a local bridge when a document needs Microsoft Word.",
+        "question": "What is the stella workspace?"
+      },
+      "sections": {
+        "0": {
+          "bullets": {
+            "0": "Documents, contacts, review, and chat live inside the matter",
+            "1": "Edit Word .docx documents without leaving the workspace",
+            "2": "Move between research, review, and chat without switching apps"
+          },
+          "heading": "Everything for a matter, in one place"
+        },
+        "1": {
+          "bullets": {
+            "0": "Open and edit Word .docx documents directly in the workspace",
+            "1": "The redline stays a Word file: no conversion, no copies",
+            "2": "Use the desktop bridge when a document needs Microsoft Word"
+          },
+          "heading": "Word documents, edited where you need them"
+        }
+      }
+    }
+  },
+  "story": {
+    "agentBody": "The AI agent searches the matter, reads the relevant text, and answers with citations that open the source at the exact passage. Use it in stella, or connect it to the tools you already work in.",
+    "agentEyebrow": "AI agent",
+    "agentTitle": "Ask once. Every answer cites its source.",
+    "bringEditorToFront": "Bring stella Editor to front",
+    "bringTerminalToFront": "Bring stella terminal to front",
+    "bringWorkspaceToFront": "Bring stella workspace to front",
+    "controlBody": "stella is <gh>open-source</gh> legal software you can self-host: inspect the code, run it your way, and export everything in standard formats.",
+    "controlTitle": "Keep control of your technology.",
+    "dataBody": "Case law and company registries from every jurisdiction you work in, loaded straight into the matter. Anonymization keeps identifying details away from the AI.",
+    "dataEyebrow": "Legal data",
+    "dataMainAlt": "An official court decision open in stella",
+    "dataTitle": "Bring the law and the data with you.",
+    "exploreAgent": "Explore AI agent",
+    "exploreAnonymization": "Explore Anonymization",
+    "explorePublicData": "Explore Public data",
+    "exploreTabularReview": "Explore Tabular Review",
+    "exploreTemplates": "Explore Templates",
+    "exploreWorkspace": "Explore Workspace",
+    "eyebrow": "A connected workspace",
+    "intro": "Source material, review, and final documents stay in the matter and build on each other. Work on the matter with the AI agent, and verify every step it takes.",
+    "openEditor": "Open Editor",
+    "proofByokBody": "Use your own provider keys for AI features.",
+    "proofByokTitle": "Bring your own models",
+    "proofOpenSourceBody": "Inspect the code and keep a portable system.",
+    "proofOpenSourceTitle": "Open source",
+    "proofPermissionsBody": "Every action stays within the user's and the workspace's permissions.",
+    "proofPermissionsTitle": "Respects permissions",
+    "proofSelfHostBody": "Run stella on infrastructure you control.",
+    "proofSelfHostTitle": "Self-hostable",
+    "selfHostGuide": "Read self-hosting guide",
+    "sourceOnGitHub": "Source on GitHub",
+    "title": "One matter. Every part of the work.",
+    "velocityAll": "Full changelog",
+    "velocityTitle": "What's new in stella.",
+    "workspaceBody": "Documents, deadlines, structured review, and drafting stay together, searchable across every matter.",
+    "workspaceEyebrow": "Workspace",
+    "workspaceTitle": "Run the whole matter in one place."
+  }
+}

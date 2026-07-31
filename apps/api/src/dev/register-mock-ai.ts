@@ -20,8 +20,17 @@ import { registerBatchGenerator } from "@/api/lib/workflow/generate-batch-provid
 // `generate-batch-mock` and `@faker-js/faker` out of the production build — both
 // the compiled binary and the knip `--production` graph.
 
+// The reply every mocked chat turn streams. It carries no "mock"/"stub"
+// scaffolding prefix on purpose: the marketing captures film this text
+// verbatim whenever a scene sends a live message, so it has to read like a
+// plausible answer. Nothing asserts on the string — the chat specs key on the
+// assistant message's rendered affordances (its Copy/Retry actions) instead,
+// which is what actually proves a reply painted. `USE_MOCK_AI` remains the
+// only signal that the model is stubbed.
 const MOCK_REPLY =
-  "Mock assistant reply: streaming is stubbed because USE_MOCK_AI is set.";
+  "Based on the documents in this workspace, the notice periods, governing " +
+  "law, and liability caps are the provisions that differ most. Ask a " +
+  "follow-up to open any of them at the cited passage.";
 
 // A user message containing this marker makes the mock adapter stream its
 // reply as many small delayed chunks instead of one instant chunk, giving an
@@ -178,6 +187,114 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
 // schema validation to the caller's `v.parse`, which throws on any missing
 // required field — every new structured-output feature was born broken
 // under the documented `USE_MOCK_AI=true` dev default.
+// templates.prefill (apps/api/src/handlers/templates/prefill.ts), tmpl-supply
+// only: the mapped-id answers the "Prefill from documents" panel expects.
+// `buildPrefillTargets` (apps/api/src/handlers/templates/prefill-fields.ts)
+// allocates f1..f16 over the merged manifest fields sorted ALPHABETICALLY BY
+// PATH, not the manifest's own declaration order — verified by loading the
+// seeded template's manifest and calling buildPrefillTargets against it
+// directly (capacityHeadroomPercent, customerAddress, customerJurisdiction,
+// customerName, date, deliveryLocation, deliveryTerms,
+// includeLiquidatedDamages, includeStepInRights, liabilityCapPercent,
+// startDate, supplierAddress, supplierJurisdiction, supplierName, termYears,
+// terminationNoticeDays -> f1..f16 in that order). Every value and
+// sourceSnippet below is frozen from a real extraction, hand-verified against
+// the seeded Supplier_Agreement.docx body (the "Meridian supply agreement"
+// matter, apps/api/scripts/seed-dev.ts) — never edit a value here without
+// re-checking it against that document (and the id order above against
+// buildPrefillTargets, if the manifest's field set ever changes), or the
+// fixture drifts into fiction. deliveryLocation and includeStepInRights are
+// null because the source document does not state either.
+const TMPL_SUPPLY_PREFILL_FIXTURE: {
+  id: string;
+  value: string | null;
+  sourceSnippet: string | null;
+}[] = [
+  {
+    id: "f1", // capacityHeadroomPercent
+    value: "120",
+    sourceSnippet:
+      "up to one hundred and twenty per cent (120%) of the most recent quarterly forecast volume",
+  },
+  {
+    id: "f2", // customerAddress
+    value: "548 Market Street, San Francisco, California 94104, United States",
+    sourceSnippet:
+      "offices at 548 Market Street, San Francisco, California 94104, United States",
+  },
+  {
+    id: "f3", // customerJurisdiction
+    value: "Delaware",
+    sourceSnippet: "Northstar Robotics, Inc., a Delaware corporation",
+  },
+  {
+    id: "f4", // customerName
+    value: "Northstar Robotics, Inc.",
+    sourceSnippet:
+      "Northstar Robotics, Inc., a Delaware corporation with offices at 548 Market Street, San Francisco, California 94104, United States",
+  },
+  {
+    id: "f5", // date
+    value: "2026-07-01",
+    sourceSnippet: "is entered into as of 1 July 2026 (the “Effective Date”)",
+  },
+  { id: "f6", value: null, sourceSnippet: null }, // deliveryLocation
+  {
+    id: "f7", // deliveryTerms
+    value: "DAP (Incoterms 2020)",
+    sourceSnippet:
+      "The Supplier shall deliver the Products DAP (Incoterms 2020) to the Customer's facility identified in the Order.",
+  },
+  {
+    id: "f8", // includeLiquidatedDamages
+    value: "true",
+    sourceSnippet:
+      "the Customer is entitled to a delay credit of 0.5% of the Order value per commenced week of delay, up to 5% of the Order value",
+  },
+  { id: "f9", value: null, sourceSnippet: null }, // includeStepInRights
+  {
+    id: "f10", // liabilityCapPercent
+    value: "100",
+    sourceSnippet:
+      "The Supplier's aggregate liability shall not exceed 100% of the annual fees paid under this Agreement.",
+  },
+  {
+    id: "f11", // startDate
+    value: "2026-07-01",
+    sourceSnippet:
+      "This Agreement starts on the Effective Date and continues for an initial term of three (3) years",
+  },
+  {
+    id: "f12", // supplierAddress
+    value: "Werkstrasse 12, 80339 Munich, Germany",
+    sourceSnippet:
+      "registered offices at Werkstrasse 12, 80339 Munich, Germany",
+  },
+  {
+    id: "f13", // supplierJurisdiction
+    value: "Germany",
+    sourceSnippet: "organised under the laws of Germany",
+  },
+  {
+    id: "f14", // supplierName
+    value: "Meridian Precision Components GmbH",
+    sourceSnippet:
+      "Meridian Precision Components GmbH, a company organised under the laws of Germany with registered offices at Werkstrasse 12, 80339 Munich, Germany",
+  },
+  {
+    id: "f15", // termYears
+    value: "3",
+    sourceSnippet:
+      "continues for an initial term of three (3) years, renewing automatically for successive one (1) year periods",
+  },
+  {
+    id: "f16", // terminationNoticeDays
+    value: "30",
+    sourceSnippet:
+      "Either Party may terminate this Agreement for convenience by giving the other Party thirty (30) days' prior written notice.",
+  },
+];
+
 export const mockStructuredData = (
   outputSchema: unknown,
 ): Record<string, unknown> => {
@@ -195,6 +312,13 @@ export const mockStructuredData = (
       question: "What does the contract say about this issue?",
       contentType: "text",
     };
+  }
+
+  // templates.prefill — tmpl-supply fixture (see comment above). Its values
+  // are semantic source-document evidence, so generic schema synthesis cannot
+  // produce a useful recording response.
+  if ("fields" in properties) {
+    return { fields: TMPL_SUPPLY_PREFILL_FIXTURE };
   }
 
   return synthesizeJsonSchemaObject(outputSchema);

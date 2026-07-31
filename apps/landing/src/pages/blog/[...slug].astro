@@ -2,7 +2,7 @@
 import { getCollection, render } from "astro:content";
 import type { CollectionEntry } from "astro:content";
 import Base from "../../layouts/Base.astro";
-import ThemeToggle from "../../components/ThemeToggle.astro";
+import LandingFooter from "../../components/LandingFooter.astro";
 
 export async function getStaticPaths() {
   const posts = await getCollection("blog", ({ data }) =>
@@ -20,17 +20,49 @@ const { post } = Astro.props;
 const { Content } = await render(post);
 const dateFormatter = new Intl.DateTimeFormat("en", { dateStyle: "long" });
 const publishedAtIso = post.data.publishedAt.toISOString();
+const canonicalUrl = new URL(Astro.url.pathname, Astro.site).href;
+
+// BlogPosting structured data, sourced from the same frontmatter the page
+// renders. Posts are published by the organisation, not individual bylines,
+// and `publisher` points at the site-wide Organization node Base emits rather
+// than restating it. No `dateModified`: the frontmatter tracks publication
+// only, and echoing datePublished there would assert an edit history the
+// content does not have.
+const blogPostingJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  headline: post.data.title,
+  description: post.data.description,
+  datePublished: publishedAtIso,
+  author: { "@type": "Organization", name: post.data.author },
+  publisher: { "@id": new URL("#organization", Astro.site).href },
+  image: new URL("/images/og-card.png", Astro.site).href,
+  inLanguage: "en",
+  url: canonicalUrl,
+  mainEntityOfPage: { "@type": "WebPage", "@id": canonicalUrl },
+};
 ---
 
-<Base title={`stella | ${post.data.title}`} description={post.data.description}>
+<Base
+  title={`${post.data.title} | stella`}
+  description={post.data.description}
+  ogType="article"
+  publishedTime={publishedAtIso}
+  current="blog"
+  breadcrumbTrail={{
+    ancestors: [
+      { name: "stella", path: "/" },
+      { name: "Blog", path: "/blog/" },
+    ],
+    name: post.data.title,
+  }}
+>
+  <script
+    is:inline
+    type="application/ld+json"
+    set:html={JSON.stringify(blogPostingJsonLd)}
+  />
   <div class="flex min-h-dvh flex-col">
-    <nav class="mx-auto flex w-full max-w-300 items-center justify-between px-6 py-5">
-      <a href="/" aria-label="stella home">
-        <img src="/images/stella-logo.svg" alt="stella" class="h-6 dark:invert" />
-      </a>
-      <ThemeToggle />
-    </nav>
-
     <main class="flex-1 px-6">
       <article class="mx-auto max-w-3xl py-12 lg:py-16">
         <a
@@ -71,31 +103,7 @@ const publishedAtIso = post.data.publishedAt.toISOString();
       </article>
     </main>
 
-    <footer class="relative px-6 py-12" style="border-top: 1px solid var(--border)">
-      <div
-        class="mx-auto flex max-w-300 flex-col items-center justify-between gap-4 text-sm sm:flex-row"
-        style="color: var(--muted-foreground)"
-      >
-        <a href="/imprint" class="transition-opacity hover:opacity-70">
-          stella labs, s.r.o.
-        </a>
-        <nav class="flex flex-wrap items-center justify-center gap-4" aria-label="Footer">
-          <a href="/blog" class="transition-opacity hover:opacity-70">Blog</a>
-          <a href="/changelog" class="transition-opacity hover:opacity-70">Changelog</a>
-          <a href="/security" class="transition-opacity hover:opacity-70">Security</a>
-          <a href="/terms" class="transition-opacity hover:opacity-70">Terms</a>
-          <a href="/imprint" class="transition-opacity hover:opacity-70">Imprint</a>
-          <a href="mailto:contact@stll.app" class="transition-opacity hover:opacity-70">
-            Contact
-          </a>
-        </nav>
-      </div>
-      <div
-        class="pointer-events-none absolute inset-x-0 bottom-0 h-32"
-        style="background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--auth-gradient-end) 42%, transparent))"
-      >
-      </div>
-    </footer>
+    <LandingFooter />
   </div>
 
   <style>

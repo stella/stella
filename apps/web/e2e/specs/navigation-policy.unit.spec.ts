@@ -5,6 +5,16 @@ import ts from "typescript";
 
 const E2E_ROOT = path.resolve(import.meta.dirname, "..");
 const READINESS_LIFECYCLES = new Set(["commit", "domcontentloaded"]);
+// Every `page.*` call that starts a navigation, mapped to the argument index
+// carrying its options: `goto` takes (url, options); reload and the history
+// navigations take (options) alone. History navigations count because they
+// default to the `load` lifecycle exactly like `goto` does.
+const NAVIGATION_OPTIONS_INDEX = new Map([
+  ["goBack", 0],
+  ["goForward", 0],
+  ["goto", 1],
+  ["reload", 0],
+]);
 
 test("route navigation waits for an explicit lifecycle before UI readiness", async () => {
   const violations = (
@@ -78,12 +88,12 @@ const isPageNavigation = (
   ts.isPropertyAccessExpression(call.expression) &&
   ts.isIdentifier(call.expression.expression) &&
   call.expression.expression.text === "page" &&
-  (call.expression.name.text === "goto" ||
-    call.expression.name.text === "reload");
+  NAVIGATION_OPTIONS_INDEX.has(call.expression.name.text);
 
 const navigationLifecycle = (call: PageNavigationCall): string | null => {
-  const method = call.expression.name.text;
-  const options = call.arguments.at(method === "goto" ? 1 : 0);
+  const options = call.arguments.at(
+    NAVIGATION_OPTIONS_INDEX.get(call.expression.name.text) ?? 0,
+  );
   if (!options || !ts.isObjectLiteralExpression(options)) {
     return null;
   }

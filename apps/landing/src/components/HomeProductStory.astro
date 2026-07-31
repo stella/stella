@@ -1,0 +1,659 @@
+---
+import { productHref } from "../data/products/links";
+import type { ProductSlug } from "../data/products/pillars";
+import { resolveProductDiscoverLabels } from "../data/site-nav";
+import { resolveSceneWindowLabels } from "../data/product-story";
+import type { TranslationKey } from "../i18n/utils";
+import { defaultLocale, isLocale } from "../i18n/config";
+import { getTranslations, requireLinkedSegment } from "../i18n/utils";
+import { CliMcpPreview } from "./react/previews/CliMcpPreview";
+import ThemeImage from "./ThemeImage.astro";
+
+const rawLocale = Astro.currentLocale ?? defaultLocale;
+const locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
+const t = getTranslations(locale);
+const sceneWindowLabels = resolveSceneWindowLabels(t);
+// Chapter scenes navigate like the hero's windows: the whole visual links to
+// the chapter's first product page, announced by the same discover chip.
+const discoverLabels = resolveProductDiscoverLabels(t);
+// Same <gh>…</gh> contract as the hero: the locale marks its own open-source
+// phrase and the marked span links to the repository.
+const controlBody = requireLinkedSegment(
+  "story.controlBody",
+  t("story.controlBody"),
+);
+
+// Copy is referenced by TranslationKey (not literal strings) so a renamed or
+// removed message key fails typecheck instead of rendering the raw key.
+type StoryChapter = {
+  id: "workspace" | "agent" | "data";
+  eyebrowKey: TranslationKey;
+  titleKey: TranslationKey;
+  bodyKey: TranslationKey;
+  // Chapter links only ever point at product pages, so they carry the slug
+  // and the locale-aware URL is built at render time.
+  links: readonly { labelKey: TranslationKey; slug: ProductSlug }[];
+};
+
+const chapters = [
+  {
+    id: "workspace",
+    eyebrowKey: "story.workspaceEyebrow",
+    titleKey: "story.workspaceTitle",
+    bodyKey: "story.workspaceBody",
+    links: [
+      { labelKey: "story.exploreWorkspace", slug: "workspace" },
+      { labelKey: "story.openEditor", slug: "editor" },
+      { labelKey: "story.exploreTabularReview", slug: "tabular-review" },
+    ],
+  },
+  {
+    id: "agent",
+    eyebrowKey: "story.agentEyebrow",
+    titleKey: "story.agentTitle",
+    bodyKey: "story.agentBody",
+    links: [
+      { labelKey: "story.exploreAgent", slug: "agent" },
+      { labelKey: "story.exploreTemplates", slug: "templates" },
+    ],
+  },
+  {
+    id: "data",
+    eyebrowKey: "story.dataEyebrow",
+    titleKey: "story.dataTitle",
+    bodyKey: "story.dataBody",
+    links: [
+      { labelKey: "story.explorePublicData", slug: "public-data" },
+      { labelKey: "story.exploreAnonymization", slug: "anonymization" },
+    ],
+  },
+] as const satisfies readonly StoryChapter[];
+
+// Data chapter: cycles through three different national decisions (CZE,
+// POL, SVK), each captured with the structured reader (structure/AI margin
+// populated) — see apps/web/e2e/marketing/product-screenshots.spec.ts,
+// "story-public-data-1/2/3". Keep in sync with that spec's decisionText
+// values.
+const storyShots = [
+  {
+    darkSrc: "/media/products/story-public-data-1-dark.png",
+    lightSrc: "/media/products/story-public-data-1.png",
+  },
+  {
+    darkSrc: "/media/products/story-public-data-2-dark.png",
+    lightSrc: "/media/products/story-public-data-2.png",
+  },
+  {
+    darkSrc: "/media/products/story-public-data-3-dark.png",
+    lightSrc: "/media/products/story-public-data-3.png",
+  },
+] as const;
+
+// Each shot holds at full opacity for ~3.6s and cross-fades over ~0.8s, for
+// a ~13.2s total loop. The keyframes (below, in .story-shot-layer) are
+// percentage-based so they scale with whatever duration is set here.
+const STORY_SHOT_SEGMENT_SECONDS = 4.4;
+const STORY_SHOT_TOTAL_SECONDS = STORY_SHOT_SEGMENT_SECONDS * storyShots.length;
+
+const proofItems = [
+  { titleKey: "story.proofOpenSourceTitle", bodyKey: "story.proofOpenSourceBody" },
+  { titleKey: "story.proofSelfHostTitle", bodyKey: "story.proofSelfHostBody" },
+  { titleKey: "story.proofByokTitle", bodyKey: "story.proofByokBody" },
+  { titleKey: "story.proofPermissionsTitle", bodyKey: "story.proofPermissionsBody" },
+] as const satisfies readonly { titleKey: TranslationKey; bodyKey: TranslationKey }[];
+---
+
+<section class="home-product-story px-4 py-20 sm:px-6 lg:py-28" aria-labelledby="product-story-title">
+  <div class="mx-auto max-w-300">
+    <div class="max-w-4xl">
+      <p
+        data-reveal
+        class="text-xs font-medium uppercase tracking-[0.2em]"
+        style="color: var(--muted-foreground)"
+      >
+        {t("story.eyebrow")}
+      </p>
+      <h2
+        data-reveal
+        id="product-story-title"
+        style="--reveal-delay: 80ms"
+        class="mt-3 max-w-4xl text-balance font-display text-4xl font-medium leading-[1.04] sm:text-5xl lg:text-6xl"
+      >
+        {t("story.title")}
+      </h2>
+      <p
+        data-reveal
+        style="--reveal-delay: 160ms; color: var(--muted-foreground)"
+        class="mt-5 max-w-2xl text-pretty text-base leading-7 sm:text-lg sm:leading-8"
+      >
+        {t("story.intro")}
+      </p>
+    </div>
+
+    <div class="mt-16 space-y-24 lg:mt-24 lg:space-y-36">
+      {
+        chapters.map((chapter, index) => (
+          <article
+            class:list={[
+              "product-chapter grid gap-8 lg:grid-cols-12 lg:items-center lg:gap-12",
+              index % 2 === 1 && "product-chapter-reverse",
+            ]}
+            id={`story-${chapter.id}`}
+          >
+            <div
+              data-reveal
+              class:list={[
+                "product-chapter-copy lg:col-span-4",
+                index % 2 === 1 ? "lg:col-start-9" : "lg:col-start-1",
+              ]}
+            >
+              <p
+                class="text-xs font-medium uppercase tracking-[0.2em]"
+                style="color: var(--muted-foreground)"
+              >
+                {t(chapter.eyebrowKey)}
+              </p>
+              <h3 class="mt-3 text-balance font-display text-3xl font-medium leading-[1.08] sm:text-4xl">
+                {t(chapter.titleKey)}
+              </h3>
+              <p
+                class="mt-5 text-pretty text-base leading-7"
+                style="color: var(--muted-foreground)"
+              >
+                {t(chapter.bodyKey)}
+              </p>
+              <nav class="mt-6 flex flex-wrap gap-x-5 gap-y-1" aria-label={t(chapter.eyebrowKey)}>
+                {chapter.links.map((link) => (
+                  <a class="story-link group inline-flex min-h-11 items-center gap-2 text-sm font-medium" href={productHref(link.slug, locale)}>
+                    <span>{t(link.labelKey)}</span>
+                    <span
+                      aria-hidden="true"
+                      class="transition-transform rtl:-scale-x-100 ltr:group-hover:translate-x-0.5 rtl:group-hover:-translate-x-0.5"
+                    >
+                      →
+                    </span>
+                  </a>
+                ))}
+              </nav>
+            </div>
+
+            <div
+              data-reveal
+              style={`--reveal-delay: ${120 + index * 30}ms`}
+              class:list={[
+                "product-chapter-visual lg:col-span-8",
+                index % 2 === 1 ? "lg:col-start-1 lg:row-start-1" : "lg:col-start-5",
+              ]}
+>
+              <div
+                class:list={[
+                  "story-window",
+                  chapter.id === "data" && "story-window-shot",
+                ]}
+              >
+              {chapter.id === "workspace" && (
+                <Fragment>
+                  <CliMcpPreview
+                    client:visible
+                    backdrop="transparent"
+                    includeStyles={false}
+                    sceneId="workspace"
+                    showCompanions={false}
+                    windowLabels={sceneWindowLabels}
+                  />
+                </Fragment>
+              )}
+              {chapter.id === "agent" && (
+                <Fragment>
+                  <CliMcpPreview
+                    client:visible
+                    backdrop="transparent"
+                    includeStyles={false}
+                    sceneId="agent"
+                    showCompanions={false}
+                    windowLabels={sceneWindowLabels}
+                  />
+                </Fragment>
+              )}
+              {chapter.id === "data" && (
+                  <div class="story-shot-main mac-window">
+                    <div class="mac-titlebar relative flex shrink-0 items-center">
+                      <div aria-hidden="true" class="mac-traffic-lights">
+                        <span class="mac-traffic-light" style="background: var(--mac-close)">
+                          <span class="mac-traffic-glyph">×</span>
+                        </span>
+                        <span class="mac-traffic-light" style="background: var(--mac-minimize)">
+                          <span class="mac-traffic-glyph mac-traffic-minus">−</span>
+                        </span>
+                        <span class="mac-traffic-light" style="background: var(--mac-maximize)">
+                          <span class="mac-traffic-glyph">+</span>
+                        </span>
+                      </div>
+                      <div class="mac-titlebar-label">stella · Case Law</div>
+                    </div>
+                    <div class="story-shot-body">
+                      {
+                        storyShots.map((shot, shotIndex) => (
+                          <div
+                            aria-hidden={shotIndex === 0 ? undefined : "true"}
+                            class="story-shot-layer"
+                            style={`animation-duration: ${STORY_SHOT_TOTAL_SECONDS}s; animation-delay: ${(shotIndex - storyShots.length) * STORY_SHOT_SEGMENT_SECONDS}s`}
+                          >
+                            <ThemeImage
+                              alt={shotIndex === 0 ? t("story.dataMainAlt") : ""}
+                              class="h-full w-full object-cover object-top"
+                              darkSrc={shot.darkSrc}
+                              decoding="async"
+                              defer="visible"
+                              lightSrc={shot.lightSrc}
+                              loading="lazy"
+                            />
+                          </div>
+                        ))
+                      }
+                    </div>
+                  </div>
+              )}
+                <a
+                  class="story-visual-link absolute z-10 flex items-end justify-center"
+                  href={productHref(chapter.links[0].slug, locale)}
+                  aria-label={discoverLabels[chapter.links[0].slug]}
+                >
+                  <span
+                    class="story-visual-chip inline-flex items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-semibold shadow-md"
+                    style="background: var(--primary); color: var(--primary-foreground)"
+                  >
+                    {discoverLabels[chapter.links[0].slug]}
+                    <span aria-hidden="true" class="rtl:inline-block rtl:-scale-x-100">→</span>
+                  </span>
+                </a>
+              </div>
+            </div>
+          </article>
+        ))
+      }
+    </div>
+  </div>
+</section>
+
+<section class="relative px-4 pb-20 sm:px-6 lg:pb-28" aria-labelledby="control-title">
+  <div class="control-rail mx-auto max-w-300 overflow-hidden rounded-[1.65rem]">
+    <div class="grid gap-8 p-7 sm:p-9 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,2.65fr)] lg:items-center lg:p-12">
+      <div data-reveal>
+        <h2 id="control-title" class="text-balance font-display text-3xl font-medium leading-[1.08] sm:text-4xl">
+          {t("story.controlTitle")}
+        </h2>
+        <p
+          class="mt-4 text-pretty text-base leading-7"
+          style="color: var(--muted-foreground)"
+        >
+          {controlBody.before}<a
+            href="https://github.com/stella/stella"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="underline underline-offset-4 transition-opacity hover:opacity-70"
+            >{controlBody.linked}</a
+          >{controlBody.after}
+        </p>
+      </div>
+      <ul class="proof-list grid sm:grid-cols-2" data-reveal style="--reveal-delay: 100ms">
+        {
+          proofItems.map((item) => (
+            <li>
+              <strong>{t(item.titleKey)}</strong>
+              <span>{t(item.bodyKey)}</span>
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+    <div class="deployment-band flex flex-wrap items-center justify-end gap-3 px-7 py-6 sm:px-9 lg:px-12">
+        <a
+          href="https://github.com/stella/stella/blob/main/docs/self-hosting.md"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="inline-flex min-h-11 items-center rounded-[0.75rem] px-4 text-sm font-medium transition-opacity hover:opacity-75"
+        >
+          {t("story.selfHostGuide")}
+        </a>
+        <a
+          href="https://github.com/stella/stella"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="inline-flex min-h-11 items-center rounded-[0.75rem] px-4 text-sm font-medium transition-opacity hover:opacity-75"
+        >
+          {t("story.sourceOnGitHub")}
+        </a>
+        <a
+          href="https://my.stll.app"
+          class="inline-flex min-h-11 items-center rounded-[0.75rem] px-5 text-sm font-medium transition-opacity hover:opacity-90"
+          style="background: var(--primary); color: var(--primary-foreground)"
+        >
+          {t("common.startFree")}
+        </a>
+    </div>
+  </div>
+</section>
+
+<style>
+  .home-product-story {
+    position: relative;
+  }
+
+  /* Frameless chapter windows: the app window itself (chrome, border, its
+     own shadow) is the only frame; the container just reserves the aspect
+     and lets the shadow breathe. On wide screens the window bleeds slightly
+     past the text container on its outer side (the page-level overflow clip
+     crops at the viewport), so each capability peeks into the page. */
+  .story-window {
+    position: relative;
+    aspect-ratio: 16 / 10;
+  }
+
+  /* The visual's link overlay: nothing until the pointer is over the scene,
+     then the hero's own selection frame (.cli-selected) and discover chip,
+     so both surfaces answer a hover the same way. It anchors to the window,
+     not the grid cell: the scene bleeds past the cell on wide screens, and
+     the scene chapters inset their window by 3% (.cli-story-scene-only). */
+  .story-visual-link {
+    position: absolute;
+    inset: 3%;
+    border-radius: clamp(0.62rem, 1vw, 0.9rem);
+    outline: 2px solid transparent;
+    outline-offset: 5px;
+    transition: outline-color 200ms;
+  }
+
+  /* The data chapter's window fills its box, so the overlay does too. */
+  .story-window-shot .story-visual-link {
+    inset: 0;
+  }
+
+  .story-visual-link:hover,
+  .story-visual-link:focus-visible {
+    outline-color: var(--primary);
+  }
+
+  /* Sits just below the framed scene, the gap the hero's DiscoverTag uses. */
+  .story-visual-chip {
+    opacity: 0;
+    transition:
+      opacity 200ms,
+      translate 200ms;
+    translate: 0 0.5rem;
+  }
+
+  .story-visual-link:hover .story-visual-chip,
+  .story-visual-link:focus-visible .story-visual-chip {
+    opacity: 1;
+    translate: 0 calc(100% + 14px);
+  }
+
+  /* The data chapter renders a static mac-window (reusing the workspace/
+     agent chapters' .mac-window treatment from CliMcpPreview's WindowChrome,
+     whose global styles are injected once per page by the hero) so all
+     three chapters read as one consistent system instead of the data
+     chapter's screenshot floating frameless. The titlebar sits on top of the
+     1440:760 image aspect (.story-shot-body, matching
+     apps/web/e2e/marketing/product-screenshots.spec.ts's
+     "story-public-data-1/2/3" capture size); .story-window-shot lets the box
+     size to that content (titlebar height + aspect body) instead of forcing
+     its own aspect-ratio, so the screenshots render at native aspect with
+     zero internal cropping (same intent as the CLI preview's "editor"
+     companion box: content aspect + titlebar, just via auto content height
+     rather than a fixed clamp'd width). The compound selector beats both
+     the base .story-window aspect-ratio and its mobile override below. */
+  .story-window.story-window-shot {
+    aspect-ratio: unset;
+  }
+
+  .story-shot-main {
+    /* .mac-window's shared rules read these from an ancestor with class
+       "cli-story" (the hero's own scene wrapper); this window lives outside
+       that wrapper, so redeclare them locally. */
+    --mac-close: #ff5f57;
+    --mac-maximize: #28c840;
+    --mac-minimize: #febc2e;
+    --mac-titlebar-height: clamp(1.7rem, 2.35vw, 2.15rem);
+    position: relative;
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--foreground) 11%, transparent);
+    box-shadow: 0 42px 110px -54px rgba(15, 23, 42, 0.5);
+  }
+
+  /* .mac-window's ::after focus overlay only clears once
+     aria-pressed="true"; this window is never interactive (no manual
+     focus/blur), so it should always read as the focused, fully-composited
+     window the workspace/agent chapters show at rest. */
+  .story-shot-main.mac-window::after {
+    opacity: 0;
+  }
+
+  .mac-traffic-lights {
+    align-items: center;
+    display: flex;
+    gap: clamp(0.28rem, 0.48vw, 0.48rem);
+    position: relative;
+    z-index: 1;
+  }
+
+  .mac-titlebar-label {
+    color: var(--muted-foreground);
+    display: flex;
+    font-size: clamp(0.62rem, 0.72vw, 0.72rem);
+    font-weight: 500;
+    inset: 0;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    pointer-events: none;
+    position: absolute;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .story-shot-body {
+    position: relative;
+    aspect-ratio: 1440 / 760;
+    overflow: hidden;
+  }
+
+  /* Cross-fade loop: each layer holds at full opacity for its own segment
+     and fades in/out over the shared boundary. The keyframes are
+     percentage-based (not time-based) so the same animation works for every
+     layer; each layer is phase-shifted with a negative animation-delay
+     (set inline, one segment apart) instead of duplicating the keyframes. */
+  .story-shot-layer {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    animation-name: story-shot-cycle;
+    animation-timing-function: ease-in-out;
+    animation-iteration-count: infinite;
+  }
+
+  .story-shot-layer:first-child {
+    opacity: 1;
+  }
+
+  @keyframes story-shot-cycle {
+    0%,
+    27.27% {
+      opacity: 1;
+    }
+    33.33%,
+    93.94% {
+      opacity: 0;
+    }
+    100% {
+      opacity: 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .story-shot-layer {
+      animation: none;
+      opacity: 0;
+    }
+
+    .story-shot-layer:first-child {
+      opacity: 1;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .product-chapter:not(.product-chapter-reverse) .story-window {
+      margin-inline-end: -3.5rem;
+    }
+
+    .product-chapter-reverse .story-window {
+      margin-inline-start: -3.5rem;
+    }
+  }
+
+  @media (max-width: 639px) {
+    .story-window {
+      aspect-ratio: 4 / 3;
+    }
+  }
+
+  /* Liquid-glass control rail: a thin translucent layer with a strong blur
+     and saturation boost, a bright specular top edge, and a diagonal sheen.
+     Solid fallbacks below for browsers without backdrop-filter and for
+     reduced-transparency users. */
+  .control-rail {
+    background: color-mix(in srgb, var(--card) 52%, transparent);
+    -webkit-backdrop-filter: blur(26px) saturate(1.7);
+    backdrop-filter: blur(26px) saturate(1.7);
+    border: 1px solid color-mix(in srgb, white 34%, transparent);
+    box-shadow:
+      inset 0 1px 0 color-mix(in srgb, white 55%, transparent),
+      inset 0 -1px 0 color-mix(in srgb, white 12%, transparent),
+      0 36px 90px -58px color-mix(in srgb, var(--foreground) 45%, transparent);
+  }
+
+  :global(.dark) .control-rail {
+    border-color: color-mix(in srgb, white 14%, transparent);
+    box-shadow:
+      inset 0 1px 0 color-mix(in srgb, white 20%, transparent),
+      inset 0 -1px 0 color-mix(in srgb, white 6%, transparent),
+      0 36px 90px -58px rgba(0, 0, 0, 0.8);
+  }
+
+  .control-rail::before {
+    position: absolute;
+    content: "";
+    pointer-events: none;
+    inset: 0;
+    background: linear-gradient(
+      115deg,
+      color-mix(in srgb, white 30%, transparent),
+      transparent 24%,
+      transparent 70%,
+      color-mix(in srgb, var(--auth-gradient-end) 14%, transparent)
+    );
+  }
+
+  :global(.dark) .control-rail::before {
+    background: linear-gradient(
+      115deg,
+      color-mix(in srgb, white 10%, transparent),
+      transparent 24%,
+      transparent 70%,
+      color-mix(in srgb, var(--auth-gradient-end) 18%, transparent)
+    );
+  }
+
+  /* Glass needs backdrop-filter; without it (or when the user asks for
+     reduced transparency) the rail falls back to a solid card. */
+  @supports not (backdrop-filter: blur(1px)) {
+    .control-rail {
+      background: color-mix(in srgb, var(--card) 92%, var(--background));
+    }
+  }
+
+  @media (prefers-reduced-transparency: reduce) {
+    .control-rail {
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+      background: color-mix(in srgb, var(--card) 92%, var(--background));
+    }
+  }
+
+  .story-link {
+    color: var(--foreground);
+    text-decoration: none;
+  }
+
+  .story-link:hover,
+  .story-link:focus-visible {
+    opacity: 0.68;
+  }
+
+  .control-rail {
+    position: relative;
+  }
+
+  .proof-list {
+    grid-auto-rows: 1fr;
+  }
+
+  .proof-list li {
+    display: flex;
+    min-height: 6.5rem;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.3rem;
+    border-block-start: 1px solid var(--border);
+    padding-block: 1.25rem;
+  }
+
+  .proof-list li:first-child {
+    border-block-start: 0;
+  }
+
+  .proof-list li:nth-child(odd) {
+    padding-inline-end: 1.5rem;
+  }
+
+  .proof-list li:nth-child(even) {
+    padding-inline-start: 1.5rem;
+  }
+
+  .proof-list strong {
+    font-family: var(--font-display);
+    font-size: 1.05rem;
+    font-weight: 500;
+  }
+
+  .proof-list span {
+    color: var(--muted-foreground);
+    font-size: 0.875rem;
+    line-height: 1.55;
+  }
+
+  .deployment-band {
+    position: relative;
+    border-block-start: 1px solid var(--border);
+    background: color-mix(in srgb, var(--background) 56%, transparent);
+  }
+
+  @media (min-width: 640px) {
+    .proof-list li:nth-child(even) {
+      border-inline-start: 1px solid var(--border);
+    }
+
+    /* In the two-column grid the second cell sits in the first row, so its
+       top border would draw the same stray line above the list. */
+    .proof-list li:nth-child(2) {
+      border-block-start: 0;
+    }
+  }
+
+  @media (max-width: 639px) {
+    .proof-list li:nth-child(odd),
+    .proof-list li:nth-child(even) {
+      padding-inline: 0;
+    }
+  }
+</style>

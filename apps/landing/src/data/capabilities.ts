@@ -16,6 +16,17 @@ export const primaryCapabilities = [
   },
 ] as const;
 
+export const dataStackCapabilities = [
+  {
+    title: "Case law & public legal sources",
+    body: "Read and search official case law and public legal material, collected and structure-parsed by stella's Legal Atlas ingestion stack.",
+  },
+  {
+    title: "Company registries",
+    body: "Pull company and commercial-registry data straight into a matter: ARES, Companies House, SEC EDGAR, KRS, PRH, VIES, and more.",
+  },
+] as const;
+
 export const controlCapabilities = [
   {
     title: "Agent-ready workflows",
@@ -23,7 +34,7 @@ export const controlCapabilities = [
   },
   {
     title: "Anonymize sensitive text",
-    body: "Prepare material for AI workflows without exposing names, entities, or identifying details. Coming soon.",
+    body: "Prepare material for AI workflows without exposing names, entities, or identifying details.",
   },
   {
     title: "Use your AI provider key",

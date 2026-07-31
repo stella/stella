@@ -1,0 +1,418 @@
+---
+import ProductMediaFrame from "./ProductMediaFrame.astro";
+import { productHref } from "../data/products/links";
+import { pillars } from "../data/products/pillars";
+import { productBySlug } from "../data/products/registry";
+import { connectLinks, isExternal, resolveNavLinks, resourceLinks } from "../data/site-nav";
+import { getTranslations } from "../i18n/utils";
+import { defaultLocale, isLocale } from "../i18n/config";
+
+// Shared primary nav (Product mega-menu + section links), used by both the
+// homepage header and SiteHeader so the menu stays in one place. Sourced from
+// the products registry. `current` marks the active entry.
+type Props = { current?: string };
+const { current } = Astro.props;
+
+const rawLocale = Astro.currentLocale ?? defaultLocale;
+const locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
+const t = getTranslations(locale);
+
+// Pillar group labels are catalog copy too (`nav.pillars.<id>`, keyed on the
+// literal pillar ids), and so are the product eyebrows under them
+// (`nav.products.<slug>.eyebrow`); see src/i18n/TRANSLATION.md.
+//
+// The header renders on every localized page, so the preview copy is catalog
+// copy keyed on the slug, and the links carry the active locale's prefix so a
+// reader on /cs/ stays on /cs/. The slugs are literals, so a product without
+// catalog entries fails typecheck.
+// Built in pillar order like the list beside it, so every trigger has a pane.
+const previews = pillars.flatMap((pillar) =>
+  pillar.slugs.flatMap((slug) => {
+    const product = productBySlug.get(slug);
+    if (!product) {
+      return [];
+    }
+    return [
+      {
+        slug,
+        hero: product.hero,
+        href: productHref(slug, locale),
+        title: t(`nav.products.${slug}.title`),
+        blurb: t(`nav.products.${slug}.blurb`),
+      },
+    ];
+  }),
+);
+
+const compactMenus = [
+  {
+    label: t("footer.resources"),
+    isCurrent: current === "security" || current === "blog",
+    links: resolveNavLinks(resourceLinks, t),
+  },
+  {
+    label: t("footer.connect"),
+    isCurrent: false,
+    links: resolveNavLinks(connectLinks, t),
+  },
+] as const;
+---
+
+<div class="hidden items-center gap-1 md:flex">
+  <details class="nav-dropdown group relative" data-nav-dropdown name="primary-navigation">
+    <summary
+      class={`nav-link flex cursor-pointer list-none items-center gap-1 ${current === "product" ? "is-current" : ""}`}
+    >
+      {t("nav.product")}
+      <svg aria-hidden="true" class="nav-caret h-3 w-3 shrink-0" fill="none" viewBox="0 0 12 12">
+        <path
+          d="M3 4.5L6 7.5L9 4.5"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="1.5"
+        />
+      </svg>
+    </summary>
+    <div
+      class="nav-menu nav-mega absolute start-0 top-full z-50 mt-2 w-[min(48rem,calc(100vw-16rem))] overflow-hidden rounded-xl border"
+      style="border-color: var(--border); background: linear-gradient(0deg, var(--card), var(--card)), var(--background); box-shadow: 0 24px 48px -20px rgba(0,0,0,0.55)"
+    >
+      <div class="flex">
+        <ul class="w-52 shrink-0 border-e p-2" style="border-color: var(--border)">
+          {
+            pillars.map((pillar, pi) => (
+              <li class="mb-1">
+                <span class="nav-mega-grouplabel">{t(`nav.pillars.${pillar.id}`)}</span>
+                <ul>
+                  {pillar.slugs.map((slug) => {
+                    const p = productBySlug.get(slug);
+                    if (!p) return null;
+                    const first = pi === 0 && slug === pillar.slugs[0];
+                    return (
+                      <li>
+                        <a
+                          href={productHref(p.slug, locale)}
+                          class={`nav-mega-item ${first ? "is-hover" : ""}`}
+                          data-mega-trigger
+                          data-slug={p.slug}
+                        >
+                          <span class="block text-sm font-medium" style="color: var(--foreground)">
+                            {t(`nav.products.${slug}.eyebrow`)}
+                          </span>
+                        </a>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </li>
+            ))
+          }
+        </ul>
+
+        <div class="nav-mega-preview grow p-3">
+          {
+            previews.map((preview, i) => (
+              <a
+                href={preview.href}
+                class={`nav-mega-pane ${i === 0 ? "is-active" : ""}`}
+                data-pane={preview.slug}
+              >
+                <ProductMediaFrame media={preview.hero} compact deferThemeImage thumbnail />
+                <span class="mt-3 block text-base font-medium leading-snug" style="color: var(--foreground)">
+                  {preview.title}
+                </span>
+                <span
+                  class="mt-1 block text-sm leading-[1.5] line-clamp-3"
+                  style="color: var(--muted-foreground)"
+                >
+                  {preview.blurb}
+                </span>
+              </a>
+            ))
+          }
+        </div>
+      </div>
+    </div>
+  </details>
+
+  {compactMenus.map((menu) => (
+    <details class="nav-dropdown group relative" data-nav-dropdown name="primary-navigation">
+      <summary class={`nav-link flex cursor-pointer list-none items-center gap-1 ${menu.isCurrent ? "is-current" : ""}`}>
+        {menu.label}
+        <svg aria-hidden="true" class="nav-caret h-3 w-3 shrink-0" fill="none" viewBox="0 0 12 12">
+          <path
+            d="M3 4.5L6 7.5L9 4.5"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="1.5"
+          />
+        </svg>
+      </summary>
+      <div
+        class="nav-menu absolute start-0 top-full z-50 mt-2 w-48 rounded-xl border p-2"
+        style="border-color: var(--border); background: linear-gradient(0deg, var(--card), var(--card)), var(--background); box-shadow: 0 24px 48px -20px rgba(0,0,0,0.55)"
+      >
+        <ul>
+          {menu.links.map((link) => (
+            <li>
+              <a
+                href={link.href}
+                class="nav-menu-item"
+                target={isExternal(link.href) ? "_blank" : undefined}
+                rel={isExternal(link.href) ? "noopener noreferrer" : undefined}
+              >
+                {link.label}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </details>
+  ))}
+</div>
+
+<style>
+  .nav-link {
+    min-height: 2.75rem;
+    border-radius: 0.5rem;
+    padding: 0.4rem 0.7rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--muted-foreground);
+    text-decoration: none;
+    transition:
+      color 150ms,
+      background-color 150ms;
+  }
+  .nav-link:hover,
+  .nav-link.is-current {
+    color: var(--foreground);
+    background: color-mix(in srgb, var(--foreground) 6%, transparent);
+  }
+
+  .nav-dropdown summary::-webkit-details-marker {
+    display: none;
+  }
+
+  /* Stroke chevron (replaces the old glyph triangle): symmetric, so it needs
+     no RTL mirroring, just a plain 180deg rotate on open. */
+  .nav-caret {
+    transition: transform 150ms ease;
+  }
+  .nav-dropdown[open] .nav-caret {
+    transform: rotate(180deg);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .nav-caret {
+      transition: none;
+    }
+  }
+
+  .nav-menu {
+    opacity: 0;
+    transform: translateY(-4px);
+    pointer-events: none;
+    transition:
+      opacity 150ms,
+      transform 150ms;
+  }
+  .nav-dropdown[open] .nav-menu {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+
+  .nav-mega-grouplabel {
+    display: block;
+    padding: 0.35rem 0.7rem 0.15rem;
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
+
+  .nav-mega-item {
+    display: flex;
+    min-height: 2.75rem;
+    align-items: center;
+    border-radius: 0.6rem;
+    padding: 0.45rem 0.7rem;
+    text-decoration: none;
+    transition: background-color 150ms;
+  }
+  .nav-mega-item:hover,
+  .nav-mega-item.is-hover {
+    background: color-mix(in srgb, var(--foreground) 6%, transparent);
+  }
+
+  .nav-menu-item {
+    display: flex;
+    min-height: 2.75rem;
+    align-items: center;
+    border-radius: 0.6rem;
+    padding: 0.55rem 0.7rem;
+    color: var(--foreground);
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: background-color 150ms;
+  }
+
+  .nav-menu-item:hover,
+  .nav-menu-item:focus-visible {
+    background: color-mix(in srgb, var(--foreground) 6%, transparent);
+  }
+
+  /* Preview panes share one grid cell so only the active one shows. */
+  .nav-mega-preview {
+    display: grid;
+  }
+  .nav-mega-pane {
+    grid-area: 1 / 1;
+    text-decoration: none;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 150ms;
+  }
+  .nav-mega-pane.is-active {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* Frameless previews: the pane's own media (ThemeImage's border + shadow,
+     or the recorded scene's own window chrome) is the only frame, matching
+     the homepage's frameless story windows (HomeProductStory .story-window /
+     .story-shot-main) and ProductMediaFrame everywhere else now. The only
+     override still needed here is aspect: every pane shares one preview
+     size regardless of the media's own aspect (the CLI scene is 2.03
+     elsewhere), and the scene thumbnails lay out in percentages, so they
+     adapt to the unified box. */
+  .nav-mega-pane :global(.product-media) {
+    aspect-ratio: 16 / 10 !important;
+  }
+</style>
+
+<script is:inline>
+  if (!window.__navMenuBound) {
+    window.__navMenuBound = true;
+
+    // Mega-menu: hovering a feature on the left swaps the preview on the right.
+    // The header re-renders per page, so re-bind triggers on every navigation;
+    // guard each element so it is never double-bound.
+    const setupMegaTriggers = () => {
+      for (const dd of document.querySelectorAll("[data-nav-dropdown]")) {
+        // Hover-open on fine-pointer devices; a short close delay keeps the
+        // menu from flickering on the way to its pane. Click and keyboard
+        // behaviour (summary toggle, Escape, outside click) stay unchanged
+        // for touch and assistive tech.
+        if (!dd.__hoverBound) {
+          dd.__hoverBound = true;
+          let closeTimer = null;
+          dd.addEventListener("pointerenter", () => {
+            if (!window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
+              return;
+            }
+            if (closeTimer !== null) {
+              clearTimeout(closeTimer);
+              closeTimer = null;
+            }
+            dd.setAttribute("open", "");
+          });
+          dd.addEventListener("pointerleave", () => {
+            if (!dd.open) {
+              return;
+            }
+            closeTimer = setTimeout(() => {
+              closeTimer = null;
+              dd.removeAttribute("open");
+            }, 180);
+          });
+          // On hover-capable devices the menu is already open when the
+          // pointer reaches the summary, so the natural follow-up click
+          // would toggle it closed the instant before the user tries to
+          // pick an item. Swallow that close; hover-out, Escape, and
+          // outside clicks still dismiss, and touch keeps the toggle.
+          const summary = dd.querySelector("summary");
+          summary?.addEventListener("click", (event) => {
+            if (
+              dd.open &&
+              window.matchMedia("(hover: hover) and (pointer: fine)").matches
+            ) {
+              event.preventDefault();
+            }
+          });
+        }
+
+        const triggers = dd.querySelectorAll("[data-mega-trigger]");
+        const panes = dd.querySelectorAll(".nav-mega-pane");
+        if (!triggers.length || !panes.length) {
+          continue;
+        }
+
+        const loadPaneImages = (pane) => {
+          pane.dispatchEvent(new CustomEvent("stella:load-theme-images", {
+            bubbles: true,
+          }));
+        };
+
+        const activateTrigger = (t) => {
+          const slug = t.dataset.slug;
+          for (const p of panes) {
+            const isActive = p.dataset.pane === slug;
+            p.classList.toggle("is-active", isActive);
+            if (isActive) {
+              loadPaneImages(p);
+            }
+          }
+          for (const x of triggers) {
+            x.classList.toggle("is-hover", x === t);
+          }
+        };
+
+        if (!dd.__megaToggleBound) {
+          dd.__megaToggleBound = true;
+          dd.addEventListener("toggle", () => {
+            if (!dd.open) {
+              return;
+            }
+            const activePane = dd.querySelector(".nav-mega-pane.is-active");
+            if (activePane) {
+              loadPaneImages(activePane);
+            }
+          });
+        }
+
+        for (const t of triggers) {
+          if (t.__megaBound) {
+            continue;
+          }
+          t.__megaBound = true;
+          t.addEventListener("pointerenter", () => { activateTrigger(t); });
+          t.addEventListener("focus", () => { activateTrigger(t); });
+        }
+      }
+    };
+    document.addEventListener("astro:page-load", setupMegaTriggers);
+
+    // Close any open nav dropdown on outside click or Escape. These are
+    // document-level and only need to be added once.
+    document.addEventListener("click", (e) => {
+      for (const d of document.querySelectorAll("[data-nav-dropdown][open]")) {
+        if (!d.contains(e.target)) {
+          d.removeAttribute("open");
+        }
+      }
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape") {
+        return;
+      }
+      for (const d of document.querySelectorAll("[data-nav-dropdown][open]")) {
+        d.removeAttribute("open");
+      }
+    });
+  }
+</script>

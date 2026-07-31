@@ -1,0 +1,17 @@
+---
+import ProductPage from "../../components/ProductPage.astro";
+import { products } from "../../data/products/registry";
+
+// The default locale sits at the root (prefixDefaultLocale: false); every other
+// locale is emitted by [locale]/product/[slug].astro from this same list.
+export function getStaticPaths() {
+  return products.map((product) => ({
+    params: { slug: product.slug },
+    props: { product },
+  }));
+}
+
+const { product } = Astro.props;
+---
+
+<ProductPage product={product} />

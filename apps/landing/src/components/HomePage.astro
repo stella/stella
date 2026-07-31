@@ -1,0 +1,386 @@
+---
+import Base from "../layouts/Base.astro";
+import LandingFooter from "./LandingFooter.astro";
+import HomeProductStory from "./HomeProductStory.astro";
+import { CliMcpPreview } from "./react/previews/CliMcpPreview";
+import { getChangelogReleases } from "../lib/changelog";
+import { getReleaseKind } from "../lib/changelog-release";
+import { resolveProductHrefs } from "../data/products/links";
+import { resolveProductDiscoverLabels } from "../data/site-nav";
+import { resolveSceneWindowLabels } from "../data/product-story";
+import { getTranslations, requireLinkedSegment } from "../i18n/utils";
+import { defaultLocale, isLocale } from "../i18n/config";
+
+const rawLocale = Astro.currentLocale ?? defaultLocale;
+const locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
+const t = getTranslations(locale);
+// Releases are sorted newest-first; the strip shows the last three feature
+// (non-patch) releases, and the hero badge reuses the newest of them.
+const featureReleases = getChangelogReleases()
+  .filter((release) => getReleaseKind(release.tagName) !== "patch")
+  .slice(0, 3);
+const latestRelease = featureReleases.at(0);
+const releaseDateFormatter = new Intl.DateTimeFormat(locale, {
+  dateStyle: "medium",
+});
+// Release headings and notes are read from the English changelog markdown
+// (docs/changelog/*.md), so they cannot be keyed and translated per release.
+// The English prose renders on every locale — release notes are engineering
+// artifacts, not marketing copy — isolated with lang="en" dir="ltr" so RTL
+// pages lay the island out correctly.
+
+const appUrl = "https://my.stll.app";
+const selfHostingDocsUrl =
+  "https://github.com/stella/stella/blob/main/docs/self-hosting.md";
+const githubUrl = "https://github.com/stella/stella";
+
+// The subtitle carries a <gh>…</gh> marker pair around each locale's
+// open-source phrase; the marked span renders as a link to the repository.
+// Every catalog must carry exactly one pair — fail loudly rather than
+// rendering a marker to visitors.
+const subtitle = requireLinkedSegment("hero.subtitle", t("hero.subtitle"));
+---
+
+<Base
+  title={t("meta.homeTitle")}
+  description={t("meta.homeDescription")}
+  headerOverlay
+  translationScope="all-locales"
+>
+  <main>
+    {/* ——— Hero + opening product story: one shared background surface ———
+        overflow-clip, not overflow-hidden: hidden would make this a scroll
+        container and capture the scene's view() timeline, disabling the
+        scroll-staged companion reveal. */}
+    <div class="relative overflow-clip">
+      {/* pt compensates for the fixed overlay header (which no longer
+          occupies layout space) plus a little extra air above the badge. */}
+      <section
+        class="relative flex min-h-[34rem] flex-col pt-16 sm:min-h-[36rem] sm:pt-20 lg:min-h-[38rem]"
+      >
+        {/* Extends past the hero so the gradient continues behind the scene
+            below, resolving to the page background at its own bottom edge.
+            Stretched tall on purpose: the artwork ramps from transparent at
+            its top, so a bigger surface keeps the headline calm and pushes
+            the visible ripples down to bloom behind the scene. */}
+        <div
+          class="absolute inset-x-0 top-0 h-[215%] overflow-hidden"
+          id="gradient-bg"
+        >
+          <div
+            id="gradient-light"
+            class="absolute inset-0 dark:opacity-0 transition-opacity duration-500"
+          >
+          </div>
+          <div
+            id="gradient-dark"
+            class="absolute inset-0 opacity-0 dark:opacity-100 transition-opacity duration-500"
+          >
+          </div>
+          {/* Fade completes at 85% of this band so the art is fully resolved
+              to background before the wrapper's clip line. */}
+          <div
+            class="pointer-events-none absolute inset-x-0 bottom-0 h-1/3"
+            style="background: linear-gradient(to bottom, transparent, var(--background) 85%)"
+          >
+          </div>
+        </div>
+
+        <div
+          class="relative z-10 flex flex-1 flex-col items-center justify-center px-6 pb-10 sm:pb-12"
+        >
+          <a
+            href="/changelog"
+            data-reveal
+            style="background: color-mix(in srgb, var(--card) 88%, transparent); border: 1px solid var(--border)"
+            class="reveal-fast group mb-7 inline-flex max-w-[calc(100%-3rem)] items-center gap-2.5 rounded-full px-4 py-2 text-sm font-medium shadow-sm transition-transform hover:-translate-y-0.5"
+          >
+            <span
+              class="hero-beta-dot h-2 w-2 shrink-0 rounded-full"
+              style="background: var(--success)"
+              aria-hidden="true"></span>
+            <span
+              class="hidden shrink-0 whitespace-nowrap sm:inline"
+              style="color: var(--foreground)">{t("hero.badge")}</span
+            >
+            <span
+              class="inline-flex min-w-0 items-center gap-1.5 sm:border-s sm:ps-2.5"
+              style="border-color: var(--border); color: var(--muted-foreground)"
+            >
+              {
+                latestRelease && (
+                  <span
+                    class="shrink-0 font-medium"
+                    style="color: var(--foreground)"
+                  >
+                    {latestRelease.tagName}
+                  </span>
+                )
+              }
+              <span class="min-w-0 truncate" lang="en" dir="ltr">
+                {
+                  latestRelease
+                    ? (latestRelease.heading ?? latestRelease.displayName)
+                    : t("nav.changelog")
+                }
+              </span>
+              <span
+                aria-hidden="true"
+                class="shrink-0 transition-transform rtl:-scale-x-100 ltr:group-hover:translate-x-0.5 rtl:group-hover:-translate-x-0.5"
+                >→</span
+              >
+            </span>
+          </a>
+          {/* No entrance animation on the headline or subtitle: the H1 is
+              the LCP element, and hiding it behind choreography delays both
+              perceived and measured paint. */}
+          <h1
+            class="max-w-[90rem] text-balance text-center font-display text-5xl font-medium leading-[1.02] sm:text-6xl lg:text-7xl xl:text-[5.5rem]"
+          >
+            {t("hero.title")}
+          </h1>
+          <p
+            style="color: color-mix(in srgb, var(--foreground) 72%, var(--muted-foreground))"
+            class="mt-6 max-w-2xl text-balance text-center text-lg leading-[1.55] sm:text-xl"
+          >
+            {subtitle.before}<a
+              href={githubUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="underline underline-offset-4 transition-opacity hover:opacity-70"
+              >{subtitle.linked}</a
+            >{subtitle.after}
+          </p>
+          <div
+            data-reveal
+            class="reveal-fast mt-8 flex flex-row items-center gap-3"
+          >
+            <a
+              href={selfHostingDocsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              style="background: var(--background); border: 1px solid var(--border); color: var(--foreground)"
+              class="inline-flex h-11 items-center rounded-[0.85rem] px-6 text-sm font-medium transition-opacity hover:opacity-90 whitespace-nowrap"
+            >
+              {t("hero.selfHost")}
+            </a>
+            <a
+              id="hero-cta"
+              href={appUrl}
+              style="background: var(--primary); color: var(--primary-foreground)"
+              class="group inline-flex h-11 items-center gap-2 rounded-[0.85rem] px-6 text-sm font-medium shadow-sm transition-[opacity,transform] hover:-translate-y-0.5 hover:opacity-90 whitespace-nowrap"
+            >
+              {t("common.startFree")}
+              <span
+                aria-hidden="true"
+                class="transition-transform rtl:-scale-x-100 ltr:group-hover:translate-x-0.5 rtl:group-hover:-translate-x-0.5">→</span
+              >
+            </a>
+          </div>
+        </div>
+      </section>
+
+      {/* ——— Opening product story ——— */}
+      <section class="relative overflow-clip" id="opening-product-story">
+        <div class="relative aspect-[4/5] w-full sm:aspect-[2.03]">
+          <CliMcpPreview
+            client:load
+            revealSideWindowsOnScroll
+            backdrop="transparent"
+            discover={{
+              productHrefs: resolveProductHrefs(locale),
+              productLabels: resolveProductDiscoverLabels(t),
+            }}
+            windowLabels={resolveSceneWindowLabels(t)}
+          />
+        </div>
+      </section>
+    </div>
+
+    <HomeProductStory />
+
+    {/* ——— Velocity strip: the last three feature releases ——— */}
+    <section class="px-6 pb-20 lg:pb-24" aria-labelledby="velocity-title">
+      <div class="mx-auto max-w-300">
+        <p
+          data-reveal
+          class="text-xs font-medium uppercase tracking-[0.2em]"
+          style="color: var(--muted-foreground)"
+        >
+          {t("hero.badge")}
+        </p>
+        <h2
+          data-reveal
+          id="velocity-title"
+          style="--reveal-delay: 80ms"
+          class="mt-3 text-balance font-display text-3xl font-medium leading-[1.08] sm:text-4xl"
+        >
+          {t("story.velocityTitle")}
+        </h2>
+        <ul class="release-grid mt-10 grid sm:grid-cols-3">
+          {
+            featureReleases.map((release, index) => (
+              <li
+                data-reveal
+                style={`--reveal-delay: ${120 + index * 60}ms`}
+                class="release-col"
+              >
+                <a
+                  href={`/changelog#${release.slug}`}
+                  class="group flex h-full flex-col gap-2"
+                >
+                  <span
+                    class="flex items-baseline gap-3 text-sm tabular-nums"
+                    style="color: var(--muted-foreground)"
+                  >
+                    {release.publishedAt && (
+                      <time datetime={release.publishedAt}>
+                        {releaseDateFormatter.format(new Date(release.publishedAt))}
+                      </time>
+                    )}
+                    <span>{release.tagName}</span>
+                  </span>
+                  <span
+                    class="font-display text-xl font-medium transition-opacity group-hover:opacity-70"
+                    lang="en"
+                    dir="ltr"
+                  >
+                    {release.heading ?? release.displayName}
+                  </span>
+                  <span
+                    class="text-sm leading-6"
+                    style="color: var(--muted-foreground)"
+                    lang="en"
+                    dir="ltr"
+                    >{release.description}</span
+                  >
+                </a>
+              </li>
+            ))
+          }
+        </ul>
+        <a
+          href="/changelog"
+          data-reveal
+          style="--reveal-delay: 300ms"
+          class="group mt-2 inline-flex min-h-11 items-center gap-2 text-sm font-medium transition-opacity hover:opacity-70"
+        >
+          <span>{t("story.velocityAll")}</span>
+          <span
+            aria-hidden="true"
+            class="transition-transform rtl:-scale-x-100 ltr:group-hover:translate-x-0.5 rtl:group-hover:-translate-x-0.5"
+            >→</span
+          >
+        </a>
+      </div>
+    </section>
+
+    {/* ——— Final CTA ——— */}
+    <section class="px-6 pb-20 lg:pb-24">
+      <div
+        class="relative mx-auto max-w-300 overflow-hidden rounded-[2rem] p-8 sm:p-10 lg:p-12"
+        style="background: var(--card); border: 1px solid var(--border)"
+      >
+        <div
+          class="pointer-events-none absolute inset-0 bg-cover bg-center opacity-100 dark:opacity-28"
+          style="background-image: url('/images/gradient-hero.png')"
+          aria-hidden="true"
+        >
+        </div>
+        <div
+          class="pointer-events-none absolute inset-0 dark:hidden"
+          style="background:
+            linear-gradient(180deg, rgba(255,255,255,0.2), rgba(255,255,255,0.34))"
+          aria-hidden="true"
+        >
+        </div>
+        <div
+          class="pointer-events-none absolute inset-0 hidden dark:block"
+          style="background:
+            linear-gradient(180deg, color-mix(in srgb, var(--card) 74%, transparent), color-mix(in srgb, var(--card) 88%, transparent));
+            backdrop-filter: blur(2px)"
+          aria-hidden="true"
+        >
+        </div>
+
+        <div class="relative z-10">
+          <div class="max-w-3xl">
+            <h2
+              data-reveal
+              class="font-display text-3xl font-medium leading-tight sm:text-4xl"
+            >
+              {t("home.ctaTitle")}
+            </h2>
+          </div>
+
+          <div class="mt-8 flex flex-col gap-3 sm:flex-row">
+            <a
+              href="mailto:contact@stll.app"
+              data-reveal
+              style="--reveal-delay: 120ms; background: var(--background); border: 1px solid var(--border); color: var(--foreground)"
+              class="inline-flex h-11 items-center justify-center rounded-[0.85rem] px-5 text-sm font-medium transition-opacity hover:opacity-90 whitespace-nowrap"
+            >
+              {t("footer.contact")}
+            </a>
+            <a
+              href={appUrl}
+              data-reveal
+              style="--reveal-delay: 200ms; background: var(--primary); color: var(--primary-foreground)"
+              class="inline-flex h-11 items-center justify-center rounded-[0.85rem] px-5 text-sm font-medium transition-opacity hover:opacity-90 whitespace-nowrap"
+            >
+              {t("common.startFree")}
+            </a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <LandingFooter />
+
+  <style>
+    .hero-beta-dot {
+      animation: hero-beta-pulse 4s var(--ease-out-quint) infinite;
+    }
+
+    @keyframes hero-beta-pulse {
+      0%, 100% {
+        box-shadow: 0 0 0 0 color-mix(in srgb, var(--success) 22%, transparent);
+      }
+      60% {
+        box-shadow: 0 0 0 6px color-mix(in srgb, var(--success) 0%, transparent);
+      }
+    }
+
+    /* Release columns: hairline separators between columns on wide screens
+       (rows on mobile), the changelog-section pattern of date over title over
+       one-line summary. */
+    .release-col a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    @media (min-width: 640px) {
+      .release-col {
+        padding-inline: 1.75rem;
+      }
+
+      .release-col:first-child {
+        padding-inline-start: 0;
+      }
+
+      .release-col + .release-col {
+        border-inline-start: 1px solid var(--border);
+      }
+    }
+
+    @media (max-width: 639px) {
+      .release-col + .release-col {
+        margin-block-start: 1.5rem;
+        border-block-start: 1px solid var(--border);
+        padding-block-start: 1.5rem;
+      }
+    }
+  </style>
+
+</Base>

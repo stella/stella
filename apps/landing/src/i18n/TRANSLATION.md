@@ -1,0 +1,776 @@
+# Landing translation guidelines
+
+How and why the landing catalogs (`messages/*.json`) are translated the way
+they are. The checks in `bun run i18n:check` enforce most of this; this
+document explains the intent behind the rules so future translations stay
+coherent rather than merely passing.
+
+## Source language
+
+- The source is **British English** (`-ise`, `-our`). Established product
+  names keep their canonical spelling regardless (e.g. `Anonymization`).
+- The brand is written **`stella`, lowercase, always** — including at the
+  start of a sentence and in every locale. It is never translated,
+  transliterated, or declined; in languages that decline nouns, restructure
+  around it (e.g. Latvian `lietotnē stella`, not a declined brand).
+
+### Restructuring around the brand: the generic-noun pattern
+
+Declining is the failure mode this rule keeps recurring against (`ve stelle`,
+`w stelli`, `a stellát`), and the naive fix is worse: a bare undeclined name in
+a slot that demands a case reads as broken grammar (`Zeptat se stella`). Put a
+generic noun in the case-bearing slot and leave the brand invariant beside it.
+Use each locale's fixed carrier noun so the pattern reads as one habit:
+
+| Locale | Carrier           | Example                           |
+| ------ | ----------------- | --------------------------------- |
+| cs     | aplikace stella   | `Provozujte aplikaci stella…`     |
+| sk     | aplikácia stella  | `Prevádzkujte aplikáciu stella…`  |
+| pl     | aplikacja stella  | `Uruchamiaj aplikację stella…`    |
+| hu     | stella alkalmazás | `Futtassa a stella alkalmazást…`  |
+| et     | rakendus stella   | `Kasuta seda rakenduses stella…`  |
+| lt     | programa stella   | `Naudokite jį programoje stella…` |
+| lv     | lietotne stella   | `Darbiniet lietotni stella…`      |
+
+Locales that need no carrier (ar, de, en, es, fr, pt-BR) keep the bare brand;
+Portuguese and Spanish may take the article (`a stella`, `na stella`), which is
+not declension.
+
+## Translate meaning, not words
+
+Marketing copy is translated for effect, not word-by-word. A punchy English
+triplet ("Your matters. Your stack. Your terms.") needs an equally punchy
+native triplet, not a literal gloss. When an English pun cannot carry over
+("work that matters"), translate the meaning and drop the pun.
+
+The failure mode to watch for is the beat-by-beat calque that happens to be
+grammatical: `story.title`'s "One matter. Every part of the work." was once
+rendered cs "Jeden spis. Každá část práce." — every word correct, and no
+native would write it. The maintainer rejected it, and rejected the closer
+"Celá práce." too. The settled rendering re-tells the section's arc instead:
+cs "Jeden spis. Od podkladů po odpověď." (from source material to answer),
+fr "Des pièces à la réponse.", hu "Az iratoktól a válaszig.". When a short
+headline resists translation twice, stop translating it and write the claim
+a native marketer would make; matching the section's actual content beats
+matching the English syntax.
+
+Recurring calque families the quality passes keep removing — check for them
+whenever a string is touched:
+
+- English's "lives in / live together" metaphor ("reviews live in the matter")
+  produces literal `žijí`/`elab`/`él` renderings; say stays, remains, is part
+  of, or happens in.
+- "bring AI to your practice" as a literal carry verb (cs `Přineste`,
+  hu `Hozza el`, lv `Ienesiet`); use the locale's adoption verb (zavést,
+  bevezet, ieviest, ievade).
+- English false friends around redaction: es `redactado` and pl `zredagowany`
+  mean drafted/copyedited, et `redigeeritud` means edited; the anonymization
+  pages say anonymised, never a redact cognate.
+- "works across your matters" as a spatial preposition pile; unfold into the
+  locale's own structure (reaches, covers, spans as a verb).
+
+## The reader is a lawyer, not a developer
+
+Developer vocabulary is banned on every marketing surface except the CLI & MCP
+page (`products.cli-mcp.*` and `mcpProof.*`, which render for a technical
+audience and may name registries, capabilities, scopes, and OAuth). Everywhere
+else — the homepage, the other product pages, every meta string — copy is
+written the way a practising lawyer would say it.
+
+The canonical failure is Czech **"typovaný přístup"**, a faithful translation of
+"typed access". No translator invented it: the English source said _typed
+clients_, _typed access_, _structure-parsed_, _queried_, and _stella's Legal
+Atlas stack_, and twelve locales rendered exactly that. The lesson is where the
+fix belongs: **rewrite the English**, then re-render the fixed meaning. Words
+banned outside the CLI & MCP surface, with the replacement that carries the same
+claim:
+
+| Banned in the source           | Say instead                                           |
+| ------------------------------ | ----------------------------------------------------- |
+| typed client, typed access     | connected register, direct access, "look up"          |
+| stack (data / ingestion)       | name the thing itself (`stella's Legal Atlas`)        |
+| parse, parser, structure-parse | "keeps its structure", "with the structure preserved" |
+| query (verb), queried from     | search, look up, consult                              |
+| ingest                         | collect                                               |
+| scraped                        | second-hand, third-party                              |
+| blacklist                      | name list                                             |
+| prompt, tool definition        | instruction, tool                                     |
+| chat composer                  | chat                                                  |
+| scoped to                      | "stays within the permissions of"                     |
+| render (a document)            | look, appear                                          |
+
+The tell for a new one: the word names how stella is built rather than what the
+reader gets. When you catch one, fix the `en` string **and** its twin in
+`data/products/<slug>.ts`; `menu-copy.test.ts` fails if you fix only one.
+
+## Register per locale
+
+Each catalog has an established register. Stay consistent **within the
+file** — check the existing hero/footer strings before adding keys:
+
+| Locale | Register                               |
+| ------ | -------------------------------------- |
+| ar     | Modern Standard Arabic, direct address |
+| cs     | vykání (formal you)                    |
+| de     | Sie                                    |
+| es     | tú                                     |
+| et     | sina (informal)                        |
+| fr     | vous                                   |
+| hu     | Ön                                     |
+| lt     | Jūs                                    |
+| lv     | Jūs                                    |
+| pl     | informal ty, capitalised Twoje/Twoja   |
+| pt-BR  | você                                   |
+| sk     | vykanie (formal you)                   |
+
+The register binds every string, body copy included; the informal locales are
+where it slips, because a translator reaching for a neutral sentence lands on
+the formal default (es `Lo que ve aquí` for `Lo que ves aquí`, et `mida siin
+näete` for `mida siin näed`). Read a new string against the hero and the footer
+of the same file before committing it.
+
+## Legal terminology: the glossary is binding
+
+The shared glossary (`apps/web/src/i18n/glossary.json`) defines the one
+correct rendering of load-bearing product concepts per language — above all
+**Matter** (ar ملف قانوني, cs Spis, sk Spis, pl Sprawa, de Akte, et Toimik,
+hu Ügy, lt Byla, lv Lieta, es Asunto, fr Dossier, pt-BR Caso) — and lists
+forbidden near-synonyms per language (e.g. Arabic قضية reads as "lawsuit",
+German "Mandat" collides with a different concept). `i18n-lint` enforces this.
+
+Arabic qualifies the term because bare ملف is also the everyday word for a
+computer file, so Matter and Files collided; the landing carries the full
+ملف قانوني wherever the concept is named, and the bare form only where the
+string means a file or document.
+
+Why: Matter names the product's central object. If the landing and the app
+render it differently, users meet two products. Use the app's canonical
+translation; never introduce a new synonym on the landing.
+
+The glossary now also bans cs `případ` / sk `prípad` (nominative singular and
+plural) for Matter, because a demo label had drifted to `Případy` / `Prípady`
+while every other string in the same file said `spis`. Only those two forms are
+banned per language: the oblique forms carry the everyday `v případě` idiom and
+would false-fire.
+
+The gate is a ratchet, not a whitelist: `i18n-lint` fires only on renderings
+listed as `forbidden`, and it cannot require the canonical term to appear
+(transcreation legitimately restructures a sentence around the concept). So a
+synonym nobody has banned yet drifts silently — Lithuanian rendered Clause as
+`nuostata` for months while the app said `sąlyga`. When you catch such a drift,
+fix the strings **and** add the wrong family to the glossary's `forbidden`
+list, scoped by the concept's English trigger, so the class stays dead.
+
+Two wording rules the glossary cannot express as bans:
+
+- cs/sk: a company is `společnost` / `spoločnosť`. `firma` legally names the
+  business name (obchodní firma, ObčZ § 423), so prose about looking up
+  companies must not say it; the researched query term `firmy` may survive
+  only inside the two public-data meta descriptions.
+- de: a citation the AI answers with is a `Fundstelle`; running copy had three
+  renderings (`Quellenangaben`, `Fundstellen`, `Zitate`). Product-page prose
+  uses `Fundstellen`; only the settled hero keeps its own phrasing.
+
+### Terms the app owns, not the landing
+
+For a concept that already has a rendering in `apps/web/src/i18n/langs`, the app
+wins and the landing copies it, even when the landing's own wording reads
+better in isolation. Verified drifts and their resolutions:
+
+| Concept   | Locale | App term           | Landing had          |
+| --------- | ------ | ------------------ | -------------------- |
+| In review | cs     | `V revizi`         | `V kontrole`         |
+| In review | sk     | `V revízii`        | `V kontrole`         |
+| Review    | hu     | `ellenőrzés`       | `felülvizsgálat`     |
+| Workspace | cs     | `pracovní prostor` | `pracovní prostředí` |
+| Workspace | pl     | `obszar roboczy`   | `przestrzeń robocza` |
+| Workspace | lt     | `darbo sritis`     | `darbo erdvė`        |
+| Workspace | lv     | `darbvieta`        | `darba vide`         |
+
+Hungarian is the case worth remembering: `felülvizsgálat` is not a stylistic
+variant, it names the extraordinary appeal to the Kúria, so a legal reader
+parses it as a procedure rather than as document review.
+
+Any status chip, tab label, or column header the demo section reproduces is an
+app string: render it verbatim, not as a fresh translation of the English.
+
+Special case: some languages ban the literal translation of "workspace" on
+matter-related strings (cs "pracovní prostor", fr "espace de travail",
+et standalone "tööruum") because the app uses the Matter term where its UI
+says workspace. On the landing, "workspace" as _product positioning_ (the
+category the product belongs to) may translate literally; the
+grandfathered entries in `i18n-lint-baseline.json` exist for exactly that
+distinction: the cs and fr taglines, plus the three cs strings that carry the
+identity phrase next to the word "matters" (`hero.subtitle`,
+`meta.homeDescription`, `story.workspaceEyebrow`). Czech had been dodging the
+ban with a second rendering of workspace; one correct term plus an honest
+baseline entry beats two terms. Do not add baseline entries for any other
+reason. Each entry is keyed on the (source, target) pair, so editing either
+side re-checks the string.
+
+## The identity phrase
+
+"**open-source legal workspace**" is the product's category identity. Each
+locale should settle one natural rendering of it and reuse that rendering
+everywhere it appears — page titles, meta descriptions, the footer tagline,
+hero copy. Consistency here is what makes the phrase recognisable to both
+readers and search engines indexing the localized pages.
+
+The settled rendering of "workspace" per locale now lives in `glossary.json`
+(`nouns` → `workspace`), which bans the near-synonyms each locale had drifted
+to, so the split cannot come back silently:
+
+| Locale | Workspace         | Locale | Workspace          |
+| ------ | ----------------- | ------ | ------------------ |
+| ar     | مساحة عمل         | hu     | munkaterület       |
+| cs     | pracovní prostor  | lt     | darbo sritis       |
+| sk     | pracovný priestor | lv     | darbvieta          |
+| pl     | obszar roboczy    | es     | espacio de trabajo |
+| de     | Arbeitsbereich    | fr     | espace de travail  |
+| et     | tööruum           | pt-BR  | espaço de trabalho |
+
+Czech is the instructive one: `pracovní prostředí` is the Czech term for a
+desktop environment, and in a legal context it reads as workplace conditions.
+Latvian `darba vide` and Hungarian `munkatér` fail the same way.
+
+Two locales cannot use their usual rendering when the string also carries the
+Matter term, because the glossary forbids the literal "workspace" there
+(et standalone _tööruum_, fr _espace de travail_). `hero.subtitle` therefore
+uses the Estonian compound _õigustööruum_ and the French _plateforme
+juridique open source_ — the renderings those locales' `meta.homeDescription`
+already uses. Reach for an existing lint-safe wording before coining a new
+one; a third synonym costs more than the repetition it avoids.
+
+### Linking the phrase: the `<gh>…</gh>` markers
+
+Where "open source" appears in running prose on the homepage, the phrase links
+to the repository. Only the translator knows which words carry the term in their
+language, so the catalog marks them: `hero.subtitle` and `story.controlBody`
+wrap each locale's own rendering in `<gh>…</gh>`, and
+`requireLinkedSegment(key, value)` in `i18n/utils.ts` splits the value into
+`before` / `linked` / `after`. It throws when a catalog drops the pair, so a
+missing marker fails the build instead of rendering `<gh>` to a reader; the
+plain `splitLinkedSegment` returns null for surfaces where the link is optional.
+
+Two homepage strings carry the term and are deliberately not marked:
+`meta.homeDescription` (a meta tag, not prose) and `story.proofOpenSourceTitle`
+(a proof-card label whose card already pairs with the `story.sourceOnGitHub`
+link). Product-page copy is out of scope: the markers belong where the homepage
+renders them.
+
+### "open source" per locale
+
+The term itself is rendered per locale by whichever form that language's
+technical audience dominantly uses — the English loanword where the
+loanword is the standard term, the native compound where the native term
+is. Fixed choices (use these, never a synonym):
+
+| Locale | Rendering                                    |
+| ------ | -------------------------------------------- |
+| ar     | مفتوح المصدر (agree in gender with the noun) |
+| cs     | open source (loanword)                       |
+| de     | Open Source / Open-Source- in compounds      |
+| es     | código abierto                               |
+| et     | avatud lähtekoodiga                          |
+| fr     | open source (loanword)                       |
+| hu     | nyílt forráskódú                             |
+| lt     | atvirojo kodo                                |
+| lv     | atvērtā pirmkoda                             |
+| pl     | open source (loanword)                       |
+| pt-BR  | código aberto                                |
+| sk     | open source (loanword)                       |
+
+Why not one global rule: "Open Source" is the recognised standard in
+German and the Slavic tech vocabularies, while Spanish, Portuguese, and
+Arabic have fully dominant native terms; forcing either direction
+everywhere reads foreign in half the markets. A plain "open/otevřené/
+otwarte" adjective is NOT a substitute for the technical term in the
+identity phrase.
+
+### Self-hosting per locale
+
+Three families, chosen by what each market's practitioners actually write, not
+by whether the word is native. `glossary.json` (`nouns` → `self-hosting`) bans
+the wrong renderings, keyed on `selfHost` in the key path plus the English
+trigger, so the split cannot come back silently.
+
+| Locale | Noun (button, card title)                          | Verb phrase (body copy)                 |
+| ------ | -------------------------------------------------- | --------------------------------------- |
+| ar     | الاستضافة الذاتية                                  | استضافته ذاتياً                         |
+| cs     | self-hosting / _Na vlastní infrastruktuře_         | provozovat na vlastní infrastruktuře    |
+| sk     | self-hosting / _Na vlastnej infraštruktúre_        | prevádzkovať na vlastnej infraštruktúre |
+| pl     | self-hosting / _Na własnej infrastrukturze_        | uruchomić na własnej infrastrukturze    |
+| de     | Self-Hosting / _Zum Selbsthosten_                  | selbst hosten                           |
+| fr     | auto-hébergement / _Auto-hébergeable_              | auto-héberger                           |
+| es     | autoalojamiento / _Autoalojable_                   | autoalojar                              |
+| pt-BR  | auto-hospedagem / _Auto-hospedável_                | auto-hospedar                           |
+| hu     | saját üzemeltetés / _Saját üzemeltetésű_           | saját maga is üzemeltetheti             |
+| et     | _Oma serveris_ / _Ise majutatav_                   | ise majutada                            |
+| lt     | _Savame serveryje_ / _Diegiama savo serveryje_     | įdiegti savo serveryje                  |
+| lv     | _Savā serverī_ / _Izvietojams savā infrastruktūrā_ | izvietot savā infrastruktūrā            |
+
+_Loan, because the loan is the term._ German `Self-Hosting` is a naturalized
+German noun (heise's own "Self-Hosting-Kompendium", Hetzner's product page), and
+cs/sk/pl practitioners write it untranslated (interval.cz "Má self-hosting ještě
+smysl?", root.cz "self-hosted řešení", sekurak.pl "aplikacją self-hosted"). None
+of them needs an `identicalToSource` entry: the loan is a noun (`self-hosting`)
+where the English button is a verb (`Self-host`), so the strings differ. If a
+future edit makes them match, that is a genuine cognate and belongs in the
+baseline.
+
+_Native, because the native term won._ French `auto-hébergement` is the
+strongest coinage of the twelve (its own fr.wikipedia article, a standing
+LinuxFr tag, Korben's "logiciels auto-hébergés"); the English loan is absent
+from French tech writing. Same for es `autoalojado` (Genbeta, Nextcloud ES),
+pt-BR `auto-hospedagem` (alongside the loan, which Brazilian pages gloss with
+it), hu `saját üzemeltetés`, and ar الاستضافة الذاتية.
+
+_Descriptive, because no native noun exists._ Estonian, Lithuanian, and Latvian
+have a settled word for hosting (`majutus`, `talpinimas`, `mitināšana`) and none
+for self-hosting. Every candidate found was either a coinage or, for lt
+`savarankiškas talpinimas`, machine-translated affiliate spam. Those three
+locales say where it runs ("in your own server", "on your own infrastructure")
+rather than inventing a noun; revisit if one settles.
+
+Two rejected forms are worth recording. Czech **"Vlastní hosting"** — the string
+this section replaced — reads as _a hosting plan you bought_, because Czech
+`hosting` denotes the purchased service; the one Czech article using it had to
+gloss "(self-hosting)" on first mention. German **"Eigenbetrieb"** is a
+public-law term for a municipal enterprise, which is a live collision on a legal
+product's page.
+
+**Known divergence:** `apps/web`'s `settings.account.desktopSelfHostTitle` uses
+the loan in all twelve locales, including fr, es, hu, and pt-BR, where this table
+takes the native term. That is a technical settings label rather than a settled
+product term, so the landing does not copy it; align the app on this table when
+that screen is next touched.
+
+## The hero: one structure, every locale
+
+`hero.title` is the positioning line ("Put AI to work on every matter.");
+`hero.subtitle` carries the identity phrase and the product payload in one
+sentence. Both render from the catalog in every locale, English included.
+The homepage used to inline the English hero and reach for the catalog only
+for other locales; that is precisely how the English headline got rewritten
+while twelve catalogs kept the previous tagline. Source copy that lives in a
+component cannot be seen to have drifted.
+
+Do not split the identity across title and subtitle. The title sells the
+outcome, the subtitle names the category; carrying "open source" in both
+reads as padding in every language.
+
+`hero.title` is an imperative in every locale, built on the verb that
+language actually uses for putting a tool to productive work (cs/sk
+_zapojit_, de _einsetzen_, pl _zaprzęgnąć_, lt _pasitelkti_, hu _munkába
+állítani_, et _tööle panema_), never a literal gloss of "put to work". The
+abbreviation for AI follows the catalog's established choice — cs, sk, hu,
+lv, pl `AI`; de `KI`; es, fr, pt-BR `IA`; lt `DI`; ar الذكاء الاصطناعي — so
+the hero and `home.ctaTitle` name the technology identically.
+
+## Meta strings are length-budgeted
+
+`meta.homeTitle` ≤ ~60 characters, `meta.homeDescription` ~140–160
+characters. Search results truncate beyond that; a beautifully translated
+description that gets cut mid-clause is a worse outcome than a tighter one.
+Keep the brand verbatim and the identity phrase intact inside the budget.
+
+## Cognates are allowed — deliberately
+
+When the natural term in a language _is_ the English word (Status, Editor,
+Blog, Beta), keep it. Do not invent a forced native alternative to avoid
+matching the source. Such entries are recorded in
+`i18n-check-baseline.json` so the untranslated-string check accepts them;
+extend the baseline only for genuine cognates.
+
+## Product names on marketing surfaces
+
+Product names are **descriptors, not brand marks**: only `stella` is the
+brand. Every localized surface therefore names a product in the reader's
+language. The product eyebrows (Workspace, Editor, Templates, Tabular Review,
+AI agent, Anonymization, Public data, CLI & MCP) render from
+`nav.products.<slug>.eyebrow` in the mega-menu and the mobile menu, and from
+the `footer.*` descriptors in the footer's product column. This reverses an
+earlier rule that treated the eyebrows as brand-constant English: a Czech page
+whose footer said "Tabulková revize" while the menu above it said "Tabular
+Review" was naming the same page twice, as two products.
+
+The product pages render the same eyebrow from the same key. They are localized
+too (`/<lang>/product/<slug>`), and their hero reads
+`nav.products.<slug>.eyebrow`/`.title`/`.blurb` rather than restating them, so a
+product is named once per locale across the menu, the footer, and its own page.
+
+| Locale | Workspace          | Editor      | Templates  | Tabular Review        | AI agent              | Anonymization  | Public data       |
+| ------ | ------------------ | ----------- | ---------- | --------------------- | --------------------- | -------------- | ----------------- |
+| ar     | مساحة العمل        | المحرر      | القوالب    | المراجعة الجدولية     | وكيل الذكاء الاصطناعي | إخفاء الهوية   | البيانات العامة   |
+| cs     | Pracovní prostor   | Editor      | Vzory      | Tabulková revize      | AI agent              | Anonymizace    | Veřejná data      |
+| de     | Arbeitsbereich     | Editor      | Vorlagen   | Tabellenprüfung       | KI-Agent              | Anonymisierung | Öffentliche Daten |
+| es     | Espacio de trabajo | Editor      | Plantillas | Revisión tabular      | Agente de IA          | Anonimización  | Datos públicos    |
+| et     | Tööruum            | Redaktor    | Mallid     | Tabelülevaatus        | Tehisintellekti agent | Anonüümimine   | Avalikud andmed   |
+| fr     | Espace de travail  | Éditeur     | Modèles    | Revue tabulaire       | Agent IA              | Anonymisation  | Données publiques |
+| hu     | Munkaterület       | Szerkesztő  | Sablonok   | Táblázatos ellenőrzés | AI-ügynök             | Anonimizálás   | Nyilvános adatok  |
+| lt     | Darbo sritis       | Redaktorius | Šablonai   | Lentelinė peržiūra    | DI agentas            | Anonimizavimas | Viešieji duomenys |
+| lv     | Darbvieta          | Redaktors   | Veidnes    | Tabulāra pārskatīšana | AI aģents             | Anonimizācija  | Publiskie dati    |
+| pl     | Obszar roboczy     | Edytor      | Szablony   | Przegląd tabelaryczny | Agent AI              | Anonimizacja   | Dane publiczne    |
+| pt-BR  | Espaço de trabalho | Editor      | Modelos    | Revisão tabular       | Agente de IA          | Anonimização   | Dados públicos    |
+| sk     | Pracovný priestor  | Editor      | Vzory      | Tabuľková revízia     | AI agent              | Anonymizácia   | Verejné dáta      |
+
+**The agent is always named with its AI qualifier on marketing surfaces.** Bare
+"agent" never names the product concept: not in a headline, not in a body
+sentence, not in a FAQ, and not when the eyebrow directly above already says it.
+Take the AI-qualified form from the table's _AI agent_ column and decline it
+(cs _AI agenta_, de _KI-Agenten_, lt _DI agentui_, hu _AI-ügynököt_). Inside one
+string, qualify the first mention only; a repeat a clause later may stay a
+pronoun where the qualified repeat reads clunky. Generic mentions of third-party
+agents follow the same rule ("Tools for AI agents", "Connect compatible AI
+agents"): a reader who meets a bare "agent" on a legal site does not think of
+software. This is a wording rule with no lint behind it, deliberately — bare
+_agent_ is a substring of every qualified form, so a `forbidden` entry would
+fire on the correct copy. Grep each locale for its agent word after touching
+`story.*`, `products.*`, `nav.*`, or `footer.*`.
+
+No cell in that table is a new translation. Each one is the `footer.*`
+descriptor the same locale already used for the same product page, copied
+across so the two surfaces cannot drift: one concept, one translation. When a
+new product page lands, take its eyebrow from its footer descriptor rather
+than translating the English afresh.
+
+`CLI & MCP` is the one eyebrow that stays English in all twelve locales: both
+halves are protocol names, not words. It is recorded per-locale under
+`identicalToSource` in `i18n-check-baseline.json`, the same way other genuine
+cognates are.
+
+The hero scene's discover chips follow the same rule. `CliMcpPreview` is a
+React island with no translator, so `HomePage.astro` resolves every eyebrow for
+the active locale (`resolveProductEyebrows` in `data/site-nav.ts`) and passes
+the names in beside the "Discover" verb, as one `discover` prop: a caller
+cannot supply a translated verb and leave the product name English. The chips
+read "Objevte Pracovní prostor" on `/cs/`, "Entdecken Sie Arbeitsbereich" on
+`/de/`. An island that needs a product name takes it that way; do not hardcode
+one in a `.tsx` file.
+
+Because the eyebrows repeat the footer descriptors, six of them share an
+en.json value with their `footer.*` twin and are listed under `duplicateValues`
+in `i18n-check-baseline.json` (`agent`, `anonymization`, `editor`,
+`public-data`, `templates`, `workspace`). Hoisting a product name to `common.*`
+to serve a menu and a footer would make one key own two surfaces with different
+length budgets; the duplication is the cheaper honest option.
+`tabular-review` needs no entry: the eyebrow is title-cased (_Tabular Review_)
+and `footer.tabularReview` is not, so the two English values differ.
+
+### Pillar group labels DO translate
+
+The mega-menu's three group headings (`nav.pillars.data`,
+`nav.pillars.intelligence`, `nav.pillars.workspace`, keyed on the pillar ids in
+`data/products/pillars.ts`) name categories, not products, so they translate in
+every locale too.
+
+| Locale | Data infrastructure       | Legal intelligence     | Workspace          |
+| ------ | ------------------------- | ---------------------- | ------------------ |
+| ar     | البنية التحتية للبيانات   | الذكاء القانوني        | مساحة عمل          |
+| cs     | Datová infrastruktura     | Právní analytika       | Pracovní prostor   |
+| de     | Dateninfrastruktur        | Juristische Analytik   | Arbeitsbereich     |
+| es     | Infraestructura de datos  | Inteligencia jurídica  | Espacio de trabajo |
+| et     | Andmetaristu              | Õigusanalüütika        | Tööruum            |
+| fr     | Infrastructure de données | Intelligence juridique | Espace de travail  |
+| hu     | Adatinfrastruktúra        | Jogi analitika         | Munkaterület       |
+| lt     | Duomenų infrastruktūra    | Teisinė analitika      | Darbo sritis       |
+| lv     | Datu infrastruktūra       | Juridiskā analītika    | Darbvieta          |
+| pl     | Infrastruktura danych     | Analityka prawna       | Obszar roboczy     |
+| pt-BR  | Infraestrutura de dados   | Inteligência jurídica  | Espaço de trabalho |
+| sk     | Dátová infraštruktúra     | Právna analytika       | Pracovný priestor  |
+
+"Legal intelligence" is the label that does not travel as one word. Two
+families, chosen by what each language's legal-tech market actually calls the
+function:
+
+- Romance locales and Arabic keep the cognate, which is an established term
+  there for the analytic layer over legal material: fr _intelligence
+  juridique_, es _inteligencia jurídica_, pt-BR _inteligência jurídica_,
+  ar الذكاء القانوني.
+- Germanic, Slavic, Baltic, and Finno-Ugric locales take the analytics family
+  instead, because a literal "intelligence" reads there as either the human
+  faculty or as espionage (cs _právní inteligence_, de _Rechtsintelligenz_ are
+  both wrong readings, not stylistic variants). German _juristische Analytik_,
+  cs _právní analytika_ / sk _právna analytika_, pl _analityka prawna_, hu
+  _jogi analitika_, et _õigusanalüütika_, lt _teisinė analitika_, lv _juridiskā
+  analītika_ are the renderings that market uses for legal analytics.
+
+"Workspace" reuses the settled rendering from `glossary.json` (the table above
+under _The identity phrase_) rather than coining a menu-only variant. That
+makes `nav.pillars.workspace` hold the same string as `footer.workspace` and
+`nav.products.workspace.eyebrow` in every locale, which is deliberate: the
+pillar names the category, the other two name the product page, and all three
+are one word in English. The keys are listed in `i18n-check-baseline.json`
+under `duplicateValues` for that reason (same precedent as `demo.status` /
+`footer.status`); hoisting one word to `common.*` to serve three unrelated
+surfaces would be worse.
+
+The visible consequence is that the workspace pillar's group label and its
+first entry are the same word, stacked: _PRACOVNÍ PROSTOR_ over _Pracovní
+prostor_, _ARBEITSBEREICH_ over _Arbeitsbereich_. That is the English menu's
+own reading (_WORKSPACE_ over _Workspace_), not a translation artefact, and the
+two rows are already distinguished the way English distinguishes them: the
+group label is uppercased, 0.625rem, letter-spaced, and muted, the entry is
+0.875rem in the foreground colour. Do not coin a second workspace term to
+break the repetition; the near-synonyms are exactly what `glossary.json` bans.
+Arabic is the one locale where the pair differs by itself, because the pillar
+takes the indefinite مساحة عمل and the product entry the definite مساحة العمل.
+
+Estonian uses _taristu_, the standard Estonian term for infrastructure, so the
+data pillar is _Andmetaristu_ rather than the loan compound
+_andmeinfrastruktuur_.
+
+## The product pages: `products.<slug>.*`
+
+Everything below a product page's hero lives under `products.<slug>.*`: the quick
+answer, the capability cards, the deep-dive sections and their bullets, the FAQ,
+the "Explore more" card bodies, the closing CTA heading, and the two meta
+strings. The page's own eyebrow, headline, and lead paragraph are **not** here:
+they are `nav.products.<slug>.eyebrow`/`.title`/`.blurb`, so the mega-menu and
+the page cannot say two different things. The four section labels the template
+prints around that copy (`In short`, `Capabilities`, `FAQ`, `Explore more`) are
+`products.ui.*`, and the CTA button label is `common.startFree` (or
+`common.getCli` on the CLI & MCP page).
+
+The message format has no array form, so lists are numbered sibling keys:
+`products.editor.sections.0.bullets.3`. The numbers are positions in
+`data/products/<slug>.ts`, which stays the English source of truth and owns
+everything that is not prose (media, evidence, link destinations);
+`menu-copy.test.ts` compares the whole `en` subtree against it, so a dropped
+bullet or an extra FAQ fails there rather than rendering as a gap. Never add,
+drop, or reorder a numbered key in a translation: the count is the English
+structure, and `i18n:check` enforces it.
+
+What a translated page owes the reader:
+
+- The **meta strings** keep the home page's budgets: `metaTitle` ≤ ~60
+  characters including the ` | stella` suffix, `metaDescription` ~140–160.
+  Rewrite them for the market rather than compressing a literal translation; a
+  Czech `metaTitle` that says what the page is about beats one that preserves
+  the English word order and gets cut.
+- **Section headings and capability titles are headlines.** They take the
+  transcreation rule at the top of this document: re-tell the claim the way a
+  native legal-tech marketer would make it, never beat by beat. "It lives where
+  the work lives" is cs "Je tam, kde je práce", not a gloss of "lives".
+- **Bullets stay short.** They render as a list, not as prose; a bullet that
+  grows a subordinate clause in translation has lost the format.
+- The **card bodies under "Explore more"** describe the destination page, and
+  several pages point at the same destination with the same English sentence.
+  Translate such a sentence once and reuse that rendering on every page that
+  carries it, the way `products.cli-mcp.adjacent.0.body` reuses
+  `nav.products.workspace.title`'s rendering (the two share an English value and
+  are listed under `duplicateValues` in `i18n-check-baseline.json`).
+- **Product names inside body copy** take the eyebrow table above, not a fresh
+  translation: cs "tabulková revize", sk "tabuľková revízia", never a synonym.
+
+Czech has one extra constraint on this namespace. The glossary forbids cs
+`pracovní prostor` on strings whose English mentions **matter**, and the
+workspace page's copy names both concepts constantly. Restructure instead of
+reaching for a second workspace term (which is what `glossary.json` bans): the
+workspace `metaTitle` is cs "Správa právních spisů na jednom místě", and
+`cta.heading` is "Mějte všechny spisy na jednom místě", both of which say the
+product's claim without the word. Slovak has no such ban and uses `pracovný
+priestor` freely.
+
+All twelve locales are translated; no `products.*` key remains grandfathered
+under `identicalToSource` in `i18n-check-baseline.json`, and none should be
+added back (`--write-baseline` is not how to finish a locale).
+
+### The two meta strings are written against the market's queries
+
+A translated `metaTitle` says what the page is about in the reader's language.
+An optimized one says it in the words that market's practitioners type. The
+difference is worth a rewrite, and only in the meta strings: the H1, the
+eyebrow, and the body keep the settled product names.
+
+The rule with teeth: **never promise a query the page cannot deliver.** Two
+kinds of miss keep recurring.
+
+_Terms the market does not have._ `discovery` had been carried into the cs and
+sk tabular-review descriptions, and `الإفصاح` into the Arabic one; neither
+legal system has that procedural stage. Arabic `العناية الواجبة` is the AML/KYC
+sense of due diligence in Gulf practice, not the transactional sense a document
+review page means (`الفحص النافي للجهالة`). This rule covers body copy, not
+just metas: the en tabular-review blurb legitimately says "discovery" to a
+common-law reader, but every civil-law locale replaces it with the market's
+real stage or task (de `Vertragsanalyse`, pl `analiza umów`, fr
+`le contentieux`, es `los litigios`, pt-BR `contencioso`, lt/lv evidence
+analysis, hu `iratvizsgálat`, et `dokumentide läbivaatus`). Never leave the
+English word untranslated in a market that has no such procedure.
+
+_Terms that overclaim._ pt-BR searches `processos`, but that word promises
+tribunal docket sync, so the Brazilian pages stay on `casos`. The anonymization
+feature is reversible (`deanonymise`, and the CLI's `--revert`), which is
+pseudonymization under the GDPR: the descriptions therefore say what it removes
+and that the result is reviewable, and never claim GDPR-grade anonymization of
+personal data. German makes the same trap concrete — `Schwärzung` asserts the
+content is gone from the file, which is the Akteneinsicht and beA sense, so the
+German page says `anonymisieren` and not `schwärzen`.
+
+_Calques that pass review because they are grammatical._ A translated term can
+be correct and still be a word nobody types. pl `przegląd umów` reads as a
+periodic inspection (`przegląd techniczny`); Polish vendors title on
+`analiza umów` without exception. fr `revue de contrats` fails the same way
+against `analyse`. The tell is that no competitor page in that market uses the
+phrase in a title.
+
+Two nouns that are UI labels rather than queries: de `Arbeitsbereich` (its
+results are dictionary sites; German marketing prose reaches for `Arbeitsplatz`)
+and, in the same family, any locale's literal rendering of "workspace" outside
+the identity phrase. They stay in the identity phrase on the homepage and out of
+the per-page titles, which name the function instead (de `Akte`, pl `sprawa`).
+
+Where the head query is an audience rather than a capability, add the audience:
+cs `pro advokáty`, de `für Kanzleien`, pl `dla kancelarii`, fr `pour avocats`,
+es `para despachos`, pt-BR `para advogados`, hu `ügyvédeknek`. That captures the
+category query without coining a synonym for a glossary term.
+
+One rejected candidate is worth recording so it is not re-litigated: Czech
+**"AI právní pracovní prostor"**. It is a press-release label from a single
+vendor launch, rendered four different ways across that vendor's own channels,
+with no independent usage. Ranking for it would deliver a competitor-branded
+SERP. Czech titles use demand terms instead (`AI pro právníky`,
+`právní rešerše`, `elektronický advokátní spis`).
+
+### The budgets are checked, not remembered
+
+`bun run test` runs `scripts/check-meta-budgets.ts`: title ≤ 60, description
+140–158, and no two pages in a locale sharing either. Thirteen locales drifted
+past the budget at once while it was only written down here.
+
+## Shared chrome is UI copy, not decoration
+
+The header, the mobile menu, and the footer render on every localized page,
+so their labels are catalog keys like any other string: `appearance.*` (the
+theme switcher), `nav.openMenu`, `nav.github`, `footer.navLabel`. An ARIA
+label counts: a screen-reader user reading the Czech page must not hear
+"Toggle theme".
+
+Chrome labels are also the strings most likely to grow in translation. The
+switcher sizes to its content (`min-w-11` keeps the tap target, the width is
+not fixed), because "Dark" at 44px becomes "Világos" or "Ciemny".
+
+### The hero scene's window handles
+
+The three draggable windows in `CliMcpPreview` are focus controls, so their
+handles carry an accessible name: `story.bringWorkspaceToFront`,
+`story.bringEditorToFront`, `story.bringTerminalToFront`. The island has no
+translator, so every Astro mount passes `windowLabels`
+(`resolveSceneWindowLabels` in `data/product-story.ts`) and the prop is
+required — an optional prop with an English default is the same bug written
+more politely.
+
+| Locale | Bring stella workspace to front                         |
+| ------ | ------------------------------------------------------- |
+| ar     | إحضار مساحة عمل stella إلى المقدمة                      |
+| cs     | Přenést do popředí pracovní prostor aplikace stella     |
+| de     | Arbeitsbereich von stella in den Vordergrund holen      |
+| es     | Traer al frente el espacio de trabajo de stella         |
+| et     | Too rakenduse stella tööruum esiplaanile                |
+| fr     | Mettre l’espace de travail stella au premier plan       |
+| hu     | A stella alkalmazás munkaterületének előtérbe hozása    |
+| lt     | Perkelti programos stella darbo sritį į priekinį planą  |
+| lv     | Pārvietot lietotnes stella darbvietu priekšplānā        |
+| pl     | Przenieś na wierzch obszar roboczy aplikacji stella     |
+| pt-BR  | Trazer o espaço de trabalho da stella para a frente     |
+| sk     | Preniesť do popredia pracovný priestor aplikácie stella |
+
+The editor and terminal labels are the same sentence with that locale's word
+for the editor (the `footer.editor` descriptor) and for a terminal. Two rules
+meet here: the verb takes the locale's action-label form (infinitive for cs,
+sk, de, es, fr, lt, lv, pt-BR; imperative for pl and et; verbal noun for hu and
+ar, matching `appearance.toggle`), and the brand rides its carrier noun from
+the table at the top of this document, because "front" puts the phrase in a
+case-bearing slot (cs _aplikace stella_, lt _programos stella_, lv _lietotnes
+stella_, et _rakenduse stella_, pl _aplikacji stella_, hu _a stella
+alkalmazás_). The locales that need no carrier take the bare brand.
+
+The windows' visible titles stay as they are: "Microsoft Teams" is a
+third-party proper noun, and "stella Editor" / "stella CLI" depict OS window
+chrome rather than describing the product.
+
+### Light / Dark: the app's renderings, verbatim
+
+The switcher reuses the web app's `appearance.light` / `appearance.dark`
+values unchanged. Same concept, same key path, same string on both surfaces;
+a landing that says one thing and the app another is the failure this
+document exists to prevent.
+
+Every locale uses the platform-conventional **adjective** naming the mode
+— the form the Windows and macOS "choose your mode" pickers use — never the
+abstract noun for light or darkness. cs "Světlo", de "Licht", fr "Lumière",
+ar "ضوء" are the classic machine-translation reading of a bare "Light"; they,
+and their dark counterparts, are `forbidden` in `glossary.json`
+(`theme-light` / `theme-dark`), so `i18n-lint` rejects them in both catalogs.
+
+| Locale | Light   | Dark   |
+| ------ | ------- | ------ |
+| ar     | فاتح    | داكن   |
+| cs     | Světlý  | Tmavý  |
+| de     | Hell    | Dunkel |
+| es     | Claro   | Oscuro |
+| et     | Hele    | Tume   |
+| fr     | Clair   | Sombre |
+| hu     | Világos | Sötét  |
+| lt     | Šviesus | Tamsus |
+| lv     | Gaišs   | Tumšs  |
+| pl     | Jasny   | Ciemny |
+| pt-BR  | Claro   | Escuro |
+| sk     | Svetlý  | Tmavý  |
+
+The adjective agrees with the noun the locale implies for the concept
+(cs/sk _režim_, pl _motyw_, lv _režīms_, lt _režimas_). That is why Lithuanian
+keeps masculine "Šviesus"/"Tamsus" even though _tema_ is feminine: the picker
+option describes the mode, not the theme object. Latvian uses the indefinite
+"Gaišs"/"Tumšs" for the standalone option; the definite "gaišais/tumšais
+režīms" belongs in running prose, not on a button.
+
+### Verb labels follow the glossary's register
+
+`appearance.toggle` and `nav.openMenu` are actions, so they take the same
+per-locale verb form the glossary uses for Save/Close: infinitive (cs, sk, de,
+lt, lv, es, fr, pt-BR), imperative (pl, et), verbal noun (hu, ar). The noun
+is whatever the app calls the theme in `appearance.theme` (cs Vzhled, de
+Design, lv Motīvs, ar السمة), not a second synonym coined here.
+
+| Locale | Toggle theme     |
+| ------ | ---------------- |
+| ar     | تبديل السمة      |
+| cs     | Přepnout vzhled  |
+| de     | Design wechseln  |
+| es     | Cambiar tema     |
+| et     | Vaheta teemat    |
+| fr     | Changer de thème |
+| hu     | Téma váltása     |
+| lt     | Keisti temą      |
+| lv     | Mainīt motīvu    |
+| pl     | Zmień motyw      |
+| pt-BR  | Alternar tema    |
+| sk     | Prepnúť vzhľad   |
+
+## Typography per locale
+
+French uses the typographic apostrophe `’` (U+2019) throughout, never the
+straight `'`: the file had been mixing both. French also takes a narrow
+no-break space (U+202F) before `:` `;` `!` `?` and inside `« »` guillemets;
+the whole catalog once carried plain spaces there. Arabic keeps its own
+punctuation (see below). Nothing else in the catalogs needs locale-specific
+typography today; when it does, record it here rather than fixing one string.
+
+## Arabic specifics
+
+Use native punctuation (، ؛) in running prose. Direction is handled by the
+layout (`dir` attribute from locale config) — never embed directional
+control characters in strings. Follow the glossary's Arabic notes exactly;
+several near-synonyms are explicitly forbidden.
+
+## Mechanics
+
+- Keys are typed: components reference catalogs through `TranslationKey`,
+  so a missing or renamed key fails typecheck. Never inline a
+  language-specific string in a component.
+- After editing catalogs: `bun run i18n:sync` (sorts + regenerates types),
+  then `bun run i18n:check` must exit 0.
+- One concept, one translation: before adding a key, check whether an
+  existing key already carries the string (`common.*`, `footer.*`) and
+  reuse it.

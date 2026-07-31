@@ -4,15 +4,20 @@ import type {
   AgendaItemSource,
   ConditionNode,
   EntityKind,
-  OptionColor,
   ViewLayout,
   ViewLayoutType,
   SafeId,
 } from "@stll/api/types";
+import type {
+  OptionColor,
+  WorkspaceFieldContent,
+} from "@stll/workspace-ui/types";
 
 import { PDF_MIME_TYPE } from "@/consts";
 import { DOCX_MIME, isEmailFile, isMarkdownFile } from "@/lib/consts";
 import type { FileRouteTypes } from "@/routeTree.gen";
+
+export type { OptionColor, WorkspaceFieldContent };
 
 export type {
   EntityKind,
@@ -140,66 +145,6 @@ export type WorkspacePropertyOption = {
   color: OptionColor;
   value: string;
 };
-
-export type WorkspaceFieldContent =
-  | {
-      type: "error";
-      version: 1;
-    }
-  | {
-      type: "pending";
-      version: 1;
-    }
-  | {
-      type: "unsupported";
-      version: 1;
-    }
-  | {
-      type: "text";
-      version: 1;
-      value: string;
-    }
-  | {
-      type: "single-select";
-      version: 1;
-      value: string | null;
-    }
-  | {
-      type: "multi-select";
-      version: 1;
-      value: string[];
-    }
-  | {
-      type: "file";
-      version: 1;
-      id: string;
-      fileName: string;
-      mimeType: string;
-      sizeBytes: number;
-      encrypted: boolean;
-      sha256Hex: string;
-      pdfFileId: string | null;
-    }
-  | {
-      type: "date";
-      version: 1;
-      value: string | null;
-    }
-  | {
-      type: "int";
-      version: 1;
-      value: number;
-      currency: string | null;
-    }
-  | {
-      type: "clip";
-      version: 1;
-      url: string;
-      snippet?: string;
-      citation?: string;
-      jurisdiction?: string;
-      sourceType?: string;
-    };
 
 export type WorkspaceField = {
   entityId: EntityId;
