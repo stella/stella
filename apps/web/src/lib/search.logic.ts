@@ -36,9 +36,9 @@ const decodeSearchHeadlineEntities = (value: string): string =>
     return SEARCH_HEADLINE_NAMED_ENTITIES[normalizedEntity] ?? encoded;
   });
 
-const getMarkedSearchText = (headline: string | null): string => {
+const getMarkedSearchTerms = (headline: string | null): string[] => {
   if (!headline) {
-    return "";
+    return [];
   }
 
   const terms: string[] = [];
@@ -51,7 +51,7 @@ const getMarkedSearchText = (headline: string | null): string => {
       terms.push(term);
     }
   }
-  return terms.join(" ");
+  return terms;
 };
 
 export const getSearchHighlightText = (
@@ -59,7 +59,7 @@ export const getSearchHighlightText = (
   query: string,
 ): string => {
   const normalizedQuery = normalizeSearchQuery(query);
-  const markedSearchText = getMarkedSearchText(headline);
+  const markedSearchText = getMarkedSearchTerms(headline).join(" ");
   if (markedSearchText) {
     return markedSearchText;
   }
@@ -69,6 +69,14 @@ export const getSearchHighlightText = (
   }
 
   return headline ? stripSearchMarkup(headline) : "";
+};
+
+export const getFirstSearchHighlightText = (
+  headline: string | null,
+  query: string,
+): string => {
+  const markedSearchText = getMarkedSearchTerms(headline).at(0);
+  return markedSearchText ?? getSearchHighlightText(headline, query);
 };
 
 type SearchPreviewContent =

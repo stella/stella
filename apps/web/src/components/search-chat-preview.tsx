@@ -43,6 +43,11 @@ export const SearchChatPreview = ({
   );
 
   useExternalSyncEffect(() => {
+    setActiveIndex(0);
+    lastScrolledMatchRef.current = null;
+  }, [searchText]);
+
+  useExternalSyncEffect(() => {
     const root = rootRef.current;
     if (!root) {
       return undefined;

@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import type { GlobalSearchHit } from "@stll/api/types";
 
 import {
+  getFirstSearchHighlightText,
   getNativeSearchDocumentPreviewTarget,
   getSearchHighlightText,
   getSearchPreviewRenderContent,
@@ -141,6 +142,18 @@ describe("search query normalization", () => {
         "indemnity AND liability NOT superseded",
       ),
     ).toBe("indemnity liability");
+  });
+
+  test("uses one marked passage for case-law deep links", () => {
+    expect(
+      getFirstSearchHighlightText(
+        "<mark>indemnity</mark> and <mark>liability</mark>",
+        "",
+      ),
+    ).toBe("indemnity");
+    expect(getFirstSearchHighlightText(null, "  closing memo ")).toBe(
+      "closing memo",
+    );
   });
 });
 

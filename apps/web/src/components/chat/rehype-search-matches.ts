@@ -3,11 +3,7 @@ import type { Element, ElementContent, Root, RootContent, Text } from "hast";
 import { findSearchTextMatches } from "@/lib/document-search";
 
 const skipsSearchHighlight = (tagName: string): boolean =>
-  tagName === "a" ||
-  tagName === "button" ||
-  tagName === "pre" ||
-  tagName === "script" ||
-  tagName === "style";
+  tagName === "script" || tagName === "style";
 
 const isElement = (node: ElementContent | RootContent): node is Element =>
   node.type === "element";

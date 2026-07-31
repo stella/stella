@@ -102,7 +102,7 @@ const extractChatPreviewTextParts = (content: unknown): string[] => {
     if (!isRecord(sourceDocument)) {
       continue;
     }
-    for (const key of ["title", "mention", "entityRef", "matterRef", "kind"]) {
+    for (const key of ["title", "mention", "kind"]) {
       const value = sourceDocument[key];
       if (typeof value === "string" && value.trim()) {
         textParts.push(value);
@@ -543,7 +543,8 @@ export const readSearchPreview = async (
     }
 
     const targetIndex = candidates.findIndex(({ isTarget }) => isTarget);
-    const targetCandidate = candidates.at(targetIndex);
+    const targetCandidate =
+      targetIndex === -1 ? undefined : candidates.at(targetIndex);
     const orderedCandidates =
       targetCandidate === undefined
         ? candidates
@@ -552,8 +553,9 @@ export const readSearchPreview = async (
             ...Array.from({ length: candidates.length - 1 }).flatMap(
               (_, offset) => {
                 const distance = offset + 1;
+                const beforeIndex = targetIndex - distance;
                 return [
-                  candidates.at(targetIndex - distance),
+                  beforeIndex < 0 ? undefined : candidates.at(beforeIndex),
                   candidates.at(targetIndex + distance),
                 ].flatMap((candidate) => (candidate ? [candidate] : []));
               },

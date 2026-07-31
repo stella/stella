@@ -54,6 +54,11 @@ scope.addEventListener(
         sendResponse(response);
         return undefined;
       })
-      .catch(() => undefined);
+      .catch((error: unknown) => {
+        sendResponse({
+          status: "error",
+          message: error instanceof Error ? error.message : String(error),
+        });
+      });
   },
 );

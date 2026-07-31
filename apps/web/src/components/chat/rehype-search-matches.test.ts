@@ -43,7 +43,7 @@ describe("chat search highlighting", () => {
     ]);
   });
 
-  test("does not inject marks into links or fenced code", () => {
+  test("highlights visible text inside links and fenced code", () => {
     const tree: Root = {
       type: "root",
       children: [
@@ -69,13 +69,27 @@ describe("chat search highlighting", () => {
         type: "element",
         tagName: "a",
         properties: {},
-        children: [{ type: "text", value: "needle" }],
+        children: [
+          {
+            type: "element",
+            tagName: "mark",
+            properties: { "data-search-match": "true" },
+            children: [{ type: "text", value: "needle" }],
+          },
+        ],
       },
       {
         type: "element",
         tagName: "pre",
         properties: {},
-        children: [{ type: "text", value: "needle" }],
+        children: [
+          {
+            type: "element",
+            tagName: "mark",
+            properties: { "data-search-match": "true" },
+            children: [{ type: "text", value: "needle" }],
+          },
+        ],
       },
     ]);
   });

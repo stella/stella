@@ -67,6 +67,7 @@ export const SearchDocumentPreview = ({
   const handlePreviewError = useCallback(() => {
     setActiveSearchMatchIndex(0);
     setSearchMatchSummary({ count: 0, truncated: false });
+    setNativeSearchStatus("unmatched");
   }, []);
   const viewer = (
     <PeekPdfViewer

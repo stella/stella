@@ -124,6 +124,7 @@ import type {
   SearchRecentsScope,
 } from "@/lib/search-recents";
 import {
+  getFirstSearchHighlightText,
   getNativeSearchDocumentPreviewTarget,
   getSearchHighlightText,
   getSearchPreviewRenderContent,
@@ -503,6 +504,7 @@ export const SearchDialog = ({
   >(null);
   if (recentsSnapshotKey !== lastRecentsSnapshotKey) {
     setLastRecentsSnapshotKey(recentsSnapshotKey);
+    setRecentPreviewFile(null);
     if (recentsSnapshotKey) {
       setRecentSearches(readRecentSearches(searchRecentsScope));
       setRecentFiles(readRecentFiles(searchRecentsScope));
@@ -831,7 +833,7 @@ export const SearchDialog = ({
           }),
           search: {
             ...(hit.headline && {
-              q: getSearchHighlightText(hit.headline, ""),
+              q: getFirstSearchHighlightText(hit.headline, ""),
             }),
           },
         });

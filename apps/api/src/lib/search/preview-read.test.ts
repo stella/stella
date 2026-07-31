@@ -224,6 +224,60 @@ describe("search preview rendering contract", () => {
     });
   });
 
+  test("orders context around a first-position target without duplicates", async () => {
+    rootDbExecuteMock.mockResolvedValueOnce([
+      {
+        messages: [
+          {
+            id: "00000000-0000-4000-8000-000000000010",
+            isTarget: true,
+            role: "user",
+            content: {
+              version: 2,
+              data: [{ type: "text", content: "target" }],
+            },
+          },
+          {
+            id: "00000000-0000-4000-8000-000000000011",
+            isTarget: false,
+            role: "assistant",
+            content: { version: 2, data: [{ type: "text", content: "reply" }] },
+          },
+          {
+            id: "00000000-0000-4000-8000-000000000012",
+            isTarget: false,
+            role: "user",
+            content: {
+              version: 2,
+              data: [{ type: "text", content: "follow-up" }],
+            },
+          },
+        ],
+      },
+    ]);
+
+    expect(await readSearchPreview({ ...previewQuery, type: "chat" })).toEqual({
+      type: "chat-messages",
+      messages: [
+        {
+          id: "00000000-0000-4000-8000-000000000010",
+          role: "user",
+          content: "target",
+        },
+        {
+          id: "00000000-0000-4000-8000-000000000011",
+          role: "assistant",
+          content: "reply",
+        },
+        {
+          id: "00000000-0000-4000-8000-000000000012",
+          role: "user",
+          content: "follow-up",
+        },
+      ],
+    });
+  });
+
   test("renders indexed source-document metadata in chat previews", async () => {
     rootDbExecuteMock.mockResolvedValueOnce([
       {
@@ -258,8 +312,7 @@ describe("search preview rendering contract", () => {
         {
           id: "00000000-0000-4000-8000-000000000010",
           role: "assistant",
-          content:
-            "Closing memorandum\n\n@closing-memo\n\nentity_1\n\nmatter_1\n\ndocument",
+          content: "Closing memorandum\n\n@closing-memo\n\ndocument",
         },
       ],
     });
