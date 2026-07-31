@@ -23,7 +23,14 @@ import { mock } from "bun:test";
  *   );
  */
 
-const realS3 = await import("@/api/lib/s3");
+/**
+ * Snapshotted at import rather than read per call: a module namespace is a
+ * live view, so once any test has replaced the storage module, reading it
+ * again would hand back that test's mock instead of the real shape. Copying
+ * once, before any factory runs, keeps this the real module's shape for every
+ * caller regardless of what else in the batch has mocked it since.
+ */
+const realS3 = { ...(await import("@/api/lib/s3")) };
 
 type S3Module = typeof realS3;
 
