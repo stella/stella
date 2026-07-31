@@ -1,6 +1,9 @@
 import { afterEach, expect, mock, test } from "bun:test";
 
-import { initializePageGradients } from "./animated-gradient";
+import {
+  cleanupPageGradients,
+  initializePageGradients,
+} from "./animated-gradient";
 
 const originalDocument = Object.getOwnPropertyDescriptor(
   globalThis,
@@ -25,13 +28,16 @@ const restoreGlobal = (
 };
 
 afterEach(() => {
+  cleanupPageGradients();
   restoreGlobal("document", originalDocument);
   restoreGlobal("navigator", originalNavigator);
   restoreGlobal("window", originalWindow);
 });
 
 test("iOS gradients animate one original SVG surface", () => {
+  const cancel = mock(() => undefined);
   const animate = mock((keyframes: unknown, options: unknown) => ({
+    cancel,
     keyframes,
     options,
   }));
@@ -90,4 +96,7 @@ test("iOS gradients animate one original SVG surface", () => {
       "translate3d(-2%, -3%, 0) scale3d(1.11, 1.05, 1) rotate(-0.6deg)",
     ],
   });
+
+  cleanupPageGradients();
+  expect(cancel).toHaveBeenCalledTimes(1);
 });

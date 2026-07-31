@@ -170,6 +170,12 @@ const legalLinks = [
     inset-inline: 0;
   }
 
+  @media (max-width: 639px) {
+    .footer-link::before {
+      inset-block: 0;
+    }
+  }
+
   .footer-link:hover,
   .footer-link:focus-visible {
     color: var(--foreground);

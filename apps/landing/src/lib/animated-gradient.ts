@@ -16,6 +16,14 @@ const IOS_GRADIENT_TRANSFORMS = [
 ];
 const IOS_GRADIENT_OPACITIES = ["0.96", "1", "0.93", "1", "0.96"];
 const IOS_GRADIENT_DURATION_MS = 20_000;
+const activeIOSGradientAnimations = new Set<Animation>();
+
+export const cleanupPageGradients = () => {
+  for (const animation of activeIOSGradientAnimations) {
+    animation.cancel();
+  }
+  activeIOSGradientAnimations.clear();
+};
 
 export const initializePageGradients = () => {
   for (const [containerId, svgUrl, speed] of GRADIENT_LAYERS) {
@@ -189,7 +197,7 @@ const initializeIOSGradient = (
     return;
   }
 
-  image.animate(
+  const animation = image.animate(
     {
       opacity: IOS_GRADIENT_OPACITIES,
       transform: IOS_GRADIENT_TRANSFORMS,
@@ -200,4 +208,5 @@ const initializeIOSGradient = (
       iterations: Number.POSITIVE_INFINITY,
     },
   );
+  activeIOSGradientAnimations.add(animation);
 };
