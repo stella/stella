@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sql";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
@@ -262,6 +262,69 @@ if (!databaseUrl || !runPostgresTests) {
       expect(compensated).toEqual({
         order: compensationOrder,
         sourceHash: "legacy-fence-current",
+      });
+
+      const replayCaseNumber = `compensation-cas-${Bun.randomUUIDv7()}`;
+      const replayInput = {
+        ...ingestionResult,
+        caseNumber: replayCaseNumber,
+        rawHash: "compensation-cas-current",
+      };
+      await processDecision({
+        input: replayInput,
+        observationOrder: 20n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T13:01:00.000Z"),
+      });
+      await processDecision({
+        input: replayInput,
+        observationOrder: 21n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T13:01:01.000Z"),
+      });
+      const staleCompensationOrder = (
+        await db
+          .update(caseLawSources)
+          .set({
+            observationOrder: sql`greatest(${caseLawSources.observationOrder}, 21) + 1`,
+          })
+          .where(eq(caseLawSources.id, sourceId))
+          .returning({ order: caseLawSources.observationOrder })
+      ).at(0)?.order;
+      if (staleCompensationOrder === undefined) {
+        throw new Error("expected stale compensation order");
+      }
+      const staleCompensation = await db
+        .update(caseLawDecisions)
+        .set({
+          sourceHash: "compensation-cas-previous",
+          sourceObservationHash: replayInput.rawHash,
+          sourceObservationOrder: staleCompensationOrder,
+        })
+        .where(
+          and(
+            eq(caseLawDecisions.caseNumber, replayCaseNumber),
+            eq(caseLawDecisions.sourceHash, replayInput.rawHash),
+            eq(caseLawDecisions.sourceObservationOrder, 20n),
+          ),
+        )
+        .returning({ id: caseLawDecisions.id });
+      expect(staleCompensation).toHaveLength(0);
+      const replayWinner = (
+        await db
+          .select({
+            order: caseLawDecisions.sourceObservationOrder,
+            sourceHash: caseLawDecisions.sourceHash,
+          })
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.caseNumber, replayCaseNumber))
+          .limit(1)
+      ).at(0);
+      expect(replayWinner).toEqual({
+        order: 21n,
+        sourceHash: replayInput.rawHash,
       });
 
       await db

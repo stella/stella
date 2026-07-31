@@ -302,7 +302,7 @@ const preserveCorpusWriteRetry = async ({
         and(
           eq(caseLawDecisions.id, decisionId),
           sql`${caseLawDecisions.sourceHash} IS NOT DISTINCT FROM ${expectedSourceHash}`,
-          storedObservationPrecedes({ order: compensationOrder }),
+          eq(caseLawDecisions.sourceObservationOrder, failedObservationOrder),
         ),
       );
   });
