@@ -289,11 +289,14 @@ export const caseLawCitations = p.pgTable(
      * Whether this citation invokes authority or names the case's own
      * procedural history. Only `precedent` belongs in the citation graph:
      * the judgment under review is not an endorsement of it.
+     *
+     * Deliberately a plain string rather than a column-level union: the
+     * union re-instantiates this table's type everywhere it is referenced,
+     * including through the API surface into the web type graph, which
+     * costs more than it buys. `citations_kind_values` keeps the database
+     * honest and `CitationKind` types the write path.
      */
-    kind: p
-      .varchar({ length: 16, enum: ["precedent", "procedural"] })
-      .default("precedent")
-      .notNull(),
+    kind: p.varchar({ length: 16 }).default("precedent").notNull(),
     sectionIndex: p.integer("section_index"),
     polarity: p.varchar("polarity", { length: 16 }),
     polarityRuleId: safeUuid<"caseLawPolarityRule">(
