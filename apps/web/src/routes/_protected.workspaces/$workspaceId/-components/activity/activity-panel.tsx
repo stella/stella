@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { Suspense, useDeferredValue, useMemo, useState } from "react";
 import type { ReactElement, ReactNode } from "react";
 
 import { useSuspenseInfiniteQuery } from "@tanstack/react-query";
@@ -79,26 +79,9 @@ const categoryLabel = (
 
 export const ActivityPanel = ({ workspaceId }: ActivityPanelProps) => {
   const t = useTranslations();
-  const format = useFormatter();
-  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const [category, setCategory] = useState<MatterActivityCategory>("all");
-  const query = useSuspenseInfiniteQuery(
-    overviewActivityOptions({ activeOrganizationId, category, workspaceId }),
-  );
-  const items = query.data.pages.flatMap((page) => page.items);
-  const days = useMemo(() => {
-    const result = new Map<string, ActivityDay>();
-    for (const item of items) {
-      const key = activityDayKey(item.activityAt);
-      const dayItems = result.get(key);
-      if (dayItems) {
-        dayItems.push(item);
-      } else {
-        result.set(key, [item]);
-      }
-    }
-    return [...result.values()];
-  }, [items]);
+  const deferredCategory = useDeferredValue(category);
+  const isFilterPending = category !== deferredCategory;
 
   return (
     <section aria-labelledby="matter-activity-heading">
@@ -135,6 +118,54 @@ export const ActivityPanel = ({ workspaceId }: ActivityPanelProps) => {
         </Menu>
       </div>
 
+      <div
+        aria-busy={isFilterPending}
+        className={
+          isFilterPending
+            ? "opacity-60 transition-opacity duration-150"
+            : "opacity-100 transition-opacity duration-150"
+        }
+      >
+        <Suspense fallback={<ActivityTimelineSkeleton />}>
+          <ActivityTimeline
+            category={deferredCategory}
+            workspaceId={workspaceId}
+          />
+        </Suspense>
+      </div>
+    </section>
+  );
+};
+
+const ActivityTimeline = ({
+  category,
+  workspaceId,
+}: {
+  category: MatterActivityCategory;
+  workspaceId: string;
+}) => {
+  const t = useTranslations();
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
+  const query = useSuspenseInfiniteQuery(
+    overviewActivityOptions({ activeOrganizationId, category, workspaceId }),
+  );
+  const items = query.data.pages.flatMap((page) => page.items);
+  const days = useMemo(() => {
+    const result = new Map<string, ActivityDay>();
+    for (const item of items) {
+      const key = activityDayKey(item.activityAt);
+      const dayItems = result.get(key);
+      if (dayItems) {
+        dayItems.push(item);
+      } else {
+        result.set(key, [item]);
+      }
+    }
+    return [...result.values()];
+  }, [items]);
+
+  return (
+    <>
       <div className="bg-background overflow-hidden rounded-xl shadow-sm ring-1 ring-foreground/5">
         {days.length === 0 ? (
           <p className="text-muted-foreground px-4 py-8 text-center text-sm">
@@ -177,9 +208,64 @@ export const ActivityPanel = ({ workspaceId }: ActivityPanelProps) => {
           </Button>
         </div>
       )}
-    </section>
+    </>
   );
 };
+
+const ACTIVITY_SKELETON_WIDTHS = ["w-24", "w-32", "w-28", "w-36"] as const;
+
+const ActivityTimelineSkeleton = () => (
+  <div
+    aria-hidden="true"
+    className="bg-background overflow-hidden rounded-xl shadow-sm ring-1 ring-foreground/5"
+  >
+    <div className="hidden overflow-hidden md:block">
+      <div className="flex min-w-max px-5 pt-4 pb-5">
+        {ACTIVITY_SKELETON_WIDTHS.map((width, index) => (
+          <div className="w-64 shrink-0" key={width}>
+            <div
+              className={
+                index === 0
+                  ? "bg-muted h-3 w-24 animate-pulse rounded-sm"
+                  : "h-3"
+              }
+            />
+            <div className="bg-muted mt-2 h-2 w-12 animate-pulse rounded-sm" />
+            <div className="relative mt-3 h-3">
+              <span className="bg-border absolute start-0 end-0 top-1/2 h-px" />
+              <span className="bg-muted-foreground/50 absolute start-0 top-0 h-3 w-px" />
+            </div>
+            <div className="mt-3 pe-8">
+              <div
+                className={`bg-muted h-3 animate-pulse rounded-sm ${width}`}
+              />
+              <div className="bg-muted mt-3 h-3 w-40 animate-pulse rounded-sm" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+    <div className="py-2 md:hidden">
+      {ACTIVITY_SKELETON_WIDTHS.slice(0, 3).map((width) => (
+        <div
+          className="grid min-h-16 grid-cols-[5.5rem_1.5rem_minmax(0,1fr)]"
+          key={width}
+        >
+          <span className="bg-muted mt-3 ms-auto me-1 h-2 w-12 animate-pulse rounded-sm" />
+          <span className="relative flex justify-center">
+            <span className="bg-border absolute inset-y-0 start-1/2 w-px" />
+          </span>
+          <span className="py-3 pe-4 ps-3">
+            <span
+              className={`bg-muted block h-3 animate-pulse rounded-sm ${width}`}
+            />
+            <span className="bg-muted mt-3 block h-3 w-40 animate-pulse rounded-sm" />
+          </span>
+        </div>
+      ))}
+    </div>
+  </div>
+);
 
 const HorizontalTimeline = ({
   days,
