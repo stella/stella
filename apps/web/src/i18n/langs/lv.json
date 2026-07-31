@@ -3400,43 +3400,30 @@
           "updated": "<actor>Lietotājs</actor> atjaunināja <target>vienumu</target>"
         },
         "approvals": {
-          "approved": "Apstiprināts",
+          "approved": "Apstiprinājums piešķirts",
           "notRequired": "Nav nepieciešams",
-          "pending": "Gaida",
-          "rejected": "Noraidīts"
+          "pending": "Gaida apstiprinājumu",
+          "rejected": "Apstiprinājums noraidīts"
         },
         "automatedService": "Automatizēts pakalpojums",
+        "deletedUser": "Dzēsts lietotājs",
         "details": {
           "actor": "Veica",
           "approval": "Apstiprinājums",
           "approvedBy": "Apstiprināja",
-          "category": "Kategorija",
+          "channel": "Kanāls",
           "dateTime": "Datums un laiks",
           "direct": "Tieša darbība",
           "eventId": "Notikuma ID",
           "notAvailable": "Nav pieejams",
           "openTarget": "Atvērt vienumu",
           "runId": "Izpildes ID",
-          "source": "Avots",
           "system": "Sistēmas darbība",
           "target": "Mērķis",
           "title": "Darbības informācija",
           "trigger": "Uzsāka",
           "webhook": "Tīmekļa aizķere"
         },
-        "list": {
-          "activity": "Darbība",
-          "actor": "Veicējs",
-          "dateTime": "Datums un laiks",
-          "provenance": "Izcelsme"
-        },
-        "sources": {
-          "chat": "Tērzēšana",
-          "flow": "Darbplūsma",
-          "mcp": "Pievienots rīks"
-        },
-        "views": { "list": "Saraksta skats", "timeline": "Laika skalas skats" },
-        "deletedUser": "Dzēsts lietotājs",
         "empty": "Šajā lietā vēl nav darbību.",
         "filterLabel": "Filtrēt darbības",
         "filters": {
@@ -3447,6 +3434,12 @@
           "matter": "Lieta",
           "tasks": "Darba kārtība",
           "team": "Komanda"
+        },
+        "list": {
+          "actor": "Veicējs",
+          "dateTime": "Datums un laiks",
+          "event": "Notikums",
+          "provenance": "Izcelsme"
         },
         "loadEarlier": "Ielādēt agrākās",
         "loading": "Ielādē…",
@@ -3462,6 +3455,11 @@
           "scheduledBy": "Lietotāja {user} plānotā automatizācija"
         },
         "runCount": "{count} darbības",
+        "sources": {
+          "chat": "Tērzēšana",
+          "flow": "Darbplūsma",
+          "mcp": "Pievienots rīks"
+        },
         "targets": {
           "automation": "automatizāciju",
           "court": "tiesas ierakstu",
@@ -3470,7 +3468,11 @@
           "task": "dzēstu darba kārtības vienumu",
           "team": "lietas komandu"
         },
-        "title": "Darbības"
+        "title": "Darbības",
+        "views": {
+          "list": "Saraksta skats",
+          "timeline": "Laika skalas skats"
+        }
       },
       "atAGlance": "Apskats",
       "edited": "rediģēja",

@@ -3403,46 +3403,30 @@ type Messages = {
           "updated": "<actor>Actor</actor> updated <target>target</target>";
         };
         "approvals": {
-          "approved": "Approved";
+          "approved": "Approval granted";
           "notRequired": "Not required";
-          "pending": "Pending";
-          "rejected": "Rejected";
+          "pending": "Approval pending";
+          "rejected": "Approval rejected";
         };
         "automatedService": "Automated service";
+        "deletedUser": "Deleted user";
         "details": {
           "actor": "Performed by";
           "approval": "Approval";
           "approvedBy": "Approved by";
-          "category": "Category";
+          "channel": "Channel";
           "dateTime": "Date and time";
           "direct": "Direct activity";
           "eventId": "Event ID";
           "notAvailable": "Not available";
           "openTarget": "Open item";
           "runId": "Run ID";
-          "source": "Source";
           "system": "System activity";
           "target": "Target";
           "title": "Activity details";
           "trigger": "Initiated by";
           "webhook": "Webhook";
         };
-        "list": {
-          "activity": "Activity";
-          "actor": "Actor";
-          "dateTime": "Date and time";
-          "provenance": "Origin";
-        };
-        "sources": {
-          "chat": "Chat";
-          "flow": "Workflow";
-          "mcp": "Connected tool";
-        };
-        "views": {
-          "list": "List view";
-          "timeline": "Timeline view";
-        };
-        "deletedUser": "Deleted user";
         "empty": "No activity in this matter yet.";
         "filterLabel": "Filter activity";
         "filters": {
@@ -3453,6 +3437,12 @@ type Messages = {
           "matter": "Matter details";
           "tasks": "Agenda items";
           "team": "Matter team";
+        };
+        "list": {
+          "actor": "Actor";
+          "dateTime": "Date and time";
+          "event": "Event";
+          "provenance": "Origin";
         };
         "loadEarlier": "Load earlier";
         "loading": "Loading…";
@@ -3468,6 +3458,11 @@ type Messages = {
           "scheduledBy": "Scheduled automation owned by {user}";
         };
         "runCount": "{count, plural, one {# activity} other {# activities}}";
+        "sources": {
+          "chat": "Chat conversation";
+          "flow": "Workflow";
+          "mcp": "Connected tool";
+        };
         "targets": {
           "automation": "automation";
           "court": "court record";
@@ -3477,6 +3472,10 @@ type Messages = {
           "team": "matter team";
         };
         "title": "Matter activity";
+        "views": {
+          "list": "List view";
+          "timeline": "Timeline view";
+        };
       };
       "atAGlance": "At a glance";
       "edited": "edited";

@@ -6,10 +6,11 @@ import {
   AUDIT_RESOURCE_TYPE,
   createBackgroundAuditRecorder,
 } from "@/api/lib/audit-log";
-import type { SafeId } from "@/api/lib/branded-types";
+import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
-const safeId = <T extends string>(value: string) => asTestRaw<SafeId<T>>(value);
+const safeId = <T extends SafeIdType>(value: string) =>
+  asTestRaw<SafeId<T>>(value);
 
 describe("createBackgroundAuditRecorder", () => {
   test("stores bot provenance and keeps every event in one run group", async () => {
@@ -58,7 +59,7 @@ describe("createBackgroundAuditRecorder", () => {
     expect(inserted).toHaveLength(2);
     expect(inserted[0]).toMatchObject({
       activityCategory: "tasks",
-      groupId: inserted[1]?.groupId,
+      groupId: inserted[1]?.["groupId"],
       performerId: "contract-review",
       performerName: "Contract Review",
       performerType: "agent",

@@ -3400,43 +3400,30 @@
           "updated": "<actor>Persona</actor> actualizó <target>elemento</target>"
         },
         "approvals": {
-          "approved": "Aprobado",
+          "approved": "Aprobación concedida",
           "notRequired": "No requerida",
-          "pending": "Pendiente",
-          "rejected": "Rechazado"
+          "pending": "Aprobación pendiente",
+          "rejected": "Aprobación rechazada"
         },
         "automatedService": "Servicio automatizado",
+        "deletedUser": "Usuario eliminado",
         "details": {
           "actor": "Realizado por",
           "approval": "Aprobación",
           "approvedBy": "Aprobado por",
-          "category": "Categoría",
+          "channel": "Canal",
           "dateTime": "Fecha y hora",
           "direct": "Actividad directa",
           "eventId": "ID del evento",
           "notAvailable": "No disponible",
           "openTarget": "Abrir elemento",
           "runId": "ID de ejecución",
-          "source": "Fuente",
           "system": "Actividad del sistema",
           "target": "Objetivo",
           "title": "Detalles de la actividad",
           "trigger": "Iniciado por",
-          "webhook": "Webhook"
+          "webhook": "Enlace web"
         },
-        "list": {
-          "activity": "Actividad",
-          "actor": "Actor",
-          "dateTime": "Fecha y hora",
-          "provenance": "Origen"
-        },
-        "sources": {
-          "chat": "Chat",
-          "flow": "Flujo de trabajo",
-          "mcp": "Herramienta conectada"
-        },
-        "views": { "list": "Vista de lista", "timeline": "Vista cronológica" },
-        "deletedUser": "Usuario eliminado",
         "empty": "Aún no hay actividad en este asunto.",
         "filterLabel": "Filtrar actividad",
         "filters": {
@@ -3447,6 +3434,12 @@
           "matter": "Asunto",
           "tasks": "Tareas",
           "team": "Equipo"
+        },
+        "list": {
+          "actor": "Responsable",
+          "dateTime": "Fecha y hora",
+          "event": "Evento",
+          "provenance": "Origen"
         },
         "loadEarlier": "Cargar anteriores",
         "loading": "Cargando…",
@@ -3462,6 +3455,11 @@
           "scheduledBy": "Automatización programada de {user}"
         },
         "runCount": "{count, plural, one {# actividad} other {# actividades}}",
+        "sources": {
+          "chat": "Conversación de chat",
+          "flow": "Flujo de trabajo",
+          "mcp": "Herramienta conectada"
+        },
         "targets": {
           "automation": "automatización",
           "court": "registro judicial",
@@ -3470,7 +3468,11 @@
           "task": "elemento de agenda eliminado",
           "team": "equipo del asunto"
         },
-        "title": "Actividad"
+        "title": "Actividad",
+        "views": {
+          "list": "Vista de lista",
+          "timeline": "Vista cronológica"
+        }
       },
       "atAGlance": "De un vistazo",
       "edited": "editó",

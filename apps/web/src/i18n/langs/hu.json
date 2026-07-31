@@ -3400,43 +3400,30 @@
           "updated": "<actor>Felhasználó</actor> frissítette: <target>elem</target>"
         },
         "approvals": {
-          "approved": "Jóváhagyva",
+          "approved": "Jóváhagyás megadva",
           "notRequired": "Nem szükséges",
-          "pending": "Függőben",
-          "rejected": "Elutasítva"
+          "pending": "Jóváhagyás függőben",
+          "rejected": "Jóváhagyás elutasítva"
         },
         "automatedService": "Automatizált szolgáltatás",
+        "deletedUser": "Törölt felhasználó",
         "details": {
           "actor": "Végrehajtotta",
           "approval": "Jóváhagyás",
           "approvedBy": "Jóváhagyta",
-          "category": "Kategória",
+          "channel": "Csatorna",
           "dateTime": "Dátum és idő",
           "direct": "Közvetlen tevékenység",
           "eventId": "Eseményazonosító",
           "notAvailable": "Nem érhető el",
           "openTarget": "Elem megnyitása",
           "runId": "Futásazonosító",
-          "source": "Forrás",
           "system": "Rendszertevékenység",
           "target": "Cél",
           "title": "Tevékenység részletei",
           "trigger": "Kezdeményezte",
-          "webhook": "Webhook"
+          "webhook": "Webes esemény"
         },
-        "list": {
-          "activity": "Tevékenység",
-          "actor": "Szereplő",
-          "dateTime": "Dátum és idő",
-          "provenance": "Eredet"
-        },
-        "sources": {
-          "chat": "Csevegés",
-          "flow": "Munkafolyamat",
-          "mcp": "Csatlakoztatott eszköz"
-        },
-        "views": { "list": "Listanézet", "timeline": "Idővonalnézet" },
-        "deletedUser": "Törölt felhasználó",
         "empty": "Ebben az ügyben még nincs tevékenység.",
         "filterLabel": "Tevékenység szűrése",
         "filters": {
@@ -3447,6 +3434,12 @@
           "matter": "Ügy",
           "tasks": "Napirend",
           "team": "Csapat"
+        },
+        "list": {
+          "actor": "Szereplő",
+          "dateTime": "Dátum és idő",
+          "event": "Esemény",
+          "provenance": "Eredet"
         },
         "loadEarlier": "Korábbiak betöltése",
         "loading": "Betöltés…",
@@ -3462,6 +3455,11 @@
           "scheduledBy": "{user} ütemezett automatizálása"
         },
         "runCount": "{count} tevékenység",
+        "sources": {
+          "chat": "Csevegés",
+          "flow": "Munkafolyamat",
+          "mcp": "Csatlakoztatott eszköz"
+        },
         "targets": {
           "automation": "automatizálás",
           "court": "bírósági bejegyzés",
@@ -3470,7 +3468,11 @@
           "task": "törölt napirendi elem",
           "team": "ügycsapat"
         },
-        "title": "Tevékenység"
+        "title": "Tevékenység",
+        "views": {
+          "list": "Listanézet",
+          "timeline": "Idővonalnézet"
+        }
       },
       "atAGlance": "Áttekintés",
       "edited": "szerkesztette",

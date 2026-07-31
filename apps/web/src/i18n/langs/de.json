@@ -3400,43 +3400,30 @@
           "updated": "<actor>Person</actor> hat <target>Element</target> aktualisiert"
         },
         "approvals": {
-          "approved": "Genehmigt",
+          "approved": "Genehmigung erteilt",
           "notRequired": "Nicht erforderlich",
-          "pending": "Ausstehend",
-          "rejected": "Abgelehnt"
+          "pending": "Genehmigung ausstehend",
+          "rejected": "Genehmigung abgelehnt"
         },
         "automatedService": "Automatisierter Dienst",
+        "deletedUser": "Gelöschter Benutzer",
         "details": {
           "actor": "Ausgeführt von",
           "approval": "Genehmigung",
           "approvedBy": "Genehmigt von",
-          "category": "Kategorie",
+          "channel": "Kanal",
           "dateTime": "Datum und Uhrzeit",
           "direct": "Direkte Aktivität",
           "eventId": "Ereignis-ID",
           "notAvailable": "Nicht verfügbar",
           "openTarget": "Element öffnen",
           "runId": "Ausführungs-ID",
-          "source": "Quelle",
           "system": "Systemaktivität",
           "target": "Ziel",
           "title": "Aktivitätsdetails",
           "trigger": "Ausgelöst von",
-          "webhook": "Webhook"
+          "webhook": "Web-Schnittstelle"
         },
-        "list": {
-          "activity": "Aktivität",
-          "actor": "Akteur",
-          "dateTime": "Datum und Uhrzeit",
-          "provenance": "Ursprung"
-        },
-        "sources": {
-          "chat": "Chat",
-          "flow": "Arbeitsablauf",
-          "mcp": "Verbundenes Werkzeug"
-        },
-        "views": { "list": "Listenansicht", "timeline": "Zeitleistenansicht" },
-        "deletedUser": "Gelöschter Benutzer",
         "empty": "Noch keine Aktivität in dieser Akte.",
         "filterLabel": "Aktivität filtern",
         "filters": {
@@ -3447,6 +3434,12 @@
           "matter": "Akte",
           "tasks": "Aufgaben",
           "team": "Aktenteam"
+        },
+        "list": {
+          "actor": "Akteur",
+          "dateTime": "Datum und Uhrzeit",
+          "event": "Ereignis",
+          "provenance": "Ursprung"
         },
         "loadEarlier": "Ältere laden",
         "loading": "Wird geladen…",
@@ -3462,6 +3455,11 @@
           "scheduledBy": "Geplante Automatisierung von {user}"
         },
         "runCount": "{count, plural, one {# Aktivität} other {# Aktivitäten}}",
+        "sources": {
+          "chat": "Chat-Unterhaltung",
+          "flow": "Arbeitsablauf",
+          "mcp": "Verbundenes Werkzeug"
+        },
         "targets": {
           "automation": "Automatisierung",
           "court": "Gerichtseintrag",
@@ -3470,7 +3468,11 @@
           "task": "gelöschter Agendaeintrag",
           "team": "Aktenteam"
         },
-        "title": "Aktivität"
+        "title": "Aktivität",
+        "views": {
+          "list": "Listenansicht",
+          "timeline": "Zeitleistenansicht"
+        }
       },
       "atAGlance": "Auf einen Blick",
       "edited": "bearbeitet",

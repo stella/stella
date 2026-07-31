@@ -3400,43 +3400,30 @@
           "updated": "<actor>Osoba</actor> zaktualizowała <target>element</target>"
         },
         "approvals": {
-          "approved": "Zatwierdzono",
+          "approved": "Zatwierdzenie udzielone",
           "notRequired": "Niewymagane",
-          "pending": "Oczekuje",
-          "rejected": "Odrzucono"
+          "pending": "Zatwierdzenie oczekuje",
+          "rejected": "Zatwierdzenie odrzucone"
         },
         "automatedService": "Usługa automatyczna",
+        "deletedUser": "Usunięty użytkownik",
         "details": {
           "actor": "Wykonał(a)",
           "approval": "Zatwierdzenie",
           "approvedBy": "Zatwierdził(a)",
-          "category": "Kategoria",
+          "channel": "Kanał",
           "dateTime": "Data i godzina",
           "direct": "Działanie bezpośrednie",
           "eventId": "ID zdarzenia",
           "notAvailable": "Niedostępne",
           "openTarget": "Otwórz element",
           "runId": "ID uruchomienia",
-          "source": "Źródło",
           "system": "Aktywność systemowa",
           "target": "Cel",
           "title": "Szczegóły aktywności",
           "trigger": "Zainicjował(a)",
-          "webhook": "Webhook"
+          "webhook": "Wywołanie sieciowe"
         },
-        "list": {
-          "activity": "Aktywność",
-          "actor": "Wykonawca",
-          "dateTime": "Data i godzina",
-          "provenance": "Pochodzenie"
-        },
-        "sources": {
-          "chat": "Czat",
-          "flow": "Przepływ pracy",
-          "mcp": "Połączone narzędzie"
-        },
-        "views": { "list": "Widok listy", "timeline": "Widok osi czasu" },
-        "deletedUser": "Usunięty użytkownik",
         "empty": "Brak aktywności w tej sprawie.",
         "filterLabel": "Filtruj aktywność",
         "filters": {
@@ -3447,6 +3434,12 @@
           "matter": "Sprawa",
           "tasks": "Zadania",
           "team": "Zespół"
+        },
+        "list": {
+          "actor": "Wykonawca",
+          "dateTime": "Data i godzina",
+          "event": "Zdarzenie",
+          "provenance": "Pochodzenie"
         },
         "loadEarlier": "Wczytaj starsze",
         "loading": "Wczytywanie…",
@@ -3462,6 +3455,11 @@
           "scheduledBy": "Zaplanowana automatyzacja użytkownika {user}"
         },
         "runCount": "{count, plural, one {# aktywność} few {# aktywności} other {# aktywności}}",
+        "sources": {
+          "chat": "Rozmowa na czacie",
+          "flow": "Przepływ pracy",
+          "mcp": "Połączone narzędzie"
+        },
         "targets": {
           "automation": "automatyzację",
           "court": "wpis sądowy",
@@ -3470,7 +3468,11 @@
           "task": "usunięty element agendy",
           "team": "zespół sprawy"
         },
-        "title": "Aktywność"
+        "title": "Aktywność",
+        "views": {
+          "list": "Widok listy",
+          "timeline": "Widok osi czasu"
+        }
       },
       "atAGlance": "W skrócie",
       "edited": "edytował(a)",

@@ -3400,43 +3400,30 @@
           "updated": "<actor>Uživatel</actor> upravil(a) <target>položku</target>"
         },
         "approvals": {
-          "approved": "Schváleno",
+          "approved": "Schválení uděleno",
           "notRequired": "Není vyžadováno",
-          "pending": "Čeká na schválení",
-          "rejected": "Zamítnuto"
+          "pending": "Schválení se vyřizuje",
+          "rejected": "Schválení zamítnuto"
         },
         "automatedService": "Automatizovaná služba",
+        "deletedUser": "Odstraněný uživatel",
         "details": {
           "actor": "Provedl(a)",
           "approval": "Schválení",
           "approvedBy": "Schválil(a)",
-          "category": "Kategorie",
+          "channel": "Kanál",
           "dateTime": "Datum a čas",
           "direct": "Přímá aktivita",
           "eventId": "ID události",
           "notAvailable": "Není k dispozici",
           "openTarget": "Otevřít položku",
           "runId": "ID běhu",
-          "source": "Zdroj",
           "system": "Systémová aktivita",
           "target": "Cíl",
           "title": "Podrobnosti aktivity",
           "trigger": "Spustil(a)",
-          "webhook": "Webhook"
+          "webhook": "Webové volání"
         },
-        "list": {
-          "activity": "Aktivita",
-          "actor": "Aktér",
-          "dateTime": "Datum a čas",
-          "provenance": "Původ"
-        },
-        "sources": {
-          "chat": "Chat",
-          "flow": "Pracovní postup",
-          "mcp": "Připojený nástroj"
-        },
-        "views": { "list": "Seznam", "timeline": "Časová osa" },
-        "deletedUser": "Odstraněný uživatel",
         "empty": "V této věci zatím není žádná aktivita.",
         "filterLabel": "Filtrovat aktivitu",
         "filters": {
@@ -3447,6 +3434,12 @@
           "matter": "Věc",
           "tasks": "Položky agendy",
           "team": "Tým"
+        },
+        "list": {
+          "actor": "Aktér",
+          "dateTime": "Datum a čas",
+          "event": "Událost",
+          "provenance": "Původ"
         },
         "loadEarlier": "Načíst starší",
         "loading": "Načítání…",
@@ -3462,6 +3455,11 @@
           "scheduledBy": "Naplánovaná automatizace vlastníka {user}"
         },
         "runCount": "{count, plural, one {# aktivita} few {# aktivity} other {# aktivit}}",
+        "sources": {
+          "chat": "Konverzace v chatu",
+          "flow": "Pracovní postup",
+          "mcp": "Připojený nástroj"
+        },
         "targets": {
           "automation": "automatizaci",
           "court": "soudní záznam",
@@ -3470,7 +3468,11 @@
           "task": "odstraněnou položku agendy",
           "team": "tým věci"
         },
-        "title": "Aktivita"
+        "title": "Aktivita",
+        "views": {
+          "list": "Seznam",
+          "timeline": "Časová osa"
+        }
       },
       "atAGlance": "Přehled",
       "edited": "upravil(a)",

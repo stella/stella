@@ -3400,46 +3400,30 @@
           "updated": "<actor>Naudotojas</actor> atnaujino <target>elementą</target>"
         },
         "approvals": {
-          "approved": "Patvirtinta",
+          "approved": "Patvirtinimas suteiktas",
           "notRequired": "Nereikalinga",
-          "pending": "Laukiama",
-          "rejected": "Atmesta"
+          "pending": "Laukiama patvirtinimo",
+          "rejected": "Patvirtinimas atmestas"
         },
         "automatedService": "Automatinė paslauga",
+        "deletedUser": "Ištrintas naudotojas",
         "details": {
           "actor": "Atliko",
           "approval": "Patvirtinimas",
           "approvedBy": "Patvirtino",
-          "category": "Kategorija",
+          "channel": "Kanalas",
           "dateTime": "Data ir laikas",
           "direct": "Tiesioginė veikla",
           "eventId": "Įvykio ID",
           "notAvailable": "Nėra",
           "openTarget": "Atidaryti elementą",
           "runId": "Vykdymo ID",
-          "source": "Šaltinis",
           "system": "Sistemos veikla",
           "target": "Objektas",
           "title": "Veiklos informacija",
           "trigger": "Inicijavo",
           "webhook": "Saityno jungtis"
         },
-        "list": {
-          "activity": "Veikla",
-          "actor": "Atlikėjas",
-          "dateTime": "Data ir laikas",
-          "provenance": "Kilmė"
-        },
-        "sources": {
-          "chat": "Pokalbis",
-          "flow": "Darbo eiga",
-          "mcp": "Prijungtas įrankis"
-        },
-        "views": {
-          "list": "Sąrašo rodinys",
-          "timeline": "Laiko juostos rodinys"
-        },
-        "deletedUser": "Ištrintas naudotojas",
         "empty": "Šioje byloje veiklos dar nėra.",
         "filterLabel": "Filtruoti veiklą",
         "filters": {
@@ -3450,6 +3434,12 @@
           "matter": "Byla",
           "tasks": "Darbotvarkė",
           "team": "Komanda"
+        },
+        "list": {
+          "actor": "Atlikėjas",
+          "dateTime": "Data ir laikas",
+          "event": "Įvykis",
+          "provenance": "Kilmė"
         },
         "loadEarlier": "Įkelti ankstesnius",
         "loading": "Įkeliama…",
@@ -3465,6 +3455,11 @@
           "scheduledBy": "Naudotojo {user} suplanuotas automatizavimas"
         },
         "runCount": "{count} veiklos įrašai",
+        "sources": {
+          "chat": "Pokalbis",
+          "flow": "Darbo eiga",
+          "mcp": "Prijungtas įrankis"
+        },
         "targets": {
           "automation": "automatizavimą",
           "court": "teismo įrašą",
@@ -3473,7 +3468,11 @@
           "task": "ištrintą darbotvarkės elementą",
           "team": "bylos komandą"
         },
-        "title": "Veikla"
+        "title": "Veikla",
+        "views": {
+          "list": "Sąrašo rodinys",
+          "timeline": "Laiko juostos rodinys"
+        }
       },
       "atAGlance": "Apžvalga",
       "edited": "redagavo",

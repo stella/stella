@@ -28,6 +28,7 @@ import {
   brandPersistedAuditLogId,
   brandPersistedEntityId,
   brandPersistedEntityVersionId,
+  brandPersistedFieldId,
 } from "@/api/lib/safe-id-boundaries";
 
 const ACTIVITY_FILTERS = [
@@ -278,7 +279,7 @@ const readOverviewActivity = createSafeHandler(
           .map((row) => brandPersistedEntityVersionId(row.resourceId));
         const fieldIds = rows
           .filter((row) => row.resourceType === AUDIT_RESOURCE_TYPE.FIELD)
-          .map((row) => row.resourceId);
+          .map((row) => brandPersistedFieldId(row.resourceId));
         const fieldRows =
           fieldIds.length === 0
             ? []

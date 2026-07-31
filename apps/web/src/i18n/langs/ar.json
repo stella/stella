@@ -3400,43 +3400,30 @@
           "updated": "حدّث <actor>المستخدم</actor> <target>العنصر</target>"
         },
         "approvals": {
-          "approved": "تمت الموافقة",
+          "approved": "تم منح الموافقة",
           "notRequired": "غير مطلوب",
-          "pending": "قيد الانتظار",
-          "rejected": "مرفوض"
+          "pending": "الموافقة قيد الانتظار",
+          "rejected": "رُفضت الموافقة"
         },
         "automatedService": "خدمة آلية",
+        "deletedUser": "مستخدم محذوف",
         "details": {
           "actor": "نفّذها",
           "approval": "الموافقة",
           "approvedBy": "وافق عليها",
-          "category": "الفئة",
+          "channel": "القناة",
           "dateTime": "التاريخ والوقت",
           "direct": "نشاط مباشر",
           "eventId": "معرّف الحدث",
           "notAvailable": "غير متاح",
           "openTarget": "فتح العنصر",
           "runId": "معرّف التشغيل",
-          "source": "المصدر",
           "system": "نشاط النظام",
           "target": "الهدف",
           "title": "تفاصيل النشاط",
           "trigger": "بدأه",
           "webhook": "خطاف ويب"
         },
-        "list": {
-          "activity": "النشاط",
-          "actor": "الفاعل",
-          "dateTime": "التاريخ والوقت",
-          "provenance": "المنشأ"
-        },
-        "sources": {
-          "chat": "المحادثة",
-          "flow": "سير العمل",
-          "mcp": "أداة متصلة"
-        },
-        "views": { "list": "عرض القائمة", "timeline": "عرض الخط الزمني" },
-        "deletedUser": "مستخدم محذوف",
         "empty": "لا يوجد نشاط في هذه المسألة بعد.",
         "filterLabel": "تصفية النشاط",
         "filters": {
@@ -3447,6 +3434,12 @@
           "matter": "المسألة",
           "tasks": "جدول الأعمال",
           "team": "الفريق"
+        },
+        "list": {
+          "actor": "الفاعل",
+          "dateTime": "التاريخ والوقت",
+          "event": "الحدث",
+          "provenance": "المنشأ"
         },
         "loadEarlier": "تحميل الأقدم",
         "loading": "جارٍ التحميل…",
@@ -3462,6 +3455,11 @@
           "scheduledBy": "أتمتة مجدولة يملكها {user}"
         },
         "runCount": "{count} أنشطة",
+        "sources": {
+          "chat": "محادثة الدردشة",
+          "flow": "سير العمل",
+          "mcp": "أداة متصلة"
+        },
         "targets": {
           "automation": "الأتمتة",
           "court": "سجل المحكمة",
@@ -3470,7 +3468,11 @@
           "task": "عنصر جدول أعمال محذوف",
           "team": "فريق المسألة"
         },
-        "title": "النشاط"
+        "title": "النشاط",
+        "views": {
+          "list": "عرض القائمة",
+          "timeline": "عرض الخط الزمني"
+        }
       },
       "atAGlance": "لمحة سريعة",
       "edited": "تم التعديل",

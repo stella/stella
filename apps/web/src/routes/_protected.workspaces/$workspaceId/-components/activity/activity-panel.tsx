@@ -709,7 +709,7 @@ const ActivityList = ({
       >
         <span>{t("workspaces.overview.activity.list.dateTime")}</span>
         <span>{t("workspaces.overview.activity.list.actor")}</span>
-        <span>{t("workspaces.overview.activity.list.activity")}</span>
+        <span>{t("workspaces.overview.activity.list.event")}</span>
         <span>{t("workspaces.overview.activity.list.provenance")}</span>
       </div>
       {items.map((item) => {
@@ -801,7 +801,7 @@ const ActivityDetailsSheet = ({
       value: target,
     },
     {
-      label: t("workspaces.overview.activity.details.category"),
+      label: t("common.category"),
       value: categoryLabel(item.category, t),
     },
     {
@@ -809,7 +809,7 @@ const ActivityDetailsSheet = ({
       value: triggerName(item, t),
     },
     {
-      label: t("workspaces.overview.activity.details.source"),
+      label: t("workspaces.overview.activity.details.channel"),
       value: sourceName(item.trigger.source, t),
     },
     {
