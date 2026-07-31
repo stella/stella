@@ -885,7 +885,7 @@ const ActivityDetailsSheet = ({
       ? [
           {
             label: t("workspaces.overview.activity.details.approvedBy"),
-            value: item.approval.user.name,
+            value: <BidiText as="span">{item.approval.user.name}</BidiText>,
           },
         ]
       : []),
