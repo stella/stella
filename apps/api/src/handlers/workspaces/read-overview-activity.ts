@@ -107,7 +107,7 @@ const siblingVersionEntityIdSnapshot = () => sql<string | null>`(
     ${versionSnapshotAuditLogs.changes} -> 'created' -> 'new' ->> 'entityId',
     ${versionSnapshotAuditLogs.changes} -> 'deleted' -> 'old' ->> 'entityId'
   )
-  from ${versionSnapshotAuditLogs}
+  from ${auditLogs} as "version_snapshot_audit_logs"
   where ${versionSnapshotAuditLogs.organizationId} = ${auditLogs.organizationId}
     and ${versionSnapshotAuditLogs.workspaceId} = ${auditLogs.workspaceId}
     and ${auditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.ENTITY_VERSION}
@@ -143,7 +143,7 @@ const siblingVersionEntityNameSnapshot = () => sql<string | null>`(
     ${versionSnapshotAuditLogs.changes} -> 'created' -> 'new' ->> 'fileName',
     ${versionSnapshotAuditLogs.changes} -> 'deleted' -> 'old' ->> 'name'
   )
-  from ${versionSnapshotAuditLogs}
+  from ${auditLogs} as "version_snapshot_audit_logs"
   where ${versionSnapshotAuditLogs.organizationId} = ${auditLogs.organizationId}
     and ${versionSnapshotAuditLogs.workspaceId} = ${auditLogs.workspaceId}
     and ${auditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.ENTITY_VERSION}
@@ -162,7 +162,7 @@ const siblingVersionEntityNameSnapshot = () => sql<string | null>`(
 
 const siblingDeletedEntityKind = () => sql<string | null>`(
   select ${entitySnapshotAuditLogs.changes} -> 'deleted' -> 'old' ->> 'kind'
-  from ${entitySnapshotAuditLogs}
+  from ${auditLogs} as "entity_snapshot_audit_logs"
   where ${entitySnapshotAuditLogs.organizationId} = ${auditLogs.organizationId}
     and ${entitySnapshotAuditLogs.workspaceId} = ${auditLogs.workspaceId}
     and ${entitySnapshotAuditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.ENTITY}
@@ -174,7 +174,7 @@ const siblingDeletedEntityKind = () => sql<string | null>`(
 
 const siblingDeletedEntityName = () => sql<string | null>`(
   select ${entitySnapshotAuditLogs.changes} -> 'deleted' -> 'old' ->> 'name'
-  from ${entitySnapshotAuditLogs}
+  from ${auditLogs} as "entity_snapshot_audit_logs"
   where ${entitySnapshotAuditLogs.organizationId} = ${auditLogs.organizationId}
     and ${entitySnapshotAuditLogs.workspaceId} = ${auditLogs.workspaceId}
     and ${entitySnapshotAuditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.ENTITY}
