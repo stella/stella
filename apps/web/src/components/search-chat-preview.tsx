@@ -83,9 +83,9 @@ export const SearchChatPreview = ({
 
     for (const [index, match] of matches.entries()) {
       if (index === clampedIndex) {
-        match.dataset.active = "true";
+        match.dataset["active"] = "true";
       } else {
-        delete match.dataset.active;
+        delete match.dataset["active"];
       }
     }
     const activeMatch = matches.at(clampedIndex);

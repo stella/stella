@@ -263,29 +263,29 @@ export const toPDFSearchViewportBox = (
   box: PDFSearchBox,
   viewport: Pick<PageViewport, "convertToViewportPoint">,
 ): PDFSearchViewportBox | null => {
-  const start = viewport.convertToViewportPoint(box.x, box.y);
-  const end = viewport.convertToViewportPoint(
-    box.x + box.width,
-    box.y + box.height,
+  const parsePoint = (value: unknown) => {
+    if (!Array.isArray(value)) {
+      return null;
+    }
+    const x: unknown = value.at(0);
+    const y: unknown = value.at(1);
+    if (typeof x !== "number" || typeof y !== "number") {
+      return null;
+    }
+    return { x, y };
+  };
+  const start = parsePoint(viewport.convertToViewportPoint(box.x, box.y));
+  const end = parsePoint(
+    viewport.convertToViewportPoint(box.x + box.width, box.y + box.height),
   );
-  const startX = start.at(0);
-  const startY = start.at(1);
-  const endX = end.at(0);
-  const endY = end.at(1);
-
-  if (
-    typeof startX !== "number" ||
-    typeof startY !== "number" ||
-    typeof endX !== "number" ||
-    typeof endY !== "number"
-  ) {
+  if (!start || !end) {
     return null;
   }
 
   return {
-    left: Math.min(startX, endX),
-    top: Math.min(startY, endY),
-    width: Math.abs(endX - startX),
-    height: Math.abs(endY - startY),
+    left: Math.min(start.x, end.x),
+    top: Math.min(start.y, end.y),
+    width: Math.abs(end.x - start.x),
+    height: Math.abs(end.y - start.y),
   };
 };

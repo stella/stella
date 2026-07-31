@@ -14,6 +14,7 @@ import {
   selectSearchPreviewHit,
   shouldShowSearchPreview,
 } from "@/lib/search.logic";
+import type { SearchPreviewChatMessage } from "@/lib/search.logic";
 
 process.env["VITE_API_URL"] ??= "http://localhost:3001";
 
@@ -352,7 +353,7 @@ describe("search preview targets", () => {
     const messages = [
       { id: "message_1", role: "user", content: "Review this" },
       { id: "message_2", role: "assistant", content: "## Review" },
-    ] as const;
+    ] satisfies SearchPreviewChatMessage[];
 
     expect(
       getSearchPreviewRenderContent({

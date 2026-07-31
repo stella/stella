@@ -17,14 +17,14 @@ type FindPDFSearchResultsInWorkerOptions = PDFSearchWorkerRequest & {
 
 const abortError = () => new DOMException("PDF search cancelled", "AbortError");
 
-export const findPDFSearchResultsInWorker = ({
+export const findPDFSearchResultsInWorker = async ({
   bytes,
   password,
   searchText,
   signal,
 }: FindPDFSearchResultsInWorkerOptions): Promise<PDFSearchResult | null> => {
   if (signal.aborted) {
-    return Promise.reject(abortError());
+    throw abortError();
   }
 
   const worker = new Worker(
@@ -67,11 +67,12 @@ export const findPDFSearchResultsInWorker = ({
       "error",
       (event) => {
         dispose();
+        const cause: unknown = event.error;
         reject(
           new PDFViewerError({
             code: "LOAD_FAILED",
             message: "PDF search worker failed",
-            cause: event.error,
+            cause,
           }),
         );
       },

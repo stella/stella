@@ -1,8 +1,9 @@
-import type { EntityGlobalSearchHit, GlobalSearchHit } from "@stll/api/types";
+import type { GlobalSearchHit } from "@stll/api/types";
 
 import type { RecentFile } from "@/lib/search-recents";
 
 type ChatGlobalSearchHit = Extract<GlobalSearchHit, { type: "chat" }>;
+type DocumentGlobalSearchHit = Extract<GlobalSearchHit, { type: "document" }>;
 
 type DialogCloseActionState =
   | { status: "idle" }
@@ -54,7 +55,7 @@ export const getRecentFilePreviewHit = (
     updatedAt: file.openedAt,
     workspaceId: file.workspaceId,
     workspaceName: file.workspaceName,
-  }) satisfies EntityGlobalSearchHit;
+  }) satisfies DocumentGlobalSearchHit;
 
 export type ChatHitRoute =
   | {

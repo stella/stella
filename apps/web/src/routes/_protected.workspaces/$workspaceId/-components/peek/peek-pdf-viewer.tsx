@@ -491,7 +491,10 @@ const PeekDocxViewer = ({
 
     editor.ensureEditorView({ focus: false });
     const pagedEditor = editor.getEditorRef();
-    const view = pagedEditor?.getView();
+    if (!pagedEditor) {
+      return false;
+    }
+    const view = pagedEditor.getView();
     if (!view) {
       return false;
     }
@@ -549,15 +552,9 @@ const PeekDocxViewer = ({
     scheduleSearchHighlight();
   }, [scheduleSearchHighlight]);
 
-  const handleEditorViewReady = useCallback(
-    (view: unknown) => {
-      if (!view) {
-        return;
-      }
-      scheduleSearchHighlight();
-    },
-    [scheduleSearchHighlight],
-  );
+  const handleEditorViewReady = useCallback(() => {
+    scheduleSearchHighlight();
+  }, [scheduleSearchHighlight]);
 
   // Sync scaleOffset from inspector +/- buttons to Folio zoom
   useLayoutEffect(() => {

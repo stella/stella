@@ -15,7 +15,10 @@ export const getSearchTextCandidates = (searchText: string): string[] => {
   }
 
   const matchedTerms = normalizedSearchText.match(/[\p{L}\p{N}]+/gu);
-  const terms = matchedTerms ? matchedTerms : [];
+  const terms: string[] = [];
+  if (matchedTerms) {
+    terms.push(...matchedTerms);
+  }
   return [normalizedSearchText, ...terms].filter(
     (candidate, index, candidates) =>
       candidate.length > 1 && candidates.indexOf(candidate) === index,
