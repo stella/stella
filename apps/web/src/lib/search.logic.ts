@@ -14,30 +14,24 @@ const SEARCH_HEADLINE_NAMED_ENTITIES: Readonly<Record<string, string>> = {
   lt: "<",
   quot: '"',
 };
-const SEARCH_HEADLINE_ENTITY = /&(?<entity>#x[\da-f]+|#\d+|[a-z]+);/giu;
+const MAX_UNICODE_CODE_POINT = 1_114_111;
+const SEARCH_HEADLINE_ENTITY = /&(?:#x[\da-f]+|#\d+|[a-z]+);/giu;
 
 const decodeSearchHeadlineEntities = (value: string): string =>
-  value.replace(SEARCH_HEADLINE_ENTITY, (encoded, _entity, ...args) => {
-    const groups = args.at(-1);
-    if (
-      typeof groups !== "object" ||
-      groups === null ||
-      !("entity" in groups)
-    ) {
-      return encoded;
-    }
-    const entity = groups["entity"];
-    if (typeof entity !== "string") {
-      return encoded;
-    }
+  value.replace(SEARCH_HEADLINE_ENTITY, (encoded) => {
+    const entity = encoded.slice(1, -1);
     const normalizedEntity = entity.toLowerCase();
     if (normalizedEntity.startsWith("#x")) {
       const codePoint = Number.parseInt(normalizedEntity.slice(2), 16);
-      return codePoint <= 0x10_ffff ? String.fromCodePoint(codePoint) : encoded;
+      return codePoint <= MAX_UNICODE_CODE_POINT
+        ? String.fromCodePoint(codePoint)
+        : encoded;
     }
     if (normalizedEntity.startsWith("#")) {
       const codePoint = Number.parseInt(normalizedEntity.slice(1), 10);
-      return codePoint <= 0x10_ffff ? String.fromCodePoint(codePoint) : encoded;
+      return codePoint <= MAX_UNICODE_CODE_POINT
+        ? String.fromCodePoint(codePoint)
+        : encoded;
     }
     return SEARCH_HEADLINE_NAMED_ENTITIES[normalizedEntity] ?? encoded;
   });

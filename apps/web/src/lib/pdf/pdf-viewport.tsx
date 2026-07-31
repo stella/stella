@@ -184,6 +184,8 @@ const PDFViewerContent = ({
     isSettled: searchPageQuery.isSuccess,
     result: searchPageQuery.data,
   });
+  const settledSearchMatchCount = settledSearchMatchSummary?.count;
+  const settledSearchMatchTruncated = settledSearchMatchSummary?.truncated;
   const viewportStyle: PDFViewportStyle = {
     "--pdf-page-filter": shouldInvert ? "invert(1) hue-rotate(180deg)" : "none",
     "--scale-factor": effectiveScale,
@@ -209,15 +211,21 @@ const PDFViewerContent = ({
   }, [activeSearchMatchIndex, searchPageId, setScrollTo]);
 
   useExternalSyncEffect(() => {
-    if (!settledSearchMatchSummary) {
+    if (
+      settledSearchMatchCount === undefined ||
+      settledSearchMatchTruncated === undefined
+    ) {
       return;
     }
 
-    onSearchMatchSummaryChange?.(settledSearchMatchSummary);
+    onSearchMatchSummaryChange?.({
+      count: settledSearchMatchCount,
+      truncated: settledSearchMatchTruncated,
+    });
   }, [
     onSearchMatchSummaryChange,
-    settledSearchMatchSummary?.count,
-    settledSearchMatchSummary?.truncated,
+    settledSearchMatchCount,
+    settledSearchMatchTruncated,
   ]);
 
   useTextSelection(containerRef);
