@@ -55,8 +55,8 @@ export const mockS3Module = (overrides: S3ModuleOverrides = {}) => ({
   putS3ObjectWithSignal: mock(async () => await Promise.resolve(undefined)),
   refreshS3: mock(() => undefined),
   refreshCorpusS3: mock(() => undefined),
-  presignDownloadUrl: mock(() =>
-    Promise.resolve("https://example.test/presigned"),
+  presignDownloadUrl: mock(
+    async () => await Promise.resolve("https://example.test/presigned"),
   ),
   ...overrides,
 });
