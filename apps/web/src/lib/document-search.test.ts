@@ -77,6 +77,13 @@ describe("document search highlighting", () => {
     expect(normalizeSearchText("ODŠTĚPENÍ")).toBe("odstepeni");
   });
 
+  test("preserves contextual case folding while mapping source offsets", () => {
+    expect(normalizeSearchText("ΟΣ")).toBe("ος");
+    expect(findNormalizedSearchTextMatches("ΟΣ", "ος")).toEqual([
+      { start: 0, end: 2 },
+    ]);
+  });
+
   test("uses canonical Arabic folds while preserving source offsets", () => {
     expect(findNormalizedSearchTextMatches("مدرسة", "مدرسه")).toEqual([
       { start: 0, end: 5 },

@@ -16,10 +16,62 @@ type FindNormalizedSearchTextMatchesOptions = {
   maxMatches?: number;
 };
 
+type NormalizedSearchTextWithOffsets = {
+  originalRanges: SearchTextMatch[];
+  text: string;
+};
+
+const normalizeSearchTextBeforeCase = (value: string): string =>
+  applyArabicFolds(value.normalize("NFKD").replace(COMBINING_MARKS, ""));
+
 export const normalizeSearchText = (value: string): string =>
-  applyArabicFolds(
-    value.normalize("NFKD").replace(COMBINING_MARKS, "").toLowerCase(),
-  );
+  normalizeSearchTextBeforeCase(value).toLowerCase();
+
+const normalizeSearchTextWithOffsets = (
+  content: string,
+): NormalizedSearchTextWithOffsets => {
+  const units: { range: SearchTextMatch; text: string }[] = [];
+  let originalOffset = 0;
+
+  for (const character of content) {
+    const start = originalOffset;
+    originalOffset += character.length;
+    units.push({
+      range: { start, end: originalOffset },
+      text: normalizeSearchTextBeforeCase(character),
+    });
+  }
+
+  const beforeCase = units.map(({ text }) => text).join("");
+  const contextualLowercase = beforeCase.toLowerCase();
+  if (contextualLowercase.length === beforeCase.length) {
+    const originalRanges: SearchTextMatch[] = [];
+    for (const unit of units) {
+      let codeUnit = 0;
+      while (codeUnit < unit.text.length) {
+        originalRanges.push(unit.range);
+        codeUnit += 1;
+      }
+    }
+    return {
+      text: contextualLowercase,
+      originalRanges,
+    };
+  }
+
+  const loweredParts: string[] = [];
+  const originalRanges: SearchTextMatch[] = [];
+  for (const unit of units) {
+    const lowered = unit.text.toLowerCase();
+    loweredParts.push(lowered);
+    let codeUnit = 0;
+    while (codeUnit < lowered.length) {
+      originalRanges.push(unit.range);
+      codeUnit += 1;
+    }
+  }
+  return { text: loweredParts.join(""), originalRanges };
+};
 
 export const searchTextQueryKey = (query: SearchTextQuery): string =>
   typeof query === "string"
@@ -69,21 +121,7 @@ export const findNormalizedSearchTextMatches = (
     return [];
   }
 
-  const normalizedContentParts: string[] = [];
-  const originalRanges: SearchTextMatch[] = [];
-  let originalOffset = 0;
-
-  for (const character of content) {
-    const start = originalOffset;
-    originalOffset += character.length;
-    const normalizedCharacter = normalizeSearchText(character);
-    normalizedContentParts.push(normalizedCharacter);
-    for (const _codeUnit of normalizedCharacter.split("")) {
-      originalRanges.push({ start, end: originalOffset });
-    }
-  }
-
-  const normalizedContent = normalizedContentParts.join("");
+  const normalizedContent = normalizeSearchTextWithOffsets(content);
   const normalizedQuery = normalizeSearchText(searchText.trim());
   if (normalizedQuery.length === 0) {
     return [];
@@ -91,8 +129,8 @@ export const findNormalizedSearchTextMatches = (
 
   const matches: SearchTextMatch[] = [];
   let searchFrom = 0;
-  while (searchFrom <= normalizedContent.length - normalizedQuery.length) {
-    const normalizedStart = normalizedContent.indexOf(
+  while (searchFrom <= normalizedContent.text.length - normalizedQuery.length) {
+    const normalizedStart = normalizedContent.text.indexOf(
       normalizedQuery,
       searchFrom,
     );
@@ -100,8 +138,8 @@ export const findNormalizedSearchTextMatches = (
       break;
     }
     const normalizedEnd = normalizedStart + normalizedQuery.length;
-    const firstRange = originalRanges.at(normalizedStart);
-    const lastRange = originalRanges.at(normalizedEnd - 1);
+    const firstRange = normalizedContent.originalRanges.at(normalizedStart);
+    const lastRange = normalizedContent.originalRanges.at(normalizedEnd - 1);
     if (firstRange && lastRange) {
       matches.push({ start: firstRange.start, end: lastRange.end });
       if (matches.length >= maxMatches) {

@@ -89,6 +89,27 @@ describe("chat search highlighting", () => {
     });
   });
 
+  test("highlights context-sensitive case mappings", () => {
+    const tree: Root = {
+      type: "root",
+      children: [{ type: "text", value: "ΟΣ" }],
+    };
+
+    rehypeSearchMatches({
+      matchBudget: createMatchBudget(),
+      searchText: "ος",
+    })(tree);
+
+    expect(tree.children).toEqual([
+      {
+        type: "element",
+        tagName: "mark",
+        properties: { "data-search-match": "true" },
+        children: [{ type: "text", value: "ΟΣ" }],
+      },
+    ]);
+  });
+
   test("highlights visible text inside links and fenced code", () => {
     const tree: Root = {
       type: "root",
