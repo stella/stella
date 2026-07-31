@@ -36,82 +36,96 @@ const keyOf = (text: string): string | null => bareCitationKey(text) || null;
  * revisited forever — null means "not yet computed", so leaving it null on
  * an uncanonicalizable row would make the scan never terminate.
  */
-const backfillKeys = async (
+/**
+ * Fill one table's keys. `sourceColumn` is where the key derives from, and
+ * rows whose text does not canonicalize get an empty key rather than being
+ * revisited forever — null means "not yet computed", so leaving it null on
+ * an uncanonicalizable row would make the scan never terminate.
+ *
+ * Expressed as a walk rather than a loop: each step depends on the
+ * previous step's last id, so there is nothing to parallelise, and the
+ * depth is bounded by rows/BATCH.
+ */
+const backfillFrom = async (
   table: "case_law_decisions" | "case_law_citations",
   sourceColumn: "case_number" | "citation_text",
-): Promise<void> => {
-  let after: string | null = null;
-  let seen = 0;
-  let keyed = 0;
+  after: string | null,
+  seen: number,
+  keyed: number,
+): Promise<{ seen: number; keyed: number }> => {
+  const result: unknown = await rootDb.execute(
+    sql`SELECT id, ${sql.raw(sourceColumn)} AS text
+          FROM ${sql.raw(table)}
+         WHERE citation_key IS NULL
+           ${after === null ? sql`` : sql`AND id > ${after}`}
+         ORDER BY id
+         LIMIT ${BATCH}`,
+  );
+  const rows = (Array.isArray(result) ? result : []).flatMap((row) =>
+    isRecord(row) &&
+    typeof row["id"] === "string" &&
+    typeof row["text"] === "string"
+      ? [{ id: row["id"], text: row["text"] }]
+      : [],
+  );
 
-  while (true) {
-    // oxlint-disable-next-line no-await-in-loop -- keyset walk: each batch starts where the previous ended
-    const result: unknown = await rootDb.execute(
-      sql`SELECT id, ${sql.raw(sourceColumn)} AS text
-            FROM ${sql.raw(table)}
-           WHERE citation_key IS NULL
-             ${after === null ? sql`` : sql`AND id > ${after}`}
-           ORDER BY id
-           LIMIT ${BATCH}`,
-    );
-    const rows = (Array.isArray(result) ? result : []).flatMap((row) =>
-      isRecord(row) &&
-      typeof row["id"] === "string" &&
-      typeof row["text"] === "string"
-        ? [{ id: row["id"], text: row["text"] }]
-        : [],
-    );
-
-    if (rows.length === 0) {
-      break;
-    }
-
-    const values = rows.map((row) => {
-      const key = keyOf(row.text) ?? "";
-      return sql`(${row.id}::uuid, ${key}::varchar)`;
-    });
-
-    // oxlint-disable-next-line no-await-in-loop -- one bounded batch write per iteration
-    await rootDb.execute(
-      sql`UPDATE ${sql.raw(table)} AS t
-             SET citation_key = v.key
-            FROM (VALUES ${sql.join(values, sql`, `)}) AS v(id, key)
-           WHERE t.id = v.id`,
-    );
-
-    seen += rows.length;
-    keyed += rows.filter((row) => keyOf(row.text) !== null).length;
-    after = rows.at(-1)?.id ?? after;
-    console.log(`  ${table}: ${seen} scanned, ${keyed} keyed`);
+  if (rows.length === 0) {
+    return { seen, keyed };
   }
+
+  const values = rows.map(
+    (row) => sql`(${row.id}::uuid, ${keyOf(row.text) ?? ""}::varchar)`,
+  );
+  await rootDb.execute(
+    sql`UPDATE ${sql.raw(table)} AS t
+           SET citation_key = v.key
+          FROM (VALUES ${sql.join(values, sql`, `)}) AS v(id, key)
+         WHERE t.id = v.id`,
+  );
+
+  const nextSeen = seen + rows.length;
+  const nextKeyed =
+    keyed + rows.filter((row) => keyOf(row.text) !== null).length;
+  console.log(`  ${table}: ${nextSeen} scanned, ${nextKeyed} keyed`);
+  return await backfillFrom(
+    table,
+    sourceColumn,
+    rows.at(-1)?.id ?? after,
+    nextSeen,
+    nextKeyed,
+  );
+};
+
+/** Walk resolution to completion; same shape, same reason. */
+const resolveFrom = async (
+  after: string | null,
+  scanned: number,
+  resolved: number,
+): Promise<{ scanned: number; resolved: number }> => {
+  const batch = await resolveCitationBatch(ingestionDb, {
+    limit: BATCH,
+    afterId: after,
+  });
+  if (batch.scanned === 0) {
+    return { scanned, resolved };
+  }
+  const next = {
+    scanned: scanned + batch.scanned,
+    resolved: resolved + batch.resolved,
+  };
+  console.log(`  scanned ${next.scanned}, resolved ${next.resolved}`);
+  return await resolveFrom(batch.lastId, next.scanned, next.resolved);
 };
 
 if (!RESOLVE_ONLY) {
   console.log("=== Backfilling citation keys ===");
-  await backfillKeys("case_law_decisions", "case_number");
-  await backfillKeys("case_law_citations", "citation_text");
+  await backfillFrom("case_law_decisions", "case_number", null, 0, 0);
+  await backfillFrom("case_law_citations", "citation_text", null, 0, 0);
 }
 
 if (!KEYS_ONLY) {
   console.log("=== Resolving citations ===");
-  let after: string | null = null;
-  let scanned = 0;
-  let resolved = 0;
-
-  while (true) {
-    // oxlint-disable-next-line no-await-in-loop -- keyset walk: each batch's cursor comes from the previous one
-    const batch = await resolveCitationBatch(ingestionDb, {
-      limit: BATCH,
-      afterId: after,
-    });
-    if (batch.scanned === 0) {
-      break;
-    }
-    scanned += batch.scanned;
-    resolved += batch.resolved;
-    after = batch.lastId;
-    console.log(`  scanned ${scanned}, resolved ${resolved}`);
-  }
+  const { scanned, resolved } = await resolveFrom(null, 0, 0);
   console.log(`Done. Scanned ${scanned}, resolved ${resolved}.`);
 }
 
