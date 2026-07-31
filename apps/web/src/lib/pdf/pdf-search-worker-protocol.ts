@@ -1,10 +1,11 @@
 import type { PDFSearchResult } from "@/lib/pdf/pdf-search";
+import type { SearchTextQuery } from "@/lib/search-text";
 
 export type PDFSearchWorkerRequest = {
   bytes: ArrayBuffer;
   password?: string | undefined;
   requestId: number;
-  searchText: string;
+  searchText: SearchTextQuery;
 };
 
 export type PDFSearchWorkerResponse =

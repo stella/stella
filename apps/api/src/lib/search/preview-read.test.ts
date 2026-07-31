@@ -224,6 +224,45 @@ describe("search preview rendering contract", () => {
     });
   });
 
+  test("retains a late match inside an oversized target message", async () => {
+    rootDbExecuteMock.mockResolvedValueOnce([
+      {
+        messages: [
+          {
+            id: "00000000-0000-4000-8000-000000000010",
+            isTarget: true,
+            role: "assistant",
+            content: {
+              version: 2,
+              data: [
+                {
+                  type: "text",
+                  content: `${"a".repeat(20_000)} résumé ${"b".repeat(1000)}`,
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ]);
+
+    const preview = await readSearchPreview({
+      ...previewQuery,
+      query: "resume",
+      type: "chat",
+    });
+
+    expect(preview).toMatchObject({
+      type: "chat-messages",
+      messages: [{ content: expect.stringContaining("résumé") }],
+    });
+    if (preview?.type === "chat-messages") {
+      expect(preview.messages.at(0)?.content.length ?? 0).toBeLessThanOrEqual(
+        16_000,
+      );
+    }
+  });
+
   test("orders context around a first-position target without duplicates", async () => {
     rootDbExecuteMock.mockResolvedValueOnce([
       {

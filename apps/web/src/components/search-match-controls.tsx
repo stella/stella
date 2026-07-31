@@ -1,5 +1,5 @@
 import { ChevronDownIcon, ChevronUpIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 
@@ -19,6 +19,7 @@ export const SearchMatchControls = ({
   truncated = false,
 }: SearchMatchControlsProps) => {
   const t = useTranslations();
+  const format = useFormatter();
   const hasMatches = matchCount > 0;
 
   return (
@@ -26,8 +27,8 @@ export const SearchMatchControls = ({
       <span className="text-muted-foreground min-w-12 text-center text-xs tabular-nums">
         {hasMatches
           ? t("folio.findReplace.matchCounter", {
-              current: String(activeIndex + 1),
-              total: `${String(matchCount)}${truncated ? "+" : ""}`,
+              current: format.number(activeIndex + 1),
+              total: `${format.number(matchCount)}${truncated ? "+" : ""}`,
             })
           : t("common.noResults")}
       </span>

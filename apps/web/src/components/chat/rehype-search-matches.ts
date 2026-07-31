@@ -1,6 +1,7 @@
 import type { Element, ElementContent, Root, RootContent, Text } from "hast";
 
 import { findSearchTextMatches } from "@/lib/document-search";
+import type { SearchTextQuery } from "@/lib/search-text";
 
 const skipsSearchHighlight = (tagName: string): boolean =>
   tagName === "script" || tagName === "style";
@@ -12,7 +13,7 @@ const isText = (node: ElementContent | RootContent): node is Text =>
   node.type === "text";
 
 type SearchMatchPluginOptions = {
-  searchText: string;
+  searchText: SearchTextQuery;
 };
 
 export function rehypeSearchMatches(

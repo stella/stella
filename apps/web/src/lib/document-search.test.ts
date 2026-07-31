@@ -42,6 +42,25 @@ describe("document search highlighting", () => {
     ]);
   });
 
+  test("keeps independently marked server terms independent", () => {
+    const searchText = {
+      type: "separate-terms" as const,
+      terms: ["alpha", "beta"],
+    };
+
+    expect(findSearchTextMatches("alpha beta alpha", searchText)).toEqual([
+      { start: 0, end: 5 },
+      { start: 6, end: 10 },
+      { start: 11, end: 16 },
+    ]);
+    const document = createEmptyDocument({ initialText: "alpha beta alpha" });
+    expect(findDocumentSearchMatches(document, searchText)).toMatchObject([
+      { startOffset: 0, endOffset: 5 },
+      { startOffset: 6, endOffset: 10 },
+      { startOffset: 11, endOffset: 16 },
+    ]);
+  });
+
   test("maps a diacritic-insensitive match back to original offsets", () => {
     expect(
       findNormalizedSearchTextMatches("zápis odštepení", "odštěpení"),

@@ -12,7 +12,7 @@ import {
   findNormalizedSearchTextMatches,
   getSearchTextCandidates,
 } from "@/lib/search-text";
-import type { SearchTextMatch } from "@/lib/search-text";
+import type { SearchTextMatch, SearchTextQuery } from "@/lib/search-text";
 
 export {
   findNormalizedSearchTextMatches,
@@ -45,8 +45,20 @@ const findTextCandidateMatches = (content: string, candidate: string) => {
   return [...matches.values()].toSorted(sortSearchTextMatches);
 };
 
-export const findSearchTextMatches = (content: string, searchText: string) => {
+export const findSearchTextMatches = (
+  content: string,
+  searchText: SearchTextQuery,
+) => {
   const candidates = getSearchTextCandidates(searchText);
+  if (typeof searchText !== "string") {
+    const matches = new Map<string, SearchTextMatch>();
+    for (const candidate of candidates) {
+      for (const match of findTextCandidateMatches(content, candidate)) {
+        matches.set(searchTextMatchKey(match), match);
+      }
+    }
+    return [...matches.values()].toSorted(sortSearchTextMatches);
+  }
   const phraseCandidate = candidates.at(0);
   const phraseMatches = phraseCandidate
     ? findTextCandidateMatches(content, phraseCandidate)
@@ -179,7 +191,7 @@ export type DocumentSearchResult = {
 
 type FindDocumentSearchResultOptions = {
   document: Document | null;
-  searchText: string;
+  searchText: SearchTextQuery;
   maxMatches: number;
 };
 
@@ -195,6 +207,17 @@ export const findDocumentSearchResult = ({
   const normalizedMaxMatches = Math.max(0, Math.floor(maxMatches));
   const collectionLimit = normalizedMaxMatches + 1;
   const candidates = getSearchTextCandidates(searchText);
+  if (typeof searchText !== "string") {
+    const matches = findDocumentCandidateMatches({
+      candidates,
+      document,
+      limit: collectionLimit,
+    });
+    return {
+      matches: matches.slice(0, normalizedMaxMatches),
+      truncated: matches.length > normalizedMaxMatches,
+    };
+  }
   const phraseCandidate = candidates.at(0);
   const phraseMatches = phraseCandidate
     ? findDocumentCandidateMatches({
@@ -224,7 +247,7 @@ export const findDocumentSearchResult = ({
 
 export const findDocumentSearchMatches = (
   document: Document | null,
-  searchText: string,
+  searchText: SearchTextQuery,
 ) =>
   findDocumentSearchResult({
     document,
@@ -234,7 +257,7 @@ export const findDocumentSearchMatches = (
 
 export const findFirstDocumentSearchMatch = (
   document: Document | null,
-  searchText: string,
+  searchText: SearchTextQuery,
 ) =>
   findDocumentSearchResult({ document, searchText, maxMatches: 1 }).matches.at(
     0,

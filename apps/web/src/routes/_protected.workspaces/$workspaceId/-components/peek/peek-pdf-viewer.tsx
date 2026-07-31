@@ -45,6 +45,8 @@ import { PDFPage } from "@/lib/pdf/pdf-page";
 import { PDFViewport } from "@/lib/pdf/pdf-viewport";
 import type { SearchMatchSummary } from "@/lib/search-match-navigation";
 import { MAX_SEARCH_PREVIEW_MATCHES } from "@/lib/search-match-navigation";
+import { searchTextQueryKey } from "@/lib/search-text";
+import type { SearchTextQuery } from "@/lib/search-text";
 import { composeRefs } from "@/lib/utils";
 import { useDocxBlockScroll } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/use-docx-block-scroll";
 import { fileOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
@@ -71,7 +73,7 @@ type ScheduleSearchHighlightFrameOptions = {
 type DocxSearchResultCache = {
   document: ReturnType<DocxEditorRef["getDocument"]>;
   result: DocumentSearchResult;
-  searchText: string;
+  searchTextKey: string;
 };
 
 const scheduleSearchHighlightFrame = ({
@@ -104,7 +106,7 @@ type PeekPdfViewerProps = {
   scaleOffset: number;
   mimeType?: string | undefined;
   interactionMode?: "preview-only" | "with-ai" | undefined;
-  searchText?: string | undefined;
+  searchText?: SearchTextQuery | undefined;
   activeSearchMatchIndex?: number | undefined;
   onSearchMatchSummaryChange?:
     | ((summary: SearchMatchSummary) => void)
@@ -126,6 +128,8 @@ export const PeekPdfViewer = (props: PeekPdfViewerProps) => {
     searchText,
     workspaceId,
   } = props;
+  const searchTextKey =
+    searchText === undefined ? undefined : searchTextQueryKey(searchText);
 
   return (
     <QuerySuspenseBoundary
@@ -133,7 +137,7 @@ export const PeekPdfViewer = (props: PeekPdfViewerProps) => {
       errorFallback={errorFallback ?? defaultPeekViewerErrorFallback}
       suspenseFallback={<PeekSuspenseFallback />}
       onError={onError}
-      resetKeys={[workspaceId, fieldId, filePurpose, searchText]}
+      resetKeys={[workspaceId, fieldId, filePurpose, searchTextKey]}
     >
       <PeekPdfViewerContent {...props} filePurpose={filePurpose} />
     </QuerySuspenseBoundary>
@@ -469,7 +473,7 @@ const PeekDocxViewer = ({
     | undefined;
   printActionsRef?: RefObject<Map<string, () => void>> | undefined;
   scaleOffset: number;
-  searchText: string | undefined;
+  searchText: SearchTextQuery | undefined;
   workspaceId: string;
 }) => {
   const analytics = useAnalytics();
@@ -487,6 +491,8 @@ const PeekDocxViewer = ({
     [fitZoomRef],
   );
   useDocxBlockScroll({ editorRef, fieldId });
+  const searchTextKey =
+    searchText === undefined ? undefined : searchTextQueryKey(searchText);
 
   const highlightSearchResult = useCallback(() => {
     if (searchText === undefined) {
@@ -512,7 +518,7 @@ const PeekDocxViewer = ({
     const cachedSearchResult = searchResultCacheRef.current;
     const searchResult =
       cachedSearchResult?.document === document &&
-      cachedSearchResult.searchText === searchText
+      cachedSearchResult.searchTextKey === searchTextKey
         ? cachedSearchResult.result
         : findDocumentSearchResult({
             document,
@@ -522,7 +528,7 @@ const PeekDocxViewer = ({
     searchResultCacheRef.current = {
       document,
       result: searchResult,
-      searchText,
+      searchTextKey: searchTextKey ?? "",
     };
     onSearchMatchSummaryChange?.({
       count: searchResult.matches.length,
@@ -543,7 +549,12 @@ const PeekDocxViewer = ({
     pagedEditor.setPassageHighlight(range);
     pagedEditor.scrollToPosition(range.from);
     return true;
-  }, [activeSearchMatchIndex, onSearchMatchSummaryChange, searchText]);
+  }, [
+    activeSearchMatchIndex,
+    onSearchMatchSummaryChange,
+    searchText,
+    searchTextKey,
+  ]);
 
   const scheduleSearchHighlight = useCallback(() => {
     if (searchHighlightFrameRef.current !== null) {

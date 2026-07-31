@@ -8,6 +8,7 @@ import {
   getAdjacentSearchMatchIndex,
   type SearchMatchSummary,
 } from "@/lib/search-match-navigation";
+import type { SearchTextQuery } from "@/lib/search-text";
 import type {
   NativeSearchDocumentPreviewTarget,
   NativeSearchStatus,
@@ -21,7 +22,7 @@ import {
 type SearchDocumentPreviewProps = {
   fallback: ReactNode;
   noMatchFallback: ReactNode;
-  searchText: string;
+  searchText: SearchTextQuery;
   target: NativeSearchDocumentPreviewTarget;
 };
 

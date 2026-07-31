@@ -63,6 +63,19 @@ describe("canonical PDF search", () => {
     expect(result?.matches.map((match) => match.pageIndex)).toEqual([0, 1, 1]);
   });
 
+  test("finds every independently marked term even when one forms a phrase", async () => {
+    const result = await findPDFSearchResults({
+      bytes: await createSearchablePDF(),
+      searchText: {
+        type: "separate-terms",
+        terms: ["Due Diligence", "Introduction"],
+      },
+      signal: new AbortController().signal,
+    });
+
+    expect(result?.matches.map((match) => match.pageIndex)).toEqual([0, 1]);
+  });
+
   test("searches PDF portfolio pages in viewer render order", async () => {
     const createAttachment = async (
       pages: readonly { text: string; y: number }[],

@@ -16,11 +16,13 @@ import {
   MAX_SEARCH_PREVIEW_MATCHES,
   type SearchMatchSummary,
 } from "@/lib/search-match-navigation";
+import { searchTextQueryKey } from "@/lib/search-text";
+import type { SearchTextQuery } from "@/lib/search-text";
 import type { SearchPreviewChatMessage } from "@/lib/search.logic";
 
 type SearchChatPreviewProps = {
   messages: SearchPreviewChatMessage[];
-  searchText: string;
+  searchText: SearchTextQuery;
 };
 
 const EMPTY_MATCH_SUMMARY: SearchMatchSummary = {
@@ -37,6 +39,7 @@ export const SearchChatPreview = ({
   const [activeIndex, setActiveIndex] = useState(0);
   const [matchSummary, setMatchSummary] =
     useState<SearchMatchSummary>(EMPTY_MATCH_SUMMARY);
+  const searchTextKey = searchTextQueryKey(searchText);
   const rehypePlugins = useMemo<PluggableList>(
     () => [[rehypeSearchMatches, { searchText }]],
     [searchText],
@@ -45,7 +48,7 @@ export const SearchChatPreview = ({
   useExternalSyncEffect(() => {
     setActiveIndex(0);
     lastScrolledMatchRef.current = null;
-  }, [searchText]);
+  }, [searchTextKey]);
 
   useExternalSyncEffect(() => {
     const root = rootRef.current;

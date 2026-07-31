@@ -1,6 +1,8 @@
 import type { GlobalSearchHit, GlobalSearchResultType } from "@stll/api/types";
 
 import { DOCX_MIME, PDF_MIME } from "@/lib/consts";
+import { getSearchTextCandidates } from "@/lib/search-text";
+import type { SearchTextQuery } from "@/lib/search-text";
 
 export const normalizeSearchQuery = (query: string): string => query.trim();
 
@@ -57,9 +59,13 @@ const getMarkedSearchTerms = (headline: string | null): string[] => {
 export const getSearchHighlightText = (
   headline: string | null,
   query: string,
-): string => {
+): SearchTextQuery => {
   const normalizedQuery = normalizeSearchQuery(query);
-  const markedSearchText = getMarkedSearchTerms(headline).join(" ");
+  const markedSearchTerms = getMarkedSearchTerms(headline);
+  if (markedSearchTerms.length > 1) {
+    return { type: "separate-terms", terms: markedSearchTerms };
+  }
+  const markedSearchText = markedSearchTerms.at(0);
   if (markedSearchText) {
     return markedSearchText;
   }
@@ -76,7 +82,12 @@ export const getFirstSearchHighlightText = (
   query: string,
 ): string => {
   const markedSearchText = getMarkedSearchTerms(headline).at(0);
-  return markedSearchText ?? getSearchHighlightText(headline, query);
+  if (markedSearchText) {
+    return markedSearchText;
+  }
+
+  const normalizedQuery = normalizeSearchQuery(query);
+  return normalizedQuery || (headline ? stripSearchMarkup(headline) : "");
 };
 
 type SearchPreviewContent =
@@ -172,7 +183,7 @@ export type NativeSearchDocumentPreviewTarget = {
 export type NativeSearchStatus = "matched" | "pending" | "unmatched";
 
 type NativeSearchFallbackArgs = {
-  searchText: string;
+  searchText: SearchTextQuery;
   status: NativeSearchStatus;
 };
 
@@ -180,7 +191,7 @@ export const shouldShowNativeSearchFallback = ({
   searchText,
   status,
 }: NativeSearchFallbackArgs): boolean =>
-  searchText.trim().length > 0 && status === "unmatched";
+  getSearchTextCandidates(searchText).length > 0 && status === "unmatched";
 
 export const getNativeSearchDocumentPreviewTarget = (
   hit: GlobalSearchHit,

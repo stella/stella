@@ -8,9 +8,23 @@ import {
   SEARCH_PREVIEW_FRAGMENT_DELIMITER,
   SEARCH_PREVIEW_FRAGMENT_SEPARATOR,
   SEARCH_PREVIEW_HEADLINE_CONFIG,
+  truncateSearchPreviewAroundLexemes,
 } from "./highlight";
 
 describe("search result highlighting", () => {
+  test("centers a bounded preview around a normalized late match", () => {
+    const source = `${"a".repeat(20_000)} odštěpení ${"b".repeat(20_000)}`;
+    const preview = truncateSearchPreviewAroundLexemes({
+      lexemes: ["odstepeni"],
+      maxLength: 16_000,
+      source,
+    });
+
+    expect(preview).toContain("odštěpení");
+    expect(preview.length).toBeLessThanOrEqual(16_000);
+    expect(preview).not.toBe("a".repeat(16_000));
+  });
+
   test("escapes HTML before inserting highlight tags", () => {
     const highlighted = escapeAndHighlight(
       `<script>alert("x")</script> ${HIGHLIGHT_START}Privileged & confidential${HIGHLIGHT_STOP}`,

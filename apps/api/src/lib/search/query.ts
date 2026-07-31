@@ -346,6 +346,56 @@ const toSearchLexemes = (
     })
     .slice(0, PREFIX_QUERY_TOKEN_LIMIT);
 
+const collectPositiveLocatorLexemes = (
+  ast: SearchAst,
+  lexemes: Set<string>,
+  negated = false,
+): void => {
+  switch (ast.type) {
+    case "term":
+      if (!negated) {
+        for (const group of ast.lexemes) {
+          for (const lexeme of group) {
+            lexemes.add(lexeme);
+          }
+        }
+      }
+      return;
+    case "not":
+      collectPositiveLocatorLexemes(ast.child, lexemes, !negated);
+      return;
+    case "and":
+    case "or":
+      collectPositiveLocatorLexemes(ast.left, lexemes, negated);
+      collectPositiveLocatorLexemes(ast.right, lexemes, negated);
+      return;
+    default: {
+      const exhaustive: never = ast;
+      return exhaustive;
+    }
+  }
+};
+
+export const getSearchPreviewLocatorLexemes = (query: string): string[] => {
+  const lexemes = new Set<string>();
+  if (isAdvancedQuery(query.trim())) {
+    const ast = parseAdvancedSearchAst(query);
+    if (ast) {
+      collectPositiveLocatorLexemes(ast, lexemes);
+    }
+    return [...lexemes];
+  }
+
+  for (const variant of [query, normalizeFileNameVariantForSearch(query)]) {
+    if (variant) {
+      for (const lexeme of toSearchLexemes(variant)) {
+        lexemes.add(lexeme);
+      }
+    }
+  }
+  return [...lexemes];
+};
+
 const toSearchLexemeGroups = (
   query: string,
   mode: ArabicFoldMode = "folded",

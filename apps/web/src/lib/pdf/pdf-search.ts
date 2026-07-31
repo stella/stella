@@ -6,6 +6,7 @@ import {
   findNormalizedSearchTextMatches,
   getSearchTextCandidates,
 } from "@/lib/search-text";
+import type { SearchTextQuery } from "@/lib/search-text";
 
 export type PDFSearchBox = {
   x: number;
@@ -34,7 +35,7 @@ export type PDFSearchViewportBox = {
 type FindPDFSearchResultsOptions = {
   bytes: Uint8Array;
   password?: string | undefined;
-  searchText: string;
+  searchText: SearchTextQuery;
   signal: AbortSignal;
 };
 
@@ -212,15 +213,14 @@ const findNormalizedPageMatches = ({
   maxMatches,
   pageIndex,
   pageSearchText,
-}: FindNormalizedPageMatchesOptions): PDFSearchMatch[] => {
-  return findNormalizedSearchTextMatches(pageSearchText.text, candidate, {
+}: FindNormalizedPageMatchesOptions): PDFSearchMatch[] =>
+  findNormalizedSearchTextMatches(pageSearchText.text, candidate, {
     maxMatches,
   })
     .map(({ end, start }) =>
       toPDFSearchMatch({ end, pageIndex, pageSearchText, start }),
     )
     .filter((match) => match.boxes.length > 0);
-};
 
 type FindPageMatchesOptions = {
   candidate: string;
@@ -375,6 +375,18 @@ export const findPDFSearchResults = async ({
       .slice(0, MAX_SEARCH_PREVIEW_MATCHES),
     truncated,
   });
+
+  if (typeof searchText !== "string") {
+    const matches = new Map<string, PDFSearchMatch>();
+    let truncated = false;
+    for (const candidate of candidates) {
+      truncated ||= collectCandidateMatches(candidate, matches);
+      if (truncated) {
+        break;
+      }
+    }
+    return toResult(matches, truncated);
+  }
 
   const phraseCandidate = candidates.at(0);
   const phraseMatches = new Map<string, PDFSearchMatch>();

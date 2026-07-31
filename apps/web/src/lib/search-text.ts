@@ -6,6 +6,10 @@ export type SearchTextMatch = {
   end: number;
 };
 
+export type SearchTextQuery =
+  | string
+  | { type: "separate-terms"; terms: readonly string[] };
+
 type FindNormalizedSearchTextMatchesOptions = {
   maxMatches?: number;
 };
@@ -13,7 +17,24 @@ type FindNormalizedSearchTextMatchesOptions = {
 export const normalizeSearchText = (value: string): string =>
   value.normalize("NFKD").replace(COMBINING_MARKS, "").toLowerCase();
 
-export const getSearchTextCandidates = (searchText: string): string[] => {
+export const searchTextQueryKey = (query: SearchTextQuery): string =>
+  typeof query === "string"
+    ? `query:${JSON.stringify(query)}`
+    : `separate-terms:${JSON.stringify(query.terms)}`;
+
+export const getSearchTextCandidates = (
+  searchText: SearchTextQuery,
+): string[] => {
+  if (typeof searchText !== "string") {
+    return searchText.terms
+      .map((term) => term.trim())
+      .filter(
+        (term, index, terms) =>
+          (term.length > 1 || SINGLE_SEARCH_TERM.test(term)) &&
+          terms.indexOf(term) === index,
+      );
+  }
+
   const normalizedSearchText = searchText.trim();
   if (normalizedSearchText.length === 0) {
     return [];

@@ -1,4 +1,8 @@
-import { normalizeSearchText, stripDiacritics } from "@stll/text-normalize";
+import {
+  applyArabicFolds,
+  normalizeSearchText,
+  stripDiacritics,
+} from "@stll/text-normalize";
 
 // Non-HTML delimiters injected by ts_headline / pdb.snippet(). Keep these
 // high-entropy internal tokens distinct from user-typable source text: common
@@ -188,6 +192,77 @@ const sourceSpanAt = (
     start: mapping.sourceStart + offset,
     end: mapping.sourceStart + offset + 1,
   };
+};
+
+type TruncateSearchPreviewAroundLexemesOptions = {
+  lexemes: readonly string[];
+  maxLength: number;
+  source: string;
+};
+
+const isLowSurrogate = (value: number): boolean =>
+  value >= 0xdc_00 && value <= 0xdf_ff;
+
+const isHighSurrogate = (value: number): boolean =>
+  value >= 0xd8_00 && value <= 0xdb_ff;
+
+export const truncateSearchPreviewAroundLexemes = ({
+  lexemes,
+  maxLength,
+  source,
+}: TruncateSearchPreviewAroundLexemesOptions): string => {
+  const boundedLength = Math.max(0, Math.floor(maxLength));
+  if (boundedLength === 0) {
+    return "";
+  }
+  if (source.length <= boundedLength) {
+    return source;
+  }
+
+  const normalizedSource = normalizeSourceWithMappings(source, true);
+  const foldedSource = applyArabicFolds(normalizedSource.text);
+  let normalizedMatchStart = Number.POSITIVE_INFINITY;
+  let normalizedMatchLength = 0;
+  for (const lexeme of lexemes) {
+    const normalizedLexeme = applyArabicFolds(
+      normalizePreviewUnit(lexeme.trim(), true),
+    );
+    if (!normalizedLexeme) {
+      continue;
+    }
+    const start = foldedSource.indexOf(normalizedLexeme);
+    if (start !== -1 && start < normalizedMatchStart) {
+      normalizedMatchStart = start;
+      normalizedMatchLength = normalizedLexeme.length;
+    }
+  }
+
+  if (!Number.isFinite(normalizedMatchStart)) {
+    return source.slice(0, boundedLength);
+  }
+  const firstSpan = sourceSpanAt(normalizedSource, normalizedMatchStart);
+  const lastSpan = sourceSpanAt(
+    normalizedSource,
+    normalizedMatchStart + normalizedMatchLength - 1,
+  );
+  if (!firstSpan || !lastSpan) {
+    return source.slice(0, boundedLength);
+  }
+
+  const matchCenter = Math.floor((firstSpan.start + lastSpan.end) / 2);
+  let start = Math.max(
+    0,
+    Math.min(source.length - boundedLength, matchCenter - boundedLength / 2),
+  );
+  start = Math.floor(start);
+  if (isLowSurrogate(source.codePointAt(start))) {
+    start += 1;
+  }
+  let end = Math.min(source.length, start + boundedLength);
+  if (isHighSurrogate(source.codePointAt(end - 1))) {
+    end -= 1;
+  }
+  return source.slice(start, end);
 };
 
 type AlignmentAnchor = {

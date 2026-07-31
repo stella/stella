@@ -29,6 +29,8 @@ import {
   getSettledSearchMatchSummary,
   type SearchMatchSummary,
 } from "@/lib/search-match-navigation";
+import { getSearchTextCandidates } from "@/lib/search-text";
+import type { SearchTextQuery } from "@/lib/search-text";
 import { composeRefs } from "@/lib/utils";
 
 export { usePDFStore } from "@/lib/pdf/pdf-context";
@@ -45,7 +47,7 @@ type PDFViewportProps = {
   invertColors?: boolean | undefined;
   className?: string | undefined;
   contentClassName?: string | undefined;
-  searchText?: string | undefined;
+  searchText?: SearchTextQuery | undefined;
   activeSearchMatchIndex?: number | undefined;
   onSearchMatchSummaryChange?:
     | ((summary: SearchMatchSummary) => void)
@@ -149,9 +151,9 @@ const PDFViewerContent = ({
         s.setScrollTo,
       ]),
     );
-  const normalizedSearchText = searchText.trim();
+  const hasSearchText = getSearchTextCandidates(searchText).length > 0;
   const searchPageQuery = useQuery({
-    enabled: normalizedSearchText.length > 0,
+    enabled: hasSearchText,
     queryFn: async ({ signal }) => {
       const { findPDFSearchResultsInWorker } =
         await import("@/lib/pdf/pdf-search-worker-client");
@@ -159,14 +161,14 @@ const PDFViewerContent = ({
       return await findPDFSearchResultsInWorker({
         bytes: buffer.slice(0),
         password,
-        searchText: normalizedSearchText,
+        searchText,
         signal,
       });
     },
     queryKey: [
       "pdf-search-page",
-      document.document.fingerprints.at(0),
-      normalizedSearchText,
+      document.document.fingerprints,
+      searchText,
       password === undefined ? "unprotected" : "password-protected",
     ],
     staleTime: Number.POSITIVE_INFINITY,

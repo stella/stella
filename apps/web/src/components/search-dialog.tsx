@@ -123,6 +123,7 @@ import type {
   RecentSearch,
   SearchRecentsScope,
 } from "@/lib/search-recents";
+import { searchTextQueryKey } from "@/lib/search-text";
 import {
   getFirstSearchHighlightText,
   getNativeSearchDocumentPreviewTarget,
@@ -1593,15 +1594,18 @@ type SearchPreviewBodyProps = Pick<
 
 const SearchPreviewBody = (props: SearchPreviewBodyProps) => {
   const { hit } = props;
+  const searchText = useMemo(
+    () => getSearchHighlightText(hit.headline, props.query),
+    [hit.headline, props.query],
+  );
   const nativePreviewTarget = getNativeSearchDocumentPreviewTarget(hit);
   if (nativePreviewTarget) {
-    const searchText = getSearchHighlightText(hit.headline, props.query);
     return (
       <div className="min-h-0 flex-1 overflow-hidden">
         <Suspense fallback={<NativeDocumentPreviewSkeleton />}>
           <NativeDocumentPreview
             fallback={<NativeDocumentPreviewSkeleton />}
-            key={`${hit.id}:${searchText}`}
+            key={`${hit.id}:${searchTextQueryKey(searchText)}`}
             noMatchFallback={<SearchTextPreview {...props} />}
             searchText={searchText}
             target={nativePreviewTarget}
@@ -1627,6 +1631,10 @@ const SearchTextPreview = ({
   userId,
 }: SearchPreviewBodyProps) => {
   const t = useTranslations();
+  const searchText = useMemo(
+    () => getSearchHighlightText(hit.headline, query),
+    [hit.headline, query],
+  );
   const target = getSearchPreviewTarget(hit);
   const { data, isError, isFetchedAfterMount, isFetching, refetch } = useQuery(
     searchPreviewOptions({
@@ -1691,7 +1699,7 @@ const SearchTextPreview = ({
         <Suspense fallback={<SearchTextPreviewSkeleton />}>
           <ChatPreview
             messages={renderContent.messages}
-            searchText={getSearchHighlightText(hit.headline, query)}
+            searchText={searchText}
           />
         </Suspense>
       )}

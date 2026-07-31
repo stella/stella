@@ -7,6 +7,7 @@ import {
   buildSearchPreviewLocatorTsQuery,
   buildSearchTsQuery,
   fileNameSearchText,
+  getSearchPreviewLocatorLexemes,
   normalizeFileNameForSearch,
   normalizeFileNameVariantForSearch,
   removeSearchDiacritics,
@@ -17,6 +18,14 @@ import {
 } from "@/api/lib/search/query";
 
 describe("search query text", () => {
+  test("extracts only positive preview locator lexemes", () => {
+    expect(
+      getSearchPreviewLocatorLexemes(
+        '"closing memo" OR odštěpení NOT superseded',
+      ),
+    ).toEqual(["closing", "memo", "odstepeni"]);
+  });
+
   test("preview locator ORs positive terms and excludes negated terms", () => {
     const dialect = new PgDialect();
     const compiled = dialect.sqlToQuery(

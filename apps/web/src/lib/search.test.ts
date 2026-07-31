@@ -132,7 +132,7 @@ describe("search query normalization", () => {
         "The <mark>R&amp;D</mark> team&#x27;s <mark>&lt;draft&gt;</mark>",
         "",
       ),
-    ).toBe("R&D <draft>");
+    ).toEqual({ type: "separate-terms", terms: ["R&D", "<draft>"] });
   });
 
   test("excludes advanced-query operators and negated terms from previews", () => {
@@ -141,7 +141,10 @@ describe("search query normalization", () => {
         "<mark>indemnity</mark> and <mark>liability</mark>",
         "indemnity AND liability NOT superseded",
       ),
-    ).toBe("indemnity liability");
+    ).toEqual({
+      type: "separate-terms",
+      terms: ["indemnity", "liability"],
+    });
   });
 
   test("uses one marked passage for case-law deep links", () => {
