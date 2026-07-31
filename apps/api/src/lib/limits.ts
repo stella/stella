@@ -313,6 +313,8 @@ export const LIMITS = {
   workspaceContactsCount: 100,
   /** Better Auth organization member cap and full-org read bound. */
   organizationMembersCount: BETTER_AUTH_ORGANIZATION_OPTIONS.membershipLimit,
+  ssoSamlMetadataMaxBytes: 100 * 1024,
+  ssoSamlResponseMaxBytes: 256 * 1024,
   workspaceMembersCount: 500,
   /** Max governed obligations synchronously unassigned during member removal. */
   workspaceMemberRemovalWorkObligationsMax: 500,

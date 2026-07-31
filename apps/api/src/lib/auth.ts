@@ -1,5 +1,6 @@
 import { apiKey } from "@better-auth/api-key";
 import { oauthProvider } from "@better-auth/oauth-provider";
+import { sso } from "@better-auth/sso";
 import type { BetterAuthPlugin, HookEndpointContext } from "better-auth";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
@@ -18,16 +19,22 @@ import {
   twoFactor,
 } from "better-auth/plugins";
 import { panic, Result } from "better-result";
-import { and, eq, exists, inArray, isNotNull, or } from "drizzle-orm";
+import { and, eq, exists, inArray, isNotNull, or, sql } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
 import Elysia, { t } from "elysia";
+import { domainToASCII } from "node:url";
 
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
 import { ac, roles } from "@stll/permissions";
 import type { PermissionInput } from "@stll/permissions";
 import { parseUserAgent } from "@stll/user-agent";
 
-import { member, user as authUser } from "@/api/db/auth-schema";
+import {
+  member,
+  session as sessionTable,
+  ssoProvider,
+  user as authUser,
+} from "@/api/db/auth-schema";
 import { rootDb, rlsDb } from "@/api/db/root";
 import { workspaceMembers, workspaces } from "@/api/db/schema";
 import {
@@ -38,7 +45,11 @@ import { env } from "@/api/env";
 import { loadOrgSettingsForAuth } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
 import { getAnalytics } from "@/api/lib/analytics/client";
-import { createAuditRecorder } from "@/api/lib/audit-log";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  createAuditRecorder,
+} from "@/api/lib/audit-log";
 import type { AuditExecutionContext } from "@/api/lib/audit-log";
 import {
   AUTH_DATABASE_ADAPTER_OPTIONS,
@@ -46,7 +57,10 @@ import {
   AUTH_SESSION_STORAGE_OPTIONS,
   AUTH_VERIFICATION_STORAGE_OPTIONS,
 } from "@/api/lib/auth-adapter-options";
-import { revokeOrganizationMemberAuthArtifacts } from "@/api/lib/auth-artifacts";
+import {
+  revokeOrganizationMemberAuthArtifacts,
+  revokeUserSession,
+} from "@/api/lib/auth-artifacts";
 import { authCookiePolicy } from "@/api/lib/auth-cookie-name";
 import {
   getAuthIssuerUrl,
@@ -54,6 +68,7 @@ import {
   OAUTH_UI_LOGIN_PATH,
   OAUTH_UI_ORGANIZATION_PATH,
 } from "@/api/lib/auth-paths";
+import { AUTH_SESSION_ADDITIONAL_FIELDS } from "@/api/lib/auth-session-additional-fields";
 import { AUTH_USER_ADDITIONAL_FIELDS } from "@/api/lib/auth-user-additional-fields";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -142,6 +157,70 @@ const WORD_EDIT_SHORTCUT_MAX_LENGTH = 16;
 
 /** Passwordless email-OTP sign-in path (not a better-auth credential path). */
 const SIGN_IN_EMAIL_OTP_PATH = "/sign-in/email-otp";
+const SSO_DOMAIN_VERIFICATION_TOKEN_PREFIX = "stella-sso";
+
+const SSO_CALLBACK_PATH_PATTERNS = [
+  /^\/sso\/callback\/(?<providerId>[^/]+)$/u,
+  /^\/sso\/saml2\/callback\/(?<providerId>[^/]+)$/u,
+  /^\/sso\/saml2\/sp\/acs\/(?<providerId>[^/]+)$/u,
+] as const;
+
+export const getSsoCallbackProviderId = (
+  path: string | undefined,
+): string | null => {
+  if (!path) {
+    return null;
+  }
+
+  for (const pattern of SSO_CALLBACK_PATH_PATTERNS) {
+    const providerId = pattern.exec(path)?.groups?.["providerId"];
+    if (providerId) {
+      const decoded = Result.try(() => decodeURIComponent(providerId));
+      return Result.isOk(decoded) ? decoded.value : null;
+    }
+  }
+
+  return null;
+};
+
+const assertSsoCallbackEmailDomain = async (
+  email: string,
+  callbackPath: string | undefined,
+): Promise<void> => {
+  const providerId = getSsoCallbackProviderId(callbackPath);
+  if (!providerId) {
+    return;
+  }
+
+  const provider = await rootDb.query.ssoProvider.findFirst({
+    where: { providerId: { eq: providerId } },
+    columns: { domain: true, domainVerified: true },
+  });
+  if (
+    provider?.domainVerified &&
+    doesSsoEmailMatchDomain(email, provider.domain)
+  ) {
+    return;
+  }
+
+  throw new APIError("UNAUTHORIZED", {
+    message:
+      "The identity provider returned an email outside its verified domain",
+  });
+};
+
+export const doesSsoEmailMatchDomain = (
+  email: string,
+  verifiedDomain: string,
+): boolean => {
+  const separator = email.lastIndexOf("@");
+  if (separator <= 0 || separator === email.length - 1) {
+    return false;
+  }
+  return (
+    domainToASCII(email.slice(separator + 1).toLowerCase()) === verifiedDomain
+  );
+};
 
 type SignInEmailOtpBody = {
   email: string;
@@ -635,6 +714,47 @@ const getSessionActiveOrganizationId = (
   return typeof value === "string" && value.length > 0 ? value : undefined;
 };
 
+export const getSessionSsoProviderId = (session: unknown): string | null => {
+  if (typeof session !== "object" || session === null) {
+    return null;
+  }
+  if (
+    !("authenticationMethod" in session) ||
+    session.authenticationMethod !== "sso" ||
+    !("ssoProviderId" in session)
+  ) {
+    return null;
+  }
+
+  return typeof session.ssoProviderId === "string" &&
+    session.ssoProviderId.length > 0
+    ? session.ssoProviderId
+    : null;
+};
+
+/** SSO tokens are used during the callback only; retaining them adds risk. */
+export const stripSsoAccountTokens = <T extends Record<string, unknown>>(
+  account: T,
+  callbackPath: string | undefined,
+): T => {
+  const providerId = account["providerId"];
+  const isSsoAccount =
+    (typeof providerId === "string" && providerId.startsWith("sso-")) ||
+    getSsoCallbackProviderId(callbackPath) !== null;
+  if (!isSsoAccount) {
+    return account;
+  }
+
+  return {
+    ...account,
+    accessToken: null,
+    refreshToken: null,
+    idToken: null,
+    accessTokenExpiresAt: null,
+    refreshTokenExpiresAt: null,
+  };
+};
+
 /**
  * Read a validated UUID-shaped route/query workspace solely to fold the common
  * workspace lookup into the membership query. The returned ID is not branded
@@ -789,6 +909,212 @@ const oauthUiFragmentBridgePlugin = {
   },
 } satisfies BetterAuthPlugin;
 
+/**
+ * Bind a newly created SSO session to the provider that authenticated it.
+ * Enforcement later compares this server-written provenance with the active
+ * organization's required provider; no client-supplied claim participates.
+ */
+const ssoSessionProvenancePlugin = {
+  id: "stella-sso-session-provenance",
+  hooks: {
+    after: [
+      {
+        matcher: (ctx: HookEndpointContext) =>
+          getSsoCallbackProviderId(ctx.path) !== null,
+        handler: createAuthMiddleware(async (ctx) => {
+          const providerId = getSsoCallbackProviderId(ctx.path);
+          const newSession = ctx.context.newSession;
+          if (!providerId || !newSession?.session || !ctx.request) {
+            return;
+          }
+
+          const provider = await rootDb.query.ssoProvider.findFirst({
+            where: { providerId: { eq: providerId } },
+            columns: { organizationId: true, providerId: true },
+          });
+          if (!provider) {
+            return;
+          }
+
+          const organizationId = brandPersistedOrganizationId(
+            provider.organizationId,
+          );
+          const userId = brandPersistedUserId(newSession.user.id);
+          const recordAuditEvent = createAuditRecorder({
+            organizationId,
+            workspaceId: null,
+            userId,
+            request: ctx.request,
+            server: null,
+          });
+
+          await rootDb.transaction(async (tx) => {
+            // Better Auth's generic organization provisioning also assigns
+            // social-login users by matching email domain. Stella provisions
+            // only after this provider-specific SSO callback, under a lock so
+            // concurrent callbacks cannot create duplicate memberships.
+            await tx.execute(
+              sql`select pg_advisory_xact_lock(hashtext(${`sso-jit:${organizationId}:${userId}`}))`,
+            );
+            const existingMember = await tx
+              .select({ id: member.id })
+              .from(member)
+              .where(
+                and(
+                  eq(member.organizationId, organizationId),
+                  eq(member.userId, userId),
+                ),
+              )
+              .limit(1)
+              .then((rows) => rows.at(0));
+            if (!existingMember) {
+              await tx.insert(member).values({
+                id: Bun.randomUUIDv7(),
+                organizationId,
+                userId,
+                role: "member",
+                createdAt: new Date(),
+              });
+              await recordAuditEvent(tx, {
+                action: AUDIT_ACTION.CREATE,
+                resourceType: AUDIT_RESOURCE_TYPE.SSO_CONNECTION,
+                resourceId: provider.providerId,
+                metadata: { event: "member_provisioned", memberUserId: userId },
+              });
+            }
+
+            await tx
+              .update(sessionTable)
+              .set({
+                activeOrganizationId: organizationId,
+                authenticationMethod: "sso",
+                ssoProviderId: provider.providerId,
+                updatedAt: new Date(),
+              })
+              .where(
+                and(
+                  eq(sessionTable.id, newSession.session.id),
+                  eq(sessionTable.userId, userId),
+                ),
+              );
+
+            await recordAuditEvent(tx, {
+              action: AUDIT_ACTION.ACCESS,
+              resourceType: AUDIT_RESOURCE_TYPE.SSO_CONNECTION,
+              resourceId: provider.providerId,
+            });
+          });
+        }),
+      },
+    ],
+  },
+} satisfies BetterAuthPlugin;
+
+const getOrganizationIdFromInput = (input: unknown): string | null => {
+  if (
+    typeof input !== "object" ||
+    input === null ||
+    !("organizationId" in input)
+  ) {
+    return null;
+  }
+  return typeof input.organizationId === "string" &&
+    input.organizationId.length > 0
+    ? input.organizationId
+    : null;
+};
+
+const getOrganizationSlugFromInput = (input: unknown): string | null => {
+  if (
+    typeof input !== "object" ||
+    input === null ||
+    !("organizationSlug" in input)
+  ) {
+    return null;
+  }
+  return typeof input.organizationSlug === "string" &&
+    input.organizationSlug.length > 0
+    ? input.organizationSlug
+    : null;
+};
+
+/**
+ * Better Auth's organization endpoints do not pass through Stella's Elysia
+ * authorization macro. Apply the same required-SSO invariant there so a local
+ * session cannot switch into, or administer, an organization that requires a
+ * different SSO provider.
+ */
+const ssoOrganizationRouteEnforcementPlugin = {
+  id: "stella-sso-organization-route-enforcement",
+  hooks: {
+    before: [
+      {
+        matcher: (ctx: HookEndpointContext) =>
+          ctx.path?.startsWith("/organization/") ?? false,
+        handler: createAuthMiddleware(async (ctx) => {
+          if (!ctx.request) {
+            return;
+          }
+          // See requireTwoFactorManageOtp: Better Auth's HTTP middleware always
+          // supplies a Request even though the shared context type marks it as
+          // optional for programmatic API calls.
+          // eslint-disable-next-line typescript/no-unsafe-type-assertion -- HTTP organization routes always carry a request
+          const genericCtx = ctx as unknown as Parameters<
+            typeof getAuthoritativeSessionFromCtx
+          >[0];
+          const current = await getAuthoritativeSessionFromCtx(genericCtx);
+          if (!current?.session) {
+            return;
+          }
+
+          const directOrganizationId =
+            getOrganizationIdFromInput(ctx.body) ??
+            getOrganizationIdFromInput(ctx.query);
+          const organizationSlug =
+            getOrganizationSlugFromInput(ctx.body) ??
+            getOrganizationSlugFromInput(ctx.query);
+          const organizationBySlug =
+            !directOrganizationId && organizationSlug
+              ? await rootDb.query.organization.findFirst({
+                  where: { slug: { eq: organizationSlug } },
+                  columns: { id: true },
+                })
+              : null;
+          const organizationId =
+            directOrganizationId ??
+            organizationBySlug?.id ??
+            getSessionActiveOrganizationId(current.session);
+          if (!organizationId) {
+            return;
+          }
+
+          const policy = await rootDb.query.ssoProvider.findFirst({
+            where: {
+              organizationId: { eq: organizationId },
+              enforcementMode: { eq: "required" },
+            },
+            columns: { providerId: true },
+          });
+          if (
+            !policy ||
+            getSessionSsoProviderId(current.session) === policy.providerId
+          ) {
+            return;
+          }
+
+          await revokeUserSession(rootDb, {
+            sessionId: current.session.id,
+            userId: current.session.userId,
+          });
+          throw new APIError("UNAUTHORIZED", {
+            message: "Sign in with the organization's SSO provider",
+          });
+        }),
+      },
+    ],
+  },
+} satisfies BetterAuthPlugin;
+
 // Lazy singleton: `betterAuth()` eagerly resolves the
 // database adapter, which accesses `rootDb`. Deferring to
 // first use prevents the TDZ error when the test runner
@@ -845,6 +1171,20 @@ const createAuth = () => {
       "/api-key/delete",
       "/api-key/get",
       "/api-key/list",
+      // SSO protocol endpoints remain public, but provider lifecycle only goes
+      // through Stella's org-scoped handlers. The plugin's built-in list scans
+      // every provider before filtering and its CRUD responses include config
+      // material that Stella deliberately never returns.
+      "/sso/register",
+      "/sso/providers",
+      "/sso/get-provider",
+      "/sso/update-provider",
+      "/sso/delete-provider",
+      "/sso/request-domain-verification",
+      "/sso/verify-domain",
+      // Stella always uses provider-specific OIDC callback URLs, which lets
+      // the server bind session provenance without trusting callback input.
+      "/sso/callback",
       // Account unlinking is not a Stella feature: there is no UI and no
       // server-side `auth.api.unlinkAccount` caller. Better Auth still mounts
       // `/unlink-account` and protects it with `freshSessionMiddleware`, so
@@ -861,6 +1201,7 @@ const createAuth = () => {
       expiresIn: SESSION_LIFETIME_SECONDS,
       updateAge: SESSION_UPDATE_AGE_SECONDS,
       ...AUTH_SESSION_STORAGE_OPTIONS,
+      additionalFields: AUTH_SESSION_ADDITIONAL_FIELDS,
       // Short-lived signed cookie cache for session resolution. Every API
       // request runs `getSession` through `sessionAuthMacro` /
       // `getSessionAndMemberAuthorization`, and without this cache each of
@@ -911,6 +1252,7 @@ const createAuth = () => {
       customRules: {
         "/sign-in/email-otp": AUTH_RATE_LIMITS.signIn,
         "/sign-in/email": AUTH_RATE_LIMITS.signIn,
+        "/sign-in/sso": AUTH_RATE_LIMITS.signIn,
         "/sign-up/email": AUTH_RATE_LIMITS.signUp,
         "/email-otp/send-verification-otp": AUTH_RATE_LIMITS.sendOtp,
         "/email-otp/verify-email": AUTH_RATE_LIMITS.verifyOtp,
@@ -939,6 +1281,20 @@ const createAuth = () => {
         }
       : undefined,
     databaseHooks: {
+      account: {
+        create: {
+          before: async (account, context) =>
+            await Promise.resolve({
+              data: stripSsoAccountTokens(account, context?.path),
+            }),
+        },
+        update: {
+          before: async (account, context) =>
+            await Promise.resolve({
+              data: stripSsoAccountTokens(account, context?.path),
+            }),
+        },
+      },
       user: {
         create: {
           before: async (user, ctx) => {
@@ -946,6 +1302,7 @@ const createAuth = () => {
               email: user.email,
               path: ctx?.path,
             });
+            await assertSsoCallbackEmailDomain(user.email, ctx?.path);
             validateTimezoneId(user["timezoneId"]);
             // Email-OTP and some social providers leave `name` blank.
             // The `notNull` schema constraint allows empty strings, which
@@ -965,6 +1322,36 @@ const createAuth = () => {
             validateTimezoneId(user["timezoneId"]);
             const data = normalizeUserPreferences(ensureDisplayName(user));
             return await Promise.resolve({ data });
+          },
+        },
+      },
+      session: {
+        create: {
+          before: async (session, context) => {
+            const providerId = getSsoCallbackProviderId(context?.path);
+            if (!providerId) {
+              return;
+            }
+            const callbackUser = await rootDb.query.user.findFirst({
+              where: { id: { eq: session.userId } },
+              columns: { email: true },
+            });
+            if (!callbackUser) {
+              throw new APIError("UNAUTHORIZED", {
+                message: "SSO callback user was not found",
+              });
+            }
+            await assertSsoCallbackEmailDomain(
+              callbackUser.email,
+              context?.path,
+            );
+            return {
+              data: {
+                ...session,
+                authenticationMethod: "sso",
+                ssoProviderId: providerId,
+              },
+            };
           },
         },
       },
@@ -1231,6 +1618,34 @@ const createAuth = () => {
           });
         },
       }),
+      sso({
+        providersLimit: 0,
+        disableImplicitSignUp: false,
+        domainVerification: {
+          enabled: true,
+          tokenPrefix: SSO_DOMAIN_VERIFICATION_TOKEN_PREFIX,
+        },
+        organizationProvisioning: {
+          // Stella provisions only on provider-specific SSO callbacks. The
+          // plugin's generic mode also provisions unrelated social sign-ins by
+          // matching domain, which is too broad for an enterprise boundary.
+          disabled: true,
+          defaultRole: "member",
+        },
+        saml: {
+          enableInResponseToValidation: true,
+          allowIdpInitiated: false,
+          requestTTL: 5 * 60 * 1000,
+          clockSkew: 2 * 60 * 1000,
+          requireTimestamps: true,
+          algorithms: { onDeprecated: "reject" },
+          maxMetadataSize: LIMITS.ssoSamlMetadataMaxBytes,
+          maxResponseSize: LIMITS.ssoSamlResponseMaxBytes,
+          enableSingleLogout: false,
+        },
+      }),
+      ssoSessionProvenancePlugin,
+      ssoOrganizationRouteEnforcementPlugin,
       oauthProvider({
         loginPage: OAUTH_UI_LOGIN_PATH,
         consentPage: OAUTH_UI_CONSENT_PATH,
@@ -1464,6 +1879,7 @@ const getSessionAndMemberAuthorization = async (
           return {
             role: authorization.role,
             workspace: authorization.workspace,
+            ssoPolicy: authorization.ssoPolicy,
           };
         })
       : Result.ok(null);
@@ -1534,6 +1950,10 @@ type MemberAuthorization = {
   /** Raw DB value; callers validate it with isMemberRole. */
   role: string;
   workspace: AccessibleWorkspace | null;
+  ssoPolicy: {
+    providerId: string;
+    enforcementMode: "optional" | "required";
+  } | null;
 };
 
 const ADMIN_BYPASS_ROLES = ["owner", "admin"];
@@ -1545,8 +1965,16 @@ export const resolveMemberAuthorization = async (
 ): Promise<MemberAuthorization | null> => {
   if (!workspaceId) {
     const row = await db
-      .select({ role: member.role })
+      .select({
+        role: member.role,
+        ssoProviderId: ssoProvider.providerId,
+        ssoEnforcementMode: ssoProvider.enforcementMode,
+      })
       .from(member)
+      .leftJoin(
+        ssoProvider,
+        eq(ssoProvider.organizationId, member.organizationId),
+      )
       .where(
         and(
           eq(member.userId, userId),
@@ -1556,7 +1984,19 @@ export const resolveMemberAuthorization = async (
       .limit(1)
       .then((rows) => rows.at(0));
 
-    return row ? { role: row.role, workspace: null } : null;
+    return row
+      ? {
+          role: row.role,
+          workspace: null,
+          ssoPolicy:
+            row.ssoProviderId && row.ssoEnforcementMode
+              ? {
+                  providerId: row.ssoProviderId,
+                  enforcementMode: row.ssoEnforcementMode,
+                }
+              : null,
+        }
+      : null;
   }
 
   const membershipExists = exists(
@@ -1573,10 +2013,16 @@ export const resolveMemberAuthorization = async (
   const row = await db
     .select({
       role: member.role,
+      ssoProviderId: ssoProvider.providerId,
+      ssoEnforcementMode: ssoProvider.enforcementMode,
       workspaceId: workspaces.id,
       workspaceStatus: workspaces.status,
     })
     .from(member)
+    .leftJoin(
+      ssoProvider,
+      eq(ssoProvider.organizationId, member.organizationId),
+    )
     .leftJoin(
       workspaces,
       and(
@@ -1602,12 +2048,29 @@ export const resolveMemberAuthorization = async (
   }
 
   if (row.workspaceId === null || row.workspaceStatus === null) {
-    return { role: row.role, workspace: null };
+    return {
+      role: row.role,
+      workspace: null,
+      ssoPolicy:
+        row.ssoProviderId && row.ssoEnforcementMode
+          ? {
+              providerId: row.ssoProviderId,
+              enforcementMode: row.ssoEnforcementMode,
+            }
+          : null,
+    };
   }
 
   return {
     role: row.role,
     workspace: { id: row.workspaceId, status: row.workspaceStatus },
+    ssoPolicy:
+      row.ssoProviderId && row.ssoEnforcementMode
+        ? {
+            providerId: row.ssoProviderId,
+            enforcementMode: row.ssoEnforcementMode,
+          }
+        : null,
   };
 };
 
@@ -1772,6 +2235,16 @@ const resolveValidateAuth = async (
 
   const authorization = memberAuthorizationResult.value;
   if (!authorization) {
+    return { ok: false as const, statusCode: 401 as const };
+  }
+  if (
+    authorization.ssoPolicy?.enforcementMode === "required" &&
+    getSessionSsoProviderId(session) !== authorization.ssoPolicy.providerId
+  ) {
+    await revokeUserSession(rootDb, {
+      sessionId: session.id,
+      userId: user.id,
+    });
     return { ok: false as const, statusCode: 401 as const };
   }
   const { role } = authorization;

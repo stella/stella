@@ -1,4 +1,5 @@
 import { oauthProvider as betterAuthOAuthProvider } from "@better-auth/oauth-provider";
+import { sso as betterAuthSso } from "@better-auth/sso";
 import { twoFactor as betterAuthTwoFactor } from "better-auth/plugins";
 import { describe, expect, test } from "bun:test";
 import { getColumns } from "drizzle-orm";
@@ -27,6 +28,7 @@ import {
   member,
   organization,
   session,
+  ssoProvider,
   twoFactor,
   user,
   verification,
@@ -37,6 +39,7 @@ import {
   AUTH_SESSION_STORAGE_OPTIONS,
   AUTH_VERIFICATION_STORAGE_OPTIONS,
 } from "@/api/lib/auth-adapter-options";
+import { AUTH_SESSION_ADDITIONAL_FIELDS } from "@/api/lib/auth-session-additional-fields";
 import { AUTH_USER_ADDITIONAL_FIELDS } from "@/api/lib/auth-user-additional-fields";
 
 const PRODUCT_AUTH_MODEL_NAMES = [
@@ -50,6 +53,7 @@ const PRODUCT_AUTH_MODEL_NAMES = [
   "oauthRefreshToken",
   "oauthResource",
   "oauthConsent",
+  "ssoProvider",
 ] as const;
 
 const OAUTH_PROVIDER_MODEL_TABLES = [
@@ -278,6 +282,16 @@ const HOST_MEMBER_FIELDS = {
   }),
 } as const;
 
+const HOST_SESSION_FIELDS = normalizeRuntimeFields(
+  AUTH_SESSION_ADDITIONAL_FIELDS,
+  {
+    authenticationMethod: {
+      databaseDefault: { kind: "literal", value: "non_sso" },
+      databaseNotNull: true,
+    },
+  },
+);
+
 const referenceTo = (tableName: string): BetterAuthFieldReference => {
   if (tableName === "organization" || tableName === "user") {
     return { field: "id", model: tableName, onDelete: "cascade" };
@@ -397,6 +411,23 @@ const PRODUCT_MODEL_PLACEHOLDER = {
 } satisfies BetterAuthModelContract;
 
 describe("auth schema", () => {
+  test("covers every Better Auth 1.7 SSO-provider field", () => {
+    const dependencySchema = betterAuthSso({
+      domainVerification: { enabled: true },
+    }).schema;
+    const dependencyFields = Object.keys(dependencySchema.ssoProvider.fields);
+    const hostFields = Object.keys(getColumns(ssoProvider)).filter(
+      (field) =>
+        !["createdAt", "enforcementMode", "protocol", "updatedAt"].includes(
+          field,
+        ),
+    );
+
+    expect(hostFields.toSorted()).toEqual(
+      ["id", ...dependencyFields].toSorted(),
+    );
+  });
+
   test("covers every Better Auth 1.7 OAuth-provider model and field", () => {
     const dependencySchema = betterAuthOAuthProvider({
       consentPage: "/oauth-ui/consent",
@@ -435,7 +466,10 @@ describe("auth schema", () => {
         table: user,
       }),
       session: normalizeModel({
-        expectedFields: BETTER_AUTH_CORE_SCHEMA.session.fields,
+        expectedFields: {
+          ...BETTER_AUTH_CORE_SCHEMA.session.fields,
+          ...HOST_SESSION_FIELDS,
+        },
         modelName: "session",
         table: session,
       }),
@@ -509,6 +543,7 @@ describe("auth schema", () => {
         fields: {
           user: HOST_USER_FIELDS,
           member: HOST_MEMBER_FIELDS,
+          session: HOST_SESSION_FIELDS,
         },
         indexes: {
           account: [
@@ -528,6 +563,13 @@ describe("auth schema", () => {
           member: [
             {
               fields: ["lastActiveWorkspaceId"],
+              predicate: null,
+              unique: false,
+            },
+          ],
+          session: [
+            {
+              fields: ["ssoProviderId"],
               predicate: null,
               unique: false,
             },

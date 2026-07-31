@@ -239,6 +239,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   schedulerJobRun: { type: "non_resource", reason: "job" },
   sharepointConnection: { type: "non_resource", reason: "credential" },
   sharepointOAuthState: { type: "non_resource", reason: "credential" },
+  ssoConnection: { type: "non_resource", reason: "credential" },
   styleSet: { type: "resource", resourceType: RESOURCE_TYPE.STYLE_SET },
   taskAssignee: { type: "non_resource", reason: "association" },
   task: { type: "alias", resourceType: RESOURCE_TYPE.ENTITY },
