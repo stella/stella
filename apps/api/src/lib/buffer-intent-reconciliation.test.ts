@@ -11,6 +11,7 @@ const s3DeleteMock = mock(
 );
 
 const {
+  lockActiveWorkspaceForBufferIntent,
   reconcileBufferObjectCleanupIntents,
   reconcileStaleBufferIntentsGlobally,
 } = await import("@/api/lib/buffer-intent-reconciliation");
@@ -77,6 +78,53 @@ const createReconciliationSafeDb = (updates: UpdateValues[]): SafeDb => {
 beforeEach(() => {
   s3DeleteMock.mockReset();
   s3DeleteMock.mockResolvedValue(undefined);
+});
+
+test("share-locks an active workspace before reserving a writer intent", async () => {
+  const locks: unknown[] = [];
+  const tx = asTestRaw<Transaction>({
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          limit: () => ({
+            for: async (strength: unknown) => {
+              locks.push(strength);
+              return [{ status: "active" }];
+            },
+          }),
+        }),
+      }),
+    }),
+  });
+
+  await lockActiveWorkspaceForBufferIntent(tx, workspaceId);
+
+  expect(locks).toEqual(["share"]);
+});
+
+test("rejects a writer reservation after workspace deletion seals", async () => {
+  const tx = asTestRaw<Transaction>({
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          limit: () => ({ for: async () => [{ status: "deleting" }] }),
+        }),
+      }),
+    }),
+  });
+
+  const rejection: unknown = await lockActiveWorkspaceForBufferIntent(
+    tx,
+    workspaceId,
+  ).then(
+    () => null,
+    (error: unknown) => error,
+  );
+
+  expect(rejection).toMatchObject({
+    _tag: "BufferIntentWorkspaceUnavailableError",
+    message: "Workspace is not active",
+  });
 });
 
 test("keeps a reclaimed writer intent recoverable after deleting its object", async () => {

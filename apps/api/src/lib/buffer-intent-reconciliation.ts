@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { Result, TaggedError } from "better-result";
 import { and, asc, eq, inArray, lte, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
@@ -7,6 +7,7 @@ import {
   bufferObjectCleanupIntents,
   pendingUploads,
   PENDING_UPLOAD_RECOVERABLE_STATUSES,
+  workspaces,
 } from "@/api/db/schema";
 import type { PendingUploadPurposeData } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -44,6 +45,32 @@ type BufferIntentDeletionRow = Pick<
   | "purposeData"
   | "workspaceId"
 >;
+
+class BufferIntentWorkspaceUnavailableError extends TaggedError(
+  "BufferIntentWorkspaceUnavailableError",
+)<{ message: string }>() {}
+
+/**
+ * Share-lock the workspace while reserving an intent. Workspace deletion
+ * takes an update lock before sealing, so either the reservation commits in
+ * time for its cleanup snapshot or it observes the seal and cannot publish.
+ */
+export const lockActiveWorkspaceForBufferIntent = async (
+  tx: Transaction,
+  workspaceId: SafeId<"workspace">,
+): Promise<void> => {
+  const rows = await tx
+    .select({ status: workspaces.status })
+    .from(workspaces)
+    .where(eq(workspaces.id, workspaceId))
+    .limit(1)
+    .for("share");
+  if (rows.at(0)?.status !== "active") {
+    throw new BufferIntentWorkspaceUnavailableError({
+      message: "Workspace is not active",
+    });
+  }
+};
 
 export const isRecoverableBufferIntent = (
   value: PendingUploadPurposeData,

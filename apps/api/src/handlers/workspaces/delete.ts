@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 
 import { member } from "@/api/db/auth-schema";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -202,13 +202,14 @@ export const deleteWorkspaceHandler = async function* ({
         organizationId: pendingUploads.organizationId,
         purpose: pendingUploads.purpose,
         purposeData: pendingUploads.purposeData,
+        status: pendingUploads.status,
         workspaceId: pendingUploads.workspaceId,
       })
       .from(pendingUploads)
       .where(
         and(
           eq(pendingUploads.workspaceId, workspaceId),
-          inArray(pendingUploads.status, PENDING_UPLOAD_RECOVERABLE_STATUSES),
+          ne(pendingUploads.status, "finalized"),
         ),
       );
 
@@ -217,7 +218,12 @@ export const deleteWorkspaceHandler = async function* ({
       chatFileRefsPromise,
       pendingUploadRowsPromise,
     ]);
-    await preserveBufferObjectCleanupIntents(tx, result[2]);
+    await preserveBufferObjectCleanupIntents(
+      tx,
+      result[2].filter(
+        ({ status }) => status === "scanning" || status === "failed",
+      ),
+    );
     return result;
   });
 

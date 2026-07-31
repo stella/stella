@@ -10,6 +10,7 @@ import {
   entityVersions,
   fields,
   pendingUploads,
+  workspaces,
 } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
@@ -303,7 +304,7 @@ describe("createEntityFromBuffer", () => {
       );
     }
     expect(getCallCount()).toBe(4);
-    expect(locks).toEqual(["update"]);
+    expect(locks).toEqual(["share", "update"]);
     expect(s3WriteMock).toHaveBeenCalledTimes(1);
     expect(s3DeleteMock).toHaveBeenCalledTimes(1);
     expect(recordAuditEvent).not.toHaveBeenCalled();
@@ -505,16 +506,24 @@ describe("createEntityFromBuffer", () => {
 type CreateParentSelectOptions = {
   parentKind: "document" | "folder" | null;
   onLock?: (strength: unknown) => void;
+  workspaceStatus?: "active" | "deleting";
 };
 
 const createParentSelect =
-  ({ parentKind, onLock }: CreateParentSelectOptions) =>
+  ({
+    parentKind,
+    onLock,
+    workspaceStatus = "active",
+  }: CreateParentSelectOptions) =>
   (_selection: unknown) => ({
-    from: (_table: unknown) => ({
+    from: (table: unknown) => ({
       where: () => ({
         limit: () => ({
           for: async (strength: unknown) => {
             onLock?.(strength);
+            if (table === workspaces) {
+              return [{ status: workspaceStatus }];
+            }
             if (parentKind !== null) {
               return [{ id: parentId, kind: parentKind }];
             }

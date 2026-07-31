@@ -21,6 +21,7 @@ import {
   BUFFER_INTENT_DELETE_TIMEOUT_MS,
   BUFFER_INTENT_HEARTBEAT_MS,
   BUFFER_INTENT_TTL_MS,
+  lockActiveWorkspaceForBufferIntent,
 } from "@/api/lib/buffer-intent-reconciliation";
 import type { DocumentSource } from "@/api/lib/document-source";
 import {
@@ -119,6 +120,7 @@ const reserveBufferVersionIntent = async ({
   const claimRequestId = Bun.randomUUIDv7().slice(0, 64);
   const now = new Date();
   const reserved = await safeDb(async (tx) => {
+    await lockActiveWorkspaceForBufferIntent(tx, workspaceId);
     // audit: skip — crash-recovery intent; the version transaction records the
     // durable entity and version events.
     const rows = await tx

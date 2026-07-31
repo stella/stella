@@ -6,7 +6,8 @@ import {
   createUserFileKey,
   getFileExtension,
 } from "@/api/lib/file-key";
-import { getS3 } from "@/api/lib/s3";
+import { deleteS3ObjectWithSignal } from "@/api/lib/s3";
+import { withTimeout } from "@/api/lib/with-timeout";
 
 export { createFileKey, createUserFileKey, getFileExtension };
 
@@ -66,6 +67,7 @@ export const resolveUploadMime = ({
  * overwhelming the endpoint with concurrent HTTP requests.
  */
 const S3_DELETE_CONCURRENCY = 50;
+const S3_DELETE_TIMEOUT_MS = 30 * 1000;
 
 type DeleteS3ObjectsProps = {
   fileRows: { fileId: string; mimeType: string }[];
@@ -108,7 +110,18 @@ export const deleteS3Keys = async (
     // oxlint-disable-next-line no-await-in-loop -- chunks run sequentially for bounded S3 concurrency and early return on the first failed chunk
     const result = await Result.tryPromise(
       async () =>
-        await Promise.all(chunk.map(async (key) => await getS3().delete(key))),
+        await Promise.all(
+          chunk.map(
+            async (key) =>
+              await withTimeout(
+                async (signal) => await deleteS3ObjectWithSignal(key, signal),
+                {
+                  label: "s3-object-delete",
+                  timeoutMs: S3_DELETE_TIMEOUT_MS,
+                },
+              ),
+          ),
+        ),
     );
 
     if (Result.isError(result)) {

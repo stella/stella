@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
-import { bufferObjectCleanupIntents } from "@/api/db/schema";
+import { bufferObjectCleanupIntents, workspaces } from "@/api/db/schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
@@ -74,6 +74,16 @@ const createTestTransaction = (): Transaction =>
           returning: async () => [{ id: values.id }],
         };
       },
+    }),
+    select: () => ({
+      from: (table: unknown) => ({
+        where: () => ({
+          limit: () => ({
+            for: async () =>
+              table === workspaces ? [{ status: "active" }] : [],
+          }),
+        }),
+      }),
     }),
     update: () => ({
       set: (values: { status?: string }) => {

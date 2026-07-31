@@ -30,6 +30,7 @@ import {
   BUFFER_INTENT_DELETE_TIMEOUT_MS,
   BUFFER_INTENT_HEARTBEAT_MS,
   BUFFER_INTENT_TTL_MS,
+  lockActiveWorkspaceForBufferIntent,
 } from "@/api/lib/buffer-intent-reconciliation";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
@@ -81,6 +82,7 @@ const reserveEntityCreateIntent = async ({
   const claimRequestId = Bun.randomUUIDv7().slice(0, 64);
   const now = new Date();
   const reserved = await safeDb(async (tx) => {
+    await lockActiveWorkspaceForBufferIntent(tx, workspaceId);
     // audit: skip — crash-recovery intent; entity creation is audited later.
     const rows = await tx
       .insert(pendingUploads)

@@ -683,13 +683,14 @@ export const deletePendingUploads = async ({
       organizationId: pendingUploads.organizationId,
       purpose: pendingUploads.purpose,
       purposeData: pendingUploads.purposeData,
+      status: pendingUploads.status,
       workspaceId: pendingUploads.workspaceId,
     })
     .from(pendingUploads)
     .where(
       and(
         eq(pendingUploads.userId, currentUserId),
-        inArray(pendingUploads.status, PENDING_UPLOAD_RECOVERABLE_STATUSES),
+        ne(pendingUploads.status, "finalized"),
       ),
     )
     .for("update");
@@ -697,8 +698,11 @@ export const deletePendingUploads = async ({
     ...stagedUploadRows.flatMap(pendingUploadS3KeysForDeletion),
   );
 
-  if (stagedUploadRows.length > 0) {
-    const ids = stagedUploadRows.map(({ id }) => id);
+  const recoverableRows = stagedUploadRows.filter(
+    ({ status }) => status === "scanning" || status === "failed",
+  );
+  if (recoverableRows.length > 0) {
+    const ids = recoverableRows.map(({ id }) => id);
     // Invalidate every live writer before transferring recovery ownership.
     // A later finalize CAS must fail and route through the writer's exact-key
     // cleanup, which removes the independent tombstone only after PUT settles.
@@ -716,7 +720,7 @@ export const deletePendingUploads = async ({
           inArray(pendingUploads.status, PENDING_UPLOAD_RECOVERABLE_STATUSES),
         ),
       );
-    await preserveBufferObjectCleanupIntents(tx, stagedUploadRows);
+    await preserveBufferObjectCleanupIntents(tx, recoverableRows);
   }
 
   await tx

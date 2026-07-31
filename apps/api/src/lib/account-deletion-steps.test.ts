@@ -14,6 +14,9 @@ describe("pendingUploadS3KeysForDeletion", () => {
     "0198fa3d-fc8d-7000-8000-000000000002",
   );
   const id = toSafeId<"pendingUpload">("0198fa3d-fc8d-7000-8000-000000000003");
+  const normalUploadId = toSafeId<"pendingUpload">(
+    "0198fa3d-fc8d-7000-8000-000000000006",
+  );
 
   test("includes the reserved final object for an abandoned buffer intent", () => {
     expect(
@@ -73,6 +76,16 @@ describe("pendingUploadS3KeysForDeletion", () => {
                     ),
                     reservedFileId: "0198fa3d-fc8d-7000-8000-000000000005",
                   },
+                  status: "scanning",
+                  workspaceId,
+                },
+                {
+                  declaredMime: "application/zip",
+                  id: normalUploadId,
+                  organizationId,
+                  purpose: "agent_skill",
+                  purposeData: { type: "agent_skill", scope: "private" },
+                  status: "pending",
                   workspaceId,
                 },
               ];
@@ -125,6 +138,18 @@ describe("pendingUploadS3KeysForDeletion", () => {
     ]);
     expect(s3KeysToDelete).toContain(
       `${organizationId}/${workspaceId}/0198fa3d-fc8d-7000-8000-000000000005.docx`,
+    );
+    expect(s3KeysToDelete).toEqual(
+      expect.arrayContaining(
+        pendingUploadS3KeysForDeletion({
+          declaredMime: "application/zip",
+          id: normalUploadId,
+          organizationId,
+          purpose: "agent_skill",
+          purposeData: { type: "agent_skill", scope: "private" },
+          workspaceId,
+        }),
+      ),
     );
   });
 });
