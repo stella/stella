@@ -26,7 +26,10 @@ import {
   brandPersistedUserId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
-import type { McpRequestContext } from "@/api/mcp/context";
+import {
+  bindApprovedMcpAuditContext,
+  type McpRequestContext,
+} from "@/api/mcp/context";
 import type { McpToolDefinition, McpToolHandler } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
@@ -758,7 +761,7 @@ const handleManageOrganizationTool: McpToolHandler = async ({
     }
     // matter_id and user_id are guaranteed present by the schema.
     return await handleRemoveMember({
-      context,
+      context: bindApprovedMcpAuditContext(context),
       matterId: input.matter_id ?? "",
       userId: input.user_id ?? "",
     });

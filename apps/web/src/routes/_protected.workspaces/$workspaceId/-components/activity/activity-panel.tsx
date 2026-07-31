@@ -142,7 +142,7 @@ export const ActivityPanel = ({ workspaceId }: ActivityPanelProps) => {
           <Menu>
             <MenuTrigger
               aria-label={t("workspaces.overview.activity.filterLabel")}
-              className="h-11 gap-1.5 text-xs md:h-7"
+              className="h-7 gap-1.5 text-xs [@media(any-pointer:coarse)]:h-11"
               render={<Button size="sm" variant="ghost" />}
             >
               <ListFilterIcon className="size-3.5" />

@@ -7,9 +7,14 @@ import {
   test,
 } from "bun:test";
 
+import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { createScopedDb } from "@/api/db/scoped";
-import { loadAccessibleMcpWorkspaces } from "@/api/mcp/context";
+import {
+  bindApprovedMcpAuditContext,
+  loadAccessibleMcpWorkspaces,
+} from "@/api/mcp/context";
+import type { McpRequestContext } from "@/api/mcp/context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -48,5 +53,49 @@ describe("MCP workspace enumeration", () => {
     });
 
     expect(workspaces.map((workspace) => workspace.id)).toEqual([ids.wsA1]);
+  });
+});
+
+describe("MCP audit approval", () => {
+  test("binds confirmed execution to the authenticated approver", async () => {
+    let inserted: Record<string, unknown>[] = [];
+    const context = asTestRaw<McpRequestContext>({
+      auditExecution: {
+        performer: { id: "agent-1", name: "Agent 1", type: "agent" },
+        runId: "run-1",
+        trigger: {
+          ownerUserId: ids.userA1,
+          source: "mcp",
+          type: "credential",
+        },
+      },
+      organizationId: ids.orgA,
+      request: new Request("http://localhost/mcp"),
+      userId: ids.userA1,
+    });
+    const approvedContext = bindApprovedMcpAuditContext(context);
+    const tx = asTestRaw<Transaction>({
+      insert: () => ({
+        values: async (rows: Record<string, unknown>[]) => {
+          inserted = rows;
+        },
+      }),
+    });
+
+    await approvedContext.recordAuditEvent(tx, {
+      action: "delete",
+      resourceId: "entity-1",
+      resourceType: "entity",
+    });
+
+    expect(inserted[0]).toMatchObject({
+      approvalStatus: "approved",
+      approvedByUserId: ids.userA1,
+      performerId: "agent-1",
+      performerType: "agent",
+      runId: "run-1",
+      triggerSource: "mcp",
+      triggerType: "credential",
+    });
   });
 });

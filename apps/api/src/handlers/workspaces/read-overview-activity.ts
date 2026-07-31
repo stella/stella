@@ -122,6 +122,11 @@ const siblingVersionEntityIdSnapshot = () => sql<string | null>`(
   limit 1
 )`;
 
+const resolvedAuditEntityIdSnapshot = () => sql<string | null>`coalesce(
+  ${auditEntityIdSnapshot()},
+  ${siblingVersionEntityIdSnapshot()}
+)`;
+
 const auditEntityNameSnapshot = () => sql<string | null>`coalesce(
   ${auditLogs.metadata} ->> 'entityName',
   ${auditLogs.metadata} ->> 'fileName',
@@ -160,9 +165,8 @@ const siblingDeletedEntityKind = () => sql<string | null>`(
   from ${entitySnapshotAuditLogs}
   where ${entitySnapshotAuditLogs.organizationId} = ${auditLogs.organizationId}
     and ${entitySnapshotAuditLogs.workspaceId} = ${auditLogs.workspaceId}
-    and ${auditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.ENTITY}
     and ${entitySnapshotAuditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.ENTITY}
-    and ${entitySnapshotAuditLogs.resourceId} = ${auditLogs.resourceId}
+    and ${entitySnapshotAuditLogs.resourceId} = ${resolvedAuditEntityIdSnapshot()}
     and ${entitySnapshotAuditLogs.changes} -> 'deleted' -> 'old' ->> 'kind' is not null
   order by ${entitySnapshotAuditLogs.createdAt} desc, ${entitySnapshotAuditLogs.id} desc
   limit 1
@@ -173,9 +177,8 @@ const siblingDeletedEntityName = () => sql<string | null>`(
   from ${entitySnapshotAuditLogs}
   where ${entitySnapshotAuditLogs.organizationId} = ${auditLogs.organizationId}
     and ${entitySnapshotAuditLogs.workspaceId} = ${auditLogs.workspaceId}
-    and ${auditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.ENTITY}
     and ${entitySnapshotAuditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.ENTITY}
-    and ${entitySnapshotAuditLogs.resourceId} = ${auditLogs.resourceId}
+    and ${entitySnapshotAuditLogs.resourceId} = ${resolvedAuditEntityIdSnapshot()}
     and ${entitySnapshotAuditLogs.changes} -> 'deleted' -> 'old' ->> 'name' is not null
   order by ${entitySnapshotAuditLogs.createdAt} desc, ${entitySnapshotAuditLogs.id} desc
   limit 1
@@ -421,10 +424,7 @@ const readOverviewActivity = createSafeHandler(
             approvedByUserId: auditLogs.approvedByUserId,
             createdAt: auditLogs.createdAt,
             createdAtCursor: activityCursor.cursorValue.as("created_at_cursor"),
-            entityIdSnapshot: sql<string | null>`coalesce(
-              ${auditEntityIdSnapshot()},
-              ${siblingVersionEntityIdSnapshot()}
-            )`,
+            entityIdSnapshot: resolvedAuditEntityIdSnapshot(),
             entityNameSnapshot: sql<string | null>`coalesce(
               ${auditEntityNameSnapshot()},
               ${siblingDeletedEntityName()},
@@ -709,17 +709,18 @@ type EntityFile = {
 };
 
 const toEntityTarget = (entity: EntityRow): EntityTarget => {
+  const file = entity.kind === "task" ? null : entity.file;
   return {
     deleted: false,
-    encrypted: entity.file?.encrypted ?? null,
+    encrypted: file?.encrypted ?? null,
     entityId: entity.id,
-    fieldId: entity.file?.id ?? null,
+    fieldId: file?.id ?? null,
     id: entity.id,
     kind: entity.kind === "task" ? "task" : "document",
-    mimeType: entity.file?.mimeType ?? null,
-    name: entity.file?.fileName ?? entity.name,
-    pdfFileId: entity.file?.pdfFileId ?? null,
-    propertyId: entity.file?.propertyId ?? null,
+    mimeType: file?.mimeType ?? null,
+    name: file?.fileName ?? entity.name,
+    pdfFileId: file?.pdfFileId ?? null,
+    propertyId: file?.propertyId ?? null,
   };
 };
 

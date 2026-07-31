@@ -21,7 +21,10 @@ import type { SynthesizedCapabilityContext } from "@/api/mcp/capability-context"
 import { isCapabilityFeatureEnabled } from "@/api/mcp/capability-feature";
 import { consumeInvokeCapabilityRateLimit } from "@/api/mcp/capability-rate-limit";
 import { CONTEXT_FIDELITY_WAIVERS } from "@/api/mcp/capability-waivers";
-import type { McpRequestContext } from "@/api/mcp/context";
+import {
+  bindApprovedMcpAuditContext,
+  type McpRequestContext,
+} from "@/api/mcp/context";
 import type { McpErrorCode, McpValidationIssue } from "@/api/mcp/error-codes";
 import capabilityCatalogRaw from "@/api/mcp/generated/capability-catalog.json";
 import { CAPABILITY_DISPATCH } from "@/api/mcp/generated/capability-dispatch";
@@ -1004,7 +1007,9 @@ const invokeCapabilityHandler = async ({
 
   try {
     return await executeInvoke({
-      context,
+      context: entry.destructive
+        ? bindApprovedMcpAuditContext(context)
+        : context,
       entry,
       id,
       input,
