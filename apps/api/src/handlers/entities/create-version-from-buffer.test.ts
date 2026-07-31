@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
+import { bufferObjectCleanupIntents } from "@/api/db/schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
@@ -56,6 +57,12 @@ const { createEntityVersionFromBuffer } =
 
 const createTestTransaction = (): Transaction =>
   asTestRaw<Transaction>({
+    delete: (table: unknown) => {
+      if (table === bufferObjectCleanupIntents) {
+        return { where: async () => undefined };
+      }
+      throw new Error("Unexpected delete table");
+    },
     insert: () => ({
       values: (values: { id: string; status?: string }) => {
         persistenceEvents.push("intent-reserved");

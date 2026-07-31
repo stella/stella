@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
+  bufferObjectCleanupIntents,
   documentCounters,
   entities,
   entityVersions,
@@ -60,6 +61,7 @@ const parentId = toSafeId<"entity">("00000000-0000-0000-0000-000000000005");
 
 type IntentPersistenceBase = {
   [key: string]: unknown;
+  delete?: (table: unknown) => unknown;
   insert?: (table: unknown) => unknown;
   select?: (selection: unknown) => unknown;
   update?: (table: unknown) => unknown;
@@ -67,11 +69,18 @@ type IntentPersistenceBase = {
 
 const withIntentPersistence = (base: IntentPersistenceBase) => {
   const baseSelect = base.select;
+  const baseDelete = base.delete;
   const baseInsert = base.insert;
   const baseUpdate = base.update;
   return {
     ...base,
     select: (selection: unknown) => baseSelect?.(selection),
+    delete: (table: unknown) => {
+      if (table === bufferObjectCleanupIntents) {
+        return { where: async () => undefined };
+      }
+      return baseDelete?.(table);
+    },
     insert: (table: unknown) => {
       if (table === pendingUploads) {
         return {

@@ -4,6 +4,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
+  bufferObjectCleanupIntents,
   pendingUploads,
   PENDING_UPLOAD_RECOVERABLE_STATUSES,
 } from "@/api/db/schema";
@@ -179,6 +180,9 @@ const abandonBufferVersionIntent = async ({
           inArray(pendingUploads.status, PENDING_UPLOAD_RECOVERABLE_STATUSES),
         ),
       );
+    await tx
+      .delete(bufferObjectCleanupIntents)
+      .where(eq(bufferObjectCleanupIntents.id, intent.id));
   });
   if (Result.isError(abandoned)) {
     captureError(abandoned.error, {

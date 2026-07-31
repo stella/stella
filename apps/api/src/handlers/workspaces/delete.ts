@@ -27,6 +27,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { preserveBufferObjectCleanupIntents } from "@/api/lib/buffer-intent-reconciliation";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { pendingUploadS3KeysForDeletion } from "@/api/lib/pending-upload-keys";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
@@ -210,11 +211,13 @@ export const deleteWorkspaceHandler = async function* ({
         ),
       );
 
-    return await Promise.all([
+    const result = await Promise.all([
       fileRefsPromise,
       chatFileRefsPromise,
       pendingUploadRowsPromise,
     ]);
+    await preserveBufferObjectCleanupIntents(tx, result[2]);
+    return result;
   });
 
   if (Result.isError(fileQueryResult)) {

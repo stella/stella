@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
 
-import { pendingUploads } from "@/api/db/schema";
+import { bufferObjectCleanupIntents, pendingUploads } from "@/api/db/schema";
 
 describe("pending upload recovery indexes", () => {
   test("the global stale-buffer sweep starts from claimed_at", () => {
@@ -24,5 +24,21 @@ describe("pending upload recovery indexes", () => {
     expect(new PgDialect().sqlToQuery(recoveryPredicate).sql).toContain(
       "IN ('scanning', 'failed')",
     );
+  });
+});
+
+describe("buffer object cleanup tombstones", () => {
+  test("survive owner deletion and have a bounded scheduler index", () => {
+    const config = getTableConfig(bufferObjectCleanupIntents);
+
+    expect(config.foreignKeys).toHaveLength(0);
+    const scheduleIndex = config.indexes.find(
+      (index) => index.config.name === "buffer_object_cleanup_schedule_idx",
+    );
+    expect(
+      scheduleIndex?.config.columns.map((column) =>
+        "name" in column ? column.name : undefined,
+      ),
+    ).toEqual(["next_attempt_at", "id"]);
   });
 });

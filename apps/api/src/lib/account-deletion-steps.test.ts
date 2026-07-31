@@ -51,6 +51,8 @@ describe("pendingUploadS3KeysForDeletion", () => {
   test("locks active intents before queuing their object keys", async () => {
     const lockStrengths: string[] = [];
     const deletedUserIds: unknown[] = [];
+    const insertedCleanupValues: unknown[] = [];
+    const updateValues: unknown[] = [];
     const tx = asTestRaw<Transaction>({
       select: () => ({
         from: () => ({
@@ -78,6 +80,19 @@ describe("pendingUploadS3KeysForDeletion", () => {
           }),
         }),
       }),
+      insert: () => ({
+        values: (values: unknown[]) => ({
+          onConflictDoNothing: async () => {
+            insertedCleanupValues.push(...values);
+          },
+        }),
+      }),
+      update: () => ({
+        set: (values: unknown) => {
+          updateValues.push(values);
+          return { where: async () => undefined };
+        },
+      }),
       delete: () => ({
         where: async (condition: unknown) => {
           deletedUserIds.push(condition);
@@ -94,6 +109,20 @@ describe("pendingUploadS3KeysForDeletion", () => {
 
     expect(lockStrengths).toEqual(["update"]);
     expect(deletedUserIds).toHaveLength(1);
+    expect(updateValues).toEqual([
+      expect.objectContaining({
+        claimedByRequestId: null,
+        status: "failed",
+      }),
+    ]);
+    expect(insertedCleanupValues).toEqual([
+      expect.objectContaining({
+        id,
+        organizationId,
+        workspaceId,
+        objectKey: `${organizationId}/${workspaceId}/0198fa3d-fc8d-7000-8000-000000000005.docx`,
+      }),
+    ]);
     expect(s3KeysToDelete).toContain(
       `${organizationId}/${workspaceId}/0198fa3d-fc8d-7000-8000-000000000005.docx`,
     );

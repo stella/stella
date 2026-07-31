@@ -830,6 +830,47 @@ export const pendingUploads = p.pgTable(
   ],
 );
 
+/**
+ * Durable tombstones for server-generated object writes interrupted by a
+ * workspace or account deletion. They intentionally have no foreign keys:
+ * recovery must survive both workspace cascades and user cleanup until the
+ * original writer confirms that it can no longer publish the reserved key.
+ */
+export const bufferObjectCleanupIntents = p.pgTable(
+  "buffer_object_cleanup_intents",
+  {
+    id: pUuid<"pendingUpload">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    workspaceId: safeWorkspaceId("workspace_id").notNull(),
+    objectKey: p.text("object_key").notNull(),
+    attemptCount: p.integer("attempt_count").notNull().default(0),
+    nextAttemptAt: timestamptz("next_attempt_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p
+      .index("buffer_object_cleanup_schedule_idx")
+      .on(table.nextAttemptAt, table.id),
+    p.check(
+      "buffer_object_cleanup_attempt_count_nonnegative_check",
+      sql`${table.attemptCount} >= 0`,
+    ),
+    // Lifecycle deletion may transfer the intent through its scoped
+    // transaction. The original scoped writer may remove it only after its
+    // PUT settles and exact-key cleanup succeeds; retry reads stay root-only.
+    p.pgPolicy("buffer_object_cleanup_insert", {
+      for: "insert",
+      to: stella,
+      withCheck: sql`${workspaceCheck} AND ${organizationCheck}`,
+    }),
+    p.pgPolicy("buffer_object_cleanup_delete", {
+      for: "delete",
+      to: stella,
+      using: sql`${workspaceCheck} AND ${organizationCheck}`,
+    }),
+  ],
+);
+
 export const fields = p.pgTable(
   "fields",
   {

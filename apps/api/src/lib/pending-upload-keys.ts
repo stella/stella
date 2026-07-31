@@ -1,10 +1,6 @@
 import type { pendingUploads } from "@/api/db/schema";
-import { createFileKey } from "@/api/handlers/files/utils";
 import { tmpUploadKeys } from "@/api/handlers/uploads/lib";
-import {
-  isBufferIntentPurpose,
-  isRecoverableBufferIntent,
-} from "@/api/lib/buffer-intent-reconciliation";
+import { bufferIntentObjectKey } from "@/api/lib/buffer-intent-reconciliation";
 
 type PendingUploadDeletionRow = Pick<
   typeof pendingUploads.$inferSelect,
@@ -24,18 +20,9 @@ export const pendingUploadS3KeysForDeletion = (
     uploadId: row.id,
     workspaceId: row.workspaceId,
   });
-  if (
-    isBufferIntentPurpose(row.purpose) &&
-    isRecoverableBufferIntent(row.purposeData, row.purpose)
-  ) {
-    keys.push(
-      createFileKey({
-        fileId: row.purposeData.reservedFileId,
-        mimeType: row.declaredMime,
-        organizationId: row.organizationId,
-        workspaceId: row.workspaceId,
-      }),
-    );
+  const objectKey = bufferIntentObjectKey(row);
+  if (objectKey !== null) {
+    keys.push(objectKey);
   }
   return keys;
 };

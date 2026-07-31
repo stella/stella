@@ -55,6 +55,7 @@ import {
 import { arrayOrEmpty } from "@/api/lib/array";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { preserveBufferObjectCleanupIntents } from "@/api/lib/buffer-intent-reconciliation";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE } from "@/api/lib/folio-collab-sessions";
 import { LIMITS } from "@/api/lib/limits";
@@ -694,6 +695,28 @@ export const deletePendingUploads = async ({
   s3KeysToDelete.push(
     ...stagedUploadRows.flatMap(pendingUploadS3KeysForDeletion),
   );
+
+  if (stagedUploadRows.length > 0) {
+    const ids = stagedUploadRows.map(({ id }) => id);
+    // Invalidate every live writer before transferring recovery ownership.
+    // A later finalize CAS must fail and route through the writer's exact-key
+    // cleanup, which removes the independent tombstone only after PUT settles.
+    await tx
+      .update(pendingUploads)
+      .set({
+        claimedAt: new Date(0),
+        claimedByRequestId: null,
+        rejectReason: "Account deletion cancelled the upload",
+        status: "failed",
+      })
+      .where(
+        and(
+          inArray(pendingUploads.id, ids),
+          ne(pendingUploads.status, "finalized"),
+        ),
+      );
+    await preserveBufferObjectCleanupIntents(tx, stagedUploadRows);
+  }
 
   await tx
     .delete(pendingUploads)

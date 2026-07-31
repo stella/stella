@@ -14,33 +14,32 @@ type WithTimeoutOptions = {
  * The motivating case is a DB read on a pooled connection that the
  * server reaped silently (no RST): Bun's SQL client never settles the
  * query promise, so the await hangs indefinitely. There is no portable
- * way to cancel the underlying query, so the operation is abandoned,
- * not aborted — callers must be safe to retry, because the work may
- * still complete server-side.
+ * way to cancel every underlying API, so callers must still be safe to retry.
+ * Operations that support cancellation should consume the provided signal;
+ * other work may still complete server-side after the wrapper rejects.
  */
 export const withTimeout = async <T>(
-  operation: () => Promise<T>,
+  operation: (signal: AbortSignal) => Promise<T>,
   { label, signal, timeoutMs }: WithTimeoutOptions,
 ): Promise<T> => {
   signal?.throwIfAborted();
-  if (timeoutMs === 0 && signal === undefined) {
-    return await operation();
-  }
-
-  const op = operation();
+  const operationController = new AbortController();
+  const op = Promise.resolve().then(
+    async () => await operation(operationController.signal),
+  );
   let timer: ReturnType<typeof setTimeout> | undefined;
   const deadlines: Promise<never>[] = [];
   if (timeoutMs > 0) {
     deadlines.push(
       new Promise<never>((_resolve, reject) => {
         timer = setTimeout(() => {
-          reject(
-            new TimeoutError({
-              message: `${label} exceeded ${timeoutMs}ms`,
-              label,
-              timeoutMs,
-            }),
-          );
+          const error = new TimeoutError({
+            message: `${label} exceeded ${timeoutMs}ms`,
+            label,
+            timeoutMs,
+          });
+          operationController.abort(error);
+          reject(error);
         }, timeoutMs);
       }),
     );
@@ -50,12 +49,14 @@ export const withTimeout = async <T>(
   if (signal !== undefined) {
     deadlines.push(
       new Promise<never>((_resolve, reject) => {
-        abort = () =>
-          reject(
+        abort = () => {
+          const reason =
             signal.reason instanceof Error
               ? signal.reason
-              : new DOMException("The operation was aborted.", "AbortError"),
-          );
+              : new DOMException("The operation was aborted.", "AbortError");
+          operationController.abort(reason);
+          reject(reason);
+        };
         signal.addEventListener("abort", abort, { once: true });
         if (signal.aborted) {
           abort();
@@ -71,8 +72,9 @@ export const withTimeout = async <T>(
     if (signal !== undefined && abort !== undefined) {
       signal.removeEventListener("abort", abort);
     }
-    // If a deadline won the race, `op` is still pending; swallow its eventual
-    // settlement so a late rejection is not reported as unhandled.
+    // Cancellation is cooperative: operations that use the provided signal
+    // stop their underlying work. Keep swallowing late settlement for APIs
+    // that cannot cancel so their rejection is never reported as unhandled.
     op.catch(() => undefined);
   }
 };

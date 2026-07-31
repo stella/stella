@@ -6,14 +6,14 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { toSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
-const s3DeleteMock = mock(async () => undefined);
+const s3DeleteMock = mock(
+  async (_key: string, _signal: AbortSignal) => undefined,
+);
 
-void mock.module("@/api/lib/s3", () => ({
-  getS3: () => ({ delete: s3DeleteMock }),
-}));
-
-const { reconcileStaleBufferIntentsGlobally } =
-  await import("@/api/lib/buffer-intent-reconciliation");
+const {
+  reconcileBufferObjectCleanupIntents,
+  reconcileStaleBufferIntentsGlobally,
+} = await import("@/api/lib/buffer-intent-reconciliation");
 
 const pendingUploadId = toSafeId<"pendingUpload">(
   "00000000-0000-0000-0000-000000000001",
@@ -85,6 +85,7 @@ test("keeps a reclaimed writer intent recoverable after deleting its object", as
   const claimed = await reconcileStaleBufferIntentsGlobally({
     safeDb: createReconciliationSafeDb(updates),
     limit: 1,
+    deleteObject: s3DeleteMock,
   });
 
   expect(claimed).toBe(1);
@@ -98,16 +99,80 @@ test("keeps a reclaimed writer intent recoverable after deleting its object", as
   expect(updates.at(-1)).not.toHaveProperty("finalizedAt");
 });
 
+test("keeps a lifecycle tombstone while backing off repeated deletion", async () => {
+  const updates: unknown[] = [];
+  const tx = asTestRaw<Transaction>({
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          orderBy: () => ({
+            limit: () => ({
+              for: async () => [
+                {
+                  attemptCount: 0,
+                  id: pendingUploadId,
+                  objectKey: `${organizationId}/${workspaceId}/reserved.docx`,
+                },
+              ],
+            }),
+          }),
+        }),
+      }),
+    }),
+    update: () => ({
+      set: (values: unknown) => {
+        updates.push(values);
+        return { where: async () => undefined };
+      },
+    }),
+  });
+  const safeDb = asTestRaw<SafeDb>(
+    async <T>(run: (transaction: Transaction) => Promise<T>) =>
+      await Result.tryPromise({
+        try: async () => await run(tx),
+        catch: (cause) => cause,
+      }),
+  );
+
+  const claimed = await reconcileBufferObjectCleanupIntents({
+    safeDb,
+    limit: 1,
+    deleteObject: s3DeleteMock,
+  });
+
+  expect(claimed).toBe(1);
+  expect(s3DeleteMock).toHaveBeenCalledWith(
+    `${organizationId}/${workspaceId}/reserved.docx`,
+    expect.any(AbortSignal),
+  );
+  expect(updates).toHaveLength(1);
+  expect(updates.at(0)).toEqual(
+    expect.objectContaining({
+      attemptCount: expect.anything(),
+      nextAttemptAt: expect.anything(),
+    }),
+  );
+});
+
 test("stops an in-flight object cleanup when the scheduler aborts", async () => {
   const updates: UpdateValues[] = [];
   let deletionStarted: (() => void) | undefined;
   const started = new Promise<void>((resolve) => {
     deletionStarted = resolve;
   });
-  s3DeleteMock.mockImplementation(async () => {
+  s3DeleteMock.mockImplementation(async (_key, signal: AbortSignal) => {
     deletionStarted?.();
-    return await new Promise<never>(() => {
-      // Intentionally pending: only the scheduler abort may settle the batch.
+    return await new Promise<never>((_resolve, reject) => {
+      signal.addEventListener(
+        "abort",
+        () =>
+          reject(
+            signal.reason instanceof Error
+              ? signal.reason
+              : new DOMException("Aborted", "AbortError"),
+          ),
+        { once: true },
+      );
     });
   });
   const controller = new AbortController();
@@ -115,6 +180,7 @@ test("stops an in-flight object cleanup when the scheduler aborts", async () => 
     safeDb: createReconciliationSafeDb(updates),
     limit: 1,
     signal: controller.signal,
+    deleteObject: s3DeleteMock,
   });
 
   await started;
@@ -132,4 +198,5 @@ test("stops an in-flight object cleanup when the scheduler aborts", async () => 
   expect(updates.at(0)).toEqual(
     expect.objectContaining({ status: "scanning" }),
   );
+  expect(s3DeleteMock.mock.calls.at(0)?.at(1)).toMatchObject({ aborted: true });
 });

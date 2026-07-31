@@ -1,3 +1,7 @@
+import {
+  DeleteObjectCommand,
+  S3Client as AwsS3Client,
+} from "@aws-sdk/client-s3";
 import { S3Client } from "bun";
 
 import { envBase } from "@/api/env-base";
@@ -216,6 +220,33 @@ const buildS3Client = (
       : {}),
   });
 
+const isPathStyleRequired = (endpoint: string): boolean => {
+  try {
+    const host = new URL(endpoint).hostname.toLowerCase();
+    return !(host.includes("s3") && host.endsWith(".amazonaws.com"));
+  } catch {
+    return true;
+  }
+};
+
+const buildAbortableS3Client = (
+  creds?: OptionalS3Credentials | null,
+): AwsS3Client =>
+  new AwsS3Client({
+    region: envBase.S3_REGION,
+    endpoint: envBase.S3_ENDPOINT,
+    forcePathStyle: isPathStyleRequired(envBase.S3_ENDPOINT),
+    ...(creds
+      ? {
+          credentials: {
+            accessKeyId: creds.accessKeyId,
+            secretAccessKey: creds.secretAccessKey,
+            ...(creds.sessionToken ? { sessionToken: creds.sessionToken } : {}),
+          },
+        }
+      : {}),
+  });
+
 /** The legal-corpus bucket; falls back to the default bucket in dev. */
 const corpusBucket = (): string =>
   envBase.LEGAL_CORPUS_S3_BUCKET ?? envBase.S3_BUCKET;
@@ -333,7 +364,9 @@ export const resolveS3Credentials = async ({
  * processes to prevent STS credential expiry.
  */
 export const refreshS3 = async (): Promise<void> => {
-  _client = buildS3Client(envBase.S3_BUCKET, await resolveS3Credentials());
+  const credentials = await resolveS3Credentials();
+  _client = buildS3Client(envBase.S3_BUCKET, credentials);
+  _abortableClient = buildAbortableS3Client(credentials);
   _clientCreatedAt = Date.now();
 };
 
@@ -345,6 +378,7 @@ const CREDENTIAL_MAX_AGE_MS = 50 * 60 * 1000;
 // periodically — replaces the client with credentials resolved via
 // the configured provider.
 let _client: S3Client | null = null;
+let _abortableClient: AwsS3Client | null = null;
 let _clientCreatedAt = 0;
 
 /**
@@ -355,6 +389,18 @@ let _clientCreatedAt = 0;
 export const getS3 = (): S3Client => {
   _client ??= buildS3Client(envBase.S3_BUCKET, staticCredentialsFromEnv());
   return _client;
+};
+
+/** Delete one object while allowing the caller to cancel the HTTP request. */
+export const deleteS3ObjectWithSignal = async (
+  key: string,
+  signal: AbortSignal,
+): Promise<void> => {
+  _abortableClient ??= buildAbortableS3Client(staticCredentialsFromEnv());
+  await _abortableClient.send(
+    new DeleteObjectCommand({ Bucket: envBase.S3_BUCKET, Key: key }),
+    { abortSignal: signal },
+  );
 };
 
 /** True when credentials are older than 50 minutes (or not yet built). */
