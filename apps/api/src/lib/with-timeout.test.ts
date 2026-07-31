@@ -80,4 +80,60 @@ describe("withTimeout", () => {
       process.off("unhandledRejection", onUnhandled);
     }
   });
+
+  test("stops waiting when its abort signal fires", async () => {
+    const controller = new AbortController();
+    let operationStarted: (() => void) | undefined;
+    const started = new Promise<void>((resolve) => {
+      operationStarted = resolve;
+    });
+    const pending = withTimeout(
+      async () => {
+        operationStarted?.();
+        return await new Promise<never>(() => {
+          // Intentionally pending: only the abort signal may settle the wrapper.
+        });
+      },
+      {
+        label: "aborted-operation",
+        signal: controller.signal,
+        timeoutMs: 60_000,
+      },
+    );
+
+    await started;
+    controller.abort();
+
+    const rejection: unknown = await pending.then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(rejection).toMatchObject({
+      message: "The operation was aborted.",
+      name: "AbortError",
+    });
+  });
+
+  test("does not start an operation for an already-aborted signal", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    let started = false;
+
+    const rejection: unknown = await withTimeout(
+      async () => {
+        started = true;
+      },
+      {
+        label: "pre-aborted-operation",
+        signal: controller.signal,
+        timeoutMs: 60_000,
+      },
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(started).toBe(false);
+    expect(rejection).toMatchObject({ name: "AbortError" });
+  });
 });

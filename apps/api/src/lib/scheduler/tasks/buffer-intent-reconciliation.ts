@@ -28,6 +28,7 @@ export const reconcileBufferIntents: SchedulerTask = async ({
   const claimedIntents = await reconcileStaleBufferIntentsGlobally({
     safeDb: rootSafeDb,
     limit: RECONCILE_INTENT_LIMIT,
+    signal,
   });
 
   logger.info("scheduler.buffer_intents_reconciled", {

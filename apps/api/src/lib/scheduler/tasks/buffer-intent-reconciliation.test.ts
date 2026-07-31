@@ -25,17 +25,19 @@ beforeEach(() => {
 test("independently schedules one bounded fair global recovery batch", async () => {
   reconcileStaleBufferIntentsGloballyMock.mockResolvedValue(2);
   const info = mock();
+  const signal = new AbortController().signal;
 
   await reconcileBufferIntents(
     asTestRaw<SchedulerTaskContext>({
       logger: { info },
-      signal: new AbortController().signal,
+      signal,
     }),
   );
 
   expect(reconcileStaleBufferIntentsGloballyMock).toHaveBeenCalledWith({
     safeDb: expect.any(Function),
     limit: 50,
+    signal,
   });
   expect(info).toHaveBeenCalledWith("scheduler.buffer_intents_reconciled", {
     "bufferIntents.claimed": 2,

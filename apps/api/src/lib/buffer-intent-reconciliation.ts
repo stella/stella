@@ -11,11 +11,13 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createFileKey } from "@/api/lib/file-key";
 import { getS3 } from "@/api/lib/s3";
+import { withTimeout } from "@/api/lib/with-timeout";
 
 export const BUFFER_INTENT_TTL_MS = 5 * 60 * 1000;
 export const BUFFER_INTENT_STALE_MS = 60 * 1000;
 export const BUFFER_INTENT_HEARTBEAT_MS = 15 * 1000;
 const BUFFER_INTENT_RECONCILE_LIMIT = 25;
+const BUFFER_INTENT_DELETE_TIMEOUT_MS = 30 * 1000;
 
 export type BufferIntentPurpose = "entity_create" | "entity_version";
 
@@ -53,11 +55,14 @@ const reconcileStaleBufferIntentBatch = async ({
   safeDb,
   scope,
   limit,
+  signal,
 }: {
   safeDb: SafeDb;
   scope?: BufferIntentScope | undefined;
   limit: number;
+  signal?: AbortSignal | undefined;
 }): Promise<number> => {
+  signal?.throwIfAborted();
   const reconcileClaimId = Bun.randomUUIDv7().slice(0, 64);
   const timeoutSeconds = Math.floor(BUFFER_INTENT_STALE_MS / 1000);
   const ownershipPredicate =
@@ -129,10 +134,18 @@ const reconcileStaleBufferIntentBatch = async ({
         mimeType: row.declaredMime,
       });
       const cleanup = await Result.tryPromise({
-        try: async () => await getS3().delete(objectKey),
+        try: async () =>
+          await withTimeout(async () => await getS3().delete(objectKey), {
+            label: "buffer-intent-reconciliation.delete",
+            signal,
+            timeoutMs: BUFFER_INTENT_DELETE_TIMEOUT_MS,
+          }),
         catch: (cause) => cause,
       });
       if (Result.isError(cleanup)) {
+        if (signal?.aborted) {
+          return null;
+        }
         captureError(cleanup.error, {
           objectKey,
           pendingUploadId: row.id,
@@ -143,6 +156,7 @@ const reconcileStaleBufferIntentBatch = async ({
       return row.id;
     }),
   );
+  signal?.throwIfAborted();
   const cleanedIds = cleanupResults.filter(
     (id): id is SafeId<"pendingUpload"> => id !== null,
   );
@@ -150,18 +164,22 @@ const reconcileStaleBufferIntentBatch = async ({
     return claimedResult.value.length;
   }
 
-  const finalizedCleanup = await safeDb(async (tx) => {
-    // audit: skip — terminal crash-recovery bookkeeping after object cleanup.
+  const retainedCleanup = await safeDb(async (tx) => {
+    // audit: skip — durable crash-recovery retry bookkeeping; no entity changes.
+    // A reclaimed writer may still publish after this delete. Keep the row
+    // recoverable so later sweeps delete any late object publication. A writer
+    // that eventually settles can terminalize the row after its own confirmed
+    // cleanup.
     await tx
       .update(pendingUploads)
       .set({
-        finalizedAt: new Date(),
+        claimedAt: new Date(),
         rejectReason: sql<string>`CASE
           WHEN ${pendingUploads.purpose} = 'entity_create'
             THEN ${rejectionReason("entity_create")}
           ELSE ${rejectionReason("entity_version")}
         END`,
-        status: "rejected",
+        status: "failed",
       })
       .where(
         and(
@@ -171,10 +189,10 @@ const reconcileStaleBufferIntentBatch = async ({
         ),
       );
   });
-  if (Result.isError(finalizedCleanup)) {
-    captureError(finalizedCleanup.error, {
+  if (Result.isError(retainedCleanup)) {
+    captureError(retainedCleanup.error, {
       pendingUploadIds: cleanedIds.join(","),
-      stage: "buffer-intent-reconcile-finalize",
+      stage: "buffer-intent-reconcile-retain",
     });
   }
   return claimedResult.value.length;
@@ -213,7 +231,10 @@ export const reconcileStaleBufferIntents = async ({
 export const reconcileStaleBufferIntentsGlobally = async ({
   safeDb,
   limit,
+  signal,
 }: {
   safeDb: SafeDb;
   limit: number;
-}): Promise<number> => await reconcileStaleBufferIntentBatch({ safeDb, limit });
+  signal?: AbortSignal | undefined;
+}): Promise<number> =>
+  await reconcileStaleBufferIntentBatch({ safeDb, limit, signal });

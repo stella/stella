@@ -1,5 +1,5 @@
 import { Result, TaggedError, panic } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -8,6 +8,7 @@ import {
   entityVersions,
   fields,
   pendingUploads,
+  PENDING_UPLOAD_RECOVERABLE_STATUSES,
   workspaces,
 } from "@/api/db/schema";
 import type { PendingUploadFinalizedResult } from "@/api/db/schema";
@@ -123,6 +124,9 @@ const abandonEntityCreateIntent = async ({
 }): Promise<void> => {
   const abandoned = await safeDb(async (tx) => {
     // audit: skip — failed intent bookkeeping; no durable entity was created.
+    // The writer reaches this only after its PUT settled and deletion of its
+    // exact reserved key succeeded. It may therefore close a recoverable row
+    // even when the reconciler replaced its expired lease in the meantime.
     await tx
       .update(pendingUploads)
       .set({
@@ -133,8 +137,7 @@ const abandonEntityCreateIntent = async ({
       .where(
         and(
           eq(pendingUploads.id, intent.id),
-          eq(pendingUploads.status, "scanning"),
-          eq(pendingUploads.claimedByRequestId, intent.claimRequestId),
+          inArray(pendingUploads.status, PENDING_UPLOAD_RECOVERABLE_STATUSES),
         ),
       );
   });

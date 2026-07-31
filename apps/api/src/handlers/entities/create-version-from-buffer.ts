@@ -1,9 +1,12 @@
 import { Result, TaggedError, panic } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
-import { pendingUploads } from "@/api/db/schema";
+import {
+  pendingUploads,
+  PENDING_UPLOAD_RECOVERABLE_STATUSES,
+} from "@/api/db/schema";
 import { computeVersionDiffStats } from "@/api/handlers/entities/compute-version-diff";
 import { writeFileVersion } from "@/api/handlers/entities/write-file-version";
 import type { WriteFileVersionResult } from "@/api/handlers/entities/write-file-version";
@@ -160,6 +163,9 @@ const abandonBufferVersionIntent = async ({
 }): Promise<void> => {
   const abandoned = await safeDb(async (tx) => {
     // audit: skip — failed intent bookkeeping; no durable version was created.
+    // The writer reaches this only after its PUT settled and deletion of its
+    // exact reserved key succeeded. It may therefore close a recoverable row
+    // even when the reconciler replaced its expired lease in the meantime.
     await tx
       .update(pendingUploads)
       .set({
@@ -170,8 +176,7 @@ const abandonBufferVersionIntent = async ({
       .where(
         and(
           eq(pendingUploads.id, intent.id),
-          eq(pendingUploads.status, "scanning"),
-          eq(pendingUploads.claimedByRequestId, intent.claimRequestId),
+          inArray(pendingUploads.status, PENDING_UPLOAD_RECOVERABLE_STATUSES),
         ),
       );
   });
