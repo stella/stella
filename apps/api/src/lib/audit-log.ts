@@ -255,6 +255,8 @@ const activityCategoryForEvent = (event: AuditEvent): AuditActivityCategory => {
       return "court";
     case "flow_run":
       return "automation";
+    case "playbook":
+      return event.action === AUDIT_ACTION.EXECUTE ? "automation" : "other";
     case "workspace":
       return event.changes?.["membersAdded"] !== undefined ||
         event.changes?.["membersRemoved"] !== undefined
@@ -264,6 +266,15 @@ const activityCategoryForEvent = (event: AuditEvent): AuditActivityCategory => {
       return "other";
   }
 };
+
+const runIdForEvent = (
+  event: AuditEvent,
+  execution: ReturnType<typeof executionColumns>,
+): string | null =>
+  execution.runId ??
+  (event.resourceType === AUDIT_RESOURCE_TYPE.FLOW_RUN
+    ? event.resourceId
+    : null);
 
 const nullableHeader = (headers: Headers, name: string): string | null => {
   const value = headers.get(name);
@@ -315,6 +326,7 @@ export const createBackgroundAuditRecorder =
       ...execution,
       activityCategory: activityCategoryForEvent(e),
       groupId,
+      runId: runIdForEvent(e, execution),
     });
     await tx.insert(auditLogs).values(events.map(toRow));
   };
@@ -345,6 +357,7 @@ export const createAuditRecorder = (
       ...execution,
       activityCategory: activityCategoryForEvent(e),
       groupId,
+      runId: runIdForEvent(e, execution),
     });
     await tx.insert(auditLogs).values(events.map(toRow));
   };

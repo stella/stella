@@ -3395,6 +3395,7 @@
           "cancelled": "<actor>Lietotājs</actor> atcēla <target>vienumu</target>",
           "created": "<actor>Lietotājs</actor> izveidoja <target>vienumu</target>",
           "deleted": "<actor>Lietotājs</actor> dzēsa <target>vienumu</target>",
+          "removed": "<actor>Lietotājs</actor> noņēma <target>vienumu</target>",
           "executed": "<actor>Lietotājs</actor> palaida <target>vienumu</target>",
           "reviewed": "<actor>Lietotājs</actor> pārskatīja <target>vienumu</target>",
           "updated": "<actor>Lietotājs</actor> atjaunināja <target>vienumu</target>"

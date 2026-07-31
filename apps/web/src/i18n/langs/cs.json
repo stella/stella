@@ -3395,6 +3395,7 @@
           "cancelled": "<actor>Uživatel</actor> zrušil(a) <target>položku</target>",
           "created": "<actor>Uživatel</actor> vytvořil(a) <target>položku</target>",
           "deleted": "<actor>Uživatel</actor> odstranil(a) <target>položku</target>",
+          "removed": "<actor>Uživatel</actor> odebral(a) <target>položku</target>",
           "executed": "<actor>Uživatel</actor> spustil(a) <target>položku</target>",
           "reviewed": "<actor>Uživatel</actor> zkontroloval(a) <target>položku</target>",
           "updated": "<actor>Uživatel</actor> upravil(a) <target>položku</target>"

@@ -40,6 +40,7 @@ import {
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import type { NeedsMatterMatter } from "@/components/chat/needs-matter-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
+import { invalidateCreatedDocumentQueries } from "@/features/chat/hooks/use-chat-session-created-document.logic";
 import { reconcileDocumentDeletionToolCalls } from "@/features/chat/hooks/use-chat-session-document-deletion.logic";
 import {
   createInitialSendQueueState,
@@ -716,6 +717,7 @@ export const useChatSession = ({
         .entities({ workspaceId: toSafeId<"workspace">(matterId) })
         ["create-from-legal-source"].post({
           queryKey: entitiesKeys.all(matterId),
+          queryKeys: [workspacesKeys.overviewActivityAll(matterId)],
           name: input.name,
           source: input.source,
         });
@@ -733,6 +735,8 @@ export const useChatSession = ({
         });
         return;
       }
+
+      await invalidateCreatedDocumentQueries({ matterId, queryClient });
 
       // Prime the file-bytes cache the moment the server returns —
       // there's typically a multi-second gap before the user clicks

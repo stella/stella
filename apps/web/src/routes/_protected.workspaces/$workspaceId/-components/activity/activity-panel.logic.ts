@@ -34,3 +34,11 @@ export const activityDayKey = (activityAt: string): string => {
     ? activityAt
     : `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
 };
+
+export const activityActionVerb = (
+  action: MatterActivityItem["action"],
+  targetKind: MatterActivityItem["target"]["kind"],
+): MatterActivityItem["action"] | "remove" =>
+  action === "delete" && (targetKind === "team" || targetKind === "court")
+    ? "remove"
+    : action;

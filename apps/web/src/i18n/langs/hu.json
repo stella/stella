@@ -3395,6 +3395,7 @@
           "cancelled": "<actor>Felhasználó</actor> megszakította: <target>elem</target>",
           "created": "<actor>Felhasználó</actor> létrehozta: <target>elem</target>",
           "deleted": "<actor>Felhasználó</actor> törölte: <target>elem</target>",
+          "removed": "<actor>Felhasználó</actor> eltávolította: <target>elem</target>",
           "executed": "<actor>Felhasználó</actor> futtatta: <target>elem</target>",
           "reviewed": "<actor>Felhasználó</actor> ellenőrizte: <target>elem</target>",
           "updated": "<actor>Felhasználó</actor> frissítette: <target>elem</target>"

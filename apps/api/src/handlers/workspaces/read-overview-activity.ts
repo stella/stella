@@ -14,9 +14,15 @@ import {
 import { alias } from "drizzle-orm/pg-core";
 import { t } from "elysia";
 
-// eslint-disable-next-line security-guards/no-unscoped-user-query -- actor IDs come only from audit rows already scoped to this authorized organization and workspace; a membership join would erase retained attribution after account deletion.
+// eslint-disable-next-line security-guards/no-unscoped-user-query -- actor and affected-user IDs come only from audit rows already scoped to this authorized organization and workspace; a membership join would erase retained attribution after account deletion.
 import { user } from "@/api/db/auth-schema";
-import { auditLogs, entities, entityVersions, fields } from "@/api/db/schema";
+import {
+  auditLogs,
+  contacts,
+  entities,
+  entityVersions,
+  fields,
+} from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -33,6 +39,7 @@ import {
 import {
   parseFieldAuditResourceId,
   resolveActivityCategory,
+  resolveActivityRunId,
 } from "./read-overview-activity.logic";
 
 const ACTIVITY_FILTERS = [
@@ -236,6 +243,45 @@ const legacyWorkspaceTeamEvent = () =>
     OR ${auditLogs.changes} ? 'membersRemoved'
   )`;
 
+const teamContactIdSnapshot = () => sql<string | null>`case
+  when ${auditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.WORKSPACE_CONTACT}
+    then coalesce(
+      ${auditLogs.changes} -> 'created' -> 'new' ->> 'contactId',
+      ${auditLogs.changes} -> 'deleted' -> 'old' ->> 'contactId'
+    )
+  else null
+end`;
+
+const teamContactNameSnapshot = () => sql<string | null>`(
+  select ${contacts.displayName}
+  from ${contacts}
+  where ${contacts.organizationId} = ${auditLogs.organizationId}
+    and ${contacts.id} = case
+      when ${teamContactIdSnapshot()} ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+        then ${teamContactIdSnapshot()}::uuid
+      else null
+    end
+  limit 1
+)`;
+
+const teamUserIdSnapshot = () => sql<string | null>`case
+  when ${auditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.WORKSPACE_MEMBER}
+    then coalesce(
+      ${auditLogs.changes} -> 'created' -> 'new' ->> 'userId',
+      ${auditLogs.changes} -> 'deleted' -> 'old' ->> 'userId'
+    )
+  when ${auditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.WORKSPACE}
+    and jsonb_array_length(
+      case
+        when jsonb_typeof(${auditLogs.changes} -> 'membersAdded' -> 'new') = 'array'
+          then ${auditLogs.changes} -> 'membersAdded' -> 'new'
+        else '[]'::jsonb
+      end
+    ) = 1
+    then ${auditLogs.changes} -> 'membersAdded' -> 'new' ->> 0
+  else null
+end`;
+
 const legacyCategoryCondition = (category: ActivityCategory): SQL => {
   switch (category) {
     case "documents":
@@ -364,6 +410,7 @@ const readOverviewActivity = createSafeHandler(
           isNotNull(auditLogs.activityCategory),
           ne(auditLogs.activityCategory, "other"),
         ),
+        ne(auditLogs.performerType, "user"),
         and(
           isNull(auditLogs.activityCategory),
           inArray(auditLogs.resourceType, LEGACY_VISIBLE_RESOURCE_TYPES),
@@ -442,6 +489,8 @@ const readOverviewActivity = createSafeHandler(
             triggerSource: auditLogs.triggerSource,
             triggerType: auditLogs.triggerType,
             triggerUserId: auditLogs.triggerUserId,
+            teamContactNameSnapshot: teamContactNameSnapshot(),
+            teamUserIdSnapshot: teamUserIdSnapshot(),
             userId: auditLogs.userId,
           })
           .from(auditLogs)
@@ -571,6 +620,7 @@ const readOverviewActivity = createSafeHandler(
                   : null,
                 row.triggerUserId,
                 row.approvedByUserId,
+                row.teamUserIdSnapshot,
               ])
               .filter((id): id is string => id !== null),
           ),
@@ -588,7 +638,6 @@ const readOverviewActivity = createSafeHandler(
                 })
                 .from(user)
                 .where(inArray(user.id, actorIds));
-
         return {
           actors,
           compositeFieldVersions,
@@ -665,7 +714,11 @@ const readOverviewActivity = createSafeHandler(
           category,
           id: row.id,
           performer,
-          runId: row.runId,
+          runId: resolveActivityRunId({
+            resourceId: row.resourceId,
+            resourceType: row.resourceType,
+            runId: row.runId,
+          }),
           target: targetForRow({
             category,
             entityMap,
@@ -675,6 +728,9 @@ const readOverviewActivity = createSafeHandler(
             matterName: result.workspace?.name ?? null,
             resourceId: row.resourceId,
             resourceType: row.resourceType,
+            teamTargetName: row.teamUserIdSnapshot
+              ? (actorMap.get(row.teamUserIdSnapshot)?.name ?? null)
+              : row.teamContactNameSnapshot,
             versionEntityMap,
           }),
           trigger: {
@@ -733,6 +789,7 @@ type TargetForRowOptions = {
   matterName: string | null;
   resourceId: string;
   resourceType: string;
+  teamTargetName: string | null;
   versionEntityMap: Map<string, string>;
 };
 
@@ -745,6 +802,7 @@ const targetForRow = ({
   matterName,
   resourceId,
   resourceType,
+  teamTargetName,
   versionEntityMap,
 }: TargetForRowOptions): ActivityTarget => {
   if (resourceType === AUDIT_RESOURCE_TYPE.ENTITY) {
@@ -792,14 +850,14 @@ const targetForRow = ({
   }
   if (resourceType === AUDIT_RESOURCE_TYPE.WORKSPACE) {
     return category === "team"
-      ? genericTarget("team", resourceId, null)
+      ? genericTarget("team", resourceId, teamTargetName)
       : genericTarget("matter", resourceId, matterName);
   }
   if (
     resourceType === AUDIT_RESOURCE_TYPE.WORKSPACE_MEMBER ||
     resourceType === AUDIT_RESOURCE_TYPE.WORKSPACE_CONTACT
   ) {
-    return genericTarget("team", resourceId, null);
+    return genericTarget("team", resourceId, teamTargetName);
   }
   if (resourceType === AUDIT_RESOURCE_TYPE.CASE_LAW_MATTER_LINK) {
     return genericTarget("court", resourceId, null);

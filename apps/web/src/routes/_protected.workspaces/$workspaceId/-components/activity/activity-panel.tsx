@@ -53,7 +53,11 @@ import type {
 } from "@/routes/_protected.workspaces/-queries";
 import { overviewActivityOptions } from "@/routes/_protected.workspaces/-queries";
 
-import { activityDayKey, groupActivityRuns } from "./activity-panel.logic";
+import {
+  activityActionVerb,
+  activityDayKey,
+  groupActivityRuns,
+} from "./activity-panel.logic";
 
 type ActivityPanelProps = { workspaceId: string };
 type ActivityDay = [MatterActivityItem, ...MatterActivityItem[]];
@@ -426,7 +430,7 @@ const HorizontalActivityMilestone = ({
           </span>
         )}
         <span className="mt-2 block text-[13px] leading-5">
-          {actionSentence(first.action, <Performer item={first} />, target, t)}
+          {actionSentence(first, <Performer item={first} />, target, t)}
         </span>
       </span>
     );
@@ -536,12 +540,7 @@ const HorizontalRunActivityItem = ({
       {targetName(item, t)}
     </BidiText>
   );
-  const sentence = actionSentence(
-    item.action,
-    <Performer item={item} />,
-    target,
-    t,
-  );
+  const sentence = actionSentence(item, <Performer item={item} />, target, t);
   return (
     <button
       className="hover:bg-muted/40 -ms-2 flex min-h-11 w-[calc(100%+0.5rem)] items-center rounded-md px-2 text-start transition-colors"
@@ -686,12 +685,7 @@ const RunActivityItem = ({
       {targetName(item, t)}
     </BidiText>
   );
-  const sentence = actionSentence(
-    item.action,
-    <Performer item={item} />,
-    target,
-    t,
-  );
+  const sentence = actionSentence(item, <Performer item={item} />, target, t);
   return (
     <button
       className="hover:bg-muted/40 -ms-2 flex min-h-11 w-[calc(100%+0.5rem)] items-center rounded-md px-2 text-start transition-colors"
@@ -722,7 +716,7 @@ const ActivityItemRow = ({
       {targetName(item, t)}
     </BidiText>
   );
-  const sentence = actionSentence(item.action, actor, target, t);
+  const sentence = actionSentence(item, actor, target, t);
   const detail = triggerDetail(item, t);
   const icon = targetIcon(item.target.kind);
 
@@ -802,12 +796,7 @@ const ActivityList = ({
                   <Performer item={item} />
                 </span>
                 <span className="min-w-0 text-sm leading-5">
-                  {actionSentence(
-                    item.action,
-                    <Performer item={item} />,
-                    target,
-                    t,
-                  )}
+                  {actionSentence(item, <Performer item={item} />, target, t)}
                 </span>
                 <span className="text-muted-foreground min-w-0 text-xs leading-4">
                   {provenance ??
@@ -911,7 +900,7 @@ const ActivityDetailsSheet = ({
             {t("workspaces.overview.activity.details.title")}
           </SheetTitle>
           <SheetDescription className="pe-8">
-            {actionSentence(item.action, <Performer item={item} />, target, t)}
+            {actionSentence(item, <Performer item={item} />, target, t)}
           </SheetDescription>
         </SheetHeader>
         <SheetPanel>
@@ -1033,12 +1022,13 @@ const Performer = ({ item }: { item: MatterActivityItem }) => {
 };
 
 const actionSentence = (
-  action: MatterActivityItem["action"],
+  item: MatterActivityItem,
   actor: ReactElement | null,
   target: ReactElement,
   t: ActivityTranslator,
 ): ReactElement => {
   const values = { actor: () => actor, target: () => target };
+  const action = activityActionVerb(item.action, item.target.kind);
   switch (action) {
     case "create":
       return (
@@ -1051,6 +1041,10 @@ const actionSentence = (
     case "delete":
       return (
         <>{t.rich("workspaces.overview.activity.actions.deleted", values)}</>
+      );
+    case "remove":
+      return (
+        <>{t.rich("workspaces.overview.activity.actions.removed", values)}</>
       );
     case "execute":
       return (

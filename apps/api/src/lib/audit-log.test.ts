@@ -109,6 +109,66 @@ describe("createBackgroundAuditRecorder", () => {
     });
   });
 
+  test("infers flow run provenance from the audited resource", async () => {
+    let inserted: Record<string, unknown>[] = [];
+    const tx = asTestRaw<Transaction>({
+      insert: () => ({
+        values: async (rows: Record<string, unknown>[]) => {
+          inserted = rows;
+        },
+      }),
+    });
+    const recorder = createBackgroundAuditRecorder({
+      execution: {
+        performer: { id: safeId<"user">("user-1"), type: "user" },
+        trigger: { type: "direct" },
+      },
+      organizationId: safeId<"organization">("org-1"),
+      userId: safeId<"user">("user-1"),
+      workspaceId: safeId<"workspace">("workspace-1"),
+    });
+
+    await recorder(tx, {
+      action: AUDIT_ACTION.EXECUTE,
+      resourceId: "flow-run-1",
+      resourceType: AUDIT_RESOURCE_TYPE.FLOW_RUN,
+    });
+
+    expect(inserted[0]).toMatchObject({ runId: "flow-run-1" });
+  });
+
+  test("keeps explicit run provenance and categorizes playbook execution", async () => {
+    let inserted: Record<string, unknown>[] = [];
+    const tx = asTestRaw<Transaction>({
+      insert: () => ({
+        values: async (rows: Record<string, unknown>[]) => {
+          inserted = rows;
+        },
+      }),
+    });
+    const recorder = createBackgroundAuditRecorder({
+      execution: {
+        performer: { id: "router", name: "Router", type: "service" },
+        runId: "service-run-1",
+        trigger: { type: "system" },
+      },
+      organizationId: safeId<"organization">("org-1"),
+      userId: safeId<"user">("user-1"),
+      workspaceId: safeId<"workspace">("workspace-1"),
+    });
+
+    await recorder(tx, {
+      action: AUDIT_ACTION.EXECUTE,
+      resourceId: "playbook-1",
+      resourceType: AUDIT_RESOURCE_TYPE.PLAYBOOK,
+    });
+
+    expect(inserted[0]).toMatchObject({
+      activityCategory: "automation",
+      runId: "service-run-1",
+    });
+  });
+
   test("categorizes deleted task entities from the persisted diff", async () => {
     let inserted: Record<string, unknown>[] = [];
     const tx = asTestRaw<Transaction>({

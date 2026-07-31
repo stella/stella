@@ -3395,6 +3395,7 @@
           "cancelled": "<actor>Naudotojas</actor> atšaukė <target>elementą</target>",
           "created": "<actor>Naudotojas</actor> sukūrė <target>elementą</target>",
           "deleted": "<actor>Naudotojas</actor> ištrynė <target>elementą</target>",
+          "removed": "<actor>Naudotojas</actor> pašalino <target>elementą</target>",
           "executed": "<actor>Naudotojas</actor> paleido <target>elementą</target>",
           "reviewed": "<actor>Naudotojas</actor> peržiūrėjo <target>elementą</target>",
           "updated": "<actor>Naudotojas</actor> atnaujino <target>elementą</target>"

@@ -111,3 +111,17 @@ export const resolveActivityCategory = ({
   }
   return derivedCategory;
 };
+
+type ResolveActivityRunIdOptions = {
+  resourceId: string;
+  resourceType: string;
+  runId: string | null;
+};
+
+export const resolveActivityRunId = ({
+  resourceId,
+  resourceType,
+  runId,
+}: ResolveActivityRunIdOptions): string | null =>
+  runId ??
+  (resourceType === AUDIT_RESOURCE_TYPE.FLOW_RUN ? resourceId : null);

@@ -3395,6 +3395,7 @@
           "cancelled": "<actor>Osoba</actor> anulowała <target>element</target>",
           "created": "<actor>Osoba</actor> utworzyła <target>element</target>",
           "deleted": "<actor>Osoba</actor> usunęła <target>element</target>",
+          "removed": "<actor>Osoba</actor> odłączyła <target>element</target>",
           "executed": "<actor>Osoba</actor> uruchomiła <target>element</target>",
           "reviewed": "<actor>Osoba</actor> sprawdziła <target>element</target>",
           "updated": "<actor>Osoba</actor> zaktualizowała <target>element</target>"

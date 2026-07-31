@@ -3395,6 +3395,7 @@
           "cancelled": "<actor>Person</actor> hat <target>Element</target> abgebrochen",
           "created": "<actor>Person</actor> hat <target>Element</target> erstellt",
           "deleted": "<actor>Person</actor> hat <target>Element</target> gelöscht",
+          "removed": "<actor>Person</actor> hat <target>Element</target> entfernt",
           "executed": "<actor>Person</actor> hat <target>Element</target> ausgeführt",
           "reviewed": "<actor>Person</actor> hat <target>Element</target> geprüft",
           "updated": "<actor>Person</actor> hat <target>Element</target> aktualisiert"

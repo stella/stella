@@ -7,6 +7,7 @@ import {
   legacyActivityCategory,
   parseFieldAuditResourceId,
   resolveActivityCategory,
+  resolveActivityRunId,
 } from "./read-overview-activity.logic";
 
 const fieldId = toSafeId<"field">("00000000-0000-0000-0000-000000000001");
@@ -68,5 +69,45 @@ describe("legacyActivityCategory", () => {
         workspaceTeamEvent: false,
       }),
     ).toBe("tasks");
+  });
+
+  test("derives automation for legacy playbook activity", () => {
+    expect(
+      resolveActivityCategory({
+        kind: null,
+        persistedCategory: "other",
+        resourceType: AUDIT_RESOURCE_TYPE.PLAYBOOK,
+        workspaceTeamEvent: false,
+      }),
+    ).toBe("automation");
+  });
+});
+
+describe("resolveActivityRunId", () => {
+  test("recovers legacy flow run ids from the resource", () => {
+    expect(
+      resolveActivityRunId({
+        resourceId: "flow-run-1",
+        resourceType: AUDIT_RESOURCE_TYPE.FLOW_RUN,
+        runId: null,
+      }),
+    ).toBe("flow-run-1");
+  });
+
+  test("preserves explicit run ids and ignores unrelated resources", () => {
+    expect(
+      resolveActivityRunId({
+        resourceId: "flow-run-1",
+        resourceType: AUDIT_RESOURCE_TYPE.FLOW_RUN,
+        runId: "dispatch-run-1",
+      }),
+    ).toBe("dispatch-run-1");
+    expect(
+      resolveActivityRunId({
+        resourceId: "entity-1",
+        resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+        runId: null,
+      }),
+    ).toBeNull();
   });
 });

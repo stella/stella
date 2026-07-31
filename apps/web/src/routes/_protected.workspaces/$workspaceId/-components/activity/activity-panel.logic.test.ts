@@ -3,7 +3,11 @@ import { describe, expect, test } from "bun:test";
 import { toSafeId } from "@/lib/safe-id";
 import type { MatterActivityItem } from "@/routes/_protected.workspaces/-queries";
 
-import { activityDayKey, groupActivityRuns } from "./activity-panel.logic";
+import {
+  activityActionVerb,
+  activityDayKey,
+  groupActivityRuns,
+} from "./activity-panel.logic";
 
 const item = (id: string, runId: string | null): MatterActivityItem => ({
   action: "update",
@@ -51,5 +55,14 @@ describe("groupActivityRuns", () => {
     expect(activityDayKey("2026-07-30T12:00:00.000Z")).toBe(
       activityDayKey("2026-07-30T18:00:00.000Z"),
     );
+  });
+});
+
+describe("activityActionVerb", () => {
+  test("renders relationship deletions as removals", () => {
+    expect(activityActionVerb("delete", "team")).toBe("remove");
+    expect(activityActionVerb("delete", "court")).toBe("remove");
+    expect(activityActionVerb("delete", "document")).toBe("delete");
+    expect(activityActionVerb("update", "team")).toBe("update");
   });
 });
