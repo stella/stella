@@ -63,6 +63,7 @@ import {
 type FillValues = Record<string, unknown>;
 
 type UnusedValuePolicy = "allow" | "reject";
+type TemplateUseRecording = "after-fill" | "caller";
 
 type TemplateInputRejection = {
   type: "unused-values";
@@ -244,6 +245,9 @@ type FillServiceOptions<TRejection = never> = {
    *  before any model call. A non-null return aborts the fill with a
    *  `{ usageRejection }` result the caller surfaces as its own response. */
   assertUsageAvailable?: FillUsagePreflight<TRejection> | undefined;
+  /** The persistence owner may defer use-count recording into its own atomic
+   *  transaction. All ordinary fill callers retain the after-fill default. */
+  useRecording?: TemplateUseRecording | undefined;
   /** The matter being filled into. When set and the manifest declares any
    *  data-bound field ({@link FieldMeta.source}), the matter's client, parties,
    *  attorneys, matter fields, and firm are resolved into a binding context and
@@ -304,6 +308,7 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
   decideAiCondition,
   adaptAiValue,
   assertUsageAvailable,
+  useRecording = "after-fill",
   workspaceId,
   unusedValuePolicy,
 }: FillDocxWithPolicyOptions<TRejection>): Promise<
@@ -490,7 +495,7 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
 
   const result = await fillTemplate(fillBuffer, record);
 
-  if (templateId !== undefined) {
+  if (templateId !== undefined && useRecording === "after-fill") {
     await scopedDb(async (tx) => {
       await recordTemplateUse({ tx, templateId });
     });

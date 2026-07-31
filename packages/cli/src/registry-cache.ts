@@ -15,11 +15,10 @@ import path from "node:path";
 
 import type { RegistryToolListing } from "./route-types.js";
 
-// Cache schema version; a bump invalidates every existing cache file. Version 2
-// added `lastNudgedVersion`. Scope evidence fields are optional so older v2
-// caches stay readable, but only explicit per-tool omission evidence may
-// restore a baked command.
-export const CACHE_SCHEMA_VERSION = 2;
+// Cache schema version; a bump invalidates every existing cache file. Version 3
+// invalidates listings captured before the save_filled_template command and
+// scope-evidence fields existed.
+export const CACHE_SCHEMA_VERSION = 3;
 /** Default time-to-live before a cached listing is refetched (spec S5.3). */
 export const DEFAULT_TTL_SECONDS = 86_400;
 

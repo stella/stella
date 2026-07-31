@@ -76,13 +76,33 @@ export const generatedToolAnnotations: Readonly<
       subcommands: {
         create_document: {
           command: "new-document",
-          include: ["template_id", "matter_id", "parent_id", "name", "values"],
-          required: ["template_id", "matter_id", "values"],
+          include: [
+            "template_id",
+            "matter_id",
+            "idempotency_key",
+            "parent_id",
+            "name",
+            "values",
+          ],
+          required: ["template_id", "matter_id", "idempotency_key", "values"],
         },
         create_version: {
           command: "new-version",
-          include: ["template_id", "matter_id", "entity_id", "name", "values"],
-          required: ["template_id", "matter_id", "entity_id", "values"],
+          include: [
+            "template_id",
+            "matter_id",
+            "idempotency_key",
+            "entity_id",
+            "name",
+            "values",
+          ],
+          required: [
+            "template_id",
+            "matter_id",
+            "entity_id",
+            "idempotency_key",
+            "values",
+          ],
         },
       },
     },

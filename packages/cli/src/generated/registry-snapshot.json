@@ -649,22 +649,35 @@
             "include": [
               "template_id",
               "matter_id",
+              "idempotency_key",
               "parent_id",
               "name",
               "values"
             ],
-            "required": ["template_id", "matter_id", "values"]
+            "required": [
+              "template_id",
+              "matter_id",
+              "idempotency_key",
+              "values"
+            ]
           },
           "create_version": {
             "command": "new-version",
             "include": [
               "template_id",
               "matter_id",
+              "idempotency_key",
               "entity_id",
               "name",
               "values"
             ],
-            "required": ["template_id", "matter_id", "entity_id", "values"]
+            "required": [
+              "template_id",
+              "matter_id",
+              "entity_id",
+              "idempotency_key",
+              "values"
+            ]
           }
         }
       }
@@ -700,13 +713,24 @@
           "description": "Optional DOCX file name; defaults to the template file name",
           "maxLength": 255
         },
+        "idempotency_key": {
+          "type": "string",
+          "description": "Unique retry key for this save operation; reuse it only to recover the same timed-out request",
+          "maxLength": 128
+        },
         "values": {
           "type": "object",
           "description": "Map of template field path to value",
           "additionalProperties": true
         }
       },
-      "required": ["action", "template_id", "matter_id", "values"]
+      "required": [
+        "action",
+        "template_id",
+        "matter_id",
+        "idempotency_key",
+        "values"
+      ]
     },
     "annotations": {
       "idempotentHint": false,

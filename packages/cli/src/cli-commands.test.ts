@@ -1035,6 +1035,8 @@ describe("template persistence discriminator split", () => {
         "matter_1",
         "--entity-id",
         "entity_1",
+        "--idempotency-key",
+        "retry_1",
         "--input",
         '{"values":{"tenant.name":"ACME"}}',
       ],
@@ -1066,6 +1068,8 @@ describe("template persistence discriminator split", () => {
         "matter_1",
         "--entity-id",
         "entity_1",
+        "--idempotency-key",
+        "retry_1",
         "--input",
         '{"values":{"tenant.name":"ACME"}}',
       ],
@@ -1081,6 +1085,7 @@ describe("template persistence discriminator split", () => {
       template_id: "template_1",
       matter_id: "matter_1",
       entity_id: "entity_1",
+      idempotency_key: "retry_1",
       values: { "tenant.name": "ACME" },
     });
   });

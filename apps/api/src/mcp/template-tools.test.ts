@@ -18,6 +18,10 @@ const createEntityFromBufferMock = mock();
 const createEntityVersionFromBufferMock = mock();
 const createStoredTemplateMock = mock();
 const recordTemplateFillMock = mock();
+const recordTemplateUseMock = mock();
+const loadTemplatePersistenceReceiptMock = mock();
+const recordTemplatePersistenceReceiptMock = mock();
+const fingerprintTemplatePersistenceRequestMock = mock();
 const configureTemplateFieldsMock = mock();
 const loadOrgAIConfigMock = mock();
 const captureErrorMock = mock();
@@ -55,8 +59,12 @@ void mock.module("@/api/handlers/templates/template-fill-service", () => ({
 }));
 
 void mock.module("@/api/mcp/template-persistence", () => ({
+  fingerprintTemplatePersistenceRequest:
+    fingerprintTemplatePersistenceRequestMock,
+  loadTemplatePersistenceReceipt: loadTemplatePersistenceReceiptMock,
   persistFilledTemplateDocument: createEntityFromBufferMock,
   persistFilledTemplateVersion: createEntityVersionFromBufferMock,
+  recordTemplatePersistenceReceipt: recordTemplatePersistenceReceiptMock,
 }));
 
 void mock.module("@/api/handlers/templates/create-template-service", () => ({
@@ -65,7 +73,7 @@ void mock.module("@/api/handlers/templates/create-template-service", () => ({
 
 void mock.module("@/api/handlers/templates/record-use", () => ({
   recordTemplateFill: recordTemplateFillMock,
-  recordTemplateUse: mock(),
+  recordTemplateUse: recordTemplateUseMock,
 }));
 
 void mock.module(
@@ -233,6 +241,15 @@ describe("MCP template tools", () => {
     createEntityVersionFromBufferMock.mockReset();
     createStoredTemplateMock.mockReset();
     recordTemplateFillMock.mockReset();
+    recordTemplateUseMock.mockReset();
+    loadTemplatePersistenceReceiptMock.mockReset();
+    loadTemplatePersistenceReceiptMock.mockResolvedValue(Result.ok(undefined));
+    recordTemplatePersistenceReceiptMock.mockReset();
+    recordTemplatePersistenceReceiptMock.mockResolvedValue(undefined);
+    fingerprintTemplatePersistenceRequestMock.mockReset();
+    fingerprintTemplatePersistenceRequestMock.mockReturnValue(
+      "request-fingerprint",
+    );
     configureTemplateFieldsMock.mockReset();
     loadOrgAIConfigMock.mockReset();
     loadOrgAIConfigMock.mockResolvedValue(null);
@@ -795,6 +812,7 @@ describe("MCP template tools", () => {
         action: "create_document",
         template_id: TEMPLATE_ID,
         matter_id: "ws_1",
+        idempotency_key: "create-document-1",
         parent_id: FOLDER_ID,
         name: "Example Lease",
         values: { "tenant.name": "ACME" },
@@ -811,8 +829,25 @@ describe("MCP template tools", () => {
         afterCreate: expect.any(Function),
       }),
     );
+    expect(fillStoredTemplateDocxMock).toHaveBeenCalledWith(
+      expect.objectContaining({ useRecording: "caller" }),
+    );
+    expect(recordTemplateUseMock).toHaveBeenCalledWith({
+      tx: fakeTransaction,
+      templateId: TEMPLATE_ID,
+    });
     expect(recordTemplateFillMock).toHaveBeenCalledWith(
       expect.objectContaining({ entityId: "entity_new" }),
+    );
+    expect(recordTemplatePersistenceReceiptMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        idempotencyKey: "create-document-1",
+        requestFingerprint: "request-fingerprint",
+        result: expect.objectContaining({
+          action: "create_document",
+          entityId: "entity_new",
+        }),
+      }),
     );
     expect(parseToolPayload(result)).toEqual({
       action: "create_document",
@@ -844,6 +879,7 @@ describe("MCP template tools", () => {
         action: "create_document",
         template_id: TEMPLATE_ID,
         matter_id: "ws_1",
+        idempotency_key: "disconnect-1",
         values: { "tenant.name": "ACME" },
       },
       context: { ...createContext(), request },
@@ -859,11 +895,126 @@ describe("MCP template tools", () => {
     ]);
     expect(createEntityFromBufferMock).not.toHaveBeenCalled();
     expect(createEntityVersionFromBufferMock).not.toHaveBeenCalled();
+    expect(recordTemplateUseMock).not.toHaveBeenCalled();
+    expect(recordTemplatePersistenceReceiptMock).not.toHaveBeenCalled();
+  });
+
+  test("save_filled_template replays a durable idempotency receipt", async () => {
+    loadTemplatePersistenceReceiptMock.mockResolvedValue(
+      Result.ok({
+        workspaceId: "ws_1",
+        requestFingerprint: "request-fingerprint",
+        result: {
+          action: "create_document",
+          entityId: "entity_existing",
+          fileName: "lease.docx",
+          unmatchedPlaceholders: [],
+          unusedValues: ["unused"],
+        },
+      }),
+    );
+
+    const result = await handleMcpToolCall({
+      args: {
+        action: "create_document",
+        template_id: TEMPLATE_ID,
+        matter_id: "ws_1",
+        idempotency_key: "create-document-retry",
+        values: { "tenant.name": "ACME" },
+      },
+      context: createContext(),
+      toolName: "save_filled_template",
+    });
+
+    expect(parseToolPayload(result)).toEqual({
+      action: "create_document",
+      entityId: "entity_existing",
+      fileName: "lease.docx",
+      unmatchedPlaceholders: [],
+      unusedValues: ["unused"],
+    });
+    expect(fillStoredTemplateDocxMock).not.toHaveBeenCalled();
+    expect(createEntityFromBufferMock).not.toHaveBeenCalled();
+  });
+
+  test("save_filled_template recovers a concurrent retry winner", async () => {
+    const receipt = {
+      workspaceId: "ws_1",
+      requestFingerprint: "request-fingerprint",
+      result: {
+        action: "create_document" as const,
+        entityId: "entity_winner",
+        fileName: "lease.docx",
+        unmatchedPlaceholders: [],
+        unusedValues: [],
+      },
+    };
+    loadTemplatePersistenceReceiptMock
+      .mockResolvedValueOnce(Result.ok(undefined))
+      .mockResolvedValueOnce(Result.ok(receipt));
+    fillStoredTemplateDocxMock.mockResolvedValue({
+      fileName: "lease.docx",
+      buffer: Buffer.from("filled docx"),
+      unmatchedPlaceholders: [],
+      unusedValues: [],
+    });
+    createEntityFromBufferMock.mockRejectedValue(
+      new Error("duplicate idempotency receipt"),
+    );
+
+    const result = await handleMcpToolCall({
+      args: {
+        action: "create_document",
+        template_id: TEMPLATE_ID,
+        matter_id: "ws_1",
+        idempotency_key: "concurrent-retry",
+        values: { "tenant.name": "ACME" },
+      },
+      context: createContext(),
+      toolName: "save_filled_template",
+    });
+
+    expect(parseToolPayload(result)).toEqual(receipt.result);
+    expect(loadTemplatePersistenceReceiptMock).toHaveBeenCalledTimes(2);
+  });
+
+  test("save_filled_template rejects an idempotency key reused for different input", async () => {
+    loadTemplatePersistenceReceiptMock.mockResolvedValue(
+      Result.ok({
+        workspaceId: "ws_1",
+        requestFingerprint: "different-fingerprint",
+        result: {
+          action: "create_document",
+          entityId: "entity_existing",
+          fileName: "lease.docx",
+          unmatchedPlaceholders: [],
+          unusedValues: [],
+        },
+      }),
+    );
+
+    const result = await handleMcpToolCall({
+      args: {
+        action: "create_document",
+        template_id: TEMPLATE_ID,
+        matter_id: "ws_1",
+        idempotency_key: "reused-key",
+        values: { "tenant.name": "Different" },
+      },
+      context: createContext(),
+      toolName: "save_filled_template",
+    });
+
+    expect(validationEnvelope(result)).toMatchObject({
+      code: "validation_error",
+      message: "idempotency_key was already used for different input",
+    });
+    expect(fillStoredTemplateDocxMock).not.toHaveBeenCalled();
   });
 
   test("save_filled_template appends a version through the shared buffer service", async () => {
     fillStoredTemplateDocxMock.mockResolvedValue({
-      fileName: "lease.docx",
+      fileName: "lease",
       buffer: Buffer.from("filled docx v2"),
       unmatchedPlaceholders: ["signature"],
       unusedValues: [],
@@ -893,6 +1044,7 @@ describe("MCP template tools", () => {
         action: "create_version",
         template_id: TEMPLATE_ID,
         matter_id: "ws_1",
+        idempotency_key: "create-version-1",
         entity_id: ENTITY_ID,
         values: { "tenant.name": "ACME" },
       },
@@ -940,6 +1092,7 @@ describe("MCP template tools", () => {
         action: "create_version",
         template_id: TEMPLATE_ID,
         matter_id: "ws_1",
+        idempotency_key: "missing-entity-1",
         values: {},
       },
       context: createContext(),
@@ -950,6 +1103,7 @@ describe("MCP template tools", () => {
         action: "create_document",
         template_id: TEMPLATE_ID,
         matter_id: "ws_1",
+        idempotency_key: "archived-1",
         values: {},
       },
       context: createContext({ workspaceStatus: "archived" }),
@@ -960,6 +1114,7 @@ describe("MCP template tools", () => {
         action: "create_document",
         template_id: TEMPLATE_ID,
         matter_id: "ws_1",
+        idempotency_key: "forbidden-1",
         values: {},
       },
       context: createContext({ memberRole: "intern" }),
@@ -970,6 +1125,7 @@ describe("MCP template tools", () => {
         action: "create_document",
         template_id: "not-a-uuid",
         matter_id: "ws_1",
+        idempotency_key: "malformed-template-1",
         values: {},
       },
       context: createContext(),
@@ -980,6 +1136,7 @@ describe("MCP template tools", () => {
         action: "create_document",
         template_id: TEMPLATE_ID,
         matter_id: "ws_1",
+        idempotency_key: "malformed-parent-1",
         parent_id: "not-a-uuid",
         values: {},
       },
@@ -991,6 +1148,7 @@ describe("MCP template tools", () => {
         action: "create_version",
         template_id: TEMPLATE_ID,
         matter_id: "ws_1",
+        idempotency_key: "malformed-entity-1",
         entity_id: "not-a-uuid",
         values: {},
       },
@@ -1047,6 +1205,7 @@ describe("MCP template tools", () => {
         action: "create_document",
         template_id: TEMPLATE_ID,
         matter_id: "ws_1",
+        idempotency_key: "missing-parent-1",
         parent_id: MISSING_FOLDER_ID,
         values: {},
       },
@@ -1058,6 +1217,7 @@ describe("MCP template tools", () => {
         action: "create_document",
         template_id: TEMPLATE_ID,
         matter_id: "ws_1",
+        idempotency_key: "non-folder-1",
         parent_id: NON_FOLDER_ID,
         values: {},
       },
@@ -1069,6 +1229,7 @@ describe("MCP template tools", () => {
         action: "create_version",
         template_id: TEMPLATE_ID,
         matter_id: "ws_1",
+        idempotency_key: "missing-version-1",
         entity_id: MISSING_VERSION_ID,
         values: {},
       },
@@ -1080,6 +1241,7 @@ describe("MCP template tools", () => {
         action: "create_version",
         template_id: TEMPLATE_ID,
         matter_id: "ws_1",
+        idempotency_key: "read-only-1",
         entity_id: READ_ONLY_VERSION_ID,
         values: {},
       },
@@ -1091,6 +1253,7 @@ describe("MCP template tools", () => {
         action: "create_version",
         template_id: TEMPLATE_ID,
         matter_id: "ws_1",
+        idempotency_key: "non-file-1",
         entity_id: NON_FILE_VERSION_ID,
         values: {},
       },
@@ -1124,6 +1287,7 @@ describe("MCP template tools", () => {
         action: "create_document",
         template_id: TEMPLATE_ID,
         matter_id: "ws_1",
+        idempotency_key: "full-workspace-1",
         values: {},
       },
       context: createContext({ scopedDb: fullWorkspace }),

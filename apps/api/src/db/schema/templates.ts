@@ -15,10 +15,11 @@ import {
   tsvector,
   user,
   wsPolicies,
+  wsOrganizationPolicies,
   wsOrganizationReadOnlyPolicies,
   timestamptz,
 } from "./common";
-import type { AnyPgColumn, TemplateManifest } from "./common";
+import type { AnyPgColumn, SafeId, TemplateManifest } from "./common";
 import { contacts, workspaces } from "./contacts";
 import { TEMPLATE_KINDS, entities, entityVersions, fields } from "./entities";
 
@@ -102,6 +103,65 @@ export const templates = p.pgTable(
       .on(table.organizationId, table.categoryId),
     p.unique("templates_id_org_unq").on(table.id, table.organizationId),
     ...orgPolicies(),
+  ],
+);
+
+export type TemplatePersistenceResult =
+  | {
+      action: "create_document";
+      entityId: SafeId<"entity">;
+      fileName: string;
+      unmatchedPlaceholders: string[];
+      unusedValues: string[];
+    }
+  | {
+      action: "create_version";
+      entityId: SafeId<"entity">;
+      entityVersionId: SafeId<"entityVersion">;
+      fileName: string;
+      unmatchedPlaceholders: string[];
+      unusedValues: string[];
+      versionNumber: number;
+    };
+
+/** Durable receipt that makes save_filled_template retries idempotent. */
+export const templatePersistenceRequests = p.pgTable(
+  "template_persistence_requests",
+  {
+    id: pUuid<"templatePersistenceRequest">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    workspaceId: safeWorkspaceId("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    userId: p
+      .text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    idempotencyKey: p.varchar("idempotency_key", { length: 128 }).notNull(),
+    requestFingerprint: p
+      .varchar("request_fingerprint", { length: 64 })
+      .notNull(),
+    result: jsonb().$type<TemplatePersistenceResult>().notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p
+      .uniqueIndex("template_persistence_requests_org_user_key_uidx")
+      .on(table.organizationId, table.userId, table.idempotencyKey),
+    p
+      .index("template_persistence_requests_workspace_created_idx")
+      .on(table.workspaceId, table.createdAt),
+    p.check(
+      "template_persistence_requests_key_nonempty_check",
+      sql`length(${table.idempotencyKey}) > 0`,
+    ),
+    p.check(
+      "template_persistence_requests_fingerprint_check",
+      sql`${table.requestFingerprint} ~ '^[0-9a-f]{64}$'`,
+    ),
+    ...wsOrganizationPolicies("template_persistence_requests"),
   ],
 );
 

@@ -89,6 +89,7 @@ export type SafeIdType =
   | "templateClause"
   | "templateRecipe"
   | "templateFill"
+  | "templatePersistenceRequest"
   | "templateVersion"
   | "timeEntry"
   | "user"

@@ -1614,6 +1614,15 @@ export const generatedRouteMap: RouteNode = {
                     required: true,
                   },
                   {
+                    flag: "--idempotency-key",
+                    prop: "idempotency_key",
+                    kind: "string",
+                    repeatable: false,
+                    description:
+                      "Unique retry key for this save operation; reuse it only to recover the same timed-out request",
+                    required: true,
+                  },
+                  {
                     flag: "--parent-id",
                     prop: "parent_id",
                     kind: "string",
@@ -1671,13 +1680,25 @@ export const generatedRouteMap: RouteNode = {
                         "Optional DOCX file name; defaults to the template file name",
                       maxLength: 255,
                     },
+                    idempotency_key: {
+                      type: "string",
+                      description:
+                        "Unique retry key for this save operation; reuse it only to recover the same timed-out request",
+                      maxLength: 128,
+                    },
                     values: {
                       type: "object",
                       description: "Map of template field path to value",
                       additionalProperties: true,
                     },
                   },
-                  required: ["action", "template_id", "matter_id", "values"],
+                  required: [
+                    "action",
+                    "template_id",
+                    "matter_id",
+                    "idempotency_key",
+                    "values",
+                  ],
                 },
               },
             },
@@ -1704,6 +1725,15 @@ export const generatedRouteMap: RouteNode = {
                     kind: "string",
                     repeatable: false,
                     description: "Matter/workspace receiving the filled DOCX",
+                    required: true,
+                  },
+                  {
+                    flag: "--idempotency-key",
+                    prop: "idempotency_key",
+                    kind: "string",
+                    repeatable: false,
+                    description:
+                      "Unique retry key for this save operation; reuse it only to recover the same timed-out request",
                     required: true,
                   },
                   {
@@ -1764,13 +1794,25 @@ export const generatedRouteMap: RouteNode = {
                         "Optional DOCX file name; defaults to the template file name",
                       maxLength: 255,
                     },
+                    idempotency_key: {
+                      type: "string",
+                      description:
+                        "Unique retry key for this save operation; reuse it only to recover the same timed-out request",
+                      maxLength: 128,
+                    },
                     values: {
                       type: "object",
                       description: "Map of template field path to value",
                       additionalProperties: true,
                     },
                   },
-                  required: ["action", "template_id", "matter_id", "values"],
+                  required: [
+                    "action",
+                    "template_id",
+                    "matter_id",
+                    "idempotency_key",
+                    "values",
+                  ],
                 },
               },
             },
