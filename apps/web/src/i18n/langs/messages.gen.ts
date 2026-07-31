@@ -3399,6 +3399,7 @@ type Messages = {
           "created": "<actor>Actor</actor> created <target>target</target>";
           "deleted": "<actor>Actor</actor> deleted <target>target</target>";
           "executed": "<actor>Actor</actor> ran <target>target</target>";
+          "removed": "<actor>Actor</actor> removed <target>target</target>";
           "reviewed": "<actor>Actor</actor> reviewed <target>target</target>";
           "updated": "<actor>Actor</actor> updated <target>target</target>";
         };

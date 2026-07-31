@@ -3395,8 +3395,8 @@
           "cancelled": "<actor>Pessoa</actor> cancelou <target>item</target>",
           "created": "<actor>Pessoa</actor> criou <target>item</target>",
           "deleted": "<actor>Pessoa</actor> excluiu <target>item</target>",
-          "removed": "<actor>Pessoa</actor> removeu <target>item</target>",
           "executed": "<actor>Pessoa</actor> executou <target>item</target>",
+          "removed": "<actor>Pessoa</actor> removeu <target>item</target>",
           "reviewed": "<actor>Pessoa</actor> revisou <target>item</target>",
           "updated": "<actor>Pessoa</actor> atualizou <target>item</target>"
         },

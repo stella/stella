@@ -3395,8 +3395,8 @@
           "cancelled": "<actor>Personne</actor> a annulé <target>élément</target>",
           "created": "<actor>Personne</actor> a créé <target>élément</target>",
           "deleted": "<actor>Personne</actor> a supprimé <target>élément</target>",
-          "removed": "<actor>Personne</actor> a retiré <target>élément</target>",
           "executed": "<actor>Personne</actor> a exécuté <target>élément</target>",
+          "removed": "<actor>Personne</actor> a retiré <target>élément</target>",
           "reviewed": "<actor>Personne</actor> a vérifié <target>élément</target>",
           "updated": "<actor>Personne</actor> a mis à jour <target>élément</target>"
         },
