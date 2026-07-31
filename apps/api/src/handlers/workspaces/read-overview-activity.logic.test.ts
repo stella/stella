@@ -1,8 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
+import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 
-import { parseFieldAuditResourceId } from "./read-overview-activity.logic";
+import {
+  legacyActivityCategory,
+  parseFieldAuditResourceId,
+} from "./read-overview-activity.logic";
 
 const fieldId = toSafeId<"field">("00000000-0000-0000-0000-000000000001");
 const entityVersionId = toSafeId<"entityVersion">(
@@ -29,5 +33,19 @@ describe("parseFieldAuditResourceId", () => {
       parseFieldAuditResourceId(`${entityVersionId}:not-a-uuid`),
     ).toBeNull();
     expect(parseFieldAuditResourceId("not-a-field-id")).toBeNull();
+  });
+});
+
+describe("legacyActivityCategory", () => {
+  test("keeps task deletions and member additions in their original categories", () => {
+    expect(
+      legacyActivityCategory(AUDIT_RESOURCE_TYPE.ENTITY, "task", false),
+    ).toBe("tasks");
+    expect(
+      legacyActivityCategory(AUDIT_RESOURCE_TYPE.WORKSPACE, null, true),
+    ).toBe("team");
+    expect(
+      legacyActivityCategory(AUDIT_RESOURCE_TYPE.WORKSPACE, null, false),
+    ).toBe("matter");
   });
 });

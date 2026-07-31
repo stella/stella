@@ -1,3 +1,4 @@
+import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { isUuid } from "@/api/lib/custom-schema";
 import {
   brandPersistedEntityVersionId,
@@ -35,4 +36,43 @@ export const parseFieldAuditResourceId = (
     entityVersionId: brandPersistedEntityVersionId(entityVersionId),
     type: "cell",
   };
+};
+
+export type LegacyActivityCategory =
+  | "automation"
+  | "court"
+  | "documents"
+  | "matter"
+  | "tasks"
+  | "team";
+
+export const legacyActivityCategory = (
+  resourceType: string,
+  kind: string | null,
+  workspaceTeamEvent: boolean,
+): LegacyActivityCategory => {
+  if (resourceType === AUDIT_RESOURCE_TYPE.ENTITY && kind === "task") {
+    return "tasks";
+  }
+  if (
+    resourceType === AUDIT_RESOURCE_TYPE.ENTITY ||
+    resourceType === AUDIT_RESOURCE_TYPE.ENTITY_VERSION ||
+    resourceType === AUDIT_RESOURCE_TYPE.FIELD ||
+    resourceType === AUDIT_RESOURCE_TYPE.USER_FILE
+  ) {
+    return "documents";
+  }
+  if (
+    resourceType === AUDIT_RESOURCE_TYPE.WORKSPACE_MEMBER ||
+    resourceType === AUDIT_RESOURCE_TYPE.WORKSPACE_CONTACT
+  ) {
+    return "team";
+  }
+  if (resourceType === AUDIT_RESOURCE_TYPE.CASE_LAW_MATTER_LINK) {
+    return "court";
+  }
+  if (resourceType === AUDIT_RESOURCE_TYPE.WORKSPACE) {
+    return workspaceTeamEvent ? "team" : "matter";
+  }
+  return "automation";
 };

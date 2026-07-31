@@ -30,7 +30,10 @@ import {
   brandPersistedEntityVersionId,
 } from "@/api/lib/safe-id-boundaries";
 
-import { parseFieldAuditResourceId } from "./read-overview-activity.logic";
+import {
+  legacyActivityCategory,
+  parseFieldAuditResourceId,
+} from "./read-overview-activity.logic";
 
 const ACTIVITY_FILTERS = [
   "all",
@@ -65,6 +68,19 @@ const LEGACY_VISIBLE_RESOURCE_TYPES = [
 
 type ActivityCategory = Exclude<(typeof ACTIVITY_FILTERS)[number], "all">;
 
+const legacyEntityKind = () =>
+  sql<string>`coalesce(
+    ${auditLogs.metadata} ->> 'kind',
+    ${auditLogs.changes} -> 'created' -> 'new' ->> 'kind',
+    ${auditLogs.changes} -> 'deleted' -> 'old' ->> 'kind'
+  )`;
+
+const legacyWorkspaceTeamEvent = () =>
+  sql<boolean>`(
+    ${auditLogs.changes} ? 'membersAdded'
+    OR ${auditLogs.changes} ? 'membersRemoved'
+  )`;
+
 const legacyCategoryCondition = (category: ActivityCategory): SQL => {
   switch (category) {
     case "documents":
@@ -77,7 +93,7 @@ const legacyCategoryCondition = (category: ActivityCategory): SQL => {
           ]),
           and(
             eq(auditLogs.resourceType, AUDIT_RESOURCE_TYPE.ENTITY),
-            sql`coalesce(${auditLogs.metadata} ->> 'kind', '') <> 'task'`,
+            sql`coalesce(${legacyEntityKind()}, '') <> 'task'`,
           ),
         ) ?? sql`false`
       );
@@ -85,16 +101,29 @@ const legacyCategoryCondition = (category: ActivityCategory): SQL => {
       return (
         and(
           eq(auditLogs.resourceType, AUDIT_RESOURCE_TYPE.ENTITY),
-          sql`${auditLogs.metadata} ->> 'kind' = 'task'`,
+          sql`${legacyEntityKind()} = 'task'`,
         ) ?? sql`false`
       );
     case "matter":
-      return eq(auditLogs.resourceType, AUDIT_RESOURCE_TYPE.WORKSPACE);
+      return (
+        and(
+          eq(auditLogs.resourceType, AUDIT_RESOURCE_TYPE.WORKSPACE),
+          sql`NOT ${legacyWorkspaceTeamEvent()}`,
+        ) ?? sql`false`
+      );
     case "team":
-      return inArray(auditLogs.resourceType, [
-        AUDIT_RESOURCE_TYPE.WORKSPACE_MEMBER,
-        AUDIT_RESOURCE_TYPE.WORKSPACE_CONTACT,
-      ]);
+      return (
+        or(
+          inArray(auditLogs.resourceType, [
+            AUDIT_RESOURCE_TYPE.WORKSPACE_MEMBER,
+            AUDIT_RESOURCE_TYPE.WORKSPACE_CONTACT,
+          ]),
+          and(
+            eq(auditLogs.resourceType, AUDIT_RESOURCE_TYPE.WORKSPACE),
+            legacyWorkspaceTeamEvent(),
+          ),
+        ) ?? sql`false`
+      );
     case "court":
       return eq(
         auditLogs.resourceType,
@@ -107,36 +136,6 @@ const legacyCategoryCondition = (category: ActivityCategory): SQL => {
       return exhaustive;
     }
   }
-};
-
-const legacyActivityCategory = (
-  resourceType: string,
-  kind: string | null,
-): ActivityCategory => {
-  if (resourceType === AUDIT_RESOURCE_TYPE.ENTITY && kind === "task") {
-    return "tasks";
-  }
-  if (
-    resourceType === AUDIT_RESOURCE_TYPE.ENTITY ||
-    resourceType === AUDIT_RESOURCE_TYPE.ENTITY_VERSION ||
-    resourceType === AUDIT_RESOURCE_TYPE.FIELD ||
-    resourceType === AUDIT_RESOURCE_TYPE.USER_FILE
-  ) {
-    return "documents";
-  }
-  if (
-    resourceType === AUDIT_RESOURCE_TYPE.WORKSPACE_MEMBER ||
-    resourceType === AUDIT_RESOURCE_TYPE.WORKSPACE_CONTACT
-  ) {
-    return "team";
-  }
-  if (resourceType === AUDIT_RESOURCE_TYPE.CASE_LAW_MATTER_LINK) {
-    return "court";
-  }
-  if (resourceType === AUDIT_RESOURCE_TYPE.WORKSPACE) {
-    return "matter";
-  }
-  return "automation";
 };
 
 const activityCursor = createTimestampIdCursorCodec({
@@ -254,7 +253,8 @@ const readOverviewActivity = createSafeHandler(
             createdAt: auditLogs.createdAt,
             createdAtCursor: activityCursor.cursorValue.as("created_at_cursor"),
             id: auditLogs.id,
-            legacyKind: sql<string | null>`${auditLogs.metadata} ->> 'kind'`,
+            legacyKind: legacyEntityKind(),
+            legacyWorkspaceTeamEvent: legacyWorkspaceTeamEvent(),
             performerId: auditLogs.performerId,
             performerName: auditLogs.performerName,
             performerType: auditLogs.performerType,
@@ -453,7 +453,11 @@ const readOverviewActivity = createSafeHandler(
         const category =
           row.activityCategory && row.activityCategory !== "other"
             ? row.activityCategory
-            : legacyActivityCategory(row.resourceType, row.legacyKind);
+            : legacyActivityCategory(
+                row.resourceType,
+                row.legacyKind,
+                row.legacyWorkspaceTeamEvent,
+              );
         const performer =
           row.performerType === "user"
             ? (actorMap.get(performerId) ?? {

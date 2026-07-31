@@ -424,7 +424,7 @@ const HorizontalActivityMilestone = ({
           </span>
         )}
         <span className="mt-2 block text-[13px] leading-5">
-          {actionSentence(first.action, null, target, t)}
+          {actionSentence(first.action, <Performer item={first} />, target, t)}
         </span>
       </span>
     );
@@ -531,7 +531,12 @@ const HorizontalRunActivityItem = ({
       {targetName(item, t)}
     </BidiText>
   );
-  const sentence = actionSentence(item.action, null, target, t);
+  const sentence = actionSentence(
+    item.action,
+    <Performer item={item} />,
+    target,
+    t,
+  );
   return (
     <button
       className="hover:bg-muted/40 -ms-2 flex min-h-11 w-[calc(100%+0.5rem)] items-center rounded-md px-2 text-start transition-colors"
@@ -673,7 +678,12 @@ const RunActivityItem = ({
       {targetName(item, t)}
     </BidiText>
   );
-  const sentence = actionSentence(item.action, null, target, t);
+  const sentence = actionSentence(
+    item.action,
+    <Performer item={item} />,
+    target,
+    t,
+  );
   return (
     <button
       className="hover:bg-muted/40 -ms-2 flex min-h-11 w-[calc(100%+0.5rem)] items-center rounded-md px-2 text-start transition-colors"
@@ -784,7 +794,12 @@ const ActivityList = ({
                   <Performer item={item} />
                 </span>
                 <span className="min-w-0 text-sm leading-5">
-                  {actionSentence(item.action, null, target, t)}
+                  {actionSentence(
+                    item.action,
+                    <Performer item={item} />,
+                    target,
+                    t,
+                  )}
                 </span>
                 <span className="text-muted-foreground min-w-0 text-xs leading-4">
                   {provenance ??
@@ -888,7 +903,7 @@ const ActivityDetailsSheet = ({
             {t("workspaces.overview.activity.details.title")}
           </SheetTitle>
           <SheetDescription className="pe-8">
-            {actionSentence(item.action, null, target, t)}
+            {actionSentence(item.action, <Performer item={item} />, target, t)}
           </SheetDescription>
         </SheetHeader>
         <SheetPanel>
