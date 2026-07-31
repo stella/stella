@@ -46,7 +46,10 @@ import {
   INGESTION_CHECKPOINT_STATUS,
 } from "@/api/lib/corpus-ingestion-checkpoint";
 import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
-import { TimeoutError } from "@/api/lib/errors/tagged-errors";
+import {
+  ConcurrentModificationError,
+  TimeoutError,
+} from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import type { WriteCorpusResult } from "@/api/lib/legal-search/corpus-storage";
 import {
@@ -129,6 +132,21 @@ type ProcessResult = {
   inserted: boolean;
   searchVectorFailed: boolean;
   s3UploadFailed: boolean;
+};
+
+const IDENTITY_RECONCILIATION = {
+  INITIAL: "initial",
+  RETRY: "retry",
+} as const;
+
+type IdentityReconciliation =
+  (typeof IDENTITY_RECONCILIATION)[keyof typeof IDENTITY_RECONCILIATION];
+
+type ProcessDecisionAttemptOptions = {
+  input: IngestionResult;
+  sourceId: SafeId<"caseLawSource">;
+  scopedDb: ScopedDb;
+  identityReconciliation: IdentityReconciliation;
 };
 
 /**
@@ -442,11 +460,12 @@ const discardOrphanedCorpusObjects = async (
  * Insert a single decision and its citations into the database.
  * Skips duplicates based on sourceHash.
  */
-export const processDecision = async (
-  input: IngestionResult,
-  sourceId: SafeId<"caseLawSource">,
-  scopedDb: ScopedDb,
-): Promise<ProcessResult> => {
+const processDecisionAttempt = async ({
+  input,
+  sourceId,
+  scopedDb,
+  identityReconciliation,
+}: ProcessDecisionAttemptOptions): Promise<ProcessResult> => {
   const result = sanitizeResult(input);
 
   // Match on the publisher's id where the adapter supplies one, and only
@@ -897,11 +916,17 @@ export const processDecision = async (
       if (corpusPlan.type === "object-storage") {
         await discardOrphanedCorpusObjects(corpusPlan.written, decisionId);
       }
-      return {
-        inserted: false,
-        searchVectorFailed: false,
-        s3UploadFailed: false,
-      };
+      if (identityReconciliation === IDENTITY_RECONCILIATION.RETRY) {
+        throw new ConcurrentModificationError({
+          message: "Case-law decision identity did not converge",
+        });
+      }
+      return await processDecisionAttempt({
+        input,
+        sourceId,
+        scopedDb,
+        identityReconciliation: IDENTITY_RECONCILIATION.RETRY,
+      });
     }
     if (
       corpusPlan.type === "object-storage" &&
@@ -992,6 +1017,18 @@ export const processDecision = async (
 
   return { inserted: true, searchVectorFailed: false, s3UploadFailed };
 };
+
+export const processDecision = async (
+  input: IngestionResult,
+  sourceId: SafeId<"caseLawSource">,
+  scopedDb: ScopedDb,
+): Promise<ProcessResult> =>
+  await processDecisionAttempt({
+    input,
+    sourceId,
+    scopedDb,
+    identityReconciliation: IDENTITY_RECONCILIATION.INITIAL,
+  });
 
 /**
  * Run the ingestion pipeline for a configured source.
