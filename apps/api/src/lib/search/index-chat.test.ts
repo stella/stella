@@ -134,8 +134,8 @@ describe("chat search indexing", () => {
     );
     expect(
       findExecutedQuery("INSERT INTO chat_thread_search_preview_passages"),
-    ).toBeDefined();
-    expect(findExecutedQuery("SET preview_generation =")).toBeDefined();
+    ).toBeUndefined();
+    expect(findExecutedQuery("SET preview_generation =")).toBeUndefined();
   });
 
   test("does not let stale upserts overwrite newer message search documents", async () => {
@@ -199,5 +199,7 @@ describe("chat search indexing", () => {
     expect(compiled.sql).toContain("LEFT JOIN chat_thread_search_documents");
     expect(compiled.sql).toContain("LEFT JOIN chat_message_search_documents");
     expect(compiled.sql).toContain("md.message_id IS NULL");
+    expect(compiled.sql).not.toContain("preview_generation");
+    expect(compiled.sql).not.toContain("chat_thread_search_preview_passages");
   });
 });

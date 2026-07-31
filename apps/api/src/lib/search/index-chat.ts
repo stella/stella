@@ -13,10 +13,6 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
-import {
-  buildSearchPreviewPassages,
-  buildSearchPreviewPassageValueRows,
-} from "@/api/lib/search/preview-passages";
 
 const BACKFILL_BATCH_SIZE = 200;
 const ZERO_UUID = "00000000-0000-0000-0000-000000000000";
@@ -183,63 +179,31 @@ export const upsertChatThreadSearchDocument = async (
     threadId: thread.id,
     threadUpdatedAt: thread.updatedAt,
   });
-  const previewGeneration = Bun.randomUUIDv7();
-  const previewPassages = buildSearchPreviewPassages(
-    thread.title,
-    searchableText,
-  );
-
-  await rootDb.transaction(async (tx) => {
-    const indexed = await tx.execute<{ threadId: SafeId<"chatThread"> }>(sql`
-      INSERT INTO chat_thread_search_documents (
-        thread_id, title, searchable_text, updated_at, tsv
-      ) VALUES (
-        ${thread.id},
-        ${thread.title},
-        ${searchableText},
-        ${thread.updatedAt},
-        to_tsvector(
-          'simple',
-          unaccent(
-            arabic_normalize(
-              coalesce(${thread.title}, '') || ' ' ||
-              coalesce(${searchableText}, '')
-            )
+  await rootDb.execute(sql`
+    INSERT INTO chat_thread_search_documents (
+      thread_id, title, searchable_text, updated_at, tsv
+    ) VALUES (
+      ${thread.id},
+      ${thread.title},
+      ${searchableText},
+      ${thread.updatedAt},
+      to_tsvector(
+        'simple',
+        unaccent(
+          arabic_normalize(
+            coalesce(${thread.title}, '') || ' ' ||
+            coalesce(${searchableText}, '')
           )
         )
       )
-      ON CONFLICT (thread_id) DO UPDATE SET
-        title = EXCLUDED.title,
-        searchable_text = EXCLUDED.searchable_text,
-        updated_at = EXCLUDED.updated_at,
-        tsv = EXCLUDED.tsv
-      WHERE EXCLUDED.updated_at >= chat_thread_search_documents.updated_at
-      RETURNING thread_id AS "threadId"
-    `);
-    if (!indexed.at(0)) {
-      return;
-    }
-    await tx.execute(sql`
-      DELETE FROM chat_thread_search_preview_passages
-      WHERE thread_id = ${thread.id}
-    `);
-    await tx.execute(sql`
-      INSERT INTO chat_thread_search_preview_passages (
-        thread_id, generation, ordinal, content, tsv
-      ) VALUES ${buildSearchPreviewPassageValueRows({
-        generation: previewGeneration,
-        leadingValues: [sql`${thread.id}`],
-        passages: previewPassages,
-        regconfig: sql`'simple'`,
-        useUnaccent: true,
-      })}
-    `);
-    await tx.execute(sql`
-      UPDATE chat_thread_search_documents
-      SET preview_generation = ${previewGeneration}::uuid
-      WHERE thread_id = ${thread.id}
-    `);
-  });
+    )
+    ON CONFLICT (thread_id) DO UPDATE SET
+      title = EXCLUDED.title,
+      searchable_text = EXCLUDED.searchable_text,
+      updated_at = EXCLUDED.updated_at,
+      tsv = EXCLUDED.tsv
+    WHERE EXCLUDED.updated_at >= chat_thread_search_documents.updated_at
+  `);
 };
 
 /** Page through a thread's messages by `(created_at, id)`, write the
@@ -388,13 +352,6 @@ export const backfillChatThreadSearchIndex = async (): Promise<number> => {
       LEFT JOIN chat_thread_search_documents d ON d.thread_id = t.id
       WHERE (
           d.thread_id IS NULL
-          OR d.preview_generation IS NULL
-          OR NOT EXISTS (
-            SELECT 1
-            FROM chat_thread_search_preview_passages passage
-            WHERE passage.thread_id = d.thread_id
-              AND passage.generation = d.preview_generation
-          )
           OR EXISTS (
             SELECT 1
             FROM chat_messages m

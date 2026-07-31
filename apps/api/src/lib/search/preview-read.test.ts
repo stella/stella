@@ -263,6 +263,43 @@ describe("search preview rendering contract", () => {
     }
   });
 
+  test("retains a late quoted phrase instead of an earlier standalone word", async () => {
+    rootDbExecuteMock.mockResolvedValueOnce([
+      {
+        messages: [
+          {
+            id: "00000000-0000-4000-8000-000000000010",
+            isTarget: true,
+            role: "assistant",
+            content: {
+              version: 2,
+              data: [
+                {
+                  type: "text",
+                  content: `closing ${"a".repeat(20_000)} closing, memo`,
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ]);
+
+    const preview = await readSearchPreview({
+      ...previewQuery,
+      query: '"closing memo"',
+      type: "chat",
+    });
+
+    expect(preview).toMatchObject({
+      type: "chat-messages",
+      messages: [{ content: expect.stringContaining("closing, memo") }],
+    });
+    if (preview?.type === "chat-messages") {
+      expect(preview.messages.at(0)?.content).not.toStartWith("closing ");
+    }
+  });
+
   test("orders context around a first-position target without duplicates", async () => {
     rootDbExecuteMock.mockResolvedValueOnce([
       {

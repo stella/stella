@@ -7,7 +7,7 @@ import {
   buildSearchPreviewLocatorTsQuery,
   buildSearchTsQuery,
   fileNameSearchText,
-  getSearchPreviewLocatorLexemes,
+  getSearchPreviewLocatorCandidates,
   normalizeFileNameForSearch,
   normalizeFileNameVariantForSearch,
   removeSearchDiacritics,
@@ -18,12 +18,12 @@ import {
 } from "@/api/lib/search/query";
 
 describe("search query text", () => {
-  test("extracts only positive preview locator lexemes", () => {
+  test("extracts positive preview locator candidates without losing phrases", () => {
     expect(
-      getSearchPreviewLocatorLexemes(
+      getSearchPreviewLocatorCandidates(
         '"closing memo" OR odštěpení NOT superseded',
       ),
-    ).toEqual(["closing", "memo", "odstepeni"]);
+    ).toEqual(["closing memo", "odstepeni"]);
   });
 
   test("preview locator ORs positive terms and excludes negated terms", () => {

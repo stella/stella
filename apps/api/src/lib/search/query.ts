@@ -346,28 +346,42 @@ const toSearchLexemes = (
     })
     .slice(0, PREFIX_QUERY_TOKEN_LIMIT);
 
-const collectPositiveLocatorLexemes = (
+const collectPositiveLocatorCandidates = (
   ast: SearchAst,
-  lexemes: Set<string>,
+  candidates: Set<string>,
   negated = false,
 ): void => {
   switch (ast.type) {
     case "term":
       if (!negated) {
+        if (ast.phrase) {
+          const phraseLexemes: string[] = [];
+          for (const group of ast.lexemes) {
+            const lexeme = group.at(0);
+            if (lexeme) {
+              phraseLexemes.push(lexeme);
+            }
+          }
+          const phrase = phraseLexemes.join(" ");
+          if (phrase) {
+            candidates.add(phrase);
+          }
+          return;
+        }
         for (const group of ast.lexemes) {
           for (const lexeme of group) {
-            lexemes.add(lexeme);
+            candidates.add(lexeme);
           }
         }
       }
       return;
     case "not":
-      collectPositiveLocatorLexemes(ast.child, lexemes, !negated);
+      collectPositiveLocatorCandidates(ast.child, candidates, !negated);
       return;
     case "and":
     case "or":
-      collectPositiveLocatorLexemes(ast.left, lexemes, negated);
-      collectPositiveLocatorLexemes(ast.right, lexemes, negated);
+      collectPositiveLocatorCandidates(ast.left, candidates, negated);
+      collectPositiveLocatorCandidates(ast.right, candidates, negated);
       return;
     default: {
       const exhaustive: never = ast;
@@ -376,24 +390,24 @@ const collectPositiveLocatorLexemes = (
   }
 };
 
-export const getSearchPreviewLocatorLexemes = (query: string): string[] => {
-  const lexemes = new Set<string>();
+export const getSearchPreviewLocatorCandidates = (query: string): string[] => {
+  const candidates = new Set<string>();
   if (isAdvancedQuery(query.trim())) {
     const ast = parseAdvancedSearchAst(query);
     if (ast) {
-      collectPositiveLocatorLexemes(ast, lexemes);
+      collectPositiveLocatorCandidates(ast, candidates);
     }
-    return [...lexemes];
+    return [...candidates];
   }
 
   for (const variant of [query, normalizeFileNameVariantForSearch(query)]) {
     if (variant) {
       for (const lexeme of toSearchLexemes(variant)) {
-        lexemes.add(lexeme);
+        candidates.add(lexeme);
       }
     }
   }
-  return [...lexemes];
+  return [...candidates];
 };
 
 const toSearchLexemeGroups = (

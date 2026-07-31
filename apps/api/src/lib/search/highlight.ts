@@ -195,8 +195,8 @@ const sourceSpanAt = (
   };
 };
 
-type TruncateSearchPreviewAroundLexemesOptions = {
-  lexemes: readonly string[];
+type TruncateSearchPreviewAroundCandidatesOptions = {
+  candidates: readonly string[];
   maxLength: number;
   source: string;
 };
@@ -226,42 +226,62 @@ const sliceWithoutSplitSurrogate = (
   return source.slice(start, end);
 };
 
-const SEARCH_LEXEME_CHARACTER = /[\p{L}\p{N}]/u;
+const SEARCH_LEXEME = /[\p{L}\p{N}]+/gu;
 
-const characterBefore = (text: string, index: number): string | null => {
-  if (index <= 0) {
+type CandidatePrefixMatch = {
+  length: number;
+  start: number;
+};
+
+type SearchLexeme = {
+  start: number;
+  value: string;
+};
+
+const getSearchLexemes = (text: string): SearchLexeme[] =>
+  Array.from(text.matchAll(SEARCH_LEXEME), (match) => ({
+    start: match.index,
+    value: match[0],
+  }));
+
+const findCandidatePrefix = (
+  sourceLexemes: readonly SearchLexeme[],
+  candidate: string,
+): CandidatePrefixMatch | null => {
+  const candidateLexemes = Array.from(
+    candidate.matchAll(SEARCH_LEXEME),
+    (match) => match[0],
+  );
+  if (candidateLexemes.length === 0) {
     return null;
   }
-  const previousUnit = utf16CodeUnitAt(text, index - 1);
-  const previousIndex = isLowSurrogate(previousUnit) ? index - 2 : index - 1;
-  const codePoint = text.codePointAt(previousIndex);
-  return codePoint === undefined ? null : String.fromCodePoint(codePoint);
-};
-
-const findLexemePrefix = (text: string, lexeme: string): number => {
-  let searchFrom = 0;
-  while (searchFrom <= text.length - lexeme.length) {
-    const start = text.indexOf(lexeme, searchFrom);
-    if (start === -1) {
-      return -1;
+  const lastStartIndex = sourceLexemes.length - candidateLexemes.length;
+  for (let startIndex = 0; startIndex <= lastStartIndex; startIndex += 1) {
+    const matches = candidateLexemes.every((lexeme, offset) =>
+      sourceLexemes.at(startIndex + offset)?.value.startsWith(lexeme),
+    );
+    if (!matches) {
+      continue;
     }
-    const previousCharacter = characterBefore(text, start);
-    if (
-      previousCharacter === null ||
-      !SEARCH_LEXEME_CHARACTER.test(previousCharacter)
-    ) {
-      return start;
+    const first = sourceLexemes.at(startIndex);
+    const last = sourceLexemes.at(startIndex + candidateLexemes.length - 1);
+    const lastCandidate = candidateLexemes.at(-1);
+    if (!first || !last || !lastCandidate) {
+      return null;
     }
-    searchFrom = start + lexeme.length;
+    return {
+      length: last.start + lastCandidate.length - first.start,
+      start: first.start,
+    };
   }
-  return -1;
+  return null;
 };
 
-export const truncateSearchPreviewAroundLexemes = ({
-  lexemes,
+export const truncateSearchPreviewAroundCandidates = ({
+  candidates,
   maxLength,
   source,
-}: TruncateSearchPreviewAroundLexemesOptions): string => {
+}: TruncateSearchPreviewAroundCandidatesOptions): string => {
   const boundedLength = Math.max(0, Math.floor(maxLength));
   if (boundedLength === 0) {
     return "";
@@ -272,19 +292,20 @@ export const truncateSearchPreviewAroundLexemes = ({
 
   const normalizedSource = normalizeSourceWithMappings(source, true);
   const foldedSource = applyArabicFoldsWithOffsets(normalizedSource.text);
+  const sourceLexemes = getSearchLexemes(foldedSource.text);
   let foldedMatchStart = Number.POSITIVE_INFINITY;
   let foldedMatchLength = 0;
-  for (const lexeme of lexemes) {
-    const normalizedLexeme = applyArabicFolds(
-      normalizePreviewUnit(lexeme.trim(), true),
+  for (const candidate of candidates) {
+    const normalizedCandidate = applyArabicFolds(
+      normalizePreviewUnit(candidate.trim(), true),
     );
-    if (!normalizedLexeme) {
+    if (!normalizedCandidate) {
       continue;
     }
-    const start = findLexemePrefix(foldedSource.text, normalizedLexeme);
-    if (start !== -1 && start < foldedMatchStart) {
-      foldedMatchStart = start;
-      foldedMatchLength = normalizedLexeme.length;
+    const match = findCandidatePrefix(sourceLexemes, normalizedCandidate);
+    if (match && match.start < foldedMatchStart) {
+      foldedMatchStart = match.start;
+      foldedMatchLength = match.length;
     }
   }
 

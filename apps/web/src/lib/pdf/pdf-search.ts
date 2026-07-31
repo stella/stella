@@ -63,7 +63,11 @@ const canMergePDFSearchBoxes = (
 ): boolean => {
   const minimumHeight = Math.min(current.height, next.height);
   const verticalOverlap = getVerticalOverlap(current, next);
-  const horizontalGap = next.x - (current.x + current.width);
+  const horizontalGap = Math.max(
+    0,
+    next.x - (current.x + current.width),
+    current.x - (next.x + next.width),
+  );
   const maximumInlineGap =
     Math.max(current.height, next.height) * MAX_INLINE_GAP_HEIGHT_RATIO;
 

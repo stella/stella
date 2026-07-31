@@ -319,6 +319,19 @@ describe("PDF search highlight geometry", () => {
     ]);
   });
 
+  test("merges nearby RTL boxes without bridging distant visual segments", () => {
+    expect(
+      mergePDFSearchBoxes([
+        { x: 100, y: 20, width: 5, height: 8 },
+        { x: 95, y: 20, width: 5, height: 8 },
+        { x: 20, y: 20, width: 5, height: 8 },
+      ]),
+    ).toEqual([
+      { x: 95, y: 20, width: 10, height: 8 },
+      { x: 20, y: 20, width: 5, height: 8 },
+    ]);
+  });
+
   test("maps bottom-left PDF coordinates through the active viewport", () => {
     expect(
       toPDFSearchViewportBox(

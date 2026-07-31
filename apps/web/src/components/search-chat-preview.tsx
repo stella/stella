@@ -42,9 +42,14 @@ export const SearchChatPreview = ({
     useState<SearchMatchSummary>(EMPTY_MATCH_SUMMARY);
   const searchTextKey = searchTextQueryKey(searchText);
   const rehypePluginsByMessage = useMemo<PluggableList[]>(() => {
-    const matchBudget = { remaining: MAX_SEARCH_PREVIEW_MATCHES + 1 };
+    // The API bounds both message count and total preview characters. Keep the
+    // transform cap immutable per message so Strict Mode/concurrent replays
+    // cannot inherit a consumed budget; the DOM summary applies the global cap.
     return messages.map(() => [
-      [rehypeSearchMatches, { matchBudget, searchText }],
+      [
+        rehypeSearchMatches,
+        { maxMatches: MAX_SEARCH_PREVIEW_MATCHES + 1, searchText },
+      ],
     ]);
   }, [messages, searchText]);
 

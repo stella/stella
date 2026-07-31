@@ -5,8 +5,6 @@ import { rehypeSearchMatches } from "@/components/chat/rehype-search-matches";
 
 const TEST_MAX_MATCHES = 200;
 
-const createMatchBudget = (remaining = TEST_MAX_MATCHES) => ({ remaining });
-
 describe("chat search highlighting", () => {
   test("highlights every normalized prose match", () => {
     const tree: Root = {
@@ -22,7 +20,7 @@ describe("chat search highlighting", () => {
     };
 
     rehypeSearchMatches({
-      matchBudget: createMatchBudget(),
+      maxMatches: TEST_MAX_MATCHES,
       searchText: "odštepení",
     })(tree);
 
@@ -64,7 +62,7 @@ describe("chat search highlighting", () => {
     };
 
     rehypeSearchMatches({
-      matchBudget: createMatchBudget(),
+      maxMatches: TEST_MAX_MATCHES,
       searchText: "odštěpení",
     })(tree);
 
@@ -96,7 +94,7 @@ describe("chat search highlighting", () => {
     };
 
     rehypeSearchMatches({
-      matchBudget: createMatchBudget(),
+      maxMatches: TEST_MAX_MATCHES,
       searchText: "ος",
     })(tree);
 
@@ -130,7 +128,7 @@ describe("chat search highlighting", () => {
     };
 
     rehypeSearchMatches({
-      matchBudget: createMatchBudget(),
+      maxMatches: TEST_MAX_MATCHES,
       searchText: "needle",
     })(tree);
 
@@ -178,7 +176,7 @@ describe("chat search highlighting", () => {
     };
 
     rehypeSearchMatches({
-      matchBudget: createMatchBudget(3),
+      maxMatches: 3,
       searchText: "hit",
     })(tree);
 
@@ -195,25 +193,26 @@ describe("chat search highlighting", () => {
     });
   });
 
-  test("shares one match budget across separately rendered messages", () => {
-    const first: Root = {
+  test("resets the immutable cap when a transform is replayed", () => {
+    const createTree = (): Root => ({
       type: "root",
-      children: [{ type: "text", value: "hit hit" }],
-    };
-    const second: Root = {
-      type: "root",
-      children: [{ type: "text", value: "hit hit" }],
-    };
-    const matchBudget = createMatchBudget(3);
+      children: [{ type: "text", value: "hit hit hit hit" }],
+    });
+    const transform = rehypeSearchMatches({
+      maxMatches: 3,
+      searchText: "hit",
+    });
+    const first = createTree();
+    const replay = createTree();
 
-    rehypeSearchMatches({ matchBudget, searchText: "hit" })(first);
-    rehypeSearchMatches({ matchBudget, searchText: "hit" })(second);
+    transform(first);
+    transform(replay);
 
     const countMarks = (tree: Root) =>
       tree.children.filter(
         (child) => child.type === "element" && child.tagName === "mark",
       ).length;
-    expect(countMarks(first) + countMarks(second)).toBe(3);
-    expect(matchBudget.remaining).toBe(0);
+    expect(countMarks(first)).toBe(3);
+    expect(countMarks(replay)).toBe(3);
   });
 });

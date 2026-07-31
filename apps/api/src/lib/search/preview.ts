@@ -15,7 +15,7 @@ import {
   escapeAndHighlight,
   restoreOriginalSearchPreview,
   SEARCH_PREVIEW_HEADLINE_CONFIG,
-  truncateSearchPreviewAroundLexemes,
+  truncateSearchPreviewAroundCandidates,
 } from "@/api/lib/search/highlight";
 import { normalizeSearchableChatMessageContent } from "@/api/lib/search/index-chat";
 import { previewPassageJoin } from "@/api/lib/search/preview-passage-sql";
@@ -26,7 +26,7 @@ import {
 import {
   buildSearchPreviewLocatorTsQuery,
   buildSearchTsQuery,
-  getSearchPreviewLocatorLexemes,
+  getSearchPreviewLocatorCandidates,
 } from "@/api/lib/search/query";
 import type { GlobalSearchResultType } from "@/api/lib/search/types";
 
@@ -598,7 +598,7 @@ export const readSearchPreview = async (
           ];
 
     const messages: (SearchPreviewChatMessage & { position: number })[] = [];
-    const locatorLexemes = getSearchPreviewLocatorLexemes(input.query);
+    const locatorCandidates = getSearchPreviewLocatorCandidates(input.query);
     let remainingCharacters = Math.max(
       0,
       LIMITS.searchPreviewResponseCharacterLimit,
@@ -608,8 +608,8 @@ export const readSearchPreview = async (
         break;
       }
       const content = candidate.isTarget
-        ? truncateSearchPreviewAroundLexemes({
-            lexemes: locatorLexemes,
+        ? truncateSearchPreviewAroundCandidates({
+            candidates: locatorCandidates,
             maxLength: remainingCharacters,
             source: candidate.content,
           })
