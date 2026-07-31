@@ -29,6 +29,7 @@ void mock.module("@/api/lib/s3", () => ({
     file: s3FileMock,
     write: s3WriteMock,
   }),
+  deleteS3ObjectWithSignal: s3DeleteMock,
 }));
 
 const processExtractionMock = mock(async () => undefined);
