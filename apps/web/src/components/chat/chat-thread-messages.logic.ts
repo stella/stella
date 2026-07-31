@@ -29,7 +29,7 @@ const USER_MESSAGE_FALLBACK_INLINE_TAGS = Object.freeze([
   "strong",
   "u",
 ]);
-const USER_MESSAGE_FALLBACK_TAGS = new Set([
+const USER_MESSAGE_FALLBACK_TAGS = Object.freeze([
   ...USER_MESSAGE_FALLBACK_BLOCK_TAGS,
   ...USER_MESSAGE_FALLBACK_INLINE_TAGS,
   "br",
@@ -66,7 +66,7 @@ export const userMessageFallbackText = (html: string): string => {
       nameEnd += 1;
     }
     const tagName = rawTag.slice(nameStart, nameEnd).toLowerCase();
-    if (!USER_MESSAGE_FALLBACK_TAGS.has(tagName)) {
+    if (!USER_MESSAGE_FALLBACK_TAGS.some((name) => name === tagName)) {
       output += html.slice(tagStart, tagEnd + 1);
       cursor = tagEnd + 1;
       continue;
