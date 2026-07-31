@@ -372,15 +372,10 @@ export const createEntityFromBuffer = async ({
         },
       );
     } catch (error) {
-      // A transport failure is ambiguous: S3 may have accepted the object.
-      // Keep the intent recoverable unless deletion is confirmed.
-      if (await cleanupObject()) {
-        await abandonEntityCreateIntent({
-          safeDb,
-          intent,
-          reason: "Server-generated entity object write failed",
-        });
-      }
+      // A transport failure is ambiguous: S3 may publish after this immediate
+      // delete completes. Keep the intent recoverable so later sweeps remove
+      // any late publication; the heartbeat stops in finally below.
+      await cleanupObject();
       throw error;
     }
 

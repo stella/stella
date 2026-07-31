@@ -341,16 +341,10 @@ export const createEntityVersionFromBuffer = async ({
       );
     } catch (error) {
       // A timeout or connection failure can be ambiguous: object storage may
-      // have accepted the complete object even though the client saw an error.
-      // Terminalize the intent only after confirmed deletion; otherwise its
-      // live lease remains recoverable by the bounded reconciler.
-      if (await cleanupObject()) {
-        await abandonBufferVersionIntent({
-          safeDb,
-          intent,
-          reason: "Server-generated version object write failed",
-        });
-      }
+      // publish after the immediate delete completes. Keep the intent
+      // recoverable so later sweeps remove any late publication; the
+      // heartbeat stops in finally below.
+      await cleanupObject();
       throw error;
     }
 

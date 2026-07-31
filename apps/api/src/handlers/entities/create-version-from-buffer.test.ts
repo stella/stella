@@ -168,7 +168,7 @@ describe("createEntityVersionFromBuffer", () => {
     expect(s3DeleteMock).not.toHaveBeenCalled();
   });
 
-  test("best-effort deletes an object after an ambiguous initial write failure", async () => {
+  test("keeps recovery after deleting an ambiguous initial write", async () => {
     const writeError = new Error("object storage timed out");
     s3WriteMock.mockRejectedValue(writeError);
 
@@ -186,7 +186,7 @@ describe("createEntityVersionFromBuffer", () => {
       expect.any(AbortSignal),
     );
     expect(writeFileVersionMock).not.toHaveBeenCalled();
-    expect(intentStatuses).toEqual(["scanning", "rejected"]);
+    expect(intentStatuses).toEqual(["scanning"]);
   });
 
   test("keeps the durable intent recoverable when ambiguous-write cleanup fails", async () => {
