@@ -50,6 +50,7 @@ GRANT SELECT ON TABLE "case_law_corpus_index_backfills" TO stella;--> statement-
 GRANT SELECT, INSERT, UPDATE, DELETE
   ON TABLE "case_law_corpus_index_backfills" TO stella_ingestion;--> statement-breakpoint
 
+-- squawk-ignore transaction-nesting
 COMMIT;--> statement-breakpoint
 SET statement_timeout = 0;--> statement-breakpoint
 SET lock_timeout = 0;--> statement-breakpoint
@@ -62,4 +63,5 @@ CREATE INDEX CONCURRENTLY "case_law_decisions_corpus_generation_cursor_idx"
   ON "case_law_decisions" ("created_at", "id");--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 SET lock_timeout = '1s';--> statement-breakpoint
+-- squawk-ignore transaction-nesting, ban-uncommitted-transaction
 BEGIN;--> statement-breakpoint
