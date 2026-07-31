@@ -2,6 +2,7 @@ import { defineRelationsPart, sql } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
 import {
   boolean,
+  check,
   index,
   integer,
   pgTable,
@@ -9,13 +10,23 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
-import { jsonb, timestamptz } from "@/api/db/columns";
+import { encryptedSsoConfig, jsonb, timestamptz } from "@/api/db/columns";
 import {
   authMemberPolicies,
   authOrganizationPolicies,
   authUserPolicies,
   denyStellaAccessPolicies,
 } from "@/api/db/rls";
+
+export const SESSION_AUTHENTICATION_METHODS = ["non_sso", "sso"] as const;
+export type SessionAuthenticationMethod =
+  (typeof SESSION_AUTHENTICATION_METHODS)[number];
+
+export const SSO_ENFORCEMENT_MODES = ["optional", "required"] as const;
+export type SsoEnforcementMode = (typeof SSO_ENFORCEMENT_MODES)[number];
+
+export const SSO_PROTOCOLS = ["oidc", "saml"] as const;
+export type SsoProtocol = (typeof SSO_PROTOCOLS)[number];
 
 export const user = pgTable(
   "user",
@@ -95,11 +106,22 @@ export const session = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     activeOrganizationId: text("active_organization_id"),
+    authenticationMethod: text("authentication_method", {
+      enum: SESSION_AUTHENTICATION_METHODS,
+    })
+      .default("non_sso")
+      .notNull(),
+    ssoProviderId: text("sso_provider_id"),
   },
   (table) => [
     index("session_userId_activeOrgId_idx").on(
       table.userId,
       table.activeOrganizationId,
+    ),
+    index("session_sso_provider_id_idx").on(table.ssoProviderId),
+    check(
+      "session_sso_provenance_check",
+      sql`(${table.authenticationMethod} = 'sso' AND ${table.ssoProviderId} IS NOT NULL) OR (${table.authenticationMethod} = 'non_sso' AND ${table.ssoProviderId} IS NULL)`,
     ),
     ...denyStellaAccessPolicies(),
   ],
@@ -249,6 +271,55 @@ export const invitation = pgTable(
   (table) => [
     index("invitation_organizationId_idx").on(table.organizationId),
     index("invitation_email_idx").on(table.email),
+    ...denyStellaAccessPolicies(),
+  ],
+);
+
+/** Better Auth protocol storage; Stella owns its audited management surface. */
+export const ssoProvider = pgTable(
+  "sso_provider",
+  {
+    id: text("id").primaryKey(),
+    issuer: text("issuer").notNull(),
+    domain: text("domain").notNull(),
+    oidcConfig: encryptedSsoConfig("oidc_config"),
+    samlConfig: encryptedSsoConfig("saml_config"),
+    userId: text("user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    providerId: text("provider_id").notNull(),
+    protocol: text("protocol", { enum: SSO_PROTOCOLS }).notNull(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    domainVerified: boolean("domain_verified").default(false).notNull(),
+    enforcementMode: text("enforcement_mode", {
+      enum: SSO_ENFORCEMENT_MODES,
+    })
+      .default("optional")
+      .notNull(),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+    updatedAt: timestamptz("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("sso_provider_provider_id_uidx").on(table.providerId),
+    uniqueIndex("sso_provider_organization_id_uidx").on(table.organizationId),
+    uniqueIndex("sso_provider_domain_uidx").on(table.domain),
+    check(
+      "sso_provider_protocol_config_check",
+      sql`(${table.protocol} = 'oidc' AND ${table.oidcConfig} IS NOT NULL AND ${table.samlConfig} IS NULL) OR (${table.protocol} = 'saml' AND ${table.oidcConfig} IS NULL AND ${table.samlConfig} IS NOT NULL)`,
+    ),
+    check(
+      "sso_provider_enforcement_mode_check",
+      sql`${table.enforcementMode} IN ('optional', 'required')`,
+    ),
+    check(
+      "sso_provider_protocol_check",
+      sql`${table.protocol} IN ('oidc', 'saml')`,
+    ),
     ...denyStellaAccessPolicies(),
   ],
 );
@@ -493,6 +564,7 @@ export const authSchema = {
   organization,
   member,
   invitation,
+  ssoProvider,
   jwks,
   apikey,
   oauthClient,
@@ -527,6 +599,10 @@ export const authRelationsPart = defineRelationsPart(authSchema, (r) => ({
       to: r.oauthConsent.userId,
     }),
     twoFactors: r.many.twoFactor({ from: r.user.id, to: r.twoFactor.userId }),
+    ssoProviders: r.many.ssoProvider({
+      from: r.user.id,
+      to: r.ssoProvider.userId,
+    }),
   },
   session: {
     user: r.one.user({ from: r.session.userId, to: r.user.id }),
@@ -554,6 +630,10 @@ export const authRelationsPart = defineRelationsPart(authSchema, (r) => ({
       from: r.organization.id,
       to: r.invitation.organizationId,
     }),
+    ssoProviders: r.many.ssoProvider({
+      from: r.organization.id,
+      to: r.ssoProvider.organizationId,
+    }),
   },
   member: {
     organization: r.one.organization({
@@ -569,6 +649,16 @@ export const authRelationsPart = defineRelationsPart(authSchema, (r) => ({
     }),
     inviter: r.one.user({
       from: r.invitation.inviterId,
+      to: r.user.id,
+    }),
+  },
+  ssoProvider: {
+    organization: r.one.organization({
+      from: r.ssoProvider.organizationId,
+      to: r.organization.id,
+    }),
+    user: r.one.user({
+      from: r.ssoProvider.userId,
       to: r.user.id,
     }),
   },

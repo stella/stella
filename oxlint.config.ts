@@ -1375,6 +1375,9 @@ export default defineConfig({
               "apps/api/src/lib/db/assert-migrations-applied.ts",
               "apps/api/src/lib/runtime-worker-path.ts",
               "apps/api/src/lib/s3.ts",
+              // Shared Drizzle columns import this module; read the validated
+              // encryption key lazily without initializing env.ts on import.
+              "apps/api/src/lib/sso-config-encryption.ts",
               "apps/api/src/lib/scheduler/runner.ts",
               "apps/api/src/lib/subprocess.ts",
               // Shared APP_VERSION resolution for routes.ts and posthog.ts

@@ -161,7 +161,11 @@ describe("resolveMemberAuthorization", () => {
       testDb,
     );
 
-    expect(authorization).toEqual({ role: "owner", workspace: null });
+    expect(authorization).toEqual({
+      role: "owner",
+      workspace: null,
+      ssoPolicy: null,
+    });
   });
 
   test("a member belonging to the org but to no workspace still resolves", async () => {
@@ -169,7 +173,11 @@ describe("resolveMemberAuthorization", () => {
       { organizationId: orgFull, userId: loneMemberInFull },
       testDb,
     );
-    expect(authorization).toEqual({ role: "member", workspace: null });
+    expect(authorization).toEqual({
+      role: "member",
+      workspace: null,
+      ssoPolicy: null,
+    });
   });
 
   test("optionally resolves one target workspace without expanding the access set", async () => {

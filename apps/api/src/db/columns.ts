@@ -1,6 +1,11 @@
 import { sql } from "drizzle-orm";
 import { customType, timestamp } from "drizzle-orm/pg-core";
 
+import {
+  decryptSsoConfigFromStorage,
+  encryptSsoConfigForStorage,
+} from "@/api/lib/sso-config-encryption";
+
 /**
  * Safe replacement for `p.jsonb()`.
  *
@@ -38,6 +43,16 @@ export const jsonb = customType<{
     }
     return value;
   },
+});
+
+/** Encrypted text storage matching Better Auth's serialized SSO config API. */
+export const encryptedSsoConfig = customType<{
+  data: string;
+  driverData: string;
+}>({
+  dataType: () => "text",
+  toDriver: encryptSsoConfigForStorage,
+  fromDriver: decryptSsoConfigFromStorage,
 });
 
 /**

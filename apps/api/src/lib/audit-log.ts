@@ -61,6 +61,7 @@ export const AUDIT_RESOURCE_TYPE = {
   PROPERTY: "property",
   RATE_ENTRY: "rate_entry",
   REPORT_EXPORT: "report_export",
+  SSO_CONNECTION: "sso_connection",
   RATE_TABLE: "rate_table",
   SAVED_SEARCH: "saved_search",
   STYLE_SET: "style_set",

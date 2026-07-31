@@ -81,6 +81,7 @@ export type SafeIdType =
   | "schedulerJobRun"
   | "sharepointConnection"
   | "sharepointOAuthState"
+  | "ssoConnection"
   | "styleSet"
   | "taskAssignee"
   | "task"

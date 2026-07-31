@@ -41,6 +41,7 @@
     "@aws-sdk/s3-request-presigner": "^3.1094.0",
     "@better-auth/api-key": "catalog:",
     "@better-auth/oauth-provider": "catalog:",
+    "@better-auth/sso": "catalog:",
     "@elysiajs/cors": "^1.4.2",
     "@google/genai": "^2.13.0",
     "@libpdf/core": "catalog:",

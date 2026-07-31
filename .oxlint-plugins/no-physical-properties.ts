@@ -8,7 +8,7 @@
 //
 // Replaces: scripts/lint-logical-properties.sh
 
-import { hasPhysicalProperty } from "./physical-properties";
+import { hasPhysicalProperty } from "./physical-properties.ts";
 
 export default {
   meta: { name: "no-physical-properties" },

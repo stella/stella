@@ -22,6 +22,7 @@ const readSource = async (path: string) =>
 const ROUTE_FILES_WITH_UNIVERSAL_PERMISSIONS = [
   "apps/api/src/handlers/chat/routes.ts",
   "apps/api/src/handlers/organization-settings/routes.ts",
+  "apps/api/src/handlers/sso/routes.ts",
   "apps/api/src/handlers/workspaces/routes.ts",
 ];
 

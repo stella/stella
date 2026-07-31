@@ -1,4 +1,5 @@
 import { oauthProviderClient } from "@better-auth/oauth-provider/client";
+import { ssoClient } from "@better-auth/sso/client";
 import type { BetterAuthClientPlugin } from "better-auth/client";
 import {
   emailOTPClient,
@@ -115,6 +116,7 @@ const authClientPlugins = [
     },
   }),
   defineBetterAuthClientPlugin(oauthProviderClient()),
+  ssoClient({ domainVerification: { enabled: true } }),
   // No `onTwoFactorRedirect`/`twoFactorPage`: those globally intercept every
   // sign-in call, which would lose the in-flight `redirectTo` search param.
   // The email-OTP sign-in step (otp-panel.tsx) reads `twoFactorRedirect` off
