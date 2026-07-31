@@ -134,13 +134,13 @@ afterAll(async () => {
   await client?.close();
 });
 
-// eslint-disable-next-line arrow-body-style -- block body holds the safety rationale at the assertion boundary
-const scopedDb = async <T>(callback: (tx: Transaction) => Promise<T>) => {
-  // SAFETY: the runner only uses the transaction's Drizzle query surface;
-  // PGlite provides that surface structurally, as in other corpus DB tests.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
-  return await callback(db as unknown as Transaction);
-};
+const scopedDb = async <T>(callback: (tx: Transaction) => Promise<T>) =>
+  await db.transaction(async (tx) => {
+    // SAFETY: PGlite's transaction provides the Drizzle query surface the
+    // runner uses; the explicit transaction is required for LOCK TABLE.
+    // eslint-disable-next-line typescript/no-unsafe-type-assertion
+    return await callback(tx as unknown as Transaction);
+  });
 
 const readCheckpoint = async (generation: string) =>
   (
