@@ -63,6 +63,25 @@ if (!databaseUrl || !runPostgresTests) {
       return list.map((row) => (isRecord(row) ? String(row["court"]) : ""));
     };
 
+    const storedSlugs = async (
+      sourceDocumentIds: string[],
+    ): Promise<string[]> => {
+      const rows = await db.execute(sql<{ slug: string }>`
+        SELECT slug
+        FROM case_law_decisions
+        WHERE source_id = ${sourceId}
+          AND source_document_id IN (${sql.join(
+            sourceDocumentIds.map(
+              (sourceDocumentId) => sql`${sourceDocumentId}`,
+            ),
+            sql`, `,
+          )})
+        ORDER BY source_document_id
+      `);
+      const list = Array.isArray(rows) ? rows : [];
+      return list.map((row) => (isRecord(row) ? String(row["slug"]) : ""));
+    };
+
     beforeAll(async () => {
       const [source] = await db
         .insert(caseLawSources)
@@ -107,6 +126,47 @@ if (!databaseUrl || !runPostgresTests) {
       );
 
       expect(await storedCourts()).toEqual(before);
+    });
+
+    test("concurrent collision inserts converge to unique stable slugs", async () => {
+      const first = decisionAt("Okresný súd A", "concurrent-a");
+      const second = decisionAt("Okresný súd B", "concurrent-b");
+
+      await Promise.all([
+        processDecision(first, sourceId, scopedDb),
+        processDecision(second, sourceId, scopedDb),
+      ]);
+
+      const slugs = await storedSlugs(["concurrent-a", "concurrent-b"]);
+      expect(slugs).toHaveLength(2);
+      expect(new Set(slugs).size).toBe(2);
+
+      const beforeReplay = [...slugs];
+      await Promise.all([
+        processDecision(first, sourceId, scopedDb),
+        processDecision(second, sourceId, scopedDb),
+      ]);
+      expect(await storedSlugs(["concurrent-a", "concurrent-b"])).toEqual(
+        beforeReplay,
+      );
+    });
+
+    test("concurrent delivery of one publisher id leaves one durable row", async () => {
+      const decision = decisionAt("Okresný súd Replay", "concurrent-replay");
+
+      await Promise.all([
+        processDecision(decision, sourceId, scopedDb),
+        processDecision(decision, sourceId, scopedDb),
+      ]);
+
+      const rows = await db.execute(sql<{ count: number }>`
+        SELECT count(*)::int AS count
+        FROM case_law_decisions
+        WHERE source_id = ${sourceId}
+          AND source_document_id = 'concurrent-replay'
+      `);
+      const row = Array.isArray(rows) ? rows.at(0) : undefined;
+      expect(isRecord(row) ? Number(row["count"]) : 0).toBe(1);
     });
   });
 }

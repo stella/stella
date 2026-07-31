@@ -1,6 +1,6 @@
 import { DrizzleQueryError } from "drizzle-orm";
 
-type PgCause = { code?: unknown; errno?: unknown };
+type PgCause = { code?: unknown; constraint?: unknown; errno?: unknown };
 
 const hasPgCause = (cause: unknown): cause is PgCause =>
   cause !== null &&
@@ -35,6 +35,22 @@ export const isPgError = (error: unknown, code: string): boolean =>
   error instanceof DrizzleQueryError &&
   hasPgCause(error.cause) &&
   sqlStateFromCause(error.cause) === code;
+
+/**
+ * Returns true only when Postgres identified both the SQLSTATE and the
+ * database constraint/index which rejected the query.  A 23505 alone is not
+ * enough to retry a different value: an identity conflict and a slug conflict
+ * have different replay semantics.
+ */
+export const isPgConstraintError = (
+  error: unknown,
+  code: string,
+  constraint: string,
+): boolean =>
+  error instanceof DrizzleQueryError &&
+  hasPgCause(error.cause) &&
+  sqlStateFromCause(error.cause) === code &&
+  error.cause.constraint === constraint;
 
 export const getPgErrorCode = (error: unknown): string | undefined =>
   error instanceof DrizzleQueryError && hasPgCause(error.cause)

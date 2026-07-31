@@ -4,18 +4,15 @@ import type { SQL } from "drizzle-orm";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions } from "@/api/db/schema";
 import {
-  caseLawDecisionSlugCollisionFilter,
-  createAvailableCaseLawDecisionSlug,
+  CASE_LAW_DECISION_SLUG_ALLOCATION_ATTEMPTS,
+  createCaseLawDecisionSlugCandidate,
   createCaseLawDecisionSlug,
 } from "@/api/handlers/case-law/decisions/slug";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
-import { LIMITS } from "@/api/lib/limits";
-import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
+import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
 
 const BATCH_SIZE = 200;
-const MAX_SLUG_ATTEMPTS = 5;
-
 type BackfillRow = {
   id: SafeId<"caseLawDecision">;
   caseNumber: string;
@@ -26,33 +23,25 @@ export type CaseLawSlugBackfillResult = {
   failed: number;
 };
 
-// Postgres unique_violation: a concurrent writer grabbed our scanned slug
-// between the prefix scan and the update; re-scan and try a higher suffix.
-// Drizzle wraps the driver error, so `isPgError` reads the SQLSTATE off
-// `.cause` (errno for Bun SQL, code for pg/PGlite) rather than the wrapper.
-const isUniqueViolation = (error: unknown): boolean =>
-  isPgError(error, PG_ERROR.UNIQUE_VIOLATION);
+const isSlugUniqueViolation = (error: unknown): boolean =>
+  isPgConstraintError(
+    error,
+    PG_ERROR.UNIQUE_VIOLATION,
+    "case_law_decisions_slug_uidx",
+  );
 
 const assignSlug = async (db: ScopedDb, row: BackfillRow): Promise<boolean> => {
   const baseSlug = createCaseLawDecisionSlug(row.caseNumber);
-  const collisionFilter = caseLawDecisionSlugCollisionFilter({
-    baseSlug,
-    maxSuffix: LIMITS.caseLawSlugCollisionScanLimit + 1,
-  });
 
-  for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt += 1) {
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential by design: retry loop, each attempt re-scans after a concurrent writer took the prior candidate
-    const existingSlugRows = await db((tx) =>
-      tx
-        .select({ slug: caseLawDecisions.slug })
-        .from(caseLawDecisions)
-        .where(collisionFilter)
-        .limit(LIMITS.caseLawSlugCollisionScanLimit),
-    );
-    const slug = createAvailableCaseLawDecisionSlug(
+  for (const [
+    attemptIndex,
+    attempt,
+  ] of CASE_LAW_DECISION_SLUG_ALLOCATION_ATTEMPTS.entries()) {
+    const slug = createCaseLawDecisionSlugCandidate({
       baseSlug,
-      existingSlugRows.map((scanned) => scanned.slug),
-    );
+      identity: row.id,
+      attempt,
+    });
 
     try {
       // Compare-and-set on a still-null slug: a concurrent writer may have
@@ -71,7 +60,10 @@ const assignSlug = async (db: ScopedDb, row: BackfillRow): Promise<boolean> => {
 
       return updated.length > 0;
     } catch (error) {
-      if (isUniqueViolation(error) && attempt < MAX_SLUG_ATTEMPTS - 1) {
+      if (
+        isSlugUniqueViolation(error) &&
+        attemptIndex < CASE_LAW_DECISION_SLUG_ALLOCATION_ATTEMPTS.length - 1
+      ) {
         continue;
       }
       throw error;
@@ -86,11 +78,9 @@ const assignSlug = async (db: ScopedDb, row: BackfillRow): Promise<boolean> => {
  * `slug` is still null. Shared by the standalone backfill CLI and the
  * dev seed so the slug algorithm has a single source of truth.
  *
- * Slug assignment derives a base slug from the case number, scans the
- * small set of existing slugs sharing that base, and picks the first free
- * suffix. Rows are filled one at a time so each scan observes the slugs
- * committed just before it; the partial unique index is the final guard
- * against a race with a concurrent writer (compare-and-set + retry above).
+ * Slug assignment first tries the familiar case-number base. A collision
+ * retries a stable digest of the persisted decision id; the unique index is
+ * the allocator, so the backfill never scans the global slug namespace.
  *
  * Idempotent (only processes null-slug rows) and resumable (keyset by id):
  * a row that fails stays null and cannot stall the scan, so re-running
@@ -127,11 +117,9 @@ export const backfillCaseLawSlugs = async (
       break;
     }
 
-    // Assign one row at a time: each slug scan must see the slugs committed
-    // by the rows before it to avoid handing out the same suffix twice.
     for (const row of rows) {
       try {
-        // oxlint-disable-next-line no-await-in-loop -- sequential by design: each slug scan must see the slugs committed by prior rows to avoid handing out the same suffix twice
+        // oxlint-disable-next-line no-await-in-loop -- bounded keyset batch; each write is independently compare-and-set
         const wrote = await assignSlug(db, row);
         if (wrote) {
           written += 1;

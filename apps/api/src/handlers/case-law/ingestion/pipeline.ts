@@ -19,8 +19,8 @@ import {
   MAX_SYNC_PAGES,
 } from "@/api/handlers/case-law/consts";
 import {
-  caseLawDecisionSlugCollisionFilter,
-  createAvailableCaseLawDecisionSlug,
+  CASE_LAW_DECISION_SLUG_ALLOCATION_ATTEMPTS,
+  createCaseLawDecisionSlugCandidate,
   createCaseLawDecisionSlug,
 } from "@/api/handlers/case-law/decisions/slug";
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
@@ -59,8 +59,8 @@ import {
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import { storedDecisionSignal } from "@/api/lib/legal-search/parsers/validate-ast";
-import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
+import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
 import { getS3 } from "@/api/lib/s3";
 
 export { sanitizeResult };
@@ -712,7 +712,7 @@ export const processDecision = async (
     }
   })();
 
-  const writeDecisionRow = async (): Promise<void> => {
+  const writeDecisionRow = async (slug?: string): Promise<void> => {
     await scopedDb(async (tx) => {
       // audit: skip — background case-law ingestion pipeline; public case-law data, not user actions
       if (existing) {
@@ -793,21 +793,9 @@ export const processDecision = async (
         return;
       }
 
-      const baseSlug = createCaseLawDecisionSlug(result.caseNumber);
-      const existingSlugRows = await tx
-        .select({ slug: caseLawDecisions.slug })
-        .from(caseLawDecisions)
-        .where(
-          caseLawDecisionSlugCollisionFilter({
-            baseSlug,
-            maxSuffix: LIMITS.caseLawSlugCollisionScanLimit + 1,
-          }),
-        )
-        .limit(LIMITS.caseLawSlugCollisionScanLimit);
-      const slug = createAvailableCaseLawDecisionSlug(
-        baseSlug,
-        existingSlugRows.map((row) => row.slug),
-      );
+      if (slug === undefined) {
+        panic("Missing slug for a new case-law decision");
+      }
 
       const [decisionRow] = await tx
         .insert(caseLawDecisions)
@@ -855,12 +843,66 @@ export const processDecision = async (
 
   // Pass the original error through: the pipeline's halt semantics inspect
   // its type (a TimeoutError holds the cursor), which a wrapper would hide.
-  const rowWrite = await Result.tryPromise({
-    try: writeDecisionRow,
+  const slugIdentity = result.sourceDocumentId
+    ? `${sourceId}\u0000document\u0000${result.sourceDocumentId}`
+    : `${sourceId}\u0000case\u0000${result.caseNumber}\u0000${result.language}`;
+  const baseSlug = createCaseLawDecisionSlug(result.caseNumber);
+
+  let rowWrite = await Result.tryPromise({
+    try: async () => await writeDecisionRow(existing ? undefined : baseSlug),
     catch: (cause: unknown) => cause,
   });
 
+  for (const attempt of CASE_LAW_DECISION_SLUG_ALLOCATION_ATTEMPTS) {
+    if (attempt === 0) {
+      continue;
+    }
+    if (Result.isOk(rowWrite)) {
+      break;
+    }
+    if (
+      !isPgConstraintError(
+        rowWrite.error,
+        PG_ERROR.UNIQUE_VIOLATION,
+        "case_law_decisions_slug_uidx",
+      )
+    ) {
+      break;
+    }
+    const slug = createCaseLawDecisionSlugCandidate({
+      baseSlug,
+      identity: slugIdentity,
+      attempt,
+    });
+    // oxlint-disable-next-line no-await-in-loop -- a failed unique-index insert aborts its transaction; each deterministic candidate needs a fresh transaction
+    rowWrite = await Result.tryPromise({
+      try: async () => await writeDecisionRow(slug),
+      catch: (cause: unknown) => cause,
+    });
+  }
+
   if (Result.isError(rowWrite)) {
+    const isConcurrentIdentityInsert =
+      isPgConstraintError(
+        rowWrite.error,
+        PG_ERROR.UNIQUE_VIOLATION,
+        "case_law_decisions_source_document_idx",
+      ) ||
+      isPgConstraintError(
+        rowWrite.error,
+        PG_ERROR.UNIQUE_VIOLATION,
+        "case_law_decisions_source_case_lang_null_idx",
+      );
+    if (isConcurrentIdentityInsert) {
+      if (corpusPlan.type === "object-storage") {
+        await discardOrphanedCorpusObjects(corpusPlan.written, decisionId);
+      }
+      return {
+        inserted: false,
+        searchVectorFailed: false,
+        s3UploadFailed: false,
+      };
+    }
     if (
       corpusPlan.type === "object-storage" &&
       canDiscardCorpusObjects({
