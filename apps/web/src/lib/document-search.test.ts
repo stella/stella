@@ -77,6 +77,18 @@ describe("document search highlighting", () => {
     expect(normalizeSearchText("ODŠTĚPENÍ")).toBe("odstepeni");
   });
 
+  test("uses canonical Arabic folds while preserving source offsets", () => {
+    expect(findNormalizedSearchTextMatches("مدرسة", "مدرسه")).toEqual([
+      { start: 0, end: 5 },
+    ]);
+    expect(findNormalizedSearchTextMatches("مـحـمـد", "محمد")).toEqual([
+      { start: 0, end: 7 },
+    ]);
+    expect(findNormalizedSearchTextMatches("٢٠٢٤", "2024")).toEqual([
+      { start: 0, end: 4 },
+    ]);
+  });
+
   test("finds every fallback term and maps unaccented DOCX queries", () => {
     const document = createEmptyDocument({
       initialText: "Plán odštěpení a následné assignment povinností",

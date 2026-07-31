@@ -207,6 +207,22 @@ const isLowSurrogate = (value: number): boolean =>
 const isHighSurrogate = (value: number): boolean =>
   value >= 0xd8_00 && value <= 0xdb_ff;
 
+const sliceWithoutSplitSurrogate = (
+  source: string,
+  requestedStart: number,
+  maxLength: number,
+): string => {
+  let start = Math.max(0, Math.min(source.length, Math.floor(requestedStart)));
+  if (isLowSurrogate(source.charCodeAt(start))) {
+    start += 1;
+  }
+  let end = Math.min(source.length, start + maxLength);
+  if (isHighSurrogate(source.charCodeAt(end - 1))) {
+    end -= 1;
+  }
+  return source.slice(start, end);
+};
+
 const SEARCH_LEXEME_CHARACTER = /[\p{L}\p{N}]/u;
 
 const characterBefore = (text: string, index: number): string | null => {
@@ -270,7 +286,7 @@ export const truncateSearchPreviewAroundLexemes = ({
   }
 
   if (!Number.isFinite(foldedMatchStart)) {
-    return source.slice(0, boundedLength);
+    return sliceWithoutSplitSurrogate(source, 0, boundedLength);
   }
   const normalizedMatchStart = foldedSource.sourceIndex.at(foldedMatchStart);
   const normalizedMatchEnd = foldedSource.sourceEndIndex.at(
@@ -281,28 +297,20 @@ export const truncateSearchPreviewAroundLexemes = ({
     normalizedMatchEnd === undefined ||
     normalizedMatchEnd <= normalizedMatchStart
   ) {
-    return source.slice(0, boundedLength);
+    return sliceWithoutSplitSurrogate(source, 0, boundedLength);
   }
   const firstSpan = sourceSpanAt(normalizedSource, normalizedMatchStart);
   const lastSpan = sourceSpanAt(normalizedSource, normalizedMatchEnd - 1);
   if (!firstSpan || !lastSpan) {
-    return source.slice(0, boundedLength);
+    return sliceWithoutSplitSurrogate(source, 0, boundedLength);
   }
 
   const matchCenter = Math.floor((firstSpan.start + lastSpan.end) / 2);
-  let start = Math.max(
+  const start = Math.max(
     0,
     Math.min(source.length - boundedLength, matchCenter - boundedLength / 2),
   );
-  start = Math.floor(start);
-  if (isLowSurrogate(source.charCodeAt(start))) {
-    start += 1;
-  }
-  let end = Math.min(source.length, start + boundedLength);
-  if (isHighSurrogate(source.charCodeAt(end - 1))) {
-    end -= 1;
-  }
-  return source.slice(start, end);
+  return sliceWithoutSplitSurrogate(source, start, boundedLength);
 };
 
 type AlignmentAnchor = {

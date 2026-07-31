@@ -1,3 +1,5 @@
+import { applyArabicFolds } from "@stll/text-normalize";
+
 const COMBINING_MARKS = /\p{M}+/gu;
 const SINGLE_SEARCH_TERM = /^[\p{L}\p{N}]$/u;
 
@@ -15,7 +17,9 @@ type FindNormalizedSearchTextMatchesOptions = {
 };
 
 export const normalizeSearchText = (value: string): string =>
-  value.normalize("NFKD").replace(COMBINING_MARKS, "").toLowerCase();
+  applyArabicFolds(
+    value.normalize("NFKD").replace(COMBINING_MARKS, "").toLowerCase(),
+  );
 
 export const searchTextQueryKey = (query: SearchTextQuery): string =>
   typeof query === "string"

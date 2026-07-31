@@ -48,6 +48,18 @@ describe("search result highlighting", () => {
     expect(preview).toContain("مـحـمـد");
   });
 
+  test("does not split surrogate pairs in a fallback preview", () => {
+    const source = `${"a".repeat(15_999)}😀 trailing`;
+    const preview = truncateSearchPreviewAroundLexemes({
+      lexemes: ["absent"],
+      maxLength: 16_000,
+      source,
+    });
+
+    expect(preview).toBe("a".repeat(15_999));
+    expect(preview).not.toContain("\u{d83d}");
+  });
+
   test("escapes HTML before inserting highlight tags", () => {
     const highlighted = escapeAndHighlight(
       `<script>alert("x")</script> ${HIGHLIGHT_START}Privileged & confidential${HIGHLIGHT_STOP}`,

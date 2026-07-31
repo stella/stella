@@ -77,6 +77,28 @@ const findExecutedQuery = (needle: string): string | undefined => {
 };
 
 describe("chat search indexing", () => {
+  test("filters malformed version 2 source-document metadata", async () => {
+    const { normalizeSearchableChatMessageContent } =
+      await import("./index-chat");
+    const validSource = {
+      entityId: "entity-1",
+      kind: "document",
+      mimeType: "application/pdf",
+      title: "Agreement.pdf",
+      workspaceId: "workspace-1",
+    };
+
+    expect(
+      normalizeSearchableChatMessageContent({
+        version: 2,
+        data: [],
+        metadata: { sourceDocuments: [null, validSource] },
+      }),
+    ).toMatchObject({
+      metadata: { sourceDocuments: [validSource] },
+    });
+  });
+
   test("does not let stale upserts overwrite a newer search document", async () => {
     const { upsertChatThreadSearchDocument } = await import("./index-chat");
 

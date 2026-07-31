@@ -31,13 +31,73 @@ const isPersistedChatMessageContent = (
   (value["version"] === 1 || value["version"] === 2) &&
   Array.isArray(value["data"]);
 
+type SearchableChatSourceDocument = {
+  entityId?: string;
+  entityRef?: string;
+  kind: string;
+  matterRef?: string;
+  mention?: string;
+  mimeType?: string | null;
+  title: string;
+  workspaceId?: string | null;
+};
+
+const toSearchableChatSourceDocument = (
+  value: unknown,
+): SearchableChatSourceDocument | null => {
+  if (
+    !isRecord(value) ||
+    typeof value["kind"] !== "string" ||
+    typeof value["title"] !== "string"
+  ) {
+    return null;
+  }
+  return {
+    kind: value["kind"],
+    title: value["title"],
+    ...(typeof value["entityId"] === "string"
+      ? { entityId: value["entityId"] }
+      : {}),
+    ...(typeof value["entityRef"] === "string"
+      ? { entityRef: value["entityRef"] }
+      : {}),
+    ...(typeof value["matterRef"] === "string"
+      ? { matterRef: value["matterRef"] }
+      : {}),
+    ...(typeof value["mention"] === "string"
+      ? { mention: value["mention"] }
+      : {}),
+    ...(value["mimeType"] === null || typeof value["mimeType"] === "string"
+      ? { mimeType: value["mimeType"] }
+      : {}),
+    ...(value["workspaceId"] === null ||
+    typeof value["workspaceId"] === "string"
+      ? { workspaceId: value["workspaceId"] }
+      : {}),
+  };
+};
+
 export const normalizeSearchableChatMessageContent = (content: unknown) => {
   if (!isPersistedChatMessageContent(content)) {
     return null;
   }
   const normalized = normalizePersistedChatMessageContent(content);
+  const sourceDocuments: unknown = normalized.metadata.sourceDocuments;
+  const metadata =
+    sourceDocuments === undefined
+      ? normalized.metadata
+      : {
+          ...normalized.metadata,
+          sourceDocuments: Array.isArray(sourceDocuments)
+            ? sourceDocuments.flatMap((sourceDocument) => {
+                const searchable =
+                  toSearchableChatSourceDocument(sourceDocument);
+                return searchable ? [searchable] : [];
+              })
+            : [],
+        };
   return {
-    metadata: normalized.metadata,
+    metadata,
     parts: normalized.parts.filter(isChatPart),
   };
 };

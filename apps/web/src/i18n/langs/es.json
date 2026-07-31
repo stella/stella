@@ -2367,6 +2367,7 @@
     "mimeType": "Tipo de archivo",
     "noResults": "Sin resultados para \"{query}\".",
     "placeholder": "Buscar en todos los asuntos...",
+    "previewUnavailable": "Vista previa no disponible",
     "recentSearches": "Búsquedas recientes",
     "recentlyOpenedFiles": "Archivos abiertos recientemente",
     "renameSearchTitle": "Cambiar nombre de la búsqueda guardada",

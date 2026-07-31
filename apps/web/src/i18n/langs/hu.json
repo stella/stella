@@ -2367,6 +2367,7 @@
     "mimeType": "Fájltípus",
     "noResults": "Nincs találat erre: „{query}”.",
     "placeholder": "Keresés az összes ügyben...",
+    "previewUnavailable": "Az előnézet nem érhető el",
     "recentSearches": "Legutóbbi keresések",
     "recentlyOpenedFiles": "Legutóbb megnyitott fájlok",
     "renameSearchTitle": "Mentett keresés átnevezése",

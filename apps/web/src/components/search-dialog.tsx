@@ -1432,18 +1432,44 @@ type RecentFilePreviewPanelProps = {
   userId: string;
 };
 
+type RecentFilePreviewUnavailableProps = {
+  reason: "missing" | "request-error";
+};
+
+const RecentFilePreviewUnavailable = ({
+  reason,
+}: RecentFilePreviewUnavailableProps) => {
+  const t = useTranslations();
+  let message: string;
+  switch (reason) {
+    case "missing":
+      message = t("search.previewUnavailable");
+      break;
+    case "request-error":
+      message = t("common.somethingWentWrong");
+      break;
+    default: {
+      const exhaustive: never = reason;
+      return exhaustive;
+    }
+  }
+  return (
+    <aside className={SEARCH_PREVIEW_COLUMN_CLASS_NAME}>
+      <div className="text-muted-foreground flex flex-1 items-center justify-center px-5 text-center text-sm">
+        {message}
+      </div>
+    </aside>
+  );
+};
+
 const RecentFilePreviewPanel = ({
   file,
   onOpen,
   organizationId,
   userId,
 }: RecentFilePreviewPanelProps) => {
-  const t = useTranslations();
   const isNativeDocument =
     file.mimeType === PDF_MIME || file.mimeType === DOCX_MIME;
-  const needsFieldResolution =
-    isNativeDocument &&
-    (file.fileFieldId === undefined || file.fileFieldId === null);
   const fieldQuery = useQuery({
     ...recentFilePreviewFieldOptions({
       entityId: file.entityId,
@@ -1452,23 +1478,25 @@ const RecentFilePreviewPanel = ({
       userId,
       workspaceId: file.workspaceId,
     }),
-    enabled: needsFieldResolution,
+    enabled: isNativeDocument,
   });
-  const resolvedFieldId = file.fileFieldId ?? fieldQuery.data ?? null;
-
-  if (needsFieldResolution && resolvedFieldId === null) {
+  if (isNativeDocument && fieldQuery.isPending) {
     return (
       <aside className={SEARCH_PREVIEW_COLUMN_CLASS_NAME}>
-        {fieldQuery.isPending ? (
-          <NativeDocumentPreviewSkeleton />
-        ) : (
-          <div className="text-muted-foreground flex flex-1 items-center justify-center px-5 text-center text-sm">
-            {t("common.somethingWentWrong")}
-          </div>
-        )}
+        <NativeDocumentPreviewSkeleton />
       </aside>
     );
   }
+  if (isNativeDocument && fieldQuery.isError) {
+    return <RecentFilePreviewUnavailable reason="request-error" />;
+  }
+  if (isNativeDocument && fieldQuery.data === null) {
+    return <RecentFilePreviewUnavailable reason="missing" />;
+  }
+
+  const resolvedFieldId = isNativeDocument
+    ? (fieldQuery.data ?? null)
+    : (file.fileFieldId ?? null);
 
   const hit = getRecentFilePreviewHit(file, resolvedFieldId);
 
@@ -1954,6 +1982,9 @@ const SearchRecents = ({
           <div className="flex flex-col gap-y-1">
             {recentFiles.map((file) => (
               <Button
+                aria-current={
+                  previewedFileId === file.entityId ? "true" : undefined
+                }
                 className="h-auto! w-full justify-start gap-2 py-1 text-start text-sm"
                 data-previewing={previewedFileId === file.entityId}
                 key={file.entityId}

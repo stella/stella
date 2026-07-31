@@ -37,6 +37,7 @@ export const SearchChatPreview = ({
   const rootRef = useRef<HTMLDivElement>(null);
   const lastScrolledMatchRef = useRef<Element | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [domRevision, setDomRevision] = useState(0);
   const [matchSummary, setMatchSummary] =
     useState<SearchMatchSummary>(EMPTY_MATCH_SUMMARY);
   const searchTextKey = searchTextQueryKey(searchText);
@@ -69,6 +70,7 @@ export const SearchChatPreview = ({
           ? current
           : next,
       );
+      setDomRevision((current) => current + 1);
     };
     syncMatchSummary();
     const observer = new MutationObserver(syncMatchSummary);
@@ -120,7 +122,7 @@ export const SearchChatPreview = ({
       }),
     });
     lastScrolledMatchRef.current = activeMatch;
-  }, [activeIndex, matchSummary.count]);
+  }, [activeIndex, domRevision, matchSummary.count]);
 
   const navigate = useCallback(
     (direction: "next" | "previous") => {
