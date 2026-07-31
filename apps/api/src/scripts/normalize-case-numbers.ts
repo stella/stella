@@ -37,22 +37,21 @@ const DRY_RUN = process.argv.includes("--dry-run");
  */
 const SHEET_PATTERN = String.raw`^(.*/\d{2,4})-(\d+)$`;
 
-const rowCount = (result: unknown): number => {
+/** Rows from `execute` under either driver shape (bare array or `{ rows }`). */
+const executedRows = (result: unknown): unknown[] => {
   if (Array.isArray(result)) {
-    return result.length;
+    return result;
   }
-  return isRecord(result) && Array.isArray(result["rows"])
-    ? result["rows"].length
-    : 0;
+  if (isRecord(result) && Array.isArray(result["rows"])) {
+    return result["rows"];
+  }
+  return [];
 };
 
+const rowCount = (result: unknown): number => executedRows(result).length;
+
 const firstNumber = (result: unknown, key: string): number => {
-  const rows = Array.isArray(result)
-    ? result
-    : isRecord(result) && Array.isArray(result["rows"])
-      ? result["rows"]
-      : [];
-  const row = rows.at(0);
+  const row = executedRows(result).at(0);
   return isRecord(row) && typeof row[key] === "number" ? row[key] : 0;
 };
 
