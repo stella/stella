@@ -6,7 +6,7 @@ import {
   caseLawCitations,
   caseLawDecisions,
   caseLawIngestionFailures,
-  type caseLawSources,
+  caseLawSources,
 } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
 import {
@@ -1024,7 +1024,7 @@ const processDecisionAttempt = async ({
     if (corpusPlan.type === "object-storage") {
       const current = await scopedDb((tx) =>
         tx.query.caseLawDecisions.findFirst({
-          where: { id: decisionId },
+          where: { id: { eq: decisionId } },
           columns: {
             astS3Key: true,
             normalizedS3Key: true,
@@ -1213,7 +1213,7 @@ export const runIngestionPipeline = async ({
       );
     } catch (error) {
       if (error instanceof TimeoutError) {
-        haltReason = dbTimeoutHaltReason(error);
+        haltReason = databaseTimeoutHaltReason(error);
         break;
       }
       throw error;
