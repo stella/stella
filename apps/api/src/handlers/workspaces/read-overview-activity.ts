@@ -695,6 +695,7 @@ const readOverviewActivity = createSafeHandler(
         actor.id,
         {
           deletedAt: actor.deletedAt?.toISOString() ?? null,
+          id: actor.id,
           image: actor.image,
           name: actor.name || actor.email,
           type: "user" as const,
@@ -733,6 +734,7 @@ const readOverviewActivity = createSafeHandler(
           row.performerType === "user"
             ? (actorMap.get(performerId) ?? {
                 deletedAt: null,
+                id: performerId,
                 image: null,
                 name: null,
                 type: "user" as const,

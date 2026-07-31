@@ -57,7 +57,11 @@ import type {
 import { overviewActivityOptions } from "@/routes/_protected.workspaces/-queries";
 
 import type { ActivityGroup } from "./activity-panel.logic";
-import { activityDayKey, groupActivityItems } from "./activity-panel.logic";
+import {
+  activityDayKey,
+  expandActivityGroupsForList,
+  groupActivityItems,
+} from "./activity-panel.logic";
 
 type ActivityPanelProps = { workspaceId: string };
 type ActivityDay = [ActivityGroup, ...ActivityGroup[]];
@@ -822,6 +826,7 @@ const ActivityList = ({
 }) => {
   const format = useFormatter();
   const t = useTranslations();
+  const listGroups = expandActivityGroupsForList(groups);
   return (
     <div className="overflow-x-auto" role="list">
       <div className="w-full min-w-[57rem]">
@@ -834,7 +839,7 @@ const ActivityList = ({
           <span>{t("workspaces.overview.activity.list.event")}</span>
           <span>{t("workspaces.overview.activity.list.provenance")}</span>
         </div>
-        {groups.map((group) => {
+        {listGroups.map((group) => {
           const item = group.items[0];
           const provenance = triggerDetail(item, t);
           return (

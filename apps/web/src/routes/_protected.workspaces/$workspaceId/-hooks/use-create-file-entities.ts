@@ -25,6 +25,7 @@ import {
 import {
   buildEntityCreateInvalidationPayload,
   buildEntityCreatePresignPayload,
+  entityCreateLocalInvalidationKeys,
 } from "@/routes/_protected.workspaces/$workspaceId/-hooks/create-file-upload-payload.logic";
 import { useStartWorkflow } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-start-workflow";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
@@ -747,11 +748,9 @@ export const useCreateFileEntities = (workspaceId: string) => {
       analytics.captureError(error);
     },
     onSettled: () => {
-      const { queryKey, queryKeys } =
-        buildEntityCreateInvalidationPayload(workspaceId);
       detached(
         Promise.all(
-          [queryKey, ...queryKeys].map((key) =>
+          entityCreateLocalInvalidationKeys(workspaceId).map((key) =>
             queryClient.invalidateQueries({ queryKey: key }),
           ),
         ),

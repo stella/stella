@@ -32,11 +32,7 @@ const hasSamePerformer = (
   if (left.performer.type !== "user" || right.performer.type !== "user") {
     return false;
   }
-  return (
-    left.performer.name === right.performer.name &&
-    left.performer.image === right.performer.image &&
-    left.performer.deletedAt === right.performer.deletedAt
-  );
+  return left.performer.id !== null && left.performer.id === right.performer.id;
 };
 
 const isWithinDocumentBatchWindow = (
@@ -104,3 +100,16 @@ export const activityDayKey = (activityAt: string): string => {
     ? activityAt
     : `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
 };
+
+export const expandActivityGroupsForList = (
+  groups: ActivityGroup[],
+): ActivityGroup[] =>
+  groups.flatMap((group) =>
+    group.type === "automation_run"
+      ? group.items.map((item) => ({
+          id: `item:${item.id}`,
+          items: [item],
+          type: "single" as const,
+        }))
+      : [group],
+  );

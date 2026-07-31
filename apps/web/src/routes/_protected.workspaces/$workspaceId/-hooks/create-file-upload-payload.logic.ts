@@ -30,8 +30,10 @@ export const buildEntityCreatePresignPayload = ({
 
 export const buildEntityCreateInvalidationPayload = (workspaceId: string) => ({
   queryKey: entitiesKeys.all(workspaceId),
-  queryKeys: [
-    workspacesKeys.overview(workspaceId),
-    workspacesKeys.overviewActivityAll(workspaceId),
-  ],
 });
+
+export const entityCreateLocalInvalidationKeys = (workspaceId: string) => [
+  entitiesKeys.all(workspaceId),
+  // This prefix also invalidates every overview activity category.
+  workspacesKeys.overview(workspaceId),
+];

@@ -3,7 +3,11 @@ import { describe, expect, test } from "bun:test";
 import { toSafeId } from "@/lib/safe-id";
 import type { MatterActivityItem } from "@/routes/_protected.workspaces/-queries";
 
-import { activityDayKey, groupActivityItems } from "./activity-panel.logic";
+import {
+  activityDayKey,
+  expandActivityGroupsForList,
+  groupActivityItems,
+} from "./activity-panel.logic";
 
 type ItemOptions = {
   action?: MatterActivityItem["action"];
@@ -66,6 +70,7 @@ describe("groupActivityItems", () => {
     const anchor = new Date("2026-07-30T12:00:00.000Z").getTime();
     const performer = {
       deletedAt: null,
+      id: "user-1",
       image: null,
       name: "Matter Administrator",
       type: "user",
@@ -89,6 +94,7 @@ describe("groupActivityItems", () => {
   test("starts a new document batch outside the first item's minute", () => {
     const performer = {
       deletedAt: null,
+      id: "user-1",
       image: null,
       name: "Matter Administrator",
       type: "user",
@@ -120,6 +126,7 @@ describe("groupActivityItems", () => {
   test("keeps uploads in one batch when the minute crosses midnight", () => {
     const performer = {
       deletedAt: null,
+      id: "user-1",
       image: null,
       name: "Matter Administrator",
       type: "user",
@@ -141,6 +148,40 @@ describe("groupActivityItems", () => {
 
     expect(groups).toHaveLength(1);
     expect(groups[0]?.items).toHaveLength(2);
+  });
+
+  test("keeps same-named users in separate upload batches", () => {
+    const performer = {
+      deletedAt: null,
+      image: null,
+      name: "Matter Administrator",
+      type: "user",
+    } as const;
+    const groups = groupActivityItems([
+      item("1", {
+        action: "create",
+        performer: { ...performer, id: "user-1" },
+        runId: null,
+      }),
+      item("2", {
+        action: "create",
+        performer: { ...performer, id: "user-2" },
+        runId: null,
+      }),
+    ]);
+
+    expect(groups).toHaveLength(2);
+  });
+
+  test("expands every automation event for list mode", () => {
+    const groups = groupActivityItems([
+      item("1", { runId: "run-a" }),
+      item("2", { runId: "run-a" }),
+    ]);
+
+    expect(
+      expandActivityGroupsForList(groups).map(({ items }) => items[0].id),
+    ).toEqual(["1", "2"]);
   });
 
   test("uses local calendar days instead of UTC slices", () => {

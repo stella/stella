@@ -7,6 +7,7 @@ import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
 import {
   buildEntityCreateInvalidationPayload,
   buildEntityCreatePresignPayload,
+  entityCreateLocalInvalidationKeys,
 } from "./create-file-upload-payload.logic";
 
 const baseInput = {
@@ -50,15 +51,20 @@ describe("entity-create upload payload", () => {
     expect(payload.size).toBe(0);
   });
 
-  test("invalidates matter activity when an upload is finalized", () => {
+  test("broadcasts one non-overlapping invalidation per finalized file", () => {
     const workspaceId = "workspace_upload";
 
     expect(buildEntityCreateInvalidationPayload(workspaceId)).toEqual({
       queryKey: entitiesKeys.all(workspaceId),
-      queryKeys: [
-        workspacesKeys.overview(workspaceId),
-        workspacesKeys.overviewActivityAll(workspaceId),
-      ],
     });
+  });
+
+  test("invalidates overview and activity once after the upload operation", () => {
+    const workspaceId = "workspace_upload";
+
+    expect(entityCreateLocalInvalidationKeys(workspaceId)).toEqual([
+      entitiesKeys.all(workspaceId),
+      workspacesKeys.overview(workspaceId),
+    ]);
   });
 });
