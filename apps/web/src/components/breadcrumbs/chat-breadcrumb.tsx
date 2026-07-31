@@ -11,8 +11,10 @@ import { BidiText } from "@stll/ui/components/bidi-text";
 import { BreadcrumbItem } from "@stll/ui/components/breadcrumb";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { shouldFetchChatThreadTitle } from "@/components/breadcrumbs/chat-breadcrumb.logic";
 import Tooltip from "@/components/tooltip";
 import {
+  chatThreadOptions,
   chatThreadTitleOptions,
   groupedChatThreadsOptions,
   invalidateChatThreadLists,
@@ -21,6 +23,7 @@ import {
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
@@ -63,13 +66,39 @@ export const ChatBreadcrumb = ({
     select: (data) => selectThreadTitle(data.pages, threadId),
   });
 
+  // The route loader already primes this allow-missing query. Use its
+  // activity timestamp as the existence signal for the title fallback: a
+  // newly generated route id has no row yet, so issuing GET /title for it
+  // would produce an expected but noisy 404. Once the first message exists,
+  // the by-id title read is safe. Keep the query disabled when the grouped
+  // list already supplied the title, preserving the no-extra-request path.
+  const threadRef = workspaceId
+    ? {
+        scope: "workspace" as const,
+        threadId: toChatThreadId(threadId),
+        workspaceId,
+      }
+    : { scope: "global" as const, threadId: toChatThreadId(threadId) };
+  const threadOptions = chatThreadOptions({
+    activeOrganizationId,
+    context: { allowMissingThread: true },
+    key: threadRef,
+  });
+  const { data: threadData } = useQuery({
+    ...threadOptions,
+    enabled: groupedTitle === null,
+  });
+
   // The grouped list only holds its first loaded pages, so an older thread that
   // has scrolled out of that window is absent (`groupedTitle === null`). Fall
   // back to a bounded by-id title read, enabled only on that miss so a thread
   // already in the list never triggers a redundant fetch.
   const titleOptions = chatThreadTitleOptions({
     activeOrganizationId,
-    enabled: groupedTitle === null,
+    enabled: shouldFetchChatThreadTitle({
+      groupedTitle,
+      lastActivityAt: threadData?.lastActivityAt,
+    }),
     key: { threadId, workspaceId },
   });
   const { data: byIdTitle } = useQuery(titleOptions);
