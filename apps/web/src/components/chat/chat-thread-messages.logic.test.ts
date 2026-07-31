@@ -43,6 +43,14 @@ describe("userMessageFallbackText", () => {
       "مرحبا světe こんにちは",
     );
   });
+
+  test("preserves entity mention labels in optimistic prompts", () => {
+    expect(
+      userMessageFallbackText(
+        '<p><entity-mention data-id="contact_1" data-label="Marie Curie" data-category="contact"></entity-mention></p>',
+      ),
+    ).toBe("Marie Curie");
+  });
 });
 
 describe("collectAnonRestorations", () => {

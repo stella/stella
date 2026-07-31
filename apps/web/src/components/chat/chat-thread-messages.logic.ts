@@ -35,6 +35,22 @@ const USER_MESSAGE_FALLBACK_TAGS = Object.freeze([
   "br",
 ]);
 
+const escapeRegExp = (value: string) =>
+  value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+
+export const getMentionTagAttr = (
+  attrs: string,
+  name: string,
+): string | null => {
+  const attrName = escapeRegExp(name);
+  const match = new RegExp(
+    `(?:^|\\s)${attrName}\\s*=\\s*(["'])(.*?)\\1`,
+    "iu",
+  ).exec(attrs);
+
+  return match?.[2] ?? null;
+};
+
 /**
  * Turns TipTap HTML into readable text without using DOMParser, so the same
  * result is safe during server rendering. Only known TipTap tags are removed,
@@ -70,6 +86,12 @@ export const userMessageFallbackText = (html: string): string => {
       output += html.slice(tagStart, tagEnd + 1);
       cursor = tagEnd + 1;
       continue;
+    }
+    if (!closing && tagName === "entity-mention") {
+      const label = getMentionTagAttr(rawTag, "data-label");
+      if (label) {
+        output += label;
+      }
     }
     if (
       tagName === "br" ||

@@ -33,6 +33,7 @@ import {
   collectAnonRestorations,
   EMPTY_RESTORATION_PAIRS,
   getFollowingAssistantRestorations,
+  getMentionTagAttr,
   userMessageFallbackText,
 } from "@/components/chat/chat-thread-messages.logic";
 import type {
@@ -567,19 +568,6 @@ const USER_STREAMDOWN_COMPONENTS = {
   a: (props: ComponentProps<"a">) => (
     <StreamdownMentionLink interactive={false} {...props} />
   ),
-};
-
-const escapeRegExp = (value: string) =>
-  value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
-
-const getMentionTagAttr = (attrs: string, name: string) => {
-  const attrName = escapeRegExp(name);
-  const match = new RegExp(
-    `(?:^|\\s)${attrName}\\s*=\\s*(["'])(.*?)\\1`,
-    "iu",
-  ).exec(attrs);
-
-  return match?.[2] ?? null;
 };
 
 const replaceMentionTag = (rawAttrs: string) => {

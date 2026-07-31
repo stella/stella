@@ -61,7 +61,7 @@ export const ChatTurnNavigator = ({ messages }: ChatTurnNavigatorProps) => {
 
         return (
           <div
-            className="group relative flex h-5 min-h-1 w-11 items-center"
+            className="group relative flex size-11 items-center"
             key={item.id}
           >
             <button
