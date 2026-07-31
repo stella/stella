@@ -175,6 +175,23 @@ const nextBackfillSnapshotAt = async (): Promise<Date> => {
 
 const ignoreProjectionRemoval = async () => undefined;
 
+test("rejects a pending hash without a pending action", async () => {
+  const generation = "case_law_invalid_pending";
+  await db.insert(caseLawCorpusIndexBackfills).values({
+    generation,
+    snapshotAt: await nextBackfillSnapshotAt(),
+    status: "complete",
+  });
+
+  await expect(
+    db.insert(caseLawCorpusIndexProjections).values({
+      decisionId: publicFirstId,
+      generation,
+      pendingHash: "orphaned",
+    }),
+  ).rejects.toThrow();
+});
+
 test(
   "one generation writer excludes rebuilds until it releases",
   async () => {

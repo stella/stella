@@ -109,12 +109,14 @@ CREATE TABLE IF NOT EXISTS "case_law_corpus_index_projections" (
     CHECK (("index_id" IS NULL) = ("indexed_hash" IS NULL)),
   CONSTRAINT "case_law_corpus_index_projections_pending_shape"
     CHECK (
-      ("pending_action" IS NULL AND "pending_hash" IS NULL)
-      OR ("pending_action" = 'index' AND "pending_hash" IS NOT NULL)
-      OR ("pending_action" = 'delete' AND "pending_hash" IS NULL)
+      (
+        ("pending_action" IS NULL AND "pending_hash" IS NULL)
+        OR ("pending_action" = 'index' AND "pending_hash" IS NOT NULL)
+        OR ("pending_action" = 'delete' AND "pending_hash" IS NULL)
+      ) IS TRUE
     )
 );--> statement-breakpoint
-CREATE INDEX "case_law_corpus_index_projections_pending_idx"
+CREATE INDEX IF NOT EXISTS "case_law_corpus_index_projections_pending_idx"
   ON "case_law_corpus_index_projections" ("generation", "decision_id")
   WHERE "pending_action" IS NOT NULL;--> statement-breakpoint
 ALTER TABLE "case_law_corpus_index_projections" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint

@@ -749,9 +749,9 @@ export const caseLawCorpusIndexProjections = p.pgTable(
     ),
     p.check(
       "case_law_corpus_index_projections_pending_shape",
-      sql`(${t.pendingAction} IS NULL AND ${t.pendingHash} IS NULL)
+      sql`((${t.pendingAction} IS NULL AND ${t.pendingHash} IS NULL)
         OR (${t.pendingAction} = 'index' AND ${t.pendingHash} IS NOT NULL)
-        OR (${t.pendingAction} = 'delete' AND ${t.pendingHash} IS NULL)`,
+        OR (${t.pendingAction} = 'delete' AND ${t.pendingHash} IS NULL)) IS TRUE`,
     ),
     p
       .index("case_law_corpus_index_projections_pending_idx")
