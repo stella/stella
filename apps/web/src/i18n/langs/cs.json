@@ -3392,6 +3392,7 @@
     "overview": {
       "activity": {
         "actions": {
+          "added": "<actor>Uživatel</actor> přidal(a) <target>položku</target>",
           "cancelled": "<actor>Uživatel</actor> zrušil(a) <target>položku</target>",
           "created": "<actor>Uživatel</actor> vytvořil(a) <target>položku</target>",
           "deleted": "<actor>Uživatel</actor> odstranil(a) <target>položku</target>",

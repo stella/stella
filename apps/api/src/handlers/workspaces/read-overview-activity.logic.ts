@@ -1,4 +1,5 @@
 import {
+  type AuditAction,
   AUDIT_RESOURCE_TYPE,
   type AuditActivityCategory,
 } from "@/api/lib/audit-log";
@@ -124,3 +125,14 @@ export const resolveActivityRunId = ({
   runId,
 }: ResolveActivityRunIdOptions): string | null =>
   runId ?? (resourceType === AUDIT_RESOURCE_TYPE.FLOW_RUN ? resourceId : null);
+
+type ResolveActivityActionOptions = {
+  action: AuditAction;
+  relationshipChange: "add" | "remove" | null;
+};
+
+export const resolveActivityAction = ({
+  action,
+  relationshipChange,
+}: ResolveActivityActionOptions): AuditAction | "add" | "remove" =>
+  relationshipChange ?? action;

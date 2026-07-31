@@ -38,6 +38,7 @@ import {
 
 import {
   parseFieldAuditResourceId,
+  resolveActivityAction,
   resolveActivityCategory,
   resolveActivityRunId,
 } from "./read-overview-activity.logic";
@@ -57,6 +58,10 @@ const versionSnapshotAuditLogs = alias(
   "version_snapshot_audit_logs",
 );
 const entitySnapshotAuditLogs = alias(auditLogs, "entity_snapshot_audit_logs");
+const contactSnapshotAuditLogs = alias(
+  auditLogs,
+  "contact_snapshot_audit_logs",
+);
 
 const VISIBLE_ACTIONS = [
   AUDIT_ACTION.CREATE,
@@ -252,16 +257,28 @@ const teamContactIdSnapshot = () => sql<string | null>`case
   else null
 end`;
 
-const teamContactNameSnapshot = () => sql<string | null>`(
-  select ${contacts.displayName}
-  from ${contacts}
-  where ${contacts.organizationId} = ${auditLogs.organizationId}
-    and ${contacts.id} = case
-      when ${teamContactIdSnapshot()} ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-        then ${teamContactIdSnapshot()}::uuid
-      else null
-    end
-  limit 1
+const teamContactNameSnapshot = () => sql<string | null>`coalesce(
+  (
+    select ${contacts.displayName}
+    from ${contacts}
+    where ${contacts.organizationId} = ${auditLogs.organizationId}
+      and ${contacts.id} = case
+        when ${teamContactIdSnapshot()} ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+          then ${teamContactIdSnapshot()}::uuid
+        else null
+      end
+    limit 1
+  ),
+  (
+    select ${contactSnapshotAuditLogs.changes} -> 'deleted' -> 'old' ->> 'displayName'
+    from ${auditLogs} as "contact_snapshot_audit_logs"
+    where ${contactSnapshotAuditLogs.organizationId} = ${auditLogs.organizationId}
+      and ${contactSnapshotAuditLogs.workspaceId} is null
+      and ${contactSnapshotAuditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.CONTACT}
+      and ${contactSnapshotAuditLogs.resourceId} = ${teamContactIdSnapshot()}
+    order by ${contactSnapshotAuditLogs.createdAt} desc
+    limit 1
+  )
 )`;
 
 const teamUserIdSnapshot = () => sql<string | null>`case
@@ -485,6 +502,27 @@ const readOverviewActivity = createSafeHandler(
             performerType: auditLogs.performerType,
             resourceId: auditLogs.resourceId,
             resourceType: auditLogs.resourceType,
+            relationshipChange: sql<"add" | "remove" | null>`case
+              when ${auditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.WORKSPACE}
+                and ${auditLogs.changes} ? 'membersAdded'
+                then 'add'
+              when ${auditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.WORKSPACE}
+                and ${auditLogs.changes} ? 'membersRemoved'
+                then 'remove'
+              when ${auditLogs.resourceType} in (
+                ${AUDIT_RESOURCE_TYPE.WORKSPACE_MEMBER},
+                ${AUDIT_RESOURCE_TYPE.WORKSPACE_CONTACT},
+                ${AUDIT_RESOURCE_TYPE.CASE_LAW_MATTER_LINK}
+              ) and ${auditLogs.action} = ${AUDIT_ACTION.CREATE}
+                then 'add'
+              when ${auditLogs.resourceType} in (
+                ${AUDIT_RESOURCE_TYPE.WORKSPACE_MEMBER},
+                ${AUDIT_RESOURCE_TYPE.WORKSPACE_CONTACT},
+                ${AUDIT_RESOURCE_TYPE.CASE_LAW_MATTER_LINK}
+              ) and ${auditLogs.action} = ${AUDIT_ACTION.DELETE}
+                then 'remove'
+              else null
+            end`,
             runId: auditLogs.runId,
             triggerSource: auditLogs.triggerSource,
             triggerType: auditLogs.triggerType,
@@ -703,7 +741,10 @@ const readOverviewActivity = createSafeHandler(
               };
 
         return {
-          action: row.action,
+          action: resolveActivityAction({
+            action: row.action,
+            relationshipChange: row.relationshipChange,
+          }),
           activityAt: row.createdAt.toISOString(),
           approval: {
             status: row.approvalStatus,

@@ -3392,6 +3392,7 @@
     "overview": {
       "activity": {
         "actions": {
+          "added": "أضاف <actor>المستخدم</actor> <target>العنصر</target>",
           "cancelled": "ألغى <actor>المستخدم</actor> <target>العنصر</target>",
           "created": "أنشأ <actor>المستخدم</actor> <target>العنصر</target>",
           "deleted": "حذف <actor>المستخدم</actor> <target>العنصر</target>",

@@ -3392,6 +3392,7 @@
     "overview": {
       "activity": {
         "actions": {
+          "added": "<actor>Person</actor> hat <target>Element</target> hinzugefügt",
           "cancelled": "<actor>Person</actor> hat <target>Element</target> abgebrochen",
           "created": "<actor>Person</actor> hat <target>Element</target> erstellt",
           "deleted": "<actor>Person</actor> hat <target>Element</target> gelöscht",

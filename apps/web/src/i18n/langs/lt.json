@@ -3392,6 +3392,7 @@
     "overview": {
       "activity": {
         "actions": {
+          "added": "<actor>Naudotojas</actor> pridėjo <target>elementą</target>",
           "cancelled": "<actor>Naudotojas</actor> atšaukė <target>elementą</target>",
           "created": "<actor>Naudotojas</actor> sukūrė <target>elementą</target>",
           "deleted": "<actor>Naudotojas</actor> ištrynė <target>elementą</target>",

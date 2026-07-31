@@ -3395,6 +3395,7 @@ type Messages = {
     "overview": {
       "activity": {
         "actions": {
+          "added": "<actor>Actor</actor> added <target>target</target>";
           "cancelled": "<actor>Actor</actor> cancelled <target>target</target>";
           "created": "<actor>Actor</actor> created <target>target</target>";
           "deleted": "<actor>Actor</actor> deleted <target>target</target>";

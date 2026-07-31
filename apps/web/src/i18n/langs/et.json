@@ -3392,6 +3392,7 @@
     "overview": {
       "activity": {
         "actions": {
+          "added": "<actor>Kasutaja</actor> lisas <target>üksuse</target>",
           "cancelled": "<actor>Kasutaja</actor> tühistas <target>üksuse</target>",
           "created": "<actor>Kasutaja</actor> lõi <target>üksuse</target>",
           "deleted": "<actor>Kasutaja</actor> kustutas <target>üksuse</target>",

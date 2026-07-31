@@ -3392,6 +3392,7 @@
     "overview": {
       "activity": {
         "actions": {
+          "added": "<actor>Lietotājs</actor> pievienoja <target>vienumu</target>",
           "cancelled": "<actor>Lietotājs</actor> atcēla <target>vienumu</target>",
           "created": "<actor>Lietotājs</actor> izveidoja <target>vienumu</target>",
           "deleted": "<actor>Lietotājs</actor> dzēsa <target>vienumu</target>",

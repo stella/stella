@@ -3392,6 +3392,7 @@
     "overview": {
       "activity": {
         "actions": {
+          "added": "<actor>Felhasználó</actor> hozzáadta: <target>elem</target>",
           "cancelled": "<actor>Felhasználó</actor> megszakította: <target>elem</target>",
           "created": "<actor>Felhasználó</actor> létrehozta: <target>elem</target>",
           "deleted": "<actor>Felhasználó</actor> törölte: <target>elem</target>",

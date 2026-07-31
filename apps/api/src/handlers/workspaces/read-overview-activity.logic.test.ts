@@ -6,6 +6,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import {
   legacyActivityCategory,
   parseFieldAuditResourceId,
+  resolveActivityAction,
   resolveActivityCategory,
   resolveActivityRunId,
 } from "./read-overview-activity.logic";
@@ -109,5 +110,22 @@ describe("resolveActivityRunId", () => {
         runId: null,
       }),
     ).toBeNull();
+  });
+});
+
+describe("resolveActivityAction", () => {
+  test("uses relationship semantics without rewriting entity mutations", () => {
+    expect(
+      resolveActivityAction({ action: "update", relationshipChange: "add" }),
+    ).toBe("add");
+    expect(
+      resolveActivityAction({
+        action: "delete",
+        relationshipChange: "remove",
+      }),
+    ).toBe("remove");
+    expect(
+      resolveActivityAction({ action: "delete", relationshipChange: null }),
+    ).toBe("delete");
   });
 });

@@ -53,11 +53,7 @@ import type {
 } from "@/routes/_protected.workspaces/-queries";
 import { overviewActivityOptions } from "@/routes/_protected.workspaces/-queries";
 
-import {
-  activityActionVerb,
-  activityDayKey,
-  groupActivityRuns,
-} from "./activity-panel.logic";
+import { activityDayKey, groupActivityRuns } from "./activity-panel.logic";
 
 type ActivityPanelProps = { workspaceId: string };
 type ActivityDay = [MatterActivityItem, ...MatterActivityItem[]];
@@ -1028,8 +1024,11 @@ const actionSentence = (
   t: ActivityTranslator,
 ): ReactElement => {
   const values = { actor: () => actor, target: () => target };
-  const action = activityActionVerb(item.action, item.target.kind);
-  switch (action) {
+  switch (item.action) {
+    case "add":
+      return (
+        <>{t.rich("workspaces.overview.activity.actions.added", values)}</>
+      );
     case "create":
       return (
         <>{t.rich("workspaces.overview.activity.actions.created", values)}</>
