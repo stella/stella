@@ -119,7 +119,16 @@ const loadRow = async (id: SafeId<"caseLawDecision">) => {
   const [row] = await db
     .select({
       id: caseLawDecisions.id,
+      sourceId: caseLawDecisions.sourceId,
+      caseNumber: caseLawDecisions.caseNumber,
+      ecli: caseLawDecisions.ecli,
+      court: caseLawDecisions.court,
       country: caseLawDecisions.country,
+      language: caseLawDecisions.language,
+      decisionDate: caseLawDecisions.decisionDate,
+      decisionType: caseLawDecisions.decisionType,
+      citationAuthority: caseLawDecisions.citationAuthority,
+      citationCount: caseLawDecisions.citationCount,
       textS3Key: caseLawDecisions.textS3Key,
       astS3Key: caseLawDecisions.astS3Key,
       contentHash: caseLawDecisions.contentHash,
