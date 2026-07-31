@@ -311,6 +311,7 @@ describe("failed index jobs always reach the audit trail", () => {
       // boundary itself is what the indexer must cross before reporting success.
       // oxlint-disable-next-line node/callback-return, typescript/no-unsafe-type-assertion -- the fake transaction is deliberately inert
       await callback({} as Transaction);
+    const commitEvents: string[] = [];
     const indexer = createCorpusIndexer<"caseLawDecision", typeof row>({
       family: "case_law",
       captureStep: "test",
@@ -320,14 +321,21 @@ describe("failed index jobs always reach the audit trail", () => {
       selectMissing: async () => [],
       selectStale: async () => [],
       fetchFulltext: async () => "body",
-      markIndexedBatch: async (_tx, { rows }) =>
-        new Set(rows.map((selected) => selected.id)),
+      markIndexedBatch: async (_tx, { rows }) => {
+        commitEvents.push("mark");
+        return new Set(rows.map((selected) => selected.id));
+      },
       insertSucceededJobs: async () => undefined,
       recordJobs: async () => undefined,
     });
 
     let guardedEffects = 0;
+    let guardedMarks = 0;
     const indexed = await indexer.backfillRows(scopedDb, [row], GENERATION, {
+      beforeDatabaseMark: async () => {
+        guardedMarks += 1;
+        commitEvents.push("guard");
+      },
       beforeRemoteEffect: async () => {
         guardedEffects += 1;
       },
@@ -351,15 +359,23 @@ describe("failed index jobs always reach the audit trail", () => {
       JSON.stringify({ query: 'document_id:"dec-replay"' }),
     ]);
     expect(guardedEffects).toBe(calls.length);
+    expect(guardedMarks).toBe(1);
+    expect(commitEvents).toEqual(["guard", "mark"]);
 
     calls.length = 0;
+    commitEvents.length = 0;
     guardedEffects = 0;
+    guardedMarks = 0;
     const sameIndexRow = {
       ...makeRow("dec-replay-same", "CZ"),
       indexedGeneration: corpusIndexId(GENERATION, "CZ"),
     };
     expect(
       await indexer.backfillRows(scopedDb, [sameIndexRow], GENERATION, {
+        beforeDatabaseMark: async () => {
+          guardedMarks += 1;
+          commitEvents.push("guard");
+        },
         beforeRemoteEffect: async () => {
           guardedEffects += 1;
         },
@@ -369,5 +385,7 @@ describe("failed index jobs always reach the audit trail", () => {
       calls.filter(({ url }) => url.includes("/delete-tasks")),
     ).toHaveLength(1);
     expect(guardedEffects).toBe(calls.length);
+    expect(guardedMarks).toBe(1);
+    expect(commitEvents).toEqual(["guard", "mark"]);
   });
 });

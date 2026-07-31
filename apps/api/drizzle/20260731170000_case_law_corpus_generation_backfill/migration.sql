@@ -67,17 +67,19 @@ DROP INDEX CONCURRENTLY IF EXISTS "case_law_decisions_corpus_generation_cursor_i
 CREATE INDEX CONCURRENTLY "case_law_decisions_corpus_generation_cursor_idx"
   ON "case_law_decisions" ("created_at", "id");--> statement-breakpoint
 -- Refreshes clear indexed_hash while retaining indexed_generation so the
--- indexer can remove a prior jurisdiction copy. Make that durable pending
--- signal the bounded partial-index predicate for both corpus families.
--- stella-migration-safety: reviewed destructive-change - replacing derived-state indexes only; source rows are untouched and replay recreates either index.
-DROP INDEX CONCURRENTLY IF EXISTS "case_law_decisions_corpus_pending_idx";--> statement-breakpoint
+-- indexer can remove a prior jurisdiction copy. Build that durable pending
+-- signal under a new name: rolling-deployment tasks still use the legacy
+-- indexed_generation predicate until they drain.
+-- stella-migration-safety: reviewed destructive-change - retry cleanup removes only this migration's derived-state index.
+DROP INDEX CONCURRENTLY IF EXISTS "case_law_decisions_corpus_hash_pending_idx";--> statement-breakpoint
 -- squawk-ignore prefer-robust-stmts
-CREATE INDEX CONCURRENTLY "case_law_decisions_corpus_pending_idx"
+CREATE INDEX CONCURRENTLY "case_law_decisions_corpus_hash_pending_idx"
   ON "case_law_decisions" ("id")
   WHERE "content_hash" IS NOT NULL AND "indexed_hash" IS NULL;--> statement-breakpoint
-DROP INDEX CONCURRENTLY IF EXISTS "legislation_documents_corpus_pending_idx";--> statement-breakpoint
+-- stella-migration-safety: reviewed destructive-change - retry cleanup removes only this migration's derived-state index.
+DROP INDEX CONCURRENTLY IF EXISTS "legislation_documents_corpus_hash_pending_idx";--> statement-breakpoint
 -- squawk-ignore prefer-robust-stmts
-CREATE INDEX CONCURRENTLY "legislation_documents_corpus_pending_idx"
+CREATE INDEX CONCURRENTLY "legislation_documents_corpus_hash_pending_idx"
   ON "legislation_documents" ("id")
   WHERE "content_hash" IS NOT NULL AND "indexed_hash" IS NULL;--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint

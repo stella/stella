@@ -152,12 +152,20 @@ const readCheckpoint = async (generation: string) =>
   ).at(0);
 
 test(
-  "replays every snapshot row once, including equal timestamps, without indexing restricted content",
+  "replays the snapshot once and reconciles pending rows after completion",
   async () => {
     const sent: SafeId<"caseLawDecision">[][] = [];
     let guardedPages = 0;
+    let pendingCalls = 0;
+    let pendingPages = 1;
     let lease = 0;
     const backfill = createCaseLawGenerationBackfill({
+      backfillIncremental: async () => {
+        pendingCalls += 1;
+        const indexed = pendingPages;
+        pendingPages = 0;
+        return indexed;
+      },
       backfillRows: async (_scopedDb, rows, _generation, options) => {
         await options.beforeRemoteEffect();
         sent.push(rows.map((row) => row.id));
@@ -177,6 +185,10 @@ test(
       status: "advanced",
     });
     expect(await backfill(scopedDb, 2, GENERATION)).toEqual({
+      indexed: 1,
+      status: "advanced",
+    });
+    expect(await backfill(scopedDb, 2, GENERATION)).toEqual({
       indexed: 0,
       status: "complete",
     });
@@ -190,6 +202,7 @@ test(
     // never cross the index boundary.
     expect(sent).toEqual([[publicFirstId], [publicLastId]]);
     expect(guardedPages).toBe(2);
+    expect(pendingCalls).toBe(3);
     const checkpoint = await readCheckpoint(GENERATION);
     expect(checkpoint).toMatchObject({
       cursorCreatedAt: CREATED_AT,
@@ -215,6 +228,7 @@ test(
       releaseFirstPage = resolve;
     });
     const backfill = createCaseLawGenerationBackfill({
+      backfillIncremental: async () => 0,
       backfillRows: async (_scopedDb, _rows, _generation, options) => {
         await options.beforeRemoteEffect();
         firstPageStarted?.();
@@ -250,6 +264,7 @@ test(
     });
 
     const incomplete = createCaseLawGenerationBackfill({
+      backfillIncremental: async () => 0,
       backfillRows: async (_scopedDb, _rows, _generation, options) => {
         await options.beforeRemoteEffect();
         return 0;
@@ -277,6 +292,7 @@ test(
 
     const replayed: SafeId<"caseLawDecision">[][] = [];
     const retry = createCaseLawGenerationBackfill({
+      backfillIncremental: async () => 0,
       backfillRows: async (_scopedDb, rows, _generation, options) => {
         await options.beforeRemoteEffect();
         replayed.push(rows.map((row) => row.id));
@@ -299,6 +315,7 @@ test(
     const generation = "case_law_v2_takeover";
     let winningRemoteEffects = 0;
     const winner = createCaseLawGenerationBackfill({
+      backfillIncremental: async () => 0,
       backfillRows: async (_scopedDb, rows, _generation, options) => {
         await options.beforeRemoteEffect();
         winningRemoteEffects += 1;
@@ -310,6 +327,7 @@ test(
     let staleRemoteEffects = 0;
     let winnerResult: Awaited<ReturnType<typeof winner>> | undefined;
     const stale = createCaseLawGenerationBackfill({
+      backfillIncremental: async () => 0,
       backfillRows: async (_scopedDb, rows, _generation, options) => {
         await db
           .update(caseLawCorpusIndexBackfills)
@@ -334,6 +352,65 @@ test(
     expect(winnerResult).toMatchObject({ indexed: 1, status: "advanced" });
     expect(winningRemoteEffects).toBe(1);
     expect(staleRemoteEffects).toBe(0);
+    expect(await readCheckpoint(generation)).toMatchObject({
+      cursorCreatedAt: CREATED_AT,
+      cursorId: publicFirstId,
+      leaseExpiresAt: null,
+      leaseToken: null,
+      status: "running",
+    });
+  },
+  { timeout: 30_000 },
+);
+
+test(
+  "an owner that expires after ingest cannot commit the database mark",
+  async () => {
+    const generation = "case_law_v2_mark_fence";
+    let winningRemoteEffects = 0;
+    const winner = createCaseLawGenerationBackfill({
+      backfillIncremental: async () => 0,
+      backfillRows: async (runnerDb, rows, _generation, options) => {
+        await options.beforeRemoteEffect();
+        winningRemoteEffects += 1;
+        await runnerDb(options.beforeDatabaseMark);
+        return rows.length;
+      },
+      newLeaseToken: () => "00000000-0000-4000-8000-000000000401",
+    });
+
+    let staleDatabaseMarks = 0;
+    let staleRemoteEffects = 0;
+    let winnerResult: Awaited<ReturnType<typeof winner>> | undefined;
+    const stale = createCaseLawGenerationBackfill({
+      backfillIncremental: async () => 0,
+      backfillRows: async (runnerDb, rows, _generation, options) => {
+        await options.beforeRemoteEffect();
+        staleRemoteEffects += 1;
+        await db
+          .update(caseLawCorpusIndexBackfills)
+          .set({ leaseExpiresAt: new Date("2000-01-01T00:00:00.000Z") })
+          .where(eq(caseLawCorpusIndexBackfills.generation, generation));
+        winnerResult = await winner(scopedDb, 1, generation);
+        await runnerDb(options.beforeDatabaseMark);
+        staleDatabaseMarks += 1;
+        return rows.length;
+      },
+      newLeaseToken: () => "00000000-0000-4000-8000-000000000400",
+    });
+
+    const rejection: unknown = await stale(scopedDb, 1, generation).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toMatchObject({
+      message: "Case-law corpus generation lease was lost",
+    });
+    expect(winnerResult).toMatchObject({ indexed: 1, status: "advanced" });
+    expect(winningRemoteEffects).toBe(1);
+    expect(staleRemoteEffects).toBe(1);
+    expect(staleDatabaseMarks).toBe(0);
     expect(await readCheckpoint(generation)).toMatchObject({
       cursorCreatedAt: CREATED_AT,
       cursorId: publicFirstId,
@@ -415,6 +492,7 @@ test(
 
     const sent: SafeId<"caseLawDecision">[] = [];
     const backfill = createCaseLawGenerationBackfill({
+      backfillIncremental: async () => 0,
       backfillRows: async (_scopedDb, rows, _generation, options) => {
         await options.beforeRemoteEffect();
         sent.push(...rows.map(({ id }) => id));

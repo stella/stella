@@ -14,7 +14,9 @@ test("case-law incremental corpus scans never select a generation inequality", a
   // selector into a corpus-wide scan and can starve request traffic.
   expect(source).not.toMatch(/indexedGeneration\}[^`]*<>/su);
   expect(source).not.toMatch(/indexed_generation[^`]*<>/su);
-  expect(source).toContain("sql`LOCK TABLE ${caseLawDecisions} IN SHARE MODE`");
+  expect(source).toMatch(
+    /sql`LOCK TABLE \$\{caseLawDecisions\} IN SHARE MODE`/u,
+  );
 });
 
 test("generation checkpoint migration preserves replay and role invariants", async () => {
@@ -34,13 +36,16 @@ test("generation checkpoint migration preserves replay and role invariants", asy
     'CREATE INDEX CONCURRENTLY "case_law_decisions_corpus_generation_cursor_idx"\n  ON "case_law_decisions" ("created_at", "id")',
   );
   expect(source).toContain(
-    'CREATE INDEX CONCURRENTLY "case_law_decisions_corpus_pending_idx"\n  ON "case_law_decisions" ("id")\n  WHERE "content_hash" IS NOT NULL AND "indexed_hash" IS NULL',
+    'CREATE INDEX CONCURRENTLY "case_law_decisions_corpus_hash_pending_idx"\n  ON "case_law_decisions" ("id")\n  WHERE "content_hash" IS NOT NULL AND "indexed_hash" IS NULL',
   );
   expect(source).toContain(
-    'CREATE INDEX CONCURRENTLY "legislation_documents_corpus_pending_idx"\n  ON "legislation_documents" ("id")\n  WHERE "content_hash" IS NOT NULL AND "indexed_hash" IS NULL',
+    'CREATE INDEX CONCURRENTLY "legislation_documents_corpus_hash_pending_idx"\n  ON "legislation_documents" ("id")\n  WHERE "content_hash" IS NOT NULL AND "indexed_hash" IS NULL',
   );
   expect(source).not.toContain(
-    '"content_hash" IS NOT NULL AND "indexed_generation" IS NULL',
+    'DROP INDEX CONCURRENTLY IF EXISTS "case_law_decisions_corpus_pending_idx"',
+  );
+  expect(source).not.toContain(
+    'DROP INDEX CONCURRENTLY IF EXISTS "legislation_documents_corpus_pending_idx"',
   );
   expect(source).toContain(
     `CHECK ("status" IN (${CASE_LAW_CORPUS_INDEX_BACKFILL_STATUSES.map(

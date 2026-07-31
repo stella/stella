@@ -11,6 +11,7 @@ import {
   sql,
 } from "drizzle-orm";
 
+import type { Transaction } from "@/api/db/root";
 import {
   caseLawDecisions,
   caseLawCorpusIndexBackfills,
@@ -382,6 +383,7 @@ export const createCaseLawIncrementalBackfill =
     scopedDb: Parameters<typeof indexer.backfill>[0],
     batchSize: number,
     generation: string,
+    options?: Parameters<typeof indexer.backfill>[3],
   ): Promise<number> => {
     const newestGeneration = await newestRebuildGeneration(scopedDb);
     if (newestGeneration !== null && newestGeneration !== generation) {
@@ -389,7 +391,7 @@ export const createCaseLawIncrementalBackfill =
         message: `incremental generation ${generation} is behind rebuild ${newestGeneration}`,
       });
     }
-    return await backfill(scopedDb, batchSize, generation);
+    return await backfill(scopedDb, batchSize, generation, options);
   };
 
 export const backfillCorpusIndex = createCaseLawIncrementalBackfill({
@@ -438,11 +440,15 @@ type GenerationBackfillResult =
     };
 
 type GenerationBackfillDependencies = {
+  backfillIncremental: typeof backfillCorpusIndex;
   backfillRows: (
     scopedDb: Parameters<typeof backfillCorpusIndex>[0],
     rows: readonly IndexableRow[],
     generation: string,
-    options: { beforeRemoteEffect: () => Promise<void> },
+    options: {
+      beforeDatabaseMark: (tx: Transaction) => Promise<void>;
+      beforeRemoteEffect: () => Promise<void>;
+    },
   ) => Promise<number>;
   newLeaseToken: () => string;
 };
@@ -522,12 +528,26 @@ const withoutSourceDescriptor = ({
  * retains the shared indexer's normal S3, CAS, and audit path.
  */
 export const createCaseLawGenerationBackfill =
-  ({ backfillRows, newLeaseToken }: GenerationBackfillDependencies) =>
+  ({
+    backfillIncremental,
+    backfillRows,
+    newLeaseToken,
+  }: GenerationBackfillDependencies) =>
   async (
     scopedDb: Parameters<typeof backfillCorpusIndex>[0],
     batchSize: number,
     generation: string,
   ): Promise<GenerationBackfillResult> => {
+    const reconcilePending = async (): Promise<GenerationBackfillResult> => {
+      const pendingIndexed = await backfillIncremental(
+        scopedDb,
+        batchSize,
+        generation,
+      );
+      return pendingIndexed > 0
+        ? { indexed: pendingIndexed, status: BACKFILL_STATUS.ADVANCED }
+        : { indexed: 0, status: BACKFILL_STATUS.COMPLETE };
+    };
     const checkpoint = await scopedDb(async (tx) => {
       // audit: skip — the checkpoint is the durable audit trail for this derived projection rebuild
       const existing = (
@@ -569,7 +589,7 @@ export const createCaseLawGenerationBackfill =
       return concurrent;
     });
     if (checkpoint.status === CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.COMPLETE) {
-      return { indexed: 0, status: BACKFILL_STATUS.COMPLETE };
+      return await reconcilePending();
     }
 
     const leaseToken = newLeaseToken();
@@ -605,10 +625,10 @@ export const createCaseLawGenerationBackfill =
       generation: claimed.generation,
       snapshotAt: claimed.snapshotAt,
     };
-    const renewLease = async (): Promise<void> => {
-      const renewed = await scopedDb(async (tx) => {
-        // audit: skip — renewal extends ephemeral ownership without changing rebuild progress
-        const rows = await tx
+    const renewLeaseInTransaction = async (tx: Transaction): Promise<void> => {
+      // audit: skip — renewal extends ephemeral ownership without changing rebuild progress
+      const renewed = (
+        await tx
           .update(caseLawCorpusIndexBackfills)
           .set({ leaseExpiresAt: nextLeaseExpiry() })
           .where(
@@ -622,14 +642,16 @@ export const createCaseLawGenerationBackfill =
           )
           .returning({
             generation: caseLawCorpusIndexBackfills.generation,
-          });
-        return rows.at(0);
-      });
+          })
+      ).at(0);
       if (!renewed) {
         throw new ConcurrentModificationError({
           message: "Case-law corpus generation lease was lost",
         });
       }
+    };
+    const renewLease = async (): Promise<void> => {
+      await scopedDb(renewLeaseInTransaction);
     };
     const page = await selectGenerationBackfillPage(scopedDb, {
       batchSize,
@@ -659,7 +681,7 @@ export const createCaseLawGenerationBackfill =
         return rows.at(0);
       });
       return completed
-        ? { indexed: 0, status: BACKFILL_STATUS.COMPLETE }
+        ? await reconcilePending()
         : { indexed: 0, status: BACKFILL_STATUS.BUSY };
     }
 
@@ -669,6 +691,7 @@ export const createCaseLawGenerationBackfill =
     let indexed: number;
     try {
       indexed = await backfillRows(scopedDb, rows, generation, {
+        beforeDatabaseMark: renewLeaseInTransaction,
         beforeRemoteEffect: renewLease,
       });
       if (indexed !== rows.length) {
@@ -700,7 +723,7 @@ export const createCaseLawGenerationBackfill =
 
     const advanced = await scopedDb(async (tx) => {
       // audit: skip — cursor advancement is the durable audit trail for this derived rebuild
-      const rows = await tx
+      const advancedRows = await tx
         .update(caseLawCorpusIndexBackfills)
         .set({
           cursorCreatedAt: last.createdAt,
@@ -718,7 +741,7 @@ export const createCaseLawGenerationBackfill =
           ),
         )
         .returning({ generation: caseLawCorpusIndexBackfills.generation });
-      return rows.at(0);
+      return advancedRows.at(0);
     });
     return advanced
       ? { indexed, status: BACKFILL_STATUS.ADVANCED }
@@ -732,6 +755,7 @@ export const createCaseLawGenerationBackfill =
  */
 export const backfillCorpusIndexGenerationPage =
   createCaseLawGenerationBackfill({
+    backfillIncremental: backfillCorpusIndex,
     backfillRows: indexer.backfillRows,
     newLeaseToken: () => Bun.randomUUIDv7(),
   });

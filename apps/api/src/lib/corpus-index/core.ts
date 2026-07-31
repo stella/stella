@@ -214,6 +214,7 @@ export type FetchFulltext<TBrand extends SafeIdType> = (
 type SelectBatchArgs = { generation: string; limit: number };
 
 type BeforeRemoteEffect = () => Promise<void>;
+type BeforeDatabaseMark = (tx: Transaction) => Promise<void>;
 
 type BackfillSelectedRowsOptions =
   | {
@@ -222,11 +223,13 @@ type BackfillSelectedRowsOptions =
     }
   | {
       type: "generation-rebuild";
+      beforeDatabaseMark: BeforeDatabaseMark;
       beforeRemoteEffect: BeforeRemoteEffect;
       readConcurrency?: number;
     };
 
 type GenerationBackfillRowsOptions = {
+  beforeDatabaseMark: BeforeDatabaseMark;
   beforeRemoteEffect: BeforeRemoteEffect;
   readConcurrency?: number;
 };
@@ -864,6 +867,9 @@ export const createCorpusIndexer = <
           // oxlint-disable-next-line no-await-in-loop -- one CAS transaction per ingest request; sequential to keep index writes and audit rows consistent
           await scopedDb(async (tx) => {
             // audit: skip — search index maintenance; rebuilds derived state
+            if (options.type === "generation-rebuild") {
+              await options.beforeDatabaseMark(tx);
+            }
             // Compare-and-set on each row's selected state: a concurrent
             // re-ingest clears indexedHash (possibly leaving it null-to-null
             // when the row was already pending) and bumps updatedAt, and an

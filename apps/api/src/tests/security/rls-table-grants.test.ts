@@ -46,6 +46,7 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   "chat_thread_search_preview_passages",
   "case_law_search_document_preview_passages",
   "case_law_index_jobs",
+  "case_law_corpus_index_backfills",
   "legislation_sources",
   "legislation_documents",
   "legislation_search_documents",

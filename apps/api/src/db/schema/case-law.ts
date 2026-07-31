@@ -238,6 +238,12 @@ export const caseLawDecisions = p.pgTable(
     p
       .index("case_law_decisions_corpus_pending_idx")
       .on(t.id)
+      .where(
+        sql`${t.contentHash} is not null and ${t.indexedGeneration} is null`,
+      ),
+    p
+      .index("case_law_decisions_corpus_hash_pending_idx")
+      .on(t.id)
       .where(sql`${t.contentHash} is not null and ${t.indexedHash} is null`),
     p
       .index("case_law_decisions_citation_key_idx")
