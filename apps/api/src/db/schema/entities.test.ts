@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { getTableConfig } from "drizzle-orm/pg-core";
+import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
 
 import { pendingUploads } from "@/api/db/schema";
 
@@ -16,6 +16,13 @@ describe("pending upload recovery indexes", () => {
         "name" in column ? column.name : undefined,
       ),
     ).toEqual(["claimed_at", "id"]);
-    expect(recoveryIndex?.config.where).toBeDefined();
+    const recoveryPredicate = recoveryIndex?.config.where;
+    expect(recoveryPredicate).toBeDefined();
+    if (!recoveryPredicate) {
+      return;
+    }
+    expect(new PgDialect().sqlToQuery(recoveryPredicate).sql).toContain(
+      "IN ('scanning', 'failed')",
+    );
   });
 });

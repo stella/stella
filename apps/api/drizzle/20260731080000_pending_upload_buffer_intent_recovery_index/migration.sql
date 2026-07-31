@@ -21,7 +21,7 @@ DROP INDEX CONCURRENTLY IF EXISTS "pending_uploads_buffer_intent_recovery_idx";
 -- squawk-ignore prefer-robust-stmts
 CREATE INDEX CONCURRENTLY "pending_uploads_buffer_intent_recovery_idx"
   ON "pending_uploads" ("claimed_at", "id")
-  WHERE "status" = 'scanning'
+  WHERE "status" IN ('scanning', 'failed')
     AND "purpose" IN ('entity_create', 'entity_version')
     AND ("purpose_data"->>'reservedFileId') IS NOT NULL;
 --> statement-breakpoint

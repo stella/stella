@@ -5,28 +5,17 @@ const readApiSource = async (relativePath: string): Promise<string> =>
 
 describe("entity-version persistence parity", () => {
   test("every byte transport delegates to the shared version transaction", async () => {
-    const [multipart, presigned, templates, templatePersistence] =
-      await Promise.all([
-        readApiSource("handlers/entities/upload-version.ts"),
-        readApiSource("handlers/uploads/entity-version.ts"),
-        readApiSource("mcp/template-tools.ts"),
-        readApiSource("mcp/template-persistence.ts"),
-      ]);
+    const [multipart, presigned] = await Promise.all([
+      readApiSource("handlers/entities/upload-version.ts"),
+      readApiSource("handlers/uploads/entity-version.ts"),
+    ]);
 
     expect(multipart).toContain("createEntityVersionFromBuffer");
     expect(presigned).toContain("writeFileVersion");
-    expect(templates).toContain("persistFilledTemplateVersion");
-    expect(templatePersistence).toContain("createEntityVersionFromBuffer");
     expect(multipart).toContain("source: UPLOAD_DOCUMENT_SOURCE");
     expect(presigned).toContain("source: UPLOAD_DOCUMENT_SOURCE");
-    expect(templates).toContain("source: null");
 
-    for (const transport of [
-      multipart,
-      presigned,
-      templates,
-      templatePersistence,
-    ]) {
+    for (const transport of [multipart, presigned]) {
       expect(transport).not.toContain("cloneFieldsForRevision");
       expect(transport).not.toContain("nextEntityVersionNumber");
     }

@@ -689,7 +689,8 @@ export const deletePendingUploads = async ({
         eq(pendingUploads.userId, currentUserId),
         ne(pendingUploads.status, "finalized"),
       ),
-    );
+    )
+    .for("update");
   s3KeysToDelete.push(
     ...stagedUploadRows.flatMap(pendingUploadS3KeysForDeletion),
   );

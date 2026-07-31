@@ -153,9 +153,9 @@ export const deleteWorkspaceHandler = async function* ({
     await tx
       .update(pendingUploads)
       .set({
-        // Keep failed rows retryable if a later S3/DB step fails and the
-        // workspace is reactivated; upload finalization only reclaims failed
-        // rows whose claim is stale.
+        // Invalidate the writer's claim while keeping the row eligible for
+        // bounded repair if object cleanup fails and the workspace is
+        // reactivated. The writer's finalize CAS requires its original claim.
         claimedAt: new Date(0),
         claimedByRequestId: null,
         rejectReason: "Workspace deletion cancelled the upload",

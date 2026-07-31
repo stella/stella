@@ -702,6 +702,11 @@ export const PENDING_UPLOAD_STATUSES = [
   "failed",
 ] as const;
 
+export const PENDING_UPLOAD_RECOVERABLE_STATUSES = [
+  "scanning",
+  "failed",
+] as const satisfies readonly (typeof PENDING_UPLOAD_STATUSES)[number][];
+
 /**
  * Each upload purpose drives a different finalize transaction (entity
  * vs. version vs. skill...). The discriminator lives in its own column
@@ -817,7 +822,7 @@ export const pendingUploads = p.pgTable(
       .index("pending_uploads_buffer_intent_recovery_idx")
       .on(table.claimedAt, table.id)
       .where(
-        sql`${table.status} = 'scanning'
+        sql`${table.status} IN ('scanning', 'failed')
           AND ${table.purpose} IN ('entity_create', 'entity_version')
           AND ${table.purposeData}->>'reservedFileId' IS NOT NULL`,
       ),

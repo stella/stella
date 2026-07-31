@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
+import type { Transaction } from "@/api/db/root";
+import { deletePendingUploads } from "@/api/lib/account-deletion-steps";
 import { toSafeId } from "@/api/lib/branded-types";
 import { pendingUploadS3KeysForDeletion } from "@/api/lib/pending-upload-keys";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 describe("pendingUploadS3KeysForDeletion", () => {
   const organizationId = toSafeId<"organization">(
@@ -43,5 +46,56 @@ describe("pendingUploadS3KeysForDeletion", () => {
         workspaceId,
       }),
     ).not.toContainEqual(expect.stringContaining(".zip"));
+  });
+
+  test("locks active intents before queuing their object keys", async () => {
+    const lockStrengths: string[] = [];
+    const deletedUserIds: unknown[] = [];
+    const tx = asTestRaw<Transaction>({
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            for: async (strength: string) => {
+              lockStrengths.push(strength);
+              return [
+                {
+                  declaredMime:
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                  id,
+                  organizationId,
+                  purpose: "entity_version",
+                  purposeData: {
+                    type: "entity_version",
+                    entityId: toSafeId<"entity">(
+                      "0198fa3d-fc8d-7000-8000-000000000004",
+                    ),
+                    reservedFileId: "0198fa3d-fc8d-7000-8000-000000000005",
+                  },
+                  workspaceId,
+                },
+              ];
+            },
+          }),
+        }),
+      }),
+      delete: () => ({
+        where: async (condition: unknown) => {
+          deletedUserIds.push(condition);
+        },
+      }),
+    });
+    const s3KeysToDelete: string[] = [];
+
+    await deletePendingUploads({
+      tx,
+      currentUserId: "user-1",
+      s3KeysToDelete,
+    });
+
+    expect(lockStrengths).toEqual(["update"]);
+    expect(deletedUserIds).toHaveLength(1);
+    expect(s3KeysToDelete).toContain(
+      `${organizationId}/${workspaceId}/0198fa3d-fc8d-7000-8000-000000000005.docx`,
+    );
   });
 });

@@ -27,7 +27,6 @@ import type { SafeId } from "@/api/lib/branded-types";
 import {
   BUFFER_INTENT_HEARTBEAT_MS,
   BUFFER_INTENT_TTL_MS,
-  reconcileStaleBufferIntents,
 } from "@/api/lib/buffer-intent-reconciliation";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
@@ -310,15 +309,10 @@ export const createEntityFromBuffer = async ({
   const fieldId = createSafeId<"field">();
   const safeDb = toSafeDb(scopedDb);
 
-  // Reconcile older crash leftovers before publishing another final object,
-  // then durably reserve this exact file id. A hard death after the S3 write
-  // can therefore be distinguished from a committed entity and cleaned later.
-  await reconcileStaleBufferIntents({
-    safeDb,
-    organizationId,
-    workspaceId,
-    purpose: "entity_create",
-  });
+  // Durably reserve this exact file id before publishing. A hard death after
+  // the S3 write can therefore be distinguished from a committed entity and
+  // cleaned by the bounded scheduler without adding a repair query to every
+  // request.
   const intent = await reserveEntityCreateIntent({
     safeDb,
     organizationId,

@@ -2,7 +2,10 @@ import { Result } from "better-result";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { pendingUploads } from "@/api/db/schema";
+import {
+  pendingUploads,
+  PENDING_UPLOAD_RECOVERABLE_STATUSES,
+} from "@/api/db/schema";
 import type { PendingUploadPurposeData } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -75,10 +78,12 @@ const reconcileStaleBufferIntentBatch = async ({
       })
       .from(pendingUploads)
       .where(
-        sql`${ownershipPredicate}
-          AND ${pendingUploads.purposeData}->>'reservedFileId' IS NOT NULL
-          AND ${pendingUploads.status} = 'scanning'
-          AND ${pendingUploads.claimedAt} < NOW() - ${timeoutSeconds} * interval '1 second'`,
+        and(
+          ownershipPredicate,
+          sql`${pendingUploads.purposeData}->>'reservedFileId' IS NOT NULL`,
+          inArray(pendingUploads.status, PENDING_UPLOAD_RECOVERABLE_STATUSES),
+          sql`${pendingUploads.claimedAt} < NOW() - ${timeoutSeconds} * interval '1 second'`,
+        ),
       )
       .orderBy(asc(pendingUploads.claimedAt), asc(pendingUploads.id))
       .limit(limit)
@@ -95,11 +100,12 @@ const reconcileStaleBufferIntentBatch = async ({
       .set({
         claimedAt: new Date(),
         claimedByRequestId: reconcileClaimId,
+        status: "scanning",
       })
       .where(
         and(
           inArray(pendingUploads.id, ids),
-          eq(pendingUploads.status, "scanning"),
+          inArray(pendingUploads.status, PENDING_UPLOAD_RECOVERABLE_STATUSES),
         ),
       );
     return staleRows;

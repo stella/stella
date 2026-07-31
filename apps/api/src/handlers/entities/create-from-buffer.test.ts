@@ -24,15 +24,6 @@ const enqueuePdfDerivativeMock = mock(async () => {});
 const enqueuePdfDerivativeOrMarkFailedMock = mock(async () => {});
 const broadcastMock = mock();
 let intentStatuses: string[] = [];
-let staleIntentRows: {
-  declaredMime: string;
-  id: ReturnType<typeof toSafeId<"pendingUpload">>;
-  purposeData: {
-    type: "entity_create";
-    propertyId: typeof propertyId;
-    reservedFileId: string;
-  };
-}[] = [];
 
 void mock.module("@/api/lib/s3", () => ({
   getS3: () => ({
@@ -80,22 +71,7 @@ const withIntentPersistence = (base: IntentPersistenceBase) => {
   const baseUpdate = base.update;
   return {
     ...base,
-    select: (selection: unknown) => {
-      if (
-        typeof selection === "object" &&
-        selection !== null &&
-        "purposeData" in selection
-      ) {
-        return {
-          from: () => ({
-            where: () => ({
-              limit: () => ({ for: async () => staleIntentRows }),
-            }),
-          }),
-        };
-      }
-      return baseSelect?.(selection);
-    },
+    select: (selection: unknown) => baseSelect?.(selection),
     insert: (table: unknown) => {
       if (table === pendingUploads) {
         return {
@@ -138,7 +114,6 @@ describe("createEntityFromBuffer", () => {
     processExtractionMock.mockClear();
     broadcastMock.mockClear();
     intentStatuses = [];
-    staleIntentRows = [];
   });
 
   test("rejects oversized documents before database or object-storage work", async () => {
@@ -318,7 +293,7 @@ describe("createEntityFromBuffer", () => {
         }),
       );
     }
-    expect(getCallCount()).toBe(5);
+    expect(getCallCount()).toBe(4);
     expect(locks).toEqual(["update"]);
     expect(s3WriteMock).toHaveBeenCalledTimes(1);
     expect(s3DeleteMock).toHaveBeenCalledTimes(1);
@@ -483,7 +458,7 @@ describe("createEntityFromBuffer", () => {
       async <T>(run: (transaction: Transaction) => Promise<T>) => {
         callCount += 1;
         const value = await run(asTestRaw<Transaction>(tx));
-        if (callCount === 4) {
+        if (callCount === 3) {
           throw commitError;
         }
         return value;

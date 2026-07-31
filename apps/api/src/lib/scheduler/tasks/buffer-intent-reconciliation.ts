@@ -14,10 +14,9 @@ const rootSafeDb: SafeDb = async (run) =>
   await Result.tryPromise(async () => await rootDb.transaction(run));
 
 /**
- * Independently drain abandoned server-generated file intents. Request-path
- * reconciliation remains a fast recovery path, while this scheduled sweep
- * guarantees that a workspace never needs another write to reclaim orphaned
- * final-key S3 objects after a hard process death.
+ * Independently drain abandoned server-generated file intents. This scheduled
+ * sweep guarantees that a workspace never needs another write to reclaim
+ * orphaned final-key S3 objects after a hard process death.
  */
 export const reconcileBufferIntents: SchedulerTask = async ({
   logger,

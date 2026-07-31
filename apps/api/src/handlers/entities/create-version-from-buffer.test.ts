@@ -16,15 +16,6 @@ const pdfDerivativeMock = mock();
 const thumbnailDerivativeMock = mock();
 const diffStatsMock = mock();
 const broadcastMock = mock();
-let staleIntentRows: {
-  declaredMime: string;
-  id: ReturnType<typeof toSafeId<"pendingUpload">>;
-  purposeData: {
-    type: "entity_version";
-    entityId: ReturnType<typeof toSafeId<"entity">>;
-    reservedFileId: string;
-  };
-}[] = [];
 let persistenceEvents: string[] = [];
 let intentStatuses: string[] = [];
 
@@ -65,15 +56,6 @@ const { createEntityVersionFromBuffer } =
 
 const createTestTransaction = (): Transaction =>
   asTestRaw<Transaction>({
-    select: () => ({
-      from: () => ({
-        where: () => ({
-          limit: () => ({
-            for: async () => staleIntentRows,
-          }),
-        }),
-      }),
-    }),
     insert: () => ({
       values: (values: { id: string; status?: string }) => {
         persistenceEvents.push("intent-reserved");
@@ -144,7 +126,6 @@ describe("createEntityVersionFromBuffer", () => {
     pdfDerivativeMock.mockResolvedValue(undefined);
     thumbnailDerivativeMock.mockResolvedValue(undefined);
     diffStatsMock.mockResolvedValue(undefined);
-    staleIntentRows = [];
     persistenceEvents = [];
     intentStatuses = [];
   });
@@ -240,40 +221,6 @@ describe("createEntityVersionFromBuffer", () => {
     });
   });
 
-  test("reconciles a stale durable intent before publishing new bytes", async () => {
-    staleIntentRows = [
-      {
-        declaredMime:
-          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        id: toSafeId<"pendingUpload">("019c0000-0000-7000-8000-000000000001"),
-        purposeData: {
-          type: "entity_version",
-          entityId: toSafeId<"entity">("entity_old"),
-          reservedFileId: "019c0000-0000-7000-8000-000000000002",
-        },
-      },
-    ];
-    writeFileVersionMock.mockImplementation(async (input) => {
-      const result = {
-        status: "ok" as const,
-        entityVersionId: input.entityVersionId,
-        fieldId: input.fieldId,
-        versionNumber: 2,
-      };
-      await input.afterWrite(result);
-      return result;
-    });
-
-    const result = await createEntityVersionFromBuffer(baseInput);
-
-    expect(Result.isOk(result)).toBe(true);
-    expect(s3DeleteMock).toHaveBeenCalledTimes(1);
-    expect(s3DeleteMock).toHaveBeenCalledWith(
-      "org_1/ws_1/019c0000-0000-7000-8000-000000000002.docx",
-    );
-    expect(persistenceEvents).toEqual(["intent-reserved", "s3-written"]);
-  });
-
   test("deletes the object when the target rejects under the lock", async () => {
     writeFileVersionMock.mockResolvedValue({ status: "entity-read-only" });
 
@@ -321,7 +268,7 @@ describe("createEntityVersionFromBuffer", () => {
       async <T>(run: (tx: Transaction) => Promise<T>) => {
         safeDbCall += 1;
         const value = await run(createTestTransaction());
-        return safeDbCall === 3 ? Result.err(commitError) : Result.ok(value);
+        return safeDbCall === 2 ? Result.err(commitError) : Result.ok(value);
       },
     );
 
