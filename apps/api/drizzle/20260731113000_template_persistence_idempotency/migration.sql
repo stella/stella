@@ -8,12 +8,28 @@ CREATE TABLE "template_persistence_requests" (
   "user_id" text NOT NULL,
   "idempotency_key" varchar(128) NOT NULL,
   "request_fingerprint" varchar(64) NOT NULL,
-  "result" jsonb NOT NULL,
+  "status" varchar(16) DEFAULT 'pending' NOT NULL,
+  "claim_token" uuid NOT NULL,
+  "claimed_at" timestamptz DEFAULT now() NOT NULL,
+  "result" jsonb,
   "created_at" timestamptz DEFAULT now() NOT NULL,
+  "completed_at" timestamptz,
   CONSTRAINT "template_persistence_requests_key_nonempty_check"
     CHECK (length("idempotency_key") > 0),
   CONSTRAINT "template_persistence_requests_fingerprint_check"
-    CHECK ("request_fingerprint" ~ '^[0-9a-f]{64}$')
+    CHECK ("request_fingerprint" ~ '^[0-9a-f]{64}$'),
+  CONSTRAINT "template_persistence_requests_state_check"
+    CHECK (
+      (
+        "status" = 'pending'
+        AND "result" IS NULL
+        AND "completed_at" IS NULL
+      ) OR (
+        "status" = 'completed'
+        AND "result" IS NOT NULL
+        AND "completed_at" IS NOT NULL
+      )
+    )
 );
 --> statement-breakpoint
 ALTER TABLE "template_persistence_requests"
@@ -40,7 +56,8 @@ CREATE INDEX "template_persistence_requests_workspace_created_idx"
 --> statement-breakpoint
 ALTER TABLE "template_persistence_requests" ENABLE ROW LEVEL SECURITY;
 --> statement-breakpoint
-GRANT SELECT, INSERT ON TABLE "template_persistence_requests" TO stella;
+GRANT SELECT, INSERT, UPDATE, DELETE
+  ON TABLE "template_persistence_requests" TO stella;
 --> statement-breakpoint
 CREATE POLICY "template_persistence_requests_workspace_select"
   ON "template_persistence_requests"

@@ -19,8 +19,9 @@ const createEntityVersionFromBufferMock = mock();
 const createStoredTemplateMock = mock();
 const recordTemplateFillMock = mock();
 const recordTemplateUseMock = mock();
-const loadTemplatePersistenceReceiptMock = mock();
+const claimTemplatePersistenceRequestMock = mock();
 const recordTemplatePersistenceReceiptMock = mock();
+const releaseTemplatePersistenceClaimMock = mock();
 const fingerprintTemplatePersistenceRequestMock = mock();
 const configureTemplateFieldsMock = mock();
 const loadOrgAIConfigMock = mock();
@@ -59,12 +60,13 @@ void mock.module("@/api/handlers/templates/template-fill-service", () => ({
 }));
 
 void mock.module("@/api/mcp/template-persistence", () => ({
+  claimTemplatePersistenceRequest: claimTemplatePersistenceRequestMock,
   fingerprintTemplatePersistenceRequest:
     fingerprintTemplatePersistenceRequestMock,
-  loadTemplatePersistenceReceipt: loadTemplatePersistenceReceiptMock,
   persistFilledTemplateDocument: createEntityFromBufferMock,
   persistFilledTemplateVersion: createEntityVersionFromBufferMock,
   recordTemplatePersistenceReceipt: recordTemplatePersistenceReceiptMock,
+  releaseTemplatePersistenceClaim: releaseTemplatePersistenceClaimMock,
 }));
 
 void mock.module("@/api/handlers/templates/create-template-service", () => ({
@@ -242,10 +244,14 @@ describe("MCP template tools", () => {
     createStoredTemplateMock.mockReset();
     recordTemplateFillMock.mockReset();
     recordTemplateUseMock.mockReset();
-    loadTemplatePersistenceReceiptMock.mockReset();
-    loadTemplatePersistenceReceiptMock.mockResolvedValue(Result.ok(undefined));
+    claimTemplatePersistenceRequestMock.mockReset();
+    claimTemplatePersistenceRequestMock.mockResolvedValue(
+      Result.ok({ status: "claimed", claimToken: "claim_1" }),
+    );
     recordTemplatePersistenceReceiptMock.mockReset();
     recordTemplatePersistenceReceiptMock.mockResolvedValue(undefined);
+    releaseTemplatePersistenceClaimMock.mockReset();
+    releaseTemplatePersistenceClaimMock.mockResolvedValue(Result.ok(undefined));
     fingerprintTemplatePersistenceRequestMock.mockReset();
     fingerprintTemplatePersistenceRequestMock.mockReturnValue(
       "request-fingerprint",
@@ -847,6 +853,7 @@ describe("MCP template tools", () => {
       expect.objectContaining({
         idempotencyKey: "create-document-1",
         requestFingerprint: "request-fingerprint",
+        claimToken: "claim_1",
         result: expect.objectContaining({
           action: "create_document",
           entityId: "entity_new",
@@ -903,13 +910,13 @@ describe("MCP template tools", () => {
     expect(createEntityVersionFromBufferMock).not.toHaveBeenCalled();
     expect(recordTemplateUseMock).not.toHaveBeenCalled();
     expect(recordTemplatePersistenceReceiptMock).not.toHaveBeenCalled();
+    expect(releaseTemplatePersistenceClaimMock).toHaveBeenCalled();
   });
 
   test("save_filled_template replays a durable idempotency receipt", async () => {
-    loadTemplatePersistenceReceiptMock.mockResolvedValue(
+    claimTemplatePersistenceRequestMock.mockResolvedValue(
       Result.ok({
-        workspaceId: "ws_1",
-        requestFingerprint: "request-fingerprint",
+        status: "completed",
         result: {
           action: "create_document",
           entityId: "entity_existing",
@@ -929,7 +936,7 @@ describe("MCP template tools", () => {
         idempotency_key: "create-document-retry",
         values: { "tenant.name": "ACME" },
       },
-      context: createContext(),
+      context: createContext({ workspaceStatus: "archived" }),
       toolName: "save_filled_template",
     });
 
@@ -945,30 +952,9 @@ describe("MCP template tools", () => {
     expect(createEntityFromBufferMock).not.toHaveBeenCalled();
   });
 
-  test("save_filled_template recovers a concurrent retry winner", async () => {
-    const receipt = {
-      workspaceId: "ws_1",
-      requestFingerprint: "request-fingerprint",
-      result: {
-        action: "create_document" as const,
-        entityId: "entity_winner",
-        entityVersionId: "version_winner",
-        fileName: "lease.docx",
-        unmatchedPlaceholders: [],
-        unusedValues: [],
-      },
-    };
-    loadTemplatePersistenceReceiptMock
-      .mockResolvedValueOnce(Result.ok(undefined))
-      .mockResolvedValueOnce(Result.ok(receipt));
-    fillStoredTemplateDocxMock.mockResolvedValue({
-      fileName: "lease.docx",
-      buffer: Buffer.from("filled docx"),
-      unmatchedPlaceholders: [],
-      unusedValues: [],
-    });
-    createEntityFromBufferMock.mockRejectedValue(
-      new Error("duplicate idempotency receipt"),
+  test("save_filled_template does not render behind an active claim", async () => {
+    claimTemplatePersistenceRequestMock.mockResolvedValue(
+      Result.ok({ status: "pending" }),
     );
 
     const result = await handleMcpToolCall({
@@ -983,24 +969,20 @@ describe("MCP template tools", () => {
       toolName: "save_filled_template",
     });
 
-    expect(parseToolPayload(result)).toEqual(receipt.result);
-    expect(loadTemplatePersistenceReceiptMock).toHaveBeenCalledTimes(2);
+    expect(result.isError).toBe(true);
+    expect(result.content).toEqual([
+      {
+        type: "text",
+        text: "A save with this idempotency_key is still in progress; retry shortly",
+      },
+    ]);
+    expect(fillStoredTemplateDocxMock).not.toHaveBeenCalled();
+    expect(createEntityFromBufferMock).not.toHaveBeenCalled();
   });
 
   test("save_filled_template rejects an idempotency key reused for different input", async () => {
-    loadTemplatePersistenceReceiptMock.mockResolvedValue(
-      Result.ok({
-        workspaceId: "ws_1",
-        requestFingerprint: "different-fingerprint",
-        result: {
-          action: "create_document",
-          entityId: "entity_existing",
-          entityVersionId: "version_existing",
-          fileName: "lease.docx",
-          unmatchedPlaceholders: [],
-          unusedValues: [],
-        },
-      }),
+    claimTemplatePersistenceRequestMock.mockResolvedValue(
+      Result.ok({ status: "conflict" }),
     );
 
     const result = await handleMcpToolCall({

@@ -63,12 +63,6 @@ const POST_BOOTSTRAP_SCOPED_HANDOFF_TABLES = new Set([
   "entity_deletion_cleanup_requests",
 ]);
 
-// Immutable request receipts are selected and inserted by scoped handlers;
-// updates and deletes remain owner-only maintenance operations.
-const POST_BOOTSTRAP_SELECT_INSERT_TABLES = new Set([
-  "template_persistence_requests",
-]);
-
 // Post-bootstrap control-plane auth tables that deny `stella` entirely
 // (deny-all RLS policy + REVOKE ALL, like `oauth_client`). They
 // deliberately grant stella nothing, so the grant requirement does not
@@ -142,9 +136,6 @@ const grantsRequiredPrivileges = ({
   }
   if (POST_BOOTSTRAP_SCOPED_HANDOFF_TABLES.has(table)) {
     return privileges.has("insert");
-  }
-  if (POST_BOOTSTRAP_SELECT_INSERT_TABLES.has(table)) {
-    return privileges.has("select") && privileges.has("insert");
   }
   return grantsTableDml;
 };

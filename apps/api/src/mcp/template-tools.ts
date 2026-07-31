@@ -54,11 +54,12 @@ import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
 import { withTimeout } from "@/api/lib/with-timeout";
 import type { McpRequestContext } from "@/api/mcp/context";
 import {
+  claimTemplatePersistenceRequest,
   fingerprintTemplatePersistenceRequest,
-  loadTemplatePersistenceReceipt,
   persistFilledTemplateDocument,
   persistFilledTemplateVersion,
   recordTemplatePersistenceReceipt,
+  releaseTemplatePersistenceClaim,
 } from "@/api/mcp/template-persistence";
 import {
   defineTextFieldSpec,
@@ -74,10 +75,12 @@ import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   bindWorkspaceRecorder,
   ensureActiveWorkspace,
+  ensureWorkspaceAccess,
   enumProp,
   errorResult,
   internalFailureResult,
   isToolErrorResult,
+  notFoundResult,
   parseOptionalCursor,
   stringProp,
   structuredErrorResult,
@@ -1055,26 +1058,15 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
     return errorResult("Forbidden");
   }
 
-  const workspaceId = ensureActiveWorkspace({
+  const workspaceId = ensureWorkspaceAccess({
     context,
     workspaceId: input.matter_id,
   });
-  if (typeof workspaceId !== "string") {
-    return workspaceId;
+  if (workspaceId === null) {
+    return notFoundResult("Matter not found or not accessible");
   }
   const recordAuditEvent = bindWorkspaceRecorder(context, workspaceId);
   const templateId = brandPersistedTemplateId(input.template_id);
-
-  const destinationError = await validateFilledTemplateDestination({
-    action: input.action,
-    context,
-    entityId: input.entity_id,
-    parentId: input.parent_id,
-    workspaceId,
-  });
-  if (destinationError !== null) {
-    return errorResult(destinationError);
-  }
 
   const requestFingerprint = fingerprintTemplatePersistenceRequest({
     action: input.action,
@@ -1085,32 +1077,79 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
     name: input.name,
     values: input.values,
   });
-  const priorReceipt = await loadTemplatePersistenceReceipt({
+  const claim = await claimTemplatePersistenceRequest({
     safeDb: context.safeDb,
     organizationId: context.organizationId,
+    workspaceId,
     userId: context.userId,
     idempotencyKey: input.idempotency_key,
+    requestFingerprint,
   });
-  if (Result.isError(priorReceipt)) {
-    return internalFailureResult(priorReceipt.error);
+  if (Result.isError(claim)) {
+    return internalFailureResult(claim.error);
   }
-  if (priorReceipt.value !== undefined) {
-    if (
-      priorReceipt.value.workspaceId !== workspaceId ||
-      priorReceipt.value.requestFingerprint !== requestFingerprint
-    ) {
-      return structuredErrorResult({
-        code: "validation_error",
-        message: "idempotency_key was already used for different input",
-        issues: [
-          {
-            path: "idempotency_key",
-            message: "Reuse a key only for the same save operation",
-          },
-        ],
-      });
+  const claimToken = (() => {
+    switch (claim.value.status) {
+      case "claimed":
+        return claim.value.claimToken;
+      case "completed":
+        return textResult(claim.value.result);
+      case "conflict":
+        return structuredErrorResult({
+          code: "validation_error",
+          message: "idempotency_key was already used for different input",
+          issues: [
+            {
+              path: "idempotency_key",
+              message: "Reuse a key only for the same save operation",
+            },
+          ],
+        });
+      case "pending":
+        return errorResult(
+          "A save with this idempotency_key is still in progress; retry shortly",
+        );
+      default: {
+        const unreachable: never = claim.value;
+        return unreachable;
+      }
     }
-    return textResult(priorReceipt.value.result);
+  })();
+  if (typeof claimToken !== "string") {
+    return claimToken;
+  }
+  const releaseClaim = async (): Promise<void> => {
+    const released = await releaseTemplatePersistenceClaim({
+      safeDb: context.safeDb,
+      organizationId: context.organizationId,
+      userId: context.userId,
+      idempotencyKey: input.idempotency_key,
+      claimToken,
+    });
+    if (Result.isError(released)) {
+      captureError(released.error);
+    }
+  };
+
+  const activeWorkspaceId = ensureActiveWorkspace({
+    context,
+    workspaceId: input.matter_id,
+  });
+  if (typeof activeWorkspaceId !== "string") {
+    await releaseClaim();
+    return activeWorkspaceId;
+  }
+
+  const destinationError = await validateFilledTemplateDestination({
+    action: input.action,
+    context,
+    entityId: input.entity_id,
+    parentId: input.parent_id,
+    workspaceId,
+  });
+  if (destinationError !== null) {
+    await releaseClaim();
+    return errorResult(destinationError);
   }
 
   const orgAIConfig = await loadOrgAIConfig(context.organizationId);
@@ -1195,19 +1234,23 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
       ),
   );
   if (Result.isError(filledResult)) {
+    await releaseClaim();
     return internalFailureResult(filledResult.error);
   }
   const filled = filledResult.value;
   if ("usageRejection" in filled) {
+    await releaseClaim();
     return errorResult(filled.usageRejection.message);
   }
   if ("error" in filled) {
+    await releaseClaim();
     return errorResult(filled.error);
   }
   // Never cross the non-idempotent persistence boundary after either the
   // caller disconnects or the server-owned render deadline expires, even if
   // the abandoned fill operation settles later.
   if (operationSignal.aborted) {
+    await releaseClaim();
     return errorResult("Request cancelled before document persistence");
   }
 
@@ -1241,6 +1284,7 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
       userId: context.userId,
       idempotencyKey: input.idempotency_key,
       requestFingerprint,
+      claimToken,
       result,
     });
   };
@@ -1325,22 +1369,11 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
     catch: (cause) => cause,
   });
   if (Result.isError(persistence)) {
-    const concurrentReceipt = await loadTemplatePersistenceReceipt({
-      safeDb: context.safeDb,
-      organizationId: context.organizationId,
-      userId: context.userId,
-      idempotencyKey: input.idempotency_key,
-    });
-    if (
-      Result.isOk(concurrentReceipt) &&
-      concurrentReceipt.value?.workspaceId === workspaceId &&
-      concurrentReceipt.value.requestFingerprint === requestFingerprint
-    ) {
-      return textResult(concurrentReceipt.value.result);
-    }
+    await releaseClaim();
     return internalFailureResult(persistence.error);
   }
   if (persistence.value.status === "error") {
+    await releaseClaim();
     return errorResult(persistence.value.message);
   }
   return textResult(persistence.value.value);

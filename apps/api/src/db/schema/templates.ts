@@ -125,6 +125,14 @@ export type TemplatePersistenceResult =
       versionNumber: number;
     };
 
+export const TEMPLATE_PERSISTENCE_REQUEST_STATUS = {
+  COMPLETED: "completed",
+  PENDING: "pending",
+} as const;
+
+export type TemplatePersistenceRequestStatus =
+  (typeof TEMPLATE_PERSISTENCE_REQUEST_STATUS)[keyof typeof TEMPLATE_PERSISTENCE_REQUEST_STATUS];
+
 /** Durable receipt that makes save_filled_template retries idempotent. */
 export const templatePersistenceRequests = p.pgTable(
   "template_persistence_requests",
@@ -144,8 +152,16 @@ export const templatePersistenceRequests = p.pgTable(
     requestFingerprint: p
       .varchar("request_fingerprint", { length: 64 })
       .notNull(),
-    result: jsonb().$type<TemplatePersistenceResult>().notNull(),
+    status: p
+      .varchar({ length: 16 })
+      .$type<TemplatePersistenceRequestStatus>()
+      .notNull()
+      .default(TEMPLATE_PERSISTENCE_REQUEST_STATUS.PENDING),
+    claimToken: p.uuid("claim_token").notNull(),
+    claimedAt: timestamptz("claimed_at").notNull().defaultNow(),
+    result: jsonb().$type<TemplatePersistenceResult>(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
+    completedAt: timestamptz("completed_at"),
   },
   (table) => [
     p
@@ -161,6 +177,10 @@ export const templatePersistenceRequests = p.pgTable(
     p.check(
       "template_persistence_requests_fingerprint_check",
       sql`${table.requestFingerprint} ~ '^[0-9a-f]{64}$'`,
+    ),
+    p.check(
+      "template_persistence_requests_state_check",
+      sql`(${table.status} = ${TEMPLATE_PERSISTENCE_REQUEST_STATUS.PENDING} AND ${table.result} IS NULL AND ${table.completedAt} IS NULL) OR (${table.status} = ${TEMPLATE_PERSISTENCE_REQUEST_STATUS.COMPLETED} AND ${table.result} IS NOT NULL AND ${table.completedAt} IS NOT NULL)`,
     ),
     ...wsOrganizationPolicies("template_persistence_requests"),
   ],
