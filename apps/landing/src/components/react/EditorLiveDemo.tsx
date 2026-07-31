@@ -25,12 +25,13 @@ const FOLIO_MESSAGES = getFolioMessages("en");
  * and is fully editable — including folio's own formatting toolbar and
  * track-changes toggle — with no server round-trip.
  *
- * Mounted with Astro's `client:only="react"` (see ProductMediaFrame.astro),
- * not `client:visible`: folio's `DocxEditor` renders a real ProseMirror surface
- * and has no server snapshot, so `astro build`'s SSR of a `client:visible`
- * island crashes (its `useEditorMode` calls `useSyncExternalStore` without the
- * `getServerSnapshot` argument SSR requires). `client:only` skips server
- * rendering, which is also simply correct for a ProseMirror-backed editor.
+ * Loaded through EditorLiveDemoShell, which ProductMediaFrame mounts with
+ * Astro's `client:only="react"`, not `client:visible`: folio's `DocxEditor`
+ * renders a real ProseMirror surface and has no server snapshot, so
+ * `astro build`'s SSR of a `client:visible` island crashes (its `useEditorMode`
+ * calls `useSyncExternalStore` without the `getServerSnapshot` argument SSR
+ * requires). `client:only` skips server rendering, which is also simply
+ * correct for a ProseMirror-backed editor.
  *
  * `DocxEditor` ships its own dependency-light default chrome (buttons, menus,
  * dialogs, keyed off the same `--doc-*` CSS variables the app's semantic tokens

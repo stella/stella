@@ -793,7 +793,8 @@
       "capabilities": "Capabilities",
       "exploreMore": "Explore more",
       "faq": "FAQ",
-      "inShort": "In short"
+      "inShort": "In short",
+      "preview": "Preview"
     },
     "workspace": {
       "adjacent": {

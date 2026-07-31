@@ -793,7 +793,8 @@
       "capabilities": "Képességek",
       "exploreMore": "Fedezzen fel többet",
       "faq": "GYIK",
-      "inShort": "Röviden"
+      "inShort": "Röviden",
+      "preview": "Előnézet"
     },
     "workspace": {
       "adjacent": {

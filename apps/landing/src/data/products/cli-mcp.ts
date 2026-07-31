@@ -18,6 +18,9 @@ export const cliMcp: Product = {
     // homepage opening story keeps the full four-window scene.
     sideWindows: false,
     aspect: "2.03",
+    // Mobile stacks the app and terminal, so the desktop-wide ratio would
+    // leave less height than the terminal chrome alone requires.
+    mobileAspect: "1 / 1",
   },
   // Frame rhythm down the page: bloom, wash, bloom.
   heroFrameVariant: "bloom",

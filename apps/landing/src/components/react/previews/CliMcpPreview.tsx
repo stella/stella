@@ -1472,6 +1472,15 @@ const CLI_STYLES = `
       width: 90%;
       height: 33%;
     }
+    /* Two-window product scenes stack vertically on mobile. Give the
+       terminal enough room for its titlebar, command, results, and status
+       while keeping the app window as the larger surface. */
+    .cli-story-two-window .cli-main-window {
+      height: 55%;
+    }
+    .cli-story-two-window .cli-window {
+      height: 39%;
+    }
     /* The homepage hero follows the single-focus mobile composition: keep
        the main animated stella window and drop every companion. Other embeds
        retain their purpose-built mobile layouts. */

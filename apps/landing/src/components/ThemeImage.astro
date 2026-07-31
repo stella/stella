@@ -8,6 +8,7 @@ type Props = {
   loading?: "eager" | "lazy";
   decoding?: "async" | "auto" | "sync";
   defer?: "manual" | "visible";
+  media?: string;
 };
 
 const {
@@ -19,6 +20,7 @@ const {
   loading = "lazy",
   decoding = "async",
   defer,
+  media,
 } = Astro.props;
 
 const transparentPixel =
@@ -32,14 +34,19 @@ const transparentPixel =
 //
 // `manual` defers keep the placeholder: those are the nav mega-menu
 // thumbnails inside a closed <details>, where a real source would fetch every
-// product preview on every page load.
-const initialSrc = defer === "manual" ? transparentPixel : lightSrc;
+// product preview on every page load. A `media` constraint also keeps the
+// placeholder until theme-images.ts observes a matching viewport, so a
+// responsive-only capture does not download on the opposite breakpoint.
+const initialSrc =
+  defer === "manual" || media !== undefined ? transparentPixel : lightSrc;
+const deferredMode = media === undefined ? defer : "media";
 ---
 
 <img
   src={initialSrc}
   data-theme-image
-  data-theme-image-deferred={defer}
+  data-theme-image-deferred={deferredMode}
+  data-theme-image-media={media}
   data-theme-light-src={lightSrc}
   data-theme-dark-src={darkSrc}
   alt={alt}

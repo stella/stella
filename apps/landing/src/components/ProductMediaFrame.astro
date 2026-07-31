@@ -9,7 +9,7 @@ import MacWindow from "./MacWindow.astro";
 import MediaSkeleton from "./MediaSkeleton.astro";
 import ThemeImage from "./ThemeImage.astro";
 import { AnonymizeLiveDemo } from "./react/AnonymizeLiveDemo";
-import { EditorLiveDemo } from "./react/EditorLiveDemo";
+import { EditorLiveDemoShell } from "./react/EditorLiveDemoShell";
 import { ProductPreview } from "./react/previews/ProductPreview";
 import { CliMcpPreview } from "./react/previews/CliMcpPreview";
 import { RecordedStellaScene } from "./react/product-story/RecordedStellaScene";
@@ -39,8 +39,12 @@ const { media, compact = false, deferThemeImage = false, thumbnail = false } = A
 // catalog keys.
 const rawLocale = Astro.currentLocale ?? defaultLocale;
 const locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
-const sceneWindowLabels = resolveSceneWindowLabels(getTranslations(locale));
+const t = getTranslations(locale);
+const sceneWindowLabels = resolveSceneWindowLabels(t);
+const staticEditorLabel = `${t("nav.products.editor.eyebrow")} · ${t("products.ui.preview")}`;
 const aspect = media.aspect ?? "16 / 9";
+const mobileAspect =
+  media.type === "story" ? media.mobileAspect ?? aspect : aspect;
 
 // A video slot upgrades from skeleton to <video> the moment its file lands in
 // public/. The build's cwd is the Astro project dir (apps/landing), so resolve
@@ -51,7 +55,10 @@ const posterReady = media.type === "video" && media.poster !== undefined && vide
 const storyThumbnail = media.type === "story" ? productStoryThumbnails[media.sceneId] : undefined;
 ---
 
-<div class="product-media relative" style={`aspect-ratio: ${aspect}`}>
+<div
+  class="product-media relative"
+  style={`--product-media-aspect: ${aspect}; --product-media-mobile-aspect: ${mobileAspect}`}
+>
   {
     media.type === "preview" && (
       <div class="absolute inset-0">
@@ -168,11 +175,30 @@ const storyThumbnail = media.type === "story" ? productStoryThumbnails[media.sce
 
   {
     media.type === "live-editor" && !thumbnail && (
-      <div class="absolute inset-0">
-        <MacWindow class="h-full" label={media.alt}>
-          <EditorLiveDemo client:only="react" />
-        </MacWindow>
-      </div>
+      <>
+        {/* The real folio toolbar is scaled below a usable touch size in the
+            mobile hero. Show its theme-aware capture there so the preview is
+            clearly illustrative; larger viewports retain the live editor. */}
+        <div class="absolute inset-0 sm:hidden" data-editor-preview="static">
+          <MacWindow class="h-full" label={staticEditorLabel}>
+            <ThemeImage
+              lightSrc="/media/products/editor.png"
+              darkSrc="/media/products/editor-dark.png"
+              alt=""
+              class="h-full w-full object-contain object-top"
+              media="(max-width: 639px)"
+            />
+          </MacWindow>
+        </div>
+        <div
+          class="absolute inset-0 hidden sm:block"
+          data-editor-preview="interactive"
+        >
+          <MacWindow class="h-full" label={media.alt}>
+            <EditorLiveDemoShell client:only="react" />
+          </MacWindow>
+        </div>
+      </>
     )
   }
 
@@ -204,7 +230,14 @@ const storyThumbnail = media.type === "story" ? productStoryThumbnails[media.sce
      on the plain <img>/<video> element) instead of relying on a shared ring
      here. */
   .product-media {
+    aspect-ratio: var(--product-media-aspect);
     overflow: visible;
+  }
+
+  @media (max-width: 639px) {
+    .product-media {
+      aspect-ratio: var(--product-media-mobile-aspect);
+    }
   }
 
   /* Portrait document window: full frame height, width derived from the

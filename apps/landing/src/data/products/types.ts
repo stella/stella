@@ -24,6 +24,8 @@ export type ProductMedia =
        *  as a centred portrait window instead of the wide app scene. */
       variant?: "portrait";
       aspect?: string;
+      /** Optional mobile ratio for scenes whose windows recompose vertically. */
+      mobileAspect?: string;
     }
   | { type: "placeholder"; note: string; aspect?: string }
   | {
@@ -49,10 +51,11 @@ export type ProductMedia =
       aspect?: string;
     }
   | {
-      /** Live, in-browser run of the real folio DOCX editor (EditorLiveDemo):
-       *  a sample contract opens pre-parsed (no server round-trip) and is
-       *  fully editable, including folio's own formatting toolbar and
-       *  track-changes toggle. Mounted with `client:only` (not
+      /** In-browser presentation of the real folio DOCX editor: mobile uses
+       *  a non-interactive, theme-aware capture because the scaled controls
+       *  are too small for touch; larger viewports mount EditorLiveDemo, where
+       *  a sample contract is fully editable, including folio's formatting
+       *  toolbar and track-changes toggle. Mounted with `client:only` (not
        *  `client:visible`, unlike `live-anonymize`): folio's `DocxEditor`
        *  has no SSR guard and crashes under Astro's server render for a
        *  `document`-seeded editor; see ProductMediaFrame and
