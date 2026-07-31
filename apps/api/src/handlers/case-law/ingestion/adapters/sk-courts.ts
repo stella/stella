@@ -311,6 +311,31 @@ export const skCourtsAdapter: SourceAdapter = {
   // 30 min cycle fits ~70 pages = ~7000 decisions per cursor persist.
   maxCycleMs: 30 * 60 * 1000,
 
+  /**
+   * The list endpoint reports `numFound` for the whole collection, so one
+   * minimal request measures the source. Without it this corpus — the
+   * largest we hold — has no completeness signal at all.
+   */
+  async getTotalCount(signal) {
+    const response = await fetchWithTimeout(
+      `${BASE_URL}?${new URLSearchParams({ page: "0", size: "1" }).toString()}`,
+      {
+        signal,
+        headers: { Accept: "application/json" },
+        timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+      },
+    );
+    if (!response.ok) {
+      return null;
+    }
+    const json: unknown = await response.json();
+    if (!isRecord(json)) {
+      return null;
+    }
+    const total = json["numFound"];
+    return typeof total === "number" && total > 0 ? total : null;
+  },
+
   fetchPage: createPagePaginatedFetch<SkApiResponse>({
     adapterKey: ADAPTER_KEYS.SK_COURTS,
     pageSize: PAGE_SIZE,
