@@ -231,6 +231,19 @@ type GenerationBackfillRowsOptions = {
   readConcurrency?: number;
 };
 
+const ingestBatchWithGuard = async ({
+  beforeRemoteEffect,
+  indexId,
+  ndjson,
+}: {
+  beforeRemoteEffect?: BeforeRemoteEffect;
+  indexId: string;
+  ndjson: string;
+}): Promise<Result<void, CorpusIndexError>> => {
+  await beforeRemoteEffect?.();
+  return await getCorpusIndexClient().ingestBatch(indexId, ndjson);
+};
+
 /**
  * Family-specific surface consumed by the shared core. Everything that touches
  * a family's Drizzle tables or its per-document shape lives here; the core
@@ -830,13 +843,13 @@ export const createCorpusIndexer = <
           LIMITS.corpusIndexIngestMaxBytes,
         )) {
           // oxlint-disable-next-line no-await-in-loop -- sequential ingest paces NDJSON pushes to the search backend
-          if (options.type === "generation-rebuild") {
-            await options.beforeRemoteEffect();
-          }
-          const ingest = await getCorpusIndexClient().ingestBatch(
+          const ingest = await ingestBatchWithGuard({
+            ...(options.type === "generation-rebuild"
+              ? { beforeRemoteEffect: options.beforeRemoteEffect }
+              : {}),
             indexId,
             ndjson,
-          );
+          });
 
           if (ingest.isErr()) {
             firstError ??= ingest.error;
