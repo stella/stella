@@ -549,30 +549,29 @@ export const createCaseLawGenerationBackfill =
       const reconciliationToken = newLeaseToken();
       const claimedReconciliation = await scopedDb(async (tx) => {
         // audit: skip — completed rebuild reconciliation uses the durable lease for mutual exclusion
-        return (
-          await tx
-            .update(caseLawCorpusIndexBackfills)
-            .set({
-              leaseExpiresAt: nextLeaseExpiry(),
-              leaseToken: reconciliationToken,
-            })
-            .where(
-              and(
-                eq(caseLawCorpusIndexBackfills.generation, generation),
-                eq(
-                  caseLawCorpusIndexBackfills.status,
-                  CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.COMPLETE,
-                ),
-                sameCursor({ checkpoint }),
-                hasNoNewerRebuild({ checkpoint }),
-                or(
-                  isNull(caseLawCorpusIndexBackfills.leaseExpiresAt),
-                  lte(caseLawCorpusIndexBackfills.leaseExpiresAt, sql`now()`),
-                ),
+        const claimedRows = await tx
+          .update(caseLawCorpusIndexBackfills)
+          .set({
+            leaseExpiresAt: nextLeaseExpiry(),
+            leaseToken: reconciliationToken,
+          })
+          .where(
+            and(
+              eq(caseLawCorpusIndexBackfills.generation, generation),
+              eq(
+                caseLawCorpusIndexBackfills.status,
+                CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.COMPLETE,
               ),
-            )
-            .returning({ generation: caseLawCorpusIndexBackfills.generation })
-        ).at(0);
+              sameCursor({ checkpoint }),
+              hasNoNewerRebuild({ checkpoint }),
+              or(
+                isNull(caseLawCorpusIndexBackfills.leaseExpiresAt),
+                lte(caseLawCorpusIndexBackfills.leaseExpiresAt, sql`now()`),
+              ),
+            ),
+          )
+          .returning({ generation: caseLawCorpusIndexBackfills.generation });
+        return claimedRows.at(0);
       });
       if (!claimedReconciliation) {
         return { indexed: 0, status: BACKFILL_STATUS.BUSY };
