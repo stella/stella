@@ -87,3 +87,39 @@ describe("listGatewayMcpToolDefinitions business-registry narrowing", () => {
     expect(registryEnum).toContain("vies");
   });
 });
+
+describe("listGatewayMcpToolDefinitions compound scope discovery", () => {
+  test("keeps compound tools discoverable when an additional grant is missing", async () => {
+    const withoutTemplateConsent = await listGatewayMcpToolDefinitions({
+      context: contextWith(undefined),
+      mode: "default",
+      scopes: ["stella:documents_write"],
+    });
+    const withoutPrimaryConsent = await listGatewayMcpToolDefinitions({
+      context: contextWith(undefined),
+      mode: "default",
+      scopes: ["stella:templates"],
+    });
+    const withBothConsents = await listGatewayMcpToolDefinitions({
+      context: contextWith(undefined),
+      mode: "default",
+      scopes: ["stella:documents_write", "stella:templates"],
+    });
+
+    expect(
+      withoutTemplateConsent.some(
+        (definition) => definition.name === "save_filled_template",
+      ),
+    ).toBe(true);
+    expect(
+      withoutPrimaryConsent.some(
+        (definition) => definition.name === "save_filled_template",
+      ),
+    ).toBe(false);
+    expect(
+      withBothConsents.some(
+        (definition) => definition.name === "save_filled_template",
+      ),
+    ).toBe(true);
+  });
+});

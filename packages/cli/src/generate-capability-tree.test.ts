@@ -401,6 +401,18 @@ describe("deriveCapabilityLeaf: pagination + suppression + truncation", () => {
         .scope,
     ).toBeUndefined();
   });
+
+  test("maps compound catalog scopes into the capability preflight", () => {
+    const { spec } = deriveCapabilityLeaf(
+      entry({
+        id: "templates.fill-to-workspace",
+        scope: "stella:documents_write",
+        additionalScopes: ["stella:templates"],
+      }),
+    );
+    expect(spec.scope).toBe("documents_write");
+    expect(spec.additionalScopes).toEqual(["templates"]);
+  });
 });
 
 describe("insertCapabilities: namespaced merge", () => {

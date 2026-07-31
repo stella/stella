@@ -17,6 +17,7 @@ import type { McpSession } from "@/api/mcp/auth";
 import {
   type McpMode,
   STELLA_MCP_ORGANIZATION_HEADER,
+  STELLA_MCP_SCOPE_OMITTED_TOOLS_HEADER,
   STELLA_MCP_SCOPES_HEADER,
 } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -25,15 +26,18 @@ import {
   McpGatewayLoadError,
   McpOrganizationAccessError,
 } from "@/api/mcp/errors";
+import { isMcpToolFeatureEnabled } from "@/api/mcp/gateway/list-tools";
 import { getMcpInstructions } from "@/api/mcp/instructions";
 import {
   createMcpCorsHeaders,
   getMcpWwwAuthenticateHeader,
 } from "@/api/mcp/metadata";
+import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
 import type { McpToolDefinition, ToolScope } from "@/api/mcp/tool-types";
 import {
   closestToolNames,
   MCP_INTERNAL_ERROR_HINT,
+  oauthScopeRecoveryHint,
   structuredErrorResult,
 } from "@/api/mcp/tool-utils";
 
@@ -44,13 +48,34 @@ const formatUnknownToolName = (toolName: string): string =>
     ? toolName
     : `${toolName.slice(0, MAX_TOOL_NAME_SUGGESTION_CHARS)}...`;
 
-/** `missing_scope` envelope: the granted scopes do not include `scope`. */
-const missingScopeResult = (scope: ToolScope): CallToolResult =>
+/** `missing_scope` envelope with a CLI command that preserves all grants. */
+const missingScopeResult = ({
+  grantedScopes,
+  missingScope,
+  requiredScopes,
+}: {
+  grantedScopes: readonly string[];
+  missingScope: ToolScope;
+  requiredScopes: readonly ToolScope[];
+}): CallToolResult =>
   structuredErrorResult({
     code: "missing_scope",
-    message: `Insufficient permissions. Required scope: ${scope}`,
-    hint: `Grant the '${scope}' scope by re-running OAuth consent (CLI: 'stella auth login --scopes ${scope}'), then retry.`,
+    message: `Insufficient permissions. Required scope: ${missingScope}`,
+    hint: oauthScopeRecoveryHint({
+      grantedScopes,
+      missingScope,
+      requiredScopes,
+    }),
   });
+
+const requiredScopesForTool = (
+  definition: McpToolDefinition,
+): readonly ToolScope[] => {
+  if (definition.additionalScopes === undefined) {
+    return [definition.scope];
+  }
+  return [definition.scope, ...definition.additionalScopes];
+};
 
 type McpServerDependencies = {
   authenticateMcpRequest: (token: string, mode: McpMode) => Promise<McpSession>;
@@ -60,10 +85,10 @@ type McpServerDependencies = {
     context: McpRequestContext,
     mode?: McpMode,
   ) => Promise<McpToolDefinition | undefined>;
-  getMcpToolScopeHint: (
+  getMcpToolRequiredScopesHint: (
     toolName: string,
     mode?: McpMode,
-  ) => ToolScope | undefined;
+  ) => readonly ToolScope[] | undefined;
   handleMcpToolCall: ({
     args,
     context,
@@ -102,7 +127,26 @@ const extractBearerToken = (request: Request): string | undefined => {
   return token.length > 0 ? token : undefined;
 };
 
-const withMcpCors = (response: Response, session?: McpSession) => {
+const scopeOmittedCompoundToolNames = (
+  session: McpSession,
+  mode: McpMode,
+): readonly string[] =>
+  listStaticMcpToolDefinitions(mode)
+    .filter(
+      (definition) =>
+        definition.additionalScopes !== undefined &&
+        definition.additionalScopes.length > 0 &&
+        isMcpToolFeatureEnabled(definition.feature) &&
+        !session.scopes.includes(definition.scope),
+    )
+    .map((definition) => definition.name)
+    .sort();
+
+const withMcpCors = (
+  response: Response,
+  session?: McpSession,
+  mode: McpMode = "default",
+) => {
   const headers = new Headers(response.headers);
   for (const [key, value] of createMcpCorsHeaders()) {
     if (!headers.has(key)) {
@@ -115,6 +159,10 @@ const withMcpCors = (response: Response, session?: McpSession) => {
   if (session) {
     headers.set(STELLA_MCP_ORGANIZATION_HEADER, session.organizationId);
     headers.set(STELLA_MCP_SCOPES_HEADER, session.scopes.join(" "));
+    headers.set(
+      STELLA_MCP_SCOPE_OMITTED_TOOLS_HEADER,
+      scopeOmittedCompoundToolNames(session, mode).join(" "),
+    );
   }
   return new Response(response.body, {
     headers,
@@ -179,7 +227,7 @@ export const createMcpHttpRequestHandler = ({
   authenticateMcpRequest,
   captureError,
   getMcpToolDefinition,
-  getMcpToolScopeHint,
+  getMcpToolRequiredScopesHint,
   handleMcpToolCall,
   listMcpResources,
   listMcpTools,
@@ -232,9 +280,19 @@ export const createMcpHttpRequestHandler = ({
 
     server.setRequestHandler(CallToolRequestSchema, async (toolRequest) => {
       const toolName = toolRequest.params.name;
-      const hintedScope = getMcpToolScopeHint(toolName, mode);
-      if (hintedScope && !session.scopes.includes(hintedScope)) {
-        return missingScopeResult(hintedScope);
+      const requiredScopesHint = getMcpToolRequiredScopesHint(toolName, mode);
+      const missingHintedScope = requiredScopesHint?.find(
+        (scope) => !session.scopes.includes(scope),
+      );
+      if (
+        missingHintedScope !== undefined &&
+        requiredScopesHint !== undefined
+      ) {
+        return missingScopeResult({
+          grantedScopes: session.scopes,
+          missingScope: missingHintedScope,
+          requiredScopes: requiredScopesHint,
+        });
       }
 
       // Resolving a dynamic-gateway tool reads the backing store. A load fault
@@ -276,8 +334,16 @@ export const createMcpHttpRequestHandler = ({
         });
       }
 
-      if (!session.scopes.includes(definition.scope)) {
-        return missingScopeResult(definition.scope);
+      const requiredScopes = requiredScopesForTool(definition);
+      const missingScope = requiredScopes.find(
+        (scope) => !session.scopes.includes(scope),
+      );
+      if (missingScope !== undefined) {
+        return missingScopeResult({
+          grantedScopes: session.scopes,
+          missingScope,
+          requiredScopes,
+        });
       }
 
       return await handleMcpToolCall({
@@ -334,7 +400,7 @@ export const createMcpHttpRequestHandler = ({
         },
       });
 
-      return withMcpCors(response, session);
+      return withMcpCors(response, session, mode);
     } catch (error) {
       if (error instanceof McpOrganizationAccessError) {
         return accessDeniedResponse({

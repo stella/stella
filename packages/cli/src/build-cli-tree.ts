@@ -170,11 +170,13 @@ const leafBrief = (spec: LeafCommandSpec): string => {
 
 const fullDescription = ({
   brief,
+  discriminatorInject,
   inputSchema,
   inputOnly,
   requiredPaths,
 }: {
   brief: string;
+  discriminatorInject?: Readonly<Record<string, string>> | undefined;
   inputSchema: Record<string, unknown> | undefined;
   inputOnly: readonly string[];
   requiredPaths: readonly string[];
@@ -197,10 +199,14 @@ const fullDescription = ({
     ...contract.fields.map((line) => `  ${line}`),
   ];
   if (contract.example.status === "complete") {
+    const example =
+      discriminatorInject === undefined
+        ? contract.example.value
+        : { ...contract.example.value, ...discriminatorInject };
     lines.push(
       "",
       "Complete JSON example:",
-      `  ${formatInputExample(contract.example.value)}`,
+      `  ${formatInputExample(example)}`,
     );
   } else {
     lines.push(
@@ -216,6 +222,7 @@ const buildLeafCommand = (spec: LeafCommandSpec): RoutingTarget => {
   const brief = leafBrief(spec);
   const description = fullDescription({
     brief,
+    discriminatorInject: spec.discriminatorInject,
     inputSchema: spec.inputSchema,
     inputOnly: spec.inputOnly,
     requiredPaths: spec.flags

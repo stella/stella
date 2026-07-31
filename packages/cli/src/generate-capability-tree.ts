@@ -42,6 +42,7 @@ export type CapabilityCatalogEntry = {
   access: "read" | "write";
   destructive: boolean;
   scope: string;
+  additionalScopes?: readonly string[];
   requiresFileInput?: boolean;
   returnsFileResponse?: boolean;
   inputSchemaTruncated?: boolean;
@@ -419,6 +420,10 @@ export const deriveCapabilityLeaf = (
 ): { spec: CapabilityLeafSpec; flagCollisions: readonly string[] } => {
   const commandPath = capabilityCommandPath(entry.id);
   const scope = toolScopeOf(entry.scope);
+  const additionalScopes = entry.additionalScopes?.flatMap((candidate) => {
+    const mapped = toolScopeOf(candidate);
+    return mapped === undefined ? [] : [mapped];
+  });
   const paginationPart = paginationPartOf(entry);
 
   // Truncated entries carry no snapshot schema: no flags, no client-side
@@ -439,6 +444,9 @@ export const deriveCapabilityLeaf = (
         ...(paginationPart === undefined ? {} : { itemsKey: "items" }),
         destructive: entry.destructive,
         ...(scope === undefined ? {} : { scope }),
+        ...(additionalScopes === undefined || additionalScopes.length === 0
+          ? {}
+          : { additionalScopes }),
         schemaTruncated: true,
       },
       flagCollisions: [],
@@ -501,6 +509,9 @@ export const deriveCapabilityLeaf = (
       ...(paginationPart === undefined ? {} : { itemsKey: "items" }),
       destructive: entry.destructive,
       ...(scope === undefined ? {} : { scope }),
+      ...(additionalScopes === undefined || additionalScopes.length === 0
+        ? {}
+        : { additionalScopes }),
       inputSchema: buildWrapperSchema({ entry, injectWorkspace }),
       schemaTruncated: false,
     },

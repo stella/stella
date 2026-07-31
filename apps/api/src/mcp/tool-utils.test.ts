@@ -15,6 +15,7 @@ import {
   isToolErrorResult,
   mapValibotIssues,
   notFoundResult,
+  oauthScopeRecoveryHint,
   parseOptionalCursor,
   resolveWindowBounds,
   slugifyCaseLawPathSegment,
@@ -394,6 +395,20 @@ const errorText = (result: ReturnType<typeof structuredErrorResult>) => {
   }
   return item.text;
 };
+
+describe("oauthScopeRecoveryHint", () => {
+  test("preserves granted scopes, adds every required scope, and removes duplicates", () => {
+    expect(
+      oauthScopeRecoveryHint({
+        grantedScopes: ["openid", "offline_access", "stella:documents_write"],
+        missingScope: "stella:templates",
+        requiredScopes: ["stella:documents_write", "stella:templates"],
+      }),
+    ).toBe(
+      "Grant the 'stella:templates' scope by re-running OAuth consent (CLI: 'stella auth login --scopes openid,offline_access,stella:documents_write,stella:templates'), then retry.",
+    );
+  });
+});
 
 describe("structuredErrorResult", () => {
   test("serializes a minimal envelope and marks isError", () => {

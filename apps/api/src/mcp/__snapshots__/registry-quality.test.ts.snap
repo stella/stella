@@ -635,6 +635,64 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     }
   },
   {
+    "name": "save_filled_template",
+    "scope": "stella:documents_write",
+    "additionalScopes": [
+      "stella:templates"
+    ],
+    "access": "write",
+    "description": "Fill a registered template and persist the generated DOCX directly in a matter, without requiring the client to upload bytes. Use action='create_document' to create a new document (optionally inside parent_id), or action='create_version' with entity_id to append a version to an existing document. Call list_templates first to learn the field paths. Returns the entity and version identifiers plus any unmatched placeholders or unused values.",
+    "annotations": {
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "create_document",
+            "create_version"
+          ],
+          "description": "Persistence destination"
+        },
+        "template_id": {
+          "type": "string",
+          "description": "Template id, as returned by list_templates"
+        },
+        "matter_id": {
+          "type": "string",
+          "description": "Matter/workspace receiving the filled DOCX"
+        },
+        "entity_id": {
+          "type": "string",
+          "description": "Existing document entity id; required only for create_version"
+        },
+        "parent_id": {
+          "type": "string",
+          "description": "Folder entity id for a new document; valid only for create_document"
+        },
+        "name": {
+          "type": "string",
+          "description": "Optional DOCX file name; defaults to the template file name",
+          "maxLength": 255
+        },
+        "values": {
+          "type": "object",
+          "description": "Map of template field path to value",
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "action",
+        "template_id",
+        "matter_id",
+        "values"
+      ]
+    }
+  },
+  {
     "name": "save_template",
     "scope": "stella:templates",
     "access": "write",
@@ -2276,7 +2334,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "name": "list_capabilities",
     "scope": "stella:read",
     "access": "read",
-    "description": "List the automatable capabilities beyond the curated tools: every safe backend operation (CRUD, exports, processing triggers) reachable through invoke_capability. Paginated; filter by domain (the id prefix, e.g. \\"time-entries\\") or access (read/write). Each item gives the capability id, a one-line summary, and the OAuth scope it needs. Use describe_capability for the full input schema.",
+    "description": "List the automatable capabilities beyond the curated tools: every safe backend operation (CRUD, exports, processing triggers) reachable through invoke_capability. Paginated; filter by domain (the id prefix, e.g. \\"time-entries\\") or access (read/write). Each item gives the capability id, a one-line summary, and every OAuth scope it needs. Use describe_capability for the full input schema.",
     "annotations": {
       "openWorldHint": false
     },
@@ -2314,7 +2372,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "name": "describe_capability",
     "scope": "stella:read",
     "access": "read",
-    "description": "Describe one capability in full: its live input JSON Schema (body/params/query), required OAuth scope, member permissions, whether it is destructive, its handler kind (workspace/root), and its disposition. Call this before invoke_capability to learn exactly what input to pass.",
+    "description": "Describe one capability in full: its live input JSON Schema (body/params/query), required OAuth scopes, member permissions, whether it is destructive, its handler kind (workspace/root), and its disposition. Call this before invoke_capability to learn exactly what input to pass.",
     "annotations": {
       "openWorldHint": false
     },

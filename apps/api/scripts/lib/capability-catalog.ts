@@ -1230,6 +1230,7 @@ export type CoverageDocEntry = {
   access: "read" | "write";
   destructive: boolean;
   scope: string;
+  additionalScopes?: readonly string[];
   feature?: string;
   requiresFileInput?: true;
   returnsFileResponse?: true;
@@ -1252,6 +1253,10 @@ here as its CLI form). Projected from the same handler enumeration that builds
 /** Access column text: `read`, `write`, or `write, destructive`. */
 const renderAccessCell = (entry: CoverageDocEntry): string =>
   entry.destructive ? `${entry.access}, destructive` : entry.access;
+
+/** Scope column text, including every compound grant required by the surface. */
+const renderScopeCell = (entry: CoverageDocEntry): string =>
+  [...new Set([entry.scope, ...(entry.additionalScopes ?? [])])].join(", ");
 
 /**
  * "Reachable via" column text for one entry. `cliCommandPathById` carries the
@@ -1298,7 +1303,7 @@ const renderDomainSection = ({
     .toSorted((a, b) => a.id.localeCompare(b.id))
     .map(
       (entry) =>
-        `| \`${entry.id}\` | ${renderAccessCell(entry)} | ${entry.scope} | ${entry.feature ?? "—"} | ${renderReachableViaCell(entry, cliCommandPathById)} |`,
+        `| \`${entry.id}\` | ${renderAccessCell(entry)} | ${renderScopeCell(entry)} | ${entry.feature ?? "—"} | ${renderReachableViaCell(entry, cliCommandPathById)} |`,
     );
   return `## ${domain}
 

@@ -92,6 +92,12 @@ export type McpToolAccess = (typeof MCP_TOOL_ACCESS_LEVELS)[number];
 
 export type McpToolDefinition = {
   access: McpToolAccess;
+  /**
+   * Extra grants required in addition to the primary `scope`. Discovery and
+   * dispatch both enforce this list centrally, so compound operations cannot
+   * be advertised or called with only one half of their consent contract.
+   */
+  additionalScopes?: readonly ToolScope[];
   annotations?: McpTool["annotations"];
   anonymized: McpAnonymizedPolicy;
   description: string;
@@ -128,6 +134,9 @@ export type McpCliDiscriminatorSubcommand = {
 
 export type McpCliToolAnnotation = {
   command: readonly string[];
+  additionalScopes?: readonly McpCliToolScope[];
+  /** API-owned finite transport deadline projected into generated CLI leaves. */
+  requestTimeoutMs?: number;
   excluded?: true;
   scope?: McpCliToolScope;
   itemsKey?: string;

@@ -43,13 +43,16 @@ export const getMcpToolDefinition = async (
 ): Promise<McpToolDefinition | undefined> =>
   await getGatewayMcpToolDefinition({ context, mode, toolName });
 
-export const getMcpToolScopeHint = (
+export const getMcpToolRequiredScopesHint = (
   toolName: string,
   mode: McpMode = "default",
-): ToolScope | undefined => {
+): readonly ToolScope[] | undefined => {
   const staticTool = getStaticMcpToolDefinition(toolName, mode);
   if (staticTool) {
-    return staticTool.scope;
+    if (staticTool.additionalScopes === undefined) {
+      return [staticTool.scope];
+    }
+    return [staticTool.scope, ...staticTool.additionalScopes];
   }
 
   if (mode === "anonymized") {
@@ -57,11 +60,11 @@ export const getMcpToolScopeHint = (
   }
 
   if (isExternalMcpToolName(toolName)) {
-    return "stella:external_mcps";
+    return ["stella:external_mcps"];
   }
 
   if (isSkillToolName(toolName)) {
-    return "stella:skills";
+    return ["stella:skills"];
   }
 
   return undefined;

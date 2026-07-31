@@ -23,6 +23,7 @@ const catalogEntrySchema = v.looseObject({
   access: v.picklist(["read", "write"]),
   destructive: v.boolean(),
   scope: v.string(),
+  additionalScopes: v.optional(v.array(v.string())),
   requiresFileInput: v.optional(v.boolean()),
   returnsFileResponse: v.optional(v.boolean()),
   inputSchemaTruncated: v.optional(v.boolean()),
@@ -55,6 +56,9 @@ export const parseCapabilityCatalog = (
       destructive: entry.destructive,
       scope: entry.scope,
     };
+    if (entry.additionalScopes !== undefined) {
+      projected.additionalScopes = entry.additionalScopes;
+    }
     if (entry.description !== undefined) {
       projected.description = entry.description;
     }

@@ -4,10 +4,16 @@ import * as v from "valibot";
 
 import { roles } from "@stll/permissions";
 
-import { templates } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/root";
+import { entities, templates } from "@/api/db/schema";
+import type { TemplatePersistenceResult } from "@/api/db/schema";
 import { configureTemplateFields } from "@/api/handlers/templates/configure-template-fields-service";
 import { createStoredTemplate } from "@/api/handlers/templates/create-template-service";
-import { recordTemplateFill } from "@/api/handlers/templates/record-use";
+import { containsNull } from "@/api/handlers/templates/fill";
+import {
+  recordTemplateFill,
+  recordTemplateUse,
+} from "@/api/handlers/templates/record-use";
 import {
   decideTemplateFillCompletion,
   DEFAULT_TEMPLATE_FILL_COMPLETION_MODE,
@@ -16,6 +22,7 @@ import {
 import type { DescribeTemplateResult } from "@/api/handlers/templates/template-fill-service";
 import {
   describeStoredTemplate,
+  fillStoredTemplateDocx,
   fillStoredTemplateWithText,
   fillStoredTemplateWithTextStrict,
 } from "@/api/handlers/templates/template-fill-service";
@@ -38,9 +45,22 @@ import {
   encodePaginationCursor,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
-import { brandPersistedTemplateId } from "@/api/lib/safe-id-boundaries";
+import {
+  brandPersistedEntityId,
+  brandPersistedTemplateId,
+} from "@/api/lib/safe-id-boundaries";
+import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
+import { withTimeout } from "@/api/lib/with-timeout";
 import type { McpRequestContext } from "@/api/mcp/context";
+import {
+  claimTemplatePersistenceRequest,
+  fingerprintTemplatePersistenceRequest,
+  persistFilledTemplateDocument,
+  persistFilledTemplateVersion,
+  recordTemplatePersistenceReceipt,
+  releaseTemplatePersistenceClaim,
+} from "@/api/mcp/template-persistence";
 import {
   defineTextFieldSpec,
   deriveTextFieldPaths,
@@ -53,20 +73,31 @@ import type {
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
+  bindWorkspaceRecorder,
+  ensureActiveWorkspace,
+  ensureWorkspaceAccess,
   enumProp,
   errorResult,
+  internalFailureResult,
   isToolErrorResult,
+  notFoundResult,
   parseOptionalCursor,
   stringProp,
   structuredErrorResult,
   textResult,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
-type TemplateToolName = "list_templates" | "fill_template" | "save_template";
+type TemplateToolName =
+  | "list_templates"
+  | "fill_template"
+  | "save_filled_template"
+  | "save_template";
 
 /** Max assembled-text length returned inline; full bytes ride along as base64. */
 const TEMPLATE_FILL_TEXT_MAX_CHARS = 16_000;
+const SAVE_FILLED_TEMPLATE_RENDER_TIMEOUT_MS = 300_000;
 
 /**
  * One field-configuration overlay entry. Each object configures the field at
@@ -451,6 +482,59 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
   },
   {
     description:
+      "Fill a registered template and persist the generated DOCX directly in " +
+      "a matter, without requiring the client to upload bytes. Use " +
+      "action='create_document' to create a new document (optionally inside " +
+      "parent_id), or action='create_version' with entity_id to append a " +
+      "version to an existing document. Call list_templates first to learn " +
+      "the field paths. Returns the entity and version identifiers plus any " +
+      "unmatched placeholders or unused values.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        action: enumProp("Persistence destination", [
+          "create_document",
+          "create_version",
+        ]),
+        template_id: stringProp("Template id, as returned by list_templates"),
+        matter_id: stringProp("Matter/workspace receiving the filled DOCX"),
+        entity_id: stringProp(
+          "Existing document entity id; required only for create_version",
+        ),
+        parent_id: stringProp(
+          "Folder entity id for a new document; valid only for create_document",
+        ),
+        name: stringProp(
+          "Optional DOCX file name; defaults to the template file name",
+          { maxLength: 255 },
+        ),
+        idempotency_key: stringProp(
+          "Unique retry key for this save operation; reuse it only to recover the same timed-out request",
+          { maxLength: 128 },
+        ),
+        values: {
+          type: "object",
+          description: "Map of template field path to value",
+          additionalProperties: true,
+        },
+      },
+      required: [
+        "action",
+        "template_id",
+        "matter_id",
+        "idempotency_key",
+        "values",
+      ],
+    },
+    annotations: { idempotentHint: false, openWorldHint: true },
+    access: "write",
+    additionalScopes: ["stella:templates"],
+    anonymized: { exposure: "excluded", reason: "write" },
+    name: "save_filled_template",
+    scope: "stella:documents_write",
+  },
+  {
+    description:
       "Create a document template from a DOCX, or configure an existing " +
       "template's fields. To create, pass docx_base64 (base64-encoded .docx / " +
       "Office Open XML bytes, max ~10 MB decoded) and a name; the {{field}} " +
@@ -767,6 +851,7 @@ const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
           format: "docx",
           unmatchedCount: filled.unmatchedPlaceholders.length,
           unusedCount: filled.unusedValues.length,
+          structureErrors: filled.structureErrors,
           recordAuditEvent: context.recordAuditEvent,
         }),
     )
@@ -808,6 +893,490 @@ const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
     unmatchedPlaceholders: filled.unmatchedPlaceholders,
     unusedValues: filled.unusedValues,
   });
+};
+
+const saveFilledTemplateArgsSchema = v.strictObject({
+  action: v.picklist(["create_document", "create_version"]),
+  template_id: v.pipe(v.string(), v.uuid()),
+  matter_id: v.pipe(v.string(), v.minLength(1)),
+  entity_id: v.optional(v.pipe(v.string(), v.uuid())),
+  parent_id: v.optional(v.pipe(v.string(), v.uuid())),
+  name: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(255))),
+  idempotency_key: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+  values: v.record(v.string(), v.unknown()),
+});
+
+const resolveFilledDocxName = ({
+  requested,
+  fallback,
+}: {
+  requested: string | undefined;
+  fallback: string;
+}): string => {
+  const sanitized = sanitizeFilename((requested ?? fallback).trim());
+  return DOCX_EXT_RE.test(sanitized) ? sanitized : `${sanitized}.docx`;
+};
+
+const validateFilledTemplateDestination = async ({
+  action,
+  context,
+  entityId,
+  parentId,
+  workspaceId,
+}: {
+  action: "create_document" | "create_version";
+  context: McpRequestContext;
+  entityId?: string | undefined;
+  parentId?: string | undefined;
+  workspaceId: McpRequestContext["accessibleWorkspaceIds"][number];
+}): Promise<string | null> => {
+  if (action === "create_document") {
+    const destinationResult = await context.safeDb(async (tx) => {
+      // Non-authoritative fast-fail: avoid template rendering, AI metering and
+      // use-count writes when the workspace is already full. The shared buffer
+      // writer retains the authoritative locked check against concurrent creates.
+      const entityCount = await tx.$count(
+        entities,
+        eq(entities.workspaceId, workspaceId),
+      );
+      if (entityCount >= LIMITS.entitiesCount) {
+        return "Entities limit reached";
+      }
+      if (parentId === undefined) {
+        return null;
+      }
+
+      const parent = await tx.query.entities.findFirst({
+        where: {
+          id: { eq: brandPersistedEntityId(parentId) },
+          workspaceId: { eq: workspaceId },
+        },
+        columns: { kind: true },
+      });
+      if (!parent) {
+        return "Parent entity not found in this workspace";
+      }
+      return parent.kind === "folder" ? null : "Parent entity must be a folder";
+    });
+    if (Result.isError(destinationResult)) {
+      throw destinationResult.error;
+    }
+    return destinationResult.value;
+  }
+
+  const entityResult = await context.safeDb((tx) =>
+    tx.query.entities.findFirst({
+      where: {
+        id: {
+          eq: brandPersistedEntityId(
+            entityId ?? panic("create_version preflight requires entity_id"),
+          ),
+        },
+        workspaceId: { eq: workspaceId },
+      },
+      columns: { currentVersionId: true, readOnly: true },
+      with: {
+        currentVersion: {
+          columns: {},
+          with: {
+            fields: { columns: { content: true } },
+          },
+        },
+      },
+    }),
+  );
+  if (Result.isError(entityResult)) {
+    throw entityResult.error;
+  }
+  const entity = entityResult.value;
+  if (!entity?.currentVersionId || !entity.currentVersion) {
+    return "Entity not found";
+  }
+  if (entity.readOnly) {
+    return "Entity is read-only";
+  }
+  if (
+    !entity.currentVersion.fields.some((field) => field.content.type === "file")
+  ) {
+    return "Entity has no file field";
+  }
+  return null;
+};
+
+const handleSaveFilledTemplateTool: McpToolHandler = async ({
+  args,
+  context,
+}) => {
+  const parsed = v.safeParse(saveFilledTemplateArgsSchema, args);
+  if (!parsed.success) {
+    return validationErrorResult({
+      issues: parsed.issues,
+      message:
+        "Invalid input: expected { action, template_id, matter_id, idempotency_key, values, entity_id?, parent_id?, name? }",
+    });
+  }
+  const input = parsed.output;
+
+  if (
+    (input.action === "create_version" && input.entity_id === undefined) ||
+    (input.action === "create_document" && input.entity_id !== undefined) ||
+    (input.action === "create_version" && input.parent_id !== undefined)
+  ) {
+    let invalidPath = "entity_id";
+    if (input.action === "create_version" && input.entity_id !== undefined) {
+      invalidPath = "parent_id";
+    }
+    return structuredErrorResult({
+      code: "validation_error",
+      message:
+        input.action === "create_version"
+          ? "create_version requires entity_id and does not accept parent_id"
+          : "create_document does not accept entity_id",
+      issues: [
+        {
+          path: invalidPath,
+          message: "Field is not valid for the selected action",
+        },
+      ],
+    });
+  }
+  if (Object.values(input.values).some(containsNull)) {
+    return structuredErrorResult({
+      code: "validation_error",
+      message: "values must not contain null values",
+      issues: [{ path: "values", message: "Null values are not allowed" }],
+    });
+  }
+
+  const templatePermission = roles[context.memberRole].authorize({
+    template: ["use"],
+  });
+  const entityPermission = roles[context.memberRole].authorize({
+    entity: [input.action === "create_document" ? "create" : "update"],
+  });
+  if (!templatePermission.success || !entityPermission.success) {
+    return errorResult("Forbidden");
+  }
+
+  const workspaceId = ensureWorkspaceAccess({
+    context,
+    workspaceId: input.matter_id,
+  });
+  if (workspaceId === null) {
+    return notFoundResult("Matter not found or not accessible");
+  }
+  const recordAuditEvent = bindWorkspaceRecorder(context, workspaceId);
+  const templateId = brandPersistedTemplateId(input.template_id);
+
+  const requestFingerprint = fingerprintTemplatePersistenceRequest({
+    action: input.action,
+    templateId: input.template_id,
+    workspaceId,
+    entityId: input.entity_id,
+    parentId: input.parent_id,
+    name: input.name,
+    values: input.values,
+  });
+  const claim = await claimTemplatePersistenceRequest({
+    safeDb: context.safeDb,
+    organizationId: context.organizationId,
+    workspaceId,
+    userId: context.userId,
+    idempotencyKey: input.idempotency_key,
+    requestFingerprint,
+  });
+  if (Result.isError(claim)) {
+    return internalFailureResult(claim.error);
+  }
+  const claimToken = (() => {
+    switch (claim.value.status) {
+      case "claimed":
+        return claim.value.claimToken;
+      case "completed":
+        return textResult(claim.value.result);
+      case "conflict":
+        return structuredErrorResult({
+          code: "validation_error",
+          message: "idempotency_key was already used for different input",
+          issues: [
+            {
+              path: "idempotency_key",
+              message: "Reuse a key only for the same save operation",
+            },
+          ],
+        });
+      case "pending":
+        return errorResult(
+          "A save with this idempotency_key is still in progress; retry shortly",
+        );
+      default: {
+        const unreachable: never = claim.value;
+        return unreachable;
+      }
+    }
+  })();
+  if (typeof claimToken !== "string") {
+    return claimToken;
+  }
+  const releaseClaim = async (): Promise<void> => {
+    const released = await releaseTemplatePersistenceClaim({
+      safeDb: context.safeDb,
+      organizationId: context.organizationId,
+      userId: context.userId,
+      idempotencyKey: input.idempotency_key,
+      claimToken,
+    });
+    if (Result.isError(released)) {
+      captureError(released.error);
+    }
+  };
+
+  const activeWorkspaceId = ensureActiveWorkspace({
+    context,
+    workspaceId: input.matter_id,
+  });
+  if (typeof activeWorkspaceId !== "string") {
+    await releaseClaim();
+    return activeWorkspaceId;
+  }
+
+  const destinationError = await validateFilledTemplateDestination({
+    action: input.action,
+    context,
+    entityId: input.entity_id,
+    parentId: input.parent_id,
+    workspaceId,
+  });
+  if (destinationError !== null) {
+    await releaseClaim();
+    return errorResult(destinationError);
+  }
+
+  const orgAIConfig = await loadOrgAIConfig(context.organizationId);
+  const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+    usageMetering: {
+      actionType: "chat",
+      organizationId: context.organizationId,
+      safeDb: context.safeDb,
+      serviceTier: "standard",
+      userId: context.userId,
+      workspaceId,
+    },
+    feature: "templates.fill",
+    modelRole: "fast",
+    orgAIConfig,
+    properties: { organization_id: context.organizationId },
+    traceId: Bun.randomUUIDv7(),
+  });
+  const skillContext = {
+    organizationId: context.organizationId,
+    safeDb: context.safeDb,
+    userId: context.userId,
+  };
+  const assertUsageAvailable =
+    orgAIConfig || hasTanStackInstanceProvider()
+      ? async () =>
+          await assertUsageAvailableForHandler({
+            metering: { actionType: "chat", modelRole: "fast" },
+            organizationId: context.organizationId,
+            orgAIConfig,
+            workspaceId,
+            userId: context.userId,
+            safeDb: context.safeDb,
+          })
+      : undefined;
+
+  const renderDeadline = AbortSignal.timeout(
+    SAVE_FILLED_TEMPLATE_RENDER_TIMEOUT_MS,
+  );
+  const operationSignal =
+    context.request === undefined
+      ? renderDeadline
+      : AbortSignal.any([context.request.signal, renderDeadline]);
+  const filledResult = await Result.tryPromise(
+    async () =>
+      await withTimeout(
+        async () =>
+          await fillStoredTemplateDocx({
+            templateId,
+            values: input.values,
+            scopedDb: context.scopedDb,
+            organizationId: context.organizationId,
+            workspaceId,
+            useRecording: "caller",
+            assertUsageAvailable,
+            generateAiValue: buildAiFieldGenerator({
+              orgAIConfig,
+              organizationId: context.organizationId,
+              skillContext,
+              aiAnalytics,
+              operationSignal,
+            }),
+            decideAiCondition: buildAiConditionDecider({
+              orgAIConfig,
+              organizationId: context.organizationId,
+              skillContext,
+              aiAnalytics,
+              operationSignal,
+            }),
+            adaptAiValue: buildAiOccurrenceAdapter({
+              orgAIConfig,
+              organizationId: context.organizationId,
+              skillContext,
+              aiAnalytics,
+              operationSignal,
+            }),
+          }),
+        {
+          label: "save filled template render",
+          timeoutMs: SAVE_FILLED_TEMPLATE_RENDER_TIMEOUT_MS,
+        },
+      ),
+  );
+  if (Result.isError(filledResult)) {
+    await releaseClaim();
+    return internalFailureResult(filledResult.error);
+  }
+  const filled = filledResult.value;
+  if ("usageRejection" in filled) {
+    await releaseClaim();
+    return errorResult(filled.usageRejection.message);
+  }
+  if ("error" in filled) {
+    await releaseClaim();
+    return errorResult(filled.error);
+  }
+  // Never cross the non-idempotent persistence boundary after either the
+  // caller disconnects or the server-owned render deadline expires, even if
+  // the abandoned fill operation settles later.
+  if (operationSignal.aborted) {
+    await releaseClaim();
+    return errorResult("Request cancelled before document persistence");
+  }
+
+  const fileName = resolveFilledDocxName({
+    requested: input.name,
+    fallback: filled.fileName,
+  });
+  const recordPersistedFill = async (
+    tx: Transaction,
+    result: TemplatePersistenceResult,
+  ): Promise<void> => {
+    await recordTemplateUse({ tx, templateId });
+    await recordTemplateFill({
+      tx,
+      templateId,
+      organizationId: context.organizationId,
+      userId: context.userId,
+      format: "docx",
+      unmatchedCount: filled.unmatchedPlaceholders.length,
+      unusedCount: filled.unusedValues.length,
+      structureErrors: filled.structureErrors,
+      workspaceId,
+      entityId: result.entityId,
+      entityVersionId: result.entityVersionId,
+      recordAuditEvent,
+    });
+    await recordTemplatePersistenceReceipt({
+      tx,
+      organizationId: context.organizationId,
+      workspaceId,
+      userId: context.userId,
+      idempotencyKey: input.idempotency_key,
+      requestFingerprint,
+      claimToken,
+      result,
+    });
+  };
+  const persistence = await Result.tryPromise({
+    try: async (): Promise<
+      | { status: "ok"; value: TemplatePersistenceResult }
+      | { status: "error"; message: string }
+    > => {
+      if (input.action === "create_document") {
+        let result: TemplatePersistenceResult | undefined;
+        const created = await persistFilledTemplateDocument({
+          scopedDb: context.scopedDb,
+          organizationId: context.organizationId,
+          workspaceId,
+          userId: context.userId,
+          recordAuditEvent,
+          buffer: filled.buffer,
+          fileName,
+          mimeType: DOCX_MIME_TYPE,
+          parentId:
+            input.parent_id === undefined
+              ? undefined
+              : brandPersistedEntityId(input.parent_id),
+          afterCreate: async (tx, persisted) => {
+            result = {
+              action: "create_document",
+              entityId: persisted.entityId,
+              entityVersionId: persisted.entityVersionId,
+              fileName: persisted.fileName,
+              unmatchedPlaceholders: filled.unmatchedPlaceholders,
+              unusedValues: filled.unusedValues,
+            };
+            await recordPersistedFill(tx, result);
+          },
+        });
+        return Result.isError(created)
+          ? { status: "error", message: created.error.message }
+          : {
+              status: "ok",
+              value:
+                result ??
+                panic("Document persisted without an idempotency receipt"),
+            };
+      }
+      const entityId = brandPersistedEntityId(
+        input.entity_id ?? panic("create_version reached without an entity_id"),
+      );
+      let result: TemplatePersistenceResult | undefined;
+      const created = await persistFilledTemplateVersion({
+        safeDb: context.safeDb,
+        organizationId: context.organizationId,
+        workspaceId,
+        entityId,
+        userId: context.userId,
+        recordAuditEvent,
+        buffer: filled.buffer,
+        fileName,
+        mimeType: DOCX_MIME_TYPE,
+        source: null,
+        afterWrite: async (tx, persisted) => {
+          result = {
+            action: "create_version",
+            entityId,
+            entityVersionId: persisted.entityVersionId,
+            fileName,
+            unmatchedPlaceholders: filled.unmatchedPlaceholders,
+            unusedValues: filled.unusedValues,
+            versionNumber: persisted.versionNumber,
+          };
+          await recordPersistedFill(tx, result);
+        },
+      });
+      return Result.isError(created)
+        ? { status: "error", message: created.error.message }
+        : {
+            status: "ok",
+            value:
+              result ??
+              panic("Version persisted without an idempotency receipt"),
+          };
+    },
+    catch: (cause) => cause,
+  });
+  if (Result.isError(persistence)) {
+    await releaseClaim();
+    return internalFailureResult(persistence.error);
+  }
+  if (persistence.value.status === "error") {
+    await releaseClaim();
+    return errorResult(persistence.value.message);
+  }
+  return textResult(persistence.value.value);
 };
 
 // base64 encodes 3 bytes per 4 chars, so bound the encoded length to the doc
@@ -1115,6 +1684,7 @@ const handleSaveTemplateTool: McpToolHandler = async ({ args, context }) => {
 export const TEMPLATE_TOOL_HANDLERS = {
   fill_template: handleFillTemplateTool,
   list_templates: handleListTemplatesTool,
+  save_filled_template: handleSaveFilledTemplateTool,
   save_template: handleSaveTemplateTool,
 } satisfies Record<TemplateToolName, McpToolHandler>;
 

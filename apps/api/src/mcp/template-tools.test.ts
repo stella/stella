@@ -2,17 +2,27 @@ import { Result } from "better-result";
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import JSZip from "jszip";
 
+import type { Transaction } from "@/api/db/root";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import { LIMITS } from "@/api/lib/limits";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 const describeStoredTemplateMock = mock();
+const fillStoredTemplateDocxMock = mock();
 const fillStoredTemplateWithTextMock = mock();
 const fillStoredTemplateWithTextStrictMock = mock();
+const createEntityFromBufferMock = mock();
+const createEntityVersionFromBufferMock = mock();
 const createStoredTemplateMock = mock();
 const recordTemplateFillMock = mock();
+const recordTemplateUseMock = mock();
+const claimTemplatePersistenceRequestMock = mock();
+const recordTemplatePersistenceReceiptMock = mock();
+const releaseTemplatePersistenceClaimMock = mock();
+const fingerprintTemplatePersistenceRequestMock = mock();
 const configureTemplateFieldsMock = mock();
 const loadOrgAIConfigMock = mock();
 const captureErrorMock = mock();
@@ -44,9 +54,19 @@ void mock.module("@/api/handlers/templates/template-fill-service", () => ({
   fillStoredTemplateWithText: fillStoredTemplateWithTextMock,
   fillStoredTemplateWithTextStrict: fillStoredTemplateWithTextStrictMock,
   fillStoredTemplate: mock(),
-  fillStoredTemplateDocx: mock(),
+  fillStoredTemplateDocx: fillStoredTemplateDocxMock,
   fillTemplateDocx: mock(),
   fillTemplateDocxStrict: mock(),
+}));
+
+void mock.module("@/api/mcp/template-persistence", () => ({
+  claimTemplatePersistenceRequest: claimTemplatePersistenceRequestMock,
+  fingerprintTemplatePersistenceRequest:
+    fingerprintTemplatePersistenceRequestMock,
+  persistFilledTemplateDocument: createEntityFromBufferMock,
+  persistFilledTemplateVersion: createEntityVersionFromBufferMock,
+  recordTemplatePersistenceReceipt: recordTemplatePersistenceReceiptMock,
+  releaseTemplatePersistenceClaim: releaseTemplatePersistenceClaimMock,
 }));
 
 void mock.module("@/api/handlers/templates/create-template-service", () => ({
@@ -55,7 +75,7 @@ void mock.module("@/api/handlers/templates/create-template-service", () => ({
 
 void mock.module("@/api/handlers/templates/record-use", () => ({
   recordTemplateFill: recordTemplateFillMock,
-  recordTemplateUse: mock(),
+  recordTemplateUse: recordTemplateUseMock,
 }));
 
 void mock.module(
@@ -108,7 +128,20 @@ const validationEnvelope = (
   return payload["error"];
 };
 
-const createScopedDb = (templates: unknown[] = []) =>
+type SeededEntityTarget =
+  | {
+      currentVersionId: string;
+      readOnly: boolean;
+      currentVersion: { fields: { content: { type: string } }[] };
+    }
+  | { kind: "folder" | "document" }
+  | null;
+
+const createScopedDb = (
+  templates: unknown[] = [],
+  entityTargets: Record<string, SeededEntityTarget> = {},
+  entityCount = 0,
+) =>
   asTestRaw<McpRequestContext["scopedDb"] & ReturnType<typeof mock>>(
     mock(async (run: (tx: unknown) => unknown) => {
       // list_templates now uses the core query builder; the chain ignores its
@@ -125,7 +158,28 @@ const createScopedDb = (templates: unknown[] = []) =>
       };
       return await run({
         ...builder,
-        query: { templates: { findMany: async () => templates } },
+        $count: async () => entityCount,
+        query: {
+          entities: {
+            findFirst: async ({ where }: { where: { id: { eq: string } } }) => {
+              const id = where.id.eq;
+              if (Object.hasOwn(entityTargets, id)) {
+                return entityTargets[id];
+              }
+              if (id === FOLDER_ID) {
+                return { kind: "folder" };
+              }
+              return {
+                currentVersionId: "version_1",
+                readOnly: false,
+                currentVersion: {
+                  fields: [{ content: { type: "file" } }],
+                },
+              };
+            },
+          },
+          templates: { findMany: async () => templates },
+        },
       });
     }),
   );
@@ -133,13 +187,15 @@ const createScopedDb = (templates: unknown[] = []) =>
 const createContext = ({
   memberRole = "owner",
   scopedDb = createScopedDb(),
+  workspaceStatus = "active",
 }: {
   memberRole?: McpRequestContext["memberRole"];
   scopedDb?: McpRequestContext["scopedDb"];
+  workspaceStatus?: "active" | "archived";
 } = {}): McpRequestContext => ({
   accessibleWorkspaceIds: [toSafeId<"workspace">("ws_1")],
   accessibleWorkspaceIdSet: new Set(["ws_1"]),
-  accessibleWorkspaceStatusById: new Map([["ws_1", "active"]]),
+  accessibleWorkspaceStatusById: new Map([["ws_1", workspaceStatus]]),
   accessibleWorkspaces: [],
   grantedScopes: [],
   memberRole,
@@ -153,6 +209,15 @@ const createContext = ({
 });
 
 const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+const TEMPLATE_ID = "00000000-0000-4000-8000-000000000000";
+const ENTITY_ID = "00000000-0000-4000-8000-000000000001";
+const FOLDER_ID = "00000000-0000-4000-8000-000000000002";
+const MISSING_FOLDER_ID = "00000000-0000-4000-8000-000000000003";
+const NON_FOLDER_ID = "00000000-0000-4000-8000-000000000004";
+const MISSING_VERSION_ID = "00000000-0000-4000-8000-000000000005";
+const READ_ONLY_VERSION_ID = "00000000-0000-4000-8000-000000000006";
+const NON_FILE_VERSION_ID = "00000000-0000-4000-8000-000000000007";
+const fakeTransaction = asTestRaw<Transaction>({});
 
 /** A real, minimal valid DOCX (well-formed word/document.xml) as base64, so
  *  save_template (create) exercises the real validateDocxBuffer — no module mock to
@@ -171,10 +236,26 @@ const makeValidDocxBase64 = async (): Promise<string> => {
 describe("MCP template tools", () => {
   beforeEach(() => {
     describeStoredTemplateMock.mockReset();
+    fillStoredTemplateDocxMock.mockReset();
     fillStoredTemplateWithTextMock.mockReset();
     fillStoredTemplateWithTextStrictMock.mockReset();
+    createEntityFromBufferMock.mockReset();
+    createEntityVersionFromBufferMock.mockReset();
     createStoredTemplateMock.mockReset();
     recordTemplateFillMock.mockReset();
+    recordTemplateUseMock.mockReset();
+    claimTemplatePersistenceRequestMock.mockReset();
+    claimTemplatePersistenceRequestMock.mockResolvedValue(
+      Result.ok({ status: "claimed", claimToken: "claim_1" }),
+    );
+    recordTemplatePersistenceReceiptMock.mockReset();
+    recordTemplatePersistenceReceiptMock.mockResolvedValue(undefined);
+    releaseTemplatePersistenceClaimMock.mockReset();
+    releaseTemplatePersistenceClaimMock.mockResolvedValue(Result.ok(undefined));
+    fingerprintTemplatePersistenceRequestMock.mockReset();
+    fingerprintTemplatePersistenceRequestMock.mockReturnValue(
+      "request-fingerprint",
+    );
     configureTemplateFieldsMock.mockReset();
     loadOrgAIConfigMock.mockReset();
     loadOrgAIConfigMock.mockResolvedValue(null);
@@ -197,6 +278,7 @@ describe("MCP template tools", () => {
     // moved to an MCP resource (M5).
     expect(names).toContain("list_templates");
     expect(names).toContain("fill_template");
+    expect(names).toContain("save_filled_template");
     expect(names).toContain("save_template");
     expect(names).not.toContain("describe_template");
     expect(names).not.toContain("create_template");
@@ -209,6 +291,14 @@ describe("MCP template tools", () => {
         "stella:templates",
       );
     }
+    expect(
+      (await getMcpToolDefinition("save_filled_template", createContext()))
+        ?.scope,
+    ).toBe("stella:documents_write");
+    expect(
+      (await getMcpToolDefinition("save_filled_template", createContext()))
+        ?.additionalScopes,
+    ).toEqual(["stella:templates"]);
   });
 
   test("the read template tool is on the anonymized surface; writes are not", async () => {
@@ -219,6 +309,7 @@ describe("MCP template tools", () => {
     // tools stay off the egress-only surface.
     expect(names).toContain("list_templates");
     expect(names).not.toContain("fill_template");
+    expect(names).not.toContain("save_filled_template");
     expect(names).not.toContain("save_template");
   });
 
@@ -488,6 +579,13 @@ describe("MCP template tools", () => {
       text: "Lease between ACME and Tenant.",
       unmatchedPlaceholders: [],
       unusedValues: [],
+      structureErrors: [
+        {
+          directive: "#if signature",
+          message: "Missing closing directive",
+          paragraphIndex: 4,
+        },
+      ],
     });
 
     const result = await handleMcpToolCall({
@@ -521,6 +619,13 @@ describe("MCP template tools", () => {
         format: "docx",
         unmatchedCount: 0,
         unusedCount: 0,
+        structureErrors: [
+          {
+            directive: "#if signature",
+            message: "Missing closing directive",
+            paragraphIndex: 4,
+          },
+        ],
       }),
     );
   });
@@ -689,6 +794,503 @@ describe("MCP template tools", () => {
     expect(result.content).toEqual([
       { type: "text", text: "Monthly AI usage limit reached." },
     ]);
+  });
+
+  test("save_filled_template creates a document without returning base64", async () => {
+    fillStoredTemplateDocxMock.mockResolvedValue({
+      fileName: "lease.docx",
+      buffer: Buffer.from("filled docx"),
+      unmatchedPlaceholders: [],
+      unusedValues: ["unused"],
+    });
+    createEntityFromBufferMock.mockImplementation(async (input) => {
+      const created = {
+        entityId: "entity_new",
+        entityVersionId: "version_new",
+        fieldId: "field_new",
+        fileName: "Example Lease.docx",
+      };
+      await input.afterCreate(fakeTransaction, created);
+      return Result.ok(created);
+    });
+
+    const result = await handleMcpToolCall({
+      args: {
+        action: "create_document",
+        template_id: TEMPLATE_ID,
+        matter_id: "ws_1",
+        idempotency_key: "create-document-1",
+        parent_id: FOLDER_ID,
+        name: "Example Lease",
+        values: { "tenant.name": "ACME" },
+      },
+      context: createContext(),
+      toolName: "save_filled_template",
+    });
+
+    expect(createEntityFromBufferMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: "ws_1",
+        parentId: FOLDER_ID,
+        fileName: "Example Lease.docx",
+        afterCreate: expect.any(Function),
+      }),
+    );
+    expect(fillStoredTemplateDocxMock).toHaveBeenCalledWith(
+      expect.objectContaining({ useRecording: "caller" }),
+    );
+    expect(recordTemplateUseMock).toHaveBeenCalledWith({
+      tx: fakeTransaction,
+      templateId: TEMPLATE_ID,
+    });
+    expect(recordTemplateFillMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entityId: "entity_new",
+        entityVersionId: "version_new",
+      }),
+    );
+    expect(recordTemplatePersistenceReceiptMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        idempotencyKey: "create-document-1",
+        requestFingerprint: "request-fingerprint",
+        claimToken: "claim_1",
+        result: expect.objectContaining({
+          action: "create_document",
+          entityId: "entity_new",
+          entityVersionId: "version_new",
+        }),
+      }),
+    );
+    expect(parseToolPayload(result)).toEqual({
+      action: "create_document",
+      entityId: "entity_new",
+      entityVersionId: "version_new",
+      fileName: "Example Lease.docx",
+      unmatchedPlaceholders: [],
+      unusedValues: ["unused"],
+    });
+    expect(JSON.stringify(parseToolPayload(result))).not.toContain("base64");
+  });
+
+  test("save_filled_template does not persist after its caller disconnects", async () => {
+    const controller = new AbortController();
+    const request = new Request("http://localhost/mcp", {
+      signal: controller.signal,
+    });
+    fillStoredTemplateDocxMock.mockImplementation(async () => {
+      controller.abort();
+      return {
+        fileName: "lease.docx",
+        buffer: Buffer.from("filled docx"),
+        unmatchedPlaceholders: [],
+        unusedValues: [],
+      };
+    });
+
+    const result = await handleMcpToolCall({
+      args: {
+        action: "create_document",
+        template_id: TEMPLATE_ID,
+        matter_id: "ws_1",
+        idempotency_key: "disconnect-1",
+        values: { "tenant.name": "ACME" },
+      },
+      context: { ...createContext(), request },
+      toolName: "save_filled_template",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content).toEqual([
+      {
+        type: "text",
+        text: "Request cancelled before document persistence",
+      },
+    ]);
+    expect(createEntityFromBufferMock).not.toHaveBeenCalled();
+    expect(createEntityVersionFromBufferMock).not.toHaveBeenCalled();
+    expect(recordTemplateUseMock).not.toHaveBeenCalled();
+    expect(recordTemplatePersistenceReceiptMock).not.toHaveBeenCalled();
+    expect(releaseTemplatePersistenceClaimMock).toHaveBeenCalled();
+  });
+
+  test("save_filled_template replays a durable idempotency receipt", async () => {
+    claimTemplatePersistenceRequestMock.mockResolvedValue(
+      Result.ok({
+        status: "completed",
+        result: {
+          action: "create_document",
+          entityId: "entity_existing",
+          entityVersionId: "version_existing",
+          fileName: "lease.docx",
+          unmatchedPlaceholders: [],
+          unusedValues: ["unused"],
+        },
+      }),
+    );
+
+    const result = await handleMcpToolCall({
+      args: {
+        action: "create_document",
+        template_id: TEMPLATE_ID,
+        matter_id: "ws_1",
+        idempotency_key: "create-document-retry",
+        values: { "tenant.name": "ACME" },
+      },
+      context: createContext({ workspaceStatus: "archived" }),
+      toolName: "save_filled_template",
+    });
+
+    expect(parseToolPayload(result)).toEqual({
+      action: "create_document",
+      entityId: "entity_existing",
+      entityVersionId: "version_existing",
+      fileName: "lease.docx",
+      unmatchedPlaceholders: [],
+      unusedValues: ["unused"],
+    });
+    expect(fillStoredTemplateDocxMock).not.toHaveBeenCalled();
+    expect(createEntityFromBufferMock).not.toHaveBeenCalled();
+  });
+
+  test("save_filled_template does not render behind an active claim", async () => {
+    claimTemplatePersistenceRequestMock.mockResolvedValue(
+      Result.ok({ status: "pending" }),
+    );
+
+    const result = await handleMcpToolCall({
+      args: {
+        action: "create_document",
+        template_id: TEMPLATE_ID,
+        matter_id: "ws_1",
+        idempotency_key: "concurrent-retry",
+        values: { "tenant.name": "ACME" },
+      },
+      context: createContext(),
+      toolName: "save_filled_template",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content).toEqual([
+      {
+        type: "text",
+        text: "A save with this idempotency_key is still in progress; retry shortly",
+      },
+    ]);
+    expect(fillStoredTemplateDocxMock).not.toHaveBeenCalled();
+    expect(createEntityFromBufferMock).not.toHaveBeenCalled();
+  });
+
+  test("save_filled_template rejects an idempotency key reused for different input", async () => {
+    claimTemplatePersistenceRequestMock.mockResolvedValue(
+      Result.ok({ status: "conflict" }),
+    );
+
+    const result = await handleMcpToolCall({
+      args: {
+        action: "create_document",
+        template_id: TEMPLATE_ID,
+        matter_id: "ws_1",
+        idempotency_key: "reused-key",
+        values: { "tenant.name": "Different" },
+      },
+      context: createContext(),
+      toolName: "save_filled_template",
+    });
+
+    expect(validationEnvelope(result)).toMatchObject({
+      code: "validation_error",
+      message: "idempotency_key was already used for different input",
+    });
+    expect(fillStoredTemplateDocxMock).not.toHaveBeenCalled();
+  });
+
+  test("save_filled_template appends a version through the shared buffer service", async () => {
+    fillStoredTemplateDocxMock.mockResolvedValue({
+      fileName: "lease",
+      buffer: Buffer.from("filled docx v2"),
+      unmatchedPlaceholders: ["signature"],
+      unusedValues: [],
+      structureErrors: [
+        {
+          directive: "#if signature",
+          message: "Missing closing directive",
+          paragraphIndex: 4,
+        },
+      ],
+    });
+    createEntityVersionFromBufferMock.mockImplementation(async (input) => {
+      const created = {
+        status: "ok",
+        entityId: ENTITY_ID,
+        entityVersionId: "version_2",
+        fieldId: "field_2",
+        fileName: "lease.docx",
+        versionNumber: 2,
+      };
+      await input.afterWrite(fakeTransaction, created);
+      return Result.ok(created);
+    });
+
+    const result = await handleMcpToolCall({
+      args: {
+        action: "create_version",
+        template_id: TEMPLATE_ID,
+        matter_id: "ws_1",
+        idempotency_key: "create-version-1",
+        entity_id: ENTITY_ID,
+        values: { "tenant.name": "ACME" },
+      },
+      context: createContext(),
+      toolName: "save_filled_template",
+    });
+
+    expect(createEntityVersionFromBufferMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: "ws_1",
+        entityId: ENTITY_ID,
+        fileName: "lease.docx",
+        source: null,
+        afterWrite: expect.any(Function),
+      }),
+    );
+    expect(recordTemplateFillMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        structureErrors: [
+          {
+            directive: "#if signature",
+            message: "Missing closing directive",
+            paragraphIndex: 4,
+          },
+        ],
+        entityId: ENTITY_ID,
+        entityVersionId: "version_2",
+        workspaceId: "ws_1",
+      }),
+    );
+    expect(parseToolPayload(result)).toEqual({
+      action: "create_version",
+      entityId: ENTITY_ID,
+      entityVersionId: "version_2",
+      versionNumber: 2,
+      fileName: "lease.docx",
+      unmatchedPlaceholders: ["signature"],
+      unusedValues: [],
+    });
+  });
+
+  test("save_filled_template validates its destination before filling", async () => {
+    const missingEntity = await handleMcpToolCall({
+      args: {
+        action: "create_version",
+        template_id: TEMPLATE_ID,
+        matter_id: "ws_1",
+        idempotency_key: "missing-entity-1",
+        values: {},
+      },
+      context: createContext(),
+      toolName: "save_filled_template",
+    });
+    const archived = await handleMcpToolCall({
+      args: {
+        action: "create_document",
+        template_id: TEMPLATE_ID,
+        matter_id: "ws_1",
+        idempotency_key: "archived-1",
+        values: {},
+      },
+      context: createContext({ workspaceStatus: "archived" }),
+      toolName: "save_filled_template",
+    });
+    const forbidden = await handleMcpToolCall({
+      args: {
+        action: "create_document",
+        template_id: TEMPLATE_ID,
+        matter_id: "ws_1",
+        idempotency_key: "forbidden-1",
+        values: {},
+      },
+      context: createContext({ memberRole: "intern" }),
+      toolName: "save_filled_template",
+    });
+    const malformedTemplate = await handleMcpToolCall({
+      args: {
+        action: "create_document",
+        template_id: "not-a-uuid",
+        matter_id: "ws_1",
+        idempotency_key: "malformed-template-1",
+        values: {},
+      },
+      context: createContext(),
+      toolName: "save_filled_template",
+    });
+    const malformedParent = await handleMcpToolCall({
+      args: {
+        action: "create_document",
+        template_id: TEMPLATE_ID,
+        matter_id: "ws_1",
+        idempotency_key: "malformed-parent-1",
+        parent_id: "not-a-uuid",
+        values: {},
+      },
+      context: createContext(),
+      toolName: "save_filled_template",
+    });
+    const malformedEntity = await handleMcpToolCall({
+      args: {
+        action: "create_version",
+        template_id: TEMPLATE_ID,
+        matter_id: "ws_1",
+        idempotency_key: "malformed-entity-1",
+        entity_id: "not-a-uuid",
+        values: {},
+      },
+      context: createContext(),
+      toolName: "save_filled_template",
+    });
+
+    expect(missingEntity.isError).toBe(true);
+    expect(validationEnvelope(missingEntity)).toMatchObject({
+      code: "validation_error",
+    });
+    expect(archived.isError).toBe(true);
+    expect(archived.content.at(0)).toMatchObject({
+      type: "text",
+      text: "Matter is archived; unarchive it first",
+    });
+    expect(forbidden.isError).toBe(true);
+    expect(forbidden.content.at(0)).toMatchObject({
+      type: "text",
+      text: "Forbidden",
+    });
+    expect(validationEnvelope(malformedTemplate)).toMatchObject({
+      code: "validation_error",
+    });
+    expect(validationEnvelope(malformedParent)).toMatchObject({
+      code: "validation_error",
+    });
+    expect(validationEnvelope(malformedEntity)).toMatchObject({
+      code: "validation_error",
+    });
+    expect(fillStoredTemplateDocxMock).not.toHaveBeenCalled();
+  });
+
+  test("save_filled_template preflights persisted targets before fill work", async () => {
+    const invalidTargets = createScopedDb([], {
+      [MISSING_FOLDER_ID]: null,
+      [NON_FOLDER_ID]: { kind: "document" },
+      [MISSING_VERSION_ID]: null,
+      [READ_ONLY_VERSION_ID]: {
+        currentVersionId: "version_1",
+        readOnly: true,
+        currentVersion: { fields: [{ content: { type: "file" } }] },
+      },
+      [NON_FILE_VERSION_ID]: {
+        currentVersionId: "version_1",
+        readOnly: false,
+        currentVersion: { fields: [{ content: { type: "text" } }] },
+      },
+    });
+    const context = createContext({ scopedDb: invalidTargets });
+
+    const missingParent = await handleMcpToolCall({
+      args: {
+        action: "create_document",
+        template_id: TEMPLATE_ID,
+        matter_id: "ws_1",
+        idempotency_key: "missing-parent-1",
+        parent_id: MISSING_FOLDER_ID,
+        values: {},
+      },
+      context,
+      toolName: "save_filled_template",
+    });
+    const nonFolderParent = await handleMcpToolCall({
+      args: {
+        action: "create_document",
+        template_id: TEMPLATE_ID,
+        matter_id: "ws_1",
+        idempotency_key: "non-folder-1",
+        parent_id: NON_FOLDER_ID,
+        values: {},
+      },
+      context,
+      toolName: "save_filled_template",
+    });
+    const missingVersionTarget = await handleMcpToolCall({
+      args: {
+        action: "create_version",
+        template_id: TEMPLATE_ID,
+        matter_id: "ws_1",
+        idempotency_key: "missing-version-1",
+        entity_id: MISSING_VERSION_ID,
+        values: {},
+      },
+      context,
+      toolName: "save_filled_template",
+    });
+    const readOnlyVersionTarget = await handleMcpToolCall({
+      args: {
+        action: "create_version",
+        template_id: TEMPLATE_ID,
+        matter_id: "ws_1",
+        idempotency_key: "read-only-1",
+        entity_id: READ_ONLY_VERSION_ID,
+        values: {},
+      },
+      context,
+      toolName: "save_filled_template",
+    });
+    const nonFileVersionTarget = await handleMcpToolCall({
+      args: {
+        action: "create_version",
+        template_id: TEMPLATE_ID,
+        matter_id: "ws_1",
+        idempotency_key: "non-file-1",
+        entity_id: NON_FILE_VERSION_ID,
+        values: {},
+      },
+      context,
+      toolName: "save_filled_template",
+    });
+
+    expect(missingParent.content.at(0)).toMatchObject({
+      text: "Parent entity not found in this workspace",
+    });
+    expect(nonFolderParent.content.at(0)).toMatchObject({
+      text: "Parent entity must be a folder",
+    });
+    expect(missingVersionTarget.content.at(0)).toMatchObject({
+      text: "Entity not found",
+    });
+    expect(readOnlyVersionTarget.content.at(0)).toMatchObject({
+      text: "Entity is read-only",
+    });
+    expect(nonFileVersionTarget.content.at(0)).toMatchObject({
+      text: "Entity has no file field",
+    });
+    expect(fillStoredTemplateDocxMock).not.toHaveBeenCalled();
+  });
+
+  test("save_filled_template preflights workspace capacity before fill work", async () => {
+    const fullWorkspace = createScopedDb([], {}, LIMITS.entitiesCount);
+
+    const result = await handleMcpToolCall({
+      args: {
+        action: "create_document",
+        template_id: TEMPLATE_ID,
+        matter_id: "ws_1",
+        idempotency_key: "full-workspace-1",
+        values: {},
+      },
+      context: createContext({ scopedDb: fullWorkspace }),
+      toolName: "save_filled_template",
+    });
+
+    expect(result.content.at(0)).toMatchObject({
+      text: "Entities limit reached",
+    });
+    expect(fillStoredTemplateDocxMock).not.toHaveBeenCalled();
+    expect(createEntityFromBufferMock).not.toHaveBeenCalled();
   });
 
   test("save_template (create) validates the DOCX and returns the new template id", async () => {

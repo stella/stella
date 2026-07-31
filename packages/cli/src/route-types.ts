@@ -47,6 +47,9 @@ export type DiscriminatorSubcommand = {
 /** Baked-in per-tool annotation (spec S1), keyed by tool name and merged with the listing. */
 export type ToolAnnotation = {
   command: readonly string[];
+  additionalScopes?: readonly ToolScope[];
+  /** API-owned finite transport deadline for this generated tool. */
+  requestTimeoutMs?: number;
   excluded?: true;
   scope?: ToolScope;
   itemsKey?: string;
@@ -103,6 +106,8 @@ export type FlagSpec = {
 /** The generator's per-leaf output before handing to stricli's `buildCommand`. */
 export type LeafCommandSpec = {
   commandPath: readonly string[];
+  additionalScopes?: readonly ToolScope[];
+  requestTimeoutMs?: number;
   toolName: string;
   discriminatorInject?: Record<string, string>;
   flags: readonly FlagSpec[];
@@ -164,6 +169,7 @@ export type CapabilityLeafSpec = {
   itemsKey?: string;
   destructive: boolean;
   scope?: ToolScope;
+  additionalScopes?: readonly ToolScope[];
   /**
    * Synthesized `{ body?, params?, query? }` wrapper schema validated against
    * the `--input` payload. Absent when the catalog entry's schema was truncated

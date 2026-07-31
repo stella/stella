@@ -83,6 +83,43 @@ const loadBakedListings = async (): Promise<readonly RegistryToolListing[]> => {
   return listings;
 };
 
+/**
+ * A scoped `tools/list` response is an authorization projection, not proof that
+ * a baked tool was removed from the server. Keep a baked compound tool in the
+ * runtime tree only when the authenticated response explicitly names that tool
+ * as omitted for missing scope, so its local all-scopes preflight remains
+ * reachable. Grants alone are insufficient: an older server may lack the tool
+ * entirely while still echoing the same limited grants.
+ * Single-scope tools follow the live projection; unknown live tools survive.
+ */
+const retainBakedCompoundListings = ({
+  fetched,
+  baked,
+  scopeOmittedTools,
+}: {
+  fetched: readonly RegistryToolListing[];
+  baked: readonly RegistryToolListing[];
+  scopeOmittedTools: readonly string[] | undefined;
+}): readonly RegistryToolListing[] => {
+  if (scopeOmittedTools === undefined) {
+    return fetched;
+  }
+  const names = new Set(fetched.map((listing) => listing.name));
+  const omittedForScope = new Set(scopeOmittedTools);
+  const retained = baked.filter((listing) => {
+    const annotation = TOOL_ANNOTATIONS[listing.name];
+    const additionalScopes = annotation?.additionalScopes;
+    return (
+      !names.has(listing.name) &&
+      annotation?.scope !== undefined &&
+      additionalScopes !== undefined &&
+      additionalScopes.length > 0 &&
+      omittedForScope.has(listing.name)
+    );
+  });
+  return retained.length === 0 ? fetched : [...fetched, ...retained];
+};
+
 /** The one-line stderr notice for a diverged registry (spec S5.3). */
 const divergenceNotice = (file: RegistryCacheFile): string =>
   `server registry differs (+${file.delta.added.length} −${file.delta.removed.length} ~${file.delta.changed.length}); see 'stella tools list'\n`;
@@ -123,10 +160,15 @@ export const resolveCommandTree = async ({
   if (entries === null) {
     return { tree: generatedRouteMap };
   }
+  const listings = retainBakedCompoundListings({
+    fetched: file.listings,
+    baked: await loadBakedListings(),
+    scopeOmittedTools: file.scopeOmittedTools,
+  });
   const built = Result.try(
     () =>
       buildCliRouteTree({
-        listings: file.listings,
+        listings,
         annotations: TOOL_ANNOTATIONS,
         entries,
       }).tree,
@@ -224,6 +266,12 @@ export const refreshRegistryCache = async ({
     toolsListHash: trust.toolsListHash,
     listings: trust.listings,
     delta,
+    ...(raw.value.grantedScopes === undefined
+      ? {}
+      : { grantedScopes: raw.value.grantedScopes }),
+    ...(raw.value.scopeOmittedTools === undefined
+      ? {}
+      : { scopeOmittedTools: raw.value.scopeOmittedTools }),
     ...(lastNudgedVersion === undefined ? {} : { lastNudgedVersion }),
   };
   await writeCacheFile(filePath, file);
