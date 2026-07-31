@@ -1,5 +1,3 @@
-import { queryOptions } from "@tanstack/react-query";
-
 import { api } from "@/lib/api";
 import { shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
 import {
@@ -19,11 +17,11 @@ type FileMetadata = {
 };
 
 export const fileMetadataOptions = (props: FileMetadataOptions) =>
-  queryOptions({
+  ({
     queryKey: fileMetadataQueryKey(props),
     enabled: props.enabled ?? true,
     retry: shouldRetryAPIRequest,
-    queryFn: async ({ signal }): Promise<FileMetadata> => {
+    queryFn: async ({ signal }: { signal: AbortSignal }) => {
       const response = await api
         .files({ workspaceId: props.workspaceId })
         .url({ fieldId: props.fieldId })
@@ -39,6 +37,6 @@ export const fileMetadataOptions = (props: FileMetadataOptions) =>
         fileName: data.fileName,
         mimeType: data.mimeType,
         originalMimeType: data.originalMimeType,
-      };
+      } satisfies FileMetadata;
     },
-  });
+  }) as const;
