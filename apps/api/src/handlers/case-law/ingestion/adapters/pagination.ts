@@ -36,9 +36,21 @@ export type TraversalMode = {
   buildRequest: (page: number) => { url: string; init?: RequestInit };
   /**
    * Where to continue once this walk reaches the end of the collection, or
-   * null to park within it and re-scan its recent window (rule 13).
+   * null to stay in it.
    */
   followedBy: string | null;
+  /**
+   * How many items this walk covers before returning to its own start.
+   *
+   * A walk that keeps a crawl current has to stay near the head. Without a
+   * bound it advances deeper into the collection every cycle and ends parked
+   * at the far tail, where it sees nothing new — the same non-convergence
+   * the ordered walks exist to avoid, reached from the other end.
+   *
+   * Omit it for a walk that is meant to cross the whole collection once,
+   * which is what catching up is.
+   */
+  windowItems?: number | undefined;
 };
 
 type PagePaginationOptions<TResponse> = {
@@ -253,6 +265,13 @@ export const createPagePaginatedFetch = <TResponse>(
         const page = firstPage + pageIndex;
         const pageStartOffset = pageIndex * opts.pageSize;
         const itemsAlreadyFetched = offset - pageStartOffset;
+        // Every cursor this call writes goes through here, including the
+        // skip-ahead ones below. A bare offset written while a walk is
+        // active would name no walk, and the next call would read that as
+        // "start over" — one timeout would discard the whole traversal.
+        const encode = walk
+          ? (at: number): string => encodeTraversalCursor(walk.mode.name, at)
+          : encodeOffsetCursor;
 
         const { url, init } = (walk?.mode ?? opts).buildRequest(page);
         const fetchT0 = performance.now();
@@ -289,7 +308,7 @@ export const createPagePaginatedFetch = <TResponse>(
             );
             return {
               decisions: [],
-              nextCursor: encodeOffsetCursor(pageStartOffset + opts.pageSize),
+              nextCursor: encode(pageStartOffset + opts.pageSize),
             };
           }
           throw error;
@@ -313,7 +332,7 @@ export const createPagePaginatedFetch = <TResponse>(
             );
             return {
               decisions: [],
-              nextCursor: encodeOffsetCursor(pageStartOffset + opts.pageSize),
+              nextCursor: encode(pageStartOffset + opts.pageSize),
             };
           }
 
@@ -447,10 +466,6 @@ export const createPagePaginatedFetch = <TResponse>(
         // re-processing the already consumed page tail.
         // When exhausted with zero results (overshot past end),
         // step back so the cursor recovers into the valid range.
-        const encode = walk
-          ? (at: number): string => encodeTraversalCursor(walk.mode.name, at)
-          : encodeOffsetCursor;
-
         let nextCursor = encode(Math.max(0, pageStartOffset - opts.pageSize));
         if (signal?.aborted) {
           nextCursor = encode(offset + processedThroughIndex);
@@ -458,6 +473,20 @@ export const createPagePaginatedFetch = <TResponse>(
           nextCursor = encode(fetched);
         } else if (fetchedItems.length > 0) {
           nextCursor = encode(offset + items.length);
+        }
+
+        // A bounded walk returns to its own start rather than carrying on
+        // deeper. Reaching the edge of the window is not the end of
+        // anything, so this is not a handover: the walk simply begins again
+        // at the head, which is where the new items are.
+        const windowItems = walk?.mode.windowItems;
+        if (
+          walk !== null &&
+          windowItems !== undefined &&
+          !signal?.aborted &&
+          fetched >= windowItems
+        ) {
+          nextCursor = encodeTraversalCursor(walk.mode.name, 0);
         }
 
         // This walk has reached the end of the collection, so hand over to

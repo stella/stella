@@ -447,3 +447,36 @@ describe("traversal modes", () => {
     });
   });
 });
+
+describe("traversal cursors survive the paths that write them", () => {
+  const bounded = [
+    {
+      name: "backfill",
+      buildRequest: () => ({ url: "a" }),
+      followedBy: "live",
+    },
+    {
+      name: "live",
+      buildRequest: () => ({ url: "b" }),
+      followedBy: null,
+      windowItems: 200,
+    },
+  ] as const;
+
+  /**
+   * A cursor that names no walk restarts the first one, so any path writing
+   * a bare offset while a walk is active would silently discard its
+   * progress. This asserts the reading half of that contract.
+   */
+  test("a bare offset cursor discards traversal progress", () => {
+    expect(decodeTraversalCursor("offset:1200", bounded)).toEqual({
+      mode: bounded[0],
+      offset: 0,
+    });
+  });
+
+  test("a bounded walk declares where it turns back", () => {
+    expect(bounded[1].windowItems).toBe(200);
+    expect(bounded[0]).not.toHaveProperty("windowItems");
+  });
+});

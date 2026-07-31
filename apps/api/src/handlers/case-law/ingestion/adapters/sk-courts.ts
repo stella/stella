@@ -39,6 +39,13 @@ const BASE_URL =
 const PAGE_SIZE = 100;
 const LEGACY_PAGE_SIZE = 100;
 const ITEM_CONCURRENCY = 10;
+/**
+ * How far back the newest-first walk reaches before returning to the head.
+ * Comfortably more than this source publishes between cycles, so a slow or
+ * skipped cycle still cannot let a decision slip past unseen; already-stored
+ * decisions in the overlap cost a list read and are then deduplicated.
+ */
+const LIVE_WINDOW_ITEMS = 5000;
 
 const arrayOrEmpty = <T>(value: T[] | null | undefined): T[] => {
   if (value === undefined || value === null) {
@@ -376,6 +383,10 @@ export const skCourtsAdapter: SourceAdapter = {
         name: "live",
         buildRequest: (page) => listRequest(page, "DESC"),
         followedBy: null,
+        // Newest-first only has to reach as far back as what was published
+        // since the last cycle. Walking further would drift into history
+        // this source has already been caught up on.
+        windowItems: LIVE_WINDOW_ITEMS,
       },
     ],
 
