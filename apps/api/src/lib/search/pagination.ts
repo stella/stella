@@ -138,10 +138,15 @@ export const encodeGlobalSearchCursor = ({
   // The prefix remains a valid offset cursor for replicas running the previous
   // release. New replicas use the suffix for keyset pagination, so requests can
   // move safely between old and new replicas during a rolling deployment.
-  const legacyPayload = encodeCursor(
+  const encodedLegacyCursor = encodeCursor(
     seen,
     LEGACY_GLOBAL_SEARCH_CURSOR_ID,
-  ).replace(/=+$/, "");
+  );
+  const paddingIndex = encodedLegacyCursor.indexOf("=");
+  const legacyPayload =
+    paddingIndex === -1
+      ? encodedLegacyCursor
+      : encodedLegacyCursor.slice(0, paddingIndex);
   const keysetPayload = encodeCursor(score, `${seen}:${id}`);
   return `${legacyPayload}${DUAL_CURSOR_SEPARATOR}${keysetPayload}`;
 };
