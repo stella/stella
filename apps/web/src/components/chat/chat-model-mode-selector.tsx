@@ -1,13 +1,13 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import {
   BrainCircuitIcon,
   CpuIcon,
   GaugeIcon,
-  MessageCircleIcon,
   PinIcon,
   PinOffIcon,
+  ScaleIcon,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -29,6 +29,7 @@ import {
 import { PROVIDER_LABELS } from "@/components/ai-config-role-models.logic";
 import type { ComposerModelsMenuProps } from "@/components/chat/composer-plus-menu";
 import { modelOptionsOptions } from "@/features/chat/queries";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { TranslationKey } from "@/i18n/types";
 import {
   CHAT_MODEL_MODE,
@@ -50,7 +51,7 @@ const MODE_DESCRIPTION_KEY = {
 } as const satisfies Record<ChatModelMode, TranslationKey>;
 
 const MODE_ICON = {
-  [CHAT_MODEL_MODE.standard]: MessageCircleIcon,
+  [CHAT_MODEL_MODE.standard]: ScaleIcon,
   [CHAT_MODEL_MODE.deepThinking]: BrainCircuitIcon,
   [CHAT_MODEL_MODE.fast]: GaugeIcon,
 } as const satisfies Record<ChatModelMode, LucideIcon>;
@@ -67,7 +68,8 @@ type ChatModelSelectionIntent = {
 
 /**
  * Compact access to friendly modes and exact models. Modes resolve to the
- * organization's configured role model; pinned modes therefore follow later
+ * organization's configured role model. A pinned choice becomes the default
+ * for a thread without an explicit selection; pinned modes follow later
  * configuration changes, while pinned exact models retain their identity.
  */
 export const ChatModelModeSelector = ({
@@ -79,22 +81,39 @@ export const ChatModelModeSelector = ({
   const [detailsRequested, setDetailsRequested] = useState(false);
   const [selectionIntent, setSelectionIntent] =
     useState<ChatModelSelectionIntent | null>(null);
-  const { data } = useQuery({
-    ...modelOptionsOptions(models.activeOrganizationId),
-    enabled: open || detailsRequested || models.selectedModel !== null,
-  });
+  const autoAppliedFavoriteRef = useRef<string | null>(null);
   const favorite = useChatModelFavoriteStore(
     (state) => state.favoritesByOrganization[models.activeOrganizationId],
   );
   const setFavorite = useChatModelFavoriteStore((state) => state.setFavorite);
+  const { data } = useQuery({
+    ...modelOptionsOptions(models.activeOrganizationId),
+    enabled:
+      open ||
+      detailsRequested ||
+      models.selectedModel !== null ||
+      favorite !== undefined,
+  });
 
   const options = resolveModeOptions(data?.modeValues);
   const intendedChoice =
     selectionIntent?.threadId === models.threadRef.threadId
       ? selectionIntent.choice
       : null;
+  const favoriteValue = resolveAvailableFavoriteValue({
+    favorite,
+    modeOptions: options,
+    modelOptions: data?.options,
+  });
+  const favoriteAsDefault =
+    intendedChoice === null &&
+    models.selectedModel === null &&
+    favoriteValue !== undefined
+      ? favorite
+      : null;
   const selectedChoice =
     intendedChoice ??
+    favoriteAsDefault ??
     resolveSelectedChoice({
       favorite,
       options,
@@ -119,6 +138,22 @@ export const ChatModelModeSelector = ({
     : selectedMode
       ? t(MODE_LABEL_KEY[selectedMode])
       : (models.selectedModel ?? t("chat.modelMode.exactModels"));
+
+  const autoApplyKey = favoriteAsDefault
+    ? `${models.threadRef.threadId}:${selectionKey(favoriteAsDefault)}`
+    : null;
+  useExternalSyncEffect(() => {
+    if (
+      autoApplyKey === null ||
+      favoriteValue === null ||
+      favoriteValue === undefined ||
+      autoAppliedFavoriteRef.current === autoApplyKey
+    ) {
+      return;
+    }
+    autoAppliedFavoriteRef.current = autoApplyKey;
+    models.selectModel(favoriteValue);
+  }, [autoApplyKey, favoriteValue, models.selectModel]);
 
   const selectChoice = (choice: ChatModelFavorite) => {
     const nextModel = resolveChoiceModelValue({ choice, options });
@@ -330,6 +365,26 @@ const resolveChoiceModelValue = ({
     return undefined;
   }
   return option.value === "" ? null : option.value;
+};
+
+const resolveAvailableFavoriteValue = ({
+  favorite,
+  modeOptions,
+  modelOptions,
+}: {
+  favorite: ChatModelFavorite | undefined;
+  modeOptions: ModelModeOption[];
+  modelOptions: ModelOption[] | undefined;
+}): string | null | undefined => {
+  if (!favorite) {
+    return undefined;
+  }
+  if (favorite.type === "mode") {
+    return resolveChoiceModelValue({ choice: favorite, options: modeOptions });
+  }
+  return modelOptions?.some(({ value }) => value === favorite.value)
+    ? favorite.value
+    : undefined;
 };
 
 const resolveSelectedChoice = ({
