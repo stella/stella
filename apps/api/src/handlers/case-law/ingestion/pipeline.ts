@@ -1021,35 +1021,6 @@ const processDecisionAttempt = async ({
   }
 
   if (!rowWrite.value) {
-    if (corpusPlan.type === "object-storage") {
-      const current = await scopedDb((tx) =>
-        tx.query.caseLawDecisions.findFirst({
-          where: { id: { eq: decisionId } },
-          columns: {
-            astS3Key: true,
-            normalizedS3Key: true,
-            textS3Key: true,
-          },
-        }),
-      );
-      await discardOrphanedCorpusObjects(
-        {
-          astKey:
-            current?.astS3Key === corpusPlan.written.astKey
-              ? null
-              : corpusPlan.written.astKey,
-          sectionsKey:
-            current?.normalizedS3Key === corpusPlan.written.sectionsKey
-              ? null
-              : corpusPlan.written.sectionsKey,
-          textKey:
-            current?.textS3Key === corpusPlan.written.textKey
-              ? null
-              : corpusPlan.written.textKey,
-        },
-        decisionId,
-      );
-    }
     return {
       inserted: false,
       searchVectorFailed: false,

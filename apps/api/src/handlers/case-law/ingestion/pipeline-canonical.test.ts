@@ -83,7 +83,7 @@ let persistedCursor: string | null | undefined;
  * `timeout` is the transaction bound firing, which abandons rather than
  * cancels the statement and so proves nothing about whether it committed.
  */
-let rowWrite: "ok" | "fault" | "stale" | "timeout" = "ok";
+let rowWrite: "ok" | "fault" | "timeout" = "ok";
 /** The row the dedup lookup finds; undefined makes this a new decision. */
 let existingDecision: Record<string, unknown> | undefined;
 
@@ -165,10 +165,9 @@ const scopedDb: ScopedDb = async (callback) => {
         // The checkpoint helper reads back the compare-and-set winner.
         return {
           where: () => ({
-            returning: async () =>
-              table === caseLawDecisions && rowWrite === "stale"
-                ? []
-                : [{ cursor: values.syncCursor ?? null, order: 1n }],
+            returning: async () => [
+              { cursor: values.syncCursor ?? null, order: 1n },
+            ],
           }),
         };
       },
@@ -274,31 +273,6 @@ describe("processDecision — canonical storage mode", () => {
     expect(outcome.s3UploadFailed).toBe(true);
     expect(events).toEqual(["corpus-write-failed"]);
     expect(deleteCorpusDocumentMock).not.toHaveBeenCalled();
-  });
-
-  test("discards unreferenced canonical objects when a newer refresh wins", async () => {
-    existingDecision = {
-      id: createSafeId<"caseLawDecision">(),
-      metadata: {},
-      sourceHash: "older-hash",
-      sourceRawS3Key: null,
-      sourceRawContentType: null,
-      textS3Key: "winner/text.zst",
-      normalizedS3Key: "winner/sections.json.zst",
-      astS3Key: "winner/ast.json.zst",
-    };
-    rowWrite = "stale";
-
-    const outcome = await processDecision({
-      input: decision,
-      observationOrder: 1n,
-      sourceId: createSafeId<"caseLawSource">(),
-      scopedDb,
-      observedAt: new Date("2026-07-31T12:00:00.000Z"),
-    });
-
-    expect(outcome.inserted).toBe(false);
-    expect(deleteCorpusDocumentMock).toHaveBeenCalledWith({ ...CORPUS_KEYS });
   });
 
   // bun-types declares `.rejects.toBe` as void, so awaiting it trips
