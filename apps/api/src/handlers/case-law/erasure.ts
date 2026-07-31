@@ -164,7 +164,6 @@ export const redactCaseLawDecision = async ({
       // eslint-disable-next-line no-throw-literal -- CorpusIndexError (TaggedError); rethrow so the caller retries the redaction
       throw firstError;
     }
-    // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
     await scopedDb(async (tx) => {
       // audit: skip — GDPR redaction bookkeeping; recorded in case_law_index_jobs above
       await tx

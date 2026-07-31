@@ -568,7 +568,6 @@ const removeGenerationProjection: GenerationBackfillDependencies["removeProjecti
         "delete",
       );
       if (removed.isErr()) {
-        // eslint-disable-next-line no-throw-literal -- CorpusIndexError (TaggedError); retry keeps the durable delete action
         throw removed.error;
       }
     }
