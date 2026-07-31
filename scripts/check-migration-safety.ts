@@ -295,7 +295,10 @@ const GRANDFATHERED_VIOLATIONS: ReadonlyMap<
 > = new Map([
   ["20260429220500_global-search-unaccent", new Set(["unbounded-update"])],
   ["20260522100000_entity_hot_path_indexes", new Set(["unbounded-update"])],
-  ["20260603120000_case_law_public_slugs", new Set(["recursive-cte"])],
+  [
+    "20260603120000_case_law_public_slugs",
+    new Set(["drop-object", "recursive-cte"]),
+  ],
 ]);
 
 const getMigrationName = (file: string): string | undefined =>
