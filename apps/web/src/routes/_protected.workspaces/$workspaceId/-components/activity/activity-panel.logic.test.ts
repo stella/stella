@@ -10,7 +10,7 @@ const item = (id: string, runId: string | null): MatterActivityItem => ({
   approval: { status: "not_required", user: null },
   category: "documents",
   id,
-  performer: { id: "agent-1", name: "Review agent", type: "agent" },
+  performer: { name: "Review agent", type: "agent" },
   runId,
   target: {
     deleted: false,
