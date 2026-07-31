@@ -6,6 +6,16 @@ import { defineConfig } from "astro/config";
 import stllAnonymizeWasm from "@stll/anonymize-wasm/vite";
 import { UI_LOCALES } from "@stll/locales";
 
+// Keep this aligned with the production CDN response-headers policy.
+// `wasm-unsafe-eval` permits WebAssembly compilation without enabling
+// JavaScript eval; COOP/COEP expose SharedArrayBuffer to the threaded runtime.
+const LANDING_SECURITY_HEADERS = {
+  "Content-Security-Policy":
+    "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; media-src 'self' https://github.com https://*.githubusercontent.com https://objects.githubusercontent.com https://*.s3.amazonaws.com; connect-src 'self' https://api.github.com; frame-ancestors 'none'",
+  "Cross-Origin-Opener-Policy": "same-origin",
+  "Cross-Origin-Embedder-Policy": "credentialless",
+};
+
 // Derived from @stll/locales so routing + sitemap locales equal the app's UI
 // locales (mirrors src/i18n/config.ts). Default locale (en) sits at root; the
 // rest under a lowercased path prefix (/es/, /pt-br/, /ar/, /de/, ...).
@@ -26,10 +36,7 @@ export default defineConfig({
   // the deployed site's actual host/CDN must send the same pair in
   // production or the demo will fail there even though it works locally.
   server: {
-    headers: {
-      "Cross-Origin-Opener-Policy": "same-origin",
-      "Cross-Origin-Embedder-Policy": "credentialless",
-    },
+    headers: LANDING_SECURITY_HEADERS,
   },
   i18n: {
     defaultLocale: "en",
@@ -68,10 +75,7 @@ export default defineConfig({
     // not reliably reach every dev response. `astro preview` and production
     // still rely on the top-level/host headers documented above.
     server: {
-      headers: {
-        "Cross-Origin-Opener-Policy": "same-origin",
-        "Cross-Origin-Embedder-Policy": "credentialless",
-      },
+      headers: LANDING_SECURITY_HEADERS,
     },
     // Emits @stll/anonymize-wasm's binding + glue as build assets and
     // rewrites its runtime asset URLs so `astro build` (Vite/Rollup) can
