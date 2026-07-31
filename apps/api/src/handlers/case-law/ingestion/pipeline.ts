@@ -235,6 +235,9 @@ export const sanitizeResult = (r: IngestionResult): IngestionResult => {
   return {
     ...r,
     caseNumber: r.caseNumber.replace(DANGEROUS_CHARS, ""),
+    // Part of the uniqueness key, so it is sanitized like the case number:
+    // an invisible char here would make an already-stored decision look new.
+    sourceDocumentId: strip(r.sourceDocumentId),
     fulltext: r.fulltext
       ? collapseSpacedLetters(strip(r.fulltext) ?? "")
       : undefined,
@@ -581,13 +584,22 @@ export const processDecision = async (
 ): Promise<ProcessResult> => {
   const result = sanitizeResult(input);
 
+  // Match on the publisher's id where the adapter supplies one, and only
+  // fall back to the case number where it does not. The two are the halves
+  // of the uniqueness key, so the lookup has to split the same way the
+  // index does or it would find a row the insert cannot replace.
   const existing = await scopedDb((tx) =>
     tx.query.caseLawDecisions.findFirst({
-      where: {
-        sourceId: { eq: sourceId },
-        caseNumber: result.caseNumber,
-        language: result.language,
-      },
+      where: result.sourceDocumentId
+        ? {
+            sourceId: { eq: sourceId },
+            sourceDocumentId: result.sourceDocumentId,
+          }
+        : {
+            sourceId: { eq: sourceId },
+            caseNumber: result.caseNumber,
+            language: result.language,
+          },
       columns: {
         id: true,
         metadata: true,
@@ -937,6 +949,7 @@ export const processDecision = async (
           id: decisionId,
           sourceId,
           caseNumber: result.caseNumber,
+          sourceDocumentId: result.sourceDocumentId,
           citationKey: citationKeyOf(result.caseNumber),
           slug,
           ecli: result.ecli,

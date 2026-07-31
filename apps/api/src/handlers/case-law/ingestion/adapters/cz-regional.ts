@@ -382,6 +382,19 @@ const fetchFinaldoc = async (
   }
 };
 
+/**
+ * The publisher's document id, which this source states only as the last
+ * segment of the item's link (`/api/finaldoc/<id>`). Returns undefined for a
+ * link that carries no segment, so identity falls back to the case number
+ * rather than keying every such row on the same empty string.
+ */
+const documentIdFromLink = (link: string | undefined): string | undefined => {
+  if (link === undefined) {
+    return undefined;
+  }
+  return /\/(?<id>[^/?#]+)\/*(?:[?#]|$)/u.exec(link)?.groups?.["id"];
+};
+
 const parseItem = (item: CzRegionalApiItem): IngestionResult | null => {
   if (!item.jednaciCislo || !item.soud) {
     return null;
@@ -396,6 +409,7 @@ const parseItem = (item: CzRegionalApiItem): IngestionResult | null => {
     country: "CZE",
     language: "cs",
     decisionDate: toOptionalValue(item.datumVydani),
+    sourceDocumentId: documentIdFromLink(toOptionalValue(item.odkaz)),
     sourceUrl: sanitizeUrl(toOptionalValue(item.odkaz) ?? ""),
     documentUrl: sanitizeUrl(toOptionalValue(item.odkaz) ?? ""),
     metadata: {

@@ -101,6 +101,20 @@ export const caseLawDecisions = p.pgTable(
     sourceUrl: p.varchar("source_url", { length: 2048 }),
     documentUrl: p.varchar("document_url", { length: 2048 }),
     /**
+     * The publisher's own identifier for this document, as the source states
+     * it. This is what identifies a decision.
+     *
+     * A case number cannot: courts number their dockets per court, so one
+     * source covering many courts issues the same number many times over
+     * (`0T/42/2019` exists at most Slovak district courts). Keying on it
+     * makes two unrelated decisions the same row. The publisher's id is
+     * unique across the whole source by construction.
+     *
+     * Null only for sources that expose no such id; those keep the older
+     * case-number key, which is sound for a source holding one court.
+     */
+    sourceDocumentId: p.varchar("source_document_id", { length: 256 }),
+    /**
      * Bookkeeping for sources that ingest metadata first and fetch the
      * document later (see `ingestion/sk-document-backfill.ts`).
      * `documentFetchRequestedAt` is the first read that asked for the
@@ -165,9 +179,18 @@ export const caseLawDecisions = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (t) => [
+    // Identity, in two halves that together cover every row exactly once.
+    // Where the publisher states an id, that is the key. Where it does not,
+    // the case number still serves, because such a source holds one court
+    // and its numbering is unique within it.
     p
-      .uniqueIndex("case_law_decisions_source_case_lang_idx")
-      .on(t.sourceId, t.caseNumber, t.language),
+      .uniqueIndex("case_law_decisions_source_document_idx")
+      .on(t.sourceId, t.sourceDocumentId)
+      .where(isNotNull(t.sourceDocumentId)),
+    p
+      .uniqueIndex("case_law_decisions_source_case_lang_null_idx")
+      .on(t.sourceId, t.caseNumber, t.language)
+      .where(isNull(t.sourceDocumentId)),
     p
       .uniqueIndex("case_law_decisions_slug_uidx")
       .on(t.slug)

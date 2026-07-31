@@ -20,6 +20,15 @@ export const EMPTY_AST: EmptyAst = {};
 /** Result of parsing a single court decision from a source. */
 export type IngestionResult = {
   caseNumber: string;
+  /**
+   * The publisher's own identifier for this document. Supply it whenever the
+   * source has one: it is what makes a decision identifiable. A case number
+   * does not, because courts number dockets per court and one source often
+   * covers many, so the same number recurs across unrelated decisions.
+   *
+   * Omit it only where the source publishes no such id.
+   */
+  sourceDocumentId?: string | undefined;
   ecli?: string | undefined;
   court: string;
   country: string;
