@@ -9,7 +9,7 @@ import MacWindow from "./MacWindow.astro";
 import MediaSkeleton from "./MediaSkeleton.astro";
 import ThemeImage from "./ThemeImage.astro";
 import { AnonymizeLiveDemo } from "./react/AnonymizeLiveDemo";
-import { EditorLiveDemo } from "./react/EditorLiveDemo";
+import { EditorLiveDemoShell } from "./react/EditorLiveDemoShell";
 import { ProductPreview } from "./react/previews/ProductPreview";
 import { CliMcpPreview } from "./react/previews/CliMcpPreview";
 import { RecordedStellaScene } from "./react/product-story/RecordedStellaScene";
@@ -173,11 +173,30 @@ const storyThumbnail = media.type === "story" ? productStoryThumbnails[media.sce
 
   {
     media.type === "live-editor" && !thumbnail && (
-      <div class="absolute inset-0">
-        <MacWindow class="h-full" label={media.alt}>
-          <EditorLiveDemo client:only="react" />
-        </MacWindow>
-      </div>
+      <>
+        {/* The real folio toolbar is scaled below a usable touch size in the
+            mobile hero. Show its theme-aware capture there so the preview is
+            clearly illustrative; larger viewports retain the live editor. */}
+        <div class="absolute inset-0 sm:hidden" data-editor-preview="static">
+          <MacWindow class="h-full" label={media.alt}>
+            <ThemeImage
+              lightSrc="/media/products/editor.png"
+              darkSrc="/media/products/editor-dark.png"
+              alt={media.alt}
+              class="h-full w-full object-contain object-top"
+              loading="eager"
+            />
+          </MacWindow>
+        </div>
+        <div
+          class="absolute inset-0 hidden sm:block"
+          data-editor-preview="interactive"
+        >
+          <MacWindow class="h-full" label={media.alt}>
+            <EditorLiveDemoShell client:only="react" />
+          </MacWindow>
+        </div>
+      </>
     )
   }
 
