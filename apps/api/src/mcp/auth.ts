@@ -15,6 +15,10 @@ export type McpSession = {
   userId: string;
   organizationId: string;
   scopes: string[];
+  credential?:
+    | { type: "oauth_agent"; clientId: string }
+    | { type: "machine_api_key"; id: string; name: string }
+    | { type: "delegated_user" };
 };
 
 let verifyAccessToken:
@@ -55,8 +59,14 @@ export const extractMcpSession = (payload: JWTPayload): McpSession => {
   const rawScopes = payload["scope"];
   const scopes =
     typeof rawScopes === "string" ? rawScopes.split(" ").filter(Boolean) : [];
+  const rawClientId = payload["client_id"] ?? payload["azp"];
+  const credential =
+    typeof rawClientId === "string" && rawClientId.length > 0
+      ? ({ type: "oauth_agent", clientId: rawClientId } as const)
+      : ({ type: "delegated_user" } as const);
 
   return {
+    credential,
     userId,
     organizationId: rawOrganizationId,
     scopes,

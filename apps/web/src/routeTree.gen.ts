@@ -9,100 +9,89 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
-import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
-import { Route as DevRouteImport } from './routes/dev'
-import { Route as ConsentRouteImport } from './routes/consent'
-import { Route as AgentClaimRouteImport } from './routes/agent-claim'
-import { Route as ProtectedRouteImport } from './routes/_protected'
-import { Route as OnboardingRouteRouteImport } from './routes/onboarding/route'
-import { Route as LawRouteRouteImport } from './routes/law/route'
-import { Route as AuthRouteRouteImport } from './routes/auth/route'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as LawIndexRouteImport } from './routes/law/index'
-import { Route as AuthIndexRouteImport } from './routes/auth/index'
-import { Route as SitemapsLawDotxmlRouteImport } from './routes/sitemaps/law[.]xml'
-import { Route as McpOauthCallbackRouteImport } from './routes/mcp.oauth-callback'
-import { Route as AuthTwoFactorRouteImport } from './routes/auth/two-factor'
-import { Route as AuthOtpRouteImport } from './routes/auth/otp'
-import { Route as AuthOrganizationRouteImport } from './routes/auth/organization'
-import { Route as AuthErrorRouteImport } from './routes/auth/error'
-import { Route as ProtectedSettingsRouteRouteImport } from './routes/_protected.settings/route'
-import { Route as ProtectedKnowledgeRouteRouteImport } from './routes/_protected.knowledge/route'
+import { Route as ProtectedRouteImport } from './routes/_protected'
+import { Route as AgentClaimRouteImport } from './routes/agent-claim'
+import { Route as AuthRouteRouteImport } from './routes/auth/route'
+import { Route as ConsentRouteImport } from './routes/consent'
+import { Route as DevRouteImport } from './routes/dev'
+import { Route as LawRouteRouteImport } from './routes/law/route'
+import { Route as OnboardingRouteRouteImport } from './routes/onboarding/route'
+import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as ProtectedChatRouteRouteImport } from './routes/_protected.chat/route'
-import { Route as LawCasesIndexRouteImport } from './routes/law/cases/index'
-import { Route as ProtectedWorkspacesIndexRouteImport } from './routes/_protected.workspaces/index'
-import { Route as ProtectedTodosIndexRouteImport } from './routes/_protected.todos/index'
-import { Route as ProtectedSettingsIndexRouteImport } from './routes/_protected.settings/index'
-import { Route as ProtectedKnowledgeIndexRouteImport } from './routes/_protected.knowledge/index'
-import { Route as ProtectedContactsIndexRouteImport } from './routes/_protected.contacts/index'
+import { Route as ProtectedKnowledgeRouteRouteImport } from './routes/_protected.knowledge/route'
+import { Route as ProtectedSettingsRouteRouteImport } from './routes/_protected.settings/route'
+import { Route as AuthIndexRouteImport } from './routes/auth/index'
+import { Route as AuthErrorRouteImport } from './routes/auth/error'
+import { Route as AuthOrganizationRouteImport } from './routes/auth/organization'
+import { Route as AuthOtpRouteImport } from './routes/auth/otp'
+import { Route as AuthTwoFactorRouteImport } from './routes/auth/two-factor'
+import { Route as LawIndexRouteImport } from './routes/law/index'
+import { Route as McpOauthCallbackRouteImport } from './routes/mcp.oauth-callback'
+import { Route as SitemapsLawDotxmlRouteImport } from './routes/sitemaps/law[.]xml'
 import { Route as ProtectedChatIndexRouteImport } from './routes/_protected.chat/index'
-import { Route as AuthAcceptInvitationInvitationIdRouteImport } from './routes/auth/accept-invitation.$invitationId'
-import { Route as ProtectedKnowledgeWorkflowsRouteImport } from './routes/_protected.knowledge/workflows'
-import { Route as ProtectedKnowledgeToolsRouteImport } from './routes/_protected.knowledge/tools'
-import { Route as ProtectedKnowledgeTemplatesRouteImport } from './routes/_protected.knowledge/templates'
-import { Route as ProtectedKnowledgeStylesRouteImport } from './routes/_protected.knowledge/styles'
-import { Route as ProtectedKnowledgeSkillsRouteImport } from './routes/_protected.knowledge/skills'
-import { Route as ProtectedKnowledgePromptsRouteImport } from './routes/_protected.knowledge/prompts'
-import { Route as ProtectedKnowledgePlaybooksRouteImport } from './routes/_protected.knowledge/playbooks'
-import { Route as ProtectedKnowledgeMcpRouteImport } from './routes/_protected.knowledge/mcp'
-import { Route as ProtectedKnowledgeClausesRouteImport } from './routes/_protected.knowledge/clauses'
-import { Route as ProtectedDevAutocompleteRouteImport } from './routes/_protected.dev_.autocomplete'
-import { Route as ProtectedContactsContactIdRouteImport } from './routes/_protected.contacts/$contactId'
-import { Route as ProtectedChatNewRouteImport } from './routes/_protected.chat_.new'
 import { Route as ProtectedChatThreadIdRouteImport } from './routes/_protected.chat/$threadId'
-import { Route as ProtectedWorkspacesWorkspaceIdRouteRouteImport } from './routes/_protected.workspaces/$workspaceId/route'
+import { Route as ProtectedChatNewRouteImport } from './routes/_protected.chat_.new'
+import { Route as ProtectedContactsIndexRouteImport } from './routes/_protected.contacts/index'
+import { Route as ProtectedContactsContactIdRouteImport } from './routes/_protected.contacts/$contactId'
+import { Route as ProtectedDevAutocompleteRouteImport } from './routes/_protected.dev_.autocomplete'
+import { Route as ProtectedKnowledgeIndexRouteImport } from './routes/_protected.knowledge/index'
+import { Route as ProtectedKnowledgeClausesRouteImport } from './routes/_protected.knowledge/clauses'
+import { Route as ProtectedKnowledgeMcpRouteImport } from './routes/_protected.knowledge/mcp'
+import { Route as ProtectedKnowledgePlaybooksRouteImport } from './routes/_protected.knowledge/playbooks'
+import { Route as ProtectedKnowledgePromptsRouteImport } from './routes/_protected.knowledge/prompts'
+import { Route as ProtectedKnowledgeSkillsRouteImport } from './routes/_protected.knowledge/skills'
+import { Route as ProtectedKnowledgeStylesRouteImport } from './routes/_protected.knowledge/styles'
+import { Route as ProtectedKnowledgeTemplatesRouteImport } from './routes/_protected.knowledge/templates'
+import { Route as ProtectedKnowledgeToolsRouteImport } from './routes/_protected.knowledge/tools'
+import { Route as ProtectedKnowledgeWorkflowsRouteImport } from './routes/_protected.knowledge/workflows'
+import { Route as ProtectedSettingsIndexRouteImport } from './routes/_protected.settings/index'
 import { Route as ProtectedSettingsOrganizationRouteRouteImport } from './routes/_protected.settings/organization.route'
-import { Route as ProtectedWorkspacesWorkspaceIdIndexRouteImport } from './routes/_protected.workspaces/$workspaceId/index'
-import { Route as ProtectedSettingsOrganizationIndexRouteImport } from './routes/_protected.settings/organization.index'
-import { Route as ProtectedWorkspacesWorkspaceIdWorkflowsRouteImport } from './routes/_protected.workspaces/$workspaceId/workflows'
-import { Route as ProtectedWorkspacesWorkspaceIdTimesheetsRouteImport } from './routes/_protected.workspaces/$workspaceId/timesheets'
-import { Route as ProtectedWorkspacesWorkspaceIdInvoicesRouteImport } from './routes/_protected.workspaces/$workspaceId/invoices'
-import { Route as ProtectedWorkspacesWorkspaceIdExpensesRouteImport } from './routes/_protected.workspaces/$workspaceId/expenses'
-import { Route as ProtectedSettingsOrganizationUsageRouteImport } from './routes/_protected.settings/organization.usage'
-import { Route as ProtectedSettingsOrganizationMembersRouteImport } from './routes/_protected.settings/organization.members'
-import { Route as ProtectedSettingsOrganizationMatterNumberingRouteImport } from './routes/_protected.settings/organization.matter-numbering'
-import { Route as ProtectedSettingsOrganizationDocumentTypesRouteImport } from './routes/_protected.settings/organization.document-types'
-import { Route as ProtectedSettingsOrganizationCatalogueRouteImport } from './routes/_protected.settings/organization.catalogue'
-import { Route as ProtectedSettingsOrganizationAuditLogsRouteImport } from './routes/_protected.settings/organization.audit-logs'
-import { Route as ProtectedSettingsOrganizationAnonymizationRouteImport } from './routes/_protected.settings/organization.anonymization'
-import { Route as ProtectedSettingsOrganizationAiRouteImport } from './routes/_protected.settings/organization.ai'
-import { Route as ProtectedSettingsAccountProfileRouteImport } from './routes/_protected.settings/account.profile'
-import { Route as ProtectedSettingsAccountDesktopRouteImport } from './routes/_protected.settings/account.desktop'
-import { Route as ProtectedSettingsAccountConnectionsRouteImport } from './routes/_protected.settings/account.connections'
-import { Route as ProtectedSettingsAccountBetaRouteImport } from './routes/_protected.settings/account.beta'
+import { Route as ProtectedTodosIndexRouteImport } from './routes/_protected.todos/index'
+import { Route as ProtectedWorkspacesIndexRouteImport } from './routes/_protected.workspaces/index'
+import { Route as ProtectedWorkspacesWorkspaceIdRouteRouteImport } from './routes/_protected.workspaces/$workspaceId/route'
+import { Route as AuthAcceptInvitationInvitationIdRouteImport } from './routes/auth/accept-invitation.$invitationId'
+import { Route as LawCasesIndexRouteImport } from './routes/law/cases/index'
 import { Route as ProtectedKnowledgeToolsSkillIdRouteImport } from './routes/_protected.knowledge/tools_.$skillId'
+import { Route as ProtectedSettingsAccountBetaRouteImport } from './routes/_protected.settings/account.beta'
+import { Route as ProtectedSettingsAccountConnectionsRouteImport } from './routes/_protected.settings/account.connections'
+import { Route as ProtectedSettingsAccountDesktopRouteImport } from './routes/_protected.settings/account.desktop'
+import { Route as ProtectedSettingsAccountProfileRouteImport } from './routes/_protected.settings/account.profile'
+import { Route as ProtectedSettingsOrganizationIndexRouteImport } from './routes/_protected.settings/organization.index'
+import { Route as ProtectedSettingsOrganizationAiRouteImport } from './routes/_protected.settings/organization.ai'
+import { Route as ProtectedSettingsOrganizationAnonymizationRouteImport } from './routes/_protected.settings/organization.anonymization'
+import { Route as ProtectedSettingsOrganizationAuditLogsRouteImport } from './routes/_protected.settings/organization.audit-logs'
+import { Route as ProtectedSettingsOrganizationCatalogueRouteImport } from './routes/_protected.settings/organization.catalogue'
+import { Route as ProtectedSettingsOrganizationDocumentTypesRouteImport } from './routes/_protected.settings/organization.document-types'
+import { Route as ProtectedSettingsOrganizationMatterNumberingRouteImport } from './routes/_protected.settings/organization.matter-numbering'
+import { Route as ProtectedSettingsOrganizationMembersRouteImport } from './routes/_protected.settings/organization.members'
+import { Route as ProtectedSettingsOrganizationUsageRouteImport } from './routes/_protected.settings/organization.usage'
+import { Route as ProtectedWorkspacesWorkspaceIdIndexRouteImport } from './routes/_protected.workspaces/$workspaceId/index'
 import { Route as ProtectedWorkspacesWorkspaceIdViewIdRouteRouteImport } from './routes/_protected.workspaces/$workspaceId/$viewId.route'
-import { Route as ProtectedWorkspacesWorkspaceIdViewIdIndexRouteImport } from './routes/_protected.workspaces/$workspaceId/$viewId.index'
-import { Route as SitemapsLawCasesCountryYearChar123monthChar125DotxmlRouteImport } from './routes/sitemaps/law-cases/$country/$year/{$month}[.]xml'
-import { Route as LawCountryCasesCourtSlugRouteImport } from './routes/law/$country/cases/$court/$slug'
-import { Route as ProtectedWorkspacesWorkspaceIdReportsExportIdRouteImport } from './routes/_protected.workspaces/$workspaceId/reports/$exportId'
-import { Route as ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRouteImport } from './routes/_protected.workspaces/$workspaceId/invoices/$invoiceId'
-import { Route as ProtectedWorkspacesWorkspaceIdEntitiesEntityIdRouteImport } from './routes/_protected.workspaces/$workspaceId/entities/$entityId'
-import { Route as ProtectedWorkspacesWorkspaceIdViewIdDocumentRouteImport } from './routes/_protected.workspaces/$workspaceId/$viewId.document'
-import { Route as ProtectedChatWorkspacesWorkspaceIdNewRouteImport } from './routes/_protected.chat/workspaces/$workspaceId/new'
+import { Route as ProtectedWorkspacesWorkspaceIdExpensesRouteImport } from './routes/_protected.workspaces/$workspaceId/expenses'
+import { Route as ProtectedWorkspacesWorkspaceIdInvoicesRouteImport } from './routes/_protected.workspaces/$workspaceId/invoices'
+import { Route as ProtectedWorkspacesWorkspaceIdTimesheetsRouteImport } from './routes/_protected.workspaces/$workspaceId/timesheets'
+import { Route as ProtectedWorkspacesWorkspaceIdWorkflowsRouteImport } from './routes/_protected.workspaces/$workspaceId/workflows'
 import { Route as ProtectedChatWorkspacesWorkspaceIdThreadIdRouteImport } from './routes/_protected.chat/workspaces/$workspaceId/$threadId'
-import { Route as SitemapsLawCasesCountryYearMonthChar123bucketChar125DotxmlRouteImport } from './routes/sitemaps/law-cases/$country/$year/$month/{$bucket}[.]xml'
+import { Route as ProtectedChatWorkspacesWorkspaceIdNewRouteImport } from './routes/_protected.chat/workspaces/$workspaceId/new'
+import { Route as ProtectedWorkspacesWorkspaceIdViewIdIndexRouteImport } from './routes/_protected.workspaces/$workspaceId/$viewId.index'
+import { Route as ProtectedWorkspacesWorkspaceIdViewIdDocumentRouteImport } from './routes/_protected.workspaces/$workspaceId/$viewId.document'
+import { Route as ProtectedWorkspacesWorkspaceIdEntitiesEntityIdRouteImport } from './routes/_protected.workspaces/$workspaceId/entities/$entityId'
+import { Route as ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRouteImport } from './routes/_protected.workspaces/$workspaceId/invoices/$invoiceId'
+import { Route as ProtectedWorkspacesWorkspaceIdReportsExportIdRouteImport } from './routes/_protected.workspaces/$workspaceId/reports/$exportId'
+import { Route as LawCountryCasesCourtSlugRouteImport } from './routes/law/$country/cases/$court/$slug'
+import { Route as SitemapsLawCasesCountryYearChar123monthChar125DotxmlRouteImport } from './routes/sitemaps/law-cases/$country/$year/{$month}[.]xml'
 import { Route as LawCountryCasesCourtLanguageSlugRouteImport } from './routes/law/$country/cases/$court/$language/$slug'
+import { Route as SitemapsLawCasesCountryYearMonthChar123bucketChar125DotxmlRouteImport } from './routes/sitemaps/law-cases/$country/$year/$month/{$bucket}[.]xml'
 
-const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
-  id: '/sitemap.xml',
-  path: '/sitemap.xml',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const RobotsDottxtRoute = RobotsDottxtRouteImport.update({
-  id: '/robots.txt',
-  path: '/robots.txt',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DevRoute = DevRouteImport.update({
-  id: '/dev',
-  path: '/dev',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ConsentRoute = ConsentRouteImport.update({
-  id: '/consent',
-  path: '/consent',
+const ProtectedRoute = ProtectedRouteImport.update({
+  id: '/_protected',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AgentClaimRoute = AgentClaimRouteImport.update({
@@ -110,13 +99,19 @@ const AgentClaimRoute = AgentClaimRouteImport.update({
   path: '/agent-claim',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ProtectedRoute = ProtectedRouteImport.update({
-  id: '/_protected',
+const AuthRouteRoute = AuthRouteRouteImport.update({
+  id: '/auth',
+  path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
-const OnboardingRouteRoute = OnboardingRouteRouteImport.update({
-  id: '/onboarding',
-  path: '/onboarding',
+const ConsentRoute = ConsentRouteImport.update({
+  id: '/consent',
+  path: '/consent',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DevRoute = DevRouteImport.update({
+  id: '/dev',
+  path: '/dev',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LawRouteRoute = LawRouteRouteImport.update({
@@ -124,59 +119,24 @@ const LawRouteRoute = LawRouteRouteImport.update({
   path: '/law',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthRouteRoute = AuthRouteRouteImport.update({
-  id: '/auth',
-  path: '/auth',
+const OnboardingRouteRoute = OnboardingRouteRouteImport.update({
+  id: '/onboarding',
+  path: '/onboarding',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const RobotsDottxtRoute = RobotsDottxtRouteImport.update({
+  id: '/robots.txt',
+  path: '/robots.txt',
   getParentRoute: () => rootRouteImport,
 } as any)
-const LawIndexRoute = LawIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => LawRouteRoute,
-} as any)
-const AuthIndexRoute = AuthIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AuthRouteRoute,
-} as any)
-const SitemapsLawDotxmlRoute = SitemapsLawDotxmlRouteImport.update({
-  id: '/sitemaps/law.xml',
-  path: '/sitemaps/law.xml',
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
   getParentRoute: () => rootRouteImport,
 } as any)
-const McpOauthCallbackRoute = McpOauthCallbackRouteImport.update({
-  id: '/mcp/oauth-callback',
-  path: '/mcp/oauth-callback',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AuthTwoFactorRoute = AuthTwoFactorRouteImport.update({
-  id: '/two-factor',
-  path: '/two-factor',
-  getParentRoute: () => AuthRouteRoute,
-} as any)
-const AuthOtpRoute = AuthOtpRouteImport.update({
-  id: '/otp',
-  path: '/otp',
-  getParentRoute: () => AuthRouteRoute,
-} as any)
-const AuthOrganizationRoute = AuthOrganizationRouteImport.update({
-  id: '/organization',
-  path: '/organization',
-  getParentRoute: () => AuthRouteRoute,
-} as any)
-const AuthErrorRoute = AuthErrorRouteImport.update({
-  id: '/error',
-  path: '/error',
-  getParentRoute: () => AuthRouteRoute,
-} as any)
-const ProtectedSettingsRouteRoute = ProtectedSettingsRouteRouteImport.update({
-  id: '/settings',
-  path: '/settings',
+const ProtectedChatRouteRoute = ProtectedChatRouteRouteImport.update({
+  id: '/chat',
+  path: '/chat',
   getParentRoute: () => ProtectedRoute,
 } as any)
 const ProtectedKnowledgeRouteRoute = ProtectedKnowledgeRouteRouteImport.update({
@@ -184,97 +144,86 @@ const ProtectedKnowledgeRouteRoute = ProtectedKnowledgeRouteRouteImport.update({
   path: '/knowledge',
   getParentRoute: () => ProtectedRoute,
 } as any)
-const ProtectedChatRouteRoute = ProtectedChatRouteRouteImport.update({
-  id: '/chat',
-  path: '/chat',
+const ProtectedSettingsRouteRoute = ProtectedSettingsRouteRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => ProtectedRoute,
 } as any)
-const LawCasesIndexRoute = LawCasesIndexRouteImport.update({
-  id: '/cases/',
-  path: '/cases/',
+const AuthIndexRoute = AuthIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AuthRouteRoute,
+} as any)
+const AuthErrorRoute = AuthErrorRouteImport.update({
+  id: '/error',
+  path: '/error',
+  getParentRoute: () => AuthRouteRoute,
+} as any)
+const AuthOrganizationRoute = AuthOrganizationRouteImport.update({
+  id: '/organization',
+  path: '/organization',
+  getParentRoute: () => AuthRouteRoute,
+} as any)
+const AuthOtpRoute = AuthOtpRouteImport.update({
+  id: '/otp',
+  path: '/otp',
+  getParentRoute: () => AuthRouteRoute,
+} as any)
+const AuthTwoFactorRoute = AuthTwoFactorRouteImport.update({
+  id: '/two-factor',
+  path: '/two-factor',
+  getParentRoute: () => AuthRouteRoute,
+} as any)
+const LawIndexRoute = LawIndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => LawRouteRoute,
 } as any)
-const ProtectedWorkspacesIndexRoute =
-  ProtectedWorkspacesIndexRouteImport.update({
-    id: '/workspaces/',
-    path: '/workspaces/',
-    getParentRoute: () => ProtectedRoute,
-  } as any)
-const ProtectedTodosIndexRoute = ProtectedTodosIndexRouteImport.update({
-  id: '/todos/',
-  path: '/todos/',
-  getParentRoute: () => ProtectedRoute,
+const McpOauthCallbackRoute = McpOauthCallbackRouteImport.update({
+  id: '/mcp/oauth-callback',
+  path: '/mcp/oauth-callback',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const ProtectedSettingsIndexRoute = ProtectedSettingsIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => ProtectedSettingsRouteRoute,
-} as any)
-const ProtectedKnowledgeIndexRoute = ProtectedKnowledgeIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => ProtectedKnowledgeRouteRoute,
-} as any)
-const ProtectedContactsIndexRoute = ProtectedContactsIndexRouteImport.update({
-  id: '/contacts/',
-  path: '/contacts/',
-  getParentRoute: () => ProtectedRoute,
+const SitemapsLawDotxmlRoute = SitemapsLawDotxmlRouteImport.update({
+  id: '/sitemaps/law.xml',
+  path: '/sitemaps/law.xml',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const ProtectedChatIndexRoute = ProtectedChatIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => ProtectedChatRouteRoute,
 } as any)
-const AuthAcceptInvitationInvitationIdRoute =
-  AuthAcceptInvitationInvitationIdRouteImport.update({
-    id: '/accept-invitation/$invitationId',
-    path: '/accept-invitation/$invitationId',
-    getParentRoute: () => AuthRouteRoute,
-  } as any)
-const ProtectedKnowledgeWorkflowsRoute =
-  ProtectedKnowledgeWorkflowsRouteImport.update({
-    id: '/workflows',
-    path: '/workflows',
-    getParentRoute: () => ProtectedKnowledgeRouteRoute,
-  } as any)
-const ProtectedKnowledgeToolsRoute = ProtectedKnowledgeToolsRouteImport.update({
-  id: '/tools',
-  path: '/tools',
-  getParentRoute: () => ProtectedKnowledgeRouteRoute,
+const ProtectedChatThreadIdRoute = ProtectedChatThreadIdRouteImport.update({
+  id: '/$threadId',
+  path: '/$threadId',
+  getParentRoute: () => ProtectedChatRouteRoute,
 } as any)
-const ProtectedKnowledgeTemplatesRoute =
-  ProtectedKnowledgeTemplatesRouteImport.update({
-    id: '/templates',
-    path: '/templates',
-    getParentRoute: () => ProtectedKnowledgeRouteRoute,
+const ProtectedChatNewRoute = ProtectedChatNewRouteImport.update({
+  id: '/chat_/new',
+  path: '/chat/new',
+  getParentRoute: () => ProtectedRoute,
+} as any)
+const ProtectedContactsIndexRoute = ProtectedContactsIndexRouteImport.update({
+  id: '/contacts/',
+  path: '/contacts/',
+  getParentRoute: () => ProtectedRoute,
+} as any)
+const ProtectedContactsContactIdRoute =
+  ProtectedContactsContactIdRouteImport.update({
+    id: '/contacts/$contactId',
+    path: '/contacts/$contactId',
+    getParentRoute: () => ProtectedRoute,
   } as any)
-const ProtectedKnowledgeStylesRoute =
-  ProtectedKnowledgeStylesRouteImport.update({
-    id: '/styles',
-    path: '/styles',
-    getParentRoute: () => ProtectedKnowledgeRouteRoute,
+const ProtectedDevAutocompleteRoute =
+  ProtectedDevAutocompleteRouteImport.update({
+    id: '/dev_/autocomplete',
+    path: '/dev/autocomplete',
+    getParentRoute: () => ProtectedRoute,
   } as any)
-const ProtectedKnowledgeSkillsRoute =
-  ProtectedKnowledgeSkillsRouteImport.update({
-    id: '/skills',
-    path: '/skills',
-    getParentRoute: () => ProtectedKnowledgeRouteRoute,
-  } as any)
-const ProtectedKnowledgePromptsRoute =
-  ProtectedKnowledgePromptsRouteImport.update({
-    id: '/prompts',
-    path: '/prompts',
-    getParentRoute: () => ProtectedKnowledgeRouteRoute,
-  } as any)
-const ProtectedKnowledgePlaybooksRoute =
-  ProtectedKnowledgePlaybooksRouteImport.update({
-    id: '/playbooks',
-    path: '/playbooks',
-    getParentRoute: () => ProtectedKnowledgeRouteRoute,
-  } as any)
-const ProtectedKnowledgeMcpRoute = ProtectedKnowledgeMcpRouteImport.update({
-  id: '/mcp',
-  path: '/mcp',
+const ProtectedKnowledgeIndexRoute = ProtectedKnowledgeIndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => ProtectedKnowledgeRouteRoute,
 } as any)
 const ProtectedKnowledgeClausesRoute =
@@ -283,134 +232,101 @@ const ProtectedKnowledgeClausesRoute =
     path: '/clauses',
     getParentRoute: () => ProtectedKnowledgeRouteRoute,
   } as any)
-const ProtectedDevAutocompleteRoute =
-  ProtectedDevAutocompleteRouteImport.update({
-    id: '/dev_/autocomplete',
-    path: '/dev/autocomplete',
-    getParentRoute: () => ProtectedRoute,
-  } as any)
-const ProtectedContactsContactIdRoute =
-  ProtectedContactsContactIdRouteImport.update({
-    id: '/contacts/$contactId',
-    path: '/contacts/$contactId',
-    getParentRoute: () => ProtectedRoute,
-  } as any)
-const ProtectedChatNewRoute = ProtectedChatNewRouteImport.update({
-  id: '/chat_/new',
-  path: '/chat/new',
-  getParentRoute: () => ProtectedRoute,
+const ProtectedKnowledgeMcpRoute = ProtectedKnowledgeMcpRouteImport.update({
+  id: '/mcp',
+  path: '/mcp',
+  getParentRoute: () => ProtectedKnowledgeRouteRoute,
 } as any)
-const ProtectedChatThreadIdRoute = ProtectedChatThreadIdRouteImport.update({
-  id: '/$threadId',
-  path: '/$threadId',
-  getParentRoute: () => ProtectedChatRouteRoute,
-} as any)
-const ProtectedWorkspacesWorkspaceIdRouteRoute =
-  ProtectedWorkspacesWorkspaceIdRouteRouteImport.update({
-    id: '/workspaces/$workspaceId',
-    path: '/workspaces/$workspaceId',
-    getParentRoute: () => ProtectedRoute,
+const ProtectedKnowledgePlaybooksRoute =
+  ProtectedKnowledgePlaybooksRouteImport.update({
+    id: '/playbooks',
+    path: '/playbooks',
+    getParentRoute: () => ProtectedKnowledgeRouteRoute,
   } as any)
+const ProtectedKnowledgePromptsRoute =
+  ProtectedKnowledgePromptsRouteImport.update({
+    id: '/prompts',
+    path: '/prompts',
+    getParentRoute: () => ProtectedKnowledgeRouteRoute,
+  } as any)
+const ProtectedKnowledgeSkillsRoute =
+  ProtectedKnowledgeSkillsRouteImport.update({
+    id: '/skills',
+    path: '/skills',
+    getParentRoute: () => ProtectedKnowledgeRouteRoute,
+  } as any)
+const ProtectedKnowledgeStylesRoute =
+  ProtectedKnowledgeStylesRouteImport.update({
+    id: '/styles',
+    path: '/styles',
+    getParentRoute: () => ProtectedKnowledgeRouteRoute,
+  } as any)
+const ProtectedKnowledgeTemplatesRoute =
+  ProtectedKnowledgeTemplatesRouteImport.update({
+    id: '/templates',
+    path: '/templates',
+    getParentRoute: () => ProtectedKnowledgeRouteRoute,
+  } as any)
+const ProtectedKnowledgeToolsRoute = ProtectedKnowledgeToolsRouteImport.update({
+  id: '/tools',
+  path: '/tools',
+  getParentRoute: () => ProtectedKnowledgeRouteRoute,
+} as any)
+const ProtectedKnowledgeWorkflowsRoute =
+  ProtectedKnowledgeWorkflowsRouteImport.update({
+    id: '/workflows',
+    path: '/workflows',
+    getParentRoute: () => ProtectedKnowledgeRouteRoute,
+  } as any)
+const ProtectedSettingsIndexRoute = ProtectedSettingsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => ProtectedSettingsRouteRoute,
+} as any)
 const ProtectedSettingsOrganizationRouteRoute =
   ProtectedSettingsOrganizationRouteRouteImport.update({
     id: '/organization',
     path: '/organization',
     getParentRoute: () => ProtectedSettingsRouteRoute,
   } as any)
-const ProtectedWorkspacesWorkspaceIdIndexRoute =
-  ProtectedWorkspacesWorkspaceIdIndexRouteImport.update({
-    id: '/',
-    path: '/',
-    getParentRoute: () => ProtectedWorkspacesWorkspaceIdRouteRoute,
+const ProtectedTodosIndexRoute = ProtectedTodosIndexRouteImport.update({
+  id: '/todos/',
+  path: '/todos/',
+  getParentRoute: () => ProtectedRoute,
+} as any)
+const ProtectedWorkspacesIndexRoute =
+  ProtectedWorkspacesIndexRouteImport.update({
+    id: '/workspaces/',
+    path: '/workspaces/',
+    getParentRoute: () => ProtectedRoute,
   } as any)
-const ProtectedSettingsOrganizationIndexRoute =
-  ProtectedSettingsOrganizationIndexRouteImport.update({
-    id: '/',
-    path: '/',
-    getParentRoute: () => ProtectedSettingsOrganizationRouteRoute,
+const ProtectedWorkspacesWorkspaceIdRouteRoute =
+  ProtectedWorkspacesWorkspaceIdRouteRouteImport.update({
+    id: '/workspaces/$workspaceId',
+    path: '/workspaces/$workspaceId',
+    getParentRoute: () => ProtectedRoute,
   } as any)
-const ProtectedWorkspacesWorkspaceIdWorkflowsRoute =
-  ProtectedWorkspacesWorkspaceIdWorkflowsRouteImport.update({
-    id: '/workflows',
-    path: '/workflows',
-    getParentRoute: () => ProtectedWorkspacesWorkspaceIdRouteRoute,
+const AuthAcceptInvitationInvitationIdRoute =
+  AuthAcceptInvitationInvitationIdRouteImport.update({
+    id: '/accept-invitation/$invitationId',
+    path: '/accept-invitation/$invitationId',
+    getParentRoute: () => AuthRouteRoute,
   } as any)
-const ProtectedWorkspacesWorkspaceIdTimesheetsRoute =
-  ProtectedWorkspacesWorkspaceIdTimesheetsRouteImport.update({
-    id: '/timesheets',
-    path: '/timesheets',
-    getParentRoute: () => ProtectedWorkspacesWorkspaceIdRouteRoute,
+const LawCasesIndexRoute = LawCasesIndexRouteImport.update({
+  id: '/cases/',
+  path: '/cases/',
+  getParentRoute: () => LawRouteRoute,
+} as any)
+const ProtectedKnowledgeToolsSkillIdRoute =
+  ProtectedKnowledgeToolsSkillIdRouteImport.update({
+    id: '/tools_/$skillId',
+    path: '/tools/$skillId',
+    getParentRoute: () => ProtectedKnowledgeRouteRoute,
   } as any)
-const ProtectedWorkspacesWorkspaceIdInvoicesRoute =
-  ProtectedWorkspacesWorkspaceIdInvoicesRouteImport.update({
-    id: '/invoices',
-    path: '/invoices',
-    getParentRoute: () => ProtectedWorkspacesWorkspaceIdRouteRoute,
-  } as any)
-const ProtectedWorkspacesWorkspaceIdExpensesRoute =
-  ProtectedWorkspacesWorkspaceIdExpensesRouteImport.update({
-    id: '/expenses',
-    path: '/expenses',
-    getParentRoute: () => ProtectedWorkspacesWorkspaceIdRouteRoute,
-  } as any)
-const ProtectedSettingsOrganizationUsageRoute =
-  ProtectedSettingsOrganizationUsageRouteImport.update({
-    id: '/usage',
-    path: '/usage',
-    getParentRoute: () => ProtectedSettingsOrganizationRouteRoute,
-  } as any)
-const ProtectedSettingsOrganizationMembersRoute =
-  ProtectedSettingsOrganizationMembersRouteImport.update({
-    id: '/members',
-    path: '/members',
-    getParentRoute: () => ProtectedSettingsOrganizationRouteRoute,
-  } as any)
-const ProtectedSettingsOrganizationMatterNumberingRoute =
-  ProtectedSettingsOrganizationMatterNumberingRouteImport.update({
-    id: '/matter-numbering',
-    path: '/matter-numbering',
-    getParentRoute: () => ProtectedSettingsOrganizationRouteRoute,
-  } as any)
-const ProtectedSettingsOrganizationDocumentTypesRoute =
-  ProtectedSettingsOrganizationDocumentTypesRouteImport.update({
-    id: '/document-types',
-    path: '/document-types',
-    getParentRoute: () => ProtectedSettingsOrganizationRouteRoute,
-  } as any)
-const ProtectedSettingsOrganizationCatalogueRoute =
-  ProtectedSettingsOrganizationCatalogueRouteImport.update({
-    id: '/catalogue',
-    path: '/catalogue',
-    getParentRoute: () => ProtectedSettingsOrganizationRouteRoute,
-  } as any)
-const ProtectedSettingsOrganizationAuditLogsRoute =
-  ProtectedSettingsOrganizationAuditLogsRouteImport.update({
-    id: '/audit-logs',
-    path: '/audit-logs',
-    getParentRoute: () => ProtectedSettingsOrganizationRouteRoute,
-  } as any)
-const ProtectedSettingsOrganizationAnonymizationRoute =
-  ProtectedSettingsOrganizationAnonymizationRouteImport.update({
-    id: '/anonymization',
-    path: '/anonymization',
-    getParentRoute: () => ProtectedSettingsOrganizationRouteRoute,
-  } as any)
-const ProtectedSettingsOrganizationAiRoute =
-  ProtectedSettingsOrganizationAiRouteImport.update({
-    id: '/ai',
-    path: '/ai',
-    getParentRoute: () => ProtectedSettingsOrganizationRouteRoute,
-  } as any)
-const ProtectedSettingsAccountProfileRoute =
-  ProtectedSettingsAccountProfileRouteImport.update({
-    id: '/account/profile',
-    path: '/account/profile',
-    getParentRoute: () => ProtectedSettingsRouteRoute,
-  } as any)
-const ProtectedSettingsAccountDesktopRoute =
-  ProtectedSettingsAccountDesktopRouteImport.update({
-    id: '/account/desktop',
-    path: '/account/desktop',
+const ProtectedSettingsAccountBetaRoute =
+  ProtectedSettingsAccountBetaRouteImport.update({
+    id: '/account/beta',
+    path: '/account/beta',
     getParentRoute: () => ProtectedSettingsRouteRoute,
   } as any)
 const ProtectedSettingsAccountConnectionsRoute =
@@ -419,17 +335,77 @@ const ProtectedSettingsAccountConnectionsRoute =
     path: '/account/connections',
     getParentRoute: () => ProtectedSettingsRouteRoute,
   } as any)
-const ProtectedSettingsAccountBetaRoute =
-  ProtectedSettingsAccountBetaRouteImport.update({
-    id: '/account/beta',
-    path: '/account/beta',
+const ProtectedSettingsAccountDesktopRoute =
+  ProtectedSettingsAccountDesktopRouteImport.update({
+    id: '/account/desktop',
+    path: '/account/desktop',
     getParentRoute: () => ProtectedSettingsRouteRoute,
   } as any)
-const ProtectedKnowledgeToolsSkillIdRoute =
-  ProtectedKnowledgeToolsSkillIdRouteImport.update({
-    id: '/tools_/$skillId',
-    path: '/tools/$skillId',
-    getParentRoute: () => ProtectedKnowledgeRouteRoute,
+const ProtectedSettingsAccountProfileRoute =
+  ProtectedSettingsAccountProfileRouteImport.update({
+    id: '/account/profile',
+    path: '/account/profile',
+    getParentRoute: () => ProtectedSettingsRouteRoute,
+  } as any)
+const ProtectedSettingsOrganizationIndexRoute =
+  ProtectedSettingsOrganizationIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => ProtectedSettingsOrganizationRouteRoute,
+  } as any)
+const ProtectedSettingsOrganizationAiRoute =
+  ProtectedSettingsOrganizationAiRouteImport.update({
+    id: '/ai',
+    path: '/ai',
+    getParentRoute: () => ProtectedSettingsOrganizationRouteRoute,
+  } as any)
+const ProtectedSettingsOrganizationAnonymizationRoute =
+  ProtectedSettingsOrganizationAnonymizationRouteImport.update({
+    id: '/anonymization',
+    path: '/anonymization',
+    getParentRoute: () => ProtectedSettingsOrganizationRouteRoute,
+  } as any)
+const ProtectedSettingsOrganizationAuditLogsRoute =
+  ProtectedSettingsOrganizationAuditLogsRouteImport.update({
+    id: '/audit-logs',
+    path: '/audit-logs',
+    getParentRoute: () => ProtectedSettingsOrganizationRouteRoute,
+  } as any)
+const ProtectedSettingsOrganizationCatalogueRoute =
+  ProtectedSettingsOrganizationCatalogueRouteImport.update({
+    id: '/catalogue',
+    path: '/catalogue',
+    getParentRoute: () => ProtectedSettingsOrganizationRouteRoute,
+  } as any)
+const ProtectedSettingsOrganizationDocumentTypesRoute =
+  ProtectedSettingsOrganizationDocumentTypesRouteImport.update({
+    id: '/document-types',
+    path: '/document-types',
+    getParentRoute: () => ProtectedSettingsOrganizationRouteRoute,
+  } as any)
+const ProtectedSettingsOrganizationMatterNumberingRoute =
+  ProtectedSettingsOrganizationMatterNumberingRouteImport.update({
+    id: '/matter-numbering',
+    path: '/matter-numbering',
+    getParentRoute: () => ProtectedSettingsOrganizationRouteRoute,
+  } as any)
+const ProtectedSettingsOrganizationMembersRoute =
+  ProtectedSettingsOrganizationMembersRouteImport.update({
+    id: '/members',
+    path: '/members',
+    getParentRoute: () => ProtectedSettingsOrganizationRouteRoute,
+  } as any)
+const ProtectedSettingsOrganizationUsageRoute =
+  ProtectedSettingsOrganizationUsageRouteImport.update({
+    id: '/usage',
+    path: '/usage',
+    getParentRoute: () => ProtectedSettingsOrganizationRouteRoute,
+  } as any)
+const ProtectedWorkspacesWorkspaceIdIndexRoute =
+  ProtectedWorkspacesWorkspaceIdIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => ProtectedWorkspacesWorkspaceIdRouteRoute,
   } as any)
 const ProtectedWorkspacesWorkspaceIdViewIdRouteRoute =
   ProtectedWorkspacesWorkspaceIdViewIdRouteRouteImport.update({
@@ -437,28 +413,58 @@ const ProtectedWorkspacesWorkspaceIdViewIdRouteRoute =
     path: '/$viewId',
     getParentRoute: () => ProtectedWorkspacesWorkspaceIdRouteRoute,
   } as any)
+const ProtectedWorkspacesWorkspaceIdExpensesRoute =
+  ProtectedWorkspacesWorkspaceIdExpensesRouteImport.update({
+    id: '/expenses',
+    path: '/expenses',
+    getParentRoute: () => ProtectedWorkspacesWorkspaceIdRouteRoute,
+  } as any)
+const ProtectedWorkspacesWorkspaceIdInvoicesRoute =
+  ProtectedWorkspacesWorkspaceIdInvoicesRouteImport.update({
+    id: '/invoices',
+    path: '/invoices',
+    getParentRoute: () => ProtectedWorkspacesWorkspaceIdRouteRoute,
+  } as any)
+const ProtectedWorkspacesWorkspaceIdTimesheetsRoute =
+  ProtectedWorkspacesWorkspaceIdTimesheetsRouteImport.update({
+    id: '/timesheets',
+    path: '/timesheets',
+    getParentRoute: () => ProtectedWorkspacesWorkspaceIdRouteRoute,
+  } as any)
+const ProtectedWorkspacesWorkspaceIdWorkflowsRoute =
+  ProtectedWorkspacesWorkspaceIdWorkflowsRouteImport.update({
+    id: '/workflows',
+    path: '/workflows',
+    getParentRoute: () => ProtectedWorkspacesWorkspaceIdRouteRoute,
+  } as any)
+const ProtectedChatWorkspacesWorkspaceIdThreadIdRoute =
+  ProtectedChatWorkspacesWorkspaceIdThreadIdRouteImport.update({
+    id: '/workspaces/$workspaceId/$threadId',
+    path: '/workspaces/$workspaceId/$threadId',
+    getParentRoute: () => ProtectedChatRouteRoute,
+  } as any)
+const ProtectedChatWorkspacesWorkspaceIdNewRoute =
+  ProtectedChatWorkspacesWorkspaceIdNewRouteImport.update({
+    id: '/workspaces/$workspaceId/new',
+    path: '/workspaces/$workspaceId/new',
+    getParentRoute: () => ProtectedChatRouteRoute,
+  } as any)
 const ProtectedWorkspacesWorkspaceIdViewIdIndexRoute =
   ProtectedWorkspacesWorkspaceIdViewIdIndexRouteImport.update({
     id: '/',
     path: '/',
     getParentRoute: () => ProtectedWorkspacesWorkspaceIdViewIdRouteRoute,
   } as any)
-const SitemapsLawCasesCountryYearChar123monthChar125DotxmlRoute =
-  SitemapsLawCasesCountryYearChar123monthChar125DotxmlRouteImport.update({
-    id: '/sitemaps/law-cases/$country/$year/{$month}.xml',
-    path: '/sitemaps/law-cases/$country/$year/{$month}.xml',
-    getParentRoute: () => rootRouteImport,
+const ProtectedWorkspacesWorkspaceIdViewIdDocumentRoute =
+  ProtectedWorkspacesWorkspaceIdViewIdDocumentRouteImport.update({
+    id: '/document',
+    path: '/document',
+    getParentRoute: () => ProtectedWorkspacesWorkspaceIdViewIdRouteRoute,
   } as any)
-const LawCountryCasesCourtSlugRoute =
-  LawCountryCasesCourtSlugRouteImport.update({
-    id: '/$country/cases/$court/$slug',
-    path: '/$country/cases/$court/$slug',
-    getParentRoute: () => LawRouteRoute,
-  } as any)
-const ProtectedWorkspacesWorkspaceIdReportsExportIdRoute =
-  ProtectedWorkspacesWorkspaceIdReportsExportIdRouteImport.update({
-    id: '/reports/$exportId',
-    path: '/reports/$exportId',
+const ProtectedWorkspacesWorkspaceIdEntitiesEntityIdRoute =
+  ProtectedWorkspacesWorkspaceIdEntitiesEntityIdRouteImport.update({
+    id: '/entities/$entityId',
+    path: '/entities/$entityId',
     getParentRoute: () => ProtectedWorkspacesWorkspaceIdRouteRoute,
   } as any)
 const ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRoute =
@@ -467,34 +473,22 @@ const ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRoute =
     path: '/$invoiceId',
     getParentRoute: () => ProtectedWorkspacesWorkspaceIdInvoicesRoute,
   } as any)
-const ProtectedWorkspacesWorkspaceIdEntitiesEntityIdRoute =
-  ProtectedWorkspacesWorkspaceIdEntitiesEntityIdRouteImport.update({
-    id: '/entities/$entityId',
-    path: '/entities/$entityId',
+const ProtectedWorkspacesWorkspaceIdReportsExportIdRoute =
+  ProtectedWorkspacesWorkspaceIdReportsExportIdRouteImport.update({
+    id: '/reports/$exportId',
+    path: '/reports/$exportId',
     getParentRoute: () => ProtectedWorkspacesWorkspaceIdRouteRoute,
   } as any)
-const ProtectedWorkspacesWorkspaceIdViewIdDocumentRoute =
-  ProtectedWorkspacesWorkspaceIdViewIdDocumentRouteImport.update({
-    id: '/document',
-    path: '/document',
-    getParentRoute: () => ProtectedWorkspacesWorkspaceIdViewIdRouteRoute,
+const LawCountryCasesCourtSlugRoute =
+  LawCountryCasesCourtSlugRouteImport.update({
+    id: '/$country/cases/$court/$slug',
+    path: '/$country/cases/$court/$slug',
+    getParentRoute: () => LawRouteRoute,
   } as any)
-const ProtectedChatWorkspacesWorkspaceIdNewRoute =
-  ProtectedChatWorkspacesWorkspaceIdNewRouteImport.update({
-    id: '/workspaces/$workspaceId/new',
-    path: '/workspaces/$workspaceId/new',
-    getParentRoute: () => ProtectedChatRouteRoute,
-  } as any)
-const ProtectedChatWorkspacesWorkspaceIdThreadIdRoute =
-  ProtectedChatWorkspacesWorkspaceIdThreadIdRouteImport.update({
-    id: '/workspaces/$workspaceId/$threadId',
-    path: '/workspaces/$workspaceId/$threadId',
-    getParentRoute: () => ProtectedChatRouteRoute,
-  } as any)
-const SitemapsLawCasesCountryYearMonthChar123bucketChar125DotxmlRoute =
-  SitemapsLawCasesCountryYearMonthChar123bucketChar125DotxmlRouteImport.update({
-    id: '/sitemaps/law-cases/$country/$year/$month/{$bucket}.xml',
-    path: '/sitemaps/law-cases/$country/$year/$month/{$bucket}.xml',
+const SitemapsLawCasesCountryYearChar123monthChar125DotxmlRoute =
+  SitemapsLawCasesCountryYearChar123monthChar125DotxmlRouteImport.update({
+    id: '/sitemaps/law-cases/$country/$year/{$month}.xml',
+    path: '/sitemaps/law-cases/$country/$year/{$month}.xml',
     getParentRoute: () => rootRouteImport,
   } as any)
 const LawCountryCasesCourtLanguageSlugRoute =
@@ -502,6 +496,12 @@ const LawCountryCasesCourtLanguageSlugRoute =
     id: '/$country/cases/$court/$language/$slug',
     path: '/$country/cases/$court/$language/$slug',
     getParentRoute: () => LawRouteRoute,
+  } as any)
+const SitemapsLawCasesCountryYearMonthChar123bucketChar125DotxmlRoute =
+  SitemapsLawCasesCountryYearMonthChar123bucketChar125DotxmlRouteImport.update({
+    id: '/sitemaps/law-cases/$country/$year/$month/{$bucket}.xml',
+    path: '/sitemaps/law-cases/$country/$year/$month/{$bucket}.xml',
+    getParentRoute: () => rootRouteImport,
   } as any)
 
 export interface FileRoutesByFullPath {
@@ -969,39 +969,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/sitemap.xml': {
-      id: '/sitemap.xml'
-      path: '/sitemap.xml'
-      fullPath: '/sitemap.xml'
-      preLoaderRoute: typeof SitemapDotxmlRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/robots.txt': {
-      id: '/robots.txt'
-      path: '/robots.txt'
-      fullPath: '/robots.txt'
-      preLoaderRoute: typeof RobotsDottxtRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/dev': {
-      id: '/dev'
-      path: '/dev'
-      fullPath: '/dev'
-      preLoaderRoute: typeof DevRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/consent': {
-      id: '/consent'
-      path: '/consent'
-      fullPath: '/consent'
-      preLoaderRoute: typeof ConsentRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/agent-claim': {
-      id: '/agent-claim'
-      path: '/agent-claim'
-      fullPath: '/agent-claim'
-      preLoaderRoute: typeof AgentClaimRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_protected': {
@@ -1011,18 +983,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProtectedRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/onboarding': {
-      id: '/onboarding'
-      path: '/onboarding'
-      fullPath: '/onboarding'
-      preLoaderRoute: typeof OnboardingRouteRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/law': {
-      id: '/law'
-      path: '/law'
-      fullPath: '/law'
-      preLoaderRoute: typeof LawRouteRouteImport
+    '/agent-claim': {
+      id: '/agent-claim'
+      path: '/agent-claim'
+      fullPath: '/agent-claim'
+      preLoaderRoute: typeof AgentClaimRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth': {
@@ -1032,74 +997,53 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/consent': {
+      id: '/consent'
+      path: '/consent'
+      fullPath: '/consent'
+      preLoaderRoute: typeof ConsentRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/law/': {
-      id: '/law/'
-      path: '/'
-      fullPath: '/law/'
-      preLoaderRoute: typeof LawIndexRouteImport
-      parentRoute: typeof LawRouteRoute
-    }
-    '/auth/': {
-      id: '/auth/'
-      path: '/'
-      fullPath: '/auth/'
-      preLoaderRoute: typeof AuthIndexRouteImport
-      parentRoute: typeof AuthRouteRoute
-    }
-    '/sitemaps/law.xml': {
-      id: '/sitemaps/law.xml'
-      path: '/sitemaps/law.xml'
-      fullPath: '/sitemaps/law.xml'
-      preLoaderRoute: typeof SitemapsLawDotxmlRouteImport
+    '/dev': {
+      id: '/dev'
+      path: '/dev'
+      fullPath: '/dev'
+      preLoaderRoute: typeof DevRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/mcp/oauth-callback': {
-      id: '/mcp/oauth-callback'
-      path: '/mcp/oauth-callback'
-      fullPath: '/mcp/oauth-callback'
-      preLoaderRoute: typeof McpOauthCallbackRouteImport
+    '/law': {
+      id: '/law'
+      path: '/law'
+      fullPath: '/law'
+      preLoaderRoute: typeof LawRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/auth/two-factor': {
-      id: '/auth/two-factor'
-      path: '/two-factor'
-      fullPath: '/auth/two-factor'
-      preLoaderRoute: typeof AuthTwoFactorRouteImport
-      parentRoute: typeof AuthRouteRoute
+    '/onboarding': {
+      id: '/onboarding'
+      path: '/onboarding'
+      fullPath: '/onboarding'
+      preLoaderRoute: typeof OnboardingRouteRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/auth/otp': {
-      id: '/auth/otp'
-      path: '/otp'
-      fullPath: '/auth/otp'
-      preLoaderRoute: typeof AuthOtpRouteImport
-      parentRoute: typeof AuthRouteRoute
+    '/robots.txt': {
+      id: '/robots.txt'
+      path: '/robots.txt'
+      fullPath: '/robots.txt'
+      preLoaderRoute: typeof RobotsDottxtRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/auth/organization': {
-      id: '/auth/organization'
-      path: '/organization'
-      fullPath: '/auth/organization'
-      preLoaderRoute: typeof AuthOrganizationRouteImport
-      parentRoute: typeof AuthRouteRoute
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/auth/error': {
-      id: '/auth/error'
-      path: '/error'
-      fullPath: '/auth/error'
-      preLoaderRoute: typeof AuthErrorRouteImport
-      parentRoute: typeof AuthRouteRoute
-    }
-    '/_protected/settings': {
-      id: '/_protected/settings'
-      path: '/settings'
-      fullPath: '/settings'
-      preLoaderRoute: typeof ProtectedSettingsRouteRouteImport
+    '/_protected/chat': {
+      id: '/_protected/chat'
+      path: '/chat'
+      fullPath: '/chat'
+      preLoaderRoute: typeof ProtectedChatRouteRouteImport
       parentRoute: typeof ProtectedRoute
     }
     '/_protected/knowledge': {
@@ -1109,54 +1053,68 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProtectedKnowledgeRouteRouteImport
       parentRoute: typeof ProtectedRoute
     }
-    '/_protected/chat': {
-      id: '/_protected/chat'
-      path: '/chat'
-      fullPath: '/chat'
-      preLoaderRoute: typeof ProtectedChatRouteRouteImport
+    '/_protected/settings': {
+      id: '/_protected/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof ProtectedSettingsRouteRouteImport
       parentRoute: typeof ProtectedRoute
     }
-    '/law/cases/': {
-      id: '/law/cases/'
-      path: '/cases'
-      fullPath: '/law/cases/'
-      preLoaderRoute: typeof LawCasesIndexRouteImport
+    '/auth/': {
+      id: '/auth/'
+      path: '/'
+      fullPath: '/auth/'
+      preLoaderRoute: typeof AuthIndexRouteImport
+      parentRoute: typeof AuthRouteRoute
+    }
+    '/auth/error': {
+      id: '/auth/error'
+      path: '/error'
+      fullPath: '/auth/error'
+      preLoaderRoute: typeof AuthErrorRouteImport
+      parentRoute: typeof AuthRouteRoute
+    }
+    '/auth/organization': {
+      id: '/auth/organization'
+      path: '/organization'
+      fullPath: '/auth/organization'
+      preLoaderRoute: typeof AuthOrganizationRouteImport
+      parentRoute: typeof AuthRouteRoute
+    }
+    '/auth/otp': {
+      id: '/auth/otp'
+      path: '/otp'
+      fullPath: '/auth/otp'
+      preLoaderRoute: typeof AuthOtpRouteImport
+      parentRoute: typeof AuthRouteRoute
+    }
+    '/auth/two-factor': {
+      id: '/auth/two-factor'
+      path: '/two-factor'
+      fullPath: '/auth/two-factor'
+      preLoaderRoute: typeof AuthTwoFactorRouteImport
+      parentRoute: typeof AuthRouteRoute
+    }
+    '/law/': {
+      id: '/law/'
+      path: '/'
+      fullPath: '/law/'
+      preLoaderRoute: typeof LawIndexRouteImport
       parentRoute: typeof LawRouteRoute
     }
-    '/_protected/workspaces/': {
-      id: '/_protected/workspaces/'
-      path: '/workspaces'
-      fullPath: '/workspaces/'
-      preLoaderRoute: typeof ProtectedWorkspacesIndexRouteImport
-      parentRoute: typeof ProtectedRoute
+    '/mcp/oauth-callback': {
+      id: '/mcp/oauth-callback'
+      path: '/mcp/oauth-callback'
+      fullPath: '/mcp/oauth-callback'
+      preLoaderRoute: typeof McpOauthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_protected/todos/': {
-      id: '/_protected/todos/'
-      path: '/todos'
-      fullPath: '/todos/'
-      preLoaderRoute: typeof ProtectedTodosIndexRouteImport
-      parentRoute: typeof ProtectedRoute
-    }
-    '/_protected/settings/': {
-      id: '/_protected/settings/'
-      path: '/'
-      fullPath: '/settings/'
-      preLoaderRoute: typeof ProtectedSettingsIndexRouteImport
-      parentRoute: typeof ProtectedSettingsRouteRoute
-    }
-    '/_protected/knowledge/': {
-      id: '/_protected/knowledge/'
-      path: '/'
-      fullPath: '/knowledge/'
-      preLoaderRoute: typeof ProtectedKnowledgeIndexRouteImport
-      parentRoute: typeof ProtectedKnowledgeRouteRoute
-    }
-    '/_protected/contacts/': {
-      id: '/_protected/contacts/'
-      path: '/contacts'
-      fullPath: '/contacts/'
-      preLoaderRoute: typeof ProtectedContactsIndexRouteImport
-      parentRoute: typeof ProtectedRoute
+    '/sitemaps/law.xml': {
+      id: '/sitemaps/law.xml'
+      path: '/sitemaps/law.xml'
+      fullPath: '/sitemaps/law.xml'
+      preLoaderRoute: typeof SitemapsLawDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_protected/chat/': {
       id: '/_protected/chat/'
@@ -1165,81 +1123,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProtectedChatIndexRouteImport
       parentRoute: typeof ProtectedChatRouteRoute
     }
-    '/auth/accept-invitation/$invitationId': {
-      id: '/auth/accept-invitation/$invitationId'
-      path: '/accept-invitation/$invitationId'
-      fullPath: '/auth/accept-invitation/$invitationId'
-      preLoaderRoute: typeof AuthAcceptInvitationInvitationIdRouteImport
-      parentRoute: typeof AuthRouteRoute
+    '/_protected/chat/$threadId': {
+      id: '/_protected/chat/$threadId'
+      path: '/$threadId'
+      fullPath: '/chat/$threadId'
+      preLoaderRoute: typeof ProtectedChatThreadIdRouteImport
+      parentRoute: typeof ProtectedChatRouteRoute
     }
-    '/_protected/knowledge/workflows': {
-      id: '/_protected/knowledge/workflows'
-      path: '/workflows'
-      fullPath: '/knowledge/workflows'
-      preLoaderRoute: typeof ProtectedKnowledgeWorkflowsRouteImport
-      parentRoute: typeof ProtectedKnowledgeRouteRoute
+    '/_protected/chat_/new': {
+      id: '/_protected/chat_/new'
+      path: '/chat/new'
+      fullPath: '/chat/new'
+      preLoaderRoute: typeof ProtectedChatNewRouteImport
+      parentRoute: typeof ProtectedRoute
     }
-    '/_protected/knowledge/tools': {
-      id: '/_protected/knowledge/tools'
-      path: '/tools'
-      fullPath: '/knowledge/tools'
-      preLoaderRoute: typeof ProtectedKnowledgeToolsRouteImport
-      parentRoute: typeof ProtectedKnowledgeRouteRoute
-    }
-    '/_protected/knowledge/templates': {
-      id: '/_protected/knowledge/templates'
-      path: '/templates'
-      fullPath: '/knowledge/templates'
-      preLoaderRoute: typeof ProtectedKnowledgeTemplatesRouteImport
-      parentRoute: typeof ProtectedKnowledgeRouteRoute
-    }
-    '/_protected/knowledge/styles': {
-      id: '/_protected/knowledge/styles'
-      path: '/styles'
-      fullPath: '/knowledge/styles'
-      preLoaderRoute: typeof ProtectedKnowledgeStylesRouteImport
-      parentRoute: typeof ProtectedKnowledgeRouteRoute
-    }
-    '/_protected/knowledge/skills': {
-      id: '/_protected/knowledge/skills'
-      path: '/skills'
-      fullPath: '/knowledge/skills'
-      preLoaderRoute: typeof ProtectedKnowledgeSkillsRouteImport
-      parentRoute: typeof ProtectedKnowledgeRouteRoute
-    }
-    '/_protected/knowledge/prompts': {
-      id: '/_protected/knowledge/prompts'
-      path: '/prompts'
-      fullPath: '/knowledge/prompts'
-      preLoaderRoute: typeof ProtectedKnowledgePromptsRouteImport
-      parentRoute: typeof ProtectedKnowledgeRouteRoute
-    }
-    '/_protected/knowledge/playbooks': {
-      id: '/_protected/knowledge/playbooks'
-      path: '/playbooks'
-      fullPath: '/knowledge/playbooks'
-      preLoaderRoute: typeof ProtectedKnowledgePlaybooksRouteImport
-      parentRoute: typeof ProtectedKnowledgeRouteRoute
-    }
-    '/_protected/knowledge/mcp': {
-      id: '/_protected/knowledge/mcp'
-      path: '/mcp'
-      fullPath: '/knowledge/mcp'
-      preLoaderRoute: typeof ProtectedKnowledgeMcpRouteImport
-      parentRoute: typeof ProtectedKnowledgeRouteRoute
-    }
-    '/_protected/knowledge/clauses': {
-      id: '/_protected/knowledge/clauses'
-      path: '/clauses'
-      fullPath: '/knowledge/clauses'
-      preLoaderRoute: typeof ProtectedKnowledgeClausesRouteImport
-      parentRoute: typeof ProtectedKnowledgeRouteRoute
-    }
-    '/_protected/dev_/autocomplete': {
-      id: '/_protected/dev_/autocomplete'
-      path: '/dev/autocomplete'
-      fullPath: '/dev/autocomplete'
-      preLoaderRoute: typeof ProtectedDevAutocompleteRouteImport
+    '/_protected/contacts/': {
+      id: '/_protected/contacts/'
+      path: '/contacts'
+      fullPath: '/contacts/'
+      preLoaderRoute: typeof ProtectedContactsIndexRouteImport
       parentRoute: typeof ProtectedRoute
     }
     '/_protected/contacts/$contactId': {
@@ -1249,26 +1151,89 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProtectedContactsContactIdRouteImport
       parentRoute: typeof ProtectedRoute
     }
-    '/_protected/chat_/new': {
-      id: '/_protected/chat_/new'
-      path: '/chat/new'
-      fullPath: '/chat/new'
-      preLoaderRoute: typeof ProtectedChatNewRouteImport
+    '/_protected/dev_/autocomplete': {
+      id: '/_protected/dev_/autocomplete'
+      path: '/dev/autocomplete'
+      fullPath: '/dev/autocomplete'
+      preLoaderRoute: typeof ProtectedDevAutocompleteRouteImport
       parentRoute: typeof ProtectedRoute
     }
-    '/_protected/chat/$threadId': {
-      id: '/_protected/chat/$threadId'
-      path: '/$threadId'
-      fullPath: '/chat/$threadId'
-      preLoaderRoute: typeof ProtectedChatThreadIdRouteImport
-      parentRoute: typeof ProtectedChatRouteRoute
+    '/_protected/knowledge/': {
+      id: '/_protected/knowledge/'
+      path: '/'
+      fullPath: '/knowledge/'
+      preLoaderRoute: typeof ProtectedKnowledgeIndexRouteImport
+      parentRoute: typeof ProtectedKnowledgeRouteRoute
     }
-    '/_protected/workspaces/$workspaceId': {
-      id: '/_protected/workspaces/$workspaceId'
-      path: '/workspaces/$workspaceId'
-      fullPath: '/workspaces/$workspaceId'
-      preLoaderRoute: typeof ProtectedWorkspacesWorkspaceIdRouteRouteImport
-      parentRoute: typeof ProtectedRoute
+    '/_protected/knowledge/clauses': {
+      id: '/_protected/knowledge/clauses'
+      path: '/clauses'
+      fullPath: '/knowledge/clauses'
+      preLoaderRoute: typeof ProtectedKnowledgeClausesRouteImport
+      parentRoute: typeof ProtectedKnowledgeRouteRoute
+    }
+    '/_protected/knowledge/mcp': {
+      id: '/_protected/knowledge/mcp'
+      path: '/mcp'
+      fullPath: '/knowledge/mcp'
+      preLoaderRoute: typeof ProtectedKnowledgeMcpRouteImport
+      parentRoute: typeof ProtectedKnowledgeRouteRoute
+    }
+    '/_protected/knowledge/playbooks': {
+      id: '/_protected/knowledge/playbooks'
+      path: '/playbooks'
+      fullPath: '/knowledge/playbooks'
+      preLoaderRoute: typeof ProtectedKnowledgePlaybooksRouteImport
+      parentRoute: typeof ProtectedKnowledgeRouteRoute
+    }
+    '/_protected/knowledge/prompts': {
+      id: '/_protected/knowledge/prompts'
+      path: '/prompts'
+      fullPath: '/knowledge/prompts'
+      preLoaderRoute: typeof ProtectedKnowledgePromptsRouteImport
+      parentRoute: typeof ProtectedKnowledgeRouteRoute
+    }
+    '/_protected/knowledge/skills': {
+      id: '/_protected/knowledge/skills'
+      path: '/skills'
+      fullPath: '/knowledge/skills'
+      preLoaderRoute: typeof ProtectedKnowledgeSkillsRouteImport
+      parentRoute: typeof ProtectedKnowledgeRouteRoute
+    }
+    '/_protected/knowledge/styles': {
+      id: '/_protected/knowledge/styles'
+      path: '/styles'
+      fullPath: '/knowledge/styles'
+      preLoaderRoute: typeof ProtectedKnowledgeStylesRouteImport
+      parentRoute: typeof ProtectedKnowledgeRouteRoute
+    }
+    '/_protected/knowledge/templates': {
+      id: '/_protected/knowledge/templates'
+      path: '/templates'
+      fullPath: '/knowledge/templates'
+      preLoaderRoute: typeof ProtectedKnowledgeTemplatesRouteImport
+      parentRoute: typeof ProtectedKnowledgeRouteRoute
+    }
+    '/_protected/knowledge/tools': {
+      id: '/_protected/knowledge/tools'
+      path: '/tools'
+      fullPath: '/knowledge/tools'
+      preLoaderRoute: typeof ProtectedKnowledgeToolsRouteImport
+      parentRoute: typeof ProtectedKnowledgeRouteRoute
+    }
+    '/_protected/knowledge/workflows': {
+      id: '/_protected/knowledge/workflows'
+      path: '/workflows'
+      fullPath: '/knowledge/workflows'
+      preLoaderRoute: typeof ProtectedKnowledgeWorkflowsRouteImport
+      parentRoute: typeof ProtectedKnowledgeRouteRoute
+    }
+    '/_protected/settings/': {
+      id: '/_protected/settings/'
+      path: '/'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof ProtectedSettingsIndexRouteImport
+      parentRoute: typeof ProtectedSettingsRouteRoute
     }
     '/_protected/settings/organization': {
       id: '/_protected/settings/organization'
@@ -1277,116 +1242,53 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProtectedSettingsOrganizationRouteRouteImport
       parentRoute: typeof ProtectedSettingsRouteRoute
     }
-    '/_protected/workspaces/$workspaceId/': {
-      id: '/_protected/workspaces/$workspaceId/'
-      path: '/'
-      fullPath: '/workspaces/$workspaceId/'
-      preLoaderRoute: typeof ProtectedWorkspacesWorkspaceIdIndexRouteImport
-      parentRoute: typeof ProtectedWorkspacesWorkspaceIdRouteRoute
+    '/_protected/todos/': {
+      id: '/_protected/todos/'
+      path: '/todos'
+      fullPath: '/todos/'
+      preLoaderRoute: typeof ProtectedTodosIndexRouteImport
+      parentRoute: typeof ProtectedRoute
     }
-    '/_protected/settings/organization/': {
-      id: '/_protected/settings/organization/'
-      path: '/'
-      fullPath: '/settings/organization/'
-      preLoaderRoute: typeof ProtectedSettingsOrganizationIndexRouteImport
-      parentRoute: typeof ProtectedSettingsOrganizationRouteRoute
+    '/_protected/workspaces/': {
+      id: '/_protected/workspaces/'
+      path: '/workspaces'
+      fullPath: '/workspaces/'
+      preLoaderRoute: typeof ProtectedWorkspacesIndexRouteImport
+      parentRoute: typeof ProtectedRoute
     }
-    '/_protected/workspaces/$workspaceId/workflows': {
-      id: '/_protected/workspaces/$workspaceId/workflows'
-      path: '/workflows'
-      fullPath: '/workspaces/$workspaceId/workflows'
-      preLoaderRoute: typeof ProtectedWorkspacesWorkspaceIdWorkflowsRouteImport
-      parentRoute: typeof ProtectedWorkspacesWorkspaceIdRouteRoute
+    '/_protected/workspaces/$workspaceId': {
+      id: '/_protected/workspaces/$workspaceId'
+      path: '/workspaces/$workspaceId'
+      fullPath: '/workspaces/$workspaceId'
+      preLoaderRoute: typeof ProtectedWorkspacesWorkspaceIdRouteRouteImport
+      parentRoute: typeof ProtectedRoute
     }
-    '/_protected/workspaces/$workspaceId/timesheets': {
-      id: '/_protected/workspaces/$workspaceId/timesheets'
-      path: '/timesheets'
-      fullPath: '/workspaces/$workspaceId/timesheets'
-      preLoaderRoute: typeof ProtectedWorkspacesWorkspaceIdTimesheetsRouteImport
-      parentRoute: typeof ProtectedWorkspacesWorkspaceIdRouteRoute
+    '/auth/accept-invitation/$invitationId': {
+      id: '/auth/accept-invitation/$invitationId'
+      path: '/accept-invitation/$invitationId'
+      fullPath: '/auth/accept-invitation/$invitationId'
+      preLoaderRoute: typeof AuthAcceptInvitationInvitationIdRouteImport
+      parentRoute: typeof AuthRouteRoute
     }
-    '/_protected/workspaces/$workspaceId/invoices': {
-      id: '/_protected/workspaces/$workspaceId/invoices'
-      path: '/invoices'
-      fullPath: '/workspaces/$workspaceId/invoices'
-      preLoaderRoute: typeof ProtectedWorkspacesWorkspaceIdInvoicesRouteImport
-      parentRoute: typeof ProtectedWorkspacesWorkspaceIdRouteRoute
+    '/law/cases/': {
+      id: '/law/cases/'
+      path: '/cases'
+      fullPath: '/law/cases/'
+      preLoaderRoute: typeof LawCasesIndexRouteImport
+      parentRoute: typeof LawRouteRoute
     }
-    '/_protected/workspaces/$workspaceId/expenses': {
-      id: '/_protected/workspaces/$workspaceId/expenses'
-      path: '/expenses'
-      fullPath: '/workspaces/$workspaceId/expenses'
-      preLoaderRoute: typeof ProtectedWorkspacesWorkspaceIdExpensesRouteImport
-      parentRoute: typeof ProtectedWorkspacesWorkspaceIdRouteRoute
+    '/_protected/knowledge/tools_/$skillId': {
+      id: '/_protected/knowledge/tools_/$skillId'
+      path: '/tools/$skillId'
+      fullPath: '/knowledge/tools/$skillId'
+      preLoaderRoute: typeof ProtectedKnowledgeToolsSkillIdRouteImport
+      parentRoute: typeof ProtectedKnowledgeRouteRoute
     }
-    '/_protected/settings/organization/usage': {
-      id: '/_protected/settings/organization/usage'
-      path: '/usage'
-      fullPath: '/settings/organization/usage'
-      preLoaderRoute: typeof ProtectedSettingsOrganizationUsageRouteImport
-      parentRoute: typeof ProtectedSettingsOrganizationRouteRoute
-    }
-    '/_protected/settings/organization/members': {
-      id: '/_protected/settings/organization/members'
-      path: '/members'
-      fullPath: '/settings/organization/members'
-      preLoaderRoute: typeof ProtectedSettingsOrganizationMembersRouteImport
-      parentRoute: typeof ProtectedSettingsOrganizationRouteRoute
-    }
-    '/_protected/settings/organization/matter-numbering': {
-      id: '/_protected/settings/organization/matter-numbering'
-      path: '/matter-numbering'
-      fullPath: '/settings/organization/matter-numbering'
-      preLoaderRoute: typeof ProtectedSettingsOrganizationMatterNumberingRouteImport
-      parentRoute: typeof ProtectedSettingsOrganizationRouteRoute
-    }
-    '/_protected/settings/organization/document-types': {
-      id: '/_protected/settings/organization/document-types'
-      path: '/document-types'
-      fullPath: '/settings/organization/document-types'
-      preLoaderRoute: typeof ProtectedSettingsOrganizationDocumentTypesRouteImport
-      parentRoute: typeof ProtectedSettingsOrganizationRouteRoute
-    }
-    '/_protected/settings/organization/catalogue': {
-      id: '/_protected/settings/organization/catalogue'
-      path: '/catalogue'
-      fullPath: '/settings/organization/catalogue'
-      preLoaderRoute: typeof ProtectedSettingsOrganizationCatalogueRouteImport
-      parentRoute: typeof ProtectedSettingsOrganizationRouteRoute
-    }
-    '/_protected/settings/organization/audit-logs': {
-      id: '/_protected/settings/organization/audit-logs'
-      path: '/audit-logs'
-      fullPath: '/settings/organization/audit-logs'
-      preLoaderRoute: typeof ProtectedSettingsOrganizationAuditLogsRouteImport
-      parentRoute: typeof ProtectedSettingsOrganizationRouteRoute
-    }
-    '/_protected/settings/organization/anonymization': {
-      id: '/_protected/settings/organization/anonymization'
-      path: '/anonymization'
-      fullPath: '/settings/organization/anonymization'
-      preLoaderRoute: typeof ProtectedSettingsOrganizationAnonymizationRouteImport
-      parentRoute: typeof ProtectedSettingsOrganizationRouteRoute
-    }
-    '/_protected/settings/organization/ai': {
-      id: '/_protected/settings/organization/ai'
-      path: '/ai'
-      fullPath: '/settings/organization/ai'
-      preLoaderRoute: typeof ProtectedSettingsOrganizationAiRouteImport
-      parentRoute: typeof ProtectedSettingsOrganizationRouteRoute
-    }
-    '/_protected/settings/account/profile': {
-      id: '/_protected/settings/account/profile'
-      path: '/account/profile'
-      fullPath: '/settings/account/profile'
-      preLoaderRoute: typeof ProtectedSettingsAccountProfileRouteImport
-      parentRoute: typeof ProtectedSettingsRouteRoute
-    }
-    '/_protected/settings/account/desktop': {
-      id: '/_protected/settings/account/desktop'
-      path: '/account/desktop'
-      fullPath: '/settings/account/desktop'
-      preLoaderRoute: typeof ProtectedSettingsAccountDesktopRouteImport
+    '/_protected/settings/account/beta': {
+      id: '/_protected/settings/account/beta'
+      path: '/account/beta'
+      fullPath: '/settings/account/beta'
+      preLoaderRoute: typeof ProtectedSettingsAccountBetaRouteImport
       parentRoute: typeof ProtectedSettingsRouteRoute
     }
     '/_protected/settings/account/connections': {
@@ -1396,19 +1298,89 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProtectedSettingsAccountConnectionsRouteImport
       parentRoute: typeof ProtectedSettingsRouteRoute
     }
-    '/_protected/settings/account/beta': {
-      id: '/_protected/settings/account/beta'
-      path: '/account/beta'
-      fullPath: '/settings/account/beta'
-      preLoaderRoute: typeof ProtectedSettingsAccountBetaRouteImport
+    '/_protected/settings/account/desktop': {
+      id: '/_protected/settings/account/desktop'
+      path: '/account/desktop'
+      fullPath: '/settings/account/desktop'
+      preLoaderRoute: typeof ProtectedSettingsAccountDesktopRouteImport
       parentRoute: typeof ProtectedSettingsRouteRoute
     }
-    '/_protected/knowledge/tools_/$skillId': {
-      id: '/_protected/knowledge/tools_/$skillId'
-      path: '/tools/$skillId'
-      fullPath: '/knowledge/tools/$skillId'
-      preLoaderRoute: typeof ProtectedKnowledgeToolsSkillIdRouteImport
-      parentRoute: typeof ProtectedKnowledgeRouteRoute
+    '/_protected/settings/account/profile': {
+      id: '/_protected/settings/account/profile'
+      path: '/account/profile'
+      fullPath: '/settings/account/profile'
+      preLoaderRoute: typeof ProtectedSettingsAccountProfileRouteImport
+      parentRoute: typeof ProtectedSettingsRouteRoute
+    }
+    '/_protected/settings/organization/': {
+      id: '/_protected/settings/organization/'
+      path: '/'
+      fullPath: '/settings/organization/'
+      preLoaderRoute: typeof ProtectedSettingsOrganizationIndexRouteImport
+      parentRoute: typeof ProtectedSettingsOrganizationRouteRoute
+    }
+    '/_protected/settings/organization/ai': {
+      id: '/_protected/settings/organization/ai'
+      path: '/ai'
+      fullPath: '/settings/organization/ai'
+      preLoaderRoute: typeof ProtectedSettingsOrganizationAiRouteImport
+      parentRoute: typeof ProtectedSettingsOrganizationRouteRoute
+    }
+    '/_protected/settings/organization/anonymization': {
+      id: '/_protected/settings/organization/anonymization'
+      path: '/anonymization'
+      fullPath: '/settings/organization/anonymization'
+      preLoaderRoute: typeof ProtectedSettingsOrganizationAnonymizationRouteImport
+      parentRoute: typeof ProtectedSettingsOrganizationRouteRoute
+    }
+    '/_protected/settings/organization/audit-logs': {
+      id: '/_protected/settings/organization/audit-logs'
+      path: '/audit-logs'
+      fullPath: '/settings/organization/audit-logs'
+      preLoaderRoute: typeof ProtectedSettingsOrganizationAuditLogsRouteImport
+      parentRoute: typeof ProtectedSettingsOrganizationRouteRoute
+    }
+    '/_protected/settings/organization/catalogue': {
+      id: '/_protected/settings/organization/catalogue'
+      path: '/catalogue'
+      fullPath: '/settings/organization/catalogue'
+      preLoaderRoute: typeof ProtectedSettingsOrganizationCatalogueRouteImport
+      parentRoute: typeof ProtectedSettingsOrganizationRouteRoute
+    }
+    '/_protected/settings/organization/document-types': {
+      id: '/_protected/settings/organization/document-types'
+      path: '/document-types'
+      fullPath: '/settings/organization/document-types'
+      preLoaderRoute: typeof ProtectedSettingsOrganizationDocumentTypesRouteImport
+      parentRoute: typeof ProtectedSettingsOrganizationRouteRoute
+    }
+    '/_protected/settings/organization/matter-numbering': {
+      id: '/_protected/settings/organization/matter-numbering'
+      path: '/matter-numbering'
+      fullPath: '/settings/organization/matter-numbering'
+      preLoaderRoute: typeof ProtectedSettingsOrganizationMatterNumberingRouteImport
+      parentRoute: typeof ProtectedSettingsOrganizationRouteRoute
+    }
+    '/_protected/settings/organization/members': {
+      id: '/_protected/settings/organization/members'
+      path: '/members'
+      fullPath: '/settings/organization/members'
+      preLoaderRoute: typeof ProtectedSettingsOrganizationMembersRouteImport
+      parentRoute: typeof ProtectedSettingsOrganizationRouteRoute
+    }
+    '/_protected/settings/organization/usage': {
+      id: '/_protected/settings/organization/usage'
+      path: '/usage'
+      fullPath: '/settings/organization/usage'
+      preLoaderRoute: typeof ProtectedSettingsOrganizationUsageRouteImport
+      parentRoute: typeof ProtectedSettingsOrganizationRouteRoute
+    }
+    '/_protected/workspaces/$workspaceId/': {
+      id: '/_protected/workspaces/$workspaceId/'
+      path: '/'
+      fullPath: '/workspaces/$workspaceId/'
+      preLoaderRoute: typeof ProtectedWorkspacesWorkspaceIdIndexRouteImport
+      parentRoute: typeof ProtectedWorkspacesWorkspaceIdRouteRoute
     }
     '/_protected/workspaces/$workspaceId/$viewId': {
       id: '/_protected/workspaces/$workspaceId/$viewId'
@@ -1417,6 +1389,48 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProtectedWorkspacesWorkspaceIdViewIdRouteRouteImport
       parentRoute: typeof ProtectedWorkspacesWorkspaceIdRouteRoute
     }
+    '/_protected/workspaces/$workspaceId/expenses': {
+      id: '/_protected/workspaces/$workspaceId/expenses'
+      path: '/expenses'
+      fullPath: '/workspaces/$workspaceId/expenses'
+      preLoaderRoute: typeof ProtectedWorkspacesWorkspaceIdExpensesRouteImport
+      parentRoute: typeof ProtectedWorkspacesWorkspaceIdRouteRoute
+    }
+    '/_protected/workspaces/$workspaceId/invoices': {
+      id: '/_protected/workspaces/$workspaceId/invoices'
+      path: '/invoices'
+      fullPath: '/workspaces/$workspaceId/invoices'
+      preLoaderRoute: typeof ProtectedWorkspacesWorkspaceIdInvoicesRouteImport
+      parentRoute: typeof ProtectedWorkspacesWorkspaceIdRouteRoute
+    }
+    '/_protected/workspaces/$workspaceId/timesheets': {
+      id: '/_protected/workspaces/$workspaceId/timesheets'
+      path: '/timesheets'
+      fullPath: '/workspaces/$workspaceId/timesheets'
+      preLoaderRoute: typeof ProtectedWorkspacesWorkspaceIdTimesheetsRouteImport
+      parentRoute: typeof ProtectedWorkspacesWorkspaceIdRouteRoute
+    }
+    '/_protected/workspaces/$workspaceId/workflows': {
+      id: '/_protected/workspaces/$workspaceId/workflows'
+      path: '/workflows'
+      fullPath: '/workspaces/$workspaceId/workflows'
+      preLoaderRoute: typeof ProtectedWorkspacesWorkspaceIdWorkflowsRouteImport
+      parentRoute: typeof ProtectedWorkspacesWorkspaceIdRouteRoute
+    }
+    '/_protected/chat/workspaces/$workspaceId/$threadId': {
+      id: '/_protected/chat/workspaces/$workspaceId/$threadId'
+      path: '/workspaces/$workspaceId/$threadId'
+      fullPath: '/chat/workspaces/$workspaceId/$threadId'
+      preLoaderRoute: typeof ProtectedChatWorkspacesWorkspaceIdThreadIdRouteImport
+      parentRoute: typeof ProtectedChatRouteRoute
+    }
+    '/_protected/chat/workspaces/$workspaceId/new': {
+      id: '/_protected/chat/workspaces/$workspaceId/new'
+      path: '/workspaces/$workspaceId/new'
+      fullPath: '/chat/workspaces/$workspaceId/new'
+      preLoaderRoute: typeof ProtectedChatWorkspacesWorkspaceIdNewRouteImport
+      parentRoute: typeof ProtectedChatRouteRoute
+    }
     '/_protected/workspaces/$workspaceId/$viewId/': {
       id: '/_protected/workspaces/$workspaceId/$viewId/'
       path: '/'
@@ -1424,25 +1438,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProtectedWorkspacesWorkspaceIdViewIdIndexRouteImport
       parentRoute: typeof ProtectedWorkspacesWorkspaceIdViewIdRouteRoute
     }
-    '/sitemaps/law-cases/$country/$year/{$month}.xml': {
-      id: '/sitemaps/law-cases/$country/$year/{$month}.xml'
-      path: '/sitemaps/law-cases/$country/$year/{$month}.xml'
-      fullPath: '/sitemaps/law-cases/$country/$year/{$month}.xml'
-      preLoaderRoute: typeof SitemapsLawCasesCountryYearChar123monthChar125DotxmlRouteImport
-      parentRoute: typeof rootRouteImport
+    '/_protected/workspaces/$workspaceId/$viewId/document': {
+      id: '/_protected/workspaces/$workspaceId/$viewId/document'
+      path: '/document'
+      fullPath: '/workspaces/$workspaceId/$viewId/document'
+      preLoaderRoute: typeof ProtectedWorkspacesWorkspaceIdViewIdDocumentRouteImport
+      parentRoute: typeof ProtectedWorkspacesWorkspaceIdViewIdRouteRoute
     }
-    '/law/$country/cases/$court/$slug': {
-      id: '/law/$country/cases/$court/$slug'
-      path: '/$country/cases/$court/$slug'
-      fullPath: '/law/$country/cases/$court/$slug'
-      preLoaderRoute: typeof LawCountryCasesCourtSlugRouteImport
-      parentRoute: typeof LawRouteRoute
-    }
-    '/_protected/workspaces/$workspaceId/reports/$exportId': {
-      id: '/_protected/workspaces/$workspaceId/reports/$exportId'
-      path: '/reports/$exportId'
-      fullPath: '/workspaces/$workspaceId/reports/$exportId'
-      preLoaderRoute: typeof ProtectedWorkspacesWorkspaceIdReportsExportIdRouteImport
+    '/_protected/workspaces/$workspaceId/entities/$entityId': {
+      id: '/_protected/workspaces/$workspaceId/entities/$entityId'
+      path: '/entities/$entityId'
+      fullPath: '/workspaces/$workspaceId/entities/$entityId'
+      preLoaderRoute: typeof ProtectedWorkspacesWorkspaceIdEntitiesEntityIdRouteImport
       parentRoute: typeof ProtectedWorkspacesWorkspaceIdRouteRoute
     }
     '/_protected/workspaces/$workspaceId/invoices/$invoiceId': {
@@ -1452,39 +1459,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRouteImport
       parentRoute: typeof ProtectedWorkspacesWorkspaceIdInvoicesRoute
     }
-    '/_protected/workspaces/$workspaceId/entities/$entityId': {
-      id: '/_protected/workspaces/$workspaceId/entities/$entityId'
-      path: '/entities/$entityId'
-      fullPath: '/workspaces/$workspaceId/entities/$entityId'
-      preLoaderRoute: typeof ProtectedWorkspacesWorkspaceIdEntitiesEntityIdRouteImport
+    '/_protected/workspaces/$workspaceId/reports/$exportId': {
+      id: '/_protected/workspaces/$workspaceId/reports/$exportId'
+      path: '/reports/$exportId'
+      fullPath: '/workspaces/$workspaceId/reports/$exportId'
+      preLoaderRoute: typeof ProtectedWorkspacesWorkspaceIdReportsExportIdRouteImport
       parentRoute: typeof ProtectedWorkspacesWorkspaceIdRouteRoute
     }
-    '/_protected/workspaces/$workspaceId/$viewId/document': {
-      id: '/_protected/workspaces/$workspaceId/$viewId/document'
-      path: '/document'
-      fullPath: '/workspaces/$workspaceId/$viewId/document'
-      preLoaderRoute: typeof ProtectedWorkspacesWorkspaceIdViewIdDocumentRouteImport
-      parentRoute: typeof ProtectedWorkspacesWorkspaceIdViewIdRouteRoute
+    '/law/$country/cases/$court/$slug': {
+      id: '/law/$country/cases/$court/$slug'
+      path: '/$country/cases/$court/$slug'
+      fullPath: '/law/$country/cases/$court/$slug'
+      preLoaderRoute: typeof LawCountryCasesCourtSlugRouteImport
+      parentRoute: typeof LawRouteRoute
     }
-    '/_protected/chat/workspaces/$workspaceId/new': {
-      id: '/_protected/chat/workspaces/$workspaceId/new'
-      path: '/workspaces/$workspaceId/new'
-      fullPath: '/chat/workspaces/$workspaceId/new'
-      preLoaderRoute: typeof ProtectedChatWorkspacesWorkspaceIdNewRouteImport
-      parentRoute: typeof ProtectedChatRouteRoute
-    }
-    '/_protected/chat/workspaces/$workspaceId/$threadId': {
-      id: '/_protected/chat/workspaces/$workspaceId/$threadId'
-      path: '/workspaces/$workspaceId/$threadId'
-      fullPath: '/chat/workspaces/$workspaceId/$threadId'
-      preLoaderRoute: typeof ProtectedChatWorkspacesWorkspaceIdThreadIdRouteImport
-      parentRoute: typeof ProtectedChatRouteRoute
-    }
-    '/sitemaps/law-cases/$country/$year/$month/{$bucket}.xml': {
-      id: '/sitemaps/law-cases/$country/$year/$month/{$bucket}.xml'
-      path: '/sitemaps/law-cases/$country/$year/$month/{$bucket}.xml'
-      fullPath: '/sitemaps/law-cases/$country/$year/$month/{$bucket}.xml'
-      preLoaderRoute: typeof SitemapsLawCasesCountryYearMonthChar123bucketChar125DotxmlRouteImport
+    '/sitemaps/law-cases/$country/$year/{$month}.xml': {
+      id: '/sitemaps/law-cases/$country/$year/{$month}.xml'
+      path: '/sitemaps/law-cases/$country/$year/{$month}.xml'
+      fullPath: '/sitemaps/law-cases/$country/$year/{$month}.xml'
+      preLoaderRoute: typeof SitemapsLawCasesCountryYearChar123monthChar125DotxmlRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/law/$country/cases/$court/$language/$slug': {
@@ -1493,6 +1486,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/law/$country/cases/$court/$language/$slug'
       preLoaderRoute: typeof LawCountryCasesCourtLanguageSlugRouteImport
       parentRoute: typeof LawRouteRoute
+    }
+    '/sitemaps/law-cases/$country/$year/$month/{$bucket}.xml': {
+      id: '/sitemaps/law-cases/$country/$year/$month/{$bucket}.xml'
+      path: '/sitemaps/law-cases/$country/$year/$month/{$bucket}.xml'
+      fullPath: '/sitemaps/law-cases/$country/$year/$month/{$bucket}.xml'
+      preLoaderRoute: typeof SitemapsLawCasesCountryYearMonthChar123bucketChar125DotxmlRouteImport
+      parentRoute: typeof rootRouteImport
     }
   }
 }

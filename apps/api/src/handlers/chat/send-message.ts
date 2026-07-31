@@ -212,6 +212,7 @@ const sendMessage = createSafeRootHandler(
   config,
   async function* ({
     body,
+    createAuditRecorder,
     getAccessibleWorkspaces,
     getWorkspaceAccess,
     memberRole,
@@ -1010,7 +1011,22 @@ const sendMessage = createSafeRootHandler(
         disabledNativeToolSlugs,
         skillMetadata: chatContext.skillMetadata,
         activeSkillContext: chatContext.activeSkillContext,
-        recordAuditEvent,
+        recordAuditEvent: createAuditRecorder({
+          execution: {
+            performer: {
+              type: "agent",
+              id: "stella-assistant",
+              name: "Stella AI",
+            },
+            trigger: {
+              type: "user_dispatch",
+              userId: user.id,
+              source: "chat",
+              sourceId: body.threadId,
+            },
+            runId: parsedMessage.message.id,
+          },
+        }),
         workspaceStatusById,
       });
       // A named scope narrows the streaming turn to its server-defined

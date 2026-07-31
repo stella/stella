@@ -3390,6 +3390,52 @@
       "equals": "Lygu"
     },
     "overview": {
+      "activity": {
+        "actions": {
+          "cancelled": "<actor>Naudotojas</actor> atšaukė <target>elementą</target>",
+          "created": "<actor>Naudotojas</actor> sukūrė <target>elementą</target>",
+          "deleted": "<actor>Naudotojas</actor> ištrynė <target>elementą</target>",
+          "executed": "<actor>Naudotojas</actor> paleido <target>elementą</target>",
+          "reviewed": "<actor>Naudotojas</actor> peržiūrėjo <target>elementą</target>",
+          "updated": "<actor>Naudotojas</actor> atnaujino <target>elementą</target>"
+        },
+        "automatedService": "Automatinė paslauga",
+        "deletedUser": "Ištrintas naudotojas",
+        "empty": "Šioje byloje veiklos dar nėra.",
+        "filterLabel": "Filtruoti veiklą",
+        "filters": {
+          "all": "Visa veikla",
+          "automation": "Automatizavimas",
+          "court": "Teismas",
+          "documents": "Dokumentai",
+          "matter": "Byla",
+          "tasks": "Darbotvarkė",
+          "team": "Komanda"
+        },
+        "loadEarlier": "Įkelti ankstesnius",
+        "loading": "Įkeliama…",
+        "provenance": {
+          "connected": "Naudojant prijungtą prieigą",
+          "connectedBy": "Prijungė {user}",
+          "delegated": "Perdavė kitas agentas",
+          "delegatedBy": "Agentas perdavė naudotojo {user} vardu",
+          "dispatched": "Paleido naudotojas",
+          "dispatchedBy": "Paleido {user}",
+          "dispatchedInChatBy": "{user} paleido pokalbyje",
+          "scheduled": "Paleista pagal tvarkaraštį",
+          "scheduledBy": "Naudotojo {user} suplanuotas automatizavimas"
+        },
+        "runCount": "{count} veiklos įrašai",
+        "targets": {
+          "automation": "automatizavimą",
+          "court": "teismo įrašą",
+          "document": "ištrintą dokumentą",
+          "matter": "bylą",
+          "task": "ištrintą darbotvarkės elementą",
+          "team": "bylos komandą"
+        },
+        "title": "Veikla"
+      },
       "atAGlance": "Apžvalga",
       "edited": "redagavo",
       "getStarted": "Pradėkite įkeldami dokumentus arba sukurdami pirmąjį aplanką.",

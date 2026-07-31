@@ -36,6 +36,7 @@ import { ensureDefaultDocumentTypes } from "@/api/handlers/document-types/defaul
 import { loadOrgSettingsForAuth } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createAuditRecorder } from "@/api/lib/audit-log";
+import type { AuditExecutionContext } from "@/api/lib/audit-log";
 import { revokeOrganizationMemberAuthArtifacts } from "@/api/lib/auth-artifacts";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -1402,10 +1403,12 @@ const resolveValidateAuth = async (
        * shared copy/move utilities).
        */
       createAuditRecorder: (opts?: {
+        execution?: AuditExecutionContext;
         workspaceId?: SafeId<"workspace"> | null;
       }) =>
         createAuditRecorder({
           ...recorderBindings,
+          ...(opts?.execution ? { execution: opts.execution } : {}),
           workspaceId:
             opts && "workspaceId" in opts ? (opts.workspaceId ?? null) : null,
         }),
@@ -1488,10 +1491,12 @@ const bindWorkspaceRecorder = (
   return {
     recordAuditEvent: createAuditRecorder(recorderBindings),
     createAuditRecorder: (opts?: {
+      execution?: AuditExecutionContext;
       workspaceId?: SafeId<"workspace"> | null;
     }) =>
       createAuditRecorder({
         ...recorderBindings,
+        ...(opts?.execution ? { execution: opts.execution } : {}),
         workspaceId:
           opts && "workspaceId" in opts
             ? (opts.workspaceId ?? null)

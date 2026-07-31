@@ -11,6 +11,7 @@ import { createEntityFromBuffer } from "@/api/handlers/entities/create-from-buff
 import { resolveCaching } from "@/api/lib/ai-config";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
 import { createAuditRecorder } from "@/api/lib/audit-log";
+import type { AuditExecutionContext } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -496,7 +497,43 @@ const runCreateDocumentStep = async ({
     });
   }
 
+  const trigger = ((): AuditExecutionContext["trigger"] => {
+    switch (run.triggerSource.type) {
+      case "manual":
+        return {
+          source: "action",
+          sourceId: run.id,
+          type: "user_dispatch",
+          userId: actorUserId,
+        };
+      case "schedule":
+        return {
+          ownerUserId: actorUserId,
+          source: "flow",
+          sourceId: run.definitionId ?? run.id,
+          type: "schedule",
+        };
+      case "file-upload":
+        return { source: "file-upload", type: "system" };
+      default: {
+        const exhaustive: never = run.triggerSource;
+        return exhaustive;
+      }
+    }
+  })();
+
   const recordAuditEvent = createAuditRecorder({
+    execution: {
+      performer: {
+        type: "agent",
+        id: run.definitionId
+          ? `flow:${run.definitionId}`
+          : `flow-run:${run.id}`,
+        name: run.definitionSnapshot.name,
+      },
+      trigger,
+      runId: run.id,
+    },
     organizationId,
     workspaceId: run.workspaceId,
     userId: actorUserId,

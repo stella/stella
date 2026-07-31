@@ -3390,6 +3390,52 @@
       "equals": "Gleich"
     },
     "overview": {
+      "activity": {
+        "actions": {
+          "cancelled": "<actor>Person</actor> hat <target>Element</target> abgebrochen",
+          "created": "<actor>Person</actor> hat <target>Element</target> erstellt",
+          "deleted": "<actor>Person</actor> hat <target>Element</target> gelöscht",
+          "executed": "<actor>Person</actor> hat <target>Element</target> ausgeführt",
+          "reviewed": "<actor>Person</actor> hat <target>Element</target> geprüft",
+          "updated": "<actor>Person</actor> hat <target>Element</target> aktualisiert"
+        },
+        "automatedService": "Automatisierter Dienst",
+        "deletedUser": "Gelöschter Benutzer",
+        "empty": "Noch keine Aktivität in dieser Akte.",
+        "filterLabel": "Aktivität filtern",
+        "filters": {
+          "all": "Alle Aktivitäten",
+          "automation": "Automatisierung",
+          "court": "Gericht",
+          "documents": "Dokumente",
+          "matter": "Akte",
+          "tasks": "Aufgaben",
+          "team": "Aktenteam"
+        },
+        "loadEarlier": "Ältere laden",
+        "loading": "Wird geladen…",
+        "provenance": {
+          "connected": "Über verbundenen Zugriff",
+          "connectedBy": "Verbunden von {user}",
+          "delegated": "Von einem anderen Agenten delegiert",
+          "delegatedBy": "Von einem Agenten für {user} delegiert",
+          "dispatched": "Von einem Benutzer beauftragt",
+          "dispatchedBy": "Von {user} beauftragt",
+          "dispatchedInChatBy": "Von {user} im Chat beauftragt",
+          "scheduled": "Planmäßig gestartet",
+          "scheduledBy": "Geplante Automatisierung von {user}"
+        },
+        "runCount": "{count, plural, one {# Aktivität} other {# Aktivitäten}}",
+        "targets": {
+          "automation": "Automatisierung",
+          "court": "Gerichtseintrag",
+          "document": "gelöschtes Dokument",
+          "matter": "Akte",
+          "task": "gelöschter Agendaeintrag",
+          "team": "Aktenteam"
+        },
+        "title": "Aktivität"
+      },
       "atAGlance": "Auf einen Blick",
       "edited": "bearbeitet",
       "getStarted": "Laden Sie Dokumente hoch oder erstellen Sie Ihren ersten Ordner.",

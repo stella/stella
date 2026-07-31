@@ -8,6 +8,7 @@ import {
   createMembershipSafeDb,
   createMembershipScopedDb,
 } from "@/api/db/scoped";
+import { resolveAgentAuditExecution } from "@/api/lib/agent-audit-principal";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { resolveMemberAuthorization } from "@/api/lib/auth";
@@ -135,6 +136,11 @@ export const resolveMcpSessionContext = async (
     organizationId: session.organizationId,
     userId: session.userId,
   });
+  const auditExecution = await resolveAgentAuditExecution({
+    credential: session.credential,
+    organizationId,
+    userId,
+  });
 
   const authorization = await resolveMemberAuthorization({
     organizationId,
@@ -227,6 +233,7 @@ export const resolveMcpSessionContext = async (
     organizationId,
     request,
     recordAuditEvent: createAuditRecorder({
+      ...(auditExecution ? { execution: auditExecution } : {}),
       organizationId,
       request,
       server: null,

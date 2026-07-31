@@ -1,8 +1,6 @@
 import type * as React from "react";
 import { useCallback, useMemo, useRef, useState } from "react";
 
-import { draggable } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
-import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview";
 import {
   useMutation,
   useQuery,
@@ -26,7 +24,6 @@ import {
   AvatarFallback,
   AvatarImage,
 } from "@stll/ui/components/avatar";
-import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
 import {
   Menu,
@@ -51,16 +48,13 @@ import {
   Tooltip as TooltipRoot,
   TooltipTrigger,
 } from "@stll/ui/components/tooltip";
-import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
 import { cn } from "@stll/ui/lib/utils";
 
-import { renderDragPreview } from "@/components/drag-preview";
 import { EmptyScreen } from "@/components/empty-screen";
 import { EMPTY_SCREEN_MATTERS_VIDEO } from "@/components/empty-screen-media";
 import { isTerminalFlowRunStatus } from "@/components/flows/flow-meta";
 import { PersonMentionLabel } from "@/components/person-mention-label";
-import Tooltip from "@/components/tooltip";
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { useMountEffect } from "@/hooks/use-effect";
 import { useWorkflowsPreviewEnabled } from "@/hooks/use-workflows-preview";
 import { useLocale } from "@/i18n/formatting-context";
 import {
@@ -74,15 +68,11 @@ import { normalizeOptionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { routeQueryOptions } from "@/lib/react-query";
-import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
-import { isFileDisplayable } from "@/lib/types";
-import type { EntityKind, WorkspaceEntity } from "@/lib/types";
-import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
+import { ActivityPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel";
 import { EntityKindIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-kind-icon";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { AddMemberDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/members-section";
-import { RowActions } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
 import type { TaskStatus } from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-constants";
 import {
   isTaskStatus,
@@ -91,7 +81,6 @@ import {
   TASK_STATUSES,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-constants";
 import { useCreateFileEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities";
-import { useInspectorFlash } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { flowRunsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/flow-runs";
 import { taskKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/tasks";
@@ -1008,33 +997,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
         />
       )}
 
-      {hasActivity && (
-        <section>
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-muted-foreground text-sm font-medium">
-              {t("workspaces.overview.recentActivity")}
-            </h2>
-            <Button
-              className="h-7 text-xs"
-              onClick={() => fileInputRef.current?.click()}
-              size="sm"
-              variant="ghost"
-            >
-              <UploadIcon className="size-3" />
-              {t("common.uploadFiles")}
-            </Button>
-          </div>
-          <div className={cn(OVERVIEW_PANEL_CLASS, "divide-y")}>
-            {recentEntities.map((entity) => (
-              <OverviewRow
-                entity={entity}
-                key={entity.entityId}
-                workspaceId={workspaceId}
-              />
-            ))}
-          </div>
-        </section>
-      )}
+      <ActivityPanel workspaceId={workspaceId} />
       <input
         className="hidden"
         multiple
@@ -1090,326 +1053,6 @@ const StatCard = ({ icon, label, value, sublabel, onClick }: StatCardProps) => {
 
   return (
     <div className="bg-card flex flex-col gap-1.5 rounded-lg border px-4 py-3">
-      {content}
-    </div>
-  );
-};
-
-// -- Overview entity row with context menu + actions --
-
-type OverviewEntity = {
-  entityId: string;
-  name: string;
-  kind: EntityKind;
-  status: string | null;
-  priority: string | null;
-  dueDate: string | null;
-  mimeType: string | null;
-  fieldId: string | null;
-  propertyId: string | null;
-  pdfFileId: string | null;
-  encrypted: boolean;
-  createdAt: string;
-  createdBy: string | null;
-  createdByImage: string | null;
-  createdByDeletedAt: string | null;
-  assignedTo: string | null;
-  assignedToImage: string | null;
-  assignedToDeletedAt: string | null;
-  updatedAt: string | null;
-};
-
-type OverviewRowProps = {
-  entity: OverviewEntity;
-  workspaceId: string;
-};
-
-const OverviewRow = ({ entity, workspaceId }: OverviewRowProps) => {
-  const [contextOpen, setContextOpen] = useState(false);
-  const [contextAnchor, setContextAnchor] = useState<VirtualAnchor | null>(
-    null,
-  );
-  const rowRef = useRef<HTMLDivElement>(null);
-
-  useInspectorFlash(entity.entityId, rowRef);
-
-  // Construct a WorkspaceEntity from overview data so RowActions can render.
-  // The overview endpoint returns enough metadata to build a synthetic fields
-  // record for the primary file.
-  const fullEntity = useMemo((): WorkspaceEntity => {
-    const fields: WorkspaceEntity["fields"] = {};
-    const propertyKey = entity.propertyId ?? entity.fieldId;
-    const fieldKey = entity.fieldId ?? propertyKey;
-    if (propertyKey && fieldKey && entity.mimeType) {
-      const entityId = toSafeId<"entity">(entity.entityId);
-      const fieldId = toSafeId<"field">(fieldKey);
-      const propertyId = toSafeId<"property">(propertyKey);
-      fields[propertyId] = {
-        id: fieldId,
-        entityId,
-        propertyId,
-        content: {
-          type: "file",
-          version: 1,
-          id: fieldKey,
-          fileName: entity.name,
-          mimeType: entity.mimeType,
-          sizeBytes: 0,
-          encrypted: entity.encrypted,
-          sha256Hex: "",
-          pdfFileId: entity.pdfFileId,
-        },
-      };
-    }
-    return {
-      entityId: toSafeId<"entity">(entity.entityId),
-      kind: entity.kind,
-      name: entity.name,
-      parentId: null,
-      createdAt: entity.createdAt,
-      createdBy: entity.createdBy,
-      createdByImage: entity.createdByImage,
-      createdByDeletedAt: entity.createdByDeletedAt,
-      updatedAt: entity.updatedAt,
-      version: 0,
-      status: entity.status,
-      priority: entity.priority,
-      dueDate: entity.dueDate,
-      agendaKind: "task",
-      startAt: null,
-      endAt: null,
-      occurredAt: null,
-      remindAt: null,
-      allDay: false,
-      timeZone: null,
-      location: null,
-      onlineMeetingUrl: null,
-      availability: null,
-      sensitivity: null,
-      organizer: null,
-      attendees: null,
-      recurrence: null,
-      agendaSource: "manual",
-      externalSource: null,
-      externalId: null,
-      externalChangeKey: null,
-      externalICalUid: null,
-      readOnly: false,
-      sortOrder: null,
-      activeEditBy: null,
-      cellMetadata: {},
-      fields,
-    };
-  }, [entity]);
-
-  const handleContextMenu = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    const { clientX: x, clientY: y } = e;
-    setContextAnchor({
-      getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
-    });
-    setContextOpen(true);
-  }, []);
-
-  const navigable =
-    entity.mimeType !== null &&
-    entity.fieldId !== null &&
-    isFileDisplayable({
-      fileName: entity.name,
-      mimeType: entity.mimeType,
-      pdfFileId: entity.pdfFileId,
-      encrypted: entity.encrypted,
-    });
-
-  const icon = (
-    <EntityKindIcon
-      className="size-4 shrink-0"
-      fileName={entity.name}
-      kind={entity.kind}
-      mimeType={entity.mimeType}
-      status={entity.status}
-    />
-  );
-
-  useExternalSyncEffect(() => {
-    const el = rowRef.current;
-    if (!el) {
-      return undefined;
-    }
-    return draggable({
-      element: el,
-      getInitialData: () => ({
-        type: ENTITY_DRAG_TYPE,
-        entityId: entity.entityId,
-        name: entity.name,
-        kind: entity.kind,
-        mimeType: entity.mimeType,
-        entityIds: [entity.entityId],
-        entities: [
-          {
-            entityId: entity.entityId,
-            name: entity.name,
-            kind: entity.kind,
-            mimeType: entity.mimeType,
-            parentId: null,
-          },
-        ],
-      }),
-      onGenerateDragPreview: ({ nativeSetDragImage }) => {
-        setCustomNativeDragPreview({
-          nativeSetDragImage,
-          render: ({ container }) =>
-            renderDragPreview(container, {
-              name: entity.name,
-              kind: entity.kind,
-              mimeType: entity.mimeType,
-            }),
-        });
-      },
-    });
-  }, [entity.entityId, entity.name, entity.kind, entity.mimeType]);
-
-  const { fieldId } = entity;
-
-  const handleOpen = (() => {
-    if (entity.kind === "task") {
-      return () =>
-        useInspectorStore.getState().openTask({
-          taskId: entity.entityId,
-          workspaceId,
-          label: entity.name,
-        });
-    }
-    if (navigable && fieldId) {
-      return () =>
-        useInspectorStore.getState().openFile({
-          id: fieldId,
-          entityId: entity.entityId,
-          label: entity.name,
-          fileName: entity.name,
-          mimeType: entity.mimeType ?? undefined,
-          pdfFileId: entity.pdfFileId,
-          propertyId: entity.propertyId ?? undefined,
-          workspaceId,
-        });
-    }
-    return undefined;
-  })();
-
-  const t = useTranslations();
-  const relTime = formatRelativeTime(entity.updatedAt ?? entity.createdAt);
-
-  /** Entities whose updatedAt is within this window of createdAt
-   *  are considered "just uploaded" rather than "edited". */
-  const UPLOAD_THRESHOLD_MS = 5000;
-
-  const isNewUpload =
-    entity.mimeType !== null &&
-    (!entity.updatedAt ||
-      Math.abs(
-        new Date(entity.createdAt).getTime() -
-          new Date(entity.updatedAt).getTime(),
-      ) < UPLOAD_THRESHOLD_MS);
-
-  const activityLabel = isNewUpload
-    ? t("workspaces.overview.uploaded")
-    : t("workspaces.overview.edited");
-
-  const content = (
-    <>
-      {entity.createdBy !== null && (
-        <PersonMentionLabel
-          avatarClassName="size-5 text-[8px]"
-          className="w-36 shrink-0 truncate"
-          mention={{
-            name: entity.createdBy,
-            image: entity.createdByImage,
-            deletedAt: entity.createdByDeletedAt,
-          }}
-        />
-      )}
-      <span className="flex min-w-0 flex-1 items-center gap-1 truncate text-sm">
-        {/* Grid overlays the active verb on invisible sizers of every verb, so
-            the column is as wide as the longest one and file names align across
-            rows regardless of locale. */}
-        <span className="text-muted-foreground grid shrink-0 justify-items-start">
-          <span
-            aria-hidden="true"
-            className="invisible col-start-1 row-start-1 whitespace-nowrap"
-          >
-            {t("workspaces.overview.uploaded")}
-          </span>
-          <span
-            aria-hidden="true"
-            className="invisible col-start-1 row-start-1 whitespace-nowrap"
-          >
-            {t("workspaces.overview.edited")}
-          </span>
-          <span className="col-start-1 row-start-1 whitespace-nowrap">
-            {activityLabel}
-          </span>
-        </span>
-        {icon}
-        <BidiText as="span" className="truncate">
-          {entity.name}
-        </BidiText>
-      </span>
-      {relTime && (
-        <Tooltip
-          content={formatFullTimestamp(entity.updatedAt ?? entity.createdAt)}
-          render={
-            <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
-              {relTime}
-            </span>
-          }
-        />
-      )}
-      {/* oxlint-disable-next-line jsx_a11y/click-events-have-key-events, jsx_a11y/no-static-element-interactions -- non-interactive wrapper; only stops row-open clicks bubbling from the already-keyboard-accessible RowActions trigger */}
-      <span className="shrink-0" onClick={(e) => e.stopPropagation()}>
-        <RowActions
-          anchor={contextAnchor}
-          entity={fullEntity}
-          onOpen={handleOpen}
-          onOpenChange={(o) => {
-            setContextOpen(o);
-            if (!o) {
-              setContextAnchor(null);
-            }
-          }}
-          open={contextOpen}
-          workspaceId={workspaceId}
-        />
-      </span>
-    </>
-  );
-
-  const handleKeyDown = handleOpen
-    ? (e: React.KeyboardEvent) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          handleOpen();
-        }
-      }
-    : undefined;
-
-  return (
-    // Use a <div> instead of <button> to avoid invalid
-    // nested <button> elements (RowActions renders a
-    // <button> menu trigger inside).
-    // eslint-disable-next-line jsx-a11y/no-static-element-interactions -- div carries paired role="button"/tabIndex/onKeyDown; can't be a real button (nested buttons)
-    <div
-      className={cn(
-        "group/row hover:bg-muted/50 flex items-center gap-3 px-4 py-2.5",
-        handleOpen && "w-full cursor-pointer text-start",
-      )}
-      // eslint-disable-next-line react/react-compiler -- containedHandler house pattern; rowRef is handed to the helper, not read for rendered output
-      onClick={containedHandler(rowRef, handleOpen)}
-      onContextMenu={handleContextMenu}
-      onKeyDown={handleKeyDown}
-      ref={rowRef}
-      role={handleOpen ? "button" : undefined}
-      tabIndex={handleOpen ? 0 : undefined}
-    >
       {content}
     </div>
   );

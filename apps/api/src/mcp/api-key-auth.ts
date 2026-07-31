@@ -118,5 +118,14 @@ export const resolveMachineApiKeySession = async (
     throw rejectCredential();
   }
 
-  return { organizationId, scopes: [...scopes], userId };
+  return {
+    credential: {
+      type: "machine_api_key",
+      id: key.id,
+      name: key.name ?? "Machine API key",
+    },
+    organizationId,
+    scopes: [...scopes],
+    userId,
+  };
 };

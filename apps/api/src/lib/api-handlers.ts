@@ -16,7 +16,7 @@ import type { UsageActionType, UsageServiceTier } from "@/api/db/schema";
 import { env } from "@/api/env";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { captureRequestError } from "@/api/lib/analytics/capture";
-import type { AuditRecorder } from "@/api/lib/audit-log";
+import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -351,6 +351,7 @@ type BaseHandlerContext<TConfig extends HandlerConfig = HandlerConfig> =
      * shared copy/move utilities).
      */
     createAuditRecorder: (opts?: {
+      execution?: AuditExecutionContext;
       workspaceId?: SafeId<"workspace"> | null;
     }) => AuditRecorder;
   };

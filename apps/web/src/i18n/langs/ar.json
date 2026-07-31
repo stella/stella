@@ -3390,6 +3390,52 @@
       "equals": "يساوي"
     },
     "overview": {
+      "activity": {
+        "actions": {
+          "cancelled": "ألغى <actor>المستخدم</actor> <target>العنصر</target>",
+          "created": "أنشأ <actor>المستخدم</actor> <target>العنصر</target>",
+          "deleted": "حذف <actor>المستخدم</actor> <target>العنصر</target>",
+          "executed": "شغّل <actor>المستخدم</actor> <target>العنصر</target>",
+          "reviewed": "راجع <actor>المستخدم</actor> <target>العنصر</target>",
+          "updated": "حدّث <actor>المستخدم</actor> <target>العنصر</target>"
+        },
+        "automatedService": "خدمة آلية",
+        "deletedUser": "مستخدم محذوف",
+        "empty": "لا يوجد نشاط في هذه المسألة بعد.",
+        "filterLabel": "تصفية النشاط",
+        "filters": {
+          "all": "كل النشاط",
+          "automation": "الأتمتة",
+          "court": "المحكمة",
+          "documents": "المستندات",
+          "matter": "المسألة",
+          "tasks": "جدول الأعمال",
+          "team": "الفريق"
+        },
+        "loadEarlier": "تحميل الأقدم",
+        "loading": "جارٍ التحميل…",
+        "provenance": {
+          "connected": "باستخدام وصول متصل",
+          "connectedBy": "تم الاتصال بواسطة {user}",
+          "delegated": "فُوّض من وكيل آخر",
+          "delegatedBy": "فُوّض من وكيل لصالح {user}",
+          "dispatched": "طلبه مستخدم",
+          "dispatchedBy": "طلبه {user}",
+          "dispatchedInChatBy": "طلبه {user} في الدردشة",
+          "scheduled": "بدأ حسب الجدول",
+          "scheduledBy": "أتمتة مجدولة يملكها {user}"
+        },
+        "runCount": "{count} أنشطة",
+        "targets": {
+          "automation": "الأتمتة",
+          "court": "سجل المحكمة",
+          "document": "مستند محذوف",
+          "matter": "المسألة",
+          "task": "عنصر جدول أعمال محذوف",
+          "team": "فريق المسألة"
+        },
+        "title": "النشاط"
+      },
       "atAGlance": "لمحة سريعة",
       "edited": "تم التعديل",
       "getStarted": "ابدأ برفع المستندات أو إنشاء أول مجلد لك.",

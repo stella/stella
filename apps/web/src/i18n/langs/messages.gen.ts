@@ -3393,6 +3393,52 @@ type Messages = {
       "equals": "Equals";
     };
     "overview": {
+      "activity": {
+        "actions": {
+          "cancelled": "<actor>Actor</actor> cancelled <target>target</target>";
+          "created": "<actor>Actor</actor> created <target>target</target>";
+          "deleted": "<actor>Actor</actor> deleted <target>target</target>";
+          "executed": "<actor>Actor</actor> ran <target>target</target>";
+          "reviewed": "<actor>Actor</actor> reviewed <target>target</target>";
+          "updated": "<actor>Actor</actor> updated <target>target</target>";
+        };
+        "automatedService": "Automated service";
+        "deletedUser": "Deleted user";
+        "empty": "No activity in this matter yet.";
+        "filterLabel": "Filter activity";
+        "filters": {
+          "all": "All activity";
+          "automation": "Automation";
+          "court": "Court records";
+          "documents": "Documents and files";
+          "matter": "Matter details";
+          "tasks": "Agenda items";
+          "team": "Matter team";
+        };
+        "loadEarlier": "Load earlier";
+        "loading": "Loading…";
+        "provenance": {
+          "connected": "Using connected access";
+          "connectedBy": "Connected by {user}";
+          "delegated": "Delegated by another agent";
+          "delegatedBy": "Delegated by an agent for {user}";
+          "dispatched": "Dispatched by a user";
+          "dispatchedBy": "Dispatched by {user}";
+          "dispatchedInChatBy": "Dispatched by {user} in Chat";
+          "scheduled": "Started on schedule";
+          "scheduledBy": "Scheduled automation owned by {user}";
+        };
+        "runCount": "{count, plural, one {# activity} other {# activities}}";
+        "targets": {
+          "automation": "automation";
+          "court": "court record";
+          "document": "deleted document";
+          "matter": "matter";
+          "task": "deleted agenda item";
+          "team": "matter team";
+        };
+        "title": "Matter activity";
+      };
       "atAGlance": "At a glance";
       "edited": "edited";
       "getStarted": "Get started by uploading documents or creating your first folder.";

@@ -3,13 +3,18 @@ import type { QueryClient } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
+import { stringCursorSeed } from "@/lib/infinite-query";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import {
+  type MatterActivityCategory,
   type WorkspaceActivityKey,
   workspacesKeys,
 } from "@/routes/_protected.workspaces/-queries.logic";
 
-export { workspacesKeys } from "@/routes/_protected.workspaces/-queries.logic";
+export {
+  type MatterActivityCategory,
+  workspacesKeys,
+} from "@/routes/_protected.workspaces/-queries.logic";
 
 type WorkspaceActivityOptions = {
   activeOrganizationId: string;
@@ -17,6 +22,35 @@ type WorkspaceActivityOptions = {
 };
 
 const WORKSPACE_ACTIVITY_PAGE_SIZE = 3;
+const MATTER_ACTIVITY_PAGE_SIZE = 15;
+
+type ReadOverviewActivityOptions = {
+  category: MatterActivityCategory;
+  cursor?: string;
+  signal?: AbortSignal;
+  workspaceId: string;
+};
+
+const readOverviewActivity = async ({
+  category,
+  cursor,
+  signal,
+  workspaceId,
+}: ReadOverviewActivityOptions) => {
+  const response = await api.workspaces({ workspaceId }).overview.activity.get({
+    ...(signal ? { fetch: { signal } } : {}),
+    query: {
+      category,
+      limit: MATTER_ACTIVITY_PAGE_SIZE,
+      ...(cursor ? { cursor } : {}),
+    },
+  });
+  return unwrapEden(response);
+};
+
+export type MatterActivityItem = Awaited<
+  ReturnType<typeof readOverviewActivity>
+>["items"][number];
 
 const getInitialWorkspaceActivityCursor = (): string | undefined => undefined;
 
@@ -114,5 +148,32 @@ export const overviewOptions = (workspaceId: string) =>
 
       return unwrapEden(response);
     },
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
+  });
+
+export const overviewActivityOptions = ({
+  activeOrganizationId,
+  category,
+  workspaceId,
+}: {
+  activeOrganizationId: string;
+  category: MatterActivityCategory;
+  workspaceId: string;
+}) =>
+  infiniteQueryOptions({
+    queryKey: workspacesKeys.overviewActivity(
+      activeOrganizationId,
+      workspaceId,
+      category,
+    ),
+    queryFn: async ({ pageParam, signal }) =>
+      await readOverviewActivity({
+        category,
+        cursor: pageParam || undefined,
+        signal,
+        workspaceId,
+      }),
+    initialPageParam: stringCursorSeed(),
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });

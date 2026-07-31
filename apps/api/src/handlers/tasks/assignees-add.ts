@@ -107,6 +107,7 @@ export const addAssigneeHandler = async function* ({
         resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
         resourceId: body.taskId,
         metadata: {
+          kind: "task",
           change: "assignee-added",
           assigneeUserId: body.userId,
           role,

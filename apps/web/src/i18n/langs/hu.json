@@ -3390,6 +3390,52 @@
       "equals": "Egyenlő"
     },
     "overview": {
+      "activity": {
+        "actions": {
+          "cancelled": "<actor>Felhasználó</actor> megszakította: <target>elem</target>",
+          "created": "<actor>Felhasználó</actor> létrehozta: <target>elem</target>",
+          "deleted": "<actor>Felhasználó</actor> törölte: <target>elem</target>",
+          "executed": "<actor>Felhasználó</actor> futtatta: <target>elem</target>",
+          "reviewed": "<actor>Felhasználó</actor> ellenőrizte: <target>elem</target>",
+          "updated": "<actor>Felhasználó</actor> frissítette: <target>elem</target>"
+        },
+        "automatedService": "Automatizált szolgáltatás",
+        "deletedUser": "Törölt felhasználó",
+        "empty": "Ebben az ügyben még nincs tevékenység.",
+        "filterLabel": "Tevékenység szűrése",
+        "filters": {
+          "all": "Minden tevékenység",
+          "automation": "Automatizálás",
+          "court": "Bíróság",
+          "documents": "Dokumentumok",
+          "matter": "Ügy",
+          "tasks": "Napirend",
+          "team": "Csapat"
+        },
+        "loadEarlier": "Korábbiak betöltése",
+        "loading": "Betöltés…",
+        "provenance": {
+          "connected": "Csatlakoztatott hozzáféréssel",
+          "connectedBy": "Csatlakoztatta: {user}",
+          "delegated": "Másik ügynök delegálta",
+          "delegatedBy": "Egy ügynök delegálta {user} számára",
+          "dispatched": "Felhasználó indította",
+          "dispatchedBy": "{user} indította",
+          "dispatchedInChatBy": "{user} indította a csevegésben",
+          "scheduled": "Ütemezés szerint indult",
+          "scheduledBy": "{user} ütemezett automatizálása"
+        },
+        "runCount": "{count} tevékenység",
+        "targets": {
+          "automation": "automatizálás",
+          "court": "bírósági bejegyzés",
+          "document": "törölt dokumentum",
+          "matter": "ügy",
+          "task": "törölt napirendi elem",
+          "team": "ügycsapat"
+        },
+        "title": "Tevékenység"
+      },
       "atAGlance": "Áttekintés",
       "edited": "szerkesztette",
       "getStarted": "Kezdje el dokumentumok feltöltésével vagy az első mappa létrehozásával.",

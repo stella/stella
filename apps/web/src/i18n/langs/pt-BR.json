@@ -3390,6 +3390,52 @@
       "equals": "Igual"
     },
     "overview": {
+      "activity": {
+        "actions": {
+          "cancelled": "<actor>Pessoa</actor> cancelou <target>item</target>",
+          "created": "<actor>Pessoa</actor> criou <target>item</target>",
+          "deleted": "<actor>Pessoa</actor> excluiu <target>item</target>",
+          "executed": "<actor>Pessoa</actor> executou <target>item</target>",
+          "reviewed": "<actor>Pessoa</actor> revisou <target>item</target>",
+          "updated": "<actor>Pessoa</actor> atualizou <target>item</target>"
+        },
+        "automatedService": "Serviço automatizado",
+        "deletedUser": "Usuário excluído",
+        "empty": "Ainda não há atividade neste caso.",
+        "filterLabel": "Filtrar atividade",
+        "filters": {
+          "all": "Toda a atividade",
+          "automation": "Automação",
+          "court": "Tribunal",
+          "documents": "Documentos",
+          "matter": "Caso",
+          "tasks": "Tarefas",
+          "team": "Equipe"
+        },
+        "loadEarlier": "Carregar anteriores",
+        "loading": "Carregando…",
+        "provenance": {
+          "connected": "Usando acesso conectado",
+          "connectedBy": "Conectado por {user}",
+          "delegated": "Delegado por outro agente",
+          "delegatedBy": "Delegado por um agente para {user}",
+          "dispatched": "Solicitado por um usuário",
+          "dispatchedBy": "Solicitado por {user}",
+          "dispatchedInChatBy": "Solicitado por {user} no Chat",
+          "scheduled": "Iniciado conforme agendamento",
+          "scheduledBy": "Automação agendada de {user}"
+        },
+        "runCount": "{count, plural, one {# atividade} other {# atividades}}",
+        "targets": {
+          "automation": "automação",
+          "court": "registro judicial",
+          "document": "documento excluído",
+          "matter": "caso",
+          "task": "item de agenda excluído",
+          "team": "equipe do caso"
+        },
+        "title": "Atividade"
+      },
       "atAGlance": "De relance",
       "edited": "editado",
       "getStarted": "Comece enviando documentos ou criando sua primeira pasta.",

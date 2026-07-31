@@ -3390,6 +3390,52 @@
       "equals": "Võrdub"
     },
     "overview": {
+      "activity": {
+        "actions": {
+          "cancelled": "<actor>Kasutaja</actor> tühistas <target>üksuse</target>",
+          "created": "<actor>Kasutaja</actor> lõi <target>üksuse</target>",
+          "deleted": "<actor>Kasutaja</actor> kustutas <target>üksuse</target>",
+          "executed": "<actor>Kasutaja</actor> käivitas <target>üksuse</target>",
+          "reviewed": "<actor>Kasutaja</actor> vaatas üle <target>üksuse</target>",
+          "updated": "<actor>Kasutaja</actor> uuendas <target>üksust</target>"
+        },
+        "automatedService": "Automaatne teenus",
+        "deletedUser": "Kustutatud kasutaja",
+        "empty": "Selles asjas pole veel tegevust.",
+        "filterLabel": "Filtreeri tegevust",
+        "filters": {
+          "all": "Kogu tegevus",
+          "automation": "Automatiseerimine",
+          "court": "Kohus",
+          "documents": "Dokumendid",
+          "matter": "Asi",
+          "tasks": "Päevakord",
+          "team": "Meeskond"
+        },
+        "loadEarlier": "Laadi varasemad",
+        "loading": "Laadimine…",
+        "provenance": {
+          "connected": "Ühendatud juurdepääsuga",
+          "connectedBy": "Ühendas {user}",
+          "delegated": "Delegeeris teine agent",
+          "delegatedBy": "Agent delegeeris kasutaja {user} nimel",
+          "dispatched": "Käivitas kasutaja",
+          "dispatchedBy": "{user} käivitas",
+          "dispatchedInChatBy": "{user} käivitas vestluses",
+          "scheduled": "Käivitati ajakava järgi",
+          "scheduledBy": "Kasutaja {user} ajastatud automatiseerimine"
+        },
+        "runCount": "{count, plural, one {# tegevus} other {# tegevust}}",
+        "targets": {
+          "automation": "automatiseerimise",
+          "court": "kohtukirje",
+          "document": "kustutatud dokumendi",
+          "matter": "asja",
+          "task": "kustutatud päevakorrapunkti",
+          "team": "asja meeskonna"
+        },
+        "title": "Tegevus"
+      },
       "atAGlance": "Ülevaade",
       "edited": "muutis",
       "getStarted": "Alustage dokumentide üleslaadimisega või looge oma esimene kaust.",

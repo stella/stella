@@ -72,6 +72,7 @@ export const removeAssigneeHandler = async function* ({
         resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
         resourceId: body.taskId,
         metadata: {
+          kind: "task",
           change: "assignee-removed",
           assigneeUserId: body.userId,
         },

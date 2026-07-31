@@ -3390,6 +3390,52 @@
       "equals": "Równa się"
     },
     "overview": {
+      "activity": {
+        "actions": {
+          "cancelled": "<actor>Osoba</actor> anulowała <target>element</target>",
+          "created": "<actor>Osoba</actor> utworzyła <target>element</target>",
+          "deleted": "<actor>Osoba</actor> usunęła <target>element</target>",
+          "executed": "<actor>Osoba</actor> uruchomiła <target>element</target>",
+          "reviewed": "<actor>Osoba</actor> sprawdziła <target>element</target>",
+          "updated": "<actor>Osoba</actor> zaktualizowała <target>element</target>"
+        },
+        "automatedService": "Usługa automatyczna",
+        "deletedUser": "Usunięty użytkownik",
+        "empty": "Brak aktywności w tej sprawie.",
+        "filterLabel": "Filtruj aktywność",
+        "filters": {
+          "all": "Cała aktywność",
+          "automation": "Automatyzacja",
+          "court": "Sąd",
+          "documents": "Dokumenty",
+          "matter": "Sprawa",
+          "tasks": "Zadania",
+          "team": "Zespół"
+        },
+        "loadEarlier": "Wczytaj starsze",
+        "loading": "Wczytywanie…",
+        "provenance": {
+          "connected": "Przez połączony dostęp",
+          "connectedBy": "Połączono przez {user}",
+          "delegated": "Oddelegowane przez innego agenta",
+          "delegatedBy": "Oddelegowane przez agenta dla {user}",
+          "dispatched": "Zlecone przez użytkownika",
+          "dispatchedBy": "Zlecone przez {user}",
+          "dispatchedInChatBy": "Zlecone przez {user} na czacie",
+          "scheduled": "Uruchomiono zgodnie z harmonogramem",
+          "scheduledBy": "Zaplanowana automatyzacja użytkownika {user}"
+        },
+        "runCount": "{count, plural, one {# aktywność} few {# aktywności} other {# aktywności}}",
+        "targets": {
+          "automation": "automatyzację",
+          "court": "wpis sądowy",
+          "document": "usunięty dokument",
+          "matter": "sprawę",
+          "task": "usunięty element agendy",
+          "team": "zespół sprawy"
+        },
+        "title": "Aktywność"
+      },
       "atAGlance": "W skrócie",
       "edited": "edytował(a)",
       "getStarted": "Zacznij od przesłania dokumentów lub utworzenia pierwszego folderu.",

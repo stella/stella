@@ -3390,6 +3390,52 @@
       "equals": "Vienāds ar"
     },
     "overview": {
+      "activity": {
+        "actions": {
+          "cancelled": "<actor>Lietotājs</actor> atcēla <target>vienumu</target>",
+          "created": "<actor>Lietotājs</actor> izveidoja <target>vienumu</target>",
+          "deleted": "<actor>Lietotājs</actor> dzēsa <target>vienumu</target>",
+          "executed": "<actor>Lietotājs</actor> palaida <target>vienumu</target>",
+          "reviewed": "<actor>Lietotājs</actor> pārskatīja <target>vienumu</target>",
+          "updated": "<actor>Lietotājs</actor> atjaunināja <target>vienumu</target>"
+        },
+        "automatedService": "Automatizēts pakalpojums",
+        "deletedUser": "Dzēsts lietotājs",
+        "empty": "Šajā lietā vēl nav darbību.",
+        "filterLabel": "Filtrēt darbības",
+        "filters": {
+          "all": "Visas darbības",
+          "automation": "Automatizācija",
+          "court": "Tiesa",
+          "documents": "Dokumenti",
+          "matter": "Lieta",
+          "tasks": "Darba kārtība",
+          "team": "Komanda"
+        },
+        "loadEarlier": "Ielādēt agrākās",
+        "loading": "Ielādē…",
+        "provenance": {
+          "connected": "Izmantojot savienoto piekļuvi",
+          "connectedBy": "Savienoja {user}",
+          "delegated": "Deleģēja cits aģents",
+          "delegatedBy": "Aģents deleģēja lietotāja {user} vārdā",
+          "dispatched": "Palaida lietotājs",
+          "dispatchedBy": "Palaida {user}",
+          "dispatchedInChatBy": "{user} palaida tērzēšanā",
+          "scheduled": "Palaists pēc grafika",
+          "scheduledBy": "Lietotāja {user} plānotā automatizācija"
+        },
+        "runCount": "{count} darbības",
+        "targets": {
+          "automation": "automatizāciju",
+          "court": "tiesas ierakstu",
+          "document": "dzēstu dokumentu",
+          "matter": "lietu",
+          "task": "dzēstu darba kārtības vienumu",
+          "team": "lietas komandu"
+        },
+        "title": "Darbības"
+      },
       "atAGlance": "Apskats",
       "edited": "rediģēja",
       "getStarted": "Sāciet, augšupielādējot dokumentus vai izveidojot pirmo mapi.",

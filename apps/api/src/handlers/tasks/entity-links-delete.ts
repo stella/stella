@@ -93,6 +93,7 @@ export const deleteEntityLinkHandler = async function* ({
         resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
         resourceId: taskEntityId,
         metadata: {
+          kind: "task",
           change: "entity-link-removed",
           linkId: body.linkId,
         },

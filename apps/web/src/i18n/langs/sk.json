@@ -3390,6 +3390,52 @@
       "equals": "Rovná sa"
     },
     "overview": {
+      "activity": {
+        "actions": {
+          "cancelled": "<actor>Používateľ</actor> zrušil <target>položku</target>",
+          "created": "<actor>Používateľ</actor> vytvoril <target>položku</target>",
+          "deleted": "<actor>Používateľ</actor> odstránil <target>položku</target>",
+          "executed": "<actor>Používateľ</actor> spustil <target>položku</target>",
+          "reviewed": "<actor>Používateľ</actor> skontroloval <target>položku</target>",
+          "updated": "<actor>Používateľ</actor> upravil <target>položku</target>"
+        },
+        "automatedService": "Automatizovaná služba",
+        "deletedUser": "Odstránený používateľ",
+        "empty": "V tejto veci zatiaľ nie je žiadna aktivita.",
+        "filterLabel": "Filtrovať aktivitu",
+        "filters": {
+          "all": "Všetka aktivita",
+          "automation": "Automatizácia",
+          "court": "Súd",
+          "documents": "Dokumenty",
+          "matter": "Vec",
+          "tasks": "Úlohy",
+          "team": "Tím"
+        },
+        "loadEarlier": "Načítať staršie",
+        "loading": "Načítava sa…",
+        "provenance": {
+          "connected": "Pomocou pripojeného prístupu",
+          "connectedBy": "Pripojil {user}",
+          "delegated": "Delegované iným agentom",
+          "delegatedBy": "Delegované agentom pre používateľa {user}",
+          "dispatched": "Zadal používateľ",
+          "dispatchedBy": "Zadal {user}",
+          "dispatchedInChatBy": "Zadal {user} v Chate",
+          "scheduled": "Spustené podľa plánu",
+          "scheduledBy": "Naplánovaná automatizácia vlastníka {user}"
+        },
+        "runCount": "{count, plural, one {# aktivita} few {# aktivity} other {# aktivít}}",
+        "targets": {
+          "automation": "automatizáciu",
+          "court": "súdny záznam",
+          "document": "odstránený dokument",
+          "matter": "vec",
+          "task": "odstránenú položku agendy",
+          "team": "tím veci"
+        },
+        "title": "Aktivita"
+      },
       "atAGlance": "Prehľad",
       "edited": "upravil(a)",
       "getStarted": "Začnite nahraním dokumentov alebo vytvorením prvého priečinka.",
