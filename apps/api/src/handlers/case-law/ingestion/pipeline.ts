@@ -564,8 +564,8 @@ const processDecisionAttempt = async ({
       incomingRawHash: result.rawHash,
     })
   ) {
+    // audit: skip — background case-law ingestion ordering metadata; public case-law data, not user actions
     const watermarkAdvanced = await scopedDb(async (tx) =>
-      // audit: skip — background case-law ingestion ordering metadata; public case-law data, not user actions
       (
         await tx
           .update(caseLawDecisions)
