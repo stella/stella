@@ -15,6 +15,7 @@ const item = (id: string, runId: string | null): MatterActivityItem => ({
   runId,
   target: {
     deleted: false,
+    encrypted: false,
     entityId: "entity-1",
     fieldId: "field-1",
     id: "entity-1",
