@@ -31,6 +31,10 @@ export const caseLawSources = p.pgTable(
     enabled: p.boolean().default(true).notNull(),
     syncCursor: p.text("sync_cursor"),
     lastSyncAt: timestamptz("last_sync_at"),
+    observationOrder: p
+      .bigint("observation_order", { mode: "bigint" })
+      .default(0n)
+      .notNull(),
     config: jsonb().$type<Record<string, unknown>>().default({}),
     // License / redistribution terms. null = legacy source (public
     // court records, treated as redistributable); see corpus-source.ts. A
@@ -151,6 +155,9 @@ export const caseLawDecisions = p.pgTable(
     metadata: jsonb().$type<Record<string, unknown>>().default({}),
     sourceHash: p.varchar("source_hash", { length: 64 }),
     sourceObservedAt: timestamptz("source_observed_at"),
+    sourceObservationOrder: p.bigint("source_observation_order", {
+      mode: "bigint",
+    }),
     sourceObservationHash: p.varchar("source_observation_hash", { length: 64 }),
     /**
      * Materialized citation-authority ranking signal: the

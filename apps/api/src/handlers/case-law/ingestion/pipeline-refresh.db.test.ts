@@ -210,6 +210,7 @@ if (!databaseUrl || !runPostgresTests) {
 
       const outcome = await processDecision({
         input: metadataOnlyResult(caseNumber),
+        observationOrder: 1n,
         sourceId,
         scopedDb,
         observedAt: new Date("2026-07-31T12:00:00.000Z"),
@@ -272,6 +273,7 @@ if (!databaseUrl || !runPostgresTests) {
 
       await processDecision({
         input: metadataOnlyResult(caseNumber),
+        observationOrder: 1n,
         sourceId,
         scopedDb: racingDb,
         observedAt: new Date("2026-07-31T12:00:00.000Z"),
@@ -304,6 +306,7 @@ if (!databaseUrl || !runPostgresTests) {
           ...metadataOnlyResult(caseNumber),
           fulltext: "Rozsudok\n\nOdôvodnenie:\n\nRevidovaný text.",
         },
+        observationOrder: 1n,
         sourceId,
         scopedDb,
         observedAt: new Date("2026-07-31T12:00:00.000Z"),

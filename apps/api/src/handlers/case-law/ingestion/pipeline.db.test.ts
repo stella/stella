@@ -112,6 +112,7 @@ if (!databaseUrl || !runPostgresTests) {
     test("stores adapter documentAst output as a jsonb object", async () => {
       await processDecision({
         input: ingestionResult,
+        observationOrder: 1n,
         sourceId,
         scopedDb,
         observedAt: new Date("2026-07-31T12:00:00.000Z"),
@@ -135,6 +136,7 @@ if (!databaseUrl || !runPostgresTests) {
     test("keeps adapter documentAst as an object when refreshing a decision", async () => {
       await processDecision({
         input: ingestionResult,
+        observationOrder: 1n,
         sourceId,
         scopedDb,
         observedAt: new Date("2026-07-31T12:00:00.000Z"),
@@ -152,6 +154,7 @@ if (!databaseUrl || !runPostgresTests) {
           rawHash: "jsonb-regression-hash-refresh",
           metadata: { source: "regression-refresh" },
         },
+        observationOrder: 2n,
         sourceId,
         scopedDb,
         observedAt: new Date("2026-07-31T12:00:01.000Z"),

@@ -286,6 +286,7 @@ describe("runIngestionPipeline — database timeouts", () => {
       enabled: true,
       syncCursor: "cursor-1",
       lastSyncAt: null,
+      observationOrder: 0n,
       config: {},
       descriptor: null,
       createdAt: new Date("2026-01-01T00:00:00.000Z"),
@@ -318,7 +319,9 @@ describe("runIngestionPipeline — database timeouts", () => {
 
             return {
               where: () => ({
-                returning: async () => [{ cursor: values.syncCursor ?? null }],
+                returning: async () => [
+                  { cursor: values.syncCursor ?? null, order: 1n },
+                ],
               }),
             };
           },
@@ -351,6 +354,7 @@ describe("runIngestionPipeline — empty-page cursor progress", () => {
       enabled: true,
       syncCursor: "cursor-1",
       lastSyncAt: null,
+      observationOrder: 0n,
       config: {},
       descriptor: null,
       createdAt: new Date("2026-01-01T00:00:00.000Z"),
@@ -389,7 +393,9 @@ describe("runIngestionPipeline — empty-page cursor progress", () => {
 
             return {
               where: () => ({
-                returning: async () => [{ cursor: values.syncCursor ?? null }],
+                returning: async () => [
+                  { cursor: values.syncCursor ?? null, order: 1n },
+                ],
               }),
             };
           },
@@ -496,6 +502,7 @@ describe("processDecision — corpus storage off", () => {
         rawHash: "new-hash",
         documentAst: EMPTY_AST,
       },
+      observationOrder: 1n,
       sourceId: createSafeId<"caseLawSource">(),
       scopedDb,
       observedAt: new Date("2026-07-31T12:00:00.000Z"),

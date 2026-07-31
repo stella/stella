@@ -102,12 +102,14 @@ if (!databaseUrl || !runPostgresTests) {
     test("keeps decisions that share a docket across courts", async () => {
       await processDecision({
         input: decisionAt("Okresný súd Prievidza", "g1"),
+        observationOrder: 1n,
         sourceId,
         scopedDb,
         observedAt: new Date("2026-07-31T12:00:00.000Z"),
       });
       await processDecision({
         input: decisionAt("Okresný súd Trenčín", "g2"),
+        observationOrder: 1n,
         sourceId,
         scopedDb,
         observedAt: new Date("2026-07-31T12:00:00.000Z"),
@@ -123,6 +125,7 @@ if (!databaseUrl || !runPostgresTests) {
       const before = await storedCourts();
       await processDecision({
         input: decisionAt("Okresný súd Prievidza", "g1"),
+        observationOrder: 2n,
         sourceId,
         scopedDb,
         observedAt: new Date("2026-07-31T12:00:01.000Z"),
@@ -138,12 +141,14 @@ if (!databaseUrl || !runPostgresTests) {
 
       await processDecision({
         input: newer,
+        observationOrder: 2n,
         sourceId,
         scopedDb,
         observedAt: new Date("2026-07-31T12:00:01.000Z"),
       });
       await processDecision({
         input: older,
+        observationOrder: 1n,
         sourceId,
         scopedDb,
         observedAt: new Date("2026-07-31T12:00:00.000Z"),
@@ -164,6 +169,7 @@ if (!databaseUrl || !runPostgresTests) {
 
       await processDecision({
         input: current,
+        observationOrder: 20n,
         sourceId,
         scopedDb,
         observedAt: new Date("2026-07-31T12:02:00.000Z"),
@@ -174,12 +180,14 @@ if (!databaseUrl || !runPostgresTests) {
       `);
       await processDecision({
         input: current,
+        observationOrder: 22n,
         sourceId,
         scopedDb,
         observedAt: new Date("2026-07-31T12:02:02.000Z"),
       });
       await processDecision({
         input: decisionAt("Stale observation", publisherId),
+        observationOrder: 21n,
         sourceId,
         scopedDb,
         observedAt: new Date("2026-07-31T12:02:01.000Z"),
@@ -205,31 +213,31 @@ if (!databaseUrl || !runPostgresTests) {
       );
     });
 
-    test("equal observation timestamps converge by source hash", async () => {
+    test("database order wins independently of worker timestamps", async () => {
       const publisherId = "observed-tie";
-      const greaterHash = decisionAt("Lower hash", publisherId);
-      const lesserHash = decisionAt("Higher hash", publisherId);
-      const observedAt = new Date("2026-07-31T12:01:00.000Z");
-      expect(greaterHash.rawHash > lesserHash.rawHash).toBe(true);
+      const authoritative = decisionAt("Database winner", publisherId);
+      const clockAheadStale = decisionAt("Clock-ahead stale", publisherId);
 
       await processDecision({
-        input: greaterHash,
+        input: authoritative,
+        observationOrder: 2n,
         sourceId,
         scopedDb,
-        observedAt,
+        observedAt: new Date("2026-07-31T12:01:00.000Z"),
       });
       await processDecision({
-        input: lesserHash,
+        input: clockAheadStale,
+        observationOrder: 1n,
         sourceId,
         scopedDb,
-        observedAt,
+        observedAt: new Date("2026-07-31T12:01:01.000Z"),
       });
 
       const [row] = await db.execute(sql<{ court: string }>`
         SELECT court FROM case_law_decisions
         WHERE source_id = ${sourceId} AND source_document_id = ${publisherId}
       `);
-      expect(isRecord(row) ? row["court"] : undefined).toBe("Lower hash");
+      expect(isRecord(row) ? row["court"] : undefined).toBe("Database winner");
     });
 
     test("concurrent collision inserts converge to unique stable slugs", async () => {
@@ -239,12 +247,14 @@ if (!databaseUrl || !runPostgresTests) {
       await Promise.all([
         processDecision({
           input: first,
+          observationOrder: 1n,
           sourceId,
           scopedDb,
           observedAt: new Date("2026-07-31T12:00:00.000Z"),
         }),
         processDecision({
           input: second,
+          observationOrder: 1n,
           sourceId,
           scopedDb,
           observedAt: new Date("2026-07-31T12:00:00.000Z"),
@@ -259,12 +269,14 @@ if (!databaseUrl || !runPostgresTests) {
       await Promise.all([
         processDecision({
           input: first,
+          observationOrder: 2n,
           sourceId,
           scopedDb,
           observedAt: new Date("2026-07-31T12:00:01.000Z"),
         }),
         processDecision({
           input: second,
+          observationOrder: 2n,
           sourceId,
           scopedDb,
           observedAt: new Date("2026-07-31T12:00:01.000Z"),
@@ -334,12 +346,14 @@ if (!databaseUrl || !runPostgresTests) {
       await Promise.all([
         processDecision({
           input: first,
+          observationOrder: 1n,
           sourceId,
           scopedDb: firstScopedDb,
           observedAt: new Date("2026-07-31T12:00:00.000Z"),
         }),
         processDecision({
           input: second,
+          observationOrder: 2n,
           sourceId,
           scopedDb: secondScopedDb,
           observedAt: new Date("2026-07-31T12:00:01.000Z"),

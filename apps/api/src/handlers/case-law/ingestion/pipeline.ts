@@ -147,6 +147,7 @@ type ProcessDecisionAttemptOptions = {
   sourceId: SafeId<"caseLawSource">;
   scopedDb: ScopedDb;
   observedAt: Date;
+  observationOrder: bigint;
   identityReconciliation: IdentityReconciliation;
 };
 
@@ -156,25 +157,36 @@ type ProcessDecisionOptions = Omit<
 >;
 
 type SourceObservation = {
-  observedAt: Date;
-  sourceHash: string;
+  order: bigint;
 };
 
-const storedObservationPrecedes = ({
-  observedAt,
-  sourceHash,
-}: SourceObservation) =>
+const storedObservationPrecedes = ({ order }: SourceObservation) =>
   or(
-    isNull(caseLawDecisions.sourceObservedAt),
-    lt(caseLawDecisions.sourceObservedAt, observedAt),
-    and(
-      eq(caseLawDecisions.sourceObservedAt, observedAt),
-      or(
-        isNull(caseLawDecisions.sourceObservationHash),
-        lt(caseLawDecisions.sourceObservationHash, sourceHash),
-      ),
-    ),
+    isNull(caseLawDecisions.sourceObservationOrder),
+    lt(caseLawDecisions.sourceObservationOrder, order),
   );
+
+const allocateSourceObservationOrder = async (
+  sourceId: SafeId<"caseLawSource">,
+  scopedDb: ScopedDb,
+): Promise<bigint> =>
+  await scopedDb(async (tx) => {
+    // audit: skip — background ingestion ordering state for public source data
+    const allocated = (
+      await tx
+        .update(caseLawSources)
+        .set({
+          observationOrder: sql`${caseLawSources.observationOrder} + 1`,
+          updatedAt: sql`${caseLawSources.updatedAt}`,
+        })
+        .where(eq(caseLawSources.id, sourceId))
+        .returning({ order: caseLawSources.observationOrder })
+    ).at(0);
+    if (!allocated) {
+      panic("Case-law source disappeared while allocating observation order");
+    }
+    return allocated.order;
+  });
 
 /**
  * Upload sourceRaw to S3 under a content-addressable key.
@@ -464,7 +476,7 @@ const canDiscardCorpusObjects = ({
  * has to surface the original row-write error.
  */
 const discardOrphanedCorpusObjects = async (
-  written: WriteCorpusResult,
+  written: Parameters<typeof deleteCorpusDocument>[0],
   decisionId: SafeId<"caseLawDecision">,
 ): Promise<void> => {
   const discarded = await Result.tryPromise(
@@ -492,6 +504,7 @@ const processDecisionAttempt = async ({
   sourceId,
   scopedDb,
   observedAt,
+  observationOrder,
   identityReconciliation,
 }: ProcessDecisionAttemptOptions): Promise<ProcessResult> => {
   const result = sanitizeResult(input);
@@ -540,6 +553,7 @@ const processDecisionAttempt = async ({
         .update(caseLawDecisions)
         .set({
           sourceObservedAt: observedAt,
+          sourceObservationOrder: observationOrder,
           sourceObservationHash: result.rawHash,
           // Drizzle applies the schema's on-update value unless this column is
           // explicit. A watermark-only replay is not a content modification.
@@ -548,10 +562,7 @@ const processDecisionAttempt = async ({
         .where(
           and(
             eq(caseLawDecisions.id, existing.id),
-            storedObservationPrecedes({
-              observedAt,
-              sourceHash: result.rawHash,
-            }),
+            storedObservationPrecedes({ order: observationOrder }),
           ),
         );
     });
@@ -821,6 +832,7 @@ const processDecisionAttempt = async ({
             // the upload instead of permanently skipping the decision.
             sourceHash: s3UploadFailed ? existing.sourceHash : result.rawHash,
             sourceObservedAt: observedAt,
+            sourceObservationOrder: observationOrder,
             sourceObservationHash: result.rawHash,
             // Clear indexedHash so the corpus indexer re-picks this row even
             // when only metadata changed (its staleness check compares
@@ -831,10 +843,7 @@ const processDecisionAttempt = async ({
           .where(
             and(
               eq(caseLawDecisions.id, existing.id),
-              storedObservationPrecedes({
-                observedAt,
-                sourceHash: result.rawHash,
-              }),
+              storedObservationPrecedes({ order: observationOrder }),
             ),
           )
           .returning({ id: caseLawDecisions.id });
@@ -908,6 +917,7 @@ const processDecisionAttempt = async ({
           sourceRawContentType,
           sourceHash: result.rawHash,
           sourceObservedAt: observedAt,
+          sourceObservationOrder: observationOrder,
           sourceObservationHash: result.rawHash,
         })
         .returning({ id: caseLawDecisions.id });
@@ -994,6 +1004,7 @@ const processDecisionAttempt = async ({
         sourceId,
         scopedDb,
         observedAt,
+        observationOrder,
         identityReconciliation: IDENTITY_RECONCILIATION.RETRY,
       });
     }
@@ -1010,6 +1021,35 @@ const processDecisionAttempt = async ({
   }
 
   if (!rowWrite.value) {
+    if (corpusPlan.type === "object-storage") {
+      const current = await scopedDb((tx) =>
+        tx.query.caseLawDecisions.findFirst({
+          where: { id: decisionId },
+          columns: {
+            astS3Key: true,
+            normalizedS3Key: true,
+            textS3Key: true,
+          },
+        }),
+      );
+      await discardOrphanedCorpusObjects(
+        {
+          astKey:
+            current?.astS3Key === corpusPlan.written.astKey
+              ? null
+              : corpusPlan.written.astKey,
+          sectionsKey:
+            current?.normalizedS3Key === corpusPlan.written.sectionsKey
+              ? null
+              : corpusPlan.written.sectionsKey,
+          textKey:
+            current?.textS3Key === corpusPlan.written.textKey
+              ? null
+              : corpusPlan.written.textKey,
+        },
+        decisionId,
+      );
+    }
     return {
       inserted: false,
       searchVectorFailed: false,
@@ -1162,8 +1202,22 @@ export const runIngestionPipeline = async ({
       ? AbortSignal.any([signal, AbortSignal.timeout(pageTimeout)])
       : AbortSignal.timeout(pageTimeout);
     recentCursors.add(cursor);
-    // The request-start order represents source observation order: a slower
-    // older response must not become newer merely because it arrived later.
+    // Allocate from the source row before the request: PostgreSQL serializes
+    // overlapping workers without relying on replica wall clocks.
+    let observationOrder: bigint;
+    try {
+      // oxlint-disable-next-line no-await-in-loop -- each page needs one durable order token before its dependent fetch
+      observationOrder = await allocateSourceObservationOrder(
+        source.id,
+        scopedDb,
+      );
+    } catch (error) {
+      if (error instanceof TimeoutError) {
+        haltReason = dbTimeoutHaltReason(error);
+        break;
+      }
+      throw error;
+    }
     const observedAt = new Date();
     // oxlint-disable-next-line no-await-in-loop -- sequential paginated crawl (each page's cursor depends on the previous page)
     const pageResult = await adapter.fetchPage(
@@ -1235,6 +1289,7 @@ export const runIngestionPipeline = async ({
             sourceId: source.id,
             scopedDb,
             observedAt,
+            observationOrder,
           });
 
           if (outcome.inserted) {
