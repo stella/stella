@@ -77,27 +77,29 @@ export const ChatModelModeSelector = ({
   models,
 }: ChatModelModeSelectorProps) => {
   const t = useTranslations();
+  const { activeOrganizationId, selectedModel, selectModel, threadRef } =
+    models;
   const [open, setOpen] = useState(false);
   const [detailsRequested, setDetailsRequested] = useState(false);
   const [selectionIntent, setSelectionIntent] =
     useState<ChatModelSelectionIntent | null>(null);
   const autoAppliedFavoriteRef = useRef<string | null>(null);
   const favorite = useChatModelFavoriteStore(
-    (state) => state.favoritesByOrganization[models.activeOrganizationId],
+    (state) => state.favoritesByOrganization[activeOrganizationId],
   );
   const setFavorite = useChatModelFavoriteStore((state) => state.setFavorite);
   const { data } = useQuery({
-    ...modelOptionsOptions(models.activeOrganizationId),
+    ...modelOptionsOptions(activeOrganizationId),
     enabled:
       open ||
       detailsRequested ||
-      models.selectedModel !== null ||
+      selectedModel !== null ||
       favorite !== undefined,
   });
 
   const options = resolveModeOptions(data?.modeValues);
   const intendedChoice =
-    selectionIntent?.threadId === models.threadRef.threadId
+    selectionIntent?.threadId === threadRef.threadId
       ? selectionIntent.choice
       : null;
   const favoriteValue = resolveAvailableFavoriteValue({
@@ -107,7 +109,7 @@ export const ChatModelModeSelector = ({
   });
   const favoriteAsDefault =
     intendedChoice === null &&
-    models.selectedModel === null &&
+    selectedModel === null &&
     favoriteValue !== undefined
       ? favorite
       : null;
@@ -117,7 +119,7 @@ export const ChatModelModeSelector = ({
     resolveSelectedChoice({
       favorite,
       options,
-      selectedModel: models.selectedModel,
+      selectedModel,
     });
   const selectedMode =
     selectedChoice.type === "mode" ? selectedChoice.mode : null;
@@ -133,14 +135,16 @@ export const ChatModelModeSelector = ({
     (option) => option.value === effectiveModelValue,
   );
   const TriggerIcon = selectedMode ? MODE_ICON[selectedMode] : CpuIcon;
-  const triggerLabel = effectiveModel
-    ? formatModelLabel(effectiveModel)
-    : selectedMode
-      ? t(MODE_LABEL_KEY[selectedMode])
-      : (models.selectedModel ?? t("chat.modelMode.exactModels"));
+  let triggerLabel = selectedModel ?? t("chat.modelMode.exactModels");
+  if (selectedMode) {
+    triggerLabel = t(MODE_LABEL_KEY[selectedMode]);
+  }
+  if (effectiveModel) {
+    triggerLabel = formatModelLabel(effectiveModel);
+  }
 
   const autoApplyKey = favoriteAsDefault
-    ? `${models.threadRef.threadId}:${selectionKey(favoriteAsDefault)}`
+    ? `${threadRef.threadId}:${selectionKey(favoriteAsDefault)}`
     : null;
   useExternalSyncEffect(() => {
     if (
@@ -152,26 +156,26 @@ export const ChatModelModeSelector = ({
       return;
     }
     autoAppliedFavoriteRef.current = autoApplyKey;
-    models.selectModel(favoriteValue);
-  }, [autoApplyKey, favoriteValue, models.selectModel]);
+    selectModel(favoriteValue);
+  }, [autoApplyKey, favoriteValue, selectModel]);
 
   const selectChoice = (choice: ChatModelFavorite) => {
     const nextModel = resolveChoiceModelValue({ choice, options });
     if (nextModel === undefined) {
       return;
     }
-    setSelectionIntent({ choice, threadId: models.threadRef.threadId });
-    if (nextModel !== models.selectedModel) {
-      models.selectModel(nextModel);
+    setSelectionIntent({ choice, threadId: threadRef.threadId });
+    if (nextModel !== selectedModel) {
+      selectModel(nextModel);
     }
   };
 
   const toggleFavorite = (nextFavorite: ChatModelFavorite) => {
     if (isSameFavorite(favorite, nextFavorite)) {
-      setFavorite(models.activeOrganizationId, null);
+      setFavorite(activeOrganizationId, null);
       return;
     }
-    setFavorite(models.activeOrganizationId, nextFavorite);
+    setFavorite(activeOrganizationId, nextFavorite);
     selectChoice(nextFavorite);
   };
 
