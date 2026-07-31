@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
+  abortDocumentProcessingWorkerBeforeClose,
   automaticOcrRetryDelayMs,
   classifyOcrProjectionSource,
   classifyOcrWorkspaceDispatch,
@@ -20,6 +21,7 @@ import {
   revivableAutomaticOcrCancellationCodes,
   runDocumentProcessingReconciliationPhases,
   runSearchIndexReplayAttempt,
+  settleDocumentProcessingAttemptError,
   requiresOcrPolicy,
   shouldFailStaleAutomaticOcrRun,
   shouldPreserveCurrentProjection,
@@ -755,5 +757,135 @@ describe("unconfigured worker lifecycle", () => {
     expect(unconfiguredBranch).toContain("setInterval(");
     expect(unconfiguredBranch).toContain("clearInterval(keepAliveInterval)");
     expect(unconfiguredBranch).not.toContain("new Worker");
+  });
+});
+
+describe("worker interruption lifecycle", () => {
+  test("aborts active work before waiting for the queue consumer to close", async () => {
+    const calls: string[] = [];
+
+    await abortDocumentProcessingWorkerBeforeClose({
+      abortLifecycle: () => {
+        calls.push("abort");
+      },
+      closeWorker: async () => {
+        calls.push("close");
+      },
+    });
+
+    expect(calls).toEqual(["abort", "close"]);
+  });
+
+  test("returns an interrupted claim to the queue without recording a failure", async () => {
+    const lifecycle = new AbortController();
+    lifecycle.abort();
+    const calls: string[] = [];
+
+    const outcome = await settleDocumentProcessingAttemptError({
+      error: lifecycle.signal.reason,
+      lifecycleSignal: lifecycle.signal,
+      markFailed: async () => {
+        calls.push("failed");
+      },
+      returnToQueue: async () => {
+        calls.push("queued");
+      },
+    });
+
+    expect(outcome).toBe("interrupted");
+    expect(calls).toEqual(["queued"]);
+  });
+
+  test("records ordinary processing errors through the existing failure path", async () => {
+    const calls: string[] = [];
+
+    const outcome = await settleDocumentProcessingAttemptError({
+      error: new Error("processing failed"),
+      lifecycleSignal: new AbortController().signal,
+      markFailed: async () => {
+        calls.push("failed");
+      },
+      returnToQueue: async () => {
+        calls.push("queued");
+      },
+    });
+
+    expect(outcome).toBe("failed");
+    expect(calls).toEqual(["failed"]);
+  });
+
+  test("does not refund an ordinary failure when shutdown races with settlement", async () => {
+    const lifecycle = new AbortController();
+    lifecycle.abort();
+    const calls: string[] = [];
+
+    const outcome = await settleDocumentProcessingAttemptError({
+      error: new Error("indexing failed"),
+      lifecycleSignal: lifecycle.signal,
+      markFailed: async () => {
+        calls.push("failed");
+      },
+      returnToQueue: async () => {
+        calls.push("queued");
+      },
+    });
+
+    expect(outcome).toBe("failed");
+    expect(calls).toEqual(["failed"]);
+  });
+
+  test("finds lifecycle cancellation through provider error causes", async () => {
+    const lifecycle = new AbortController();
+    lifecycle.abort();
+    const calls: string[] = [];
+
+    const outcome = await settleDocumentProcessingAttemptError({
+      error: { cause: { cause: lifecycle.signal.reason } },
+      lifecycleSignal: lifecycle.signal,
+      markFailed: async () => {
+        calls.push("failed");
+      },
+      returnToQueue: async () => {
+        calls.push("queued");
+      },
+    });
+
+    expect(outcome).toBe("interrupted");
+    expect(calls).toEqual(["queued"]);
+  });
+
+  test("threads shutdown cancellation into OCR and still fails BullMQ delivery", () => {
+    expect(queueSource).toContain("signal: lifecycleSignal");
+    expect(queueSource).toContain("throw processingResult.error");
+  });
+
+  test("uses one compare-and-set transition to restore the claimed attempt", () => {
+    const transitionStart = queueSource.indexOf(
+      "const returnInterruptedRunToQueue",
+    );
+    const transitionEnd = queueSource.indexOf(
+      "const earlierFileFields",
+      transitionStart,
+    );
+    const transition = queueSource.slice(transitionStart, transitionEnd);
+
+    expect(transitionStart).toBeGreaterThan(-1);
+    expect(transitionEnd).toBeGreaterThan(transitionStart);
+    expect(transition).toContain(
+      "attemptCount: Math.max(0, run.attemptCount - 1)",
+    );
+    expect(transition).toContain('status: "queued"');
+    expect(transition).toContain(
+      'eq(documentProcessingRuns.status, "running")',
+    );
+    expect(transition).toContain(
+      "eq(documentProcessingRuns.attemptCount, run.attemptCount)",
+    );
+    expect(transition).toContain(
+      "eq(documentProcessingRuns.claimedBy, claimToken)",
+    );
+    expect(
+      transition.match(/\.update\(documentProcessingRuns\)/gu),
+    ).toHaveLength(1);
   });
 });

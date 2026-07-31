@@ -1,0 +1,33 @@
+pipeline_name: OCR
+
+text_type: general
+
+# Stella sends these switches as false. Keeping the modules disabled in the
+# pipeline also prevents PaddleX from looking for their model weights at boot.
+use_doc_preprocessor: false
+use_textline_orientation: false
+
+SubModules:
+  TextDetection:
+    module_name: text_detection
+    model_name: PP-OCRv6_medium_det
+    model_dir: /opt/stella/models/text-detection
+    limit_side_len: 64
+    limit_type: min
+    max_side_limit: 4000
+    thresh: 0.3
+    box_thresh: 0.6
+    unclip_ratio: 1.5
+  TextRecognition:
+    module_name: text_recognition
+    model_name: PP-OCRv6_medium_rec
+    model_dir: /opt/stella/models/text-recognition
+    batch_size: 6
+    score_thresh: 0.0
+
+Serving:
+  visualize: false
+  extra:
+    # Stella rejects page 501. The service may inspect it so it can return a
+    # bounded response instead of silently accepting a partially processed PDF.
+    max_num_input_imgs: 501

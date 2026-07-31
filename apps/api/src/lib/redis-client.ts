@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { type BunRedisRawClient, createBunRedisClient } from "bullmq";
 import { type RedisOptions, RedisClient, sleep } from "bun";
 
-import { env } from "@/api/env";
+import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import { connectionErrorFields, safeErrorCode } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { redisConnectionOptions } from "@/api/lib/redis-options";
@@ -30,7 +30,10 @@ class ConfiguredRedisClient extends RedisClient implements BunRedisRawClient {
   override onconnect: () => void = () => undefined;
   readonly url: string;
 
-  constructor(url = env.REDIS_URL, overrides?: RedisOptions) {
+  constructor(
+    url = envDocumentProcessingWorker.REDIS_URL,
+    overrides?: RedisOptions,
+  ) {
     super(url, { ...redisConnectionOptions(url), ...overrides });
     this.url = url;
     // Register one owned dispatcher on Bun's native `onconnect` setter so a
@@ -71,7 +74,8 @@ class ConfiguredRedisClient extends RedisClient implements BunRedisRawClient {
 
 export const createRedisClient = (
   overrides?: RedisOptions,
-): ConfiguredRedisClient => new ConfiguredRedisClient(env.REDIS_URL, overrides);
+): ConfiguredRedisClient =>
+  new ConfiguredRedisClient(envDocumentProcessingWorker.REDIS_URL, overrides);
 
 // On a Railway cold start the API container can win the race against its
 // own Redis/Valkey service, so the very first connection attempt hits

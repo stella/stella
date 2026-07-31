@@ -2,25 +2,12 @@ import { createEnv } from "@t3-oss/env-core";
 import { panic } from "better-result";
 import * as v from "valibot";
 
-import { DEPLOYED_NODE_ENVS, envBase } from "@/api/env-base";
+import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 
 const featureFlagSchema = v.optional(
   v.pipe(v.string(), v.parseBoolean()),
   "false",
 );
-
-const isSecureOcrServiceUrl = (value: string) => {
-  const url = new URL(value);
-  if (url.protocol === "https:") {
-    return true;
-  }
-  return (
-    url.protocol === "http:" &&
-    (url.hostname === "localhost" ||
-      url.hostname === "127.0.0.1" ||
-      url.hostname === "[::1]")
-  );
-};
 
 const hasAnySmtpTransportEnv = () =>
   !!(
@@ -58,7 +45,7 @@ const hasRequiredEmailProviderEnv = (provider: "ses" | "smtp" | undefined) => {
 
 /**
  * API-specific environment variables. These are only required
- * when the full API server boots (auth, email, gotenberg, redis,
+ * when the full API server boots (auth, email, gotenberg,
  * etc.). Scripts and CLI tools that only need DB + S3 import
  * envBase from env-base.ts instead.
  */
@@ -108,7 +95,6 @@ const envApi = createEnv({
       v.pipe(v.string(), v.parseBoolean()),
       "false",
     ),
-    REDIS_URL: v.pipe(v.string(), v.url()),
     USE_MOCK_AI: v.optional(v.pipe(v.string(), v.parseBoolean()), "false"),
     E2E_DISABLE_AUTH_RATE_LIMIT: v.optional(
       v.pipe(
@@ -212,30 +198,6 @@ const envApi = createEnv({
     GOTENBERG_URL: v.pipe(v.string(), v.url()),
     GOTENBERG_USERNAME: v.string(),
     GOTENBERG_PASSWORD: v.string(),
-    /**
-     * Optional private PaddleOCR serving endpoint. The dedicated document
-     * processing worker requires it; the API server can run without it.
-     */
-    OCR_SERVICE_URL: v.optional(
-      v.pipe(
-        v.string(),
-        v.url(),
-        v.check(
-          isSecureOcrServiceUrl,
-          "OCR_SERVICE_URL must use HTTPS unless it targets a loopback address.",
-        ),
-      ),
-    ),
-    OCR_SERVICE_TOKEN: v.optional(v.pipe(v.string(), v.minLength(16))),
-    CONTENT_ENCRYPTION_KEY: v.optional(
-      v.pipe(
-        v.string(),
-        v.regex(
-          /^[0-9a-f]{64}$/iu,
-          "CONTENT_ENCRYPTION_KEY must be a 64-character hex string",
-        ),
-      ),
-    ),
     EXTENSION_ORIGIN: v.optional(v.pipe(v.string(), v.url())),
 
     /**
@@ -437,16 +399,7 @@ if (
   );
 }
 
-if (
-  DEPLOYED_NODE_ENVS.has(process.env.NODE_ENV ?? "") &&
-  !envApi.CONTENT_ENCRYPTION_KEY
-) {
-  panic(
-    "CONTENT_ENCRYPTION_KEY is required when NODE_ENV is 'production' or 'staging'.",
-  );
-}
-
-export const env = { ...envBase, ...envApi };
+export const env = { ...envDocumentProcessingWorker, ...envApi };
 
 // Prevent accidental mutation of env vars at runtime.
 // Must run AFTER createEnv has consumed process.env.

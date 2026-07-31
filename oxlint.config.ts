@@ -1357,6 +1357,7 @@ export default defineConfig({
           "error",
           {
             allowedFiles: [
+              "apps/api/src/env-document-processing-worker.ts",
               "apps/api/src/db-url.ts",
               "apps/api/src/handlers/case-law/ingestion/adapters/utils.ts",
               "apps/api/src/handlers/health/routes.ts",

@@ -67,12 +67,15 @@ describe("isSupportedOcrPageCount", () => {
 
 describe("createOcrRequestInit", () => {
   test("rejects redirects before they can forward a presigned source URL", () => {
+    const signal = new AbortController().signal;
     const request = createOcrRequestInit({
       idempotencyKey: "ocr:run_1",
+      signal,
       sourceUrl: "https://storage.example.test/presigned-document",
     });
 
     expect(request.redirect).toBe("error");
+    expect(request.signal).toBe(signal);
   });
 });
 

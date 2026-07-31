@@ -1,6 +1,6 @@
 import { Result, TaggedError } from "better-result";
 
-import { env } from "@/api/env";
+import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import { fetchWithTimeout } from "@/api/lib/fetch";
 import { LIMITS } from "@/api/lib/limits";
 import { isRecord } from "@/api/lib/type-guards";
@@ -34,10 +34,12 @@ export type DocumentOcrResult = {
 
 export const createOcrRequestInit = ({
   idempotencyKey,
+  signal,
   sourceUrl,
   token,
 }: {
   idempotencyKey: string;
+  signal: AbortSignal;
   sourceUrl: string;
   token?: string | undefined;
 }) => {
@@ -63,6 +65,7 @@ export const createOcrRequestInit = ({
     // The payload contains a presigned document URL. Following a provider
     // redirect could otherwise disclose it to an unvalidated HTTP endpoint.
     redirect: "error" as const,
+    signal,
     timeoutMs: OCR_REQUEST_TIMEOUT_MS,
   };
 };
@@ -127,7 +130,7 @@ export const readBoundedOcrJson = async (
 };
 
 const serviceUrl = (): string => {
-  const configured = env.OCR_SERVICE_URL;
+  const configured = envDocumentProcessingWorker.OCR_SERVICE_URL;
   if (!configured) {
     throw new DocumentOcrProviderError({
       code: "not_configured",
@@ -142,7 +145,7 @@ const serviceUrl = (): string => {
 };
 
 export const isDocumentOcrProviderConfigured = (): boolean =>
-  env.OCR_SERVICE_URL !== undefined;
+  envDocumentProcessingWorker.OCR_SERVICE_URL !== undefined;
 
 const parsePageText = (value: unknown): string | null => {
   if (!isRecord(value)) {
@@ -210,9 +213,11 @@ export const parsePaddleOcrResponse = (
 
 export const recognizePdfText = async ({
   idempotencyKey,
+  signal,
   sourceUrl,
 }: {
   idempotencyKey: string;
+  signal: AbortSignal;
   sourceUrl: string;
 }): Promise<Result<DocumentOcrResult, DocumentOcrProviderError>> =>
   await Result.tryPromise({
@@ -221,8 +226,9 @@ export const recognizePdfText = async ({
         serviceUrl(),
         createOcrRequestInit({
           idempotencyKey,
+          signal,
           sourceUrl,
-          token: env.OCR_SERVICE_TOKEN,
+          token: envDocumentProcessingWorker.OCR_SERVICE_TOKEN,
         }),
       );
 
