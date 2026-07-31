@@ -832,10 +832,10 @@ export const searchGlobal = async ({
       JOIN chat_threads t ON t.id = cst.thread_id
       LEFT JOIN workspaces w ON w.id = t.workspace_id
       WHERE TRUE
+        AND ${chatScope}
         AND cst.preview_generation IS NULL
         ${chatUpdatedFilter}
         ${chatTextSearchFilter}
-        AND ${chatScope}
         ${globalSearchCursorSql({
           cursor: searchCursor,
           score: searchScoreValue({
@@ -926,10 +926,10 @@ export const searchGlobal = async ({
         FROM chat_thread_search_documents cst
         JOIN chat_threads t ON t.id = cst.thread_id
         WHERE TRUE
+          AND ${chatScope}
           AND cst.preview_generation IS NULL
           ${chatUpdatedFilter}
           ${chatTextSearchFilter}
-          AND ${chatScope}
       `),
     ),
   ] as const;
@@ -1009,10 +1009,10 @@ export const searchGlobal = async ({
       FROM chat_thread_search_documents cst
       JOIN chat_threads t ON t.id = cst.thread_id
       WHERE TRUE
+        AND ${chatScope}
         AND cst.preview_generation IS NULL
         ${chatUpdatedFilter}
         ${chatTextSearchFilter}
-        AND ${chatScope}
     `),
   );
 

@@ -87,11 +87,14 @@ describe("chat search indexing", () => {
         metadata: {
           sourceDocuments: [
             {
+              entityId: "entity_1",
               entityRef: "internal-entity-reference",
               kind: "document",
               matterRef: "internal-matter-reference",
               mention: "@closing-memo",
+              mimeType: "application/pdf",
               title: "Closing memorandum",
+              workspaceId: "workspace_1",
             },
           ],
         },
