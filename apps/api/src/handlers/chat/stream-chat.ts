@@ -983,11 +983,19 @@ export const processServerChatStream = async function* ({
       if (chunk.type === EventType.RUN_FINISHED && chunk.usage) {
         usage = chunk.usage;
       }
-      processor.processChunk(chunk);
       if (chunk.type === EventType.RUN_FINISHED) {
+        // TanStack's agent loop can emit continuation events after a model
+        // run finishes, notably `approval-requested` for a gated server tool.
+        // The client already receives RUN_FINISHED only after the source is
+        // drained; keep the server-side processor on that same ordering too.
+        // Processing this now would finalize `responseMessage` before the
+        // later approval event changes the tool call from `input-complete` to
+        // `approval-requested`, persisting a turn that hydration then treats
+        // as interrupted.
         deferredRunFinishedChunks.push(chunk);
         continue;
       }
+      processor.processChunk(chunk);
       yield chunk;
       if (chunk.type === EventType.RUN_ERROR) {
         streamFailed = true;
@@ -995,6 +1003,9 @@ export const processServerChatStream = async function* ({
       }
     }
 
+    for (const chunk of deferredRunFinishedChunks) {
+      processor.processChunk(chunk);
+    }
     finishInvoked = await finishResponseMessage({
       abortSignal,
       getResponseMessage,

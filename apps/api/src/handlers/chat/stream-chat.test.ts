@@ -369,6 +369,121 @@ describe("outgoing chat stream message ids", () => {
     ]);
   });
 
+  test("persists approval requests emitted after a model run finishes", async () => {
+    const messageId = toSafeId<"chatMessage">(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    let responseMessage: ChatMessage | null = null;
+    const processor = new StreamProcessor({
+      events: {
+        onStreamEnd: (message) => {
+          const toolCall = message.parts.find(
+            (part) => part.type === "tool-call" && part.id === "tool-1",
+          );
+          if (!toolCall) {
+            throw new Error("Expected web-search tool call");
+          }
+          responseMessage = {
+            id: message.id,
+            parts: [
+              {
+                arguments: toolCall.arguments,
+                id: toolCall.id,
+                name: "web_search",
+                state: toolCall.state,
+                type: "tool-call",
+                ...(toolCall.approval === undefined
+                  ? {}
+                  : { approval: toolCall.approval }),
+              },
+            ],
+            role: "assistant",
+          };
+        },
+      },
+    });
+    let persistedState: string | undefined;
+    const stream = processServerChatStream({
+      abortSignal: new AbortController().signal,
+      getResponseMessage: () => responseMessage,
+      mapMessageId: createChatMessageIdMapper(() => messageId),
+      onFinish: ({ responseMessage: finishedMessage }) => {
+        const part = finishedMessage.parts.at(0);
+        persistedState = part?.type === "tool-call" ? part.state : undefined;
+      },
+      processor,
+      source: streamChunks([
+        { type: EventType.RUN_STARTED, runId: "run-1", threadId: "thread-1" },
+        {
+          type: EventType.TOOL_CALL_START,
+          parentMessageId: "provider-message",
+          toolCallId: "tool-1",
+          toolCallName: "web_search",
+          // eslint-disable-next-line typescript/no-deprecated -- AG-UI still requires the compatibility field.
+          toolName: "web_search",
+        },
+        {
+          type: EventType.TOOL_CALL_ARGS,
+          delta: '{"query":"Winston Churchill quotes"}',
+          toolCallId: "tool-1",
+        },
+        {
+          type: EventType.TOOL_CALL_END,
+          input: { query: "Winston Churchill quotes" },
+          toolCallId: "tool-1",
+          toolCallName: "web_search",
+          // eslint-disable-next-line typescript/no-deprecated -- AG-UI still requires the compatibility field.
+          toolName: "web_search",
+        },
+        {
+          type: EventType.RUN_FINISHED,
+          finishReason: "tool_calls",
+          runId: "run-1",
+          threadId: "thread-1",
+        },
+        {
+          type: EventType.CUSTOM,
+          name: "approval-requested",
+          value: {
+            approval: { id: "approval_tool-1", needsApproval: true },
+            input: { query: "Winston Churchill quotes" },
+            toolCallId: "tool-1",
+            toolName: "web_search",
+          },
+        },
+      ]),
+    });
+
+    const chunks = await collectChunks(stream);
+    let clientState: string | undefined;
+    const clientProcessor = new StreamProcessor({
+      events: {
+        onStreamEnd: (message) => {
+          const part = message.parts.find(
+            (candidate) =>
+              candidate.type === "tool-call" && candidate.id === "tool-1",
+          );
+          clientState = part?.type === "tool-call" ? part.state : undefined;
+        },
+      },
+    });
+    for (const chunk of chunks) {
+      clientProcessor.processChunk(chunk);
+    }
+
+    expect(chunks.map((chunk) => chunk.type)).toEqual([
+      EventType.RUN_STARTED,
+      EventType.TEXT_MESSAGE_START,
+      EventType.TOOL_CALL_START,
+      EventType.TOOL_CALL_ARGS,
+      EventType.TOOL_CALL_END,
+      EventType.CUSTOM,
+      EventType.RUN_FINISHED,
+    ]);
+    expect(persistedState).toBe(clientState);
+    expect(persistedState).toBe("approval-requested");
+  });
+
   test("persists partial assistant messages when the stream aborts after content", async () => {
     const abortController = new AbortController();
     const messageId = toSafeId<"chatMessage">(

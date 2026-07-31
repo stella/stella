@@ -1154,6 +1154,50 @@ describe("acquireChatRuntime reconcile", () => {
     { type: "RUN_FINISHED", threadId, runId: "run-A", finishReason: "stop" },
   ];
 
+  const createApprovalSseChunks = () => [
+    { type: "RUN_STARTED", threadId, runId: "run-A" },
+    {
+      type: "TEXT_MESSAGE_START",
+      messageId: assistantMessageId,
+      role: "assistant",
+    },
+    {
+      type: "TOOL_CALL_START",
+      parentMessageId: assistantMessageId,
+      toolCallId: "tool-A",
+      toolCallName: "web_search",
+      toolName: "web_search",
+    },
+    {
+      type: "TOOL_CALL_ARGS",
+      delta: '{"query":"Winston Churchill quotes"}',
+      toolCallId: "tool-A",
+    },
+    {
+      type: "TOOL_CALL_END",
+      input: { query: "Winston Churchill quotes" },
+      toolCallId: "tool-A",
+      toolCallName: "web_search",
+      toolName: "web_search",
+    },
+    {
+      type: "CUSTOM",
+      name: "approval-requested",
+      value: {
+        approval: { id: "approval_tool-A", needsApproval: true },
+        input: { query: "Winston Churchill quotes" },
+        toolCallId: "tool-A",
+        toolName: "web_search",
+      },
+    },
+    {
+      type: "RUN_FINISHED",
+      threadId,
+      runId: "run-A",
+      finishReason: "tool_calls",
+    },
+  ];
+
   test("reattaches to the same runtime when the freshness signal is unchanged", () => {
     const queryClient = new QueryClient();
     const data = buildThreadData();
@@ -1306,6 +1350,40 @@ describe("acquireChatRuntime reconcile", () => {
       queryClient,
     });
     expect(afterRefetch).not.toBe(handoff);
+  });
+
+  test("keeps a runtime awaiting tool approval when newer data arrives", async () => {
+    const queryClient = new QueryClient();
+    globalThis.fetch = createFetchMock(async () =>
+      createSseResponse(createApprovalSseChunks()),
+    );
+    const context = { allowMissingThread: true };
+    const runtime = acquireChatRuntime({
+      activeOrganizationId,
+      context,
+      data: buildThreadData(),
+      key: threadRef,
+      queryClient,
+    });
+
+    const started = runtime.startRouteHandoffMessage(
+      createOutgoingMessage("22222222-2222-4222-8222-2222222222c1"),
+    );
+    await started.stream;
+
+    expect(runtime.getSnapshot().messages.at(-1)?.parts.at(0)).toMatchObject({
+      name: "web_search",
+      state: "approval-requested",
+      type: "tool-call",
+    });
+    const reattached = acquireChatRuntime({
+      activeOrganizationId,
+      context,
+      data: newerThreadData(),
+      key: threadRef,
+      queryClient,
+    });
+    expect(reattached).toBe(runtime);
   });
 
   test("keeps distinct runtimes per context capability set and sweeps them all on query GC", () => {

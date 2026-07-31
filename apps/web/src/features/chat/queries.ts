@@ -1617,6 +1617,19 @@ const seedSignalsEqual = (
   left.lastActivityAt === right.lastActivityAt &&
   left.lastMessageId === right.lastMessageId;
 
+const hasPendingToolApproval = (
+  messages: readonly PersistedChatMessage[],
+): boolean => {
+  const message = messages.at(-1);
+  if (!message || message.role !== "assistant") {
+    return false;
+  }
+
+  return message.parts.some(
+    (part) => part.type === "tool-call" && part.state === "approval-requested",
+  );
+};
+
 /**
  * Whether a runtime has live work in flight that a rebuild would kill:
  * an active stream (`status` submitted/streaming, `isLoading` covers a
@@ -1635,6 +1648,7 @@ const isChatRuntimeBusy = (runtime: ChatRuntime): boolean => {
     snapshot.sessionGenerating ||
     snapshot.status === "submitted" ||
     snapshot.status === "streaming" ||
+    hasPendingToolApproval(snapshot.messages) ||
     hasRunningToolCallInLatestAssistantMessage({
       messages: snapshot.messages,
     })
