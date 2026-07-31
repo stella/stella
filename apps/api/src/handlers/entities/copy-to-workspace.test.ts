@@ -22,8 +22,11 @@ const fileMock = mock(() => ({ arrayBuffer: arrayBufferMock }));
 const writeMock = mock(async () => undefined);
 const s3DeleteMock = mock(async () => undefined);
 
+// Replacing the module wholesale means every export something in the graph
+// reaches has to be present here, not only the ones this test asserts on.
 void mock.module("@/api/lib/s3", () => ({
   getS3: () => ({ delete: s3DeleteMock, file: fileMock, write: writeMock }),
+  deleteS3ObjectWithSignal: s3DeleteMock,
 }));
 
 const processExtractionMock = mock(async () => {});
