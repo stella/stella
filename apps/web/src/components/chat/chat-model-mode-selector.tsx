@@ -209,11 +209,12 @@ export const ChatModelModeSelector = ({
             const pinned = isSameFavorite(favorite, optionFavorite);
             return (
               <div
-                className="hover:bg-accent has-[[data-highlighted]]:bg-accent has-[[data-highlighted]]:text-accent-foreground grid grid-cols-[minmax(0,1fr)_auto] rounded-sm"
+                className="hover:bg-accent has-[[data-checked]]:bg-accent has-[[data-highlighted]]:bg-accent has-[[data-highlighted]]:text-accent-foreground grid grid-cols-[minmax(0,1fr)_auto] rounded-sm"
                 key={option.mode}
               >
                 <MenuRadioItem
                   className="data-highlighted:bg-transparent pe-2"
+                  indicator="none"
                   onClick={() => selectChoice(optionFavorite)}
                   value={selectionKey(optionFavorite)}
                 >
