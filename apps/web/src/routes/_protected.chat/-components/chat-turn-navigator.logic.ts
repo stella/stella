@@ -8,12 +8,14 @@ const PREVIEW_SEGMENTER = new Intl.Segmenter(undefined, {
   granularity: "grapheme",
 });
 const WHITESPACE_SEGMENT = /^\s+$/u;
-const MARKDOWN_FENCE = /^\s{0,3}(?:`{3,}|~{3,})[^\n]*$/gmu;
+const MARKDOWN_FENCE = /^[ \t]{0,3}(?:```|~~~)[^\n]*$/gmu;
 const MARKDOWN_HEADING = /^\s{0,3}#{1,6}\s+/gmu;
 const MARKDOWN_BLOCKQUOTE = /^\s{0,3}>\s?/gmu;
-const MARKDOWN_LIST_MARKER = /^\s*(?:[-+*]|\d+[.)])\s+/gmu;
-const MARKDOWN_STRONG = /(\*\*|__)(\S(?:[\s\S]*?\S)?)\1/gu;
-const MARKDOWN_EMPHASIS = /(\*|_)(\S(?:[\s\S]*?\S)?)\1/gu;
+const MARKDOWN_LIST_MARKER = /^[ \t]*(?:[-+*]|\d+[.)])[ \t]+/gmu;
+const MARKDOWN_ASTERISK_STRONG = /\*\*(\S(?:[^*]*\S)?)\*\*/gu;
+const MARKDOWN_UNDERSCORE_STRONG = /__(\S(?:[^_]*\S)?)__/gu;
+const MARKDOWN_ASTERISK_EMPHASIS = /\*(\S(?:[^*]*\S)?)\*/gu;
+const MARKDOWN_UNDERSCORE_EMPHASIS = /_(\S(?:[^_]*\S)?)_/gu;
 const MARKDOWN_STRIKETHROUGH = /(~~)(\S(?:[\s\S]*?\S)?)\1/gu;
 const MARKDOWN_INLINE_CODE = /(`+)([\s\S]*?)\1/gu;
 const MARKDOWN_ESCAPE = /\\([!#()*+\-.>[\]\\_`{|}~])/gu;
@@ -129,8 +131,10 @@ const markdownToPreviewText = (value: string): string =>
     .replace(MARKDOWN_HEADING, "")
     .replace(MARKDOWN_BLOCKQUOTE, "")
     .replace(MARKDOWN_LIST_MARKER, "")
-    .replace(MARKDOWN_STRONG, "$2")
-    .replace(MARKDOWN_EMPHASIS, "$2")
+    .replace(MARKDOWN_ASTERISK_STRONG, "$1")
+    .replace(MARKDOWN_UNDERSCORE_STRONG, "$1")
+    .replace(MARKDOWN_ASTERISK_EMPHASIS, "$1")
+    .replace(MARKDOWN_UNDERSCORE_EMPHASIS, "$1")
     .replace(MARKDOWN_STRIKETHROUGH, "$2")
     .replace(MARKDOWN_INLINE_CODE, "$2")
     .replace(MARKDOWN_ESCAPE, "$1");
