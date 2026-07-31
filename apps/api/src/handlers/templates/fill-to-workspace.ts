@@ -1,13 +1,11 @@
 import { Result } from "better-result";
-import { eq } from "drizzle-orm";
 import { t } from "elysia";
 
-import { entities, templateFills } from "@/api/db/schema";
+import { templateFills } from "@/api/db/schema";
 import { clauseBodySchema } from "@/api/handlers/clauses/shared-schemas";
 import { createEntityFromBuffer } from "@/api/handlers/entities/create-from-buffer";
 import { containsNull } from "@/api/handlers/templates/fill";
 import { fillStoredTemplateDocx } from "@/api/handlers/templates/template-fill-service";
-import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   assertUsageAvailableForHandler,
@@ -243,6 +241,7 @@ const fillTemplateToWorkspace = createSafeHandler(
             buffer: filled.buffer,
             fileName,
             mimeType: DOCX_MIME_TYPE,
+            parentId,
           }),
         catch: (cause) =>
           new HandlerError({
@@ -260,27 +259,6 @@ const fillTemplateToWorkspace = createSafeHandler(
     }
 
     const entityId = created.value.entityId;
-
-    if (parentId !== null) {
-      // Re-parent after creation (the shared creator always lands at root).
-      // The parent was validated above; if it vanished in between, the FK
-      // rejects and the document simply stays at the workspace root.
-      const reparented = await Result.tryPromise({
-        try: async () =>
-          await scopedDb(async (tx) => {
-            // audit: skip — placement detail of an entity creation that was
-            // already audited (createEntityFromBuffer records the CREATE).
-            await tx
-              .update(entities)
-              .set({ parentId })
-              .where(eq(entities.id, entityId));
-          }),
-        catch: (cause) => cause,
-      });
-      if (Result.isError(reparented)) {
-        captureError(reparented.error, { entityId, parentId });
-      }
-    }
 
     const fillStatus =
       filled.unmatchedPlaceholders.length > 0 ? "partial" : "success";

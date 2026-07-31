@@ -47,7 +47,6 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createFileKey, createUserFileKey } from "@/api/handlers/files/utils";
-import { tmpUploadKeys } from "@/api/handlers/uploads/lib";
 import {
   ACTIVE_TASK_REASSIGNMENT_STATUSES,
   buildAccountDeletionTaskReassignmentTargets,
@@ -59,6 +58,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE } from "@/api/lib/folio-collab-sessions";
 import { LIMITS } from "@/api/lib/limits";
+import { pendingUploadS3KeysForDeletion } from "@/api/lib/pending-upload-keys";
 import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
@@ -676,8 +676,11 @@ export const deletePendingUploads = async ({
 }: DeletePendingUploadsParams): Promise<void> => {
   const stagedUploadRows = await tx
     .select({
+      declaredMime: pendingUploads.declaredMime,
       id: pendingUploads.id,
       organizationId: pendingUploads.organizationId,
+      purpose: pendingUploads.purpose,
+      purposeData: pendingUploads.purposeData,
       workspaceId: pendingUploads.workspaceId,
     })
     .from(pendingUploads)
@@ -688,13 +691,7 @@ export const deletePendingUploads = async ({
       ),
     );
   s3KeysToDelete.push(
-    ...stagedUploadRows.flatMap((row) =>
-      tmpUploadKeys({
-        organizationId: row.organizationId,
-        uploadId: row.id,
-        workspaceId: row.workspaceId,
-      }),
-    ),
+    ...stagedUploadRows.flatMap(pendingUploadS3KeysForDeletion),
   );
 
   await tx

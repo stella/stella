@@ -253,25 +253,6 @@ describe("delete-version chain-of-custody guard", () => {
             "Version-number allocator (nextEntityVersionNumber): MAX(versionNumber) deliberately spans tombstones so a new version never reuses a withdrawn number; reads versionNumber only, no content.",
         },
       ],
-      "handlers/entities/upload-version.ts": [
-        {
-          anchor: "currentVersion.fields.find",
-          reason:
-            "New-version upload: reads the current version's fields to carry them forward. currentVersionId is invariant-live (tombstoning promotes it off a withdrawn row).",
-        },
-        {
-          anchor: "freshCurrentVersion.fields.find",
-          reason:
-            "Same carry-forward read, re-taken under the entity-cap lock; currentVersionId is invariant-live.",
-        },
-      ],
-      "handlers/uploads/entity-version.ts": [
-        {
-          anchor: "freshCurrentVersionId",
-          reason:
-            "Presigned-upload finalize: reads the locked current version's fields to carry forward into a new version; currentVersionId is invariant-live.",
-        },
-      ],
       "handlers/entities/finalize-desktop-edit-session.ts": [
         {
           anchor: "editSession.baseVersionId",

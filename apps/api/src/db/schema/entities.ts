@@ -719,10 +719,22 @@ export type PendingUploadPurposeData =
   | {
       type: "entity_create";
       propertyId: SafeId<"property">;
+      /**
+       * Final object id reserved by trusted server-side writers. Persisting it
+       * before S3 publication lets the bounded reconciler derive and remove a
+       * final-key object left behind by a hard process death.
+       */
+      reservedFileId?: string;
     }
   | {
       type: "entity_version";
       entityId: SafeId<"entity">;
+      /**
+       * Final object id reserved by trusted server-side writers. Persisting it
+       * before S3 publication lets the bounded reconciler derive and remove a
+       * final-key object left behind by a hard process death.
+       */
+      reservedFileId?: string;
     }
   | {
       type: "agent_skill";
@@ -801,6 +813,14 @@ export const pendingUploads = p.pgTable(
     p
       .index("pending_uploads_org_created_idx")
       .on(table.organizationId, table.createdAt),
+    p
+      .index("pending_uploads_buffer_intent_recovery_idx")
+      .on(table.claimedAt, table.id)
+      .where(
+        sql`${table.status} = 'scanning'
+          AND ${table.purpose} IN ('entity_create', 'entity_version')
+          AND ${table.purposeData}->>'reservedFileId' IS NOT NULL`,
+      ),
     ...wsPolicies(),
   ],
 );

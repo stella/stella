@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 
 import { member } from "@/api/db/auth-schema";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -9,6 +9,7 @@ import {
   entities,
   entityVersions,
   fields,
+  pendingUploads,
   properties,
   propertyDependencies,
   userFiles,
@@ -27,6 +28,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { pendingUploadS3KeysForDeletion } from "@/api/lib/pending-upload-keys";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
@@ -140,6 +142,32 @@ export const deleteWorkspaceHandler = async function* ({
   // Workspace is sealed by status: "deleting", so no
   // concurrent uploads can insert new files.
   const fileQueryResult = await safeDb(async (tx) => {
+    // Cancel every non-finalized upload before enumerating its keys. A live
+    // server buffer writer can no longer commit after this compare-and-set;
+    // if it publishes concurrently, its failed persistence path deletes the
+    // reserved final object too. This closes the publish-vs-workspace-cascade
+    // race instead of merely snapshotting recovery intents before deleting
+    // their rows.
+    // audit: skip — internal upload-lease cancellation within the audited
+    // workspace delete; the user-visible DELETE event is recorded below.
+    await tx
+      .update(pendingUploads)
+      .set({
+        // Keep failed rows retryable if a later S3/DB step fails and the
+        // workspace is reactivated; upload finalization only reclaims failed
+        // rows whose claim is stale.
+        claimedAt: new Date(0),
+        claimedByRequestId: null,
+        rejectReason: "Workspace deletion cancelled the upload",
+        status: "failed",
+      })
+      .where(
+        and(
+          eq(pendingUploads.workspaceId, workspaceId),
+          ne(pendingUploads.status, "finalized"),
+        ),
+      );
+
     const workspaceEntityVersionIds = tx
       .select({ id: entityVersions.id })
       .from(entityVersions)
@@ -165,7 +193,28 @@ export const deleteWorkspaceHandler = async function* ({
       .innerJoin(chatThreads, eq(userFiles.threadId, chatThreads.id))
       .where(eq(chatThreads.workspaceId, workspaceId));
 
-    return await Promise.all([fileRefsPromise, chatFileRefsPromise]);
+    const pendingUploadRowsPromise = tx
+      .select({
+        declaredMime: pendingUploads.declaredMime,
+        id: pendingUploads.id,
+        organizationId: pendingUploads.organizationId,
+        purpose: pendingUploads.purpose,
+        purposeData: pendingUploads.purposeData,
+        workspaceId: pendingUploads.workspaceId,
+      })
+      .from(pendingUploads)
+      .where(
+        and(
+          eq(pendingUploads.workspaceId, workspaceId),
+          ne(pendingUploads.status, "finalized"),
+        ),
+      );
+
+    return await Promise.all([
+      fileRefsPromise,
+      chatFileRefsPromise,
+      pendingUploadRowsPromise,
+    ]);
   });
 
   if (Result.isError(fileQueryResult)) {
@@ -179,7 +228,7 @@ export const deleteWorkspaceHandler = async function* ({
     );
   }
 
-  const [fileRefs, chatFileRefs] = fileQueryResult.value;
+  const [fileRefs, chatFileRefs, pendingUploadRows] = fileQueryResult.value;
 
   // Delete S3 objects outside any transaction.
   // On retry, already-deleted S3 objects are no-ops.
@@ -214,6 +263,16 @@ export const deleteWorkspaceHandler = async function* ({
         ),
       ).then((result) =>
         Result.unwrap(result, "Workspace chat file cleanup failed"),
+      ),
+    );
+  }
+
+  if (pendingUploadRows.length > 0) {
+    s3Deletes.push(
+      deleteS3Keys(
+        pendingUploadRows.flatMap(pendingUploadS3KeysForDeletion),
+      ).then((result) =>
+        Result.unwrap(result, "Workspace pending upload cleanup failed"),
       ),
     );
   }
