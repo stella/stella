@@ -115,6 +115,24 @@ describe("search handler workspace scoping", () => {
     });
   });
 
+  test("returns canonical positive locator candidates for native previews", async () => {
+    const result = await searchHandler({
+      accessibleWorkspaceIds,
+      body: {
+        ...emptySearchFilters(),
+        query: '"closing memo" OR liability NOT superseded',
+      },
+      organizationId,
+      userId,
+      search: searchMock,
+      scopedDb: unusedScopedDb,
+    });
+
+    expect(result).toMatchObject({
+      previewLocatorCandidates: ["closing memo", "liability"],
+    });
+  });
+
   test("rejects a blank query scoped only to a workspace", async () => {
     const result = await searchHandler({
       accessibleWorkspaceIds,

@@ -8,9 +8,70 @@ import {
   SEARCH_PREVIEW_FRAGMENT_DELIMITER,
   SEARCH_PREVIEW_FRAGMENT_SEPARATOR,
   SEARCH_PREVIEW_HEADLINE_CONFIG,
+  truncateSearchPreviewAroundCandidates,
 } from "./highlight";
 
 describe("search result highlighting", () => {
+  test("centers a bounded preview around a normalized late match", () => {
+    const source = `${"a".repeat(20_000)} odštěpení ${"b".repeat(20_000)}`;
+    const preview = truncateSearchPreviewAroundCandidates({
+      candidates: ["odstepeni"],
+      maxLength: 16_000,
+      source,
+    });
+
+    expect(preview).toContain("odštěpení");
+    expect(preview.length).toBeLessThanOrEqual(16_000);
+    expect(preview).not.toBe("a".repeat(16_000));
+  });
+
+  test("anchors locator prefixes at lexical boundaries", () => {
+    const source = `educate ${"a".repeat(20_000)} catapult`;
+    const preview = truncateSearchPreviewAroundCandidates({
+      candidates: ["cat"],
+      maxLength: 16_000,
+      source,
+    });
+
+    expect(preview).toContain("catapult");
+    expect(preview).not.toContain("educate");
+  });
+
+  test("maps length-changing Arabic folds back to the source", () => {
+    const source = `${"a".repeat(20_000)} مـحـمـد`;
+    const preview = truncateSearchPreviewAroundCandidates({
+      candidates: ["محمد"],
+      maxLength: 16_000,
+      source,
+    });
+
+    expect(preview).toContain("مـحـمـد");
+  });
+
+  test("does not split surrogate pairs in a fallback preview", () => {
+    const source = `${"a".repeat(15_999)}😀 trailing`;
+    const preview = truncateSearchPreviewAroundCandidates({
+      candidates: ["absent"],
+      maxLength: 16_000,
+      source,
+    });
+
+    expect(preview).toBe("a".repeat(15_999));
+    expect(preview).not.toContain("\u{d83d}");
+  });
+
+  test("centers on an intact phrase instead of an earlier standalone word", () => {
+    const source = `closing ${"a".repeat(20_000)} closing, memo`;
+    const preview = truncateSearchPreviewAroundCandidates({
+      candidates: ["closing memo"],
+      maxLength: 16_000,
+      source,
+    });
+
+    expect(preview).toContain("closing, memo");
+    expect(preview).not.toStartWith("closing ");
+  });
+
   test("escapes HTML before inserting highlight tags", () => {
     const highlighted = escapeAndHighlight(
       `<script>alert("x")</script> ${HIGHLIGHT_START}Privileged & confidential${HIGHLIGHT_STOP}`,

@@ -438,9 +438,9 @@ export const ChatThreadPage = ({
   // The floating composer block grows with the draft (multi-line text,
   // attachment chips, followup chips), so a static bottom offset cannot
   // keep the scroll-to-bottom button clear of it in every state. Publish
-  // the block's live height as a CSS variable on the page container; the
-  // button (inside <Conversation>) inherits it and floats just above the
-  // block at any composer height.
+  // the block's live height as a CSS variable on the page container. The
+  // transcript bottom padding and scroll button (inside <Conversation>) both
+  // inherit it, keeping the final content above the block at any height.
   const pageContainerRef = useRef<HTMLDivElement>(null);
   const composerBlockRef = useRef<HTMLDivElement>(null);
   useExternalSyncEffect(() => {
@@ -568,7 +568,7 @@ export const ChatThreadPage = ({
             ref={pageContainerRef}
           >
             <Conversation className="@container isolate min-h-0">
-              <ConversationContent className="mx-auto w-full max-w-5xl gap-3 px-4 pb-36">
+              <ConversationContent className="mx-auto w-full max-w-5xl gap-3 px-4 pb-[calc(var(--composer-block-h,7rem)+1.5rem)]">
                 {messages.length === 0 && !isGenerating && !error ? (
                   <div className="m-auto w-full max-w-md px-4">
                     <PromptSuggestions
@@ -645,8 +645,8 @@ export const ChatThreadPage = ({
                 showing through beneath the status row. The tray wrapper's
                 `p-2` keeps the composer breathing inside the veil.
                 `--composer-block-h` is measured from this block's live
-                height, so the scroll button's offset tracks the change
-                automatically. */}
+                height, so transcript clearance and the scroll button's
+                offset track the change automatically. */}
             <div
               className="absolute inset-x-0 bottom-0 z-20 mx-auto w-full max-w-5xl px-4"
               ref={composerBlockRef}

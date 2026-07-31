@@ -34,10 +34,12 @@ import {
 import { Input } from "@stll/ui/components/input";
 import { stellaToast } from "@stll/ui/components/toast";
 import { contentDir } from "@stll/ui/hooks/use-content-dir";
+import type { OverlayLayer } from "@stll/ui/lib/overlay-layer";
 
 import {
   canSaveSearch,
   savedSearchKeys,
+  shouldShowSavedSearchList,
   toSavedSearchCriteria,
 } from "@/components/saved-searches.logic";
 import type { SearchFilters } from "@/components/search-filters.logic";
@@ -69,6 +71,7 @@ type SavedSearchesProps = {
   isOpen: boolean;
   query: string;
   onApply: (criteria: SavedSearch["criteria"]) => void;
+  overlayLayer?: OverlayLayer;
   showList?: boolean;
   showTrigger?: boolean;
 };
@@ -78,6 +81,7 @@ export const SavedSearches = ({
   isOpen,
   query,
   onApply,
+  overlayLayer = "default",
   showList = true,
   showTrigger = true,
 }: SavedSearchesProps) => {
@@ -187,6 +191,13 @@ export const SavedSearches = ({
   const savedSearches = savedSearchesQuery.data?.pages.flatMap(
     (page) => page.items,
   );
+  const hasSavedSearches = (savedSearches?.length ?? 0) > 0;
+  const shouldShowList =
+    showList &&
+    shouldShowSavedSearchList({
+      itemCount: hasSavedSearches ? (savedSearches?.length ?? 0) : 0,
+      status: savedSearchesQuery.status,
+    });
   const savedSearchesError = savedSearchesQuery.error;
   useExternalSyncEffect(() => {
     if (!showList || !savedSearchesError) {
@@ -241,7 +252,7 @@ export const SavedSearches = ({
         </Button>
       )}
 
-      {showList && (
+      {shouldShowList && (
         <section className="space-y-1">
           <h3 className="text-muted-foreground mb-2 text-xs font-medium">
             {t("search.savedSearches")}
@@ -305,11 +316,6 @@ export const SavedSearches = ({
               </Button>
             </div>
           ))}
-          {savedSearchesQuery.isSuccess && savedSearches?.length === 0 && (
-            <p className="text-muted-foreground px-2 py-2 text-sm">
-              {t("search.savedSearchesEmpty")}
-            </p>
-          )}
           {savedSearchesQuery.hasNextPage && (
             <Button
               className="h-11 w-full"
@@ -337,7 +343,7 @@ export const SavedSearches = ({
         }}
         open={dialog.type === "create" || dialog.type === "rename"}
       >
-        <DialogPopup>
+        <DialogPopup layer={overlayLayer}>
           <DialogHeader>
             <DialogTitle>
               {dialog.type === "rename"
@@ -397,7 +403,7 @@ export const SavedSearches = ({
         }}
         open={dialog.type === "delete"}
       >
-        <AlertDialogPopup>
+        <AlertDialogPopup layer={overlayLayer}>
           <AlertDialogHeader>
             <AlertDialogTitle>{t("search.deleteSearchTitle")}</AlertDialogTitle>
             <AlertDialogDescription>

@@ -2367,6 +2367,7 @@
     "mimeType": "Typ súboru",
     "noResults": "Nenašli sa žiadne výsledky pre „{query}“.",
     "placeholder": "Vyhľadávať vo všetkých spisoch...",
+    "previewUnavailable": "Náhľad nie je k dispozícii",
     "recentSearches": "Nedávne vyhľadávania",
     "recentlyOpenedFiles": "Nedávno otvorené súbory",
     "renameSearchTitle": "Premenovať uložené vyhľadávanie",

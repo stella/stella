@@ -72,9 +72,12 @@ describe("search recents", () => {
     recordRecentFile(
       {
         entityId: "entity-1",
+        fileFieldId: "field-draft",
+        filePropertyId: "property-file",
         mimeType:
           "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         title: "Draft.docx",
+        updatedAt: "2021-01-01T00:00:00.000Z",
         workspaceId: "workspace-1",
         workspaceName: "Matter A",
       },
@@ -84,8 +87,11 @@ describe("search recents", () => {
     recordRecentFile(
       {
         entityId: "entity-1",
+        fileFieldId: "field-final",
+        filePropertyId: "property-file",
         mimeType: "application/pdf",
         title: "Final.docx",
+        updatedAt: "2021-02-01T00:00:00.000Z",
         workspaceId: "workspace-1",
         workspaceName: "Matter A",
       },
@@ -96,14 +102,20 @@ describe("search recents", () => {
     expect(
       readRecentFiles(scope, storage).map((item) => ({
         entityId: item.entityId,
+        fileFieldId: item.fileFieldId,
+        filePropertyId: item.filePropertyId,
         mimeType: item.mimeType,
         title: item.title,
+        updatedAt: item.updatedAt,
       })),
     ).toEqual([
       {
         entityId: "entity-1",
+        fileFieldId: "field-final",
+        filePropertyId: "property-file",
         mimeType: "application/pdf",
         title: "Final.docx",
+        updatedAt: "2021-02-01T00:00:00.000Z",
       },
     ]);
   });

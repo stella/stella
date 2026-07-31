@@ -85,6 +85,14 @@ type SearchFacetParams = {
 
 type SearchOwner = Pick<SearchParams, "organizationId" | "userId">;
 
+type RecentFilePreviewFieldParams = SearchOwner & {
+  entityId: string;
+  fileFieldId?: string | null | undefined;
+  filePropertyId?: string | null | undefined;
+  mimeType: string | null;
+  workspaceId: string;
+};
+
 export type SearchAISummaryParams = {
   query: string;
   locale: string;
@@ -143,6 +151,18 @@ const searchKeys = {
         resultId,
         type,
         updatedAt,
+      },
+    ] as const,
+  recentFilePreviewField: (params: RecentFilePreviewFieldParams) =>
+    [
+      ...searchKeys.owner(params),
+      "recent-file-preview-field",
+      {
+        entityId: params.entityId,
+        fileFieldId: params.fileFieldId,
+        filePropertyId: params.filePropertyId,
+        mimeType: params.mimeType,
+        workspaceId: params.workspaceId,
       },
     ] as const,
   facet: (params: SearchFacetParams) =>
@@ -254,6 +274,76 @@ export const searchPreviewOptions = ({
     },
     refetchOnMount: "always",
     staleTime: 0,
+  });
+
+type RecentFilePreviewCandidate = {
+  content: { mimeType?: string | null | undefined; type: string };
+  id: string;
+  propertyId: string;
+};
+
+type ResolveRecentFilePreviewFieldIdOptions = Pick<
+  RecentFilePreviewFieldParams,
+  "fileFieldId" | "filePropertyId" | "mimeType"
+> & {
+  fields: readonly RecentFilePreviewCandidate[];
+};
+
+export const resolveRecentFilePreviewFieldId = ({
+  fields,
+  fileFieldId,
+  filePropertyId,
+  mimeType,
+}: ResolveRecentFilePreviewFieldIdOptions): string | null => {
+  const matchesFile = ({ content }: RecentFilePreviewCandidate) =>
+    content.type === "file" &&
+    (mimeType === null || content.mimeType === mimeType);
+  const exactField = fileFieldId
+    ? fields.find(
+        (candidate) => candidate.id === fileFieldId && matchesFile(candidate),
+      )
+    : undefined;
+  if (exactField) {
+    return exactField.id;
+  }
+  const replacementField = filePropertyId
+    ? fields.find(
+        (candidate) =>
+          candidate.propertyId === filePropertyId && matchesFile(candidate),
+      )
+    : undefined;
+  if (replacementField) {
+    return replacementField.id;
+  }
+  if (fileFieldId || filePropertyId) {
+    return null;
+  }
+  return fields.find(matchesFile)?.id ?? null;
+};
+
+/**
+ * Reauthorizes a recent file against the entity's current version. Exact field
+ * identity wins; a stable property id follows replacement revisions; the MIME
+ * fallback remains only for legacy recent entries without either identifier.
+ */
+export const recentFilePreviewFieldOptions = (
+  params: RecentFilePreviewFieldParams,
+) =>
+  queryOptions({
+    queryKey: searchKeys.recentFilePreviewField(params),
+    queryFn: async ({ signal }) => {
+      const response = await api
+        .entities({ workspaceId: toSafeId<"workspace">(params.workspaceId) })
+        .entity({ entityId: toSafeId<"entity">(params.entityId) })
+        .get({ fetch: { signal } });
+      const entity = unwrapEden(response);
+      return resolveRecentFilePreviewFieldId({
+        fields: entity.fields,
+        fileFieldId: params.fileFieldId,
+        filePropertyId: params.filePropertyId,
+        mimeType: params.mimeType,
+      });
+    },
   });
 
 export const searchFacetOptions = (params: SearchFacetParams) =>

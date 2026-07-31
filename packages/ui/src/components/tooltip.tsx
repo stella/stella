@@ -2,6 +2,10 @@
 
 import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip";
 
+import {
+  OVERLAY_LAYER_CLASS_NAMES,
+  type OverlayLayer,
+} from "@stll/ui/lib/overlay-layer";
 import { cn } from "@stll/ui/lib/utils";
 
 const TooltipCreateHandle = TooltipPrimitive.createHandle;
@@ -19,18 +23,23 @@ function TooltipPopup({
   align = "center",
   sideOffset = 4,
   side = "top",
+  layer = "default",
   children,
   ...props
 }: TooltipPrimitive.Popup.Props & {
   align?: TooltipPrimitive.Positioner.Props["align"];
   side?: TooltipPrimitive.Positioner.Props["side"];
   sideOffset?: TooltipPrimitive.Positioner.Props["sideOffset"];
+  layer?: OverlayLayer;
 }) {
   return (
     <TooltipPrimitive.Portal>
       <TooltipPrimitive.Positioner
         align={align}
-        className="z-50 h-(--positioner-height) w-(--positioner-width) max-w-(--available-width) transition-[top,left,right,bottom,transform] data-instant:transition-none"
+        className={cn(
+          "h-(--positioner-height) w-(--positioner-width) max-w-(--available-width) transition-[top,left,right,bottom,transform] data-instant:transition-none",
+          OVERLAY_LAYER_CLASS_NAMES[layer],
+        )}
         data-slot="tooltip-positioner"
         side={side}
         sideOffset={sideOffset}

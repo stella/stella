@@ -20,11 +20,14 @@ export type RecentSearch = {
 
 export type RecentFile = {
   entityId: string;
+  fileFieldId?: string | null | undefined;
+  filePropertyId?: string | null | undefined;
   workspaceId: string;
   workspaceName: string;
   title: string;
   mimeType?: string | null | undefined;
   openedAt: string;
+  updatedAt?: string | undefined;
 };
 
 type RecentFileInput = Omit<RecentFile, "openedAt">;
@@ -46,13 +49,20 @@ const isRecentSearch = (value: unknown): value is RecentSearch =>
 const isRecentFile = (value: unknown): value is RecentFile =>
   isRecord(value) &&
   typeof value["entityId"] === "string" &&
+  (value["fileFieldId"] === undefined ||
+    value["fileFieldId"] === null ||
+    typeof value["fileFieldId"] === "string") &&
+  (value["filePropertyId"] === undefined ||
+    value["filePropertyId"] === null ||
+    typeof value["filePropertyId"] === "string") &&
   typeof value["workspaceId"] === "string" &&
   typeof value["workspaceName"] === "string" &&
   typeof value["title"] === "string" &&
   (value["mimeType"] === undefined ||
     value["mimeType"] === null ||
     typeof value["mimeType"] === "string") &&
-  typeof value["openedAt"] === "string";
+  typeof value["openedAt"] === "string" &&
+  (value["updatedAt"] === undefined || typeof value["updatedAt"] === "string");
 
 // Top-level shape only: each item is validated individually below via
 // `isItem`, so one malformed entry drops just that entry rather than the

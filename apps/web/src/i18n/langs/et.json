@@ -2367,6 +2367,7 @@
     "mimeType": "Failitüüp",
     "noResults": "Päringule „{query}\" tulemusi ei leitud.",
     "placeholder": "Otsi kõigist asjadest...",
+    "previewUnavailable": "Eelvaade pole saadaval",
     "recentSearches": "Hiljutised otsingud",
     "recentlyOpenedFiles": "Hiljuti avatud failid",
     "renameSearchTitle": "Nimeta salvestatud otsing ümber",

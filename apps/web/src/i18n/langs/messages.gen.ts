@@ -2370,6 +2370,7 @@ type Messages = {
     "mimeType": "File type";
     "noResults": "No results found for \"{query}\".";
     "placeholder": "Search across all matters...";
+    "previewUnavailable": "Preview unavailable";
     "recentSearches": "Recent searches";
     "recentlyOpenedFiles": "Recently opened files";
     "renameSearchTitle": "Rename saved search";

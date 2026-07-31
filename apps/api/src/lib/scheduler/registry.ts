@@ -20,6 +20,10 @@ import {
   syncInfoSoudTrackedCases,
 } from "@/api/lib/scheduler/tasks/infosoud";
 import {
+  REPAIR_CHAT_SEARCH_INDEX_TASK,
+  repairChatSearchIndex,
+} from "@/api/lib/scheduler/tasks/search-chat-index";
+import {
   REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK,
   repairSearchSemanticTimestampsTask,
 } from "@/api/lib/scheduler/tasks/search-semantic-timestamps";
@@ -41,6 +45,7 @@ export const createSchedulerTaskRegistry = (): SchedulerTaskRegistry =>
     [FLOW_RUN_TASK, runScheduledFlow],
     [BACKFILL_SK_DOCUMENTS_TASK, backfillSkDocuments],
     [RECONCILE_BUFFER_INTENTS_TASK, reconcileBufferIntents],
+    [REPAIR_CHAT_SEARCH_INDEX_TASK, repairChatSearchIndex],
     [
       REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK,
       repairSearchSemanticTimestampsTask,

@@ -1,11 +1,115 @@
 import type { GlobalSearchHit, GlobalSearchResultType } from "@stll/api/types";
 
+import { DOCX_MIME, PDF_MIME } from "@/lib/consts";
+import { getSearchTextCandidates } from "@/lib/search-text";
+import type { SearchTextQuery } from "@/lib/search-text";
+
 export const normalizeSearchQuery = (query: string): string => query.trim();
 
 export const stripSearchMarkup = (value: string): string =>
   value.replaceAll("<mark>", " ").replaceAll("</mark>", " ").trim();
 
+const SEARCH_HEADLINE_NAMED_ENTITIES: Readonly<Record<string, string>> = {
+  amp: "&",
+  apos: "'",
+  gt: ">",
+  lt: "<",
+  quot: '"',
+};
+const MAX_UNICODE_CODE_POINT = 1_114_111;
+const SEARCH_HEADLINE_ENTITY = /&(?:#x[\da-f]+|#\d+|[a-z]+);/giu;
+
+const decodeSearchHeadlineEntities = (value: string): string =>
+  value.replace(SEARCH_HEADLINE_ENTITY, (encoded) => {
+    const entity = encoded.slice(1, -1);
+    const normalizedEntity = entity.toLowerCase();
+    if (normalizedEntity.startsWith("#x")) {
+      const codePoint = Number.parseInt(normalizedEntity.slice(2), 16);
+      return codePoint <= MAX_UNICODE_CODE_POINT
+        ? String.fromCodePoint(codePoint)
+        : encoded;
+    }
+    if (normalizedEntity.startsWith("#")) {
+      const codePoint = Number.parseInt(normalizedEntity.slice(1), 10);
+      return codePoint <= MAX_UNICODE_CODE_POINT
+        ? String.fromCodePoint(codePoint)
+        : encoded;
+    }
+    return SEARCH_HEADLINE_NAMED_ENTITIES[normalizedEntity] ?? encoded;
+  });
+
+const getMarkedSearchTerms = (headline: string | null): string[] => {
+  if (!headline) {
+    return [];
+  }
+
+  const terms: string[] = [];
+  for (const match of headline.matchAll(/<mark>(?<term>.*?)<\/mark>/gu)) {
+    const encodedTerm = match.groups?.["term"]?.trim();
+    const term = encodedTerm
+      ? decodeSearchHeadlineEntities(encodedTerm).trim()
+      : undefined;
+    if (term && !terms.includes(term)) {
+      terms.push(term);
+    }
+  }
+  return terms;
+};
+
+type GetSearchHighlightTextOptions = {
+  headline: string | null;
+  previewLocatorCandidates?: readonly string[] | undefined;
+  query: string;
+};
+
+export const getSearchHighlightText = ({
+  headline,
+  previewLocatorCandidates = [],
+  query,
+}: GetSearchHighlightTextOptions): SearchTextQuery => {
+  const normalizedQuery = normalizeSearchQuery(query);
+  const markedSearchTerms = getMarkedSearchTerms(headline);
+  if (markedSearchTerms.length > 1) {
+    return { type: "separate-terms", terms: markedSearchTerms };
+  }
+  const markedSearchText = markedSearchTerms.at(0);
+  if (markedSearchText) {
+    return markedSearchText;
+  }
+
+  if (previewLocatorCandidates.length > 1) {
+    return { type: "separate-terms", terms: [...previewLocatorCandidates] };
+  }
+  const previewLocatorCandidate = previewLocatorCandidates.at(0);
+  if (previewLocatorCandidate) {
+    return previewLocatorCandidate;
+  }
+
+  if (normalizedQuery) {
+    return normalizedQuery;
+  }
+
+  return headline ? stripSearchMarkup(headline) : "";
+};
+
+export const getFirstSearchHighlightText = (
+  headline: string | null,
+  query: string,
+): string => {
+  const markedSearchText = getMarkedSearchTerms(headline).at(0);
+  if (markedSearchText) {
+    return markedSearchText;
+  }
+
+  const normalizedQuery = normalizeSearchQuery(query);
+  return normalizedQuery || (headline ? stripSearchMarkup(headline) : "");
+};
+
 type SearchPreviewContent =
+  | {
+      messages: SearchPreviewChatMessage[];
+      type: "chat-messages";
+    }
   | {
       content: string;
       type: "highlighted-html";
@@ -15,7 +119,17 @@ type SearchPreviewContent =
       type: "plain-text";
     };
 
+export type SearchPreviewChatMessage = {
+  content: string;
+  id: string;
+  role: "assistant" | "system" | "user";
+};
+
 type SearchPreviewRenderContent =
+  | {
+      messages: SearchPreviewChatMessage[];
+      type: "chat-messages";
+    }
   | {
       directionText: string;
       html: string;
@@ -31,6 +145,8 @@ export const getSearchPreviewRenderContent = (
   preview: SearchPreviewContent,
 ): SearchPreviewRenderContent => {
   switch (preview.type) {
+    case "chat-messages":
+      return { type: preview.type, messages: preview.messages };
     case "highlighted-html":
       return {
         type: preview.type,
@@ -59,6 +175,68 @@ export const shouldShowSearchPreview = ({
   isMobile,
   previewEnabled,
 }: SearchPreviewVisibilityArgs): boolean => previewEnabled && !isMobile;
+
+type DisplayedSearchPreviewHitArgs = {
+  hit: GlobalSearchHit | null;
+  showPreview: boolean;
+};
+
+export const selectDisplayedSearchPreviewHit = ({
+  hit,
+  showPreview,
+}: DisplayedSearchPreviewHitArgs): GlobalSearchHit | null =>
+  showPreview ? hit : null;
+
+export type NativeSearchDocumentPreviewTarget = {
+  entityId: string;
+  fieldId: string;
+  filePurpose: "display" | "native-display";
+  mimeType: typeof DOCX_MIME | typeof PDF_MIME;
+  workspaceId: string;
+};
+
+export type NativeSearchStatus = "matched" | "pending" | "unmatched";
+
+type NativeSearchFallbackArgs = {
+  searchText: SearchTextQuery;
+  status: NativeSearchStatus;
+};
+
+export const shouldShowNativeSearchFallback = ({
+  searchText,
+  status,
+}: NativeSearchFallbackArgs): boolean =>
+  getSearchTextCandidates(searchText).length > 0 && status === "unmatched";
+
+export const getNativeSearchDocumentPreviewTarget = (
+  hit: GlobalSearchHit,
+): NativeSearchDocumentPreviewTarget | null => {
+  if (hit.type !== "document" || hit.fileFieldId === null) {
+    return null;
+  }
+
+  if (hit.mimeType === PDF_MIME) {
+    return {
+      entityId: hit.entityId,
+      fieldId: hit.fileFieldId,
+      filePurpose: "display",
+      mimeType: hit.mimeType,
+      workspaceId: hit.workspaceId,
+    };
+  }
+
+  if (hit.mimeType === DOCX_MIME) {
+    return {
+      entityId: hit.entityId,
+      fieldId: hit.fileFieldId,
+      filePurpose: "native-display",
+      mimeType: hit.mimeType,
+      workspaceId: hit.workspaceId,
+    };
+  }
+
+  return null;
+};
 
 type AuthorizedSearchPreviewDataArgs<T> = {
   data: T | undefined;

@@ -2367,6 +2367,7 @@
     "mimeType": "Type de fichier",
     "noResults": "Aucun résultat pour « {query} ».",
     "placeholder": "Rechercher dans tous les dossiers…",
+    "previewUnavailable": "Aperçu indisponible",
     "recentSearches": "Recherches récentes",
     "recentlyOpenedFiles": "Fichiers ouverts récemment",
     "renameSearchTitle": "Renommer la recherche enregistrée",

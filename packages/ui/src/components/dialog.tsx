@@ -8,6 +8,10 @@ import { XIcon } from "lucide-react";
 import { Button } from "@stll/ui/components/button";
 import { ScrollArea } from "@stll/ui/components/scroll-area";
 import { renderTooltipTrigger } from "@stll/ui/components/tooltip-trigger-helper";
+import {
+  OVERLAY_LAYER_CLASS_NAMES,
+  type OverlayLayer,
+} from "@stll/ui/lib/overlay-layer";
 import { cn } from "@stll/ui/lib/utils";
 
 const DialogCreateHandle = DialogPrimitive.createHandle;
@@ -38,12 +42,14 @@ function DialogClose({
 
 function DialogBackdrop({
   className,
+  layer = "default",
   ...props
-}: DialogPrimitive.Backdrop.Props) {
+}: DialogPrimitive.Backdrop.Props & { layer?: OverlayLayer }) {
   return (
     <DialogPrimitive.Backdrop
       className={cn(
-        "fixed inset-0 z-50 bg-black/32 backdrop-blur-sm transition-opacity duration-200 data-ending-style:opacity-0 data-starting-style:opacity-0",
+        "fixed inset-0 bg-black/32 backdrop-blur-sm transition-opacity duration-200 data-ending-style:opacity-0 data-starting-style:opacity-0",
+        OVERLAY_LAYER_CLASS_NAMES[layer],
         className,
       )}
       data-slot="dialog-backdrop"
@@ -54,12 +60,14 @@ function DialogBackdrop({
 
 function DialogViewport({
   className,
+  layer = "default",
   ...props
-}: DialogPrimitive.Viewport.Props) {
+}: DialogPrimitive.Viewport.Props & { layer?: OverlayLayer }) {
   return (
     <DialogPrimitive.Viewport
       className={cn(
-        "fixed inset-0 z-50 grid grid-rows-[1fr_auto_3fr] justify-items-center p-4",
+        "fixed inset-0 grid grid-rows-[1fr_auto_3fr] justify-items-center p-4",
+        OVERLAY_LAYER_CLASS_NAMES[layer],
         className,
       )}
       data-slot="dialog-viewport"
@@ -69,23 +77,31 @@ function DialogViewport({
 }
 
 function DialogPopup({
+  backdropClassName,
   className,
   children,
   showCloseButton = true,
   bottomStickOnMobile = true,
+  layer = "default",
+  viewportClassName,
   ...props
 }: DialogPrimitive.Popup.Props & {
+  backdropClassName?: string;
   showCloseButton?: boolean;
   bottomStickOnMobile?: boolean;
+  layer?: OverlayLayer;
+  viewportClassName?: string;
 }) {
   return (
     <DialogPortal>
-      <DialogBackdrop />
+      <DialogBackdrop className={backdropClassName} layer={layer} />
       <DialogViewport
         className={cn(
           bottomStickOnMobile &&
             "max-sm:grid-rows-[1fr_auto] max-sm:p-0 max-sm:pt-12",
+          viewportClassName,
         )}
+        layer={layer}
       >
         <DialogPrimitive.Popup
           className={cn(

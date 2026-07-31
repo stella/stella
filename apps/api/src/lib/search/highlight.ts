@@ -1,4 +1,9 @@
-import { normalizeSearchText, stripDiacritics } from "@stll/text-normalize";
+import {
+  applyArabicFolds,
+  applyArabicFoldsWithOffsets,
+  normalizeSearchText,
+  stripDiacritics,
+} from "@stll/text-normalize";
 
 // Non-HTML delimiters injected by ts_headline / pdb.snippet(). Keep these
 // high-entropy internal tokens distinct from user-typable source text: common
@@ -188,6 +193,148 @@ const sourceSpanAt = (
     start: mapping.sourceStart + offset,
     end: mapping.sourceStart + offset + 1,
   };
+};
+
+type TruncateSearchPreviewAroundCandidatesOptions = {
+  candidates: readonly string[];
+  maxLength: number;
+  source: string;
+};
+
+const isLowSurrogate = (value: number): boolean =>
+  value >= 0xdc_00 && value <= 0xdf_ff;
+
+const isHighSurrogate = (value: number): boolean =>
+  value >= 0xd8_00 && value <= 0xdb_ff;
+
+const utf16CodeUnitAt = (source: string, index: number): number =>
+  source.at(index)?.codePointAt(0) ?? Number.NaN;
+
+const sliceWithoutSplitSurrogate = (
+  source: string,
+  requestedStart: number,
+  maxLength: number,
+): string => {
+  let start = Math.max(0, Math.min(source.length, Math.floor(requestedStart)));
+  if (isLowSurrogate(utf16CodeUnitAt(source, start))) {
+    start += 1;
+  }
+  let end = Math.min(source.length, start + maxLength);
+  if (isHighSurrogate(utf16CodeUnitAt(source, end - 1))) {
+    end -= 1;
+  }
+  return source.slice(start, end);
+};
+
+const SEARCH_LEXEME = /[\p{L}\p{N}]+/gu;
+
+type CandidatePrefixMatch = {
+  length: number;
+  start: number;
+};
+
+type SearchLexeme = {
+  start: number;
+  value: string;
+};
+
+const getSearchLexemes = (text: string): SearchLexeme[] =>
+  Array.from(text.matchAll(SEARCH_LEXEME), (match) => ({
+    start: match.index,
+    value: match[0],
+  }));
+
+const findCandidatePrefix = (
+  sourceLexemes: readonly SearchLexeme[],
+  candidate: string,
+): CandidatePrefixMatch | null => {
+  const candidateLexemes = Array.from(
+    candidate.matchAll(SEARCH_LEXEME),
+    (match) => match[0],
+  );
+  if (candidateLexemes.length === 0) {
+    return null;
+  }
+  const lastStartIndex = sourceLexemes.length - candidateLexemes.length;
+  for (let startIndex = 0; startIndex <= lastStartIndex; startIndex += 1) {
+    const matches = candidateLexemes.every((lexeme, offset) =>
+      sourceLexemes.at(startIndex + offset)?.value.startsWith(lexeme),
+    );
+    if (!matches) {
+      continue;
+    }
+    const first = sourceLexemes.at(startIndex);
+    const last = sourceLexemes.at(startIndex + candidateLexemes.length - 1);
+    const lastCandidate = candidateLexemes.at(-1);
+    if (!first || !last || !lastCandidate) {
+      return null;
+    }
+    return {
+      length: last.start + lastCandidate.length - first.start,
+      start: first.start,
+    };
+  }
+  return null;
+};
+
+export const truncateSearchPreviewAroundCandidates = ({
+  candidates,
+  maxLength,
+  source,
+}: TruncateSearchPreviewAroundCandidatesOptions): string => {
+  const boundedLength = Math.max(0, Math.floor(maxLength));
+  if (boundedLength === 0) {
+    return "";
+  }
+  if (source.length <= boundedLength) {
+    return source;
+  }
+
+  const normalizedSource = normalizeSourceWithMappings(source, true);
+  const foldedSource = applyArabicFoldsWithOffsets(normalizedSource.text);
+  const sourceLexemes = getSearchLexemes(foldedSource.text);
+  let foldedMatchStart = Number.POSITIVE_INFINITY;
+  let foldedMatchLength = 0;
+  for (const candidate of candidates) {
+    const normalizedCandidate = applyArabicFolds(
+      normalizePreviewUnit(candidate.trim(), true),
+    );
+    if (!normalizedCandidate) {
+      continue;
+    }
+    const match = findCandidatePrefix(sourceLexemes, normalizedCandidate);
+    if (match && match.start < foldedMatchStart) {
+      foldedMatchStart = match.start;
+      foldedMatchLength = match.length;
+    }
+  }
+
+  if (!Number.isFinite(foldedMatchStart)) {
+    return sliceWithoutSplitSurrogate(source, 0, boundedLength);
+  }
+  const normalizedMatchStart = foldedSource.sourceIndex.at(foldedMatchStart);
+  const normalizedMatchEnd = foldedSource.sourceEndIndex.at(
+    foldedMatchStart + foldedMatchLength - 1,
+  );
+  if (
+    normalizedMatchStart === undefined ||
+    normalizedMatchEnd === undefined ||
+    normalizedMatchEnd <= normalizedMatchStart
+  ) {
+    return sliceWithoutSplitSurrogate(source, 0, boundedLength);
+  }
+  const firstSpan = sourceSpanAt(normalizedSource, normalizedMatchStart);
+  const lastSpan = sourceSpanAt(normalizedSource, normalizedMatchEnd - 1);
+  if (!firstSpan || !lastSpan) {
+    return sliceWithoutSplitSurrogate(source, 0, boundedLength);
+  }
+
+  const matchCenter = Math.floor((firstSpan.start + lastSpan.end) / 2);
+  const start = Math.max(
+    0,
+    Math.min(source.length - boundedLength, matchCenter - boundedLength / 2),
+  );
+  return sliceWithoutSplitSurrogate(source, start, boundedLength);
 };
 
 type AlignmentAnchor = {

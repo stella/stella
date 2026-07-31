@@ -1,4 +1,12 @@
-import { useCallback, useId, useMemo, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import type { UseMutationResult } from "@tanstack/react-query";
 import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
@@ -52,7 +60,12 @@ import {
   toSearchFilters,
   type SavedSearchCriteria,
 } from "@/components/saved-searches.logic";
-import { getChatHitRoute } from "@/components/search-dialog.logic";
+import {
+  createDialogCloseActionQueue,
+  getChatHitRoute,
+  getRecentFilePreviewDateVisibility,
+  getRecentFilePreviewHit,
+} from "@/components/search-dialog.logic";
 import {
   canShowSearchSummary,
   clearTime,
@@ -83,12 +96,14 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { createCaseLawDecisionRouteParams } from "@/lib/case-law-route";
+import { DOCX_MIME, PDF_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import {
   searchFacetOptions,
   hasSearchQueryOrSelectiveFilter,
+  recentFilePreviewFieldOptions,
   searchInfiniteOptions,
   searchPreviewOptions,
   TIME_PRESETS,
@@ -109,15 +124,19 @@ import type {
   RecentSearch,
   SearchRecentsScope,
 } from "@/lib/search-recents";
+import { searchTextQueryKey } from "@/lib/search-text";
 import {
+  getFirstSearchHighlightText,
+  getNativeSearchDocumentPreviewTarget,
+  getSearchHighlightText,
   getSearchPreviewRenderContent,
   getSearchPreviewDate,
   getSearchPreviewTarget,
   normalizeSearchQuery,
   selectAuthorizedSearchPreviewData,
+  selectDisplayedSearchPreviewHit,
   selectSearchPreviewHit,
   shouldShowSearchPreview,
-  stripSearchMarkup,
 } from "@/lib/search.logic";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 
@@ -145,6 +164,20 @@ const VIRTUAL_HIT_ESTIMATE_PX = 76;
 const VIRTUAL_HIT_OVERSCAN = 6;
 const SEARCH_PREVIEW_CONTENT_CLASS_NAME =
   "text-foreground/90 [&_mark]:bg-highlight [&_mark]:text-highlight-foreground text-sm leading-6 whitespace-pre-wrap [&_mark]:font-medium";
+const SEARCH_PREVIEW_COLUMN_CLASS_NAME =
+  "hidden min-h-0 w-[min(44%,32rem)] min-w-72 shrink-0 flex-col overflow-hidden border-s md:flex";
+
+const NativeDocumentPreview = lazy(async () => {
+  const { SearchDocumentPreview } =
+    await import("@/components/search-document-preview");
+  return { default: SearchDocumentPreview };
+});
+
+const ChatPreview = lazy(async () => {
+  const { SearchChatPreview } =
+    await import("@/components/search-chat-preview");
+  return { default: SearchChatPreview };
+});
 
 const KIND_ICONS = {
   contact: UserIcon,
@@ -223,15 +256,6 @@ const isAvailableSearchKind = (
   includePublicLaw: boolean,
 ): boolean => type !== "case-law" || includePublicLaw;
 
-const extractHighlightedText = (headline: string): string => {
-  const start = headline.indexOf("<mark>");
-  const end = headline.indexOf("</mark>", start);
-  if (start === -1 || end === -1 || end <= start) {
-    return stripSearchMarkup(headline);
-  }
-  return stripSearchMarkup(headline.slice(start + "<mark>".length, end));
-};
-
 const formatMimeTypeLabel = (mimeType: string): string => {
   if (mimeType === "application/pdf") {
     return "PDF";
@@ -308,6 +332,7 @@ export const SearchDialog = ({
   const user = useAuthenticatedUser();
   const isMobile = useIsMobile();
   const publicLawPreviewEnabled = usePublicLawPreviewEnabled();
+  const [closeActionQueue] = useState(createDialogCloseActionQueue);
   const searchRecentsScope = useMemo(
     (): SearchRecentsScope => ({
       organizationId: user.activeOrganizationId,
@@ -324,6 +349,9 @@ export const SearchDialog = ({
   const [previewEnabled, setPreviewEnabled] = useState(true);
   const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
   const [recentFiles, setRecentFiles] = useState<RecentFile[]>([]);
+  const [recentPreviewFile, setRecentPreviewFile] = useState<RecentFile | null>(
+    null,
+  );
   const [filters, setFilters] = useState<SearchFilters>(() =>
     initialSearchFilters(initialWorkspaceId),
   );
@@ -423,6 +451,9 @@ export const SearchDialog = ({
     }
     return data.pages.flatMap((page) => page.hits);
   }, [data]);
+  const previewLocatorCandidates =
+    data?.pages.at(0)?.previewLocatorCandidates ??
+    EMPTY_SEARCH_PREVIEW_LOCATOR_CANDIDATES;
   const getHitVirtualKey = (index: number) => allHits.at(index)?.id ?? index;
   const previewHit = selectSearchPreviewHit({
     highlightedHitId,
@@ -430,6 +461,12 @@ export const SearchDialog = ({
     isPlaceholderData,
   });
   const showPreview = shouldShowSearchPreview({ isMobile, previewEnabled });
+  const displayedPreviewHit = selectDisplayedSearchPreviewHit({
+    hit: previewHit,
+    showPreview,
+  });
+  const displayedRecentFile =
+    showPreview && !hasVisibleSearch ? recentPreviewFile : null;
 
   // Counts and facets are computed only on the first page (see backend);
   // ignore them entirely while the query is empty so a cleared input
@@ -472,6 +509,7 @@ export const SearchDialog = ({
   >(null);
   if (recentsSnapshotKey !== lastRecentsSnapshotKey) {
     setLastRecentsSnapshotKey(recentsSnapshotKey);
+    setRecentPreviewFile(null);
     if (recentsSnapshotKey) {
       setRecentSearches(readRecentSearches(searchRecentsScope));
       setRecentFiles(readRecentFiles(searchRecentsScope));
@@ -585,6 +623,7 @@ export const SearchDialog = ({
     debouncedSetQuery.cancel();
     setQuery("");
     setDebouncedQuery("");
+    setRecentPreviewFile(null);
     summarizeSearchMutation.reset();
   };
 
@@ -615,6 +654,22 @@ export const SearchDialog = ({
     });
   };
 
+  const navigateAfterClose = (navigateToTarget: () => Promise<unknown>) => {
+    closeActionQueue.schedule(() => {
+      detached(
+        navigateToTarget().catch((error: unknown) => {
+          analytics.captureError(error);
+          stellaToast.add({
+            title: t("common.somethingWentWrong"),
+            type: "error",
+          });
+        }),
+        "SearchDialog.navigateAfterClose",
+      );
+    });
+    onOpenChange(false);
+  };
+
   const handleOpenSummaryChat = () => {
     const trimmedQuery = searchQuery.trim();
     const summaryData = summarizeSearchMutation.data;
@@ -639,14 +694,12 @@ export const SearchDialog = ({
       },
       {
         onSuccess: (thread) => {
-          onOpenChange(false);
-          detached(
-            navigate({
+          navigateAfterClose(async () => {
+            await navigate({
               to: "/chat/$threadId",
               params: { threadId: thread.threadId },
-            }),
-            "onSuccess",
-          );
+            });
+          });
         },
         onError: () => {
           stellaToast.add({
@@ -687,18 +740,20 @@ export const SearchDialog = ({
   };
 
   const applyRecentSearch = (recent: RecentSearch) => {
+    setRecentPreviewFile(null);
     setQuery(recent.query);
     setDebouncedQuery(recent.query);
     summarizeSearchMutation.reset();
     setRecentSearches(recordRecentSearch(recent.query, searchRecentsScope));
   };
 
-  const openRecentFile = async (file: RecentFile) => {
-    onOpenChange(false);
+  const openRecentFile = (file: RecentFile) => {
     setRecentFiles(recordRecentFile(file, searchRecentsScope));
-    await navigate({
-      to: "/workspaces/$workspaceId/entities/$entityId",
-      params: { workspaceId: file.workspaceId, entityId: file.entityId },
+    navigateAfterClose(async () => {
+      await navigate({
+        to: "/workspaces/$workspaceId/entities/$entityId",
+        params: { workspaceId: file.workspaceId, entityId: file.entityId },
+      });
     });
   };
 
@@ -745,22 +800,24 @@ export const SearchDialog = ({
     }));
   };
 
-  const handleResultClick = async (hit: GlobalSearchHit) => {
+  const handleResultClick = (hit: GlobalSearchHit) => {
     if (query.trim()) {
       setRecentSearches(recordRecentSearch(query, searchRecentsScope));
     }
 
-    onOpenChange(false);
     if (hit.type === "contact") {
-      await navigate({
-        to: "/contacts/$contactId",
-        params: { contactId: hit.contactId },
+      navigateAfterClose(async () => {
+        await navigate({
+          to: "/contacts/$contactId",
+          params: { contactId: hit.contactId },
+        });
       });
       return;
     }
 
     if (hit.type === "case-law") {
       if (!isPublicLawPreviewEnabled()) {
+        onOpenChange(false);
         stellaToast.add({
           title: t("common.comingSoon"),
           type: "neutral",
@@ -770,33 +827,39 @@ export const SearchDialog = ({
 
       const slug =
         "slug" in hit && typeof hit.slug === "string" ? hit.slug : null;
-      await navigate({
-        to: "/law/$country/cases/$court/$slug",
-        params: createCaseLawDecisionRouteParams({
-          caseNumber: hit.caseNumber,
-          country: hit.country,
-          court: hit.court,
-          slug,
-        }),
-        search: {
-          ...(hit.headline && {
-            q: extractHighlightedText(hit.headline),
+      navigateAfterClose(async () => {
+        await navigate({
+          to: "/law/$country/cases/$court/$slug",
+          params: createCaseLawDecisionRouteParams({
+            caseNumber: hit.caseNumber,
+            country: hit.country,
+            court: hit.court,
+            slug,
           }),
-        },
+          search: {
+            ...(hit.headline && {
+              q: getFirstSearchHighlightText(hit.headline, ""),
+            }),
+          },
+        });
       });
       return;
     }
 
     if (hit.type === "matter") {
-      await navigate({
-        to: "/workspaces/$workspaceId",
-        params: { workspaceId: hit.workspaceId },
+      navigateAfterClose(async () => {
+        await navigate({
+          to: "/workspaces/$workspaceId",
+          params: { workspaceId: hit.workspaceId },
+        });
       });
       return;
     }
 
     if (hit.type === "chat") {
-      await navigate(getChatHitRoute(hit));
+      navigateAfterClose(async () => {
+        await navigate(getChatHitRoute(hit));
+      });
       return;
     }
 
@@ -805,27 +868,29 @@ export const SearchDialog = ({
         recordRecentFile(
           {
             entityId: hit.entityId,
+            fileFieldId: hit.fileFieldId,
+            filePropertyId: hit.filePropertyId,
             mimeType: hit.mimeType,
             title: hit.title || hit.id,
             workspaceId: hit.workspaceId,
             workspaceName: hit.workspaceName,
+            updatedAt: hit.updatedAt,
           },
           searchRecentsScope,
         ),
       );
     }
 
-    await navigate({
-      to: "/workspaces/$workspaceId/entities/$entityId",
-      params: { workspaceId: hit.workspaceId, entityId: hit.entityId },
+    navigateAfterClose(async () => {
+      await navigate({
+        to: "/workspaces/$workspaceId/entities/$entityId",
+        params: { workspaceId: hit.workspaceId, entityId: hit.entityId },
+      });
     });
   };
 
   const openSearchResult = (hit: GlobalSearchHit): void => {
-    handleResultClick(hit).catch((error: unknown) => {
-      analytics.captureError(error);
-      stellaToast.add({ title: t("common.somethingWentWrong"), type: "error" });
-    });
+    handleResultClick(hit);
   };
 
   const hasResults = allHits.length > 0;
@@ -894,6 +959,7 @@ export const SearchDialog = ({
   const applySavedSearch = (criteria: SavedSearchCriteria) => {
     const savedFilters = toSearchFilters(criteria);
     debouncedSetQuery.cancel();
+    setRecentPreviewFile(null);
     setQuery(criteria.query);
     setDebouncedQuery(criteria.query);
     setFilters({
@@ -910,7 +976,13 @@ export const SearchDialog = ({
 
   return (
     <CommandDialog
+      onOpenChangeComplete={(nextOpen) => {
+        closeActionQueue.complete(nextOpen);
+      }}
       onOpenChange={(nextOpen, eventDetails) => {
+        if (nextOpen) {
+          closeActionQueue.cancel();
+        }
         if (
           !nextOpen &&
           eventDetails.reason === "escape-key" &&
@@ -926,17 +998,18 @@ export const SearchDialog = ({
     >
       <CommandDialogPopup
         className={cn(
-          "flex h-[calc(100dvh-32px)] w-[calc(100vw-16px)] max-w-none flex-col overflow-hidden sm:h-[min(720px,calc(100dvh-96px))]",
+          "flex h-[calc(100dvh-32px)] w-[calc(100vw-16px)] max-w-none flex-col overflow-clip sm:h-[min(720px,calc(100dvh-96px))]",
           showPreview
             ? "sm:w-[min(1120px,calc(100vw-32px))] xl:w-[min(1280px,calc(100vw-48px))]"
             : "sm:w-[min(960px,calc(100vw-32px))]",
         )}
+        layer="search"
         showCloseButton={false}
       >
         <Command
           itemToStringValue={(hit) => hit.title}
           items={commandHits}
-          keepHighlight={false}
+          keepHighlight
           mode="none"
           onItemHighlighted={(_, eventDetails) => {
             if (eventDetails.index < 0) {
@@ -963,6 +1036,7 @@ export const SearchDialog = ({
               return;
             }
             setQuery(value);
+            setRecentPreviewFile(null);
             debouncedSetQuery(value);
             summarizeSearchMutation.reset();
           }}
@@ -1002,6 +1076,7 @@ export const SearchDialog = ({
               filters={filters}
               isOpen={open}
               onApply={applySavedSearch}
+              overlayLayer="search-child"
               query={query}
               showList={false}
             />
@@ -1041,7 +1116,7 @@ export const SearchDialog = ({
           </div>
 
           {/* Content area */}
-          <div className="flex min-h-0 flex-1">
+          <div className="flex min-h-0 flex-1 overflow-hidden">
             {/* Facets sidebar — always present so the layout stays stable. */}
             <div
               className={cn(
@@ -1157,12 +1232,15 @@ export const SearchDialog = ({
                     filters={filters}
                     isOpen={open}
                     onApply={applySavedSearch}
+                    overlayLayer="search-child"
                     query={query}
                     showTrigger={false}
                   />
                   <SearchRecents
                     onFileClick={openRecentFile}
+                    onFilePreview={setRecentPreviewFile}
                     onSearchClick={applyRecentSearch}
+                    previewedFileId={displayedRecentFile?.entityId ?? null}
                     recentFiles={recentFiles}
                     recentSearches={recentSearches}
                   />
@@ -1312,13 +1390,31 @@ export const SearchDialog = ({
                 </div>
               )}
             </CommandList>
-            {showPreview && (
+            {showPreview && displayedPreviewHit && (
               <SearchPreviewPanel
-                hit={previewHit}
+                hit={displayedPreviewHit}
                 onOpen={openSearchResult}
                 organizationId={searchRecentsScope.organizationId}
+                previewLocatorCandidates={previewLocatorCandidates}
                 query={searchQuery}
                 userId={searchRecentsScope.userId}
+              />
+            )}
+            {showPreview && !displayedPreviewHit && displayedRecentFile && (
+              <RecentFilePreviewPanel
+                file={displayedRecentFile}
+                organizationId={searchRecentsScope.organizationId}
+                onOpen={() => {
+                  openRecentFile(displayedRecentFile);
+                }}
+                userId={searchRecentsScope.userId}
+              />
+            )}
+            {showPreview && !displayedPreviewHit && !displayedRecentFile && (
+              <div
+                aria-hidden="true"
+                className={SEARCH_PREVIEW_COLUMN_CLASS_NAME}
+                data-slot="search-preview-placeholder"
               />
             )}
           </div>
@@ -1329,16 +1425,111 @@ export const SearchDialog = ({
 };
 
 type SearchPreviewPanelProps = {
-  hit: GlobalSearchHit | null;
+  dateVisibility?: "hide" | "show" | undefined;
+  hit: GlobalSearchHit;
   organizationId: string;
+  previewLocatorCandidates?: readonly string[] | undefined;
   query: string;
   userId: string;
   onOpen: (hit: GlobalSearchHit) => void;
 };
 
+type RecentFilePreviewPanelProps = {
+  file: RecentFile;
+  onOpen: () => void;
+  organizationId: string;
+  userId: string;
+};
+
+type RecentFilePreviewUnavailableProps = {
+  reason: "missing" | "request-error";
+};
+
+const RecentFilePreviewUnavailable = ({
+  reason,
+}: RecentFilePreviewUnavailableProps) => {
+  const t = useTranslations();
+  let message: string;
+  switch (reason) {
+    case "missing":
+      message = t("search.previewUnavailable");
+      break;
+    case "request-error":
+      message = t("common.somethingWentWrong");
+      break;
+    default: {
+      const exhaustive: never = reason;
+      return exhaustive;
+    }
+  }
+  return (
+    <aside className={SEARCH_PREVIEW_COLUMN_CLASS_NAME}>
+      <div className="text-muted-foreground flex flex-1 items-center justify-center px-5 text-center text-sm">
+        {message}
+      </div>
+    </aside>
+  );
+};
+
+const RecentFilePreviewPanel = ({
+  file,
+  onOpen,
+  organizationId,
+  userId,
+}: RecentFilePreviewPanelProps) => {
+  const isNativeDocument =
+    file.mimeType === PDF_MIME || file.mimeType === DOCX_MIME;
+  const fieldQuery = useQuery({
+    ...recentFilePreviewFieldOptions({
+      entityId: file.entityId,
+      fileFieldId: file.fileFieldId,
+      filePropertyId: file.filePropertyId,
+      mimeType: file.mimeType ?? null,
+      organizationId,
+      userId,
+      workspaceId: file.workspaceId,
+    }),
+    enabled: isNativeDocument,
+  });
+  if (isNativeDocument && fieldQuery.isPending) {
+    return (
+      <aside className={SEARCH_PREVIEW_COLUMN_CLASS_NAME}>
+        <NativeDocumentPreviewSkeleton />
+      </aside>
+    );
+  }
+  if (isNativeDocument && fieldQuery.isError) {
+    return <RecentFilePreviewUnavailable reason="request-error" />;
+  }
+  if (isNativeDocument && fieldQuery.data === null) {
+    return <RecentFilePreviewUnavailable reason="missing" />;
+  }
+
+  const resolvedFieldId = isNativeDocument
+    ? (fieldQuery.data ?? null)
+    : (file.fileFieldId ?? null);
+
+  const hit = getRecentFilePreviewHit(file, resolvedFieldId);
+
+  return (
+    <SearchPreviewPanel
+      dateVisibility={getRecentFilePreviewDateVisibility(file)}
+      hit={hit}
+      onOpen={() => {
+        onOpen();
+      }}
+      organizationId={organizationId}
+      query=""
+      userId={userId}
+    />
+  );
+};
+
 const SearchPreviewPanel = ({
+  dateVisibility = "show",
   hit,
   organizationId,
+  previewLocatorCandidates = EMPTY_SEARCH_PREVIEW_LOCATOR_CANDIDATES,
   query,
   userId,
   onOpen,
@@ -1349,76 +1540,52 @@ const SearchPreviewPanel = ({
   return (
     <aside
       aria-labelledby={headingId}
-      className="hidden w-[min(44%,32rem)] min-w-72 shrink-0 flex-col border-s md:flex"
+      className={SEARCH_PREVIEW_COLUMN_CLASS_NAME}
     >
       <h2 className="sr-only" id={headingId}>
         {t("common.preview")}
       </h2>
-      {hit ? (
-        <SearchPreviewContent
-          hit={hit}
-          key={`${hit.type}:${hit.id}:${hit.updatedAt}:${normalizeSearchQuery(query)}`}
-          onOpen={onOpen}
-          organizationId={organizationId}
-          query={query}
-          userId={userId}
-        />
-      ) : (
-        <>
-          <div className="shrink-0 border-b px-4 py-3 text-sm font-medium">
-            {t("common.preview")}
-          </div>
-          <div className="text-muted-foreground flex flex-1 items-center justify-center px-5 text-center text-sm">
-            {t("search.emptyState")}
-          </div>
-        </>
-      )}
+      <SearchPreviewContent
+        dateVisibility={dateVisibility}
+        hit={hit}
+        key={`${hit.type}:${hit.id}:${hit.updatedAt}:${normalizeSearchQuery(query)}`}
+        onOpen={onOpen}
+        organizationId={organizationId}
+        previewLocatorCandidates={previewLocatorCandidates}
+        query={query}
+        userId={userId}
+      />
     </aside>
   );
 };
 
 type SearchPreviewContentProps = {
+  dateVisibility: "hide" | "show";
   hit: GlobalSearchHit;
   organizationId: string;
+  previewLocatorCandidates: readonly string[];
   query: string;
   userId: string;
   onOpen: (hit: GlobalSearchHit) => void;
 };
 
 const SearchPreviewContent = ({
+  dateVisibility,
   hit,
   organizationId,
+  previewLocatorCandidates,
   query,
   userId,
   onOpen,
 }: SearchPreviewContentProps) => {
   const t = useTranslations();
   const format = useFormatter();
-  const target = getSearchPreviewTarget(hit);
-  const { data, isError, isFetchedAfterMount, isFetching, refetch } = useQuery(
-    searchPreviewOptions({
-      organizationId,
-      query,
-      resultId: target.resultId,
-      type: target.type,
-      updatedAt: hit.updatedAt,
-      userId,
-    }),
-  );
-  const authorizedData = selectAuthorizedSearchPreviewData({
-    data,
-    isError,
-    isFetchedAfterMount,
-    isFetching,
-  });
-  const renderContent = authorizedData
-    ? getSearchPreviewRenderContent(authorizedData)
-    : null;
   const location =
     hit.type === "contact" || hit.type === "case-law"
       ? null
       : hit.workspaceName;
-  const previewDate = getSearchPreviewDate(hit);
+  const previewDate =
+    dateVisibility === "show" ? getSearchPreviewDate(hit) : null;
   const formattedPreviewDate = previewDate
     ? format.dateTime(new Date(previewDate.value), {
         month: "short",
@@ -1464,55 +1631,165 @@ const SearchPreviewContent = ({
           </Button>
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
-        {!isError && authorizedData === undefined && (
-          <div className="space-y-3">
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-11/12" />
-            <Skeleton className="h-4 w-4/5" />
-            <Skeleton className="mt-6 h-4 w-full" />
-            <Skeleton className="h-4 w-3/4" />
-          </div>
-        )}
-        {isError && (
-          <div className="flex min-h-48 flex-col items-center justify-center gap-3">
-            <p className="text-muted-foreground text-sm">
-              {t("common.somethingWentWrong")}
-            </p>
-            <Button
-              disabled={isFetching}
-              onClick={() => {
-                detached(refetch(), "SearchPreviewContent");
-              }}
-              size="sm"
-              variant="outline"
-            >
-              {t("common.retry")}
-            </Button>
-          </div>
-        )}
-        {renderContent?.type === "plain-text" && (
-          <div
-            className={SEARCH_PREVIEW_CONTENT_CLASS_NAME}
-            dir={contentDir(renderContent.directionText)}
-          >
-            {renderContent.text}
-          </div>
-        )}
-        {renderContent?.type === "highlighted-html" && (
-          <div
-            className={SEARCH_PREVIEW_CONTENT_CLASS_NAME}
-            dir={contentDir(renderContent.directionText)}
-            dangerouslySetInnerHTML={{
-              // safe-html: preview content is server-escaped before the trusted <mark> tags are inserted
-              __html: renderContent.html,
-            }}
-          />
-        )}
-      </div>
+      <SearchPreviewBody
+        hit={hit}
+        organizationId={organizationId}
+        previewLocatorCandidates={previewLocatorCandidates}
+        query={query}
+        userId={userId}
+      />
     </>
   );
 };
+
+type SearchPreviewBodyProps = Pick<
+  SearchPreviewContentProps,
+  "hit" | "organizationId" | "previewLocatorCandidates" | "query" | "userId"
+>;
+
+const SearchPreviewBody = (props: SearchPreviewBodyProps) => {
+  const { hit } = props;
+  const searchText = useMemo(
+    () =>
+      getSearchHighlightText({
+        headline: hit.headline,
+        previewLocatorCandidates: props.previewLocatorCandidates,
+        query: props.query,
+      }),
+    [hit.headline, props.previewLocatorCandidates, props.query],
+  );
+  const nativePreviewTarget = getNativeSearchDocumentPreviewTarget(hit);
+  if (nativePreviewTarget) {
+    return (
+      <div className="min-h-0 flex-1 overflow-hidden">
+        <Suspense fallback={<NativeDocumentPreviewSkeleton />}>
+          <NativeDocumentPreview
+            fallback={<NativeDocumentPreviewSkeleton />}
+            key={`${hit.id}:${searchTextQueryKey(searchText)}`}
+            noMatchFallback={<SearchTextPreview {...props} />}
+            searchText={searchText}
+            target={nativePreviewTarget}
+          />
+        </Suspense>
+      </div>
+    );
+  }
+
+  return <SearchTextPreview {...props} />;
+};
+
+const NativeDocumentPreviewSkeleton = () => (
+  <div className="bg-muted/40 flex h-full justify-center overflow-hidden p-3">
+    <Skeleton className="h-[calc(100%+8rem)] w-full max-w-sm rounded-sm" />
+  </div>
+);
+
+const SearchTextPreview = ({
+  hit,
+  organizationId,
+  previewLocatorCandidates,
+  query,
+  userId,
+}: SearchPreviewBodyProps) => {
+  const t = useTranslations();
+  const searchText = useMemo(
+    () =>
+      getSearchHighlightText({
+        headline: hit.headline,
+        previewLocatorCandidates,
+        query,
+      }),
+    [hit.headline, previewLocatorCandidates, query],
+  );
+  const target = getSearchPreviewTarget(hit);
+  const { data, isError, isFetchedAfterMount, isFetching, refetch } = useQuery(
+    searchPreviewOptions({
+      organizationId,
+      query,
+      resultId: target.resultId,
+      type: target.type,
+      updatedAt: hit.updatedAt,
+      userId,
+    }),
+  );
+  const authorizedData = selectAuthorizedSearchPreviewData({
+    data,
+    isError,
+    isFetchedAfterMount,
+    isFetching,
+  });
+  const renderContent = authorizedData
+    ? getSearchPreviewRenderContent(authorizedData)
+    : null;
+
+  return (
+    <div
+      className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5"
+      data-slot="search-preview-scroll-area"
+    >
+      {!isError && authorizedData === undefined && (
+        <div className="space-y-3">
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-11/12" />
+          <Skeleton className="h-4 w-4/5" />
+          <Skeleton className="mt-6 h-4 w-full" />
+          <Skeleton className="h-4 w-3/4" />
+        </div>
+      )}
+      {isError && (
+        <div className="flex min-h-48 flex-col items-center justify-center gap-3">
+          <p className="text-muted-foreground text-sm">
+            {t("common.somethingWentWrong")}
+          </p>
+          <Button
+            disabled={isFetching}
+            onClick={() => {
+              detached(refetch(), "SearchTextPreview");
+            }}
+            size="sm"
+            variant="outline"
+          >
+            {t("common.retry")}
+          </Button>
+        </div>
+      )}
+      {renderContent?.type === "plain-text" && (
+        <div
+          className={SEARCH_PREVIEW_CONTENT_CLASS_NAME}
+          dir={contentDir(renderContent.directionText)}
+        >
+          {renderContent.text}
+        </div>
+      )}
+      {renderContent?.type === "chat-messages" && (
+        <Suspense fallback={<SearchTextPreviewSkeleton />}>
+          <ChatPreview
+            messages={renderContent.messages}
+            searchText={searchText}
+          />
+        </Suspense>
+      )}
+      {renderContent?.type === "highlighted-html" && (
+        <div
+          className={SEARCH_PREVIEW_CONTENT_CLASS_NAME}
+          dir={contentDir(renderContent.directionText)}
+          dangerouslySetInnerHTML={{
+            // safe-html: preview content is server-escaped before the trusted <mark> tags are inserted
+            __html: renderContent.html,
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+const SearchTextPreviewSkeleton = () => (
+  <div className="space-y-3">
+    <Skeleton className="h-12 w-4/5" />
+    <Skeleton className="ms-auto h-16 w-3/4" />
+    <Skeleton className="h-20 w-11/12" />
+  </div>
+);
 
 type SearchSummaryItemProps = {
   summarizeMutation: UseMutationResult<
@@ -1644,6 +1921,7 @@ const SummaryBody = ({
         <Tooltip
           content={`${citation.title}\n${citation.reason}`}
           key={`${citation.id}-${start}`}
+          layer="search-child"
           render={
             <button
               className="text-foreground hover:bg-muted mx-0.5 rounded px-1 font-medium"
@@ -1676,7 +1954,9 @@ type SearchRecentsProps = {
   recentSearches: RecentSearch[];
   recentFiles: RecentFile[];
   onSearchClick: (recent: RecentSearch) => void;
-  onFileClick: (file: RecentFile) => Promise<void>;
+  onFileClick: (file: RecentFile) => void;
+  onFilePreview: (file: RecentFile) => void;
+  previewedFileId: string | null;
 };
 
 const SearchRecents = ({
@@ -1684,6 +1964,8 @@ const SearchRecents = ({
   recentFiles,
   onSearchClick,
   onFileClick,
+  onFilePreview,
+  previewedFileId,
 }: SearchRecentsProps) => {
   const t = useTranslations();
   const hasRecents = recentSearches.length > 0 || recentFiles.length > 0;
@@ -1730,12 +2012,20 @@ const SearchRecents = ({
           <div className="flex flex-col gap-y-1">
             {recentFiles.map((file) => (
               <Button
+                aria-current={
+                  previewedFileId === file.entityId ? "true" : undefined
+                }
                 className="h-auto! w-full justify-start gap-2 py-1 text-start text-sm"
+                data-previewing={previewedFileId === file.entityId}
                 key={file.entityId}
+                onFocus={() => onFilePreview(file)}
                 onClick={() => {
-                  detached(onFileClick(file), "SearchRecents");
+                  onFileClick(file);
                 }}
-                variant="ghost"
+                onPointerEnter={() => onFilePreview(file)}
+                variant={
+                  previewedFileId === file.entityId ? "secondary" : "ghost"
+                }
               >
                 {file.mimeType ? (
                   <DocumentIcon
@@ -1882,6 +2172,7 @@ const TimeFacetGroup = ({
               {t("search.dateFrom")}
             </p>
             <DatePickerPopover
+              layer="search-child"
               locale={locale}
               onChange={handleFromChange}
               value={customFromValue}
@@ -1893,6 +2184,7 @@ const TimeFacetGroup = ({
               {t("search.dateTo")}
             </p>
             <DatePickerPopover
+              layer="search-child"
               locale={locale}
               onChange={handleToChange}
               value={customToValue}
@@ -1925,6 +2217,7 @@ type FacetBucket = { value: string; label?: string; count: number };
 
 const EMPTY_FACET_BUCKETS: readonly FacetBucket[] = [];
 const EMPTY_SEARCH_HITS: readonly GlobalSearchHit[] = [];
+const EMPTY_SEARCH_PREVIEW_LOCATOR_CANDIDATES: readonly string[] = [];
 
 type FacetBucketListProps = {
   buckets: FacetBucket[];

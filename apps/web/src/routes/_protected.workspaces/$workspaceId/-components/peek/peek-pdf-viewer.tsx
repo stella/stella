@@ -20,8 +20,10 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { resolveFindMatchRange } from "@stll/folio-core/prosemirror/findReplaceSelection";
 import type { DocxEditorRef } from "@stll/folio-react";
 import { Button } from "@stll/ui/components/button";
+import type { OverlayLayer } from "@stll/ui/lib/overlay-layer";
 import "@stll/folio-react/editor.css";
 
 import "./peek-docx.css";
@@ -37,9 +39,15 @@ import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
+import { findDocumentSearchResult } from "@/lib/document-search";
+import type { DocumentSearchResult } from "@/lib/document-search";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
 import { PDFPage } from "@/lib/pdf/pdf-page";
 import { PDFViewport } from "@/lib/pdf/pdf-viewport";
+import type { SearchMatchSummary } from "@/lib/search-match-navigation";
+import { MAX_SEARCH_PREVIEW_MATCHES } from "@/lib/search-match-navigation";
+import { searchTextQueryKey } from "@/lib/search-text";
+import type { SearchTextQuery } from "@/lib/search-text";
 import { composeRefs } from "@/lib/utils";
 import { useDocxBlockScroll } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/use-docx-block-scroll";
 import { fileOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
@@ -55,6 +63,40 @@ const DocxEditor = lazy(async () => {
   return { default: m.DocxEditor };
 });
 
+const SEARCH_HIGHLIGHT_MAX_ANIMATION_FRAMES = 120;
+
+type ScheduleSearchHighlightFrameOptions = {
+  attempt: () => boolean;
+  onFrame: (frame: number | null) => void;
+  remainingFrames?: number | undefined;
+};
+
+type DocxSearchResultCache = {
+  document: ReturnType<DocxEditorRef["getDocument"]>;
+  result: DocumentSearchResult;
+  searchTextKey: string;
+};
+
+const scheduleSearchHighlightFrame = ({
+  attempt,
+  onFrame,
+  remainingFrames = SEARCH_HIGHLIGHT_MAX_ANIMATION_FRAMES,
+}: ScheduleSearchHighlightFrameOptions): void => {
+  if (attempt() || remainingFrames <= 1) {
+    onFrame(null);
+    return;
+  }
+
+  const frame = requestAnimationFrame(() => {
+    scheduleSearchHighlightFrame({
+      attempt,
+      onFrame,
+      remainingFrames: remainingFrames - 1,
+    });
+  });
+  onFrame(frame);
+};
+
 type PeekPdfViewerProps = {
   workspaceId: string;
   viewId: string;
@@ -64,6 +106,12 @@ type PeekPdfViewerProps = {
   filePurpose?: "display" | "native-display" | undefined;
   scaleOffset: number;
   mimeType?: string | undefined;
+  interactionMode?: "preview-only" | "with-ai" | undefined;
+  searchText?: SearchTextQuery | undefined;
+  activeSearchMatchIndex?: number | undefined;
+  onSearchMatchSummaryChange?:
+    | ((summary: SearchMatchSummary) => void)
+    | undefined;
   /** Called when navigating from peek to fullscreen PDF (e.g. inspector close). */
   onPeekNavigate?: (() => void) | undefined;
   docxPrintActionsRef?: RefObject<Map<string, () => void>> | undefined;
@@ -78,8 +126,11 @@ export const PeekPdfViewer = (props: PeekPdfViewerProps) => {
     fieldId,
     filePurpose = "display",
     onError,
+    searchText,
     workspaceId,
   } = props;
+  const searchTextKey =
+    searchText === undefined ? undefined : searchTextQueryKey(searchText);
 
   return (
     <QuerySuspenseBoundary
@@ -87,7 +138,7 @@ export const PeekPdfViewer = (props: PeekPdfViewerProps) => {
       errorFallback={errorFallback ?? defaultPeekViewerErrorFallback}
       suspenseFallback={<PeekSuspenseFallback />}
       onError={onError}
-      resetKeys={[workspaceId, fieldId, filePurpose]}
+      resetKeys={[workspaceId, fieldId, filePurpose, searchTextKey]}
     >
       <PeekPdfViewerContent {...props} filePurpose={filePurpose} />
     </QuerySuspenseBoundary>
@@ -103,6 +154,10 @@ const PeekPdfViewerContent = ({
   filePurpose = "display",
   scaleOffset,
   mimeType,
+  interactionMode = "with-ai",
+  searchText = "",
+  activeSearchMatchIndex = 0,
+  onSearchMatchSummaryChange,
   onPeekNavigate,
   docxPrintActionsRef,
   onDocxScrollTopChange,
@@ -129,7 +184,10 @@ const PeekPdfViewerContent = ({
     [activePropertyId, entityId, fieldId, onPeekNavigate, viewId, workspaceId],
   );
 
-  if (fileQuery.isError || !file) {
+  if (fileQuery.isError) {
+    throw fileQuery.error;
+  }
+  if (!file) {
     return null;
   }
 
@@ -138,14 +196,40 @@ const PeekPdfViewerContent = ({
       <Suspense fallback={<PeekSuspenseFallback />}>
         <PeekDocxViewer
           buffer={file.buffer}
+          activeSearchMatchIndex={activeSearchMatchIndex}
           fieldId={fieldId}
           printActionsRef={docxPrintActionsRef}
           onScrollTopChange={onDocxScrollTopChange}
+          onSearchMatchSummaryChange={onSearchMatchSummaryChange}
           scaleOffset={scaleOffset}
+          searchText={
+            interactionMode === "preview-only" ? searchText : undefined
+          }
           workspaceId={workspaceId}
         />
       </Suspense>
     );
+  }
+
+  const viewport = (
+    <PDFViewport
+      buffer={file.buffer}
+      className="document-preview-surface h-full"
+      contentClassName="relative space-y-2 px-2 pt-2"
+      fileId={fieldId}
+      invertColors={isImageOrigin ? false : undefined}
+      scaleOffset={scaleOffset}
+      activeSearchMatchIndex={activeSearchMatchIndex}
+      onSearchMatchSummaryChange={onSearchMatchSummaryChange}
+      searchText={searchText}
+      renderPage={(props) => (
+        <PDFPage {...props} renderOverlay={renderPageOverlay} />
+      )}
+    />
+  );
+
+  if (interactionMode === "preview-only") {
+    return viewport;
   }
 
   return (
@@ -153,17 +237,7 @@ const PeekPdfViewerContent = ({
       activeFile={{ entityId, fileFieldId: fieldId, fileName: file.fileName }}
       workspaceId={workspaceId}
     >
-      <PDFViewport
-        buffer={file.buffer}
-        className="document-preview-surface h-full"
-        contentClassName="relative space-y-2 px-2 pt-2"
-        fileId={fieldId}
-        invertColors={isImageOrigin ? false : undefined}
-        scaleOffset={scaleOffset}
-        renderPage={(props) => (
-          <PDFPage {...props} renderOverlay={renderPageOverlay} />
-        )}
-      />
+      {viewport}
     </FileViewerWithAI>
   );
 };
@@ -200,12 +274,14 @@ export const PeekPdfControls = ({
   onZoomOut,
   onResetZoom,
   scaleOffset,
+  tooltipLayer,
 }: {
   canResetZoom: boolean;
   onZoomIn?: (() => void) | undefined;
   onZoomOut?: (() => void) | undefined;
   onResetZoom?: (() => void) | undefined;
   scaleOffset: number;
+  tooltipLayer?: OverlayLayer | undefined;
 }) => {
   const t = useTranslations();
 
@@ -213,6 +289,7 @@ export const PeekPdfControls = ({
     <>
       <Tooltip
         content={t("workspaces.pdf.zoomOut")}
+        layer={tooltipLayer}
         render={
           <Button
             disabled={!onZoomOut}
@@ -226,6 +303,7 @@ export const PeekPdfControls = ({
       />
       <Tooltip
         content={t("workspaces.pdf.zoomIn")}
+        layer={tooltipLayer}
         render={
           <Button
             disabled={!onZoomIn}
@@ -239,6 +317,7 @@ export const PeekPdfControls = ({
       />
       <Tooltip
         content={t("workspaces.pdf.resetZoom")}
+        layer={tooltipLayer}
         render={
           <Button
             disabled={!canResetZoom || !onResetZoom}
@@ -384,23 +463,33 @@ export const PreparedPdfPrintButton = ({
 // ── DOCX peek viewer with zoom wiring ──────────────────
 
 const PeekDocxViewer = ({
+  activeSearchMatchIndex,
   buffer,
   fieldId,
   onScrollTopChange,
+  onSearchMatchSummaryChange,
   printActionsRef,
   scaleOffset,
+  searchText,
   workspaceId,
 }: {
+  activeSearchMatchIndex: number;
   buffer: ArrayBuffer;
   fieldId: string;
   onScrollTopChange?: ((scrollTop: number) => void) | undefined;
+  onSearchMatchSummaryChange?:
+    | ((summary: SearchMatchSummary) => void)
+    | undefined;
   printActionsRef?: RefObject<Map<string, () => void>> | undefined;
   scaleOffset: number;
+  searchText: SearchTextQuery | undefined;
   workspaceId: string;
 }) => {
   const analytics = useAnalytics();
   const editorRef = useRef<DocxEditorRef>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const searchHighlightFrameRef = useRef<number | null>(null);
+  const searchResultCacheRef = useRef<DocxSearchResultCache | null>(null);
   const { containerRef: fitZoomRef, fitZoom: targetZoom } = useDocxFitZoom({
     scaleOffset,
   });
@@ -411,6 +500,103 @@ const PeekDocxViewer = ({
     [fitZoomRef],
   );
   useDocxBlockScroll({ editorRef, fieldId });
+  const searchTextKey =
+    searchText === undefined ? undefined : searchTextQueryKey(searchText);
+
+  const highlightSearchResult = useCallback(() => {
+    if (searchText === undefined) {
+      return true;
+    }
+
+    const editor = editorRef.current;
+    if (!editor) {
+      return false;
+    }
+
+    editor.ensureEditorView({ focus: false });
+    const pagedEditor = editor.getEditorRef();
+    if (!pagedEditor) {
+      return false;
+    }
+    const view = pagedEditor.getView();
+    if (!view) {
+      return false;
+    }
+
+    const document = editor.getDocument();
+    const cachedSearchResult = searchResultCacheRef.current;
+    const searchResult =
+      cachedSearchResult?.document === document &&
+      cachedSearchResult.searchTextKey === searchTextKey
+        ? cachedSearchResult.result
+        : findDocumentSearchResult({
+            document,
+            maxMatches: MAX_SEARCH_PREVIEW_MATCHES,
+            searchText,
+          });
+    searchResultCacheRef.current = {
+      document,
+      result: searchResult,
+      searchTextKey: searchTextKey ?? "",
+    };
+    onSearchMatchSummaryChange?.({
+      count: searchResult.matches.length,
+      truncated: searchResult.truncated,
+    });
+    const match = searchResult.matches.at(activeSearchMatchIndex);
+    if (!match) {
+      pagedEditor.setPassageHighlight(null);
+      return true;
+    }
+
+    const range = resolveFindMatchRange(view.state.doc, match);
+    if (!range) {
+      pagedEditor.setPassageHighlight(null);
+      return true;
+    }
+
+    pagedEditor.setPassageHighlight(range);
+    pagedEditor.scrollToPosition(range.from);
+    return true;
+  }, [
+    activeSearchMatchIndex,
+    onSearchMatchSummaryChange,
+    searchText,
+    searchTextKey,
+  ]);
+
+  const scheduleSearchHighlight = useCallback(() => {
+    if (searchHighlightFrameRef.current !== null) {
+      cancelAnimationFrame(searchHighlightFrameRef.current);
+    }
+
+    scheduleSearchHighlightFrame({
+      attempt: highlightSearchResult,
+      onFrame: (frame) => {
+        searchHighlightFrameRef.current = frame;
+      },
+    });
+  }, [highlightSearchResult]);
+
+  useMountEffect(() => () => {
+    if (searchHighlightFrameRef.current !== null) {
+      cancelAnimationFrame(searchHighlightFrameRef.current);
+    }
+  });
+
+  useExternalSyncEffect(() => {
+    scheduleSearchHighlight();
+  }, [scheduleSearchHighlight]);
+
+  const handleDocumentReady = useCallback(() => {
+    searchResultCacheRef.current = null;
+    scheduleSearchHighlight();
+  }, [scheduleSearchHighlight]);
+
+  const handleEditorViewReady = useCallback(() => {
+    searchResultCacheRef.current = null;
+    scheduleSearchHighlight();
+  }, [scheduleSearchHighlight]);
 
   // Sync scaleOffset from inspector +/- buttons to Folio zoom
   useLayoutEffect(() => {
@@ -452,6 +638,8 @@ const PeekDocxViewer = ({
         documentBuffer={buffer}
         initialZoom={targetZoom}
         loadingIndicator={null}
+        onCompatibilityChange={handleDocumentReady}
+        onEditorViewReady={handleEditorViewReady}
         readOnly
         showToolbar={false}
         showZoomControl={false}

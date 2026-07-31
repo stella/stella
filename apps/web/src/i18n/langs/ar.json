@@ -2367,6 +2367,7 @@
     "mimeType": "نوع الملف",
     "noResults": "لا نتائج لـ «{query}».",
     "placeholder": "البحث عبر جميع الملفات القانونية...",
+    "previewUnavailable": "المعاينة غير متوفرة",
     "recentSearches": "عمليات البحث الأخيرة",
     "recentlyOpenedFiles": "الملفات المفتوحة مؤخراً",
     "renameSearchTitle": "إعادة تسمية البحث المحفوظ",

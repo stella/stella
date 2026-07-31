@@ -2367,6 +2367,7 @@
     "mimeType": "Typ pliku",
     "noResults": "Brak wyników dla „{query}”.",
     "placeholder": "Przeszukaj wszystkie sprawy...",
+    "previewUnavailable": "Podgląd niedostępny",
     "recentSearches": "Ostatnie wyszukiwania",
     "recentlyOpenedFiles": "Ostatnio otwarte pliki",
     "renameSearchTitle": "Zmień nazwę zapisanego wyszukiwania",

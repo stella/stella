@@ -2367,6 +2367,7 @@
     "mimeType": "Failo tipas",
     "noResults": "Nerasta rezultatų pagal \"{query}\".",
     "placeholder": "Ieškoti visose bylose...",
+    "previewUnavailable": "Peržiūra nepasiekiama",
     "recentSearches": "Naujausios paieškos",
     "recentlyOpenedFiles": "Neseniai atidaryti failai",
     "renameSearchTitle": "Pervadinti išsaugotą paiešką",

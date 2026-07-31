@@ -1,7 +1,10 @@
 import { sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
-import { normalizePersistedChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
+import {
+  isChatPart,
+  normalizePersistedChatMessageContent,
+} from "@/api/handlers/chat/chat-message-parts";
 import type {
   ChatMessageRole,
   PersistedChatMessageContent,
@@ -10,19 +13,100 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
-import {
-  buildSearchPreviewPassages,
-  buildSearchPreviewPassageValueRows,
-} from "@/api/lib/search/preview-passages";
+import { CHAT_SEARCH_DISPLAY_METADATA_GENERATION } from "@/api/lib/search/chat-search-generation";
 
 const BACKFILL_BATCH_SIZE = 200;
 const ZERO_UUID = "00000000-0000-0000-0000-000000000000";
 
-const extractMessageSearchText = (
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const isPersistedChatMessageContent = (
+  value: unknown,
+): value is PersistedChatMessageContent =>
+  isRecord(value) &&
+  (value["version"] === 1 || value["version"] === 2) &&
+  Array.isArray(value["data"]);
+
+type SearchableChatSourceDocument = {
+  entityId?: string;
+  entityRef?: string;
+  kind: string;
+  matterRef?: string;
+  mention?: string;
+  mimeType?: string | null;
+  title: string;
+  workspaceId?: string | null;
+};
+
+const toSearchableChatSourceDocument = (
+  value: unknown,
+): SearchableChatSourceDocument | null => {
+  if (
+    !isRecord(value) ||
+    typeof value["kind"] !== "string" ||
+    typeof value["title"] !== "string"
+  ) {
+    return null;
+  }
+  return {
+    kind: value["kind"],
+    title: value["title"],
+    ...(typeof value["entityId"] === "string"
+      ? { entityId: value["entityId"] }
+      : {}),
+    ...(typeof value["entityRef"] === "string"
+      ? { entityRef: value["entityRef"] }
+      : {}),
+    ...(typeof value["matterRef"] === "string"
+      ? { matterRef: value["matterRef"] }
+      : {}),
+    ...(typeof value["mention"] === "string"
+      ? { mention: value["mention"] }
+      : {}),
+    ...(value["mimeType"] === null || typeof value["mimeType"] === "string"
+      ? { mimeType: value["mimeType"] }
+      : {}),
+    ...(value["workspaceId"] === null ||
+    typeof value["workspaceId"] === "string"
+      ? { workspaceId: value["workspaceId"] }
+      : {}),
+  };
+};
+
+export const normalizeSearchableChatMessageContent = (content: unknown) => {
+  if (!isPersistedChatMessageContent(content)) {
+    return null;
+  }
+  const normalized = normalizePersistedChatMessageContent(content);
+  const sourceDocuments: unknown = normalized.metadata.sourceDocuments;
+  const metadata =
+    sourceDocuments === undefined
+      ? normalized.metadata
+      : {
+          ...normalized.metadata,
+          sourceDocuments: Array.isArray(sourceDocuments)
+            ? sourceDocuments.flatMap((sourceDocument) => {
+                const searchable =
+                  toSearchableChatSourceDocument(sourceDocument);
+                return searchable ? [searchable] : [];
+              })
+            : [],
+        };
+  return {
+    metadata,
+    parts: normalized.parts.filter(isChatPart),
+  };
+};
+
+export const extractMessageSearchText = (
   content: PersistedChatMessageContent,
 ): string => {
   const parts: string[] = [];
-  const message = normalizePersistedChatMessageContent(content);
+  const message = normalizeSearchableChatMessageContent(content);
+  if (!message) {
+    return "";
+  }
   for (const part of message.parts) {
     if (part.type === "text") {
       const trimmed = part.content.trim();
@@ -40,8 +124,6 @@ const extractMessageSearchText = (
     for (const value of [
       sourceDocumentData.title,
       sourceDocumentData.mention,
-      sourceDocumentData.entityRef,
-      sourceDocumentData.matterRef,
       sourceDocumentData.kind,
     ]) {
       if (typeof value !== "string") {
@@ -98,63 +180,39 @@ export const upsertChatThreadSearchDocument = async (
     threadId: thread.id,
     threadUpdatedAt: thread.updatedAt,
   });
-  const previewGeneration = Bun.randomUUIDv7();
-  const previewPassages = buildSearchPreviewPassages(
-    thread.title,
-    searchableText,
-  );
-
-  await rootDb.transaction(async (tx) => {
-    const indexed = await tx.execute<{ threadId: SafeId<"chatThread"> }>(sql`
-      INSERT INTO chat_thread_search_documents (
-        thread_id, title, searchable_text, updated_at, tsv
-      ) VALUES (
-        ${thread.id},
-        ${thread.title},
-        ${searchableText},
-        ${thread.updatedAt},
-        to_tsvector(
-          'simple',
-          unaccent(
-            arabic_normalize(
-              coalesce(${thread.title}, '') || ' ' ||
-              coalesce(${searchableText}, '')
-            )
+  await rootDb.execute(sql`
+    INSERT INTO chat_thread_search_documents (
+      thread_id, title, searchable_text, preview_generation, updated_at, tsv
+    ) VALUES (
+      ${thread.id},
+      ${thread.title},
+      ${searchableText},
+      NULL,
+      ${thread.updatedAt},
+      to_tsvector(
+        'simple',
+        unaccent(
+          arabic_normalize(
+            coalesce(${thread.title}, '') || ' ' ||
+            coalesce(${searchableText}, '')
           )
         )
       )
-      ON CONFLICT (thread_id) DO UPDATE SET
-        title = EXCLUDED.title,
-        searchable_text = EXCLUDED.searchable_text,
-        updated_at = EXCLUDED.updated_at,
-        tsv = EXCLUDED.tsv
-      WHERE EXCLUDED.updated_at >= chat_thread_search_documents.updated_at
-      RETURNING thread_id AS "threadId"
-    `);
-    if (!indexed.at(0)) {
-      return;
-    }
-    await tx.execute(sql`
-      DELETE FROM chat_thread_search_preview_passages
-      WHERE thread_id = ${thread.id}
-    `);
-    await tx.execute(sql`
-      INSERT INTO chat_thread_search_preview_passages (
-        thread_id, generation, ordinal, content, tsv
-      ) VALUES ${buildSearchPreviewPassageValueRows({
-        generation: previewGeneration,
-        leadingValues: [sql`${thread.id}`],
-        passages: previewPassages,
-        regconfig: sql`'simple'`,
-        useUnaccent: true,
-      })}
-    `);
-    await tx.execute(sql`
-      UPDATE chat_thread_search_documents
-      SET preview_generation = ${previewGeneration}::uuid
-      WHERE thread_id = ${thread.id}
-    `);
-  });
+    )
+    ON CONFLICT (thread_id) DO UPDATE SET
+      title = EXCLUDED.title,
+      searchable_text = EXCLUDED.searchable_text,
+      preview_generation = NULL,
+      updated_at = EXCLUDED.updated_at,
+      tsv = EXCLUDED.tsv
+    WHERE EXCLUDED.updated_at >= chat_thread_search_documents.updated_at
+  `);
+  await rootDb.execute(sql`
+    UPDATE chat_thread_search_documents
+    SET preview_generation = ${CHAT_SEARCH_DISPLAY_METADATA_GENERATION}::uuid
+    WHERE thread_id = ${thread.id}
+      AND updated_at = ${thread.updatedAt}
+  `);
 };
 
 /** Page through a thread's messages by `(created_at, id)`, write the
@@ -286,16 +344,24 @@ const upsertChatMessageSearchDocuments = async ({
   `);
 };
 
-/** One-time backfill: index every thread missing either a thread-level
- *  search document or per-message search documents. Idempotent and
- *  resumable. Keyset-paginates by thread id so a thread that cannot
- *  be indexed (e.g. deleted mid-run) advances the cursor instead of
+/** Periodic repair: index every thread with a missing or stale projection.
+ *  Idempotent and resumable. Keyset-paginates by thread id so a thread that
+ *  cannot be indexed (e.g. deleted mid-run) advances the cursor instead of
  *  looping. */
-export const backfillChatThreadSearchIndex = async (): Promise<number> => {
+type BackfillChatThreadSearchIndexOptions = {
+  signal?: AbortSignal;
+};
+
+export const backfillChatThreadSearchIndex = async ({
+  signal,
+}: BackfillChatThreadSearchIndexOptions = {}): Promise<number> => {
   let cursor = ZERO_UUID;
   let total = 0;
 
   for (;;) {
+    if (signal?.aborted) {
+      return total;
+    }
     // oxlint-disable-next-line no-await-in-loop, require-search-scope/require-search-scope -- system backfill repairs derived search documents across all threads; it does not return request data
     const batch = await rootDb.execute<{ id: SafeId<"chatThread"> }>(sql`
       SELECT t.id
@@ -303,13 +369,11 @@ export const backfillChatThreadSearchIndex = async (): Promise<number> => {
       LEFT JOIN chat_thread_search_documents d ON d.thread_id = t.id
       WHERE (
           d.thread_id IS NULL
-          OR d.preview_generation IS NULL
-          OR NOT EXISTS (
-            SELECT 1
-            FROM chat_thread_search_preview_passages passage
-            WHERE passage.thread_id = d.thread_id
-              AND passage.generation = d.preview_generation
-          )
+          -- The previous writer stored UUIDv7 passage generations. The
+          -- reserved display-metadata generation therefore distinguishes the
+          -- current projection without rewriting existing rows in a migration.
+          OR d.preview_generation IS DISTINCT FROM
+            ${CHAT_SEARCH_DISPLAY_METADATA_GENERATION}::uuid
           OR EXISTS (
             SELECT 1
             FROM chat_messages m
@@ -330,6 +394,9 @@ export const backfillChatThreadSearchIndex = async (): Promise<number> => {
     }
 
     for (const row of batch) {
+      if (signal?.aborted) {
+        return total;
+      }
       try {
         // oxlint-disable-next-line no-await-in-loop -- sequential by design: sequential per-thread backfill writes bound DB load
         await upsertChatThreadSearchDocument(row.id);

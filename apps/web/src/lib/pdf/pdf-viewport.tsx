@@ -2,6 +2,7 @@ import { startTransition, useId, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { useFormStatus } from "react-dom";
 
+import { useQuery } from "@tanstack/react-query";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
@@ -24,6 +25,12 @@ import type { PDFDocument } from "@/lib/pdf/pdf-loader";
 import type { PDFPageProps } from "@/lib/pdf/pdf-page";
 import { approximateFraction } from "@/lib/pdf/pdfjs-utils";
 import { getDevicePixelRatio } from "@/lib/pdf/utils";
+import {
+  getSettledSearchMatchSummary,
+  type SearchMatchSummary,
+} from "@/lib/search-match-navigation";
+import { getSearchTextCandidates } from "@/lib/search-text";
+import type { SearchTextQuery } from "@/lib/search-text";
 import { composeRefs } from "@/lib/utils";
 
 export { usePDFStore } from "@/lib/pdf/pdf-context";
@@ -40,14 +47,21 @@ type PDFViewportProps = {
   invertColors?: boolean | undefined;
   className?: string | undefined;
   contentClassName?: string | undefined;
+  searchText?: SearchTextQuery | undefined;
+  activeSearchMatchIndex?: number | undefined;
+  onSearchMatchSummaryChange?:
+    | ((summary: SearchMatchSummary) => void)
+    | undefined;
   renderPage: (props: PDFPageProps) => ReactNode;
 };
 
 type PDFViewerContentProps = Omit<
   PDFViewportProps,
-  "fallback" | "fileId" | "password" | "buffer"
+  "fileId" | "password" | "buffer"
 > & {
+  buffer: ArrayBuffer;
   document: PDFDocument;
+  password?: string | undefined;
 };
 
 type PDFViewportStyle = CSSProperties & {
@@ -82,7 +96,14 @@ export const PDFViewport = ({
   });
 
   if (Result.isOk(result)) {
-    return <PDFViewerContent {...contentProps} document={result.value} />;
+    return (
+      <PDFViewerContent
+        {...contentProps}
+        buffer={buffer}
+        document={result.value}
+        password={password}
+      />
+    );
   }
 
   if (
@@ -104,23 +125,69 @@ export const PDFViewport = ({
 };
 
 const PDFViewerContent = ({
+  buffer,
   document,
+  password,
   page,
   onPageChanged,
   scaleOffset = 0,
   invertColors,
   className,
   contentClassName,
+  searchText = "",
+  activeSearchMatchIndex = 0,
+  onSearchMatchSummaryChange,
   renderPage,
 }: PDFViewerContentProps) => {
   const { resolvedTheme } = useTheme();
   const shouldInvert = invertColors ?? resolvedTheme === "dark";
-  const [attachmentLabels, scale, pages, setDocument] = usePDFStore(
-    useShallow((s) => [s.attachmentLabels, s.scale, s.pages, s.setDocument]),
-  );
+  const [attachmentLabels, scale, pages, setDocument, setScrollTo] =
+    usePDFStore(
+      useShallow((s) => [
+        s.attachmentLabels,
+        s.scale,
+        s.pages,
+        s.setDocument,
+        s.setScrollTo,
+      ]),
+    );
+  const hasSearchText = getSearchTextCandidates(searchText).length > 0;
+  const searchPageQuery = useQuery({
+    enabled: hasSearchText,
+    queryFn: async ({ signal }) => {
+      const { findPDFSearchResultsInWorker } =
+        await import("@/lib/pdf/pdf-search-worker-client");
+      signal.throwIfAborted();
+      return await findPDFSearchResultsInWorker({
+        bytes: buffer.slice(0),
+        password,
+        searchText,
+        signal,
+      });
+    },
+    queryKey: [
+      "pdf-search-page",
+      document.document.fingerprints,
+      searchText,
+      password === undefined ? "unprotected" : "password-protected",
+    ],
+    staleTime: Number.POSITIVE_INFINITY,
+  });
 
   const effectiveScale = scale + scaleOffset;
   const pageIds = useMemo(() => pages.keys().toArray(), [pages]);
+  const activeSearchMatch = searchPageQuery.data?.matches.at(
+    activeSearchMatchIndex,
+  );
+  const searchPageId = activeSearchMatch
+    ? pageIds.at(activeSearchMatch.pageIndex)
+    : undefined;
+  const settledSearchMatchSummary = getSettledSearchMatchSummary({
+    isSettled: searchPageQuery.isSuccess,
+    result: searchPageQuery.data,
+  });
+  const settledSearchMatchCount = settledSearchMatchSummary?.count;
+  const settledSearchMatchTruncated = settledSearchMatchSummary?.truncated;
   const viewportStyle: PDFViewportStyle = {
     "--pdf-page-filter": shouldInvert ? "invert(1) hue-rotate(180deg)" : "none",
     "--scale-factor": effectiveScale,
@@ -135,6 +202,33 @@ const PDFViewerContent = ({
       setDocument(document);
     });
   }, [document, setDocument]);
+
+  useExternalSyncEffect(() => {
+    if (searchPageId) {
+      setScrollTo({
+        pageId: searchPageId,
+        target: { kind: "searchMatch", matchIndex: activeSearchMatchIndex },
+      });
+    }
+  }, [activeSearchMatchIndex, searchPageId, setScrollTo]);
+
+  useExternalSyncEffect(() => {
+    if (
+      settledSearchMatchCount === undefined ||
+      settledSearchMatchTruncated === undefined
+    ) {
+      return;
+    }
+
+    onSearchMatchSummaryChange?.({
+      count: settledSearchMatchCount,
+      truncated: settledSearchMatchTruncated,
+    });
+  }, [
+    onSearchMatchSummaryChange,
+    settledSearchMatchCount,
+    settledSearchMatchTruncated,
+  ]);
 
   useTextSelection(containerRef);
   const fitToWidthRef = usePDFFitToWidth({
@@ -160,6 +254,10 @@ const PDFViewerContent = ({
     [fitToWidthRef, pageVisibilityRef],
   );
 
+  if (searchPageQuery.error && !searchPageQuery.isFetching) {
+    throw searchPageQuery.error;
+  }
+
   return (
     // The surround background lives on the (non-scrolling) ScrollArea
     // root, not on an inner `h-full` wrapper. A wrapper sized to the
@@ -181,13 +279,23 @@ const PDFViewerContent = ({
         className={contentClassName}
         style={viewportStyle}
       >
-        {pageIds.map((pageId) => {
+        {pageIds.map((pageId, pageIndex) => {
           const label = attachmentLabels.get(pageId);
+          const searchMatches = searchPageQuery.data?.matches.flatMap(
+            (match, matchIndex) =>
+              match.pageIndex === pageIndex
+                ? [{ boxes: match.boxes, matchIndex }]
+                : [],
+          );
 
           return (
             <div key={pageId}>
               {label && <PDFBanner label={label} />}
-              {renderPage({ pageId })}
+              {renderPage({
+                activeSearchMatchIndex,
+                pageId,
+                searchMatches,
+              })}
             </div>
           );
         })}

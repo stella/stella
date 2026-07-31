@@ -77,6 +77,53 @@ const findExecutedQuery = (needle: string): string | undefined => {
 };
 
 describe("chat search indexing", () => {
+  test("indexes only source-document metadata that previews can display", async () => {
+    const { extractMessageSearchText } = await import("./index-chat");
+
+    expect(
+      extractMessageSearchText({
+        version: 2,
+        data: [],
+        metadata: {
+          sourceDocuments: [
+            {
+              entityId: "entity_1",
+              entityRef: "internal-entity-reference",
+              kind: "document",
+              matterRef: "internal-matter-reference",
+              mention: "@closing-memo",
+              mimeType: "application/pdf",
+              title: "Closing memorandum",
+              workspaceId: "workspace_1",
+            },
+          ],
+        },
+      }),
+    ).toBe("Closing memorandum @closing-memo document");
+  });
+
+  test("filters malformed version 2 source-document metadata", async () => {
+    const { normalizeSearchableChatMessageContent } =
+      await import("./index-chat");
+    const validSource = {
+      entityId: "entity-1",
+      kind: "document",
+      mimeType: "application/pdf",
+      title: "Agreement.pdf",
+      workspaceId: "workspace-1",
+    };
+
+    expect(
+      normalizeSearchableChatMessageContent({
+        version: 2,
+        data: [],
+        metadata: { sourceDocuments: [null, validSource] },
+      }),
+    ).toMatchObject({
+      metadata: { sourceDocuments: [validSource] },
+    });
+  });
+
   test("does not let stale upserts overwrite a newer search document", async () => {
     const { upsertChatThreadSearchDocument } = await import("./index-chat");
 
@@ -88,10 +135,13 @@ describe("chat search indexing", () => {
     expect(sqlText).toContain(
       "WHERE EXCLUDED.updated_at >= chat_thread_search_documents.updated_at",
     );
+    expect(sqlText).toContain("preview_generation = NULL");
     expect(
       findExecutedQuery("INSERT INTO chat_thread_search_preview_passages"),
-    ).toBeDefined();
-    expect(findExecutedQuery("SET preview_generation =")).toBeDefined();
+    ).toBeUndefined();
+    const generationSql = findExecutedQuery("SET preview_generation =");
+    expect(generationSql).toContain("WHERE thread_id =");
+    expect(generationSql).toContain("AND updated_at =");
   });
 
   test("does not let stale upserts overwrite newer message search documents", async () => {
@@ -155,5 +205,7 @@ describe("chat search indexing", () => {
     expect(compiled.sql).toContain("LEFT JOIN chat_thread_search_documents");
     expect(compiled.sql).toContain("LEFT JOIN chat_message_search_documents");
     expect(compiled.sql).toContain("md.message_id IS NULL");
+    expect(compiled.sql).toContain("d.preview_generation IS DISTINCT FROM");
+    expect(compiled.sql).not.toContain("chat_thread_search_preview_passages");
   });
 });

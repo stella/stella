@@ -42,6 +42,16 @@ export const canSaveSearch = ({
     updatedTo: resolveUpdatedTo(filters.time),
   });
 
+type SavedSearchListState = {
+  itemCount: number;
+  status: "error" | "pending" | "success";
+};
+
+export const shouldShowSavedSearchList = ({
+  itemCount,
+  status,
+}: SavedSearchListState): boolean => status !== "success" || itemCount > 0;
+
 const toSavedSearchTime = (time: TimeFilter): SavedSearchTime => {
   if (time.mode === "preset") {
     return { type: "preset", preset: time.preset };

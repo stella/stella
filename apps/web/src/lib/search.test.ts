@@ -3,19 +3,27 @@ import { describe, expect, test } from "bun:test";
 import type { GlobalSearchHit } from "@stll/api/types";
 
 import {
+  getFirstSearchHighlightText,
+  getNativeSearchDocumentPreviewTarget,
+  getSearchHighlightText,
   getSearchPreviewRenderContent,
   getSearchPreviewDate,
   getSearchPreviewTarget,
   normalizeSearchQuery,
   selectAuthorizedSearchPreviewData,
+  selectDisplayedSearchPreviewHit,
   selectSearchPreviewHit,
+  shouldShowNativeSearchFallback,
   shouldShowSearchPreview,
 } from "@/lib/search.logic";
+import type { SearchPreviewChatMessage } from "@/lib/search.logic";
 
 process.env["VITE_API_URL"] ??= "http://localhost:3001";
 
 const {
   hasSearchQueryOrSelectiveFilter,
+  recentFilePreviewFieldOptions,
+  resolveRecentFilePreviewFieldId,
   searchInfiniteOptions,
   searchPreviewOptions,
 } = await import("@/lib/search");
@@ -106,6 +114,72 @@ describe("search query normalization", () => {
   test("turns whitespace-only input into an empty query", () => {
     expect(normalizeSearchQuery(" \t\n ")).toBe("");
   });
+
+  test("uses server-located terms for native document highlighting", () => {
+    expect(
+      getSearchHighlightText({
+        headline: "The <mark>Closing</mark> memorandum",
+        query: "closing memo",
+      }),
+    ).toBe("Closing");
+    expect(
+      getSearchHighlightText({ headline: null, query: "  closing memo " }),
+    ).toBe("closing memo");
+    expect(
+      getSearchHighlightText({
+        headline: "The <mark>Closing</mark> memorandum",
+        query: "",
+      }),
+    ).toBe("Closing");
+    expect(
+      getSearchHighlightText({
+        headline:
+          "The <mark>R&amp;D</mark> team&#x27;s <mark>&lt;draft&gt;</mark>",
+        query: "",
+      }),
+    ).toEqual({ type: "separate-terms", terms: ["R&D", "<draft>"] });
+  });
+
+  test("excludes advanced-query operators and negated terms from previews", () => {
+    expect(
+      getSearchHighlightText({
+        headline: "<mark>indemnity</mark> and <mark>liability</mark>",
+        query: "indemnity AND liability NOT superseded",
+      }),
+    ).toEqual({
+      type: "separate-terms",
+      terms: ["indemnity", "liability"],
+    });
+    expect(
+      getSearchHighlightText({
+        headline: null,
+        previewLocatorCandidates: ["indemnity", "liability"],
+        query: "indemnity OR liability NOT superseded",
+      }),
+    ).toEqual({
+      type: "separate-terms",
+      terms: ["indemnity", "liability"],
+    });
+    expect(
+      getSearchHighlightText({
+        headline: null,
+        previewLocatorCandidates: ["closing memo"],
+        query: '"closing memo" NOT draft',
+      }),
+    ).toBe("closing memo");
+  });
+
+  test("uses one marked passage for case-law deep links", () => {
+    expect(
+      getFirstSearchHighlightText(
+        "<mark>indemnity</mark> and <mark>liability</mark>",
+        "",
+      ),
+    ).toBe("indemnity");
+    expect(getFirstSearchHighlightText(null, "  closing memo ")).toBe(
+      "closing memo",
+    );
+  });
 });
 
 describe("search preview targets", () => {
@@ -120,6 +194,8 @@ describe("search preview targets", () => {
     workspaceName: "Matter",
     lastEditedByName: null,
     lastEditedByImage: null,
+    fileFieldId: null,
+    filePropertyId: null,
     mimeType: null,
   } as const satisfies GlobalSearchHit;
 
@@ -141,6 +217,86 @@ describe("search preview targets", () => {
 
     expect(organizationB.queryKey).not.toEqual(ownerA.queryKey);
     expect(userB.queryKey).not.toEqual(ownerA.queryKey);
+  });
+
+  test("isolates legacy recent-file field resolution by owner", () => {
+    const params = {
+      entityId: "entity_1",
+      fileFieldId: "field_2",
+      filePropertyId: "property_2",
+      mimeType: "application/pdf",
+      organizationId: "org_1",
+      userId: "user_1",
+      workspaceId: "workspace_1",
+    };
+    const ownerA = recentFilePreviewFieldOptions(params);
+    const organizationB = recentFilePreviewFieldOptions({
+      ...params,
+      organizationId: "org_2",
+    });
+    const userB = recentFilePreviewFieldOptions({
+      ...params,
+      userId: "user_2",
+    });
+
+    expect(organizationB.queryKey).not.toEqual(ownerA.queryKey);
+    expect(userB.queryKey).not.toEqual(ownerA.queryKey);
+    expect(
+      recentFilePreviewFieldOptions({ ...params, fileFieldId: "field_1" })
+        .queryKey,
+    ).not.toEqual(ownerA.queryKey);
+    expect(
+      recentFilePreviewFieldOptions({
+        ...params,
+        filePropertyId: "property_1",
+      }).queryKey,
+    ).not.toEqual(ownerA.queryKey);
+  });
+
+  test("preserves recent attachment identity across current revisions", () => {
+    const fields = [
+      {
+        content: { mimeType: "application/pdf", type: "file" },
+        id: "field_1",
+        propertyId: "property_1",
+      },
+      {
+        content: { mimeType: "application/pdf", type: "file" },
+        id: "field_2",
+        propertyId: "property_2",
+      },
+    ];
+
+    expect(
+      resolveRecentFilePreviewFieldId({
+        fields,
+        fileFieldId: "field_2",
+        filePropertyId: "property_1",
+        mimeType: "application/pdf",
+      }),
+    ).toBe("field_2");
+    expect(
+      resolveRecentFilePreviewFieldId({
+        fields,
+        fileFieldId: "deleted_field",
+        filePropertyId: "deleted_property",
+        mimeType: "application/pdf",
+      }),
+    ).toBeNull();
+    expect(
+      resolveRecentFilePreviewFieldId({
+        fields,
+        fileFieldId: "field_from_old_revision",
+        filePropertyId: "property_2",
+        mimeType: "application/pdf",
+      }),
+    ).toBe("field_2");
+    expect(
+      resolveRecentFilePreviewFieldId({
+        fields,
+        mimeType: "application/pdf",
+      }),
+    ).toBe("field_1");
   });
 
   test("reauthorizes cached previews whenever they mount", () => {
@@ -166,6 +322,88 @@ describe("search preview targets", () => {
     ]) {
       expect(shouldShowSearchPreview(testCase)).toBe(testCase.expected);
     }
+  });
+
+  test("does not reserve a preview pane without a current result", () => {
+    expect(
+      selectDisplayedSearchPreviewHit({ hit: null, showPreview: true }),
+    ).toBeNull();
+    expect(
+      selectDisplayedSearchPreviewHit({
+        hit: previewHit,
+        showPreview: false,
+      }),
+    ).toBeNull();
+    expect(
+      selectDisplayedSearchPreviewHit({ hit: previewHit, showPreview: true }),
+    ).toBe(previewHit);
+  });
+
+  test("uses server text only after a native search settles without matches", () => {
+    expect(
+      shouldShowNativeSearchFallback({
+        searchText: "indemnity",
+        status: "unmatched",
+      }),
+    ).toBeTrue();
+    expect(
+      shouldShowNativeSearchFallback({
+        searchText: "indemnity",
+        status: "pending",
+      }),
+    ).toBeFalse();
+    expect(
+      shouldShowNativeSearchFallback({ searchText: "", status: "unmatched" }),
+    ).toBeFalse();
+  });
+
+  test("routes PDF and DOCX documents to the native inspector viewer", () => {
+    expect(
+      getNativeSearchDocumentPreviewTarget({
+        ...previewHit,
+        fileFieldId: "field_pdf",
+        mimeType: "application/pdf",
+      }),
+    ).toEqual({
+      entityId: "entity_1",
+      fieldId: "field_pdf",
+      filePurpose: "display",
+      mimeType: "application/pdf",
+      workspaceId: "ws_1",
+    });
+    expect(
+      getNativeSearchDocumentPreviewTarget({
+        ...previewHit,
+        fileFieldId: "field_docx",
+        mimeType:
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      }),
+    ).toEqual({
+      entityId: "entity_1",
+      fieldId: "field_docx",
+      filePurpose: "native-display",
+      mimeType:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      workspaceId: "ws_1",
+    });
+  });
+
+  test("keeps unsupported and unresolved documents on the text path", () => {
+    expect(
+      getNativeSearchDocumentPreviewTarget({
+        ...previewHit,
+        fileFieldId: null,
+        filePropertyId: null,
+        mimeType: "application/pdf",
+      }),
+    ).toBeNull();
+    expect(
+      getNativeSearchDocumentPreviewTarget({
+        ...previewHit,
+        fileFieldId: "field_text",
+        mimeType: "text/plain",
+      }),
+    ).toBeNull();
   });
 
   test("retains authorized data during background refetches", () => {
@@ -232,6 +470,20 @@ describe("search preview targets", () => {
       directionText: "résumé",
       html: "<mark>résumé</mark>",
     });
+  });
+
+  test("preserves structured chat messages for native bubble rendering", () => {
+    const messages = [
+      { id: "message_1", role: "user", content: "Review this" },
+      { id: "message_2", role: "assistant", content: "## Review" },
+    ] satisfies SearchPreviewChatMessage[];
+
+    expect(
+      getSearchPreviewRenderContent({
+        type: "chat-messages",
+        messages: [...messages],
+      }),
+    ).toEqual({ type: "chat-messages", messages });
   });
 
   test("withholds previews while hits belong to the previous query", () => {
@@ -313,6 +565,8 @@ describe("search preview targets", () => {
         workspaceName: "Matter",
         lastEditedByName: null,
         lastEditedByImage: null,
+        fileFieldId: null,
+        filePropertyId: null,
         mimeType: null,
       },
     ] as const satisfies readonly GlobalSearchHit[];

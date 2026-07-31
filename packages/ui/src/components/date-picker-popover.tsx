@@ -11,6 +11,7 @@ import {
   PopoverPopup,
   PopoverTrigger,
 } from "@stll/ui/components/popover";
+import type { OverlayLayer } from "@stll/ui/lib/overlay-layer";
 import { cn } from "@stll/ui/lib/utils";
 import { getLocaleWeekInfo, getWeekendDays } from "@stll/ui/lib/week";
 
@@ -212,6 +213,7 @@ type DatePickerPopoverProps = {
   minDate?: string;
   maxDate?: string;
   isDateDisabled?: (date: string) => boolean;
+  layer?: OverlayLayer;
 };
 
 function DatePickerPopover({
@@ -229,6 +231,7 @@ function DatePickerPopover({
   minDate,
   maxDate,
   isDateDisabled,
+  layer = "default",
 }: DatePickerPopoverProps) {
   const locale = localeProp ?? navigator.language;
   const value = normalizeDate(rawValue);
@@ -506,6 +509,7 @@ function DatePickerPopover({
       </PopoverTrigger>
       <PopoverPopup
         className="*:data-[slot=popover-viewport]:p-2!"
+        layer={layer}
         side="bottom"
         sideOffset={4}
       >

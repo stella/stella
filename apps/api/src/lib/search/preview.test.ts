@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { CHAT_SEARCH_DISPLAY_METADATA_GENERATION } from "@/api/lib/search/chat-search-generation";
 import { buildSearchPreviewQuery } from "@/api/lib/search/preview";
 import type { GlobalSearchResultType } from "@/api/lib/search/types";
 
@@ -69,7 +70,6 @@ describe("search preview authorization scope", () => {
       "matter",
       "contact",
       "case-law",
-      "chat",
       "document",
       "folder",
       "task",
@@ -120,7 +120,6 @@ describe("search preview authorization scope", () => {
     const projectionTypes = [
       "matter",
       "contact",
-      "chat",
     ] as const satisfies readonly GlobalSearchResultType[];
 
     for (const type of projectionTypes) {
@@ -189,12 +188,43 @@ describe("search preview authorization scope", () => {
   test("chat preview is private to its user, org, and workspace set", () => {
     const compiled = compilePreview("chat");
     expect(compiled.sql).toContain("FROM chat_thread_search_documents cst");
+    expect(compiled.sql).toContain("FROM chat_message_search_documents");
+    expect(compiled.sql).toContain("cst.preview_generation =");
+    expect(compiled.params).toContain(CHAT_SEARCH_DISPLAY_METADATA_GENERATION);
+    expect(compiled.sql).toContain("JOIN chat_messages message");
+    expect(compiled.sql).toContain("ts_rank_cd(matching.tsv");
+    expect(compiled.sql).toContain('AS "isTitleOnlyMatch"');
+    expect(compiled.sql).toContain("arabic_normalize(coalesce(cst.title, ''))");
+    expect(compiled.sql).toContain("cst.title");
+    expect(compiled.sql).toContain("ORDER BY nearby.created_at");
+    expect(compiled.sql).toContain("LIMIT");
     expect(compiled.sql).toContain("t.user_id =");
     expect(compiled.sql).toContain("t.organization_id =");
     expect(compiled.sql).toContain("t.workspace_id IS NULL");
     expect(compiled.sql).toContain("data_workspace_ids <@");
     expect(compiled.params).toContain(userId);
     expect(compiled.params).toContain(organizationId);
+  });
+
+  test("anchors advanced chat previews with positive locator terms", () => {
+    const compiled = compilePreview(
+      "chat",
+      "indemnity AND liability NOT superseded",
+    );
+
+    expect(compiled.params).toContain("(indemnity:*) | (liability:*)");
+    expect(compiled.params).not.toContain("(superseded:*)");
+  });
+
+  test("chat filter-only preview returns a bounded recent message window", () => {
+    const compiled = compilePreview("chat", "");
+
+    expect(compiled.sql).not.toContain("ts_rank_cd");
+    expect(compiled.sql).not.toContain("matching.tsv @@");
+    expect(compiled.sql).toContain("latest.created_at DESC");
+    expect(compiled.sql).toContain("JOIN chat_messages message");
+    expect(compiled.params).toContain(6);
+    expect(compiled.params).toContain(0);
   });
 
   test("case-law preview stays on the intentionally public corpus", () => {
