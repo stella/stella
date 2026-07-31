@@ -291,8 +291,7 @@ export const caseLawCitations = p.pgTable(
      * the judgment under review is not an endorsement of it.
      */
     kind: p
-      .varchar({ length: 16 })
-      .$type<"precedent" | "procedural">()
+      .varchar({ length: 16, enum: ["precedent", "procedural"] })
       .default("precedent")
       .notNull(),
     sectionIndex: p.integer("section_index"),

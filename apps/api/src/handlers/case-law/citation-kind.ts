@@ -25,6 +25,12 @@ export const CITATION_KIND = {
 
 export type CitationKind = (typeof CITATION_KIND)[keyof typeof CITATION_KIND];
 
+/** The same values as a list, for the column's `enum` and the CHECK. */
+export const CITATION_KINDS = [
+  CITATION_KIND.PRECEDENT,
+  CITATION_KIND.PROCEDURAL,
+] as const;
+
 /**
  * Registries of courts whose decisions are published as standalone
  * documents and therefore citable as authority. Everything else is
@@ -132,18 +138,38 @@ export type ClassifyCitationInput = {
   proceduralKeys?: ProceduralKeys | undefined;
 };
 
+/** Which tier of evidence decided a classification. */
+export const CITATION_KIND_EVIDENCE = {
+  /** The publisher named this judgment as the case's own history. */
+  PUBLISHER: "publisher",
+  /** The surrounding sentence carried exactly one of the two cue sets. */
+  CONTEXT: "context",
+  /** Neither spoke; the cited court's publication status decided. */
+  REGISTRY: "registry",
+} as const;
+
+export type CitationKindEvidence =
+  (typeof CITATION_KIND_EVIDENCE)[keyof typeof CITATION_KIND_EVIDENCE];
+
+export type CitationKindVerdict = {
+  kind: CitationKind;
+  evidence: CitationKindEvidence;
+};
+
 /**
+ * Classification with the reason attached.
+ *
  * Evidence in descending order of authority: what the publisher declares,
  * then what the surrounding sentence says, then whether the cited court
  * publishes at all. Each step only runs because the one above it was
  * silent.
  */
-export const classifyCitation = ({
+export const classifyCitationVerdict = ({
   citationText,
   context,
   citationKey,
   proceduralKeys,
-}: ClassifyCitationInput): CitationKind => {
+}: ClassifyCitationInput): CitationKindVerdict => {
   // The publisher's own account of the case's history outranks anything
   // read out of the prose: it is a statement, not a reading of one.
   if (
@@ -151,23 +177,54 @@ export const classifyCitation = ({
     citationKey !== undefined &&
     proceduralKeys?.has(citationKey) === true
   ) {
-    return CITATION_KIND.PROCEDURAL;
+    return {
+      kind: CITATION_KIND.PROCEDURAL,
+      evidence: CITATION_KIND_EVIDENCE.PUBLISHER,
+    };
   }
 
   if (context !== null) {
     const procedural = PROCEDURAL_CUE.test(context);
     const precedent = PRECEDENT_CUE.test(context);
     if (procedural !== precedent) {
-      return procedural ? CITATION_KIND.PROCEDURAL : CITATION_KIND.PRECEDENT;
+      return {
+        kind: procedural ? CITATION_KIND.PROCEDURAL : CITATION_KIND.PRECEDENT,
+        evidence: CITATION_KIND_EVIDENCE.CONTEXT,
+      };
     }
   }
 
   const registry = registryOf(withoutPrefix(citationText));
-  if (registry !== null && AUTHORITY_REGISTRIES.has(registry)) {
-    return CITATION_KIND.PRECEDENT;
-  }
-  return CITATION_KIND.PROCEDURAL;
+  return {
+    kind:
+      registry !== null && AUTHORITY_REGISTRIES.has(registry)
+        ? CITATION_KIND.PRECEDENT
+        : CITATION_KIND.PROCEDURAL,
+    evidence: CITATION_KIND_EVIDENCE.REGISTRY,
+  };
 };
+
+export const classifyCitation = (input: ClassifyCitationInput): CitationKind =>
+  classifyCitationVerdict(input).kind;
+
+/**
+ * How the heuristics would have classified this citation with the
+ * publisher's account withheld.
+ *
+ * Where a publisher states a case's procedural history, that statement is
+ * a free label for the tiers below it — and the only way to know whether
+ * the cue lists work on sources that publish no such list. The comparison
+ * is one-sided: a publisher naming a judgment proves it *is* procedural,
+ * but its silence proves nothing, so this measures how much of the known
+ * procedural set the heuristics recover, never how much they over-call.
+ */
+export const classifyWithoutPublisher = (
+  input: ClassifyCitationInput,
+): CitationKindVerdict =>
+  classifyCitationVerdict({
+    citationText: input.citationText,
+    context: input.context,
+  });
 
 /**
  * Case numbers a publisher names as the decision's own procedural history.
