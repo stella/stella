@@ -106,8 +106,11 @@ const extractChatPreviewTextParts = (content: unknown): string[] => {
     if (!isRecord(sourceDocument)) {
       continue;
     }
-    for (const key of ["title", "mention", "kind"]) {
-      const value = sourceDocument[key];
+    for (const value of [
+      sourceDocument.title,
+      sourceDocument.mention,
+      sourceDocument.kind,
+    ]) {
       if (typeof value === "string" && value.trim()) {
         textParts.push(value);
       }

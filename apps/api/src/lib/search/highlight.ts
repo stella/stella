@@ -207,17 +207,20 @@ const isLowSurrogate = (value: number): boolean =>
 const isHighSurrogate = (value: number): boolean =>
   value >= 0xd8_00 && value <= 0xdb_ff;
 
+const utf16CodeUnitAt = (source: string, index: number): number =>
+  source.at(index)?.codePointAt(0) ?? Number.NaN;
+
 const sliceWithoutSplitSurrogate = (
   source: string,
   requestedStart: number,
   maxLength: number,
 ): string => {
   let start = Math.max(0, Math.min(source.length, Math.floor(requestedStart)));
-  if (isLowSurrogate(source.charCodeAt(start))) {
+  if (isLowSurrogate(utf16CodeUnitAt(source, start))) {
     start += 1;
   }
   let end = Math.min(source.length, start + maxLength);
-  if (isHighSurrogate(source.charCodeAt(end - 1))) {
+  if (isHighSurrogate(utf16CodeUnitAt(source, end - 1))) {
     end -= 1;
   }
   return source.slice(start, end);
@@ -229,7 +232,7 @@ const characterBefore = (text: string, index: number): string | null => {
   if (index <= 0) {
     return null;
   }
-  const previousUnit = text.charCodeAt(index - 1);
+  const previousUnit = utf16CodeUnitAt(text, index - 1);
   const previousIndex = isLowSurrogate(previousUnit) ? index - 2 : index - 1;
   const codePoint = text.codePointAt(previousIndex);
   return codePoint === undefined ? null : String.fromCodePoint(codePoint);
