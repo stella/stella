@@ -1,15 +1,18 @@
 import { infiniteQueryOptions } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 
-import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
-import { toSafeId } from "@/lib/safe-id";
+import { fetchMemoriesPage } from "@/lib/memory-api";
+import type {
+  MemoryListItem,
+  MemoryScope,
+  MemoryStatus,
+} from "@/lib/memory-api";
 
-export type MemoryScope = "organization" | "user" | "workspace";
-export type MemoryStatus = "suggested" | "active" | "stale" | "archived";
-
-type MemoriesPage = Awaited<ReturnType<typeof fetchMemoriesPage>>;
-export type MemoryListItem = MemoriesPage["items"][number];
+export type {
+  MemoryListItem,
+  MemoryScope,
+  MemoryStatus,
+} from "@/lib/memory-api";
 
 const MEMORIES_PAGE_SIZE = 50;
 const INITIAL_PAGE_CURSOR = "";
@@ -33,41 +36,6 @@ export const memoriesKeys = {
   ],
 };
 
-type FetchMemoriesPageArgs = {
-  cursor: string | null;
-  scope?: MemoryScope | undefined;
-  signal?: AbortSignal | undefined;
-  status?: MemoryStatus | undefined;
-  workspaceId?: string | undefined;
-};
-
-const fetchMemoriesPage = async ({
-  cursor,
-  scope,
-  signal,
-  status,
-  workspaceId,
-}: FetchMemoriesPageArgs) => {
-  const response = await api.memories.get({
-    ...(signal !== undefined && { fetch: { signal } }),
-    query: {
-      limit: MEMORIES_PAGE_SIZE,
-      ...(scope !== undefined && { scope }),
-      ...(status !== undefined && { status }),
-      ...(workspaceId !== undefined && {
-        workspaceId: toSafeId<"workspace">(workspaceId),
-      }),
-      ...(cursor !== null && { cursor }),
-    },
-  });
-
-  if (response.error) {
-    throw toAPIError(response.error);
-  }
-
-  return response.data;
-};
-
 type MemoriesOptionsInput = MemoriesPageKey;
 
 export const memoriesOptions = ({
@@ -86,6 +54,7 @@ export const memoriesOptions = ({
     queryFn: async ({ pageParam, signal }) =>
       await fetchMemoriesPage({
         cursor: pageParam === INITIAL_PAGE_CURSOR ? null : pageParam,
+        limit: MEMORIES_PAGE_SIZE,
         scope,
         signal,
         status,

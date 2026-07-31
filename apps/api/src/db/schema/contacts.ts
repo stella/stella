@@ -210,6 +210,10 @@ export const workspaces = p.pgTable(
       .index("workspaces_org_client_id_idx")
       .on(table.organizationId, table.clientId)
       .where(isNotNull(table.clientId)),
+    p
+      .index("workspaces_org_activity_id_non_deleting_idx")
+      .on(table.organizationId, table.lastActivityAt.desc(), table.id.desc())
+      .where(sql`${table.status} <> 'deleting'`),
     p.pgPolicy("workspace_select", {
       for: "select",
       to: stella,

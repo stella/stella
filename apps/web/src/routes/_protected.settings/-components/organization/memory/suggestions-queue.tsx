@@ -10,10 +10,8 @@ import { Button } from "@stll/ui/components/button";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { useAnalytics } from "@/lib/analytics/provider";
-import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { toAPIError } from "@/lib/errors/api";
-import { toSafeId } from "@/lib/safe-id";
+import { updateMemory } from "@/lib/memory-api";
 import {
   invalidateMemories,
   memoriesOptions,
@@ -61,17 +59,7 @@ export const SuggestionsQueue = (props: SuggestionsQueueProps) => {
     }: {
       memoryId: string;
       status: "active" | "archived";
-    }) => {
-      const response = await api
-        .memories({ memoryId: toSafeId<"aiMemory">(memoryId) })
-        .patch({ status });
-
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
-    },
+    }) => await updateMemory({ body: { status }, memoryId }),
     onSuccess: async () => {
       await invalidateMemories(queryClient, activeOrganizationId);
     },

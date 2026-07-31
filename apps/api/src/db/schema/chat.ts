@@ -618,8 +618,19 @@ export const chatThreadCompactions = p.pgTable(
     // this compaction, so the background job stays idempotent.
     memoryExtractedAt: timestamptz("memory_extracted_at"),
     // Failed attempts stay eligible, but rotate behind untouched work so a
-    // permanently bad compaction cannot monopolize the global batch.
+    // permanently bad compaction cannot monopolize its tenant's queue slice.
     memoryExtractionAttemptedAt: timestamptz("memory_extraction_attempted_at"),
+    // Stamped from the owning thread by a database trigger on insert. Keeping
+    // the tenant on the work item lets the extractor seek directly into one
+    // organization's bounded queue slice instead of ranking every tenant's
+    // pending compactions globally.
+    memoryExtractionOrganizationId: safeOrganizationId(
+      "memory_extraction_organization_id",
+    ).references(() => organization.id, { onDelete: "cascade" }),
+    // Copies organization_settings.memory_extraction_enabled_at only when
+    // extraction consent is active at insert time. Consent generations are
+    // part of the queue address, so re-enabling never scans an older window.
+    memoryExtractionConsentAt: timestamptz("memory_extraction_consent_at"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
@@ -631,14 +642,16 @@ export const chatThreadCompactions = p.pgTable(
       .index("chat_thread_compactions_thread_status_created_idx")
       .on(table.threadId, table.status, table.createdAt),
     p
-      .index("chat_thread_compactions_memory_unmined_idx")
+      .index("chat_thread_compactions_memory_unmined_org_idx")
       .on(
+        table.memoryExtractionOrganizationId,
+        table.memoryExtractionConsentAt,
         sql`${table.memoryExtractionAttemptedAt} ASC NULLS FIRST`,
         table.createdAt,
         table.id,
       )
       .where(
-        sql`${table.memoryExtractedAt} IS NULL AND ${table.status} = 'active'`,
+        sql`${table.memoryExtractionOrganizationId} IS NOT NULL AND ${table.memoryExtractionConsentAt} IS NOT NULL AND ${table.memoryExtractedAt} IS NULL AND ${table.status} = 'active'`,
       ),
     ...chatThreadCompactionPolicies(),
   ],

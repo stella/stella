@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
@@ -19,6 +19,7 @@ import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/components/tabs";
 import { usePermissions } from "@/hooks/use-permissions";
 import { detached } from "@/lib/detached";
 import { MemoryCreateForm } from "@/routes/_protected.settings/-components/organization/memory/memory-create-form";
+import { canManageMatterMemory } from "@/routes/_protected.settings/-components/organization/memory/memory-panel.logic";
 import { MemoryRow } from "@/routes/_protected.settings/-components/organization/memory/memory-row";
 import { SuggestionsQueue } from "@/routes/_protected.settings/-components/organization/memory/suggestions-queue";
 import { memoriesOptions } from "@/routes/_protected.settings/-queries/memories";
@@ -26,10 +27,7 @@ import type {
   MemoryListItem,
   MemoryScope,
 } from "@/routes/_protected.settings/-queries/memories";
-import {
-  WORKSPACE_NAVIGATION_STATUS_SCOPE,
-  workspacesNavigationOptions,
-} from "@/routes/_protected.workspaces/-queries";
+import { memoryMattersOptions } from "@/routes/_protected.settings/-queries/memory-matters";
 
 type MemoryTab = "mine" | "firm" | "matter";
 type MemoryView = "active" | "stale" | "archived";
@@ -116,14 +114,24 @@ const MatterMemories = ({ canManage }: MatterMemoriesProps) => {
   const t = useTranslations("memory");
   const commonT = useTranslations("common");
   const activeOrganizationId = useActiveOrganizationId();
-  const { data, isError, refetch } = useQuery(
-    workspacesNavigationOptions(activeOrganizationId, {
-      statusScope: WORKSPACE_NAVIGATION_STATUS_SCOPE.ACTIVE_AND_ARCHIVED,
-    }),
-  );
+  const {
+    data,
+    fetchNextPage: fetchNextMatterPage,
+    hasNextPage: hasNextMatterPage,
+    isError,
+    isFetchingNextPage: isFetchingNextMatterPage,
+    refetch,
+  } = useInfiniteQuery(memoryMattersOptions(activeOrganizationId));
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
 
-  const workspaces = data ? data.workspaces : [];
+  const workspaces = data ? data.pages.flatMap((page) => page.items) : [];
+  const selectedWorkspace = workspaces.find(
+    (workspace) => workspace.id === workspaceId,
+  );
+  const canManageSelectedMatter = canManageMatterMemory({
+    canManage,
+    status: selectedWorkspace?.status,
+  });
 
   if (isError) {
     return (
@@ -160,16 +168,40 @@ const MatterMemories = ({ canManage }: MatterMemoriesProps) => {
           <SelectPopup>
             {workspaces.map((workspace) => (
               <SelectItem key={workspace.id} value={workspace.id}>
-                {workspace.name}
+                <span className="min-w-0 flex-1 truncate" dir="auto">
+                  {workspace.name}
+                </span>
+                {workspace.status === "archived" ? (
+                  <span className="text-muted-foreground">
+                    {t("views.archived")}
+                  </span>
+                ) : null}
               </SelectItem>
             ))}
           </SelectPopup>
         </Select>
+        {hasNextMatterPage ? (
+          <Button
+            disabled={isFetchingNextMatterPage}
+            onClick={() => {
+              detached(
+                fetchNextMatterPage(),
+                "memory-panel.fetch-next-matter-page",
+              );
+            }}
+            size="sm"
+            variant="ghost"
+          >
+            {isFetchingNextMatterPage
+              ? commonT("loading")
+              : commonT("loadMore")}
+          </Button>
+        ) : null}
       </Field>
 
       {workspaceId ? (
         <>
-          {canManage ? (
+          {canManageSelectedMatter ? (
             <>
               <SuggestionsQueue scope="workspace" workspaceId={workspaceId} />
               <MemoryCreateForm scope="workspace" workspaceId={workspaceId} />
@@ -179,7 +211,7 @@ const MatterMemories = ({ canManage }: MatterMemoriesProps) => {
             scope={TAB_TO_SCOPE.matter}
             workspaceId={workspaceId}
             activeOrganizationId={activeOrganizationId}
-            canManage={canManage}
+            canManage={canManageSelectedMatter}
           />
         </>
       ) : (

@@ -169,6 +169,13 @@ export const organizationSettings = p.pgTable(
       .default(false),
     /** Start of the current opt-in window; null while extraction is off. */
     memoryExtractionEnabledAt: timestamptz("memory_extraction_enabled_at"),
+    /**
+     * Durable tenant queue position for background extraction. Null means no
+     * known eligible work; a compaction-insert trigger wakes the organization.
+     */
+    memoryExtractionScheduledAt: timestamptz(
+      "memory_extraction_scheduled_at",
+    ),
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
@@ -176,6 +183,12 @@ export const organizationSettings = p.pgTable(
       "organization_settings_document_processing_mode_check",
       sql`${table.documentProcessingMode} IN ('off', 'searchable-text')`,
     ),
+    p
+      .index("organization_settings_memory_extraction_queue_idx")
+      .on(table.memoryExtractionScheduledAt, table.organizationId)
+      .where(
+        sql`${table.memoryExtractionEnabled} = true AND ${table.memoryExtractionScheduledAt} IS NOT NULL`,
+      ),
     ...orgPolicies(),
   ],
 );

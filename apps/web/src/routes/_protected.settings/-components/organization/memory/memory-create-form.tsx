@@ -16,9 +16,10 @@ import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { useAnalytics } from "@/lib/analytics/provider";
-import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
-import { toSafeId } from "@/lib/safe-id";
+import {
+  createFirmMemory,
+  createMemory as createMemoryRequest,
+} from "@/lib/memory-api";
 import { invalidateMemories } from "@/routes/_protected.settings/-queries/memories";
 import type { MemoryScope } from "@/routes/_protected.settings/-queries/memories";
 
@@ -72,28 +73,24 @@ export const MemoryCreateForm = (props: MemoryCreateFormProps) => {
     mutationFn: async () => {
       const trimmed = content.trim();
       if (scope === "organization") {
-        const response = await api.memories.firm.post({
+        return await createFirmMemory({
           kind: kind === "preference" ? "preference" : "instruction",
           content: trimmed,
         });
-        if (response.error) {
-          throw toAPIError(response.error);
-        }
-        return response.data;
       }
 
-      const response = await api.memories.post({
-        scope,
-        kind,
-        content: trimmed,
-        ...(props.scope === "workspace" && {
-          workspaceId: toSafeId<"workspace">(props.workspaceId),
-        }),
-      });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
+      return props.scope === "workspace"
+        ? await createMemoryRequest({
+            content: trimmed,
+            kind,
+            scope: props.scope,
+            workspaceId: props.workspaceId,
+          })
+        : await createMemoryRequest({
+            content: trimmed,
+            kind,
+            scope: props.scope,
+          });
     },
     onSuccess: async (result) => {
       setContent("");

@@ -37,13 +37,51 @@ describe("memory lifecycle concurrency invariants", () => {
     expect(insert).toBeGreaterThan(unclaimedPredicate);
   });
 
-  test("selects a bounded, retry-aware quota per organization", () => {
-    const text = source("../scheduler/tasks/memory-extractor.ts");
+  test("claims a bounded tenant queue before seeking tenant work", () => {
+    const text = source("../scheduler/tasks/memory-extractor-queue.ts");
+    const tenantClaim = text.indexOf("due_organizations AS MATERIALIZED");
+    const tenantLimit = text.indexOf(
+      "MEMORY_EXTRACTION_ORGANIZATION_BATCH_SIZE",
+      tenantClaim,
+    );
+    const lateralSeek = text.indexOf("LEFT JOIN LATERAL", tenantClaim);
+    const tenantPredicate = text.indexOf(
+      "compaction.memory_extraction_organization_id = due.organization_id",
+      lateralSeek,
+    );
+    const consentGeneration = text.indexOf(
+      "compaction.memory_extraction_consent_at = due.memory_extraction_enabled_at",
+      tenantPredicate,
+    );
 
-    expect(text).toContain(`partition by \${chatThreads.organizationId}`);
-    expect(text).toContain("ASC NULLS FIRST");
-    expect(text).toContain("EXTRACTION_PER_ORGANIZATION_LIMIT");
-    expect(text).toContain(".limit(EXTRACTION_BATCH_SIZE)");
+    expect(tenantClaim).toBeGreaterThan(-1);
+    expect(tenantLimit).toBeGreaterThan(tenantClaim);
+    expect(tenantLimit).toBeLessThan(lateralSeek);
+    expect(tenantPredicate).toBeGreaterThan(lateralSeek);
+    expect(consentGeneration).toBeGreaterThan(tenantPredicate);
+    expect(text).not.toContain("row_number");
+  });
+
+  test("database triggers durably address and wake eligible tenant work", () => {
+    const migration = source(
+      "../../../drizzle/20260717100000_ai_memory/migration.sql",
+    );
+    const indexMigration = source(
+      "../../../drizzle/20260717101000_ai_memory_extractor_index/migration.sql",
+    );
+
+    expect(migration).toContain(
+      "stella_sync_memory_extraction_queue_on_settings_write",
+    );
+    expect(migration).toContain(
+      "stella_address_and_queue_memory_compaction",
+    );
+    expect(migration).toContain(
+      "INTO NEW.memory_extraction_consent_at",
+    );
+    expect(indexMigration).toContain(
+      '"memory_extraction_organization_id", "memory_extraction_consent_at"',
+    );
   });
 
   test("keeps persistence failures inside the per-compaction boundary", () => {

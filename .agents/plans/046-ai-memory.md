@@ -106,7 +106,7 @@ not just a UX nicety.
 
 ### Phase 0 — Schema + migration + RLS
 
-- `apps/api/src/db/schema.ts` — new `aiMemories` table:
+- `apps/api/src/db/schema/chat.ts` — new `aiMemories` table:
   - `id` uuid pk; `organizationId` text → `organization` (cascade on explicit
     parent erasure; direct memory deletion remains denied).
   - `scope` enum `organization | user | workspace`.

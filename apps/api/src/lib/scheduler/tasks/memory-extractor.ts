@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, asc, eq, gte, isNotNull, isNull, lte, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { rootDb } from "@/api/db/root";
@@ -8,7 +8,6 @@ import {
   aiMemories,
   auditLogs,
   chatThreadCompactions,
-  chatThreads,
   organizationSettings,
 } from "@/api/db/schema";
 import { resolveCaching } from "@/api/lib/ai-config";
@@ -31,18 +30,23 @@ import {
   escapeUntrustedSummary,
 } from "@/api/lib/memory/memory-extraction-prompt";
 import { createRootSafeDb } from "@/api/lib/root-scoped-db";
-import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import {
   resolveExtractedMemoryScope,
   type ExtractableMemoryKind,
 } from "@/api/lib/scheduler/tasks/memory-extractor-scope";
+import {
+  buildClaimMemoryExtractionQueueQuery,
+  buildSettleMemoryExtractionQueueQuery,
+  groupClaimedMemoryExtractionRows,
+  interleaveClaimedMemoryCompactions,
+  MEMORY_EXTRACTION_QUEUE_LEASE_MS,
+  type QueuedMemoryCompaction,
+} from "@/api/lib/scheduler/tasks/memory-extractor-queue";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 
 export const MEMORY_EXTRACTOR_TASK = "memory.extractor" as const;
 
-const EXTRACTION_BATCH_SIZE = 25;
-const EXTRACTION_PER_ORGANIZATION_LIMIT = 3;
 const EXTRACTION_TIMEOUT_MS = 30_000;
 const MAX_CANDIDATES = 3;
 const MAX_CONTENT_LENGTH = 4000;
@@ -97,18 +101,7 @@ Use fact, decision, or relationship ONLY for information tied to this one matter
 Do not extract transient details, one-off questions, or anything you are unsure about.
 Do not invent information that is not in the summary or transcript.`;
 
-type CompactionRow = {
-  compactionId: SafeId<"chatThreadCompaction">;
-  compactionCreatedAt: Date;
-  sourceMessageId: SafeId<"chatMessage">;
-  threadId: SafeId<"chatThread">;
-  firstSummarizedMessageId: SafeId<"chatMessage">;
-  summaryMarkdown: string;
-  threadUserId: SafeId<"user">;
-  threadWorkspaceId: SafeId<"workspace"> | null;
-  threadOrganizationId: SafeId<"organization">;
-  threadDataWorkspaceIds: SafeId<"workspace">[];
-};
+type CompactionRow = QueuedMemoryCompaction;
 
 /**
  * Suggest-first memory extraction. Reads chat-thread compactions that have
@@ -125,7 +118,10 @@ export const extractMemoriesFromCompactions: SchedulerTask = async ({
   logger,
   signal,
 }) => {
-  const compactions = await loadUnminedCompactions();
+  const claimedBatch = await claimMemoryExtractionBatch();
+  const compactions = interleaveClaimedMemoryCompactions(
+    claimedBatch.organizations,
+  );
 
   let processed = 0;
   let failed = 0;
@@ -146,7 +142,7 @@ export const extractMemoriesFromCompactions: SchedulerTask = async ({
 
     if (Result.isError(candidatesResult)) {
       // Rotate failures behind untouched work. They remain retryable on a
-      // later run, but cannot permanently occupy the oldest global batch.
+      // later run, but cannot permanently occupy its tenant's oldest slots.
       await rootDb
         .update(chatThreadCompactions)
         .set({ memoryExtractionAttemptedAt: new Date() })
@@ -208,10 +204,15 @@ export const extractMemoriesFromCompactions: SchedulerTask = async ({
 
   await processCompactionAt(0);
 
+  if (!signal.aborted) {
+    await settleMemoryExtractionBatch(claimedBatch);
+  }
+
   logger.info("scheduler.memory_extractor", {
     "compaction.processed": processed,
     "compaction.failed": failed,
     "memory.suggested": suggested,
+    "organization.claimed": claimedBatch.organizations.length,
   });
 
   if (signal.aborted) {
@@ -219,87 +220,41 @@ export const extractMemoriesFromCompactions: SchedulerTask = async ({
   }
 };
 
-const loadUnminedCompactions = async (): Promise<CompactionRow[]> => {
-  const rankedCompactions = rootDb
-    .select({
-      compactionId: chatThreadCompactions.id,
-      compactionCreatedAt: chatThreadCompactions.createdAt,
-      sourceMessageId: chatThreadCompactions.lastSummarizedMessageId,
-      threadId: chatThreadCompactions.threadId,
-      firstSummarizedMessageId: chatThreadCompactions.firstSummarizedMessageId,
-      summaryMarkdown: chatThreadCompactions.summaryMarkdown,
-      threadUserId: chatThreads.userId,
-      threadWorkspaceId: chatThreads.workspaceId,
-      threadOrganizationId: chatThreads.organizationId,
-      threadDataWorkspaceIds: chatThreads.dataWorkspaceIds,
-      memoryExtractionAttemptedAt:
-        chatThreadCompactions.memoryExtractionAttemptedAt,
-      organizationRank: sql<number>`row_number() over (
-        partition by ${chatThreads.organizationId}
-        order by
-          ${chatThreadCompactions.memoryExtractionAttemptedAt} ASC NULLS FIRST,
-          ${chatThreadCompactions.createdAt},
-          ${chatThreadCompactions.id}
-      )`.as("organization_rank"),
-    })
-    .from(chatThreadCompactions)
-    .innerJoin(chatThreads, eq(chatThreads.id, chatThreadCompactions.threadId))
-    // Background extraction is opt-in per organization. The inner join to
-    // organization_settings skips any org whose settings row is missing,
-    // and the flag filter skips orgs that left it off, so background AI
-    // spend on an org's own provider key stays explicit (cost attribution).
-    .innerJoin(
-      organizationSettings,
-      eq(organizationSettings.organizationId, chatThreads.organizationId),
-    )
-    .where(
-      and(
-        isNull(chatThreadCompactions.memoryExtractedAt),
-        eq(chatThreadCompactions.status, "active"),
-        eq(organizationSettings.memoryExtractionEnabled, true),
-        isNotNull(organizationSettings.memoryExtractionEnabledAt),
-        gte(
-          chatThreadCompactions.createdAt,
-          organizationSettings.memoryExtractionEnabledAt,
-        ),
-      ),
-    )
-    .as("ranked_unmined_compactions");
+type ClaimedMemoryExtractionBatch = {
+  leaseExpiresAt: Date;
+  organizations: ReturnType<typeof groupClaimedMemoryExtractionRows>;
+};
 
-  const rows = await rootDb
-    .select()
-    .from(rankedCompactions)
-    .where(
-      lte(
-        rankedCompactions.organizationRank,
-        EXTRACTION_PER_ORGANIZATION_LIMIT,
-      ),
-    )
-    // Take every organization's oldest candidate before any organization's
-    // second candidate. A busy tenant can consume at most the per-org quota,
-    // while the global batch remains strictly bounded.
-    .orderBy(
-      asc(rankedCompactions.organizationRank),
-      sql`${rankedCompactions.memoryExtractionAttemptedAt} ASC NULLS FIRST`,
-      asc(rankedCompactions.compactionCreatedAt),
-      asc(rankedCompactions.compactionId),
-    )
-    .limit(EXTRACTION_BATCH_SIZE);
+const claimMemoryExtractionBatch =
+  async (): Promise<ClaimedMemoryExtractionBatch> => {
+    const now = new Date();
+    const leaseExpiresAt = new Date(
+      now.getTime() + MEMORY_EXTRACTION_QUEUE_LEASE_MS,
+    );
+    const rows = await rootDb.execute(
+      buildClaimMemoryExtractionQueueQuery({ leaseExpiresAt, now }),
+    );
+    return {
+      leaseExpiresAt,
+      organizations: groupClaimedMemoryExtractionRows(rows),
+    };
+  };
 
-  return rows.map((row) => ({
-    compactionId: row.compactionId,
-    compactionCreatedAt: row.compactionCreatedAt,
-    sourceMessageId: row.sourceMessageId,
-    threadId: row.threadId,
-    firstSummarizedMessageId: row.firstSummarizedMessageId,
-    summaryMarkdown: row.summaryMarkdown,
-    // chatThreads.userId is a bare text FK to user.id (not branded in the
-    // schema); brand it at this boundary so downstream inserts stay typed.
-    threadUserId: brandPersistedUserId(row.threadUserId),
-    threadWorkspaceId: row.threadWorkspaceId,
-    threadOrganizationId: row.threadOrganizationId,
-    threadDataWorkspaceIds: row.threadDataWorkspaceIds,
-  }));
+const settleMemoryExtractionBatch = async ({
+  leaseExpiresAt,
+  organizations,
+}: ClaimedMemoryExtractionBatch): Promise<void> => {
+  const now = new Date();
+  for (const { organizationId } of organizations) {
+    // oxlint-disable-next-line no-await-in-loop -- each CAS releases one independently leased tenant queue row
+    await rootDb.execute(
+      buildSettleMemoryExtractionQueueQuery({
+        leaseExpiresAt,
+        now,
+        organizationId,
+      }),
+    );
+  }
 };
 
 type ExtractedCandidate = {

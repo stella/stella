@@ -15,9 +15,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { useAnalytics } from "@/lib/analytics/provider";
-import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
-import { toSafeId } from "@/lib/safe-id";
+import { updateMemory as updateMemoryRequest } from "@/lib/memory-api";
 import { invalidateMemories } from "@/routes/_protected.settings/-queries/memories";
 import type { MemoryListItem } from "@/routes/_protected.settings/-queries/memories";
 
@@ -60,17 +58,7 @@ export const MemoryRow = ({
       content?: string;
       pinned?: boolean;
       status?: "active" | "archived";
-    }) => {
-      const response = await api
-        .memories({ memoryId: toSafeId<"aiMemory">(memory.id) })
-        .patch(body);
-
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
-    },
+    }) => await updateMemoryRequest({ body, memoryId: memory.id }),
     onSuccess: async (_data, variables) => {
       await invalidateMemories(queryClient, activeOrganizationId);
       if (variables.status === "archived") {
