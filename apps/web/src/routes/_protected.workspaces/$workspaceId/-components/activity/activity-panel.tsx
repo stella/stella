@@ -57,6 +57,11 @@ type ActivityPanelProps = { workspaceId: string };
 type ActivityDay = [MatterActivityItem, ...MatterActivityItem[]];
 type ActivityViewMode = "timeline" | "list";
 
+const FIRST_STRONG_ISOLATE = String.fromCodePoint(8296);
+const POP_DIRECTIONAL_ISOLATE = String.fromCodePoint(8297);
+const isolateBidi = (value: string): string =>
+  `${FIRST_STRONG_ISOLATE}${value}${POP_DIRECTIONAL_ISOLATE}`;
+
 const CATEGORIES: MatterActivityCategory[] = [
   "all",
   "documents",
@@ -1062,7 +1067,8 @@ const triggerDetail = (
   item: MatterActivityItem,
   t: ReturnType<typeof useTranslations>,
 ) => {
-  const user = item.trigger.user?.name;
+  const rawUser = item.trigger.user?.name;
+  const user = rawUser ? isolateBidi(rawUser) : null;
   switch (item.trigger.type) {
     case "user_dispatch": {
       if (!user) {

@@ -46,7 +46,7 @@ export const resolveAgentAuditExecution = async ({
           sourceId: credential.id,
         },
       };
-    case "oauth_agent": {
+    case "oauth_client": {
       const registration = await rootDb
         .select({ id: agentRegistration.id })
         .from(agentRegistration)
@@ -55,23 +55,27 @@ export const resolveAgentAuditExecution = async ({
             eq(agentRegistration.clientId, credential.clientId),
             eq(agentRegistration.boundUserId, userId),
             eq(agentRegistration.boundOrganizationId, organizationId),
-            eq(agentRegistration.status, "confirmed"),
+            eq(agentRegistration.status, "claimed"),
           ),
         )
         .limit(1)
         .then((rows) => rows.at(0) ?? null);
 
+      if (!registration) {
+        return undefined;
+      }
+
       return {
         performer: {
           type: "agent",
-          id: registration?.id ?? `oauth-client:${credential.clientId}`,
+          id: registration.id,
           name: null,
         },
         trigger: {
           type: "credential",
           ownerUserId: userId,
           source: "mcp",
-          sourceId: registration?.id ?? credential.clientId,
+          sourceId: registration.id,
         },
       };
     }

@@ -1013,6 +1013,12 @@ const sendMessage = createSafeRootHandler(
         activeSkillContext: chatContext.activeSkillContext,
         recordAuditEvent: createAuditRecorder({
           execution: {
+            // Every tool that receives this recorder is classified as a
+            // mutation and executes only after the current user approves it.
+            approval: {
+              status: "approved",
+              userId: user.id,
+            },
             performer: {
               type: "agent",
               id: "stella-assistant",
@@ -1026,6 +1032,7 @@ const sendMessage = createSafeRootHandler(
             },
             runId: parsedMessage.message.id,
           },
+          ...(workspaceId === null ? {} : { workspaceId }),
         }),
         workspaceStatusById,
       });

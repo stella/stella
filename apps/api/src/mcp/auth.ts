@@ -16,7 +16,7 @@ export type McpSession = {
   organizationId: string;
   scopes: string[];
   credential?:
-    | { type: "oauth_agent"; clientId: string }
+    | { type: "oauth_client"; clientId: string }
     | { type: "machine_api_key"; id: string; name: string }
     | { type: "delegated_user" };
 };
@@ -62,7 +62,7 @@ export const extractMcpSession = (payload: JWTPayload): McpSession => {
   const rawClientId = payload["client_id"] ?? payload["azp"];
   const credential =
     typeof rawClientId === "string" && rawClientId.length > 0
-      ? ({ type: "oauth_agent", clientId: rawClientId } as const)
+      ? ({ type: "oauth_client", clientId: rawClientId } as const)
       : ({ type: "delegated_user" } as const);
 
   return {

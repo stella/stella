@@ -48,7 +48,7 @@ describe("extractMcpSession", () => {
     });
   });
 
-  test("preserves the verified OAuth client as the agent credential", () => {
+  test("preserves the verified OAuth client for later provenance resolution", () => {
     expect(
       extractMcpSession({
         azp: "agent-client-123",
@@ -57,7 +57,7 @@ describe("extractMcpSession", () => {
         sub: "user_123",
       }),
     ).toEqual({
-      credential: { clientId: "agent-client-123", type: "oauth_agent" },
+      credential: { clientId: "agent-client-123", type: "oauth_client" },
       organizationId: "org_123",
       scopes: ["stella:read"],
       userId: "user_123",
