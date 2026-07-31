@@ -1047,7 +1047,7 @@ const DiscoverTag = ({
   <a
     onPointerEnter={onPointerEnter}
     onPointerLeave={onPointerLeave}
-    className="absolute z-[70] inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold whitespace-nowrap no-underline shadow-md"
+    className="cli-discover-tag absolute z-[70] inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold whitespace-nowrap no-underline shadow-md"
     dir="auto"
     href={href}
     style={{
@@ -1471,6 +1471,28 @@ const CLI_STYLES = `
       inset: auto auto 2.5% 5%;
       width: 90%;
       height: 33%;
+    }
+    /* The homepage hero follows the single-focus mobile composition: keep
+       the main animated stella window and drop every companion. Other embeds
+       retain their purpose-built mobile layouts. */
+    .cli-story-with-scroll-reveal .cli-window {
+      display: none;
+    }
+    .cli-story-with-scroll-reveal .cli-selected {
+      outline: none;
+    }
+    .cli-story-with-scroll-reveal .cli-discover-tag {
+      display: none;
+    }
+    .cli-story-with-scroll-reveal .cli-main-window {
+      --cli-main-width: 94cqw;
+      inset-block: 50% auto;
+      inset-inline: 50% auto;
+      width: var(--cli-main-width);
+      height: calc(var(--cli-main-width) / 1.674 + var(--mac-titlebar-height));
+      animation: none;
+      transform: none;
+      translate: -50% -50%;
     }
     .cli-idle-prompt { display: none; }
   }

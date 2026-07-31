@@ -117,13 +117,21 @@ const subtitle = requireLinkedSegment("hero.subtitle", t("hero.subtitle"));
                   </span>
                 )
               }
-              <span class="min-w-0 truncate" lang="en" dir="ltr">
-                {
-                  latestRelease
-                    ? (latestRelease.heading ?? latestRelease.displayName)
-                    : t("nav.changelog")
-                }
-              </span>
+              <overflow-marquee
+                class="hero-news-marquee min-w-0 flex-1 overflow-hidden"
+              >
+                <span
+                  class="hero-news-marquee-content block w-max whitespace-nowrap"
+                  lang="en"
+                  dir="ltr"
+                >
+                  {
+                    latestRelease
+                      ? (latestRelease.heading ?? latestRelease.displayName)
+                      : t("nav.changelog")
+                  }
+                </span>
+              </overflow-marquee>
               <span
                 aria-hidden="true"
                 class="shrink-0 transition-transform rtl:-scale-x-100 ltr:group-hover:translate-x-0.5 rtl:group-hover:-translate-x-0.5"
@@ -182,7 +190,7 @@ const subtitle = requireLinkedSegment("hero.subtitle", t("hero.subtitle"));
 
       {/* ——— Opening product story ——— */}
       <section class="relative overflow-clip" id="opening-product-story">
-        <div class="relative aspect-[4/5] w-full sm:aspect-[2.03]">
+        <div class="relative aspect-[5/4] w-full sm:aspect-[2.03]">
           <CliMcpPreview
             client:load
             revealSideWindowsOnScroll
@@ -343,6 +351,23 @@ const subtitle = requireLinkedSegment("hero.subtitle", t("hero.subtitle"));
       animation: hero-beta-pulse 4s var(--ease-out-quint) infinite;
     }
 
+    .hero-news-marquee[data-overflowing="true"]
+      .hero-news-marquee-content {
+      animation: hero-news-marquee var(--marquee-duration) ease-in-out infinite
+        alternate;
+    }
+
+    @keyframes hero-news-marquee {
+      0%,
+      18% {
+        transform: translate3d(0, 0, 0);
+      }
+      82%,
+      100% {
+        transform: translate3d(calc(-1 * var(--marquee-distance)), 0, 0);
+      }
+    }
+
     @keyframes hero-beta-pulse {
       0%, 100% {
         box-shadow: 0 0 0 0 color-mix(in srgb, var(--success) 22%, transparent);
@@ -381,6 +406,50 @@ const subtitle = requireLinkedSegment("hero.subtitle", t("hero.subtitle"));
         padding-block-start: 1.5rem;
       }
     }
+
+    @media (prefers-reduced-motion: reduce) {
+      .hero-news-marquee-content {
+        animation: none !important;
+      }
+    }
   </style>
+
+  <script>
+    class OverflowMarquee extends HTMLElement {
+      #resizeObserver = new ResizeObserver(() => this.#update());
+
+      connectedCallback() {
+        const content = this.firstElementChild;
+        this.#resizeObserver.observe(this);
+        if (content instanceof HTMLElement) {
+          this.#resizeObserver.observe(content);
+        }
+        this.#update();
+      }
+
+      disconnectedCallback() {
+        this.#resizeObserver.disconnect();
+      }
+
+      #update() {
+        const content = this.firstElementChild;
+        if (!(content instanceof HTMLElement)) {
+          return;
+        }
+
+        const distance = Math.max(0, content.scrollWidth - this.clientWidth);
+        this.dataset.overflowing = distance > 0 ? "true" : "false";
+        this.style.setProperty("--marquee-distance", `${distance}px`);
+        this.style.setProperty(
+          "--marquee-duration",
+          `${Math.max(7, distance / 18).toFixed(1)}s`,
+        );
+      }
+    }
+
+    if (!customElements.get("overflow-marquee")) {
+      customElements.define("overflow-marquee", OverflowMarquee);
+    }
+  </script>
 
 </Base>
