@@ -339,6 +339,8 @@ type ThreadFetch = {
   contextMatterIds: string[];
   /** ISO timestamp of the most recent message, or null when empty. */
   lastActivityAt: string | null;
+  /** Changes whenever the persisted thread is updated. */
+  threadRevision: string | null;
   /** Whether the requested thread row exists; false only for allowed drafts. */
   threadExists: boolean;
   webSearchAvailable: boolean;
@@ -464,6 +466,7 @@ const fetchThreadMessages = async (
         olderCursor: null,
         contextMatterIds: [],
         lastActivityAt: null,
+        threadRevision: null,
         threadExists: false,
         webSearchAvailable: false,
         webSearchEnabled: false,
@@ -480,6 +483,7 @@ const fetchThreadMessages = async (
     olderCursor: response.data.olderCursor,
     contextMatterIds: response.data.contextMatterIds,
     lastActivityAt: response.data.lastActivityAt,
+    threadRevision: response.data.threadRevision,
     threadExists: response.data.threadExists,
     webSearchAvailable: response.data.webSearchAvailable,
     webSearchEnabled: response.data.webSearchEnabled,
@@ -547,6 +551,7 @@ type FileChatThreadFetchResult = {
   olderCursor: string | null;
   contextMatterIds: string[];
   lastActivityAt: string | null;
+  threadRevision: string | null;
   threadExists: boolean;
   webSearchAvailable: boolean;
   webSearchEnabled: boolean;
@@ -574,6 +579,7 @@ const fetchFileChatThread = async ({
     olderCursor: data.olderCursor,
     contextMatterIds: data.contextMatterIds,
     lastActivityAt: data.lastActivityAt,
+    threadRevision: null,
     threadExists: true,
     webSearchAvailable: data.webSearchAvailable,
     webSearchEnabled: data.webSearchEnabled,
@@ -1302,6 +1308,9 @@ export type ChatThreadFetched = {
    * empty thread). Drives the revisit-recap staleness check.
    */
   lastActivityAt: string | null;
+  /** Server revision for in-place transcript changes; null for drafts and
+   *  file-thread bootstrap seeds. */
+  threadRevision: string | null;
   /** False only when an allow-missing query resolved an unpersisted draft. */
   threadExists: boolean;
   webSearchAvailable: boolean;
@@ -1397,6 +1406,7 @@ export const fileChatThreadOptions = ({
           olderCursor: fetched.olderCursor,
           contextMatterIds: fetched.contextMatterIds,
           lastActivityAt: fetched.lastActivityAt,
+          threadRevision: fetched.threadRevision,
           threadExists: fetched.threadExists,
           webSearchAvailable: fetched.webSearchAvailable,
           webSearchEnabled: fetched.webSearchEnabled,
@@ -1569,10 +1579,9 @@ export const chatThreadOptions = ({
  * Server-authoritative freshness signal a runtime was seeded with,
  * remembered alongside its registry entry so a later acquire can tell
  * whether the incoming pure-data fetch carries anything the runtime was
- * not BUILT from. Both fields together are the signal: `lastActivityAt`
- * alone cannot distinguish two states of a thread edited within the same
- * timestamp resolution, and the last message id alone cannot see a
- * truncate-and-replay that lands back on the same tail message.
+ * not BUILT from. The message id and activity timestamp detect appended or
+ * replayed turns; `threadRevision` detects in-place changes to an existing
+ * message, such as an approval resolved by another client.
  *
  * INVARIANT: captured once at build time and never updated afterwards —
  * deliberately, even though the runtime's own transcript advances as
@@ -1589,6 +1598,7 @@ export const chatThreadOptions = ({
 type ChatRuntimeSeedSignal = {
   lastActivityAt: string | null;
   lastMessageId: string | null;
+  threadRevision: string | null;
 };
 
 type ChatRuntimeRegistryEntry = {
@@ -1617,6 +1627,7 @@ const toChatRuntimeSeedSignal = (
 ): ChatRuntimeSeedSignal => ({
   lastActivityAt: data.lastActivityAt,
   lastMessageId: data.messages.at(-1)?.id ?? null,
+  threadRevision: data.threadRevision,
 });
 
 const seedSignalsEqual = (
@@ -1624,7 +1635,8 @@ const seedSignalsEqual = (
   right: ChatRuntimeSeedSignal,
 ): boolean =>
   left.lastActivityAt === right.lastActivityAt &&
-  left.lastMessageId === right.lastMessageId;
+  left.lastMessageId === right.lastMessageId &&
+  left.threadRevision === right.threadRevision;
 
 const getPendingToolApprovalIds = (
   messages: readonly PersistedChatMessage[],
@@ -1672,9 +1684,11 @@ const hasInFlightChatRuntimeWork = (runtime: ChatRuntime): boolean => {
 
 const getChatRuntimeReconcileDisposition = ({
   data,
+  hasAuthoritativeRefresh,
   runtime,
 }: {
   data: ChatThreadFetched;
+  hasAuthoritativeRefresh: boolean;
   runtime: ChatRuntime;
 }) => {
   if (hasInFlightChatRuntimeWork(runtime)) {
@@ -1691,19 +1705,29 @@ const getChatRuntimeReconcileDisposition = ({
   const authoritativeApprovalIds = new Set(
     getPendingToolApprovalIds(data.messages),
   );
-  return pendingApprovalIds.every((id) => authoritativeApprovalIds.has(id))
-    ? CHAT_RUNTIME_RECONCILE_DISPOSITION.retainPendingApproval
-    : CHAT_RUNTIME_RECONCILE_DISPOSITION.replaceStaleApproval;
+  if (pendingApprovalIds.every((id) => authoritativeApprovalIds.has(id))) {
+    return CHAT_RUNTIME_RECONCILE_DISPOSITION.retainPendingApproval;
+  }
+
+  return hasAuthoritativeRefresh
+    ? CHAT_RUNTIME_RECONCILE_DISPOSITION.replaceStaleApproval
+    : CHAT_RUNTIME_RECONCILE_DISPOSITION.retainPendingApproval;
 };
 
 const shouldRetainBusyChatRuntime = ({
   data,
+  hasAuthoritativeRefresh,
   runtime,
 }: {
   data: ChatThreadFetched;
+  hasAuthoritativeRefresh: boolean;
   runtime: ChatRuntime;
 }): boolean => {
-  const disposition = getChatRuntimeReconcileDisposition({ data, runtime });
+  const disposition = getChatRuntimeReconcileDisposition({
+    data,
+    hasAuthoritativeRefresh,
+    runtime,
+  });
   return (
     disposition === CHAT_RUNTIME_RECONCILE_DISPOSITION.retainInFlight ||
     disposition === CHAT_RUNTIME_RECONCILE_DISPOSITION.retainPendingApproval
@@ -1797,12 +1821,17 @@ const toChatRuntimeRegistryKey = (
  */
 const findBusyChatRuntimeEntryForThread = (
   data: ChatThreadFetched,
+  seed: ChatRuntimeSeedSignal,
   threadIdentity: string,
 ): ChatRuntimeRegistryEntry | undefined => {
   for (const entry of chatRuntimeRegistry.values()) {
     if (
       entry.threadIdentity === threadIdentity &&
-      shouldRetainBusyChatRuntime({ data, runtime: entry.runtime })
+      shouldRetainBusyChatRuntime({
+        data,
+        hasAuthoritativeRefresh: !seedSignalsEqual(entry.seed, seed),
+        runtime: entry.runtime,
+      })
     ) {
       return entry;
     }
@@ -1875,9 +1904,9 @@ export type AcquireChatRuntimeArgs = {
  *      registers the runtime and starts the stream BEFORE navigating, so
  *      the destination page's acquire (identical fingerprint) lands here
  *      and reattaches instead of rebuilding.
- *      A pending approval is retained only when the incoming authoritative
- *      transcript still contains every pending tool-call id; otherwise the
- *      persisted resolution replaces stale local approval state.
+ *      A pending approval is retained while the query still carries the
+ *      runtime's pre-send seed, or when a refreshed transcript contains every
+ *      pending tool-call id. A refreshed mismatch replaces stale local state.
  *   2. Runtime with in-flight work under ANY other registry key for the
  *      same THREAD
  *      (any fingerprint, any query key — the inspector's active-skill
@@ -1937,6 +1966,7 @@ export const acquireChatRuntime = ({
       ? null
       : getChatRuntimeReconcileDisposition({
           data,
+          hasAuthoritativeRefresh: !seedSignalsEqual(existing.seed, seed),
           runtime: existing.runtime,
         });
   // Priority 1: busy runtime under the exact registry key.
@@ -1956,7 +1986,11 @@ export const acquireChatRuntime = ({
   // Overwrites a stale idle exact entry on purpose: the user is looking
   // at the streaming runtime now, so a later seed-equal hit must return
   // it, not the pre-stream leftover.
-  const busyEntry = findBusyChatRuntimeEntryForThread(data, threadIdentity);
+  const busyEntry = findBusyChatRuntimeEntryForThread(
+    data,
+    seed,
+    threadIdentity,
+  );
   if (busyEntry !== undefined) {
     chatRuntimeRegistry.set(registryKey, {
       runtime: busyEntry.runtime,

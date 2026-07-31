@@ -137,6 +137,7 @@ const getMessages = createSafeRootHandler(
             webSearchEnabled: true,
             usedAnonymization: true,
             chatModel: true,
+            updatedAt: true,
           },
         });
 
@@ -243,6 +244,7 @@ const getMessages = createSafeRootHandler(
           olderCursor: null,
           contextMatterIds: [],
           lastActivityAt: null,
+          threadRevision: null,
           threadExists: false,
           webSearchAvailable: reads.webSearchAvailable,
           webSearchEnabled: false,
@@ -308,6 +310,7 @@ const getMessages = createSafeRootHandler(
       olderCursor: page.olderCursor,
       contextMatterIds: thread.contextMatterIds,
       lastActivityAt: page.lastActivityAt,
+      threadRevision: thread.updatedAt.toISOString(),
       threadExists: true,
       webSearchAvailable,
       webSearchEnabled: thread.webSearchEnabled,

@@ -1118,6 +1118,7 @@ describe("acquireChatRuntime reconcile", () => {
     olderCursor: null,
     contextMatterIds: [],
     lastActivityAt: null,
+    threadRevision: null,
     threadExists: true,
     webSearchAvailable: false,
     webSearchEnabled: false,
@@ -1414,7 +1415,11 @@ describe("acquireChatRuntime reconcile", () => {
     const runtime = acquireChatRuntime({
       activeOrganizationId,
       context: { allowMissingThread: true },
-      data: buildThreadData({ lastActivityAt, messages: pendingMessages }),
+      data: buildThreadData({
+        lastActivityAt,
+        messages: pendingMessages,
+        threadRevision: "revision-before-resolution",
+      }),
       key: threadRef,
       queryClient,
     });
@@ -1424,6 +1429,7 @@ describe("acquireChatRuntime reconcile", () => {
       context: { allowMissingThread: true },
       data: buildThreadData({
         lastActivityAt,
+        threadRevision: "revision-after-resolution",
         messages: [
           createMessage(),
           {
@@ -1441,6 +1447,43 @@ describe("acquireChatRuntime reconcile", () => {
     expect(reconciled.getSnapshot().messages.at(-1)?.parts).toEqual([
       { type: "text", content: "Resolved elsewhere" },
     ]);
+  });
+
+  test("retains a local pending approval while the query still has its pre-send seed", async () => {
+    const queryClient = new QueryClient();
+    globalThis.fetch = createFetchMock(async () =>
+      createSseResponse(createApprovalSseChunks()),
+    );
+    const context = { allowMissingThread: true };
+    const preSendData = buildThreadData();
+    const runtime = acquireChatRuntime({
+      activeOrganizationId,
+      context,
+      data: preSendData,
+      key: threadRef,
+      queryClient,
+    });
+
+    const started = runtime.startRouteHandoffMessage(
+      createOutgoingMessage("22222222-2222-4222-8222-2222222222c3"),
+    );
+    await started.stream;
+
+    const reattached = acquireChatRuntime({
+      activeOrganizationId,
+      context,
+      data: preSendData,
+      key: threadRef,
+      queryClient,
+    });
+
+    expect(reattached).toBe(runtime);
+    expect(reattached.getSnapshot().messages.at(-1)?.parts.at(0)).toMatchObject(
+      {
+        state: "approval-requested",
+        type: "tool-call",
+      },
+    );
   });
 
   test("keeps a runtime awaiting approval present in the authoritative transcript", async () => {
