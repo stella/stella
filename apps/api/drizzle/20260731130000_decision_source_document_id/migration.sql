@@ -44,16 +44,19 @@ COMMIT;
 --> statement-breakpoint
 DROP INDEX CONCURRENTLY IF EXISTS "case_law_decisions_source_document_idx";
 --> statement-breakpoint
+-- squawk-ignore prefer-robust-stmts -- IF NOT EXISTS would skip an INVALID index left by an interrupted CONCURRENTLY build; the preceding DROP is what makes a retry robust
 CREATE UNIQUE INDEX CONCURRENTLY "case_law_decisions_source_document_idx"
   ON "case_law_decisions" ("source_id","source_document_id")
   WHERE "source_document_id" IS NOT NULL;
 --> statement-breakpoint
 DROP INDEX CONCURRENTLY IF EXISTS "case_law_decisions_source_case_lang_null_idx";
 --> statement-breakpoint
+-- squawk-ignore prefer-robust-stmts -- see the note on the index above
 CREATE UNIQUE INDEX CONCURRENTLY "case_law_decisions_source_case_lang_null_idx"
   ON "case_law_decisions" ("source_id","case_number","language")
   WHERE "source_document_id" IS NULL;
 --> statement-breakpoint
 DROP INDEX CONCURRENTLY IF EXISTS "case_law_decisions_source_case_lang_idx";
 --> statement-breakpoint
+-- squawk-ignore ban-uncommitted-transaction -- reopens the migrator transaction the COMMIT above closed; Drizzle commits it after writing its bookkeeping row
 BEGIN;
