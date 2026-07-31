@@ -139,34 +139,6 @@ const comparePDFSearchMatches = (
   second: PDFSearchMatch,
 ) => first.pageIndex - second.pageIndex || first.textOffset - second.textOffset;
 
-type FindCaseInsensitiveSearchTextMatchesOptions = {
-  content: string;
-  maxMatches: number;
-  searchText: string;
-};
-
-const findCaseInsensitiveSearchTextMatches = ({
-  content,
-  maxMatches,
-  searchText,
-}: FindCaseInsensitiveSearchTextMatchesOptions) => {
-  const matches: { start: number; end: number }[] = [];
-  const normalizedContent = content.toLowerCase();
-  const normalizedSearchText = searchText.toLowerCase();
-  let searchFrom = 0;
-
-  while (matches.length < maxMatches) {
-    const start = normalizedContent.indexOf(normalizedSearchText, searchFrom);
-    if (start === -1) {
-      break;
-    }
-    matches.push({ start, end: start + normalizedSearchText.length });
-    searchFrom = start + 1;
-  }
-
-  return matches;
-};
-
 type ToPDFSearchMatchOptions = {
   end: number;
   pageIndex: number;
@@ -223,44 +195,13 @@ const findPageMatches = ({
   maxMatches,
   pageIndex,
   pageSearchText,
-}: FindPageMatchesOptions): PDFSearchMatch[] => {
-  const matches = new Map<string, PDFSearchMatch>();
-
-  const exactMatches = findCaseInsensitiveSearchTextMatches({
-    content: pageSearchText.text,
+}: FindPageMatchesOptions): PDFSearchMatch[] =>
+  findNormalizedPageMatches({
+    candidate,
     maxMatches,
-    searchText: candidate,
+    pageSearchText,
+    pageIndex,
   });
-  for (const { end, start } of exactMatches) {
-    const match = toPDFSearchMatch({
-      end,
-      pageIndex,
-      pageSearchText,
-      start,
-    });
-    if (match.boxes.length > 0) {
-      matches.set(getPDFSearchMatchKey(match), match);
-    }
-  }
-
-  if (matches.size < maxMatches) {
-    for (const match of findNormalizedPageMatches({
-      candidate,
-      maxMatches,
-      pageSearchText,
-      pageIndex,
-    })) {
-      if (match.boxes.length > 0) {
-        matches.set(getPDFSearchMatchKey(match), match);
-      }
-      if (matches.size >= maxMatches) {
-        break;
-      }
-    }
-  }
-
-  return [...matches.values()].toSorted(comparePDFSearchMatches);
-};
 
 const getViewerSearchPages = async (
   pdf: PDF,

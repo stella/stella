@@ -53,6 +53,29 @@ describe("canonical PDF search", () => {
     expect(result?.matches.at(0)?.boxes.length).toBeGreaterThan(0);
   });
 
+  test("preserves geometry offsets across length-changing case folds", async () => {
+    const pdf = PDF.create();
+    const font = pdf.embedFont(
+      await Bun.file(
+        new URL(
+          "../../../../landing/public/fonts/CabinetGrotesk-Regular.otf",
+          import.meta.url,
+        ),
+      ).bytes(),
+    );
+    const page = pdf.addPage({ size: "letter" });
+    page.drawText("İXYZ", { font, x: 50, y: 700, size: 18 });
+
+    const result = await findPDFSearchResults({
+      bytes: await pdf.save(),
+      searchText: "Y",
+      signal: new AbortController().signal,
+    });
+
+    expect(result?.matches).toHaveLength(1);
+    expect(result?.matches.at(0)?.textOffset).toBe(2);
+  });
+
   test("finds every query term when the exact phrase is absent", async () => {
     const result = await findPDFSearchResults({
       bytes: await createSearchablePDF(),
