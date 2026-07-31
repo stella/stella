@@ -10,8 +10,11 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 const s3Delete = mock(async () => undefined);
+const realS3 = await import("@/api/lib/s3");
 
 void mock.module("@/api/lib/s3", () => ({
+  ...realS3,
+  deleteS3ObjectWithSignal: s3Delete,
   getS3: () => ({ delete: s3Delete }),
 }));
 
@@ -147,7 +150,10 @@ describe("send-message side-effect rollback", () => {
     });
 
     expect(Result.isOk(result)).toBe(true);
-    expect(s3Delete).toHaveBeenCalledWith(uploadedFile.s3Key);
+    expect(s3Delete).toHaveBeenCalledWith(
+      uploadedFile.s3Key,
+      expect.any(AbortSignal),
+    );
     expect(deleteRows).toHaveBeenCalledTimes(1);
     expect(deleteRowsWhere).toHaveBeenCalledTimes(1);
     expect(recordAuditEvent).toHaveBeenCalledWith(expect.anything(), [
