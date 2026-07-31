@@ -79,7 +79,7 @@ export const STELLA_MCP_API_CONTRACT_VERSION = 1;
 const CLI_SUPPORT_BAND = declareCliSupportBand({
   minimum: "0.3.0",
   latest: "0.3.0",
-  maximum: "0.3.0",
+  maximum: "0.3.1",
 });
 
 export const STELLA_CLI_MINIMUM_VERSION = CLI_SUPPORT_BAND.minimum;

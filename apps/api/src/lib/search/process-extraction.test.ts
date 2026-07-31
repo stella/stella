@@ -51,6 +51,8 @@ const arrayBufferMock = mock(async () => new ArrayBuffer(8));
 const getS3Mock = mock(() => ({
   file: () => ({ arrayBuffer: arrayBufferMock }),
 }));
+const s3DeleteMock = mock(async () => undefined);
+const s3WriteMock = mock(async () => undefined);
 const extractFileTextMock = mock(
   async (): Promise<string | null> => "native text",
 );
@@ -74,7 +76,11 @@ void mock.module("@/api/lib/content-encryption", () => ({
 void mock.module("@/api/lib/document-processing-automatic-request", () => ({
   requestAutomaticDocumentOcr: requestAutomaticDocumentOcrMock,
 }));
-void mock.module("@/api/lib/s3", () => ({ getS3: getS3Mock }));
+void mock.module("@/api/lib/s3", () => ({
+  deleteS3ObjectWithSignal: s3DeleteMock,
+  getS3: getS3Mock,
+  putS3ObjectWithSignal: s3WriteMock,
+}));
 void mock.module("@/api/lib/search/extract-content", () => ({
   extractFileText: extractFileTextMock,
   resolveExtractionMimeType: ({ mimeType }: { mimeType: string }) => mimeType,

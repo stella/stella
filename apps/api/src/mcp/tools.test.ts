@@ -54,9 +54,13 @@ const makeDocxBytes = async () => {
 
 const s3ArrayBufferMock = mock(async () => await makeDocxBytes());
 const s3FileMock = mock(() => ({ arrayBuffer: s3ArrayBufferMock }));
+const s3DeleteMock = mock(async () => undefined);
+const s3WriteMock = mock(async () => undefined);
 
 void mock.module("@/api/lib/s3", () => ({
+  deleteS3ObjectWithSignal: s3DeleteMock,
   getS3: () => ({ file: s3FileMock }),
+  putS3ObjectWithSignal: s3WriteMock,
   resolveS3Credentials: async () => ({
     accessKeyId: "test-access-key",
     secretAccessKey: "test-secret-key",
