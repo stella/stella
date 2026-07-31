@@ -104,12 +104,17 @@ test("iOS gradients animate one original SVG surface", () => {
     configurable: true,
     value: class {
       disconnect = visibilityDisconnect;
+      private readonly callback: (
+        entries: { isIntersecting: boolean; target: Element }[],
+      ) => void;
 
       constructor(
-        private readonly callback: (
+        callback: (
           entries: { isIntersecting: boolean; target: Element }[],
         ) => void,
-      ) {}
+      ) {
+        this.callback = callback;
+      }
 
       observe(target: Element) {
         this.callback([{ isIntersecting: true, target }]);
