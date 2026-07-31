@@ -5,15 +5,17 @@ import fc from "fast-check";
 
 import { propertyConfig } from "@stll/property-testing";
 
-import { encodeCursor } from "@/api/lib/search/cursor";
+import { decodeCursor, encodeCursor } from "@/api/lib/search/cursor";
 import {
   compareScoredSearchHits,
   decodeGlobalSearchCursor,
   encodeGlobalSearchCursor,
+  GLOBAL_SEARCH_HIT_ID_PREFIXES,
   GLOBAL_SEARCH_RESULT_LIMIT,
   globalSearchCursorSql,
   isAfterGlobalSearchCursor,
   paginateScoredSearchHits,
+  parseGlobalSearchCursor,
 } from "@/api/lib/search/pagination";
 
 type TestHit = {
@@ -54,14 +56,13 @@ const pageThrough = (
   limit: number,
 ): TestHit[] => {
   const sorted = source.toSorted(compareScoredSearchHits);
-  const prefixes = ["entity:", "matter:", "contact:", "case-law:", "chat:"];
   const collected: TestHit[] = [];
   let cursor: ReturnType<typeof decodeGlobalSearchCursor> = null;
 
   for (;;) {
     const candidates = candidatesAfterCursor({
       sorted,
-      prefixes,
+      prefixes: GLOBAL_SEARCH_HIT_ID_PREFIXES,
       cursor,
       limit,
     });
@@ -101,6 +102,56 @@ describe("global search keyset pagination", () => {
         seen: 2,
       }),
     });
+  });
+
+  test("keeps new cursors consumable by legacy replicas", () => {
+    const cursor = encodeGlobalSearchCursor({
+      score: 0.8,
+      id: "entity:2",
+      seen: 25,
+    });
+
+    expect(decodeCursor(cursor)).toEqual({ score: 25, id: "global" });
+    expect(parseGlobalSearchCursor(cursor)).toEqual({
+      type: "keyset",
+      cursor: { score: 0.8, id: "entity:2", seen: 25 },
+    });
+  });
+
+  test("recognizes cursors issued by legacy replicas", () => {
+    expect(parseGlobalSearchCursor(encodeCursor(25, "global"))).toEqual({
+      type: "legacy",
+      offset: 25,
+    });
+    expect(parseGlobalSearchCursor(encodeCursor(100, "global"))).toEqual({
+      type: "legacy",
+      offset: 100,
+    });
+  });
+
+  test("dual cursors preserve both formats for every supported position", () => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 1, max: GLOBAL_SEARCH_RESULT_LIMIT - 1 }),
+        fc.integer({ min: -8, max: 8 }),
+        fc.constantFrom(...GLOBAL_SEARCH_HIT_ID_PREFIXES),
+        fc.uuid(),
+        (seen, score, prefix, id) => {
+          const keysetCursor = { score, id: `${prefix}${id}`, seen };
+          const encoded = encodeGlobalSearchCursor(keysetCursor);
+
+          expect(decodeCursor(encoded)).toEqual({ score: seen, id: "global" });
+          expect(parseGlobalSearchCursor(encoded)).toEqual({
+            type: "keyset",
+            cursor: keysetCursor,
+          });
+          expect(parseGlobalSearchCursor(encodeCursor(seen, "global"))).toEqual(
+            { type: "legacy", offset: seen },
+          );
+        },
+      ),
+      propertyConfig(),
+    );
   });
 
   test("stops when the merged candidates contain no lookahead row", () => {
@@ -153,21 +204,18 @@ describe("global search keyset pagination", () => {
         encodeCursor(0.5, `${GLOBAL_SEARCH_RESULT_LIMIT}:entity:1`),
       ),
     ).toBeNull();
+    expect(
+      decodeGlobalSearchCursor(encodeCursor(0.5, "0:entity:1")),
+    ).toBeNull();
+    expect(
+      decodeGlobalSearchCursor(encodeCursor(0.5, "-1:entity:1")),
+    ).toBeNull();
   });
 
   test("repeated pages preserve the complete deterministic order", () => {
     const arbitraryHit = fc.record({
       id: fc
-        .tuple(
-          fc.constantFrom(
-            "entity:",
-            "matter:",
-            "contact:",
-            "case-law:",
-            "chat:",
-          ),
-          fc.uuid(),
-        )
+        .tuple(fc.constantFrom(...GLOBAL_SEARCH_HIT_ID_PREFIXES), fc.uuid())
         .map(([prefix, id]) => `${prefix}${id}`),
       score: fc.integer({ min: 0, max: 8 }),
     });

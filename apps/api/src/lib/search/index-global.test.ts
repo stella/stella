@@ -4,6 +4,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import { chatThreadScopeSql } from "@/api/lib/search/chat-thread-scope-sql";
 import { contactWorkspaceAccessSql } from "@/api/lib/search/contact-workspace-access-sql";
+import { encodeCursor } from "@/api/lib/search/cursor";
 import { mapEntityHit } from "@/api/lib/search/global-search-mappers";
 import { searchGlobal } from "@/api/lib/search/index-global";
 import {
@@ -235,9 +236,35 @@ describe("global search SQL scope", () => {
     }
 
     const matterQuery = sourceQueries.at(1)?.compiled;
+    // One boost parameter is in the selected score; each cursor OR branch
+    // repeats that same score expression for the keyset boundary.
     expect(matterQuery?.params.filter((param) => param === 0.15)).toHaveLength(
       3,
     );
+  });
+
+  test("continues legacy offset cursors during a rolling deployment", async () => {
+    const dialect = new PgDialect();
+
+    await searchGlobal({
+      query: "contract",
+      organizationId: toSafeId<"organization">("org_1"),
+      userId: toSafeId<"user">("user_1"),
+      accessibleWorkspaceIds: [toSafeId<"workspace">("ws_1")],
+      selectedWorkspaceIds: [],
+      types: [],
+      editedByUserIds: [],
+      mimeTypes: [],
+      cursor: encodeCursor(25, "global"),
+      limit: 3,
+    });
+
+    expect(rootDbExecuteMock).toHaveBeenCalledTimes(5);
+    for (const [query] of rootDbExecuteMock.mock.calls) {
+      const compiled = dialect.sqlToQuery(query);
+      expect(compiled.sql).not.toContain('COLLATE "C" <');
+      expect(compiled.params.at(-1)).toBe(29);
+    }
   });
 
   test("uses updated time as the keyset value for empty-query search", async () => {

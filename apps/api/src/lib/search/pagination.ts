@@ -12,13 +12,22 @@ export type GlobalSearchCursor = {
 
 export const GLOBAL_SEARCH_RESULT_LIMIT = 1000;
 
-const GLOBAL_SEARCH_HIT_ID_PREFIXES = [
+const LEGACY_GLOBAL_SEARCH_CURSOR_ID = "global";
+const DUAL_CURSOR_SEPARATOR = "==";
+
+export const GLOBAL_SEARCH_HIT_ID_PREFIXES = [
   "entity:",
   "matter:",
   "contact:",
   "case-law:",
   "chat:",
 ] as const;
+
+export type ParsedGlobalSearchCursor =
+  | { type: "initial" }
+  | { type: "keyset"; cursor: GlobalSearchCursor }
+  | { type: "legacy"; offset: number }
+  | { type: "invalid" };
 
 type ScoredSearchHit<T extends { id: string }> = {
   hit: T;
@@ -37,19 +46,18 @@ export const isAfterGlobalSearchCursor = (
   hit.score < cursor.score ||
   (hit.score === cursor.score && compareCodepoint(hit.id, cursor.id) < 0);
 
-export const decodeGlobalSearchCursor = (
-  cursor: string | undefined,
+const decodeGlobalSearchKeysetPayload = (
+  cursor: string,
 ): GlobalSearchCursor | null => {
-  if (cursor === undefined) {
+  const decoded = decodeCursor(cursor);
+  if (decoded === null) {
     return null;
   }
 
-  const decoded = decodeCursor(cursor);
-  const separatorIndex = decoded?.id.indexOf(":") ?? -1;
-  const seen = Number(decoded?.id.slice(0, separatorIndex));
-  const id = decoded?.id.slice(separatorIndex + 1) ?? "";
+  const separatorIndex = decoded.id.indexOf(":");
+  const seen = Number(decoded.id.slice(0, separatorIndex));
+  const id = decoded.id.slice(separatorIndex + 1);
   if (
-    decoded === null ||
     separatorIndex === -1 ||
     !Number.isInteger(seen) ||
     seen <= 0 ||
@@ -64,11 +72,79 @@ export const decodeGlobalSearchCursor = (
   return { score: decoded.score, id, seen };
 };
 
+const decodeLegacyGlobalSearchOffset = (cursor: string): number | null => {
+  const decoded = decodeCursor(cursor);
+  if (
+    decoded?.id !== LEGACY_GLOBAL_SEARCH_CURSOR_ID ||
+    !Number.isInteger(decoded.score) ||
+    decoded.score < 0 ||
+    decoded.score >= GLOBAL_SEARCH_RESULT_LIMIT
+  ) {
+    return null;
+  }
+
+  return decoded.score;
+};
+
+export const parseGlobalSearchCursor = (
+  cursor: string | undefined,
+): ParsedGlobalSearchCursor => {
+  if (cursor === undefined) {
+    return { type: "initial" };
+  }
+
+  const dualSeparatorIndex = cursor.indexOf(DUAL_CURSOR_SEPARATOR);
+  if (
+    dualSeparatorIndex !== -1 &&
+    dualSeparatorIndex + DUAL_CURSOR_SEPARATOR.length < cursor.length
+  ) {
+    const legacyPayload = cursor.slice(0, dualSeparatorIndex);
+    const keysetPayload = cursor.slice(
+      dualSeparatorIndex + DUAL_CURSOR_SEPARATOR.length,
+    );
+    const offset = decodeLegacyGlobalSearchOffset(legacyPayload);
+    const keysetCursor = decodeGlobalSearchKeysetPayload(keysetPayload);
+    if (
+      offset === null ||
+      keysetCursor === null ||
+      offset !== keysetCursor.seen
+    ) {
+      return { type: "invalid" };
+    }
+    return { type: "keyset", cursor: keysetCursor };
+  }
+
+  const keysetCursor = decodeGlobalSearchKeysetPayload(cursor);
+  if (keysetCursor !== null) {
+    return { type: "keyset", cursor: keysetCursor };
+  }
+
+  const offset = decodeLegacyGlobalSearchOffset(cursor);
+  return offset === null ? { type: "invalid" } : { type: "legacy", offset };
+};
+
+export const decodeGlobalSearchCursor = (
+  cursor: string | undefined,
+): GlobalSearchCursor | null => {
+  const parsed = parseGlobalSearchCursor(cursor);
+  return parsed.type === "keyset" ? parsed.cursor : null;
+};
+
 export const encodeGlobalSearchCursor = ({
   score,
   id,
   seen,
-}: GlobalSearchCursor): string => encodeCursor(score, `${seen}:${id}`);
+}: GlobalSearchCursor): string => {
+  // The prefix remains a valid offset cursor for replicas running the previous
+  // release. New replicas use the suffix for keyset pagination, so requests can
+  // move safely between old and new replicas during a rolling deployment.
+  const legacyPayload = encodeCursor(
+    seen,
+    LEGACY_GLOBAL_SEARCH_CURSOR_ID,
+  ).replace(/=+$/, "");
+  const keysetPayload = encodeCursor(score, `${seen}:${id}`);
+  return `${legacyPayload}${DUAL_CURSOR_SEPARATOR}${keysetPayload}`;
+};
 
 export const globalSearchCursorSql = ({
   cursor,

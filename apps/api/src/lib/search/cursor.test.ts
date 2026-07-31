@@ -28,8 +28,8 @@ describe("search cursor encoding", () => {
 });
 
 describe("search cursor encoding — properties", () => {
-  // -0 is excluded because String(-0) === "0" loses the sign.
   const arbId = fc.string({ minLength: 1, maxLength: 32 });
+  // -0 is excluded because String(-0) === "0" loses the sign.
   const arbScore = fc
     .double({ noNaN: true, noDefaultInfinity: true })
     .filter((n) => !Object.is(n, -0));
