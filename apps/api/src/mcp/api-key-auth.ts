@@ -24,8 +24,9 @@ const rejectCredential = (): McpAuthenticationError =>
   new McpAuthenticationError({ message: "Invalid or expired API key" });
 
 /**
- * Resolve a machine API key into the *same* `McpSession` shape the JWT bearer
- * path produces, so both credential types land on one authorization path.
+ * Resolve a machine API key into the same authorization identity the JWT
+ * bearer path produces, while retaining credential-specific audit provenance.
+ * Both credential types still land on one authorization path.
  *
  * This adds a credential type; it does not relax anything. The returned session
  * is handed to `resolveMcpSessionContext` unchanged, which independently

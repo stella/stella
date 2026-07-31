@@ -31,6 +31,7 @@ const OWNER_USER_ID = "user-machine-owner";
 const ORG_ID = "org-owning-the-key";
 const FOREIGN_ORG_ID = "org-somebody-else";
 const CREDENTIAL = `${MACHINE_API_KEY_PREFIX}abcdef0123456789`;
+const KEY_ID = "machine-key-1";
 const SCOPES = ["stella:read", "stella:search"];
 
 type KeyOverrides = {
@@ -42,7 +43,9 @@ type KeyOverrides = {
 
 const validKey = (overrides: KeyOverrides = {}) => ({
   enabled: true,
+  id: KEY_ID,
   metadata: { organizationId: ORG_ID, scopes: SCOPES },
+  name: "Machine API key",
   permissions: { workspace: ["read"] },
   referenceId: OWNER_USER_ID,
   ...overrides,
@@ -85,11 +88,13 @@ beforeEach(() => {
 });
 
 describe("resolveMachineApiKeySession", () => {
-  test("produces the identical session shape the JWT bearer path produces", async () => {
+  test("matches JWT authorization identity while preserving credential provenance", async () => {
     // This is the crux of treating a key as "another credential type" rather
     // than "another authorization path": whatever comes out here is handed to
     // `resolveMcpSessionContext` exactly as a JWT-derived session is, so if the
-    // two shapes ever diverge, the key would be authorized by different rules.
+    // authorization fields ever diverge, the key would be authorized by
+    // different rules. Credential provenance intentionally remains distinct
+    // so downstream audit records can identify the actual performer.
     givenKey();
     givenMemberRole("member");
 
@@ -100,7 +105,21 @@ describe("resolveMachineApiKeySession", () => {
       sub: OWNER_USER_ID,
     });
 
-    expect(fromKey).toEqual(fromJwt);
+    expect({
+      organizationId: fromKey.organizationId,
+      scopes: fromKey.scopes,
+      userId: fromKey.userId,
+    }).toEqual({
+      organizationId: fromJwt.organizationId,
+      scopes: fromJwt.scopes,
+      userId: fromJwt.userId,
+    });
+    expect(fromKey.credential).toEqual({
+      id: KEY_ID,
+      name: "Machine API key",
+      type: "machine_api_key",
+    });
+    expect(fromJwt.credential).toEqual({ type: "delegated_user" });
   });
 
   test("resolves to a real user id, which is what makes the member and RLS checks apply", async () => {
