@@ -181,6 +181,7 @@ describe("generateRouteMap: discriminator split (S2)", () => {
     ]);
     expect(add?.flags.every((f) => f.required)).toBe(true);
     expect(settings?.flags.map((f) => f.flag).sort()).toEqual([
+      "--document-processing-mode",
       "--matter-number-padding",
       "--matter-number-pattern",
       "--prompt-caching-enabled",

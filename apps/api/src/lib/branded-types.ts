@@ -39,6 +39,8 @@ export type SafeIdType =
   | "docxSuggestion"
   | "document"
   | "documentCounter"
+  | "entityDeletionCleanupRequest"
+  | "documentProcessingRun"
   | "documentType"
   | "entity"
   | "entityVersionAiSummary"

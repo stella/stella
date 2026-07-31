@@ -201,10 +201,11 @@ describe("manage_organization per-action validation", () => {
         matter_id: "ws_1",
         user_id: "user_2",
         prompt_caching_enabled: false,
+        document_processing_mode: "searchable-text",
       }),
     );
     expect(message).toBe(
-      "matter_number_pattern, matter_number_padding, and prompt_caching_enabled apply only to update_org_settings",
+      "matter_number_pattern, matter_number_padding, prompt_caching_enabled, and document_processing_mode apply only to update_org_settings",
     );
   });
 
@@ -231,6 +232,30 @@ describe("manage_organization per-action validation", () => {
     expect(
       errorText(await runManageOrg({ action: "promote_admin" })),
     ).toContain("action");
+  });
+
+  test("exposes the searchable-text processing modes", () => {
+    const definition = DEFAULT_MCP_TOOL_DEFINITIONS.find(
+      (tool) => tool.name === "manage_organization",
+    );
+    const property =
+      definition?.inputSchema.properties?.document_processing_mode;
+
+    expect(property).toMatchObject({
+      type: "string",
+      enum: ["off", "searchable-text"],
+    });
+  });
+
+  test("rejects an unknown document processing mode", async () => {
+    expect(
+      errorText(
+        await runManageOrg({
+          action: "update_org_settings",
+          document_processing_mode: "structured-document",
+        }),
+      ),
+    ).toContain("document_processing_mode");
   });
 });
 

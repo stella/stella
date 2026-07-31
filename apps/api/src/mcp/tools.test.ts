@@ -57,6 +57,10 @@ const s3FileMock = mock(() => ({ arrayBuffer: s3ArrayBufferMock }));
 
 void mock.module("@/api/lib/s3", () => ({
   getS3: () => ({ file: s3FileMock }),
+  resolveS3Credentials: async () => ({
+    accessKeyId: "test-access-key",
+    secretAccessKey: "test-secret-key",
+  }),
 }));
 
 // Default passthrough: just await the wrapped operation, so every existing

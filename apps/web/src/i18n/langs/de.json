@@ -2525,6 +2525,12 @@
       "auditLogsTo": "Bis",
       "auditLogsUserId": "Benutzer-ID",
       "auditLogsUserIdPlaceholder": "Nach Benutzer-ID filtern",
+      "documentProcessing": {
+        "description": "Erkennt Text in gescannten PDFs automatisch, damit deren Inhalt durchsuchbar ist.",
+        "title": "Dokumenttexterkennung",
+        "toggleLabel": "Text in gescannten PDFs automatisch erkennen",
+        "updated": "Einstellung für Dokumenttexterkennung aktualisiert"
+      },
       "documentTypes": {
         "addPlaceholder": "Add a document type (e.g. Employment Agreement)",
         "deleteFailed": "Couldn't delete document type",
@@ -3198,9 +3204,13 @@
       "downloadOriginal": "Originaldatei",
       "downloadPdf": "PDF",
       "maxEntitiesReached": "Maximale Anzahl an Entitäten erreicht",
+      "ocrAlreadyProcessed": "Texterkennung wurde bereits abgeschlossen",
+      "ocrQueueFailed": "Texterkennung konnte nicht in die Warteschlange gestellt werden",
+      "ocrQueued": "Texterkennung in Warteschlange gestellt",
       "rateLimited": "Ratenlimit erreicht; Wiederaufnahme in {seconds, number} s",
       "renamedToAvoidConflicts": "{count, plural, one {# Datei umbenannt, um Konflikte zu vermeiden} other {# Dateien umbenannt, um Konflikte zu vermeiden}}",
       "retryFailed": "{count, plural, one {# Datei} other {# Dateien}} erneut versuchen",
+      "runOcr": "OCR ausführen",
       "uploadedPartially": "{failed, plural, one {# Datei} other {# Dateien}} von {total, number} fehlgeschlagen",
       "uploadedSuccessfully": "Dateien erfolgreich hochgeladen",
       "uploading": "Dateien werden hochgeladen",

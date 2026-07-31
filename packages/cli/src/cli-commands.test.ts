@@ -1062,6 +1062,26 @@ describe("organization discriminator split (S2/Phase 4)", () => {
       matter_number_padding: 4,
     });
   });
+
+  test("update-settings forwards the document processing mode", async () => {
+    const server = startMockServer(() => ({ toolPayload: { ok: true } }));
+    const result = await runCli({
+      args: [
+        "organization",
+        "update-settings",
+        "--document-processing-mode",
+        "searchable-text",
+      ],
+      url: server.url,
+      token: makeToken(["admin_write"]),
+    });
+    server.stop();
+    expect(result.exitCode).toBe(0);
+    expect(server.requests.at(0)?.params.arguments).toEqual({
+      action: "update_org_settings",
+      document_processing_mode: "searchable-text",
+    });
+  });
 });
 
 describe("legislation multi-shape rendering (Phase 4)", () => {

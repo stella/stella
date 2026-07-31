@@ -1,22 +1,31 @@
 import { Result } from "better-result";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
+import {
+  documentProcessingRuns,
+  entityDeletionCleanupRequests,
+  entities,
+  entityVersions,
+  fields,
+  workspaces,
+} from "@/api/db/schema";
+import { handoffCommittedEntityDeletionCleanup } from "@/api/handlers/entities/entity-deletion-cleanup-handoff";
 import {
   extractFieldFileRefs,
   filterUnreferencedFieldFileRefs,
 } from "@/api/handlers/files/field-file-refs";
-import { deleteS3Objects } from "@/api/handlers/files/utils";
+import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import type { SafeId } from "@/api/lib/branded-types";
+import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { enqueueEntityDeletionCleanup } from "@/api/lib/entity-deletion-cleanup-queue";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { getSearchProvider } from "@/api/lib/search/provider";
@@ -31,6 +40,9 @@ const deleteEntitiesBodySchema = t.Object({
 type DeleteEntitiesBodySchema = Static<typeof deleteEntitiesBodySchema>;
 
 export type DeleteEntitiesHandlerProps = {
+  enqueueCleanup?: (
+    requestId: SafeId<"entityDeletionCleanupRequest">,
+  ) => Promise<void>;
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
@@ -39,34 +51,62 @@ export type DeleteEntitiesHandlerProps = {
 };
 
 export const deleteEntitiesHandler = async function* ({
+  enqueueCleanup = enqueueEntityDeletionCleanup,
   safeDb,
   organizationId,
   workspaceId,
   recordAuditEvent,
   body,
 }: DeleteEntitiesHandlerProps) {
-  const readOnlyEntities = yield* Result.await(
-    safeDb((tx) =>
-      // SAFETY: result pinned to body.entityIds via id IN (...), which the body schema caps at LIMITS.entitiesPageSizeMax, so it cannot return more rows than the (bounded) request enumerated
-      // eslint-disable-next-line require-query-limit/require-query-limit
-      tx.query.entities.findMany({
-        where: {
-          id: { in: body.entityIds },
-          readOnly: { eq: true },
-          workspaceId: { eq: workspaceId },
-        },
-        columns: { id: true },
-      }),
-    ),
-  );
-  if (readOnlyEntities.length > 0) {
-    return Result.err(
-      new HandlerError({ status: 409, message: "Entity is read-only" }),
-    );
-  }
+  const txOutcome = yield* Result.await(
+    safeDb(async (tx) => {
+      // OCR dispatch takes this same entity fence before changing a run to
+      // `running`. The committed entity deletion is the durable withdrawal
+      // fence; storage cleanup happens later from a durable request, never
+      // while this transaction owns locks.
+      const lockedEntities = await tx
+        .select({ id: entities.id, readOnly: entities.readOnly })
+        .from(entities)
+        .where(
+          and(
+            eq(entities.workspaceId, workspaceId),
+            inArray(entities.id, body.entityIds),
+          ),
+        )
+        .orderBy(asc(entities.id))
+        .limit(LIMITS.entitiesPageSizeMax)
+        .for("update");
+      if (lockedEntities.some(({ readOnly }) => readOnly)) {
+        return {
+          status: "rejected" as const,
+          error: new HandlerError({
+            status: 409,
+            message: "Entity is read-only",
+          }),
+        };
+      }
 
-  const fieldRows = yield* Result.await(
-    safeDb((tx) => {
+      const runningOcrRuns = await tx
+        .select({ id: documentProcessingRuns.id })
+        .from(documentProcessingRuns)
+        .where(
+          and(
+            eq(documentProcessingRuns.workspaceId, workspaceId),
+            inArray(documentProcessingRuns.entityId, body.entityIds),
+            eq(documentProcessingRuns.status, "running"),
+          ),
+        )
+        .limit(1);
+      if (runningOcrRuns.at(0)) {
+        return {
+          status: "rejected" as const,
+          error: new HandlerError({
+            status: 409,
+            message: "Wait for document processing to finish before deleting",
+          }),
+        };
+      }
+
       const entityVersionIds = tx
         .select({ id: entityVersions.id })
         .from(entityVersions)
@@ -78,44 +118,38 @@ export const deleteEntitiesHandler = async function* ({
           ),
         );
 
-      return tx
+      const fieldRows = await tx
         .select({ content: fields.content })
         .from(fields)
         .where(inArray(fields.entityVersionId, entityVersionIds));
-    }),
-  );
 
-  const fileRefs = fieldRows.flatMap((row) =>
-    extractFieldFileRefs(row.content),
-  );
-  const unreferencedFileRefs = yield* Result.await(
-    safeDb(
-      async (tx) =>
-        await filterUnreferencedFieldFileRefs({
-          tx,
+      const fileRefs = fieldRows.flatMap((row) =>
+        extractFieldFileRefs(row.content),
+      );
+      const unreferencedFileRefs = await filterUnreferencedFieldFileRefs({
+        tx,
+        workspaceId,
+        fileRows: fileRefs,
+        excludedEntityIds: body.entityIds,
+      });
+
+      const cleanupRequestId =
+        unreferencedFileRefs.length > 0
+          ? createSafeId<"entityDeletionCleanupRequest">()
+          : null;
+      if (cleanupRequestId) {
+        await tx.insert(entityDeletionCleanupRequests).values({
+          id: cleanupRequestId,
+          organizationId,
           workspaceId,
-          fileRows: fileRefs,
-          excludedEntityIds: body.entityIds,
-        }),
-    ),
-  );
+          s3Keys: unreferencedFileRefs.map(({ fileId, mimeType }) =>
+            createFileKey({ organizationId, workspaceId, fileId, mimeType }),
+          ),
+        });
+      }
 
-  // Delete S3 objects before the DB delete.
-  // On retry, already-deleted objects are no-ops.
-
-  Result.unwrap(
-    await deleteS3Objects({
-      fileRows: unreferencedFileRefs,
-      organizationId,
-      workspaceId,
-    }),
-    "Entity file cleanup must succeed before deleting database records",
-  );
-
-  // Cascade: entities → entityVersions → fields →
-  // justifications (all cascade).
-  const deletedEntities = yield* Result.await(
-    safeDb(async (tx) => {
+      // Cascade: entities → entityVersions → fields →
+      // justifications (all cascade).
       const deleted = await tx
         .delete(entities)
         .where(
@@ -155,9 +189,25 @@ export const deleteEntitiesHandler = async function* ({
         })),
       );
 
-      return deleted;
+      return {
+        status: "deleted" as const,
+        cleanupRequestId,
+        entities: deleted,
+      };
     }),
   );
+  if (txOutcome.status === "rejected") {
+    return Result.err(txOutcome.error);
+  }
+  const deletedEntities = txOutcome.entities;
+  const cleanupRequestId = txOutcome.cleanupRequestId;
+  if (cleanupRequestId) {
+    await handoffCommittedEntityDeletionCleanup({
+      captureDeliveryError: captureError,
+      enqueueCleanup,
+      requestId: cleanupRequestId,
+    });
+  }
 
   // Explicit removal for non-PG providers (CASCADE handles PG)
   const provider = getSearchProvider();

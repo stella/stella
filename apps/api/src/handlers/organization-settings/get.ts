@@ -1,6 +1,10 @@
 import { Result } from "better-result";
 
-import type { PracticeJurisdiction } from "@/api/db/schema";
+import type {
+  DocumentProcessingMode,
+  PracticeJurisdiction,
+} from "@/api/db/schema";
+import { DEFAULT_DOCUMENT_PROCESSING_MODE } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
@@ -16,6 +20,7 @@ const config = {
 } satisfies HandlerConfig;
 
 type OrganizationSettingsRow = {
+  documentProcessingMode: DocumentProcessingMode;
   matterNumberPadding: number;
   matterNumberPattern: string;
   practiceJurisdictions: PracticeJurisdiction[];
@@ -25,6 +30,8 @@ type OrganizationSettingsRow = {
 export const projectOrganizationSettingsRow = (
   row: OrganizationSettingsRow | null | undefined,
 ) => ({
+  documentProcessingMode:
+    row?.documentProcessingMode ?? DEFAULT_DOCUMENT_PROCESSING_MODE,
   matterNumberPattern:
     row?.matterNumberPattern ?? DEFAULT_MATTER_NUMBER_PATTERN,
   matterNumberPadding:
@@ -41,6 +48,7 @@ const readOrganizationSettings = createSafeRootHandler(
         tx.query.organizationSettings.findFirst({
           where: { organizationId: { eq: session.activeOrganizationId } },
           columns: {
+            documentProcessingMode: true,
             matterNumberPattern: true,
             matterNumberPadding: true,
             practiceJurisdictions: true,

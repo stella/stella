@@ -90,6 +90,7 @@ describe("policy coverage", () => {
     "agent_delegation",
   ]);
   const APPEND_ONLY = new Set(["audit_logs"]);
+  const INSERT_ONLY = new Set(["entity_deletion_cleanup_requests"]);
   const GLOBAL_CASE_LAW_TABLES = [
     "case_law_citations",
     "case_law_court_weights",
@@ -198,13 +199,19 @@ describe("policy coverage", () => {
     for (const table of wsTables) {
       const tablePolicies = policies.filter((p) => p.table_name === table);
       const cmds = new Set(tablePolicies.map((p) => p.command));
-      expect(cmds).toContain("r"); // SELECT
       expect(cmds).toContain("a"); // INSERT
+      if (INSERT_ONLY.has(table)) {
+        expect(cmds).toEqual(new Set(["a"]));
+      } else {
+        expect(cmds).toContain("r"); // SELECT
+        if (!APPEND_ONLY.has(table)) {
+          expect(cmds).toContain("w"); // UPDATE
+          expect(cmds).toContain("d"); // DELETE
+        }
+      }
       if (APPEND_ONLY.has(table)) {
         continue;
       }
-      expect(cmds).toContain("w"); // UPDATE
-      expect(cmds).toContain("d"); // DELETE
 
       // Verify expressions reference the correct column
       // AND the correct session variable

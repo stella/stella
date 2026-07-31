@@ -9,6 +9,19 @@ const featureFlagSchema = v.optional(
   "false",
 );
 
+const isSecureOcrServiceUrl = (value: string) => {
+  const url = new URL(value);
+  if (url.protocol === "https:") {
+    return true;
+  }
+  return (
+    url.protocol === "http:" &&
+    (url.hostname === "localhost" ||
+      url.hostname === "127.0.0.1" ||
+      url.hostname === "[::1]")
+  );
+};
+
 const hasAnySmtpTransportEnv = () =>
   !!(
     process.env["SMTP_HOST"] ||
@@ -199,6 +212,21 @@ const envApi = createEnv({
     GOTENBERG_URL: v.pipe(v.string(), v.url()),
     GOTENBERG_USERNAME: v.string(),
     GOTENBERG_PASSWORD: v.string(),
+    /**
+     * Optional private PaddleOCR serving endpoint. The dedicated document
+     * processing worker requires it; the API server can run without it.
+     */
+    OCR_SERVICE_URL: v.optional(
+      v.pipe(
+        v.string(),
+        v.url(),
+        v.check(
+          isSecureOcrServiceUrl,
+          "OCR_SERVICE_URL must use HTTPS unless it targets a loopback address.",
+        ),
+      ),
+    ),
+    OCR_SERVICE_TOKEN: v.optional(v.pipe(v.string(), v.minLength(16))),
     CONTENT_ENCRYPTION_KEY: v.optional(
       v.pipe(
         v.string(),

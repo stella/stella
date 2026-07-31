@@ -2525,6 +2525,12 @@
       "auditLogsTo": "Data iki",
       "auditLogsUserId": "Naudotojo ID",
       "auditLogsUserIdPlaceholder": "Filtruoti pagal naudotojo ID",
+      "documentProcessing": {
+        "description": "Automatiškai atpažinkite tekstą nuskenuotuose PDF, kad jų turinį būtų galima ieškoti.",
+        "title": "Dokumentų teksto atpažinimas",
+        "toggleLabel": "Automatiškai atpažinti tekstą nuskenuotuose PDF",
+        "updated": "Dokumentų teksto atpažinimo nustatymas atnaujintas"
+      },
       "documentTypes": {
         "addPlaceholder": "Add a document type (e.g. Employment Agreement)",
         "deleteFailed": "Couldn't delete document type",
@@ -3198,9 +3204,13 @@
       "downloadOriginal": "Originalus failas",
       "downloadPdf": "PDF",
       "maxEntitiesReached": "Pasiektas didžiausias įrašų skaičius",
+      "ocrAlreadyProcessed": "Teksto atpažinimas jau baigtas",
+      "ocrQueueFailed": "Nepavyko įtraukti teksto atpažinimo į eilę",
+      "ocrQueued": "Teksto atpažinimas įtrauktas į eilę",
       "rateLimited": "Greičio ribojimas; tęsiama po {seconds, number} s",
       "renamedToAvoidConflicts": "{count, plural, one {# failas pervadintas siekiant išvengti konfliktų} few {# failai pervadinti siekiant išvengti konfliktų} many {# failų pervadinta siekiant išvengti konfliktų} other {# failų pervadinta siekiant išvengti konfliktų}}",
       "retryFailed": "Kartoti {count, plural, one {# failą} few {# failus} other {# failų}}",
+      "runOcr": "Paleisti OCR",
       "uploadedPartially": "{failed, plural, one {# failas nepavyko} few {# failai nepavyko} many {# failų nepavyko} other {# failų nepavyko}} iš {total, number}",
       "uploadedSuccessfully": "Failai sėkmingai įkelti",
       "uploading": "Failai keliami",

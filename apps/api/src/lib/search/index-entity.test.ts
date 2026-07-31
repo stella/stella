@@ -3,6 +3,7 @@ import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 
 process.env["REDIS_URL"] ??= "redis://localhost:6379";
@@ -24,13 +25,37 @@ const syncWorkspaceSearchActivityMock = mock(
 );
 const decryptContentMock = mock(async () => "Extracted text");
 const captureErrorMock = mock(() => undefined);
+const currentFileField = {
+  content: {
+    encrypted: false,
+    fileName: "scan.pdf",
+    id: "019864b8-48d0-7f37-94d5-948e3bcf3f44",
+    mimeType: "application/pdf",
+    pdfFileId: null,
+    sha256Hex: "a".repeat(64),
+    sizeBytes: 123,
+    type: "file" as const,
+    version: 1 as const,
+  },
+  id: toSafeId<"field">("019864b8-48d0-7f37-94d5-948e3bcf3f46"),
+  propertyId: toSafeId<"property">("019864b8-48d0-7f37-94d5-948e3bcf3f47"),
+};
+const noCurrentFileFields: (typeof currentFileField)[] = [];
 const entityRow = {
-  currentVersion: { fields: [], id: toSafeId<"entityVersion">("v_1") },
+  currentVersion: {
+    fields: noCurrentFileFields,
+    id: toSafeId<"entityVersion">("v_1"),
+  },
   createdAt: new Date("2026-04-01T08:00:00.000Z"),
   extractedContent: null as {
     ciphertext: Buffer;
+    extractedAt: Date;
     iv: Buffer;
     language: string | null;
+    sourceEntityVersionId: SafeId<"entityVersion"> | null;
+    sourceFieldId: SafeId<"field"> | null;
+    sourceFileId: string | null;
+    sourceSha256Hex: string | null;
   } | null,
   id: toSafeId<"entity">("entity_1"),
   kind: "document" as const,
@@ -130,16 +155,16 @@ test("rejects an out-of-order projection against the authoritative entity", asyn
   }
 
   const compiled = new PgDialect().sqlToQuery(query);
-  expect(compiled.sql).toContain("WITH authoritative_source AS MATERIALIZED");
+  expect(compiled.sql).toContain("FROM entities e");
   expect(compiled.sql).toContain("e.current_version_id =");
   expect(compiled.sql).toMatch(
     /COALESCE\(e\.updated_at, e\.created_at\)\s+IS NOT DISTINCT FROM/u,
   );
   expect(compiled.sql).toContain("::timestamptz");
   expect(compiled.sql).toContain("FOR UPDATE");
-  expect(compiled.sql).toContain(
-    "WHERE EXISTS (SELECT 1 FROM authoritative_source)",
-  );
+  expect(compiled.sql).toContain("FOR UPDATE OF e");
+  expect(compiled.sql).toContain("NOT EXISTS");
+  expect(compiled.sql).toContain("FROM extracted_content ec");
 });
 
 test("does not advance matter activity when a stale projection is rejected", async () => {
@@ -174,10 +199,19 @@ test("keeps the last complete projection when extracted content cannot decrypt",
   const decryptionFailure = new Error("key unavailable");
   findFirstMock.mockResolvedValueOnce({
     ...entityRow,
+    currentVersion: {
+      fields: [currentFileField],
+      id: entityRow.currentVersion.id,
+    },
     extractedContent: {
       ciphertext: Buffer.from("ciphertext"),
+      extractedAt: new Date("2026-04-30T08:01:00.000Z"),
       iv: Buffer.from("iv"),
       language: "en",
+      sourceEntityVersionId: entityRow.currentVersion.id,
+      sourceFieldId: currentFileField.id,
+      sourceFileId: currentFileField.content.id,
+      sourceSha256Hex: currentFileField.content.sha256Hex,
     },
   });
   decryptContentMock.mockRejectedValueOnce(decryptionFailure);
@@ -197,4 +231,86 @@ test("keeps the last complete projection when extracted content cannot decrypt",
   });
   expect(executeMock).not.toHaveBeenCalled();
   expect(syncWorkspaceSearchActivityMock).not.toHaveBeenCalled();
+});
+
+test("excludes stale extracted text and fences its observed provenance", async () => {
+  const staleVersionId = toSafeId<"entityVersion">(
+    "019864b8-48d0-7f37-94d5-948e3bcf3f48",
+  );
+  const extractedAt = new Date("2026-04-30T08:01:00.000Z");
+  findFirstMock.mockResolvedValueOnce({
+    ...entityRow,
+    currentVersion: {
+      fields: [currentFileField],
+      id: entityRow.currentVersion.id,
+    },
+    extractedContent: {
+      ciphertext: Buffer.from("stale ciphertext"),
+      extractedAt,
+      iv: Buffer.from("stale iv"),
+      language: "en",
+      sourceEntityVersionId: staleVersionId,
+      sourceFieldId: currentFileField.id,
+      sourceFileId: currentFileField.content.id,
+      sourceSha256Hex: currentFileField.content.sha256Hex,
+    },
+  });
+  const { upsertSearchDocument } =
+    await import("@/api/lib/search/index-entity");
+
+  await upsertSearchDocument(toSafeId<"entity">("entity_1"));
+
+  expect(decryptContentMock).not.toHaveBeenCalled();
+  const query = executeMock.mock.calls.at(0)?.[0];
+  expect(query).toBeDefined();
+  if (!query) {
+    return;
+  }
+  const compiled = new PgDialect().sqlToQuery(query);
+  expect(compiled.sql).toContain("EXISTS");
+  expect(compiled.sql).toContain("ec.source_entity_version_id");
+  expect(compiled.sql).toContain("ec.extracted_at");
+  expect(compiled.params).toContain(staleVersionId);
+  expect(compiled.params).toContain(extractedAt);
+});
+
+test("preserves pre-provenance extracted text until a fenced writer replaces it", async () => {
+  const extractedAt = new Date("2026-04-30T08:01:00.000Z");
+  findFirstMock.mockResolvedValueOnce({
+    ...entityRow,
+    currentVersion: {
+      fields: [currentFileField],
+      id: entityRow.currentVersion.id,
+    },
+    extractedContent: {
+      ciphertext: Buffer.from("legacy ciphertext"),
+      extractedAt,
+      iv: Buffer.from("legacy iv"),
+      language: "cs",
+      sourceEntityVersionId: null,
+      sourceFieldId: null,
+      sourceFileId: null,
+      sourceSha256Hex: null,
+    },
+  });
+  const { upsertSearchDocument } =
+    await import("@/api/lib/search/index-entity");
+
+  await upsertSearchDocument(toSafeId<"entity">("entity_1"));
+
+  expect(decryptContentMock).toHaveBeenCalledWith(
+    toSafeId<"organization">("org_1"),
+    Buffer.from("legacy ciphertext"),
+    Buffer.from("legacy iv"),
+  );
+  const query = executeMock.mock.calls.at(0)?.[0];
+  expect(query).toBeDefined();
+  if (!query) {
+    return;
+  }
+  const compiled = new PgDialect().sqlToQuery(query);
+  expect(compiled.params).toContain(extractedAt);
+  expect(
+    compiled.params.filter((parameter) => parameter === null),
+  ).not.toHaveLength(0);
 });

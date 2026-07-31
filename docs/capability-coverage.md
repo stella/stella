@@ -122,6 +122,7 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | `entities.list-files`                 | read               | stella:read            | —       | covered by `list_documents`                                            |
 | `entities.list-folders`               | read               | stella:read            | —       | covered by `list_documents`                                            |
 | `entities.move`                       | write              | stella:documents_write | —       | covered by `save_document`                                             |
+| `entities.ocr.create`                 | write              | stella:matters_write   | —       | generic invoke → `stella capability entities ocr-create`               |
 | `entities.organize-suggestions`       | write              | stella:matters_write   | —       | generic invoke → `stella capability entities organize-suggestions`     |
 | `entities.read-filesystem-tree`       | read               | stella:read            | —       | covered by `list_documents`                                            |
 | `entities.read-summaries`             | read               | stella:read            | —       | covered by `list_documents`                                            |
@@ -201,6 +202,7 @@ here as its CLI form). Projected from the same handler enumeration that builds
 
 | Capability                                             | Access | Scope              | Feature | Reachable via                                                                             |
 | ------------------------------------------------------ | ------ | ------------------ | ------- | ----------------------------------------------------------------------------------------- |
+| `organization-settings.document-ocr-availability.get`  | read   | stella:admin_read  | —       | generic invoke → `stella capability organization-settings document-ocr-availability-get`  |
 | `organization-settings.get`                            | read   | stella:admin_read  | —       | generic invoke → `stella capability organization-settings get`                            |
 | `organization-settings.preview`                        | read   | stella:admin_read  | —       | generic invoke → `stella capability organization-settings preview`                        |
 | `organization-settings.read-ai-availability`           | read   | stella:admin_read  | —       | generic invoke → `stella capability organization-settings read-ai-availability`           |

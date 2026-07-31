@@ -55,6 +55,13 @@ RUN bun build \
     --target bun \
     --outfile /app/backfill.js \
     apps/api/src/scripts/backfill-case-law-slugs.ts
+# Dedicated durable document-processing worker. Deploy the same image with
+# command override ["bun", "/app/document-processing-worker.js"]; PaddleOCR
+# itself remains an isolated serving endpoint configured by OCR_SERVICE_URL.
+RUN bun build \
+    --target bun \
+    --outfile /app/document-processing-worker.js \
+    apps/api/src/scripts/document-processing-worker.ts
 # Bundle the migration entrypoint so its full transitive @/api import graph is
 # resolved at build time. Keep the output at the same directory depth as the
 # source so its `import.meta.dir`-relative migrationsFolder lookup resolves to
@@ -97,6 +104,7 @@ RUN groupadd --system --gid 1001 stella && \
     useradd --system --uid 1001 --gid stella --no-create-home stella
 COPY --chown=stella:stella --from=builder /app/server /app/server
 COPY --chown=stella:stella --from=builder /app/backfill.js /app/backfill.js
+COPY --chown=stella:stella --from=builder /app/document-processing-worker.js /app/document-processing-worker.js
 COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/index.js /app/legal-atlas.js
 # Bundled migration task entrypoint:
 #   ["bun", "/app/apps/api/src/db/migrate.js"]

@@ -1,19 +1,32 @@
 import { Result } from "better-result";
+import { and, eq, inArray } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { organizationSettings } from "@/api/db/schema";
+import {
+  DOCUMENT_PROCESSING_MODE,
+  DEFAULT_DOCUMENT_PROCESSING_MODE,
+  documentProcessingRuns,
+  organizationSettings,
+} from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isDocumentOcrWorkerAvailable } from "@/api/lib/document-processing-readiness";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { validatePattern } from "@/api/lib/matter-reference";
 
+const documentProcessingModeSchema = t.Union([
+  t.Literal(DOCUMENT_PROCESSING_MODE.OFF),
+  t.Literal(DOCUMENT_PROCESSING_MODE.SEARCHABLE_TEXT),
+]);
+
 const updateOrganizationSettingsBodySchema = t.Object({
+  documentProcessingMode: t.Optional(documentProcessingModeSchema),
   matterNumberPattern: t.Optional(t.String({ minLength: 1, maxLength: 128 })),
   matterNumberPadding: t.Optional(t.Integer({ minimum: 1, maximum: 6 })),
   promptCachingEnabled: t.Optional(t.Boolean()),
@@ -30,6 +43,7 @@ export type UpdateOrganizationSettingsProps = {
   organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
   body: Static<typeof updateOrganizationSettingsBodySchema>;
+  workerAvailable?: () => Promise<boolean>;
 };
 
 // Shared org-settings update logic reused by the HTTP handler and the
@@ -42,6 +56,7 @@ export const updateOrganizationSettingsHandler = async function* ({
   organizationId,
   recordAuditEvent,
   body,
+  workerAvailable = isDocumentOcrWorkerAvailable,
 }: UpdateOrganizationSettingsProps) {
   const matterPattern = body.matterNumberPattern;
   const matterPadding = body.matterNumberPadding;
@@ -71,18 +86,76 @@ export const updateOrganizationSettingsHandler = async function* ({
     }
   }
 
-  yield* Result.await(
+  if (
+    body.documentProcessingMode === DOCUMENT_PROCESSING_MODE.SEARCHABLE_TEXT &&
+    !(await workerAvailable())
+  ) {
+    return Result.err(
+      new HandlerError({
+        status: 502,
+        message: "Document processing is temporarily unavailable",
+      }),
+    );
+  }
+
+  const updateOutcome = yield* Result.await(
     safeDb(async (tx) => {
       // Only touch promptCachingEnabled when the body carries it;
-      // omitting it from the upsert set keeps a concurrent toggle
-      // request from being clobbered by a stale read.
+      // omitting optional settings from the upsert set keeps a concurrent
+      // toggle request from being clobbered by a stale read.
       const wantsPromptCachingUpdate = body.promptCachingEnabled !== undefined;
-      const existing = wantsPromptCachingUpdate
-        ? await tx.query.organizationSettings.findFirst({
-            where: { organizationId: { eq: organizationId } },
-            columns: { promptCachingEnabled: true },
+      const wantsDocumentProcessingUpdate =
+        body.documentProcessingMode !== undefined;
+      const needsSerializedSettingsRead =
+        wantsPromptCachingUpdate || wantsDocumentProcessingUpdate;
+      if (needsSerializedSettingsRead) {
+        // Ensure there is a row to lock. Concurrent first-time updates block
+        // on the unique organization key here, then read the committed
+        // predecessor below; an absent optional settings row cannot bypass
+        // audit serialization.
+        await tx
+          .insert(organizationSettings)
+          .values({
+            id: createSafeId<"organizationSettings">(),
+            organizationId,
           })
-        : undefined;
+          .onConflictDoNothing({
+            target: organizationSettings.organizationId,
+          });
+      }
+      const existingRows = needsSerializedSettingsRead
+        ? await tx
+            .select({
+              documentProcessingMode:
+                organizationSettings.documentProcessingMode,
+              promptCachingEnabled: organizationSettings.promptCachingEnabled,
+            })
+            .from(organizationSettings)
+            .where(eq(organizationSettings.organizationId, organizationId))
+            .limit(1)
+            .for("update")
+        : [];
+      const existing = existingRows.at(0);
+
+      if (body.documentProcessingMode === DOCUMENT_PROCESSING_MODE.OFF) {
+        const runningAutomaticOcrRuns = await tx
+          .select({ id: documentProcessingRuns.id })
+          .from(documentProcessingRuns)
+          .where(
+            and(
+              eq(documentProcessingRuns.organizationId, organizationId),
+              eq(documentProcessingRuns.status, "running"),
+              inArray(documentProcessingRuns.requestSource, [
+                "upload",
+                "repair",
+              ]),
+            ),
+          )
+          .limit(1);
+        if (runningAutomaticOcrRuns.at(0)) {
+          return { type: "automatic_ocr_running" } as const;
+        }
+      }
 
       // Insert path needs schema defaults for any required column
       // the body did not carry. Matter columns are NOT NULL with
@@ -101,6 +174,9 @@ export const updateOrganizationSettingsHandler = async function* ({
           ...(wantsPromptCachingUpdate
             ? { promptCachingEnabled: body.promptCachingEnabled }
             : {}),
+          ...(wantsDocumentProcessingUpdate
+            ? { documentProcessingMode: body.documentProcessingMode }
+            : {}),
         })
         .onConflictDoUpdate({
           target: organizationSettings.organizationId,
@@ -113,6 +189,9 @@ export const updateOrganizationSettingsHandler = async function* ({
               : {}),
             ...(wantsPromptCachingUpdate
               ? { promptCachingEnabled: body.promptCachingEnabled }
+              : {}),
+            ...(wantsDocumentProcessingUpdate
+              ? { documentProcessingMode: body.documentProcessingMode }
               : {}),
             updatedAt: new Date(),
           },
@@ -144,10 +223,33 @@ export const updateOrganizationSettingsHandler = async function* ({
                 },
               }
             : {}),
+          ...(wantsDocumentProcessingUpdate &&
+          body.documentProcessingMode !==
+            (existing?.documentProcessingMode ??
+              DEFAULT_DOCUMENT_PROCESSING_MODE)
+            ? {
+                documentProcessingMode: {
+                  old:
+                    existing?.documentProcessingMode ??
+                    DEFAULT_DOCUMENT_PROCESSING_MODE,
+                  new: body.documentProcessingMode,
+                },
+              }
+            : {}),
         },
       });
+      return { type: "updated" } as const;
     }),
   );
+
+  if (updateOutcome.type === "automatic_ocr_running") {
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        message: "Wait for document processing to finish before disabling OCR",
+      }),
+    );
+  }
 
   return Result.ok({
     ...(body.matterNumberPattern !== undefined
@@ -158,6 +260,9 @@ export const updateOrganizationSettingsHandler = async function* ({
       : {}),
     ...(body.promptCachingEnabled !== undefined
       ? { promptCachingEnabled: body.promptCachingEnabled }
+      : {}),
+    ...(body.documentProcessingMode !== undefined
+      ? { documentProcessingMode: body.documentProcessingMode }
       : {}),
   });
 };

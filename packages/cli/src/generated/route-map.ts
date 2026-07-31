@@ -1266,6 +1266,12 @@ export const generatedRouteMap: RouteNode = {
                   description:
                     "Toggle AI prompt caching for the organization (update_org_settings)",
                 },
+                document_processing_mode: {
+                  type: "string",
+                  enum: ["off", "searchable-text"],
+                  description:
+                    "Set automatic PDF searchable-text extraction for the organization (update_org_settings)",
+                },
                 confirm: {
                   type: "boolean",
                   description:
@@ -1344,6 +1350,12 @@ export const generatedRouteMap: RouteNode = {
                   description:
                     "Toggle AI prompt caching for the organization (update_org_settings)",
                 },
+                document_processing_mode: {
+                  type: "string",
+                  enum: ["off", "searchable-text"],
+                  description:
+                    "Set automatic PDF searchable-text extraction for the organization (update_org_settings)",
+                },
                 confirm: {
                   type: "boolean",
                   description:
@@ -1392,6 +1404,16 @@ export const generatedRouteMap: RouteNode = {
                   "Toggle AI prompt caching for the organization (update_org_settings)",
                 required: false,
               },
+              {
+                flag: "--document-processing-mode",
+                prop: "document_processing_mode",
+                kind: "enum",
+                enum: ["off", "searchable-text"],
+                repeatable: false,
+                description:
+                  "Set automatic PDF searchable-text extraction for the organization (update_org_settings)",
+                required: false,
+              },
             ],
             inputOnly: [],
             paginated: false,
@@ -1433,6 +1455,12 @@ export const generatedRouteMap: RouteNode = {
                   type: "boolean",
                   description:
                     "Toggle AI prompt caching for the organization (update_org_settings)",
+                },
+                document_processing_mode: {
+                  type: "string",
+                  enum: ["off", "searchable-text"],
+                  description:
+                    "Set automatic PDF searchable-text extraction for the organization (update_org_settings)",
                 },
                 confirm: {
                   type: "boolean",
@@ -13382,6 +13410,89 @@ export const generatedRouteMap: RouteNode = {
                         },
                       },
                       required: ["workspaceId"],
+                    },
+                  },
+                },
+                schemaTruncated: false,
+              },
+            },
+            "ocr-create": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "entities", "ocr-create"],
+                capabilityId: "entities.ocr.create",
+                description:
+                  "Queue searchable-text recognition for an unencrypted PDF field on a document. Returns the durable run and reports when that source was already processed.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--workspace-id",
+                    prop: "workspaceId",
+                    required: true,
+                    part: "params",
+                    partPath: "workspaceId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--entity-id",
+                    prop: "entityId",
+                    required: true,
+                    part: "params",
+                    partPath: "entityId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--field-id",
+                    prop: "fieldId",
+                    required: true,
+                    part: "body",
+                    partPath: "fieldId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["fieldId"],
+                      properties: {
+                        fieldId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["workspaceId", "entityId"],
+                      properties: {
+                        workspaceId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        entityId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
                     },
                   },
                 },
@@ -27834,6 +27945,32 @@ export const generatedRouteMap: RouteNode = {
         "organization-settings": {
           kind: "route",
           children: {
+            "document-ocr-availability-get": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "organization-settings",
+                  "document-ocr-availability-get",
+                ],
+                capabilityId:
+                  "organization-settings.document-ocr-availability.get",
+                description:
+                  "Report whether a document OCR worker is currently ready to accept work.",
+                access: "read",
+                flags: [],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "admin_read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {},
+                },
+                schemaTruncated: false,
+              },
+            },
             get: {
               kind: "capability-leaf",
               spec: {
@@ -28006,7 +28143,10 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "promptCachingEnabled",
                   },
                 ],
-                inputOnly: ["body.matterNumberPadding"],
+                inputOnly: [
+                  "body.documentProcessingMode",
+                  "body.matterNumberPadding",
+                ],
                 paginated: false,
                 destructive: false,
                 scope: "admin_write",
@@ -28017,6 +28157,18 @@ export const generatedRouteMap: RouteNode = {
                     body: {
                       type: "object",
                       properties: {
+                        documentProcessingMode: {
+                          anyOf: [
+                            {
+                              const: "off",
+                              type: "string",
+                            },
+                            {
+                              const: "searchable-text",
+                              type: "string",
+                            },
+                          ],
+                        },
                         matterNumberPattern: {
                           minLength: 1,
                           maxLength: 128,

@@ -21,6 +21,7 @@ import readEntities from "@/api/handlers/entities/list";
 import listFiles from "@/api/handlers/entities/list-files";
 import listFolders from "@/api/handlers/entities/list-folders";
 import moveEntity from "@/api/handlers/entities/move";
+import requestOcr from "@/api/handlers/entities/ocr/create";
 import openDesktopEditSession from "@/api/handlers/entities/open-desktop-edit-session";
 import openFolioCollabSession from "@/api/handlers/entities/open-folio-collab-session";
 import organizeSuggestions from "@/api/handlers/entities/organize-suggestions";
@@ -242,6 +243,11 @@ export const entitiesRoute = new Elysia({
   .get("/entity/:entityId/field/:fieldId/file", readFieldFile.handler, {
     params: readFieldFile.config.params,
     permissions: readFieldFile.config.permissions,
+  })
+  .post("/entity/:entityId/ocr", requestOcr.handler, {
+    body: requestOcr.config.body,
+    params: requestOcr.config.params,
+    permissions: requestOcr.config.permissions,
   })
   .get("/entity/:entityId/versions/:versionId/diff", versionDiff.handler, {
     params: versionDiff.config.params,

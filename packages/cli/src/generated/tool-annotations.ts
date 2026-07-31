@@ -218,6 +218,7 @@ export const generatedToolAnnotations: Readonly<
             "matter_number_pattern",
             "matter_number_padding",
             "prompt_caching_enabled",
+            "document_processing_mode",
           ],
         },
       },

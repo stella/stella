@@ -1,0 +1,145 @@
+import { describe, expect, test } from "bun:test";
+
+import {
+  createOcrRequestInit,
+  isSupportedOcrPageCount,
+  parsePaddleOcrResponse,
+  readBoundedOcrJson,
+} from "@/api/lib/document-processing-provider";
+import { LIMITS } from "@/api/lib/limits";
+
+describe("parsePaddleOcrResponse", () => {
+  test("preserves page boundaries and recognized line order", () => {
+    const result = parsePaddleOcrResponse({
+      errorCode: 0,
+      result: {
+        ocrResults: [
+          { prunedResult: { rec_texts: ["Soud", "Rozsudek"] } },
+          { prunedResult: { rec_texts: ["Sygn. akt", "I ACa 12/26"] } },
+        ],
+      },
+    });
+
+    expect(result).toEqual({
+      pageCount: 2,
+      text: "Soud\nRozsudek\n\n\f\n\nSygn. akt\nI ACa 12/26",
+      truncated: false,
+    });
+  });
+
+  test("rejects malformed page output", () => {
+    expect(
+      parsePaddleOcrResponse({
+        errorCode: 0,
+        result: {
+          ocrResults: [{ prunedResult: { rec_texts: ["valid", 42] } }],
+        },
+      }),
+    ).toBeNull();
+  });
+
+  test("bounds persisted searchable text", () => {
+    const result = parsePaddleOcrResponse({
+      errorCode: 0,
+      result: {
+        ocrResults: [
+          {
+            prunedResult: {
+              rec_texts: ["x".repeat(LIMITS.extractedContentMaxChars + 1)],
+            },
+          },
+        ],
+      },
+    });
+
+    expect(result?.text).toHaveLength(LIMITS.extractedContentMaxChars);
+    expect(result?.truncated).toBe(true);
+  });
+});
+
+describe("isSupportedOcrPageCount", () => {
+  test("enforces the bounded document limit", () => {
+    expect(isSupportedOcrPageCount(1)).toBe(true);
+    expect(isSupportedOcrPageCount(500)).toBe(true);
+    expect(isSupportedOcrPageCount(501)).toBe(false);
+  });
+});
+
+describe("createOcrRequestInit", () => {
+  test("rejects redirects before they can forward a presigned source URL", () => {
+    const request = createOcrRequestInit({
+      idempotencyKey: "ocr:run_1",
+      sourceUrl: "https://storage.example.test/presigned-document",
+    });
+
+    expect(request.redirect).toBe("error");
+  });
+});
+
+describe("readBoundedOcrJson", () => {
+  test("parses a response within the byte boundary", async () => {
+    const parsed = await readBoundedOcrJson(new Response('{"ok":true}'), 32);
+
+    expect(parsed).toEqual({ ok: true });
+  });
+
+  test("rejects a response whose declared size exceeds the boundary", async () => {
+    const rejection: unknown = await readBoundedOcrJson(
+      new Response("abcd", { headers: { "content-length": "4" } }),
+      3,
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toMatchObject({ code: "response_too_large" });
+  });
+
+  test("rejects a chunked response that crosses the boundary", async () => {
+    const body = new ReadableStream({
+      start(controller) {
+        const encoder = new TextEncoder();
+        controller.enqueue(encoder.encode("ab"));
+        controller.enqueue(encoder.encode("cd"));
+        controller.close();
+      },
+    });
+
+    const rejection: unknown = await readBoundedOcrJson(
+      new Response(body),
+      3,
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toMatchObject({ code: "response_too_large" });
+  });
+
+  test("rejects malicious tiny chunks before their allocations can exhaust the worker", async () => {
+    let cancelled = false;
+    let emittedChunks = 0;
+    const maxBytes = 20_000;
+    const body = new ReadableStream({
+      cancel() {
+        cancelled = true;
+      },
+      pull(controller) {
+        emittedChunks += 1;
+        controller.enqueue(new Uint8Array([0x20]));
+      },
+    });
+
+    const rejection: unknown = await readBoundedOcrJson(
+      new Response(body),
+      maxBytes,
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(emittedChunks).toBeLessThan(maxBytes);
+    expect(cancelled).toBe(true);
+    expect(rejection).toMatchObject({ code: "response_too_large" });
+  });
+});

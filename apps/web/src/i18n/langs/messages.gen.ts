@@ -2528,6 +2528,12 @@ type Messages = {
       "auditLogsTo": "To date";
       "auditLogsUserId": "User ID";
       "auditLogsUserIdPlaceholder": "Filter by user ID";
+      "documentProcessing": {
+        "description": "Automatically recognize text in scanned PDFs so their contents can be searched.";
+        "title": "Document text recognition";
+        "toggleLabel": "Automatically recognize text in scanned PDFs";
+        "updated": "Document text recognition setting updated";
+      };
       "documentTypes": {
         "addPlaceholder": "Add a document type (e.g. Employment Agreement)";
         "deleteFailed": "Couldn't delete document type";
@@ -3201,9 +3207,13 @@ type Messages = {
       "downloadOriginal": "Original file";
       "downloadPdf": "PDF";
       "maxEntitiesReached": "Max entities count reached";
+      "ocrAlreadyProcessed": "Text recognition has already completed";
+      "ocrQueueFailed": "Couldn't queue text recognition";
+      "ocrQueued": "Text recognition queued";
       "rateLimited": "Rate limited; resuming in {seconds, number}s";
       "renamedToAvoidConflicts": "{count, plural, one {# file renamed to avoid conflicts} other {# files renamed to avoid conflicts}}";
       "retryFailed": "Retry {count, plural, one {# file} other {# files}}";
+      "runOcr": "Run OCR";
       "uploadedPartially": "{failed, plural, one {# file} other {# files}} failed out of {total, number}";
       "uploadedSuccessfully": "Files uploaded successfully";
       "uploading": "Uploading files";

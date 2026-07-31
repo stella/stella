@@ -4,6 +4,7 @@ import { and, desc, eq, isNull, ne } from "drizzle-orm";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   desktopEditSessions,
+  documentProcessingRuns,
   entities,
   entityVersions,
   folioCollabSessions,
@@ -134,6 +135,30 @@ export const deleteEntityVersionHandler = async function* ({
           ok: false as const,
           status: 404 as const,
           message: "Version not found",
+        };
+      }
+
+      // A worker locks this entity immediately before moving the same version's
+      // OCR run to `running`. Refuse the tombstone while that dispatch owns the
+      // fence; otherwise a successful delete could race a provider request for
+      // bytes that have just been withdrawn.
+      const runningOcrRuns = await tx
+        .select({ id: documentProcessingRuns.id })
+        .from(documentProcessingRuns)
+        .where(
+          and(
+            eq(documentProcessingRuns.entityId, params.entityId),
+            eq(documentProcessingRuns.entityVersionId, params.versionId),
+            eq(documentProcessingRuns.workspaceId, workspaceId),
+            eq(documentProcessingRuns.status, "running"),
+          ),
+        )
+        .limit(1);
+      if (runningOcrRuns.at(0)) {
+        return {
+          ok: false as const,
+          status: 409 as const,
+          message: "Wait for document processing to finish before deleting",
         };
       }
 

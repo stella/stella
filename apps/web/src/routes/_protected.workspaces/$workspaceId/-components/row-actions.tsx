@@ -18,6 +18,7 @@ import {
   MessageSquareIcon,
   PencilIcon,
   RefreshCwIcon,
+  ScanTextIcon,
   Trash2Icon,
   UploadIcon,
 } from "lucide-react";
@@ -33,6 +34,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@stll/ui/components/alert-dialog";
+import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
 import {
   Menu,
@@ -50,6 +52,7 @@ import { useRequestChatAbout } from "@/components/chat/use-request-chat-about";
 import Tooltip from "@/components/tooltip";
 import { PDF_MIME_TYPE } from "@/consts";
 import { env } from "@/env";
+import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-url";
 import { getFreshLinkedAccount } from "@/lib/auth-session";
@@ -79,11 +82,16 @@ import {
   resolveAncestorIds,
   type CopyToMatterEntity,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog.logic";
+import { useDocumentOcrAvailability } from "@/routes/_protected.workspaces/$workspaceId/-components/document-ocr-availability";
 import { getExtension } from "@/routes/_protected.workspaces/$workspaceId/-components/file-extension";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
+import { requestManualOcr } from "@/routes/_protected.workspaces/$workspaceId/-components/request-manual-ocr";
 import {
+  canRunManualOcr,
   getDesktopEditLockState,
   getPdfDownloadFileName,
+  type OcrSource,
+  type RowActionContext,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions.logic";
 import type { TableTreeNode } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 import { useEntitiesCountLimit } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-limits";
@@ -106,8 +114,12 @@ export type VirtualAnchor = {
   getBoundingClientRect: () => DOMRect;
 };
 
+const EMPTY_OCR_SOURCES: readonly OcrSource[] = [];
+
 type RowActionsProps = {
   entity: WorkspaceEntity;
+  ocrSource?: OcrSource | undefined;
+  ocrSources?: readonly OcrSource[] | undefined;
   workspaceId: string;
   open?: boolean | undefined;
   onOpenChange?: ((open: boolean) => void) | undefined;
@@ -145,8 +157,11 @@ export const RowActions = ({
   selectedEntities,
   getAncestorIds,
   cellMetadataTarget,
+  ocrSource,
+  ocrSources = EMPTY_OCR_SOURCES,
 }: RowActionsProps) => {
   const t = useTranslations();
+  const analytics = useAnalytics();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const deleteEntities = useDeleteEntities();
@@ -158,15 +173,39 @@ export const RowActions = ({
     CopyToMatterEntity[]
   >([]);
   const [isRetrying, setIsRetrying] = useState(false);
+  const [isOcrPending, setIsOcrPending] = useState(false);
   const { data: properties } = useQuery(propertiesOptions(workspaceId));
   const uploadVersionInputRef = useRef<HTMLInputElement>(null);
   const file = getFirstFile(entity);
   const name = getEntityName(entity);
   const isFolder = entity.kind === "folder";
   const isBulk = selectedEntities !== undefined && selectedEntities.length > 1;
+  const documentOcrAvailable = useDocumentOcrAvailability();
   const bulkTargets = isBulk ? selectedEntities : [entity];
   const isCellContext =
     !isBulk && cellMetadataTarget !== null && cellMetadataTarget !== undefined;
+  let rowActionContext: RowActionContext = "row";
+  if (isBulk) {
+    rowActionContext = "bulk";
+  } else if (isCellContext) {
+    rowActionContext = "cell";
+  }
+  const canRunOcr = canRunManualOcr({
+    context: rowActionContext,
+    documentOcrAvailable,
+    entity,
+    ocrSource,
+  });
+  const rowOcrSources = isCellContext
+    ? []
+    : ocrSources.filter((source) =>
+        canRunManualOcr({
+          context: rowActionContext,
+          documentOcrAvailable,
+          entity,
+          ocrSource: source,
+        }),
+      );
   const isDocx = !isBulk && file?.mimeType === DOCX_MIME;
   const desktopEditLockState = getDesktopEditLockState(entity.activeEditBy);
   const isLockedByMe = isDocx && desktopEditLockState === "locked-by-me";
@@ -583,6 +622,41 @@ export const RowActions = ({
     event.target.value = "";
   };
 
+  const handleRunOcr = async (source: OcrSource | undefined) => {
+    if (!source || isOcrPending) {
+      return;
+    }
+
+    setIsOcrPending(true);
+    try {
+      const { outcome } = await requestManualOcr({
+        entityId: entity.entityId,
+        fieldId: source.fieldId,
+        workspaceId,
+      });
+      await queryClient.invalidateQueries({
+        queryKey: entitiesKeys.all(workspaceId),
+      });
+      stellaToast.add({
+        title: t(
+          outcome === "already_processed"
+            ? "workspaces.files.ocrAlreadyProcessed"
+            : "workspaces.files.ocrQueued",
+        ),
+        type: "success",
+      });
+    } catch (error) {
+      analytics.captureError(error);
+      stellaToast.add({
+        title: t("workspaces.files.ocrQueueFailed"),
+        description: userErrorFromThrown(error, t("errors.actionFailed")),
+        type: "error",
+      });
+    } finally {
+      setIsOcrPending(false);
+    }
+  };
+
   // Whether any selected entity has a downloadable file.
   const hasAnyFile = isBulk
     ? selectedEntities.some((e) => getFirstFile(e) !== null)
@@ -644,6 +718,43 @@ export const RowActions = ({
             <UploadIcon />
             {t("fileDetail.uploadNewVersion")}
           </MenuItem>
+        )}
+        {canRunOcr && (
+          <MenuItem
+            className="min-h-11 sm:min-h-11"
+            disabled={isOcrPending}
+            onClick={() => {
+              detached(handleRunOcr(ocrSource), "RowActions");
+            }}
+          >
+            <ScanTextIcon />
+            {t("workspaces.files.runOcr")}
+          </MenuItem>
+        )}
+        {rowOcrSources.length > 0 && (
+          <MenuSub>
+            <MenuSubTrigger className="min-h-11 sm:min-h-11">
+              <ScanTextIcon />
+              {t("workspaces.files.runOcr")}
+            </MenuSubTrigger>
+            <MenuSubPopup>
+              {rowOcrSources.map((source) => (
+                <MenuItem
+                  className="min-h-11 sm:min-h-11"
+                  disabled={isOcrPending}
+                  key={source.fieldId}
+                  onClick={() => {
+                    detached(handleRunOcr(source), "RowActions");
+                  }}
+                >
+                  <ScanTextIcon />
+                  <BidiText as="span" className="max-w-64 truncate">
+                    {source.fileName}
+                  </BidiText>
+                </MenuItem>
+              ))}
+            </MenuSubPopup>
+          </MenuSub>
         )}
         {!isBulk && cellMetadataTarget && (
           <>

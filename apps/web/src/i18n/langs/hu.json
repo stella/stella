@@ -2525,6 +2525,12 @@
       "auditLogsTo": "Záró dátum",
       "auditLogsUserId": "Felhasználói azonosító",
       "auditLogsUserIdPlaceholder": "Szűrés felhasználói azonosító alapján",
+      "documentProcessing": {
+        "description": "Automatikusan felismeri a szkennelt PDF-ek szövegét, hogy a tartalmuk kereshető legyen.",
+        "title": "Dokumentumszöveg-felismerés",
+        "toggleLabel": "Szöveg automatikus felismerése szkennelt PDF-ekben",
+        "updated": "A dokumentumszöveg-felismerés beállítása frissítve"
+      },
       "documentTypes": {
         "addPlaceholder": "Add a document type (e.g. Employment Agreement)",
         "deleteFailed": "Couldn't delete document type",
@@ -3198,9 +3204,13 @@
       "downloadOriginal": "Eredeti fájl",
       "downloadPdf": "PDF",
       "maxEntitiesReached": "Elérte a maximális entitásszámot",
+      "ocrAlreadyProcessed": "A szövegfelismerés már befejeződött",
+      "ocrQueueFailed": "A szövegfelismerést nem sikerült várólistára tenni",
+      "ocrQueued": "A szövegfelismerés várólistára került",
       "rateLimited": "Sebességkorlát; folytatás {seconds, number} mp múlva",
       "renamedToAvoidConflicts": "{count, plural, one {# fájl átnevezve az ütközések elkerülése érdekében} other {# fájl átnevezve az ütközések elkerülése érdekében}}",
       "retryFailed": "{count, plural, one {# fájl} other {# fájl}} újrapróbálása",
+      "runOcr": "OCR futtatása",
       "uploadedPartially": "{failed, plural, one {# fájl} other {# fájl}} feltöltése sikertelen a {total, number} fájlból",
       "uploadedSuccessfully": "Fájlok sikeresen feltöltve",
       "uploading": "Fájlok feltöltése",

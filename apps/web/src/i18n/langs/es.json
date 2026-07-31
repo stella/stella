@@ -2525,6 +2525,12 @@
       "auditLogsTo": "Hasta",
       "auditLogsUserId": "ID de usuario",
       "auditLogsUserIdPlaceholder": "Filtrar por ID de usuario",
+      "documentProcessing": {
+        "description": "Reconoce automáticamente texto en PDF escaneados para que se pueda buscar en su contenido.",
+        "title": "Reconocimiento de texto de documentos",
+        "toggleLabel": "Reconocer automáticamente texto en PDF escaneados",
+        "updated": "Configuración de reconocimiento de texto actualizada"
+      },
       "documentTypes": {
         "addPlaceholder": "Add a document type (e.g. Employment Agreement)",
         "deleteFailed": "Couldn't delete document type",
@@ -3198,9 +3204,13 @@
       "downloadOriginal": "Archivo original",
       "downloadPdf": "PDF",
       "maxEntitiesReached": "Número máximo de entidades alcanzado",
+      "ocrAlreadyProcessed": "El reconocimiento de texto ya se completó",
+      "ocrQueueFailed": "No se pudo poner en cola el reconocimiento de texto",
+      "ocrQueued": "Reconocimiento de texto en cola",
       "rateLimited": "Límite de velocidad; se reanuda en {seconds, number} s",
       "renamedToAvoidConflicts": "{count, plural, one {# archivo renombrado para evitar conflictos} other {# archivos renombrados para evitar conflictos}}",
       "retryFailed": "Reintentar {count, plural, one {# archivo} other {# archivos}}",
+      "runOcr": "Ejecutar OCR",
       "uploadedPartially": "{failed, plural, one {# archivo falló} other {# archivos fallaron}} de {total, number}",
       "uploadedSuccessfully": "Archivos subidos correctamente",
       "uploading": "Subiendo archivos",
