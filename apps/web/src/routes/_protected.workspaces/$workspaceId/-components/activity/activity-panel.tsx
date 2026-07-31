@@ -136,12 +136,13 @@ export const ActivityPanel = ({ workspaceId }: ActivityPanelProps) => {
           <SegmentedIconToggle
             onChange={setViewMode}
             options={viewOptions}
+            size="touch"
             value={viewMode}
           />
           <Menu>
             <MenuTrigger
               aria-label={t("workspaces.overview.activity.filterLabel")}
-              className="h-7 gap-1.5 text-xs"
+              className="h-11 gap-1.5 text-xs md:h-7"
               render={<Button size="sm" variant="ghost" />}
             >
               <ListFilterIcon className="size-3.5" />

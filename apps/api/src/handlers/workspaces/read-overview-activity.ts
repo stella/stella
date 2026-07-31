@@ -49,6 +49,7 @@ const versionSnapshotAuditLogs = alias(
   auditLogs,
   "version_snapshot_audit_logs",
 );
+const entitySnapshotAuditLogs = alias(auditLogs, "entity_snapshot_audit_logs");
 
 const VISIBLE_ACTIONS = [
   AUDIT_ACTION.CREATE,
@@ -154,6 +155,32 @@ const siblingVersionEntityNameSnapshot = () => sql<string | null>`(
   limit 1
 )`;
 
+const siblingDeletedEntityKind = () => sql<string | null>`(
+  select ${entitySnapshotAuditLogs.changes} -> 'deleted' -> 'old' ->> 'kind'
+  from ${entitySnapshotAuditLogs}
+  where ${entitySnapshotAuditLogs.organizationId} = ${auditLogs.organizationId}
+    and ${entitySnapshotAuditLogs.workspaceId} = ${auditLogs.workspaceId}
+    and ${auditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.ENTITY}
+    and ${entitySnapshotAuditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.ENTITY}
+    and ${entitySnapshotAuditLogs.resourceId} = ${auditLogs.resourceId}
+    and ${entitySnapshotAuditLogs.changes} -> 'deleted' -> 'old' ->> 'kind' is not null
+  order by ${entitySnapshotAuditLogs.createdAt} desc, ${entitySnapshotAuditLogs.id} desc
+  limit 1
+)`;
+
+const siblingDeletedEntityName = () => sql<string | null>`(
+  select ${entitySnapshotAuditLogs.changes} -> 'deleted' -> 'old' ->> 'name'
+  from ${entitySnapshotAuditLogs}
+  where ${entitySnapshotAuditLogs.organizationId} = ${auditLogs.organizationId}
+    and ${entitySnapshotAuditLogs.workspaceId} = ${auditLogs.workspaceId}
+    and ${auditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.ENTITY}
+    and ${entitySnapshotAuditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.ENTITY}
+    and ${entitySnapshotAuditLogs.resourceId} = ${auditLogs.resourceId}
+    and ${entitySnapshotAuditLogs.changes} -> 'deleted' -> 'old' ->> 'name' is not null
+  order by ${entitySnapshotAuditLogs.createdAt} desc, ${entitySnapshotAuditLogs.id} desc
+  limit 1
+)`;
+
 const legacyRelatedEntityKind = () => sql<string | null>`(
   select ${entities.kind}
   from ${entityVersions}
@@ -186,6 +213,7 @@ const legacyResourceKind = () =>
   sql<string>`coalesce(
     ${legacyEntityKind()},
     ${legacyDirectEntityKind()},
+    ${siblingDeletedEntityKind()},
     ${legacyRelatedEntityKind()}
   )`;
 
@@ -399,6 +427,7 @@ const readOverviewActivity = createSafeHandler(
             )`,
             entityNameSnapshot: sql<string | null>`coalesce(
               ${auditEntityNameSnapshot()},
+              ${siblingDeletedEntityName()},
               ${siblingVersionEntityNameSnapshot()}
             )`,
             id: auditLogs.id,
