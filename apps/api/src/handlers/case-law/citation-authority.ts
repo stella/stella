@@ -73,7 +73,7 @@ export const hasResolvedCitations = async (
   tx: CitationAuthorityTx,
 ): Promise<boolean> => {
   const result = await tx.execute(
-    sql`SELECT 1 AS one FROM case_law_citations WHERE cited_decision_id IS NOT NULL LIMIT 1`,
+    sql`SELECT 1 AS one FROM case_law_citations WHERE cited_decision_id IS NOT NULL AND kind = 'precedent' LIMIT 1`,
   );
   return executedRows(result).length > 0;
 };
@@ -169,6 +169,10 @@ export const recomputeCitationAuthorityForAll = async (
           ON citing_src.id = citing_d.source_id
          AND ${sql.raw(redistributableCaseLawSourceSqlFor("citing_src"))}
       ) ON c.cited_decision_id = d2.id
+         -- Procedural references name the judgment under review, not an
+         -- authority being invoked; counting them would rank a decision
+         -- by how often it was appealed.
+         AND c.kind = 'precedent'
       GROUP BY d2.id
     ) agg
     WHERE agg.decision_id = d.id

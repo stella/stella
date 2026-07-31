@@ -285,6 +285,16 @@ export const caseLawCitations = p.pgTable(
     citationText: p.varchar("citation_text", { length: 512 }).notNull(),
     /** `citationText` under `bareCitationKey`; joins to a decision's own key. */
     citationKey: p.varchar("citation_key", { length: 128 }),
+    /**
+     * Whether this citation invokes authority or names the case's own
+     * procedural history. Only `precedent` belongs in the citation graph:
+     * the judgment under review is not an endorsement of it.
+     */
+    kind: p
+      .varchar({ length: 16 })
+      .$type<"precedent" | "procedural">()
+      .default("precedent")
+      .notNull(),
     sectionIndex: p.integer("section_index"),
     polarity: p.varchar("polarity", { length: 16 }),
     polarityRuleId: safeUuid<"caseLawPolarityRule">(
@@ -314,6 +324,15 @@ export const caseLawCitations = p.pgTable(
       "citations_polarity_values",
       sql`${t.polarity} IN ('positive','supportive','neutral','negative','unknown')`,
     ),
+    p.check(
+      "citations_kind_values",
+      sql`${t.kind} IN ('precedent','procedural')`,
+    ),
+    // Authority reads precedent only, so the index covers that arm.
+    p
+      .index("case_law_citations_precedent_cited_idx")
+      .on(t.citedDecisionId)
+      .where(sql`${t.kind} = 'precedent' AND ${t.citedDecisionId} IS NOT NULL`),
     ...globalCaseLawPolicies(),
   ],
 );

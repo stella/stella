@@ -11,6 +11,7 @@ import {
   type caseLawSources,
 } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
+import { classifyCitation } from "@/api/handlers/case-law/citation-kind";
 import {
   ADAPTER_TIMEOUT,
   MAX_SYNC_PAGES,
@@ -50,6 +51,7 @@ import {
   stripDangerousChars,
 } from "@/api/handlers/case-law/ingestion/sanitize";
 import { segmentDecision } from "@/api/handlers/case-law/ingestion/segmenter";
+import { extractContext } from "@/api/handlers/case-law/polarity/context";
 import { pgPayloadCarriesDocument } from "@/api/handlers/case-law/stored-payload";
 import type { DecisionSection } from "@/api/handlers/case-law/types";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -281,6 +283,31 @@ const uploadSourceRaw = async (
  */
 const citationKeyOf = (text: string): string | null =>
   bareCitationKey(text) || null;
+
+/**
+ * Row values for one extracted citation, including what the citation is
+ * doing: invoking authority, or naming the case's own procedural history.
+ * Classified here rather than in the extractor because the decision needs
+ * the surrounding text, which the pipeline already holds.
+ */
+const citationRow = (
+  citingDecisionId: SafeId<"caseLawDecision">,
+  citation: { citationText: string; sectionIndex: number | null },
+  sections: { index: number; text: string }[],
+) => ({
+  citingDecisionId,
+  citationText: citation.citationText,
+  citationKey: citationKeyOf(citation.citationText),
+  kind: classifyCitation({
+    citationText: citation.citationText,
+    context: extractContext(
+      sections,
+      citation.citationText,
+      citation.sectionIndex,
+    ),
+  }),
+  sectionIndex: citation.sectionIndex,
+});
 
 type PreserveCorpusWriteRetryInput = {
   decisionId: SafeId<"caseLawDecision">;
@@ -859,14 +886,11 @@ export const processDecision = async (
           .where(eq(caseLawCitations.citingDecisionId, existing.id));
 
         if (citations.length > 0) {
-          await tx.insert(caseLawCitations).values(
-            citations.map((c) => ({
-              citingDecisionId: existing.id,
-              citationText: c.citationText,
-              citationKey: citationKeyOf(c.citationText),
-              sectionIndex: c.sectionIndex,
-            })),
-          );
+          await tx
+            .insert(caseLawCitations)
+            .values(
+              citations.map((c) => citationRow(existing.id, c, sections)),
+            );
         }
 
         return;
@@ -920,14 +944,11 @@ export const processDecision = async (
       }
 
       if (citations.length > 0) {
-        await tx.insert(caseLawCitations).values(
-          citations.map((c) => ({
-            citingDecisionId: decisionRow.id,
-            citationText: c.citationText,
-            citationKey: citationKeyOf(c.citationText),
-            sectionIndex: c.sectionIndex,
-          })),
-        );
+        await tx
+          .insert(caseLawCitations)
+          .values(
+            citations.map((c) => citationRow(decisionRow.id, c, sections)),
+          );
       }
     });
   };
