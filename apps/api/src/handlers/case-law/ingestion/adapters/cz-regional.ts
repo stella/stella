@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 
+import { splitCaseReference } from "@/api/handlers/case-law/case-number";
 import {
   ADAPTER_KEYS,
   ADAPTER_TIMEOUT,
@@ -401,9 +402,12 @@ const parseItem = (item: CzRegionalApiItem): IngestionResult | null => {
   }
 
   const raw = JSON.stringify(item);
+  // This source publishes the docket with the sheet number appended.
+  const { caseNumber, sheetNumber } = splitCaseReference(item.jednaciCislo);
 
   return {
-    caseNumber: item.jednaciCislo,
+    caseNumber,
+    sheetNumber,
     ecli: toOptionalValue(item.ecli),
     court: item.soud,
     country: "CZE",
@@ -413,7 +417,11 @@ const parseItem = (item: CzRegionalApiItem): IngestionResult | null => {
     sourceUrl: sanitizeUrl(toOptionalValue(item.odkaz) ?? ""),
     documentUrl: sanitizeUrl(toOptionalValue(item.odkaz) ?? ""),
     metadata: {
-      caseNumber: item.jednaciCislo,
+      caseNumber,
+      sheetNumber,
+      // The reference exactly as the court publishes it, docket and sheet
+      // together, so the split stays reversible from what we stored.
+      publishedCaseNumber: item.jednaciCislo,
       ecli: toOptionalValue(item.ecli),
       court: item.soud,
       decisionDate: toOptionalValue(item.datumVydani),
