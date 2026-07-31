@@ -1,3 +1,11 @@
+-- stella-migration-safety: reviewed destructive-change - drops indexes only, no
+-- table or column data. Two of the three drops are the idempotency guard the
+-- CONCURRENTLY pattern requires (an interrupted build leaves an INVALID index
+-- that a later CREATE IF NOT EXISTS would skip), so they are no-ops on a clean
+-- run. The third drops the old case-number unique index only after its partial
+-- replacement has been built, so uniqueness is enforced throughout. Rollback is
+-- to recreate that index CONCURRENTLY over the same columns without the
+-- predicate; no data is lost either way.
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 
