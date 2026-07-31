@@ -451,6 +451,9 @@ export const SearchDialog = ({
     }
     return data.pages.flatMap((page) => page.hits);
   }, [data]);
+  const previewLocatorCandidates =
+    data?.pages.at(0)?.previewLocatorCandidates ??
+    EMPTY_SEARCH_PREVIEW_LOCATOR_CANDIDATES;
   const getHitVirtualKey = (index: number) => allHits.at(index)?.id ?? index;
   const previewHit = selectSearchPreviewHit({
     highlightedHitId,
@@ -1391,6 +1394,7 @@ export const SearchDialog = ({
                 hit={displayedPreviewHit}
                 onOpen={openSearchResult}
                 organizationId={searchRecentsScope.organizationId}
+                previewLocatorCandidates={previewLocatorCandidates}
                 query={searchQuery}
                 userId={searchRecentsScope.userId}
               />
@@ -1423,6 +1427,7 @@ type SearchPreviewPanelProps = {
   dateVisibility?: "hide" | "show" | undefined;
   hit: GlobalSearchHit;
   organizationId: string;
+  previewLocatorCandidates?: readonly string[] | undefined;
   query: string;
   userId: string;
   onOpen: (hit: GlobalSearchHit) => void;
@@ -1521,6 +1526,7 @@ const SearchPreviewPanel = ({
   dateVisibility = "show",
   hit,
   organizationId,
+  previewLocatorCandidates = EMPTY_SEARCH_PREVIEW_LOCATOR_CANDIDATES,
   query,
   userId,
   onOpen,
@@ -1542,6 +1548,7 @@ const SearchPreviewPanel = ({
         key={`${hit.type}:${hit.id}:${hit.updatedAt}:${normalizeSearchQuery(query)}`}
         onOpen={onOpen}
         organizationId={organizationId}
+        previewLocatorCandidates={previewLocatorCandidates}
         query={query}
         userId={userId}
       />
@@ -1553,6 +1560,7 @@ type SearchPreviewContentProps = {
   dateVisibility: "hide" | "show";
   hit: GlobalSearchHit;
   organizationId: string;
+  previewLocatorCandidates: readonly string[];
   query: string;
   userId: string;
   onOpen: (hit: GlobalSearchHit) => void;
@@ -1562,6 +1570,7 @@ const SearchPreviewContent = ({
   dateVisibility,
   hit,
   organizationId,
+  previewLocatorCandidates,
   query,
   userId,
   onOpen,
@@ -1622,6 +1631,7 @@ const SearchPreviewContent = ({
       <SearchPreviewBody
         hit={hit}
         organizationId={organizationId}
+        previewLocatorCandidates={previewLocatorCandidates}
         query={query}
         userId={userId}
       />
@@ -1631,14 +1641,19 @@ const SearchPreviewContent = ({
 
 type SearchPreviewBodyProps = Pick<
   SearchPreviewContentProps,
-  "hit" | "organizationId" | "query" | "userId"
+  "hit" | "organizationId" | "previewLocatorCandidates" | "query" | "userId"
 >;
 
 const SearchPreviewBody = (props: SearchPreviewBodyProps) => {
   const { hit } = props;
   const searchText = useMemo(
-    () => getSearchHighlightText(hit.headline, props.query),
-    [hit.headline, props.query],
+    () =>
+      getSearchHighlightText({
+        headline: hit.headline,
+        previewLocatorCandidates: props.previewLocatorCandidates,
+        query: props.query,
+      }),
+    [hit.headline, props.previewLocatorCandidates, props.query],
   );
   const nativePreviewTarget = getNativeSearchDocumentPreviewTarget(hit);
   if (nativePreviewTarget) {
@@ -1669,13 +1684,19 @@ const NativeDocumentPreviewSkeleton = () => (
 const SearchTextPreview = ({
   hit,
   organizationId,
+  previewLocatorCandidates,
   query,
   userId,
 }: SearchPreviewBodyProps) => {
   const t = useTranslations();
   const searchText = useMemo(
-    () => getSearchHighlightText(hit.headline, query),
-    [hit.headline, query],
+    () =>
+      getSearchHighlightText({
+        headline: hit.headline,
+        previewLocatorCandidates,
+        query,
+      }),
+    [hit.headline, previewLocatorCandidates, query],
   );
   const target = getSearchPreviewTarget(hit);
   const { data, isError, isFetchedAfterMount, isFetching, refetch } = useQuery(
@@ -1897,6 +1918,7 @@ const SummaryBody = ({
         <Tooltip
           content={`${citation.title}\n${citation.reason}`}
           key={`${citation.id}-${start}`}
+          layer="search-child"
           render={
             <button
               className="text-foreground hover:bg-muted mx-0.5 rounded px-1 font-medium"
@@ -2192,6 +2214,7 @@ type FacetBucket = { value: string; label?: string; count: number };
 
 const EMPTY_FACET_BUCKETS: readonly FacetBucket[] = [];
 const EMPTY_SEARCH_HITS: readonly GlobalSearchHit[] = [];
+const EMPTY_SEARCH_PREVIEW_LOCATOR_CANDIDATES: readonly string[] = [];
 
 type FacetBucketListProps = {
   buckets: FacetBucket[];

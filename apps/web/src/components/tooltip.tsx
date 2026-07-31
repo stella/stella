@@ -7,6 +7,7 @@ import {
   Tooltip as TooltipRoot,
   TooltipTrigger,
 } from "@stll/ui/components/tooltip";
+import type { OverlayLayer } from "@stll/ui/lib/overlay-layer";
 import { cn } from "@stll/ui/lib/utils";
 
 type TooltipProps = {
@@ -15,6 +16,7 @@ type TooltipProps = {
   align?: TooltipPrimitive.Popup.State["align"];
   side?: "top" | "bottom" | "left" | "right";
   className?: string;
+  layer?: OverlayLayer;
 };
 
 export default function Tooltip({
@@ -24,6 +26,7 @@ export default function Tooltip({
   align,
   side,
   className,
+  layer,
 }: PropsWithChildren<TooltipProps>) {
   return (
     <TooltipRoot>
@@ -33,6 +36,7 @@ export default function Tooltip({
         // text nowrap fixes tooltip for buttons in pdf viewer controls
         className={cn("max-w-70 text-nowrap", className)}
         hidden={content === undefined || content === null || content === ""}
+        layer={layer}
         side={side}
       >
         {content}

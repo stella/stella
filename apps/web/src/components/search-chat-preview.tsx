@@ -7,7 +7,10 @@ import {
   MessageContent,
   MessageResponse,
 } from "@/components/ai-elements/message";
-import { rehypeSearchMatches } from "@/components/chat/rehype-search-matches";
+import {
+  allocateSearchMatchBudgets,
+  rehypeSearchMatches,
+} from "@/components/chat/rehype-search-matches";
 import { SearchMatchControls } from "@/components/search-match-controls";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import {
@@ -42,14 +45,16 @@ export const SearchChatPreview = ({
     useState<SearchMatchSummary>(EMPTY_MATCH_SUMMARY);
   const searchTextKey = searchTextQueryKey(searchText);
   const rehypePluginsByMessage = useMemo<PluggableList[]>(() => {
-    // The API bounds both message count and total preview characters. Keep the
-    // transform cap immutable per message so Strict Mode/concurrent replays
-    // cannot inherit a consumed budget; the DOM summary applies the global cap.
-    return messages.map(() => [
-      [
-        rehypeSearchMatches,
-        { maxMatches: MAX_SEARCH_PREVIEW_MATCHES + 1, searchText },
-      ],
+    // Allocate immutable per-message budgets from the same matcher before
+    // rendering. Their sum is globally bounded while each transform remains
+    // deterministic under Strict Mode and concurrent replays.
+    const budgets = allocateSearchMatchBudgets({
+      contents: messages.map(({ content }) => content),
+      maxMatches: MAX_SEARCH_PREVIEW_MATCHES + 1,
+      searchText,
+    });
+    return messages.map((_, index) => [
+      [rehypeSearchMatches, { maxMatches: budgets[index] ?? 0, searchText }],
     ]);
   }, [messages, searchText]);
 

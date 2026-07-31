@@ -131,6 +131,7 @@ export const SearchDocumentPreview = ({
             onZoomIn={() => handleZoom(target.fieldId, "in")}
             onZoomOut={() => handleZoom(target.fieldId, "out")}
             scaleOffset={scaleOffset}
+            tooltipLayer="search-child"
           />
         </div>
       )}

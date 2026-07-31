@@ -1,11 +1,24 @@
 import { describe, expect, test } from "bun:test";
 import type { Root } from "hast";
 
-import { rehypeSearchMatches } from "@/components/chat/rehype-search-matches";
+import {
+  allocateSearchMatchBudgets,
+  rehypeSearchMatches,
+} from "@/components/chat/rehype-search-matches";
 
 const TEST_MAX_MATCHES = 200;
 
 describe("chat search highlighting", () => {
+  test("shares one immutable match budget across preview messages", () => {
+    expect(
+      allocateSearchMatchBudgets({
+        contents: ["hit ".repeat(150), "hit ".repeat(100), "hit ".repeat(10)],
+        maxMatches: 201,
+        searchText: "hit",
+      }),
+    ).toEqual([150, 51, 0]);
+  });
+
   test("highlights every normalized prose match", () => {
     const tree: Root = {
       type: "root",

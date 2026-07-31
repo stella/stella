@@ -23,6 +23,7 @@ import { useTranslations } from "use-intl";
 import { resolveFindMatchRange } from "@stll/folio-core/prosemirror/findReplaceSelection";
 import type { DocxEditorRef } from "@stll/folio-react";
 import { Button } from "@stll/ui/components/button";
+import type { OverlayLayer } from "@stll/ui/lib/overlay-layer";
 import "@stll/folio-react/editor.css";
 
 import "./peek-docx.css";
@@ -273,12 +274,14 @@ export const PeekPdfControls = ({
   onZoomOut,
   onResetZoom,
   scaleOffset,
+  tooltipLayer,
 }: {
   canResetZoom: boolean;
   onZoomIn?: (() => void) | undefined;
   onZoomOut?: (() => void) | undefined;
   onResetZoom?: (() => void) | undefined;
   scaleOffset: number;
+  tooltipLayer?: OverlayLayer | undefined;
 }) => {
   const t = useTranslations();
 
@@ -286,6 +289,7 @@ export const PeekPdfControls = ({
     <>
       <Tooltip
         content={t("workspaces.pdf.zoomOut")}
+        layer={tooltipLayer}
         render={
           <Button
             disabled={!onZoomOut}
@@ -299,6 +303,7 @@ export const PeekPdfControls = ({
       />
       <Tooltip
         content={t("workspaces.pdf.zoomIn")}
+        layer={tooltipLayer}
         render={
           <Button
             disabled={!onZoomIn}
@@ -312,6 +317,7 @@ export const PeekPdfControls = ({
       />
       <Tooltip
         content={t("workspaces.pdf.resetZoom")}
+        layer={tooltipLayer}
         render={
           <Button
             disabled={!canResetZoom || !onResetZoom}

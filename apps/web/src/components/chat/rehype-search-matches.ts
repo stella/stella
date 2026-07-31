@@ -17,6 +17,30 @@ type SearchMatchPluginOptions = {
   searchText: SearchTextQuery;
 };
 
+type AllocateSearchMatchBudgetsOptions = {
+  contents: readonly string[];
+  maxMatches: number;
+  searchText: SearchTextQuery;
+};
+
+export const allocateSearchMatchBudgets = ({
+  contents,
+  maxMatches,
+  searchText,
+}: AllocateSearchMatchBudgetsOptions): number[] => {
+  let remainingMatches = Math.max(0, Math.floor(maxMatches));
+  return contents.map((content) => {
+    if (remainingMatches === 0) {
+      return 0;
+    }
+    const count = findSearchTextMatches(content, searchText, {
+      maxMatches: remainingMatches,
+    }).length;
+    remainingMatches -= count;
+    return count;
+  });
+};
+
 export function rehypeSearchMatches(
   this: unknown,
   { maxMatches, searchText }: SearchMatchPluginOptions,

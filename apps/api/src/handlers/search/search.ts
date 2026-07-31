@@ -9,6 +9,7 @@ import { tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import { searchGlobal } from "@/api/lib/search/index-global";
 import { parseGlobalSearchCursor } from "@/api/lib/search/pagination";
+import { getSearchPreviewLocatorCandidates } from "@/api/lib/search/query";
 import { GLOBAL_SEARCH_RESULT_TYPES } from "@/api/lib/search/types";
 
 const isoDateTime = t.String({ format: "date-time" });
@@ -166,7 +167,7 @@ export const searchHandler = async ({
 
   const types = body.types.length > 0 ? body.types : body.kinds;
 
-  return await search({
+  const result = await search({
     query: body.query,
     organizationId,
     userId,
@@ -180,4 +181,9 @@ export const searchHandler = async ({
     cursor: body.cursor,
     limit: body.limit ?? LIMITS.searchPageSizeDefault,
   });
+
+  return {
+    ...result,
+    previewLocatorCandidates: getSearchPreviewLocatorCandidates(body.query),
+  };
 };

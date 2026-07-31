@@ -116,35 +116,56 @@ describe("search query normalization", () => {
 
   test("uses server-located terms for native document highlighting", () => {
     expect(
-      getSearchHighlightText(
-        "The <mark>Closing</mark> memorandum",
-        "closing memo",
-      ),
-    ).toBe("Closing");
-    expect(getSearchHighlightText(null, "  closing memo ")).toBe(
-      "closing memo",
-    );
-    expect(
-      getSearchHighlightText("The <mark>Closing</mark> memorandum", ""),
+      getSearchHighlightText({
+        headline: "The <mark>Closing</mark> memorandum",
+        query: "closing memo",
+      }),
     ).toBe("Closing");
     expect(
-      getSearchHighlightText(
-        "The <mark>R&amp;D</mark> team&#x27;s <mark>&lt;draft&gt;</mark>",
-        "",
-      ),
+      getSearchHighlightText({ headline: null, query: "  closing memo " }),
+    ).toBe("closing memo");
+    expect(
+      getSearchHighlightText({
+        headline: "The <mark>Closing</mark> memorandum",
+        query: "",
+      }),
+    ).toBe("Closing");
+    expect(
+      getSearchHighlightText({
+        headline:
+          "The <mark>R&amp;D</mark> team&#x27;s <mark>&lt;draft&gt;</mark>",
+        query: "",
+      }),
     ).toEqual({ type: "separate-terms", terms: ["R&D", "<draft>"] });
   });
 
   test("excludes advanced-query operators and negated terms from previews", () => {
     expect(
-      getSearchHighlightText(
-        "<mark>indemnity</mark> and <mark>liability</mark>",
-        "indemnity AND liability NOT superseded",
-      ),
+      getSearchHighlightText({
+        headline: "<mark>indemnity</mark> and <mark>liability</mark>",
+        query: "indemnity AND liability NOT superseded",
+      }),
     ).toEqual({
       type: "separate-terms",
       terms: ["indemnity", "liability"],
     });
+    expect(
+      getSearchHighlightText({
+        headline: null,
+        previewLocatorCandidates: ["indemnity", "liability"],
+        query: "indemnity OR liability NOT superseded",
+      }),
+    ).toEqual({
+      type: "separate-terms",
+      terms: ["indemnity", "liability"],
+    });
+    expect(
+      getSearchHighlightText({
+        headline: null,
+        previewLocatorCandidates: ["closing memo"],
+        query: '"closing memo" NOT draft',
+      }),
+    ).toBe("closing memo");
   });
 
   test("uses one marked passage for case-law deep links", () => {

@@ -56,10 +56,17 @@ const getMarkedSearchTerms = (headline: string | null): string[] => {
   return terms;
 };
 
-export const getSearchHighlightText = (
-  headline: string | null,
-  query: string,
-): SearchTextQuery => {
+type GetSearchHighlightTextOptions = {
+  headline: string | null;
+  previewLocatorCandidates?: readonly string[] | undefined;
+  query: string;
+};
+
+export const getSearchHighlightText = ({
+  headline,
+  previewLocatorCandidates = [],
+  query,
+}: GetSearchHighlightTextOptions): SearchTextQuery => {
   const normalizedQuery = normalizeSearchQuery(query);
   const markedSearchTerms = getMarkedSearchTerms(headline);
   if (markedSearchTerms.length > 1) {
@@ -68,6 +75,14 @@ export const getSearchHighlightText = (
   const markedSearchText = markedSearchTerms.at(0);
   if (markedSearchText) {
     return markedSearchText;
+  }
+
+  if (previewLocatorCandidates.length > 1) {
+    return { type: "separate-terms", terms: [...previewLocatorCandidates] };
+  }
+  const previewLocatorCandidate = previewLocatorCandidates.at(0);
+  if (previewLocatorCandidate) {
+    return previewLocatorCandidate;
   }
 
   if (normalizedQuery) {
