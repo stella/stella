@@ -800,6 +800,7 @@ describe("MCP template tools", () => {
     createEntityFromBufferMock.mockImplementation(async (input) => {
       const created = {
         entityId: "entity_new",
+        entityVersionId: "version_new",
         fieldId: "field_new",
         fileName: "Example Lease.docx",
       };
@@ -837,7 +838,10 @@ describe("MCP template tools", () => {
       templateId: TEMPLATE_ID,
     });
     expect(recordTemplateFillMock).toHaveBeenCalledWith(
-      expect.objectContaining({ entityId: "entity_new" }),
+      expect.objectContaining({
+        entityId: "entity_new",
+        entityVersionId: "version_new",
+      }),
     );
     expect(recordTemplatePersistenceReceiptMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -846,12 +850,14 @@ describe("MCP template tools", () => {
         result: expect.objectContaining({
           action: "create_document",
           entityId: "entity_new",
+          entityVersionId: "version_new",
         }),
       }),
     );
     expect(parseToolPayload(result)).toEqual({
       action: "create_document",
       entityId: "entity_new",
+      entityVersionId: "version_new",
       fileName: "Example Lease.docx",
       unmatchedPlaceholders: [],
       unusedValues: ["unused"],
@@ -907,6 +913,7 @@ describe("MCP template tools", () => {
         result: {
           action: "create_document",
           entityId: "entity_existing",
+          entityVersionId: "version_existing",
           fileName: "lease.docx",
           unmatchedPlaceholders: [],
           unusedValues: ["unused"],
@@ -929,6 +936,7 @@ describe("MCP template tools", () => {
     expect(parseToolPayload(result)).toEqual({
       action: "create_document",
       entityId: "entity_existing",
+      entityVersionId: "version_existing",
       fileName: "lease.docx",
       unmatchedPlaceholders: [],
       unusedValues: ["unused"],
@@ -944,6 +952,7 @@ describe("MCP template tools", () => {
       result: {
         action: "create_document" as const,
         entityId: "entity_winner",
+        entityVersionId: "version_winner",
         fileName: "lease.docx",
         unmatchedPlaceholders: [],
         unusedValues: [],
@@ -986,6 +995,7 @@ describe("MCP template tools", () => {
         result: {
           action: "create_document",
           entityId: "entity_existing",
+          entityVersionId: "version_existing",
           fileName: "lease.docx",
           unmatchedPlaceholders: [],
           unusedValues: [],

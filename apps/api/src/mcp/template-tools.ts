@@ -1231,8 +1231,7 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
       structureErrors: filled.structureErrors,
       workspaceId,
       entityId: result.entityId,
-      entityVersionId:
-        result.action === "create_version" ? result.entityVersionId : undefined,
+      entityVersionId: result.entityVersionId,
       recordAuditEvent,
     });
     await recordTemplatePersistenceReceipt({
@@ -1269,6 +1268,7 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
             result = {
               action: "create_document",
               entityId: persisted.entityId,
+              entityVersionId: persisted.entityVersionId,
               fileName: persisted.fileName,
               unmatchedPlaceholders: filled.unmatchedPlaceholders,
               unusedValues: filled.unusedValues,

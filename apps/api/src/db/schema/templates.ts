@@ -110,6 +110,7 @@ export type TemplatePersistenceResult =
   | {
       action: "create_document";
       entityId: SafeId<"entity">;
+      entityVersionId: SafeId<"entityVersion">;
       fileName: string;
       unmatchedPlaceholders: string[];
       unusedValues: string[];
