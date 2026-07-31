@@ -13,6 +13,7 @@ import {
 } from "drizzle-orm";
 import { t } from "elysia";
 
+// eslint-disable-next-line security-guards/no-unscoped-user-query -- actor IDs come only from audit rows already scoped to this authorized organization and workspace; a membership join would erase retained attribution after account deletion.
 import { user } from "@/api/db/auth-schema";
 import { auditLogs, entityVersions, fields } from "@/api/db/schema";
 import type { entities } from "@/api/db/schema";
