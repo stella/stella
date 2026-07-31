@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import type { ReactElement } from "react";
+import type { ReactElement, ReactNode } from "react";
 
 import { useSuspenseInfiniteQuery } from "@tanstack/react-query";
 import {
@@ -29,7 +29,6 @@ import Tooltip from "@/components/tooltip";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import type {
   MatterActivityCategory,
@@ -138,7 +137,7 @@ export const ActivityPanel = ({ workspaceId }: ActivityPanelProps) => {
         </Menu>
       </div>
 
-      <div className="bg-background overflow-hidden rounded-lg border">
+      <div className="bg-background overflow-hidden rounded-xl shadow-sm ring-1 ring-foreground/5">
         {days.length === 0 ? (
           <p className="text-muted-foreground px-4 py-8 text-center text-sm">
             {t("workspaces.overview.activity.empty")}
@@ -146,20 +145,14 @@ export const ActivityPanel = ({ workspaceId }: ActivityPanelProps) => {
         ) : (
           days.map((dayItems) => (
             <div key={activityDayKey(dayItems[0].activityAt)}>
-              <div className="bg-muted/35 text-muted-foreground border-b px-4 py-1.5 text-xs font-medium">
-                {format.dateTime(new Date(dayItems[0].activityAt), {
-                  dateStyle: "long",
-                })}
-              </div>
-              <div className="divide-y">
-                {groupActivityRuns(dayItems).map((run) => (
-                  <ActivityRunRow
-                    items={run.items}
-                    key={run.id}
-                    workspaceId={workspaceId}
-                  />
-                ))}
-              </div>
+              <TimelineDateMarker activityAt={dayItems[0].activityAt} />
+              {groupActivityRuns(dayItems).map((run) => (
+                <ActivityRunRow
+                  items={run.items}
+                  key={run.id}
+                  workspaceId={workspaceId}
+                />
+              ))}
             </div>
           ))
         )}
@@ -192,32 +185,142 @@ const ActivityRunRow = ({
   items: MatterActivityItem[];
   workspaceId: string;
 }) => {
+  const t = useTranslations();
   const first = items[0];
   if (!first) {
     return null;
   }
-  const isRun = first.runId !== null;
+  if (first.runId === null) {
+    return <ActivityItemRow item={first} workspaceId={workspaceId} />;
+  }
+
+  const detail = triggerDetail(first, t);
+  const marker =
+    first.performer.type === "agent" ? (
+      <BotIcon className="size-3.5" />
+    ) : (
+      <WorkflowIcon className="size-3.5" />
+    );
 
   return (
-    <div className="relative px-4 py-3">
-      {isRun && items.length > 1 && (
-        <div className="text-muted-foreground mb-2 flex items-center gap-1.5 text-xs font-medium">
-          <BotIcon className="size-3.5" />
+    <TimelineEntry activityAt={first.activityAt} marker={marker}>
+      <div className="min-w-0 py-2.5 pe-4 ps-3">
+        <div className="flex min-h-6 items-center gap-1.5 text-sm font-medium">
           <span>{first.performer.name}</span>
-          <span>·</span>
-          <RunCount count={items.length} />
+          <span className="text-muted-foreground">·</span>
+          <span className="text-muted-foreground text-xs font-normal">
+            <RunCount count={items.length} />
+          </span>
         </div>
-      )}
-      <div className="space-y-2.5">
-        {items.map((item) => (
-          <ActivityItemRow
-            item={item}
-            key={item.id}
-            workspaceId={workspaceId}
-          />
-        ))}
+        {detail && (
+          <p className="text-muted-foreground mt-0.5 text-xs">{detail}</p>
+        )}
+        <div className="mt-2.5 space-y-0.5 ps-3">
+          {items.map((item) => (
+            <RunActivityItem
+              item={item}
+              key={item.id}
+              workspaceId={workspaceId}
+            />
+          ))}
+        </div>
       </div>
+    </TimelineEntry>
+  );
+};
+
+const TimelineDateMarker = ({ activityAt }: { activityAt: string }) => {
+  const format = useFormatter();
+  return (
+    <div className="grid min-h-11 grid-cols-[4.75rem_1.5rem_minmax(0,1fr)] sm:grid-cols-[6.5rem_1.5rem_minmax(0,1fr)]">
+      <span aria-hidden="true" />
+      <span className="relative flex items-center justify-center">
+        <span
+          aria-hidden="true"
+          className="bg-border absolute inset-y-0 start-1/2 w-px"
+        />
+        <span
+          aria-hidden="true"
+          className="bg-muted-foreground relative z-10 h-px w-3"
+        />
+      </span>
+      <time
+        className="text-muted-foreground flex items-center pe-4 ps-3 text-xs font-medium tabular-nums"
+        dateTime={activityAt}
+      >
+        {format.dateTime(new Date(activityAt), { dateStyle: "long" })}
+      </time>
     </div>
+  );
+};
+
+const TimelineEntry = ({
+  activityAt,
+  children,
+  marker,
+}: {
+  activityAt: string;
+  children: ReactNode;
+  marker: ReactElement;
+}) => {
+  const format = useFormatter();
+  const date = new Date(activityAt);
+  return (
+    <div className="group grid grid-cols-[4.75rem_1.5rem_minmax(0,1fr)] sm:grid-cols-[6.5rem_1.5rem_minmax(0,1fr)]">
+      <Tooltip
+        content={format.dateTime(date, {
+          dateStyle: "full",
+          timeStyle: "medium",
+        })}
+        render={
+          <time
+            className="text-muted-foreground flex items-start justify-end pt-3 text-[11px] tabular-nums"
+            dateTime={activityAt}
+          >
+            {format.dateTime(date, { timeStyle: "short" })}
+          </time>
+        }
+      />
+      <span className="relative flex justify-center">
+        <span
+          aria-hidden="true"
+          className="bg-border absolute inset-y-0 start-1/2 w-px"
+        />
+        <span className="bg-background text-muted-foreground ring-background group-hover:text-foreground relative z-10 mt-2.5 flex size-7 items-center justify-center rounded-full ring-4 transition-colors">
+          {marker}
+        </span>
+      </span>
+      <div className="min-w-0">{children}</div>
+    </div>
+  );
+};
+
+const RunActivityItem = ({
+  item,
+  workspaceId,
+}: {
+  item: MatterActivityItem;
+  workspaceId: string;
+}) => {
+  const t = useTranslations();
+  const openTarget = getOpenTarget(item, workspaceId);
+  const target = (
+    <BidiText as="span" className="font-medium">
+      {targetName(item, t)}
+    </BidiText>
+  );
+  const sentence = actionSentence(item.action, null, target, t);
+  if (!openTarget) {
+    return <div className="py-1.5 text-sm leading-5">{sentence}</div>;
+  }
+  return (
+    <button
+      className="hover:bg-muted/40 -ms-2 flex min-h-11 w-[calc(100%+0.5rem)] items-center rounded-md px-2 text-start transition-colors"
+      onClick={openTarget}
+      type="button"
+    >
+      <span className="text-sm leading-5">{sentence}</span>
+    </button>
   );
 };
 
@@ -246,43 +349,35 @@ const ActivityItemRow = ({
   const icon = targetIcon(item.target.kind);
 
   const content = (
-    <>
-      <span className="bg-background relative z-10 mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full border">
-        {icon}
-      </span>
-      <span className="min-w-0 flex-1 text-sm">
-        <span className="block leading-5">{sentence}</span>
-        {detail && (
-          <span className="text-muted-foreground mt-0.5 block text-xs">
-            {detail}
-          </span>
-        )}
-      </span>
-      <Tooltip
-        content={formatFullTimestamp(item.activityAt)}
-        render={
-          <time
-            className="text-muted-foreground shrink-0 text-xs tabular-nums"
-            dateTime={item.activityAt}
-          >
-            {formatRelativeTime(item.activityAt)}
-          </time>
-        }
-      />
-    </>
+    <span className="min-w-0 text-sm">
+      <span className="block leading-5">{sentence}</span>
+      {detail && (
+        <span className="text-muted-foreground mt-0.5 block text-xs">
+          {detail}
+        </span>
+      )}
+    </span>
   );
 
   if (!openTarget) {
-    return <div className="flex items-start gap-3">{content}</div>;
+    return (
+      <TimelineEntry activityAt={item.activityAt} marker={icon}>
+        <div className="flex min-h-11 items-center py-2 pe-4 ps-3">
+          {content}
+        </div>
+      </TimelineEntry>
+    );
   }
   return (
-    <button
-      className="hover:bg-muted/40 -mx-2 flex w-[calc(100%+1rem)] items-start gap-3 rounded-md px-2 py-1 text-start transition-colors"
-      onClick={openTarget}
-      type="button"
-    >
-      {content}
-    </button>
+    <TimelineEntry activityAt={item.activityAt} marker={icon}>
+      <button
+        className="hover:bg-muted/40 flex min-h-11 w-full items-center rounded-md py-2 pe-4 ps-3 text-start transition-colors"
+        onClick={openTarget}
+        type="button"
+      >
+        {content}
+      </button>
+    </TimelineEntry>
   );
 };
 
