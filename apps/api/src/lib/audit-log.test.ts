@@ -45,7 +45,9 @@ describe("createBackgroundAuditRecorder", () => {
     await recorder(tx, [
       {
         action: AUDIT_ACTION.CREATE,
-        metadata: { kind: "task" },
+        changes: {
+          created: { new: { kind: "task" }, old: null },
+        },
         resourceId: "task-1",
         resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
       },
@@ -82,6 +84,10 @@ describe("createBackgroundAuditRecorder", () => {
       }),
     });
     const recorder = createBackgroundAuditRecorder({
+      execution: {
+        performer: { id: safeId<"user">("user-1"), type: "user" },
+        trigger: { type: "direct" },
+      },
       organizationId: safeId<"organization">("org-1"),
       userId: safeId<"user">("user-1"),
       workspaceId: safeId<"workspace">("workspace-1"),
@@ -113,6 +119,10 @@ describe("createBackgroundAuditRecorder", () => {
       }),
     });
     const recorder = createBackgroundAuditRecorder({
+      execution: {
+        performer: { id: safeId<"user">("user-1"), type: "user" },
+        trigger: { type: "direct" },
+      },
       organizationId: safeId<"organization">("org-1"),
       userId: safeId<"user">("user-1"),
       workspaceId: safeId<"workspace">("workspace-1"),

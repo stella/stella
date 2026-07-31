@@ -3,6 +3,7 @@ import type { MatterActivityItem } from "@/routes/_protected.workspaces/-queries
 export type ActivityRun = {
   id: string;
   items: MatterActivityItem[];
+  runId: string | null;
 };
 
 export const groupActivityRuns = (
@@ -13,11 +14,15 @@ export const groupActivityRuns = (
   for (const item of items) {
     const runKey = item.runId ? `run:${item.runId}` : null;
     const previous = groups.at(-1);
-    if (runKey && previous?.id === runKey) {
+    if (item.runId && previous?.runId === item.runId) {
       previous.items.push(item);
       continue;
     }
-    groups.push({ id: runKey ?? `item:${item.id}`, items: [item] });
+    groups.push({
+      id: runKey ? `${runKey}:${item.id}` : `item:${item.id}`,
+      items: [item],
+      runId: item.runId,
+    });
   }
 
   return groups;

@@ -490,6 +490,18 @@ const runExport = async ({
       workspaceId: actor.workspaceId,
       userId: actor.userId,
       recordAuditEvent: createBackgroundAuditRecorder({
+        execution: {
+          performer: {
+            id: "report-export",
+            name: "Report export",
+            type: "service",
+          },
+          trigger: {
+            source: "action",
+            type: "user_dispatch",
+            userId: actor.userId,
+          },
+        },
         organizationId: actor.organizationId,
         workspaceId: actor.workspaceId,
         userId: actor.userId,

@@ -259,6 +259,14 @@ export const routeClassifiedDocuments = async ({
     }
 
     const recordAuditEvent = createBackgroundAuditRecorder({
+      execution: {
+        performer: {
+          id: "classification-playbook-router",
+          name: "Classification playbook router",
+          type: "service",
+        },
+        trigger: { source: "document-classification", type: "system" },
+      },
       organizationId,
       workspaceId,
       userId,

@@ -86,6 +86,7 @@ export const moveEntityHandler = async function* ({
           action: AUDIT_ACTION.UPDATE,
           resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
           resourceId: body.entityId,
+          metadata: { kind: entity.kind },
           changes: {
             parentId: {
               old: oldParentId,
@@ -170,6 +171,7 @@ export const moveEntityHandler = async function* ({
         action: AUDIT_ACTION.UPDATE,
         resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
         resourceId: body.entityId,
+        metadata: { kind: entity.kind },
         changes: {
           parentId: {
             old: oldParentId,

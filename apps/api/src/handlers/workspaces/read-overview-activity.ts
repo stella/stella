@@ -28,8 +28,9 @@ import {
   brandPersistedAuditLogId,
   brandPersistedEntityId,
   brandPersistedEntityVersionId,
-  brandPersistedFieldId,
 } from "@/api/lib/safe-id-boundaries";
+
+import { parseFieldAuditResourceId } from "./read-overview-activity.logic";
 
 const ACTIVITY_FILTERS = [
   "all",
@@ -214,6 +215,7 @@ const readOverviewActivity = createSafeHandler(
     if (query.category === "automation") {
       conditions.push(
         or(
+          eq(auditLogs.activityCategory, "automation"),
           ne(auditLogs.performerType, "user"),
           and(
             isNull(auditLogs.activityCategory),
@@ -277,9 +279,21 @@ const readOverviewActivity = createSafeHandler(
             (row) => row.resourceType === AUDIT_RESOURCE_TYPE.ENTITY_VERSION,
           )
           .map((row) => brandPersistedEntityVersionId(row.resourceId));
-        const fieldIds = rows
+        const fieldResources = rows
           .filter((row) => row.resourceType === AUDIT_RESOURCE_TYPE.FIELD)
-          .map((row) => brandPersistedFieldId(row.resourceId));
+          .map((row) => ({
+            resourceId: row.resourceId,
+            parsed: parseFieldAuditResourceId(row.resourceId),
+          }));
+        const fieldIds = fieldResources.flatMap(({ parsed }) =>
+          parsed?.type === "field" ? [parsed.fieldId] : [],
+        );
+        const compositeFieldVersions = fieldResources.flatMap(
+          ({ parsed, resourceId }) =>
+            parsed?.type === "cell"
+              ? [[resourceId, parsed.entityVersionId] as const]
+              : [],
+        );
         const fieldRows =
           fieldIds.length === 0
             ? []
@@ -299,6 +313,7 @@ const readOverviewActivity = createSafeHandler(
           ...new Set([
             ...directVersionIds,
             ...fieldRows.map((row) => row.entityVersionId),
+            ...compositeFieldVersions.map(([, versionId]) => versionId),
           ]),
         ];
         const versionRows =
@@ -390,7 +405,15 @@ const readOverviewActivity = createSafeHandler(
                 )
                 .where(inArray(user.id, actorIds));
 
-        return { actors, entityRows, fieldRows, rows, versionRows, workspace };
+        return {
+          actors,
+          compositeFieldVersions,
+          entityRows,
+          fieldRows,
+          rows,
+          versionRows,
+          workspace,
+        };
       }),
     );
 
@@ -411,9 +434,12 @@ const readOverviewActivity = createSafeHandler(
     const versionEntityMap = new Map(
       result.versionRows.map((version) => [version.id, version.entityId]),
     );
-    const fieldVersionMap = new Map(
-      result.fieldRows.map((field) => [field.id, field.entityVersionId]),
-    );
+    const fieldVersionMap = new Map([
+      ...result.fieldRows.map(
+        (field) => [field.id, field.entityVersionId] as const,
+      ),
+      ...result.compositeFieldVersions,
+    ]);
     const page = createCursorPage({
       rows: result.rows,
       limit,

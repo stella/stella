@@ -134,9 +134,14 @@ export const invalidateWorkspaceActivity = async (
   queryClient: QueryClient,
   workspaceId: string,
 ) =>
-  await queryClient.invalidateQueries({
-    queryKey: workspacesKeys.activityAll(workspaceId),
-  });
+  await Promise.all([
+    queryClient.invalidateQueries({
+      queryKey: workspacesKeys.activityAll(workspaceId),
+    }),
+    queryClient.invalidateQueries({
+      queryKey: workspacesKeys.overviewActivityAll(workspaceId),
+    }),
+  ]);
 
 export const overviewOptions = (workspaceId: string) =>
   queryOptions({

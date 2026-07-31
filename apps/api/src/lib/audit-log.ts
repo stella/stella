@@ -222,6 +222,13 @@ const executionColumns = (
 const activityCategoryForEvent = (event: AuditEvent): AuditActivityCategory => {
   switch (event.resourceType) {
     case "entity": {
+      const createdEntity = event.changes?.["created"]?.new;
+      const createdKind =
+        typeof createdEntity === "object" &&
+        createdEntity !== null &&
+        "kind" in createdEntity
+          ? createdEntity.kind
+          : null;
       const deletedEntity = event.changes?.["deleted"]?.old;
       const deletedKind =
         typeof deletedEntity === "object" &&
@@ -229,7 +236,9 @@ const activityCategoryForEvent = (event: AuditEvent): AuditActivityCategory => {
         "kind" in deletedEntity
           ? deletedEntity.kind
           : null;
-      return event.metadata?.["kind"] === "task" || deletedKind === "task"
+      return event.metadata?.["kind"] === "task" ||
+        createdKind === "task" ||
+        deletedKind === "task"
         ? "tasks"
         : "documents";
     }
@@ -281,7 +290,7 @@ export const createBackgroundAuditRecorder =
     organizationId: SafeId<"organization">;
     workspaceId: SafeId<"workspace"> | null;
     userId: SafeId<"user">;
-    execution?: AuditExecutionContext;
+    execution: AuditExecutionContext;
   }): AuditRecorder =>
   async (tx, event) => {
     const events = Array.isArray(event) ? event : [event];

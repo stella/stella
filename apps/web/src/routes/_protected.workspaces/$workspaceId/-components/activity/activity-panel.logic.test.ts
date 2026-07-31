@@ -45,6 +45,7 @@ describe("groupActivityRuns", () => {
       ["3"],
       ["4"],
     ]);
+    expect(new Set(groups.map(({ id }) => id)).size).toBe(groups.length);
   });
 
   test("uses local calendar days instead of UTC slices", () => {

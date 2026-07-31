@@ -16,12 +16,19 @@ describe("workspace activity invalidation", () => {
     const otherKey = workspacesKeys.activity("organization-a", {
       workspaceId: "workspace-b",
     });
+    const overviewKey = workspacesKeys.overviewActivity(
+      "organization-a",
+      "workspace-a",
+      "all",
+    );
     queryClient.setQueryData(targetKey, { pages: [] });
     queryClient.setQueryData(otherKey, { pages: [] });
+    queryClient.setQueryData(overviewKey, { pages: [] });
 
     await invalidateWorkspaceActivity(queryClient, "workspace-a");
 
     expect(queryClient.getQueryState(targetKey)?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(overviewKey)?.isInvalidated).toBe(true);
     expect(queryClient.getQueryState(otherKey)?.isInvalidated).toBe(false);
   });
 

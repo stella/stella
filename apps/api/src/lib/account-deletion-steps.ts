@@ -515,6 +515,7 @@ export const reassignActiveTaskAssignmentsAndDropMemberships = async ({
 
         return {
           action: AUDIT_ACTION.UPDATE,
+          activityCategory: "tasks" as const,
           changes: {
             assigneeUserId: {
               new: item.reassignedUserId,
@@ -525,6 +526,7 @@ export const reassignActiveTaskAssignmentsAndDropMemberships = async ({
             accountDeletionRequestId: deletionRequestId,
             change: "assignee-reassigned",
             fromUserId: currentUserId,
+            kind: "task",
             reason: "account-deletion",
             toUserId: item.reassignedUserId,
           },
