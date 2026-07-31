@@ -28,6 +28,31 @@ import { logger } from "@/api/lib/observability/logger";
  * 0-indexed). Covers: SK, PL, AT, CZ-supreme-admin,
  * EE, HR, and similar adapters.
  */
+/** One ordered walk over a collection, named so a cursor can carry it. */
+export type TraversalMode = {
+  /** Persisted as the cursor prefix. Stable: changing it restarts the walk. */
+  name: string;
+  /** Request for a page within this walk. */
+  buildRequest: (page: number) => { url: string; init?: RequestInit };
+  /**
+   * Where to continue once this walk reaches the end of the collection, or
+   * null to stay in it.
+   */
+  followedBy: string | null;
+  /**
+   * How many items this walk covers before returning to its own start.
+   *
+   * A walk that keeps a crawl current has to stay near the head. Without a
+   * bound it advances deeper into the collection every cycle and ends parked
+   * at the far tail, where it sees nothing new — the same non-convergence
+   * the ordered walks exist to avoid, reached from the other end.
+   *
+   * Omit it for a walk that is meant to cross the whole collection once,
+   * which is what catching up is.
+   */
+  windowItems?: number | undefined;
+};
+
 type PagePaginationOptions<TResponse> = {
   /** Adapter key for error context. */
   adapterKey: string;
@@ -45,6 +70,25 @@ type PagePaginationOptions<TResponse> = {
    * Return the URL and optional RequestInit overrides.
    */
   buildRequest: (page: number) => { url: string; init?: RequestInit };
+  /**
+   * Ordered walks over the same collection, where one walk cannot serve both
+   * catching up and keeping up.
+   *
+   * A source sorted newest-first cannot be caught up by walking offsets
+   * forward: every publication shifts each later offset, so items slide past
+   * the cursor unseen and the crawl never converges. Walking oldest-first
+   * does converge, because new items land at the end and the offsets already
+   * walked never move. It is the wrong order to stay current in, though, so a
+   * source needs both: oldest-first until the collection has been seen, then
+   * newest-first from there on.
+   *
+   * The active mode is persisted in the cursor (`backfill:1200`) rather than
+   * chosen per call, so a restart, a redeploy, or a second caller all resume
+   * in the phase the crawl actually reached.
+   *
+   * Adapters that need only one walk omit this and keep `buildRequest`.
+   */
+  traversal?: readonly TraversalMode[] | undefined;
   /**
    * Parse the raw response into a typed result.
    * Should throw on unexpected response shapes.
@@ -154,10 +198,44 @@ export const decodeOffsetCursor = ({
   return Number.isSafeInteger(offset) && offset >= 0 ? offset : null;
 };
 
+/**
+ * The mode a cursor names and the offset within it.
+ *
+ * A cursor written before the adapter declared its walks names no mode. It
+ * cannot be carried into one either, because an offset counted in one order
+ * points somewhere unrelated in another, so the first walk restarts from its
+ * beginning — which is what catching up requires anyway.
+ */
+export const decodeTraversalCursor = (
+  cursor: string | null,
+  modes: readonly TraversalMode[],
+): { mode: TraversalMode; offset: number } | null => {
+  const [first] = modes;
+  if (first === undefined) {
+    return null;
+  }
+  if (cursor === null) {
+    return { mode: first, offset: 0 };
+  }
+  const separator = cursor.indexOf(":");
+  const named = modes.find((mode) => mode.name === cursor.slice(0, separator));
+  if (separator === -1 || named === undefined) {
+    return { mode: first, offset: 0 };
+  }
+  const offset = parseCanonicalNonNegativeSafeInteger(
+    cursor.slice(separator + 1),
+  );
+  return offset === null ? null : { mode: named, offset };
+};
+
+export const encodeTraversalCursor = (mode: string, offset: number): string =>
+  `${mode}:${offset}`;
+
 export const createPagePaginatedFetch = <TResponse>(
   opts: PagePaginationOptions<TResponse>,
 ) => {
   const firstPage = opts.zeroIndexed ? 0 : 1;
+  const modes = opts.traversal;
 
   return async (
     cursor: string | null,
@@ -166,11 +244,14 @@ export const createPagePaginatedFetch = <TResponse>(
   ): Promise<Result<SyncPage, AdapterFetchError>> =>
     await Result.tryPromise({
       try: async () => {
-        const offset = decodeOffsetCursor({
-          cursor,
-          firstPage,
-          legacyPageSize: opts.legacyPageSize ?? opts.pageSize,
-        });
+        const walk = modes ? decodeTraversalCursor(cursor, modes) : null;
+        const offset = walk
+          ? walk.offset
+          : decodeOffsetCursor({
+              cursor,
+              firstPage,
+              legacyPageSize: opts.legacyPageSize ?? opts.pageSize,
+            });
 
         if (offset === null) {
           throw new AdapterFetchError({
@@ -184,8 +265,15 @@ export const createPagePaginatedFetch = <TResponse>(
         const page = firstPage + pageIndex;
         const pageStartOffset = pageIndex * opts.pageSize;
         const itemsAlreadyFetched = offset - pageStartOffset;
+        // Every cursor this call writes goes through here, including the
+        // skip-ahead ones below. A bare offset written while a walk is
+        // active would name no walk, and the next call would read that as
+        // "start over" — one timeout would discard the whole traversal.
+        const encode = walk
+          ? (at: number): string => encodeTraversalCursor(walk.mode.name, at)
+          : encodeOffsetCursor;
 
-        const { url, init } = opts.buildRequest(page);
+        const { url, init } = (walk?.mode ?? opts).buildRequest(page);
         const fetchT0 = performance.now();
         const listTimeout = opts.listTimeoutMs ?? ADAPTER_TIMEOUT.LIST;
 
@@ -220,7 +308,7 @@ export const createPagePaginatedFetch = <TResponse>(
             );
             return {
               decisions: [],
-              nextCursor: encodeOffsetCursor(pageStartOffset + opts.pageSize),
+              nextCursor: encode(pageStartOffset + opts.pageSize),
             };
           }
           throw error;
@@ -244,7 +332,7 @@ export const createPagePaginatedFetch = <TResponse>(
             );
             return {
               decisions: [],
-              nextCursor: encodeOffsetCursor(pageStartOffset + opts.pageSize),
+              nextCursor: encode(pageStartOffset + opts.pageSize),
             };
           }
 
@@ -378,15 +466,48 @@ export const createPagePaginatedFetch = <TResponse>(
         // re-processing the already consumed page tail.
         // When exhausted with zero results (overshot past end),
         // step back so the cursor recovers into the valid range.
-        let nextCursor = encodeOffsetCursor(
-          Math.max(0, pageStartOffset - opts.pageSize),
-        );
+        let nextCursor = encode(Math.max(0, pageStartOffset - opts.pageSize));
         if (signal?.aborted) {
-          nextCursor = encodeOffsetCursor(offset + processedThroughIndex);
+          nextCursor = encode(offset + processedThroughIndex);
         } else if (hasMore) {
-          nextCursor = encodeOffsetCursor(fetched);
+          nextCursor = encode(fetched);
         } else if (fetchedItems.length > 0) {
-          nextCursor = encodeOffsetCursor(offset + items.length);
+          nextCursor = encode(offset + items.length);
+        }
+
+        // A bounded walk returns to its own start rather than carrying on
+        // deeper. Reaching the edge of the window is not the end of
+        // anything, so this is not a handover: the walk simply begins again
+        // at the head, which is where the new items are.
+        const windowItems = walk?.mode.windowItems;
+        if (
+          walk !== null &&
+          windowItems !== undefined &&
+          !signal?.aborted &&
+          fetched >= windowItems
+        ) {
+          nextCursor = encodeTraversalCursor(walk.mode.name, 0);
+        }
+
+        // This walk has reached the end of the collection, so hand over to
+        // the one that follows it, starting at its own beginning. Handing
+        // over only here is what makes the switch a fact about the crawl
+        // rather than a guess: the collection has demonstrably been seen.
+        const successor = walk === null ? null : walk.mode.followedBy;
+        if (
+          walk !== null &&
+          successor !== null &&
+          !signal?.aborted &&
+          !hasMore
+        ) {
+          logger.info("case_law.ingestion.traversal_advanced", {
+            adapterKey: opts.adapterKey,
+            from: walk.mode.name,
+            to: successor,
+            offset: fetched,
+            ...(total !== undefined ? { sourceTotal: total } : {}),
+          });
+          nextCursor = encodeTraversalCursor(successor, 0);
         }
 
         return { decisions, nextCursor };

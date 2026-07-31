@@ -9,7 +9,9 @@ import { asTestRaw, readTestJson } from "@/api/tests/helpers/test-tool-set";
 import {
   createPagePaginatedFetch,
   decodeOffsetCursor,
+  decodeTraversalCursor,
   encodeOffsetCursor,
+  encodeTraversalCursor,
 } from "./pagination";
 import { mockFetchWithFixtures, saveFixture } from "./test-utils";
 
@@ -388,5 +390,93 @@ describe("offset cursor codec", () => {
       ),
       propertyConfig({ numRuns: 500 }),
     );
+  });
+});
+
+describe("traversal modes", () => {
+  const modes = [
+    {
+      name: "backfill",
+      buildRequest: () => ({ url: "a" }),
+      followedBy: "live",
+    },
+    { name: "live", buildRequest: () => ({ url: "b" }), followedBy: null },
+  ] as const;
+
+  test("a cursor names the walk it belongs to", () => {
+    expect(decodeTraversalCursor("backfill:1200", modes)).toEqual({
+      mode: modes[0],
+      offset: 1200,
+    });
+    expect(decodeTraversalCursor("live:0", modes)).toEqual({
+      mode: modes[1],
+      offset: 0,
+    });
+  });
+
+  test("starts the first walk when there is no cursor", () => {
+    expect(decodeTraversalCursor(null, modes)?.mode.name).toBe("backfill");
+    expect(decodeTraversalCursor(null, modes)?.offset).toBe(0);
+  });
+
+  /**
+   * An offset counted newest-first points somewhere unrelated oldest-first,
+   * so a cursor from before the walks were declared cannot be carried into
+   * one. Restarting the first walk is both safe and what catching up needs.
+   */
+  test("restarts the first walk for a cursor naming no walk", () => {
+    for (const cursor of ["offset:1513900", "15139", "nonsense:4"]) {
+      expect(decodeTraversalCursor(cursor, modes)).toEqual({
+        mode: modes[0],
+        offset: 0,
+      });
+    }
+  });
+
+  test("rejects a walk cursor whose offset is not a number", () => {
+    expect(decodeTraversalCursor("backfill:-1", modes)).toBeNull();
+    expect(decodeTraversalCursor("backfill:x", modes)).toBeNull();
+  });
+
+  test("round-trips", () => {
+    expect(
+      decodeTraversalCursor(encodeTraversalCursor("live", 42), modes),
+    ).toEqual({
+      mode: modes[1],
+      offset: 42,
+    });
+  });
+});
+
+describe("traversal cursors survive the paths that write them", () => {
+  const bounded = [
+    {
+      name: "backfill",
+      buildRequest: () => ({ url: "a" }),
+      followedBy: "live",
+    },
+    {
+      name: "live",
+      buildRequest: () => ({ url: "b" }),
+      followedBy: null,
+      windowItems: 200,
+    },
+  ] as const;
+
+  /**
+   * A cursor that names no walk restarts the first one, so any path writing
+   * a bare offset while a walk is active would silently discard its
+   * progress. This asserts the reading half of that contract.
+   */
+  test("a bare offset cursor discards traversal progress", () => {
+    expect(decodeTraversalCursor("offset:1200", bounded)).toEqual({
+      mode: bounded[0],
+      offset: 0,
+    });
+  });
+
+  test("a bounded walk declares where it turns back", () => {
+    expect(bounded[1].windowItems).toBe(200);
+    expect(bounded[0]).not.toHaveProperty("windowItems");
   });
 });
