@@ -59,6 +59,5 @@ CREATE UNIQUE INDEX CONCURRENTLY "case_law_decisions_source_case_lang_null_idx"
 --> statement-breakpoint
 DROP INDEX CONCURRENTLY IF EXISTS "case_law_decisions_source_case_lang_idx";
 --> statement-breakpoint
--- squawk-ignore ban-uncommitted-transaction -- reopens the migrator transaction the COMMIT above closed; Drizzle commits it after writing its bookkeeping row
--- squawk-ignore transaction-nesting -- same split; the transaction this reopens is the migrator's own
+-- squawk-ignore ban-uncommitted-transaction, transaction-nesting -- reopens the migrator's own transaction, closed above so the concurrent builds could run outside it; Drizzle commits it after writing its bookkeeping row
 BEGIN;
