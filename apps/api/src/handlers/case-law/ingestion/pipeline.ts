@@ -564,29 +564,30 @@ const processDecisionAttempt = async ({
       incomingRawHash: result.rawHash,
     })
   ) {
-    // audit: skip — background case-law ingestion ordering metadata; public case-law data, not user actions
-    const watermarkAdvanced = await scopedDb(async (tx) =>
-      (
-        await tx
-          .update(caseLawDecisions)
-          .set({
-            sourceObservedAt: observedAt,
-            sourceObservationOrder: observationOrder,
-            sourceObservationHash: result.rawHash,
-            // Drizzle applies the schema's on-update value unless this column is
-            // explicit. A watermark-only replay is not a content modification.
-            updatedAt: sql`${caseLawDecisions.updatedAt}`,
-          })
-          .where(
-            and(
-              eq(caseLawDecisions.id, existing.id),
-              storedObservationPrecedes({ order: observationOrder }),
-              sql`${caseLawDecisions.sourceHash} IS NOT DISTINCT FROM ${existing.sourceHash}`,
-              sql`${caseLawDecisions.metadata} IS NOT DISTINCT FROM ${JSON.stringify(existing.metadata)}::jsonb`,
-            ),
-          )
-          .returning({ id: caseLawDecisions.id })
-      ).at(0),
+    const watermarkAdvanced = await scopedDb(
+      // audit: skip — background case-law ingestion ordering metadata; public case-law data, not user actions
+      async (tx) =>
+        (
+          await tx
+            .update(caseLawDecisions)
+            .set({
+              sourceObservedAt: observedAt,
+              sourceObservationOrder: observationOrder,
+              sourceObservationHash: result.rawHash,
+              // Drizzle applies the schema's on-update value unless this column is
+              // explicit. A watermark-only replay is not a content modification.
+              updatedAt: sql`${caseLawDecisions.updatedAt}`,
+            })
+            .where(
+              and(
+                eq(caseLawDecisions.id, existing.id),
+                storedObservationPrecedes({ order: observationOrder }),
+                sql`${caseLawDecisions.sourceHash} IS NOT DISTINCT FROM ${existing.sourceHash}`,
+                sql`${caseLawDecisions.metadata} IS NOT DISTINCT FROM ${JSON.stringify(existing.metadata)}::jsonb`,
+              ),
+            )
+            .returning({ id: caseLawDecisions.id })
+        ).at(0),
     );
     if (!watermarkAdvanced) {
       const current = await scopedDb((tx) =>
