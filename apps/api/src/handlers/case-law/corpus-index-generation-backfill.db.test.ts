@@ -389,3 +389,50 @@ test(
   },
   { timeout: 30_000 },
 );
+
+test(
+  "generation replay revisits a refreshed row already pointing at its target",
+  async () => {
+    const generation = "case_law_v2_refreshed";
+    const refreshedId = toSafeId<"caseLawDecision">(
+      "00000000-0000-4000-8000-000000000098",
+    );
+    await db.insert(caseLawDecisions).values({
+      caseNumber: "98 T 98/2026",
+      contentHash: "refreshed-content",
+      country: "CZE",
+      court: "Refreshed court",
+      createdAt: CREATED_AT,
+      fulltext: "refreshed text",
+      id: refreshedId,
+      indexedGeneration: corpusIndexId(generation, "CZE"),
+      indexedHash: null,
+      language: "cs",
+      languageGroupKey: "refreshed",
+      slug: "refreshed",
+      sourceId: publicSourceId,
+    });
+
+    const sent: SafeId<"caseLawDecision">[] = [];
+    const backfill = createCaseLawGenerationBackfill({
+      backfillRows: async (_scopedDb, rows, _generation, options) => {
+        await options.beforeRemoteEffect();
+        sent.push(...rows.map(({ id }) => id));
+        return rows.length;
+      },
+      newLeaseToken: () => "00000000-0000-4000-8000-000000000300",
+    });
+
+    try {
+      expect(await backfill(scopedDb, 100, generation)).toMatchObject({
+        status: "advanced",
+      });
+      expect(sent).toContain(refreshedId);
+    } finally {
+      await db
+        .delete(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, refreshedId));
+    }
+  },
+  { timeout: 30_000 },
+);

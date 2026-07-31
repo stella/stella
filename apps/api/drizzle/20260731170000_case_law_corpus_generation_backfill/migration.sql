@@ -50,6 +50,11 @@ GRANT SELECT ON TABLE "case_law_corpus_index_backfills" TO stella;--> statement-
 GRANT SELECT, INSERT, UPDATE, DELETE
   ON TABLE "case_law_corpus_index_backfills" TO stella_ingestion;--> statement-breakpoint
 
+-- Statement time, rather than transaction-start time, makes the rebuild's
+-- short table-lock barrier a valid created_at high-water mark.
+ALTER TABLE "case_law_decisions"
+  ALTER COLUMN "created_at" SET DEFAULT clock_timestamp();--> statement-breakpoint
+
 -- squawk-ignore transaction-nesting
 COMMIT;--> statement-breakpoint
 SET statement_timeout = 0;--> statement-breakpoint

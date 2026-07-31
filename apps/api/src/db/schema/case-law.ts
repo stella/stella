@@ -183,7 +183,9 @@ export const caseLawDecisions = p.pgTable(
     indexedHash: p.varchar("indexed_hash", { length: 64 }),
     indexedGeneration: p.varchar("indexed_generation", { length: 32 }),
     indexedAt: timestamptz("indexed_at"),
-    createdAt: timestamptz("created_at").defaultNow().notNull(),
+    createdAt: timestamptz("created_at")
+      .default(sql`clock_timestamp()`)
+      .notNull(),
     updatedAt: timestamptz("updated_at")
       .defaultNow()
       .notNull()

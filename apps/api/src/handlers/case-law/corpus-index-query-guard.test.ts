@@ -14,6 +14,7 @@ test("case-law incremental corpus scans never select a generation inequality", a
   // selector into a corpus-wide scan and can starve request traffic.
   expect(source).not.toMatch(/indexedGeneration\}[^`]*<>/su);
   expect(source).not.toMatch(/indexed_generation[^`]*<>/su);
+  expect(source).toContain("sql`LOCK TABLE ${caseLawDecisions} IN SHARE MODE`");
 });
 
 test("generation checkpoint migration preserves replay and role invariants", async () => {
@@ -45,5 +46,8 @@ test("generation checkpoint migration preserves replay and role invariants", asy
     `CHECK ("status" IN (${CASE_LAW_CORPUS_INDEX_BACKFILL_STATUSES.map(
       (status) => `'${status}'`,
     ).join(",")}))`,
+  );
+  expect(source).toContain(
+    'ALTER COLUMN "created_at" SET DEFAULT clock_timestamp()',
   );
 });

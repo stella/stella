@@ -508,7 +508,8 @@ const isEligibleForGeneration = (
 ): boolean =>
   row.contentHash !== null &&
   isRedistributable(row.sourceDescriptor) &&
-  row.indexedGeneration !== corpusIndexId(generation, row.country);
+  (row.indexedGeneration !== corpusIndexId(generation, row.country) ||
+    row.indexedHash !== row.contentHash);
 
 const withoutSourceDescriptor = ({
   sourceDescriptor: _sourceDescriptor,
@@ -529,16 +530,6 @@ export const createCaseLawGenerationBackfill =
   ): Promise<GenerationBackfillResult> => {
     const checkpoint = await scopedDb(async (tx) => {
       // audit: skip — the checkpoint is the durable audit trail for this derived projection rebuild
-      const inserted = await tx
-        .insert(caseLawCorpusIndexBackfills)
-        .values({ generation })
-        .onConflictDoNothing()
-        .returning();
-      const created = inserted.at(0);
-      if (created) {
-        return created;
-      }
-
       const existing = (
         await tx
           .select()
@@ -546,10 +537,36 @@ export const createCaseLawGenerationBackfill =
           .where(eq(caseLawCorpusIndexBackfills.generation, generation))
           .limit(1)
       ).at(0);
-      if (!existing) {
+      if (existing) {
+        return existing;
+      }
+
+      // Wait for decision writes that already acquired their table lock, then
+      // capture statement time while new writers are held out. Together with
+      // the decision column's clock_timestamp() default, no later commit can
+      // appear behind this rebuild's (created_at,id) cursor.
+      await tx.execute(sql`LOCK TABLE ${caseLawDecisions} IN SHARE MODE`);
+      const inserted = await tx
+        .insert(caseLawCorpusIndexBackfills)
+        .values({ generation, snapshotAt: sql`clock_timestamp()` })
+        .onConflictDoNothing()
+        .returning();
+      const created = inserted.at(0);
+      if (created) {
+        return created;
+      }
+
+      const concurrent = (
+        await tx
+          .select()
+          .from(caseLawCorpusIndexBackfills)
+          .where(eq(caseLawCorpusIndexBackfills.generation, generation))
+          .limit(1)
+      ).at(0);
+      if (!concurrent) {
         panic("case-law corpus generation checkpoint disappeared");
       }
-      return existing;
+      return concurrent;
     });
     if (checkpoint.status === CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.COMPLETE) {
       return { indexed: 0, status: BACKFILL_STATUS.COMPLETE };
