@@ -77,6 +77,12 @@ const ANONYMIZED_SCOPE_BY_DEFAULT_SCOPE: Partial<Record<ToolScope, ToolScope>> =
     "stella:templates": "stella:templates_anonymized",
   };
 
+const toAnonymizedScope = (toolName: string, scope: ToolScope): ToolScope =>
+  ANONYMIZED_SCOPE_BY_DEFAULT_SCOPE[scope] ??
+  unreachable(
+    `Tool ${toolName} is exposed in anonymized mode but scope ${scope} has no anonymized pairing`,
+  );
+
 const toAnonymizedProjection = (
   tool: McpToolDefinition,
 ): McpToolDefinition | null => {
@@ -84,11 +90,10 @@ const toAnonymizedProjection = (
     return null;
   }
 
-  const anonymizedScope =
-    ANONYMIZED_SCOPE_BY_DEFAULT_SCOPE[tool.scope] ??
-    unreachable(
-      `Tool ${tool.name} is exposed in anonymized mode but scope ${tool.scope} has no anonymized pairing`,
-    );
+  const anonymizedScope = toAnonymizedScope(tool.name, tool.scope);
+  const additionalScopes = tool.additionalScopes?.map((scope) =>
+    toAnonymizedScope(tool.name, scope),
+  );
 
   const description =
     tool.anonymized.exposure === "anonymize" &&
@@ -98,6 +103,7 @@ const toAnonymizedProjection = (
 
   return {
     ...tool,
+    ...(additionalScopes === undefined ? {} : { additionalScopes }),
     description,
     scope: anonymizedScope,
   };

@@ -387,6 +387,52 @@ export const scopeGranted = ({
   return claims.scope.split(/\s+/u).includes(`stella:${scope}`);
 };
 
+export const scopePreflightFailure = ({
+  additionalScopes,
+  scope,
+  token,
+}: {
+  additionalScopes?: readonly string[] | undefined;
+  scope?: string | undefined;
+  token: string;
+}): { loginCommand: string; missingScope: string } | undefined => {
+  const claims = decodeAccessTokenClaims(token);
+  if (claims?.scope === undefined) {
+    // Opaque token or no scope claim: cannot verify locally, let the server rule.
+    return undefined;
+  }
+
+  const requiredScopes: string[] = [];
+  if (scope !== undefined) {
+    requiredScopes.push(scope);
+  }
+  if (additionalScopes !== undefined) {
+    requiredScopes.push(...additionalScopes);
+  }
+
+  const grantedScopes = claims.scope
+    .split(/\s+/u)
+    .filter((grantedScope) => grantedScope.length > 0);
+  const grantedScopeSet = new Set(grantedScopes);
+  const missingScope = requiredScopes.find(
+    (requiredScope) => !grantedScopeSet.has(`stella:${requiredScope}`),
+  );
+  if (missingScope === undefined) {
+    return undefined;
+  }
+
+  const requestedScopes = [
+    ...new Set([
+      ...grantedScopes,
+      ...requiredScopes.map((requiredScope) => `stella:${requiredScope}`),
+    ]),
+  ];
+  return {
+    loginCommand: `stella auth login --scopes ${requestedScopes.join(",")}`,
+    missingScope,
+  };
+};
+
 export const confirmDestructive = async ({
   context,
   flags,
@@ -709,6 +755,7 @@ export const followAll = async ({
   toolName,
   cursorInto,
   stream,
+  requestTimeoutMs,
 }: {
   windowedText: boolean;
   itemsKey: string | undefined;
@@ -723,6 +770,7 @@ export const followAll = async ({
     cursor: string,
   ) => Record<string, unknown>;
   stream?: (item: unknown) => void;
+  requestTimeoutMs?: number;
 }): Promise<Result<AllOutcome, McpClientError>> => {
   const items: unknown[] = [];
   let text = "";
@@ -736,7 +784,15 @@ export const followAll = async ({
   do {
     const args = cursor === null ? baseArgs : cursorInto(baseArgs, cursor);
     // eslint-disable-next-line no-await-in-loop -- each page's cursor comes from the previous response
-    const call = await callTool({ serverUrl, token, name: toolName, args });
+    const call = await callTool({
+      serverUrl,
+      token,
+      name: toolName,
+      args,
+      ...(requestTimeoutMs === undefined
+        ? {}
+        : { timeoutMs: requestTimeoutMs }),
+    });
     if (Result.isError(call)) {
       return Result.err(call.error);
     }
@@ -808,6 +864,7 @@ export const streamOrRenderAllPages = async ({
   token,
   toolName,
   cursorInto,
+  requestTimeoutMs,
 }: {
   context: Context;
   writers: Writers;
@@ -822,6 +879,7 @@ export const streamOrRenderAllPages = async ({
     base: Record<string, unknown>,
     cursor: string,
   ) => Record<string, unknown>;
+  requestTimeoutMs?: number;
 }): Promise<void> => {
   const streaming = format === "jsonl" && !windowedText;
   const outcome = await followAll({
@@ -832,6 +890,7 @@ export const streamOrRenderAllPages = async ({
     token,
     toolName,
     cursorInto,
+    ...(requestTimeoutMs === undefined ? {} : { requestTimeoutMs }),
     ...(streaming
       ? {
           stream: (item: unknown) => {
@@ -1018,10 +1077,16 @@ export const runLeafCommand = async ({
     }
   }
 
-  // Client-side scope precheck (spec S3): fail before any server call.
-  if (spec.scope !== undefined && !scopeGranted({ token, scope: spec.scope })) {
+  // Client-side scope precheck (spec S3): fail before any server call. Opaque
+  // tokens still defer to the server, which enforces the same full set.
+  const scopeFailure = scopePreflightFailure({
+    additionalScopes: spec.additionalScopes,
+    scope: spec.scope,
+    token,
+  });
+  if (scopeFailure !== undefined) {
     writers.stderr(
-      `Missing scope stella:${spec.scope}. Re-run 'stella auth login' to grant stella:${spec.scope}.\n`,
+      `Missing scope stella:${scopeFailure.missingScope}. Re-run '${scopeFailure.loginCommand}' to grant the complete scope set.\n`,
     );
     setExit(context, EXIT_CODES.auth);
     return;
@@ -1075,11 +1140,22 @@ export const runLeafCommand = async ({
       token,
       toolName: spec.toolName,
       cursorInto: (base, cursor) => ({ ...base, cursor }),
+      ...(spec.requestTimeoutMs === undefined
+        ? {}
+        : { requestTimeoutMs: spec.requestTimeoutMs }),
     });
     return;
   }
 
-  const call = await callTool({ serverUrl, token, name: spec.toolName, args });
+  const call = await callTool({
+    serverUrl,
+    token,
+    name: spec.toolName,
+    args,
+    ...(spec.requestTimeoutMs === undefined
+      ? {}
+      : { timeoutMs: spec.requestTimeoutMs }),
+  });
   if (Result.isError(call)) {
     writers.stderr(`${call.error.message}\n`);
     setExit(context, mapClientErrorExit(call.error));
@@ -1217,6 +1293,9 @@ const maybeConfirmRetry = async ({
     token,
     name: spec.toolName,
     args: { ...args, confirm: true },
+    ...(spec.requestTimeoutMs === undefined
+      ? {}
+      : { timeoutMs: spec.requestTimeoutMs }),
   });
   if (Result.isError(retry)) {
     writers.stderr(`${retry.error.message}\n`);

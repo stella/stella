@@ -131,6 +131,42 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
       singleReadWhen: "template_id",
     },
     fill_template: { command: ["template", "fill"], scope: "templates" },
+    save_filled_template: {
+      command: ["template", "save-filled"],
+      additionalScopes: ["templates"],
+      // The server caps render work at five minutes. Leave 30 seconds for the
+      // persistence response while retaining a finite transport deadline.
+      requestTimeoutMs: 330_000,
+      scope: "documents_write",
+      inputOnly: ["values"],
+      discriminator: {
+        prop: "action",
+        subcommands: {
+          create_document: {
+            command: "new-document",
+            include: [
+              "template_id",
+              "matter_id",
+              "parent_id",
+              "name",
+              "values",
+            ],
+            required: ["template_id", "matter_id", "values"],
+          },
+          create_version: {
+            command: "new-version",
+            include: [
+              "template_id",
+              "matter_id",
+              "entity_id",
+              "name",
+              "values",
+            ],
+            required: ["template_id", "matter_id", "entity_id", "values"],
+          },
+        },
+      },
+    },
     save_template: { command: ["template", "save"], scope: "templates" },
 
     list_time_entries: {

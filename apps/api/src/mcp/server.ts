@@ -5,7 +5,7 @@ import { listMcpResources, readMcpResource } from "@/api/mcp/resources";
 import { createMcpHttpRequestHandler } from "@/api/mcp/server-core";
 import {
   getMcpToolDefinition,
-  getMcpToolScopeHint,
+  getMcpToolRequiredScopesHint,
   handleMcpToolCall,
   listMcpTools,
 } from "@/api/mcp/tools";
@@ -14,7 +14,7 @@ export const handleMcpHttpRequest = createMcpHttpRequestHandler({
   authenticateMcpRequest,
   captureError,
   getMcpToolDefinition,
-  getMcpToolScopeHint,
+  getMcpToolRequiredScopesHint,
   handleMcpToolCall,
   listMcpResources,
   listMcpTools,

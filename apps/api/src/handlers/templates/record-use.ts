@@ -5,6 +5,7 @@ import { templateFills, templates } from "@/api/db/schema";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { TemplateStructureError } from "@/api/lib/docx/types";
 
 type RecordTemplateUseOptions = {
   tx: Transaction;
@@ -38,10 +39,14 @@ type RecordTemplateFillOptions = {
   templateId: SafeId<"template">;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
+  workspaceId?: SafeId<"workspace"> | undefined;
+  entityId?: SafeId<"entity"> | undefined;
+  entityVersionId?: SafeId<"entityVersion"> | undefined;
   /** Output the caller produced (`docx`, `pdf`, `text`). */
   format: string;
   unmatchedCount: number;
   unusedCount: number;
+  structureErrors?: TemplateStructureError[] | undefined;
   /** Records the `EXECUTE` audit event when present (chat tools may run without
    *  one); the fill row is always written. */
   recordAuditEvent?: AuditRecorder | undefined;
@@ -60,9 +65,13 @@ export const recordTemplateFill = async ({
   templateId,
   organizationId,
   userId,
+  workspaceId,
+  entityId,
+  entityVersionId,
   format,
   unmatchedCount,
   unusedCount,
+  structureErrors,
   recordAuditEvent,
 }: RecordTemplateFillOptions): Promise<void> => {
   const status = unmatchedCount > 0 ? "partial" : "success";
@@ -74,12 +83,22 @@ export const recordTemplateFill = async ({
     status,
     unmatchedCount,
     unusedCount,
+    structureErrors:
+      structureErrors !== undefined && structureErrors.length > 0
+        ? structureErrors
+        : null,
   });
   await recordAuditEvent?.(tx, {
     action: AUDIT_ACTION.EXECUTE,
     resourceType: AUDIT_RESOURCE_TYPE.TEMPLATE,
     resourceId: templateId,
-    workspaceId: null,
-    metadata: { format, status, unmatchedCount },
+    workspaceId: workspaceId ?? null,
+    metadata: {
+      format,
+      status,
+      unmatchedCount,
+      ...(entityId !== undefined && { entityId }),
+      ...(entityVersionId !== undefined && { entityVersionId }),
+    },
   });
 };

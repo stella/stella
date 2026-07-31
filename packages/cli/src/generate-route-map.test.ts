@@ -84,9 +84,9 @@ const flagFor = (spec: LeafCommandSpec, flag: string): FlagSpec | undefined =>
 const tree = generateRouteMap(snapshotListings, TOOL_ANNOTATIONS);
 
 describe("generateRouteMap: structure", () => {
-  test("produces 45 leaf commands and excludes the compat shims", () => {
+  test("produces 47 leaf commands and excludes the compat shims", () => {
     const paths = leafPaths(tree);
-    expect(paths).toHaveLength(45);
+    expect(paths).toHaveLength(47);
     expect(paths).not.toContain("search");
     expect(paths).not.toContain("fetch");
     // The excluded compat tools never surface anywhere in the tree.
@@ -220,6 +220,40 @@ describe("generateRouteMap: discriminator split (S2)", () => {
     const registry = flagFor(lookup ?? errorSpec(), "--registry");
     expect(registry?.kind).toBe("enum");
     expect(registry?.required).toBe(true);
+  });
+
+  test("save_filled_template exposes both destinations under its compound scopes", () => {
+    const newDocument = findLeaf(tree, [
+      "template",
+      "save-filled",
+      "new-document",
+    ]);
+    const newVersion = findLeaf(tree, [
+      "template",
+      "save-filled",
+      "new-version",
+    ]);
+
+    expect(newDocument?.toolName).toBe("save_filled_template");
+    expect(newVersion?.toolName).toBe("save_filled_template");
+    expect(newDocument?.requestTimeoutMs).toBe(330_000);
+    expect(newVersion?.requestTimeoutMs).toBe(330_000);
+    expect(newDocument?.scope).toBe("documents_write");
+    expect(newVersion?.scope).toBe("documents_write");
+    expect(newDocument?.additionalScopes).toEqual(["templates"]);
+    expect(newVersion?.additionalScopes).toEqual(["templates"]);
+    expect(newDocument?.discriminatorInject).toEqual({
+      action: "create_document",
+    });
+    expect(newVersion?.discriminatorInject).toEqual({
+      action: "create_version",
+    });
+    expect(newDocument?.inputOnly).toEqual(["values"]);
+    expect(newVersion?.inputOnly).toEqual(["values"]);
+    expect(flagFor(newDocument ?? errorSpec(), "--entity-id")).toBeUndefined();
+    expect(flagFor(newVersion ?? errorSpec(), "--entity-id")?.required).toBe(
+      true,
+    );
   });
 });
 

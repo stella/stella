@@ -246,7 +246,7 @@ void mock.module("@/api/handlers/workspaces/workspace-contacts-read", () => ({
 
 const {
   getMcpToolDefinition,
-  getMcpToolScopeHint,
+  getMcpToolRequiredScopesHint,
   handleMcpToolCall,
   listMcpTools,
 } = await import("@/api/mcp/tools");
@@ -697,14 +697,22 @@ describe("OpenAI-compatible MCP tools", () => {
   });
 
   test("hints dynamic tool scopes from names before resolving definitions", () => {
-    expect(getMcpToolScopeHint("search_case_law")).toBe("stella:search");
-    expect(getMcpToolScopeHint("mcp__registry__lookup")).toBe(
+    expect(getMcpToolRequiredScopesHint("search_case_law")).toEqual([
+      "stella:search",
+    ]);
+    expect(getMcpToolRequiredScopesHint("save_filled_template")).toEqual([
+      "stella:documents_write",
+      "stella:templates",
+    ]);
+    expect(getMcpToolRequiredScopesHint("mcp__registry__lookup")).toEqual([
       "stella:external_mcps",
-    );
-    expect(getMcpToolScopeHint("skill__research")).toBe("stella:skills");
-    expect(getMcpToolScopeHint("mcp__registry__lookup", "anonymized")).toBe(
-      undefined,
-    );
+    ]);
+    expect(getMcpToolRequiredScopesHint("skill__research")).toEqual([
+      "stella:skills",
+    ]);
+    expect(
+      getMcpToolRequiredScopesHint("mcp__registry__lookup", "anonymized"),
+    ).toBe(undefined);
   });
 
   test("does not resolve dynamic definitions for unprefixed unknown tools", async () => {

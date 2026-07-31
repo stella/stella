@@ -9,7 +9,7 @@ import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
   MCP_ANONYMIZED_PROJECTED_SCOPES,
 } from "@/api/mcp/static-tool-definitions";
-import type { McpToolDefinition } from "@/api/mcp/tool-types";
+import type { McpToolDefinition, ToolScope } from "@/api/mcp/tool-types";
 import { MCP_ANONYMIZED_EXCLUSION_REASONS } from "@/api/mcp/tool-types";
 
 describe("MCP tool registry", () => {
@@ -75,8 +75,17 @@ describe("MCP tool registry", () => {
   });
 
   test("every default tool scope is an advertised default scope", () => {
-    for (const tool of DEFAULT_MCP_TOOL_DEFINITIONS) {
-      expect(MCP_DEFAULT_RESOURCE_SCOPES).toContain(tool.scope);
+    const definitions: readonly McpToolDefinition[] =
+      DEFAULT_MCP_TOOL_DEFINITIONS;
+    const defaultScopes: readonly ToolScope[] = MCP_DEFAULT_RESOURCE_SCOPES;
+    for (const tool of definitions) {
+      expect(defaultScopes).toContain(tool.scope);
+      if (tool.additionalScopes !== undefined) {
+        for (const scope of tool.additionalScopes) {
+          expect(defaultScopes).toContain(scope);
+          expect(scope).not.toBe(tool.scope);
+        }
+      }
     }
   });
 

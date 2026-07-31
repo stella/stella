@@ -1585,6 +1585,197 @@ export const generatedRouteMap: RouteNode = {
             },
           },
         },
+        "save-filled": {
+          kind: "route",
+          children: {
+            "new-document": {
+              kind: "leaf",
+              spec: {
+                commandPath: ["template", "save-filled", "new-document"],
+                toolName: "save_filled_template",
+                discriminatorInject: {
+                  action: "create_document",
+                },
+                flags: [
+                  {
+                    flag: "--template-id",
+                    prop: "template_id",
+                    kind: "string",
+                    repeatable: false,
+                    description: "Template id, as returned by list_templates",
+                    required: true,
+                  },
+                  {
+                    flag: "--matter-id",
+                    prop: "matter_id",
+                    kind: "string",
+                    repeatable: false,
+                    description: "Matter/workspace receiving the filled DOCX",
+                    required: true,
+                  },
+                  {
+                    flag: "--parent-id",
+                    prop: "parent_id",
+                    kind: "string",
+                    repeatable: false,
+                    description:
+                      "Folder entity id for a new document; valid only for create_document",
+                    required: false,
+                  },
+                  {
+                    flag: "--name",
+                    prop: "name",
+                    kind: "string",
+                    repeatable: false,
+                    description:
+                      "Optional DOCX file name; defaults to the template file name",
+                    required: false,
+                  },
+                ],
+                inputOnly: ["values"],
+                paginated: false,
+                windowedText: false,
+                destructive: false,
+                additionalScopes: ["templates"],
+                requestTimeoutMs: 330000,
+                scope: "documents_write",
+                inputSchema: {
+                  type: "object",
+                  properties: {
+                    action: {
+                      type: "string",
+                      enum: ["create_document", "create_version"],
+                      description: "Persistence destination",
+                    },
+                    template_id: {
+                      type: "string",
+                      description: "Template id, as returned by list_templates",
+                    },
+                    matter_id: {
+                      type: "string",
+                      description: "Matter/workspace receiving the filled DOCX",
+                    },
+                    entity_id: {
+                      type: "string",
+                      description:
+                        "Existing document entity id; required only for create_version",
+                    },
+                    parent_id: {
+                      type: "string",
+                      description:
+                        "Folder entity id for a new document; valid only for create_document",
+                    },
+                    name: {
+                      type: "string",
+                      description:
+                        "Optional DOCX file name; defaults to the template file name",
+                      maxLength: 255,
+                    },
+                    values: {
+                      type: "object",
+                      description: "Map of template field path to value",
+                      additionalProperties: true,
+                    },
+                  },
+                  required: ["action", "template_id", "matter_id", "values"],
+                },
+              },
+            },
+            "new-version": {
+              kind: "leaf",
+              spec: {
+                commandPath: ["template", "save-filled", "new-version"],
+                toolName: "save_filled_template",
+                discriminatorInject: {
+                  action: "create_version",
+                },
+                flags: [
+                  {
+                    flag: "--template-id",
+                    prop: "template_id",
+                    kind: "string",
+                    repeatable: false,
+                    description: "Template id, as returned by list_templates",
+                    required: true,
+                  },
+                  {
+                    flag: "--matter-id",
+                    prop: "matter_id",
+                    kind: "string",
+                    repeatable: false,
+                    description: "Matter/workspace receiving the filled DOCX",
+                    required: true,
+                  },
+                  {
+                    flag: "--entity-id",
+                    prop: "entity_id",
+                    kind: "string",
+                    repeatable: false,
+                    description:
+                      "Existing document entity id; required only for create_version",
+                    required: true,
+                  },
+                  {
+                    flag: "--name",
+                    prop: "name",
+                    kind: "string",
+                    repeatable: false,
+                    description:
+                      "Optional DOCX file name; defaults to the template file name",
+                    required: false,
+                  },
+                ],
+                inputOnly: ["values"],
+                paginated: false,
+                windowedText: false,
+                destructive: false,
+                additionalScopes: ["templates"],
+                requestTimeoutMs: 330000,
+                scope: "documents_write",
+                inputSchema: {
+                  type: "object",
+                  properties: {
+                    action: {
+                      type: "string",
+                      enum: ["create_document", "create_version"],
+                      description: "Persistence destination",
+                    },
+                    template_id: {
+                      type: "string",
+                      description: "Template id, as returned by list_templates",
+                    },
+                    matter_id: {
+                      type: "string",
+                      description: "Matter/workspace receiving the filled DOCX",
+                    },
+                    entity_id: {
+                      type: "string",
+                      description:
+                        "Existing document entity id; required only for create_version",
+                    },
+                    parent_id: {
+                      type: "string",
+                      description:
+                        "Folder entity id for a new document; valid only for create_document",
+                    },
+                    name: {
+                      type: "string",
+                      description:
+                        "Optional DOCX file name; defaults to the template file name",
+                      maxLength: 255,
+                    },
+                    values: {
+                      type: "object",
+                      description: "Map of template field path to value",
+                      additionalProperties: true,
+                    },
+                  },
+                  required: ["action", "template_id", "matter_id", "values"],
+                },
+              },
+            },
+          },
+        },
         save: {
           kind: "leaf",
           spec: {
@@ -57716,7 +57907,8 @@ export const generatedRouteMap: RouteNode = {
                 inputOnly: ["body.clauseOverrides"],
                 paginated: false,
                 destructive: false,
-                scope: "templates",
+                scope: "documents_write",
+                additionalScopes: ["templates"],
                 inputSchema: {
                   type: "object",
                   additionalProperties: false,

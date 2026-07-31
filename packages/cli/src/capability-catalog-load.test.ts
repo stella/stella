@@ -108,6 +108,14 @@ describe("parseCapabilityCatalog fail-closed parsing", () => {
   test("accepts an empty array as a valid (empty) catalog", () => {
     expect(parseCapabilityCatalog([])).toEqual([]);
   });
+
+  test("preserves compound scope metadata", () => {
+    expect(
+      parseCapabilityCatalog([
+        validEntry({ additionalScopes: ["stella:templates"] }),
+      ])?.[0]?.additionalScopes,
+    ).toEqual(["stella:templates"]);
+  });
 });
 
 // The committed snapshot's ids are PUBLIC: they become CLI command paths and are
