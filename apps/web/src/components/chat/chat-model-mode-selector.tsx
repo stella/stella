@@ -2,12 +2,12 @@ import { useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import {
+  BlendIcon,
   BrainCircuitIcon,
   CpuIcon,
   GaugeIcon,
   PinIcon,
   PinOffIcon,
-  ScaleIcon,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -51,7 +51,7 @@ const MODE_DESCRIPTION_KEY = {
 } as const satisfies Record<ChatModelMode, TranslationKey>;
 
 const MODE_ICON = {
-  [CHAT_MODEL_MODE.standard]: ScaleIcon,
+  [CHAT_MODEL_MODE.standard]: BlendIcon,
   [CHAT_MODEL_MODE.deepThinking]: BrainCircuitIcon,
   [CHAT_MODEL_MODE.fast]: GaugeIcon,
 } as const satisfies Record<ChatModelMode, LucideIcon>;
