@@ -240,12 +240,12 @@ const getViewerSearchPages = async (
   const { PDF } = await import("@libpdf/core");
   const pages: ViewerSearchPage[] = [];
   const attachments = await Promise.all(
-    pdfAttachments.map((content) => {
+    pdfAttachments.map(async (content) => {
       signal.throwIfAborted();
       // Embedded portfolio PDFs are loaded without the container password,
       // just like the viewer's attachment loading path. Promise.all preserves
       // the name-tree order used by the viewer.
-      return PDF.load(content);
+      return await PDF.load(content);
     }),
   );
   signal.throwIfAborted();
