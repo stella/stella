@@ -1,5 +1,11 @@
 # @stll/business-registries
 
+## 0.2.2
+
+### Patch Changes
+
+- [#1439](https://github.com/stella/stella/pull/1439) [`e5997fb`](https://github.com/stella/stella/commit/e5997fb782bb5e7df0abec4568d478922a182c96) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update the stdnum runtime dependency.
+
 ## 0.2.1
 
 ### Patch Changes
