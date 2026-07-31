@@ -41,6 +41,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { PersonMentionLabel } from "@/components/person-mention-label";
 import Tooltip from "@/components/tooltip";
 import { useFormatter } from "@/i18n/formatting-context";
+import type { getTranslator } from "@/i18n/i18n-store";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
@@ -56,6 +57,7 @@ import { activityDayKey, groupActivityRuns } from "./activity-panel.logic";
 type ActivityPanelProps = { workspaceId: string };
 type ActivityDay = [MatterActivityItem, ...MatterActivityItem[]];
 type ActivityViewMode = "timeline" | "list";
+type ActivityTranslator = ReturnType<typeof getTranslator>;
 
 const FIRST_STRONG_ISOLATE = String.fromCodePoint(8296);
 const POP_DIRECTIONAL_ISOLATE = String.fromCodePoint(8297);
@@ -74,7 +76,7 @@ const CATEGORIES: MatterActivityCategory[] = [
 
 const categoryLabel = (
   category: MatterActivityCategory,
-  t: ReturnType<typeof useTranslations>,
+  t: ActivityTranslator,
 ) => {
   switch (category) {
     case "all":
@@ -226,34 +228,43 @@ const ActivityTimeline = ({
     return [...result.values()];
   }, [items]);
 
+  let activityContent: ReactNode;
+  if (days.length === 0) {
+    activityContent = (
+      <p className="text-muted-foreground px-4 py-8 text-center text-sm">
+        {t("workspaces.overview.activity.empty")}
+      </p>
+    );
+  } else if (viewMode === "list") {
+    activityContent = (
+      <ActivityList items={items} onSelectItem={onSelectItem} />
+    );
+  } else {
+    activityContent = (
+      <>
+        <HorizontalTimeline days={days} onSelectItem={onSelectItem} />
+        <div className="md:hidden">
+          {days.map((dayItems) => (
+            <div key={activityDayKey(dayItems[0].activityAt)}>
+              <TimelineDateMarker activityAt={dayItems[0].activityAt} />
+              {groupActivityRuns(dayItems).map((run) => (
+                <ActivityRunRow
+                  items={run.items}
+                  key={run.id}
+                  onSelectItem={onSelectItem}
+                />
+              ))}
+            </div>
+          ))}
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
       <div className="bg-background ring-foreground/5 overflow-hidden rounded-xl shadow-sm ring-1">
-        {days.length === 0 ? (
-          <p className="text-muted-foreground px-4 py-8 text-center text-sm">
-            {t("workspaces.overview.activity.empty")}
-          </p>
-        ) : viewMode === "list" ? (
-          <ActivityList items={items} onSelectItem={onSelectItem} />
-        ) : (
-          <>
-            <HorizontalTimeline days={days} onSelectItem={onSelectItem} />
-            <div className="md:hidden">
-              {days.map((dayItems) => (
-                <div key={activityDayKey(dayItems[0].activityAt)}>
-                  <TimelineDateMarker activityAt={dayItems[0].activityAt} />
-                  {groupActivityRuns(dayItems).map((run) => (
-                    <ActivityRunRow
-                      items={run.items}
-                      key={run.id}
-                      onSelectItem={onSelectItem}
-                    />
-                  ))}
-                </div>
-              ))}
-            </div>
-          </>
-        )}
+        {activityContent}
       </div>
 
       {query.hasNextPage && (
@@ -912,7 +923,7 @@ const ActivityDetailsSheet = ({
 
 const sourceName = (
   source: MatterActivityItem["trigger"]["source"],
-  t: ReturnType<typeof useTranslations>,
+  t: ActivityTranslator,
 ) => {
   if (!source) {
     return t("workspaces.overview.activity.details.notAvailable");
@@ -929,10 +940,7 @@ const sourceName = (
   }
 };
 
-const triggerName = (
-  item: MatterActivityItem,
-  t: ReturnType<typeof useTranslations>,
-) => {
+const triggerName = (item: MatterActivityItem, t: ActivityTranslator) => {
   const detail = triggerDetail(item, t);
   if (detail) {
     return detail;
@@ -951,7 +959,7 @@ const triggerName = (
 
 const approvalName = (
   status: MatterActivityItem["approval"]["status"],
-  t: ReturnType<typeof useTranslations>,
+  t: ActivityTranslator,
 ) => {
   switch (status) {
     case "not_required":
@@ -1003,7 +1011,7 @@ const actionSentence = (
   action: MatterActivityItem["action"],
   actor: ReactElement | null,
   target: ReactElement,
-  t: ReturnType<typeof useTranslations>,
+  t: ActivityTranslator,
 ): ReactElement => {
   const values = { actor: () => actor, target: () => target };
   switch (action) {
@@ -1036,10 +1044,7 @@ const actionSentence = (
   }
 };
 
-const targetName = (
-  item: MatterActivityItem,
-  t: ReturnType<typeof useTranslations>,
-) => {
+const targetName = (item: MatterActivityItem, t: ActivityTranslator) => {
   if (item.target.name) {
     return item.target.name;
   }
@@ -1063,10 +1068,7 @@ const targetName = (
   }
 };
 
-const triggerDetail = (
-  item: MatterActivityItem,
-  t: ReturnType<typeof useTranslations>,
-) => {
+const triggerDetail = (item: MatterActivityItem, t: ActivityTranslator) => {
   const rawUser = item.trigger.user?.name;
   const user = rawUser ? isolateBidi(rawUser) : null;
   switch (item.trigger.type) {

@@ -40,11 +40,9 @@ describe("groupActivityRuns", () => {
       item("4", "run-a"),
     ]);
 
-    expect(groups.map((group) => group.items.map(({ id }) => id))).toEqual([
-      ["1", "2"],
-      ["3"],
-      ["4"],
-    ]);
+    expect(
+      groups.map((group) => group.items.map(({ id }) => String(id))),
+    ).toEqual([["1", "2"], ["3"], ["4"]]);
     expect(new Set(groups.map(({ id }) => id)).size).toBe(groups.length);
   });
 
