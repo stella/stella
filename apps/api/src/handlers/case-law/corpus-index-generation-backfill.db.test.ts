@@ -139,7 +139,8 @@ const scopedDb = async <T>(callback: (tx: Transaction) => Promise<T>) =>
     // SAFETY: PGlite's transaction provides the Drizzle query surface the
     // runner uses; the explicit transaction is required for LOCK TABLE.
     // eslint-disable-next-line typescript/no-unsafe-type-assertion
-    return await callback(tx as unknown as Transaction);
+    const transaction = tx as unknown as Transaction;
+    return await callback(transaction);
   });
 
 const readCheckpoint = async (generation: string) =>
