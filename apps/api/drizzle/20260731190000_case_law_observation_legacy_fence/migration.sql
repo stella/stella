@@ -20,6 +20,7 @@ BEGIN
 END
 $function$;--> statement-breakpoint
 
+-- stella-migration-safety: reviewed destructive-change - retry cleanup replaces only this migration's compatibility trigger; table data is unchanged.
 DROP TRIGGER IF EXISTS case_law_decisions_source_refresh_order_fence
   ON "case_law_decisions";--> statement-breakpoint
 CREATE TRIGGER case_law_decisions_source_refresh_order_fence
