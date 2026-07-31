@@ -75,7 +75,7 @@ test("iOS gradients animate one original SVG surface", () => {
   };
   const renderedChildren: unknown[] = [];
   const root = {};
-  let syncTransition = () => undefined;
+  let syncTransition: () => void = () => undefined;
   const removeEventListener = mock(() => undefined);
   const container = {
     addEventListener: (event: string, listener: () => void) => {
@@ -94,7 +94,7 @@ test("iOS gradients animate one original SVG surface", () => {
   const visibilityDisconnect = mock(() => undefined);
   const themeDisconnect = mock(() => undefined);
   let opacity = "0";
-  let syncTheme = () => undefined;
+  let syncTheme: () => void = () => undefined;
 
   Object.defineProperty(globalThis, "getComputedStyle", {
     configurable: true,
