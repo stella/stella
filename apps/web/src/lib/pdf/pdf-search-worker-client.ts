@@ -32,59 +32,62 @@ export const findPDFSearchResultsInWorker = async ({
     { type: "module" },
   );
 
-  return new Promise((resolve, reject) => {
-    let handleAbort: (() => void) | null = null;
-    const dispose = () => {
-      if (handleAbort) {
-        signal.removeEventListener("abort", handleAbort);
-      }
-      worker.terminate();
-    };
-    handleAbort = () => {
-      dispose();
-      reject(abortError());
-    };
-
-    signal.addEventListener("abort", handleAbort, { once: true });
-    worker.addEventListener(
-      "message",
-      (event: MessageEvent<PDFSearchWorkerResponse>) => {
-        dispose();
-        if (event.data.status === "success") {
-          resolve(event.data.result);
-          return;
+  const result = await new Promise<PDFSearchResult | null>(
+    (resolve, reject) => {
+      let handleAbort: (() => void) | null = null;
+      const dispose = () => {
+        if (handleAbort) {
+          signal.removeEventListener("abort", handleAbort);
         }
-        reject(
-          new PDFViewerError({
-            code: "LOAD_FAILED",
-            message: event.data.message,
-          }),
-        );
-      },
-      { once: true },
-    );
-    worker.addEventListener(
-      "error",
-      (event) => {
+        worker.terminate();
+      };
+      handleAbort = () => {
         dispose();
-        const cause: unknown = event.error;
-        reject(
-          new PDFViewerError({
-            code: "LOAD_FAILED",
-            message: "PDF search worker failed",
-            cause,
-          }),
-        );
-      },
-      { once: true },
-    );
+        reject(abortError());
+      };
 
-    const request: PDFSearchWorkerRequest = {
-      bytes,
-      searchText,
-      ...(password !== undefined && { password }),
-    };
-    const sendRequest = worker.postMessage.bind(worker);
-    sendRequest(request, [bytes]);
-  });
+      signal.addEventListener("abort", handleAbort, { once: true });
+      worker.addEventListener(
+        "message",
+        (event: MessageEvent<PDFSearchWorkerResponse>) => {
+          dispose();
+          if (event.data.status === "success") {
+            resolve(event.data.result);
+            return;
+          }
+          reject(
+            new PDFViewerError({
+              code: "LOAD_FAILED",
+              message: event.data.message,
+            }),
+          );
+        },
+        { once: true },
+      );
+      worker.addEventListener(
+        "error",
+        (event) => {
+          dispose();
+          const cause: unknown = event.error;
+          reject(
+            new PDFViewerError({
+              code: "LOAD_FAILED",
+              message: "PDF search worker failed",
+              cause,
+            }),
+          );
+        },
+        { once: true },
+      );
+
+      const request: PDFSearchWorkerRequest = {
+        bytes,
+        searchText,
+        ...(password !== undefined && { password }),
+      };
+      const sendRequest = worker.postMessage.bind(worker);
+      sendRequest(request, [bytes]);
+    },
+  );
+  return result;
 };

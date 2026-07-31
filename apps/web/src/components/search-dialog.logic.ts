@@ -3,7 +3,7 @@ import type { GlobalSearchHit } from "@stll/api/types";
 import type { RecentFile } from "@/lib/search-recents";
 
 type ChatGlobalSearchHit = Extract<GlobalSearchHit, { type: "chat" }>;
-type DocumentGlobalSearchHit = Extract<GlobalSearchHit, { type: "document" }>;
+type EntityGlobalSearchHit = Extract<GlobalSearchHit, { entityId: string }>;
 
 type DialogCloseActionState =
   | { status: "idle" }
@@ -55,7 +55,7 @@ export const getRecentFilePreviewHit = (
     updatedAt: file.openedAt,
     workspaceId: file.workspaceId,
     workspaceName: file.workspaceName,
-  }) satisfies DocumentGlobalSearchHit;
+  }) satisfies EntityGlobalSearchHit;
 
 export type ChatHitRoute =
   | {

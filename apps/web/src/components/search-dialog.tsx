@@ -687,12 +687,12 @@ export const SearchDialog = ({
       },
       {
         onSuccess: (thread) => {
-          navigateAfterClose(() =>
-            navigate({
+          navigateAfterClose(async () => {
+            await navigate({
               to: "/chat/$threadId",
               params: { threadId: thread.threadId },
-            }),
-          );
+            });
+          });
         },
         onError: () => {
           stellaToast.add({
@@ -742,12 +742,12 @@ export const SearchDialog = ({
 
   const openRecentFile = (file: RecentFile) => {
     setRecentFiles(recordRecentFile(file, searchRecentsScope));
-    navigateAfterClose(() =>
-      navigate({
+    navigateAfterClose(async () => {
+      await navigate({
         to: "/workspaces/$workspaceId/entities/$entityId",
         params: { workspaceId: file.workspaceId, entityId: file.entityId },
-      }),
-    );
+      });
+    });
   };
 
   const toggleTypeFilter = (type: GlobalSearchResultType) => {
@@ -799,12 +799,12 @@ export const SearchDialog = ({
     }
 
     if (hit.type === "contact") {
-      navigateAfterClose(() =>
-        navigate({
+      navigateAfterClose(async () => {
+        await navigate({
           to: "/contacts/$contactId",
           params: { contactId: hit.contactId },
-        }),
-      );
+        });
+      });
       return;
     }
 
@@ -820,8 +820,8 @@ export const SearchDialog = ({
 
       const slug =
         "slug" in hit && typeof hit.slug === "string" ? hit.slug : null;
-      navigateAfterClose(() =>
-        navigate({
+      navigateAfterClose(async () => {
+        await navigate({
           to: "/law/$country/cases/$court/$slug",
           params: createCaseLawDecisionRouteParams({
             caseNumber: hit.caseNumber,
@@ -834,23 +834,25 @@ export const SearchDialog = ({
               q: getSearchHighlightText(hit.headline, ""),
             }),
           },
-        }),
-      );
+        });
+      });
       return;
     }
 
     if (hit.type === "matter") {
-      navigateAfterClose(() =>
-        navigate({
+      navigateAfterClose(async () => {
+        await navigate({
           to: "/workspaces/$workspaceId",
           params: { workspaceId: hit.workspaceId },
-        }),
-      );
+        });
+      });
       return;
     }
 
     if (hit.type === "chat") {
-      navigateAfterClose(() => navigate(getChatHitRoute(hit)));
+      navigateAfterClose(async () => {
+        await navigate(getChatHitRoute(hit));
+      });
       return;
     }
 
@@ -870,12 +872,12 @@ export const SearchDialog = ({
       );
     }
 
-    navigateAfterClose(() =>
-      navigate({
+    navigateAfterClose(async () => {
+      await navigate({
         to: "/workspaces/$workspaceId/entities/$entityId",
         params: { workspaceId: hit.workspaceId, entityId: hit.entityId },
-      }),
-    );
+      });
+    });
   };
 
   const openSearchResult = (hit: GlobalSearchHit): void => {

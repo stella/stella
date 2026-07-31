@@ -1,4 +1,5 @@
 import { PDF } from "@libpdf/core";
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -80,13 +81,20 @@ describe("canonical PDF search", () => {
     const abortController = new AbortController();
     abortController.abort();
 
-    await expect(
-      findPDFSearchResults({
-        bytes: new Uint8Array(),
-        searchText: "term",
-        signal: abortController.signal,
-      }),
-    ).rejects.toMatchObject({ name: "AbortError" });
+    const result = await Result.tryPromise({
+      try: async () =>
+        await findPDFSearchResults({
+          bytes: new Uint8Array(),
+          searchText: "term",
+          signal: abortController.signal,
+        }),
+      catch: (cause) => cause,
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error).toMatchObject({ name: "AbortError" });
+    }
   });
 });
 
