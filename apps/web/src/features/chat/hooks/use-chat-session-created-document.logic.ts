@@ -10,6 +10,8 @@ export const invalidateCreatedDocumentQueries = async ({
   queryClient,
 }: InvalidateCreatedDocumentQueriesOptions): Promise<void> => {
   await Promise.all(
-    queryKeys.map((queryKey) => queryClient.invalidateQueries({ queryKey })),
+    queryKeys.map(async (queryKey) => {
+      await queryClient.invalidateQueries({ queryKey });
+    }),
   );
 };
