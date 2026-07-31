@@ -176,12 +176,16 @@ export const redactCaseLawDecision = async ({
 
     const leases = new Map<string, CaseLawCorpusGenerationLease>();
     try {
-      for (const targetGeneration of [...targets.keys()].sort()) {
-        // oxlint-disable-next-line no-await-in-loop -- all target generations must be fenced before the first external delete
-        const lease = await acquireCaseLawCorpusGenerationLease({
-          generation: targetGeneration,
-          scopedDb,
-        });
+      const claims = await Promise.all(
+        [...targets.keys()].sort().map(async (targetGeneration) => ({
+          lease: await acquireCaseLawCorpusGenerationLease({
+            generation: targetGeneration,
+            scopedDb,
+          }),
+          targetGeneration,
+        })),
+      );
+      for (const { lease, targetGeneration } of claims) {
         if (!lease) {
           throw new ConcurrentModificationError({
             message: "Case-law corpus generation is being written",
@@ -194,25 +198,29 @@ export const redactCaseLawDecision = async ({
       // the others undeleted. Missing retired indexes are already successful
       // fixed points in the shared indexer.
       let firstError: CorpusIndexError | null = null;
-      for (const [targetGeneration, indexes] of targets) {
-        const lease = leases.get(targetGeneration);
-        if (!lease) {
-          throw new ConcurrentModificationError({
-            message: "Case-law corpus generation lease disappeared",
-          });
-        }
-        for (const indexId of indexes) {
-          // oxlint-disable-next-line no-await-in-loop -- sequential erasure across targets preserves deterministic audit ordering
-          const removed = await removeDecisionFromCorpusIndex({
-            beforeRemoteEffect: lease.beforeRemoteEffect,
-            entityId: decisionId,
-            indexId,
-            operation: "redact",
-            scopedDb,
-          });
-          if (removed.isErr()) {
-            firstError ??= removed.error;
+      const removals = await Promise.all(
+        [...targets].flatMap(([targetGeneration, indexes]) => {
+          const lease = leases.get(targetGeneration);
+          if (!lease) {
+            throw new ConcurrentModificationError({
+              message: "Case-law corpus generation lease disappeared",
+            });
           }
+          return [...indexes].map(
+            async (indexId) =>
+              await removeDecisionFromCorpusIndex({
+                beforeRemoteEffect: lease.beforeRemoteEffect,
+                entityId: decisionId,
+                indexId,
+                operation: "redact",
+                scopedDb,
+              }),
+          );
+        }),
+      );
+      for (const removed of removals) {
+        if (removed.isErr()) {
+          firstError ??= removed.error;
         }
       }
       if (firstError) {
@@ -254,10 +262,11 @@ export const redactCaseLawDecision = async ({
           .where(eq(caseLawCorpusIndexProjections.decisionId, decisionId));
       });
     } finally {
-      for (const lease of [...leases.values()].toReversed()) {
-        // oxlint-disable-next-line no-await-in-loop -- release every acquired generation fence after success or failure
-        await lease.release();
-      }
+      await Promise.all(
+        [...leases.values()].toReversed().map(async (lease) => {
+          await lease.release();
+        }),
+      );
     }
     auditedViaCorpusIndex = true;
   }
