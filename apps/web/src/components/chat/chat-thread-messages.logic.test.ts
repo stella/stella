@@ -55,6 +55,11 @@ describe("userMessageFallbackText", () => {
         '<p><entity-mention data-id="comparison" data-label="A > B" data-category="concept"></entity-mention></p>',
       ),
     ).toBe("A > B");
+    expect(
+      userMessageFallbackText(
+        '<p><pasted-text data-label="Pasted 12 characters">First line<br>Second line</pasted-text></p>',
+      ),
+    ).toBe("First line\nSecond line");
   });
 });
 

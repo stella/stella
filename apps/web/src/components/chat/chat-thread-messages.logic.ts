@@ -24,6 +24,7 @@ const USER_MESSAGE_FALLBACK_INLINE_TAGS = Object.freeze([
   "del",
   "em",
   "entity-mention",
+  "pasted-text",
   "s",
   "span",
   "strong",

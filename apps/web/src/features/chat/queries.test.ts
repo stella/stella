@@ -1390,6 +1390,59 @@ describe("acquireChatRuntime reconcile", () => {
     ]);
   });
 
+  test("replaces a persisted pending approval when its id and timestamp are unchanged", () => {
+    const queryClient = new QueryClient();
+    const lastActivityAt = "2026-07-08T10:00:00.000Z";
+    const pendingMessages = [
+      createMessage(),
+      {
+        id: assistantMessageId,
+        role: "assistant",
+        parts: [
+          {
+            approval: { id: "approval-A", needsApproval: true },
+            arguments: '{"query":"Winston Churchill quotes"}',
+            id: "tool-A",
+            input: { query: "Winston Churchill quotes" },
+            name: "web_search",
+            state: "approval-requested",
+            type: "tool-call",
+          },
+        ],
+      },
+    ] satisfies PersistedChatMessage[];
+    const runtime = acquireChatRuntime({
+      activeOrganizationId,
+      context: { allowMissingThread: true },
+      data: buildThreadData({ lastActivityAt, messages: pendingMessages }),
+      key: threadRef,
+      queryClient,
+    });
+
+    const reconciled = acquireChatRuntime({
+      activeOrganizationId,
+      context: { allowMissingThread: true },
+      data: buildThreadData({
+        lastActivityAt,
+        messages: [
+          createMessage(),
+          {
+            id: assistantMessageId,
+            role: "assistant",
+            parts: [{ type: "text", content: "Resolved elsewhere" }],
+          },
+        ],
+      }),
+      key: threadRef,
+      queryClient,
+    });
+
+    expect(reconciled).not.toBe(runtime);
+    expect(reconciled.getSnapshot().messages.at(-1)?.parts).toEqual([
+      { type: "text", content: "Resolved elsewhere" },
+    ]);
+  });
+
   test("keeps a runtime awaiting approval present in the authoritative transcript", async () => {
     const queryClient = new QueryClient();
     globalThis.fetch = createFetchMock(async () =>

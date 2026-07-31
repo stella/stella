@@ -1641,25 +1641,12 @@ const getPendingToolApprovalIds = (
   );
 };
 
-const hasAuthoritativePendingToolApprovals = ({
-  data,
-  runtime,
-}: {
-  data: ChatThreadFetched;
-  runtime: ChatRuntime;
-}): boolean => {
-  const pendingApprovalIds = getPendingToolApprovalIds(
-    runtime.getSnapshot().messages,
-  );
-  if (pendingApprovalIds.length === 0) {
-    return false;
-  }
-
-  const authoritativeApprovalIds = new Set(
-    getPendingToolApprovalIds(data.messages),
-  );
-  return pendingApprovalIds.every((id) => authoritativeApprovalIds.has(id));
-};
+const CHAT_RUNTIME_RECONCILE_DISPOSITION = {
+  idle: "idle",
+  replaceStaleApproval: "replace-stale-approval",
+  retainInFlight: "retain-in-flight",
+  retainPendingApproval: "retain-pending-approval",
+} as const;
 
 /**
  * Whether a runtime has live work in flight that a rebuild would kill:
@@ -1683,6 +1670,32 @@ const hasInFlightChatRuntimeWork = (runtime: ChatRuntime): boolean => {
   );
 };
 
+const getChatRuntimeReconcileDisposition = ({
+  data,
+  runtime,
+}: {
+  data: ChatThreadFetched;
+  runtime: ChatRuntime;
+}) => {
+  if (hasInFlightChatRuntimeWork(runtime)) {
+    return CHAT_RUNTIME_RECONCILE_DISPOSITION.retainInFlight;
+  }
+
+  const pendingApprovalIds = getPendingToolApprovalIds(
+    runtime.getSnapshot().messages,
+  );
+  if (pendingApprovalIds.length === 0) {
+    return CHAT_RUNTIME_RECONCILE_DISPOSITION.idle;
+  }
+
+  const authoritativeApprovalIds = new Set(
+    getPendingToolApprovalIds(data.messages),
+  );
+  return pendingApprovalIds.every((id) => authoritativeApprovalIds.has(id))
+    ? CHAT_RUNTIME_RECONCILE_DISPOSITION.retainPendingApproval
+    : CHAT_RUNTIME_RECONCILE_DISPOSITION.replaceStaleApproval;
+};
+
 const shouldRetainBusyChatRuntime = ({
   data,
   runtime,
@@ -1690,11 +1703,11 @@ const shouldRetainBusyChatRuntime = ({
   data: ChatThreadFetched;
   runtime: ChatRuntime;
 }): boolean => {
-  if (hasInFlightChatRuntimeWork(runtime)) {
-    return true;
-  }
-
-  return hasAuthoritativePendingToolApprovals({ data, runtime });
+  const disposition = getChatRuntimeReconcileDisposition({ data, runtime });
+  return (
+    disposition === CHAT_RUNTIME_RECONCILE_DISPOSITION.retainInFlight ||
+    disposition === CHAT_RUNTIME_RECONCILE_DISPOSITION.retainPendingApproval
+  );
 };
 
 /**
@@ -1893,7 +1906,9 @@ export type AcquireChatRuntimeArgs = {
  *      no entry exists. Build from the CURRENT caller's live getters and
  *      fresh sanitized messages (the pre-registry design rebuilt on
  *      every queryFn run; this is the idle-only equivalent). This is
- *      also the moment a busy-reattached foreign runtime — or a
+ *      also forced when an authoritative transcript resolves a pending
+ *      approval in place without changing the tail message id or timestamp.
+ *      Rebuild is also the moment a busy-reattached foreign runtime — or a
  *      route-handoff runtime — sheds its originating surface's getters
  *      in favour of the mounted caller's. Superseded same-thread entries
  *      (idle, diverged seed — finished streams whose data has been
@@ -1917,10 +1932,20 @@ export const acquireChatRuntime = ({
   const threadIdentity = chatThreadIdentity({ activeOrganizationId, key });
   const seed = toChatRuntimeSeedSignal(data);
   const existing = chatRuntimeRegistry.get(registryKey);
+  const existingDisposition =
+    existing === undefined
+      ? null
+      : getChatRuntimeReconcileDisposition({
+          data,
+          runtime: existing.runtime,
+        });
   // Priority 1: busy runtime under the exact registry key.
   if (
     existing !== undefined &&
-    shouldRetainBusyChatRuntime({ data, runtime: existing.runtime })
+    (existingDisposition ===
+      CHAT_RUNTIME_RECONCILE_DISPOSITION.retainInFlight ||
+      existingDisposition ===
+        CHAT_RUNTIME_RECONCILE_DISPOSITION.retainPendingApproval)
   ) {
     return existing.runtime;
   }
@@ -1942,7 +1967,12 @@ export const acquireChatRuntime = ({
     return busyEntry.runtime;
   }
   // Priority 3: idle exact-key reattach on an unchanged signal.
-  if (existing !== undefined && seedSignalsEqual(existing.seed, seed)) {
+  if (
+    existing !== undefined &&
+    existingDisposition !==
+      CHAT_RUNTIME_RECONCILE_DISPOSITION.replaceStaleApproval &&
+    seedSignalsEqual(existing.seed, seed)
+  ) {
     return existing.runtime;
   }
   // Priority 4: rebuild. Every entry for this thread is idle here (the
