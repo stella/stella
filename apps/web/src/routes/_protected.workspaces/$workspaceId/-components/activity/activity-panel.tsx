@@ -453,7 +453,10 @@ const HorizontalActivityMilestone = ({
     <HorizontalMilestoneFrame activityAt={first.activityAt} dateAt={dateAt}>
       <div className="flex min-h-5 items-center gap-1.5 text-[13px] leading-5 font-medium">
         <span className="text-muted-foreground">{marker}</span>
-        <span>{first.performer.name}</span>
+        <BidiText as="span">
+          {first.performer.name ??
+            t("workspaces.overview.activity.automatedService")}
+        </BidiText>
         <span className="text-muted-foreground">·</span>
         <span className="text-muted-foreground text-xs font-normal">
           <RunCount count={items.length} />
@@ -576,7 +579,10 @@ const ActivityRunRow = ({
     <TimelineEntry activityAt={first.activityAt} marker={marker}>
       <div className="min-w-0 py-2.5 ps-3 pe-4">
         <div className="flex min-h-6 items-center gap-1.5 text-sm font-medium">
-          <span>{first.performer.name}</span>
+          <BidiText as="span">
+            {first.performer.name ??
+              t("workspaces.overview.activity.automatedService")}
+          </BidiText>
           <span className="text-muted-foreground">·</span>
           <span className="text-muted-foreground text-xs font-normal">
             <RunCount count={items.length} />
@@ -996,21 +1002,23 @@ const Performer = ({ item }: { item: MatterActivityItem }) => {
   const t = useTranslations();
   if (item.performer.type === "user") {
     return (
-      <PersonMentionLabel
-        avatarClassName="size-5 text-[8px]"
-        className="inline-flex"
-        mention={{
-          deletedAt: item.performer.deletedAt,
-          image: item.performer.image,
-          name:
-            item.performer.name ??
-            t("workspaces.overview.activity.deletedUser"),
-        }}
-      />
+      <BidiText as="span" className="inline-flex">
+        <PersonMentionLabel
+          avatarClassName="size-5 text-[8px]"
+          className="inline-flex"
+          mention={{
+            deletedAt: item.performer.deletedAt,
+            image: item.performer.image,
+            name:
+              item.performer.name ??
+              t("workspaces.overview.activity.deletedUser"),
+          }}
+        />
+      </BidiText>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 font-medium">
+    <BidiText as="span" className="inline-flex items-center gap-1 font-medium">
       {item.performer.type === "agent" ? (
         <BotIcon className="size-3.5" />
       ) : (
@@ -1018,7 +1026,7 @@ const Performer = ({ item }: { item: MatterActivityItem }) => {
       )}
       {item.performer.name ??
         t("workspaces.overview.activity.automatedService")}
-    </span>
+    </BidiText>
   );
 };
 
