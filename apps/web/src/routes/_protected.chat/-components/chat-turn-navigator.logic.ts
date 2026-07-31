@@ -29,9 +29,8 @@ const getMessageTextParts = (message: PersistedChatMessage): string[] => {
 const buildPreview = (values: readonly string[], length: number): string => {
   const output: string[] = [];
   let pendingSpace = false;
-  let truncated = false;
 
-  preview: for (const value of values) {
+  for (const value of values) {
     for (const { segment } of PREVIEW_SEGMENTER.segment(value)) {
       if (WHITESPACE_SEGMENT.test(segment)) {
         pendingSpace = output.length > 0;
@@ -39,22 +38,20 @@ const buildPreview = (values: readonly string[], length: number): string => {
       }
       if (pendingSpace) {
         if (output.length >= length) {
-          truncated = true;
-          break preview;
+          return `${output.join("")}…`;
         }
         output.push(" ");
         pendingSpace = false;
       }
       if (output.length >= length) {
-        truncated = true;
-        break preview;
+        return `${output.join("")}…`;
       }
       output.push(segment);
     }
     pendingSpace = output.length > 0;
   }
 
-  return `${output.join("")}${truncated ? "…" : ""}`;
+  return output.join("");
 };
 
 export const buildChatTurnNavigationItems = (
@@ -99,5 +96,5 @@ export const buildChatTurnNavigationItems = (
     });
   }
 
-  return items.reverse();
+  return items.toReversed();
 };
