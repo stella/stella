@@ -3454,7 +3454,7 @@
           "scheduled": "Uruchomiono zgodnie z harmonogramem",
           "scheduledBy": "Zaplanowana automatyzacja użytkownika {user}"
         },
-        "runCount": "{count, plural, one {# aktywność} few {# aktywności} other {# aktywności}}",
+        "runCount": "{count, plural, one {# aktywność} few {# aktywności} many {# aktywności} other {# aktywności}}",
         "sources": {
           "chat": "Rozmowa na czacie",
           "flow": "Przepływ pracy",

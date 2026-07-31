@@ -3424,14 +3424,14 @@
           "trigger": "Algataja",
           "webhook": "Veebihaak"
         },
-        "empty": "Selles asjas pole veel tegevust.",
+        "empty": "Selles toimikus pole veel tegevust.",
         "filterLabel": "Filtreeri tegevust",
         "filters": {
           "all": "Kogu tegevus",
           "automation": "Automatiseerimine",
           "court": "Kohus",
           "documents": "Dokumendid",
-          "matter": "Asi",
+          "matter": "Toimik",
           "tasks": "Päevakord",
           "team": "Meeskond"
         },
@@ -3464,9 +3464,9 @@
           "automation": "automatiseerimise",
           "court": "kohtukirje",
           "document": "kustutatud dokumendi",
-          "matter": "asja",
+          "matter": "toimiku",
           "task": "kustutatud päevakorrapunkti",
-          "team": "asja meeskonna"
+          "team": "toimiku meeskonna"
         },
         "title": "Tegevus",
         "views": {

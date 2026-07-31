@@ -3454,7 +3454,7 @@
           "scheduled": "Paleista pagal tvarkaraštį",
           "scheduledBy": "Naudotojo {user} suplanuotas automatizavimas"
         },
-        "runCount": "{count} veiklos įrašai",
+        "runCount": "{count, plural, one {# veikla} few {# veiklos} other {# veiklų}}",
         "sources": {
           "chat": "Pokalbis",
           "flow": "Darbo eiga",

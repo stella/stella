@@ -32,8 +32,9 @@ export const seedMatterActivity = async () => {
     panic("Refusing to seed Matter Activity in production.");
   }
 
-  const workspaceId = process.env.MATTER_ACTIVITY_WORKSPACE_ID
-    ? toSafeId<"workspace">(process.env.MATTER_ACTIVITY_WORKSPACE_ID)
+  const configuredWorkspaceId = process.env["MATTER_ACTIVITY_WORKSPACE_ID"];
+  const workspaceId = configuredWorkspaceId
+    ? toSafeId<"workspace">(configuredWorkspaceId)
     : DEFAULT_WORKSPACE_ID;
   const workspace = await rootDb.query.workspaces.findFirst({
     where: {
@@ -50,11 +51,15 @@ export const seedMatterActivity = async () => {
     columns: { userId: true },
     limit: 2,
   });
-  const requestedUserId = process.env.MATTER_ACTIVITY_USER_ID
-    ? toSafeId<"user">(process.env.MATTER_ACTIVITY_USER_ID)
-    : workspaceId === DEFAULT_WORKSPACE_ID
+  const configuredUserIdValue = process.env["MATTER_ACTIVITY_USER_ID"];
+  const configuredUserId = configuredUserIdValue
+    ? toSafeId<"user">(configuredUserIdValue)
+    : undefined;
+  const defaultUserId =
+    workspaceId === DEFAULT_WORKSPACE_ID
       ? toSafeId<"user">(DEFAULT_USER_ID)
       : undefined;
+  const requestedUserId = configuredUserId ?? defaultUserId;
   const requestedMembership = requestedUserId
     ? await rootDb.query.workspaceMembers.findFirst({
         where: {

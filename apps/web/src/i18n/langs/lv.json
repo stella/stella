@@ -3454,7 +3454,7 @@
           "scheduled": "Palaists pēc grafika",
           "scheduledBy": "Lietotāja {user} plānotā automatizācija"
         },
-        "runCount": "{count} darbības",
+        "runCount": "{count, plural, zero {# darbību} one {# darbība} other {# darbības}}",
         "sources": {
           "chat": "Tērzēšana",
           "flow": "Darbplūsma",

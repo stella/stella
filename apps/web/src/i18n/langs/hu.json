@@ -3454,7 +3454,7 @@
           "scheduled": "Ütemezés szerint indult",
           "scheduledBy": "{user} ütemezett automatizálása"
         },
-        "runCount": "{count} tevékenység",
+        "runCount": "{count, plural, one {# tevékenység} other {# tevékenység}}",
         "sources": {
           "chat": "Csevegés",
           "flow": "Munkafolyamat",

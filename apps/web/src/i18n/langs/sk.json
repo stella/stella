@@ -3424,14 +3424,14 @@
           "trigger": "Spustil(a)",
           "webhook": "Webové volanie"
         },
-        "empty": "V tejto veci zatiaľ nie je žiadna aktivita.",
+        "empty": "V tomto spise zatiaľ nie je žiadna aktivita.",
         "filterLabel": "Filtrovať aktivitu",
         "filters": {
           "all": "Všetka aktivita",
           "automation": "Automatizácia",
           "court": "Súd",
           "documents": "Dokumenty",
-          "matter": "Vec",
+          "matter": "Spis",
           "tasks": "Úlohy",
           "team": "Tím"
         },
@@ -3464,9 +3464,9 @@
           "automation": "automatizáciu",
           "court": "súdny záznam",
           "document": "odstránený dokument",
-          "matter": "vec",
+          "matter": "spis",
           "task": "odstránenú položku agendy",
-          "team": "tím veci"
+          "team": "tím spisu"
         },
         "title": "Aktivita",
         "views": {
