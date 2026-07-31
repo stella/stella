@@ -468,7 +468,11 @@ describe("processDecision — corpus storage off", () => {
             if (table === caseLawDecisions) {
               updated = values;
             }
-            return { where: async () => undefined };
+            return {
+              where: () => ({
+                returning: async () => [{ id: existing.id }],
+              }),
+            };
           },
         }),
         delete: () => ({ where: async () => undefined }),
