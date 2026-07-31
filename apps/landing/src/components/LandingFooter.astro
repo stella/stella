@@ -51,8 +51,8 @@ const legalLinks = [
     class="footer-art footer-art-dark pointer-events-none absolute"
     aria-hidden="true"
   ></div>
-  <div class="relative z-10 mx-auto max-w-300 px-6 pb-6 pt-16 sm:pb-8 sm:pt-20">
-    <div class="grid gap-14 lg:grid-cols-12 lg:gap-8">
+  <div class="relative z-10 mx-auto max-w-300 px-6 pb-5 pt-12 sm:pb-8 sm:pt-20">
+    <div class="grid gap-10 sm:gap-14 lg:grid-cols-12 lg:gap-8">
       <div class="lg:col-span-4">
         <span class="inline-flex">
           <img
@@ -67,20 +67,20 @@ const legalLinks = [
 
       </div>
 
-      <nav class="grid grid-cols-2 gap-x-6 gap-y-10 sm:grid-cols-3 lg:col-span-8" aria-label={t("footer.navLabel")}>
+      <nav class="grid grid-cols-3 gap-x-4 sm:gap-x-6 lg:col-span-8" aria-label={t("footer.navLabel")}>
         {columns.map((column) => (
           <section>
             <h2 class="footer-heading text-sm font-semibold" style="color: var(--foreground)">{column.heading}</h2>
-            <ul class="footer-link-list mt-5 space-y-3">
+            <ul class="footer-link-list mt-3 sm:mt-5 sm:space-y-3">
               {column.links.map((link) => (
                 <li>
                   <a
-                    class="footer-link group inline-grid min-h-6 grid-cols-[1fr_auto] items-baseline gap-2 text-sm"
+                    class="footer-link group inline-grid min-h-11 grid-cols-[1fr_auto] items-center gap-1 text-xs sm:min-h-6 sm:items-baseline sm:gap-2 sm:text-sm"
                     href={link.href}
                     target={isExternal(link.href) ? "_blank" : undefined}
                     rel={isExternal(link.href) ? "noopener noreferrer" : undefined}
                   >
-                    <span>{link.label}</span>
+                    <span class="footer-link-label">{link.label}</span>
                     <span class="footer-arrow" aria-hidden="true">{arrow}</span>
                   </a>
                 </li>
@@ -91,7 +91,7 @@ const legalLinks = [
       </nav>
     </div>
 
-    <div class="mt-16 flex flex-col gap-4 border-t pt-4 text-sm sm:flex-row sm:items-center sm:justify-between" style="border-color: var(--border)">
+    <div class="mt-10 flex flex-col gap-4 border-t pt-4 text-sm sm:mt-16 sm:flex-row sm:items-center sm:justify-between" style="border-color: var(--border)">
       <nav class="flex gap-6" aria-label={t("footer.legal")}>
         {legalLinks.map((link) => (
           <a class="footer-link group inline-grid grid-cols-[1fr_auto] items-baseline gap-2" href={link.href}>
@@ -170,16 +170,33 @@ const legalLinks = [
     inset-inline: 0;
   }
 
+  @media (max-width: 639px) {
+    .footer-link::before {
+      inset-block: 0;
+    }
+  }
+
   .footer-link:hover,
   .footer-link:focus-visible {
     color: var(--foreground);
   }
 
   .footer-arrow {
-    display: inline-block;
+    display: none;
     opacity: 0;
     transform: translateX(-0.35rem);
     transition: opacity 180ms ease, transform 180ms ease;
+  }
+
+  .footer-link-label {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  @media (min-width: 640px) {
+    .footer-arrow {
+      display: inline-block;
+    }
   }
 
   [dir="rtl"] .footer-arrow {

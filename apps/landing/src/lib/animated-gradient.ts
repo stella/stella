@@ -5,6 +5,46 @@ const GRADIENT_LAYERS = [
   ["footer-gradient-dark", "/images/gradients/hero-dark.svg", 1.6],
 ] as const;
 
+const IOS_GRADIENT_START_TRANSFORM =
+  "translate3d(-2%, -3%, 0) scale3d(1.11, 1.05, 1) rotate(-0.6deg)";
+const IOS_GRADIENT_TRANSFORMS = [
+  IOS_GRADIENT_START_TRANSFORM,
+  "translate3d(2%, 1%, 0) scale3d(1.04, 1.12, 1) rotate(0.4deg)",
+  "translate3d(-1%, 3%, 0) scale3d(1.13, 1.06, 1) rotate(-0.2deg)",
+  "translate3d(3%, -2%, 0) scale3d(1.06, 1.13, 1) rotate(0.5deg)",
+  IOS_GRADIENT_START_TRANSFORM,
+];
+const IOS_GRADIENT_OPACITIES = ["0.96", "1", "0.93", "1", "0.96"];
+const IOS_GRADIENT_DURATION_MS = 20_000;
+
+type IOSGradientAnimationState = {
+  animation: Animation;
+  isIntersecting: boolean;
+  syncOnTransitionEnd: () => void;
+};
+
+const activeIOSGradientAnimations = new Map<
+  Element,
+  IOSGradientAnimationState
+>();
+let iosGradientVisibilityObserver: IntersectionObserver | undefined;
+let iosGradientThemeObserver: MutationObserver | undefined;
+
+export const cleanupPageGradients = () => {
+  for (const [
+    container,
+    { animation, syncOnTransitionEnd },
+  ] of activeIOSGradientAnimations) {
+    animation.cancel();
+    container.removeEventListener("transitionend", syncOnTransitionEnd);
+  }
+  activeIOSGradientAnimations.clear();
+  iosGradientVisibilityObserver?.disconnect();
+  iosGradientVisibilityObserver = undefined;
+  iosGradientThemeObserver?.disconnect();
+  iosGradientThemeObserver = undefined;
+};
+
 export const initializePageGradients = () => {
   for (const [containerId, svgUrl, speed] of GRADIENT_LAYERS) {
     const container = document.querySelector<HTMLElement>(`#${containerId}`);
@@ -22,6 +62,11 @@ const initializeGradient = async (
   svgUrl: string,
   speed: number,
 ) => {
+  if (isIOSWebKit()) {
+    initializeIOSGradient(container, svgUrl, speed);
+    return;
+  }
+
   const response = await fetch(svgUrl, {
     signal: AbortSignal.timeout(10_000),
   });
@@ -139,4 +184,101 @@ const initializeGradient = async (
   };
 
   requestAnimationFrame(animate);
+};
+
+const isIOSWebKit = () => {
+  const isIOSDevice = /iP(?:ad|hone|od)/u.test(navigator.userAgent);
+  const isIPadDesktopMode =
+    navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
+
+  return isIOSDevice || isIPadDesktopMode;
+};
+
+const initializeIOSGradient = (
+  container: HTMLElement,
+  svgUrl: string,
+  speed: number,
+) => {
+  const image = document.createElement("img");
+  image.src = svgUrl;
+  image.alt = "";
+  image.setAttribute("aria-hidden", "true");
+  image.style.display = "block";
+  image.style.width = "100%";
+  image.style.height = "100%";
+  image.style.objectFit = "fill";
+  image.style.transform = IOS_GRADIENT_START_TRANSFORM;
+  image.style.transformOrigin = "center";
+  image.style.willChange = "transform";
+
+  container.replaceChildren(image);
+
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    return;
+  }
+
+  const animation = image.animate(
+    {
+      opacity: IOS_GRADIENT_OPACITIES,
+      transform: IOS_GRADIENT_TRANSFORMS,
+    },
+    {
+      duration: IOS_GRADIENT_DURATION_MS / speed,
+      easing: "ease-in-out",
+      iterations: Number.POSITIVE_INFINITY,
+    },
+  );
+  const syncOnTransitionEnd = () => {
+    const currentState = activeIOSGradientAnimations.get(container);
+    if (currentState !== undefined) {
+      syncIOSGradientAnimation(container, currentState);
+    }
+  };
+  const state = { animation, isIntersecting: false, syncOnTransitionEnd };
+  activeIOSGradientAnimations.set(container, state);
+  container.addEventListener("transitionend", syncOnTransitionEnd);
+  ensureIOSGradientObservers();
+  syncIOSGradientAnimation(container, state);
+  iosGradientVisibilityObserver?.observe(container);
+};
+
+const ensureIOSGradientObservers = () => {
+  iosGradientVisibilityObserver ??= new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      const state = activeIOSGradientAnimations.get(entry.target);
+      if (state === undefined) {
+        continue;
+      }
+
+      state.isIntersecting = entry.isIntersecting;
+      syncIOSGradientAnimation(entry.target, state);
+    }
+  });
+
+  iosGradientThemeObserver ??= new MutationObserver(() => {
+    for (const [container, state] of activeIOSGradientAnimations) {
+      syncIOSGradientAnimation(container, state);
+    }
+  });
+  iosGradientThemeObserver.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["class"],
+  });
+};
+
+const syncIOSGradientAnimation = (
+  container: Element,
+  state: IOSGradientAnimationState,
+) => {
+  const shouldPlay =
+    container.isConnected &&
+    state.isIntersecting &&
+    getComputedStyle(container).opacity !== "0";
+
+  if (shouldPlay) {
+    state.animation.play();
+    return;
+  }
+
+  state.animation.pause();
 };

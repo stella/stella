@@ -496,10 +496,14 @@ const structuredData = {
     </script>
 
     <script>
-      import { initializePageGradients } from "../lib/animated-gradient";
+      import {
+        cleanupPageGradients,
+        initializePageGradients,
+      } from "../lib/animated-gradient";
       import { initializeThemeImages } from "../lib/theme-images";
 
       document.addEventListener("astro:page-load", initializePageGradients);
+      document.addEventListener("astro:before-swap", cleanupPageGradients);
       document.addEventListener("astro:page-load", initializeThemeImages);
     </script>
   </body>
