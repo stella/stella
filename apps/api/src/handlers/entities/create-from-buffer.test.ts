@@ -27,9 +27,9 @@ const broadcastMock = mock();
 let intentStatuses: string[] = [];
 
 void mock.module("@/api/lib/s3", () => ({
+  deleteS3ObjectWithSignal: s3DeleteMock,
   getS3: () => ({
     write: s3WriteMock,
-    delete: s3DeleteMock,
   }),
 }));
 

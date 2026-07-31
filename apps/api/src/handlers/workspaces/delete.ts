@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, inArray, ne } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { member } from "@/api/db/auth-schema";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -10,6 +10,7 @@ import {
   entityVersions,
   fields,
   pendingUploads,
+  PENDING_UPLOAD_RECOVERABLE_STATUSES,
   properties,
   propertyDependencies,
   userFiles,
@@ -165,7 +166,7 @@ export const deleteWorkspaceHandler = async function* ({
       .where(
         and(
           eq(pendingUploads.workspaceId, workspaceId),
-          ne(pendingUploads.status, "finalized"),
+          inArray(pendingUploads.status, PENDING_UPLOAD_RECOVERABLE_STATUSES),
         ),
       );
 
@@ -207,7 +208,7 @@ export const deleteWorkspaceHandler = async function* ({
       .where(
         and(
           eq(pendingUploads.workspaceId, workspaceId),
-          ne(pendingUploads.status, "finalized"),
+          inArray(pendingUploads.status, PENDING_UPLOAD_RECOVERABLE_STATUSES),
         ),
       );
 

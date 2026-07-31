@@ -27,6 +27,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
+  BUFFER_INTENT_DELETE_TIMEOUT_MS,
   BUFFER_INTENT_HEARTBEAT_MS,
   BUFFER_INTENT_TTL_MS,
 } from "@/api/lib/buffer-intent-reconciliation";
@@ -37,10 +38,11 @@ import {
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
-import { getS3 } from "@/api/lib/s3";
+import { deleteS3ObjectWithSignal, getS3 } from "@/api/lib/s3";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import { processExtraction } from "@/api/lib/search/process-extraction";
 import { broadcast } from "@/api/lib/sse";
+import { withTimeout } from "@/api/lib/with-timeout";
 
 type BufferEntityCreateIntent = {
   claimRequestId: string;
@@ -341,7 +343,14 @@ export const createEntityFromBuffer = async ({
   try {
     const cleanupObject = async (): Promise<boolean> => {
       const cleanup = await Result.tryPromise({
-        try: async () => await getS3().delete(s3Key),
+        try: async () =>
+          await withTimeout(
+            async (signal) => await deleteS3ObjectWithSignal(s3Key, signal),
+            {
+              label: "buffer-entity-writer-cleanup.delete",
+              timeoutMs: BUFFER_INTENT_DELETE_TIMEOUT_MS,
+            },
+          ),
         catch: (cause) => cause,
       });
       if (Result.isError(cleanup)) {

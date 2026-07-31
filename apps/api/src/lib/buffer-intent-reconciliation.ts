@@ -19,7 +19,7 @@ export const BUFFER_INTENT_TTL_MS = 5 * 60 * 1000;
 export const BUFFER_INTENT_STALE_MS = 60 * 1000;
 export const BUFFER_INTENT_HEARTBEAT_MS = 15 * 1000;
 const BUFFER_INTENT_RECONCILE_LIMIT = 25;
-const BUFFER_INTENT_DELETE_TIMEOUT_MS = 30 * 1000;
+export const BUFFER_INTENT_DELETE_TIMEOUT_MS = 30 * 1000;
 const BUFFER_CLEANUP_RETRY_MAX_EXPONENT = 14;
 
 export type BufferIntentPurpose = "entity_create" | "entity_version";

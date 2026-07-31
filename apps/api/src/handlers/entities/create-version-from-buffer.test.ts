@@ -30,7 +30,8 @@ void mock.module("@/api/handlers/files/utils", () => ({
   createFileKey: () => "org_1/ws_1/file_1.docx",
 }));
 void mock.module("@/api/lib/s3", () => ({
-  getS3: () => ({ write: s3WriteMock, delete: s3DeleteMock }),
+  deleteS3ObjectWithSignal: s3DeleteMock,
+  getS3: () => ({ write: s3WriteMock }),
 }));
 void mock.module("@/api/lib/search/process-extraction", () => ({
   processExtraction: processExtractionMock,
@@ -170,7 +171,10 @@ describe("createEntityVersionFromBuffer", () => {
     if (Result.isError(attempted)) {
       expect(attempted.error).toBe(writeError);
     }
-    expect(s3DeleteMock).toHaveBeenCalledWith("org_1/ws_1/file_1.docx");
+    expect(s3DeleteMock).toHaveBeenCalledWith(
+      "org_1/ws_1/file_1.docx",
+      expect.any(AbortSignal),
+    );
     expect(writeFileVersionMock).not.toHaveBeenCalled();
     expect(intentStatuses).toEqual(["scanning", "rejected"]);
   });
@@ -189,7 +193,10 @@ describe("createEntityVersionFromBuffer", () => {
     if (Result.isError(attempted)) {
       expect(attempted.error).toBe(writeError);
     }
-    expect(s3DeleteMock).toHaveBeenCalledWith("org_1/ws_1/file_1.docx");
+    expect(s3DeleteMock).toHaveBeenCalledWith(
+      "org_1/ws_1/file_1.docx",
+      expect.any(AbortSignal),
+    );
     expect(intentStatuses).toEqual(["scanning"]);
   });
 
@@ -237,7 +244,10 @@ describe("createEntityVersionFromBuffer", () => {
     if (Result.isError(result)) {
       expect(result.error.code).toBe("entity-read-only");
     }
-    expect(s3DeleteMock).toHaveBeenCalledWith("org_1/ws_1/file_1.docx");
+    expect(s3DeleteMock).toHaveBeenCalledWith(
+      "org_1/ws_1/file_1.docx",
+      expect.any(AbortSignal),
+    );
     expect(processExtractionMock).not.toHaveBeenCalled();
   });
 
@@ -255,7 +265,10 @@ describe("createEntityVersionFromBuffer", () => {
         expect(attempted.error.message).toBe("db unavailable");
       }
     }
-    expect(s3DeleteMock).toHaveBeenCalledWith("org_1/ws_1/file_1.docx");
+    expect(s3DeleteMock).toHaveBeenCalledWith(
+      "org_1/ws_1/file_1.docx",
+      expect.any(AbortSignal),
+    );
   });
 
   test("preserves the object when the commit acknowledgement is ambiguous", async () => {
@@ -323,7 +336,10 @@ describe("createEntityVersionFromBuffer", () => {
     if (Result.isError(attempted) && attempted.error instanceof Error) {
       expect(attempted.error.message).toBe("audit failed");
     }
-    expect(s3DeleteMock).toHaveBeenCalledWith("org_1/ws_1/file_1.docx");
+    expect(s3DeleteMock).toHaveBeenCalledWith(
+      "org_1/ws_1/file_1.docx",
+      expect.any(AbortSignal),
+    );
     expect(processExtractionMock).not.toHaveBeenCalled();
   });
 });

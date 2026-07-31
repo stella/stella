@@ -39,6 +39,7 @@ import {
   mcpOAuthState,
   mcpUserConnections,
   pendingUploads,
+  PENDING_UPLOAD_RECOVERABLE_STATUSES,
   rateEntries,
   taskAssignees,
   userFiles,
@@ -688,7 +689,7 @@ export const deletePendingUploads = async ({
     .where(
       and(
         eq(pendingUploads.userId, currentUserId),
-        ne(pendingUploads.status, "finalized"),
+        inArray(pendingUploads.status, PENDING_UPLOAD_RECOVERABLE_STATUSES),
       ),
     )
     .for("update");
@@ -712,7 +713,7 @@ export const deletePendingUploads = async ({
       .where(
         and(
           inArray(pendingUploads.id, ids),
-          ne(pendingUploads.status, "finalized"),
+          inArray(pendingUploads.status, PENDING_UPLOAD_RECOVERABLE_STATUSES),
         ),
       );
     await preserveBufferObjectCleanupIntents(tx, stagedUploadRows);
