@@ -534,8 +534,9 @@ const processDecisionAttempt = async ({
       incomingRawHash: result.rawHash,
     })
   ) {
-    await scopedDb((tx) =>
-      tx
+    await scopedDb(async (tx) => {
+      // audit: skip — background case-law ingestion ordering metadata; public case-law data, not user actions
+      await tx
         .update(caseLawDecisions)
         .set({
           sourceObservedAt: observedAt,
@@ -549,8 +550,8 @@ const processDecisionAttempt = async ({
               sourceHash: result.rawHash,
             }),
           ),
-        ),
-    );
+        );
+    });
     return {
       inserted: false,
       searchVectorFailed: false,
