@@ -58,9 +58,9 @@ CREATE TABLE IF NOT EXISTS "case_law_corpus_index_projections" (
   "pending_hash" varchar(64),
   "updated_at" timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT "case_law_corpus_index_projections_pk" PRIMARY KEY ("generation", "decision_id"),
-  CONSTRAINT "case_law_corpus_index_projections_generation_case_law_corpus_index_backfills_generation_fk"
+  CONSTRAINT "case_law_corpus_index_projections_generation_fk"
     FOREIGN KEY ("generation") REFERENCES "case_law_corpus_index_backfills"("generation") ON DELETE CASCADE,
-  CONSTRAINT "case_law_corpus_index_projections_decision_id_case_law_decisions_id_fk"
+  CONSTRAINT "case_law_corpus_index_projections_decision_fk"
     FOREIGN KEY ("decision_id") REFERENCES "case_law_decisions"("id") ON DELETE CASCADE,
   CONSTRAINT "case_law_corpus_index_projections_index_pair"
     CHECK (("index_id" IS NULL) = ("indexed_hash" IS NULL)),

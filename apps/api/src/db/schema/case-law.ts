@@ -693,15 +693,8 @@ export type CaseLawCorpusIndexProjectionAction =
 export const caseLawCorpusIndexProjections = p.pgTable(
   "case_law_corpus_index_projections",
   {
-    generation: p
-      .varchar({ length: 32 })
-      .notNull()
-      .references(() => caseLawCorpusIndexBackfills.generation, {
-        onDelete: "cascade",
-      }),
-    decisionId: safeUuid<"caseLawDecision">("decision_id")
-      .notNull()
-      .references(() => caseLawDecisions.id, { onDelete: "cascade" }),
+    generation: p.varchar({ length: 32 }).notNull(),
+    decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
     indexId: p.varchar("index_id", { length: 64 }),
     indexedHash: p.varchar("indexed_hash", { length: 64 }),
     pendingAction: p.text("pending_action", {
@@ -715,6 +708,20 @@ export const caseLawCorpusIndexProjections = p.pgTable(
       columns: [t.generation, t.decisionId],
       name: "case_law_corpus_index_projections_pk",
     }),
+    p
+      .foreignKey({
+        name: "case_law_corpus_index_projections_generation_fk",
+        columns: [t.generation],
+        foreignColumns: [caseLawCorpusIndexBackfills.generation],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: "case_law_corpus_index_projections_decision_fk",
+        columns: [t.decisionId],
+        foreignColumns: [caseLawDecisions.id],
+      })
+      .onDelete("cascade"),
     p.check(
       "case_law_corpus_index_projections_index_pair",
       sql`(${t.indexId} IS NULL) = (${t.indexedHash} IS NULL)`,
