@@ -183,13 +183,18 @@ test("rejects a pending hash without a pending action", async () => {
     status: "complete",
   });
 
-  await expect(
-    db.insert(caseLawCorpusIndexProjections).values({
+  const rejection: unknown = await db
+    .insert(caseLawCorpusIndexProjections)
+    .values({
       decisionId: publicFirstId,
       generation,
       pendingHash: "orphaned",
-    }),
-  ).rejects.toThrow();
+    })
+    .then(
+      () => null,
+      (error: unknown) => error,
+    );
+  expect(rejection).toBeInstanceOf(Error);
 });
 
 test(

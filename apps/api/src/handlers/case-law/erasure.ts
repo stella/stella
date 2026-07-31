@@ -254,7 +254,7 @@ export const redactCaseLawDecision = async ({
           .where(eq(caseLawCorpusIndexProjections.decisionId, decisionId));
       });
     } finally {
-      for (const lease of [...leases.values()].reverse()) {
+      for (const lease of [...leases.values()].toReversed()) {
         // oxlint-disable-next-line no-await-in-loop -- release every acquired generation fence after success or failure
         await lease.release();
       }

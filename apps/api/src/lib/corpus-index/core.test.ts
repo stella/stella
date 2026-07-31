@@ -192,7 +192,7 @@ describe("idempotent corpus removals", () => {
       granularity: "document",
       generationProjectionIndexId: () => null,
       buildDocs: () => [],
-      readCorpusText: async () => null,
+      readCorpusText: async () => "unused",
       selectMissing: async () => [],
       selectStale: async () => [],
       fetchFulltext: async () => null,
