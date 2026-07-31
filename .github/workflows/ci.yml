@@ -111,6 +111,7 @@ jobs:
             bun.lock
             packages/cli/CHANGELOG.md
             packages/cli/package.json
+            packages/cli/src/generated/cli-version.ts
             packages/business-registries/CHANGELOG.md
             packages/business-registries/package.json
             packages/country-codes/CHANGELOG.md

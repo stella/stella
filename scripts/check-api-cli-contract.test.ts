@@ -62,8 +62,7 @@ describe("API and CLI release contract", () => {
     );
   });
 
-  test("a CLI version bump cannot merge without server support", () => {
-    expect(STELLA_CLI_MAXIMUM_VERSION).toBe(cliPackage.version);
+  test("the current CLI package cannot exceed server support", () => {
     expect(
       Bun.semver.satisfies(
         cliPackage.version,
@@ -76,6 +75,50 @@ describe("API and CLI release contract", () => {
         `>=${STELLA_CLI_MINIMUM_VERSION} <=${STELLA_CLI_MAXIMUM_VERSION}`,
       ),
     ).toBe(true);
+  });
+
+  test("automated versioning regenerates allowed CLI metadata", async () => {
+    const [rootPackage, ciWorkflow] = await Promise.all([
+      Bun.file(new URL("../package.json", import.meta.url)).json(),
+      Bun.file(new URL("../.github/workflows/ci.yml", import.meta.url)).text(),
+    ]);
+    if (!isRecord(rootPackage)) {
+      throw new TypeError("root package manifest is not an object");
+    }
+    const scripts = rootPackage["scripts"];
+    if (!isRecord(scripts)) {
+      throw new TypeError("root package scripts are not an object");
+    }
+
+    const versionScript = scripts["changeset:version"];
+    if (typeof versionScript !== "string") {
+      throw new TypeError("changeset:version script is not a string");
+    }
+    const changesetVersionIndex = versionScript.indexOf("changeset version");
+    const cliVersionCodegenIndex = versionScript.indexOf(
+      "bun --cwd packages/cli codegen:version",
+    );
+    expect(changesetVersionIndex).toBeGreaterThanOrEqual(0);
+    expect(cliVersionCodegenIndex).toBeGreaterThan(changesetVersionIndex);
+    expect(cliPackage.scripts["codegen:version"]).toBe(
+      "bun run src/codegen-version.ts",
+    );
+    expect(cliPackage.scripts.codegen).toContain(
+      "bun run src/codegen-version.ts",
+    );
+
+    const generatedPathsStart = ciWorkflow.indexOf("generated-paths: |");
+    const packageFilesStart = ciWorkflow.indexOf(
+      "package-files: |",
+      generatedPathsStart,
+    );
+    const generatedPaths = ciWorkflow.slice(
+      generatedPathsStart,
+      packageFilesStart,
+    );
+    expect(generatedPaths).toContain(
+      "packages/cli/src/generated/cli-version.ts",
+    );
   });
 
   test("every packaged CLI scope is supported by the same API source", () => {
