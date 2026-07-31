@@ -339,6 +339,17 @@ jobs:
           BASE_REF: ${{ github.base_ref || 'main' }}
         run: bash scripts/check-release-changelog.sh --base "origin/$BASE_REF"
 
+      - name: Release marketing freshness guard
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+        run: |
+          if git diff --quiet "origin/$BASE_REF"...HEAD -- VERSION; then
+            echo "VERSION unchanged; fresh release recordings not required."
+            exit 0
+          fi
+          bun run marketing:stale --strict
+
       - name: Format
         if: needs.ci-changes.outputs.package_checks_required == 'true'
         # Call turbo directly: the `format:check` script already
