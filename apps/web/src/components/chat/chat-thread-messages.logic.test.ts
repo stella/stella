@@ -50,6 +50,11 @@ describe("userMessageFallbackText", () => {
         '<p><entity-mention data-id="contact_1" data-label="Marie Curie" data-category="contact"></entity-mention></p>',
       ),
     ).toBe("Marie Curie");
+    expect(
+      userMessageFallbackText(
+        '<p><entity-mention data-id="comparison" data-label="A > B" data-category="concept"></entity-mention></p>',
+      ),
+    ).toBe("A > B");
   });
 });
 

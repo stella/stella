@@ -51,6 +51,27 @@ export const getMentionTagAttr = (
   return match?.[2] ?? null;
 };
 
+const findTagEnd = (html: string, start: number): number => {
+  let quote: '"' | "'" | null = null;
+  for (let index = start; index < html.length; index += 1) {
+    const character = html.charAt(index);
+    if (quote !== null) {
+      if (character === quote) {
+        quote = null;
+      }
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      quote = character;
+      continue;
+    }
+    if (character === ">") {
+      return index;
+    }
+  }
+  return -1;
+};
+
 /**
  * Turns TipTap HTML into readable text without using DOMParser, so the same
  * result is safe during server rendering. Only known TipTap tags are removed,
@@ -68,7 +89,7 @@ export const userMessageFallbackText = (html: string): string => {
     }
 
     output += html.slice(cursor, tagStart);
-    const tagEnd = html.indexOf(">", tagStart + 1);
+    const tagEnd = findTagEnd(html, tagStart + 1);
     if (tagEnd === -1) {
       output += html.slice(tagStart);
       break;

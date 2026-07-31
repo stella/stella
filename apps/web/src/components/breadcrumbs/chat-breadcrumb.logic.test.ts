@@ -7,7 +7,7 @@ describe("chat breadcrumb title lookup", () => {
     expect(
       shouldFetchChatThreadTitle({
         groupedTitle: undefined,
-        lastActivityAt: "2026-07-31T04:30:08.968Z",
+        threadExists: true,
       }),
     ).toBe(false);
   });
@@ -16,22 +16,22 @@ describe("chat breadcrumb title lookup", () => {
     expect(
       shouldFetchChatThreadTitle({
         groupedTitle: null,
-        lastActivityAt: undefined,
+        threadExists: undefined,
       }),
     ).toBe(false);
     expect(
       shouldFetchChatThreadTitle({
         groupedTitle: null,
-        lastActivityAt: null,
+        threadExists: false,
       }),
     ).toBe(false);
   });
 
-  test("requests a missing grouped title once the thread has activity", () => {
+  test("requests a missing grouped title for an empty persisted thread", () => {
     expect(
       shouldFetchChatThreadTitle({
         groupedTitle: null,
-        lastActivityAt: "2026-07-31T04:30:08.968Z",
+        threadExists: true,
       }),
     ).toBe(true);
   });
@@ -40,7 +40,7 @@ describe("chat breadcrumb title lookup", () => {
     expect(
       shouldFetchChatThreadTitle({
         groupedTitle: "Churchill quotations",
-        lastActivityAt: "2026-07-31T04:30:08.968Z",
+        threadExists: true,
       }),
     ).toBe(false);
   });

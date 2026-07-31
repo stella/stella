@@ -1,10 +1,7 @@
 export const shouldFetchChatThreadTitle = ({
   groupedTitle,
-  lastActivityAt,
+  threadExists,
 }: {
   groupedTitle: string | null | undefined;
-  lastActivityAt: string | null | undefined;
-}): boolean =>
-  groupedTitle === null &&
-  lastActivityAt !== null &&
-  lastActivityAt !== undefined;
+  threadExists: boolean | undefined;
+}): boolean => groupedTitle === null && threadExists === true;

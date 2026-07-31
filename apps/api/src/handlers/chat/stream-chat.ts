@@ -976,6 +976,22 @@ export const processServerChatStream = async function* ({
     });
 
     for await (const sourceChunk of normalizedSource) {
+      if (
+        sourceChunk.type === EventType.RUN_STARTED &&
+        deferredRunFinishedChunks.length > 0
+      ) {
+        // Continuation events such as `approval-requested` belong before the
+        // run's finish, but a later run does not. Flush the prior boundary
+        // before starting a fallback/next attempt so run lifecycles cannot
+        // interleave as START(A), START(B), FINISH(A).
+        const priorRunFinishedChunks = deferredRunFinishedChunks.splice(0);
+        for (const chunk of priorRunFinishedChunks) {
+          processor.processChunk(chunk);
+        }
+        for (const chunk of priorRunFinishedChunks) {
+          yield chunk;
+        }
+      }
       const chunk =
         sourceChunk.type === EventType.RUN_ERROR
           ? normalizeRunErrorChunk(sourceChunk)
@@ -1003,7 +1019,8 @@ export const processServerChatStream = async function* ({
       }
     }
 
-    for (const chunk of deferredRunFinishedChunks) {
+    const finalRunFinishedChunks = deferredRunFinishedChunks.splice(0);
+    for (const chunk of finalRunFinishedChunks) {
       processor.processChunk(chunk);
     }
     finishInvoked = await finishResponseMessage({
@@ -1013,7 +1030,7 @@ export const processServerChatStream = async function* ({
       onFinish,
       usage,
     });
-    for (const chunk of deferredRunFinishedChunks) {
+    for (const chunk of finalRunFinishedChunks) {
       yield chunk;
     }
   } catch (error) {

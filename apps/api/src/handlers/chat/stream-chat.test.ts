@@ -369,6 +369,91 @@ describe("outgoing chat stream message ids", () => {
     ]);
   });
 
+  test("flushes a completed primary run before a fallback run starts", async () => {
+    const messageId = toSafeId<"chatMessage">(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    let responseMessage: ChatMessage | null = null;
+    const processor = new StreamProcessor({
+      events: {
+        onStreamEnd: (message) => {
+          responseMessage = {
+            id: message.id,
+            parts: [{ content: "Fallback answer", type: "text" }],
+            role: "assistant",
+          };
+        },
+      },
+    });
+    const persistedTexts: string[] = [];
+    const stream = processServerChatStream({
+      abortSignal: new AbortController().signal,
+      getResponseMessage: () => responseMessage,
+      mapMessageId: createChatMessageIdMapper(() => messageId),
+      onFinish: ({ responseMessage: finishedMessage }) => {
+        persistedTexts.push(
+          finishedMessage.parts
+            .map((part) => (part.type === "text" ? part.content : ""))
+            .join(""),
+        );
+      },
+      processor,
+      source: streamChunks([
+        {
+          type: EventType.RUN_STARTED,
+          runId: "primary-run",
+          threadId: "thread-1",
+        },
+        {
+          type: EventType.RUN_FINISHED,
+          finishReason: "stop",
+          runId: "primary-run",
+          threadId: "thread-1",
+        },
+        {
+          type: EventType.RUN_STARTED,
+          runId: "fallback-run",
+          threadId: "thread-1",
+        },
+        {
+          type: EventType.TEXT_MESSAGE_START,
+          messageId: "provider-message",
+          role: "assistant",
+        },
+        {
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          delta: "Fallback answer",
+          messageId: "provider-message",
+        },
+        {
+          type: EventType.TEXT_MESSAGE_END,
+          messageId: "provider-message",
+        },
+        {
+          type: EventType.RUN_FINISHED,
+          finishReason: "stop",
+          runId: "fallback-run",
+          threadId: "thread-1",
+        },
+      ]),
+    });
+
+    const lifecycle = (await collectChunks(stream)).flatMap((chunk) =>
+      chunk.type === EventType.RUN_STARTED ||
+      chunk.type === EventType.RUN_FINISHED
+        ? [`${chunk.type}:${chunk.runId}`]
+        : [],
+    );
+
+    expect(lifecycle).toEqual([
+      `${EventType.RUN_STARTED}:primary-run`,
+      `${EventType.RUN_FINISHED}:primary-run`,
+      `${EventType.RUN_STARTED}:fallback-run`,
+      `${EventType.RUN_FINISHED}:fallback-run`,
+    ]);
+    expect(persistedTexts).toEqual(["Fallback answer"]);
+  });
+
   test("persists approval requests emitted after a model run finishes", async () => {
     const messageId = toSafeId<"chatMessage">(
       "11111111-1111-4111-8111-111111111111",

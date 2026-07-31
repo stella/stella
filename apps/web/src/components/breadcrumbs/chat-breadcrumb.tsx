@@ -97,7 +97,7 @@ export const ChatBreadcrumb = ({
     activeOrganizationId,
     enabled: shouldFetchChatThreadTitle({
       groupedTitle,
-      lastActivityAt: threadData?.lastActivityAt,
+      threadExists: threadData?.threadExists,
     }),
     key: { threadId, workspaceId },
   });

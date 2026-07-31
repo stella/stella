@@ -1118,6 +1118,7 @@ describe("acquireChatRuntime reconcile", () => {
     olderCursor: null,
     contextMatterIds: [],
     lastActivityAt: null,
+    threadExists: true,
     webSearchAvailable: false,
     webSearchEnabled: false,
     context: null,
@@ -1352,7 +1353,7 @@ describe("acquireChatRuntime reconcile", () => {
     expect(afterRefetch).not.toBe(handoff);
   });
 
-  test("keeps a runtime awaiting tool approval when newer data arrives", async () => {
+  test("replaces stale local approval state with a resolved authoritative transcript", async () => {
     const queryClient = new QueryClient();
     globalThis.fetch = createFetchMock(async () =>
       createSseResponse(createApprovalSseChunks()),
@@ -1376,13 +1377,49 @@ describe("acquireChatRuntime reconcile", () => {
       state: "approval-requested",
       type: "tool-call",
     });
-    const reattached = acquireChatRuntime({
+    const reconciled = acquireChatRuntime({
       activeOrganizationId,
       context,
       data: newerThreadData(),
       key: threadRef,
       queryClient,
     });
+    expect(reconciled).not.toBe(runtime);
+    expect(reconciled.getSnapshot().messages.at(-1)?.parts).toEqual([
+      { type: "text", content: "Ahoj!" },
+    ]);
+  });
+
+  test("keeps a runtime awaiting approval present in the authoritative transcript", async () => {
+    const queryClient = new QueryClient();
+    globalThis.fetch = createFetchMock(async () =>
+      createSseResponse(createApprovalSseChunks()),
+    );
+    const context = { allowMissingThread: true };
+    const runtime = acquireChatRuntime({
+      activeOrganizationId,
+      context,
+      data: buildThreadData(),
+      key: threadRef,
+      queryClient,
+    });
+
+    const started = runtime.startRouteHandoffMessage(
+      createOutgoingMessage("22222222-2222-4222-8222-2222222222c2"),
+    );
+    await started.stream;
+
+    const reattached = acquireChatRuntime({
+      activeOrganizationId,
+      context,
+      data: buildThreadData({
+        lastActivityAt: "2026-07-08T10:00:00.000Z",
+        messages: runtime.getSnapshot().messages,
+      }),
+      key: threadRef,
+      queryClient,
+    });
+
     expect(reattached).toBe(runtime);
   });
 
