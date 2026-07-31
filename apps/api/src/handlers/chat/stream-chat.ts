@@ -927,8 +927,8 @@ const errorFromRunErrorChunk = (chunk: RunErrorChunk): Error => {
 // when the SDK exception exposes one. An exception that carries the status as a
 // plain field and stringifies the response body into its message arrives with
 // neither `rawEvent` nor `code`, so the error rebuilt from the chunk holds no
-// status at all and every failure from that provider — quota, billing, retired
-// model and outage alike — falls to `unknown`. Recover the body from the
+// status at all, and every failure from that provider (quota, billing, retired
+// model and outage alike) falls to `unknown`. Recover the body from the
 // message when the message is one. It is read for classification only and
 // never logged: a provider message can echo request content.
 const isErrorBodyRecord = (value: unknown): value is Record<string, unknown> =>
@@ -937,7 +937,9 @@ const isErrorBodyRecord = (value: unknown): value is Record<string, unknown> =>
 const providerErrorBody = (
   message: string,
 ): Record<string, unknown> | undefined => {
-  if (!message.startsWith("{")) {
+  // `JSON.parse` skips leading whitespace, so the guard must too; otherwise a
+  // body an adapter passed through verbatim would be dropped over a newline.
+  if (!message.trimStart().startsWith("{")) {
     return undefined;
   }
   const parsed = Result.try((): unknown => JSON.parse(message));

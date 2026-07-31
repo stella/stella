@@ -722,6 +722,34 @@ describe("outgoing chat stream message ids", () => {
     ]);
   });
 
+  test("classifies a run error body behind leading whitespace", async () => {
+    const messageId = toSafeId<"chatMessage">(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    const stream = processServerChatStream({
+      abortSignal: new AbortController().signal,
+      getResponseMessage: () => null,
+      mapMessageId: createChatMessageIdMapper(() => messageId),
+      onFinish: () => {
+        throw new Error("Expected run error not to finish");
+      },
+      processor: new StreamProcessor(),
+      source: streamChunks([
+        { type: EventType.RUN_STARTED, runId: "run-1", threadId: "thread-1" },
+        {
+          type: EventType.RUN_ERROR,
+          message: `\n  ${JSON.stringify({ error: { code: 429 } })}`,
+        },
+      ]),
+    });
+
+    expect(stripTimestamps(await collectChunks(stream)).at(-1)).toEqual({
+      type: EventType.RUN_ERROR,
+      message: "quota_exhausted",
+      code: "quota_exhausted",
+    });
+  });
+
   test("leaves a plain-text run error unclassified", async () => {
     const messageId = toSafeId<"chatMessage">(
       "11111111-1111-4111-8111-111111111111",

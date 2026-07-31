@@ -83,6 +83,9 @@ describe("classifyAIError", () => {
     expect(classifyAIError(providerErrorBody(429, "RESOURCE_EXHAUSTED"))).toBe(
       "quota_exhausted",
     );
+    expect(classifyAIError(providerErrorBody(402, "PAYMENT_REQUIRED"))).toBe(
+      "provider_billing",
+    );
     expect(classifyAIError(providerErrorBody(404, "NOT_FOUND"))).toBe(
       "model_unavailable",
     );

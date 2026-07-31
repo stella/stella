@@ -51,7 +51,7 @@ const providerStatusCode = (error: unknown): number | null => {
   }
 
   // A provider response body nests the status one level down, as
-  // `{ error: { code, message, status } }` — `code` is the HTTP status and
+  // `{ error: { code, message, status } }`, where `code` is the HTTP status and
   // `status` its symbolic name. Only an integer inside the HTTP range counts,
   // so a body whose `code` is symbolic ("insufficient_quota") or an
   // application error number still falls through to the cause walk.
