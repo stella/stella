@@ -39,6 +39,9 @@ const unwrapTxRead = <T>(result: Result<T, SafeDbError>): T =>
       )
     : result.value;
 
+const serializeThreadRevision = (updatedAt: Date | null): string | null =>
+  updatedAt?.toISOString() ?? null;
+
 const config = {
   permissions: { chat: ["create"] },
   access: "read",
@@ -310,7 +313,7 @@ const getMessages = createSafeRootHandler(
       olderCursor: page.olderCursor,
       contextMatterIds: thread.contextMatterIds,
       lastActivityAt: page.lastActivityAt,
-      threadRevision: thread.updatedAt.toISOString(),
+      threadRevision: serializeThreadRevision(thread.updatedAt),
       threadExists: true,
       webSearchAvailable,
       webSearchEnabled: thread.webSearchEnabled,
