@@ -80,7 +80,7 @@ const legalLinks = [
                     target={isExternal(link.href) ? "_blank" : undefined}
                     rel={isExternal(link.href) ? "noopener noreferrer" : undefined}
                   >
-                    <span>{link.label}</span>
+                    <span class="footer-link-label">{link.label}</span>
                     <span class="footer-arrow" aria-hidden="true">{arrow}</span>
                   </a>
                 </li>
@@ -176,10 +176,21 @@ const legalLinks = [
   }
 
   .footer-arrow {
-    display: inline-block;
+    display: none;
     opacity: 0;
     transform: translateX(-0.35rem);
     transition: opacity 180ms ease, transform 180ms ease;
+  }
+
+  .footer-link-label {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  @media (min-width: 640px) {
+    .footer-arrow {
+      display: inline-block;
+    }
   }
 
   [dir="rtl"] .footer-arrow {

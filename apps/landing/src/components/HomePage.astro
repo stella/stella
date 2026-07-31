@@ -119,6 +119,7 @@ const subtitle = requireLinkedSegment("hero.subtitle", t("hero.subtitle"));
               }
               <overflow-marquee
                 class="hero-news-marquee min-w-0 flex-1 overflow-hidden"
+                dir="ltr"
               >
                 <span
                   class="hero-news-marquee-content block w-max whitespace-nowrap"
@@ -355,6 +356,11 @@ const subtitle = requireLinkedSegment("hero.subtitle", t("hero.subtitle"));
       .hero-news-marquee-content {
       animation: hero-news-marquee var(--marquee-duration) ease-in-out infinite
         alternate;
+    }
+
+    .group:hover .hero-news-marquee-content,
+    .group:focus-visible .hero-news-marquee-content {
+      animation-play-state: paused;
     }
 
     @keyframes hero-news-marquee {
