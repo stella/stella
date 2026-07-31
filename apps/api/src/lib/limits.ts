@@ -203,6 +203,10 @@ export const LIMITS = {
   searchQueryMaxLength: 500,
   searchPageSizeDefault: 20,
   searchPageSizeMax: 100,
+  /** Maximum visible text returned by any global-search preview response. */
+  searchPreviewResponseCharacterLimit: 16_000,
+  /** Messages surrounding the best match in a global-search chat preview. */
+  searchChatPreviewMessageLimit: 6,
   savedSearchesPerUser: 100,
   savedSearchesPageSizeDefault: 50,
   savedSearchesPageSizeMax: 100,

@@ -20,6 +20,7 @@ export type RecentSearch = {
 
 export type RecentFile = {
   entityId: string;
+  fileFieldId?: string | null | undefined;
   workspaceId: string;
   workspaceName: string;
   title: string;
@@ -46,6 +47,9 @@ const isRecentSearch = (value: unknown): value is RecentSearch =>
 const isRecentFile = (value: unknown): value is RecentFile =>
   isRecord(value) &&
   typeof value["entityId"] === "string" &&
+  (value["fileFieldId"] === undefined ||
+    value["fileFieldId"] === null ||
+    typeof value["fileFieldId"] === "string") &&
   typeof value["workspaceId"] === "string" &&
   typeof value["workspaceName"] === "string" &&
   typeof value["title"] === "string" &&

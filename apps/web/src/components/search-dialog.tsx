@@ -1,4 +1,12 @@
-import { useCallback, useId, useMemo, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import type { UseMutationResult } from "@tanstack/react-query";
 import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
@@ -52,7 +60,11 @@ import {
   toSearchFilters,
   type SavedSearchCriteria,
 } from "@/components/saved-searches.logic";
-import { getChatHitRoute } from "@/components/search-dialog.logic";
+import {
+  createDialogCloseActionQueue,
+  getChatHitRoute,
+  getRecentFilePreviewHit,
+} from "@/components/search-dialog.logic";
 import {
   canShowSearchSummary,
   clearTime,
@@ -83,12 +95,14 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { createCaseLawDecisionRouteParams } from "@/lib/case-law-route";
+import { DOCX_MIME, PDF_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import {
   searchFacetOptions,
   hasSearchQueryOrSelectiveFilter,
+  recentFilePreviewFieldOptions,
   searchInfiniteOptions,
   searchPreviewOptions,
   TIME_PRESETS,
@@ -110,14 +124,16 @@ import type {
   SearchRecentsScope,
 } from "@/lib/search-recents";
 import {
+  getNativeSearchDocumentPreviewTarget,
+  getSearchHighlightText,
   getSearchPreviewRenderContent,
   getSearchPreviewDate,
   getSearchPreviewTarget,
   normalizeSearchQuery,
   selectAuthorizedSearchPreviewData,
+  selectDisplayedSearchPreviewHit,
   selectSearchPreviewHit,
   shouldShowSearchPreview,
-  stripSearchMarkup,
 } from "@/lib/search.logic";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 
@@ -145,6 +161,20 @@ const VIRTUAL_HIT_ESTIMATE_PX = 76;
 const VIRTUAL_HIT_OVERSCAN = 6;
 const SEARCH_PREVIEW_CONTENT_CLASS_NAME =
   "text-foreground/90 [&_mark]:bg-highlight [&_mark]:text-highlight-foreground text-sm leading-6 whitespace-pre-wrap [&_mark]:font-medium";
+const SEARCH_PREVIEW_COLUMN_CLASS_NAME =
+  "hidden min-h-0 w-[min(44%,32rem)] min-w-72 shrink-0 flex-col overflow-hidden border-s md:flex";
+
+const NativeDocumentPreview = lazy(async () => {
+  const { SearchDocumentPreview } =
+    await import("@/components/search-document-preview");
+  return { default: SearchDocumentPreview };
+});
+
+const ChatPreview = lazy(async () => {
+  const { SearchChatPreview } =
+    await import("@/components/search-chat-preview");
+  return { default: SearchChatPreview };
+});
 
 const KIND_ICONS = {
   contact: UserIcon,
@@ -223,15 +253,6 @@ const isAvailableSearchKind = (
   includePublicLaw: boolean,
 ): boolean => type !== "case-law" || includePublicLaw;
 
-const extractHighlightedText = (headline: string): string => {
-  const start = headline.indexOf("<mark>");
-  const end = headline.indexOf("</mark>", start);
-  if (start === -1 || end === -1 || end <= start) {
-    return stripSearchMarkup(headline);
-  }
-  return stripSearchMarkup(headline.slice(start + "<mark>".length, end));
-};
-
 const formatMimeTypeLabel = (mimeType: string): string => {
   if (mimeType === "application/pdf") {
     return "PDF";
@@ -308,6 +329,7 @@ export const SearchDialog = ({
   const user = useAuthenticatedUser();
   const isMobile = useIsMobile();
   const publicLawPreviewEnabled = usePublicLawPreviewEnabled();
+  const [closeActionQueue] = useState(createDialogCloseActionQueue);
   const searchRecentsScope = useMemo(
     (): SearchRecentsScope => ({
       organizationId: user.activeOrganizationId,
@@ -324,6 +346,9 @@ export const SearchDialog = ({
   const [previewEnabled, setPreviewEnabled] = useState(true);
   const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
   const [recentFiles, setRecentFiles] = useState<RecentFile[]>([]);
+  const [recentPreviewFile, setRecentPreviewFile] = useState<RecentFile | null>(
+    null,
+  );
   const [filters, setFilters] = useState<SearchFilters>(() =>
     initialSearchFilters(initialWorkspaceId),
   );
@@ -430,6 +455,12 @@ export const SearchDialog = ({
     isPlaceholderData,
   });
   const showPreview = shouldShowSearchPreview({ isMobile, previewEnabled });
+  const displayedPreviewHit = selectDisplayedSearchPreviewHit({
+    hit: previewHit,
+    showPreview,
+  });
+  const displayedRecentFile =
+    showPreview && !hasVisibleSearch ? recentPreviewFile : null;
 
   // Counts and facets are computed only on the first page (see backend);
   // ignore them entirely while the query is empty so a cleared input
@@ -585,6 +616,7 @@ export const SearchDialog = ({
     debouncedSetQuery.cancel();
     setQuery("");
     setDebouncedQuery("");
+    setRecentPreviewFile(null);
     summarizeSearchMutation.reset();
   };
 
@@ -615,6 +647,22 @@ export const SearchDialog = ({
     });
   };
 
+  const navigateAfterClose = (navigateToTarget: () => Promise<unknown>) => {
+    closeActionQueue.schedule(() => {
+      detached(
+        navigateToTarget().catch((error: unknown) => {
+          analytics.captureError(error);
+          stellaToast.add({
+            title: t("common.somethingWentWrong"),
+            type: "error",
+          });
+        }),
+        "SearchDialog.navigateAfterClose",
+      );
+    });
+    onOpenChange(false);
+  };
+
   const handleOpenSummaryChat = () => {
     const trimmedQuery = searchQuery.trim();
     const summaryData = summarizeSearchMutation.data;
@@ -639,13 +687,11 @@ export const SearchDialog = ({
       },
       {
         onSuccess: (thread) => {
-          onOpenChange(false);
-          detached(
+          navigateAfterClose(() =>
             navigate({
               to: "/chat/$threadId",
               params: { threadId: thread.threadId },
             }),
-            "onSuccess",
           );
         },
         onError: () => {
@@ -687,19 +733,21 @@ export const SearchDialog = ({
   };
 
   const applyRecentSearch = (recent: RecentSearch) => {
+    setRecentPreviewFile(null);
     setQuery(recent.query);
     setDebouncedQuery(recent.query);
     summarizeSearchMutation.reset();
     setRecentSearches(recordRecentSearch(recent.query, searchRecentsScope));
   };
 
-  const openRecentFile = async (file: RecentFile) => {
-    onOpenChange(false);
+  const openRecentFile = (file: RecentFile) => {
     setRecentFiles(recordRecentFile(file, searchRecentsScope));
-    await navigate({
-      to: "/workspaces/$workspaceId/entities/$entityId",
-      params: { workspaceId: file.workspaceId, entityId: file.entityId },
-    });
+    navigateAfterClose(() =>
+      navigate({
+        to: "/workspaces/$workspaceId/entities/$entityId",
+        params: { workspaceId: file.workspaceId, entityId: file.entityId },
+      }),
+    );
   };
 
   const toggleTypeFilter = (type: GlobalSearchResultType) => {
@@ -745,22 +793,24 @@ export const SearchDialog = ({
     }));
   };
 
-  const handleResultClick = async (hit: GlobalSearchHit) => {
+  const handleResultClick = (hit: GlobalSearchHit) => {
     if (query.trim()) {
       setRecentSearches(recordRecentSearch(query, searchRecentsScope));
     }
 
-    onOpenChange(false);
     if (hit.type === "contact") {
-      await navigate({
-        to: "/contacts/$contactId",
-        params: { contactId: hit.contactId },
-      });
+      navigateAfterClose(() =>
+        navigate({
+          to: "/contacts/$contactId",
+          params: { contactId: hit.contactId },
+        }),
+      );
       return;
     }
 
     if (hit.type === "case-law") {
       if (!isPublicLawPreviewEnabled()) {
+        onOpenChange(false);
         stellaToast.add({
           title: t("common.comingSoon"),
           type: "neutral",
@@ -770,33 +820,37 @@ export const SearchDialog = ({
 
       const slug =
         "slug" in hit && typeof hit.slug === "string" ? hit.slug : null;
-      await navigate({
-        to: "/law/$country/cases/$court/$slug",
-        params: createCaseLawDecisionRouteParams({
-          caseNumber: hit.caseNumber,
-          country: hit.country,
-          court: hit.court,
-          slug,
-        }),
-        search: {
-          ...(hit.headline && {
-            q: extractHighlightedText(hit.headline),
+      navigateAfterClose(() =>
+        navigate({
+          to: "/law/$country/cases/$court/$slug",
+          params: createCaseLawDecisionRouteParams({
+            caseNumber: hit.caseNumber,
+            country: hit.country,
+            court: hit.court,
+            slug,
           }),
-        },
-      });
+          search: {
+            ...(hit.headline && {
+              q: getSearchHighlightText(hit.headline, ""),
+            }),
+          },
+        }),
+      );
       return;
     }
 
     if (hit.type === "matter") {
-      await navigate({
-        to: "/workspaces/$workspaceId",
-        params: { workspaceId: hit.workspaceId },
-      });
+      navigateAfterClose(() =>
+        navigate({
+          to: "/workspaces/$workspaceId",
+          params: { workspaceId: hit.workspaceId },
+        }),
+      );
       return;
     }
 
     if (hit.type === "chat") {
-      await navigate(getChatHitRoute(hit));
+      navigateAfterClose(() => navigate(getChatHitRoute(hit)));
       return;
     }
 
@@ -805,6 +859,7 @@ export const SearchDialog = ({
         recordRecentFile(
           {
             entityId: hit.entityId,
+            fileFieldId: hit.fileFieldId,
             mimeType: hit.mimeType,
             title: hit.title || hit.id,
             workspaceId: hit.workspaceId,
@@ -815,17 +870,16 @@ export const SearchDialog = ({
       );
     }
 
-    await navigate({
-      to: "/workspaces/$workspaceId/entities/$entityId",
-      params: { workspaceId: hit.workspaceId, entityId: hit.entityId },
-    });
+    navigateAfterClose(() =>
+      navigate({
+        to: "/workspaces/$workspaceId/entities/$entityId",
+        params: { workspaceId: hit.workspaceId, entityId: hit.entityId },
+      }),
+    );
   };
 
   const openSearchResult = (hit: GlobalSearchHit): void => {
-    handleResultClick(hit).catch((error: unknown) => {
-      analytics.captureError(error);
-      stellaToast.add({ title: t("common.somethingWentWrong"), type: "error" });
-    });
+    handleResultClick(hit);
   };
 
   const hasResults = allHits.length > 0;
@@ -894,6 +948,7 @@ export const SearchDialog = ({
   const applySavedSearch = (criteria: SavedSearchCriteria) => {
     const savedFilters = toSearchFilters(criteria);
     debouncedSetQuery.cancel();
+    setRecentPreviewFile(null);
     setQuery(criteria.query);
     setDebouncedQuery(criteria.query);
     setFilters({
@@ -910,7 +965,13 @@ export const SearchDialog = ({
 
   return (
     <CommandDialog
+      onOpenChangeComplete={(nextOpen) => {
+        closeActionQueue.complete(nextOpen);
+      }}
       onOpenChange={(nextOpen, eventDetails) => {
+        if (nextOpen) {
+          closeActionQueue.cancel();
+        }
         if (
           !nextOpen &&
           eventDetails.reason === "escape-key" &&
@@ -925,18 +986,20 @@ export const SearchDialog = ({
       open={open}
     >
       <CommandDialogPopup
+        backdropClassName="z-[100]"
         className={cn(
-          "flex h-[calc(100dvh-32px)] w-[calc(100vw-16px)] max-w-none flex-col overflow-hidden sm:h-[min(720px,calc(100dvh-96px))]",
+          "flex h-[calc(100dvh-32px)] w-[calc(100vw-16px)] max-w-none flex-col overflow-clip sm:h-[min(720px,calc(100dvh-96px))]",
           showPreview
             ? "sm:w-[min(1120px,calc(100vw-32px))] xl:w-[min(1280px,calc(100vw-48px))]"
             : "sm:w-[min(960px,calc(100vw-32px))]",
         )}
         showCloseButton={false}
+        viewportClassName="z-[100]"
       >
         <Command
           itemToStringValue={(hit) => hit.title}
           items={commandHits}
-          keepHighlight={false}
+          keepHighlight
           mode="none"
           onItemHighlighted={(_, eventDetails) => {
             if (eventDetails.index < 0) {
@@ -963,6 +1026,7 @@ export const SearchDialog = ({
               return;
             }
             setQuery(value);
+            setRecentPreviewFile(null);
             debouncedSetQuery(value);
             summarizeSearchMutation.reset();
           }}
@@ -1041,7 +1105,7 @@ export const SearchDialog = ({
           </div>
 
           {/* Content area */}
-          <div className="flex min-h-0 flex-1">
+          <div className="flex min-h-0 flex-1 overflow-hidden">
             {/* Facets sidebar — always present so the layout stays stable. */}
             <div
               className={cn(
@@ -1162,7 +1226,9 @@ export const SearchDialog = ({
                   />
                   <SearchRecents
                     onFileClick={openRecentFile}
+                    onFilePreview={setRecentPreviewFile}
                     onSearchClick={applyRecentSearch}
+                    previewedFileId={displayedRecentFile?.entityId ?? null}
                     recentFiles={recentFiles}
                     recentSearches={recentSearches}
                   />
@@ -1312,13 +1378,28 @@ export const SearchDialog = ({
                 </div>
               )}
             </CommandList>
-            {showPreview && (
+            {showPreview && displayedPreviewHit && (
               <SearchPreviewPanel
-                hit={previewHit}
+                hit={displayedPreviewHit}
                 onOpen={openSearchResult}
                 organizationId={searchRecentsScope.organizationId}
                 query={searchQuery}
                 userId={searchRecentsScope.userId}
+              />
+            )}
+            {showPreview && !displayedPreviewHit && displayedRecentFile && (
+              <RecentFilePreviewPanel
+                file={displayedRecentFile}
+                organizationId={searchRecentsScope.organizationId}
+                onOpen={openSearchResult}
+                userId={searchRecentsScope.userId}
+              />
+            )}
+            {showPreview && !displayedPreviewHit && !displayedRecentFile && (
+              <div
+                aria-hidden="true"
+                className={SEARCH_PREVIEW_COLUMN_CLASS_NAME}
+                data-slot="search-preview-placeholder"
               />
             )}
           </div>
@@ -1329,11 +1410,69 @@ export const SearchDialog = ({
 };
 
 type SearchPreviewPanelProps = {
-  hit: GlobalSearchHit | null;
+  hit: GlobalSearchHit;
   organizationId: string;
   query: string;
   userId: string;
   onOpen: (hit: GlobalSearchHit) => void;
+};
+
+type RecentFilePreviewPanelProps = {
+  file: RecentFile;
+  onOpen: (hit: GlobalSearchHit) => void;
+  organizationId: string;
+  userId: string;
+};
+
+const RecentFilePreviewPanel = ({
+  file,
+  onOpen,
+  organizationId,
+  userId,
+}: RecentFilePreviewPanelProps) => {
+  const t = useTranslations();
+  const isNativeDocument =
+    file.mimeType === PDF_MIME || file.mimeType === DOCX_MIME;
+  const needsFieldResolution =
+    isNativeDocument &&
+    (file.fileFieldId === undefined || file.fileFieldId === null);
+  const fieldQuery = useQuery({
+    ...recentFilePreviewFieldOptions({
+      entityId: file.entityId,
+      mimeType: file.mimeType ?? null,
+      organizationId,
+      userId,
+      workspaceId: file.workspaceId,
+    }),
+    enabled: needsFieldResolution,
+  });
+  const resolvedFieldId = file.fileFieldId ?? fieldQuery.data ?? null;
+
+  if (needsFieldResolution && resolvedFieldId === null) {
+    return (
+      <aside className={SEARCH_PREVIEW_COLUMN_CLASS_NAME}>
+        {fieldQuery.isPending ? (
+          <NativeDocumentPreviewSkeleton />
+        ) : (
+          <div className="text-muted-foreground flex flex-1 items-center justify-center px-5 text-center text-sm">
+            {t("common.somethingWentWrong")}
+          </div>
+        )}
+      </aside>
+    );
+  }
+
+  const hit = getRecentFilePreviewHit(file, resolvedFieldId);
+
+  return (
+    <SearchPreviewPanel
+      hit={hit}
+      onOpen={onOpen}
+      organizationId={organizationId}
+      query=""
+      userId={userId}
+    />
+  );
 };
 
 const SearchPreviewPanel = ({
@@ -1349,30 +1488,19 @@ const SearchPreviewPanel = ({
   return (
     <aside
       aria-labelledby={headingId}
-      className="hidden w-[min(44%,32rem)] min-w-72 shrink-0 flex-col border-s md:flex"
+      className={SEARCH_PREVIEW_COLUMN_CLASS_NAME}
     >
       <h2 className="sr-only" id={headingId}>
         {t("common.preview")}
       </h2>
-      {hit ? (
-        <SearchPreviewContent
-          hit={hit}
-          key={`${hit.type}:${hit.id}:${hit.updatedAt}:${normalizeSearchQuery(query)}`}
-          onOpen={onOpen}
-          organizationId={organizationId}
-          query={query}
-          userId={userId}
-        />
-      ) : (
-        <>
-          <div className="shrink-0 border-b px-4 py-3 text-sm font-medium">
-            {t("common.preview")}
-          </div>
-          <div className="text-muted-foreground flex flex-1 items-center justify-center px-5 text-center text-sm">
-            {t("search.emptyState")}
-          </div>
-        </>
-      )}
+      <SearchPreviewContent
+        hit={hit}
+        key={`${hit.type}:${hit.id}:${hit.updatedAt}:${normalizeSearchQuery(query)}`}
+        onOpen={onOpen}
+        organizationId={organizationId}
+        query={query}
+        userId={userId}
+      />
     </aside>
   );
 };
@@ -1394,26 +1522,6 @@ const SearchPreviewContent = ({
 }: SearchPreviewContentProps) => {
   const t = useTranslations();
   const format = useFormatter();
-  const target = getSearchPreviewTarget(hit);
-  const { data, isError, isFetchedAfterMount, isFetching, refetch } = useQuery(
-    searchPreviewOptions({
-      organizationId,
-      query,
-      resultId: target.resultId,
-      type: target.type,
-      updatedAt: hit.updatedAt,
-      userId,
-    }),
-  );
-  const authorizedData = selectAuthorizedSearchPreviewData({
-    data,
-    isError,
-    isFetchedAfterMount,
-    isFetching,
-  });
-  const renderContent = authorizedData
-    ? getSearchPreviewRenderContent(authorizedData)
-    : null;
   const location =
     hit.type === "contact" || hit.type === "case-law"
       ? null
@@ -1464,55 +1572,143 @@ const SearchPreviewContent = ({
           </Button>
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
-        {!isError && authorizedData === undefined && (
-          <div className="space-y-3">
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-11/12" />
-            <Skeleton className="h-4 w-4/5" />
-            <Skeleton className="mt-6 h-4 w-full" />
-            <Skeleton className="h-4 w-3/4" />
-          </div>
-        )}
-        {isError && (
-          <div className="flex min-h-48 flex-col items-center justify-center gap-3">
-            <p className="text-muted-foreground text-sm">
-              {t("common.somethingWentWrong")}
-            </p>
-            <Button
-              disabled={isFetching}
-              onClick={() => {
-                detached(refetch(), "SearchPreviewContent");
-              }}
-              size="sm"
-              variant="outline"
-            >
-              {t("common.retry")}
-            </Button>
-          </div>
-        )}
-        {renderContent?.type === "plain-text" && (
-          <div
-            className={SEARCH_PREVIEW_CONTENT_CLASS_NAME}
-            dir={contentDir(renderContent.directionText)}
-          >
-            {renderContent.text}
-          </div>
-        )}
-        {renderContent?.type === "highlighted-html" && (
-          <div
-            className={SEARCH_PREVIEW_CONTENT_CLASS_NAME}
-            dir={contentDir(renderContent.directionText)}
-            dangerouslySetInnerHTML={{
-              // safe-html: preview content is server-escaped before the trusted <mark> tags are inserted
-              __html: renderContent.html,
-            }}
-          />
-        )}
-      </div>
+      <SearchPreviewBody
+        hit={hit}
+        organizationId={organizationId}
+        query={query}
+        userId={userId}
+      />
     </>
   );
 };
+
+type SearchPreviewBodyProps = Pick<
+  SearchPreviewContentProps,
+  "hit" | "organizationId" | "query" | "userId"
+>;
+
+const SearchPreviewBody = (props: SearchPreviewBodyProps) => {
+  const { hit } = props;
+  const nativePreviewTarget = getNativeSearchDocumentPreviewTarget(hit);
+  if (nativePreviewTarget) {
+    return (
+      <div className="min-h-0 flex-1 overflow-hidden">
+        <Suspense fallback={<NativeDocumentPreviewSkeleton />}>
+          <NativeDocumentPreview
+            fallback={<NativeDocumentPreviewSkeleton />}
+            searchText={getSearchHighlightText(hit.headline, props.query)}
+            target={nativePreviewTarget}
+          />
+        </Suspense>
+      </div>
+    );
+  }
+
+  return <SearchTextPreview {...props} />;
+};
+
+const NativeDocumentPreviewSkeleton = () => (
+  <div className="bg-muted/40 flex h-full justify-center overflow-hidden p-3">
+    <Skeleton className="h-[calc(100%+8rem)] w-full max-w-sm rounded-sm" />
+  </div>
+);
+
+const SearchTextPreview = ({
+  hit,
+  organizationId,
+  query,
+  userId,
+}: SearchPreviewBodyProps) => {
+  const t = useTranslations();
+  const target = getSearchPreviewTarget(hit);
+  const { data, isError, isFetchedAfterMount, isFetching, refetch } = useQuery(
+    searchPreviewOptions({
+      organizationId,
+      query,
+      resultId: target.resultId,
+      type: target.type,
+      updatedAt: hit.updatedAt,
+      userId,
+    }),
+  );
+  const authorizedData = selectAuthorizedSearchPreviewData({
+    data,
+    isError,
+    isFetchedAfterMount,
+    isFetching,
+  });
+  const renderContent = authorizedData
+    ? getSearchPreviewRenderContent(authorizedData)
+    : null;
+
+  return (
+    <div
+      className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5"
+      data-slot="search-preview-scroll-area"
+    >
+      {!isError && authorizedData === undefined && (
+        <div className="space-y-3">
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-11/12" />
+          <Skeleton className="h-4 w-4/5" />
+          <Skeleton className="mt-6 h-4 w-full" />
+          <Skeleton className="h-4 w-3/4" />
+        </div>
+      )}
+      {isError && (
+        <div className="flex min-h-48 flex-col items-center justify-center gap-3">
+          <p className="text-muted-foreground text-sm">
+            {t("common.somethingWentWrong")}
+          </p>
+          <Button
+            disabled={isFetching}
+            onClick={() => {
+              detached(refetch(), "SearchTextPreview");
+            }}
+            size="sm"
+            variant="outline"
+          >
+            {t("common.retry")}
+          </Button>
+        </div>
+      )}
+      {renderContent?.type === "plain-text" && (
+        <div
+          className={SEARCH_PREVIEW_CONTENT_CLASS_NAME}
+          dir={contentDir(renderContent.directionText)}
+        >
+          {renderContent.text}
+        </div>
+      )}
+      {renderContent?.type === "chat-messages" && (
+        <Suspense fallback={<SearchTextPreviewSkeleton />}>
+          <ChatPreview
+            messages={renderContent.messages}
+            searchText={getSearchHighlightText(hit.headline, query)}
+          />
+        </Suspense>
+      )}
+      {renderContent?.type === "highlighted-html" && (
+        <div
+          className={SEARCH_PREVIEW_CONTENT_CLASS_NAME}
+          dir={contentDir(renderContent.directionText)}
+          dangerouslySetInnerHTML={{
+            // safe-html: preview content is server-escaped before the trusted <mark> tags are inserted
+            __html: renderContent.html,
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+const SearchTextPreviewSkeleton = () => (
+  <div className="space-y-3">
+    <Skeleton className="h-12 w-4/5" />
+    <Skeleton className="ms-auto h-16 w-3/4" />
+    <Skeleton className="h-20 w-11/12" />
+  </div>
+);
 
 type SearchSummaryItemProps = {
   summarizeMutation: UseMutationResult<
@@ -1676,7 +1872,9 @@ type SearchRecentsProps = {
   recentSearches: RecentSearch[];
   recentFiles: RecentFile[];
   onSearchClick: (recent: RecentSearch) => void;
-  onFileClick: (file: RecentFile) => Promise<void>;
+  onFileClick: (file: RecentFile) => void;
+  onFilePreview: (file: RecentFile) => void;
+  previewedFileId: string | null;
 };
 
 const SearchRecents = ({
@@ -1684,6 +1882,8 @@ const SearchRecents = ({
   recentFiles,
   onSearchClick,
   onFileClick,
+  onFilePreview,
+  previewedFileId,
 }: SearchRecentsProps) => {
   const t = useTranslations();
   const hasRecents = recentSearches.length > 0 || recentFiles.length > 0;
@@ -1731,11 +1931,16 @@ const SearchRecents = ({
             {recentFiles.map((file) => (
               <Button
                 className="h-auto! w-full justify-start gap-2 py-1 text-start text-sm"
+                data-previewing={previewedFileId === file.entityId}
                 key={file.entityId}
+                onFocus={() => onFilePreview(file)}
                 onClick={() => {
-                  detached(onFileClick(file), "SearchRecents");
+                  onFileClick(file);
                 }}
-                variant="ghost"
+                onPointerEnter={() => onFilePreview(file)}
+                variant={
+                  previewedFileId === file.entityId ? "secondary" : "ghost"
+                }
               >
                 {file.mimeType ? (
                   <DocumentIcon

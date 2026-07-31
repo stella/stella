@@ -85,6 +85,83 @@ describe("search preview rendering contract", () => {
     });
   });
 
+  test("returns bounded chat messages with their speaker roles and visible text", async () => {
+    rootDbExecuteMock.mockResolvedValueOnce([
+      {
+        messages: [
+          {
+            id: "00000000-0000-4000-8000-000000000010",
+            role: "user",
+            content: {
+              version: 2,
+              data: [{ type: "text", content: "Review this agreement" }],
+            },
+          },
+          {
+            id: "00000000-0000-4000-8000-000000000011",
+            role: "assistant",
+            content: {
+              version: 2,
+              data: [
+                { type: "text", content: "## Key issue" },
+                { type: "text", content: "The cap is uncapped." },
+              ],
+            },
+          },
+        ],
+      },
+    ]);
+
+    expect(await readSearchPreview({ ...previewQuery, type: "chat" })).toEqual({
+      type: "chat-messages",
+      messages: [
+        {
+          id: "00000000-0000-4000-8000-000000000010",
+          role: "user",
+          content: "Review this agreement",
+        },
+        {
+          id: "00000000-0000-4000-8000-000000000011",
+          role: "assistant",
+          content: "## Key issue\n\nThe cap is uncapped.",
+        },
+      ],
+    });
+  });
+
+  test("bounds the combined visible text in a chat preview", async () => {
+    const oversizedContent = "a".repeat(20_000);
+    rootDbExecuteMock.mockResolvedValueOnce([
+      {
+        messages: [
+          {
+            id: "00000000-0000-4000-8000-000000000010",
+            role: "user",
+            content: {
+              version: 2,
+              data: [{ type: "text", content: oversizedContent }],
+            },
+          },
+          {
+            id: "00000000-0000-4000-8000-000000000011",
+            role: "assistant",
+            content: {
+              version: 2,
+              data: [{ type: "text", content: "not returned" }],
+            },
+          },
+        ],
+      },
+    ]);
+
+    const preview = await readSearchPreview({ ...previewQuery, type: "chat" });
+
+    expect(preview).toMatchObject({
+      type: "chat-messages",
+      messages: [{ content: "a".repeat(16_000) }],
+    });
+  });
+
   test("rejects rows that mix plain and highlighted source fields", async () => {
     rootDbExecuteMock.mockResolvedValueOnce([
       {

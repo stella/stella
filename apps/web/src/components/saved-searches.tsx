@@ -38,6 +38,7 @@ import { contentDir } from "@stll/ui/hooks/use-content-dir";
 import {
   canSaveSearch,
   savedSearchKeys,
+  shouldShowSavedSearchList,
   toSavedSearchCriteria,
 } from "@/components/saved-searches.logic";
 import type { SearchFilters } from "@/components/search-filters.logic";
@@ -187,6 +188,13 @@ export const SavedSearches = ({
   const savedSearches = savedSearchesQuery.data?.pages.flatMap(
     (page) => page.items,
   );
+  const hasSavedSearches = (savedSearches?.length ?? 0) > 0;
+  const shouldShowList =
+    showList &&
+    shouldShowSavedSearchList({
+      itemCount: hasSavedSearches ? (savedSearches?.length ?? 0) : 0,
+      status: savedSearchesQuery.status,
+    });
   const savedSearchesError = savedSearchesQuery.error;
   useExternalSyncEffect(() => {
     if (!showList || !savedSearchesError) {
@@ -241,7 +249,7 @@ export const SavedSearches = ({
         </Button>
       )}
 
-      {showList && (
+      {shouldShowList && (
         <section className="space-y-1">
           <h3 className="text-muted-foreground mb-2 text-xs font-medium">
             {t("search.savedSearches")}
@@ -305,11 +313,6 @@ export const SavedSearches = ({
               </Button>
             </div>
           ))}
-          {savedSearchesQuery.isSuccess && savedSearches?.length === 0 && (
-            <p className="text-muted-foreground px-2 py-2 text-sm">
-              {t("search.savedSearchesEmpty")}
-            </p>
-          )}
           {savedSearchesQuery.hasNextPage && (
             <Button
               className="h-11 w-full"

@@ -128,7 +128,11 @@ export const renderPage = async (
         signal.removeEventListener("abort", onAbort);
       }
 
-      return Result.ok({ canvas, textLayerDiv, viewport });
+      return Result.ok({
+        canvas,
+        textLayerDiv,
+        viewport,
+      });
     },
     catch: (err) =>
       isRenderingCancelledError(err, renderingCancelledException)

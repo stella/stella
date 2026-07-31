@@ -158,6 +158,7 @@ describe("global search SQL scope", () => {
       title: "Interim injunction memo.pdf",
       last_edited_by_name: "Clara Novak",
       last_edited_by_image: "https://example.test/clara.png",
+      file_field_id: "field_1",
       mime_type: "application/pdf",
       headline: "Interim injunction memo",
       score: 0.9,
@@ -168,6 +169,7 @@ describe("global search SQL scope", () => {
       type: "document",
       lastEditedByName: "Clara Novak",
       lastEditedByImage: "https://example.test/clara.png",
+      fileFieldId: "field_1",
     });
   });
 

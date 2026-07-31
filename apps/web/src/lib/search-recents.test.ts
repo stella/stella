@@ -72,6 +72,7 @@ describe("search recents", () => {
     recordRecentFile(
       {
         entityId: "entity-1",
+        fileFieldId: "field-draft",
         mimeType:
           "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         title: "Draft.docx",
@@ -84,6 +85,7 @@ describe("search recents", () => {
     recordRecentFile(
       {
         entityId: "entity-1",
+        fileFieldId: "field-final",
         mimeType: "application/pdf",
         title: "Final.docx",
         workspaceId: "workspace-1",
@@ -96,12 +98,14 @@ describe("search recents", () => {
     expect(
       readRecentFiles(scope, storage).map((item) => ({
         entityId: item.entityId,
+        fileFieldId: item.fileFieldId,
         mimeType: item.mimeType,
         title: item.title,
       })),
     ).toEqual([
       {
         entityId: "entity-1",
+        fileFieldId: "field-final",
         mimeType: "application/pdf",
         title: "Final.docx",
       },

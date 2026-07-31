@@ -2,8 +2,14 @@ import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
+import { normalizePersistedChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
+import type {
+  ChatMessageRole,
+  PersistedChatMessageContent,
+} from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { redistributableSourceJoin } from "@/api/lib/case-law/search-sql";
+import { LIMITS } from "@/api/lib/limits";
 import { chatThreadScopeSql } from "@/api/lib/search/chat-thread-scope-sql";
 import {
   contactWorkspaceAccessSql,
@@ -37,6 +43,10 @@ type SearchPreviewQuery = {
 
 type SearchPreview =
   | {
+      messages: SearchPreviewChatMessage[];
+      type: "chat-messages";
+    }
+  | {
       content: string;
       type: "highlighted-html";
     }
@@ -45,11 +55,26 @@ type SearchPreview =
       type: "plain-text";
     };
 
+type SearchPreviewChatMessage = {
+  content: string;
+  id: string;
+  role: ChatMessageRole;
+};
+
+type SearchPreviewChatMessageRow = {
+  content: PersistedChatMessageContent;
+  id: SafeId<"chatMessage">;
+  role: ChatMessageRole;
+};
+
+type SearchPreviewChatRow = {
+  messages: SearchPreviewChatMessageRow[];
+};
+
 const SEARCH_PREVIEW_BODY_CHARACTER_LIMIT =
   SEARCH_PREVIEW_SOURCE_CHARACTER_LIMIT -
   SEARCH_PREVIEW_TITLE_CHARACTER_LIMIT -
   1;
-const SEARCH_PREVIEW_RESPONSE_CHARACTER_LIMIT = 16_000;
 const SEARCH_PREVIEW_NORMALIZED_SOURCE_CHARACTER_LIMIT = 100_000;
 
 type PreviewTextConfig = {
@@ -95,7 +120,7 @@ const previewHeadline = (options: PreviewHeadlineOptions) => sql`
             ${options.tsQuery},
             ${SEARCH_PREVIEW_HEADLINE_CONFIG}
           ),
-          ${SEARCH_PREVIEW_RESPONSE_CHARACTER_LIMIT}
+          ${LIMITS.searchPreviewResponseCharacterLimit}
         ),
         'sourceContent',
         preview_source.content,
@@ -119,7 +144,7 @@ const previewUnhighlighted = (title: SQL, body: SQL) => sql`
     left(${title}, ${SEARCH_PREVIEW_TITLE_CHARACTER_LIMIT})
       || ' ' ||
     left(${body}, ${SEARCH_PREVIEW_BODY_CHARACTER_LIMIT}),
-    ${SEARCH_PREVIEW_RESPONSE_CHARACTER_LIMIT}
+    ${LIMITS.searchPreviewResponseCharacterLimit}
   )
 `;
 
@@ -164,6 +189,100 @@ const previewContent = ({
 
 const previewTextFilter = (searchVector: SQL, tsQuery: SQL | null): SQL =>
   tsQuery ? sql`AND ${searchVector} @@ ${tsQuery}` : sql.empty();
+
+const chatPreviewTargetMessageId = (tsQuery: SQL | null): SQL => {
+  const latestMessageId = sql`
+    SELECT latest.message_id
+    FROM chat_message_search_documents latest
+    WHERE latest.thread_id = cst.thread_id
+    ORDER BY latest.created_at DESC, latest.message_id DESC
+    LIMIT 1
+  `;
+
+  if (!tsQuery) {
+    return latestMessageId;
+  }
+
+  return sql`
+    SELECT coalesce(
+      (
+        SELECT matching.message_id
+        FROM chat_message_search_documents matching
+        WHERE matching.thread_id = cst.thread_id
+          AND matching.tsv @@ ${tsQuery}
+        ORDER BY
+          ts_rank_cd(matching.tsv, ${tsQuery}) DESC,
+          matching.created_at DESC,
+          matching.message_id DESC
+        LIMIT 1
+      ),
+      (${latestMessageId})
+    )
+  `;
+};
+
+const chatPreviewMessages = (tsQuery: SQL | null): SQL => {
+  const precedingLimit = tsQuery
+    ? Math.ceil(LIMITS.searchChatPreviewMessageLimit / 2)
+    : LIMITS.searchChatPreviewMessageLimit;
+  const followingLimit = tsQuery
+    ? LIMITS.searchChatPreviewMessageLimit - precedingLimit
+    : 0;
+
+  return sql`
+    (
+      WITH target AS (
+        SELECT target_message.created_at, target_message.message_id
+        FROM chat_message_search_documents target_message
+        WHERE target_message.message_id = (${chatPreviewTargetMessageId(tsQuery)})
+      ),
+      preceding AS (
+        SELECT
+          candidate.message_id,
+          candidate.role,
+          candidate.created_at
+        FROM chat_message_search_documents candidate
+        CROSS JOIN target
+        WHERE candidate.thread_id = cst.thread_id
+          AND (candidate.created_at, candidate.message_id)
+            <= (target.created_at, target.message_id)
+        ORDER BY candidate.created_at DESC, candidate.message_id DESC
+        LIMIT ${precedingLimit}
+      ),
+      following AS (
+        SELECT
+          candidate.message_id,
+          candidate.role,
+          candidate.created_at
+        FROM chat_message_search_documents candidate
+        CROSS JOIN target
+        WHERE candidate.thread_id = cst.thread_id
+          AND (candidate.created_at, candidate.message_id)
+            > (target.created_at, target.message_id)
+        ORDER BY candidate.created_at, candidate.message_id
+        LIMIT ${followingLimit}
+      ),
+      nearby AS (
+        SELECT * FROM preceding
+        UNION ALL
+        SELECT * FROM following
+      )
+      SELECT coalesce(
+        json_agg(
+          json_build_object(
+            'id', nearby.message_id,
+            'role', nearby.role,
+            'content', message.content
+          )
+          ORDER BY nearby.created_at, nearby.message_id
+        ),
+        '[]'::json
+      )
+      FROM nearby
+      JOIN chat_messages message ON message.id = nearby.message_id
+    ) AS messages
+  `;
+};
 
 export const buildSearchPreviewQuery = ({
   query,
@@ -266,22 +385,9 @@ export const buildSearchPreviewQuery = ({
       `;
     case "chat":
       return sql`
-        SELECT ${previewContent({
-          body: sql`cst.searchable_text`,
-          headlineTsQuery: locatorTsQuery,
-          normalize: normalizeSearchPreviewText,
-          passageContent: sql`preview_passage.content`,
-          regconfig: sql`'simple'::regconfig`,
-          title: sql`cst.title`,
-          useUnaccent: sql`true`,
-        })}
+        SELECT ${chatPreviewMessages(tsQuery)}
         FROM chat_thread_search_documents cst
         JOIN chat_threads t ON t.id = cst.thread_id
-        ${previewPassageJoin({
-          generation: sql`cst.preview_generation`,
-          locatorTsQuery,
-          table: "chat",
-        })}
         WHERE cst.thread_id = ${resultId}
           ${previewTextFilter(sql`cst.tsv`, tsQuery)}
           AND ${chatThreadScopeSql({
@@ -363,6 +469,44 @@ const isSearchPreviewRow = (value: unknown): value is SearchPreviewRow =>
 export const readSearchPreview = async (
   input: SearchPreviewQuery,
 ): Promise<SearchPreview | null> => {
+  if (input.type === "chat") {
+    const rows = await rootDb.execute<SearchPreviewChatRow>(
+      buildSearchPreviewQuery(input),
+    );
+    const row = rows.at(0);
+    if (!row || !Array.isArray(row.messages)) {
+      return null;
+    }
+
+    const messages: SearchPreviewChatMessage[] = [];
+    let remainingCharacters = Number(
+      LIMITS.searchPreviewResponseCharacterLimit,
+    );
+    for (const rawMessage of row.messages) {
+      if (remainingCharacters <= 0) {
+        break;
+      }
+      const message = normalizePersistedChatMessageContent(rawMessage.content);
+      const textParts: string[] = [];
+      for (const part of message.parts) {
+        if (part.type === "text" && part.content.trim()) {
+          textParts.push(part.content);
+        }
+      }
+      if (textParts.length > 0) {
+        const content = textParts.join("\n\n").slice(0, remainingCharacters);
+        messages.push({
+          content,
+          id: rawMessage.id,
+          role: rawMessage.role,
+        });
+        remainingCharacters -= content.length;
+      }
+    }
+
+    return { type: "chat-messages", messages };
+  }
+
   const rows = await rootDb.execute(buildSearchPreviewQuery(input));
   const preview = rows.at(0)?.["preview"];
   if (!isSearchPreviewRow(preview)) {
@@ -374,7 +518,7 @@ export const readSearchPreview = async (
   }
   const content = restoreOriginalSearchPreview({
     headline: preview.content,
-    maxLength: SEARCH_PREVIEW_RESPONSE_CHARACTER_LIMIT,
+    maxLength: LIMITS.searchPreviewResponseCharacterLimit,
     normalizedSource: preview.normalizedSourceContent,
     source: preview.sourceContent,
     useUnaccent: preview.useUnaccent,

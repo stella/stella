@@ -85,6 +85,12 @@ type SearchFacetParams = {
 
 type SearchOwner = Pick<SearchParams, "organizationId" | "userId">;
 
+type RecentFilePreviewFieldParams = SearchOwner & {
+  entityId: string;
+  mimeType: string | null;
+  workspaceId: string;
+};
+
 export type SearchAISummaryParams = {
   query: string;
   locale: string;
@@ -143,6 +149,16 @@ const searchKeys = {
         resultId,
         type,
         updatedAt,
+      },
+    ] as const,
+  recentFilePreviewField: (params: RecentFilePreviewFieldParams) =>
+    [
+      ...searchKeys.owner(params),
+      "recent-file-preview-field",
+      {
+        entityId: params.entityId,
+        mimeType: params.mimeType,
+        workspaceId: params.workspaceId,
       },
     ] as const,
   facet: (params: SearchFacetParams) =>
@@ -254,6 +270,33 @@ export const searchPreviewOptions = ({
     },
     refetchOnMount: "always",
     staleTime: 0,
+  });
+
+/**
+ * Resolves legacy recent-file entries recorded before recents persisted their
+ * file field id. The entity endpoint reauthorizes the workspace on every
+ * cache miss; the owner-scoped key prevents reuse across org/user switches.
+ */
+export const recentFilePreviewFieldOptions = (
+  params: RecentFilePreviewFieldParams,
+) =>
+  queryOptions({
+    queryKey: searchKeys.recentFilePreviewField(params),
+    queryFn: async ({ signal }) => {
+      const response = await api
+        .entities({ workspaceId: toSafeId<"workspace">(params.workspaceId) })
+        .entity({ entityId: toSafeId<"entity">(params.entityId) })
+        .get({ fetch: { signal } });
+      const entity = unwrapEden(response);
+      const field = entity.fields.find(
+        (candidate) =>
+          candidate.content.type === "file" &&
+          (params.mimeType === null ||
+            candidate.content.mimeType === params.mimeType),
+      );
+
+      return field?.id ?? null;
+    },
   });
 
 export const searchFacetOptions = (params: SearchFacetParams) =>

@@ -188,10 +188,13 @@ const hasSelectedEntityType = (selected: ReadonlySet<GlobalSearchResultType>) =>
 const fileFieldJoin = sql`
   LEFT JOIN LATERAL (
     SELECT
+      (array_agg(files.field_id ORDER BY files.mime_type, files.field_id))[1] AS field_id,
       (array_agg(DISTINCT files.mime_type ORDER BY files.mime_type))[1] AS mime_type,
       array_agg(DISTINCT files.mime_type ORDER BY files.mime_type) AS mime_types
     FROM (
-      SELECT field_content.content ->> 'mimeType' AS mime_type
+      SELECT
+        f.id AS field_id,
+        field_content.content ->> 'mimeType' AS mime_type
       FROM fields f
       CROSS JOIN LATERAL (
         SELECT CASE jsonb_typeof(f.content)
@@ -644,6 +647,7 @@ export const searchGlobal = async ({
         sd.title,
         editor.name AS last_edited_by_name,
         editor.image AS last_edited_by_image,
+        file_field.field_id AS file_field_id,
         file_field.mime_type,
         ${searchHeadline(sql`sd.title || ' ' || left(sd.searchable_text, 2000)`)},
         ${searchScore({ tsv: sql`sd.tsv`, updatedAt: sql`sd.updated_at` })},

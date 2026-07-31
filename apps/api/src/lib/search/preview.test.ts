@@ -69,7 +69,6 @@ describe("search preview authorization scope", () => {
       "matter",
       "contact",
       "case-law",
-      "chat",
       "document",
       "folder",
       "task",
@@ -120,7 +119,6 @@ describe("search preview authorization scope", () => {
     const projectionTypes = [
       "matter",
       "contact",
-      "chat",
     ] as const satisfies readonly GlobalSearchResultType[];
 
     for (const type of projectionTypes) {
@@ -189,12 +187,28 @@ describe("search preview authorization scope", () => {
   test("chat preview is private to its user, org, and workspace set", () => {
     const compiled = compilePreview("chat");
     expect(compiled.sql).toContain("FROM chat_thread_search_documents cst");
+    expect(compiled.sql).toContain("FROM chat_message_search_documents");
+    expect(compiled.sql).toContain("JOIN chat_messages message");
+    expect(compiled.sql).toContain("ts_rank_cd(matching.tsv");
+    expect(compiled.sql).toContain("ORDER BY nearby.created_at");
+    expect(compiled.sql).toContain("LIMIT");
     expect(compiled.sql).toContain("t.user_id =");
     expect(compiled.sql).toContain("t.organization_id =");
     expect(compiled.sql).toContain("t.workspace_id IS NULL");
     expect(compiled.sql).toContain("data_workspace_ids <@");
     expect(compiled.params).toContain(userId);
     expect(compiled.params).toContain(organizationId);
+  });
+
+  test("chat filter-only preview returns a bounded recent message window", () => {
+    const compiled = compilePreview("chat", "");
+
+    expect(compiled.sql).not.toContain("ts_rank_cd");
+    expect(compiled.sql).not.toContain("matching.tsv @@");
+    expect(compiled.sql).toContain("latest.created_at DESC");
+    expect(compiled.sql).toContain("JOIN chat_messages message");
+    expect(compiled.params).toContain(6);
+    expect(compiled.params).toContain(0);
   });
 
   test("case-law preview stays on the intentionally public corpus", () => {

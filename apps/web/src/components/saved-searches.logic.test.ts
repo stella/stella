@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   canSaveSearch,
   savedSearchKeys,
+  shouldShowSavedSearchList,
   toSavedSearchCriteria,
   toSearchFilters,
 } from "./saved-searches.logic";
@@ -52,6 +53,26 @@ describe("saved search eligibility", () => {
         query: "",
       }),
     ).toBe(false);
+  });
+});
+
+describe("saved search list visibility", () => {
+  test("hides a successfully loaded empty list", () => {
+    expect(
+      shouldShowSavedSearchList({ itemCount: 0, status: "success" }),
+    ).toBeFalse();
+  });
+
+  test("keeps loading, error, and non-empty states visible", () => {
+    expect(
+      shouldShowSavedSearchList({ itemCount: 0, status: "pending" }),
+    ).toBeTrue();
+    expect(
+      shouldShowSavedSearchList({ itemCount: 0, status: "error" }),
+    ).toBeTrue();
+    expect(
+      shouldShowSavedSearchList({ itemCount: 1, status: "success" }),
+    ).toBeTrue();
   });
 });
 

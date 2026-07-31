@@ -2,6 +2,7 @@ import { startTransition, useId, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { useFormStatus } from "react-dom";
 
+import { useQuery } from "@tanstack/react-query";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
@@ -13,6 +14,7 @@ import { ScrollArea } from "@stll/ui/components/scroll-area";
 
 import { useTheme } from "@/components/theme-provider";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useAnalytics } from "@/lib/analytics/provider";
 import { usePageVisibility } from "@/lib/pdf/hooks/use-page-visibility";
 import { usePDFControlledScaleOffset } from "@/lib/pdf/hooks/use-pdf-controlled-scale-offset";
 import { usePDFDocument } from "@/lib/pdf/hooks/use-pdf-document";
@@ -24,6 +26,7 @@ import type { PDFDocument } from "@/lib/pdf/pdf-loader";
 import type { PDFPageProps } from "@/lib/pdf/pdf-page";
 import { approximateFraction } from "@/lib/pdf/pdfjs-utils";
 import { getDevicePixelRatio } from "@/lib/pdf/utils";
+import type { SearchMatchSummary } from "@/lib/search-match-navigation";
 import { composeRefs } from "@/lib/utils";
 
 export { usePDFStore } from "@/lib/pdf/pdf-context";
@@ -40,14 +43,21 @@ type PDFViewportProps = {
   invertColors?: boolean | undefined;
   className?: string | undefined;
   contentClassName?: string | undefined;
+  searchText?: string | undefined;
+  activeSearchMatchIndex?: number | undefined;
+  onSearchMatchSummaryChange?:
+    | ((summary: SearchMatchSummary) => void)
+    | undefined;
   renderPage: (props: PDFPageProps) => ReactNode;
 };
 
 type PDFViewerContentProps = Omit<
   PDFViewportProps,
-  "fallback" | "fileId" | "password" | "buffer"
+  "fileId" | "password" | "buffer"
 > & {
+  buffer: ArrayBuffer;
   document: PDFDocument;
+  password?: string | undefined;
 };
 
 type PDFViewportStyle = CSSProperties & {
@@ -82,7 +92,14 @@ export const PDFViewport = ({
   });
 
   if (Result.isOk(result)) {
-    return <PDFViewerContent {...contentProps} document={result.value} />;
+    return (
+      <PDFViewerContent
+        {...contentProps}
+        buffer={buffer}
+        document={result.value}
+        password={password}
+      />
+    );
   }
 
   if (
@@ -104,23 +121,64 @@ export const PDFViewport = ({
 };
 
 const PDFViewerContent = ({
+  buffer,
   document,
+  password,
   page,
   onPageChanged,
   scaleOffset = 0,
   invertColors,
   className,
   contentClassName,
+  searchText = "",
+  activeSearchMatchIndex = 0,
+  onSearchMatchSummaryChange,
   renderPage,
 }: PDFViewerContentProps) => {
   const { resolvedTheme } = useTheme();
+  const analytics = useAnalytics();
   const shouldInvert = invertColors ?? resolvedTheme === "dark";
-  const [attachmentLabels, scale, pages, setDocument] = usePDFStore(
-    useShallow((s) => [s.attachmentLabels, s.scale, s.pages, s.setDocument]),
-  );
+  const [attachmentLabels, scale, pages, setDocument, setScrollTo] =
+    usePDFStore(
+      useShallow((s) => [
+        s.attachmentLabels,
+        s.scale,
+        s.pages,
+        s.setDocument,
+        s.setScrollTo,
+      ]),
+    );
+  const normalizedSearchText = searchText.trim();
+  const searchPageQuery = useQuery({
+    enabled: normalizedSearchText.length > 0,
+    queryFn: async ({ signal }) => {
+      const { findPDFSearchResultsInWorker } =
+        await import("@/lib/pdf/pdf-search-worker-client");
+      signal.throwIfAborted();
+      return await findPDFSearchResultsInWorker({
+        bytes: buffer.slice(0),
+        password,
+        searchText: normalizedSearchText,
+        signal,
+      });
+    },
+    queryKey: [
+      "pdf-search-page",
+      document.document.fingerprints.at(0),
+      normalizedSearchText,
+      password === undefined ? "unprotected" : "password-protected",
+    ],
+    staleTime: Number.POSITIVE_INFINITY,
+  });
 
   const effectiveScale = scale + scaleOffset;
   const pageIds = useMemo(() => pages.keys().toArray(), [pages]);
+  const activeSearchMatch = searchPageQuery.data?.matches.at(
+    activeSearchMatchIndex,
+  );
+  const searchPageId = activeSearchMatch
+    ? pageIds.at(activeSearchMatch.pageIndex)
+    : undefined;
   const viewportStyle: PDFViewportStyle = {
     "--pdf-page-filter": shouldInvert ? "invert(1) hue-rotate(180deg)" : "none",
     "--scale-factor": effectiveScale,
@@ -135,6 +193,29 @@ const PDFViewerContent = ({
       setDocument(document);
     });
   }, [document, setDocument]);
+
+  useExternalSyncEffect(() => {
+    if (searchPageId) {
+      setScrollTo({ pageId: searchPageId });
+    }
+  }, [searchPageId, setScrollTo]);
+
+  useExternalSyncEffect(() => {
+    onSearchMatchSummaryChange?.({
+      count: searchPageQuery.data?.matches.length ?? 0,
+      truncated: searchPageQuery.data?.truncated ?? false,
+    });
+  }, [
+    onSearchMatchSummaryChange,
+    searchPageQuery.data?.matches.length,
+    searchPageQuery.data?.truncated,
+  ]);
+
+  useExternalSyncEffect(() => {
+    if (searchPageQuery.error) {
+      analytics.captureError(searchPageQuery.error);
+    }
+  }, [analytics, searchPageQuery.error]);
 
   useTextSelection(containerRef);
   const fitToWidthRef = usePDFFitToWidth({
@@ -181,13 +262,23 @@ const PDFViewerContent = ({
         className={contentClassName}
         style={viewportStyle}
       >
-        {pageIds.map((pageId) => {
+        {pageIds.map((pageId, pageIndex) => {
           const label = attachmentLabels.get(pageId);
+          const searchMatches = searchPageQuery.data?.matches.flatMap(
+            (match, matchIndex) =>
+              match.pageIndex === pageIndex
+                ? [{ boxes: match.boxes, matchIndex }]
+                : [],
+          );
 
           return (
             <div key={pageId}>
               {label && <PDFBanner label={label} />}
-              {renderPage({ pageId })}
+              {renderPage({
+                activeSearchMatchIndex,
+                pageId,
+                searchMatches,
+              })}
             </div>
           );
         })}

@@ -1,11 +1,39 @@
 import type { GlobalSearchHit, GlobalSearchResultType } from "@stll/api/types";
 
+import { DOCX_MIME, PDF_MIME } from "@/lib/consts";
+
 export const normalizeSearchQuery = (query: string): string => query.trim();
 
 export const stripSearchMarkup = (value: string): string =>
   value.replaceAll("<mark>", " ").replaceAll("</mark>", " ").trim();
 
+export const getSearchHighlightText = (
+  headline: string | null,
+  query: string,
+): string => {
+  const normalizedQuery = normalizeSearchQuery(query);
+  if (normalizedQuery) {
+    return normalizedQuery;
+  }
+
+  if (!headline) {
+    return "";
+  }
+
+  const start = headline.indexOf("<mark>");
+  const end = headline.indexOf("</mark>", start);
+  if (start === -1 || end === -1 || end <= start) {
+    return stripSearchMarkup(headline);
+  }
+
+  return stripSearchMarkup(headline.slice(start + "<mark>".length, end));
+};
+
 type SearchPreviewContent =
+  | {
+      messages: SearchPreviewChatMessage[];
+      type: "chat-messages";
+    }
   | {
       content: string;
       type: "highlighted-html";
@@ -15,7 +43,17 @@ type SearchPreviewContent =
       type: "plain-text";
     };
 
+export type SearchPreviewChatMessage = {
+  content: string;
+  id: string;
+  role: "assistant" | "system" | "user";
+};
+
 type SearchPreviewRenderContent =
+  | {
+      messages: SearchPreviewChatMessage[];
+      type: "chat-messages";
+    }
   | {
       directionText: string;
       html: string;
@@ -31,6 +69,8 @@ export const getSearchPreviewRenderContent = (
   preview: SearchPreviewContent,
 ): SearchPreviewRenderContent => {
   switch (preview.type) {
+    case "chat-messages":
+      return { type: preview.type, messages: preview.messages };
     case "highlighted-html":
       return {
         type: preview.type,
@@ -59,6 +99,55 @@ export const shouldShowSearchPreview = ({
   isMobile,
   previewEnabled,
 }: SearchPreviewVisibilityArgs): boolean => previewEnabled && !isMobile;
+
+type DisplayedSearchPreviewHitArgs = {
+  hit: GlobalSearchHit | null;
+  showPreview: boolean;
+};
+
+export const selectDisplayedSearchPreviewHit = ({
+  hit,
+  showPreview,
+}: DisplayedSearchPreviewHitArgs): GlobalSearchHit | null =>
+  showPreview ? hit : null;
+
+export type NativeSearchDocumentPreviewTarget = {
+  entityId: string;
+  fieldId: string;
+  filePurpose: "display" | "native-display";
+  mimeType: typeof DOCX_MIME | typeof PDF_MIME;
+  workspaceId: string;
+};
+
+export const getNativeSearchDocumentPreviewTarget = (
+  hit: GlobalSearchHit,
+): NativeSearchDocumentPreviewTarget | null => {
+  if (hit.type !== "document" || hit.fileFieldId === null) {
+    return null;
+  }
+
+  if (hit.mimeType === PDF_MIME) {
+    return {
+      entityId: hit.entityId,
+      fieldId: hit.fileFieldId,
+      filePurpose: "display",
+      mimeType: hit.mimeType,
+      workspaceId: hit.workspaceId,
+    };
+  }
+
+  if (hit.mimeType === DOCX_MIME) {
+    return {
+      entityId: hit.entityId,
+      fieldId: hit.fileFieldId,
+      filePurpose: "native-display",
+      mimeType: hit.mimeType,
+      workspaceId: hit.workspaceId,
+    };
+  }
+
+  return null;
+};
 
 type AuthorizedSearchPreviewDataArgs<T> = {
   data: T | undefined;
