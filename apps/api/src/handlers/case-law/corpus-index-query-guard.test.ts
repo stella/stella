@@ -15,6 +15,11 @@ const generationMigrationSource = new URL(
   "../../../drizzle/20260731170000_case_law_corpus_generation_backfill/migration.sql",
   import.meta.url,
 );
+const GENERATION_STATE_TABLES = [
+  "case_law_corpus_index_backfills",
+  "case_law_corpus_index_writer_leases",
+  "case_law_corpus_index_projections",
+] as const;
 
 test("case-law incremental corpus scans never select a generation inequality", async () => {
   const source = await Bun.file(caseLawCorpusIndexSource).text();
@@ -30,13 +35,17 @@ test("case-law incremental corpus scans never select a generation inequality", a
 test("generation checkpoint migration preserves replay and role invariants", async () => {
   const source = await Bun.file(generationMigrationSource).text();
 
-  expect(source).toContain(
-    'ALTER TABLE "case_law_corpus_index_backfills" ENABLE ROW LEVEL SECURITY',
-  );
-  expect(source).toContain(
-    'GRANT SELECT, INSERT, UPDATE, DELETE\n  ON TABLE "case_law_corpus_index_backfills" TO stella_ingestion',
-  );
-  expect(source.match(/SELECT 1 FROM pg_policies/gu)).toHaveLength(4);
+  for (const table of GENERATION_STATE_TABLES) {
+    expect(source).toContain(
+      `ALTER TABLE "${table}" ENABLE ROW LEVEL SECURITY`,
+    );
+    expect(source).toContain(
+      `GRANT SELECT, INSERT, UPDATE, DELETE\n  ON TABLE "${table}" TO stella_ingestion`,
+    );
+    expect(
+      source.match(new RegExp(`tablename = '${table}'`, "gu")),
+    ).toHaveLength(2);
+  }
   expect(source).toContain(
     'CONSTRAINT "case_law_corpus_index_projections_pk" PRIMARY KEY ("generation", "decision_id")',
   );
