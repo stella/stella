@@ -163,15 +163,20 @@ export const SearchChatPreview = ({
           />
         </div>
       )}
-      {messages.map((message, index) => (
-        <Message from={message.role} key={message.id}>
-          <MessageContent>
-            <MessageResponse rehypePlugins={rehypePluginsByMessage[index]}>
-              {message.content}
-            </MessageResponse>
-          </MessageContent>
-        </Message>
-      ))}
+      {messages.map((message, index) => {
+        const rehypePlugins = rehypePluginsByMessage.at(index);
+        return (
+          <Message from={message.role} key={message.id}>
+            <MessageContent>
+              <MessageResponse
+                {...(rehypePlugins === undefined ? {} : { rehypePlugins })}
+              >
+                {message.content}
+              </MessageResponse>
+            </MessageContent>
+          </Message>
+        );
+      })}
     </div>
   );
 };

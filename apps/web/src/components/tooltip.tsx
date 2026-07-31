@@ -16,7 +16,7 @@ type TooltipProps = {
   align?: TooltipPrimitive.Popup.State["align"];
   side?: "top" | "bottom" | "left" | "right";
   className?: string;
-  layer?: OverlayLayer;
+  layer?: OverlayLayer | undefined;
 };
 
 export default function Tooltip({
@@ -32,12 +32,12 @@ export default function Tooltip({
     <TooltipRoot>
       <TooltipTrigger render={render}>{children}</TooltipTrigger>
       <TooltipPopup
-        align={align}
+        {...(align === undefined ? {} : { align })}
         // text nowrap fixes tooltip for buttons in pdf viewer controls
         className={cn("max-w-70 text-nowrap", className)}
         hidden={content === undefined || content === null || content === ""}
-        layer={layer}
-        side={side}
+        {...(layer === undefined ? {} : { layer })}
+        {...(side === undefined ? {} : { side })}
       >
         {content}
       </TooltipPopup>
