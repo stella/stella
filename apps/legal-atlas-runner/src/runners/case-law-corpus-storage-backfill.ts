@@ -5,9 +5,6 @@ import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { caseLawDecisions, legislationDocuments } from "@/api/db/schema";
 import { backfillCorpusIndex } from "@/api/handlers/case-law/corpus-index";
-import { writeCorpusDocument } from "@/api/handlers/case-law/corpus-storage";
-import type { EmptyAst } from "@/api/handlers/case-law/ingestion/adapter";
-import type { DecisionSection } from "@/api/handlers/case-law/types";
 import { backfillLegislationCorpusIndex } from "@/api/handlers/legislation/corpus-index";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -17,6 +14,11 @@ import {
   timestampMatchesCasToken,
 } from "@/api/lib/db/timestamp-cas";
 import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
+import { writeCorpusDocument } from "@/api/lib/legal-search/corpus-storage";
+import type {
+  DecisionSection,
+  EmptyAst,
+} from "@/api/lib/legal-search/document-types";
 import {
   isCorpusS3Stale,
   isS3Stale,
