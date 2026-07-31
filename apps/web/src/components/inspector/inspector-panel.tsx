@@ -27,6 +27,7 @@ import {
 } from "@/components/inspector/inspector-panel.logic";
 import { InspectorRail } from "@/components/inspector/inspector-rail";
 import {
+  closeInspectorTabsForEntities,
   isGenericInspectorTab,
   useInspectorStore,
 } from "@/components/inspector/inspector-store";
@@ -648,7 +649,6 @@ const CurrentFileFieldSync = ({
   isActive: boolean;
   tab: FileTab;
 }) => {
-  const closeTabsForEntities = useInspectorStore((s) => s.closeTabsForEntities);
   const replaceFileFieldId = useInspectorStore((s) => s.replaceFileFieldId);
   const [currentFileFieldIdsByProperty] = useState(
     () => new Map<string, string>(),
@@ -659,9 +659,9 @@ const CurrentFileFieldSync = ({
 
   useExternalSyncEffect(() => {
     if (APIError.is(error) && error.status === 404) {
-      closeTabsForEntities([tab.entityId]);
+      closeInspectorTabsForEntities([tab.entityId]);
     }
-  }, [closeTabsForEntities, error, tab.entityId]);
+  }, [error, tab.entityId]);
 
   const activeFileField = entity?.fields.find((field) => {
     if (field.content.type !== "file") {

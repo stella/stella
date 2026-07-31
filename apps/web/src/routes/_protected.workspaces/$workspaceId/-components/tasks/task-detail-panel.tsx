@@ -12,7 +12,10 @@ import { ScrollArea } from "@stll/ui/components/scroll-area";
 import { Skeleton } from "@stll/ui/components/skeleton";
 import { cn } from "@stll/ui/lib/utils";
 
-import { useInspectorStore } from "@/components/inspector/inspector-store";
+import {
+  closeInspectorTabsForEntities,
+  useInspectorStore,
+} from "@/components/inspector/inspector-store";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -57,7 +60,6 @@ export const TaskDetailPanel = ({
   const t = useTranslations("tasks");
   const tCommon = useTranslations("common");
   const closeTab = useInspectorStore((s) => s.closeTab);
-  const closeTabsForEntities = useInspectorStore((s) => s.closeTabsForEntities);
   const setMinimized = useInspectorStore((s) => s.setMinimized);
   const isNewTask = useInspectorStore((s) => {
     const found = s.tabs.find((tab) => tab.id === taskId);
@@ -81,9 +83,9 @@ export const TaskDetailPanel = ({
 
   useExternalSyncEffect(() => {
     if (APIError.is(taskError) && taskError.status === 404) {
-      closeTabsForEntities([taskId]);
+      closeInspectorTabsForEntities([taskId]);
     }
-  }, [closeTabsForEntities, taskError, taskId]);
+  }, [taskError, taskId]);
 
   const [isEditingName, setIsEditingName] = useState(false);
   const [editNameValue, setEditNameValue] = useState("");

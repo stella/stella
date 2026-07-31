@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import {
   buildSkillResourceTabId,
+  closeInspectorTabsForEntities,
   getInspectorTabsBroadcastChannelName,
   initializeInspectorTabBroadcast,
   useInspectorStore,
@@ -665,7 +666,7 @@ describe("closeTabsForEntities", () => {
       workspaceId: "workspace-1",
     });
 
-    useInspectorStore.getState().closeTabsForEntities(["entity-1"]);
+    closeInspectorTabsForEntities(["entity-1"]);
 
     expect(useInspectorStore.getState().tabs).toEqual([]);
     expect(useInspectorStore.getState().activeId).toBeNull();
@@ -698,9 +699,7 @@ describe("closeTabsForEntities", () => {
     });
     useInspectorStore.getState().setActive("field-1");
 
-    useInspectorStore
-      .getState()
-      .closeTabsForEntities(["entity-before", "entity-1"]);
+    closeInspectorTabsForEntities(["entity-before", "entity-1"]);
 
     expect(useInspectorStore.getState().tabs.map((tab) => tab.id)).toEqual([
       "thread-after",
@@ -726,7 +725,7 @@ describe("closeTabsForEntities", () => {
       workspaceId: "workspace-1",
     });
 
-    useInspectorStore.getState().closeTabsForEntities(["entity-1", "entity-2"]);
+    closeInspectorTabsForEntities(["entity-1", "entity-2"]);
 
     expect(useInspectorStore.getState().tabs.map((tab) => tab.id)).toEqual([
       "field-3",
@@ -749,7 +748,7 @@ describe("closeTabsForEntities", () => {
       id: toChatThreadId("thread-keep"),
     });
 
-    useInspectorStore.getState().closeTabsForEntities(["entity-1"]);
+    closeInspectorTabsForEntities(["entity-1"]);
 
     expect(useInspectorStore.getState().activeId).toBe("thread-keep");
   });
@@ -760,7 +759,7 @@ describe("closeTabsForEntities", () => {
     });
     const tabsBefore = useInspectorStore.getState().tabs;
 
-    useInspectorStore.getState().closeTabsForEntities(["entity-missing"]);
+    closeInspectorTabsForEntities(["entity-missing"]);
 
     expect(useInspectorStore.getState().tabs).toBe(tabsBefore);
   });

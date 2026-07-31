@@ -3,7 +3,7 @@ import { useTranslations } from "use-intl";
 
 import { stellaToast } from "@stll/ui/components/toast";
 
-import { useInspectorStore } from "@/components/inspector/inspector-store";
+import { closeInspectorTabsForEntities } from "@/components/inspector/inspector-store";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
@@ -70,7 +70,7 @@ export const useDeleteEntities = () => {
       return unwrapEden(response);
     },
     onSuccess: async (_data, { workspaceId, entityIds }) => {
-      useInspectorStore.getState().closeTabsForEntities(entityIds);
+      closeInspectorTabsForEntities(entityIds);
       await invalidateDeletedEntityQueries({
         queryClient,
         workspaceId,
