@@ -14,8 +14,24 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createFileKey } from "@/api/lib/file-key";
-import { deleteS3ObjectWithSignal } from "@/api/lib/s3";
+import type { deleteS3ObjectWithSignal } from "@/api/lib/s3";
 import { withTimeout } from "@/api/lib/with-timeout";
+
+/**
+ * Deleting the object is resolved when it is called, not when this module is
+ * evaluated. Reconciliation only ever needs it on the failure path, and every
+ * caller that cares injects its own, so binding the real one at import time
+ * would pull the storage module into the graph of everything that imports this
+ * one for its constants alone.
+ */
+const deleteObjectFromStorage: typeof deleteS3ObjectWithSignal = async (
+  key,
+  signal,
+) => {
+  const { deleteS3ObjectWithSignal: deleteObject } =
+    await import("@/api/lib/s3");
+  await deleteObject(key, signal);
+};
 
 export const BUFFER_INTENT_TTL_MS = 5 * 60 * 1000;
 export const BUFFER_INTENT_STALE_MS = 60 * 1000;
@@ -330,7 +346,7 @@ const reconcileStaleBufferIntentBatch = async ({
   scope,
   limit,
   signal,
-  deleteObject = deleteS3ObjectWithSignal,
+  deleteObject = deleteObjectFromStorage,
 }: {
   safeDb: SafeDb;
   scope?: BufferIntentScope | undefined;
@@ -487,7 +503,7 @@ export const reconcileBufferObjectCleanupIntents = async ({
   safeDb,
   limit,
   signal,
-  deleteObject = deleteS3ObjectWithSignal,
+  deleteObject = deleteObjectFromStorage,
 }: {
   safeDb: SafeDb;
   limit: number;
@@ -598,7 +614,7 @@ export const reconcileStaleBufferIntentsGlobally = async ({
   safeDb,
   limit,
   signal,
-  deleteObject = deleteS3ObjectWithSignal,
+  deleteObject = deleteObjectFromStorage,
 }: {
   safeDb: SafeDb;
   limit: number;
