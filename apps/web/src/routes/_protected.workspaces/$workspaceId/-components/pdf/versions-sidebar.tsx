@@ -44,7 +44,12 @@ import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { toSafeId } from "@/lib/safe-id";
-import { entityVersionsKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entity-versions";
+import {
+  type EntityVersion as Version,
+  entityVersionsKeys,
+} from "@/routes/_protected.workspaces/$workspaceId/-queries/entity-versions";
+
+export type { EntityVersion as Version } from "@/routes/_protected.workspaces/$workspaceId/-queries/entity-versions";
 
 type VersionsSidebarProps = {
   workspaceId: string;
@@ -64,27 +69,6 @@ type VersionsSidebarProps = {
   loadOlderError?: boolean | undefined;
   /** Fetch + prepend the page immediately older than the current top. */
   onLoadOlder?: (() => void | PromiseLike<void>) | undefined;
-};
-
-export type { Version };
-
-type Version = {
-  id: string;
-  versionNumber: number;
-  stamp: string | null;
-  label: string | null;
-  description: string | null;
-  diffWordsAdded: number | null;
-  diffWordsRemoved: number | null;
-  createdAt: string;
-  author: { id: string; name: string; image: string | null } | null;
-  file: {
-    fieldId: string;
-    propertyId: string;
-    fileName: string;
-    mimeType: string;
-    sizeBytes: number;
-  } | null;
 };
 
 type LabelPreset = {

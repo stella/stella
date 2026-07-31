@@ -10,6 +10,30 @@ type EntityVersionsKey = {
   entityId: string;
 };
 
+export type EntityVersion = {
+  id: string;
+  versionNumber: number;
+  stamp: string | null;
+  label: string | null;
+  description: string | null;
+  diffWordsAdded: number | null;
+  diffWordsRemoved: number | null;
+  createdAt: string;
+  author: { id: string; name: string; image: string | null } | null;
+  file: {
+    fieldId: string;
+    propertyId: string;
+    fileName: string;
+    mimeType: string;
+    sizeBytes: number;
+  } | null;
+};
+
+type EntityVersionsData = {
+  versions: EntityVersion[];
+  olderCursor: string | null;
+};
+
 export const entityVersionsKeys = {
   all: ({ workspaceId, entityId }: EntityVersionsKey) =>
     entitiesKeys.versions(workspaceId, entityId),
@@ -30,13 +54,17 @@ export const entityVersionsOptions = ({
   queryOptions({
     queryKey: entityVersionsKeys.all({ workspaceId, entityId }),
     retry: shouldRetryAPIRequest,
-    queryFn: async ({ signal }) => {
+    queryFn: async ({ signal }): Promise<EntityVersionsData> => {
       const response = await api
         .entities({ workspaceId })
         .entity({ entityId })
         .versions.get({ fetch: { signal } });
 
-      return unwrapEden(response);
+      const data = unwrapEden(response);
+      return {
+        versions: data.versions,
+        olderCursor: data.olderCursor,
+      };
     },
   });
 
@@ -44,7 +72,7 @@ export const fetchOlderVersions = async ({
   workspaceId,
   entityId,
   before,
-}: EntityVersionsKey & { before: string }) => {
+}: EntityVersionsKey & { before: string }): Promise<EntityVersionsData> => {
   const response = await api
     .entities({ workspaceId })
     .entity({ entityId })
@@ -76,7 +104,7 @@ export const fieldFileOptions = ({
   fieldId,
   enabled = true,
 }: EntityVersionsKey & { fieldId: string; enabled?: boolean }) =>
-  queryOptions({
+  ({
     queryKey: [
       ...entityVersionsKeys.all({ workspaceId, entityId }),
       "field-file",
@@ -84,7 +112,11 @@ export const fieldFileOptions = ({
     ],
     enabled,
     retry: shouldRetryAPIRequest,
-    queryFn: async ({ signal }): Promise<FieldFileData> => {
+    queryFn: async ({
+      signal,
+    }: {
+      signal: AbortSignal;
+    }): Promise<FieldFileData> => {
       const response = await api
         .entities({ workspaceId })
         .entity({ entityId })
@@ -104,7 +136,7 @@ export const fieldFileOptions = ({
         },
       };
     },
-  });
+  }) as const;
 
 export const entityVersionDetailOptions = ({
   workspaceId,
