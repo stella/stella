@@ -72,6 +72,8 @@ const VISIBLE_ACTIONS = [
   AUDIT_ACTION.REVIEW,
 ] as const;
 
+type VisibleActivityAction = (typeof VISIBLE_ACTIONS)[number];
+
 const LEGACY_VISIBLE_RESOURCE_TYPES = [
   AUDIT_RESOURCE_TYPE.ENTITY,
   AUDIT_RESOURCE_TYPE.ENTITY_VERSION,
@@ -482,7 +484,7 @@ const readOverviewActivity = createSafeHandler(
       safeDb(async (tx) => {
         const rows = await tx
           .select({
-            action: auditLogs.action,
+            action: sql<VisibleActivityAction>`${auditLogs.action}`,
             activityCategory: auditLogs.activityCategory,
             approvalStatus: auditLogs.approvalStatus,
             approvedByUserId: auditLogs.approvedByUserId,
