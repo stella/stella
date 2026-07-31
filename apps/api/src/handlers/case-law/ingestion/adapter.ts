@@ -58,10 +58,34 @@ export type IngestionResult = {
   sourceRawContentType?: string | undefined;
 };
 
+/**
+ * What a source says it holds for the slice just crawled, against what the
+ * crawl actually produced.
+ *
+ * Coverage is otherwise unknowable: a crawl that silently stops early looks
+ * exactly like a slice with fewer decisions in it. Reporting the source's
+ * own count next to the collected count turns that into a number the
+ * reconciliation pass can act on. Adapters whose source publishes no count
+ * omit it, and their slices are simply not tracked.
+ */
+export type SliceCoverage = {
+  /**
+   * The crawl slice these counts describe — a calendar day for date-cursor
+   * adapters. Stable across re-crawls, since it keys the ledger row.
+   */
+  slice: string;
+  /** How many records the source says the slice contains. */
+  reported: number;
+  /** How many this crawl produced for it. */
+  collected: number;
+};
+
 /** A page of ingestion results with an optional cursor. */
 export type SyncPage = {
   decisions: IngestionResult[];
   nextCursor: string | null;
+  /** Present on the page that completes a slice; see `SliceCoverage`. */
+  coverage?: SliceCoverage | undefined;
 };
 
 /**

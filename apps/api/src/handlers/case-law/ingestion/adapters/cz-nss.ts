@@ -10,6 +10,7 @@ import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   EmptyAst,
   IngestionResult,
+  SliceCoverage,
   SourceAdapter,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import {
@@ -965,26 +966,19 @@ export const czNssAdapter: SourceAdapter = {
           };
         }
 
-        // Day-completeness signal: the court states how many records its
-        // own search matched, so a partial crawl is measurable instead of
-        // inferred. Emitted on the last page of a day, where the running
-        // total is known.
-        if (page === 0 || rows.length < RESULTS_PER_PAGE) {
-          const reported = reportedResultCount(searchResult.html);
-          if (reported !== null) {
-            const collected = page * RESULTS_PER_PAGE + rows.length;
-            logger[collected < reported ? "warn" : "info"](
-              "case_law.ingestion.day_coverage",
-              {
-                adapterKey: ADAPTER_KEYS.CZ_NSS,
-                day: date,
+        // Day-completeness: the court states how many records its own
+        // search matched, so a partial crawl is measurable rather than
+        // inferred. Reported on the page that finishes the day, where the
+        // running total is known (see CLAUDE.md rule 15).
+        const reported = reportedResultCount(searchResult.html);
+        const dayCoverage: SliceCoverage | undefined =
+          reported === null
+            ? undefined
+            : {
+                slice: date,
                 reported,
-                collected,
-                missing: Math.max(0, reported - collected),
-              },
-            );
-          }
-        }
+                collected: page * RESULTS_PER_PAGE + rows.length,
+              };
 
         // A full page with no continuation token is not the end of the day
         // — it is a day whose remainder is unreachable. Advancing here
@@ -1004,6 +998,7 @@ export const czNssAdapter: SourceAdapter = {
         return {
           decisions,
           nextCursor: next <= today ? `${next}:0` : `${today}:0`,
+          ...(dayCoverage === undefined ? {} : { coverage: dayCoverage }),
         };
       },
       catch: adapterCatch(ADAPTER_KEYS.CZ_NSS, cursor),

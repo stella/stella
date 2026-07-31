@@ -41,6 +41,7 @@ import {
   isSelfCitation,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { publisherCitationGap } from "@/api/handlers/case-law/ingestion/citation-recall";
+import { recordSliceCoverage } from "@/api/handlers/case-law/ingestion/coverage-ledger";
 import { storedDecisionSignal } from "@/api/handlers/case-law/ingestion/parsers/validate-ast";
 import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
 import {
@@ -1239,6 +1240,17 @@ export const runIngestionPipeline = async ({
         // changes again.
         haltReason = `${pageS3Failures} corpus write failure(s); cursor held for retry`;
       }
+      // Record what the source said this slice holds against what the
+      // crawl produced. Written before the cursor advances, so a slice is
+      // never passed without leaving a row behind to reconcile against.
+      if (page.coverage) {
+        // oxlint-disable-next-line no-await-in-loop -- the row must land before this page's cursor advances, so it cannot be deferred past the loop
+        await recordSliceCoverage(scopedDb, {
+          sourceId: source.id,
+          coverage: page.coverage,
+        });
+      }
+
       logger.info("case_law.ingestion.pipeline_page_done", {
         adapterKey: adapter.key,
         cursor: cursor ?? "",

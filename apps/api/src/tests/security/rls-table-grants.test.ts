@@ -50,6 +50,9 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   "legislation_documents",
   "legislation_search_documents",
   "legislation_index_jobs",
+  // Crawl bookkeeping: the app role reads coverage for reporting, only
+  // ingestion writes it.
+  "case_law_coverage_slices",
 ]);
 
 // Internal outbox tables that scoped requests may append to, while privileged

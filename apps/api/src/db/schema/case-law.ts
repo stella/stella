@@ -232,6 +232,44 @@ export const caseLawDecisions = p.pgTable(
   ],
 );
 
+/**
+ * Per-slice crawl coverage: what a court said a slice contains against what
+ * the crawl stored for it.
+ *
+ * Without this, a partial crawl is indistinguishable from a quiet day, and
+ * the loss is silent and permanent — a forward-only cursor never revisits.
+ * A row per slice makes the shortfall queryable, so re-crawls target the
+ * slices that are actually short instead of re-running whole years.
+ */
+export const caseLawCoverageSlices = p.pgTable(
+  "case_law_coverage_slices",
+  {
+    id: pUuid<"caseLawCoverageSlice">().primaryKey(),
+    sourceId: safeUuid<"caseLawSource">("source_id")
+      .notNull()
+      .references(() => caseLawSources.id, { onDelete: "cascade" }),
+    /** The crawl slice, e.g. an ISO day for date-cursor adapters. */
+    slice: p.varchar({ length: 64 }).notNull(),
+    /** The source's own count for this slice. */
+    reported: p.integer().notNull(),
+    /** What the crawl produced for it. */
+    collected: p.integer().notNull(),
+    checkedAt: timestamptz("checked_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p
+      .uniqueIndex("case_law_coverage_slices_source_slice_idx")
+      .on(t.sourceId, t.slice),
+    // The reconciliation pass reads only the short slices, so the index
+    // covers that arm and shrinks as gaps close.
+    p
+      .index("case_law_coverage_slices_short_idx")
+      .on(t.sourceId, t.slice)
+      .where(sql`${t.collected} < ${t.reported}`),
+    ...globalCaseLawPolicies(),
+  ],
+);
+
 export const caseLawCitations = p.pgTable(
   "case_law_citations",
   {
