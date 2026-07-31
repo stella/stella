@@ -695,6 +695,12 @@ export const ChatThreadPage = ({
                   dock={
                     <ChatComposerDock
                       data={data}
+                      models={{
+                        activeOrganizationId,
+                        threadRef,
+                        selectedModel: data.model,
+                        selectModel: modelSelection.selectModel,
+                      }}
                       leadingContext={
                         <ChatMatterPicker
                           matterIds={selectedContextMatterIds}

@@ -14,6 +14,7 @@ import type {
 } from "@/components/chat-editor-provider";
 import { ChatComposerActionButton } from "@/components/chat/chat-composer-action-button";
 import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachment-chips";
+import { ChatPromptImproveButton } from "@/components/chat/chat-prompt-improve-button";
 import {
   ComposerPlusMenu,
   type ComposerContextMenuProps,
@@ -269,33 +270,34 @@ export const ChatInputSurface = ({
           )}
         </div>
         <div className="flex items-center justify-end gap-0.5 px-1.5 pb-1.5">
-          <ComposerPlusMenu
-            context={
-              context
-                ? {
-                    activeOrganizationId: context.activeOrganizationId,
-                    editor,
-                    threadRef: context.threadRef,
-                  }
-                : undefined
-            }
-            disabled={inputDisabled}
-            mcp={
-              mcpOrganizationId
-                ? { activeOrganizationId: mcpOrganizationId }
-                : undefined
-            }
-            models={models}
-            onOpenFilePicker={openFilePicker}
-            onProgrammaticMenuClose={focus}
-            ref={plusMenuRef}
-            skills={
-              skillsOrganizationId
-                ? { activeOrganizationId: skillsOrganizationId, editor }
-                : undefined
-            }
-            triggerClassName="me-auto"
-          />
+          <div className="me-auto flex min-w-0 items-center gap-0.5">
+            <ComposerPlusMenu
+              context={
+                context
+                  ? {
+                      activeOrganizationId: context.activeOrganizationId,
+                      editor,
+                      threadRef: context.threadRef,
+                    }
+                  : undefined
+              }
+              disabled={inputDisabled}
+              mcp={
+                mcpOrganizationId
+                  ? { activeOrganizationId: mcpOrganizationId }
+                  : undefined
+              }
+              models={models}
+              onOpenFilePicker={openFilePicker}
+              onProgrammaticMenuClose={focus}
+              ref={plusMenuRef}
+              skills={
+                skillsOrganizationId
+                  ? { activeOrganizationId: skillsOrganizationId, editor }
+                  : undefined
+              }
+            />
+          </div>
           <input
             accept={fileInputAccept}
             className="hidden"
@@ -305,6 +307,13 @@ export const ChatInputSurface = ({
             ref={fileInputRef}
             type="file"
           />
+          <span className="me-0.5 inline-flex">
+            <ChatPromptImproveButton
+              anonymized={anonymized}
+              controller={controller}
+              disabled={inputDisabled || isBlank}
+            />
+          </span>
           {/* The single primary affordance morphs in place: the button
               itself resolves send vs. stop from the state it is fed, so
               this surface cannot render a second, parallel control. */}

@@ -474,6 +474,11 @@
     "greeting": "Pie kā vēlaties strādāt?",
     "greetingSubtitle": "Sāciet ar lietu, dokumentu vai vienkāršu jautājumu.",
     "hideThread": "Paslēpt sarunu",
+    "improvePrompt": "Uzlabot uzvedni",
+    "improvePromptDraftChanged": "Melnraksts mainījās, tāpēc uzlabojums netika lietots.",
+    "improvePromptPlainTextOnly": "Uzvedni var uzlabot tikai vienkārša teksta formā.",
+    "improvePromptUnavailableAnonymized": "Anonimizētajā režīmā uzvedni nevar uzlabot.",
+    "improvingPrompt": "Uzvedne tiek uzlabota…",
     "inDocument": "Dokumentā",
     "jumpToMessage": "Pāriet uz šo ziņu",
     "landing": {
@@ -494,6 +499,15 @@
         "entities": "Šajā lietā"
       },
       "loadError": "Neizdevās ielādēt entītijas"
+    },
+    "modelMode": {
+      "deepThinking": "Padziļināta domāšana",
+      "deepThinkingDescription": "Sarežģīta argumentācija un analīze",
+      "exactModels": "Konkrēts modelis",
+      "fastDescription": "Ātri ikdienas jautājumi",
+      "select": "Atlasīt atbildes režīmu",
+      "standard": "Standarta",
+      "standardDescription": "Vislabāk piemērots vairumam uzdevumu"
     },
     "modelSelector": {
       "defaultLabel": "Noklusējuma (tērzēšanas loma)",

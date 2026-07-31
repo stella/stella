@@ -497,6 +497,12 @@ function ChatIndex() {
                     // (~system prompt + tools) rather than 0% until send.
                     context: chatDraftMeta?.context ?? null,
                   }}
+                  models={{
+                    activeOrganizationId,
+                    threadRef,
+                    selectedModel: chatDraftMeta?.model ?? null,
+                    selectModel: modelSelection.selectModel,
+                  }}
                   leadingContext={
                     <ChatMatterPicker
                       matterIds={contextMatterIds}

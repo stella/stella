@@ -474,6 +474,11 @@
     "greeting": "ما الذي تودّ العمل عليه؟",
     "greetingSubtitle": "ابدأ بملف قانوني أو مستند أو سؤال مباشر.",
     "hideThread": "إخفاء المحادثة",
+    "improvePrompt": "تحسين الطلب",
+    "improvePromptDraftChanged": "تغيّرت المسودة، لذلك لم يُطبّق التحسين.",
+    "improvePromptPlainTextOnly": "تحسين الطلب متاح للنص العادي فقط.",
+    "improvePromptUnavailableAnonymized": "تحسين الطلب غير متاح في وضع إخفاء الهوية.",
+    "improvingPrompt": "جارٍ تحسين الطلب…",
     "inDocument": "في المستند",
     "jumpToMessage": "الانتقال إلى هذه الرسالة",
     "landing": {
@@ -494,6 +499,15 @@
         "entities": "في هذا الملف القانوني"
       },
       "loadError": "تعذّر تحميل الكيانات"
+    },
+    "modelMode": {
+      "deepThinking": "تفكير عميق",
+      "deepThinkingDescription": "استدلال وتحليل معقدان",
+      "exactModels": "نموذج محدد",
+      "fastDescription": "أسئلة يومية سريعة",
+      "select": "اختيار وضع الإجابة",
+      "standard": "قياسي",
+      "standardDescription": "الأفضل لمعظم المهام"
     },
     "modelSelector": {
       "defaultLabel": "الافتراضي (دور المحادثة)",

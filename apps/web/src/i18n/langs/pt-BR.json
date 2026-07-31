@@ -474,6 +474,11 @@
     "greeting": "No que você gostaria de trabalhar?",
     "greetingSubtitle": "Comece com um caso, documento ou pergunta simples.",
     "hideThread": "Ocultar conversa",
+    "improvePrompt": "Melhorar prompt",
+    "improvePromptDraftChanged": "O rascunho mudou, então a melhoria não foi aplicada.",
+    "improvePromptPlainTextOnly": "A melhoria de prompts está disponível apenas para texto simples.",
+    "improvePromptUnavailableAnonymized": "A melhoria de prompts não está disponível no modo anonimizado.",
+    "improvingPrompt": "Melhorando prompt…",
     "inDocument": "No documento",
     "jumpToMessage": "Ir para esta mensagem",
     "landing": {
@@ -494,6 +499,15 @@
         "entities": "Neste caso"
       },
       "loadError": "Falha ao carregar entidades"
+    },
+    "modelMode": {
+      "deepThinking": "Raciocínio profundo",
+      "deepThinkingDescription": "Raciocínio e análise complexos",
+      "exactModels": "Modelo específico",
+      "fastDescription": "Perguntas rápidas do dia a dia",
+      "select": "Selecionar modo de resposta",
+      "standard": "Padrão",
+      "standardDescription": "Ideal para a maioria das tarefas"
     },
     "modelSelector": {
       "defaultLabel": "Padrão (função de chat)",

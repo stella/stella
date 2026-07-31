@@ -474,6 +474,11 @@
     "greeting": "Sur quoi souhaitez-vous travailler ?",
     "greetingSubtitle": "Commencez par un dossier, un document ou une question simple.",
     "hideThread": "Masquer la conversation",
+    "improvePrompt": "Améliorer le prompt",
+    "improvePromptDraftChanged": "Le brouillon a changé, l'amélioration n'a donc pas été appliquée.",
+    "improvePromptPlainTextOnly": "L'amélioration du prompt est disponible uniquement pour le texte brut.",
+    "improvePromptUnavailableAnonymized": "L'amélioration du prompt n'est pas disponible en mode anonymisé.",
+    "improvingPrompt": "Amélioration du prompt…",
     "inDocument": "Dans le document",
     "jumpToMessage": "Aller à ce message",
     "landing": {
@@ -494,6 +499,15 @@
         "entities": "Dans ce dossier"
       },
       "loadError": "Échec du chargement des entités"
+    },
+    "modelMode": {
+      "deepThinking": "Réflexion approfondie",
+      "deepThinkingDescription": "Raisonnement et analyse complexes",
+      "exactModels": "Modèle précis",
+      "fastDescription": "Questions rapides du quotidien",
+      "select": "Sélectionner le mode de réponse",
+      "standard": "Par défaut",
+      "standardDescription": "Idéal pour la plupart des tâches"
     },
     "modelSelector": {
       "defaultLabel": "Par défaut (rôle de chat)",

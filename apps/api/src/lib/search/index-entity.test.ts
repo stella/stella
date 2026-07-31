@@ -168,6 +168,11 @@ test("rejects an out-of-order projection against the authoritative entity", asyn
 
   const compiled = new PgDialect().sqlToQuery(query);
   expect(compiled.sql).toContain("FROM entities e");
+  expect(compiled.sql).toContain(
+    "INNER JOIN workspaces w ON w.id = e.workspace_id",
+  );
+  expect(compiled.sql).toContain("w.organization_id =");
+  expect(compiled.sql).not.toContain("e.organization_id");
   expect(compiled.sql).toContain("e.current_version_id =");
   expect(compiled.sql).toMatch(
     /COALESCE\(e\.updated_at, e\.created_at\)\s+IS NOT DISTINCT FROM/u,

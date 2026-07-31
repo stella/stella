@@ -626,7 +626,7 @@ export const ToolCallCard = ({
           </div>
         )}
       {hasError && errorMessage && (
-        <p className="text-destructive max-w-xl px-2 py-1 text-[11px] leading-relaxed whitespace-pre-wrap">
+        <p className="text-destructive max-w-xl py-1 text-[11px] leading-relaxed whitespace-pre-wrap">
           {errorMessage}
         </p>
       )}
