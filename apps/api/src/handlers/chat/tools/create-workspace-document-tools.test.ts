@@ -21,10 +21,12 @@ const enqueueImageThumbnailOrMarkFailedMock = mock(async () => {});
 const enqueuePdfDerivativeOrMarkFailedMock = mock(async () => {});
 
 void mock.module("@/api/lib/s3", () => ({
+  deleteS3ObjectWithSignal: s3DeleteMock,
   getS3: () => ({
     write: s3WriteMock,
     delete: s3DeleteMock,
   }),
+  putS3ObjectWithSignal: s3WriteMock,
 }));
 
 void mock.module("@/api/lib/search/process-extraction", () => ({
@@ -154,7 +156,7 @@ describe("createCreateWorkspaceDocumentTools", () => {
       select: () => ({
         from: () => ({
           where: () => ({
-            limit: () => ({ for: async () => [] }),
+            limit: () => ({ for: async () => [{ status: "active" }] }),
           }),
         }),
       }),

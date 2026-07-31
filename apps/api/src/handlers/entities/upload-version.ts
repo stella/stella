@@ -110,11 +110,29 @@ export default createSafeHandler(
       }),
     );
     if (Result.isError(created)) {
-      let status: 400 | 404 | 409 = 404;
-      if (created.error.code === "entity-read-only") {
-        status = 409;
-      } else if (created.error.code === "missing-file-field") {
-        status = 400;
+      let status: 400 | 404 | 409 | 413;
+      switch (created.error.code) {
+        case "current-version-not-found":
+        case "entity-not-found": {
+          status = 404;
+          break;
+        }
+        case "document-too-large": {
+          status = 413;
+          break;
+        }
+        case "entity-read-only": {
+          status = 409;
+          break;
+        }
+        case "missing-file-field": {
+          status = 400;
+          break;
+        }
+        default: {
+          const exhaustive: never = created.error.code;
+          return exhaustive;
+        }
       }
       return Result.err(
         new HandlerError({ status, message: created.error.message }),

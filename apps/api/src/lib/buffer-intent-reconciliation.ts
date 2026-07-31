@@ -1,4 +1,4 @@
-import { Result, TaggedError } from "better-result";
+import { Result, TaggedError, panic } from "better-result";
 import { and, asc, eq, inArray, lte, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
@@ -11,6 +11,7 @@ import {
 } from "@/api/db/schema";
 import type { PendingUploadPurposeData } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
+import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createFileKey } from "@/api/lib/file-key";
 import { deleteS3ObjectWithSignal } from "@/api/lib/s3";
@@ -25,6 +26,41 @@ export const BUFFER_INTENT_WRITE_TIMEOUT_MS = 2 * 60 * 1000;
 const BUFFER_CLEANUP_RETRY_MAX_EXPONENT = 14;
 
 export type BufferIntentPurpose = "entity_create" | "entity_version";
+
+export type BufferIntent = {
+  claimRequestId: string;
+  id: SafeId<"pendingUpload">;
+};
+
+type BufferIntentPurposeData =
+  | {
+      purpose: "entity_create";
+      purposeData: Extract<PendingUploadPurposeData, { type: "entity_create" }>;
+    }
+  | {
+      purpose: "entity_version";
+      purposeData: Extract<
+        PendingUploadPurposeData,
+        { type: "entity_version" }
+      >;
+    };
+
+type ReserveBufferIntentOptions = BufferIntentPurposeData & {
+  safeDb: SafeDb;
+  organizationId: SafeId<"organization">;
+  workspaceId: SafeId<"workspace">;
+  userId: SafeId<"user">;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  sha256Hex: string;
+};
+
+type BufferIntentTelemetryStages = {
+  abandon: string;
+  heartbeat: string;
+  heartbeatUnhandled: string;
+};
 
 type BufferIntentScope = {
   organizationId: SafeId<"organization">;
@@ -71,6 +107,153 @@ export const lockActiveWorkspaceForBufferIntent = async (
       message: "Workspace is not active",
     });
   }
+};
+
+/** Reserve the final object key before a trusted server-side writer publishes. */
+export const reserveBufferIntent = async ({
+  safeDb,
+  organizationId,
+  workspaceId,
+  userId,
+  purpose,
+  purposeData,
+  fileName,
+  mimeType,
+  sizeBytes,
+  sha256Hex,
+}: ReserveBufferIntentOptions): Promise<BufferIntent> => {
+  const id = createSafeId<"pendingUpload">();
+  const claimRequestId = Bun.randomUUIDv7().slice(0, 64);
+  const now = new Date();
+  const reserved = await safeDb(async (tx) => {
+    await lockActiveWorkspaceForBufferIntent(tx, workspaceId);
+    // audit: skip — crash-recovery intent; the durable entity mutation is
+    // audited in the transaction that finalizes this row.
+    const rows = await tx
+      .insert(pendingUploads)
+      .values({
+        id,
+        organizationId,
+        workspaceId,
+        userId,
+        purpose,
+        purposeData,
+        declaredName: fileName,
+        declaredMime: mimeType,
+        declaredSize: sizeBytes,
+        declaredSha256: sha256Hex,
+        status: "scanning",
+        claimedAt: now,
+        claimedByRequestId: claimRequestId,
+        expiresAt: new Date(now.getTime() + BUFFER_INTENT_TTL_MS),
+        createdAt: now,
+      })
+      .returning({ id: pendingUploads.id });
+    return rows.at(0)?.id ?? panic("Buffer intent insert returned no row");
+  });
+  if (Result.isError(reserved)) {
+    throw reserved.error;
+  }
+  return { id: reserved.value, claimRequestId };
+};
+
+/** Close a recoverable intent only after its exact object key was deleted. */
+export const abandonBufferIntent = async ({
+  safeDb,
+  intent,
+  reason,
+  telemetry,
+}: {
+  safeDb: SafeDb;
+  intent: BufferIntent;
+  reason: string;
+  telemetry: BufferIntentTelemetryStages;
+}): Promise<void> => {
+  const abandoned = await safeDb(async (tx) => {
+    // audit: skip — failed intent bookkeeping; no durable entity mutation.
+    // The writer reaches this only after its PUT settled and deletion of its
+    // exact reserved key succeeded, even if a reconciler replaced its lease.
+    await tx
+      .update(pendingUploads)
+      .set({
+        finalizedAt: new Date(),
+        rejectReason: reason,
+        status: "rejected",
+      })
+      .where(
+        and(
+          eq(pendingUploads.id, intent.id),
+          inArray(pendingUploads.status, PENDING_UPLOAD_RECOVERABLE_STATUSES),
+        ),
+      );
+    await tx
+      .delete(bufferObjectCleanupIntents)
+      .where(eq(bufferObjectCleanupIntents.id, intent.id));
+  });
+  if (Result.isError(abandoned)) {
+    captureError(abandoned.error, {
+      pendingUploadId: intent.id,
+      stage: telemetry.abandon,
+    });
+  }
+};
+
+/** Renew one writer's recovery lease until its storage/DB work settles. */
+export const startBufferIntentHeartbeat = ({
+  safeDb,
+  intent,
+  telemetry,
+}: {
+  safeDb: SafeDb;
+  intent: BufferIntent;
+  telemetry: BufferIntentTelemetryStages;
+}): (() => Promise<void>) => {
+  let heartbeatPromise: Promise<void> | null = null;
+  let stopped = false;
+  const heartbeat = async (): Promise<void> => {
+    try {
+      const renewed = await safeDb(async (tx) => {
+        // audit: skip — live crash-recovery lease bookkeeping only.
+        await tx
+          .update(pendingUploads)
+          .set({ claimedAt: new Date() })
+          .where(
+            and(
+              eq(pendingUploads.id, intent.id),
+              eq(pendingUploads.status, "scanning"),
+              eq(pendingUploads.claimedByRequestId, intent.claimRequestId),
+            ),
+          );
+      });
+      if (Result.isError(renewed)) {
+        captureError(renewed.error, {
+          pendingUploadId: intent.id,
+          stage: telemetry.heartbeat,
+        });
+      }
+    } catch (error) {
+      captureError(error, {
+        pendingUploadId: intent.id,
+        stage: telemetry.heartbeatUnhandled,
+      });
+    } finally {
+      heartbeatPromise = null;
+    }
+  };
+  const triggerHeartbeat = (): void => {
+    if (heartbeatPromise !== null || stopped) {
+      return;
+    }
+    heartbeatPromise = heartbeat();
+  };
+  const timer = setInterval(triggerHeartbeat, BUFFER_INTENT_HEARTBEAT_MS);
+  timer.unref();
+
+  return async () => {
+    stopped = true;
+    clearInterval(timer);
+    await heartbeatPromise;
+  };
 };
 
 export const isRecoverableBufferIntent = (
@@ -342,7 +525,7 @@ export const reconcileBufferObjectCleanupIntents = async ({
         nextAttemptAt: sql`NOW() + LEAST(
           POWER(2, LEAST(
             ${bufferObjectCleanupIntents.attemptCount},
-            ${BUFFER_CLEANUP_RETRY_MAX_EXPONENT}
+            ${BUFFER_CLEANUP_RETRY_MAX_EXPONENT}::integer
           )) * interval '1 minute',
           interval '24 hours'
         )`,

@@ -408,6 +408,7 @@ export const deleteS3ObjectWithSignal = async (
 export const putS3ObjectWithSignal = async (
   key: string,
   bytes: Uint8Array,
+  mimeType: string,
   signal: AbortSignal,
 ): Promise<void> => {
   _abortableClient ??= buildAbortableS3Client(staticCredentialsFromEnv());
@@ -415,6 +416,7 @@ export const putS3ObjectWithSignal = async (
     new PutObjectCommand({
       Body: bytes,
       Bucket: envBase.S3_BUCKET,
+      ContentType: mimeType,
       Key: key,
     }),
     { abortSignal: signal },

@@ -229,6 +229,7 @@ describe("createEntityVersionFromBuffer", () => {
     expect(s3WriteMock).toHaveBeenCalledWith(
       "org_1/ws_1/file_1.docx",
       expect.any(Uint8Array),
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       expect.any(AbortSignal),
     );
     expect(persistenceEvents).toEqual(["intent-reserved", "s3-written"]);

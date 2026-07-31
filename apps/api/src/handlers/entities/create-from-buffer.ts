@@ -1,15 +1,13 @@
 import { Result, TaggedError, panic } from "better-result";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
-  bufferObjectCleanupIntents,
   entities,
   entityVersions,
   fields,
   pendingUploads,
-  PENDING_UPLOAD_RECOVERABLE_STATUSES,
   workspaces,
 } from "@/api/db/schema";
 import type { PendingUploadFinalizedResult } from "@/api/db/schema";
@@ -28,10 +26,10 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   BUFFER_INTENT_DELETE_TIMEOUT_MS,
-  BUFFER_INTENT_HEARTBEAT_MS,
-  BUFFER_INTENT_TTL_MS,
   BUFFER_INTENT_WRITE_TIMEOUT_MS,
-  lockActiveWorkspaceForBufferIntent,
+  abandonBufferIntent,
+  reserveBufferIntent,
+  startBufferIntentHeartbeat,
 } from "@/api/lib/buffer-intent-reconciliation";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
@@ -46,169 +44,15 @@ import { processExtraction } from "@/api/lib/search/process-extraction";
 import { broadcast } from "@/api/lib/sse";
 import { withTimeout } from "@/api/lib/with-timeout";
 
-type BufferEntityCreateIntent = {
-  claimRequestId: string;
-  id: SafeId<"pendingUpload">;
-};
-
 const toSafeDb =
   (scopedDb: ScopedDb): SafeDb =>
   async <T>(run: (tx: Transaction) => Promise<T>) =>
     await Result.tryPromise(async () => await scopedDb(run));
 
-const reserveEntityCreateIntent = async ({
-  safeDb,
-  organizationId,
-  workspaceId,
-  userId,
-  propertyId,
-  fileId,
-  fileName,
-  mimeType,
-  sizeBytes,
-  sha256Hex,
-}: {
-  safeDb: SafeDb;
-  organizationId: SafeId<"organization">;
-  workspaceId: SafeId<"workspace">;
-  userId: SafeId<"user">;
-  propertyId: SafeId<"property">;
-  fileId: string;
-  fileName: string;
-  mimeType: string;
-  sizeBytes: number;
-  sha256Hex: string;
-}): Promise<BufferEntityCreateIntent> => {
-  const id = createSafeId<"pendingUpload">();
-  const claimRequestId = Bun.randomUUIDv7().slice(0, 64);
-  const now = new Date();
-  const reserved = await safeDb(async (tx) => {
-    await lockActiveWorkspaceForBufferIntent(tx, workspaceId);
-    // audit: skip — crash-recovery intent; entity creation is audited later.
-    const rows = await tx
-      .insert(pendingUploads)
-      .values({
-        id,
-        organizationId,
-        workspaceId,
-        userId,
-        purpose: "entity_create",
-        purposeData: {
-          type: "entity_create",
-          propertyId,
-          reservedFileId: fileId,
-        },
-        declaredName: fileName,
-        declaredMime: mimeType,
-        declaredSize: sizeBytes,
-        declaredSha256: sha256Hex,
-        status: "scanning",
-        claimedAt: now,
-        claimedByRequestId: claimRequestId,
-        expiresAt: new Date(now.getTime() + BUFFER_INTENT_TTL_MS),
-        createdAt: now,
-      })
-      .returning({ id: pendingUploads.id });
-    return (
-      rows.at(0)?.id ?? panic("Entity buffer intent insert returned no row")
-    );
-  });
-  if (Result.isError(reserved)) {
-    throw reserved.error;
-  }
-  return { id: reserved.value, claimRequestId };
-};
-
-const abandonEntityCreateIntent = async ({
-  safeDb,
-  intent,
-  reason,
-}: {
-  safeDb: SafeDb;
-  intent: BufferEntityCreateIntent;
-  reason: string;
-}): Promise<void> => {
-  const abandoned = await safeDb(async (tx) => {
-    // audit: skip — failed intent bookkeeping; no durable entity was created.
-    // The writer reaches this only after its PUT settled and deletion of its
-    // exact reserved key succeeded. It may therefore close a recoverable row
-    // even when the reconciler replaced its expired lease in the meantime.
-    await tx
-      .update(pendingUploads)
-      .set({
-        finalizedAt: new Date(),
-        rejectReason: reason,
-        status: "rejected",
-      })
-      .where(
-        and(
-          eq(pendingUploads.id, intent.id),
-          inArray(pendingUploads.status, PENDING_UPLOAD_RECOVERABLE_STATUSES),
-        ),
-      );
-    await tx
-      .delete(bufferObjectCleanupIntents)
-      .where(eq(bufferObjectCleanupIntents.id, intent.id));
-  });
-  if (Result.isError(abandoned)) {
-    captureError(abandoned.error, {
-      pendingUploadId: intent.id,
-      stage: "buffer-entity-intent-abandon",
-    });
-  }
-};
-
-const startEntityCreateIntentHeartbeat = ({
-  safeDb,
-  intent,
-}: {
-  safeDb: SafeDb;
-  intent: BufferEntityCreateIntent;
-}): (() => Promise<void>) => {
-  let heartbeatPromise: Promise<void> | null = null;
-  let stopped = false;
-  const heartbeat = async (): Promise<void> => {
-    try {
-      const renewed = await safeDb(async (tx) => {
-        // audit: skip — live crash-recovery lease bookkeeping only.
-        await tx
-          .update(pendingUploads)
-          .set({ claimedAt: new Date() })
-          .where(
-            and(
-              eq(pendingUploads.id, intent.id),
-              eq(pendingUploads.status, "scanning"),
-              eq(pendingUploads.claimedByRequestId, intent.claimRequestId),
-            ),
-          );
-      });
-      if (Result.isError(renewed)) {
-        captureError(renewed.error, {
-          pendingUploadId: intent.id,
-          stage: "buffer-entity-intent-heartbeat",
-        });
-      }
-    } catch (error) {
-      captureError(error, {
-        pendingUploadId: intent.id,
-        stage: "buffer-entity-intent-heartbeat-unhandled",
-      });
-    } finally {
-      heartbeatPromise = null;
-    }
-  };
-  const triggerHeartbeat = (): void => {
-    if (heartbeatPromise === null && !stopped) {
-      heartbeatPromise = heartbeat();
-    }
-  };
-  const timer = setInterval(triggerHeartbeat, BUFFER_INTENT_HEARTBEAT_MS);
-  timer.unref();
-  return async () => {
-    stopped = true;
-    clearInterval(timer);
-    await heartbeatPromise;
-  };
+const ENTITY_BUFFER_INTENT_TELEMETRY = {
+  abandon: "buffer-entity-intent-abandon",
+  heartbeat: "buffer-entity-intent-heartbeat",
+  heartbeatUnhandled: "buffer-entity-intent-heartbeat-unhandled",
 };
 
 type CreateEntityFromBufferInput = {
@@ -325,22 +169,27 @@ export const createEntityFromBuffer = async ({
   // the S3 write can therefore be distinguished from a committed entity and
   // cleaned by the bounded scheduler without adding a repair query to every
   // request.
-  const intent = await reserveEntityCreateIntent({
+  const intent = await reserveBufferIntent({
     safeDb,
     organizationId,
     workspaceId,
     userId,
-    propertyId: fileProperty.id,
-    fileId,
+    purpose: "entity_create",
+    purposeData: {
+      type: "entity_create",
+      propertyId: fileProperty.id,
+      reservedFileId: fileId,
+    },
     fileName,
     mimeType,
     sizeBytes: bytes.byteLength,
     sha256Hex,
   });
 
-  const stopIntentHeartbeat = startEntityCreateIntentHeartbeat({
+  const stopIntentHeartbeat = startBufferIntentHeartbeat({
     safeDb,
     intent,
+    telemetry: ENTITY_BUFFER_INTENT_TELEMETRY,
   });
 
   try {
@@ -365,7 +214,8 @@ export const createEntityFromBuffer = async ({
 
     try {
       await withTimeout(
-        async (signal) => await putS3ObjectWithSignal(s3Key, bytes, signal),
+        async (signal) =>
+          await putS3ObjectWithSignal(s3Key, bytes, mimeType, signal),
         {
           label: "buffer-entity-writer-put",
           timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,
@@ -532,10 +382,11 @@ export const createEntityFromBuffer = async ({
         !transactionState.durableReferencePrepared &&
         (await cleanupObject())
       ) {
-        await abandonEntityCreateIntent({
+        await abandonBufferIntent({
           safeDb,
           intent,
           reason: "Server-generated entity transaction failed",
+          telemetry: ENTITY_BUFFER_INTENT_TELEMETRY,
         });
       }
 

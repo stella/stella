@@ -16,6 +16,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { BUFFER_INTENT_DELETE_TIMEOUT_MS } from "@/api/lib/buffer-intent-reconciliation";
 import { UPLOAD_DOCUMENT_SOURCE } from "@/api/lib/document-source";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -23,10 +24,11 @@ import {
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
-import { getS3 } from "@/api/lib/s3";
+import { deleteS3ObjectWithSignal } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { processExtraction } from "@/api/lib/search/process-extraction";
 import { broadcast } from "@/api/lib/sse";
+import { withTimeout } from "@/api/lib/with-timeout";
 
 import { finalizeErr, finalizeOk } from "./lib";
 import type { UploadFinalizeError } from "./lib";
@@ -133,71 +135,97 @@ export const finalizeEntityVersion = async function* ({
   }
 
   const cleanupFinalObject = async (stage: string) => {
-    await getS3()
-      .delete(finalKey)
-      .catch((error: unknown) =>
-        captureError(error, { entityId, fieldId, stage }),
-      );
+    await withTimeout(
+      async (signal) => await deleteS3ObjectWithSignal(finalKey, signal),
+      {
+        label: "entity-version-final-cleanup.delete",
+        timeoutMs: BUFFER_INTENT_DELETE_TIMEOUT_MS,
+      },
+    ).catch((error: unknown) =>
+      captureError(error, { entityId, fieldId, stage }),
+    );
   };
 
   let finalized:
     | Extract<PendingUploadFinalizedResult, { type: "entity_version" }>
     | undefined;
-  const writeResultResult = await safeDb(
-    async (tx) =>
-      await writeFileVersion({
-        tx,
-        workspaceId,
-        entityId,
-        userId,
-        recordAuditEvent,
-        entityVersionId,
-        fieldId,
-        fileId,
-        fileName,
-        mimeType: declaredMime,
-        sizeBytes: declaredSize,
-        sha256Hex: declaredSha256Hex,
-        source: UPLOAD_DOCUMENT_SOURCE,
-        scanWarnings,
-        afterWrite: async ({ versionNumber }) => {
-          finalized = {
-            type: "entity_version",
-            entityId,
-            entityVersionId,
-            versionNumber,
-            fileId,
-            fileName,
-          };
-          // audit: skip — FSM bookkeeping; entity/version events are recorded
-          // by writeFileVersion in this same transaction.
-          const rows = await tx
-            .update(pendingUploads)
-            .set({
-              status: "finalized",
-              finalizedResult: finalized,
-              finalizedAt: new Date(),
-            })
-            .where(
-              and(
-                eq(pendingUploads.id, uploadId),
-                eq(pendingUploads.userId, userId),
-                eq(pendingUploads.workspaceId, workspaceId),
-                eq(pendingUploads.status, "scanning"),
-                eq(pendingUploads.claimedByRequestId, claimRequestId),
-              ),
-            )
-            .returning({ id: pendingUploads.id });
-          if (!rows.at(0)) {
-            panic("Pending upload finalize marker update returned no rows");
-          }
-        },
-      }),
-  );
+  const writeResultResult = await safeDb(async (tx) => {
+    const claimRows = await tx
+      .select({ id: pendingUploads.id })
+      .from(pendingUploads)
+      .where(
+        and(
+          eq(pendingUploads.id, uploadId),
+          eq(pendingUploads.userId, userId),
+          eq(pendingUploads.workspaceId, workspaceId),
+          eq(pendingUploads.status, "scanning"),
+          eq(pendingUploads.claimedByRequestId, claimRequestId),
+        ),
+      )
+      .limit(1)
+      .for("update");
+    if (!claimRows.at(0)) {
+      return { status: "upload-claim-lost" as const };
+    }
+
+    return await writeFileVersion({
+      tx,
+      workspaceId,
+      entityId,
+      userId,
+      recordAuditEvent,
+      entityVersionId,
+      fieldId,
+      fileId,
+      fileName,
+      mimeType: declaredMime,
+      sizeBytes: declaredSize,
+      sha256Hex: declaredSha256Hex,
+      source: UPLOAD_DOCUMENT_SOURCE,
+      scanWarnings,
+      afterWrite: async ({ versionNumber }) => {
+        finalized = {
+          type: "entity_version",
+          entityId,
+          entityVersionId,
+          versionNumber,
+          fileId,
+          fileName,
+        };
+        // audit: skip — FSM bookkeeping; entity/version events are recorded
+        // by writeFileVersion in this same transaction.
+        await tx
+          .update(pendingUploads)
+          .set({
+            status: "finalized",
+            finalizedResult: finalized,
+            finalizedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(pendingUploads.id, uploadId),
+              eq(pendingUploads.userId, userId),
+              eq(pendingUploads.workspaceId, workspaceId),
+              eq(pendingUploads.status, "scanning"),
+              eq(pendingUploads.claimedByRequestId, claimRequestId),
+            ),
+          );
+      },
+    });
+  });
   if (Result.isError(writeResultResult)) {
     await cleanupFinalObject("final-cleanup-after-db-error");
   }
   const writeResult = yield* writeResultResult;
+
+  if (writeResult.status === "upload-claim-lost") {
+    await cleanupFinalObject("final-cleanup-after-claim-loss");
+    return finalizeErr({
+      status: 409,
+      message: "Upload finalization claim was lost",
+      rejectReason: "claim-lost",
+    });
+  }
 
   if (writeResult.status !== "ok") {
     await cleanupFinalObject("final-cleanup-after-business-error");
