@@ -750,8 +750,9 @@ export const useCreateFileEntities = (workspaceId: string) => {
     onSettled: () => {
       detached(
         Promise.all(
-          entityCreateLocalInvalidationKeys(workspaceId).map((key) =>
-            queryClient.invalidateQueries({ queryKey: key }),
+          entityCreateLocalInvalidationKeys(workspaceId).map(
+            async (key) =>
+              await queryClient.invalidateQueries({ queryKey: key }),
           ),
         ),
         "onSettled",

@@ -3392,14 +3392,14 @@
     "overview": {
       "activity": {
         "actions": {
-          "added": "<actor>Felhasználó</actor> hozzáadta: <target>elem</target>",
-          "cancelled": "<actor>Felhasználó</actor> megszakította: <target>elem</target>",
-          "created": "<actor>Felhasználó</actor> létrehozta: <target>elem</target>",
-          "deleted": "<actor>Felhasználó</actor> törölte: <target>elem</target>",
-          "executed": "<actor>Felhasználó</actor> futtatta: <target>elem</target>",
-          "removed": "<actor>Felhasználó</actor> eltávolította: <target>elem</target>",
-          "reviewed": "<actor>Felhasználó</actor> ellenőrizte: <target>elem</target>",
-          "updated": "<actor>Felhasználó</actor> frissítette: <target>elem</target>"
+          "added": "Hozzáadva",
+          "cancelled": "Megszakítva",
+          "created": "Létrehozva",
+          "deleted": "Törölve",
+          "executed": "Futtatva",
+          "removed": "Eltávolítva",
+          "reviewed": "Ellenőrizve",
+          "updated": "Frissítve"
         },
         "approvals": {
           "approved": "Jóváhagyás megadva",
@@ -3465,9 +3465,9 @@
         "targets": {
           "automation": "automatizálás",
           "court": "bírósági bejegyzés",
-          "document": "törölt dokumentum",
+          "document": "dokumentum",
           "matter": "ügy",
-          "task": "törölt napirendi elem",
+          "task": "napirendi elem",
           "team": "ügycsapat"
         },
         "title": "Tevékenység",

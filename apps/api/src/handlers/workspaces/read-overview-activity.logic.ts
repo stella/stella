@@ -126,13 +126,13 @@ export const resolveActivityRunId = ({
 }: ResolveActivityRunIdOptions): string | null =>
   runId ?? (resourceType === AUDIT_RESOURCE_TYPE.FLOW_RUN ? resourceId : null);
 
-type ResolveActivityActionOptions = {
-  action: AuditAction;
+type ResolveActivityActionOptions<TAction extends AuditAction> = {
+  action: TAction;
   relationshipChange: "add" | "remove" | null;
 };
 
-export const resolveActivityAction = ({
+export const resolveActivityAction = <TAction extends AuditAction>({
   action,
   relationshipChange,
-}: ResolveActivityActionOptions): AuditAction | "add" | "remove" =>
+}: ResolveActivityActionOptions<TAction>): TAction | "add" | "remove" =>
   relationshipChange ?? action;

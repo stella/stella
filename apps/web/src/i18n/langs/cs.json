@@ -3392,14 +3392,14 @@
     "overview": {
       "activity": {
         "actions": {
-          "added": "<actor>Uživatel</actor> přidal(a) <target>položku</target>",
-          "cancelled": "<actor>Uživatel</actor> zrušil(a) <target>položku</target>",
-          "created": "<actor>Uživatel</actor> vytvořil(a) <target>položku</target>",
-          "deleted": "<actor>Uživatel</actor> odstranil(a) <target>položku</target>",
-          "executed": "<actor>Uživatel</actor> spustil(a) <target>položku</target>",
-          "removed": "<actor>Uživatel</actor> odebral(a) <target>položku</target>",
-          "reviewed": "<actor>Uživatel</actor> zkontroloval(a) <target>položku</target>",
-          "updated": "<actor>Uživatel</actor> upravil(a) <target>položku</target>"
+          "added": "Přidáno",
+          "cancelled": "Bylo zrušeno",
+          "created": "Vytvořeno",
+          "deleted": "Bylo odstraněno",
+          "executed": "Spuštěno",
+          "removed": "Odebráno",
+          "reviewed": "Zkontrolováno",
+          "updated": "Bylo upraveno"
         },
         "approvals": {
           "approved": "Schválení uděleno",
@@ -3463,11 +3463,11 @@
           "mcp": "Připojený nástroj"
         },
         "targets": {
-          "automation": "automatizaci",
+          "automation": "automatizace",
           "court": "soudní záznam",
-          "document": "odstraněný dokument",
+          "document": "dokument",
           "matter": "věc",
-          "task": "odstraněnou položku agendy",
+          "task": "položka agendy",
           "team": "tým věci"
         },
         "title": "Aktivita",

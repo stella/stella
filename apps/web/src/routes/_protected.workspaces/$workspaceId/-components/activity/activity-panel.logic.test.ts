@@ -7,7 +7,11 @@ import {
   activityDayKey,
   expandActivityGroupsForList,
   groupActivityItems,
+  resolveSelectedActivityGroup,
 } from "./activity-panel.logic";
+
+const LOCAL_NOON = new Date(2026, 6, 30, 12).getTime();
+const LOCAL_MIDNIGHT = new Date(2026, 6, 31).getTime();
 
 type ItemOptions = {
   action?: MatterActivityItem["action"];
@@ -102,19 +106,19 @@ describe("groupActivityItems", () => {
     const groups = groupActivityItems([
       item("1", {
         action: "create",
-        activityAt: "2026-07-30T12:01:00.000Z",
+        activityAt: new Date(LOCAL_NOON + 60_000).toISOString(),
         performer,
         runId: null,
       }),
       item("2", {
         action: "create",
-        activityAt: "2026-07-30T12:00:01.000Z",
+        activityAt: new Date(LOCAL_NOON + 1000).toISOString(),
         performer,
         runId: null,
       }),
       item("3", {
         action: "create",
-        activityAt: "2026-07-30T11:59:59.999Z",
+        activityAt: new Date(LOCAL_NOON - 1).toISOString(),
         performer,
         runId: null,
       }),
@@ -123,7 +127,7 @@ describe("groupActivityItems", () => {
     expect(groups.map(({ items }) => items.length)).toEqual([2, 1]);
   });
 
-  test("keeps uploads in one batch when the minute crosses midnight", () => {
+  test("splits upload batches at local midnight", () => {
     const performer = {
       deletedAt: null,
       id: "user-1",
@@ -134,20 +138,36 @@ describe("groupActivityItems", () => {
     const groups = groupActivityItems([
       item("1", {
         action: "create",
-        activityAt: "2026-07-31T00:00:20.000Z",
+        activityAt: new Date(LOCAL_MIDNIGHT + 20_000).toISOString(),
         performer,
         runId: null,
       }),
       item("2", {
         action: "create",
-        activityAt: "2026-07-30T23:59:40.000Z",
+        activityAt: new Date(LOCAL_MIDNIGHT - 20_000).toISOString(),
         performer,
         runId: null,
       }),
     ]);
 
-    expect(groups).toHaveLength(1);
-    expect(groups[0]?.items).toHaveLength(2);
+    expect(groups).toHaveLength(2);
+    expect(groups.map(({ items }) => items.length)).toEqual([1, 1]);
+  });
+
+  test("splits automation runs at local midnight", () => {
+    const groups = groupActivityItems([
+      item("1", {
+        activityAt: new Date(LOCAL_MIDNIGHT + 20_000).toISOString(),
+        runId: "run-a",
+      }),
+      item("2", {
+        activityAt: new Date(LOCAL_MIDNIGHT - 20_000).toISOString(),
+        runId: "run-a",
+      }),
+    ]);
+
+    expect(groups).toHaveLength(2);
+    expect(groups.map(({ items }) => items.length)).toEqual([1, 1]);
   });
 
   test("keeps same-named users in separate upload batches", () => {
@@ -181,7 +201,19 @@ describe("groupActivityItems", () => {
 
     expect(
       expandActivityGroupsForList(groups).map(({ items }) => items[0].id),
-    ).toEqual(["1", "2"]);
+    ).toEqual([toSafeId<"auditLog">("1"), toSafeId<"auditLog">("2")]);
+  });
+
+  test("resolves an individual event inside an automation run", () => {
+    const groups = groupActivityItems([
+      item("1", { runId: "run-a" }),
+      item("2", { runId: "run-a" }),
+    ]);
+
+    const selectedGroup = resolveSelectedActivityGroup(groups, "item:2");
+
+    expect(selectedGroup?.type).toBe("single");
+    expect(selectedGroup?.items[0].id).toBe(toSafeId<"auditLog">("2"));
   });
 
   test("uses local calendar days instead of UTC slices", () => {

@@ -3392,14 +3392,14 @@
     "overview": {
       "activity": {
         "actions": {
-          "added": "أضاف <actor>المستخدم</actor> <target>العنصر</target>",
-          "cancelled": "ألغى <actor>المستخدم</actor> <target>العنصر</target>",
-          "created": "أنشأ <actor>المستخدم</actor> <target>العنصر</target>",
-          "deleted": "حذف <actor>المستخدم</actor> <target>العنصر</target>",
-          "executed": "شغّل <actor>المستخدم</actor> <target>العنصر</target>",
-          "removed": "أزال <actor>المستخدم</actor> <target>العنصر</target>",
-          "reviewed": "راجع <actor>المستخدم</actor> <target>العنصر</target>",
-          "updated": "حدّث <actor>المستخدم</actor> <target>العنصر</target>"
+          "added": "تمت الإضافة",
+          "cancelled": "تم الإلغاء",
+          "created": "تم الإنشاء",
+          "deleted": "تم الحذف",
+          "executed": "تم التشغيل",
+          "removed": "تمت الإزالة",
+          "reviewed": "تمت المراجعة",
+          "updated": "تم التحديث"
         },
         "approvals": {
           "approved": "تم منح الموافقة",
@@ -3465,9 +3465,9 @@
         "targets": {
           "automation": "الأتمتة",
           "court": "سجل المحكمة",
-          "document": "مستند محذوف",
+          "document": "مستند",
           "matter": "الملف القانوني",
-          "task": "عنصر جدول أعمال محذوف",
+          "task": "عنصر جدول أعمال",
           "team": "فريق الملف القانوني"
         },
         "title": "النشاط",

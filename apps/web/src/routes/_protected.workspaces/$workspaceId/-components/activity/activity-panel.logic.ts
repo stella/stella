@@ -2,6 +2,13 @@ import type { MatterActivityItem } from "@/routes/_protected.workspaces/-queries
 
 const DOCUMENT_BATCH_WINDOW_MS = 60_000;
 
+export const activityDayKey = (activityAt: string): string => {
+  const date = new Date(activityAt);
+  return Number.isNaN(date.getTime())
+    ? activityAt
+    : `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+};
+
 export type ActivityGroup =
   | {
       id: string;
@@ -32,7 +39,7 @@ const hasSamePerformer = (
   if (left.performer.type !== "user" || right.performer.type !== "user") {
     return false;
   }
-  return left.performer.id !== null && left.performer.id === right.performer.id;
+  return left.performer.id === right.performer.id;
 };
 
 const isWithinDocumentBatchWindow = (
@@ -48,6 +55,11 @@ const isWithinDocumentBatchWindow = (
   );
 };
 
+const hasSameActivityDay = (
+  left: MatterActivityItem,
+  right: MatterActivityItem,
+) => activityDayKey(left.activityAt) === activityDayKey(right.activityAt);
+
 export const groupActivityItems = (
   items: MatterActivityItem[],
 ): ActivityGroup[] => {
@@ -58,7 +70,8 @@ export const groupActivityItems = (
     if (
       item.runId &&
       previous?.type === "automation_run" &&
-      previous.items[0].runId === item.runId
+      previous.items[0].runId === item.runId &&
+      hasSameActivityDay(previous.items[0], item)
     ) {
       previous.items.push(item);
       continue;
@@ -67,6 +80,7 @@ export const groupActivityItems = (
       isBatchableDocumentCreate(item) &&
       previous?.type === "document_batch" &&
       hasSamePerformer(previous.items[0], item) &&
+      hasSameActivityDay(previous.items[0], item) &&
       isWithinDocumentBatchWindow(previous.items[0], item)
     ) {
       previous.items.push(item);
@@ -94,13 +108,6 @@ export const groupActivityItems = (
   return groups;
 };
 
-export const activityDayKey = (activityAt: string): string => {
-  const date = new Date(activityAt);
-  return Number.isNaN(date.getTime())
-    ? activityAt
-    : `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
-};
-
 export const expandActivityGroupsForList = (
   groups: ActivityGroup[],
 ): ActivityGroup[] =>
@@ -113,3 +120,32 @@ export const expandActivityGroupsForList = (
         }))
       : [group],
   );
+
+export const toSingleActivityGroup = (
+  item: MatterActivityItem,
+): ActivityGroup => ({
+  id: `item:${item.id}`,
+  items: [item],
+  type: "single",
+});
+
+export const resolveSelectedActivityGroup = (
+  groups: ActivityGroup[],
+  selectedGroupId: string | null,
+): ActivityGroup | null => {
+  if (!selectedGroupId) {
+    return null;
+  }
+  for (const group of groups) {
+    if (group.id === selectedGroupId) {
+      return group;
+    }
+    const selectedItem = group.items.find(
+      ({ id }) => `item:${id}` === selectedGroupId,
+    );
+    if (selectedItem) {
+      return toSingleActivityGroup(selectedItem);
+    }
+  }
+  return null;
+};

@@ -3392,14 +3392,14 @@
     "overview": {
       "activity": {
         "actions": {
-          "added": "<actor>Personne</actor> a ajouté <target>élément</target>",
-          "cancelled": "<actor>Personne</actor> a annulé <target>élément</target>",
-          "created": "<actor>Personne</actor> a créé <target>élément</target>",
-          "deleted": "<actor>Personne</actor> a supprimé <target>élément</target>",
-          "executed": "<actor>Personne</actor> a exécuté <target>élément</target>",
-          "removed": "<actor>Personne</actor> a retiré <target>élément</target>",
-          "reviewed": "<actor>Personne</actor> a vérifié <target>élément</target>",
-          "updated": "<actor>Personne</actor> a mis à jour <target>élément</target>"
+          "added": "Ajouté",
+          "cancelled": "A été annulé",
+          "created": "Créé",
+          "deleted": "A été supprimé",
+          "executed": "Exécuté",
+          "removed": "Retiré",
+          "reviewed": "Vérifié",
+          "updated": "A été mis à jour"
         },
         "approvals": {
           "approved": "Approbation accordée",
@@ -3465,9 +3465,9 @@
         "targets": {
           "automation": "automatisation",
           "court": "dossier judiciaire",
-          "document": "document supprimé",
+          "document": "fichier",
           "matter": "dossier",
-          "task": "élément d’agenda supprimé",
+          "task": "élément d’agenda",
           "team": "équipe du dossier"
         },
         "title": "Activité",

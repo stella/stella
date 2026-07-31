@@ -9,6 +9,7 @@ import {
   redirect,
   useMatch,
 } from "@tanstack/react-router";
+import { useDebouncedCallback } from "use-debounce";
 
 import { stellaToast } from "@stll/ui/components/toast";
 
@@ -42,6 +43,7 @@ const EXTRACTION_PREVIEW_EVENT_TYPE = "workflow-extraction-preview";
 const INVALIDATE_QUERY_EVENT_TYPE = "invalidate-query";
 const EXTRACTION_PREVIEW_CLIENT_TTL_MS = 5 * 60 * 1000;
 const ACTIVITY_INVALIDATION_DEBOUNCE_MS = 1000;
+const ACTIVITY_INVALIDATION_MAX_WAIT_MS = 5000;
 
 type ExtractionPreviewEventData = {
   entityId: string;
@@ -185,8 +187,17 @@ function RouteComponent() {
   const [previewClearTimers] = useState(
     () => new Map<string, ReturnType<typeof setTimeout>>(),
   );
-  const [activityInvalidationTimers] = useState(
-    () => new Map<string, ReturnType<typeof setTimeout>>(),
+  const invalidateActivity = useDebouncedCallback(
+    (workspaceIdToInvalidate: string) => {
+      detached(
+        queryClient.invalidateQueries({
+          queryKey: workspacesKeys.overviewActivityAll(workspaceIdToInvalidate),
+        }),
+        "handleWorkspaceActivityInvalidation",
+      );
+    },
+    ACTIVITY_INVALIDATION_DEBOUNCE_MS,
+    { maxWait: ACTIVITY_INVALIDATION_MAX_WAIT_MS },
   );
 
   const handleWorkspaceSSEEvent = ({
@@ -197,20 +208,7 @@ function RouteComponent() {
     data: unknown;
   }) => {
     if (type === INVALIDATE_QUERY_EVENT_TYPE) {
-      const previousTimer = activityInvalidationTimers.get(workspaceId);
-      if (previousTimer !== undefined) {
-        clearTimeout(previousTimer);
-      }
-      const nextTimer = setTimeout(() => {
-        activityInvalidationTimers.delete(workspaceId);
-        detached(
-          queryClient.invalidateQueries({
-            queryKey: workspacesKeys.overviewActivityAll(workspaceId),
-          }),
-          "handleWorkspaceActivityInvalidation",
-        );
-      }, ACTIVITY_INVALIDATION_DEBOUNCE_MS);
-      activityInvalidationTimers.set(workspaceId, nextTimer);
+      invalidateActivity(workspaceId);
     }
 
     const workspaceStore = useWorkspaceStore.getState();
@@ -309,7 +307,7 @@ function RouteComponent() {
   return (
     <WorkflowStartConfirmationPromptProvider>
       <WorkspaceLifecycleCleanup
-        activityInvalidationTimers={activityInvalidationTimers}
+        flushActivityInvalidation={invalidateActivity.flush}
         key={workspaceId}
         previewClearTimers={previewClearTimers}
       />
@@ -322,17 +320,14 @@ function RouteComponent() {
 }
 
 const WorkspaceLifecycleCleanup = ({
-  activityInvalidationTimers,
+  flushActivityInvalidation,
   previewClearTimers,
 }: {
-  activityInvalidationTimers: Map<string, ReturnType<typeof setTimeout>>;
+  flushActivityInvalidation: () => void;
   previewClearTimers: Map<string, ReturnType<typeof setTimeout>>;
 }) => {
   useMountEffect(() => () => {
-    for (const timer of activityInvalidationTimers.values()) {
-      clearTimeout(timer);
-    }
-    activityInvalidationTimers.clear();
+    flushActivityInvalidation();
     for (const timer of previewClearTimers.values()) {
       clearTimeout(timer);
     }

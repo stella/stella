@@ -3392,14 +3392,14 @@
     "overview": {
       "activity": {
         "actions": {
-          "added": "<actor>Osoba</actor> dodała <target>element</target>",
-          "cancelled": "<actor>Osoba</actor> anulowała <target>element</target>",
-          "created": "<actor>Osoba</actor> utworzyła <target>element</target>",
-          "deleted": "<actor>Osoba</actor> usunęła <target>element</target>",
-          "executed": "<actor>Osoba</actor> uruchomiła <target>element</target>",
-          "removed": "<actor>Osoba</actor> odłączyła <target>element</target>",
-          "reviewed": "<actor>Osoba</actor> sprawdziła <target>element</target>",
-          "updated": "<actor>Osoba</actor> zaktualizowała <target>element</target>"
+          "added": "Dodano",
+          "cancelled": "Anulowano",
+          "created": "Utworzono",
+          "deleted": "Usunięto",
+          "executed": "Uruchomiono",
+          "removed": "Odłączono",
+          "reviewed": "Sprawdzono",
+          "updated": "Zaktualizowano"
         },
         "approvals": {
           "approved": "Zatwierdzenie udzielone",
@@ -3463,11 +3463,11 @@
           "mcp": "Połączone narzędzie"
         },
         "targets": {
-          "automation": "automatyzację",
+          "automation": "automatyzacja",
           "court": "wpis sądowy",
-          "document": "usunięty dokument",
-          "matter": "sprawę",
-          "task": "usunięty element agendy",
+          "document": "dokument",
+          "matter": "sprawa",
+          "task": "element agendy",
           "team": "zespół sprawy"
         },
         "title": "Aktywność",

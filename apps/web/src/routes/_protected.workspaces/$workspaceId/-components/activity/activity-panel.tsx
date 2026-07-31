@@ -61,6 +61,8 @@ import {
   activityDayKey,
   expandActivityGroupsForList,
   groupActivityItems,
+  resolveSelectedActivityGroup,
+  toSingleActivityGroup,
 } from "./activity-panel.logic";
 
 type ActivityPanelProps = { workspaceId: string };
@@ -84,9 +86,6 @@ const groupActivityDays = (groups: ActivityGroup[]): ActivityDay[] => {
 
 const FIRST_STRONG_ISOLATE = String.fromCodePoint(8296);
 const POP_DIRECTIONAL_ISOLATE = String.fromCodePoint(8297);
-const EMPTY_ACTIVITY_SENTENCE_PART = (
-  <span aria-hidden="true" className="hidden" />
-);
 const isolateBidi = (value: string): string =>
   `${FIRST_STRONG_ISOLATE}${value}${POP_DIRECTIONAL_ISOLATE}`;
 
@@ -129,9 +128,7 @@ const categoryLabel = (
 export const ActivityPanel = ({ workspaceId }: ActivityPanelProps) => {
   const t = useTranslations();
   const [category, setCategory] = useState<MatterActivityCategory>("all");
-  const [selectedGroup, setSelectedGroup] = useState<ActivityGroup | null>(
-    null,
-  );
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ActivityViewMode>("timeline");
   const deferredCategory = useDeferredValue(category);
   const isFilterPending = category !== deferredCategory;
@@ -180,7 +177,7 @@ export const ActivityPanel = ({ workspaceId }: ActivityPanelProps) => {
                   <MenuRadioItem
                     key={value}
                     onClick={() => {
-                      setSelectedGroup(null);
+                      setSelectedGroupId(null);
                       setCategory(value);
                     }}
                     value={value}
@@ -205,33 +202,27 @@ export const ActivityPanel = ({ workspaceId }: ActivityPanelProps) => {
         <Suspense fallback={<ActivityTimelineSkeleton />}>
           <ActivityTimeline
             category={deferredCategory}
-            onSelectGroup={setSelectedGroup}
+            onSelectedGroupChange={setSelectedGroupId}
+            selectedGroupId={selectedGroupId}
             viewMode={viewMode}
             workspaceId={workspaceId}
           />
         </Suspense>
       </div>
-      <ActivityDetailsSheet
-        group={selectedGroup}
-        onOpenChange={(open) => {
-          if (!open) {
-            setSelectedGroup(null);
-          }
-        }}
-        workspaceId={workspaceId}
-      />
     </section>
   );
 };
 
 const ActivityTimeline = ({
   category,
-  onSelectGroup,
+  onSelectedGroupChange,
+  selectedGroupId,
   viewMode,
   workspaceId,
 }: {
   category: MatterActivityCategory;
-  onSelectGroup: (group: ActivityGroup) => void;
+  onSelectedGroupChange: (groupId: string | null) => void;
+  selectedGroupId: string | null;
   viewMode: ActivityViewMode;
   workspaceId: string;
 }) => {
@@ -243,6 +234,10 @@ const ActivityTimeline = ({
   const items = query.data.pages.flatMap((page) => page.items);
   const groups = groupActivityItems(items);
   const days = groupActivityDays(groups);
+  const selectedGroup = resolveSelectedActivityGroup(groups, selectedGroupId);
+  const onSelectGroup = (group: ActivityGroup) => {
+    onSelectedGroupChange(group.id);
+  };
   const loadEarlier = () => {
     const request = query
       .fetchNextPage()
@@ -283,6 +278,7 @@ const ActivityTimeline = ({
         <ActivityList groups={groups} onSelectGroup={onSelectGroup} />
         {query.hasNextPage && (
           <ActivityLoadSentinel
+            hasError={query.isFetchNextPageError}
             isFetching={query.isFetchingNextPage}
             onLoadEarlier={loadEarlier}
           />
@@ -295,6 +291,7 @@ const ActivityTimeline = ({
         <HorizontalTimeline
           days={days}
           hasNextPage={query.hasNextPage}
+          hasNextPageError={query.isFetchNextPageError}
           isFetchingNextPage={query.isFetchingNextPage}
           onLoadEarlier={loadEarlier}
           onSelectGroup={onSelectGroup}
@@ -316,6 +313,7 @@ const ActivityTimeline = ({
           ))}
           {query.hasNextPage && (
             <ActivityLoadSentinel
+              hasError={query.isFetchNextPageError}
               isFetching={query.isFetchingNextPage}
               onLoadEarlier={loadEarlier}
             />
@@ -326,13 +324,25 @@ const ActivityTimeline = ({
   }
 
   return (
-    <div className="bg-background ring-foreground/5 overflow-hidden rounded-xl shadow-sm ring-1">
-      {activityContent}
-    </div>
+    <>
+      <div className="bg-background ring-foreground/5 overflow-hidden rounded-xl shadow-sm ring-1">
+        {activityContent}
+      </div>
+      <ActivityDetailsSheet
+        group={selectedGroup}
+        onOpenChange={(open) => {
+          if (!open) {
+            onSelectedGroupChange(null);
+          }
+        }}
+        workspaceId={workspaceId}
+      />
+    </>
   );
 };
 
 type ActivityLoadSentinelProps = {
+  hasError: boolean;
   horizontal?: boolean;
   isFetching: boolean;
   onLoadEarlier: () => void;
@@ -364,14 +374,16 @@ const observeActivityIntersection = ({
 };
 
 const ActivityLoadSentinel = ({
+  hasError,
   horizontal = false,
   isFetching,
   onLoadEarlier,
 }: ActivityLoadSentinelProps) => {
+  const t = useTranslations();
   const loadEarlier = useLatestCallback(onLoadEarlier);
   const sentinelRef = useCallback(
     (node: HTMLSpanElement | null) => {
-      if (!node || isFetching) {
+      if (!node || hasError || isFetching) {
         return undefined;
       }
       const root = horizontal ? node.closest("[data-activity-scroll]") : null;
@@ -384,8 +396,26 @@ const ActivityLoadSentinel = ({
         root,
       });
     },
-    [horizontal, isFetching, loadEarlier],
+    [hasError, horizontal, isFetching, loadEarlier],
   );
+
+  if (hasError) {
+    return (
+      <Button
+        className={
+          horizontal ? "mx-4 min-h-11 shrink-0 self-end" : "m-2 min-h-11"
+        }
+        disabled={isFetching}
+        onClick={loadEarlier}
+        size="sm"
+        variant="ghost"
+      >
+        {isFetching
+          ? t("workspaces.overview.activity.loading")
+          : t("common.tryAgain")}
+      </Button>
+    );
+  }
 
   return (
     <span
@@ -399,13 +429,20 @@ const ActivityLoadSentinel = ({
 const ACTIVITY_SKELETON_WIDTHS = ["w-24", "w-32", "w-28", "w-36"] as const;
 
 const revealCurrentActivity = (node: HTMLSpanElement | null) => {
-  const scrollArea = node?.closest<HTMLElement>("[data-activity-scroll]");
+  if (!node) {
+    return;
+  }
+  const scrollArea = node.closest<HTMLElement>("[data-activity-scroll]");
   if (!scrollArea) {
     return;
   }
-  const behavior = scrollArea.dataset["activityPositioned"]
-    ? "smooth"
-    : "instant";
+  const prefersReducedMotion = globalThis.matchMedia(
+    "(prefers-reduced-motion: reduce)",
+  ).matches;
+  const behavior =
+    scrollArea.dataset["activityPositioned"] && !prefersReducedMotion
+      ? "smooth"
+      : "instant";
   scrollArea.dataset["activityPositioned"] = "true";
   node.scrollIntoView({ behavior, block: "nearest", inline: "end" });
 };
@@ -465,12 +502,14 @@ const ActivityTimelineSkeleton = () => (
 
 const HorizontalTimeline = ({
   days,
+  hasNextPageError,
   hasNextPage,
   isFetchingNextPage,
   onLoadEarlier,
   onSelectGroup,
 }: {
   days: ActivityDay[];
+  hasNextPageError: boolean;
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
   onLoadEarlier: () => void;
@@ -485,7 +524,7 @@ const HorizontalTimeline = ({
       <span
         aria-hidden="true"
         className="size-px shrink-0"
-        key={days[0][0].id}
+        key={days.at(0)?.at(0)?.id}
         ref={revealCurrentActivity}
       />
       {days.flatMap((dayGroups) =>
@@ -504,6 +543,7 @@ const HorizontalTimeline = ({
       )}
       {hasNextPage && (
         <ActivityLoadSentinel
+          hasError={hasNextPageError}
           horizontal
           isFetching={isFetchingNextPage}
           onLoadEarlier={onLoadEarlier}
@@ -578,11 +618,9 @@ const HorizontalActivityMilestone = ({
           <RunCount count={items.length} />
         </span>
       </div>
-      {detail && (
-        <p className="text-muted-foreground mt-0.5 text-[11px] leading-4">
-          {detail}
-        </p>
-      )}
+      <p className="text-muted-foreground mt-0.5 text-[11px] leading-4">
+        {detail}
+      </p>
       <div className="mt-3 space-y-1">
         {items.map((item) => (
           <HorizontalRunActivityItem
@@ -688,9 +726,7 @@ const ActivityRunRow = ({
             <RunCount count={items.length} />
           </span>
         </div>
-        {detail && (
-          <p className="text-muted-foreground mt-0.5 text-xs">{detail}</p>
-        )}
+        <p className="text-muted-foreground mt-0.5 text-xs">{detail}</p>
         <div className="mt-2.5 space-y-0.5 ps-3">
           {items.map((item) => (
             <RunActivityItem
@@ -829,7 +865,7 @@ const ActivityList = ({
   const listGroups = expandActivityGroupsForList(groups);
   return (
     <div className="overflow-x-auto" role="list">
-      <div className="w-full min-w-[57rem]">
+      <div className="w-full md:min-w-[57rem]">
         <div
           aria-hidden="true"
           className="text-muted-foreground hidden border-b px-4 py-2 text-[11px] font-medium md:grid md:grid-cols-[10rem_12rem_minmax(16rem,1fr)_14rem] md:gap-4"
@@ -877,10 +913,7 @@ const ActivityList = ({
                   </span>
                 </span>
                 <span className="text-muted-foreground min-w-0 text-xs leading-4">
-                  {provenance ??
-                    (item.trigger.source
-                      ? sourceName(item.trigger.source, t)
-                      : "—")}
+                  {provenance}
                 </span>
               </button>
             </div>
@@ -935,9 +968,24 @@ const ActivityDetailsSheet = ({
                       <span className="flex size-5 shrink-0 items-center justify-center">
                         {activityTargetIcon(batchItem)}
                       </span>
-                      <BidiText as="span" className="min-w-0 break-words">
-                        {targetName(batchItem, t)}
-                      </BidiText>
+                      <span className="min-w-0">
+                        <BidiText as="span" className="block break-words">
+                          {targetName(batchItem, t)}
+                        </BidiText>
+                        <span className="text-muted-foreground mt-0.5 block text-xs leading-4 tabular-nums">
+                          <time dateTime={batchItem.activityAt}>
+                            {format.dateTime(new Date(batchItem.activityAt), {
+                              dateStyle: "medium",
+                              timeStyle: "short",
+                            })}
+                          </time>
+                          <span aria-hidden="true"> · </span>
+                          {t("workspaces.overview.activity.details.eventId")}:{" "}
+                          <BidiText as="span" className="break-all">
+                            {batchItem.id}
+                          </BidiText>
+                        </span>
+                      </span>
                     </>
                   );
                   if (!batchOpenTarget) {
@@ -969,14 +1017,10 @@ const ActivityDetailsSheet = ({
           },
         ]
       : []),
-    ...(provenance
-      ? [
-          {
-            label: t("workspaces.overview.activity.details.trigger"),
-            value: provenance,
-          },
-        ]
-      : []),
+    {
+      label: t("workspaces.overview.activity.details.trigger"),
+      value: provenance,
+    },
     ...(item.approval.status !== "not_required"
       ? [
           {
@@ -993,6 +1037,18 @@ const ActivityDetailsSheet = ({
           },
         ]
       : []),
+    ...(item.runId
+      ? [
+          {
+            label: t("workspaces.overview.activity.details.runId"),
+            value: <BidiText as="span">{item.runId}</BidiText>,
+          },
+        ]
+      : []),
+    {
+      label: t("workspaces.overview.activity.details.eventId"),
+      value: <BidiText as="span">{item.id}</BidiText>,
+    },
   ];
 
   return (
@@ -1118,12 +1174,6 @@ type ActivityTripletProps = {
   size: "compact" | "default";
 };
 
-const toSingleActivityGroup = (item: MatterActivityItem): ActivityGroup => ({
-  id: `item:${item.id}`,
-  items: [item],
-  type: "single",
-});
-
 const ActivityTriplet = ({ detail, group, size }: ActivityTripletProps) => {
   const t = useTranslations();
   const item = group.items[0];
@@ -1147,7 +1197,7 @@ const ActivityTriplet = ({ detail, group, size }: ActivityTripletProps) => {
         </span>
         <BidiText as="span">{activityGroupTargetName(group, t)}</BidiText>
       </span>
-      {detail && (
+      {detail !== null && detail !== undefined && (
         <span
           className={
             compact
@@ -1166,44 +1216,24 @@ const ActivityTriplet = ({ detail, group, size }: ActivityTripletProps) => {
 const activityAction = (
   item: MatterActivityItem,
   t: ActivityTranslator,
-): ReactElement => {
-  const values = {
-    actor: () => EMPTY_ACTIVITY_SENTENCE_PART,
-    target: () => EMPTY_ACTIVITY_SENTENCE_PART,
-  };
+): string => {
   switch (item.action) {
     case "add":
-      return (
-        <>{t.rich("workspaces.overview.activity.actions.added", values)}</>
-      );
+      return t("workspaces.overview.activity.actions.added");
     case "create":
-      return (
-        <>{t.rich("workspaces.overview.activity.actions.created", values)}</>
-      );
+      return t("workspaces.overview.activity.actions.created");
     case "update":
-      return (
-        <>{t.rich("workspaces.overview.activity.actions.updated", values)}</>
-      );
+      return t("workspaces.overview.activity.actions.updated");
     case "delete":
-      return (
-        <>{t.rich("workspaces.overview.activity.actions.deleted", values)}</>
-      );
+      return t("workspaces.overview.activity.actions.deleted");
     case "remove":
-      return (
-        <>{t.rich("workspaces.overview.activity.actions.removed", values)}</>
-      );
+      return t("workspaces.overview.activity.actions.removed");
     case "execute":
-      return (
-        <>{t.rich("workspaces.overview.activity.actions.executed", values)}</>
-      );
+      return t("workspaces.overview.activity.actions.executed");
     case "review":
-      return (
-        <>{t.rich("workspaces.overview.activity.actions.reviewed", values)}</>
-      );
+      return t("workspaces.overview.activity.actions.reviewed");
     case "cancel":
-      return (
-        <>{t.rich("workspaces.overview.activity.actions.cancelled", values)}</>
-      );
+      return t("workspaces.overview.activity.actions.cancelled");
     default:
       return item.action satisfies never;
   }
@@ -1231,6 +1261,21 @@ const targetName = (item: MatterActivityItem, t: ActivityTranslator) => {
       return exhaustive;
     }
   }
+};
+
+const triggerLabelWithSource = (
+  label: string,
+  source: MatterActivityItem["trigger"]["source"],
+  t: ActivityTranslator,
+) => {
+  if (!source) {
+    return label;
+  }
+  return (
+    <>
+      {label} · {sourceName(source, t)}
+    </>
+  );
 };
 
 const triggerDetail = (item: MatterActivityItem, t: ActivityTranslator) => {
@@ -1262,8 +1307,28 @@ const triggerDetail = (item: MatterActivityItem, t: ActivityTranslator) => {
       return user
         ? t("workspaces.overview.activity.provenance.delegatedBy", { user })
         : t("workspaces.overview.activity.provenance.delegated");
-    default:
-      return null;
+    case "direct":
+      return triggerLabelWithSource(
+        t("workspaces.overview.activity.details.direct"),
+        item.trigger.source,
+        t,
+      );
+    case "webhook":
+      return triggerLabelWithSource(
+        t("workspaces.overview.activity.details.webhook"),
+        item.trigger.source,
+        t,
+      );
+    case "system":
+      return triggerLabelWithSource(
+        t("workspaces.overview.activity.details.system"),
+        item.trigger.source,
+        t,
+      );
+    default: {
+      const exhaustive: never = item.trigger.type;
+      return exhaustive;
+    }
   }
 };
 
