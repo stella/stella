@@ -14,9 +14,9 @@ import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { caseLawDecisions } from "@/api/db/schema";
-import type { CorpusPayload } from "@/api/handlers/case-law/corpus-storage";
-import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/handlers/case-law/corpus-storage";
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
+import type { CorpusPayload } from "@/api/lib/legal-search/corpus-storage";
+import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";
 
 /**
  * A jsonb array's length, or 0 for anything that is not an array.

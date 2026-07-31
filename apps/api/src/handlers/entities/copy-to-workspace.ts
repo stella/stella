@@ -15,13 +15,6 @@ import {
   remapFileIds,
   rollbackS3Copies,
 } from "@/api/handlers/entities/copy-utils";
-import {
-  extractFieldFileRefs,
-  filterUnreferencedFieldFileRefs,
-  type FieldFileRef,
-} from "@/api/handlers/files/field-file-refs";
-import { deleteS3Objects } from "@/api/handlers/files/utils";
-import { DOCUMENT_TYPE_CLASSIFIER_ROLE } from "@/api/handlers/properties/create-schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -34,8 +27,15 @@ import {
   enqueueImageThumbnailOrMarkFailed,
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
+import {
+  extractFieldFileRefs,
+  filterUnreferencedFieldFileRefs,
+  type FieldFileRef,
+} from "@/api/lib/files/field-file-refs";
+import { deleteS3Objects } from "@/api/lib/files/utils";
 import { broadcastQueryInvalidationToTargetWorkspace } from "@/api/lib/invalidate-query-macro";
 import { LIMITS } from "@/api/lib/limits";
+import { DOCUMENT_TYPE_CLASSIFIER_ROLE } from "@/api/lib/properties/create-schema";
 import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
 import { processExtraction } from "@/api/lib/search/process-extraction";
 

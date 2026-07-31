@@ -13,7 +13,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { matchesPattern, previewReference } from "@/lib/matter-reference";
-import { organizationSettingsOptions } from "@/routes/_protected.organization/-settings-queries";
+import { organizationSettingsOptions } from "@/lib/organization/settings-queries";
 
 export type MatterNumberHintProps = InlineProps | PopoverProps;
 

@@ -4,11 +4,6 @@ import { eq } from "drizzle-orm";
 import type { SafeDb } from "@/api/db/safe-db";
 import { playbookDefinitions } from "@/api/db/schema";
 import { deriveAutoAsks } from "@/api/handlers/playbooks/derive-ask";
-import type {
-  PlaybookPositions,
-  PlaybookScope,
-} from "@/api/handlers/playbooks/positions";
-import { assertPositionsValid } from "@/api/handlers/playbooks/positions-validation";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -17,6 +12,11 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import type {
+  PlaybookPositions,
+  PlaybookScope,
+} from "@/api/lib/workflow/playbook-positions";
+import { assertPositionsValid } from "@/api/lib/workflow/playbook-positions-validation";
 
 // The one create path every playbook-creating surface shares: the manual
 // editor's "New playbook" save (create.ts) and the one-click starter

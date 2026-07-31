@@ -1,10 +1,10 @@
 import { t } from "elysia";
 
+import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import {
   playbookPositionsSchema,
   playbookScopeSchema,
-} from "@/api/handlers/playbooks/positions";
-import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
+} from "@/api/lib/workflow/playbook-positions";
 
 export const playbookDefinitionBodySchema = t.Object({
   name: tDefaultVarchar,

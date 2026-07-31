@@ -37,7 +37,7 @@ import {
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { detached } from "@/lib/detached";
-import { skillsOptions } from "@/routes/_protected.knowledge/-queries";
+import { skillsOptions } from "@/lib/knowledge/queries";
 
 const protectedRouteApi = getRouteApi("/_protected");
 

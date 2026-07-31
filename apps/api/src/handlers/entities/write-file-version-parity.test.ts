@@ -22,7 +22,9 @@ describe("entity-version persistence parity", () => {
   });
 
   test("the shared transaction retains the versioning and audit invariants", async () => {
-    const core = await readApiSource("handlers/entities/write-file-version.ts");
+    const core = await readApiSource(
+      "lib/entity-versions/write-file-version.ts",
+    );
 
     expect(core).toContain('.for("update")');
     expect(core).toContain("nextEntityVersionNumber");

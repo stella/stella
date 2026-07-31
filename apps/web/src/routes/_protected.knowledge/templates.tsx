@@ -18,18 +18,18 @@ import { useFormatter } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
+import {
+  knowledgeKeys,
+  templateCategoriesOptions,
+  templateDetailOptions,
+  templatesOptions,
+} from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
 import { LeaveConfirmDialog } from "@/routes/_protected.knowledge/-components/leave-confirm-dialog";
 import { TemplateList } from "@/routes/_protected.knowledge/-components/template-list";
 import { useTemplateNavStore } from "@/routes/_protected.knowledge/-components/template-nav-store";
 import { TemplateStudioPage } from "@/routes/_protected.knowledge/-components/template-studio";
 import { useTemplateStudioStore } from "@/routes/_protected.knowledge/-components/template-studio-store";
-import {
-  knowledgeKeys,
-  templateCategoriesOptions,
-  templateDetailOptions,
-  templatesOptions,
-} from "@/routes/_protected.knowledge/-queries";
 
 type TemplateItem = {
   id: string;

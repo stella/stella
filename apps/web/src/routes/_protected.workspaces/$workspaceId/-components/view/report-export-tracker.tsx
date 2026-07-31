@@ -9,11 +9,11 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { APIError } from "@/lib/errors/api";
-import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import {
   reportExportDetailOptions,
   reportExportsKeys,
-} from "@/routes/_protected.workspaces/$workspaceId/-queries/report-exports";
+} from "@/lib/workspaces/queries/report-exports";
 
 import { downloadReportExport } from "./report-export-actions";
 import {

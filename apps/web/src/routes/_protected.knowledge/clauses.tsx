@@ -9,16 +9,16 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
+import {
+  clauseCategoriesOptions,
+  clausesOptions,
+  knowledgeKeys,
+} from "@/lib/knowledge/queries";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
 import { ClauseDetailView } from "@/routes/_protected.knowledge/-components/clause-detail";
 import { ClauseFormDialog } from "@/routes/_protected.knowledge/-components/clause-form-dialog";
 import { ClauseList } from "@/routes/_protected.knowledge/-components/clause-list";
-import {
-  clauseCategoriesOptions,
-  clausesOptions,
-  knowledgeKeys,
-} from "@/routes/_protected.knowledge/-queries";
 
 // ── Type extraction ──────────────────────────────────
 

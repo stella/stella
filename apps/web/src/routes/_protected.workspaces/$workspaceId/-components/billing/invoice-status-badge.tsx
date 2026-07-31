@@ -2,7 +2,7 @@ import { useTranslations } from "use-intl";
 
 import { cn } from "@stll/ui/lib/utils";
 
-import type { InvoiceStatus } from "@/routes/_protected.workspaces/$workspaceId/-queries/invoices";
+import type { InvoiceStatus } from "@/lib/workspaces/queries/invoices";
 
 const INVOICE_STATUS_STYLES = {
   draft: "bg-muted text-muted-foreground",

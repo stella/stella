@@ -7,7 +7,7 @@ import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import type { ViewLayout } from "@/lib/types";
-import { viewTemplateKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/view-templates";
+import { viewTemplateKeys } from "@/lib/workspaces/queries/view-templates";
 
 type CreateViewTemplateVars = {
   workspaceId: string;

@@ -2,14 +2,14 @@ import { useTranslations } from "use-intl";
 
 import { cn } from "@stll/ui/lib/utils";
 
-import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
-import { ContextMenu, type ContextMenuAction } from "@/components/context-menu";
 import {
   CostBadge,
   FirstPartyMark,
   SetupBadge,
-} from "@/routes/_protected.knowledge/-components/catalogue/catalogue-badges";
-import { CatalogueEntryIcon } from "@/routes/_protected.knowledge/-components/catalogue/catalogue-entry-icon";
+} from "@/components/catalogue/catalogue-badges";
+import { CatalogueEntryIcon } from "@/components/catalogue/catalogue-entry-icon";
+import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
+import { ContextMenu, type ContextMenuAction } from "@/components/context-menu";
 
 /**
  * Minimal display fields shared by onboarding (`LoadedCatalogueEntry`)

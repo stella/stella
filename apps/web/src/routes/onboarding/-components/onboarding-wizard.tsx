@@ -34,8 +34,8 @@ import { toAPIError } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
 import { suggestedCountryCodes as getSuggestedCountryCodes } from "@/lib/jurisdictions";
+import { aiConfigKeys } from "@/lib/organization/ai-config-queries";
 import { rootKeys, sessionOptions } from "@/routes/-queries";
-import { aiConfigKeys } from "@/routes/_protected.organization/-ai-config-queries";
 import { CatalogueDetailPreview } from "@/routes/onboarding/-components/catalogue-detail-preview";
 import { CatalogueStackPreview } from "@/routes/onboarding/-components/catalogue-stack-preview";
 import {

@@ -3,13 +3,13 @@ import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { entities } from "@/api/db/schema";
-import { queryEntities } from "@/api/handlers/entities/query-entities";
 import { collectMissingAncestorIds } from "@/api/handlers/entities/read-filesystem-tree.logic";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { tConditionNode } from "@/api/lib/conditions/contract";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { queryEntities } from "@/api/lib/entities/query-entities";
 import { LIMITS } from "@/api/lib/limits";
 import { tViewSortSchema } from "@/api/lib/views-schema";
 

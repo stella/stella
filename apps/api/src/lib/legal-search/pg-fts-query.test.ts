@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
-import type { FtsSearchConfig } from "@/api/handlers/case-law/fts-config";
+import type { FtsSearchConfig } from "@/api/lib/legal-search/fts-config";
 import { buildPgFtsSearchSql } from "@/api/lib/legal-search/pg-fts-query";
 
 const configs: FtsSearchConfig[] = [

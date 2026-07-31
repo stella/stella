@@ -11,10 +11,10 @@ const materializePlaybookRunMock = mock();
 const startWorkflowMock = mock();
 
 const realMaterializeRun =
-  await import("@/api/handlers/playbooks/materialize-run");
+  await import("@/api/lib/workflow/materialize-playbook-run");
 const realWorkflowQueue = await import("@/api/lib/workflow-queue");
 
-void mock.module("@/api/handlers/playbooks/materialize-run", () => ({
+void mock.module("@/api/lib/workflow/materialize-playbook-run", () => ({
   ...realMaterializeRun,
   materializePlaybookRun: materializePlaybookRunMock,
 }));

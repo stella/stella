@@ -4,15 +4,6 @@ import { and, eq, isNull, like } from "drizzle-orm";
 import type { Transaction } from "@/api/db/root";
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
-import {
-  allocateFileObject,
-  fileContentWithMintedObject,
-  type MintedFileId,
-  type WritableFieldContent,
-} from "@/api/handlers/files/file-object-ids";
-import { pdfDerivativeStateForFile } from "@/api/handlers/files/gotenberg";
-import { thumbnailDerivativeStateForFile } from "@/api/handlers/files/image-derivative";
-import { createFileKey } from "@/api/handlers/files/utils";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -20,6 +11,15 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { escapeLike } from "@/api/lib/escape-like";
+import {
+  allocateFileObject,
+  fileContentWithMintedObject,
+  type MintedFileId,
+  type WritableFieldContent,
+} from "@/api/lib/files/file-object-ids";
+import { pdfDerivativeStateForFile } from "@/api/lib/files/gotenberg";
+import { thumbnailDerivativeStateForFile } from "@/api/lib/files/image-derivative";
+import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
 

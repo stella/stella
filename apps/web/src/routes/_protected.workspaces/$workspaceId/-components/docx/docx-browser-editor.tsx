@@ -61,6 +61,10 @@ import {
 } from "@/components/docx-preview-zoom";
 import { DocxEditor } from "@/components/docx/app-docx-editor";
 import type { DocxComments } from "@/components/docx/app-docx-editor";
+import {
+  useInspectorStore,
+  useIsAnonymizationActive,
+} from "@/components/inspector/inspector-store";
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import { StatusMessage } from "@/components/route-components";
 import Tooltip from "@/components/tooltip";
@@ -70,20 +74,16 @@ import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { anonymizeChatTextInWorker } from "@/lib/anonymize/anonymize-chat-worker-client";
 import { detached } from "@/lib/detached";
+import { fileOptions } from "@/lib/files/queries";
 import { folioUIComponents } from "@/lib/folio-ui-components";
 import { composeRefs } from "@/lib/utils";
+import { anonymizationAllowlistOptions } from "@/lib/workspaces/queries/anonymization-allowlist";
+import { anonymizationTermsOptions } from "@/lib/workspaces/queries/anonymization-terms";
 import { DocxLoadingShell } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-loading-shell";
 import { useDocxBlockScroll } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/use-docx-block-scroll";
 import { useFolioCollaborationSession } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/use-folio-collaboration-session";
-import { fileOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
-import {
-  useInspectorStore,
-  useIsAnonymizationActive,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
-import { useSyncDocxSuggestions } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-docx-suggestions";
-import { anonymizationAllowlistOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/anonymization-allowlist";
 import "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-docx.css";
-import { anonymizationTermsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/anonymization-terms";
+import { useSyncDocxSuggestions } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-docx-suggestions";
 
 import {
   getDocxEditBlockReason,

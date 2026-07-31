@@ -1,10 +1,10 @@
 import { Result } from "better-result";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import { createEntityFromBuffer } from "@/api/handlers/entities/create-from-buffer";
-import { validateParentId } from "@/api/handlers/entities/validate-parent-id";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
+import { validateParentId } from "@/api/lib/entities/validate-parent-id";
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 

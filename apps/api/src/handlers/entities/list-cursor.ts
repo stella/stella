@@ -2,8 +2,8 @@ import { and, gt, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { entities, fields } from "@/api/db/schema";
-import { isValidTimestampCursorValue } from "@/api/handlers/entities/cursor-validation";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isValidTimestampCursorValue } from "@/api/lib/entities/cursor-validation";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   decodePaginationCursor,

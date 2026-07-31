@@ -2,7 +2,7 @@ import type {
   PlaybookPositions,
   Position,
   Tiers,
-} from "@/api/handlers/playbooks/positions";
+} from "@/api/lib/workflow/playbook-positions";
 
 // Clones a starter's positions with a brand-new uuid for every id: the
 // position `sourceId`, every acceptable/not-acceptable tier-rule id, and

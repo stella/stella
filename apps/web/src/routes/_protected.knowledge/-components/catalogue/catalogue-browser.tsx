@@ -55,16 +55,16 @@ import { compareByLocale } from "@/lib/collation";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
+import { knowledgeKeys } from "@/lib/knowledge/queries";
+import {
+  catalogueKeys,
+  catalogueOptions,
+} from "@/lib/knowledge/queries/catalogue";
 import {
   BlueprintGallerySheet,
   type BlueprintCreatedSkill,
 } from "@/routes/_protected.knowledge/-components/blueprint-gallery-sheet";
 import { ImportSkillDialog } from "@/routes/_protected.knowledge/-components/import-skill-dialog";
-import { knowledgeKeys } from "@/routes/_protected.knowledge/-queries";
-import {
-  catalogueKeys,
-  catalogueOptions,
-} from "@/routes/_protected.knowledge/-queries/catalogue";
 
 import { AddMcpServerSheet } from "./add-mcp-server-sheet";
 import { isEffectivelyInstalled, type CatalogueEntry } from "./catalogue-types";

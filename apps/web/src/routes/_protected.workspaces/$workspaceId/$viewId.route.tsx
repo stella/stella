@@ -22,26 +22,26 @@ import {
 } from "@/lib/react-query";
 import { optionalSearchStringSchema } from "@/lib/schema";
 import type { ViewLayout, WorkspaceView } from "@/lib/types";
-import { DocumentOcrAvailabilityProvider } from "@/routes/_protected.workspaces/$workspaceId/-components/document-ocr-availability";
-import { ViewSwitcher } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher";
-import { ViewToolbar } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar";
+import { overviewOptions } from "@/lib/workspaces/queries";
 import {
   DEFAULT_ENTITY_WINDOW_SIZE,
   entitiesWindowOptions,
   filesystemEntitiesOptions,
   visibleEntityFieldIds,
-} from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
-import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
-import { timeEntriesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/time-entries";
-import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
-import { workspaceMembersOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace-members";
+} from "@/lib/workspaces/queries/entities";
+import { propertiesOptions } from "@/lib/workspaces/queries/properties";
+import { timeEntriesOptions } from "@/lib/workspaces/queries/time-entries";
+import { viewsOptions } from "@/lib/workspaces/queries/views";
+import { workspaceMembersOptions } from "@/lib/workspaces/queries/workspace-members";
+import { DocumentOcrAvailabilityProvider } from "@/routes/_protected.workspaces/$workspaceId/-components/document-ocr-availability";
+import { ViewSwitcher } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher";
+import { ViewToolbar } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar";
 import {
   getWeekStart,
   isWorkspaceDocumentRoutePath,
   resolveKanbanGroupBy,
   toISODate,
 } from "@/routes/_protected.workspaces/$workspaceId/-utils";
-import { overviewOptions } from "@/routes/_protected.workspaces/-queries";
 
 const protectedRouteApi = getRouteApi("/_protected");
 

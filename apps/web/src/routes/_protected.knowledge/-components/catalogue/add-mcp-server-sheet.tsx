@@ -20,8 +20,8 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { knowledgeKeys } from "@/routes/_protected.knowledge/-queries";
-import { catalogueKeys } from "@/routes/_protected.knowledge/-queries/catalogue";
+import { knowledgeKeys } from "@/lib/knowledge/queries";
+import { catalogueKeys } from "@/lib/knowledge/queries/catalogue";
 
 type CreatedConnector = {
   slug: string;

@@ -2,9 +2,9 @@ import { useTranslations } from "use-intl";
 
 import type { LoadedCatalogueEntry } from "@stll/catalogue";
 
+import { CatalogueEntryIcon } from "@/components/catalogue/catalogue-entry-icon";
 import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
 import { StellaWordmark } from "@/components/stella-wordmark";
-import { CatalogueEntryIcon } from "@/routes/_protected.knowledge/-components/catalogue/catalogue-entry-icon";
 
 /**
  * Right-panel "agent profile" for the onboarding catalogue step. A

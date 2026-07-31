@@ -3,7 +3,6 @@ import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { folioCollabSessions } from "@/api/db/schema";
-import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeTokenHandler } from "@/api/lib/api-handlers";
@@ -14,6 +13,7 @@ import {
 } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { scanFile } from "@/api/lib/file-scan/scan";
+import { createFileKey } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import {
   permissiveBodySchema,

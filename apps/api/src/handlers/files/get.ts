@@ -5,16 +5,6 @@ import { status } from "elysia";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { entities, entityVersions, fields } from "@/api/db/schema";
 import { env } from "@/api/env";
-import {
-  emailToHtml,
-  resolveEmailMimeType,
-} from "@/api/handlers/files/email-to-html";
-import {
-  convertToPdf,
-  isConvertibleMimeType,
-  isNativelyRenderableMimeType,
-} from "@/api/handlers/files/gotenberg";
-import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -23,6 +13,16 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { contentDisposition } from "@/api/lib/content-disposition";
 import { injectStamp, isStampableDocx } from "@/api/lib/docx-stamp";
 import { fetchWithTimeout } from "@/api/lib/fetch";
+import {
+  emailToHtml,
+  resolveEmailMimeType,
+} from "@/api/lib/files/email-to-html";
+import {
+  convertToPdf,
+  isConvertibleMimeType,
+  isNativelyRenderableMimeType,
+} from "@/api/lib/files/gotenberg";
+import { createFileKey } from "@/api/lib/files/utils";
 import { getS3 } from "@/api/lib/s3";
 import { presignDownloadUrl } from "@/api/lib/s3-presign";
 import { RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS } from "@/api/lib/security-headers";

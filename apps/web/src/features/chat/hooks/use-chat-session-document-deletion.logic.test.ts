@@ -5,9 +5,9 @@ import type { DocumentDeletionMessage } from "@/components/chat/chat-ui-tools";
 import type { InspectorTab } from "@/components/inspector/inspector-store";
 import { reconcileDocumentDeletionToolCalls } from "@/features/chat/hooks/use-chat-session-document-deletion.logic";
 import { fileMetadataQueryKey } from "@/lib/files/file-metadata-query.logic";
-import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities.logic";
-import { taskKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/tasks.logic";
-import { workspacesKeys } from "@/routes/_protected.workspaces/-queries.logic";
+import { workspacesKeys } from "@/lib/workspaces/queries.logic";
+import { entitiesKeys } from "@/lib/workspaces/queries/entities.logic";
+import { taskKeys } from "@/lib/workspaces/queries/tasks.logic";
 
 const deletionMessages = (
   input: Record<string, string>,

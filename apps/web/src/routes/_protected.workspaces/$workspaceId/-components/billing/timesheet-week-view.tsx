@@ -6,6 +6,7 @@ import { cn } from "@stll/ui/lib/utils";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { normalizeOptionalArray } from "@/lib/arrays";
 import { addDays } from "@/lib/dates";
+import { timeEntriesOptions } from "@/lib/workspaces/queries/time-entries";
 import { formatCurrencyCompact } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
 import {
   formatDecimalHours,
@@ -16,7 +17,6 @@ import {
   summarizeBillableAmountByMatterAndCurrency,
   summarizeBillableAmountByCurrency,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/timesheet-week-view.logic";
-import { timeEntriesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/time-entries";
 
 export const TimesheetWeekView = ({
   workspaceId,

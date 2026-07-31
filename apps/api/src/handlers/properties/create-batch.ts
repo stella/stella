@@ -3,19 +3,19 @@ import { and, eq, inArray } from "drizzle-orm";
 import { t } from "elysia";
 
 import { properties, propertyDependencies } from "@/api/db/schema";
-import {
-  DOCUMENT_TYPE_CLASSIFIER_ROLE,
-  buildPropertyParts,
-  createPropertyBodySchema,
-  isDocumentTypeClassifierProperty,
-} from "@/api/handlers/properties/create-schema";
-import { lockWorkspacePropertyWrites } from "@/api/handlers/properties/property-lock";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import {
+  DOCUMENT_TYPE_CLASSIFIER_ROLE,
+  buildPropertyParts,
+  createPropertyBodySchema,
+  isDocumentTypeClassifierProperty,
+} from "@/api/lib/properties/create-schema";
+import { lockWorkspacePropertyWrites } from "@/api/lib/properties/property-lock";
 
 const config = {
   permissions: { property: ["create"] },

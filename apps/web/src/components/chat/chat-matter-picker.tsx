@@ -20,7 +20,7 @@ import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { compareByLocale } from "@/lib/collation";
 import { resolveMatterColor } from "@/lib/matter-colors";
-import { workspacesNavigationOptions } from "@/routes/_protected.workspaces/-queries";
+import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 
 /**
  * Matter context picker rendered in the chat tab header.

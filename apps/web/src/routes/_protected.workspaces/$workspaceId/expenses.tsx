@@ -14,12 +14,12 @@ import { getFormattingLocale } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { prefetchRouteQuery } from "@/lib/react-query";
-import { ExpenseListView } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/expense-list-view";
 import {
   addDays,
   expensesOptions,
   getExpensesWeekRange,
-} from "@/routes/_protected.workspaces/$workspaceId/-queries/expenses";
+} from "@/lib/workspaces/queries/expenses";
+import { ExpenseListView } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/expense-list-view";
 
 export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/expenses",

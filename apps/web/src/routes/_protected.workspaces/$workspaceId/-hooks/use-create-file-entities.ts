@@ -18,6 +18,11 @@ import { ClientOperationError } from "@/lib/errors/client";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { toSafeId } from "@/lib/safe-id";
 import { UploadQueue } from "@/lib/upload-queue";
+import { entitiesKeys } from "@/lib/workspaces/queries/entities";
+import {
+  propertiesKeys,
+  propertiesOptions,
+} from "@/lib/workspaces/queries/properties";
 import {
   buildDroppedFolderUploadPlan,
   type DroppedFolderUploadPlan,
@@ -28,11 +33,6 @@ import {
   entityCreateLocalInvalidationKeys,
 } from "@/routes/_protected.workspaces/$workspaceId/-hooks/create-file-upload-payload.logic";
 import { useStartWorkflow } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-start-workflow";
-import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
-import {
-  propertiesKeys,
-  propertiesOptions,
-} from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 
 const MAX_DISPLAYED_FAILURES = 5;
 // Matches the versions-sidebar PUT-to-S3 upload budget (same flow, uploaded

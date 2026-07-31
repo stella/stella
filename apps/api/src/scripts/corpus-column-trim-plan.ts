@@ -1,9 +1,9 @@
-import type { CorpusPayload } from "@/api/handlers/case-law/corpus-storage";
 import {
   namesEmptyCorpusPayload,
   payloadCarriesDocument,
 } from "@/api/handlers/case-law/stored-payload";
 import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
+import type { CorpusPayload } from "@/api/lib/legal-search/corpus-storage";
 
 /**
  * Decision logic for the corpus column trim (`corpus-column-trim.ts`),

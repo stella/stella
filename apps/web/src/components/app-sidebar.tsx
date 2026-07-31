@@ -100,6 +100,11 @@ import { resolveMatterColor } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import type { EntityKind } from "@/lib/types";
+import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
+import {
+  workspaceActivityOptions,
+  workspacesNavigationOptions,
+} from "@/lib/workspaces/queries";
 import { knowledgeSections } from "@/routes/_protected.knowledge/index";
 import { CopyToMatterDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog";
 import type { CopyToMatterEntity } from "@/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog.logic";
@@ -111,11 +116,6 @@ import {
   useMatterActions,
 } from "@/routes/_protected.workspaces/-components/matter-context-menu";
 import { useUpdateWorkspace } from "@/routes/_protected.workspaces/-mutations";
-import {
-  workspaceActivityOptions,
-  workspacesNavigationOptions,
-} from "@/routes/_protected.workspaces/-queries";
-import { useCreateMatterStore } from "@/routes/_protected.workspaces/-store/create-matter-store";
 
 // Scrollable group body. Hide the scrollbar in the collapsed icon rail (matches
 // SidebarContent); a thin track over the narrow icon strip reads as a bright

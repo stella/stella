@@ -54,6 +54,10 @@ import { toAPIError } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { fetchWithTimeout } from "@/lib/fetch";
+import {
+  PLAYBOOK_PICKER_LIMIT,
+  playbooksOptions,
+} from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
 import type {
   ViewLayout,
@@ -63,9 +67,14 @@ import type {
 } from "@/lib/types";
 import { downloadFile } from "@/lib/utils";
 import {
-  PLAYBOOK_PICKER_LIMIT,
-  playbooksOptions,
-} from "@/routes/_protected.knowledge/-queries";
+  workspaceFilesOptions,
+  workspaceFoldersOptions,
+} from "@/lib/workspaces/queries/entities";
+import {
+  propertiesKeys,
+  propertiesOptions,
+} from "@/lib/workspaces/queries/properties";
+import { useWorkspaceStore } from "@/lib/workspaces/store";
 import { BulkAddColumns } from "@/routes/_protected.workspaces/$workspaceId/-components/bulk-add-columns";
 import { ExistingFileOrganizerDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog";
 import { ExtractionRunProgress } from "@/routes/_protected.workspaces/$workspaceId/-components/extraction-run-progress";
@@ -79,15 +88,6 @@ import { SortChips } from "@/routes/_protected.workspaces/$workspaceId/-componen
 import type { TableContentMode } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
 import { useTableStore } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
 import { useUpdateView } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
-import {
-  workspaceFilesOptions,
-  workspaceFoldersOptions,
-} from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
-import {
-  propertiesKeys,
-  propertiesOptions,
-} from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
-import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 import {
   getInternalPropertyId,
   resolveKanbanGroupBy,

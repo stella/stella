@@ -1,12 +1,12 @@
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import type { JsonObject } from "@/api/lib/json-value";
 import {
   positionRuleSchema,
   positionSeveritySchema,
   resolvedTiersSchema,
-} from "@/api/handlers/playbooks/position-facets";
-import type { JsonObject } from "@/api/lib/json-value";
+} from "@/api/lib/workflow/playbook-position-facets";
 
 const v1 = t.Literal(1);
 

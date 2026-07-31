@@ -34,6 +34,7 @@ import { ChatInputSurface } from "@/components/chat-input-surface";
 import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
 import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
 import { useChatModelSelection } from "@/components/chat/use-chat-model-selection";
+import { useInspectorStore } from "@/components/inspector/inspector-store";
 import { MatterIcon } from "@/components/matter-icon";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { StellaMark } from "@/components/stella-mark";
@@ -72,11 +73,10 @@ import { useSavedPrompts } from "@/lib/prompts/use-saved-prompts";
 import { formatRelativeTime } from "@/lib/relative-time";
 import { matchReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
+import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
+import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet";
-import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { MatterContextMenu } from "@/routes/_protected.workspaces/-components/matter-context-menu";
-import { workspacesNavigationOptions } from "@/routes/_protected.workspaces/-queries";
-import { useCreateMatterStore } from "@/routes/_protected.workspaces/-store/create-matter-store";
 
 export const Route = createFileRoute("/_protected/chat/")({
   component: ChatIndex,

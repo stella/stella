@@ -1,16 +1,6 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { resolveScopedGate } from "@/api/handlers/playbooks/materialize-run";
-import {
-  resolveEffectiveAsk,
-  selectEnabledPositions,
-} from "@/api/handlers/playbooks/position-runtime";
-import type { ResolvedTiers } from "@/api/handlers/playbooks/positions";
-import {
-  loadClauseSnapshots,
-  resolveTiers,
-} from "@/api/handlers/playbooks/resolve-standards";
 import { extractAskContents } from "@/api/handlers/playbooks/review-extract";
 import type { ReviewAsk } from "@/api/handlers/playbooks/review-extract";
 import { buildFindings } from "@/api/handlers/playbooks/review-grade";
@@ -26,6 +16,16 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
 import { isAISupportedFile } from "@/api/lib/workflow/generate-batch";
 import type { ResolvedFile } from "@/api/lib/workflow/generate-batch-shared";
+import { resolveScopedGate } from "@/api/lib/workflow/materialize-playbook-run";
+import type { ResolvedTiers } from "@/api/lib/workflow/playbook-positions";
+import {
+  resolveEffectiveAsk,
+  selectEnabledPositions,
+} from "@/api/lib/workflow/position-runtime";
+import {
+  loadClauseSnapshots,
+  resolveTiers,
+} from "@/api/lib/workflow/resolve-standards";
 
 // Synchronous, ephemeral single-document review: grade one document against an
 // org playbook and return Findings inline. Unlike `run.ts` (the files-table

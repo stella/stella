@@ -11,7 +11,6 @@ import {
   type PendingUploadPurposeData,
   workspaces,
 } from "@/api/db/schema";
-import { resolveUploadMime } from "@/api/handlers/files/utils";
 import {
   checkEntityCreateCapacityForInsert,
   checkEntityCreateParentForInsert,
@@ -37,6 +36,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { resolveUploadMime } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { presignUploadUrl } from "@/api/lib/s3-presign";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";

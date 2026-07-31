@@ -58,7 +58,7 @@ import { DOCX_MIME, PDF_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
-import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 
 import type { ClauseBody } from "./clause-editor-types";
 import { FillClausesSection } from "./fill-clauses-section";

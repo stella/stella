@@ -15,8 +15,8 @@ import { Button } from "@stll/ui/components/button";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import type { WorkspaceProperty } from "@/lib/types";
+import { useIsWorkflowRunning } from "@/lib/workspaces/queries/workspace";
 import { useDeleteProperty } from "@/routes/_protected.workspaces/$workspaceId/-mutations/properties";
-import { useIsWorkflowRunning } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
 
 type DeletePropertyProps = {
   workspaceId: string;

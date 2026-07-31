@@ -1,7 +1,7 @@
 import { useRef } from "react";
 
+import { useInspectorStore } from "@/components/inspector/inspector-store";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 
 /**
  * Flashes an element when the inspector activates the given entity.

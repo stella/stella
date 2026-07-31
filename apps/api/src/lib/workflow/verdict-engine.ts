@@ -6,11 +6,6 @@ import type { ConditionNode } from "@stll/conditions";
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { JustificationContent, VerdictMatchedRef } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
-import type {
-  PositionRule,
-  ResolvedTiers,
-} from "@/api/handlers/playbooks/positions";
-import type { VerdictTier } from "@/api/handlers/playbooks/verdict-tiers";
 import { resolveCaching } from "@/api/lib/ai-config";
 import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
 import {
@@ -27,7 +22,12 @@ import type {
 } from "@/api/lib/workflow/generate-batch-shared";
 import { fetchInputFieldsForBatch } from "@/api/lib/workflow/generate-batch-shared";
 import type { VerdictBatchProperty } from "@/api/lib/workflow/get-execution-plan";
+import type {
+  PositionRule,
+  ResolvedTiers,
+} from "@/api/lib/workflow/playbook-positions";
 import { evaluateGatingCondition } from "@/api/lib/workflow/utils";
+import type { VerdictTier } from "@/api/lib/workflow/verdict-tiers";
 
 // ── Presence of the ASK value ─────────────────────────
 type PresenceState = "present" | "absent" | "missing";

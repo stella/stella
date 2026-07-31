@@ -25,6 +25,7 @@ import type {
   PropertyDependency,
   WorkspaceProperty,
 } from "@/lib/types";
+import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { CreateProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/create-property";
 import { DeleteProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/delete-property";
 import { PinProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/pin-property";
@@ -36,7 +37,6 @@ import type { TableHeader } from "@/routes/_protected.workspaces/$workspaceId/-c
 import { toSortHint } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 import { useStartWorkflow } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-start-workflow";
 import { useUpdateProperty } from "@/routes/_protected.workspaces/$workspaceId/-mutations/properties";
-import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 
 type PropertyPopoverProps = {
   property: WorkspaceProperty;

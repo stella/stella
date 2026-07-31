@@ -22,10 +22,10 @@ import {
   advanceToolCallTiming,
   createToolCallTiming,
 } from "@/components/chat/tool-call-timing.logic";
+import { useInspectorStore } from "@/components/inspector/inspector-store";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { mcpConnectorsOptions } from "@/routes/_protected.knowledge/-queries";
-import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
+import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 
 type ToolPart = ChatToolCallPart;
 

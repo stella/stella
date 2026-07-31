@@ -55,11 +55,11 @@ import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { getCachedAnonymization } from "@/lib/pdf/anonymization-cache";
+import { workspacesKeys } from "@/lib/workspaces/queries.logic";
+import { entityOptions } from "@/lib/workspaces/queries/entities";
+import { useWorkspaceStore } from "@/lib/workspaces/store";
 import { MatterMetadataPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/matter-metadata-sheet";
 import { TaskDetailPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-panel";
-import { entityOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
-import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
-import { workspacesKeys } from "@/routes/_protected.workspaces/-queries.logic";
 
 type InspectorPanelProps = {
   /**

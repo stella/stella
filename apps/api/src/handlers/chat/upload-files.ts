@@ -26,13 +26,6 @@ import {
   isChatAttachmentPart,
 } from "@/api/handlers/chat/chat-message-parts";
 import { ChatError } from "@/api/handlers/chat/errors";
-import {
-  generateImageThumbnail,
-  shouldGenerateImageThumbnail,
-  THUMBNAIL_MIME_TYPE,
-} from "@/api/handlers/files/image-derivative";
-import { createUserFileKey, deleteS3Keys } from "@/api/handlers/files/utils";
-import { isUserFileUrl, toUserFileUrl } from "@/api/handlers/user-files/types";
 import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -45,9 +38,16 @@ import {
 } from "@/api/lib/data-url";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getScanWarnings, scanFile } from "@/api/lib/file-scan/scan";
+import {
+  generateImageThumbnail,
+  shouldGenerateImageThumbnail,
+  THUMBNAIL_MIME_TYPE,
+} from "@/api/lib/files/image-derivative";
+import { createUserFileKey, deleteS3Keys } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
+import { isUserFileUrl, toUserFileUrl } from "@/api/lib/user-files/types";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 import type {

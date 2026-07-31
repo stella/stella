@@ -21,9 +21,9 @@ import { Separator } from "@stll/ui/components/separator";
 import { ConditionBuilder } from "@/components/conditions/condition-builder";
 import type { FieldOption } from "@/components/conditions/condition-builder-logic";
 import type { PropertyDependency, WorkspaceProperty } from "@/lib/types";
+import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { filterCapabilities } from "@/routes/_protected.workspaces/$workspaceId/-components/conditions/filter-capabilities";
 import { PropertyIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/property-helpers";
-import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 
 type PropertyConditionsProps = {
   workspaceId: string;

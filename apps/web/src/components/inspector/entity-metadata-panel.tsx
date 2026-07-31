@@ -31,20 +31,17 @@ import type {
   PropertyId,
   WorkspaceProperty,
 } from "@/lib/types";
-import { CreateProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/create-property";
-import { EditableField } from "@/routes/_protected.workspaces/$workspaceId/-components/editable-field";
-import { Justification } from "@/routes/_protected.workspaces/$workspaceId/-components/justification";
-import {
-  entitiesKeys,
-  entityOptions,
-} from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
-import { entityVersionsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entity-versions";
-import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
-import { useIsWorkflowRunning } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
+import { entitiesKeys, entityOptions } from "@/lib/workspaces/queries/entities";
+import { entityVersionsOptions } from "@/lib/workspaces/queries/entity-versions";
+import { propertiesOptions } from "@/lib/workspaces/queries/properties";
+import { useIsWorkflowRunning } from "@/lib/workspaces/queries/workspace";
 import {
   selectJustificationByFieldId,
   useWorkspaceStore,
-} from "@/routes/_protected.workspaces/$workspaceId/-store";
+} from "@/lib/workspaces/store";
+import { CreateProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/create-property";
+import { EditableField } from "@/routes/_protected.workspaces/$workspaceId/-components/editable-field";
+import { Justification } from "@/routes/_protected.workspaces/$workspaceId/-components/justification";
 
 type AiFieldClickArgs = {
   fieldId: string;

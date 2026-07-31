@@ -1,4 +1,4 @@
-import type { MatterActivityItem } from "@/routes/_protected.workspaces/-queries";
+import type { MatterActivityItem } from "@/lib/workspaces/queries";
 
 const DOCUMENT_BATCH_WINDOW_MS = 60_000;
 

@@ -2,11 +2,6 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import {
-  type ClientTemplateManifest,
-  type CreatedTemplate,
-  createStoredTemplate,
-} from "@/api/handlers/templates/create-template-service";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type {
   HandlerConfig,
@@ -23,6 +18,11 @@ import { isFieldMeta } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
+import {
+  type ClientTemplateManifest,
+  type CreatedTemplate,
+  createStoredTemplate,
+} from "@/api/lib/templates/create-template";
 import { isRecord } from "@/api/lib/type-guards";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 

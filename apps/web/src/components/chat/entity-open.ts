@@ -1,6 +1,7 @@
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { isEntityActiveInMainRoute } from "@/components/chat/entity-route-detect";
+import { useInspectorStore } from "@/components/inspector/inspector-store";
 import { getTranslator } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -15,7 +16,6 @@ import type {
   WorkspaceField,
   WorkspaceFieldContent,
 } from "@/lib/types";
-import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 
 type EntityFileField = {
   id: FieldId;

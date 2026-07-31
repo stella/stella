@@ -2,8 +2,8 @@ import { createElement } from "react";
 
 import { FolderIcon } from "lucide-react";
 
+import { DocumentIcon } from "@/components/document-icon";
 import type { DragPreviewData } from "@/components/drag-preview";
-import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 
 const cardStyle = {
   display: "flex",

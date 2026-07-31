@@ -11,7 +11,7 @@ import { unwrapEden } from "@/lib/errors/api";
 import {
   organizationSettingsKeys,
   organizationSettingsOptions,
-} from "@/routes/_protected.organization/-settings-queries";
+} from "@/lib/organization/settings-queries";
 import { useSettingsMutation } from "@/routes/_protected.settings/-hooks/use-settings-mutation";
 
 export const PromptCachingCard = () => {

@@ -6,13 +6,13 @@ import { Input } from "@stll/ui/components/input";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { useInlineRename } from "@/hooks/use-inline-rename";
+import { useUpdateContact } from "@/lib/contacts/mutations";
 import { detached } from "@/lib/detached";
 import { invalidateContactCaches } from "@/routes/_protected.contacts/-components/contact-caches";
 import type {
   ContactData,
   EditableField,
 } from "@/routes/_protected.contacts/-components/types";
-import { useUpdateContact } from "@/routes/_protected.contacts/-mutations";
 
 const protectedRouteApi = getRouteApi("/_protected");
 

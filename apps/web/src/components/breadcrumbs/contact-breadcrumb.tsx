@@ -5,7 +5,7 @@ import type { ResolveParams } from "@tanstack/react-router";
 import { BidiText } from "@stll/ui/components/bidi-text";
 
 import { BreadcrumbLink } from "@/components/breadcrumbs/shared";
-import { contactOptions } from "@/routes/_protected.contacts/-queries";
+import { contactOptions } from "@/lib/contacts/queries";
 
 const protectedRouteApi = getRouteApi("/_protected");
 

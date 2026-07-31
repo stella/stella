@@ -1,11 +1,11 @@
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 
+import { useEntitiesOptions } from "@/lib/workspaces/queries/entities";
+import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import {
   chunkJustificationEntityIds,
   useSyncJustificationChunks,
 } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-justifications";
-import { useEntitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
-import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 
 type UseSyncTableProps = Parameters<typeof useEntitiesOptions>[0] & {
   syncJustifications?: boolean;

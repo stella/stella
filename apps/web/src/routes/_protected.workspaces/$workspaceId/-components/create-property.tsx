@@ -34,6 +34,7 @@ import type {
   WorkspaceProperty,
   WorkspacePropertyOption,
 } from "@/lib/types";
+import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import {
   COMPOSER_CARD_CLASS,
   ReadingFromRow,
@@ -60,7 +61,6 @@ import {
   useSuggestPrompt,
   useUpdateProperty,
 } from "@/routes/_protected.workspaces/$workspaceId/-mutations/properties";
-import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 
 type CreatePropertyProps = {
   workspaceId: string;

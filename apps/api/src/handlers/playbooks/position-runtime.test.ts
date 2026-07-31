@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
+import type { Position } from "@/api/lib/workflow/playbook-positions";
 import {
   gradedPositionRule,
   resolveEffectiveAsk,
   selectEnabledPositions,
-} from "@/api/handlers/playbooks/position-runtime";
-import type { Position } from "@/api/handlers/playbooks/positions";
+} from "@/api/lib/workflow/position-runtime";
 
 const textContent = { version: 1, type: "text" } as const;
 const RULE_ID = "aaaaaaaa-0000-4000-8000-000000000001";

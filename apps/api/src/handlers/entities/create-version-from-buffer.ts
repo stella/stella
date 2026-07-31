@@ -4,11 +4,6 @@ import { and, eq } from "drizzle-orm";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { pendingUploads } from "@/api/db/schema";
-import { computeVersionDiffStats } from "@/api/handlers/entities/compute-version-diff";
-import { writeFileVersion } from "@/api/handlers/entities/write-file-version";
-import type { WriteFileVersionResult } from "@/api/handlers/entities/write-file-version";
-import { allocateFileObject } from "@/api/handlers/files/file-object-ids";
-import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -21,10 +16,15 @@ import {
   startBufferIntentHeartbeat,
 } from "@/api/lib/buffer-intent-reconciliation";
 import type { DocumentSource } from "@/api/lib/document-source";
+import { computeVersionDiffStats } from "@/api/lib/entity-versions/compute-version-diff";
+import { writeFileVersion } from "@/api/lib/entity-versions/write-file-version";
+import type { WriteFileVersionResult } from "@/api/lib/entity-versions/write-file-version";
 import {
   enqueueImageThumbnailOrMarkFailed,
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
+import { allocateFileObject } from "@/api/lib/files/file-object-ids";
+import { createFileKey } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { deleteS3ObjectWithSignal, putS3ObjectWithSignal } from "@/api/lib/s3";

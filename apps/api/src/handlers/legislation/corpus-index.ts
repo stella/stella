@@ -5,7 +5,6 @@ import {
   legislationIndexJobs,
   legislationSources,
 } from "@/api/db/schema";
-import { readCorpusText } from "@/api/handlers/case-law/corpus-storage";
 import { redistributableLegislationSource } from "@/api/handlers/legislation/redistribution";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CorpusDocumentPayload } from "@/api/lib/corpus-index/core";
@@ -17,6 +16,7 @@ import {
   timestampCasToken,
   type TimestampCasToken,
 } from "@/api/lib/db/timestamp-cas";
+import { readCorpusText } from "@/api/lib/legal-search/corpus-storage";
 
 /**
  * corpus index projection for the `legislation` family. Domain adapter over the

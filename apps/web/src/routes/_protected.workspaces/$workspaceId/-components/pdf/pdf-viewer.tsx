@@ -6,16 +6,16 @@ import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-a
 import { StellaMark } from "@/components/stella-mark";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
+import { fileOptions } from "@/lib/files/queries";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
 import { PDFPage } from "@/lib/pdf/pdf-page";
 import { PDFViewport } from "@/lib/pdf/pdf-viewport";
-import { fileOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
+import { entityOptions } from "@/lib/workspaces/queries/entities";
+import { useWorkspaceStore } from "@/lib/workspaces/store";
 import { CreatingBBoxes } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/creating-citations";
 import { PageAnonymization } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/page-anonymization";
-import { PageCitation } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/page-citation";
-import { entityOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-docx.css";
-import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
+import { PageCitation } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/page-citation";
 
 const routeApi = getRouteApi(
   "/_protected/workspaces/$workspaceId/$viewId/document",

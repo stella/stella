@@ -25,7 +25,7 @@ import {
 } from "@/features/chat/queries";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { toSafeId, type SafeId } from "@/lib/safe-id";
-import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
+import { workspacesKeys } from "@/lib/workspaces/queries";
 
 const createMessage = (id = "message-A"): PersistedChatMessage => ({
   id,

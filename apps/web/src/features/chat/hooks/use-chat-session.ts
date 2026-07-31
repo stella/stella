@@ -40,6 +40,7 @@ import {
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import type { NeedsMatterMatter } from "@/components/chat/needs-matter-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
+import { useInspectorStore } from "@/components/inspector/inspector-store";
 import { invalidateCreatedDocumentQueries } from "@/features/chat/hooks/use-chat-session-created-document.logic";
 import { reconcileDocumentDeletionToolCalls } from "@/features/chat/hooks/use-chat-session-document-deletion.logic";
 import {
@@ -71,16 +72,15 @@ import type {
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { internalToolErrorMessage, toAPIError } from "@/lib/errors/api";
+import { fileOptions } from "@/lib/files/queries";
+import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
 import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
-import { mcpConnectorsOptions } from "@/routes/_protected.knowledge/-queries";
-import { fileOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
-import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
-import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities.logic";
 import {
   workspacesKeys,
   workspacesNavigationOptions,
-} from "@/routes/_protected.workspaces/-queries";
+} from "@/lib/workspaces/queries";
+import { entitiesKeys } from "@/lib/workspaces/queries/entities.logic";
 
 type CreateDocumentInput = ChatUITools["create-document"]["input"];
 type CreateDocumentOutput = ChatUITools["create-document"]["output"];

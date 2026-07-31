@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/lib/safe-id";
-import type { MatterActivityItem } from "@/routes/_protected.workspaces/-queries";
+import type { MatterActivityItem } from "@/lib/workspaces/queries";
 
 import {
   activityDayKey,

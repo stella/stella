@@ -253,7 +253,7 @@ describe("delete-version chain-of-custody guard", () => {
             "Historical activity target resolution reads only version ID and owning entity ID across tombstones; it never returns withdrawn version content.",
         },
       ],
-      "handlers/entities/version-utils.ts": [
+      "lib/entity-versions/version-utils.ts": [
         {
           anchor: "max(entityVersions.versionNumber)",
           reason:
@@ -357,7 +357,10 @@ describe("delete-version chain-of-custody guard", () => {
     // and require deletedAt IS NULL, so a tombstoned base version is never
     // served regardless of session state (class guard for the cascade above).
     const source = readFileSync(
-      nodePath.join(import.meta.dir, "desktop-edit-session-utils.ts"),
+      nodePath.join(
+        API_SRC,
+        "lib/entity-versions/desktop-edit-session-utils.ts",
+      ),
       "utf-8",
     );
 
@@ -402,7 +405,7 @@ describe("delete-version chain-of-custody guard", () => {
       string,
       { anchor: string; reason: string }
     > = {
-      "handlers/entities/compute-version-diff.ts": {
+      "lib/entity-versions/compute-version-diff.ts": {
         anchor: "diffWordsAdded",
         reason:
           "Derived diff-stats cache write on a freshly-finalized version; landing on a concurrently-tombstoned row is harmless because tombstoned versions are never read.",
@@ -451,7 +454,7 @@ describe("delete-version chain-of-custody guard", () => {
     // so the collision is a silent duplicate). Every writer must allocate via
     // nextEntityVersionNumber (MAX over ALL versions, including tombstoned).
     const utils = readFileSync(
-      nodePath.join(API_SRC, "handlers/entities/version-utils.ts"),
+      nodePath.join(API_SRC, "lib/entity-versions/version-utils.ts"),
       "utf-8",
     );
     const allocator = utils.slice(

@@ -12,11 +12,11 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { UserIdentity } from "@/components/user-avatar";
+import { useUpdateContact } from "@/lib/contacts/mutations";
 import { detached } from "@/lib/detached";
+import { organizationOptions } from "@/lib/organization/queries";
 import { invalidateContactCaches } from "@/routes/_protected.contacts/-components/contact-caches";
 import type { ContactData } from "@/routes/_protected.contacts/-components/types";
-import { useUpdateContact } from "@/routes/_protected.contacts/-mutations";
-import { organizationOptions } from "@/routes/_protected.organization/-queries";
 
 const NO_OWNER_VALUE = "__none";
 

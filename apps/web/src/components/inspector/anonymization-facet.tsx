@@ -67,11 +67,11 @@ import { toSafeId } from "@/lib/safe-id";
 import {
   anonymizationAllowlistKeys,
   anonymizationAllowlistOptions,
-} from "@/routes/_protected.workspaces/$workspaceId/-queries/anonymization-allowlist";
+} from "@/lib/workspaces/queries/anonymization-allowlist";
 import {
   anonymizationTermsKeys,
   anonymizationTermsOptions,
-} from "@/routes/_protected.workspaces/$workspaceId/-queries/anonymization-terms";
+} from "@/lib/workspaces/queries/anonymization-terms";
 
 // Org-wide ignore lands behind a dedicated org-settings handler
 // with `organizationSettings` permissions; until that ships, the

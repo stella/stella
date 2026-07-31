@@ -7,19 +7,18 @@ import {
   caseLawSearchDocuments,
   caseLawSources,
 } from "@/api/db/schema";
-import { resolveFtsConfig } from "@/api/handlers/case-law/fts-config";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { setCorpusBackfillStatementTimeout } from "@/api/lib/legal-search/backfill-statement-timeout";
+import type { DecisionSection } from "@/api/lib/legal-search/document-types";
+import { resolveFtsConfig } from "@/api/lib/legal-search/fts-config";
 import { logger } from "@/api/lib/observability/logger";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 import {
   buildSearchPreviewPassages,
   buildSearchPreviewPassageValueRows,
 } from "@/api/lib/search/preview-passages";
-
-import type { DecisionSection } from "./types";
 
 const SEARCH_INDEX_CONCURRENCY = 4;
 

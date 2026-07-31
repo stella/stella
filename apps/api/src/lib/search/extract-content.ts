@@ -9,12 +9,12 @@
 
 import { Result } from "better-result";
 
+import { captureError } from "@/api/lib/analytics/capture";
+import { ExtractionWorkerError } from "@/api/lib/errors/tagged-errors";
 import {
   EMAIL_MIME_TYPES,
   resolveEmailMimeType,
-} from "@/api/handlers/files/email-to-html";
-import { captureError } from "@/api/lib/analytics/capture";
-import { ExtractionWorkerError } from "@/api/lib/errors/tagged-errors";
+} from "@/api/lib/files/email-to-html";
 import { LIMITS } from "@/api/lib/limits";
 import { resolveRuntimeWorkerPath } from "@/api/lib/runtime-worker-path";
 import { spawnWorker } from "@/api/lib/subprocess";

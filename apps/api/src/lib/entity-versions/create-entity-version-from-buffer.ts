@@ -27,20 +27,6 @@ import {
   folioCollabSessions,
   workspaces,
 } from "@/api/db/schema";
-import { computeVersionDiffStats } from "@/api/handlers/entities/compute-version-diff";
-import { lockDocxEditTarget } from "@/api/handlers/entities/desktop-edit-session-utils";
-import {
-  buildVersionStamp,
-  cloneFieldsForRevision,
-  nextEntityVersionNumber,
-} from "@/api/handlers/entities/version-utils";
-import {
-  allocateFileObject,
-  fileContentWithMintedObject,
-} from "@/api/handlers/files/file-object-ids";
-import { pdfDerivativeStateForFile } from "@/api/handlers/files/gotenberg";
-import { thumbnailDerivativeStateForFile } from "@/api/handlers/files/image-derivative";
-import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -48,10 +34,24 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
 import { detached } from "@/api/lib/detached";
+import { computeVersionDiffStats } from "@/api/lib/entity-versions/compute-version-diff";
+import { lockDocxEditTarget } from "@/api/lib/entity-versions/desktop-edit-session-utils";
+import {
+  buildVersionStamp,
+  cloneFieldsForRevision,
+  nextEntityVersionNumber,
+} from "@/api/lib/entity-versions/version-utils";
 import {
   enqueueImageThumbnailOrMarkFailed,
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
+import {
+  allocateFileObject,
+  fileContentWithMintedObject,
+} from "@/api/lib/files/file-object-ids";
+import { pdfDerivativeStateForFile } from "@/api/lib/files/gotenberg";
+import { thumbnailDerivativeStateForFile } from "@/api/lib/files/image-derivative";
+import { createFileKey } from "@/api/lib/files/utils";
 import { isFolioCollabSessionExpired } from "@/api/lib/folio-collab-sessions";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";

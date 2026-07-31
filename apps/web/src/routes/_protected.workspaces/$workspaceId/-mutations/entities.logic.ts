@@ -1,8 +1,8 @@
 import type { QueryClient } from "@tanstack/react-query";
 
-import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities.logic";
-import { taskKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/tasks.logic";
-import { workspacesKeys } from "@/routes/_protected.workspaces/-queries.logic";
+import { workspacesKeys } from "@/lib/workspaces/queries.logic";
+import { entitiesKeys } from "@/lib/workspaces/queries/entities.logic";
+import { taskKeys } from "@/lib/workspaces/queries/tasks.logic";
 
 export const invalidateDeletedEntityQueries = async ({
   queryClient,

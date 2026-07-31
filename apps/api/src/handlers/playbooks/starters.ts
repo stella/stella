@@ -1,7 +1,7 @@
 import type {
   PlaybookPositions,
   PositionSeverity,
-} from "@/api/handlers/playbooks/positions";
+} from "@/api/lib/workflow/playbook-positions";
 
 // Ready-made playbooks a user can instantiate into their org in one click, so
 // review has day-1 value instead of a blank editor. Content here is a

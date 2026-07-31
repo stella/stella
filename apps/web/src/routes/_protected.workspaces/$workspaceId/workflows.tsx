@@ -7,10 +7,10 @@ import { useTranslations } from "use-intl";
 import { Skeleton } from "@stll/ui/components/skeleton";
 
 import { workflowsRouteAvailable } from "@/hooks/use-workflows-preview";
+import { flowRunsOptions } from "@/lib/workspaces/queries/flow-runs";
 import { RunDetail } from "@/routes/_protected.workspaces/$workspaceId/-components/flows/run-detail";
 import { RunLauncher } from "@/routes/_protected.workspaces/$workspaceId/-components/flows/run-launcher";
 import { RunsList } from "@/routes/_protected.workspaces/$workspaceId/-components/flows/runs-list";
-import { flowRunsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/flow-runs";
 
 export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/workflows",

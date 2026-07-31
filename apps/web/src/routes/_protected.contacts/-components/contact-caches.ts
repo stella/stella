@@ -5,14 +5,14 @@ import { useTranslations } from "use-intl";
 
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { useUpdateContact } from "@/lib/contacts/mutations";
+import { contactsKeys } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
+import { workspacesKeys } from "@/lib/workspaces/queries";
 import type {
   ContactData,
   ContactPatch,
 } from "@/routes/_protected.contacts/-components/types";
-import { useUpdateContact } from "@/routes/_protected.contacts/-mutations";
-import { contactsKeys } from "@/routes/_protected.contacts/-queries";
-import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
 
 const protectedRouteApi = getRouteApi("/_protected");
 

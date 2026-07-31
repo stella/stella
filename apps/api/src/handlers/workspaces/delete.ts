@@ -17,12 +17,6 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
-import { THUMBNAIL_MIME_TYPE } from "@/api/handlers/files/image-derivative";
-import {
-  createUserFileKey,
-  deleteS3Keys,
-  deleteS3Objects,
-} from "@/api/handlers/files/utils";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -30,6 +24,12 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { preserveBufferObjectCleanupIntents } from "@/api/lib/buffer-intent-reconciliation";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
+import {
+  createUserFileKey,
+  deleteS3Keys,
+  deleteS3Objects,
+} from "@/api/lib/files/utils";
 import { pendingUploadS3KeysForDeletion } from "@/api/lib/pending-upload-keys";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { PDF_MIME_TYPE } from "@/api/mime-types";

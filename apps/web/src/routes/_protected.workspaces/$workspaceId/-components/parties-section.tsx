@@ -39,11 +39,16 @@ import { ContactPicker } from "@/components/contact-picker";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import { useCreateContact } from "@/lib/contacts/mutations";
+import { contactsKeys } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
-import { useCreateContact } from "@/routes/_protected.contacts/-mutations";
-import { contactsKeys } from "@/routes/_protected.contacts/-queries";
+import { workspaceOptions, workspacesKeys } from "@/lib/workspaces/queries";
+import {
+  workspaceContactsKeys,
+  workspaceContactsOptions,
+} from "@/lib/workspaces/queries/workspace-contacts";
 import { MATTER_INFO_ICON_SLOT_CLASS } from "@/routes/_protected.workspaces/$workspaceId/-components/matter-info-layout";
 import {
   PARTY_ROLES,
@@ -51,15 +56,7 @@ import {
   toPartyRole,
 } from "@/routes/_protected.workspaces/$workspaceId/-party-roles";
 import type { PartyRole } from "@/routes/_protected.workspaces/$workspaceId/-party-roles";
-import {
-  workspaceContactsKeys,
-  workspaceContactsOptions,
-} from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace-contacts";
 import { useUpdateWorkspace } from "@/routes/_protected.workspaces/-mutations";
-import {
-  workspaceOptions,
-  workspacesKeys,
-} from "@/routes/_protected.workspaces/-queries";
 
 type PartiesSectionProps = {
   workspaceId: string;

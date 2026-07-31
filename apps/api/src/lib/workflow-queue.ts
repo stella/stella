@@ -16,11 +16,6 @@ import {
   properties,
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
-import { resolveDocTypeClassifier } from "@/api/handlers/playbooks/materialize-run";
-import {
-  classifierParticipatedInPlan,
-  routeClassifiedDocuments,
-} from "@/api/handlers/playbooks/route-playbooks";
 import type { AIRequestServiceTier } from "@/api/lib/ai-config";
 import {
   loadOrgAIConfig,
@@ -80,6 +75,7 @@ import {
   getExecutionPlanData,
   getPropertyExecutionPlan,
 } from "@/api/lib/workflow/get-execution-plan";
+import { resolveDocTypeClassifier } from "@/api/lib/workflow/materialize-playbook-run";
 import {
   isCurrentWorkflowRequestState,
   parseRunningLockWorkspaceId,
@@ -97,6 +93,10 @@ import {
   type WorkflowQueueClass,
   type WorkflowWorkerSpec,
 } from "@/api/lib/workflow/queue-topology";
+import {
+  classifierParticipatedInPlan,
+  routeClassifiedDocuments,
+} from "@/api/lib/workflow/route-playbooks";
 import {
   computeWorkflowJobTimeoutMs,
   computeWorkflowRunLockTtlSec,

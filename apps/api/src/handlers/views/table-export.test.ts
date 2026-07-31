@@ -6,21 +6,23 @@ import { propertyConfig } from "@stll/property-testing";
 
 import type { JustificationContent } from "@/api/db/schema";
 import type { PropertyTool } from "@/api/db/schema-validators";
-import type { QueryEntityResult } from "@/api/handlers/entities/query-entities";
 import {
   buildCsvExport,
   buildDocxExport,
-  buildExportColumns,
   buildExportTable,
   buildXlsxExport,
-  formatExportDate,
-  formatFieldContent,
   sanitizeSpreadsheetText,
   sanitizeWorksheetName,
   SPREADSHEET_EXPORT_LIMITS,
 } from "@/api/handlers/views/table-export";
 import { toSafeId } from "@/api/lib/branded-types";
+import type { QueryEntityResult } from "@/api/lib/entities/query-entities";
 import type { ViewLayout } from "@/api/lib/views-schema";
+import { buildExportColumns } from "@/api/lib/views/export-columns";
+import {
+  formatExportDate,
+  formatFieldContent,
+} from "@/api/lib/views/export-format";
 
 const manualTool: PropertyTool = { version: 1, type: "manual-input" };
 const aiTool: PropertyTool = {

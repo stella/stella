@@ -27,10 +27,10 @@ import type {
   WorkspaceField,
   WorkspacePropertyOption,
 } from "@/lib/types";
+import { useIsWorkflowRunning } from "@/lib/workspaces/queries/workspace";
 import { FieldValueSelect } from "@/routes/_protected.workspaces/$workspaceId/-components/field-value-select";
 import { useStartWorkflow } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-start-workflow";
 import { useUpsertField } from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities";
-import { useIsWorkflowRunning } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
 
 export type EditableFieldContent = Extract<
   WorkspaceField["content"],

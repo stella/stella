@@ -46,7 +46,7 @@ import { stringCursorSeed } from "@/lib/infinite-query";
 import type { QueryOptionsInput } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
-import { invalidateWorkspaceActivity } from "@/routes/_protected.workspaces/-queries";
+import { invalidateWorkspaceActivity } from "@/lib/workspaces/queries";
 
 type ActiveFileContext = {
   docxEditSnapshot?:

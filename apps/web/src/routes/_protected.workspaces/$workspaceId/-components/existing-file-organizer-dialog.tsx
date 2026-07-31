@@ -47,6 +47,8 @@ import { compareByLocale } from "@/lib/collation";
 import { detached } from "@/lib/detached";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
+import { workspacesKeys } from "@/lib/workspaces/queries";
+import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { EntityKindIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-kind-icon";
 import {
   buildFileNameSuggestions,
@@ -54,8 +56,6 @@ import {
   normalizeSuggestedFileName,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/import-organizer.logic";
 import type { FileNameSuggestion } from "@/routes/_protected.workspaces/$workspaceId/-components/import-organizer.logic";
-import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
-import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
 
 export type ExistingImportFolder = {
   entityId: string;

@@ -23,6 +23,10 @@ import { useLocale } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
+import { workspacesKeys } from "@/lib/workspaces/queries";
+import { entitiesKeys } from "@/lib/workspaces/queries/entities";
+import { taskKeys } from "@/lib/workspaces/queries/tasks";
+import { workspaceMembersOptions } from "@/lib/workspaces/queries/workspace-members";
 import {
   PRIORITY_COLORS,
   PRIORITY_ICONS,
@@ -31,10 +35,6 @@ import {
   TASK_PRIORITIES,
   TASK_STATUSES,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-constants";
-import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
-import { taskKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/tasks";
-import { workspaceMembersOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace-members";
-import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
 
 import type { TaskPriority, TaskStatus } from "./task-detail-constants";
 

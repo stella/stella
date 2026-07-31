@@ -27,6 +27,13 @@ import {
   createDesktopEditSessionToken,
   hashDesktopEditSessionToken,
 } from "@/api/lib/desktop-edit-sessions";
+import {
+  lockDocxEditTarget,
+  presignDocxDownloadFromFileId,
+  presignDocxFieldDownload,
+  readCurrentDocxTarget,
+  readVersionDocxTarget,
+} from "@/api/lib/entity-versions/desktop-edit-session-utils";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   collectFolioCollabStoredSessionFiles,
@@ -36,14 +43,6 @@ import {
 import type { FolioCollabStoredSessionFile } from "@/api/lib/folio-collab-sessions";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import { broadcast } from "@/api/lib/sse";
-
-import {
-  lockDocxEditTarget,
-  presignDocxDownloadFromFileId,
-  presignDocxFieldDownload,
-  readCurrentDocxTarget,
-  readVersionDocxTarget,
-} from "./desktop-edit-session-utils";
 
 export const openDesktopEditSessionBodySchema = t.Object({
   entityId: tSafeId("entity"),

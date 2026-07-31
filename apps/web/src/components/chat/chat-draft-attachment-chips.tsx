@@ -5,7 +5,7 @@ import { Button } from "@stll/ui/components/button";
 import { cn } from "@stll/ui/lib/utils";
 
 import type { ChatDraftAttachment } from "@/components/chat-editor-provider";
-import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
+import { DocumentIcon } from "@/components/document-icon";
 
 type ChatDraftAttachmentChipsProps = {
   files: ChatDraftAttachment[];

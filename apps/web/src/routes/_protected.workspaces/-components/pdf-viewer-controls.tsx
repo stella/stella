@@ -27,12 +27,12 @@ import { ClientOperationError } from "@/lib/errors/client";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { fileMetadataOptions } from "@/lib/files/file-metadata-query";
 import { downloadFile } from "@/lib/utils";
+import { useWorkspaceStore } from "@/lib/workspaces/store";
 import {
   fetchPrintPdf,
   printPdfBuffer,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-print";
 import { PeekPdfControls } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer";
-import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 
 const SCALE_OFFSET_STEP = 0.2;
 

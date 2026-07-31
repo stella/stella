@@ -28,6 +28,7 @@ import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { workspaceOptions, workspacesKeys } from "@/lib/workspaces/queries";
 import { LeadSection } from "@/routes/_protected.workspaces/$workspaceId/-components/lead-section";
 import { MATTER_INFO_ICON_SLOT_CLASS } from "@/routes/_protected.workspaces/$workspaceId/-components/matter-info-layout";
 import { MembersSection } from "@/routes/_protected.workspaces/$workspaceId/-components/members-section";
@@ -37,10 +38,6 @@ import {
   useDuplicateWorkspace,
   useUpdateWorkspace,
 } from "@/routes/_protected.workspaces/-mutations";
-import {
-  workspaceOptions,
-  workspacesKeys,
-} from "@/routes/_protected.workspaces/-queries";
 
 type MatterMetadataPanelProps = {
   workspaceId: string;

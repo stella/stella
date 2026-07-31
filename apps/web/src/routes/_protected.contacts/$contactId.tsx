@@ -18,11 +18,15 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { MatterIcon } from "@/components/matter-icon";
+import { MatterRefLink } from "@/components/matter-ref-link";
 import { usePermissions } from "@/hooks/use-permissions";
 import { getFormattingLocale } from "@/i18n/i18n-store";
+import { useDeleteContact } from "@/lib/contacts/mutations";
+import { contactOptions, contactsKeys } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { ensureRouteQueryData } from "@/lib/react-query";
+import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { ContactCommunicationEditor } from "@/routes/_protected.contacts/-components/contact-communication-editor";
 import { ContactCustomFieldsEditor } from "@/routes/_protected.contacts/-components/contact-custom-fields-editor";
 import { ContactNotesEditor } from "@/routes/_protected.contacts/-components/contact-notes-editor";
@@ -30,13 +34,6 @@ import { ContactOwnersEditor } from "@/routes/_protected.contacts/-components/co
 import { EditableRow } from "@/routes/_protected.contacts/-components/editable-row";
 import { InfoRow } from "@/routes/_protected.contacts/-components/info-row";
 import { PartyMatterRow } from "@/routes/_protected.contacts/-components/party-matter-row";
-import { useDeleteContact } from "@/routes/_protected.contacts/-mutations";
-import {
-  contactOptions,
-  contactsKeys,
-} from "@/routes/_protected.contacts/-queries";
-import { MatterRefLink } from "@/routes/_protected.workspaces/-components/matter-ref-link";
-import { useCreateMatterStore } from "@/routes/_protected.workspaces/-store/create-matter-store";
 
 export const Route = createFileRoute("/_protected/contacts/$contactId")({
   component: ContactDetailPage,

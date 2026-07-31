@@ -4,7 +4,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
-import { timeEntriesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/time-entries";
+import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
 
 type CreateTimeEntryVars = {
   workspaceId: string;

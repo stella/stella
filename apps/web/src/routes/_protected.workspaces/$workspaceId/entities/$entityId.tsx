@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { Navigate, createFileRoute } from "@tanstack/react-router";
 
+import { entityVersionsOptions } from "@/lib/workspaces/queries/entity-versions";
 import { DocxLoadingShell } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-loading-shell";
-import { entityVersionsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entity-versions";
 
 /**
  * Legacy entity detail route. Resolves the current file field after the

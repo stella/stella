@@ -1,10 +1,10 @@
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 
+import { workspacesKeys } from "@/lib/workspaces/queries.logic";
+import { entitiesKeys } from "@/lib/workspaces/queries/entities.logic";
+import { taskKeys } from "@/lib/workspaces/queries/tasks.logic";
 import { invalidateDeletedEntityQueries } from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities.logic";
-import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities.logic";
-import { taskKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/tasks.logic";
-import { workspacesKeys } from "@/routes/_protected.workspaces/-queries.logic";
 
 describe("deleted entity cache invalidation", () => {
   test("marks entity, task, and overview queries stale", async () => {

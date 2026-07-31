@@ -50,7 +50,7 @@ import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
-import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 
 type TranslateDocumentDialogProps = {
   workspaceId: string;

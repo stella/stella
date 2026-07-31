@@ -18,7 +18,6 @@ import { readDecisionWithDocumentHandler } from "@/api/handlers/case-law/decisio
 import { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
 import { readEntityByIdHandler } from "@/api/handlers/entities/get";
-import { createFileKey } from "@/api/handlers/files/utils";
 import {
   normalizePracticeJurisdictions,
   upsertPracticeJurisdictions,
@@ -31,6 +30,7 @@ import { arrayOrEmpty } from "@/api/lib/array";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { isUuid } from "@/api/lib/custom-schema";
+import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
 import {
   createCursorPage,

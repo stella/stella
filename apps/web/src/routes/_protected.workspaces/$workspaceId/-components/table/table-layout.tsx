@@ -13,6 +13,12 @@ import { useMountEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 import type { WorkspaceView } from "@/lib/types";
 import {
+  DEFAULT_ENTITY_WINDOW_SIZE,
+  useEntitiesWindowOptions,
+  visibleEntityFieldIds,
+} from "@/lib/workspaces/queries/entities";
+import { propertiesOptions } from "@/lib/workspaces/queries/properties";
+import {
   EmptyState,
   FilteredEmptyState,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
@@ -28,12 +34,6 @@ import { useSyncJustificationChunks } from "@/routes/_protected.workspaces/$work
 import { useSyncSelectedEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-selected-entities";
 import { useTableState } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-table-state";
 import { useUpdateView } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
-import {
-  DEFAULT_ENTITY_WINDOW_SIZE,
-  useEntitiesWindowOptions,
-  visibleEntityFieldIds,
-} from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
-import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import { toTableEntities } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 const loadTableDevtoolsGate = async () => {

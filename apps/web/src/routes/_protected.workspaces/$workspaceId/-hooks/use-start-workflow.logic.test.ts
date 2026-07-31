@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { workflowTargetCountOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
+import { workflowTargetCountOptions } from "@/lib/workspaces/queries/workspace";
 
 import {
   estimateWorkflowTargetCount,

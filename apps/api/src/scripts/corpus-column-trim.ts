@@ -27,14 +27,7 @@ import { rlsDb } from "@/api/db/root";
 import { caseLawDecisions, caseLawSearchDocuments } from "@/api/db/schema";
 import { createIngestionDb } from "@/api/db/scoped";
 import { corpusStorageMode } from "@/api/env-base";
-import {
-  readCorpusAst,
-  readCorpusSections,
-  readCorpusText,
-} from "@/api/handlers/case-law/corpus-storage";
-import type { EmptyAst } from "@/api/handlers/case-law/ingestion/adapter";
 import { payloadCarriesDocument } from "@/api/handlers/case-law/stored-payload";
-import type { DecisionSection } from "@/api/handlers/case-law/types";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -42,6 +35,15 @@ import {
   type TimestampCasToken,
   timestampMatchesCasToken,
 } from "@/api/lib/db/timestamp-cas";
+import {
+  readCorpusAst,
+  readCorpusSections,
+  readCorpusText,
+} from "@/api/lib/legal-search/corpus-storage";
+import type {
+  DecisionSection,
+  EmptyAst,
+} from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
 import { getCorpusS3, refreshCorpusS3, refreshS3 } from "@/api/lib/s3";
 import { withTimeout } from "@/api/lib/with-timeout";

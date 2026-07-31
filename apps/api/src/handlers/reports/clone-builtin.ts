@@ -20,11 +20,11 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { getBuiltinReportTemplate } from "@/api/handlers/reports/builtin-templates";
-import { createStoredTemplate } from "@/api/handlers/templates/create-template-service";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { createStoredTemplate } from "@/api/lib/templates/create-template";
 
 const config = {
   permissions: { workspace: ["read"], template: ["create"] },

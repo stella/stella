@@ -20,6 +20,8 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { contentDir } from "@stll/ui/hooks/use-content-dir";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
+import { DocumentIcon } from "@/components/document-icon";
+import { useInspectorStore } from "@/components/inspector/inspector-store";
 import Tooltip from "@/components/tooltip";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
@@ -32,7 +34,7 @@ import type {
   WorkspaceProperty,
   WorkspacePropertyOption,
 } from "@/lib/types";
-import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
+import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import type { EditableFieldContent } from "@/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog";
 import {
   FieldValue,
@@ -40,9 +42,7 @@ import {
   IntFieldValue,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/field-value";
 import { FieldValueSelect } from "@/routes/_protected.workspaces/$workspaceId/-components/field-value-select";
-import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { useStartWorkflow } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-start-workflow";
-import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 
 type EditableFieldProps = {
   workspaceId: string;

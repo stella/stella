@@ -15,6 +15,7 @@ import type { TranslationKey } from "@/i18n/types";
 import { DOCX_MIME } from "@/lib/consts";
 import { toSafeId } from "@/lib/safe-id";
 import type { ViewLayoutType, WorkspaceEntity } from "@/lib/types";
+import type { CalendarTask } from "@/lib/workspaces/queries/calendar-tasks";
 import { CalendarEntityChip } from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-entity-chip";
 import { TASK_STATUS_DOT_COLORS } from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-utils";
 import { EntityKindIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-kind-icon";
@@ -27,7 +28,6 @@ import {
   STATUS_COLORS,
   STATUS_ICONS,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-constants";
-import type { CalendarTask } from "@/routes/_protected.workspaces/$workspaceId/-queries/calendar-tasks";
 
 import "./view-layout-preview.css";
 

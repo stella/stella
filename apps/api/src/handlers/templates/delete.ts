@@ -4,7 +4,6 @@ import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { templates } from "@/api/db/schema";
-import { deleteS3Keys } from "@/api/handlers/files/utils";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -12,6 +11,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { deleteS3Keys } from "@/api/lib/files/utils";
 
 const deleteTemplateParamsSchema = t.Object({
   templateId: tSafeId("template"),

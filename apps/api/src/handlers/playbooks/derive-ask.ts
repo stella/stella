@@ -2,17 +2,17 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import type { PropertyContent } from "@/api/db/schema-validators";
-import type { GradedPosition } from "@/api/handlers/playbooks/position-runtime";
-import type {
-  PlaybookPositions,
-  Position,
-} from "@/api/handlers/playbooks/positions";
 import { resolveCaching } from "@/api/lib/ai-config";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import { logger } from "@/api/lib/observability/logger";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import type {
+  PlaybookPositions,
+  Position,
+} from "@/api/lib/workflow/playbook-positions";
+import type { GradedPosition } from "@/api/lib/workflow/position-runtime";
 
 // Auto-ASK derivation (save-time). A graded position with `ask.mode === "auto"`
 // derives its extraction question + content type from the issue and tier rules

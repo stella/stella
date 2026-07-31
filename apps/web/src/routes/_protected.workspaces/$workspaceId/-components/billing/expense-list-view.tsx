@@ -8,6 +8,7 @@ import { Button } from "@stll/ui/components/button";
 import { Dialog, DialogPopup } from "@stll/ui/components/dialog";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { expensesOptions } from "@/lib/workspaces/queries/expenses";
 import { ExpenseForm } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/expense-form";
 import type { ExpenseFormValues } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/expense-form";
 import { ExpenseRow } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/expense-row";
@@ -18,7 +19,6 @@ import {
   useDeleteExpense,
   useUpdateExpense,
 } from "@/routes/_protected.workspaces/$workspaceId/-mutations/expenses";
-import { expensesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/expenses";
 
 type ExpenseListViewProps = {
   workspaceId: string;

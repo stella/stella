@@ -10,8 +10,8 @@ import type {
   ViewTemplateProperty,
   WorkspaceView,
 } from "@/lib/types";
-import { propertiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
-import { viewsKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
+import { propertiesKeys } from "@/lib/workspaces/queries/properties";
+import { viewsKeys } from "@/lib/workspaces/queries/views";
 
 type CreateViewVars = {
   id: string;

@@ -13,11 +13,6 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { handoffCommittedEntityDeletionCleanup } from "@/api/handlers/entities/entity-deletion-cleanup-handoff";
-import {
-  extractFieldFileRefs,
-  filterUnreferencedFieldFileRefs,
-} from "@/api/handlers/files/field-file-refs";
-import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -27,6 +22,11 @@ import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { enqueueEntityDeletionCleanup } from "@/api/lib/entity-deletion-cleanup-queue";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  extractFieldFileRefs,
+  filterUnreferencedFieldFileRefs,
+} from "@/api/lib/files/field-file-refs";
+import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
 import { getSearchProvider } from "@/api/lib/search/provider";
 

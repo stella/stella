@@ -12,6 +12,7 @@ import type { AuditRecorder, FieldDiffs } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { clauseBodySchema } from "@/api/lib/clauses/body-schema";
 import type { ClauseBody } from "@/api/lib/clauses/types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -21,7 +22,6 @@ import { pickDefined } from "@/api/lib/pick-defined";
 import type { ClauseMetadata } from "./metadata";
 import { normalizeClauseMetadata } from "./metadata";
 import { updateSearchVector } from "./search-vector";
-import { clauseBodySchema } from "./shared-schemas";
 
 const updateClauseBodySchema = t.Object({
   title: t.Optional(tDefaultVarchar),

@@ -42,12 +42,9 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
+import { knowledgeKeys, templateClausesOptions } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
 import { LinkClauseDialog } from "@/routes/_protected.knowledge/-components/link-clause-dialog";
-import {
-  knowledgeKeys,
-  templateClausesOptions,
-} from "@/routes/_protected.knowledge/-queries";
 
 // ── Types ────────────────────────────────────────────
 

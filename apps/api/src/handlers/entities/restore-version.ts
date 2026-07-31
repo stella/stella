@@ -2,15 +2,15 @@ import { Result } from "better-result";
 import { and, eq, isNull } from "drizzle-orm";
 
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
-import {
-  buildVersionStamp,
-  nextEntityVersionNumber,
-} from "@/api/handlers/entities/version-utils";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import {
+  buildVersionStamp,
+  nextEntityVersionNumber,
+} from "@/api/lib/entity-versions/version-utils";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { broadcast } from "@/api/lib/sse";
 

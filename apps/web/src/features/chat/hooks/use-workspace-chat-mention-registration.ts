@@ -15,8 +15,8 @@ import {
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 import type { WorkspaceEntity } from "@/lib/types";
-import { entitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
-import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
+import { entitiesOptions } from "@/lib/workspaces/queries/entities";
+import { viewsOptions } from "@/lib/workspaces/queries/views";
 
 const getWorkspaceMentionExtensionId = (workspaceId: string) =>
   `workspace-chat:entity-mentions:${workspaceId}`;

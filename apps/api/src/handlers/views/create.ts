@@ -4,12 +4,6 @@ import { eq, sql } from "drizzle-orm";
 import { roles } from "@stll/permissions";
 
 import { workspaceViews } from "@/api/db/schema";
-import { resolveTemplateProperties } from "@/api/handlers/view-templates/properties";
-import {
-  cleanStalePropertyIds,
-  hasDuplicateSorts,
-  hasMultipleKindFilters,
-} from "@/api/handlers/views/utils";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -20,6 +14,12 @@ import {
   parseViewLayout,
   tCreateViewInputSchema,
 } from "@/api/lib/views-schema";
+import { resolveTemplateProperties } from "@/api/lib/views/template-properties";
+import {
+  cleanStalePropertyIds,
+  hasDuplicateSorts,
+  hasMultipleKindFilters,
+} from "@/api/lib/views/utils";
 
 const config = {
   permissions: { view: ["create"] },

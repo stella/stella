@@ -11,12 +11,12 @@ import { sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
 import type { FieldContent } from "@/api/db/schema-validators";
-import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
 import { requestAutomaticDocumentOcr } from "@/api/lib/document-processing-automatic-request";
+import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
 import {

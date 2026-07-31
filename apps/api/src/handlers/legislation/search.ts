@@ -7,7 +7,6 @@ import type { Static } from "elysia";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
-import { loadFtsSearchConfigs } from "@/api/handlers/case-law/fts-config";
 import { redistributableLegislationSource } from "@/api/handlers/legislation/redistribution";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -20,6 +19,7 @@ import {
   corpusFreeTextClause,
   quoteCorpusValue,
 } from "@/api/lib/legal-search/corpus-query";
+import { loadFtsSearchConfigs } from "@/api/lib/legal-search/fts-config";
 import {
   corpusIndexId,
   corpusIndexPattern,

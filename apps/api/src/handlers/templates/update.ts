@@ -5,11 +5,6 @@ import type { Static } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { templates, templateVersions } from "@/api/db/schema";
-import { buildTemplateVersionS3Key } from "@/api/handlers/templates/storage-keys";
-import {
-  MAX_TEMPLATE_LANGUAGES,
-  normalizeTemplateLanguages,
-} from "@/api/handlers/templates/template-languages";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -24,6 +19,11 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { pickDefined } from "@/api/lib/pick-defined";
 import { getS3 } from "@/api/lib/s3";
+import { buildTemplateVersionS3Key } from "@/api/lib/templates/storage-keys";
+import {
+  MAX_TEMPLATE_LANGUAGES,
+  normalizeTemplateLanguages,
+} from "@/api/lib/templates/template-languages";
 
 const updateTemplateBodySchema = t.Object({
   name: t.Optional(tDefaultVarchar),

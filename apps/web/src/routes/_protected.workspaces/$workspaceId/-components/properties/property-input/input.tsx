@@ -9,12 +9,12 @@ import { FieldError } from "@stll/ui/components/field";
 
 import { AIPromptInput } from "@/components/ai-prompt-input/ai-prompt-input";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { PropertyFormField } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/form";
 import {
   createCustomMention,
   createSuggestion,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/custom-mention";
-import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 
 const getMentions = (editor: Editor): string[] => {
   const mentions = new Set<string>();

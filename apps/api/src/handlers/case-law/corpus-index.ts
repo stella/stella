@@ -5,10 +5,6 @@ import {
   caseLawIndexJobs,
   caseLawSources,
 } from "@/api/db/schema";
-import {
-  readCorpusAst,
-  readCorpusText,
-} from "@/api/handlers/case-law/corpus-storage";
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
 import type { SafeId } from "@/api/lib/branded-types";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
@@ -29,6 +25,10 @@ import {
   timestampCasToken,
   type TimestampCasToken,
 } from "@/api/lib/db/timestamp-cas";
+import {
+  readCorpusAst,
+  readCorpusText,
+} from "@/api/lib/legal-search/corpus-storage";
 
 /**
  * corpus index search-projection maintenance for the `case_law` family.

@@ -52,12 +52,9 @@ import { MARKDOWN_MIME, isMarkdownFile } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { APIError, unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { knowledgeKeys, skillDetailOptions } from "@/lib/knowledge/queries";
+import { catalogueKeys } from "@/lib/knowledge/queries/catalogue";
 import { toSafeId } from "@/lib/safe-id";
-import {
-  knowledgeKeys,
-  skillDetailOptions,
-} from "@/routes/_protected.knowledge/-queries";
-import { catalogueKeys } from "@/routes/_protected.knowledge/-queries/catalogue";
 
 import {
   FILENAME_PATTERN,

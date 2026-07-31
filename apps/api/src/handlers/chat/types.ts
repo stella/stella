@@ -7,12 +7,12 @@ import type {
   ChatBuiltinApprovalToolName,
   ChatTools,
 } from "@/api/handlers/chat/tools/chat-tools";
-import type { UserFileUrl } from "@/api/handlers/user-files/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   ChatClientToolsFor,
   ChatUIToolsFor,
 } from "@/api/lib/chat/chat-tool-types";
+import type { UserFileUrl } from "@/api/lib/user-files/types";
 
 export const CHAT_MENTION_CATEGORIES = ["entity", "workspace"] as const;
 

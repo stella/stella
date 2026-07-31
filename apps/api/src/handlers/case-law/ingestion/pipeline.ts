@@ -20,14 +20,6 @@ import {
   ADAPTER_TIMEOUT,
   MAX_SYNC_PAGES,
 } from "@/api/handlers/case-law/consts";
-import type { WriteCorpusResult } from "@/api/handlers/case-law/corpus-storage";
-import {
-  corpusContentHash,
-  corpusKeys,
-  deleteCorpusDocument,
-  EMPTY_CORPUS_CONTENT_HASHES,
-  writeCorpusDocument,
-} from "@/api/handlers/case-law/corpus-storage";
 import {
   caseLawDecisionSlugCollisionFilter,
   createAvailableCaseLawDecisionSlug,
@@ -49,15 +41,9 @@ import { publisherCitationGap } from "@/api/handlers/case-law/ingestion/citation
 import { recordSliceCoverage } from "@/api/handlers/case-law/ingestion/coverage-ledger";
 import { storedDecisionSignal } from "@/api/handlers/case-law/ingestion/parsers/validate-ast";
 import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
-import {
-  DANGEROUS_CHARS,
-  sanitizeMetadata,
-  stripDangerousChars,
-} from "@/api/handlers/case-law/ingestion/sanitize";
 import { segmentDecision } from "@/api/handlers/case-law/ingestion/segmenter";
 import { extractContext } from "@/api/handlers/case-law/polarity/context";
 import { pgPayloadCarriesDocument } from "@/api/handlers/case-law/stored-payload";
-import type { DecisionSection } from "@/api/handlers/case-law/types";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -69,6 +55,20 @@ import {
 import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
+import {
+  DANGEROUS_CHARS,
+  sanitizeMetadata,
+  stripDangerousChars,
+} from "@/api/lib/legal-search/corpus-sanitize";
+import type { WriteCorpusResult } from "@/api/lib/legal-search/corpus-storage";
+import {
+  corpusContentHash,
+  corpusKeys,
+  deleteCorpusDocument,
+  EMPTY_CORPUS_CONTENT_HASHES,
+  writeCorpusDocument,
+} from "@/api/lib/legal-search/corpus-storage";
+import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 import { getS3 } from "@/api/lib/s3";

@@ -15,9 +15,9 @@ import { cn } from "@stll/ui/lib/utils";
 
 import type { FieldOption } from "@/components/conditions/condition-builder-logic";
 import { normalizeOptionalArray } from "@/lib/arrays";
+import type { PropertyFacetCounts } from "@/lib/workspaces/queries/property-facets";
+import { propertyFacetsOptions } from "@/lib/workspaces/queries/property-facets";
 import { SelectColorIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/shared";
-import type { PropertyFacetCounts } from "@/routes/_protected.workspaces/$workspaceId/-queries/property-facets";
-import { propertyFacetsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/property-facets";
 
 /**
  * The data the value editors need to fetch facet counts: the workspace

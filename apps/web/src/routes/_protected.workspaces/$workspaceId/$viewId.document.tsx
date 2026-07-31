@@ -45,6 +45,7 @@ import {
   useDocxFitZoom,
   useDocxWheelZoom,
 } from "@/components/docx-preview-zoom";
+import { useInspectorStore } from "@/components/inspector/inspector-store";
 import Tooltip from "@/components/tooltip";
 import { TranslateDocumentDialog } from "@/components/translate-document-dialog";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
@@ -55,6 +56,7 @@ import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { APIError, toAPIError } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
+import { fileOptions } from "@/lib/files/queries";
 import {
   PDFProvider,
   usePDFStore,
@@ -64,23 +66,21 @@ import { getPDFPageIdByNumber } from "@/lib/pdf/utils";
 import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import { composeRefs } from "@/lib/utils";
-import { shouldUseDocxBrowserEditor } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.logic";
-import { DocxLoadingShell } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-loading-shell";
-import { fileOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
-import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
-import PdfViewer, {
-  PDFSuspenseFallback,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/pdf-viewer";
-import { useSyncJustifications } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-justifications";
-import { docxSuggestionsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/docx-suggestions";
-import { entityOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+import { docxSuggestionsOptions } from "@/lib/workspaces/queries/docx-suggestions";
+import { entityOptions } from "@/lib/workspaces/queries/entities";
 import {
   entityVersionsKeys,
   entityVersionsOptions,
   fieldFileOptions,
-} from "@/routes/_protected.workspaces/$workspaceId/-queries/entity-versions";
-import { justificationsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
-import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
+} from "@/lib/workspaces/queries/entity-versions";
+import { justificationsOptions } from "@/lib/workspaces/queries/workspace";
+import { useWorkspaceStore } from "@/lib/workspaces/store";
+import { shouldUseDocxBrowserEditor } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.logic";
+import { DocxLoadingShell } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-loading-shell";
+import PdfViewer, {
+  PDFSuspenseFallback,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/pdf-viewer";
+import { useSyncJustifications } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-justifications";
 import "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-docx.css";
 import { PdfViewerControls } from "@/routes/_protected.workspaces/-components/pdf-viewer-controls";
 

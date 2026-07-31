@@ -6,7 +6,6 @@ import type { Static } from "elysia";
 import type { SafeDb } from "@/api/db/safe-db";
 import { entities, entityVersions, workspaces } from "@/api/db/schema";
 import { entityKindSchema } from "@/api/db/schema-validators";
-import { validateParentId } from "@/api/handlers/entities/validate-parent-id";
 import { checkEntityCreateCapacityForInsert } from "@/api/handlers/uploads/entity-create";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -17,6 +16,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, withDescription } from "@/api/lib/custom-schema";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
+import { validateParentId } from "@/api/lib/entities/validate-parent-id";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getSearchProvider } from "@/api/lib/search/provider";
 

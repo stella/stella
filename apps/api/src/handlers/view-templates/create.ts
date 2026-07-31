@@ -3,12 +3,6 @@ import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { workspaceViewTemplates } from "@/api/db/schema";
-import { collectTemplateProperties } from "@/api/handlers/view-templates/properties";
-import {
-  cleanStalePropertyIds,
-  hasDuplicateSorts,
-  hasMultipleKindFilters,
-} from "@/api/handlers/views/utils";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -16,6 +10,12 @@ import { tDefaultVarchar } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { parseViewLayout, tViewLayoutSchema } from "@/api/lib/views-schema";
+import { collectTemplateProperties } from "@/api/lib/views/template-properties";
+import {
+  cleanStalePropertyIds,
+  hasDuplicateSorts,
+  hasMultipleKindFilters,
+} from "@/api/lib/views/utils";
 
 const createViewTemplateBodySchema = t.Object(
   {

@@ -7,7 +7,7 @@ import { getOverlayRectKey } from "@/lib/anonymize/overlay-rects";
 import { getEntityColor } from "@/lib/anonymize/ui-constants";
 import { useOverlayRects } from "@/lib/anonymize/use-overlay-rects";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
-import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
+import { useWorkspaceStore } from "@/lib/workspaces/store";
 
 type PageAnonymizationProps = {
   pageId: string;

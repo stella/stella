@@ -2,7 +2,7 @@ import type { Block } from "@/api/handlers/case-law/document-ast";
 import type {
   DecisionSection,
   DecisionSectionType,
-} from "@/api/handlers/case-law/types";
+} from "@/api/lib/legal-search/document-types";
 
 /**
  * Derive a decision's sections from a parsed AST.

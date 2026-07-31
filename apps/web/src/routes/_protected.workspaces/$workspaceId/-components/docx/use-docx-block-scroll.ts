@@ -2,9 +2,9 @@ import type { RefObject } from "react";
 
 import type { DocxEditorRef } from "@stll/folio-react";
 
+import { useInspectorStore } from "@/components/inspector/inspector-store";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { FOLIO_SCROLL_EVENT } from "@/lib/folio-scroll-event";
-import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 
 const BLOCK_SCROLL_RETRY_DELAY_MS = 50;
 const BLOCK_SCROLL_RETRY_LIMIT = 20;

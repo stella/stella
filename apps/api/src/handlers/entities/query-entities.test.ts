@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { PgDialect } from "drizzle-orm/pg-core";
 
-import { buildEntitySortExpressions } from "@/api/handlers/entities/query-entities";
+import { buildEntitySortExpressions } from "@/api/lib/entities/query-entities";
 
 describe("queryEntities sort SQL", () => {
   test("custom property sorts preserve empty-string fallback for missing values", () => {

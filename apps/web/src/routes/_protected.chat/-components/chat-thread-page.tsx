@@ -32,6 +32,7 @@ import { getUserMessageHtmlHistory } from "@/components/chat/chat-ui-tools";
 import { ComposerVeil } from "@/components/chat/composer-veil";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
 import { useChatModelSelection } from "@/components/chat/use-chat-model-selection";
+import { useInspectorStore } from "@/components/inspector/inspector-store";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import Tooltip from "@/components/tooltip";
 import { UsageLimitModal } from "@/components/usage/usage-limit-modal";
@@ -68,6 +69,7 @@ import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { useModelSelectorStore } from "@/lib/model-selector-store";
+import { managementRoles } from "@/lib/organization/consts";
 import type { ChatPrompt } from "@/lib/prompts/types";
 import { useSavedPrompts } from "@/lib/prompts/use-saved-prompts";
 import { matchReservedChatCommand } from "@/lib/reserved-chat-commands";
@@ -76,9 +78,7 @@ import { roleOptions } from "@/routes/-queries";
 import { ChatThreadRecap } from "@/routes/_protected.chat/-components/chat-thread-recap";
 import { ChatTurnNavigator } from "@/routes/_protected.chat/-components/chat-turn-navigator";
 import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet";
-import { managementRoles } from "@/routes/_protected.organization/-consts";
 import { usageEntitlementOptions } from "@/routes/_protected.settings/-queries/usage";
-import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 
 type ChatThreadPageProps = {
   threadRef: ChatThreadRef;

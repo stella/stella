@@ -14,7 +14,7 @@ import {
   unwrapEden,
 } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
-import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
+import { workspacesKeys } from "@/lib/workspaces/queries";
 
 // Hardcoded in English: these are persisted in the DB and shared
 // across all organization members regardless of their locale.

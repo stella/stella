@@ -13,6 +13,7 @@ import { useDebouncedCallback } from "use-debounce";
 
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { useInspectorStore } from "@/components/inspector/inspector-store";
 import { useWorkspaceChatMentionRegistration } from "@/features/chat/hooks/use-workspace-chat-mention-registration";
 import { useMountEffect } from "@/hooks/use-effect";
 import { getTranslator } from "@/i18n/i18n-store";
@@ -24,20 +25,16 @@ import { HOTKEYS } from "@/lib/hotkeys";
 import { pageTitle, pageTitleLiteral } from "@/lib/page-title";
 import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
 import { useWorkspaceSSE } from "@/lib/sse";
-import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
+import { overviewOptions, workspaceOptions } from "@/lib/workspaces/queries";
+import { workspacesKeys } from "@/lib/workspaces/queries.logic";
+import { propertiesOptions } from "@/lib/workspaces/queries/properties";
+import { viewsOptions } from "@/lib/workspaces/queries/views";
+import { workflowOptions } from "@/lib/workspaces/queries/workspace";
+import { useWorkspaceStore } from "@/lib/workspaces/store";
 import { ReportExportTracker } from "@/routes/_protected.workspaces/$workspaceId/-components/view/report-export-tracker";
 import { WorkflowServiceTierPromptProvider } from "@/routes/_protected.workspaces/$workspaceId/-components/workflow-service-tier-prompt";
 import { WorkflowStartConfirmationPromptProvider } from "@/routes/_protected.workspaces/$workspaceId/-components/workflow-start-confirmation-prompt";
 import { WorkspaceDropZone } from "@/routes/_protected.workspaces/$workspaceId/-components/workspace-drop-zone";
-import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
-import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
-import { workflowOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
-import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
-import {
-  overviewOptions,
-  workspaceOptions,
-} from "@/routes/_protected.workspaces/-queries";
-import { workspacesKeys } from "@/routes/_protected.workspaces/-queries.logic";
 
 const EXTRACTION_PREVIEW_EVENT_TYPE = "workflow-extraction-preview";
 const INVALIDATE_QUERY_EVENT_TYPE = "invalidate-query";

@@ -21,13 +21,10 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
+import { FLOW_PICKER_LIMIT, flowsOptions } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
-import {
-  FLOW_PICKER_LIMIT,
-  flowsOptions,
-} from "@/routes/_protected.knowledge/-queries";
-import { entitySummariesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
-import { flowRunsKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/flow-runs";
+import { entitySummariesOptions } from "@/lib/workspaces/queries/entities";
+import { flowRunsKeys } from "@/lib/workspaces/queries/flow-runs";
 
 type RunLauncherProps = {
   workspaceId: string;

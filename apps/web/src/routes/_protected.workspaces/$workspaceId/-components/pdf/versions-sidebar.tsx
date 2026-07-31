@@ -47,9 +47,9 @@ import { toSafeId } from "@/lib/safe-id";
 import {
   type EntityVersion as Version,
   entityVersionsKeys,
-} from "@/routes/_protected.workspaces/$workspaceId/-queries/entity-versions";
+} from "@/lib/workspaces/queries/entity-versions";
 
-export type { EntityVersion as Version } from "@/routes/_protected.workspaces/$workspaceId/-queries/entity-versions";
+export type { EntityVersion as Version } from "@/lib/workspaces/queries/entity-versions";
 
 type VersionsSidebarProps = {
   workspaceId: string;

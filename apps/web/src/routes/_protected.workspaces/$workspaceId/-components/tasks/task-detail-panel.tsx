@@ -23,6 +23,9 @@ import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { APIError, toAPIError, unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
+import { workspacesKeys } from "@/lib/workspaces/queries";
+import { entitiesKeys } from "@/lib/workspaces/queries/entities";
+import { taskDetailOptions, taskKeys } from "@/lib/workspaces/queries/tasks";
 import {
   isTaskPriority,
   isTaskStatus,
@@ -37,12 +40,6 @@ import {
   StatusSelect,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-metadata";
 import { SubtasksSection } from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-subtasks";
-import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
-import {
-  taskDetailOptions,
-  taskKeys,
-} from "@/routes/_protected.workspaces/$workspaceId/-queries/tasks";
-import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
 
 import type { TaskPriority, TaskStatus } from "./task-detail-constants";
 

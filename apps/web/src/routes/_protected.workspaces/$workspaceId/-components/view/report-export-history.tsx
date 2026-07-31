@@ -13,7 +13,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import {
   REPORT_EXPORTS_PAGE_SIZE,
   reportExportsHistoryOptions,
-} from "@/routes/_protected.workspaces/$workspaceId/-queries/report-exports";
+} from "@/lib/workspaces/queries/report-exports";
 
 import { downloadReportExport } from "./report-export-actions";
 import type { ReportExportDeliveryMode } from "./report-export-tracking";

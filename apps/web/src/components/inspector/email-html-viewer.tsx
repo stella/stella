@@ -6,7 +6,7 @@ import { Button } from "@stll/ui/components/button";
 import { Skeleton } from "@stll/ui/components/skeleton";
 
 import { detached } from "@/lib/detached";
-import { emailHtmlPreviewOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
+import { emailHtmlPreviewOptions } from "@/lib/files/queries";
 
 type EmailHtmlViewerProps = {
   fieldId: string;

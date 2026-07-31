@@ -43,7 +43,7 @@ void mock.module("@/api/lib/file-derivative-queue", () => ({
   enqueueImageThumbnailOrMarkFailed: enqueueImageThumbnailOrMarkFailedMock,
   enqueuePdfDerivativeOrMarkFailed: enqueuePdfDerivativeOrMarkFailedMock,
 }));
-void mock.module("@/api/handlers/entities/compute-version-diff", () => ({
+void mock.module("@/api/lib/entity-versions/compute-version-diff", () => ({
   computeVersionDiffStats: computeVersionDiffStatsMock,
 }));
 void mock.module("@/api/lib/sse", () => ({ broadcast: broadcastMock }));

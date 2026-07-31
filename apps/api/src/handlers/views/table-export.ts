@@ -3,10 +3,7 @@ import { t } from "elysia";
 import JSZip from "jszip";
 
 import type { JustificationContent } from "@/api/db/schema";
-import type { FieldContent, PropertyTool } from "@/api/db/schema-validators";
 import { env } from "@/api/env";
-import { queryEntities } from "@/api/handlers/entities/query-entities";
-import type { QueryEntityResult } from "@/api/handlers/entities/query-entities";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -16,12 +13,21 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { contentDisposition } from "@/api/lib/content-disposition";
 import { escapeCSV } from "@/api/lib/csv";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { queryEntities } from "@/api/lib/entities/query-entities";
+import type { QueryEntityResult } from "@/api/lib/entities/query-entities";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { extractFormattingLocale } from "@/api/lib/locale";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
-import type { ViewLayout } from "@/api/lib/views-schema";
 import { parseViewLayout } from "@/api/lib/views-schema";
+import {
+  buildExportColumns,
+  type ExportColumn,
+} from "@/api/lib/views/export-columns";
+import {
+  formatExportDate,
+  formatFieldContent,
+} from "@/api/lib/views/export-format";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 // Postgres caps bound parameters per statement; chunk the justification
@@ -72,12 +78,6 @@ export const SPREADSHEET_EXPORT_LIMITS = {
 
 const TRUNCATION_MARKER = "\n[truncated]";
 
-const METADATA_COLUMNS = [
-  { id: "_created-by", header: "Author" },
-  { id: "_updated-at", header: "Last updated" },
-  { id: "_version", header: "Version" },
-] as const;
-
 const CELL_FLAG_IDS = [
   "needs-review",
   "important",
@@ -87,32 +87,6 @@ const CELL_FLAG_IDS = [
 ] as const;
 
 type CellFlagId = (typeof CELL_FLAG_IDS)[number];
-
-type ExportProperty = {
-  id: string;
-  name: string;
-  tool: PropertyTool;
-};
-
-type ExportColumn =
-  | {
-      type: "property";
-      id: string;
-      propertyId: string;
-      header: string;
-      // A graded playbook position renders its ASK column merged with the
-      // tier from this paired `playbook-verdict` property; the verdict never
-      // gets its own column.
-      verdictPropertyId?: string;
-      // The property whose field justification annotates this cell as a note:
-      // the verdict for a merged position, otherwise the AI extraction itself.
-      commentPropertyId?: string;
-    }
-  | {
-      type: "metadata";
-      id: (typeof METADATA_COLUMNS)[number]["id"];
-      header: string;
-    };
 
 export type ExportTable = {
   columns: ExportColumn[];
@@ -211,184 +185,6 @@ const config = {
     format: t.Union([t.Literal("csv"), t.Literal("xlsx"), t.Literal("docx")]),
   }),
 } satisfies HandlerConfig;
-
-export const buildExportColumns = (
-  layout: Extract<ViewLayout, { type: "table" }>,
-  properties: ExportProperty[],
-): ExportColumn[] => {
-  const hiddenIds = new Set(layout.hiddenProperties);
-  const verdictByAskPropertyId = new Map<string, ExportProperty>();
-  const verdictPropertyIds = new Set<string>();
-  for (const property of properties) {
-    if (property.tool.type === "playbook-verdict") {
-      verdictByAskPropertyId.set(property.tool.askPropertyId, property);
-      verdictPropertyIds.add(property.id);
-    }
-  }
-
-  const propertyColumns: Extract<ExportColumn, { type: "property" }>[] = [];
-  for (const property of properties) {
-    if (hiddenIds.has(property.id) || verdictPropertyIds.has(property.id)) {
-      continue;
-    }
-    const column: Extract<ExportColumn, { type: "property" }> = {
-      type: "property",
-      id: property.id,
-      propertyId: property.id,
-      header: property.name,
-    };
-
-    const verdict = verdictByAskPropertyId.get(property.id);
-    if (verdict) {
-      column.verdictPropertyId = verdict.id;
-      column.commentPropertyId = verdict.id;
-    } else if (property.tool.type === "ai-model") {
-      column.commentPropertyId = property.id;
-    }
-
-    propertyColumns.push(column);
-  }
-  const metadataColumns = METADATA_COLUMNS.flatMap((column) =>
-    hiddenIds.has(column.id)
-      ? []
-      : [{ type: "metadata" as const, id: column.id, header: column.header }],
-  );
-  const defaultColumns: ExportColumn[] = [
-    ...propertyColumns,
-    ...metadataColumns,
-  ];
-
-  if (layout.columnOrder.length === 0) {
-    return defaultColumns;
-  }
-
-  const byId = new Map(defaultColumns.map((column) => [column.id, column]));
-  const ordered: ExportColumn[] = [];
-  for (const columnId of layout.columnOrder) {
-    const column = byId.get(columnId);
-    if (!column) {
-      continue;
-    }
-    ordered.push(column);
-    byId.delete(columnId);
-  }
-
-  return [...ordered, ...byId.values()];
-};
-
-const exportDateFormatters = new Map<string, Intl.DateTimeFormat>();
-
-/** `Intl.DateTimeFormat` for `locale`, cached per locale (bounded by the
- *  app's supported locales) instead of rebuilt on every export row. */
-const getExportDateFormatter = (locale: string): Intl.DateTimeFormat => {
-  const formatter =
-    exportDateFormatters.get(locale) ??
-    new Intl.DateTimeFormat(locale, {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      timeZone: "UTC",
-    });
-  exportDateFormatters.set(locale, formatter);
-  return formatter;
-};
-
-export const formatExportDate = (value: string, locale: string): string => {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return getExportDateFormatter(locale).format(date);
-};
-
-const exportNumberFormatters = new Map<string, Intl.NumberFormat>();
-
-/** `Intl.NumberFormat` for `locale` (no currency), cached per locale. */
-const getExportNumberFormatter = (locale: string): Intl.NumberFormat => {
-  const formatter =
-    exportNumberFormatters.get(locale) ?? new Intl.NumberFormat(locale);
-  exportNumberFormatters.set(locale, formatter);
-  return formatter;
-};
-
-const exportCurrencyFormatters = new Map<string, Intl.NumberFormat>();
-
-/** `Intl.NumberFormat` for `locale` + `currency`, cached per pair. Currency
- *  construction can throw on an invalid ISO code, so callers get a `Result`. */
-const getExportCurrencyFormatter = (
-  locale: string,
-  currency: string,
-): Result<Intl.NumberFormat, unknown> => {
-  const key = `${locale}:${currency}`;
-  const cached = exportCurrencyFormatters.get(key);
-  if (cached) {
-    return Result.ok(cached);
-  }
-  const created = Result.try(
-    () =>
-      new Intl.NumberFormat(locale, {
-        style: "currency",
-        currency,
-        minimumFractionDigits: 0,
-      }),
-  );
-  if (!Result.isError(created)) {
-    exportCurrencyFormatters.set(key, created.value);
-  }
-  return created;
-};
-
-const formatExportNumber = (
-  value: number,
-  currency: string | null,
-  locale: string,
-): string => {
-  if (!currency) {
-    return getExportNumberFormatter(locale).format(value);
-  }
-
-  const formatter = getExportCurrencyFormatter(locale, currency);
-  if (!Result.isError(formatter)) {
-    return formatter.value.format(value);
-  }
-
-  return `${getExportNumberFormatter(locale).format(value)} ${currency}`;
-};
-
-export const formatFieldContent = (
-  content: FieldContent | undefined,
-  locale: string,
-): string => {
-  if (!content) {
-    return "";
-  }
-
-  switch (content.type) {
-    case "text":
-      return content.value;
-    case "file":
-      return content.fileName;
-    case "single-select":
-      return content.value ?? "";
-    case "multi-select":
-      return content.value.join(", ");
-    case "date":
-      return content.value ? formatExportDate(content.value, locale) : "";
-    case "int":
-      return formatExportNumber(content.value, content.currency, locale);
-    case "clip":
-      return content.url;
-    case "error":
-      return "Error";
-    case "pending":
-      return "";
-    case "unsupported":
-      return "Unsupported";
-    default:
-      return "";
-  }
-};
 
 const formatMetadataColumn = (
   column: Extract<ExportColumn, { type: "metadata" }>,

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/lib/safe-id";
-import type { CalendarTask } from "@/routes/_protected.workspaces/$workspaceId/-queries/calendar-tasks";
+import type { CalendarTask } from "@/lib/workspaces/queries/calendar-tasks";
 
 import {
   getCalendarQueryRange,

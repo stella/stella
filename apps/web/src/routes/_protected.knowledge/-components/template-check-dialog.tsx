@@ -25,7 +25,7 @@ import {
 import { cn } from "@stll/ui/lib/utils";
 
 import type { TranslationKey } from "@/i18n/types";
-import { templateCheckOptions } from "@/routes/_protected.knowledge/-queries";
+import { templateCheckOptions } from "@/lib/knowledge/queries";
 
 const protectedRouteApi = getRouteApi("/_protected");
 

@@ -4,7 +4,7 @@ import { describe, expect, test } from "bun:test";
 import {
   playbookPositionsSchema,
   positionSchema,
-} from "@/api/handlers/playbooks/positions";
+} from "@/api/lib/workflow/playbook-positions";
 
 const SOURCE_ID = "11111111-1111-4111-8111-111111111111";
 const RULE_ID = "22222222-2222-4222-8222-222222222222";

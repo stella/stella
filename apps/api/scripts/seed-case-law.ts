@@ -29,9 +29,11 @@ import { rootDb, rlsDb } from "@/api/db/root";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { createIngestionDb } from "@/api/db/scoped";
 import { backfillCaseLawSlugs } from "@/api/handlers/case-law/decisions/slug-backfill";
-import type { EmptyAst } from "@/api/handlers/case-law/ingestion/adapter";
 import { indexDecision } from "@/api/handlers/case-law/search-index";
-import type { DecisionSection } from "@/api/handlers/case-law/types";
+import type {
+  DecisionSection,
+  EmptyAst,
+} from "@/api/lib/legal-search/document-types";
 
 import { seedId } from "./seed-utils";
 

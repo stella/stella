@@ -1,7 +1,5 @@
 import { Result } from "better-result";
 
-import { materializePlaybookRun } from "@/api/handlers/playbooks/materialize-run";
-import { resolveApplicablePlaybooks } from "@/api/handlers/playbooks/route-playbooks";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -9,6 +7,8 @@ import { workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { startWorkflow } from "@/api/lib/workflow-queue";
+import { materializePlaybookRun } from "@/api/lib/workflow/materialize-playbook-run";
+import { resolveApplicablePlaybooks } from "@/api/lib/workflow/route-playbooks";
 
 const config = {
   permissions: { playbook: ["apply"] },

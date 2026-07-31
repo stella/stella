@@ -4,7 +4,6 @@ import { status, t } from "elysia";
 import type { Static } from "elysia";
 
 import { desktopEditSessions } from "@/api/db/schema";
-import { createFileKey } from "@/api/handlers/files/utils";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -21,6 +20,7 @@ import {
   hashDesktopEditSessionToken,
 } from "@/api/lib/desktop-edit-sessions";
 import { scanFile } from "@/api/lib/file-scan/scan";
+import { createFileKey } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";

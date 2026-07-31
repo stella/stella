@@ -1,6 +1,6 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 
-import { entitySummariesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+import { entitySummariesOptions } from "@/lib/workspaces/queries/entities";
 
 /**
  * Returns a Map<entityId, displayName> for all entities

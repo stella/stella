@@ -1,21 +1,15 @@
 import type { Result } from "better-result";
 
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
-import type { DecisionSection } from "@/api/handlers/case-law/types";
 import type { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
+import type {
+  DecisionSection,
+  EmptyAst,
+} from "@/api/lib/legal-search/document-types";
 
-/**
- * Empty AST placeholder for adapters without a parser.
- * Typed as a narrow object so it's assignable to the
- * documentAst union without casts.
- */
-export type EmptyAst = Record<string, never>;
-
-/**
- * Constant empty AST for adapters without a parser.
- * Avoids `{} as EmptyAst` casts at every call site.
- */
-export const EMPTY_AST: EmptyAst = {};
+export { EMPTY_AST };
+export type { EmptyAst };
 
 /** Result of parsing a single court decision from a source. */
 export type IngestionResult = {

@@ -56,19 +56,19 @@ import { UserIdentity } from "@/components/user-avatar";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { resolveMatterColor } from "@/lib/matter-colors";
+import { organizationOptions } from "@/lib/organization/queries";
 import { usePinnedStore } from "@/lib/pinned-store";
-import { organizationOptions } from "@/routes/_protected.organization/-queries";
-import { useAddWorkspaceMember } from "@/routes/_protected.workspaces/$workspaceId/-mutations/workspace-members";
+import { workspacesKeys } from "@/lib/workspaces/queries";
 import {
   workspaceMembersKeys,
   workspaceMembersOptions,
-} from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace-members";
+} from "@/lib/workspaces/queries/workspace-members";
+import { useAddWorkspaceMember } from "@/routes/_protected.workspaces/$workspaceId/-mutations/workspace-members";
 import {
   useDeleteWorkspace,
   useUnarchiveWorkspace,
   useUpdateWorkspace,
 } from "@/routes/_protected.workspaces/-mutations";
-import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
 
 // ── Shared menu items ────────────────────────────────────────
 

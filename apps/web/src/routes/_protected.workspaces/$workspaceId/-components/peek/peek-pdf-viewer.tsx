@@ -41,6 +41,7 @@ import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { findDocumentSearchResult } from "@/lib/document-search";
 import type { DocumentSearchResult } from "@/lib/document-search";
+import { fileOptions } from "@/lib/files/queries";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
 import { PDFPage } from "@/lib/pdf/pdf-page";
 import { PDFViewport } from "@/lib/pdf/pdf-viewport";
@@ -50,7 +51,6 @@ import { searchTextQueryKey } from "@/lib/search-text";
 import type { SearchTextQuery } from "@/lib/search-text";
 import { composeRefs } from "@/lib/utils";
 import { useDocxBlockScroll } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/use-docx-block-scroll";
-import { fileOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
 import { PageAnonymization } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/page-anonymization";
 import { PageCitation } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/page-citation";
 import {

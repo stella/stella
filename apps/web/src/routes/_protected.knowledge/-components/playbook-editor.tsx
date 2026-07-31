@@ -49,6 +49,11 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
+import {
+  documentTypesOptions,
+  knowledgeKeys,
+  playbookDetailOptions,
+} from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
 import { resolvePlaybookScrollTop } from "@/routes/_protected.knowledge/-components/playbook-editor.logic";
 import { usePlaybookNavStore } from "@/routes/_protected.knowledge/-components/playbook-nav-store";
@@ -70,11 +75,6 @@ import {
 } from "@/routes/_protected.knowledge/-components/playbook-types";
 import { PlaybookVersionHistorySheet } from "@/routes/_protected.knowledge/-components/playbook-version-history-sheet";
 import { PositionEditor } from "@/routes/_protected.knowledge/-components/position-editor";
-import {
-  documentTypesOptions,
-  knowledgeKeys,
-  playbookDetailOptions,
-} from "@/routes/_protected.knowledge/-queries";
 
 const PLAYBOOK_JUMP_TOP_OFFSET_PX = 24;
 

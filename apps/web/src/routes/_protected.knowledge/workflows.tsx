@@ -11,6 +11,12 @@ import { workflowsRouteAvailable } from "@/hooks/use-workflows-preview";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
+import {
+  FLOW_PICKER_LIMIT,
+  flowDetailOptions,
+  flowsOptions,
+  knowledgeKeys,
+} from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
 import { FlowEditor } from "@/routes/_protected.knowledge/-components/flow-editor";
 import type { FlowExampleKey } from "@/routes/_protected.knowledge/-components/flow-examples";
@@ -20,12 +26,6 @@ import type {
   FlowDefinitionDetail,
   FlowListItem,
 } from "@/routes/_protected.knowledge/-components/flow-types";
-import {
-  FLOW_PICKER_LIMIT,
-  flowDetailOptions,
-  flowsOptions,
-  knowledgeKeys,
-} from "@/routes/_protected.knowledge/-queries";
 
 type View =
   | { kind: "list" }

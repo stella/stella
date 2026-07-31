@@ -13,12 +13,9 @@ import type {
   PersistableChatMessage,
   PersistedChatMessageContent,
 } from "@/api/handlers/chat/types";
-import {
-  isUserFileUrl,
-  parseUserFileId,
-} from "@/api/handlers/user-files/types";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isUserFileUrl, parseUserFileId } from "@/api/lib/user-files/types";
 
 const IMAGE_MIME_PREFIX = "image/";
 

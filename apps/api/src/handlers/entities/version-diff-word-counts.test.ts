@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { FolioVersionDiff } from "@stll/folio-core/server";
 
-import { countVersionDiffWords } from "./version-diff-word-counts";
+import { countVersionDiffWords } from "@/api/lib/entity-versions/version-diff-word-counts";
 
 const mainHandle = { story: { type: "main" }, blockId: "block-1" } as const;
 

@@ -38,10 +38,10 @@ import {
   toOAuthScopeDisplayEntries,
   translateOAuthScopeEntry,
 } from "@/lib/oauth-scopes";
+import { managementRoles } from "@/lib/organization/consts";
 import { pageTitle } from "@/lib/page-title";
 import { loadAuthContext } from "@/routes/-auth-context";
 import { roleOptions } from "@/routes/-queries";
-import { managementRoles } from "@/routes/_protected.organization/-consts";
 
 const searchSchema = v.object({
   client_id: v.optional(v.string()),

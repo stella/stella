@@ -6,7 +6,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useMountEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 import { ensureRouteQueryData } from "@/lib/react-query";
-import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
+import { viewsOptions } from "@/lib/workspaces/queries/views";
 
 type DefaultWorkspaceViewInput = {
   queryClient: QueryClient;

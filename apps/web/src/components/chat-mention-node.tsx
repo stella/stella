@@ -6,9 +6,9 @@ import { cn } from "@stll/ui/lib/utils";
 
 import type { ChatReferenceCategory } from "@/components/chat-mention-extension";
 import { isMentionCategory } from "@/components/chat/chat-mention-href";
+import { DocumentIcon } from "@/components/document-icon";
 import { MatterIcon } from "@/components/matter-icon";
 import { getMatterColor } from "@/lib/matter-colors";
-import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 
 export const ChatMentionNode = (props: NodeViewProps) => {
   const attrs = readChatMentionAttrs(props.node.attrs);

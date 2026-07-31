@@ -34,14 +34,14 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
+import {
+  flowRunDetailOptions,
+  flowRunsKeys,
+} from "@/lib/workspaces/queries/flow-runs";
 import type {
   FlowRunDetail as FlowRunDetailData,
   FlowRunStepRun,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/flows/flow-run-types";
-import {
-  flowRunDetailOptions,
-  flowRunsKeys,
-} from "@/routes/_protected.workspaces/$workspaceId/-queries/flow-runs";
 
 type RunDetailProps = {
   workspaceId: string;

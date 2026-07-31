@@ -64,15 +64,15 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
-import type {
-  Negotiation,
-  PlaybookPositionsValue,
-} from "@/routes/_protected.knowledge/-components/playbook-types";
 import {
   PLAYBOOK_PICKER_LIMIT,
   playbookDetailOptions,
   playbooksOptions,
-} from "@/routes/_protected.knowledge/-queries";
+} from "@/lib/knowledge/queries";
+import type {
+  Negotiation,
+  PlaybookPositionsValue,
+} from "@/routes/_protected.knowledge/-components/playbook-types";
 
 type PlaybookFacetProps = {
   entityId: string;

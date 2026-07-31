@@ -35,7 +35,7 @@ import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceView } from "@/lib/types";
-import { reportExportsKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/report-exports";
+import { reportExportsKeys } from "@/lib/workspaces/queries/report-exports";
 
 import { ReportExportHistory } from "./report-export-history";
 import {

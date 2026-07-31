@@ -10,20 +10,7 @@ import {
   fields,
   workspaces,
 } from "@/api/db/schema";
-import { computeVersionDiffStats } from "@/api/handlers/entities/compute-version-diff";
 import { closeSessionConnections } from "@/api/handlers/entities/desktop-edit-session-events";
-import { findDocxFieldForProperty } from "@/api/handlers/entities/desktop-edit-session-utils";
-import {
-  buildVersionStamp,
-  cloneFieldsForRevision,
-  nextEntityVersionNumber,
-} from "@/api/handlers/entities/version-utils";
-import {
-  allocateFileObject,
-  fileContentWithMintedObject,
-} from "@/api/handlers/files/file-object-ids";
-import { pdfDerivativeStateForFile } from "@/api/handlers/files/gotenberg";
-import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics/capture";
 import {
   AUDIT_ACTION,
@@ -40,8 +27,21 @@ import {
   hashDesktopEditSessionToken,
 } from "@/api/lib/desktop-edit-sessions";
 import { DESKTOP_EDIT_DOCUMENT_SOURCE } from "@/api/lib/document-source";
+import { computeVersionDiffStats } from "@/api/lib/entity-versions/compute-version-diff";
+import { findDocxFieldForProperty } from "@/api/lib/entity-versions/desktop-edit-session-utils";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
+import {
+  buildVersionStamp,
+  cloneFieldsForRevision,
+  nextEntityVersionNumber,
+} from "@/api/lib/entity-versions/version-utils";
 import { enqueuePdfDerivativeOrMarkFailed } from "@/api/lib/file-derivative-queue";
+import {
+  allocateFileObject,
+  fileContentWithMintedObject,
+} from "@/api/lib/files/file-object-ids";
+import { pdfDerivativeStateForFile } from "@/api/lib/files/gotenberg";
+import { createFileKey } from "@/api/lib/files/utils";
 import { getS3 } from "@/api/lib/s3";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { processExtraction } from "@/api/lib/search/process-extraction";
