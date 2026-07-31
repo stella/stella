@@ -34,4 +34,9 @@ ALTER TABLE "case_law_coverage_slices" ENABLE ROW LEVEL SECURITY;--> statement-b
 -- Same access shape as every other case-law table: readable by the app
 -- role, writable only by ingestion.
 CREATE POLICY "case_law_global_access" ON "case_law_coverage_slices" AS PERMISSIVE FOR SELECT TO "stella" USING (true);--> statement-breakpoint
-CREATE POLICY "case_law_ingestion_access" ON "case_law_coverage_slices" AS PERMISSIVE FOR ALL TO "stella_ingestion" USING (true) WITH CHECK (true);
+CREATE POLICY "case_law_ingestion_access" ON "case_law_coverage_slices" AS PERMISSIVE FOR ALL TO "stella_ingestion" USING (true) WITH CHECK (true);--> statement-breakpoint
+
+-- The app role reads the ledger (coverage reporting); only ingestion
+-- writes it. RLS restricts rows, grants restrict verbs — both are needed.
+GRANT SELECT ON TABLE "case_law_coverage_slices" TO stella;--> statement-breakpoint
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "case_law_coverage_slices" TO stella_ingestion;
