@@ -1,5 +1,5 @@
-import { Suspense, use, useDeferredValue, useRef } from "react";
-import type { ReactNode } from "react";
+import { Suspense, use, useCallback, useDeferredValue } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 import { Result } from "better-result";
 import { useShallow } from "zustand/react/shallow";
@@ -11,10 +11,13 @@ import {
   SCROLL_AREA_VIEWPORT_SELECTOR,
   TEXT_LAYER_ATTRIBUTE,
 } from "@/lib/pdf/consts";
-import { usePDFStore } from "@/lib/pdf/pdf-context";
-import type { RenderPageResult } from "@/lib/pdf/pdf-context";
+import { usePDFStore, usePDFStoreApi } from "@/lib/pdf/pdf-context";
+import type { PDFScrollTo, RenderPageResult } from "@/lib/pdf/pdf-context";
 import { PDFErrorBoundary } from "@/lib/pdf/pdf-error-boundary";
-import { getPDFPageScrollTop } from "@/lib/pdf/pdf-page-scroll.logic";
+import {
+  getPDFPageScrollTop,
+  isPDFSearchMatchScrollRequest,
+} from "@/lib/pdf/pdf-page-scroll.logic";
 import type { PDFSearchBox } from "@/lib/pdf/pdf-search";
 import { toPDFSearchViewportBox } from "@/lib/pdf/pdf-search";
 import { getCenteredSearchMatchScrollTop } from "@/lib/search-match-navigation";
@@ -191,7 +194,7 @@ const PDFSearchHighlights = ({
   pageId,
 }: PDFSearchHighlightsProps) => {
   const viewport = usePDFStore((state) => state.pages.get(pageId)?.viewport);
-  const scrolledMatchRef = useRef<number | null>(null);
+  const scrollTo = usePDFStore((state) => state.scrollTo);
 
   if (!viewport || matches.length === 0) {
     return null;
@@ -216,49 +219,100 @@ const PDFSearchHighlights = ({
           const isActive = match.matchIndex === activeMatchIndex;
 
           return (
-            <div
-              ref={(element) => {
-                if (
-                  !element ||
-                  !isActive ||
-                  boxIndex !== 0 ||
-                  scrolledMatchRef.current === match.matchIndex
-                ) {
-                  return;
-                }
-                const scrollViewport = element.closest<HTMLElement>(
-                  SCROLL_AREA_VIEWPORT_SELECTOR,
-                );
-                if (!scrollViewport) {
-                  return;
-                }
-                const containerRect = scrollViewport.getBoundingClientRect();
-                const matchRect = element.getBoundingClientRect();
-                scrollViewport.scrollTo({
-                  top: getCenteredSearchMatchScrollTop({
-                    containerHeight: containerRect.height,
-                    containerTop: containerRect.top,
-                    currentScrollTop: scrollViewport.scrollTop,
-                    matchHeight: matchRect.height,
-                    matchTop: matchRect.top,
-                  }),
-                });
-                scrolledMatchRef.current = match.matchIndex;
-              }}
-              className={
-                isActive
-                  ? "search-document-highlight bg-highlight/90 ring-highlight-foreground/30 absolute rounded-xs ring-1"
-                  : "search-document-highlight bg-highlight/45 absolute rounded-xs"
-              }
-              data-active={isActive ? "true" : undefined}
-              data-search-highlight={true}
-              data-search-match-index={match.matchIndex}
+            <PDFSearchHighlightBox
+              boxIndex={boxIndex}
+              isActive={isActive}
               key={`${match.matchIndex}:${box.x}:${box.y}:${box.width}:${box.height}`}
+              matchIndex={match.matchIndex}
+              pageId={pageId}
+              scrollTo={scrollTo}
               style={viewportBox}
             />
           );
         }),
       )}
     </div>
+  );
+};
+
+type PDFSearchHighlightBoxProps = {
+  boxIndex: number;
+  isActive: boolean;
+  matchIndex: number;
+  pageId: string;
+  scrollTo: PDFScrollTo | null;
+  style: CSSProperties;
+};
+
+const PDFSearchHighlightBox = ({
+  boxIndex,
+  isActive,
+  matchIndex,
+  pageId,
+  scrollTo,
+  style,
+}: PDFSearchHighlightBoxProps) => {
+  const store = usePDFStoreApi();
+  const shouldCenter =
+    boxIndex === 0 &&
+    isActive &&
+    isPDFSearchMatchScrollRequest({ matchIndex, pageId, scrollTo });
+  const highlightRef = useCallback(
+    (element: HTMLDivElement | null) => {
+      if (!element || !shouldCenter) {
+        return;
+      }
+
+      // The page ref first aligns the requested page. Centre the match in the
+      // following frame, using post-alignment geometry, and consume only the
+      // same request so a newer citation/anonymization jump cannot be cleared.
+      requestAnimationFrame(() => {
+        if (
+          !element.isConnected ||
+          element.dataset["active"] !== "true" ||
+          !isPDFSearchMatchScrollRequest({
+            matchIndex,
+            pageId,
+            scrollTo: store.getState().scrollTo,
+          })
+        ) {
+          return;
+        }
+        const scrollViewport = element.closest<HTMLElement>(
+          SCROLL_AREA_VIEWPORT_SELECTOR,
+        );
+        if (!scrollViewport) {
+          return;
+        }
+        const containerRect = scrollViewport.getBoundingClientRect();
+        const matchRect = element.getBoundingClientRect();
+        scrollViewport.scrollTo({
+          top: getCenteredSearchMatchScrollTop({
+            containerHeight: containerRect.height,
+            containerTop: containerRect.top,
+            currentScrollTop: scrollViewport.scrollTop,
+            matchHeight: matchRect.height,
+            matchTop: matchRect.top,
+          }),
+        });
+        store.getState().setScrollTo(null);
+      });
+    },
+    [matchIndex, pageId, shouldCenter, store],
+  );
+
+  return (
+    <div
+      ref={highlightRef}
+      className={
+        isActive
+          ? "search-document-highlight bg-highlight/90 ring-highlight-foreground/30 absolute rounded-xs ring-1"
+          : "search-document-highlight bg-highlight/45 absolute rounded-xs"
+      }
+      data-active={isActive ? "true" : undefined}
+      data-search-highlight={true}
+      data-search-match-index={matchIndex}
+      style={style}
+    />
   );
 };

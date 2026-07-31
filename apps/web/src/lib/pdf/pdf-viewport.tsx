@@ -14,7 +14,6 @@ import { ScrollArea } from "@stll/ui/components/scroll-area";
 
 import { useTheme } from "@/components/theme-provider";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useAnalytics } from "@/lib/analytics/provider";
 import { usePageVisibility } from "@/lib/pdf/hooks/use-page-visibility";
 import { usePDFControlledScaleOffset } from "@/lib/pdf/hooks/use-pdf-controlled-scale-offset";
 import { usePDFDocument } from "@/lib/pdf/hooks/use-pdf-document";
@@ -26,7 +25,10 @@ import type { PDFDocument } from "@/lib/pdf/pdf-loader";
 import type { PDFPageProps } from "@/lib/pdf/pdf-page";
 import { approximateFraction } from "@/lib/pdf/pdfjs-utils";
 import { getDevicePixelRatio } from "@/lib/pdf/utils";
-import type { SearchMatchSummary } from "@/lib/search-match-navigation";
+import {
+  getSettledSearchMatchSummary,
+  type SearchMatchSummary,
+} from "@/lib/search-match-navigation";
 import { composeRefs } from "@/lib/utils";
 
 export { usePDFStore } from "@/lib/pdf/pdf-context";
@@ -136,7 +138,6 @@ const PDFViewerContent = ({
   renderPage,
 }: PDFViewerContentProps) => {
   const { resolvedTheme } = useTheme();
-  const analytics = useAnalytics();
   const shouldInvert = invertColors ?? resolvedTheme === "dark";
   const [attachmentLabels, scale, pages, setDocument, setScrollTo] =
     usePDFStore(
@@ -179,6 +180,10 @@ const PDFViewerContent = ({
   const searchPageId = activeSearchMatch
     ? pageIds.at(activeSearchMatch.pageIndex)
     : undefined;
+  const settledSearchMatchSummary = getSettledSearchMatchSummary({
+    isSettled: searchPageQuery.isSuccess,
+    result: searchPageQuery.data,
+  });
   const viewportStyle: PDFViewportStyle = {
     "--pdf-page-filter": shouldInvert ? "invert(1) hue-rotate(180deg)" : "none",
     "--scale-factor": effectiveScale,
@@ -196,26 +201,24 @@ const PDFViewerContent = ({
 
   useExternalSyncEffect(() => {
     if (searchPageId) {
-      setScrollTo({ pageId: searchPageId });
+      setScrollTo({
+        pageId: searchPageId,
+        target: { kind: "searchMatch", matchIndex: activeSearchMatchIndex },
+      });
     }
-  }, [searchPageId, setScrollTo]);
+  }, [activeSearchMatchIndex, searchPageId, setScrollTo]);
 
   useExternalSyncEffect(() => {
-    onSearchMatchSummaryChange?.({
-      count: searchPageQuery.data?.matches.length ?? 0,
-      truncated: searchPageQuery.data?.truncated ?? false,
-    });
+    if (!settledSearchMatchSummary) {
+      return;
+    }
+
+    onSearchMatchSummaryChange?.(settledSearchMatchSummary);
   }, [
     onSearchMatchSummaryChange,
-    searchPageQuery.data?.matches.length,
-    searchPageQuery.data?.truncated,
+    settledSearchMatchSummary?.count,
+    settledSearchMatchSummary?.truncated,
   ]);
-
-  useExternalSyncEffect(() => {
-    if (searchPageQuery.error) {
-      analytics.captureError(searchPageQuery.error);
-    }
-  }, [analytics, searchPageQuery.error]);
 
   useTextSelection(containerRef);
   const fitToWidthRef = usePDFFitToWidth({
@@ -240,6 +243,10 @@ const PDFViewerContent = ({
     () => composeRefs(containerRef, fitToWidthRef, pageVisibilityRef),
     [fitToWidthRef, pageVisibilityRef],
   );
+
+  if (searchPageQuery.error && !searchPageQuery.isFetching) {
+    throw searchPageQuery.error;
+  }
 
   return (
     // The surround background lives on the (non-scrolling) ScrollArea

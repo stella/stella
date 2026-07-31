@@ -1,4 +1,5 @@
 const COMBINING_MARKS = /\p{M}+/gu;
+const SINGLE_SEARCH_TERM = /^[\p{L}\p{N}]$/u;
 
 export type SearchTextMatch = {
   start: number;
@@ -21,7 +22,8 @@ export const getSearchTextCandidates = (searchText: string): string[] => {
   }
   return [normalizedSearchText, ...terms].filter(
     (candidate, index, candidates) =>
-      candidate.length > 1 && candidates.indexOf(candidate) === index,
+      (candidate.length > 1 || SINGLE_SEARCH_TERM.test(candidate)) &&
+      candidates.indexOf(candidate) === index,
   );
 };
 
@@ -45,7 +47,7 @@ export const findNormalizedSearchTextMatches = (
 
   const normalizedContent = normalizedContentParts.join("");
   const normalizedQuery = normalizeSearchText(searchText.trim());
-  if (normalizedQuery.length <= 1) {
+  if (normalizedQuery.length === 0) {
     return [];
   }
 

@@ -185,16 +185,27 @@ const hasSelectedEntityType = (selected: ReadonlySet<GlobalSearchResultType>) =>
   selected.size === 0 ||
   [...selected].some((type) => !NON_ENTITY_TYPES.has(type));
 
-const fileFieldJoin = sql`
+const fileFieldJoin = (mimeTypes: readonly string[]) => {
+  const mimeFilter =
+    mimeTypes.length > 0
+      ? sql`AND files.mime_type = ANY(${typedPgArray(mimeTypes, "text")})`
+      : sql``;
+
+  return sql`
   LEFT JOIN LATERAL (
-    SELECT
-      (array_agg(files.field_id ORDER BY files.mime_type, files.field_id))[1] AS field_id,
-      (array_agg(DISTINCT files.mime_type ORDER BY files.mime_type))[1] AS mime_type,
-      array_agg(DISTINCT files.mime_type ORDER BY files.mime_type) AS mime_types
-    FROM (
+    WITH files AS (
       SELECT
         f.id AS field_id,
-        field_content.content ->> 'mimeType' AS mime_type
+        field_content.content ->> 'mimeType' AS mime_type,
+        EXISTS (
+          SELECT 1
+          FROM extracted_content ec
+          WHERE ec.entity_id = sd.entity_id
+            AND ec.organization_id = sd.organization_id
+            AND ec.workspace_id = sd.workspace_id
+            AND ec.source_entity_version_id = e.current_version_id
+            AND ec.source_field_id = f.id
+        ) AS is_extracted_source
       FROM fields f
       CROSS JOIN LATERAL (
         SELECT CASE jsonb_typeof(f.content)
@@ -207,9 +218,22 @@ const fileFieldJoin = sql`
         AND f.entity_version_id = e.current_version_id
         AND field_content.content ->> 'type' = 'file'
         AND nullif(field_content.content ->> 'mimeType', '') IS NOT NULL
-    ) files
+    )
+    SELECT
+      files.field_id,
+      files.mime_type,
+      (
+        SELECT array_agg(DISTINCT available.mime_type ORDER BY available.mime_type)
+        FROM files available
+      ) AS mime_types
+    FROM files
+    WHERE TRUE
+      ${mimeFilter}
+    ORDER BY files.is_extracted_source DESC, files.field_id ASC
+    LIMIT 1
   ) file_field ON true
 `;
+};
 
 const caseLawBodyPreviewJoin = sql`
   LEFT JOIN LATERAL (
@@ -418,7 +442,7 @@ const buildSearchFilterFragments = ({
   );
   const entityMimeFilter = sqlWhen(
     hasMimeTypeFilter,
-    () => sql`AND file_field.mime_types && ${typedPgArray(mimeTypes, "text")}`,
+    () => sql`AND file_field.field_id IS NOT NULL`,
   );
   const updatedRangeFilter = (column: SQL): SQL => {
     const fragments: SQL[] = [];
@@ -623,6 +647,8 @@ export const searchGlobal = async ({
     accessibleWorkspaceIds,
     selectedWorkspaceIds: [],
   });
+  const selectedFileFieldJoin = fileFieldJoin(mimeTypes);
+  const allFileFieldJoin = fileFieldJoin([]);
   const matterWorkspaceFilter = workspaceSearchDocumentsAccessSql({
     accessibleWorkspaceIds,
     selectedWorkspaceIds,
@@ -658,7 +684,7 @@ export const searchGlobal = async ({
         ON e.id = sd.entity_id
         AND e.workspace_id = sd.workspace_id
       LEFT JOIN "user" editor ON editor.id = e.last_edited_by
-      ${fileFieldJoin}
+      ${selectedFileFieldJoin}
       WHERE sd.organization_id = ${organizationId}
         ${entityTypeFilter}
         ${entityEditorFilter}
@@ -841,7 +867,7 @@ export const searchGlobal = async ({
         LEFT JOIN entities e
           ON e.id = sd.entity_id
           AND e.workspace_id = sd.workspace_id
-        ${fileFieldJoin}
+        ${selectedFileFieldJoin}
         WHERE sd.organization_id = ${organizationId}
           ${entityTypeFilter}
           ${entityEditorFilter}
@@ -910,7 +936,7 @@ export const searchGlobal = async ({
       LEFT JOIN entities e
         ON e.id = sd.entity_id
         AND e.workspace_id = sd.workspace_id
-      ${fileFieldJoin}
+      ${selectedFileFieldJoin}
       WHERE sd.organization_id = ${organizationId}
         ${entityTypeFacetFilter}
         ${entityEditorFilter}
@@ -990,7 +1016,7 @@ export const searchGlobal = async ({
       LEFT JOIN entities e
         ON e.id = sd.entity_id
         AND e.workspace_id = sd.workspace_id
-      ${fileFieldJoin}
+      ${selectedFileFieldJoin}
       WHERE sd.organization_id = ${organizationId}
         ${entityTypeFilter}
         ${entityEditorFilter}
@@ -1042,7 +1068,7 @@ export const searchGlobal = async ({
         ON e.id = sd.entity_id
         AND e.workspace_id = sd.workspace_id
       JOIN "user" editor ON editor.id = e.last_edited_by
-      ${fileFieldJoin}
+      ${selectedFileFieldJoin}
       WHERE sd.organization_id = ${organizationId}
         ${entityTypeFilter}
         ${entityMimeFilter}
@@ -1065,7 +1091,7 @@ export const searchGlobal = async ({
       LEFT JOIN entities e
         ON e.id = sd.entity_id
         AND e.workspace_id = sd.workspace_id
-      ${fileFieldJoin}
+      ${allFileFieldJoin}
       CROSS JOIN LATERAL unnest(
         coalesce(file_field.mime_types, ARRAY[]::text[])
       ) AS mime_type(value)
@@ -1267,6 +1293,8 @@ export const searchGlobalFacet = async ({
     accessibleWorkspaceIds,
     selectedWorkspaceIds: [],
   });
+  const selectedFileFieldJoin = fileFieldJoin(mimeTypes);
+  const allFileFieldJoin = fileFieldJoin([]);
 
   if (facet === "editor") {
     if (!hasSelectedEntityType(selected)) {
@@ -1279,7 +1307,7 @@ export const searchGlobalFacet = async ({
         ON e.id = sd.entity_id
         AND e.workspace_id = sd.workspace_id
       JOIN "user" editor ON editor.id = e.last_edited_by
-      ${fileFieldJoin}
+      ${selectedFileFieldJoin}
       WHERE sd.organization_id = ${organizationId}
         ${entityTypeFilter}
         ${entityMimeFilter}
@@ -1304,7 +1332,7 @@ export const searchGlobalFacet = async ({
       LEFT JOIN entities e
         ON e.id = sd.entity_id
         AND e.workspace_id = sd.workspace_id
-      ${fileFieldJoin}
+      ${allFileFieldJoin}
       CROSS JOIN LATERAL unnest(
         coalesce(file_field.mime_types, ARRAY[]::text[])
       ) AS mime_type(value)
@@ -1338,7 +1366,7 @@ export const searchGlobalFacet = async ({
       LEFT JOIN entities e
         ON e.id = sd.entity_id
         AND e.workspace_id = sd.workspace_id
-      ${fileFieldJoin}
+      ${selectedFileFieldJoin}
       WHERE sd.organization_id = ${organizationId}
         ${entityTypeFilter}
         ${entityEditorFilter}

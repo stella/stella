@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   getAdjacentSearchMatchIndex,
   getCenteredSearchMatchScrollTop,
+  getSettledSearchMatchSummary,
 } from "@/lib/search-match-navigation";
 
 describe("search preview match navigation", () => {
@@ -43,5 +44,23 @@ describe("search preview match navigation", () => {
         matchTop: 500,
       }),
     ).toBe(410);
+  });
+
+  test("distinguishes a pending search from a settled search with no matches", () => {
+    expect(
+      getSettledSearchMatchSummary({ isSettled: false, result: undefined }),
+    ).toBeNull();
+    expect(
+      getSettledSearchMatchSummary({ isSettled: true, result: null }),
+    ).toEqual({ count: 0, truncated: false });
+  });
+
+  test("summarizes a settled bounded result", () => {
+    expect(
+      getSettledSearchMatchSummary({
+        isSettled: true,
+        result: { matches: [{}, {}], truncated: true },
+      }),
+    ).toEqual({ count: 2, truncated: true });
   });
 });

@@ -59,9 +59,10 @@ export type RenderPageResult = Result<RenderedPage, PDFViewerError>;
 
 type ScrollToTarget =
   | { kind: "justification"; id: string }
-  | { kind: "anonymizeEntity"; entityId: number };
+  | { kind: "anonymizeEntity"; entityId: number }
+  | { kind: "searchMatch"; matchIndex: number };
 
-type ScrollTo = {
+export type PDFScrollTo = {
   pageId: string;
   target?: ScrollToTarget | undefined;
 };
@@ -76,13 +77,13 @@ type PDFState = {
   fitToWidth: number | undefined;
   scaleOffset: number;
   containerWidth: number;
-  scrollTo: ScrollTo | null;
+  scrollTo: PDFScrollTo | null;
   activePages: string[];
   renderPromises: Map<string, Promise<RenderPageResult>>;
 };
 
 type PDFActions = {
-  setScrollTo: (scrollTo: ScrollTo | null) => void;
+  setScrollTo: (scrollTo: PDFScrollTo | null) => void;
   setScaleOffset: (offset: number) => void;
   setDocument: (document: PDFDocument) => void;
   updateVisiblePages: (visiblePageIds: string[]) => void;

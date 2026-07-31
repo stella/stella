@@ -38,7 +38,8 @@ import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
-import { findDocumentSearchMatches } from "@/lib/document-search";
+import { findDocumentSearchResult } from "@/lib/document-search";
+import type { DocumentSearchResult } from "@/lib/document-search";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
 import { PDFPage } from "@/lib/pdf/pdf-page";
 import { PDFViewport } from "@/lib/pdf/pdf-viewport";
@@ -65,6 +66,12 @@ type ScheduleSearchHighlightFrameOptions = {
   attempt: () => boolean;
   onFrame: (frame: number | null) => void;
   remainingFrames?: number | undefined;
+};
+
+type DocxSearchResultCache = {
+  document: ReturnType<DocxEditorRef["getDocument"]>;
+  result: DocumentSearchResult;
+  searchText: string;
 };
 
 const scheduleSearchHighlightFrame = ({
@@ -116,6 +123,7 @@ export const PeekPdfViewer = (props: PeekPdfViewerProps) => {
     fieldId,
     filePurpose = "display",
     onError,
+    searchText,
     workspaceId,
   } = props;
 
@@ -125,7 +133,7 @@ export const PeekPdfViewer = (props: PeekPdfViewerProps) => {
       errorFallback={errorFallback ?? defaultPeekViewerErrorFallback}
       suspenseFallback={<PeekSuspenseFallback />}
       onError={onError}
-      resetKeys={[workspaceId, fieldId, filePurpose]}
+      resetKeys={[workspaceId, fieldId, filePurpose, searchText]}
     >
       <PeekPdfViewerContent {...props} filePurpose={filePurpose} />
     </QuerySuspenseBoundary>
@@ -468,6 +476,7 @@ const PeekDocxViewer = ({
   const editorRef = useRef<DocxEditorRef>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const searchHighlightFrameRef = useRef<number | null>(null);
+  const searchResultCacheRef = useRef<DocxSearchResultCache | null>(null);
   const { containerRef: fitZoomRef, fitZoom: targetZoom } = useDocxFitZoom({
     scaleOffset,
   });
@@ -499,16 +508,27 @@ const PeekDocxViewer = ({
       return false;
     }
 
-    const allMatches = findDocumentSearchMatches(
-      editor.getDocument(),
+    const document = editor.getDocument();
+    const cachedSearchResult = searchResultCacheRef.current;
+    const searchResult =
+      cachedSearchResult?.document === document &&
+      cachedSearchResult.searchText === searchText
+        ? cachedSearchResult.result
+        : findDocumentSearchResult({
+            document,
+            maxMatches: MAX_SEARCH_PREVIEW_MATCHES,
+            searchText,
+          });
+    searchResultCacheRef.current = {
+      document,
+      result: searchResult,
       searchText,
-    );
-    const matches = allMatches.slice(0, MAX_SEARCH_PREVIEW_MATCHES);
+    };
     onSearchMatchSummaryChange?.({
-      count: matches.length,
-      truncated: allMatches.length > matches.length,
+      count: searchResult.matches.length,
+      truncated: searchResult.truncated,
     });
-    const match = matches.at(activeSearchMatchIndex);
+    const match = searchResult.matches.at(activeSearchMatchIndex);
     if (!match) {
       pagedEditor.setPassageHighlight(null);
       return true;
@@ -549,10 +569,12 @@ const PeekDocxViewer = ({
   }, [scheduleSearchHighlight]);
 
   const handleDocumentReady = useCallback(() => {
+    searchResultCacheRef.current = null;
     scheduleSearchHighlight();
   }, [scheduleSearchHighlight]);
 
   const handleEditorViewReady = useCallback(() => {
+    searchResultCacheRef.current = null;
     scheduleSearchHighlight();
   }, [scheduleSearchHighlight]);
 

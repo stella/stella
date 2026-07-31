@@ -1593,12 +1593,15 @@ const SearchPreviewBody = (props: SearchPreviewBodyProps) => {
   const { hit } = props;
   const nativePreviewTarget = getNativeSearchDocumentPreviewTarget(hit);
   if (nativePreviewTarget) {
+    const searchText = getSearchHighlightText(hit.headline, props.query);
     return (
       <div className="min-h-0 flex-1 overflow-hidden">
         <Suspense fallback={<NativeDocumentPreviewSkeleton />}>
           <NativeDocumentPreview
             fallback={<NativeDocumentPreviewSkeleton />}
-            searchText={getSearchHighlightText(hit.headline, props.query)}
+            key={`${hit.id}:${searchText}`}
+            noMatchFallback={<SearchTextPreview {...props} />}
+            searchText={searchText}
             target={nativePreviewTarget}
           />
         </Suspense>

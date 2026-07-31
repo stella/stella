@@ -59,6 +59,7 @@ type SearchPreviewChatMessage = {
 type SearchPreviewChatMessageRow = {
   content: unknown;
   id: SafeId<"chatMessage">;
+  isTarget: unknown;
   role: unknown;
 };
 
@@ -90,6 +91,22 @@ const extractChatPreviewTextParts = (content: unknown): string[] => {
       typeof part["content"] === "string" ? part["content"] : part["text"];
     if (typeof text === "string" && text.trim()) {
       textParts.push(text);
+    }
+  }
+
+  const metadata = content["metadata"];
+  if (!isRecord(metadata) || !Array.isArray(metadata["sourceDocuments"])) {
+    return textParts;
+  }
+  for (const sourceDocument of metadata["sourceDocuments"]) {
+    if (!isRecord(sourceDocument)) {
+      continue;
+    }
+    for (const key of ["title", "mention", "entityRef", "matterRef", "kind"]) {
+      const value = sourceDocument[key];
+      if (typeof value === "string" && value.trim()) {
+        textParts.push(value);
+      }
     }
   }
   return textParts;
@@ -296,13 +313,15 @@ const chatPreviewMessages = (tsQuery: SQL | null): SQL => {
           json_build_object(
             'id', nearby.message_id,
             'role', nearby.role,
-            'content', message.content
+            'content', message.content,
+            'isTarget', nearby.message_id = target.message_id
           )
           ORDER BY nearby.created_at, nearby.message_id
         ),
         '[]'::json
       )
       FROM nearby
+      CROSS JOIN target
       JOIN chat_messages message ON message.id = nearby.message_id
     ) AS messages
   `;
@@ -502,31 +521,69 @@ export const readSearchPreview = async (
       return null;
     }
 
-    const messages: SearchPreviewChatMessage[] = [];
-    let remainingCharacters = Math.max(
-      0,
-      LIMITS.searchPreviewResponseCharacterLimit,
-    );
-    for (const rawMessage of row.messages) {
-      if (remainingCharacters <= 0) {
-        break;
-      }
+    const candidates: Array<
+      SearchPreviewChatMessage & { isTarget: boolean; position: number }
+    > = [];
+    for (const [position, rawMessage] of row.messages.entries()) {
       if (!isSearchPreviewChatRole(rawMessage.role)) {
         continue;
       }
       const textParts = extractChatPreviewTextParts(rawMessage.content);
-      if (textParts.length > 0) {
-        const content = textParts.join("\n\n").slice(0, remainingCharacters);
-        messages.push({
-          content,
-          id: rawMessage.id,
-          role: rawMessage.role,
-        });
-        remainingCharacters -= content.length;
+      if (textParts.length === 0) {
+        continue;
       }
+      candidates.push({
+        content: textParts.join("\n\n"),
+        id: rawMessage.id,
+        isTarget: rawMessage.isTarget === true,
+        position,
+        role: rawMessage.role,
+      });
     }
 
-    return { type: "chat-messages", messages };
+    const targetIndex = candidates.findIndex(({ isTarget }) => isTarget);
+    const targetCandidate = candidates.at(targetIndex);
+    const orderedCandidates =
+      targetCandidate === undefined
+        ? candidates
+        : [
+            targetCandidate,
+            ...Array.from({ length: candidates.length - 1 }).flatMap(
+              (_, offset) => {
+                const distance = offset + 1;
+                return [
+                  candidates.at(targetIndex - distance),
+                  candidates.at(targetIndex + distance),
+                ].flatMap((candidate) => (candidate ? [candidate] : []));
+              },
+            ),
+          ];
+
+    const messages: Array<SearchPreviewChatMessage & { position: number }> = [];
+    let remainingCharacters = Math.max(
+      0,
+      LIMITS.searchPreviewResponseCharacterLimit,
+    );
+    for (const candidate of orderedCandidates) {
+      if (remainingCharacters <= 0) {
+        break;
+      }
+      const content = candidate.content.slice(0, remainingCharacters);
+      messages.push({
+        content,
+        id: candidate.id,
+        position: candidate.position,
+        role: candidate.role,
+      });
+      remainingCharacters -= content.length;
+    }
+
+    return {
+      type: "chat-messages",
+      messages: messages
+        .toSorted((first, second) => first.position - second.position)
+        .map(({ position: _, ...message }) => message),
+    };
   }
 
   const rows = await rootDb.execute(buildSearchPreviewQuery(input));

@@ -91,6 +91,7 @@ describe("search preview rendering contract", () => {
         messages: [
           {
             id: "00000000-0000-4000-8000-000000000010",
+            isTarget: false,
             role: "user",
             content: {
               version: 1,
@@ -99,6 +100,7 @@ describe("search preview rendering contract", () => {
           },
           {
             id: "00000000-0000-4000-8000-000000000011",
+            isTarget: true,
             role: "assistant",
             content: {
               version: 2,
@@ -136,6 +138,7 @@ describe("search preview rendering contract", () => {
         messages: [
           {
             id: "00000000-0000-4000-8000-000000000010",
+            isTarget: false,
             role: "user",
             content: {
               version: 2,
@@ -144,6 +147,7 @@ describe("search preview rendering contract", () => {
           },
           {
             id: "00000000-0000-4000-8000-000000000011",
+            isTarget: true,
             role: "assistant",
             content: {
               version: 2,
@@ -158,7 +162,7 @@ describe("search preview rendering contract", () => {
 
     expect(preview).toMatchObject({
       type: "chat-messages",
-      messages: [{ content: "a".repeat(16_000) }],
+      messages: [{ content: "a".repeat(15_988) }, { content: "not returned" }],
     });
   });
 
@@ -175,5 +179,89 @@ describe("search preview rendering contract", () => {
     ]);
 
     expect(await readSearchPreview(previewQuery)).toBeNull();
+  });
+
+  test("retains the matching chat message when earlier context exhausts the cap", async () => {
+    rootDbExecuteMock.mockResolvedValueOnce([
+      {
+        messages: [
+          {
+            id: "00000000-0000-4000-8000-000000000010",
+            isTarget: false,
+            role: "user",
+            content: {
+              version: 2,
+              data: [{ type: "text", content: "a".repeat(16_000) }],
+            },
+          },
+          {
+            id: "00000000-0000-4000-8000-000000000011",
+            isTarget: true,
+            role: "assistant",
+            content: {
+              version: 2,
+              data: [{ type: "text", content: "matched message" }],
+            },
+          },
+        ],
+      },
+    ]);
+
+    expect(await readSearchPreview({ ...previewQuery, type: "chat" })).toEqual({
+      type: "chat-messages",
+      messages: [
+        {
+          id: "00000000-0000-4000-8000-000000000010",
+          role: "user",
+          content: "a".repeat(15_985),
+        },
+        {
+          id: "00000000-0000-4000-8000-000000000011",
+          role: "assistant",
+          content: "matched message",
+        },
+      ],
+    });
+  });
+
+  test("renders indexed source-document metadata in chat previews", async () => {
+    rootDbExecuteMock.mockResolvedValueOnce([
+      {
+        messages: [
+          {
+            id: "00000000-0000-4000-8000-000000000010",
+            isTarget: true,
+            role: "assistant",
+            content: {
+              version: 2,
+              data: [],
+              metadata: {
+                sourceDocuments: [
+                  {
+                    title: "Closing memorandum",
+                    mention: "@closing-memo",
+                    entityRef: "entity_1",
+                    matterRef: "matter_1",
+                    kind: "document",
+                  },
+                ],
+              },
+            },
+          },
+        ],
+      },
+    ]);
+
+    expect(await readSearchPreview({ ...previewQuery, type: "chat" })).toEqual({
+      type: "chat-messages",
+      messages: [
+        {
+          id: "00000000-0000-4000-8000-000000000010",
+          role: "assistant",
+          content:
+            "Closing memorandum\n\n@closing-memo\n\nentity_1\n\nmatter_1\n\ndocument",
+        },
+      ],
+    });
   });
 });

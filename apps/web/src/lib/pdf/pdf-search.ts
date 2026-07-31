@@ -208,44 +208,47 @@ export const findPDFSearchResults = async ({
   const pages = pdf.getPages();
   const candidates = getSearchTextCandidates(searchText);
 
-  const findCandidateMatches = (candidate: string) => {
-    const matches: PDFSearchMatch[] = [];
-
+  const collectCandidateMatches = (
+    candidate: string,
+    matches: Map<string, PDFSearchMatch>,
+  ): boolean => {
     for (const page of pages) {
       signal.throwIfAborted();
-      matches.push(...findPageMatches(page, candidate));
-      if (matches.length >= MAX_SEARCH_PREVIEW_MATCHES) {
-        return {
-          matches: matches.slice(0, MAX_SEARCH_PREVIEW_MATCHES),
-          truncated: true,
-        };
+      for (const match of findPageMatches(page, candidate)) {
+        matches.set(getPDFSearchMatchKey(match), match);
+        if (matches.size > MAX_SEARCH_PREVIEW_MATCHES) {
+          return true;
+        }
       }
     }
-
-    return { matches, truncated: false };
+    return false;
   };
 
+  const toResult = (
+    matches: ReadonlyMap<string, PDFSearchMatch>,
+    truncated: boolean,
+  ): PDFSearchResult => ({
+    matches: [...matches.values()]
+      .toSorted(comparePDFSearchMatches)
+      .slice(0, MAX_SEARCH_PREVIEW_MATCHES),
+    truncated,
+  });
+
   const phraseCandidate = candidates.at(0);
-  const phraseResult = phraseCandidate
-    ? findCandidateMatches(phraseCandidate)
-    : { matches: [], truncated: false };
-  if (phraseResult.matches.length > 0 || candidates.length <= 1) {
-    return phraseResult.matches.length > 0 ? phraseResult : null;
+  const phraseMatches = new Map<string, PDFSearchMatch>();
+  const phraseTruncated = phraseCandidate
+    ? collectCandidateMatches(phraseCandidate, phraseMatches)
+    : false;
+  if (phraseMatches.size > 0 || candidates.length <= 1) {
+    return phraseMatches.size > 0
+      ? toResult(phraseMatches, phraseTruncated)
+      : null;
   }
 
   const matches = new Map<string, PDFSearchMatch>();
   for (const candidate of candidates.slice(1)) {
-    const candidateResult = findCandidateMatches(candidate);
-    for (const match of candidateResult.matches) {
-      matches.set(getPDFSearchMatchKey(match), match);
-      if (matches.size >= MAX_SEARCH_PREVIEW_MATCHES) {
-        return {
-          matches: [...matches.values()]
-            .toSorted(comparePDFSearchMatches)
-            .slice(0, MAX_SEARCH_PREVIEW_MATCHES),
-          truncated: true,
-        };
-      }
+    if (collectCandidateMatches(candidate, matches)) {
+      return toResult(matches, true);
     }
   }
 
@@ -253,10 +256,7 @@ export const findPDFSearchResults = async ({
     return null;
   }
 
-  return {
-    matches: [...matches.values()].toSorted(comparePDFSearchMatches),
-    truncated: false,
-  };
+  return toResult(matches, false);
 };
 
 export const toPDFSearchViewportBox = (

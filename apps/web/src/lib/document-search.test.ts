@@ -3,9 +3,11 @@ import { describe, expect, test } from "bun:test";
 import { createEmptyDocument } from "@stll/folio-core";
 
 import {
+  findDocumentSearchResult,
   findDocumentSearchMatches,
   findNormalizedSearchTextMatches,
   findSearchTextMatches,
+  getSearchTextCandidates,
   normalizeSearchText,
 } from "@/lib/document-search";
 
@@ -18,6 +20,16 @@ describe("document search highlighting", () => {
 
   test("does not create matches for an empty query", () => {
     expect(findSearchTextMatches("Meridian", "  ")).toEqual([]);
+  });
+
+  test("retains one-character Unicode terms", () => {
+    expect(getSearchTextCandidates("法")).toEqual(["法"]);
+    expect(findSearchTextMatches("準拠法", "法")).toEqual([
+      { start: 2, end: 3 },
+    ]);
+    expect(findNormalizedSearchTextMatches("Š", "s")).toEqual([
+      { start: 0, end: 1 },
+    ]);
   });
 
   test("falls back to web-search terms when an exact query is absent", () => {
@@ -54,5 +66,29 @@ describe("document search highlighting", () => {
       { startOffset: 5, endOffset: 14, text: "odštěpení" },
       { startOffset: 26, endOffset: 36, text: "assignment" },
     ]);
+  });
+
+  test("bounds DOCX matches at one past the display cap", () => {
+    const exactlyAtCap = createEmptyDocument({
+      initialText: "hit ".repeat(200),
+    });
+    const overCap = createEmptyDocument({
+      initialText: "hit ".repeat(201),
+    });
+
+    expect(
+      findDocumentSearchResult({
+        document: exactlyAtCap,
+        maxMatches: 200,
+        searchText: "hit",
+      }),
+    ).toMatchObject({ matches: { length: 200 }, truncated: false });
+    expect(
+      findDocumentSearchResult({
+        document: overCap,
+        maxMatches: 200,
+        searchText: "hit",
+      }),
+    ).toMatchObject({ matches: { length: 200 }, truncated: true });
   });
 });

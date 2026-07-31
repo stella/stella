@@ -358,4 +358,34 @@ describe("global search SQL scope", () => {
       seen: 1,
     });
   });
+  test("selects the filtered file field and prefers the extracted-content source", async () => {
+    await searchGlobal({
+      query: "indemnity",
+      organizationId: toSafeId<"organization">("org_1"),
+      userId: toSafeId<"user">("user_1"),
+      accessibleWorkspaceIds: [],
+      selectedWorkspaceIds: [],
+      types: ["document"],
+      editedByUserIds: [],
+      mimeTypes: ["application/pdf"],
+      limit: 10,
+    });
+
+    const dialect = new PgDialect();
+    const entityQueries = rootDbExecuteMock.mock.calls
+      .map(([query]) => dialect.sqlToQuery(query))
+      .filter(({ sql: sqlText }) => sqlText.includes("file_field.field_id"));
+
+    expect(entityQueries.length).toBeGreaterThan(0);
+    for (const compiled of entityQueries) {
+      expect(compiled.sql).toContain("FROM extracted_content ec");
+      expect(compiled.sql).toContain("ec.source_field_id = f.id");
+      expect(compiled.sql).toContain("files.mime_type = ANY");
+      expect(compiled.sql).toContain("array_agg(DISTINCT available.mime_type");
+      expect(compiled.sql).toContain(
+        "ORDER BY files.is_extracted_source DESC, files.field_id ASC",
+      );
+      expect(compiled.params).toContain("application/pdf");
+    }
+  });
 });

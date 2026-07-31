@@ -7,6 +7,41 @@ export const normalizeSearchQuery = (query: string): string => query.trim();
 export const stripSearchMarkup = (value: string): string =>
   value.replaceAll("<mark>", " ").replaceAll("</mark>", " ").trim();
 
+const SEARCH_HEADLINE_NAMED_ENTITIES: Readonly<Record<string, string>> = {
+  amp: "&",
+  apos: "'",
+  gt: ">",
+  lt: "<",
+  quot: '"',
+};
+const SEARCH_HEADLINE_ENTITY = /&(?<entity>#x[\da-f]+|#\d+|[a-z]+);/giu;
+
+const decodeSearchHeadlineEntities = (value: string): string =>
+  value.replace(SEARCH_HEADLINE_ENTITY, (encoded, _entity, ...args) => {
+    const groups = args.at(-1);
+    if (
+      typeof groups !== "object" ||
+      groups === null ||
+      !("entity" in groups)
+    ) {
+      return encoded;
+    }
+    const entity = groups["entity"];
+    if (typeof entity !== "string") {
+      return encoded;
+    }
+    const normalizedEntity = entity.toLowerCase();
+    if (normalizedEntity.startsWith("#x")) {
+      const codePoint = Number.parseInt(normalizedEntity.slice(2), 16);
+      return codePoint <= 0x10_ffff ? String.fromCodePoint(codePoint) : encoded;
+    }
+    if (normalizedEntity.startsWith("#")) {
+      const codePoint = Number.parseInt(normalizedEntity.slice(1), 10);
+      return codePoint <= 0x10_ffff ? String.fromCodePoint(codePoint) : encoded;
+    }
+    return SEARCH_HEADLINE_NAMED_ENTITIES[normalizedEntity] ?? encoded;
+  });
+
 const getMarkedSearchText = (headline: string | null): string => {
   if (!headline) {
     return "";
@@ -14,7 +49,10 @@ const getMarkedSearchText = (headline: string | null): string => {
 
   const terms: string[] = [];
   for (const match of headline.matchAll(/<mark>(?<term>.*?)<\/mark>/gu)) {
-    const term = match.groups?.["term"]?.trim();
+    const encodedTerm = match.groups?.["term"]?.trim();
+    const term = encodedTerm
+      ? decodeSearchHeadlineEntities(encodedTerm).trim()
+      : undefined;
     if (term && !terms.includes(term)) {
       terms.push(term);
     }
@@ -128,6 +166,19 @@ export type NativeSearchDocumentPreviewTarget = {
   mimeType: typeof DOCX_MIME | typeof PDF_MIME;
   workspaceId: string;
 };
+
+export type NativeSearchStatus = "matched" | "pending" | "unmatched";
+
+type NativeSearchFallbackArgs = {
+  searchText: string;
+  status: NativeSearchStatus;
+};
+
+export const shouldShowNativeSearchFallback = ({
+  searchText,
+  status,
+}: NativeSearchFallbackArgs): boolean =>
+  searchText.trim().length > 0 && status === "unmatched";
 
 export const getNativeSearchDocumentPreviewTarget = (
   hit: GlobalSearchHit,

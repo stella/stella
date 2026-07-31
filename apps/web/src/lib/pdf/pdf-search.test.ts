@@ -62,19 +62,29 @@ describe("canonical PDF search", () => {
     expect(result?.matches.map((match) => match.pageIndex)).toEqual([0, 1, 1]);
   });
 
-  test("bounds preview work and reports additional matches", async () => {
-    const pdf = PDF.create();
-    const page = pdf.addPage({ size: "letter" });
-    page.drawText("hit ".repeat(201), { x: 20, y: 700, size: 8 });
+  test("reports truncation only after observing the cap plus one", async () => {
+    const createPDFWithHits = async (count: number) => {
+      const pdf = PDF.create();
+      const page = pdf.addPage({ size: "letter" });
+      page.drawText("hit ".repeat(count), { x: 20, y: 700, size: 8 });
+      return await pdf.save();
+    };
 
-    const result = await findPDFSearchResults({
-      bytes: await pdf.save(),
+    const atCap = await findPDFSearchResults({
+      bytes: await createPDFWithHits(200),
+      searchText: "hit",
+      signal: new AbortController().signal,
+    });
+    const overCap = await findPDFSearchResults({
+      bytes: await createPDFWithHits(201),
       searchText: "hit",
       signal: new AbortController().signal,
     });
 
-    expect(result?.matches).toHaveLength(200);
-    expect(result?.truncated).toBe(true);
+    expect(atCap?.matches).toHaveLength(200);
+    expect(atCap?.truncated).toBe(false);
+    expect(overCap?.matches).toHaveLength(200);
+    expect(overCap?.truncated).toBe(true);
   });
 
   test("stops before loading LibPDF when the search is cancelled", async () => {

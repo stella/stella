@@ -12,6 +12,7 @@ import {
   selectAuthorizedSearchPreviewData,
   selectDisplayedSearchPreviewHit,
   selectSearchPreviewHit,
+  shouldShowNativeSearchFallback,
   shouldShowSearchPreview,
 } from "@/lib/search.logic";
 import type { SearchPreviewChatMessage } from "@/lib/search.logic";
@@ -125,6 +126,12 @@ describe("search query normalization", () => {
     expect(
       getSearchHighlightText("The <mark>Closing</mark> memorandum", ""),
     ).toBe("Closing");
+    expect(
+      getSearchHighlightText(
+        "The <mark>R&amp;D</mark> team&#x27;s <mark>&lt;draft&gt;</mark>",
+        "",
+      ),
+    ).toBe("R&D <draft>");
   });
 
   test("excludes advanced-query operators and negated terms from previews", () => {
@@ -233,6 +240,24 @@ describe("search preview targets", () => {
     expect(
       selectDisplayedSearchPreviewHit({ hit: previewHit, showPreview: true }),
     ).toBe(previewHit);
+  });
+
+  test("uses server text only after a native search settles without matches", () => {
+    expect(
+      shouldShowNativeSearchFallback({
+        searchText: "indemnity",
+        status: "unmatched",
+      }),
+    ).toBeTrue();
+    expect(
+      shouldShowNativeSearchFallback({
+        searchText: "indemnity",
+        status: "pending",
+      }),
+    ).toBeFalse();
+    expect(
+      shouldShowNativeSearchFallback({ searchText: "", status: "unmatched" }),
+    ).toBeFalse();
   });
 
   test("routes PDF and DOCX documents to the native inspector viewer", () => {

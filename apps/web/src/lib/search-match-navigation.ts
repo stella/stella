@@ -5,6 +5,30 @@ export type SearchMatchSummary = {
   truncated: boolean;
 };
 
+type SearchMatchResult = {
+  matches: readonly unknown[];
+  truncated: boolean;
+};
+
+type GetSettledSearchMatchSummaryOptions = {
+  isSettled: boolean;
+  result: SearchMatchResult | null | undefined;
+};
+
+export const getSettledSearchMatchSummary = ({
+  isSettled,
+  result,
+}: GetSettledSearchMatchSummaryOptions): SearchMatchSummary | null => {
+  if (!isSettled) {
+    return null;
+  }
+
+  return {
+    count: result?.matches.length ?? 0,
+    truncated: result?.truncated ?? false,
+  };
+};
+
 type GetAdjacentSearchMatchIndexOptions = {
   activeIndex: number;
   direction: "next" | "previous";
