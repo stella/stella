@@ -838,7 +838,7 @@ export const createCaseLawGenerationBackfill =
             pendingDeleteRows.push(row);
             break;
           case null:
-            panic("selected corpus projection has no pending action");
+            return panic("selected corpus projection has no pending action");
           default: {
             const unhandled: never = row.generationPendingAction;
             panic(`Unhandled corpus projection action: ${String(unhandled)}`);
