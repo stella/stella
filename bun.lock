@@ -444,7 +444,7 @@
     },
     "packages/business-registries": {
       "name": "@stll/business-registries",
-      "version": "0.2.1",
+      "version": "0.2.2",
       "dependencies": {
         "@stll/country-codes": "workspace:*",
         "@stll/stdnum": "^2.3.1",
@@ -476,7 +476,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "0.3.0",
+      "version": "0.3.1",
       "bin": {
         "stella": "./dist/cli.js",
       },
