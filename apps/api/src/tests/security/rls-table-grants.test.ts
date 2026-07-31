@@ -55,9 +55,11 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   "case_law_coverage_slices",
 ]);
 
-// Internal outbox tables that scoped requests may append to, while privileged
-// workers remain the only readers and state-transition writers.
-const POST_BOOTSTRAP_INSERT_ONLY_TABLES = new Set([
+// Internal handoff tables whose scoped role needs INSERT but not table-wide
+// SELECT. Privileged workers own reads; a table may additionally grant a
+// narrowly scoped transition such as deleting an exact cleanup tombstone.
+const POST_BOOTSTRAP_SCOPED_HANDOFF_TABLES = new Set([
+  "buffer_object_cleanup_intents",
   "entity_deletion_cleanup_requests",
 ]);
 
@@ -132,7 +134,7 @@ const grantsRequiredPrivileges = ({
   if (POST_BOOTSTRAP_SELECT_ONLY_TABLES.has(table)) {
     return privileges.has("select");
   }
-  if (POST_BOOTSTRAP_INSERT_ONLY_TABLES.has(table)) {
+  if (POST_BOOTSTRAP_SCOPED_HANDOFF_TABLES.has(table)) {
     return privileges.has("insert");
   }
   return grantsTableDml;

@@ -4,6 +4,7 @@ import { rootDb } from "@/api/db/root";
 import type { SchedulerPayload, SchedulerSchedule } from "@/api/db/schema";
 import { schedulerJobs } from "@/api/db/schema";
 import { computeNextRunAt } from "@/api/lib/scheduler/schedule";
+import { RECONCILE_BUFFER_INTENTS_TASK } from "@/api/lib/scheduler/tasks/buffer-intent-reconciliation";
 import { BACKFILL_SK_DOCUMENTS_TASK } from "@/api/lib/scheduler/tasks/case-law-sk-documents";
 import { EXPIRE_DESKTOP_EDIT_SESSIONS_TASK } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry";
 import { INFO_SOUD_SYNC_TRACKED_CASES_TASK } from "@/api/lib/scheduler/tasks/infosoud";
@@ -109,6 +110,17 @@ const sameSchedule = (
 };
 
 export const ensureDefaultSchedulerJobs = async (): Promise<void> => {
+  await ensureSchedulerJob({
+    description:
+      "Reconcile abandoned server-generated entity and version objects",
+    id: "entityBuffers.reconcileIntents.minutely",
+    schedule: {
+      type: "interval",
+      everyMs: 60 * 1000,
+    },
+    task: RECONCILE_BUFFER_INTENTS_TASK,
+  });
+
   await ensureOneShotSchedulerJob({
     description:
       "Repair entity search timestamps and persisted preview passages",

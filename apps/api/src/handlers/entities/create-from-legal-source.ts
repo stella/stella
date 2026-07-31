@@ -100,11 +100,19 @@ export default createSafeHandler(
 
 const toHandlerError = (
   error:
+    | { _tag: "DocumentTooLargeError" }
     | { _tag: "EntityLimitError" }
     | { _tag: "InvalidParentError" }
     | { _tag: "MissingFilePropertyError" },
 ): HandlerError => {
   switch (error._tag) {
+    case "DocumentTooLargeError":
+      return new HandlerError({
+        code: "legal_source_document_too_large",
+        status: 413,
+        message:
+          "The generated document exceeds the document size limit, so it could not be created.",
+      });
     case "EntityLimitError":
       return new HandlerError({
         code: "legal_source_entity_limit_reached",

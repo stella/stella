@@ -7,6 +7,7 @@ import {
   entities,
   entityVersions,
   fields,
+  pendingUploads,
 } from "@/api/db/schema";
 import { createChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -20,10 +21,12 @@ const enqueueImageThumbnailOrMarkFailedMock = mock(async () => {});
 const enqueuePdfDerivativeOrMarkFailedMock = mock(async () => {});
 
 void mock.module("@/api/lib/s3", () => ({
+  deleteS3ObjectWithSignal: s3DeleteMock,
   getS3: () => ({
     write: s3WriteMock,
     delete: s3DeleteMock,
   }),
+  putS3ObjectWithSignal: s3WriteMock,
 }));
 
 void mock.module("@/api/lib/search/process-extraction", () => ({
@@ -150,14 +153,24 @@ describe("createCreateWorkspaceDocumentTools", () => {
         },
       },
       $count: async () => 0,
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            limit: () => ({ for: async () => [{ status: "active" }] }),
+          }),
+        }),
+      }),
       insert: (table: unknown) => ({
-        values: (values: { name?: string }) => {
+        values: (values: { id?: string; name?: string }) => {
           if (table === documentCounters) {
             return {
               onConflictDoUpdate: () => ({
                 returning: async () => [{ lastValue: 1 }],
               }),
             };
+          }
+          if (table === pendingUploads) {
+            return { returning: async () => [{ id: values.id }] };
           }
           if (table === entities) {
             insertedFileName = values.name;
@@ -172,7 +185,14 @@ describe("createCreateWorkspaceDocumentTools", () => {
           return undefined;
         },
       }),
-      update: () => ({ set: () => ({ where: async () => {} }) }),
+      update: (table: unknown) => ({
+        set: () => ({
+          where: () =>
+            table === pendingUploads
+              ? { returning: async () => [{ id: "intent_1" }] }
+              : undefined,
+        }),
+      }),
     };
     return { tx, getInsertedFileName: () => insertedFileName };
   };

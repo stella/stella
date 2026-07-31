@@ -702,6 +702,11 @@ export const PENDING_UPLOAD_STATUSES = [
   "failed",
 ] as const;
 
+export const PENDING_UPLOAD_RECOVERABLE_STATUSES = [
+  "scanning",
+  "failed",
+] as const satisfies readonly (typeof PENDING_UPLOAD_STATUSES)[number][];
+
 /**
  * Each upload purpose drives a different finalize transaction (entity
  * vs. version vs. skill...). The discriminator lives in its own column
@@ -719,10 +724,22 @@ export type PendingUploadPurposeData =
   | {
       type: "entity_create";
       propertyId: SafeId<"property">;
+      /**
+       * Final object id reserved by trusted server-side writers. Persisting it
+       * before S3 publication lets the bounded reconciler derive and remove a
+       * final-key object left behind by a hard process death.
+       */
+      reservedFileId?: string;
     }
   | {
       type: "entity_version";
       entityId: SafeId<"entity">;
+      /**
+       * Final object id reserved by trusted server-side writers. Persisting it
+       * before S3 publication lets the bounded reconciler derive and remove a
+       * final-key object left behind by a hard process death.
+       */
+      reservedFileId?: string;
     }
   | {
       type: "agent_skill";
@@ -801,7 +818,56 @@ export const pendingUploads = p.pgTable(
     p
       .index("pending_uploads_org_created_idx")
       .on(table.organizationId, table.createdAt),
+    p
+      .index("pending_uploads_buffer_intent_recovery_idx")
+      .on(table.claimedAt, table.id)
+      .where(
+        sql`${table.status} IN ('scanning', 'failed')
+          AND ${table.purpose} IN ('entity_create', 'entity_version')
+          AND ${table.purposeData}->>'reservedFileId' IS NOT NULL`,
+      ),
     ...wsPolicies(),
+  ],
+);
+
+/**
+ * Durable tombstones for server-generated object writes interrupted by a
+ * workspace or account deletion. They intentionally have no foreign keys:
+ * recovery must survive both workspace cascades and user cleanup until the
+ * original writer confirms that it can no longer publish the reserved key.
+ */
+export const bufferObjectCleanupIntents = p.pgTable(
+  "buffer_object_cleanup_intents",
+  {
+    id: pUuid<"pendingUpload">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    workspaceId: safeWorkspaceId("workspace_id").notNull(),
+    objectKey: p.text("object_key").notNull(),
+    attemptCount: p.integer("attempt_count").notNull().default(0),
+    nextAttemptAt: timestamptz("next_attempt_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p
+      .index("buffer_object_cleanup_schedule_idx")
+      .on(table.nextAttemptAt, table.id),
+    p.check(
+      "buffer_object_cleanup_attempt_count_nonnegative_check",
+      sql`${table.attemptCount} >= 0`,
+    ),
+    // Lifecycle deletion may transfer the intent through its scoped
+    // transaction. The original scoped writer may remove it only after its
+    // PUT settles and exact-key cleanup succeeds; retry reads stay root-only.
+    p.pgPolicy("buffer_object_cleanup_insert", {
+      for: "insert",
+      to: stella,
+      withCheck: sql`${workspaceCheck} AND ${organizationCheck}`,
+    }),
+    p.pgPolicy("buffer_object_cleanup_delete", {
+      for: "delete",
+      to: stella,
+      using: sql`${workspaceCheck} AND ${organizationCheck}`,
+    }),
   ],
 );
 

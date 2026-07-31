@@ -76,11 +76,17 @@ type CreateWorkspaceDocumentToolsProps = {
 
 const toChatToolError = (
   error:
+    | { _tag: "DocumentTooLargeError" }
     | { _tag: "EntityLimitError" }
     | { _tag: "InvalidParentError" }
     | { _tag: "MissingFilePropertyError" },
 ): ChatToolError => {
   switch (error._tag) {
+    case "DocumentTooLargeError":
+      return new ChatToolError({
+        message:
+          "The generated document exceeds stella's document size limit, so it could not be created.",
+      });
     case "EntityLimitError":
       return new ChatToolError({
         message:

@@ -1,5 +1,9 @@
 import { createBullMqDispatchTask } from "@/api/lib/scheduler/bullmq";
 import {
+  RECONCILE_BUFFER_INTENTS_TASK,
+  reconcileBufferIntents,
+} from "@/api/lib/scheduler/tasks/buffer-intent-reconciliation";
+import {
   BACKFILL_SK_DOCUMENTS_TASK,
   backfillSkDocuments,
 } from "@/api/lib/scheduler/tasks/case-law-sk-documents";
@@ -36,6 +40,7 @@ export const createSchedulerTaskRegistry = (): SchedulerTaskRegistry =>
     [EXPIRE_DESKTOP_EDIT_SESSIONS_TASK, expireDesktopEditSessions],
     [FLOW_RUN_TASK, runScheduledFlow],
     [BACKFILL_SK_DOCUMENTS_TASK, backfillSkDocuments],
+    [RECONCILE_BUFFER_INTENTS_TASK, reconcileBufferIntents],
     [
       REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK,
       repairSearchSemanticTimestampsTask,

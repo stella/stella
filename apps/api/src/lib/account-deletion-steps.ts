@@ -39,6 +39,7 @@ import {
   mcpOAuthState,
   mcpUserConnections,
   pendingUploads,
+  PENDING_UPLOAD_RECOVERABLE_STATUSES,
   rateEntries,
   taskAssignees,
   userFiles,
@@ -47,7 +48,6 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createFileKey, createUserFileKey } from "@/api/handlers/files/utils";
-import { tmpUploadKeys } from "@/api/handlers/uploads/lib";
 import {
   ACTIVE_TASK_REASSIGNMENT_STATUSES,
   buildAccountDeletionTaskReassignmentTargets,
@@ -56,9 +56,11 @@ import {
 import { arrayOrEmpty } from "@/api/lib/array";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { preserveBufferObjectCleanupIntents } from "@/api/lib/buffer-intent-reconciliation";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE } from "@/api/lib/folio-collab-sessions";
 import { LIMITS } from "@/api/lib/limits";
+import { pendingUploadS3KeysForDeletion } from "@/api/lib/pending-upload-keys";
 import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
@@ -676,8 +678,12 @@ export const deletePendingUploads = async ({
 }: DeletePendingUploadsParams): Promise<void> => {
   const stagedUploadRows = await tx
     .select({
+      declaredMime: pendingUploads.declaredMime,
       id: pendingUploads.id,
       organizationId: pendingUploads.organizationId,
+      purpose: pendingUploads.purpose,
+      purposeData: pendingUploads.purposeData,
+      status: pendingUploads.status,
       workspaceId: pendingUploads.workspaceId,
     })
     .from(pendingUploads)
@@ -686,16 +692,36 @@ export const deletePendingUploads = async ({
         eq(pendingUploads.userId, currentUserId),
         ne(pendingUploads.status, "finalized"),
       ),
-    );
+    )
+    .for("update");
   s3KeysToDelete.push(
-    ...stagedUploadRows.flatMap((row) =>
-      tmpUploadKeys({
-        organizationId: row.organizationId,
-        uploadId: row.id,
-        workspaceId: row.workspaceId,
-      }),
-    ),
+    ...stagedUploadRows.flatMap(pendingUploadS3KeysForDeletion),
   );
+
+  const recoverableRows = stagedUploadRows.filter(
+    ({ status }) => status === "scanning" || status === "failed",
+  );
+  if (recoverableRows.length > 0) {
+    const ids = recoverableRows.map(({ id }) => id);
+    // Invalidate every live writer before transferring recovery ownership.
+    // A later finalize CAS must fail and route through the writer's exact-key
+    // cleanup, which removes the independent tombstone only after PUT settles.
+    await tx
+      .update(pendingUploads)
+      .set({
+        claimedAt: new Date(0),
+        claimedByRequestId: null,
+        rejectReason: "Account deletion cancelled the upload",
+        status: "failed",
+      })
+      .where(
+        and(
+          inArray(pendingUploads.id, ids),
+          inArray(pendingUploads.status, PENDING_UPLOAD_RECOVERABLE_STATUSES),
+        ),
+      );
+    await preserveBufferObjectCleanupIntents(tx, recoverableRows);
+  }
 
   await tx
     .delete(pendingUploads)

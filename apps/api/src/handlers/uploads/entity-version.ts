@@ -1,14 +1,4 @@
-/**
- * `entity_version` purpose: a presigned-upload flow that creates a
- * new `entityVersions` row + `fields` clone for an existing entity,
- * mirroring the legacy multipart endpoint at
- * `apps/api/src/handlers/entities/upload-version.ts`.
- *
- * Reuses `cloneFieldsForRevision`, `buildVersionStamp`, and the
- * cell-metadata carry-over from the legacy handler exactly so the
- * resulting row is byte-for-byte identical to what the multipart
- * path would have produced.
- */
+/** Presigned-upload transport for creating a new entity file version. */
 import { Result, panic } from "better-result";
 import { and, eq } from "drizzle-orm";
 
@@ -17,32 +7,16 @@ import type {
   PendingUploadFinalizedResult,
   PendingUploadPurposeData,
 } from "@/api/db/schema";
-import {
-  cellMetadata,
-  entities,
-  entityVersions,
-  fields,
-  pendingUploads,
-  workspaces,
-} from "@/api/db/schema";
+import { pendingUploads } from "@/api/db/schema";
 import { computeVersionDiffStats } from "@/api/handlers/entities/compute-version-diff";
-import {
-  buildVersionStamp,
-  cloneFieldsForRevision,
-  nextEntityVersionNumber,
-} from "@/api/handlers/entities/version-utils";
-import {
-  allocateFileObject,
-  fileContentWithMintedObject,
-} from "@/api/handlers/files/file-object-ids";
-import { pdfDerivativeStateForFile } from "@/api/handlers/files/gotenberg";
-import { thumbnailDerivativeStateForFile } from "@/api/handlers/files/image-derivative";
+import { writeFileVersion } from "@/api/handlers/entities/write-file-version";
+import { allocateFileObject } from "@/api/handlers/files/file-object-ids";
 import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics/capture";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { BUFFER_INTENT_DELETE_TIMEOUT_MS } from "@/api/lib/buffer-intent-reconciliation";
 import { UPLOAD_DOCUMENT_SOURCE } from "@/api/lib/document-source";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -50,10 +24,11 @@ import {
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
-import { getS3 } from "@/api/lib/s3";
+import { deleteS3ObjectWithSignal } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { processExtraction } from "@/api/lib/search/process-extraction";
 import { broadcast } from "@/api/lib/sse";
+import { withTimeout } from "@/api/lib/with-timeout";
 
 import { finalizeErr, finalizeOk } from "./lib";
 import type { UploadFinalizeError } from "./lib";
@@ -65,11 +40,9 @@ export type ValidateEntityVersionProps = {
 };
 
 /**
- * Up-front gating: entity exists, isn't read-only, has a file
- * field. Lets the API refuse to mint a presigned URL the user
- * couldn't redeem anyway.
+ * Refuse to mint a presigned URL for an invalid or read-only target.
  *
- * @yields safeDb errors out to the parent safe-handler.
+ * @yields Safe database errors to the parent safe handler.
  */
 export const validateEntityVersion = async function* ({
   safeDb,
@@ -83,14 +56,11 @@ export const validateEntityVersion = async function* ({
           id: { eq: entityId },
           workspaceId: { eq: workspaceId },
         },
-        columns: {
-          currentVersionId: true,
-          readOnly: true,
-        },
+        columns: { currentVersionId: true, readOnly: true },
       }),
     ),
   );
-  if (!entity || !entity.currentVersionId) {
+  if (!entity?.currentVersionId) {
     return Result.err(
       new HandlerError({ status: 404, message: "Entity not found" }),
     );
@@ -100,7 +70,6 @@ export const validateEntityVersion = async function* ({
       new HandlerError({ status: 409, message: "Entity is read-only" }),
     );
   }
-
   return Result.ok(undefined);
 };
 
@@ -125,13 +94,11 @@ export type FinalizeEntityVersionProps = {
 };
 
 /**
- * Domain transaction for `entity_version`. Allocates a new
- * `entityVersions` row + cloned fields with the uploaded file
- * swapped into the file field, carries cell metadata across,
- * records the two audit events the legacy handler emits, kicks
- * off async extraction + diff-stat computation + SSE broadcast.
+ * Promote the staged object, then join the canonical version transaction. The
+ * pending-upload FSM transition is supplied as writeFileVersion's afterWrite
+ * hook so it commits atomically with the entity/version audit rows.
  *
- * @yields safeDb errors out to the parent safe-handler.
+ * @yields Safe database errors to the parent finalize handler.
  */
 export const finalizeEntityVersion = async function* ({
   safeDb,
@@ -150,12 +117,11 @@ export const finalizeEntityVersion = async function* ({
   claimRequestId,
   promoteTmpObject,
 }: FinalizeEntityVersionProps) {
-  const sanitizedName = sanitizeFilename(declaredName);
+  const fileName = sanitizeFilename(declaredName);
   const { entityId } = purposeData;
-
   const fileId = allocateFileObject();
-  const nextVersionId = createSafeId<"entityVersion">();
-  const fileFieldId = createSafeId<"field">();
+  const entityVersionId = createSafeId<"entityVersion">();
+  const fieldId = createSafeId<"field">();
   const finalKey = createFileKey({
     organizationId,
     workspaceId,
@@ -163,257 +129,30 @@ export const finalizeEntityVersion = async function* ({
     mimeType: declaredMime,
   });
 
-  const promoteResult = await promoteTmpObject(finalKey);
-  if (Result.isError(promoteResult)) {
-    return promoteResult;
+  const promoted = await promoteTmpObject(finalKey);
+  if (Result.isError(promoted)) {
+    return promoted;
   }
 
-  type WriteResult =
-    | {
-        status: "ok";
-        finalized: Extract<
-          PendingUploadFinalizedResult,
-          { type: "entity_version" }
-        >;
-      }
-    | {
-        status:
-          | "entity-not-found"
-          | "entity-read-only"
-          | "current-version-not-found"
-          | "missing-file-field";
-      };
-
   const cleanupFinalObject = async (stage: string) => {
-    await getS3()
-      .delete(finalKey)
-      .catch((deleteError: unknown) =>
-        captureError(deleteError, {
-          entityId,
-          fieldId: fileFieldId,
-          stage,
-        }),
-      );
+    await withTimeout(
+      async (signal) => await deleteS3ObjectWithSignal(finalKey, signal),
+      {
+        label: "entity-version-final-cleanup.delete",
+        timeoutMs: BUFFER_INTENT_DELETE_TIMEOUT_MS,
+      },
+    ).catch((error: unknown) =>
+      captureError(error, { entityId, fieldId, stage }),
+    );
   };
 
-  const writeResultResult = await safeDb(async (tx): Promise<WriteResult> => {
-    // Lock the entity row for the duration of the transaction so
-    // a concurrent version upload can't observe a stale
-    // currentVersionId.
-    const entityRows = await tx
-      .select({
-        currentVersionId: entities.currentVersionId,
-        docSequence: entities.docSequence,
-        readOnly: entities.readOnly,
-      })
-      .from(entities)
-      .where(
-        and(eq(entities.id, entityId), eq(entities.workspaceId, workspaceId)),
-      )
-      .limit(1)
-      .for("update");
-    const lockedEntity = entityRows.at(0);
-
-    if (!lockedEntity?.currentVersionId) {
-      return { status: "entity-not-found" };
-    }
-    if (lockedEntity.readOnly) {
-      return { status: "entity-read-only" };
-    }
-
-    const freshCurrentVersionId = lockedEntity.currentVersionId;
-    const freshCurrentVersion = await tx.query.entityVersions.findFirst({
-      where: { id: { eq: freshCurrentVersionId } },
-      columns: { versionNumber: true },
-      with: {
-        fields: { columns: { content: true, propertyId: true } },
-      },
-    });
-    if (!freshCurrentVersion) {
-      return { status: "current-version-not-found" };
-    }
-
-    const freshFileField = freshCurrentVersion.fields.find(
-      (field) => field.content.type === "file",
-    );
-    if (!freshFileField) {
-      return { status: "missing-file-field" };
-    }
-
-    const workspace = await tx.query.workspaces.findFirst({
-      where: { id: { eq: workspaceId } },
-      columns: { reference: true },
-    });
-
-    // MAX over all versions (incl. tombstoned) under the entity lock, not
-    // currentVersion + 1, which would reuse a tombstoned latest version's number
-    // after currentVersionId promoted backward. See nextEntityVersionNumber.
-    const nextVersionNumber = await nextEntityVersionNumber(tx, {
-      entityId,
-      workspaceId,
-    });
-    const nextVersionStamp = buildVersionStamp({
-      docSequence: lockedEntity.docSequence,
-      versionNumber: nextVersionNumber,
-      workspaceReference: workspace?.reference ?? null,
-    });
-
-    await tx.insert(entityVersions).values({
-      createdBy: userId,
-      entityId,
-      id: nextVersionId,
-      source: UPLOAD_DOCUMENT_SOURCE,
-      stamp: nextVersionStamp.stamp,
-      verificationCode: nextVersionStamp.verificationCode,
-      versionNumber: nextVersionNumber,
-      workspaceId,
-    });
-
-    await tx.insert(fields).values(
-      cloneFieldsForRevision({
-        currentFields: freshCurrentVersion.fields,
-        entityVersionId: nextVersionId,
-        propertyId: freshFileField.propertyId,
-        replacementFieldId: fileFieldId,
-        replacementContent: fileContentWithMintedObject({
-          encrypted: false,
-          fileName: sanitizedName,
-          id: fileId,
-          mimeType: declaredMime,
-          pdfFileId: null,
-          sha256Hex: declaredSha256Hex,
-          sizeBytes: declaredSize,
-          type: "file",
-          version: 1,
-          pdfDerivative: pdfDerivativeStateForFile({
-            encrypted: false,
-            mimeType: declaredMime,
-          }),
-          thumbnailFileId: null,
-          thumbnailDerivative: thumbnailDerivativeStateForFile({
-            encrypted: false,
-            mimeType: declaredMime,
-          }),
-          ...(scanWarnings !== undefined && { scanWarnings }),
-        }),
-        workspaceId,
-      }),
-    );
-
-    // Carry over cell metadata from every property except the
-    // file field (whose metadata starts fresh per version).
-    const currentCellMetadataRows = await tx
-      .select({
-        createdAt: cellMetadata.createdAt,
-        createdBy: cellMetadata.createdBy,
-        metadata: cellMetadata.metadata,
-        propertyId: cellMetadata.propertyId,
-        updatedAt: cellMetadata.updatedAt,
-        updatedBy: cellMetadata.updatedBy,
-      })
-      .from(cellMetadata)
-      .where(
-        and(
-          eq(cellMetadata.workspaceId, workspaceId),
-          eq(cellMetadata.entityVersionId, freshCurrentVersionId),
-        ),
-      )
-      .for("update");
-
-    const cellMetadataRowsToCopy = currentCellMetadataRows.filter(
-      (row) => row.propertyId !== freshFileField.propertyId,
-    );
-
-    if (cellMetadataRowsToCopy.length > 0) {
-      await tx.insert(cellMetadata).values(
-        cellMetadataRowsToCopy.map((row) => ({
-          workspaceId,
-          entityVersionId: nextVersionId,
-          propertyId: row.propertyId,
-          metadata: row.metadata,
-          createdBy: row.createdBy,
-          updatedBy: row.updatedBy,
-          createdAt: row.createdAt,
-          updatedAt: row.updatedAt,
-        })),
-      );
-    }
-
-    await tx
-      .update(entities)
-      .set({
-        currentVersionId: nextVersionId,
-        lastEditedBy: userId,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(eq(entities.id, entityId), eq(entities.workspaceId, workspaceId)),
-      );
-
-    await tx
-      .update(workspaces)
-      .set({ lastActivityAt: new Date() })
-      .where(eq(workspaces.id, workspaceId));
-
-    await recordAuditEvent(tx, [
-      {
-        action: AUDIT_ACTION.CREATE,
-        resourceType: AUDIT_RESOURCE_TYPE.ENTITY_VERSION,
-        resourceId: nextVersionId,
-        changes: {
-          created: {
-            old: null,
-            new: {
-              entityId,
-              versionNumber: nextVersionNumber,
-              fileName: sanitizedName,
-              mimeType: declaredMime,
-              sizeBytes: declaredSize,
-              sha256Hex: declaredSha256Hex,
-            },
-          },
-        },
-        metadata: {
-          fileName: sanitizedName,
-          mimeType: declaredMime,
-          sizeBytes: declaredSize,
-          sha256Hex: declaredSha256Hex,
-        },
-      },
-      {
-        action: AUDIT_ACTION.UPDATE,
-        resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-        resourceId: entityId,
-        changes: {
-          currentVersionId: {
-            old: freshCurrentVersionId,
-            new: nextVersionId,
-          },
-        },
-      },
-    ]);
-
-    const finalized: Extract<
-      PendingUploadFinalizedResult,
-      { type: "entity_version" }
-    > = {
-      type: "entity_version",
-      entityId,
-      entityVersionId: nextVersionId,
-      versionNumber: nextVersionNumber,
-      fileId,
-      fileName: sanitizedName,
-    };
-
-    // audit: skip — final FSM transition on pending_uploads;
-    // the entity/version audit rows landed above in this same transaction.
-    const finalizedRows = await tx
-      .update(pendingUploads)
-      .set({
-        status: "finalized",
-        finalizedResult: finalized,
-        finalizedAt: new Date(),
-      })
+  let finalized:
+    | Extract<PendingUploadFinalizedResult, { type: "entity_version" }>
+    | undefined;
+  const writeResultResult = await safeDb(async (tx) => {
+    const claimRows = await tx
+      .select({ id: pendingUploads.id })
+      .from(pendingUploads)
       .where(
         and(
           eq(pendingUploads.id, uploadId),
@@ -423,90 +162,131 @@ export const finalizeEntityVersion = async function* ({
           eq(pendingUploads.claimedByRequestId, claimRequestId),
         ),
       )
-      .returning({ id: pendingUploads.id });
-    if (!finalizedRows.at(0)) {
-      panic("Pending upload finalize marker update returned no rows");
+      .limit(1)
+      .for("update");
+    if (!claimRows.at(0)) {
+      return { status: "upload-claim-lost" as const };
     }
 
-    return { status: "ok", finalized };
+    return await writeFileVersion({
+      tx,
+      workspaceId,
+      entityId,
+      userId,
+      recordAuditEvent,
+      entityVersionId,
+      fieldId,
+      fileId,
+      fileName,
+      mimeType: declaredMime,
+      sizeBytes: declaredSize,
+      sha256Hex: declaredSha256Hex,
+      source: UPLOAD_DOCUMENT_SOURCE,
+      scanWarnings,
+      afterWrite: async ({ versionNumber }) => {
+        finalized = {
+          type: "entity_version",
+          entityId,
+          entityVersionId,
+          versionNumber,
+          fileId,
+          fileName,
+        };
+        // audit: skip — FSM bookkeeping; entity/version events are recorded
+        // by writeFileVersion in this same transaction.
+        await tx
+          .update(pendingUploads)
+          .set({
+            status: "finalized",
+            finalizedResult: finalized,
+            finalizedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(pendingUploads.id, uploadId),
+              eq(pendingUploads.userId, userId),
+              eq(pendingUploads.workspaceId, workspaceId),
+              eq(pendingUploads.status, "scanning"),
+              eq(pendingUploads.claimedByRequestId, claimRequestId),
+            ),
+          );
+      },
+    });
   });
   if (Result.isError(writeResultResult)) {
     await cleanupFinalObject("final-cleanup-after-db-error");
   }
   const writeResult = yield* writeResultResult;
 
-  if (writeResult.status !== "ok") {
-    const status = writeResult.status;
-    if (
-      status === "entity-not-found" ||
-      status === "current-version-not-found"
-    ) {
-      await cleanupFinalObject("final-cleanup-after-business-error");
-      return finalizeErr({
-        status: 404,
-        message:
-          status === "entity-not-found"
-            ? "Entity not found"
-            : "Current version not found",
-        rejectReason: status,
-      });
-    }
-    if (status === "entity-read-only") {
-      await cleanupFinalObject("final-cleanup-after-business-error");
-      return finalizeErr({
-        status: 409,
-        message: "Entity is read-only",
-        rejectReason: "entity-read-only",
-      });
-    }
-    await cleanupFinalObject("final-cleanup-after-business-error");
+  if (writeResult.status === "upload-claim-lost") {
+    await cleanupFinalObject("final-cleanup-after-claim-loss");
     return finalizeErr({
-      status: 400,
-      message: "Entity has no file field",
-      rejectReason: "missing-file-field",
+      status: 409,
+      message: "Upload finalization claim was lost",
+      rejectReason: "claim-lost",
     });
   }
 
-  const finalized = writeResult.finalized;
+  if (writeResult.status !== "ok") {
+    await cleanupFinalObject("final-cleanup-after-business-error");
+    if (
+      writeResult.status === "entity-not-found" ||
+      writeResult.status === "current-version-not-found"
+    ) {
+      return finalizeErr({
+        status: 404,
+        message:
+          writeResult.status === "entity-not-found"
+            ? "Entity not found"
+            : "Current version not found",
+        rejectReason: writeResult.status,
+      });
+    }
+    if (writeResult.status === "entity-read-only") {
+      return finalizeErr({
+        status: 409,
+        message: "Entity is read-only",
+        rejectReason: writeResult.status,
+      });
+    }
+    return finalizeErr({
+      status: 400,
+      message: "Entity has no file field",
+      rejectReason: writeResult.status,
+    });
+  }
+
+  const finalizedResult =
+    finalized ??
+    panic("Entity version write completed without finalize result");
   const afterPromote = () => {
-    // Async kickoffs mirror the legacy handler. They run only after
-    // both promotion and the DB transaction have succeeded, so
-    // consumers never read a final key before it exists.
     processExtraction(entityId).catch((error: unknown) => {
       captureError(error, { entityId });
     });
     enqueuePdfDerivativeOrMarkFailed({
       encrypted: false,
       entityId,
-      fieldId: fileFieldId,
+      fieldId,
       mimeType: declaredMime,
       organizationId,
       userId,
       workspaceId,
     }).catch((error: unknown) => {
-      captureError(error, {
-        entityId,
-        fieldId: fileFieldId,
-        mimeType: declaredMime,
-      });
+      captureError(error, { entityId, fieldId, mimeType: declaredMime });
     });
     enqueueImageThumbnailOrMarkFailed({
       encrypted: false,
       entityId,
-      fieldId: fileFieldId,
+      fieldId,
       mimeType: declaredMime,
       organizationId,
       userId,
       workspaceId,
     }).catch((error: unknown) => {
-      captureError(error, {
-        entityId,
-        fieldId: fileFieldId,
-        mimeType: declaredMime,
-      });
+      captureError(error, { entityId, fieldId, mimeType: declaredMime });
     });
     computeVersionDiffStats({
-      versionId: nextVersionId,
+      versionId: entityVersionId,
       entityId,
       scopedDb: createRootScopedDb({
         organizationId,
@@ -516,7 +296,7 @@ export const finalizeEntityVersion = async function* ({
       workspaceId,
       organizationId,
     }).catch((error: unknown) => {
-      captureError(error, { versionId: nextVersionId });
+      captureError(error, { versionId: entityVersionId });
     });
     broadcast(workspaceId, {
       type: "invalidate-query",
@@ -524,5 +304,5 @@ export const finalizeEntityVersion = async function* ({
     });
   };
 
-  return finalizeOk({ finalizedResult: finalized, finalKey, afterPromote });
+  return finalizeOk({ finalizedResult, finalKey, afterPromote });
 };

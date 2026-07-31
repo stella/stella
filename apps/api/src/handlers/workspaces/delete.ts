@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 
 import { member } from "@/api/db/auth-schema";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -9,6 +9,8 @@ import {
   entities,
   entityVersions,
   fields,
+  pendingUploads,
+  PENDING_UPLOAD_RECOVERABLE_STATUSES,
   properties,
   propertyDependencies,
   userFiles,
@@ -26,7 +28,9 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { preserveBufferObjectCleanupIntents } from "@/api/lib/buffer-intent-reconciliation";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { pendingUploadS3KeysForDeletion } from "@/api/lib/pending-upload-keys";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
@@ -40,12 +44,22 @@ const changeWorkspaceStatus = async (
     // lock immediately before it claims a run, so a delete either seals first
     // or observes the in-flight run and leaves the workspace active.
     const workspaceRows = await tx
-      .select({ id: workspaces.id })
+      .select({ id: workspaces.id, status: workspaces.status })
       .from(workspaces)
       .where(eq(workspaces.id, workspaceId))
       .limit(1)
       .for("update");
-    if (newStatus === "deleting" && workspaceRows.at(0)) {
+    const workspace = workspaceRows.at(0);
+    if (!workspace) {
+      return false;
+    }
+    // Only one request may own the deletion seal. A concurrent request must
+    // not proceed to its own snapshot or later reactivate this workspace when
+    // its cleanup fails.
+    if (newStatus === "deleting" && workspace.status === "deleting") {
+      return false;
+    }
+    if (newStatus === "deleting") {
       const runningOcrRuns = await tx
         .select({ id: documentProcessingRuns.id })
         .from(documentProcessingRuns)
@@ -131,7 +145,8 @@ export const deleteWorkspaceHandler = async function* ({
     return Result.err(
       new HandlerError({
         status: 409,
-        message: "Wait for document processing to finish before deleting",
+        message:
+          "Wait for document processing or another deletion attempt to finish",
       }),
     );
   }
@@ -140,6 +155,32 @@ export const deleteWorkspaceHandler = async function* ({
   // Workspace is sealed by status: "deleting", so no
   // concurrent uploads can insert new files.
   const fileQueryResult = await safeDb(async (tx) => {
+    // Cancel every non-finalized upload before enumerating its keys. A live
+    // server buffer writer can no longer commit after this compare-and-set;
+    // if it publishes concurrently, its failed persistence path deletes the
+    // reserved final object too. This closes the publish-vs-workspace-cascade
+    // race instead of merely snapshotting recovery intents before deleting
+    // their rows.
+    // audit: skip — internal upload-lease cancellation within the audited
+    // workspace delete; the user-visible DELETE event is recorded below.
+    await tx
+      .update(pendingUploads)
+      .set({
+        // Invalidate the writer's claim while keeping the row eligible for
+        // bounded repair if object cleanup fails and the workspace is
+        // reactivated. The writer's finalize CAS requires its original claim.
+        claimedAt: new Date(0),
+        claimedByRequestId: null,
+        rejectReason: "Workspace deletion cancelled the upload",
+        status: "failed",
+      })
+      .where(
+        and(
+          eq(pendingUploads.workspaceId, workspaceId),
+          inArray(pendingUploads.status, PENDING_UPLOAD_RECOVERABLE_STATUSES),
+        ),
+      );
+
     const workspaceEntityVersionIds = tx
       .select({ id: entityVersions.id })
       .from(entityVersions)
@@ -165,7 +206,36 @@ export const deleteWorkspaceHandler = async function* ({
       .innerJoin(chatThreads, eq(userFiles.threadId, chatThreads.id))
       .where(eq(chatThreads.workspaceId, workspaceId));
 
-    return await Promise.all([fileRefsPromise, chatFileRefsPromise]);
+    const pendingUploadRowsPromise = tx
+      .select({
+        declaredMime: pendingUploads.declaredMime,
+        id: pendingUploads.id,
+        organizationId: pendingUploads.organizationId,
+        purpose: pendingUploads.purpose,
+        purposeData: pendingUploads.purposeData,
+        status: pendingUploads.status,
+        workspaceId: pendingUploads.workspaceId,
+      })
+      .from(pendingUploads)
+      .where(
+        and(
+          eq(pendingUploads.workspaceId, workspaceId),
+          ne(pendingUploads.status, "finalized"),
+        ),
+      );
+
+    const result = await Promise.all([
+      fileRefsPromise,
+      chatFileRefsPromise,
+      pendingUploadRowsPromise,
+    ]);
+    await preserveBufferObjectCleanupIntents(
+      tx,
+      result[2].filter(
+        ({ status }) => status === "scanning" || status === "failed",
+      ),
+    );
+    return result;
   });
 
   if (Result.isError(fileQueryResult)) {
@@ -179,7 +249,7 @@ export const deleteWorkspaceHandler = async function* ({
     );
   }
 
-  const [fileRefs, chatFileRefs] = fileQueryResult.value;
+  const [fileRefs, chatFileRefs, pendingUploadRows] = fileQueryResult.value;
 
   // Delete S3 objects outside any transaction.
   // On retry, already-deleted S3 objects are no-ops.
@@ -214,6 +284,16 @@ export const deleteWorkspaceHandler = async function* ({
         ),
       ).then((result) =>
         Result.unwrap(result, "Workspace chat file cleanup failed"),
+      ),
+    );
+  }
+
+  if (pendingUploadRows.length > 0) {
+    s3Deletes.push(
+      deleteS3Keys(
+        pendingUploadRows.flatMap(pendingUploadS3KeysForDeletion),
+      ).then((result) =>
+        Result.unwrap(result, "Workspace pending upload cleanup failed"),
       ),
     );
   }
