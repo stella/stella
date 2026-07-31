@@ -378,13 +378,9 @@ describe("outgoing chat stream message ids", () => {
       events: {
         onStreamEnd: (message) => {
           const toolCall = message.parts.find(
-            (part) => part.type === "tool-call",
+            (part) => part.type === "tool-call" && part.id === "tool-1",
           );
-          if (
-            !toolCall ||
-            toolCall.type !== "tool-call" ||
-            toolCall.id !== "tool-1"
-          ) {
+          if (!toolCall) {
             throw new Error("Expected web-search tool call");
           }
           responseMessage = {
