@@ -74,7 +74,7 @@ RUN mkdir -p /app/runtime-workers && \
     bun build \
       --target bun \
       --outfile /app/runtime-workers/pdf-worker.js \
-      apps/api/src/handlers/files/pdf-worker.ts && \
+      apps/api/src/lib/files/pdf-worker.ts && \
     bun build \
       --target bun \
       --outfile /app/runtime-workers/extraction-worker.js \
