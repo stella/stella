@@ -297,6 +297,20 @@ const parseItemWithDetail = async (
   };
 };
 
+/** One list page, in the given order. */
+const listRequest = (
+  page: number,
+  sortDirection: "ASC" | "DESC",
+): { url: string; init: RequestInit } => ({
+  url: `${BASE_URL}?${new URLSearchParams({
+    page: String(page),
+    size: String(PAGE_SIZE),
+    sortProperty: "datumVydania",
+    sortDirection,
+  }).toString()}`,
+  init: { headers: { Accept: "application/json" } },
+});
+
 export const skCourtsAdapter: SourceAdapter = {
   key: ADAPTER_KEYS.SK_COURTS,
   name: "obcan.justice.sk",
@@ -345,17 +359,25 @@ export const skCourtsAdapter: SourceAdapter = {
     listTimeoutMs: 60_000,
     itemConcurrency: ITEM_CONCURRENCY,
 
-    buildRequest: (page) => ({
-      url: `${BASE_URL}?${new URLSearchParams({
-        page: String(page),
-        size: String(PAGE_SIZE),
-        sortProperty: "datumVydania",
-        sortDirection: "DESC",
-      }).toString()}`,
-      init: {
-        headers: { Accept: "application/json" },
+    buildRequest: (page) => listRequest(page, "DESC"),
+
+    // Oldest-first until the collection has been seen, then newest-first.
+    // Walking this source newest-first from the start cannot catch up: it
+    // publishes continuously, and each new decision shifts every later
+    // offset, so items slide past the cursor unseen. Oldest-first converges
+    // because new decisions land at the end, behind the cursor.
+    traversal: [
+      {
+        name: "backfill",
+        buildRequest: (page) => listRequest(page, "ASC"),
+        followedBy: "live",
       },
-    }),
+      {
+        name: "live",
+        buildRequest: (page) => listRequest(page, "DESC"),
+        followedBy: null,
+      },
+    ],
 
     parseResponse: async (response) => {
       const json: unknown = await response.json();
