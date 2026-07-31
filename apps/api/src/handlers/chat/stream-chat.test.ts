@@ -1,5 +1,5 @@
 import { EventType, StreamProcessor } from "@tanstack/ai";
-import type { ModelMessage, StreamChunk } from "@tanstack/ai";
+import type { ModelMessage, StreamChunk, ToolCallPart } from "@tanstack/ai";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
@@ -378,7 +378,8 @@ describe("outgoing chat stream message ids", () => {
       events: {
         onStreamEnd: (message) => {
           const toolCall = message.parts.find(
-            (part) => part.type === "tool-call" && part.id === "tool-1",
+            (part): part is ToolCallPart =>
+              part.type === "tool-call" && part.id === "tool-1",
           );
           if (!toolCall) {
             throw new Error("Expected web-search tool call");
