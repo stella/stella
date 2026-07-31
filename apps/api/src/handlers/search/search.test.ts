@@ -138,6 +138,27 @@ describe("search handler workspace scoping", () => {
     expect(searchMock).not.toHaveBeenCalled();
   });
 
+  test("rejects an incompatible cursor instead of restarting pagination", async () => {
+    const result = await searchHandler({
+      accessibleWorkspaceIds,
+      body: {
+        ...emptySearchFilters(),
+        cursor: "not-a-search-cursor",
+        query: "closing memo",
+      },
+      organizationId,
+      userId,
+      search: searchMock,
+      scopedDb: unusedScopedDb,
+    });
+
+    expect(result).toMatchObject({
+      code: 400,
+      response: { message: "Invalid cursor" },
+    });
+    expect(searchMock).not.toHaveBeenCalled();
+  });
+
   test("runs a blank query when an entity-kind filter is selected", async () => {
     await searchHandler({
       accessibleWorkspaceIds,

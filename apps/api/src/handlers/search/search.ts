@@ -8,6 +8,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import { searchGlobal } from "@/api/lib/search/index-global";
+import { parseGlobalSearchCursor } from "@/api/lib/search/pagination";
 import { GLOBAL_SEARCH_RESULT_TYPES } from "@/api/lib/search/types";
 
 const isoDateTime = t.String({ format: "date-time" });
@@ -147,6 +148,10 @@ export const searchHandler = async ({
     return status(400, {
       message: "Provide a search query or at least one filter",
     });
+  }
+
+  if (parseGlobalSearchCursor(body.cursor).type === "invalid") {
+    return status(400, { message: "Invalid cursor" });
   }
 
   const resolved = await resolveSelectedWorkspaceIds({
