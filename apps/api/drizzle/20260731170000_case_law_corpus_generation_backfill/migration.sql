@@ -130,7 +130,7 @@ BEGIN
       WHERE (newer.snapshot_at, newer.generation) >
         (checkpoint.snapshot_at, checkpoint.generation)
     )
-    ON CONFLICT (generation, decision_id) DO UPDATE
+    ON CONFLICT ON CONSTRAINT case_law_corpus_index_projections_pk DO UPDATE
     SET pending_action = EXCLUDED.pending_action,
         pending_hash = EXCLUDED.pending_hash,
         updated_at = EXCLUDED.updated_at;
@@ -173,7 +173,7 @@ BEGIN
     WHERE (newer.snapshot_at, newer.generation) >
       (checkpoint.snapshot_at, checkpoint.generation)
   )
-  ON CONFLICT (generation, decision_id) DO UPDATE
+  ON CONFLICT ON CONSTRAINT case_law_corpus_index_projections_pk DO UPDATE
   SET pending_action = EXCLUDED.pending_action,
       pending_hash = EXCLUDED.pending_hash,
       updated_at = EXCLUDED.updated_at;
