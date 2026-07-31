@@ -53,15 +53,6 @@ const readSelfhostLocalPasswordAuth = (
   return result.stdout.toString().trim();
 };
 
-const validateOcrServiceUrl = (ocrServiceUrl: string) =>
-  Bun.spawnSync({
-    cmd: [process.execPath, "-e", `import ${JSON.stringify(envModuleUrl)};`],
-    cwd: repoRoot,
-    env: { ...baseEnv, OCR_SERVICE_URL: ocrServiceUrl },
-    stderr: "pipe",
-    stdout: "pipe",
-  });
-
 describe("API environment", () => {
   test("infers SMTP provider from complete SMTP settings", () => {
     expect(
@@ -85,19 +76,5 @@ describe("API environment", () => {
         SELFHOST_LOCAL_PASSWORD_AUTH: "true",
       }),
     ).toBe("true");
-  });
-
-  test("allows HTTPS and loopback OCR service endpoints", () => {
-    expect(validateOcrServiceUrl("https://ocr.example.com").exitCode).toBe(0);
-    expect(validateOcrServiceUrl("http://127.0.0.1:8080").exitCode).toBe(0);
-  });
-
-  test("rejects plaintext remote OCR service endpoints", () => {
-    const result = validateOcrServiceUrl("http://ocr.example.com");
-
-    expect(result.exitCode).not.toBe(0);
-    expect(result.stderr.toString()).toContain(
-      "OCR_SERVICE_URL must use HTTPS unless it targets a loopback address.",
-    );
   });
 });

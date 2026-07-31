@@ -1,0 +1,10 @@
+**
+!apps/
+!apps/ocr-service/
+!apps/ocr-service/Dockerfile
+!apps/ocr-service/Dockerfile.dockerignore
+!apps/ocr-service/healthcheck.py
+!apps/ocr-service/pipeline.yaml
+!apps/ocr-service/pyproject.toml
+!apps/ocr-service/THIRD-PARTY-NOTICES.md
+!apps/ocr-service/uv.lock

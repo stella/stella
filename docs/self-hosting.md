@@ -169,6 +169,13 @@ endpoints must use HTTPS because requests carry short-lived access credentials.
 The original PDF remains unchanged: stella stores and indexes only the derived
 searchable text.
 
+OCR does not change the standard self-host architecture requirements. Operators
+who explicitly opt in on an amd64 NVIDIA host can add the optional
+`docker-compose.ocr.yml` overlay; it builds the included OCR service and keeps
+it private on the worker's loopback network. See
+[the OCR service guide](../apps/ocr-service/README.md) for the command and host
+requirements.
+
 ## Desktop editing
 
 Self-hosted installs can use the signed stella desktop app without rebuilding

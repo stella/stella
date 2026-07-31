@@ -1,0 +1,34 @@
+services:
+  document-processing-worker:
+    depends_on:
+      ocr:
+        condition: service_healthy
+    environment:
+      OCR_SERVICE_URL: http://127.0.0.1:8080
+    network_mode: service:ocr
+
+  ocr:
+    build:
+      context: .
+      dockerfile: apps/ocr-service/Dockerfile
+    image: ${STELLA_OCR_IMAGE:-stella-ocr-service:local}
+    gpus: all
+    read_only: true
+    tmpfs:
+      - /tmp:size=${STELLA_OCR_TMPFS_SIZE:-4g},mode=1777
+    shm_size: ${STELLA_OCR_SHM_SIZE:-4g}
+    healthcheck:
+      test:
+        ["CMD", "python", "/opt/stella/healthcheck.py"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 120s
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: ${STELLA_OCR_PIDS_LIMIT:-1024}
+    mem_limit: ${STELLA_OCR_MEM_LIMIT:-16g}
+    cpus: ${STELLA_OCR_CPUS:-4.0}

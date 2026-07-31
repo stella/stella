@@ -13,9 +13,11 @@
 
 import type { RedisOptions } from "bun";
 
-import { env } from "@/api/env";
+import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 
-export const redisConnectionOptions = (url = env.REDIS_URL): RedisOptions => {
+export const redisConnectionOptions = (
+  url = envDocumentProcessingWorker.REDIS_URL,
+): RedisOptions => {
   const useTls = url.toLowerCase().startsWith("rediss://");
   return useTls ? { tls: { rejectUnauthorized: false } } : {};
 };

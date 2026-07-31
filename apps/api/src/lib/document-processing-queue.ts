@@ -681,9 +681,60 @@ export const requiresOcrPolicy = (
   requestSource: (typeof documentProcessingRuns.$inferSelect)["requestSource"],
 ): boolean => requestSource !== "manual";
 
+export const isLifecycleInterruptionError = ({
+  error,
+  lifecycleSignal,
+}: {
+  error: unknown;
+  lifecycleSignal: AbortSignal;
+}): boolean => {
+  if (!lifecycleSignal.aborted) {
+    return false;
+  }
+
+  const visited = new Set<unknown>();
+  let current: unknown = error;
+  while (current !== undefined && !visited.has(current)) {
+    if (current === lifecycleSignal.reason) {
+      return true;
+    }
+    visited.add(current);
+    if (
+      typeof current !== "object" ||
+      current === null ||
+      !("cause" in current)
+    ) {
+      return false;
+    }
+    current = current.cause;
+  }
+  return false;
+};
+
+export const settleDocumentProcessingAttemptError = async ({
+  error,
+  lifecycleSignal,
+  markFailed,
+  returnToQueue,
+}: {
+  error: unknown;
+  lifecycleSignal: AbortSignal;
+  markFailed: () => Promise<void>;
+  returnToQueue: () => Promise<void>;
+}): Promise<"failed" | "interrupted"> => {
+  if (isLifecycleInterruptionError({ error, lifecycleSignal })) {
+    await returnToQueue();
+    return "interrupted";
+  }
+  await markFailed();
+  return "failed";
+};
+
 export const processDocumentProcessingRun = async (
   runId: SafeId<"documentProcessingRun">,
+  lifecycleSignal: AbortSignal,
 ): Promise<void> => {
+  lifecycleSignal.throwIfAborted();
   const claimToken = Bun.randomUUIDv7();
   const run = await rootDb.transaction(async (tx) => {
     const runRows = await tx
@@ -819,6 +870,7 @@ export const processDocumentProcessingRun = async (
       return null;
     }
 
+    lifecycleSignal.throwIfAborted();
     const claimedRows = await tx
       .update(documentProcessingRuns)
       .set({
@@ -854,6 +906,7 @@ export const processDocumentProcessingRun = async (
   });
   const processingResult = await Result.tryPromise({
     try: async () => {
+      lifecycleSignal.throwIfAborted();
       const settings = await rootDb.query.organizationSettings.findFirst({
         where: { organizationId: { eq: run.organizationId } },
         columns: { documentProcessingMode: true },
@@ -892,6 +945,7 @@ export const processDocumentProcessingRun = async (
       });
       const result = await recognizePdfText({
         idempotencyKey: `ocr:${run.id}`,
+        signal: lifecycleSignal,
         sourceUrl,
       });
       if (Result.isError(result)) {
@@ -901,11 +955,13 @@ export const processDocumentProcessingRun = async (
           cause: result.error,
         });
       }
+      lifecycleSignal.throwIfAborted();
 
       const encrypted = await encryptContent(
         run.organizationId,
         result.value.text,
       );
+      lifecycleSignal.throwIfAborted();
       const persisted = await persistOcrProjection({
         claimToken,
         ciphertext: encrypted.ciphertext,
@@ -917,11 +973,13 @@ export const processDocumentProcessingRun = async (
       if (!persisted) {
         return;
       }
+      lifecycleSignal.throwIfAborted();
 
       await indexOcrProjection({
         indexEntity: async () =>
           await getSearchProvider().indexEntity(run.entityId),
       });
+      lifecycleSignal.throwIfAborted();
       const completed = await rootDb
         .update(documentProcessingRuns)
         .set({
@@ -955,10 +1013,19 @@ export const processDocumentProcessingRun = async (
   heartbeat.stop();
 
   if (Result.isError(processingResult)) {
-    await markRunFailed({
-      claimToken,
+    await settleDocumentProcessingAttemptError({
       error: processingResult.error,
-      run,
+      lifecycleSignal,
+      markFailed: async () => {
+        await markRunFailed({
+          claimToken,
+          error: processingResult.error,
+          run,
+        });
+      },
+      returnToQueue: async () => {
+        await returnInterruptedRunToQueue({ claimToken, run });
+      },
     });
     throw processingResult.error;
   }
@@ -1032,6 +1099,39 @@ const markRunFailed = async ({
       and(
         eq(documentProcessingRuns.id, run.id),
         eq(documentProcessingRuns.status, "running"),
+        eq(documentProcessingRuns.claimedBy, claimToken),
+      ),
+    );
+};
+
+const returnInterruptedRunToQueue = async ({
+  claimToken,
+  run,
+}: {
+  claimToken: string;
+  run: typeof documentProcessingRuns.$inferSelect;
+}): Promise<void> => {
+  await rootDb
+    .update(documentProcessingRuns)
+    .set({
+      attemptCount: Math.max(0, run.attemptCount - 1),
+      claimedAt: null,
+      claimedBy: null,
+      errorAt: null,
+      errorCode: null,
+      finishedAt: null,
+      nextAttemptAt: null,
+      progressCompleted: 0,
+      progressTotal: null,
+      startedAt: null,
+      status: "queued",
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(documentProcessingRuns.id, run.id),
+        eq(documentProcessingRuns.status, "running"),
+        eq(documentProcessingRuns.attemptCount, run.attemptCount),
         eq(documentProcessingRuns.claimedBy, claimToken),
       ),
     );
@@ -2137,7 +2237,19 @@ const reconcileDocumentProcessing = async ({
   }
 };
 
+export const abortDocumentProcessingWorkerBeforeClose = async ({
+  abortLifecycle,
+  closeWorker,
+}: {
+  abortLifecycle: () => void;
+  closeWorker: () => Promise<void>;
+}): Promise<void> => {
+  abortLifecycle();
+  await closeWorker();
+};
+
 export const initDocumentProcessingWorker = () => {
+  const lifecycle = new AbortController();
   if (!isDocumentOcrProviderConfigured()) {
     logger.info("document_processing.worker_not_started", {
       reason: "ocr_provider_not_configured",
@@ -2151,6 +2263,7 @@ export const initDocumentProcessingWorker = () => {
     );
     return {
       close: async (): Promise<void> => {
+        lifecycle.abort();
         clearInterval(keepAliveInterval);
         const client = reconciliationRedisClient;
         reconciliationRedisClient = null;
@@ -2166,7 +2279,7 @@ export const initDocumentProcessingWorker = () => {
     DOCUMENT_PROCESSING_QUEUE_NAME,
     async (job) => {
       try {
-        await processDocumentProcessingRun(job.data.runId);
+        await processDocumentProcessingRun(job.data.runId, lifecycle.signal);
       } catch (error) {
         handleDocumentProcessingFailure({ error, job });
         throw error;
@@ -2228,8 +2341,15 @@ export const initDocumentProcessingWorker = () => {
     close: async (): Promise<void> => {
       closing = true;
       clearInterval(reconcileInterval);
-      await worker.close();
       readiness?.close();
+      await abortDocumentProcessingWorkerBeforeClose({
+        abortLifecycle: () => {
+          lifecycle.abort();
+        },
+        closeWorker: async () => {
+          await worker.close();
+        },
+      });
       reconciliationRedisClient?.close();
       reconciliationRedisClient = null;
     },

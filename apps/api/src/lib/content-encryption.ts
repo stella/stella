@@ -5,14 +5,15 @@
  *
  * When CONTENT_ENCRYPTION_KEY is absent, content is stored
  * as plaintext wrapped in a no-op envelope so the schema
- * stays consistent. The env validator (`apps/api/src/env.ts`)
+ * stays consistent. The worker env validator
+ * (`apps/api/src/env-document-processing-worker.ts`)
  * requires the key when NODE_ENV is 'production' or 'staging',
  * so this fallback only fires in local dev / tests.
  */
 
 import { hkdf } from "node:crypto";
 
-import { env } from "@/api/env";
+import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import type { SafeId } from "@/api/lib/branded-types";
 import { ConfigurationError } from "@/api/lib/errors/tagged-errors";
 
@@ -22,7 +23,7 @@ const AUTH_TAG_BYTES = 16;
 const ALGORITHM = "AES-GCM";
 
 const getMasterKey = (): Buffer | null => {
-  const hex = env.CONTENT_ENCRYPTION_KEY;
+  const hex = envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY;
   if (!hex) {
     return null;
   }

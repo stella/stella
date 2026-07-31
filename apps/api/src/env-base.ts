@@ -2,8 +2,8 @@
  * Base environment variables shared by all entrypoints
  * (API server, ingestion scripts, CLI tools).
  *
- * API-specific variables (auth, email, gotenberg, redis, etc.)
- * live in env.ts and are only validated when the API server boots.
+ * API-specific variables (auth, email, gotenberg, etc.) live in env.ts;
+ * document-processing settings live in env-document-processing-worker.ts.
  * Scripts that only need DB + S3 + observability should import
  * from here to avoid requiring the full API env.
  */

@@ -1429,6 +1429,68 @@ jobs:
         env:
           NPM_TOKEN: ""
 
+  ocr-image:
+    needs: trust-check
+    if: >-
+      needs.trust-check.outputs.trusted == 'true'
+      || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check whether OCR image inputs changed
+        id: changed
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]] \
+            || ! git diff --quiet "origin/$BASE_REF"...HEAD -- apps/ocr-service; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Docker Buildx
+        if: steps.changed.outputs.run == 'true'
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      - name: Set up uv
+        if: steps.changed.outputs.run == 'true'
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: 0.11.32
+          enable-cache: true
+          cache-dependency-glob: apps/ocr-service/uv.lock
+
+      - name: Check OCR Python sources
+        if: steps.changed.outputs.run == 'true'
+        working-directory: apps/ocr-service
+        run: |
+          uv sync --locked --only-group dev
+          uv run --no-sync ruff check .
+          uv run --no-sync ruff format --check .
+          uv run --no-sync ty check
+
+      - name: Build OCR image
+        if: steps.changed.outputs.run == 'true'
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          file: apps/ocr-service/Dockerfile
+          platforms: linux/amd64
+          push: false
+          cache-from: type=gha,scope=ocr-service
+          cache-to: type=gha,mode=max,scope=ocr-service
+
   # Narrow Windows smoke for the dev runner. Full app CI stays on Linux,
   # but this catches path and shell assumptions in the scripts package
   # before Windows contributors hit them locally.
@@ -1600,6 +1662,7 @@ jobs:
         landing-build,
         e2e,
         api-image-deps,
+        ocr-image,
         windows-scripts,
         ci-changes,
         desktop-clippy,
@@ -1620,6 +1683,7 @@ jobs:
           LANDING_RESULT: ${{ needs.landing-build.result }}
           LINT_RESULT: ${{ needs.lint.result }}
           MOBILE_RESULT: ${{ needs.mobile-build.result }}
+          OCR_IMAGE_RESULT: ${{ needs.ocr-image.result }}
           TRUSTED: ${{ needs.trust-check.outputs.trusted }}
           TRUST_RESULT: ${{ needs.trust-check.result }}
           TYPECHECK_BASELINE_RESULT: ${{ needs.typecheck-baseline.result }}
@@ -1645,6 +1709,7 @@ jobs:
                   || "$LANDING_RESULT" == "failure" || "$LANDING_RESULT" == "cancelled" \
                   || "$E2E_RESULT" == "failure" || "$E2E_RESULT" == "cancelled" \
                   || "$API_IMAGE_DEPS_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "cancelled" \
+                  || "$OCR_IMAGE_RESULT" == "failure" || "$OCR_IMAGE_RESULT" == "cancelled" \
                   || "$WINDOWS_SCRIPTS_RESULT" == "failure" || "$WINDOWS_SCRIPTS_RESULT" == "cancelled" \
                   || "$CI_CHANGES_RESULT" == "failure" || "$CI_CHANGES_RESULT" == "cancelled" \
                   || "$CHANGESET_RESULT" == "failure" || "$CHANGESET_RESULT" == "cancelled" \
@@ -1662,12 +1727,12 @@ jobs:
 
           # "cancelled" means cancel-in-progress replaced this
           # run with a newer one; the newer run is authoritative.
-          if [[ "$CI_RESULT" == "cancelled" || "$LINT_RESULT" == "cancelled" || "$TYPECHECK_RESULT" == "cancelled" || "$TYPECHECK_BASELINE_RESULT" == "cancelled" || "$WEB_RESULT" == "cancelled" || "$MOBILE_RESULT" == "cancelled" || "$LANDING_RESULT" == "cancelled" || "$E2E_RESULT" == "cancelled" || "$API_IMAGE_DEPS_RESULT" == "cancelled" || "$WINDOWS_SCRIPTS_RESULT" == "cancelled" || "$CI_CHANGES_RESULT" == "cancelled" || "$CHANGESET_RESULT" == "cancelled" || "$DESKTOP_CLIPPY_RESULT" == "cancelled" ]]; then
+          if [[ "$CI_RESULT" == "cancelled" || "$LINT_RESULT" == "cancelled" || "$TYPECHECK_RESULT" == "cancelled" || "$TYPECHECK_BASELINE_RESULT" == "cancelled" || "$WEB_RESULT" == "cancelled" || "$MOBILE_RESULT" == "cancelled" || "$LANDING_RESULT" == "cancelled" || "$E2E_RESULT" == "cancelled" || "$API_IMAGE_DEPS_RESULT" == "cancelled" || "$OCR_IMAGE_RESULT" == "cancelled" || "$WINDOWS_SCRIPTS_RESULT" == "cancelled" || "$CI_CHANGES_RESULT" == "cancelled" || "$CHANGESET_RESULT" == "cancelled" || "$DESKTOP_CLIPPY_RESULT" == "cancelled" ]]; then
             echo "CI run was superseded by a newer run (cancel-in-progress). Passing."
             exit 0
           fi
 
-          if [[ "$CI_RESULT" == "failure" || "$LINT_RESULT" == "failure" || "$TYPECHECK_RESULT" == "failure" || "$TYPECHECK_BASELINE_RESULT" == "failure" || "$WEB_RESULT" == "failure" || "$MOBILE_RESULT" == "failure" || "$LANDING_RESULT" == "failure" || "$E2E_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "failure" || "$WINDOWS_SCRIPTS_RESULT" == "failure" || "$CI_CHANGES_RESULT" == "failure" || "$CHANGESET_RESULT" == "failure" || "$DESKTOP_CLIPPY_RESULT" == "failure" ]]; then
+          if [[ "$CI_RESULT" == "failure" || "$LINT_RESULT" == "failure" || "$TYPECHECK_RESULT" == "failure" || "$TYPECHECK_BASELINE_RESULT" == "failure" || "$WEB_RESULT" == "failure" || "$MOBILE_RESULT" == "failure" || "$LANDING_RESULT" == "failure" || "$E2E_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "failure" || "$OCR_IMAGE_RESULT" == "failure" || "$WINDOWS_SCRIPTS_RESULT" == "failure" || "$CI_CHANGES_RESULT" == "failure" || "$CHANGESET_RESULT" == "failure" || "$DESKTOP_CLIPPY_RESULT" == "failure" ]]; then
             echo "::error::CI checks failed."
             exit 1
           fi
