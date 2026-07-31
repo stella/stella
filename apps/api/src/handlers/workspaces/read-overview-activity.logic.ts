@@ -51,7 +51,12 @@ export const legacyActivityCategory = (
   kind: string | null,
   workspaceTeamEvent: boolean,
 ): LegacyActivityCategory => {
-  if (resourceType === AUDIT_RESOURCE_TYPE.ENTITY && kind === "task") {
+  if (
+    kind === "task" &&
+    (resourceType === AUDIT_RESOURCE_TYPE.ENTITY ||
+      resourceType === AUDIT_RESOURCE_TYPE.ENTITY_VERSION ||
+      resourceType === AUDIT_RESOURCE_TYPE.FIELD)
+  ) {
     return "tasks";
   }
   if (

@@ -15,9 +15,7 @@ import { t } from "elysia";
 
 // eslint-disable-next-line security-guards/no-unscoped-user-query -- actor IDs come only from audit rows already scoped to this authorized organization and workspace; a membership join would erase retained attribution after account deletion.
 import { user } from "@/api/db/auth-schema";
-import { auditLogs, entityVersions, fields } from "@/api/db/schema";
-import type { entities } from "@/api/db/schema";
-import type { FieldContent } from "@/api/db/schema-validators";
+import { auditLogs, entities, entityVersions, fields } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -76,6 +74,34 @@ const legacyEntityKind = () =>
     ${auditLogs.changes} -> 'deleted' -> 'old' ->> 'kind'
   )`;
 
+const legacyEntityVersionIdText = () => sql<string>`coalesce(
+  nullif(${auditLogs.metadata} ->> 'entityVersionId', ''),
+  case
+    when ${auditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.ENTITY_VERSION}
+      then ${auditLogs.resourceId}
+    when ${auditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.FIELD}
+      then split_part(${auditLogs.resourceId}, ':', 1)
+  end
+)`;
+
+const legacyRelatedEntityKind = () => sql<string | null>`(
+  select ${entities.kind}
+  from ${entityVersions}
+  inner join ${entities}
+    on ${entities.id} = ${entityVersions.entityId}
+    and ${entities.workspaceId} = ${auditLogs.workspaceId}
+  where ${entityVersions.workspaceId} = ${auditLogs.workspaceId}
+    and ${entityVersions.id} = case
+      when ${legacyEntityVersionIdText()} ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+        then ${legacyEntityVersionIdText()}::uuid
+      else null
+    end
+  limit 1
+)`;
+
+const legacyResourceKind = () =>
+  sql<string>`coalesce(${legacyEntityKind()}, ${legacyRelatedEntityKind()})`;
+
 const legacyWorkspaceTeamEvent = () =>
   sql<boolean>`(
     ${auditLogs.changes} ? 'membersAdded'
@@ -87,22 +113,26 @@ const legacyCategoryCondition = (category: ActivityCategory): SQL => {
     case "documents":
       return (
         or(
-          inArray(auditLogs.resourceType, [
-            AUDIT_RESOURCE_TYPE.ENTITY_VERSION,
-            AUDIT_RESOURCE_TYPE.FIELD,
-            AUDIT_RESOURCE_TYPE.USER_FILE,
-          ]),
+          eq(auditLogs.resourceType, AUDIT_RESOURCE_TYPE.USER_FILE),
           and(
-            eq(auditLogs.resourceType, AUDIT_RESOURCE_TYPE.ENTITY),
-            sql`coalesce(${legacyEntityKind()}, '') <> 'task'`,
+            inArray(auditLogs.resourceType, [
+              AUDIT_RESOURCE_TYPE.ENTITY,
+              AUDIT_RESOURCE_TYPE.ENTITY_VERSION,
+              AUDIT_RESOURCE_TYPE.FIELD,
+            ]),
+            sql`coalesce(${legacyResourceKind()}, '') <> 'task'`,
           ),
         ) ?? sql`false`
       );
     case "tasks":
       return (
         and(
-          eq(auditLogs.resourceType, AUDIT_RESOURCE_TYPE.ENTITY),
-          sql`${legacyEntityKind()} = 'task'`,
+          inArray(auditLogs.resourceType, [
+            AUDIT_RESOURCE_TYPE.ENTITY,
+            AUDIT_RESOURCE_TYPE.ENTITY_VERSION,
+            AUDIT_RESOURCE_TYPE.FIELD,
+          ]),
+          sql`${legacyResourceKind()} = 'task'`,
         ) ?? sql`false`
       );
     case "matter":
@@ -254,7 +284,7 @@ const readOverviewActivity = createSafeHandler(
             createdAt: auditLogs.createdAt,
             createdAtCursor: activityCursor.cursorValue.as("created_at_cursor"),
             id: auditLogs.id,
-            legacyKind: legacyEntityKind(),
+            legacyKind: legacyResourceKind(),
             legacyWorkspaceTeamEvent: legacyWorkspaceTeamEvent(),
             performerId: auditLogs.performerId,
             performerName: auditLogs.performerName,
@@ -330,7 +360,6 @@ const readOverviewActivity = createSafeHandler(
                   and(
                     eq(entityVersions.workspaceId, workspaceId),
                     inArray(entityVersions.id, versionIds),
-                    isNull(entityVersions.deletedAt),
                   ),
                 );
         const entityIds = [
@@ -339,31 +368,39 @@ const readOverviewActivity = createSafeHandler(
             ...versionRows.map((row) => row.entityId),
           ]),
         ];
+        const entityFile = sql<EntityFile | null>`(
+          select jsonb_build_object(
+            'id', ${fields.id},
+            'propertyId', ${fields.propertyId},
+            'fileName', ${fields.content}->>'fileName',
+            'mimeType', ${fields.content}->>'mimeType',
+            'pdfFileId', ${fields.content}->>'pdfFileId'
+          )
+          from ${fields}
+          where ${fields.workspaceId} = ${entities.workspaceId}
+            and ${fields.entityVersionId} = ${entities.currentVersionId}
+            and ${fields.content}->>'type' = 'file'
+          order by ${fields.propertyId}
+          limit 1
+        )`;
         const entityRows =
           entityIds.length === 0
             ? []
-            : await tx.query.entities.findMany({
-                limit: limit + 1,
-                where: {
-                  workspaceId: { eq: workspaceId },
-                  id: { in: entityIds },
-                },
-                columns: { id: true, kind: true, name: true },
-                with: {
-                  currentVersion: {
-                    columns: {},
-                    with: {
-                      fields: {
-                        columns: {
-                          id: true,
-                          propertyId: true,
-                          content: true,
-                        },
-                      },
-                    },
-                  },
-                },
-              });
+            : await tx
+                .select({
+                  file: entityFile,
+                  id: entities.id,
+                  kind: entities.kind,
+                  name: entities.name,
+                })
+                .from(entities)
+                .where(
+                  and(
+                    eq(entities.workspaceId, workspaceId),
+                    inArray(entities.id, entityIds),
+                  ),
+                )
+                .limit(limit + 1);
         const workspace = await tx.query.workspaces.findFirst({
           where: {
             id: { eq: workspaceId },
@@ -503,34 +540,31 @@ const readOverviewActivity = createSafeHandler(
 );
 
 type EntityRow = {
+  file: EntityFile | null;
   id: string;
   kind: (typeof entities.$inferSelect)["kind"];
   name: string;
-  currentVersion: {
-    fields: {
-      id: string;
-      propertyId: string;
-      content: FieldContent;
-    }[];
-  } | null;
+};
+
+type EntityFile = {
+  fileName: string;
+  id: string;
+  mimeType: string;
+  pdfFileId: string | null;
+  propertyId: string;
 };
 
 const toEntityTarget = (entity: EntityRow): EntityTarget => {
-  const fileField = entity.currentVersion?.fields.find(
-    (field) => field.content.type === "file",
-  );
-  const fileContent =
-    fileField?.content.type === "file" ? fileField.content : null;
   return {
     deleted: false,
     entityId: entity.id,
-    fieldId: fileField?.id ?? null,
+    fieldId: entity.file?.id ?? null,
     id: entity.id,
     kind: entity.kind === "task" ? "task" : "document",
-    mimeType: fileContent?.mimeType ?? null,
-    name: fileContent?.fileName ?? entity.name,
-    pdfFileId: fileContent?.pdfFileId ?? null,
-    propertyId: fileField?.propertyId ?? null,
+    mimeType: entity.file?.mimeType ?? null,
+    name: entity.file?.fileName ?? entity.name,
+    pdfFileId: entity.file?.pdfFileId ?? null,
+    propertyId: entity.file?.propertyId ?? null,
   };
 };
 

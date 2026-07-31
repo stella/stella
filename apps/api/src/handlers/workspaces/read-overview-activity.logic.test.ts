@@ -48,4 +48,13 @@ describe("legacyActivityCategory", () => {
       legacyActivityCategory(AUDIT_RESOURCE_TYPE.WORKSPACE, null, false),
     ).toBe("matter");
   });
+
+  test("keeps legacy task version and field events in Tasks", () => {
+    expect(
+      legacyActivityCategory(AUDIT_RESOURCE_TYPE.ENTITY_VERSION, "task", false),
+    ).toBe("tasks");
+    expect(
+      legacyActivityCategory(AUDIT_RESOURCE_TYPE.FIELD, "task", false),
+    ).toBe("tasks");
+  });
 });
