@@ -97,12 +97,15 @@ import { detached } from "@/api/lib/detached";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
 import { initEntityDeletionCleanupWorker } from "@/api/lib/entity-deletion-cleanup-queue";
 import { httpError } from "@/api/lib/errors/http-error";
-import { errorTag } from "@/api/lib/errors/utils";
+import { errorFingerprint, errorTag } from "@/api/lib/errors/utils";
 import { initFileDerivativeWorker } from "@/api/lib/file-derivative-queue";
 import { initFlowRunWorker } from "@/api/lib/flows/flow-run-worker";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { FORMATTING_LOCALE_HEADER } from "@/api/lib/locale";
-import { logger } from "@/api/lib/observability/logger";
+import {
+  logger,
+  type RequestErrorFingerprint,
+} from "@/api/lib/observability/logger";
 import {
   getRequestContext,
   getRequestId,
@@ -175,6 +178,25 @@ const shouldLogRequest = (path: string): boolean => path !== HEALTH_PATH;
 
 const getRouteName = (route: string | undefined): string =>
   route ?? "unmatched";
+
+const buildRequestErrorFingerprint = (
+  error: unknown,
+): RequestErrorFingerprint => {
+  const fingerprint = errorFingerprint(error);
+  return {
+    errorCauseFrame: fingerprint["error.cause.frame"],
+    errorClass: fingerprint["error.class"],
+    errorCode: fingerprint["error.code"],
+    errorFrame: fingerprint["error.frame"],
+    pgCode: fingerprint["error.cause.pg_code"],
+    pgColumn: fingerprint["error.cause.pg_column"],
+    pgConstraint: fingerprint["error.cause.pg_constraint"],
+    pgRoutine: fingerprint["error.cause.pg_routine"],
+    pgSchema: fingerprint["error.cause.pg_schema"],
+    pgSeverity: fingerprint["error.cause.pg_severity"],
+    pgTable: fingerprint["error.cause.pg_table"],
+  };
+};
 
 const buildRequestLogDetails = ({
   durationMs,
@@ -305,6 +327,7 @@ const api = new Elysia()
       if (statusCode >= 500) {
         logger.request({
           ...details,
+          errorFingerprint: buildRequestErrorFingerprint(error),
           message: "request.failed",
           severity: "ERROR",
         });

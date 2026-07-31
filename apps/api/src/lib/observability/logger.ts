@@ -20,8 +20,23 @@ type LoggerAttributeValue = boolean | number | string;
 
 export type LoggerAttributes = Record<string, LoggerAttributeValue>;
 
+export type RequestErrorFingerprint = {
+  errorCauseFrame?: string | undefined;
+  errorClass?: string | undefined;
+  errorCode?: string | undefined;
+  errorFrame?: string | undefined;
+  pgCode?: string | undefined;
+  pgColumn?: string | undefined;
+  pgConstraint?: string | undefined;
+  pgRoutine?: string | undefined;
+  pgSchema?: string | undefined;
+  pgSeverity?: string | undefined;
+  pgTable?: string | undefined;
+};
+
 type RequestLogOptions = {
   durationMs: number;
+  errorFingerprint?: RequestErrorFingerprint | undefined;
   elysiaCode?: string | undefined;
   errorType?: string | undefined;
   message: "request.completed" | "request.failed";
@@ -111,6 +126,7 @@ const REQUEST_SEVERITY = {
 const emitRequest = ({
   durationMs,
   elysiaCode,
+  errorFingerprint,
   errorType,
   message,
   method,
@@ -126,6 +142,39 @@ const emitRequest = ({
     "request.duration_ms": durationMs,
     ...(elysiaCode === undefined ? {} : { "http.elysia_code": elysiaCode }),
     ...(errorType === undefined ? {} : { "error.type": errorType }),
+    ...(errorFingerprint?.errorCauseFrame === undefined
+      ? {}
+      : { "error.cause.frame": errorFingerprint.errorCauseFrame }),
+    ...(errorFingerprint?.errorClass === undefined
+      ? {}
+      : { "error.class": errorFingerprint.errorClass }),
+    ...(errorFingerprint?.errorCode === undefined
+      ? {}
+      : { "error.code": errorFingerprint.errorCode }),
+    ...(errorFingerprint?.errorFrame === undefined
+      ? {}
+      : { "error.frame": errorFingerprint.errorFrame }),
+    ...(errorFingerprint?.pgCode === undefined
+      ? {}
+      : { "error.cause.pg_code": errorFingerprint.pgCode }),
+    ...(errorFingerprint?.pgColumn === undefined
+      ? {}
+      : { "error.cause.pg_column": errorFingerprint.pgColumn }),
+    ...(errorFingerprint?.pgConstraint === undefined
+      ? {}
+      : { "error.cause.pg_constraint": errorFingerprint.pgConstraint }),
+    ...(errorFingerprint?.pgRoutine === undefined
+      ? {}
+      : { "error.cause.pg_routine": errorFingerprint.pgRoutine }),
+    ...(errorFingerprint?.pgSchema === undefined
+      ? {}
+      : { "error.cause.pg_schema": errorFingerprint.pgSchema }),
+    ...(errorFingerprint?.pgSeverity === undefined
+      ? {}
+      : { "error.cause.pg_severity": errorFingerprint.pgSeverity }),
+    ...(errorFingerprint?.pgTable === undefined
+      ? {}
+      : { "error.cause.pg_table": errorFingerprint.pgTable }),
     ...(requestId === undefined ? {} : { "request.id": requestId }),
   };
 
