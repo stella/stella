@@ -541,6 +541,9 @@ const processDecisionAttempt = async ({
         .set({
           sourceObservedAt: observedAt,
           sourceObservationHash: result.rawHash,
+          // Drizzle applies the schema's on-update value unless this column is
+          // explicit. A watermark-only replay is not a content modification.
+          updatedAt: sql`${caseLawDecisions.updatedAt}`,
         })
         .where(
           and(
@@ -1159,13 +1162,15 @@ export const runIngestionPipeline = async ({
       ? AbortSignal.any([signal, AbortSignal.timeout(pageTimeout)])
       : AbortSignal.timeout(pageTimeout);
     recentCursors.add(cursor);
+    // The request-start order represents source observation order: a slower
+    // older response must not become newer merely because it arrived later.
+    const observedAt = new Date();
     // oxlint-disable-next-line no-await-in-loop -- sequential paginated crawl (each page's cursor depends on the previous page)
     const pageResult = await adapter.fetchPage(
       cursor,
       source.config ?? {},
       pageSignal,
     );
-    const observedAt = new Date();
 
     if (Result.isError(pageResult)) {
       captureError(pageResult.error, {

@@ -168,6 +168,10 @@ if (!databaseUrl || !runPostgresTests) {
         scopedDb,
         observedAt: new Date("2026-07-31T12:02:00.000Z"),
       });
+      const [initialRow] = await db.execute(sql<{ updatedAt: Date }>`
+        SELECT updated_at AS "updatedAt" FROM case_law_decisions
+        WHERE source_id = ${sourceId} AND source_document_id = ${publisherId}
+      `);
       await processDecision({
         input: current,
         sourceId,
@@ -181,23 +185,45 @@ if (!databaseUrl || !runPostgresTests) {
         observedAt: new Date("2026-07-31T12:02:01.000Z"),
       });
 
-      const [row] = await db.execute(sql<{ court: string }>`
-        SELECT court FROM case_law_decisions
+      const [row] = await db.execute(
+        sql<{ court: string; observedAt: Date; updatedAt: Date }>`
+        SELECT court,
+               source_observed_at AS "observedAt",
+               updated_at AS "updatedAt"
+        FROM case_law_decisions
         WHERE source_id = ${sourceId} AND source_document_id = ${publisherId}
-      `);
+      `,
+      );
       expect(isRecord(row) ? row["court"] : undefined).toBe(
         "Current observation",
+      );
+      expect(isRecord(row) ? row["observedAt"] : undefined).toEqual(
+        new Date("2026-07-31T12:02:02.000Z"),
+      );
+      expect(isRecord(row) ? row["updatedAt"] : undefined).toEqual(
+        isRecord(initialRow) ? initialRow["updatedAt"] : undefined,
       );
     });
 
     test("equal observation timestamps converge by source hash", async () => {
       const publisherId = "observed-tie";
-      const lower = decisionAt("Lower hash", publisherId);
-      const higher = decisionAt("Higher hash", publisherId);
+      const greaterHash = decisionAt("Lower hash", publisherId);
+      const lesserHash = decisionAt("Higher hash", publisherId);
       const observedAt = new Date("2026-07-31T12:01:00.000Z");
+      expect(greaterHash.rawHash > lesserHash.rawHash).toBe(true);
 
-      await processDecision({ input: lower, sourceId, scopedDb, observedAt });
-      await processDecision({ input: higher, sourceId, scopedDb, observedAt });
+      await processDecision({
+        input: greaterHash,
+        sourceId,
+        scopedDb,
+        observedAt,
+      });
+      await processDecision({
+        input: lesserHash,
+        sourceId,
+        scopedDb,
+        observedAt,
+      });
 
       const [row] = await db.execute(sql<{ court: string }>`
         SELECT court FROM case_law_decisions
