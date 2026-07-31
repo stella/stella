@@ -179,6 +179,14 @@ const BENIGN: readonly RegExp[] = [
   // Polish procurement-tribunal rulings (KIO/UZP): quasi-judicial, not a
   // court source the corpus ingests, so never a resolvable citation.
   /\bKIO ?\/? ?UZP\b/u,
+  // A case-number prefix ("sp. zn.", "sen. zn.", "sygn.[ akt]", "č. j.")
+  // with no digit anywhere in the captured tail is never a real citation:
+  // every actual docket carries a number. Covers Polish anonymization
+  // placeholders, where the detector's own trailing-paren exclusion
+  // truncates the candidate right before the redaction ("sygn. akt II Ca"
+  // from "sygn. akt II Ca (…)"), and self-references such as "sygn. j.w."
+  // ("as above").
+  /^(?:sp\.\s{0,3}zn\.|sen\.\s{0,3}zn\.|sygn\.(?:\s{1,3}akt)?|[čc]\.\s{0,3}j\.:?)[^\d]{0,45}$/iu,
 ];
 
 const isBenign = (candidate: string): boolean =>
