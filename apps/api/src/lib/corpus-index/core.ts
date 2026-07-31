@@ -772,6 +772,22 @@ export const createCorpusIndexer = <
       // keying.
       const groupFailures: CorpusJobInput<TBrand>[] = [];
       try {
+        // A new generation may not have an index for this jurisdiction yet.
+        // Create it before replay cleanup so an expected empty target does not
+        // turn the delete into a terminal 404.
+        // oxlint-disable-next-line no-await-in-loop -- per-jurisdiction indexes are ensured/ingested sequentially to avoid overwhelming the search backend
+        const ensured = await ensureIndex({
+          ...(options.type === "generation-rebuild"
+            ? { beforeRemoteEffect: options.beforeRemoteEffect }
+            : {}),
+          indexId,
+        });
+        if (ensured.isErr()) {
+          firstError ??= ensured.error;
+          groupFailures.push(...failedIndexJobs(group, ensured.error));
+          continue;
+        }
+
         // Ingest appends; it never replaces. Before re-ingesting, delete the
         // previously indexed copies from wherever they live (the same index for
         // a content refresh, another jurisdiction index for a corrected
@@ -819,19 +835,6 @@ export const createCorpusIndexer = <
         }
         if (staleError) {
           firstError ??= staleError;
-          continue;
-        }
-
-        // oxlint-disable-next-line no-await-in-loop -- per-jurisdiction indexes are ensured/ingested sequentially to avoid overwhelming the search backend
-        const ensured = await ensureIndex({
-          ...(options.type === "generation-rebuild"
-            ? { beforeRemoteEffect: options.beforeRemoteEffect }
-            : {}),
-          indexId,
-        });
-        if (ensured.isErr()) {
-          firstError ??= ensured.error;
-          groupFailures.push(...failedIndexJobs(group, ensured.error));
           continue;
         }
 

@@ -12,8 +12,7 @@ CREATE TABLE IF NOT EXISTS "case_law_corpus_index_backfills" (
   "updated_at" timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT "case_law_corpus_index_backfills_status_values" CHECK ("status" IN ('running','complete')),
   CONSTRAINT "case_law_corpus_index_backfills_cursor_pair" CHECK (("cursor_created_at" IS NULL) = ("cursor_id" IS NULL)),
-  CONSTRAINT "case_law_corpus_index_backfills_lease_pair" CHECK (("lease_token" IS NULL) = ("lease_expires_at" IS NULL)),
-  CONSTRAINT "case_law_corpus_index_backfills_completed_unleased" CHECK ("status" <> 'complete' OR "lease_token" IS NULL)
+  CONSTRAINT "case_law_corpus_index_backfills_lease_pair" CHECK (("lease_token" IS NULL) = ("lease_expires_at" IS NULL))
 );--> statement-breakpoint
 ALTER TABLE "case_law_corpus_index_backfills" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 DO $policy$

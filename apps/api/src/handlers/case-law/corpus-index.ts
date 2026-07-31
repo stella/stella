@@ -1,15 +1,5 @@
 import { panic } from "better-result";
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  isNotNull,
-  isNull,
-  lte,
-  or,
-  sql,
-} from "drizzle-orm";
+import { and, asc, eq, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -364,50 +354,7 @@ const indexer = createCorpusIndexer<"caseLawDecision", IndexableRow>(
 );
 
 export const loadDocsForBatch = indexer.loadDocsForBatch;
-
-type IncrementalBackfillDependencies = {
-  backfill: typeof indexer.backfill;
-  newestRebuildGeneration: (
-    scopedDb: Parameters<typeof indexer.backfill>[0],
-  ) => Promise<string | null>;
-};
-
-/**
- * Prevents an older incremental writer from racing a newer generation build.
- * Once a rebuild checkpoint exists, only that generation may advance corpus
- * index pointers; compare-and-set handles a batch that was already in flight.
- */
-export const createCaseLawIncrementalBackfill =
-  ({ backfill, newestRebuildGeneration }: IncrementalBackfillDependencies) =>
-  async (
-    scopedDb: Parameters<typeof indexer.backfill>[0],
-    batchSize: number,
-    generation: string,
-    options?: Parameters<typeof indexer.backfill>[3],
-  ): Promise<number> => {
-    const newestGeneration = await newestRebuildGeneration(scopedDb);
-    if (newestGeneration !== null && newestGeneration !== generation) {
-      throw new CorpusIndexError({
-        message: `incremental generation ${generation} is behind rebuild ${newestGeneration}`,
-      });
-    }
-    return await backfill(scopedDb, batchSize, generation, options);
-  };
-
-export const backfillCorpusIndex = createCaseLawIncrementalBackfill({
-  backfill: indexer.backfill,
-  newestRebuildGeneration: async (scopedDb) =>
-    await scopedDb(
-      async (tx) =>
-        (
-          await tx
-            .select({ generation: caseLawCorpusIndexBackfills.generation })
-            .from(caseLawCorpusIndexBackfills)
-            .orderBy(desc(caseLawCorpusIndexBackfills.snapshotAt))
-            .limit(1)
-        ).at(0)?.generation ?? null,
-    ),
-});
+export const backfillCorpusIndex = indexer.backfill;
 
 const BACKFILL_STATUS = {
   ADVANCED: "advanced",
@@ -464,6 +411,15 @@ const sameCursor = ({
 const nextLeaseExpiry = () =>
   sql<Date>`now() + (${BACKFILL_LEASE_MS} * interval '1 millisecond')`;
 
+const hasNoNewerRebuild = ({
+  checkpoint,
+}: {
+  checkpoint: GenerationBackfillCheckpoint;
+}) => sql`NOT EXISTS (
+  SELECT 1 FROM ${caseLawCorpusIndexBackfills} AS newer
+  WHERE (newer.snapshot_at, newer.generation) > (${checkpoint.snapshotAt}, ${checkpoint.generation})
+)`;
+
 const ownsUnexpiredLease = ({
   checkpoint,
   leaseToken,
@@ -477,6 +433,7 @@ const ownsUnexpiredLease = ({
       CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.RUNNING,
     ),
     sameCursor({ checkpoint }),
+    hasNoNewerRebuild({ checkpoint }),
     eq(caseLawCorpusIndexBackfills.leaseToken, leaseToken),
     sql`${caseLawCorpusIndexBackfills.leaseExpiresAt} > now()`,
   );
@@ -589,7 +546,57 @@ export const createCaseLawGenerationBackfill =
       return concurrent;
     });
     if (checkpoint.status === CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.COMPLETE) {
-      return await reconcilePending();
+      const reconciliationToken = newLeaseToken();
+      const claimedReconciliation = await scopedDb(async (tx) => {
+        // audit: skip — completed rebuild reconciliation uses the durable lease for mutual exclusion
+        return (
+          await tx
+            .update(caseLawCorpusIndexBackfills)
+            .set({
+              leaseExpiresAt: nextLeaseExpiry(),
+              leaseToken: reconciliationToken,
+            })
+            .where(
+              and(
+                eq(caseLawCorpusIndexBackfills.generation, generation),
+                eq(
+                  caseLawCorpusIndexBackfills.status,
+                  CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.COMPLETE,
+                ),
+                sameCursor({ checkpoint }),
+                hasNoNewerRebuild({ checkpoint }),
+                or(
+                  isNull(caseLawCorpusIndexBackfills.leaseExpiresAt),
+                  lte(caseLawCorpusIndexBackfills.leaseExpiresAt, sql`now()`),
+                ),
+              ),
+            )
+            .returning({ generation: caseLawCorpusIndexBackfills.generation })
+        ).at(0);
+      });
+      if (!claimedReconciliation) {
+        return { indexed: 0, status: BACKFILL_STATUS.BUSY };
+      }
+      try {
+        return await reconcilePending();
+      } finally {
+        await scopedDb(async (tx) => {
+          // audit: skip — release only this completed reconciliation owner
+          await tx
+            .update(caseLawCorpusIndexBackfills)
+            .set({ leaseExpiresAt: null, leaseToken: null })
+            .where(
+              and(
+                eq(caseLawCorpusIndexBackfills.generation, generation),
+                eq(
+                  caseLawCorpusIndexBackfills.status,
+                  CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.COMPLETE,
+                ),
+                eq(caseLawCorpusIndexBackfills.leaseToken, reconciliationToken),
+              ),
+            );
+        });
+      }
     }
 
     const leaseToken = newLeaseToken();
@@ -606,6 +613,7 @@ export const createCaseLawGenerationBackfill =
               CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.RUNNING,
             ),
             sameCursor({ checkpoint }),
+            hasNoNewerRebuild({ checkpoint }),
             or(
               isNull(caseLawCorpusIndexBackfills.leaseExpiresAt),
               lte(caseLawCorpusIndexBackfills.leaseExpiresAt, sql`now()`),

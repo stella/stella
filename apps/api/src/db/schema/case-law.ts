@@ -678,12 +678,6 @@ export const caseLawCorpusIndexBackfills = p.pgTable(
       "case_law_corpus_index_backfills_lease_pair",
       sql`(${t.leaseToken} IS NULL) = (${t.leaseExpiresAt} IS NULL)`,
     ),
-    p.check(
-      "case_law_corpus_index_backfills_completed_unleased",
-      sql`${t.status} <> ${sql.raw(
-        `'${CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.COMPLETE}'`,
-      )} OR ${t.leaseToken} IS NULL`,
-    ),
     ...globalCaseLawPolicies(),
   ],
 );
