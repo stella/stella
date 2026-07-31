@@ -20,6 +20,7 @@ import { organization, user } from "@/api/db/auth-schema";
 import { entities, extractedContent, workspaces } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
+import { mockS3Module } from "@/api/tests/helpers/mock-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -41,9 +42,14 @@ void mock.module("@/api/lib/flows/flow-run-events", () => ({
 void mock.module("@/api/lib/tanstack-ai-generate", () => ({
   generateTanStackTextForRole: mock(async () => await Promise.resolve("")),
 }));
-void mock.module("@/api/lib/s3", () => ({
-  getS3: () => ({ write: mock(async () => {}), delete: mock(async () => {}) }),
-}));
+void mock.module("@/api/lib/s3", () =>
+  mockS3Module({
+    getS3: () => ({
+      write: mock(async () => {}),
+      delete: mock(async () => {}),
+    }),
+  }),
+);
 void mock.module("@/api/lib/search/process-extraction", () => ({
   processExtraction: mock(async () => {}),
 }));

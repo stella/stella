@@ -7,6 +7,7 @@ import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { mockS3Module } from "@/api/tests/helpers/mock-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -24,10 +25,12 @@ const s3DeleteMock = mock(async () => undefined);
 
 // Replacing the module wholesale means every export something in the graph
 // reaches has to be present here, not only the ones this test asserts on.
-void mock.module("@/api/lib/s3", () => ({
-  getS3: () => ({ delete: s3DeleteMock, file: fileMock, write: writeMock }),
-  deleteS3ObjectWithSignal: s3DeleteMock,
-}));
+void mock.module("@/api/lib/s3", () =>
+  mockS3Module({
+    getS3: () => ({ delete: s3DeleteMock, file: fileMock, write: writeMock }),
+    deleteS3ObjectWithSignal: s3DeleteMock,
+  }),
+);
 
 const processExtractionMock = mock(async () => {});
 void mock.module("@/api/lib/search/process-extraction", () => ({

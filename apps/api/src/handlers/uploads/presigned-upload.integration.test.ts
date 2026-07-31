@@ -12,6 +12,7 @@ import { eq, inArray } from "drizzle-orm";
 import { pendingUploads } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { createSafeId, toSafeId, type SafeId } from "@/api/lib/branded-types";
+import { mockS3Module } from "@/api/tests/helpers/mock-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -22,17 +23,16 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 const deleteObjectMock = mock(async () => undefined);
 
-const realS3 = await import("@/api/lib/s3");
-
-void mock.module("@/api/lib/s3", () => ({
-  ...realS3,
-  getS3: () => ({
-    delete: deleteObjectMock,
-    file: () => ({
-      arrayBuffer: async () => new ArrayBuffer(0),
+void mock.module("@/api/lib/s3", () =>
+  mockS3Module({
+    getS3: () => ({
+      delete: deleteObjectMock,
+      file: () => ({
+        arrayBuffer: async () => new ArrayBuffer(0),
+      }),
     }),
   }),
-}));
+);
 
 const { default: abortUpload } = await import("./delete");
 const { default: finalizeUpload } = await import("./update");

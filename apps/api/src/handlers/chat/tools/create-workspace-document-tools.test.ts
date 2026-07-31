@@ -11,6 +11,7 @@ import {
 } from "@/api/db/schema";
 import { createChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import { toSafeId } from "@/api/lib/branded-types";
+import { mockS3Module } from "@/api/tests/helpers/mock-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -20,14 +21,16 @@ const processExtractionMock = mock(async () => {});
 const enqueueImageThumbnailOrMarkFailedMock = mock(async () => {});
 const enqueuePdfDerivativeOrMarkFailedMock = mock(async () => {});
 
-void mock.module("@/api/lib/s3", () => ({
-  deleteS3ObjectWithSignal: s3DeleteMock,
-  getS3: () => ({
-    write: s3WriteMock,
-    delete: s3DeleteMock,
+void mock.module("@/api/lib/s3", () =>
+  mockS3Module({
+    deleteS3ObjectWithSignal: s3DeleteMock,
+    getS3: () => ({
+      write: s3WriteMock,
+      delete: s3DeleteMock,
+    }),
+    putS3ObjectWithSignal: s3WriteMock,
   }),
-  putS3ObjectWithSignal: s3WriteMock,
-}));
+);
 
 void mock.module("@/api/lib/search/process-extraction", () => ({
   processExtraction: processExtractionMock,

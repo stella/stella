@@ -36,6 +36,7 @@ import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { FlowStep, FlowTrigger } from "@/api/lib/flows/flow-types";
+import { mockS3Module } from "@/api/tests/helpers/mock-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -99,11 +100,13 @@ void mock.module("@/api/lib/tanstack-ai-generate", () => ({
 
 const s3WriteMock = mock(async () => {});
 const s3DeleteMock = mock(async () => {});
-void mock.module("@/api/lib/s3", () => ({
-  deleteS3ObjectWithSignal: s3DeleteMock,
-  getS3: () => ({ write: s3WriteMock, delete: s3DeleteMock }),
-  putS3ObjectWithSignal: s3WriteMock,
-}));
+void mock.module("@/api/lib/s3", () =>
+  mockS3Module({
+    deleteS3ObjectWithSignal: s3DeleteMock,
+    getS3: () => ({ write: s3WriteMock, delete: s3DeleteMock }),
+    putS3ObjectWithSignal: s3WriteMock,
+  }),
+);
 
 void mock.module("@/api/lib/search/process-extraction", () => ({
   processExtraction: mock(async () => {}),

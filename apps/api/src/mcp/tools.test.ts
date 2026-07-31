@@ -9,6 +9,7 @@ import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { encodePaginationCursor } from "@/api/lib/pagination";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { mockS3Module } from "@/api/tests/helpers/mock-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -55,13 +56,15 @@ const makeDocxBytes = async () => {
 const s3ArrayBufferMock = mock(async () => await makeDocxBytes());
 const s3FileMock = mock(() => ({ arrayBuffer: s3ArrayBufferMock }));
 
-void mock.module("@/api/lib/s3", () => ({
-  getS3: () => ({ file: s3FileMock }),
-  resolveS3Credentials: async () => ({
-    accessKeyId: "test-access-key",
-    secretAccessKey: "test-secret-key",
+void mock.module("@/api/lib/s3", () =>
+  mockS3Module({
+    getS3: () => ({ file: s3FileMock }),
+    resolveS3Credentials: async () => ({
+      accessKeyId: "test-access-key",
+      secretAccessKey: "test-secret-key",
+    }),
   }),
-}));
+);
 
 // Default passthrough: just await the wrapped operation, so every existing
 // test exercises the real S3-read-and-convert logic unchanged. Individual

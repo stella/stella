@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { DOC_MIME_TYPE, DOCX_MIME_TYPE } from "@/api/mime-types";
+import { mockS3Module } from "@/api/tests/helpers/mock-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -50,17 +51,19 @@ void mock.module("@/api/lib/content-encryption", () => ({
   decryptContent: mock(async () => "deepl-key"),
 }));
 
-void mock.module("@/api/lib/s3", () => ({
-  deleteS3ObjectWithSignal: s3DeleteMock,
-  getS3: () => ({
-    file: () => ({
-      arrayBuffer: async () => new Uint8Array([80, 75, 3, 4]).buffer,
+void mock.module("@/api/lib/s3", () =>
+  mockS3Module({
+    deleteS3ObjectWithSignal: s3DeleteMock,
+    getS3: () => ({
+      file: () => ({
+        arrayBuffer: async () => new Uint8Array([80, 75, 3, 4]).buffer,
+      }),
+      write: s3WriteMock,
+      delete: s3DeleteMock,
     }),
-    write: s3WriteMock,
-    delete: s3DeleteMock,
+    putS3ObjectWithSignal: s3WriteMock,
   }),
-  putS3ObjectWithSignal: s3WriteMock,
-}));
+);
 
 void mock.module("@/api/lib/file-scan/scan", () => ({
   getScanWarnings: () => null,

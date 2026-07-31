@@ -5,6 +5,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { buildLineDiffSegments } from "@/api/lib/text-diff";
+import { mockS3Module } from "@/api/tests/helpers/mock-s3";
 
 // ── In-memory S3 ─────────────────────────────────────────
 // The diff endpoint loads version snapshots straight from S3;
@@ -14,25 +15,25 @@ const s3Objects = new Map<string, Buffer>();
 
 // Spread the real module so other exports stay intact for
 // transitive importers; only `getS3` is replaced.
-const realS3 = await import("@/api/lib/s3");
 
-void mock.module("@/api/lib/s3", () => ({
-  ...realS3,
-  getS3: () => ({
-    file: (key: string) => ({
-      arrayBuffer: async () => {
-        const buf = s3Objects.get(key);
-        if (!buf) {
-          throw new Error(`Missing S3 object: ${key}`);
-        }
-        return buf.buffer.slice(
-          buf.byteOffset,
-          buf.byteOffset + buf.byteLength,
-        );
-      },
+void mock.module("@/api/lib/s3", () =>
+  mockS3Module({
+    getS3: () => ({
+      file: (key: string) => ({
+        arrayBuffer: async () => {
+          const buf = s3Objects.get(key);
+          if (!buf) {
+            throw new Error(`Missing S3 object: ${key}`);
+          }
+          return buf.buffer.slice(
+            buf.byteOffset,
+            buf.byteOffset + buf.byteLength,
+          );
+        },
+      }),
     }),
   }),
-}));
+);
 
 const { loadTemplateVersionDiffSources } = await import("./versions");
 

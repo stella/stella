@@ -5,6 +5,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { toSafeId } from "@/api/lib/branded-types";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
+import { mockS3Module } from "@/api/tests/helpers/mock-s3";
 
 // `processExtraction` reads through the `rootDb` module-level singleton
 // directly (no injected `safeDb`), so the query call is captured by mocking
@@ -74,7 +75,7 @@ void mock.module("@/api/lib/content-encryption", () => ({
 void mock.module("@/api/lib/document-processing-automatic-request", () => ({
   requestAutomaticDocumentOcr: requestAutomaticDocumentOcrMock,
 }));
-void mock.module("@/api/lib/s3", () => ({ getS3: getS3Mock }));
+void mock.module("@/api/lib/s3", () => mockS3Module({ getS3: getS3Mock }));
 void mock.module("@/api/lib/search/extract-content", () => ({
   extractFileText: extractFileTextMock,
   resolveExtractionMimeType: ({ mimeType }: { mimeType: string }) => mimeType,

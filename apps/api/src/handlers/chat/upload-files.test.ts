@@ -17,6 +17,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { toDataUrl } from "@/api/lib/data-url";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
+import { mockS3Module } from "@/api/tests/helpers/mock-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const fileBytes = new TextEncoder().encode("Jan Novak,Acme");
@@ -56,10 +57,12 @@ const writeMock = mock(async () => undefined);
 const s3DeleteMock = mock(async () => undefined);
 const workspaceId = toSafeId<"workspace">("workspace_1");
 
-void mock.module("@/api/lib/s3", () => ({
-  getS3: () => ({ delete: s3DeleteMock, file: fileMock, write: writeMock }),
-  deleteS3ObjectWithSignal: s3DeleteMock,
-}));
+void mock.module("@/api/lib/s3", () =>
+  mockS3Module({
+    getS3: () => ({ delete: s3DeleteMock, file: fileMock, write: writeMock }),
+    deleteS3ObjectWithSignal: s3DeleteMock,
+  }),
+);
 
 const {
   canHydrateFilePartAsPlainText,

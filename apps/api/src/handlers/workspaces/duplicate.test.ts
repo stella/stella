@@ -16,6 +16,7 @@ import type { FieldContent, PropertyContent } from "@/api/db/schema-validators";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { mockS3Module } from "@/api/tests/helpers/mock-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -23,14 +24,16 @@ const s3FileMock = mock((key: string) => ({ key }));
 const s3WriteMock = mock(async () => undefined);
 const s3DeleteMock = mock(async () => undefined);
 
-void mock.module("@/api/lib/s3", () => ({
-  getS3: () => ({
-    delete: s3DeleteMock,
-    file: s3FileMock,
-    write: s3WriteMock,
+void mock.module("@/api/lib/s3", () =>
+  mockS3Module({
+    getS3: () => ({
+      delete: s3DeleteMock,
+      file: s3FileMock,
+      write: s3WriteMock,
+    }),
+    deleteS3ObjectWithSignal: s3DeleteMock,
   }),
-  deleteS3ObjectWithSignal: s3DeleteMock,
-}));
+);
 
 const processExtractionMock = mock(async () => undefined);
 void mock.module("@/api/lib/search/process-extraction", () => ({

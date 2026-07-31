@@ -11,6 +11,7 @@ import type { FieldContent } from "@/api/db/schema-validators";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { mockS3Module } from "@/api/tests/helpers/mock-s3";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 const processExtractionMock = mock(async () => {});
@@ -23,10 +24,12 @@ const fileMock = mock(() => ({}));
 const writeMock = mock(async () => undefined);
 const s3DeleteMock = mock(async () => undefined);
 
-void mock.module("@/api/lib/s3", () => ({
-  getS3: () => ({ delete: s3DeleteMock, file: fileMock, write: writeMock }),
-  deleteS3ObjectWithSignal: s3DeleteMock,
-}));
+void mock.module("@/api/lib/s3", () =>
+  mockS3Module({
+    getS3: () => ({ delete: s3DeleteMock, file: fileMock, write: writeMock }),
+    deleteS3ObjectWithSignal: s3DeleteMock,
+  }),
+);
 
 const { default: duplicateEntity } = await import("./duplicate");
 

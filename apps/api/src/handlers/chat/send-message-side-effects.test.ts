@@ -7,16 +7,17 @@ import type { ChatThreadState } from "@/api/handlers/chat/send-message-thread";
 import type { UploadedChatFile } from "@/api/handlers/chat/upload-files";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import { mockS3Module } from "@/api/tests/helpers/mock-s3";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 const s3Delete = mock(async () => undefined);
-const realS3 = await import("@/api/lib/s3");
 
-void mock.module("@/api/lib/s3", () => ({
-  ...realS3,
-  deleteS3ObjectWithSignal: s3Delete,
-  getS3: () => ({ delete: s3Delete }),
-}));
+void mock.module("@/api/lib/s3", () =>
+  mockS3Module({
+    deleteS3ObjectWithSignal: s3Delete,
+    getS3: () => ({ delete: s3Delete }),
+  }),
+);
 
 const { rollbackUnpersistedChatSideEffects } =
   await import("./send-message-side-effects");

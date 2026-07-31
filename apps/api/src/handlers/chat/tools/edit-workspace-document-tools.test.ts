@@ -9,6 +9,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { ScanResult } from "@/api/lib/file-scan/types";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
+import { mockS3Module } from "@/api/tests/helpers/mock-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -24,16 +25,18 @@ const broadcastMock = mock(() => {});
 let fileScanResult: ScanResult = { verdict: "pass", findings: [] };
 const scanFileMock = mock(async () => Result.ok(fileScanResult));
 
-void mock.module("@/api/lib/s3", () => ({
-  getS3: () => ({
-    write: s3WriteMock,
-    delete: s3DeleteMock,
-    file: (key: string) => {
-      s3ReadKeys.push(key);
-      return { arrayBuffer: async () => s3FileBuffer };
-    },
+void mock.module("@/api/lib/s3", () =>
+  mockS3Module({
+    getS3: () => ({
+      write: s3WriteMock,
+      delete: s3DeleteMock,
+      file: (key: string) => {
+        s3ReadKeys.push(key);
+        return { arrayBuffer: async () => s3FileBuffer };
+      },
+    }),
   }),
-}));
+);
 void mock.module("@/api/lib/search/process-extraction", () => ({
   processExtraction: processExtractionMock,
 }));
