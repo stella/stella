@@ -32,6 +32,7 @@ export type EntityVersion = {
 type EntityVersionsData = {
   versions: EntityVersion[];
   olderCursor: string | null;
+  currentVersionId: string | null;
 };
 
 export const entityVersionsKeys = {
@@ -64,6 +65,7 @@ export const entityVersionsOptions = ({
       return {
         versions: data.versions,
         olderCursor: data.olderCursor,
+        currentVersionId: data.currentVersionId,
       };
     },
   });
@@ -83,6 +85,7 @@ export const fetchOlderVersions = async ({
   return {
     versions: data.versions,
     olderCursor: data.olderCursor,
+    currentVersionId: data.currentVersionId,
   };
 };
 
