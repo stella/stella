@@ -123,5 +123,4 @@ export const resolveActivityRunId = ({
   resourceType,
   runId,
 }: ResolveActivityRunIdOptions): string | null =>
-  runId ??
-  (resourceType === AUDIT_RESOURCE_TYPE.FLOW_RUN ? resourceId : null);
+  runId ?? (resourceType === AUDIT_RESOURCE_TYPE.FLOW_RUN ? resourceId : null);
