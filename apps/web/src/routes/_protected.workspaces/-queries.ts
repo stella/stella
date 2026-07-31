@@ -169,7 +169,7 @@ export const overviewActivityOptions = ({
     queryFn: async ({ pageParam, signal }) =>
       await readOverviewActivity({
         category,
-        cursor: pageParam || undefined,
+        ...(pageParam ? { cursor: pageParam } : {}),
         signal,
         workspaceId,
       }),

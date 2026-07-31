@@ -41,10 +41,7 @@ import {
   resolveKanbanGroupBy,
   toISODate,
 } from "@/routes/_protected.workspaces/$workspaceId/-utils";
-import {
-  overviewActivityOptions,
-  overviewOptions,
-} from "@/routes/_protected.workspaces/-queries";
+import { overviewOptions } from "@/routes/_protected.workspaces/-queries";
 
 const protectedRouteApi = getRouteApi("/_protected");
 
@@ -101,17 +98,7 @@ export const Route = createFileRoute(
         return;
       }
 
-      await Promise.all([
-        ensureRouteQueryData(queryClient, overviewOptions(workspaceId)),
-        ensureRouteInfiniteQueryData(
-          queryClient,
-          overviewActivityOptions({
-            activeOrganizationId: context.user.activeOrganizationId,
-            category: "all",
-            workspaceId,
-          }),
-        ),
-      ]);
+      await ensureRouteQueryData(queryClient, overviewOptions(workspaceId));
 
       const weekStart = getWeekStart(getFormattingLocale());
       const weekEnd = new Date(weekStart);

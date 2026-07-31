@@ -228,29 +228,25 @@ const ActivityTimeline = ({
           <p className="text-muted-foreground px-4 py-8 text-center text-sm">
             {t("workspaces.overview.activity.empty")}
           </p>
+        ) : viewMode === "list" ? (
+          <ActivityList items={items} onSelectItem={onSelectItem} />
         ) : (
           <>
-            {viewMode === "list" ? (
-              <ActivityList items={items} onSelectItem={onSelectItem} />
-            ) : (
-              <>
-                <HorizontalTimeline days={days} onSelectItem={onSelectItem} />
-                <div className="md:hidden">
-                  {days.map((dayItems) => (
-                    <div key={activityDayKey(dayItems[0].activityAt)}>
-                      <TimelineDateMarker activityAt={dayItems[0].activityAt} />
-                      {groupActivityRuns(dayItems).map((run) => (
-                        <ActivityRunRow
-                          items={run.items}
-                          key={run.id}
-                          onSelectItem={onSelectItem}
-                        />
-                      ))}
-                    </div>
+            <HorizontalTimeline days={days} onSelectItem={onSelectItem} />
+            <div className="md:hidden">
+              {days.map((dayItems) => (
+                <div key={activityDayKey(dayItems[0].activityAt)}>
+                  <TimelineDateMarker activityAt={dayItems[0].activityAt} />
+                  {groupActivityRuns(dayItems).map((run) => (
+                    <ActivityRunRow
+                      items={run.items}
+                      key={run.id}
+                      onSelectItem={onSelectItem}
+                    />
                   ))}
                 </div>
-              </>
-            )}
+              ))}
+            </div>
           </>
         )}
       </div>
@@ -273,6 +269,7 @@ const ActivityTimeline = ({
                       type: "error",
                     });
                   }
+                  return result;
                 })
                 .catch((error: unknown) => {
                   stellaToast.add({
@@ -321,7 +318,7 @@ const ActivityTimelineSkeleton = () => (
             <div className="bg-muted mt-2 h-2 w-12 animate-pulse rounded-sm" />
             <div className="relative mt-3 h-3">
               <span className="bg-border absolute start-0 end-0 top-1/2 h-px" />
-              <span className="bg-muted-foreground/50 absolute start-0 top-0 h-3 w-px" />
+              <span className="bg-foreground-disabled absolute start-0 top-0 h-3 w-px" />
             </div>
             <div className="mt-3 pe-8">
               <div

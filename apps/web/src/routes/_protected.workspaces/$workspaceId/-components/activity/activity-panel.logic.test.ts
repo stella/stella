@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { toSafeId } from "@/lib/safe-id";
 import type { MatterActivityItem } from "@/routes/_protected.workspaces/-queries";
 
 import { activityDayKey, groupActivityRuns } from "./activity-panel.logic";
@@ -9,7 +10,7 @@ const item = (id: string, runId: string | null): MatterActivityItem => ({
   activityAt: "2026-07-30T12:00:00.000Z",
   approval: { status: "not_required", user: null },
   category: "documents",
-  id,
+  id: toSafeId<"auditLog">(id),
   performer: { name: "Review agent", type: "agent" },
   runId,
   target: {

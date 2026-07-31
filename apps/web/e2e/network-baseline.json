@@ -1629,6 +1629,7 @@
       "GET /v1/workspaces/:id/events",
       "GET /v1/workspaces/:id/members",
       "GET /v1/workspaces/:id/overview",
+      "GET /v1/workspaces/:id/overview/activity",
       "GET /v1/workspaces/:id/workflow",
       "GET /v1/workspaces/navigation"
     ],
@@ -1650,6 +1651,7 @@
       "GET /v1/workspaces/:id/events": 1,
       "GET /v1/workspaces/:id/members": 1,
       "GET /v1/workspaces/:id/overview": 1,
+      "GET /v1/workspaces/:id/overview/activity": 1,
       "GET /v1/workspaces/:id/workflow": 1,
       "GET /v1/workspaces/navigation": 1
     },
@@ -1671,6 +1673,7 @@
       "GET /v1/workspaces/:id/events": 4,
       "GET /v1/workspaces/:id/members": 6,
       "GET /v1/workspaces/:id/overview": 7,
+      "GET /v1/workspaces/:id/overview/activity": 8,
       "GET /v1/workspaces/:id/workflow": 4,
       "GET /v1/workspaces/navigation": 6
     },
@@ -1691,6 +1694,7 @@
       "GET /v1/workspaces/:id/activity": 1024,
       "GET /v1/workspaces/:id/members": 1024,
       "GET /v1/workspaces/:id/overview": 1024,
+      "GET /v1/workspaces/:id/overview/activity": 1024,
       "GET /v1/workspaces/:id/workflow": 1024,
       "GET /v1/workspaces/navigation": 20480
     }
@@ -1715,6 +1719,7 @@
       "GET /v1/workspaces/:id/events",
       "GET /v1/workspaces/:id/members",
       "GET /v1/workspaces/:id/overview",
+      "GET /v1/workspaces/:id/overview/activity",
       "GET /v1/workspaces/:id/workflow",
       "GET /v1/workspaces/navigation"
     ],
@@ -1736,6 +1741,7 @@
       "GET /v1/workspaces/:id/events": 1,
       "GET /v1/workspaces/:id/members": 1,
       "GET /v1/workspaces/:id/overview": 1,
+      "GET /v1/workspaces/:id/overview/activity": 1,
       "GET /v1/workspaces/:id/workflow": 1,
       "GET /v1/workspaces/navigation": 1
     },
@@ -1757,6 +1763,7 @@
       "GET /v1/workspaces/:id/events": 4,
       "GET /v1/workspaces/:id/members": 6,
       "GET /v1/workspaces/:id/overview": 7,
+      "GET /v1/workspaces/:id/overview/activity": 8,
       "GET /v1/workspaces/:id/workflow": 4,
       "GET /v1/workspaces/navigation": 6
     },
@@ -1777,6 +1784,7 @@
       "GET /v1/workspaces/:id/activity": 1024,
       "GET /v1/workspaces/:id/members": 1024,
       "GET /v1/workspaces/:id/overview": 1024,
+      "GET /v1/workspaces/:id/overview/activity": 1024,
       "GET /v1/workspaces/:id/workflow": 1024,
       "GET /v1/workspaces/navigation": 20480
     }
