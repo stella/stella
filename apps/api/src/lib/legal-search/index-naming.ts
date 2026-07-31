@@ -30,6 +30,21 @@ export const corpusIndexId = (
   return `${generation}_${jur}`;
 };
 
+/** Recovers the generation prefix from a validated physical index id. */
+export const corpusIndexGeneration = (indexId: string): string => {
+  const separator = indexId.lastIndexOf("_");
+  const generation = indexId.slice(0, separator);
+  const jurisdiction = indexId.slice(separator + 1);
+  if (
+    separator <= 0 ||
+    generation.length === 0 ||
+    !isCorpusIndexJurisdiction(jurisdiction)
+  ) {
+    panic(`Invalid corpus index index id: ${indexId}`);
+  }
+  return generation;
+};
+
 /** Glob matching every jurisdiction index for a generation (multi-index search). */
 export const corpusIndexPattern = (generation: string): string =>
   `${generation}_*`;

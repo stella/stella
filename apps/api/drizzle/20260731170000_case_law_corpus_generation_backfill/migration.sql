@@ -49,6 +49,49 @@ GRANT SELECT ON TABLE "case_law_corpus_index_backfills" TO stella;--> statement-
 GRANT SELECT, INSERT, UPDATE, DELETE
   ON TABLE "case_law_corpus_index_backfills" TO stella_ingestion;--> statement-breakpoint
 
+CREATE TABLE IF NOT EXISTS "case_law_corpus_index_writer_leases" (
+  "generation" varchar(32) PRIMARY KEY NOT NULL,
+  "lease_token" uuid,
+  "lease_expires_at" timestamptz,
+  "updated_at" timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT "case_law_corpus_index_writer_leases_pair"
+    CHECK (("lease_token" IS NULL) = ("lease_expires_at" IS NULL))
+);--> statement-breakpoint
+ALTER TABLE "case_law_corpus_index_writer_leases" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+DO $policy$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'case_law_corpus_index_writer_leases'
+      AND policyname = 'case_law_global_access'
+  ) THEN
+    CREATE POLICY "case_law_global_access"
+      ON "case_law_corpus_index_writer_leases"
+      AS PERMISSIVE FOR SELECT TO stella
+      USING (true);
+  END IF;
+END
+$policy$;--> statement-breakpoint
+DO $policy$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'case_law_corpus_index_writer_leases'
+      AND policyname = 'case_law_ingestion_access'
+  ) THEN
+    CREATE POLICY "case_law_ingestion_access"
+      ON "case_law_corpus_index_writer_leases"
+      AS PERMISSIVE FOR ALL TO stella_ingestion
+      USING (true) WITH CHECK (true);
+  END IF;
+END
+$policy$;--> statement-breakpoint
+GRANT SELECT ON TABLE "case_law_corpus_index_writer_leases" TO stella;--> statement-breakpoint
+GRANT SELECT, INSERT, UPDATE, DELETE
+  ON TABLE "case_law_corpus_index_writer_leases" TO stella_ingestion;--> statement-breakpoint
+
 CREATE TABLE IF NOT EXISTS "case_law_corpus_index_projections" (
   "generation" varchar(32) NOT NULL,
   "decision_id" uuid NOT NULL,

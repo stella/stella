@@ -222,6 +222,12 @@ type BackfillSelectedRowsOptions =
       readConcurrency?: number;
     }
   | {
+      type: "fenced-incremental";
+      beforeDatabaseMark: BeforeDatabaseMark;
+      beforeRemoteEffect: BeforeRemoteEffect;
+      readConcurrency?: number;
+    }
+  | {
       type: "generation-rebuild";
       beforeDatabaseMark: BeforeDatabaseMark;
       beforeRemoteEffect: BeforeRemoteEffect;
@@ -233,6 +239,8 @@ type GenerationBackfillRowsOptions = {
   beforeRemoteEffect: BeforeRemoteEffect;
   readConcurrency?: number;
 };
+
+type FencedIncrementalBackfillOptions = GenerationBackfillRowsOptions;
 
 type CorpusIndexMarkMode =
   | { type: "incremental" }
@@ -614,10 +622,17 @@ export const createCorpusIndexer = <
     scopedDb: ScopedDb;
   }): Promise<Result<void, CorpusIndexError>> => {
     await beforeRemoteEffect?.();
-    const result = await getCorpusIndexClient().deleteByQuery(
+    const deleted = await getCorpusIndexClient().deleteByQuery(
       indexId,
       corpusDocumentDeleteQuery(entityId),
     );
+    // A retired generation is already at the requested fixed point. Treating
+    // its missing index as a successful delete keeps cleanup idempotent and
+    // avoids retrying an index that can no longer contain the document.
+    const result =
+      deleted.isErr() && deleted.error.status === 404
+        ? Result.ok(undefined)
+        : deleted;
     await adapter.recordJobs(
       scopedDb,
       [
@@ -653,13 +668,11 @@ export const createCorpusIndexer = <
    */
   let staleSkips = 0;
 
-  const backfill = async (
+  const backfillWithOptions = async (
     scopedDb: ScopedDb,
     batchSize: number,
     generation: string,
-    options: {
-      readConcurrency?: number;
-    } = {},
+    options: BackfillSelectedRowsOptions,
   ): Promise<number> => {
     const staleReserved = Math.max(1, Math.floor(batchSize / 4));
     // A due duty batch cedes one missing slot up front so granting the
@@ -716,11 +729,30 @@ export const createCorpusIndexer = <
       return 0;
     }
 
-    return await backfillSelectedRows(scopedDb, rows, generation, {
+    return await backfillSelectedRows(scopedDb, rows, generation, options);
+  };
+
+  const backfill = async (
+    scopedDb: ScopedDb,
+    batchSize: number,
+    generation: string,
+    options: { readConcurrency?: number } = {},
+  ): Promise<number> =>
+    await backfillWithOptions(scopedDb, batchSize, generation, {
       ...options,
       type: "incremental",
     });
-  };
+
+  const backfillFenced = async (
+    scopedDb: ScopedDb,
+    batchSize: number,
+    generation: string,
+    options: FencedIncrementalBackfillOptions,
+  ): Promise<number> =>
+    await backfillWithOptions(scopedDb, batchSize, generation, {
+      ...options,
+      type: "fenced-incremental",
+    });
 
   const backfillSelectedRows = async (
     scopedDb: ScopedDb,
@@ -784,9 +816,9 @@ export const createCorpusIndexer = <
         // turn the delete into a terminal 404.
         // oxlint-disable-next-line no-await-in-loop -- per-jurisdiction indexes are ensured/ingested sequentially to avoid overwhelming the search backend
         const ensured = await ensureIndex({
-          ...(options.type === "generation-rebuild"
-            ? { beforeRemoteEffect: options.beforeRemoteEffect }
-            : {}),
+          ...(options.type === "incremental"
+            ? {}
+            : { beforeRemoteEffect: options.beforeRemoteEffect }),
           indexId,
         });
         if (ensured.isErr()) {
@@ -831,9 +863,9 @@ export const createCorpusIndexer = <
         for (const entry of moved) {
           // oxlint-disable-next-line no-await-in-loop -- sequential deletes that early-break on the first error
           const removed = await removeWithOptions({
-            ...(options.type === "generation-rebuild"
-              ? { beforeRemoteEffect: options.beforeRemoteEffect }
-              : {}),
+            ...(options.type === "incremental"
+              ? {}
+              : { beforeRemoteEffect: options.beforeRemoteEffect }),
             entityId: entry.id,
             indexId: entry.oldIndexId,
             operation: "delete",
@@ -861,9 +893,9 @@ export const createCorpusIndexer = <
         )) {
           // oxlint-disable-next-line no-await-in-loop -- sequential ingest paces NDJSON pushes to the search backend
           const ingest = await ingestBatchWithGuard({
-            ...(options.type === "generation-rebuild"
-              ? { beforeRemoteEffect: options.beforeRemoteEffect }
-              : {}),
+            ...(options.type === "incremental"
+              ? {}
+              : { beforeRemoteEffect: options.beforeRemoteEffect }),
             indexId,
             ndjson,
           });
@@ -881,7 +913,7 @@ export const createCorpusIndexer = <
           // oxlint-disable-next-line no-await-in-loop -- one CAS transaction per ingest request; sequential to keep index writes and audit rows consistent
           await scopedDb(async (tx) => {
             // audit: skip — search index maintenance; rebuilds derived state
-            if (options.type === "generation-rebuild") {
+            if (options.type !== "incremental") {
               await options.beforeDatabaseMark(tx);
             }
             // Compare-and-set on each row's selected state: a concurrent
@@ -921,9 +953,9 @@ export const createCorpusIndexer = <
           for (const missedId of casMissed) {
             // oxlint-disable-next-line no-await-in-loop -- sequential cleanup deletes of the unrecorded copies; matches this file's established sequential-vs-search-backend design (see ensureIndex/ingestBatch above)
             const removed = await removeWithOptions({
-              ...(options.type === "generation-rebuild"
-                ? { beforeRemoteEffect: options.beforeRemoteEffect }
-                : {}),
+              ...(options.type === "incremental"
+                ? {}
+                : { beforeRemoteEffect: options.beforeRemoteEffect }),
               entityId: missedId,
               indexId,
               operation: "delete",
@@ -967,5 +999,12 @@ export const createCorpusIndexer = <
       type: "generation-rebuild",
     });
 
-  return { loadDocsForBatch, backfill, backfillRows, remove };
+  return {
+    loadDocsForBatch,
+    backfill,
+    backfillFenced,
+    backfillRows,
+    remove,
+    removeFenced: removeWithOptions,
+  };
 };

@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -7,13 +7,21 @@ import {
   caseLawIndexJobs,
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
-import { removeDecisionFromCorpusIndex } from "@/api/handlers/case-law/corpus-index";
+import {
+  acquireCaseLawCorpusGenerationLease,
+  type CaseLawCorpusGenerationLease,
+  removeDecisionFromCorpusIndex,
+} from "@/api/handlers/case-law/corpus-index";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { ConcurrentModificationError } from "@/api/lib/errors/tagged-errors";
 import { removeDecisionFromIndex } from "@/api/lib/legal-search/case-law-search-index";
 import type { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
 import { deleteCorpusDocument } from "@/api/lib/legal-search/corpus-storage";
-import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
+import {
+  corpusIndexGeneration,
+  corpusIndexId,
+} from "@/api/lib/legal-search/index-naming";
 
 /**
  * GDPR redaction / takedown for a case-law decision. Personal data lives
@@ -131,49 +139,126 @@ export const redactCaseLawDecision = async ({
   if (envBase.CORPUS_INDEX_ENDPOINT !== undefined) {
     const projectionTargets = await scopedDb((tx) =>
       tx
-        .select({ indexId: caseLawCorpusIndexProjections.indexId })
+        .select({
+          generation: caseLawCorpusIndexProjections.generation,
+          indexId: caseLawCorpusIndexProjections.indexId,
+        })
         .from(caseLawCorpusIndexProjections)
         .where(eq(caseLawCorpusIndexProjections.decisionId, decisionId)),
     );
-    const targets = new Set([
-      ...(decision.indexedGeneration === null
-        ? []
-        : [decision.indexedGeneration]),
-      corpusIndexId(generation, decision.country),
-      ...projectionTargets.flatMap(({ indexId }) =>
-        indexId === null ? [] : [indexId],
-      ),
-    ]);
-    // Attempt every target: one failing index (already dropped, or a
-    // transient error) must not leave copies in the others undeleted.
-    let firstError: CorpusIndexError | null = null;
-    for (const indexId of targets) {
-      // oxlint-disable-next-line no-await-in-loop -- sequential GDPR erasure across index targets for deterministic audit ordering
-      const removed = await removeDecisionFromCorpusIndex(
-        decisionId,
-        scopedDb,
-        indexId,
-        "redact",
+    const targets = new Map<string, Set<string>>();
+    const addTarget = (targetGeneration: string, indexId: string) => {
+      const indexes = targets.get(targetGeneration);
+      if (indexes) {
+        indexes.add(indexId);
+      } else {
+        targets.set(targetGeneration, new Set([indexId]));
+      }
+    };
+    addTarget(generation, corpusIndexId(generation, decision.country));
+    if (decision.indexedGeneration !== null) {
+      addTarget(
+        corpusIndexGeneration(decision.indexedGeneration),
+        decision.indexedGeneration,
       );
-      if (removed.isErr()) {
-        firstError ??= removed.error;
+    }
+    for (const projection of projectionTargets) {
+      // The deterministic target also covers an append that landed before its
+      // projection CAS. Such an orphan has no persisted index_id to discover.
+      addTarget(
+        projection.generation,
+        corpusIndexId(projection.generation, decision.country),
+      );
+      if (projection.indexId !== null) {
+        addTarget(projection.generation, projection.indexId);
       }
     }
-    if (firstError) {
-      // Keep indexedGeneration so the retry still knows every target.
-      // eslint-disable-next-line no-throw-literal -- CorpusIndexError (TaggedError); rethrow so the caller retries the redaction
-      throw firstError;
+
+    const leases = new Map<string, CaseLawCorpusGenerationLease>();
+    try {
+      for (const targetGeneration of [...targets.keys()].sort()) {
+        // oxlint-disable-next-line no-await-in-loop -- all target generations must be fenced before the first external delete
+        const lease = await acquireCaseLawCorpusGenerationLease({
+          generation: targetGeneration,
+          scopedDb,
+        });
+        if (!lease) {
+          throw new ConcurrentModificationError({
+            message: "Case-law corpus generation is being written",
+          });
+        }
+        leases.set(targetGeneration, lease);
+      }
+
+      // Attempt every target: one transient error must not leave copies in
+      // the others undeleted. Missing retired indexes are already successful
+      // fixed points in the shared indexer.
+      let firstError: CorpusIndexError | null = null;
+      for (const [targetGeneration, indexes] of targets) {
+        const lease = leases.get(targetGeneration);
+        if (!lease) {
+          throw new ConcurrentModificationError({
+            message: "Case-law corpus generation lease disappeared",
+          });
+        }
+        for (const indexId of indexes) {
+          // oxlint-disable-next-line no-await-in-loop -- sequential erasure across targets preserves deterministic audit ordering
+          const removed = await removeDecisionFromCorpusIndex({
+            beforeRemoteEffect: lease.beforeRemoteEffect,
+            entityId: decisionId,
+            indexId,
+            operation: "redact",
+            scopedDb,
+          });
+          if (removed.isErr()) {
+            firstError ??= removed.error;
+          }
+        }
+      }
+      if (firstError) {
+        // Keep every projection and indexedGeneration target for a durable
+        // retry. The local canonical stores have already been scrubbed.
+        // eslint-disable-next-line no-throw-literal -- CorpusIndexError (TaggedError); rethrow so the caller retries the redaction
+        throw firstError;
+      }
+      await scopedDb(async (tx) => {
+        for (const lease of leases.values()) {
+          // oxlint-disable-next-line no-await-in-loop -- one transaction renews every held generation fence before clearing durable targets
+          await lease.beforeDatabaseMark(tx);
+        }
+        const stillErased = (
+          await tx
+            .select({ id: caseLawDecisions.id })
+            .from(caseLawDecisions)
+            .where(
+              and(
+                eq(caseLawDecisions.id, decisionId),
+                isNull(caseLawDecisions.contentHash),
+              ),
+            )
+            .for("update")
+            .limit(1)
+        ).at(0);
+        if (!stillErased) {
+          // A concurrent restore owns the new projection state. The fenced
+          // deletes removed old copies; its pending index action must survive.
+          return;
+        }
+        // audit: skip — GDPR redaction bookkeeping; recorded in case_law_index_jobs above
+        await tx
+          .update(caseLawDecisions)
+          .set({ indexedGeneration: null })
+          .where(eq(caseLawDecisions.id, decisionId));
+        await tx
+          .delete(caseLawCorpusIndexProjections)
+          .where(eq(caseLawCorpusIndexProjections.decisionId, decisionId));
+      });
+    } finally {
+      for (const lease of [...leases.values()].reverse()) {
+        // oxlint-disable-next-line no-await-in-loop -- release every acquired generation fence after success or failure
+        await lease.release();
+      }
     }
-    await scopedDb(async (tx) => {
-      // audit: skip — GDPR redaction bookkeeping; recorded in case_law_index_jobs above
-      await tx
-        .update(caseLawDecisions)
-        .set({ indexedGeneration: null })
-        .where(eq(caseLawDecisions.id, decisionId));
-      await tx
-        .delete(caseLawCorpusIndexProjections)
-        .where(eq(caseLawCorpusIndexProjections.decisionId, decisionId));
-    });
     auditedViaCorpusIndex = true;
   }
 

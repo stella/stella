@@ -10,10 +10,12 @@ import * as schema from "@/api/db/schema";
 import {
   caseLawCorpusIndexBackfills,
   caseLawCorpusIndexProjections,
+  caseLawCorpusIndexWriterLeases,
   caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
 import {
+  acquireCaseLawCorpusGenerationLease,
   caseLawCorpusIndexAdapter,
   createCaseLawGenerationBackfill,
 } from "@/api/handlers/case-law/corpus-index";
@@ -172,6 +174,59 @@ const nextBackfillSnapshotAt = async (): Promise<Date> => {
 };
 
 const ignoreProjectionRemoval = async () => undefined;
+
+test(
+  "one generation writer excludes rebuilds until it releases",
+  async () => {
+    const generation = "case_law_writer_fence";
+    let lease = 0;
+    const first = await acquireCaseLawCorpusGenerationLease({
+      generation,
+      newLeaseToken: () =>
+        `00000000-0000-4000-8000-${String(++lease).padStart(12, "0")}`,
+      scopedDb,
+    });
+    expect(first).not.toBeNull();
+
+    let backfillCalls = 0;
+    const backfill = createCaseLawGenerationBackfill({
+      backfillRows: async () => {
+        backfillCalls += 1;
+        return 0;
+      },
+      newLeaseToken: () =>
+        `00000000-0000-4000-8000-${String(++lease).padStart(12, "0")}`,
+      removeProjection: ignoreProjectionRemoval,
+    });
+    expect(await backfill(scopedDb, 10, generation)).toEqual({
+      indexed: 0,
+      status: "busy",
+    });
+    expect(backfillCalls).toBe(0);
+
+    await first?.release();
+    const reclaimed = await acquireCaseLawCorpusGenerationLease({
+      generation,
+      newLeaseToken: () =>
+        `00000000-0000-4000-8000-${String(++lease).padStart(12, "0")}`,
+      scopedDb,
+    });
+    expect(reclaimed).not.toBeNull();
+    await reclaimed?.release();
+
+    const writerState = (
+      await db
+        .select()
+        .from(caseLawCorpusIndexWriterLeases)
+        .where(eq(caseLawCorpusIndexWriterLeases.generation, generation))
+    ).at(0);
+    expect(writerState).toMatchObject({
+      leaseExpiresAt: null,
+      leaseToken: null,
+    });
+  },
+  { timeout: 30_000 },
+);
 
 test(
   "replays the snapshot once and reconciles pending rows after completion",

@@ -682,6 +682,27 @@ export const caseLawCorpusIndexBackfills = p.pgTable(
   ],
 );
 
+/** Mutual exclusion for every writer targeting one physical generation. */
+export const caseLawCorpusIndexWriterLeases = p.pgTable(
+  "case_law_corpus_index_writer_leases",
+  {
+    generation: p.varchar({ length: 32 }).primaryKey(),
+    leaseToken: p.uuid("lease_token"),
+    leaseExpiresAt: timestamptz("lease_expires_at"),
+    updatedAt: timestamptz("updated_at")
+      .defaultNow()
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    p.check(
+      "case_law_corpus_index_writer_leases_pair",
+      sql`(${t.leaseToken} IS NULL) = (${t.leaseExpiresAt} IS NULL)`,
+    ),
+    ...globalCaseLawPolicies(),
+  ],
+);
+
 export const CASE_LAW_CORPUS_INDEX_PROJECTION_ACTIONS = [
   "index",
   "delete",

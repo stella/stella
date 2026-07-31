@@ -165,6 +165,64 @@ describe("settleBoth", () => {
   });
 });
 
+describe("idempotent corpus removals", () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  test("a missing retired index is recorded as an achieved deletion", async () => {
+    const row = {
+      id: toSafeId<"caseLawDecision">("retired-index-row"),
+      country: "CZ",
+      textS3Key: null,
+      astS3Key: null,
+      contentHash: null,
+      indexedHash: null,
+      indexedGeneration: null,
+      // SAFETY: the removal path never reads the fabricated timestamp token.
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion
+      updatedAtToken: "2026-01-01 00:00:00" as TimestampCasToken,
+    };
+    const recorded: CorpusJobInput<"caseLawDecision">[] = [];
+    const indexer = createCorpusIndexer<"caseLawDecision", typeof row>({
+      family: "case_law",
+      captureStep: "test",
+      granularity: "document",
+      generationProjectionIndexId: () => null,
+      buildDocs: () => [],
+      readCorpusText: async () => null,
+      selectMissing: async () => [],
+      selectStale: async () => [],
+      fetchFulltext: async () => null,
+      markIndexedBatch: async () => new Set(),
+      insertSucceededJobs: async () => undefined,
+      recordJobs: async (_db, jobs) => {
+        recorded.push(...jobs);
+      },
+    });
+    globalThis.fetch = Object.assign(
+      async () => new Response("missing", { status: 404 }),
+      { preconnect: originalFetch.preconnect },
+    );
+    const scopedDb: ScopedDb = async () => {
+      throw new Error("removal should not open a database transaction");
+    };
+
+    const removed = await indexer.remove(
+      row.id,
+      scopedDb,
+      corpusIndexId("case_law_retired", "CZ"),
+    );
+
+    expect(removed.isOk()).toBe(true);
+    expect(recorded).toMatchObject([
+      { entityId: row.id, operation: "delete", status: "succeeded" },
+    ]);
+  });
+});
+
 /**
  * The indexer's audit trail is the only record of a row it could not place: a
  * row that is neither marked indexed nor recorded failed is invisible to an
