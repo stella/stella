@@ -229,6 +229,41 @@ if (!databaseUrl || !runPostgresTests) {
         sourceHash: "legacy-fence-newer",
       });
 
+      const compensationOrder = (
+        await db
+          .update(caseLawSources)
+          .set({
+            observationOrder: sql`greatest(${caseLawSources.observationOrder}, 11) + 1`,
+          })
+          .where(eq(caseLawSources.id, sourceId))
+          .returning({ order: caseLawSources.observationOrder })
+      ).at(0)?.order;
+      if (compensationOrder === undefined) {
+        throw new Error("expected compensation order");
+      }
+      await db
+        .update(caseLawDecisions)
+        .set({
+          sourceHash: "legacy-fence-current",
+          sourceObservationHash: "legacy-fence-newer",
+          sourceObservationOrder: compensationOrder,
+        })
+        .where(eq(caseLawDecisions.caseNumber, caseNumber));
+      const compensated = (
+        await db
+          .select({
+            order: caseLawDecisions.sourceObservationOrder,
+            sourceHash: caseLawDecisions.sourceHash,
+          })
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.caseNumber, caseNumber))
+          .limit(1)
+      ).at(0);
+      expect(compensated).toEqual({
+        order: compensationOrder,
+        sourceHash: "legacy-fence-current",
+      });
+
       await db
         .update(caseLawDecisions)
         .set({ sourceObservationOrder: null })

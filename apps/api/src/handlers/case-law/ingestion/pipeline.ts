@@ -134,13 +134,13 @@ type ProcessResult = {
   s3UploadFailed: boolean;
 };
 
-const IDENTITY_RECONCILIATION = {
+const CONTENTION_RECONCILIATION = {
   INITIAL: "initial",
   RETRY: "retry",
 } as const;
 
-type IdentityReconciliation =
-  (typeof IDENTITY_RECONCILIATION)[keyof typeof IDENTITY_RECONCILIATION];
+type ContentionReconciliation =
+  (typeof CONTENTION_RECONCILIATION)[keyof typeof CONTENTION_RECONCILIATION];
 
 type ProcessDecisionAttemptOptions = {
   input: IngestionResult;
@@ -148,12 +148,12 @@ type ProcessDecisionAttemptOptions = {
   scopedDb: ScopedDb;
   observedAt: Date;
   observationOrder: bigint;
-  identityReconciliation: IdentityReconciliation;
+  contentionReconciliation: ContentionReconciliation;
 };
 
 type ProcessDecisionOptions = Omit<
   ProcessDecisionAttemptOptions,
-  "identityReconciliation"
+  "contentionReconciliation"
 >;
 
 type SourceObservation = {
@@ -246,16 +246,20 @@ const citationRow = (
 
 type PreserveCorpusWriteRetryInput = {
   decisionId: SafeId<"caseLawDecision">;
+  sourceId: SafeId<"caseLawSource">;
   previousSourceHash: string | null;
   /** The sourceHash this run persisted; the reset only applies while the row still carries it. */
   expectedSourceHash: string | null;
+  failedObservationOrder: bigint;
   scopedDb: ScopedDb;
 };
 
 const preserveCorpusWriteRetry = async ({
   decisionId,
+  sourceId,
   previousSourceHash,
   expectedSourceHash,
+  failedObservationOrder,
   scopedDb,
 }: PreserveCorpusWriteRetryInput): Promise<void> => {
   // If the corpus write fails after the DB text update, do not leave the
@@ -264,30 +268,44 @@ const preserveCorpusWriteRetry = async ({
   // Clear corpus keys too so reads fall back to the fresh Postgres columns
   // instead of serving an older object payload.
   // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-  await scopedDb((tx) => {
+  await scopedDb(async (tx) => {
     // audit: skip — background corpus storage retry bookkeeping; derived state
-    return (
-      tx
-        .update(caseLawDecisions)
+    const compensationOrder = (
+      await tx
+        .update(caseLawSources)
         .set({
-          sourceHash: previousSourceHash,
-          textS3Key: null,
-          normalizedS3Key: null,
-          astS3Key: null,
-          contentHash: null,
-          indexedHash: null,
-          indexedGeneration: null,
-          indexedAt: null,
+          observationOrder: sql`greatest(${caseLawSources.observationOrder}, ${failedObservationOrder}) + 1`,
+          updatedAt: sql`${caseLawSources.updatedAt}`,
         })
-        // Only undo this run's own write: a concurrent newer refresh owns
-        // the row once it has advanced sourceHash.
-        .where(
-          and(
-            eq(caseLawDecisions.id, decisionId),
-            sql`${caseLawDecisions.sourceHash} IS NOT DISTINCT FROM ${expectedSourceHash}`,
-          ),
-        )
-    );
+        .where(eq(caseLawSources.id, sourceId))
+        .returning({ order: caseLawSources.observationOrder })
+    ).at(0)?.order;
+    if (compensationOrder === undefined) {
+      panic("Case-law source disappeared during corpus-write compensation");
+    }
+    await tx
+      .update(caseLawDecisions)
+      .set({
+        sourceHash: previousSourceHash,
+        sourceObservationOrder: compensationOrder,
+        sourceObservationHash: expectedSourceHash,
+        textS3Key: null,
+        normalizedS3Key: null,
+        astS3Key: null,
+        contentHash: null,
+        indexedHash: null,
+        indexedGeneration: null,
+        indexedAt: null,
+      })
+      // Only undo this run's own write: a concurrent newer refresh owns
+      // the row once it has advanced either the hash or observation order.
+      .where(
+        and(
+          eq(caseLawDecisions.id, decisionId),
+          sql`${caseLawDecisions.sourceHash} IS NOT DISTINCT FROM ${expectedSourceHash}`,
+          storedObservationPrecedes({ order: compensationOrder }),
+        ),
+      );
   });
 };
 
@@ -505,7 +523,7 @@ const processDecisionAttempt = async ({
   scopedDb,
   observedAt,
   observationOrder,
-  identityReconciliation,
+  contentionReconciliation,
 }: ProcessDecisionAttemptOptions): Promise<ProcessResult> => {
   const result = sanitizeResult(input);
 
@@ -547,25 +565,62 @@ const processDecisionAttempt = async ({
       incomingRawHash: result.rawHash,
     })
   ) {
-    await scopedDb(async (tx) => {
+    const watermarkAdvanced = await scopedDb(async (tx) => {
       // audit: skip — background case-law ingestion ordering metadata; public case-law data, not user actions
-      await tx
-        .update(caseLawDecisions)
-        .set({
-          sourceObservedAt: observedAt,
-          sourceObservationOrder: observationOrder,
-          sourceObservationHash: result.rawHash,
-          // Drizzle applies the schema's on-update value unless this column is
-          // explicit. A watermark-only replay is not a content modification.
-          updatedAt: sql`${caseLawDecisions.updatedAt}`,
-        })
-        .where(
-          and(
-            eq(caseLawDecisions.id, existing.id),
-            storedObservationPrecedes({ order: observationOrder }),
-          ),
-        );
+      return (
+        await tx
+          .update(caseLawDecisions)
+          .set({
+            sourceObservedAt: observedAt,
+            sourceObservationOrder: observationOrder,
+            sourceObservationHash: result.rawHash,
+            // Drizzle applies the schema's on-update value unless this column is
+            // explicit. A watermark-only replay is not a content modification.
+            updatedAt: sql`${caseLawDecisions.updatedAt}`,
+          })
+          .where(
+            and(
+              eq(caseLawDecisions.id, existing.id),
+              storedObservationPrecedes({ order: observationOrder }),
+              sql`${caseLawDecisions.sourceHash} IS NOT DISTINCT FROM ${existing.sourceHash}`,
+              sql`${caseLawDecisions.metadata} IS NOT DISTINCT FROM ${JSON.stringify(existing.metadata)}::jsonb`,
+            ),
+          )
+          .returning({ id: caseLawDecisions.id })
+      ).at(0);
     });
+    if (!watermarkAdvanced) {
+      const current = await scopedDb((tx) =>
+        tx.query.caseLawDecisions.findFirst({
+          where: { id: { eq: existing.id } },
+          columns: { sourceObservationOrder: true },
+        }),
+      );
+      if (
+        !current ||
+        (current.sourceObservationOrder !== null &&
+          current.sourceObservationOrder >= observationOrder)
+      ) {
+        return {
+          inserted: false,
+          searchVectorFailed: false,
+          s3UploadFailed: false,
+        };
+      }
+      if (contentionReconciliation === CONTENTION_RECONCILIATION.RETRY) {
+        throw new ConcurrentModificationError({
+          message: "Case-law decision refresh did not converge",
+        });
+      }
+      return await processDecisionAttempt({
+        input,
+        sourceId,
+        scopedDb,
+        observedAt,
+        observationOrder,
+        contentionReconciliation: CONTENTION_RECONCILIATION.RETRY,
+      });
+    }
     return {
       inserted: false,
       searchVectorFailed: false,
@@ -994,7 +1049,7 @@ const processDecisionAttempt = async ({
       if (corpusPlan.type === "object-storage") {
         await discardOrphanedCorpusObjects(corpusPlan.written, decisionId);
       }
-      if (identityReconciliation === IDENTITY_RECONCILIATION.RETRY) {
+      if (contentionReconciliation === CONTENTION_RECONCILIATION.RETRY) {
         throw new ConcurrentModificationError({
           message: "Case-law decision identity did not converge",
         });
@@ -1005,7 +1060,7 @@ const processDecisionAttempt = async ({
         scopedDb,
         observedAt,
         observationOrder,
-        identityReconciliation: IDENTITY_RECONCILIATION.RETRY,
+        contentionReconciliation: CONTENTION_RECONCILIATION.RETRY,
       });
     }
     if (
@@ -1091,8 +1146,10 @@ const processDecisionAttempt = async ({
       captureError(error, { decisionId, step: "processDecision.corpusWrite" });
       await preserveCorpusWriteRetry({
         decisionId,
+        sourceId,
         previousSourceHash: existing?.sourceHash ?? null,
         expectedSourceHash: persistedSourceHash,
+        failedObservationOrder: observationOrder,
         scopedDb,
       });
     }
@@ -1111,7 +1168,7 @@ export const processDecision = async (
 ): Promise<ProcessResult> =>
   await processDecisionAttempt({
     ...options,
-    identityReconciliation: IDENTITY_RECONCILIATION.INITIAL,
+    contentionReconciliation: CONTENTION_RECONCILIATION.INITIAL,
   });
 
 /**

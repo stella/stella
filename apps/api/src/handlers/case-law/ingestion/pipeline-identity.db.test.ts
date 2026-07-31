@@ -213,6 +213,74 @@ if (!databaseUrl || !runPostgresTests) {
       );
     });
 
+    test("a watermark replay reconciles content changed after its read", async () => {
+      const publisherId = "watermark-contention";
+      const initial = decisionAt("Initial content", publisherId);
+      const intervening = decisionAt("Intervening content", publisherId);
+
+      await processDecision({
+        input: initial,
+        observationOrder: 30n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:03:00.000Z"),
+      });
+
+      let releaseReplay = (): void => undefined;
+      const replayMayContinue = new Promise<void>((resolve) => {
+        releaseReplay = resolve;
+      });
+      let replayReadCompleted = (): void => undefined;
+      const replayHasRead = new Promise<void>((resolve) => {
+        replayReadCompleted = resolve;
+      });
+      let replayCallCount = 0;
+      const replayScopedDb: ScopedDb = async (transactionWork) => {
+        const call = replayCallCount;
+        replayCallCount += 1;
+        const value = await scopedDb(transactionWork);
+        if (call === 0) {
+          replayReadCompleted();
+          await replayMayContinue;
+        }
+        return value;
+      };
+
+      const replay = processDecision({
+        input: initial,
+        observationOrder: 32n,
+        sourceId,
+        scopedDb: replayScopedDb,
+        observedAt: new Date("2026-07-31T12:03:02.000Z"),
+      });
+      await replayHasRead;
+      await processDecision({
+        input: intervening,
+        observationOrder: 31n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:03:01.000Z"),
+      });
+      releaseReplay();
+      await replay;
+
+      const [row] = await db.execute(
+        sql<{ court: string; sourceHash: string; observationOrder: bigint }>`
+          SELECT court,
+                 source_hash AS "sourceHash",
+                 source_observation_order AS "observationOrder"
+          FROM case_law_decisions
+          WHERE source_id = ${sourceId}
+            AND source_document_id = ${publisherId}
+        `,
+      );
+      expect(row).toMatchObject({
+        court: "Initial content",
+        sourceHash: "hash-Initial content",
+        observationOrder: 32n,
+      });
+    });
+
     test("database order wins independently of worker timestamps", async () => {
       const publisherId = "observed-tie";
       const authoritative = decisionAt("Database winner", publisherId);
