@@ -73,4 +73,33 @@ describe("chat turn navigation items", () => {
     expect(item?.assistantPreview?.endsWith("…")).toBe(true);
     expect(item?.assistantPreview?.length).toBe(281);
   });
+
+  test("shows only the ten most recent turns", () => {
+    const messages = Array.from({ length: 12 }, (_, index) => {
+      const number = index + 1;
+      return [
+        textMessage(`user-${number}`, "user", `Question ${number}`),
+        textMessage(`assistant-${number}`, "assistant", `Answer ${number}`),
+      ];
+    }).flat();
+
+    const items = buildChatTurnNavigationItems(
+      messages,
+      userMessageFallbackText,
+    );
+
+    expect(items).toHaveLength(10);
+    expect(items.map(({ id }) => id)).toEqual([
+      "user-3",
+      "user-4",
+      "user-5",
+      "user-6",
+      "user-7",
+      "user-8",
+      "user-9",
+      "user-10",
+      "user-11",
+      "user-12",
+    ]);
+  });
 });

@@ -3,6 +3,7 @@ import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 
 const PROMPT_PREVIEW_LENGTH = 180;
 const RESPONSE_PREVIEW_LENGTH = 280;
+const MAX_NAVIGATION_ITEMS = 10;
 const PREVIEW_SEGMENTER = new Intl.Segmenter(undefined, {
   granularity: "grapheme",
 });
@@ -61,8 +62,17 @@ export const buildChatTurnNavigationItems = (
   toUserPlainText: (value: string) => string,
 ): ChatTurnNavigationItem[] => {
   const items: ChatTurnNavigationItem[] = [];
+  const turns = buildMessageTurns(messages);
 
-  for (const turn of buildMessageTurns(messages)) {
+  for (
+    let index = turns.length - 1;
+    index >= 0 && items.length < MAX_NAVIGATION_ITEMS;
+    index -= 1
+  ) {
+    const turn = turns[index];
+    if (!turn) {
+      continue;
+    }
     if (turn.type !== "user") {
       continue;
     }
@@ -89,5 +99,5 @@ export const buildChatTurnNavigationItems = (
     });
   }
 
-  return items;
+  return items.reverse();
 };
