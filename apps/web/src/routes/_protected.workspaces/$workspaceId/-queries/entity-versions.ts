@@ -62,6 +62,14 @@ export const fetchOlderVersions = async ({
 // version whose field is outside the paginated newest page (switch to an old
 // version, then reload). Kept off the versions cache key so it never refetches
 // the page; fired only when the active field isn't already loaded.
+type FieldFileData = {
+  file: {
+    propertyId: string;
+    fileName: string;
+    mimeType: string;
+  } | null;
+};
+
 export const fieldFileOptions = ({
   workspaceId,
   entityId,
@@ -76,14 +84,25 @@ export const fieldFileOptions = ({
     ],
     enabled,
     retry: shouldRetryAPIRequest,
-    queryFn: async ({ signal }) => {
+    queryFn: async ({ signal }): Promise<FieldFileData> => {
       const response = await api
         .entities({ workspaceId })
         .entity({ entityId })
         .field({ fieldId })
         .file.get({ fetch: { signal } });
 
-      return unwrapEden(response);
+      const { file } = unwrapEden(response);
+      if (file === null) {
+        return { file: null };
+      }
+
+      return {
+        file: {
+          propertyId: file.propertyId,
+          fileName: file.fileName,
+          mimeType: file.mimeType,
+        },
+      };
     },
   });
 
