@@ -8,9 +8,9 @@ import {
 } from "../i18n/config";
 import { getTranslations, localizePath } from "../i18n/utils";
 
-// Only the homepage is translated today. Keep the switcher available in the
-// shared header, but always send visitors to a real localized route instead of
-// inventing paths such as /de/security that the static build does not emit.
+// Not every page rendered with the shared header has localized routes. Send
+// language choices to the localized homepage instead of inventing paths such
+// as /de/security that the static build does not emit.
 const rawLocale = Astro.currentLocale ?? defaultLocale;
 const current: Locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
 const t = getTranslations(current);
