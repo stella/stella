@@ -132,6 +132,7 @@ describe("chat search indexing", () => {
     expect(sqlText).toContain(
       "WHERE EXCLUDED.updated_at >= chat_thread_search_documents.updated_at",
     );
+    expect(sqlText).toContain("preview_generation = NULL");
     expect(
       findExecutedQuery("INSERT INTO chat_thread_search_preview_passages"),
     ).toBeUndefined();
@@ -199,7 +200,7 @@ describe("chat search indexing", () => {
     expect(compiled.sql).toContain("LEFT JOIN chat_thread_search_documents");
     expect(compiled.sql).toContain("LEFT JOIN chat_message_search_documents");
     expect(compiled.sql).toContain("md.message_id IS NULL");
-    expect(compiled.sql).not.toContain("preview_generation");
+    expect(compiled.sql).toContain("d.preview_generation IS NOT NULL");
     expect(compiled.sql).not.toContain("chat_thread_search_preview_passages");
   });
 });

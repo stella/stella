@@ -181,11 +181,12 @@ export const upsertChatThreadSearchDocument = async (
   });
   await rootDb.execute(sql`
     INSERT INTO chat_thread_search_documents (
-      thread_id, title, searchable_text, updated_at, tsv
+      thread_id, title, searchable_text, preview_generation, updated_at, tsv
     ) VALUES (
       ${thread.id},
       ${thread.title},
       ${searchableText},
+      NULL,
       ${thread.updatedAt},
       to_tsvector(
         'simple',
@@ -200,6 +201,7 @@ export const upsertChatThreadSearchDocument = async (
     ON CONFLICT (thread_id) DO UPDATE SET
       title = EXCLUDED.title,
       searchable_text = EXCLUDED.searchable_text,
+      preview_generation = NULL,
       updated_at = EXCLUDED.updated_at,
       tsv = EXCLUDED.tsv
     WHERE EXCLUDED.updated_at >= chat_thread_search_documents.updated_at
@@ -335,16 +337,24 @@ const upsertChatMessageSearchDocuments = async ({
   `);
 };
 
-/** One-time backfill: index every thread missing either a thread-level
- *  search document or per-message search documents. Idempotent and
- *  resumable. Keyset-paginates by thread id so a thread that cannot
- *  be indexed (e.g. deleted mid-run) advances the cursor instead of
+/** Periodic repair: index every thread with a missing or stale projection.
+ *  Idempotent and resumable. Keyset-paginates by thread id so a thread that
+ *  cannot be indexed (e.g. deleted mid-run) advances the cursor instead of
  *  looping. */
-export const backfillChatThreadSearchIndex = async (): Promise<number> => {
+type BackfillChatThreadSearchIndexOptions = {
+  signal?: AbortSignal;
+};
+
+export const backfillChatThreadSearchIndex = async ({
+  signal,
+}: BackfillChatThreadSearchIndexOptions = {}): Promise<number> => {
   let cursor = ZERO_UUID;
   let total = 0;
 
   for (;;) {
+    if (signal?.aborted) {
+      return total;
+    }
     // oxlint-disable-next-line no-await-in-loop, require-search-scope/require-search-scope -- system backfill repairs derived search documents across all threads; it does not return request data
     const batch = await rootDb.execute<{ id: SafeId<"chatThread"> }>(sql`
       SELECT t.id
@@ -352,6 +362,11 @@ export const backfillChatThreadSearchIndex = async (): Promise<number> => {
       LEFT JOIN chat_thread_search_documents d ON d.thread_id = t.id
       WHERE (
           d.thread_id IS NULL
+          -- The previous writer always stored a preview generation. The live
+          -- preview no longer consumes those passages, so non-null doubles as
+          -- a rolling-deploy freshness marker: old tasks mark their writes
+          -- stale, while the current upsert clears the marker after rebuilding.
+          OR d.preview_generation IS NOT NULL
           OR EXISTS (
             SELECT 1
             FROM chat_messages m
@@ -372,6 +387,9 @@ export const backfillChatThreadSearchIndex = async (): Promise<number> => {
     }
 
     for (const row of batch) {
+      if (signal?.aborted) {
+        return total;
+      }
       try {
         // oxlint-disable-next-line no-await-in-loop -- sequential by design: sequential per-thread backfill writes bound DB load
         await upsertChatThreadSearchDocument(row.id);

@@ -243,6 +243,9 @@ describe("global search SQL scope", () => {
     expect(matterQuery?.params.filter((param) => param === 0.15)).toHaveLength(
       3,
     );
+    expect(sourceQueries.at(4)?.compiled.sql).toContain(
+      "cst.preview_generation IS NULL",
+    );
   });
 
   test("continues legacy offset cursors during a rolling deployment", async () => {
@@ -358,7 +361,7 @@ describe("global search SQL scope", () => {
       seen: 1,
     });
   });
-  test("selects the filtered file field and prefers the extracted-content source", async () => {
+  test("selects the filtered file field and prefers previewable extracted sources", async () => {
     await searchGlobal({
       query: "indemnity",
       organizationId: toSafeId<"organization">("org_1"),
@@ -382,10 +385,12 @@ describe("global search SQL scope", () => {
       expect(compiled.sql).toContain("ec.source_field_id = f.id");
       expect(compiled.sql).toContain("files.mime_type = ANY");
       expect(compiled.sql).toContain("array_agg(DISTINCT available.mime_type");
-      expect(compiled.sql).toContain(
-        "ORDER BY files.is_extracted_source DESC, files.field_id ASC",
-      );
+      expect(compiled.sql).toContain("files.is_extracted_source DESC");
+      expect(compiled.sql).toContain("files.field_id ASC");
       expect(compiled.params).toContain("application/pdf");
+      expect(compiled.params).toContain(
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      );
     }
   });
 });

@@ -460,6 +460,7 @@ export const buildSearchPreviewQuery = ({
         FROM chat_thread_search_documents cst
         JOIN chat_threads t ON t.id = cst.thread_id
         WHERE cst.thread_id = ${resultId}
+          AND cst.preview_generation IS NULL
           ${previewTextFilter(sql`cst.tsv`, tsQuery)}
           AND ${chatThreadScopeSql({
             userId,

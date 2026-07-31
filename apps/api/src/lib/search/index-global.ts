@@ -46,6 +46,7 @@ import type {
   GlobalSearchResultType,
   MatterGlobalSearchHit,
 } from "@/api/lib/search/types";
+import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
 const REINDEX_BATCH_SIZE = 100;
 const WORKSPACE_REINDEX_CONCURRENCY = 4;
@@ -180,6 +181,7 @@ const NON_ENTITY_TYPES: ReadonlySet<GlobalSearchResultType> = new Set([
   "case-law",
   "chat",
 ]);
+const NATIVE_PREVIEW_MIME_TYPES = [PDF_MIME_TYPE, DOCX_MIME_TYPE] as const;
 
 const hasSelectedEntityType = (selected: ReadonlySet<GlobalSearchResultType>) =>
   selected.size === 0 ||
@@ -229,7 +231,10 @@ const fileFieldJoin = (mimeTypes: readonly string[]) => {
     FROM files
     WHERE TRUE
       ${mimeFilter}
-    ORDER BY files.is_extracted_source DESC, files.field_id ASC
+    ORDER BY
+      files.is_extracted_source DESC,
+      (files.mime_type = ANY(${typedPgArray(NATIVE_PREVIEW_MIME_TYPES, "text")})) DESC,
+      files.field_id ASC
     LIMIT 1
   ) file_field ON true
 `;
@@ -827,6 +832,7 @@ export const searchGlobal = async ({
       JOIN chat_threads t ON t.id = cst.thread_id
       LEFT JOIN workspaces w ON w.id = t.workspace_id
       WHERE TRUE
+        AND cst.preview_generation IS NULL
         ${chatUpdatedFilter}
         ${chatTextSearchFilter}
         AND ${chatScope}
@@ -920,6 +926,7 @@ export const searchGlobal = async ({
         FROM chat_thread_search_documents cst
         JOIN chat_threads t ON t.id = cst.thread_id
         WHERE TRUE
+          AND cst.preview_generation IS NULL
           ${chatUpdatedFilter}
           ${chatTextSearchFilter}
           AND ${chatScope}
@@ -1002,6 +1009,7 @@ export const searchGlobal = async ({
       FROM chat_thread_search_documents cst
       JOIN chat_threads t ON t.id = cst.thread_id
       WHERE TRUE
+        AND cst.preview_generation IS NULL
         ${chatUpdatedFilter}
         ${chatTextSearchFilter}
         AND ${chatScope}
