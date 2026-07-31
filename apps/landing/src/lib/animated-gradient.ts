@@ -1,8 +1,28 @@
 const GRADIENT_LAYERS = [
-  ["gradient-light", "/images/gradients/hero-light.svg", 1],
-  ["gradient-dark", "/images/gradients/hero-dark.svg", 1],
-  ["footer-gradient-light", "/images/gradients/hero-light.svg", 1.6],
-  ["footer-gradient-dark", "/images/gradients/hero-dark.svg", 1.6],
+  {
+    containerId: "gradient-light",
+    iosIntensity: 0.38,
+    speed: 1,
+    svgUrl: "/images/gradients/hero-light.svg",
+  },
+  {
+    containerId: "gradient-dark",
+    iosIntensity: 0.3,
+    speed: 1,
+    svgUrl: "/images/gradients/hero-dark.svg",
+  },
+  {
+    containerId: "footer-gradient-light",
+    iosIntensity: 1,
+    speed: 1.6,
+    svgUrl: "/images/gradients/hero-light.svg",
+  },
+  {
+    containerId: "footer-gradient-dark",
+    iosIntensity: 1,
+    speed: 1.6,
+    svgUrl: "/images/gradients/hero-dark.svg",
+  },
 ] as const;
 
 const IOS_GRADIENT_START_TRANSFORM =
@@ -14,8 +34,13 @@ const IOS_GRADIENT_TRANSFORMS = [
   "translate3d(3%, -2%, 0) scale3d(1.06, 1.13, 1) rotate(0.5deg)",
   IOS_GRADIENT_START_TRANSFORM,
 ];
-const IOS_GRADIENT_OPACITIES = ["0.96", "1", "0.93", "1", "0.96"];
+const IOS_GRADIENT_OPACITIES = [0.96, 1, 0.93, 1, 0.96] as const;
 const IOS_GRADIENT_DURATION_MS = 20_000;
+
+const scaledIOSGradientOpacities = (intensity: number) =>
+  IOS_GRADIENT_OPACITIES.map((opacity) =>
+    String(Number((opacity * intensity).toFixed(3))),
+  );
 
 type IOSGradientAnimationState = {
   animation: Animation;
@@ -46,14 +71,14 @@ export const cleanupPageGradients = () => {
 };
 
 export const initializePageGradients = () => {
-  for (const [containerId, svgUrl, speed] of GRADIENT_LAYERS) {
+  for (const { containerId, iosIntensity, speed, svgUrl } of GRADIENT_LAYERS) {
     const container = document.querySelector<HTMLElement>(`#${containerId}`);
     if (!container || container.dataset.animatedGradient === "initialized") {
       continue;
     }
 
     container.dataset.animatedGradient = "initialized";
-    void initializeGradient(container, svgUrl, speed);
+    void initializeGradient(container, svgUrl, speed, iosIntensity);
   }
 };
 
@@ -61,9 +86,10 @@ const initializeGradient = async (
   container: HTMLElement,
   svgUrl: string,
   speed: number,
+  iosIntensity: number,
 ) => {
   if (isIOSWebKit()) {
-    initializeIOSGradient(container, svgUrl, speed);
+    initializeIOSGradient(container, svgUrl, speed, iosIntensity);
     return;
   }
 
@@ -198,6 +224,7 @@ const initializeIOSGradient = (
   container: HTMLElement,
   svgUrl: string,
   speed: number,
+  intensity: number,
 ) => {
   const image = document.createElement("img");
   image.src = svgUrl;
@@ -207,6 +234,7 @@ const initializeIOSGradient = (
   image.style.width = "100%";
   image.style.height = "100%";
   image.style.objectFit = "fill";
+  image.style.opacity = String(intensity);
   image.style.transform = IOS_GRADIENT_START_TRANSFORM;
   image.style.transformOrigin = "center";
   image.style.willChange = "transform";
@@ -219,7 +247,7 @@ const initializeIOSGradient = (
 
   const animation = image.animate(
     {
-      opacity: IOS_GRADIENT_OPACITIES,
+      opacity: scaledIOSGradientOpacities(intensity),
       transform: IOS_GRADIENT_TRANSFORMS,
     },
     {

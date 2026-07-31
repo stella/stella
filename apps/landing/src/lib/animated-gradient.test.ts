@@ -162,6 +162,7 @@ test("iOS gradients animate one original SVG surface", () => {
 
   expect(renderedChildren).toEqual([image]);
   expect(image.src).toBe("/images/gradients/hero-light.svg");
+  expect(image.style).toMatchObject({ opacity: "0.38" });
   expect(animate).toHaveBeenCalledTimes(1);
   expect(pause).toHaveBeenCalledTimes(2);
   expect(play).toHaveBeenCalledTimes(0);
@@ -174,7 +175,7 @@ test("iOS gradients animate one original SVG surface", () => {
   syncTransition();
   expect(pause).toHaveBeenCalledTimes(3);
   expect(animate.mock.calls.at(0)?.at(0)).toEqual({
-    opacity: ["0.96", "1", "0.93", "1", "0.96"],
+    opacity: ["0.365", "0.38", "0.353", "0.38", "0.365"],
     transform: [
       "translate3d(-2%, -3%, 0) scale3d(1.11, 1.05, 1) rotate(-0.6deg)",
       "translate3d(2%, 1%, 0) scale3d(1.04, 1.12, 1) rotate(0.4deg)",

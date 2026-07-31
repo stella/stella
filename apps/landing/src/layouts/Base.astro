@@ -175,10 +175,20 @@ const structuredData = {
   stll.app — stella landing page
 */}
 <!doctype html>
-<html lang={localeConfig.hreflang} dir={localeConfig.dir} class="scroll-smooth">
+<html
+  lang={localeConfig.hreflang}
+  dir={localeConfig.dir}
+  class="scroll-smooth"
+  data-landing-current-locale={locale}
+>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script>
+      import { initializeLandingLocale } from "../lib/landing-locale";
+
+      initializeLandingLocale();
+    </script>
     <meta name="description" content={description} />
     <meta name="robots" content={robotsContent} />
     <title>{title}</title>

@@ -57,6 +57,7 @@ const options = localeCodes.map((code) => ({
         <a
           href={option.href}
           hreflang={option.hreflang}
+          data-landing-locale-choice={option.code}
           class={`lang-item ${option.active ? "is-active" : ""}`}
         >
           {option.label}
