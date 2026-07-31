@@ -300,8 +300,9 @@ export const upsertSearchDocument = async (
           ))
         )
       FROM entities e
+      INNER JOIN workspaces w ON w.id = e.workspace_id
       WHERE e.id = ${doc.entityId}
-        AND e.organization_id = ${doc.organizationId}
+        AND w.organization_id = ${doc.organizationId}
         AND e.workspace_id = ${doc.workspaceId}
         AND e.current_version_id = ${doc.sourceVersionId}
         AND COALESCE(e.updated_at, e.created_at)
