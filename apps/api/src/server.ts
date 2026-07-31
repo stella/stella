@@ -97,11 +97,7 @@ import { detached } from "@/api/lib/detached";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
 import { initEntityDeletionCleanupWorker } from "@/api/lib/entity-deletion-cleanup-queue";
 import { httpError } from "@/api/lib/errors/http-error";
-import {
-  errorFingerprint,
-  errorTag,
-  unredactedErrorFields,
-} from "@/api/lib/errors/utils";
+import { errorTag } from "@/api/lib/errors/utils";
 import { initFileDerivativeWorker } from "@/api/lib/file-derivative-queue";
 import { initFlowRunWorker } from "@/api/lib/flows/flow-run-worker";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
@@ -177,18 +173,12 @@ const setDbQueryCountHeader = (set: Context["set"]) => {
 
 const shouldLogRequest = (path: string): boolean => path !== HEALTH_PATH;
 
-const getRouteName = ({
-  path,
-  route,
-}: {
-  path: string;
-  route: string | undefined;
-}): string => route ?? path;
+const getRouteName = (route: string | undefined): string =>
+  route ?? "unmatched";
 
-const buildRequestLogAttributes = ({
+const buildRequestLogDetails = ({
   durationMs,
   errorType,
-  path,
   request,
   route,
   statusCode,
@@ -197,45 +187,32 @@ const buildRequestLogAttributes = ({
 }: {
   durationMs: number;
   errorType?: string;
-  path: string;
   request: Request;
   route?: string;
   statusCode: number;
   reqCtx?: ReturnType<typeof getRequestContext>;
   elysiaCode?: string;
 }) => {
-  const attributes: Record<string, string | number | boolean> = {
-    "http.method": request.method,
-    "http.route": getRouteName({ path, route }),
-    "http.status_code": statusCode,
-    "request.duration_ms": Math.round(durationMs),
+  const details = {
+    durationMs: Math.round(durationMs),
+    method: request.method,
+    route,
+    statusCode,
   };
 
   if (elysiaCode) {
-    attributes["http.elysia_code"] = elysiaCode;
+    Object.assign(details, { elysiaCode });
   }
 
   if (errorType) {
-    attributes["error.type"] = errorType;
+    Object.assign(details, { errorType });
   }
 
   if (reqCtx?.requestId) {
-    attributes["request.id"] = reqCtx.requestId;
+    Object.assign(details, { requestId: reqCtx.requestId });
   }
 
-  if (reqCtx?.posthogDistinctId) {
-    attributes["posthogDistinctId"] = reqCtx.posthogDistinctId;
-  }
-
-  if (reqCtx?.sessionId) {
-    attributes["sessionId"] = reqCtx.sessionId;
-  }
-
-  if (reqCtx?.organizationId) {
-    attributes["enduser.organization_id"] = reqCtx.organizationId;
-  }
-
-  return attributes;
+  return details;
 };
 
 const api = new Elysia()
@@ -315,10 +292,9 @@ const api = new Elysia()
     const statusCode = STATUS_BY_ELYSIA_CODE[code] ?? 500;
 
     if (shouldLogRequest(path)) {
-      const attributes = buildRequestLogAttributes({
+      const details = buildRequestLogDetails({
         durationMs: reqCtx ? performance.now() - reqCtx.startTime : 0,
         errorType: errorTag(error),
-        path,
         request,
         route,
         statusCode,
@@ -327,20 +303,24 @@ const api = new Elysia()
       });
 
       if (statusCode >= 500) {
-        Object.assign(attributes, errorFingerprint(error));
-        if (env.isDev && env.DEBUG_UNREDACTED_ERRORS) {
-          Object.assign(attributes, unredactedErrorFields(error));
-        }
-        logger.error("request.failed", attributes);
+        logger.request({
+          ...details,
+          message: "request.failed",
+          severity: "ERROR",
+        });
       } else {
-        logger.warn("request.failed", attributes);
+        logger.request({
+          ...details,
+          message: "request.failed",
+          severity: "WARN",
+        });
       }
     }
 
     captureRequestError(error, {
       request,
       context: {
-        route: getRouteName({ path, route }),
+        route: getRouteName(route),
         method: request.method,
         elysiaCode: String(code),
       },
@@ -370,9 +350,8 @@ const api = new Elysia()
 
     if (shouldLogRequest(path) && reqCtx) {
       const statusCode = typeof set.status === "number" ? set.status : 200;
-      const attributes = buildRequestLogAttributes({
+      const details = buildRequestLogDetails({
         durationMs: performance.now() - reqCtx.startTime,
-        path,
         request,
         route,
         statusCode,
@@ -380,11 +359,23 @@ const api = new Elysia()
       });
 
       if (statusCode >= 500) {
-        logger.error("request.completed", attributes);
+        logger.request({
+          ...details,
+          message: "request.completed",
+          severity: "ERROR",
+        });
       } else if (statusCode >= 400) {
-        logger.warn("request.completed", attributes);
+        logger.request({
+          ...details,
+          message: "request.completed",
+          severity: "WARN",
+        });
       } else {
-        logger.info("request.completed", attributes);
+        logger.request({
+          ...details,
+          message: "request.completed",
+          severity: "INFO",
+        });
       }
     }
 
@@ -393,7 +384,7 @@ const api = new Elysia()
       await analytics.flush().catch((error: unknown) => {
         logger.error("analytics.flush.failed", {
           "error.type": errorTag(error),
-          "http.route": getRouteName({ path, route }),
+          "http.route": getRouteName(route),
         });
       });
     }

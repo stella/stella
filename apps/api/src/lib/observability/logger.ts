@@ -20,6 +20,18 @@ type LoggerAttributeValue = boolean | number | string;
 
 export type LoggerAttributes = Record<string, LoggerAttributeValue>;
 
+type RequestLogOptions = {
+  durationMs: number;
+  elysiaCode?: string | undefined;
+  errorType?: string | undefined;
+  message: "request.completed" | "request.failed";
+  method: string;
+  requestId?: string | undefined;
+  route?: string | undefined;
+  severity: "ERROR" | "INFO" | "WARN";
+  statusCode: number;
+};
+
 export const sanitizeLogAttributes = (
   attributes: LoggerAttributes | undefined,
 ): LoggerAttributes | undefined => {
@@ -90,6 +102,44 @@ const emit = ({
   }
 };
 
+const REQUEST_SEVERITY = {
+  ERROR: SeverityNumber.ERROR,
+  INFO: SeverityNumber.INFO,
+  WARN: SeverityNumber.WARN,
+} as const;
+
+const emitRequest = ({
+  durationMs,
+  elysiaCode,
+  errorType,
+  message,
+  method,
+  requestId,
+  route,
+  severity,
+  statusCode,
+}: RequestLogOptions): void => {
+  const safeAttributes: LoggerAttributes = {
+    "http.method": method,
+    "http.route": route ?? "unmatched",
+    "http.status_code": statusCode,
+    "request.duration_ms": durationMs,
+    ...(elysiaCode === undefined ? {} : { "http.elysia_code": elysiaCode }),
+    ...(errorType === undefined ? {} : { "error.type": errorType }),
+    ...(requestId === undefined ? {} : { "request.id": requestId }),
+  };
+
+  otelLogger.emit({
+    attributes: safeAttributes,
+    body: message,
+    severityNumber: REQUEST_SEVERITY[severity],
+    severityText: severity,
+  });
+  process.stdout.write(
+    `${JSON.stringify({ severity, message, ...safeAttributes })}\n`,
+  );
+};
+
 export const logger = {
   debug: (message: string, attributes?: LoggerAttributes) =>
     emit({
@@ -119,4 +169,5 @@ export const logger = {
       severityNumber: SeverityNumber.ERROR,
       severityText: "ERROR",
     }),
+  request: (options: RequestLogOptions) => emitRequest(options),
 };
