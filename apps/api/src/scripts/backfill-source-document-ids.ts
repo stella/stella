@@ -104,12 +104,25 @@ if (adapters.length === 0) {
   process.exit(1);
 }
 
-for (const [adapterKey, expression] of adapters) {
-  // Sequential by design: each source is a full table walk, and running
-  // them together would multiply the write load on one table.
-  // oxlint-disable-next-line no-await-in-loop -- one corpus-wide walk at a time
+/**
+ * Walk the sources one at a time. Sequential by design: each is a full table
+ * pass, and running them together would multiply the write load on one table.
+ * Expressed as a walk rather than a loop so the sequencing is the shape of the
+ * code rather than an awaited step inside an iteration.
+ */
+const fillEach = async (
+  remaining: readonly (readonly [string, string])[],
+): Promise<void> => {
+  const [next, ...rest] = remaining;
+  if (next === undefined) {
+    return;
+  }
+  const [adapterKey, expression] = next;
   const filled = await fillFrom(adapterKey, expression, 0);
   console.info(`${adapterKey}: done, ${filled.toLocaleString()} rows`);
-}
+  await fillEach(rest);
+};
+
+await fillEach(adapters);
 
 process.exit(0);
