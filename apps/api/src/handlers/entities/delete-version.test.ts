@@ -246,6 +246,13 @@ describe("delete-version chain-of-custody guard", () => {
             "Workspace-deletion GC: a workspace-wide file-ref sweep that must include tombstoned versions so their bytes are also cleaned up.",
         },
       ],
+      "handlers/workspaces/read-overview-activity.ts": [
+        {
+          anchor: "inArray(entityVersions.id, versionIds)",
+          reason:
+            "Historical activity target resolution reads only version ID and owning entity ID across tombstones; it never returns withdrawn version content.",
+        },
+      ],
       "handlers/entities/version-utils.ts": [
         {
           anchor: "max(entityVersions.versionNumber)",

@@ -9,7 +9,10 @@ import {
   isSkillToolName,
 } from "@/api/lib/mcp-upstream/namespace";
 import type { McpMode } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
+import {
+  bindApprovedMcpAuditContext,
+  type McpRequestContext,
+} from "@/api/mcp/context";
 import { finalizeMcpEgress } from "@/api/mcp/egress";
 import { dispatchGatewayToolCall } from "@/api/mcp/gateway/dispatch-call";
 import {
@@ -150,12 +153,20 @@ export const handleMcpToolCall = async ({
   }
 
   try {
+    const executionContext =
+      staticTool.annotations?.destructiveHint === true
+        ? bindApprovedMcpAuditContext(context)
+        : context;
     // Handlers never see the mode: they return either a finished result or an
     // egress plan. The central pipeline applies anonymization (anonymized mode)
     // before windowing, then serializes. Both steps run inside this try so an
     // anonymization or windowing failure is captured like any handler failure.
-    const response = await handler({ args, context });
-    return await finalizeMcpEgress({ context, mode, response });
+    const response = await handler({ args, context: executionContext });
+    return await finalizeMcpEgress({
+      context: executionContext,
+      mode,
+      response,
+    });
   } catch (error) {
     captureError(error, { source: "mcp", toolName });
     // Generic message: never leak internals to the caller. `captureError` keeps

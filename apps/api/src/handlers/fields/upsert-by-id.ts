@@ -242,6 +242,7 @@ export const upsertFieldHandler = async function* ({
         .select({
           id: entities.id,
           currentVersionId: entities.currentVersionId,
+          kind: entities.kind,
           readOnly: entities.readOnly,
         })
         .from(entities)
@@ -328,6 +329,7 @@ export const upsertFieldHandler = async function* ({
         },
         metadata: {
           entityId: body.entityId,
+          kind: entity.kind,
           propertyId: property.id,
           entityVersionId,
         },

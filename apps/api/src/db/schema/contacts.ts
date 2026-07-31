@@ -298,6 +298,32 @@ export const workspaceContacts = p.pgTable(
 
 // -- Audit Logs --
 
+export const AUDIT_PERFORMER_TYPES = ["user", "agent", "service"] as const;
+export const AUDIT_TRIGGER_TYPES = [
+  "direct",
+  "user_dispatch",
+  "agent_delegation",
+  "schedule",
+  "webhook",
+  "credential",
+  "system",
+] as const;
+export const AUDIT_APPROVAL_STATUSES = [
+  "not_required",
+  "pending",
+  "approved",
+  "rejected",
+] as const;
+export const AUDIT_ACTIVITY_CATEGORIES = [
+  "documents",
+  "tasks",
+  "matter",
+  "team",
+  "court",
+  "automation",
+  "other",
+] as const;
+
 export const auditLogs = p.pgTable(
   "audit_logs",
   {
@@ -312,15 +338,72 @@ export const auditLogs = p.pgTable(
     resourceId: p.text("resource_id").notNull(),
     metadata: jsonb().$type<Record<string, unknown>>(),
     changes: jsonb().$type<Record<string, unknown>>(),
+    performerType: p
+      .text("performer_type", { enum: AUDIT_PERFORMER_TYPES })
+      .notNull()
+      .default("user"),
+    performerId: p.text("performer_id"),
+    performerName: p.text("performer_name"),
+    triggerType: p
+      .text("trigger_type", { enum: AUDIT_TRIGGER_TYPES })
+      .notNull()
+      .default("direct"),
+    triggerUserId: p.text("trigger_user_id"),
+    triggerSource: p.text("trigger_source"),
+    triggerSourceId: p.text("trigger_source_id"),
+    runId: p.text("run_id"),
+    groupId: p.uuid("group_id"),
+    approvalStatus: p
+      .text("approval_status", { enum: AUDIT_APPROVAL_STATUSES })
+      .notNull()
+      .default("not_required"),
+    approvedByUserId: p.text("approved_by_user_id"),
+    activityCategory: p.text("activity_category", {
+      enum: AUDIT_ACTIVITY_CATEGORIES,
+    }),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    p.check(
+      "audit_logs_performer_type_check",
+      sql`${table.performerType} in ('user', 'agent', 'service')`,
+    ),
+    p.check(
+      "audit_logs_trigger_type_check",
+      sql`${table.triggerType} in ('direct', 'user_dispatch', 'agent_delegation', 'schedule', 'webhook', 'credential', 'system')`,
+    ),
+    p.check(
+      "audit_logs_approval_status_check",
+      sql`${table.approvalStatus} in ('not_required', 'pending', 'approved', 'rejected')`,
+    ),
+    p.check(
+      "audit_logs_activity_category_check",
+      sql`${table.activityCategory} is null or ${table.activityCategory} in ('documents', 'tasks', 'matter', 'team', 'court', 'automation', 'other')`,
+    ),
     p
       .index("audit_logs_org_created_id_idx")
       .on(table.organizationId, table.createdAt, table.id),
     p
       .index("audit_logs_org_workspace_created_id_idx")
       .on(table.organizationId, table.workspaceId, table.createdAt, table.id),
+    p
+      .index("audit_logs_org_workspace_category_created_id_idx")
+      .on(
+        table.organizationId,
+        table.workspaceId,
+        table.activityCategory,
+        table.createdAt,
+        table.id,
+      ),
+    p
+      .index("audit_logs_org_workspace_performer_created_id_idx")
+      .on(
+        table.organizationId,
+        table.workspaceId,
+        table.performerType,
+        table.createdAt,
+        table.id,
+      ),
     p
       .index("audit_logs_org_resource_created_id_idx")
       .on(

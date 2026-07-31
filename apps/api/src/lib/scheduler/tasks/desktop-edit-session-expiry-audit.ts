@@ -17,6 +17,13 @@ export type ExpiryAuditEvent = {
   resourceId: string;
   changes: { status: { old: "open"; new: "expired" } };
   metadata: { reason: "token_expired" };
+  activityCategory: "other";
+  approvalStatus: "not_required";
+  performerId: "desktop-edit-session-expiry";
+  performerName: "Desktop edit session expiry";
+  performerType: "service";
+  triggerSource: "desktop-edit-session-expiry";
+  triggerType: "system";
 };
 
 export const selectTransitionedExpirableSessions = <
@@ -45,4 +52,11 @@ export const buildExpiryAuditEvents = (
     resourceId: session.id,
     changes: { status: { old: "open", new: "expired" } },
     metadata: { reason: "token_expired" },
+    activityCategory: "other",
+    approvalStatus: "not_required",
+    performerId: "desktop-edit-session-expiry",
+    performerName: "Desktop edit session expiry",
+    performerType: "service",
+    triggerSource: "desktop-edit-session-expiry",
+    triggerType: "system",
   }));

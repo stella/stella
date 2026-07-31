@@ -129,20 +129,32 @@ describe("addWorkspaceMember", () => {
     }
     expect(auditBatch.at(0)).toEqual({
       action: "update",
+      activityCategory: "team",
+      approvalStatus: "not_required",
+      approvedByUserId: null,
       changes: {
         membersAdded: {
           old: null,
           new: ["user_invitee"],
         },
       },
+      groupId: expect.any(String),
       metadata: {
         forwardedFor: null,
         ipAddress: null,
         userAgent: null,
       },
       organizationId: "org_test123",
+      performerId: "user_test123",
+      performerName: null,
+      performerType: "user",
       resourceId: "ws_test123",
       resourceType: "workspace",
+      runId: null,
+      triggerSource: null,
+      triggerSourceId: null,
+      triggerType: "direct",
+      triggerUserId: null,
       userId: "user_test123",
       workspaceId: "ws_test123",
     });

@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { useHotkey } from "@tanstack/react-hotkeys";
-import type { QueryClient } from "@tanstack/react-query";
+import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import {
   createFileRoute,
   Navigate,
@@ -36,8 +36,10 @@ import {
   overviewOptions,
   workspaceOptions,
 } from "@/routes/_protected.workspaces/-queries";
+import { workspacesKeys } from "@/routes/_protected.workspaces/-queries.logic";
 
 const EXTRACTION_PREVIEW_EVENT_TYPE = "workflow-extraction-preview";
+const INVALIDATE_QUERY_EVENT_TYPE = "invalidate-query";
 const EXTRACTION_PREVIEW_CLIENT_TTL_MS = 5 * 60 * 1000;
 
 type ExtractionPreviewEventData = {
@@ -175,6 +177,7 @@ function RouteComponent() {
   const workspaceId = Route.useParams({
     select: (p) => p.workspaceId,
   });
+  const queryClient = useQueryClient();
   // Lazy state singleton (mutated in place, identity stable): avoids both
   // the render-scope ref write (React Compiler bailout) and per-render
   // allocation.
@@ -189,6 +192,15 @@ function RouteComponent() {
     type: string;
     data: unknown;
   }) => {
+    if (type === INVALIDATE_QUERY_EVENT_TYPE) {
+      detached(
+        queryClient.invalidateQueries({
+          queryKey: workspacesKeys.overviewActivityAll(workspaceId),
+        }),
+        "handleWorkspaceActivityInvalidation",
+      );
+    }
+
     const workspaceStore = useWorkspaceStore.getState();
     if (
       type !== EXTRACTION_PREVIEW_EVENT_TYPE ||

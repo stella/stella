@@ -3,7 +3,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { entityVersions } from "@/api/db/schema";
+import { entities, entityVersions } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -50,8 +50,19 @@ export const updateVersionLabelHandler = async function* ({
   const result = yield* Result.await(
     safeDb(async (tx) => {
       const existing = await tx
-        .select({ label: entityVersions.label })
+        .select({
+          entityName: entities.name,
+          kind: entities.kind,
+          label: entityVersions.label,
+        })
         .from(entityVersions)
+        .innerJoin(
+          entities,
+          and(
+            eq(entities.id, entityVersions.entityId),
+            eq(entities.workspaceId, entityVersions.workspaceId),
+          ),
+        )
         .where(
           and(
             eq(entityVersions.id, params.versionId),
@@ -89,6 +100,11 @@ export const updateVersionLabelHandler = async function* ({
           action: AUDIT_ACTION.UPDATE,
           resourceType: AUDIT_RESOURCE_TYPE.ENTITY_VERSION,
           resourceId: params.versionId,
+          metadata: {
+            entityId: params.entityId,
+            entityName: previous.entityName,
+            kind: previous.kind,
+          },
           changes: {
             label: {
               old: previous.label,

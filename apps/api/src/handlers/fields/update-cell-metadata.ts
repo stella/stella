@@ -100,6 +100,7 @@ const updateCellMetadata = createSafeHandler(
           .select({
             id: entities.id,
             currentVersionId: entities.currentVersionId,
+            kind: entities.kind,
           })
           .from(entities)
           .where(
@@ -194,6 +195,7 @@ const updateCellMetadata = createSafeHandler(
             metadata: {
               entityId: body.entityId,
               entityVersionId,
+              kind: entity.kind,
               propertyId: property.id,
             },
           });
@@ -253,6 +255,7 @@ const updateCellMetadata = createSafeHandler(
           metadata: {
             entityId: body.entityId,
             entityVersionId,
+            kind: entity.kind,
             propertyId: property.id,
           },
         });

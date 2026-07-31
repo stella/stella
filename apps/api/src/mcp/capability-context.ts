@@ -142,6 +142,9 @@ export const synthesizeCapabilityContext = async ({
     recordAuditEvent,
     createAuditRecorder: (opts) =>
       createAuditRecorder({
+        ...(context.auditExecution
+          ? { execution: context.auditExecution }
+          : {}),
         organizationId: context.organizationId,
         userId: context.userId,
         request,

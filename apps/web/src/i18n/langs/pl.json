@@ -3390,6 +3390,92 @@
       "equals": "Równa się"
     },
     "overview": {
+      "activity": {
+        "actions": {
+          "added": "<actor>Osoba</actor> dodała <target>element</target>",
+          "cancelled": "<actor>Osoba</actor> anulowała <target>element</target>",
+          "created": "<actor>Osoba</actor> utworzyła <target>element</target>",
+          "deleted": "<actor>Osoba</actor> usunęła <target>element</target>",
+          "executed": "<actor>Osoba</actor> uruchomiła <target>element</target>",
+          "removed": "<actor>Osoba</actor> odłączyła <target>element</target>",
+          "reviewed": "<actor>Osoba</actor> sprawdziła <target>element</target>",
+          "updated": "<actor>Osoba</actor> zaktualizowała <target>element</target>"
+        },
+        "approvals": {
+          "approved": "Zatwierdzenie udzielone",
+          "notRequired": "Niewymagane",
+          "pending": "Zatwierdzenie oczekuje",
+          "rejected": "Zatwierdzenie odrzucone"
+        },
+        "automatedService": "Usługa automatyczna",
+        "deletedUser": "Usunięty użytkownik",
+        "details": {
+          "actor": "Wykonał(a)",
+          "approval": "Zatwierdzenie",
+          "approvedBy": "Zatwierdził(a)",
+          "channel": "Kanał",
+          "dateTime": "Data i godzina",
+          "direct": "Działanie bezpośrednie",
+          "eventId": "ID zdarzenia",
+          "notAvailable": "Niedostępne",
+          "openTarget": "Otwórz element",
+          "runId": "ID uruchomienia",
+          "system": "Aktywność systemowa",
+          "target": "Cel",
+          "title": "Szczegóły aktywności",
+          "trigger": "Zainicjował(a)",
+          "webhook": "Wywołanie sieciowe"
+        },
+        "empty": "Brak aktywności w tej sprawie.",
+        "filterLabel": "Filtruj aktywność",
+        "filters": {
+          "all": "Cała aktywność",
+          "automation": "Automatyzacja",
+          "court": "Sąd",
+          "documents": "Dokumenty",
+          "matter": "Sprawa",
+          "tasks": "Zadania",
+          "team": "Zespół"
+        },
+        "list": {
+          "actor": "Wykonawca",
+          "dateTime": "Data i godzina",
+          "event": "Zdarzenie",
+          "provenance": "Pochodzenie"
+        },
+        "loadEarlier": "Wczytaj starsze",
+        "loading": "Wczytywanie…",
+        "provenance": {
+          "connected": "Przez połączony dostęp",
+          "connectedBy": "Połączono przez {user}",
+          "delegated": "Oddelegowane przez innego agenta",
+          "delegatedBy": "Oddelegowane przez agenta dla {user}",
+          "dispatched": "Zlecone przez użytkownika",
+          "dispatchedBy": "Zlecone przez {user}",
+          "dispatchedInChatBy": "Zlecone przez {user} na czacie",
+          "scheduled": "Uruchomiono zgodnie z harmonogramem",
+          "scheduledBy": "Zaplanowana automatyzacja użytkownika {user}"
+        },
+        "runCount": "{count, plural, one {# aktywność} few {# aktywności} many {# aktywności} other {# aktywności}}",
+        "sources": {
+          "chat": "Rozmowa na czacie",
+          "flow": "Przepływ pracy",
+          "mcp": "Połączone narzędzie"
+        },
+        "targets": {
+          "automation": "automatyzację",
+          "court": "wpis sądowy",
+          "document": "usunięty dokument",
+          "matter": "sprawę",
+          "task": "usunięty element agendy",
+          "team": "zespół sprawy"
+        },
+        "title": "Aktywność",
+        "views": {
+          "list": "Widok listy",
+          "timeline": "Widok osi czasu"
+        }
+      },
       "atAGlance": "W skrócie",
       "edited": "edytował(a)",
       "getStarted": "Zacznij od przesłania dokumentów lub utworzenia pierwszego folderu.",

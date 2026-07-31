@@ -13,6 +13,7 @@ import type { EditableFieldContent } from "@/routes/_protected.workspaces/$works
 import { invalidateDeletedEntityQueries } from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities.logic";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { taskKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/tasks.logic";
+import { workspacesKeys } from "@/routes/_protected.workspaces/-queries.logic";
 
 type CreateEntitiesVars = {
   type: "manual-input";
@@ -32,6 +33,7 @@ export const useCreateEntities = () => {
         .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .put({
           queryKey: entitiesKeys.all(workspaceId),
+          queryKeys: [workspacesKeys.overviewActivityAll(workspaceId)],
           name: body.name,
           ...(body.kind !== undefined && { kind: body.kind }),
           ...(body.parentId !== undefined && {
@@ -63,7 +65,10 @@ export const useDeleteEntities = () => {
         .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .delete({
           queryKey: entitiesKeys.all(workspaceId),
-          queryKeys: [taskKeys.all(workspaceId)],
+          queryKeys: [
+            taskKeys.all(workspaceId),
+            workspacesKeys.overviewActivityAll(workspaceId),
+          ],
           entityIds: entityIds.map((entityId) => toSafeId<"entity">(entityId)),
         });
 
@@ -97,6 +102,7 @@ export const useMoveEntity = () => {
         .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .move.patch({
           queryKey: entitiesKeys.all(workspaceId),
+          queryKeys: [workspacesKeys.overviewActivityAll(workspaceId)],
           entityId: toSafeId<"entity">(entityId),
           parentId: parentId === null ? null : toSafeId<"entity">(parentId),
         });
@@ -125,6 +131,7 @@ export const useRenameEntity = () => {
         .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .rename.patch({
           queryKey: entitiesKeys.all(workspaceId),
+          queryKeys: [workspacesKeys.overviewActivityAll(workspaceId)],
           entityId: toSafeId<"entity">(entityId),
           name,
         });
@@ -163,6 +170,7 @@ export const useUpsertField = () => {
         .fields({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .post({
           queryKey: entitiesKeys.all(workspaceId),
+          queryKeys: [workspacesKeys.overviewActivityAll(workspaceId)],
           propertyId: toSafeId<"property">(propertyId),
           entityId: toSafeId<"entity">(entityId),
           content,

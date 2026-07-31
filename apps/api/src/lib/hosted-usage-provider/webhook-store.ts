@@ -164,5 +164,13 @@ export const recordWebhookAuditEvent = async ({
     resourceId,
     changes: changes ?? null,
     metadata: { source: "usage_provider.webhook", eventId },
+    activityCategory: "other",
+    approvalStatus: "not_required",
+    performerId: "usage-provider",
+    performerName: "Usage provider",
+    performerType: "service",
+    triggerSource: "usage-provider",
+    triggerSourceId: eventId,
+    triggerType: "webhook",
   });
 };

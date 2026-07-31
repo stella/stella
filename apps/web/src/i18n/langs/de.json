@@ -3390,6 +3390,92 @@
       "equals": "Gleich"
     },
     "overview": {
+      "activity": {
+        "actions": {
+          "added": "<actor>Person</actor> hat <target>Element</target> hinzugefügt",
+          "cancelled": "<actor>Person</actor> hat <target>Element</target> abgebrochen",
+          "created": "<actor>Person</actor> hat <target>Element</target> erstellt",
+          "deleted": "<actor>Person</actor> hat <target>Element</target> gelöscht",
+          "executed": "<actor>Person</actor> hat <target>Element</target> ausgeführt",
+          "removed": "<actor>Person</actor> hat <target>Element</target> entfernt",
+          "reviewed": "<actor>Person</actor> hat <target>Element</target> geprüft",
+          "updated": "<actor>Person</actor> hat <target>Element</target> aktualisiert"
+        },
+        "approvals": {
+          "approved": "Genehmigung erteilt",
+          "notRequired": "Nicht erforderlich",
+          "pending": "Genehmigung ausstehend",
+          "rejected": "Genehmigung abgelehnt"
+        },
+        "automatedService": "Automatisierter Dienst",
+        "deletedUser": "Gelöschter Benutzer",
+        "details": {
+          "actor": "Ausgeführt von",
+          "approval": "Genehmigung",
+          "approvedBy": "Genehmigt von",
+          "channel": "Kanal",
+          "dateTime": "Datum und Uhrzeit",
+          "direct": "Direkte Aktivität",
+          "eventId": "Ereignis-ID",
+          "notAvailable": "Nicht verfügbar",
+          "openTarget": "Element öffnen",
+          "runId": "Ausführungs-ID",
+          "system": "Systemaktivität",
+          "target": "Ziel",
+          "title": "Aktivitätsdetails",
+          "trigger": "Ausgelöst von",
+          "webhook": "Web-Schnittstelle"
+        },
+        "empty": "Noch keine Aktivität in dieser Akte.",
+        "filterLabel": "Aktivität filtern",
+        "filters": {
+          "all": "Alle Aktivitäten",
+          "automation": "Automatisierung",
+          "court": "Gericht",
+          "documents": "Dokumente",
+          "matter": "Akte",
+          "tasks": "Aufgaben",
+          "team": "Aktenteam"
+        },
+        "list": {
+          "actor": "Akteur",
+          "dateTime": "Datum und Uhrzeit",
+          "event": "Ereignis",
+          "provenance": "Ursprung"
+        },
+        "loadEarlier": "Ältere laden",
+        "loading": "Wird geladen…",
+        "provenance": {
+          "connected": "Über verbundenen Zugriff",
+          "connectedBy": "Verbunden von {user}",
+          "delegated": "Von einem anderen Agenten delegiert",
+          "delegatedBy": "Von einem Agenten für {user} delegiert",
+          "dispatched": "Von einem Benutzer beauftragt",
+          "dispatchedBy": "Von {user} beauftragt",
+          "dispatchedInChatBy": "Von {user} im Chat beauftragt",
+          "scheduled": "Planmäßig gestartet",
+          "scheduledBy": "Geplante Automatisierung von {user}"
+        },
+        "runCount": "{count, plural, one {# Aktivität} other {# Aktivitäten}}",
+        "sources": {
+          "chat": "Chat-Unterhaltung",
+          "flow": "Arbeitsablauf",
+          "mcp": "Verbundenes Werkzeug"
+        },
+        "targets": {
+          "automation": "Automatisierung",
+          "court": "Gerichtseintrag",
+          "document": "gelöschtes Dokument",
+          "matter": "Akte",
+          "task": "gelöschter Agendaeintrag",
+          "team": "Aktenteam"
+        },
+        "title": "Aktivität",
+        "views": {
+          "list": "Listenansicht",
+          "timeline": "Zeitleistenansicht"
+        }
+      },
       "atAGlance": "Auf einen Blick",
       "edited": "bearbeitet",
       "getStarted": "Laden Sie Dokumente hoch oder erstellen Sie Ihren ersten Ordner.",

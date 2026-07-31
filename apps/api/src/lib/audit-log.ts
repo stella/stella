@@ -1,4 +1,10 @@
 import type { Transaction } from "@/api/db/root";
+import type {
+  AUDIT_ACTIVITY_CATEGORIES,
+  AUDIT_APPROVAL_STATUSES,
+  AUDIT_PERFORMER_TYPES,
+  AUDIT_TRIGGER_TYPES,
+} from "@/api/db/schema";
 import { auditLogs } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resolveClientIp } from "@/api/lib/client-ip";
@@ -79,6 +85,44 @@ export type FieldDiffs = Record<string, { old: unknown; new: unknown }>;
 
 type AuditMetadata = Record<string, unknown>;
 
+export type AuditPerformerType = (typeof AUDIT_PERFORMER_TYPES)[number];
+export type AuditTriggerType = (typeof AUDIT_TRIGGER_TYPES)[number];
+export type AuditApprovalStatus = (typeof AUDIT_APPROVAL_STATUSES)[number];
+export type AuditActivityCategory = (typeof AUDIT_ACTIVITY_CATEGORIES)[number];
+
+export type AuditExecutionContext = {
+  performer:
+    | { type: "user"; id: SafeId<"user"> }
+    | { type: "agent" | "service"; id: string; name: string | null };
+  trigger:
+    | { type: "direct" }
+    | {
+        type: "user_dispatch";
+        userId: SafeId<"user">;
+        source: "chat" | "action" | "api";
+        sourceId?: string;
+      }
+    | {
+        type: "agent_delegation";
+        agentId: string;
+        rootUserId: SafeId<"user">;
+      }
+    | {
+        type: "schedule" | "webhook" | "credential";
+        ownerUserId: SafeId<"user">;
+        source?: string;
+        sourceId?: string;
+      }
+    | { type: "system"; source?: string };
+  runId?: string;
+  approval?:
+    | { status: "not_required" | "pending" }
+    | {
+        status: "approved" | "rejected";
+        userId: SafeId<"user">;
+      };
+};
+
 export type AuditEvent = {
   action: AuditAction;
   resourceType: AuditResourceType;
@@ -104,7 +148,133 @@ type AuditRecorderBindings = {
   userId: SafeId<"user">;
   request: Request;
   server: ServerLike | null;
+  execution?: AuditExecutionContext;
 };
+
+const executionColumns = (
+  execution: AuditExecutionContext | undefined,
+  accountableUserId: SafeId<"user">,
+) => {
+  const performer = execution?.performer ?? {
+    type: "user" as const,
+    id: accountableUserId,
+  };
+  const trigger = execution?.trigger ?? { type: "direct" as const };
+  const approval = execution?.approval ?? { status: "not_required" as const };
+
+  const triggerUserId = (() => {
+    switch (trigger.type) {
+      case "user_dispatch":
+        return trigger.userId;
+      case "agent_delegation":
+        return trigger.rootUserId;
+      case "schedule":
+      case "webhook":
+      case "credential":
+        return trigger.ownerUserId;
+      case "direct":
+      case "system":
+        return null;
+      default: {
+        const exhaustive: never = trigger;
+        return exhaustive;
+      }
+    }
+  })();
+
+  const triggerSource = (() => {
+    switch (trigger.type) {
+      case "user_dispatch":
+        return trigger.source;
+      case "schedule":
+      case "webhook":
+      case "credential":
+      case "system":
+        return trigger.source ?? null;
+      case "agent_delegation":
+        return trigger.agentId;
+      case "direct":
+        return null;
+      default: {
+        const exhaustive: never = trigger;
+        return exhaustive;
+      }
+    }
+  })();
+
+  return {
+    performerType: performer.type,
+    performerId: performer.id,
+    performerName: performer.type === "user" ? null : performer.name,
+    triggerType: trigger.type,
+    triggerUserId,
+    triggerSource,
+    triggerSourceId: "sourceId" in trigger ? (trigger.sourceId ?? null) : null,
+    runId: execution?.runId ?? null,
+    approvalStatus: approval.status,
+    approvedByUserId:
+      approval.status === "approved" || approval.status === "rejected"
+        ? approval.userId
+        : null,
+  };
+};
+
+const activityCategoryForEvent = (event: AuditEvent): AuditActivityCategory => {
+  switch (event.resourceType) {
+    case "entity": {
+      const createdEntity = event.changes?.["created"]?.new;
+      const createdKind =
+        typeof createdEntity === "object" &&
+        createdEntity !== null &&
+        "kind" in createdEntity
+          ? createdEntity.kind
+          : null;
+      const deletedEntity = event.changes?.["deleted"]?.old;
+      const deletedKind =
+        typeof deletedEntity === "object" &&
+        deletedEntity !== null &&
+        "kind" in deletedEntity
+          ? deletedEntity.kind
+          : null;
+      return event.metadata?.["kind"] === "task" ||
+        createdKind === "task" ||
+        deletedKind === "task"
+        ? "tasks"
+        : "documents";
+    }
+    case "field":
+      return event.metadata?.["kind"] === "task" ? "tasks" : "documents";
+    case "entity_version":
+      return event.metadata?.["kind"] === "task" ? "tasks" : "documents";
+    case "user_file":
+      return "documents";
+    case "workspace_member":
+    case "workspace_contact":
+      return "team";
+    case "case_law_matter_link":
+      return "court";
+    case "flow_run":
+      return "automation";
+    case "playbook":
+      return event.action === AUDIT_ACTION.EXECUTE ? "automation" : "other";
+    case "workspace":
+      return event.changes?.["membersAdded"] !== undefined ||
+        event.changes?.["membersRemoved"] !== undefined
+        ? "team"
+        : "matter";
+    default:
+      return "other";
+  }
+};
+
+const runIdForEvent = (
+  event: AuditEvent,
+  execution: ReturnType<typeof executionColumns>,
+): string | null =>
+  execution.runId ??
+  (event.resourceType === AUDIT_RESOURCE_TYPE.FLOW_RUN
+    ? event.resourceId
+    : null);
 
 const nullableHeader = (headers: Headers, name: string): string | null => {
   const value = headers.get(name);
@@ -133,6 +303,7 @@ export const createBackgroundAuditRecorder =
     organizationId: SafeId<"organization">;
     workspaceId: SafeId<"workspace"> | null;
     userId: SafeId<"user">;
+    execution: AuditExecutionContext;
   }): AuditRecorder =>
   async (tx, event) => {
     const events = Array.isArray(event) ? event : [event];
@@ -140,19 +311,24 @@ export const createBackgroundAuditRecorder =
       return;
     }
 
-    await tx.insert(auditLogs).values(
-      events.map((e) => ({
-        organizationId: bindings.organizationId,
-        workspaceId:
-          e.workspaceId === undefined ? bindings.workspaceId : e.workspaceId,
-        userId: bindings.userId,
-        action: e.action,
-        resourceType: e.resourceType,
-        resourceId: e.resourceId,
-        metadata: e.metadata ?? null,
-        changes: e.changes ?? null,
-      })),
-    );
+    const groupId = Bun.randomUUIDv7();
+    const execution = executionColumns(bindings.execution, bindings.userId);
+    const toRow = (e: AuditEvent) => ({
+      action: e.action,
+      changes: e.changes ?? null,
+      metadata: e.metadata ?? null,
+      organizationId: bindings.organizationId,
+      resourceId: e.resourceId,
+      resourceType: e.resourceType,
+      userId: bindings.userId,
+      workspaceId:
+        e.workspaceId === undefined ? bindings.workspaceId : e.workspaceId,
+      ...execution,
+      activityCategory: activityCategoryForEvent(e),
+      groupId,
+      runId: runIdForEvent(e, execution),
+    });
+    await tx.insert(auditLogs).values(events.map(toRow));
   };
 
 export const createAuditRecorder = (
@@ -166,18 +342,23 @@ export const createAuditRecorder = (
       return;
     }
 
-    await tx.insert(auditLogs).values(
-      events.map((e) => ({
-        organizationId: bindings.organizationId,
-        workspaceId:
-          e.workspaceId === undefined ? bindings.workspaceId : e.workspaceId,
-        userId: bindings.userId,
-        action: e.action,
-        resourceType: e.resourceType,
-        resourceId: e.resourceId,
-        metadata: e.metadata ? { ...base, ...e.metadata } : base,
-        changes: e.changes ?? null,
-      })),
-    );
+    const groupId = Bun.randomUUIDv7();
+    const execution = executionColumns(bindings.execution, bindings.userId);
+    const toRow = (e: AuditEvent) => ({
+      action: e.action,
+      changes: e.changes ?? null,
+      metadata: e.metadata ? { ...base, ...e.metadata } : base,
+      organizationId: bindings.organizationId,
+      resourceId: e.resourceId,
+      resourceType: e.resourceType,
+      userId: bindings.userId,
+      workspaceId:
+        e.workspaceId === undefined ? bindings.workspaceId : e.workspaceId,
+      ...execution,
+      activityCategory: activityCategoryForEvent(e),
+      groupId,
+      runId: runIdForEvent(e, execution),
+    });
+    await tx.insert(auditLogs).values(events.map(toRow));
   };
 };

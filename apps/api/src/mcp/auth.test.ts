@@ -41,8 +41,25 @@ describe("extractMcpSession", () => {
         sub: "user_123",
       }),
     ).toEqual({
+      credential: { type: "delegated_user" },
       organizationId: "org_123",
       scopes: ["stella:read", "stella:search"],
+      userId: "user_123",
+    });
+  });
+
+  test("preserves the verified OAuth client for later provenance resolution", () => {
+    expect(
+      extractMcpSession({
+        azp: "agent-client-123",
+        org_id: "org_123",
+        scope: "stella:read",
+        sub: "user_123",
+      }),
+    ).toEqual({
+      credential: { clientId: "agent-client-123", type: "oauth_client" },
+      organizationId: "org_123",
+      scopes: ["stella:read"],
       userId: "user_123",
     });
   });

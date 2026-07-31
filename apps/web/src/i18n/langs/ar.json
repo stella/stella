@@ -3390,6 +3390,92 @@
       "equals": "يساوي"
     },
     "overview": {
+      "activity": {
+        "actions": {
+          "added": "أضاف <actor>المستخدم</actor> <target>العنصر</target>",
+          "cancelled": "ألغى <actor>المستخدم</actor> <target>العنصر</target>",
+          "created": "أنشأ <actor>المستخدم</actor> <target>العنصر</target>",
+          "deleted": "حذف <actor>المستخدم</actor> <target>العنصر</target>",
+          "executed": "شغّل <actor>المستخدم</actor> <target>العنصر</target>",
+          "removed": "أزال <actor>المستخدم</actor> <target>العنصر</target>",
+          "reviewed": "راجع <actor>المستخدم</actor> <target>العنصر</target>",
+          "updated": "حدّث <actor>المستخدم</actor> <target>العنصر</target>"
+        },
+        "approvals": {
+          "approved": "تم منح الموافقة",
+          "notRequired": "غير مطلوب",
+          "pending": "الموافقة قيد الانتظار",
+          "rejected": "رُفضت الموافقة"
+        },
+        "automatedService": "خدمة آلية",
+        "deletedUser": "مستخدم محذوف",
+        "details": {
+          "actor": "نفّذها",
+          "approval": "الموافقة",
+          "approvedBy": "وافق عليها",
+          "channel": "القناة",
+          "dateTime": "التاريخ والوقت",
+          "direct": "نشاط مباشر",
+          "eventId": "معرّف الحدث",
+          "notAvailable": "غير متاح",
+          "openTarget": "فتح العنصر",
+          "runId": "معرّف التشغيل",
+          "system": "نشاط النظام",
+          "target": "الهدف",
+          "title": "تفاصيل النشاط",
+          "trigger": "بدأه",
+          "webhook": "خطاف ويب"
+        },
+        "empty": "لا يوجد نشاط في هذا الملف القانوني بعد.",
+        "filterLabel": "تصفية النشاط",
+        "filters": {
+          "all": "كل النشاط",
+          "automation": "الأتمتة",
+          "court": "المحكمة",
+          "documents": "المستندات",
+          "matter": "ملف قانوني",
+          "tasks": "جدول الأعمال",
+          "team": "الفريق"
+        },
+        "list": {
+          "actor": "الفاعل",
+          "dateTime": "التاريخ والوقت",
+          "event": "الحدث",
+          "provenance": "المنشأ"
+        },
+        "loadEarlier": "تحميل الأقدم",
+        "loading": "جارٍ التحميل…",
+        "provenance": {
+          "connected": "باستخدام وصول متصل",
+          "connectedBy": "تم الاتصال بواسطة {user}",
+          "delegated": "فُوّض من وكيل آخر",
+          "delegatedBy": "فُوّض من وكيل لصالح {user}",
+          "dispatched": "طلبه مستخدم",
+          "dispatchedBy": "طلبه {user}",
+          "dispatchedInChatBy": "طلبه {user} في الدردشة",
+          "scheduled": "بدأ حسب الجدول",
+          "scheduledBy": "أتمتة مجدولة يملكها {user}"
+        },
+        "runCount": "{count, plural, zero {لا أنشطة} one {نشاط واحد} two {نشاطان} few {# أنشطة} many {# نشاطًا} other {# نشاط}}",
+        "sources": {
+          "chat": "محادثة الدردشة",
+          "flow": "سير العمل",
+          "mcp": "أداة متصلة"
+        },
+        "targets": {
+          "automation": "الأتمتة",
+          "court": "سجل المحكمة",
+          "document": "مستند محذوف",
+          "matter": "الملف القانوني",
+          "task": "عنصر جدول أعمال محذوف",
+          "team": "فريق الملف القانوني"
+        },
+        "title": "النشاط",
+        "views": {
+          "list": "عرض القائمة",
+          "timeline": "عرض الخط الزمني"
+        }
+      },
       "atAGlance": "لمحة سريعة",
       "edited": "تم التعديل",
       "getStarted": "ابدأ برفع المستندات أو إنشاء أول مجلد لك.",

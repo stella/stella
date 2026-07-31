@@ -21,6 +21,7 @@ type SegmentedIconToggleProps<T extends string> = {
   value: T;
   options: readonly SegmentedIconToggleOption<T>[];
   onChange: (value: T) => void;
+  size?: "compact" | "touch";
 };
 
 /** Compact segmented control of icon buttons (e.g. table row wrap, list
@@ -30,8 +31,14 @@ export const SegmentedIconToggle = <T extends string>({
   value,
   options,
   onChange,
+  size = "compact",
 }: SegmentedIconToggleProps<T>) => (
-  <div className="border-border/70 bg-muted/30 inline-flex h-7 shrink-0 items-center overflow-hidden rounded-md border p-0.5">
+  <div
+    className={cn(
+      "border-border/70 bg-muted/30 inline-flex shrink-0 items-center overflow-hidden rounded-md border p-0.5",
+      size === "touch" ? "h-7 [@media(any-pointer:coarse)]:h-12" : "h-7",
+    )}
+  >
     {options.map((option) => {
       const Icon = option.icon;
       const isActive = value === option.value;
@@ -44,6 +51,8 @@ export const SegmentedIconToggle = <T extends string>({
                 aria-pressed={isActive}
                 className={cn(
                   "text-muted-foreground h-6 min-h-0 w-7 rounded-[4px] p-0",
+                  size === "touch" &&
+                    "[@media(any-pointer:coarse)]:h-11 [@media(any-pointer:coarse)]:min-h-11 [@media(any-pointer:coarse)]:w-11",
                   isActive &&
                     "bg-muted text-foreground ring-border/80 hover:bg-muted hover:text-foreground shadow-xs ring-1",
                 )}

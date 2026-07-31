@@ -3390,6 +3390,92 @@
       "equals": "Es igual a"
     },
     "overview": {
+      "activity": {
+        "actions": {
+          "added": "<actor>Persona</actor> añadió <target>elemento</target>",
+          "cancelled": "<actor>Persona</actor> canceló <target>elemento</target>",
+          "created": "<actor>Persona</actor> creó <target>elemento</target>",
+          "deleted": "<actor>Persona</actor> eliminó <target>elemento</target>",
+          "executed": "<actor>Persona</actor> ejecutó <target>elemento</target>",
+          "removed": "<actor>Persona</actor> retiró <target>elemento</target>",
+          "reviewed": "<actor>Persona</actor> revisó <target>elemento</target>",
+          "updated": "<actor>Persona</actor> actualizó <target>elemento</target>"
+        },
+        "approvals": {
+          "approved": "Aprobación concedida",
+          "notRequired": "No requerida",
+          "pending": "Aprobación pendiente",
+          "rejected": "Aprobación rechazada"
+        },
+        "automatedService": "Servicio automatizado",
+        "deletedUser": "Usuario eliminado",
+        "details": {
+          "actor": "Realizado por",
+          "approval": "Aprobación",
+          "approvedBy": "Aprobado por",
+          "channel": "Canal",
+          "dateTime": "Fecha y hora",
+          "direct": "Actividad directa",
+          "eventId": "ID del evento",
+          "notAvailable": "No disponible",
+          "openTarget": "Abrir elemento",
+          "runId": "ID de ejecución",
+          "system": "Actividad del sistema",
+          "target": "Objetivo",
+          "title": "Detalles de la actividad",
+          "trigger": "Iniciado por",
+          "webhook": "Enlace web"
+        },
+        "empty": "Aún no hay actividad en este asunto.",
+        "filterLabel": "Filtrar actividad",
+        "filters": {
+          "all": "Toda la actividad",
+          "automation": "Automatización",
+          "court": "Tribunal",
+          "documents": "Documentos",
+          "matter": "Asunto",
+          "tasks": "Tareas",
+          "team": "Equipo"
+        },
+        "list": {
+          "actor": "Responsable",
+          "dateTime": "Fecha y hora",
+          "event": "Evento",
+          "provenance": "Origen"
+        },
+        "loadEarlier": "Cargar anteriores",
+        "loading": "Cargando…",
+        "provenance": {
+          "connected": "Mediante acceso conectado",
+          "connectedBy": "Conectado por {user}",
+          "delegated": "Delegado por otro agente",
+          "delegatedBy": "Delegado por un agente para {user}",
+          "dispatched": "Encargado por un usuario",
+          "dispatchedBy": "Encargado por {user}",
+          "dispatchedInChatBy": "Encargado por {user} en el chat",
+          "scheduled": "Iniciado según la programación",
+          "scheduledBy": "Automatización programada de {user}"
+        },
+        "runCount": "{count, plural, one {# actividad} other {# actividades}}",
+        "sources": {
+          "chat": "Conversación de chat",
+          "flow": "Flujo de trabajo",
+          "mcp": "Herramienta conectada"
+        },
+        "targets": {
+          "automation": "automatización",
+          "court": "registro judicial",
+          "document": "documento eliminado",
+          "matter": "asunto",
+          "task": "elemento de agenda eliminado",
+          "team": "equipo del asunto"
+        },
+        "title": "Actividad",
+        "views": {
+          "list": "Vista de lista",
+          "timeline": "Vista cronológica"
+        }
+      },
       "atAGlance": "De un vistazo",
       "edited": "editó",
       "getStarted": "Empiece subiendo documentos o creando su primera carpeta.",

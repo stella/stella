@@ -3390,6 +3390,92 @@
       "equals": "Rovná se"
     },
     "overview": {
+      "activity": {
+        "actions": {
+          "added": "<actor>Uživatel</actor> přidal(a) <target>položku</target>",
+          "cancelled": "<actor>Uživatel</actor> zrušil(a) <target>položku</target>",
+          "created": "<actor>Uživatel</actor> vytvořil(a) <target>položku</target>",
+          "deleted": "<actor>Uživatel</actor> odstranil(a) <target>položku</target>",
+          "executed": "<actor>Uživatel</actor> spustil(a) <target>položku</target>",
+          "removed": "<actor>Uživatel</actor> odebral(a) <target>položku</target>",
+          "reviewed": "<actor>Uživatel</actor> zkontroloval(a) <target>položku</target>",
+          "updated": "<actor>Uživatel</actor> upravil(a) <target>položku</target>"
+        },
+        "approvals": {
+          "approved": "Schválení uděleno",
+          "notRequired": "Není vyžadováno",
+          "pending": "Schválení se vyřizuje",
+          "rejected": "Schválení zamítnuto"
+        },
+        "automatedService": "Automatizovaná služba",
+        "deletedUser": "Odstraněný uživatel",
+        "details": {
+          "actor": "Provedl(a)",
+          "approval": "Schválení",
+          "approvedBy": "Schválil(a)",
+          "channel": "Kanál",
+          "dateTime": "Datum a čas",
+          "direct": "Přímá aktivita",
+          "eventId": "ID události",
+          "notAvailable": "Není k dispozici",
+          "openTarget": "Otevřít položku",
+          "runId": "ID běhu",
+          "system": "Systémová aktivita",
+          "target": "Cíl",
+          "title": "Podrobnosti aktivity",
+          "trigger": "Spustil(a)",
+          "webhook": "Webové volání"
+        },
+        "empty": "V této věci zatím není žádná aktivita.",
+        "filterLabel": "Filtrovat aktivitu",
+        "filters": {
+          "all": "Veškerá aktivita",
+          "automation": "Automatizace",
+          "court": "Soud",
+          "documents": "Dokumenty",
+          "matter": "Věc",
+          "tasks": "Položky agendy",
+          "team": "Tým"
+        },
+        "list": {
+          "actor": "Aktér",
+          "dateTime": "Datum a čas",
+          "event": "Událost",
+          "provenance": "Původ"
+        },
+        "loadEarlier": "Načíst starší",
+        "loading": "Načítání…",
+        "provenance": {
+          "connected": "Pomocí připojeného přístupu",
+          "connectedBy": "Připojil(a) {user}",
+          "delegated": "Delegováno jiným agentem",
+          "delegatedBy": "Delegováno agentem pro uživatele {user}",
+          "dispatched": "Zadal uživatel",
+          "dispatchedBy": "Zadal(a) {user}",
+          "dispatchedInChatBy": "Zadal(a) {user} v Chatu",
+          "scheduled": "Spuštěno podle plánu",
+          "scheduledBy": "Naplánovaná automatizace vlastníka {user}"
+        },
+        "runCount": "{count, plural, one {# aktivita} few {# aktivity} other {# aktivit}}",
+        "sources": {
+          "chat": "Konverzace v chatu",
+          "flow": "Pracovní postup",
+          "mcp": "Připojený nástroj"
+        },
+        "targets": {
+          "automation": "automatizaci",
+          "court": "soudní záznam",
+          "document": "odstraněný dokument",
+          "matter": "věc",
+          "task": "odstraněnou položku agendy",
+          "team": "tým věci"
+        },
+        "title": "Aktivita",
+        "views": {
+          "list": "Seznam",
+          "timeline": "Časová osa"
+        }
+      },
       "atAGlance": "Přehled",
       "edited": "upravil(a)",
       "getStarted": "Začněte nahráním dokumentů nebo vytvořením první složky.",

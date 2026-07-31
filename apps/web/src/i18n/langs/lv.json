@@ -3390,6 +3390,92 @@
       "equals": "Vienāds ar"
     },
     "overview": {
+      "activity": {
+        "actions": {
+          "added": "<actor>Lietotājs</actor> pievienoja <target>vienumu</target>",
+          "cancelled": "<actor>Lietotājs</actor> atcēla <target>vienumu</target>",
+          "created": "<actor>Lietotājs</actor> izveidoja <target>vienumu</target>",
+          "deleted": "<actor>Lietotājs</actor> dzēsa <target>vienumu</target>",
+          "executed": "<actor>Lietotājs</actor> palaida <target>vienumu</target>",
+          "removed": "<actor>Lietotājs</actor> noņēma <target>vienumu</target>",
+          "reviewed": "<actor>Lietotājs</actor> pārskatīja <target>vienumu</target>",
+          "updated": "<actor>Lietotājs</actor> atjaunināja <target>vienumu</target>"
+        },
+        "approvals": {
+          "approved": "Apstiprinājums piešķirts",
+          "notRequired": "Nav nepieciešams",
+          "pending": "Gaida apstiprinājumu",
+          "rejected": "Apstiprinājums noraidīts"
+        },
+        "automatedService": "Automatizēts pakalpojums",
+        "deletedUser": "Dzēsts lietotājs",
+        "details": {
+          "actor": "Veica",
+          "approval": "Apstiprinājums",
+          "approvedBy": "Apstiprināja",
+          "channel": "Kanāls",
+          "dateTime": "Datums un laiks",
+          "direct": "Tieša darbība",
+          "eventId": "Notikuma ID",
+          "notAvailable": "Nav pieejams",
+          "openTarget": "Atvērt vienumu",
+          "runId": "Izpildes ID",
+          "system": "Sistēmas darbība",
+          "target": "Mērķis",
+          "title": "Darbības informācija",
+          "trigger": "Uzsāka",
+          "webhook": "Tīmekļa aizķere"
+        },
+        "empty": "Šajā lietā vēl nav darbību.",
+        "filterLabel": "Filtrēt darbības",
+        "filters": {
+          "all": "Visas darbības",
+          "automation": "Automatizācija",
+          "court": "Tiesa",
+          "documents": "Dokumenti",
+          "matter": "Lieta",
+          "tasks": "Darba kārtība",
+          "team": "Komanda"
+        },
+        "list": {
+          "actor": "Veicējs",
+          "dateTime": "Datums un laiks",
+          "event": "Notikums",
+          "provenance": "Izcelsme"
+        },
+        "loadEarlier": "Ielādēt agrākās",
+        "loading": "Ielādē…",
+        "provenance": {
+          "connected": "Izmantojot savienoto piekļuvi",
+          "connectedBy": "Savienoja {user}",
+          "delegated": "Deleģēja cits aģents",
+          "delegatedBy": "Aģents deleģēja lietotāja {user} vārdā",
+          "dispatched": "Palaida lietotājs",
+          "dispatchedBy": "Palaida {user}",
+          "dispatchedInChatBy": "{user} palaida tērzēšanā",
+          "scheduled": "Palaists pēc grafika",
+          "scheduledBy": "Lietotāja {user} plānotā automatizācija"
+        },
+        "runCount": "{count, plural, zero {# darbību} one {# darbība} other {# darbības}}",
+        "sources": {
+          "chat": "Tērzēšana",
+          "flow": "Darbplūsma",
+          "mcp": "Pievienots rīks"
+        },
+        "targets": {
+          "automation": "automatizāciju",
+          "court": "tiesas ierakstu",
+          "document": "dzēstu dokumentu",
+          "matter": "lietu",
+          "task": "dzēstu darba kārtības vienumu",
+          "team": "lietas komandu"
+        },
+        "title": "Darbības",
+        "views": {
+          "list": "Saraksta skats",
+          "timeline": "Laika skalas skats"
+        }
+      },
       "atAGlance": "Apskats",
       "edited": "rediģēja",
       "getStarted": "Sāciet, augšupielādējot dokumentus vai izveidojot pirmo mapi.",
