@@ -89,6 +89,7 @@ class InvalidParentError extends TaggedError("InvalidParentError")<{
 
 type CreateEntityFromBufferValue = {
   entityId: SafeId<"entity">;
+  entityVersionId: SafeId<"entityVersion">;
   fieldId: SafeId<"field">;
   fileName: string;
 };
@@ -344,7 +345,12 @@ export const createEntityFromBuffer = async ({
           },
         });
 
-        await afterCreate?.(tx, { entityId, fieldId, fileName });
+        await afterCreate?.(tx, {
+          entityId,
+          entityVersionId,
+          fieldId,
+          fileName,
+        });
 
         const finalizedResult: Extract<
           PendingUploadFinalizedResult,
@@ -432,5 +438,5 @@ export const createEntityFromBuffer = async ({
     data: ["entities", workspaceId],
   });
 
-  return Result.ok({ entityId, fieldId, fileName });
+  return Result.ok({ entityId, entityVersionId, fieldId, fileName });
 };

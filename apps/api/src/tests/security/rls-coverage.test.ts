@@ -91,6 +91,7 @@ describe("policy coverage", () => {
   ]);
   const APPEND_ONLY = new Set(["audit_logs"]);
   const INSERT_ONLY = new Set(["entity_deletion_cleanup_requests"]);
+  const INSERT_DELETE_ONLY = new Set(["buffer_object_cleanup_intents"]);
   const GLOBAL_CASE_LAW_TABLES = [
     "case_law_citations",
     "case_law_court_weights",
@@ -202,6 +203,8 @@ describe("policy coverage", () => {
       expect(cmds).toContain("a"); // INSERT
       if (INSERT_ONLY.has(table)) {
         expect(cmds).toEqual(new Set(["a"]));
+      } else if (INSERT_DELETE_ONLY.has(table)) {
+        expect(cmds).toEqual(new Set(["a", "d"]));
       } else {
         expect(cmds).toContain("r"); // SELECT
         if (!APPEND_ONLY.has(table)) {
