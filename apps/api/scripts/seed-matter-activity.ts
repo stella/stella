@@ -3,6 +3,8 @@
  *
  * Run after `db:seed-dev`. The deterministic rows are updated in place, so
  * re-running refreshes their relative timestamps without creating duplicates.
+ * Set MATTER_ACTIVITY_WORKSPACE_ID and MATTER_ACTIVITY_USER_ID to seed a
+ * specific accessible matter instead of the default development matter.
  */
 
 import { panic } from "better-result";
@@ -17,17 +19,10 @@ import {
 } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 
-import { DEFAULT_ORG_ID, DEFAULT_USER_ID, seedId } from "./seed-utils";
+import { DEFAULT_USER_ID, seedId } from "./seed-utils";
 
 const MATTER_LABEL = "ws-akvizice-energo";
-const WORKSPACE_ID = seedId<"workspace">(MATTER_LABEL);
-const DOCUMENT_ID = seedId<"entity">(`${MATTER_LABEL}-doc-1`);
-const TASK_ID = seedId<"entity">(`${MATTER_LABEL}-activity-task`);
-const TASK_VERSION_ID = seedId<"entityVersion">(
-  `${MATTER_LABEL}-activity-task-v1`,
-);
-const PRIMARY_USER_ID = toSafeId<"user">(DEFAULT_USER_ID);
-const COLLEAGUE_USER_ID = toSafeId<"user">("test-user-alice-johnson");
+const DEFAULT_WORKSPACE_ID = seedId<"workspace">(MATTER_LABEL);
 
 const minutesAgo = (minutes: number, now: Date) =>
   new Date(now.getTime() - minutes * 60_000);
@@ -37,29 +32,74 @@ export const seedMatterActivity = async () => {
     panic("Refusing to seed Matter Activity in production.");
   }
 
+  const workspaceId = process.env.MATTER_ACTIVITY_WORKSPACE_ID
+    ? toSafeId<"workspace">(process.env.MATTER_ACTIVITY_WORKSPACE_ID)
+    : DEFAULT_WORKSPACE_ID;
   const workspace = await rootDb.query.workspaces.findFirst({
     where: {
-      id: { eq: WORKSPACE_ID },
-      organizationId: { eq: DEFAULT_ORG_ID },
+      id: { eq: workspaceId },
     },
-    columns: { id: true },
+    columns: { id: true, organizationId: true },
   });
   if (!workspace) {
-    panic("Seed the development dataset before Matter Activity.");
+    panic(`Matter Activity target workspace not found: ${workspaceId}`);
   }
+
+  const members = await rootDb.query.workspaceMembers.findMany({
+    where: { workspaceId: { eq: workspaceId } },
+    columns: { userId: true },
+    limit: 2,
+  });
+  const requestedUserId = process.env.MATTER_ACTIVITY_USER_ID
+    ? toSafeId<"user">(process.env.MATTER_ACTIVITY_USER_ID)
+    : workspaceId === DEFAULT_WORKSPACE_ID
+      ? toSafeId<"user">(DEFAULT_USER_ID)
+      : undefined;
+  const requestedMembership = requestedUserId
+    ? await rootDb.query.workspaceMembers.findFirst({
+        where: {
+          workspaceId: { eq: workspaceId },
+          userId: { eq: requestedUserId },
+        },
+        columns: { userId: true },
+      })
+    : undefined;
+  const primaryUserId = requestedMembership?.userId ?? members.at(0)?.userId;
+  if (!primaryUserId || (requestedUserId && !requestedMembership)) {
+    panic("Matter Activity user must be a member of the target workspace.");
+  }
+  const colleagueUserId =
+    members.find(({ userId }) => userId !== primaryUserId)?.userId ??
+    primaryUserId;
+
+  const document = await rootDb.query.entities.findFirst({
+    where: { workspaceId: { eq: workspaceId }, kind: { eq: "document" } },
+    columns: { id: true },
+  });
+  if (!document) {
+    panic("Matter Activity target workspace must contain a document.");
+  }
+
+  const taskId = seedId<"entity">(`${workspaceId}-activity-task`);
+  const taskVersionId = seedId<"entityVersion">(
+    `${workspaceId}-activity-task-v1`,
+  );
+  const activityId = (label: string) =>
+    seedId<"auditLog">(`${workspaceId}-${label}`);
+  const groupId = (label: string) => seedId(`${workspaceId}-${label}`);
 
   const now = new Date();
   await rootDb.transaction(async (tx) => {
     await tx
       .insert(entities)
       .values({
-        id: TASK_ID,
-        workspaceId: WORKSPACE_ID,
+        id: taskId,
+        workspaceId,
         kind: "task",
         name: "Prepare closing checklist",
         displayName: "Prepare closing checklist",
-        createdBy: PRIMARY_USER_ID,
-        lastEditedBy: PRIMARY_USER_ID,
+        createdBy: primaryUserId,
+        lastEditedBy: primaryUserId,
         status: "in_progress",
         priority: "high",
         dueDate: new Date(now.getTime() + 5 * 86_400_000)
@@ -84,146 +124,146 @@ export const seedMatterActivity = async () => {
     await tx
       .insert(entityVersions)
       .values({
-        id: TASK_VERSION_ID,
-        workspaceId: WORKSPACE_ID,
-        entityId: TASK_ID,
-        createdBy: PRIMARY_USER_ID,
+        id: taskVersionId,
+        workspaceId,
+        entityId: taskId,
+        createdBy: primaryUserId,
         createdAt: minutesAgo(180, now),
       })
       .onConflictDoNothing();
     await tx
       .update(entities)
-      .set({ currentVersionId: TASK_VERSION_ID })
-      .where(eq(entities.id, TASK_ID));
+      .set({ currentVersionId: taskVersionId })
+      .where(eq(entities.id, taskId));
 
-    const reviewRunId = "dev-contract-review-run";
+    const reviewRunId = `${workspaceId}-contract-review-run`;
     const rows = [
       {
-        id: seedId<"auditLog">("matter-activity-human-task-create"),
+        id: activityId("matter-activity-human-task-create"),
         action: "create",
         activityCategory: "tasks",
-        resourceId: TASK_ID,
+        resourceId: taskId,
         resourceType: "entity",
         metadata: { kind: "task" },
         performerType: "user",
-        performerId: PRIMARY_USER_ID,
+        performerId: primaryUserId,
         triggerType: "direct",
         createdAt: minutesAgo(5, now),
       },
       {
-        id: seedId<"auditLog">("matter-activity-ai-review-document"),
+        id: activityId("matter-activity-ai-review-document"),
         action: "review",
         activityCategory: "documents",
-        resourceId: DOCUMENT_ID,
+        resourceId: document.id,
         resourceType: "entity",
         metadata: { kind: "document" },
         performerType: "agent",
         performerId: "contract-review-agent",
         performerName: "Contract Review",
         triggerType: "user_dispatch",
-        triggerUserId: PRIMARY_USER_ID,
+        triggerUserId: primaryUserId,
         triggerSource: "chat",
         triggerSourceId: "dev-contract-review-thread",
         runId: reviewRunId,
-        groupId: seedId("matter-activity-review-group"),
+        groupId: groupId("matter-activity-review-group"),
         createdAt: minutesAgo(20, now),
       },
       {
-        id: seedId<"auditLog">("matter-activity-ai-update-task"),
+        id: activityId("matter-activity-ai-update-task"),
         action: "update",
         activityCategory: "tasks",
-        resourceId: TASK_ID,
+        resourceId: taskId,
         resourceType: "entity",
         metadata: { kind: "task" },
         performerType: "agent",
         performerId: "contract-review-agent",
         performerName: "Contract Review",
         triggerType: "user_dispatch",
-        triggerUserId: PRIMARY_USER_ID,
+        triggerUserId: primaryUserId,
         triggerSource: "chat",
         triggerSourceId: "dev-contract-review-thread",
         runId: reviewRunId,
-        groupId: seedId("matter-activity-review-group"),
+        groupId: groupId("matter-activity-review-group"),
         createdAt: minutesAgo(21, now),
       },
       {
-        id: seedId<"auditLog">("matter-activity-scheduled-task"),
+        id: activityId("matter-activity-scheduled-task"),
         action: "update",
         activityCategory: "tasks",
-        resourceId: TASK_ID,
+        resourceId: taskId,
         resourceType: "entity",
         metadata: { kind: "task" },
         performerType: "agent",
         performerId: "deadline-monitor",
         performerName: "Deadline Monitor",
         triggerType: "schedule",
-        triggerUserId: PRIMARY_USER_ID,
+        triggerUserId: primaryUserId,
         triggerSource: "flow",
         triggerSourceId: "closing-deadline-monitor",
-        runId: "dev-deadline-monitor-run",
-        groupId: seedId("matter-activity-deadline-group"),
+        runId: `${workspaceId}-deadline-monitor-run`,
+        groupId: groupId("matter-activity-deadline-group"),
         createdAt: minutesAgo(50, now),
       },
       {
-        id: seedId<"auditLog">("matter-activity-connected-agent"),
+        id: activityId("matter-activity-connected-agent"),
         action: "update",
         activityCategory: "documents",
-        resourceId: DOCUMENT_ID,
+        resourceId: document.id,
         resourceType: "entity",
         metadata: { kind: "document" },
         performerType: "agent",
         performerId: "diligence-mcp-agent",
         performerName: "Diligence Agent",
         triggerType: "credential",
-        triggerUserId: PRIMARY_USER_ID,
+        triggerUserId: primaryUserId,
         triggerSource: "mcp",
         triggerSourceId: "dev-mcp-connection",
-        runId: "dev-diligence-agent-run",
-        groupId: seedId("matter-activity-mcp-group"),
+        runId: `${workspaceId}-diligence-agent-run`,
+        groupId: groupId("matter-activity-mcp-group"),
         createdAt: minutesAgo(90, now),
       },
       {
-        id: seedId<"auditLog">("matter-activity-colleague-document"),
+        id: activityId("matter-activity-colleague-document"),
         action: "update",
         activityCategory: "documents",
-        resourceId: DOCUMENT_ID,
+        resourceId: document.id,
         resourceType: "entity",
         metadata: { kind: "document" },
         performerType: "user",
-        performerId: COLLEAGUE_USER_ID,
+        performerId: colleagueUserId,
         triggerType: "direct",
         createdAt: minutesAgo(1500, now),
       },
       {
-        id: seedId<"auditLog">("matter-activity-matter-update"),
+        id: activityId("matter-activity-matter-update"),
         action: "update",
         activityCategory: "matter",
-        resourceId: WORKSPACE_ID,
+        resourceId: workspaceId,
         resourceType: "workspace",
         performerType: "user",
-        performerId: PRIMARY_USER_ID,
+        performerId: primaryUserId,
         triggerType: "direct",
         createdAt: minutesAgo(1560, now),
       },
       {
-        id: seedId<"auditLog">("matter-activity-team-update"),
+        id: activityId("matter-activity-team-update"),
         action: "update",
         activityCategory: "team",
-        resourceId: COLLEAGUE_USER_ID,
+        resourceId: colleagueUserId,
         resourceType: "workspace_member",
         performerType: "user",
-        performerId: PRIMARY_USER_ID,
+        performerId: primaryUserId,
         triggerType: "direct",
         createdAt: minutesAgo(3000, now),
       },
       {
-        id: seedId<"auditLog">("matter-activity-court-link"),
+        id: activityId("matter-activity-court-link"),
         action: "create",
         activityCategory: "court",
-        resourceId: seedId("matter-activity-court-record"),
+        resourceId: groupId("matter-activity-court-record"),
         resourceType: "case_law_matter_link",
         performerType: "user",
-        performerId: COLLEAGUE_USER_ID,
+        performerId: colleagueUserId,
         triggerType: "direct",
         createdAt: minutesAgo(4500, now),
       },
@@ -234,18 +274,18 @@ export const seedMatterActivity = async () => {
         tx
           .insert(auditLogs)
           .values({
-            organizationId: DEFAULT_ORG_ID,
-            workspaceId: WORKSPACE_ID,
-            userId: PRIMARY_USER_ID,
+            organizationId: workspace.organizationId,
+            workspaceId,
+            userId: primaryUserId,
             approvalStatus: "not_required",
             ...row,
           })
           .onConflictDoUpdate({
             target: auditLogs.id,
             set: {
-              organizationId: DEFAULT_ORG_ID,
-              workspaceId: WORKSPACE_ID,
-              userId: PRIMARY_USER_ID,
+              organizationId: workspace.organizationId,
+              workspaceId,
+              userId: primaryUserId,
               approvalStatus: "not_required",
               ...row,
             },
@@ -257,10 +297,10 @@ export const seedMatterActivity = async () => {
   await rootDb
     .update(workspaces)
     .set({ lastActivityAt: now })
-    .where(eq(workspaces.id, WORKSPACE_ID));
+    .where(eq(workspaces.id, workspaceId));
 
   console.log(
-    `Seeded Matter Activity in ${WORKSPACE_ID}: 9 events across 3 days.`,
+    `Seeded Matter Activity in ${workspaceId}: 9 events across 3 days.`,
   );
 };
 
