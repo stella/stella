@@ -74,6 +74,28 @@ describe("chat turn navigation items", () => {
     expect(item?.assistantPreview?.length).toBe(281);
   });
 
+  test("uses plain display text before bounding Markdown previews", () => {
+    const longDestination = `https://example.com/${"path/".repeat(80)}`;
+    const [item] = buildChatTurnNavigationItems(
+      [
+        textMessage(
+          "user-markdown",
+          "user",
+          `# Review **the [filing](${longDestination})**`,
+        ),
+        textMessage(
+          "assistant-markdown",
+          "assistant",
+          `See [the **short answer**](${longDestination}) and \`section 4\`.`,
+        ),
+      ],
+      userMessageFallbackText,
+    );
+
+    expect(item?.userPreview).toBe("Review the filing");
+    expect(item?.assistantPreview).toBe("See the short answer and section 4.");
+  });
+
   test("shows only the ten most recent turns", () => {
     const messages = Array.from({ length: 12 }, (_, index) => {
       const number = index + 1;
