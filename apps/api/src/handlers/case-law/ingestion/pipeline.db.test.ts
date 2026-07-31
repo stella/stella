@@ -4,7 +4,7 @@ import { drizzle } from "drizzle-orm/bun-sql";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { caseLawSources, relations } from "@/api/db/schema";
+import { caseLawDecisions, caseLawSources, relations } from "@/api/db/schema";
 import { ADAPTER_KEYS, PARSER_VERSION } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
@@ -177,6 +177,76 @@ if (!databaseUrl || !runPostgresTests) {
       // A refresh must clear indexedHash so the corpus indexer re-picks
       // the row even when only metadata changed.
       expect(row?.["indexedHash"]).toBeNull();
+    });
+
+    test("database-fences legacy refreshes after observation ordering activates", async () => {
+      const caseNumber = `legacy-fence-${Bun.randomUUIDv7()}`;
+      const initial = {
+        ...ingestionResult,
+        caseNumber,
+        rawHash: "legacy-fence-current",
+      };
+      await processDecision({
+        input: initial,
+        observationOrder: 10n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T13:00:00.000Z"),
+      });
+
+      const legacyFailure: unknown = await db
+        .execute(sql`
+          UPDATE ${caseLawDecisions}
+          SET source_hash = 'legacy-fence-stale'
+          WHERE source_id = ${sourceId}
+            AND case_number = ${caseNumber}
+        `)
+        .then(
+          () => null,
+          (error: unknown) => error,
+        );
+      expect(legacyFailure).toMatchObject({ code: "55000" });
+
+      await processDecision({
+        input: { ...initial, rawHash: "legacy-fence-newer" },
+        observationOrder: 11n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T13:00:01.000Z"),
+      });
+      const ordered = (
+        await db
+          .select({
+            order: caseLawDecisions.sourceObservationOrder,
+            sourceHash: caseLawDecisions.sourceHash,
+          })
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.caseNumber, caseNumber))
+          .limit(1)
+      ).at(0);
+      expect(ordered).toEqual({
+        order: 11n,
+        sourceHash: "legacy-fence-newer",
+      });
+
+      await db
+        .update(caseLawDecisions)
+        .set({ sourceObservationOrder: null })
+        .where(eq(caseLawDecisions.caseNumber, caseNumber));
+      await db.execute(sql`
+        UPDATE ${caseLawDecisions}
+        SET source_hash = 'legacy-transition-allowed'
+        WHERE source_id = ${sourceId}
+          AND case_number = ${caseNumber}
+      `);
+      const transition = (
+        await db
+          .select({ sourceHash: caseLawDecisions.sourceHash })
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.caseNumber, caseNumber))
+          .limit(1)
+      ).at(0);
+      expect(transition?.sourceHash).toBe("legacy-transition-allowed");
     });
   });
 }
