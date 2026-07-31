@@ -15,7 +15,7 @@ type ApiEntityResourceRoutes = ApiWorkspaceEntityRoutes["entity"];
 type ApiEntityByIdRoutes = ApiEntityResourceRoutes[":entityId"];
 type EmptyElysia = Elysia;
 type WebApiRoutes = Omit<ApiRoutes, "v1"> & {
-  v1: Omit<ApiV1Routes, "entities"> & {
+  v1: Omit<ApiV1Routes, "entities" | "memories"> & {
     entities: Omit<ApiEntityRoutes, ":workspaceId"> & {
       ":workspaceId": Omit<ApiWorkspaceEntityRoutes, "entity"> & {
         entity: Omit<ApiEntityResourceRoutes, ":entityId"> & {
