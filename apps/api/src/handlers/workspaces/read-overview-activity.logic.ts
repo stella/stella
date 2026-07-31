@@ -1,4 +1,7 @@
-import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import {
+  AUDIT_RESOURCE_TYPE,
+  type AuditActivityCategory,
+} from "@/api/lib/audit-log";
 import { isUuid } from "@/api/lib/custom-schema";
 import {
   brandPersistedEntityVersionId,
@@ -80,4 +83,31 @@ export const legacyActivityCategory = (
     return workspaceTeamEvent ? "team" : "matter";
   }
   return "automation";
+};
+
+type ResolveActivityCategoryOptions = {
+  kind: string | null;
+  persistedCategory: AuditActivityCategory | null;
+  resourceType: string;
+  workspaceTeamEvent: boolean;
+};
+
+export const resolveActivityCategory = ({
+  kind,
+  persistedCategory,
+  resourceType,
+  workspaceTeamEvent,
+}: ResolveActivityCategoryOptions): LegacyActivityCategory => {
+  const derivedCategory = legacyActivityCategory(
+    resourceType,
+    kind,
+    workspaceTeamEvent,
+  );
+  if (derivedCategory === "tasks") {
+    return derivedCategory;
+  }
+  if (persistedCategory && persistedCategory !== "other") {
+    return persistedCategory;
+  }
+  return derivedCategory;
 };

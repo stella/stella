@@ -3,7 +3,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { entityVersions } from "@/api/db/schema";
+import { entities, entityVersions } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -50,8 +50,18 @@ export const updateVersionDescriptionHandler = async function* ({
   const result = yield* Result.await(
     safeDb(async (tx) => {
       const existing = await tx
-        .select({ description: entityVersions.description })
+        .select({
+          description: entityVersions.description,
+          kind: entities.kind,
+        })
         .from(entityVersions)
+        .innerJoin(
+          entities,
+          and(
+            eq(entities.id, entityVersions.entityId),
+            eq(entities.workspaceId, entityVersions.workspaceId),
+          ),
+        )
         .where(
           and(
             eq(entityVersions.id, params.versionId),
@@ -89,6 +99,7 @@ export const updateVersionDescriptionHandler = async function* ({
           action: AUDIT_ACTION.UPDATE,
           resourceType: AUDIT_RESOURCE_TYPE.ENTITY_VERSION,
           resourceId: params.versionId,
+          metadata: { kind: previous.kind },
           changes: {
             description: {
               old: previous.description,

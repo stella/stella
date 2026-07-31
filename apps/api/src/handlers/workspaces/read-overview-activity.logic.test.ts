@@ -6,6 +6,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import {
   legacyActivityCategory,
   parseFieldAuditResourceId,
+  resolveActivityCategory,
 } from "./read-overview-activity.logic";
 
 const fieldId = toSafeId<"field">("00000000-0000-0000-0000-000000000001");
@@ -55,6 +56,17 @@ describe("legacyActivityCategory", () => {
     ).toBe("tasks");
     expect(
       legacyActivityCategory(AUDIT_RESOURCE_TYPE.FIELD, "task", false),
+    ).toBe("tasks");
+  });
+
+  test("overrides stale document categories for task resources", () => {
+    expect(
+      resolveActivityCategory({
+        kind: "task",
+        persistedCategory: "documents",
+        resourceType: AUDIT_RESOURCE_TYPE.ENTITY_VERSION,
+        workspaceTeamEvent: false,
+      }),
     ).toBe("tasks");
   });
 });

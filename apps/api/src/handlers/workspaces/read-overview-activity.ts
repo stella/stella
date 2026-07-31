@@ -30,8 +30,8 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 
 import {
-  legacyActivityCategory,
   parseFieldAuditResourceId,
+  resolveActivityCategory,
 } from "./read-overview-activity.logic";
 
 const ACTIVITY_FILTERS = [
@@ -99,8 +99,35 @@ const legacyRelatedEntityKind = () => sql<string | null>`(
   limit 1
 )`;
 
+const legacyDirectEntityKind = () => sql<string | null>`(
+  select ${entities.kind}
+  from ${entities}
+  where ${entities.workspaceId} = ${auditLogs.workspaceId}
+    and ${auditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.ENTITY}
+    and ${entities.id} = case
+      when ${auditLogs.resourceId} ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+        then ${auditLogs.resourceId}::uuid
+      else null
+    end
+  limit 1
+)`;
+
 const legacyResourceKind = () =>
-  sql<string>`coalesce(${legacyEntityKind()}, ${legacyRelatedEntityKind()})`;
+  sql<string>`coalesce(
+    ${legacyEntityKind()},
+    ${legacyDirectEntityKind()},
+    ${legacyRelatedEntityKind()}
+  )`;
+
+const taskEntityResourceCondition = () =>
+  and(
+    inArray(auditLogs.resourceType, [
+      AUDIT_RESOURCE_TYPE.ENTITY,
+      AUDIT_RESOURCE_TYPE.ENTITY_VERSION,
+      AUDIT_RESOURCE_TYPE.FIELD,
+    ]),
+    sql`${legacyResourceKind()} = 'task'`,
+  ) ?? sql`false`;
 
 const legacyWorkspaceTeamEvent = () =>
   sql<boolean>`(
@@ -255,12 +282,24 @@ const readOverviewActivity = createSafeHandler(
       );
     } else if (query.category && query.category !== "all") {
       const legacyCondition = legacyCategoryCondition(query.category);
-      conditions.push(
-        or(
-          eq(auditLogs.activityCategory, query.category),
-          and(isNull(auditLogs.activityCategory), legacyCondition),
-        ),
+      const storedOrLegacyCategory = or(
+        eq(auditLogs.activityCategory, query.category),
+        and(isNull(auditLogs.activityCategory), legacyCondition),
       );
+      if (query.category === "tasks") {
+        conditions.push(
+          or(storedOrLegacyCategory, taskEntityResourceCondition()),
+        );
+      } else if (query.category === "documents") {
+        conditions.push(
+          and(
+            storedOrLegacyCategory,
+            sql`NOT coalesce(${taskEntityResourceCondition()}, false)`,
+          ),
+        );
+      } else {
+        conditions.push(storedOrLegacyCategory);
+      }
     }
     if (cursor) {
       const cursorCondition = activityCursor.keysetAfter({
@@ -283,6 +322,9 @@ const readOverviewActivity = createSafeHandler(
             approvedByUserId: auditLogs.approvedByUserId,
             createdAt: auditLogs.createdAt,
             createdAtCursor: activityCursor.cursorValue.as("created_at_cursor"),
+            deletedEntityName: sql<
+              string | null
+            >`${auditLogs.changes} -> 'deleted' -> 'old' ->> 'name'`,
             id: auditLogs.id,
             legacyKind: legacyResourceKind(),
             legacyWorkspaceTeamEvent: legacyWorkspaceTeamEvent(),
@@ -481,14 +523,12 @@ const readOverviewActivity = createSafeHandler(
     return Result.ok({
       items: page.items.map((row) => {
         const performerId = row.performerId ?? row.userId;
-        const category =
-          row.activityCategory && row.activityCategory !== "other"
-            ? row.activityCategory
-            : legacyActivityCategory(
-                row.resourceType,
-                row.legacyKind,
-                row.legacyWorkspaceTeamEvent,
-              );
+        const category = resolveActivityCategory({
+          kind: row.legacyKind,
+          persistedCategory: row.activityCategory,
+          resourceType: row.resourceType,
+          workspaceTeamEvent: row.legacyWorkspaceTeamEvent,
+        });
         const performer =
           row.performerType === "user"
             ? (actorMap.get(performerId) ?? {
@@ -517,6 +557,7 @@ const readOverviewActivity = createSafeHandler(
           runId: row.runId,
           target: targetForRow({
             category,
+            deletedEntityName: row.deletedEntityName,
             entityMap,
             fieldVersionMap,
             matterName: result.workspace?.name ?? null,
@@ -570,6 +611,7 @@ const toEntityTarget = (entity: EntityRow): EntityTarget => {
 
 type TargetForRowOptions = {
   category: ActivityCategory;
+  deletedEntityName: string | null;
   entityMap: Map<string, EntityTarget>;
   fieldVersionMap: Map<string, string>;
   matterName: string | null;
@@ -580,6 +622,7 @@ type TargetForRowOptions = {
 
 const targetForRow = ({
   category,
+  deletedEntityName,
   entityMap,
   fieldVersionMap,
   matterName,
@@ -589,23 +632,34 @@ const targetForRow = ({
 }: TargetForRowOptions): ActivityTarget => {
   if (resourceType === AUDIT_RESOURCE_TYPE.ENTITY) {
     return (
-      entityMap.get(resourceId) ?? deletedEntityTarget(resourceId, category)
+      entityMap.get(resourceId) ??
+      deletedEntityTarget({
+        category,
+        id: resourceId,
+        name: deletedEntityName,
+      })
     );
   }
   if (resourceType === AUDIT_RESOURCE_TYPE.ENTITY_VERSION) {
     const entityId = versionEntityMap.get(resourceId);
     if (entityId) {
-      return entityMap.get(entityId) ?? deletedEntityTarget(entityId, category);
+      return (
+        entityMap.get(entityId) ??
+        deletedEntityTarget({ category, id: entityId, name: null })
+      );
     }
-    return deletedEntityTarget(resourceId, category);
+    return deletedEntityTarget({ category, id: resourceId, name: null });
   }
   if (resourceType === AUDIT_RESOURCE_TYPE.FIELD) {
     const versionId = fieldVersionMap.get(resourceId);
     const entityId = versionId ? versionEntityMap.get(versionId) : null;
     if (entityId) {
-      return entityMap.get(entityId) ?? deletedEntityTarget(entityId, category);
+      return (
+        entityMap.get(entityId) ??
+        deletedEntityTarget({ category, id: entityId, name: null })
+      );
     }
-    return deletedEntityTarget(resourceId, category);
+    return deletedEntityTarget({ category, id: resourceId, name: null });
   }
   if (resourceType === AUDIT_RESOURCE_TYPE.USER_FILE) {
     return documentTarget(resourceId);
@@ -627,23 +681,30 @@ const targetForRow = ({
   return genericTarget("automation", resourceId, null);
 };
 
-const deletedEntityTarget = (
-  id: string,
-  category: ActivityCategory = "documents",
-): EntityTarget => ({
+type DeletedEntityTargetOptions = {
+  category?: ActivityCategory;
+  id: string;
+  name?: string | null;
+};
+
+const deletedEntityTarget = ({
+  category = "documents",
+  id,
+  name = null,
+}: DeletedEntityTargetOptions): EntityTarget => ({
   deleted: true,
   entityId: null,
   fieldId: null,
   id,
   kind: category === "tasks" ? "task" : "document",
   mimeType: null,
-  name: null,
+  name,
   pdfFileId: null,
   propertyId: null,
 });
 
 const documentTarget = (id: string): EntityTarget => ({
-  ...deletedEntityTarget(id),
+  ...deletedEntityTarget({ id }),
   deleted: false,
 });
 
