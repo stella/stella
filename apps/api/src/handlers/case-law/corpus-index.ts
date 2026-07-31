@@ -562,8 +562,8 @@ const removeGenerationProjection: GenerationBackfillDependencies["removeProjecti
     if (row.generationIndexId !== null) {
       await options.beforeRemoteEffect();
       const removed = await indexer.remove(
-        scopedDb,
         row.id,
+        scopedDb,
         row.generationIndexId,
         "delete",
       );
@@ -840,7 +840,6 @@ export const createCaseLawGenerationBackfill =
             break;
           case null:
             panic("selected corpus projection has no pending action");
-            break;
           default: {
             const unhandled: never = row.generationPendingAction;
             panic(`Unhandled corpus projection action: ${String(unhandled)}`);

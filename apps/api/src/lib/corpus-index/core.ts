@@ -310,7 +310,7 @@ export type CorpusIndexAdapter<
   markIndexedBatch: (
     tx: Transaction,
     args: {
-      rows: readonly CorpusIndexRow<TBrand>[];
+      rows: readonly TRow[];
       indexId: string;
       mode: CorpusIndexMarkMode;
       now: Date;
