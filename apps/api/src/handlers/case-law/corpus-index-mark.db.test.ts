@@ -125,6 +125,8 @@ const loadRow = async (id: SafeId<"caseLawDecision">) => {
       contentHash: caseLawDecisions.contentHash,
       indexedHash: caseLawDecisions.indexedHash,
       indexedGeneration: caseLawDecisions.indexedGeneration,
+      generationIndexId: sql<string | null>`null`,
+      generationPendingAction: sql<"delete" | "index" | null>`null`,
       updatedAtToken: timestampCasToken(caseLawDecisions.updatedAt),
     })
     .from(caseLawDecisions)
@@ -157,6 +159,7 @@ test(
     const marked = await caseLawCorpusIndexAdapter.markIndexedBatch(tx(), {
       rows: [fresh, moved, regen],
       indexId: NEW_GENERATION,
+      mode: { type: "incremental" },
       now: NOW,
     });
 
@@ -180,6 +183,7 @@ test(
     const stale = await caseLawCorpusIndexAdapter.markIndexedBatch(tx(), {
       rows: [regen],
       indexId: NEW_GENERATION,
+      mode: { type: "incremental" },
       now: NOW,
     });
     expect(stale.size).toBe(0);

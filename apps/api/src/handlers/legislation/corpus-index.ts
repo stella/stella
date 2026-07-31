@@ -207,6 +207,7 @@ const indexer = createCorpusIndexer<"legislationDocument", IndexableRow>({
     );
     return fallback.at(0)?.fulltext ?? null;
   },
+  generationProjectionIndexId: () => null,
   markIndexedBatch: async (tx, { rows, indexId, now }) => {
     if (rows.length === 0) {
       return new Set();

@@ -3,7 +3,11 @@ import type { SQL } from "drizzle-orm";
 import { status } from "elysia";
 import type { Static } from "elysia";
 
-import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import {
+  caseLawCorpusIndexProjections,
+  caseLawDecisions,
+  caseLawSources,
+} from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
 import { courtWeightSql } from "@/api/handlers/case-law/citation-score";
 import { loadCourtWeightEntriesForSql } from "@/api/handlers/case-law/court-weights";
@@ -22,6 +26,10 @@ import {
   redistributableSourceJoin,
 } from "@/api/lib/case-law/search-sql";
 import { isUuid } from "@/api/lib/custom-schema";
+import {
+  caseLawCorpusProjectionJoin,
+  currentCaseLawCorpusProjection,
+} from "@/api/lib/legal-search/case-law-corpus-projection";
 import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
 import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
@@ -522,12 +530,11 @@ const searchCorpusIndexDecisions = async (
       // not satisfy filters it no longer matches.
       const rehydrationFilters: SQL[] = [
         redistributableCaseLawSource,
-        // Accept only hits whose index state is current. The equality
-        // fails for scrubbed rows (contentHash nulled by redaction or a
-        // write retry) and for rows whose payload changed but are not
-        // re-indexed yet (indexedHash cleared by ingestion), so stale
-        // index copies cannot serve outdated or erased snippets.
-        eq(caseLawDecisions.indexedHash, caseLawDecisions.contentHash),
+        // Prefer the generation-specific projection state; generations that
+        // predate durable rebuild checkpoints fall back to the serving marker.
+        // Both paths reject a scrubbed or pending row, so a stale physical
+        // copy cannot serve outdated or erased snippets.
+        currentCaseLawCorpusProjection(generation),
       ];
       if (body.court) {
         rehydrationFilters.push(eq(caseLawDecisions.court, body.court));
@@ -578,6 +585,10 @@ const searchCorpusIndexDecisions = async (
                   createdAt: caseLawDecisions.createdAt,
                 })
                 .from(caseLawDecisions)
+                .leftJoin(
+                  caseLawCorpusIndexProjections,
+                  caseLawCorpusProjectionJoin(generation),
+                )
                 .innerJoin(
                   caseLawSources,
                   eq(caseLawSources.id, caseLawDecisions.sourceId),

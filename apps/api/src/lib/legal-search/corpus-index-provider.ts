@@ -1,11 +1,19 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
-import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import {
+  caseLawCorpusIndexProjections,
+  caseLawDecisions,
+  caseLawSources,
+} from "@/api/db/schema";
 // eslint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
 import { toSafeId } from "@/api/lib/branded-types";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { isUuid } from "@/api/lib/custom-schema";
+import {
+  caseLawCorpusProjectionJoin,
+  currentCaseLawCorpusProjection,
+} from "@/api/lib/legal-search/case-law-corpus-projection";
 import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
 import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
 import { loadDocumentContext } from "@/api/lib/legal-search/document-context";
@@ -141,6 +149,10 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
                 createdAt: caseLawDecisions.createdAt,
               })
               .from(caseLawDecisions)
+              .leftJoin(
+                caseLawCorpusIndexProjections,
+                caseLawCorpusProjectionJoin(generation),
+              )
               .innerJoin(
                 caseLawSources,
                 eq(caseLawSources.id, caseLawDecisions.sourceId),
@@ -151,10 +163,7 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
                 and(
                   inArray(caseLawDecisions.id, ids),
                   redistributableCaseLawSource,
-                  eq(
-                    caseLawDecisions.indexedHash,
-                    caseLawDecisions.contentHash,
-                  ),
+                  currentCaseLawCorpusProjection(generation),
                 ),
               );
 

@@ -49,6 +49,148 @@ GRANT SELECT ON TABLE "case_law_corpus_index_backfills" TO stella;--> statement-
 GRANT SELECT, INSERT, UPDATE, DELETE
   ON TABLE "case_law_corpus_index_backfills" TO stella_ingestion;--> statement-breakpoint
 
+CREATE TABLE IF NOT EXISTS "case_law_corpus_index_projections" (
+  "generation" varchar(32) NOT NULL,
+  "decision_id" uuid NOT NULL,
+  "index_id" varchar(64),
+  "indexed_hash" varchar(64),
+  "pending_action" text,
+  "pending_hash" varchar(64),
+  "updated_at" timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT "case_law_corpus_index_projections_pk" PRIMARY KEY ("generation", "decision_id"),
+  CONSTRAINT "case_law_corpus_index_projections_generation_case_law_corpus_index_backfills_generation_fk"
+    FOREIGN KEY ("generation") REFERENCES "case_law_corpus_index_backfills"("generation") ON DELETE CASCADE,
+  CONSTRAINT "case_law_corpus_index_projections_decision_id_case_law_decisions_id_fk"
+    FOREIGN KEY ("decision_id") REFERENCES "case_law_decisions"("id") ON DELETE CASCADE,
+  CONSTRAINT "case_law_corpus_index_projections_index_pair"
+    CHECK (("index_id" IS NULL) = ("indexed_hash" IS NULL)),
+  CONSTRAINT "case_law_corpus_index_projections_pending_shape"
+    CHECK (
+      ("pending_action" IS NULL AND "pending_hash" IS NULL)
+      OR ("pending_action" = 'index' AND "pending_hash" IS NOT NULL)
+      OR ("pending_action" = 'delete' AND "pending_hash" IS NULL)
+    )
+);--> statement-breakpoint
+CREATE INDEX "case_law_corpus_index_projections_pending_idx"
+  ON "case_law_corpus_index_projections" ("generation", "decision_id")
+  WHERE "pending_action" IS NOT NULL;--> statement-breakpoint
+ALTER TABLE "case_law_corpus_index_projections" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+DO $policy$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'case_law_corpus_index_projections'
+      AND policyname = 'case_law_global_access'
+  ) THEN
+    CREATE POLICY "case_law_global_access"
+      ON "case_law_corpus_index_projections"
+      AS PERMISSIVE FOR SELECT TO stella
+      USING (true);
+  END IF;
+END
+$policy$;--> statement-breakpoint
+DO $policy$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'case_law_corpus_index_projections'
+      AND policyname = 'case_law_ingestion_access'
+  ) THEN
+    CREATE POLICY "case_law_ingestion_access"
+      ON "case_law_corpus_index_projections"
+      AS PERMISSIVE FOR ALL TO stella_ingestion
+      USING (true) WITH CHECK (true);
+  END IF;
+END
+$policy$;--> statement-breakpoint
+GRANT SELECT ON TABLE "case_law_corpus_index_projections" TO stella;--> statement-breakpoint
+GRANT SELECT, INSERT, UPDATE, DELETE
+  ON TABLE "case_law_corpus_index_projections" TO stella_ingestion;--> statement-breakpoint
+
+CREATE OR REPLACE FUNCTION enqueue_case_law_corpus_index_projection()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $function$
+BEGIN
+  IF NEW.content_hash IS NULL THEN
+    INSERT INTO case_law_corpus_index_projections (
+      generation,
+      decision_id,
+      pending_action,
+      pending_hash,
+      updated_at
+    )
+    SELECT checkpoint.generation, NEW.id, 'delete', null, clock_timestamp()
+    FROM case_law_corpus_index_backfills AS checkpoint
+    WHERE NOT EXISTS (
+      SELECT 1
+      FROM case_law_corpus_index_backfills AS newer
+      WHERE (newer.snapshot_at, newer.generation) >
+        (checkpoint.snapshot_at, checkpoint.generation)
+    )
+    ON CONFLICT (generation, decision_id) DO UPDATE
+    SET pending_action = EXCLUDED.pending_action,
+        pending_hash = EXCLUDED.pending_hash,
+        updated_at = EXCLUDED.updated_at;
+    RETURN NEW;
+  END IF;
+
+  IF TG_OP = 'UPDATE'
+    AND NEW.indexed_hash IS NOT NULL
+    AND NEW.content_hash IS NOT DISTINCT FROM OLD.content_hash
+    AND NEW.country IS NOT DISTINCT FROM OLD.country
+  THEN
+    -- The ordinary incremental writer owns the serving generation while a
+    -- newer generation may be rebuilding. Its successful database mark is
+    -- also the authoritative projection commit for that serving generation;
+    -- the newer generation's independently queued action remains untouched.
+    UPDATE case_law_corpus_index_projections AS projection
+    SET index_id = NEW.indexed_generation,
+        indexed_hash = NEW.indexed_hash,
+        pending_action = null,
+        pending_hash = null,
+        updated_at = clock_timestamp()
+    WHERE projection.decision_id = NEW.id
+      AND NEW.indexed_generation =
+        (projection.generation || '_' || lower(NEW.country));
+    RETURN NEW;
+  END IF;
+
+  INSERT INTO case_law_corpus_index_projections (
+    generation,
+    decision_id,
+    pending_action,
+    pending_hash,
+    updated_at
+  )
+  SELECT checkpoint.generation, NEW.id, 'index', NEW.content_hash, clock_timestamp()
+  FROM case_law_corpus_index_backfills AS checkpoint
+  WHERE NOT EXISTS (
+    SELECT 1
+    FROM case_law_corpus_index_backfills AS newer
+    WHERE (newer.snapshot_at, newer.generation) >
+      (checkpoint.snapshot_at, checkpoint.generation)
+  )
+  ON CONFLICT (generation, decision_id) DO UPDATE
+  SET pending_action = EXCLUDED.pending_action,
+      pending_hash = EXCLUDED.pending_hash,
+      updated_at = EXCLUDED.updated_at;
+
+  RETURN NEW;
+END
+$function$;--> statement-breakpoint
+
+-- stella-migration-safety: reviewed destructive-change - retry cleanup replaces only this migration's projection trigger; table data is unchanged.
+DROP TRIGGER IF EXISTS case_law_decisions_enqueue_corpus_index_projection
+  ON "case_law_decisions";--> statement-breakpoint
+CREATE TRIGGER case_law_decisions_enqueue_corpus_index_projection
+AFTER INSERT OR UPDATE OF content_hash, indexed_hash, country
+ON "case_law_decisions"
+FOR EACH ROW
+EXECUTE FUNCTION enqueue_case_law_corpus_index_projection();--> statement-breakpoint
+
 -- Statement time, rather than transaction-start time, makes the rebuild's
 -- short table-lock barrier a valid created_at high-water mark.
 ALTER TABLE "case_law_decisions"

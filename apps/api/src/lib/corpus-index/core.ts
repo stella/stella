@@ -234,6 +234,10 @@ type GenerationBackfillRowsOptions = {
   readConcurrency?: number;
 };
 
+type CorpusIndexMarkMode =
+  | { type: "incremental" }
+  | { generation: string; type: "generation-rebuild" };
+
 const ingestBatchWithGuard = async ({
   beforeRemoteEffect,
   indexId,
@@ -293,6 +297,8 @@ export type CorpusIndexAdapter<
     scopedDb: ScopedDb,
     id: SafeId<TBrand>,
   ) => Promise<string | null>;
+  /** Last physical index recorded for this rebuild generation, if any. */
+  generationProjectionIndexId: (row: TRow) => string | null;
   /**
    * Compare-and-set every row's selected state to indexed, within the
    * caller's transaction, as ONE statement. Returns the ids that were
@@ -306,6 +312,7 @@ export type CorpusIndexAdapter<
     args: {
       rows: readonly CorpusIndexRow<TBrand>[];
       indexId: string;
+      mode: CorpusIndexMarkMode;
       now: Date;
     },
   ) => Promise<Set<SafeId<TBrand>>>;
@@ -804,6 +811,10 @@ export const createCorpusIndexer = <
           const previousIndexes = new Set<string>();
           if (options.type === "generation-rebuild") {
             previousIndexes.add(indexId);
+            const projectionIndexId = adapter.generationProjectionIndexId(row);
+            if (projectionIndexId !== null) {
+              previousIndexes.add(projectionIndexId);
+            }
           }
           if (
             row.indexedGeneration !== null &&
@@ -882,6 +893,10 @@ export const createCorpusIndexer = <
             const marked = await adapter.markIndexedBatch(tx, {
               rows: entries.map(({ row }) => row),
               indexId,
+              mode:
+                options.type === "generation-rebuild"
+                  ? { generation, type: "generation-rebuild" }
+                  : { type: "incremental" },
               now,
             });
             for (const { row } of entries) {

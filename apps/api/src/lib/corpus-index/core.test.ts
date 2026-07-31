@@ -241,6 +241,7 @@ describe("failed index jobs always reach the audit trail", () => {
       family: "case_law",
       captureStep: "test",
       granularity: "document",
+      generationProjectionIndexId: () => null,
       buildDocs: (row) => [{ document_id: row.id, text: "body" }],
       readCorpusText: async () => "body",
       selectMissing: async () => [czRow, skRow],
@@ -272,7 +273,7 @@ describe("failed index jobs always reach the audit trail", () => {
     expect(czJobs.at(0)?.jobs.at(0)?.operation).toBe("index");
   });
 
-  test("a replay deletes each target and prior jurisdiction copy before appending", async () => {
+  test("a replay deletes its target and persisted prior jurisdiction before appending", async () => {
     const calls: { method: string; url: string; body?: string }[] = [];
     const stub = async (
       input: Parameters<typeof fetch>[0],
@@ -304,7 +305,8 @@ describe("failed index jobs always reach the audit trail", () => {
 
     const row = {
       ...makeRow("dec-replay", "CZ"),
-      indexedGeneration: corpusIndexId(GENERATION, "SK"),
+      indexedGeneration: corpusIndexId("case_law_v1", "CZ"),
+      projectionIndexId: corpusIndexId(GENERATION, "SK"),
     };
     const scopedDb: ScopedDb = async (callback) =>
       // SAFETY: this test's adapter ignores the transaction; the callback
@@ -316,6 +318,7 @@ describe("failed index jobs always reach the audit trail", () => {
       family: "case_law",
       captureStep: "test",
       granularity: "document",
+      generationProjectionIndexId: (selected) => selected.projectionIndexId,
       buildDocs: (selected) => [{ document_id: selected.id, text: "body" }],
       readCorpusText: async () => "body",
       selectMissing: async () => [],
@@ -369,6 +372,7 @@ describe("failed index jobs always reach the audit trail", () => {
     const sameIndexRow = {
       ...makeRow("dec-replay-same", "CZ"),
       indexedGeneration: corpusIndexId(GENERATION, "CZ"),
+      projectionIndexId: corpusIndexId(GENERATION, "CZ"),
     };
     expect(
       await indexer.backfillRows(scopedDb, [sameIndexRow], GENERATION, {

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { pushSchema } from "drizzle-kit/api-postgres";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import * as authSchema from "@/api/db/auth-schema";
@@ -9,6 +9,7 @@ import type { Transaction } from "@/api/db/root";
 import * as schema from "@/api/db/schema";
 import {
   caseLawCorpusIndexBackfills,
+  caseLawCorpusIndexProjections,
   caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
@@ -18,6 +19,10 @@ import {
 } from "@/api/handlers/case-law/corpus-index";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  caseLawCorpusProjectionJoin,
+  currentCaseLawCorpusProjection,
+} from "@/api/lib/legal-search/case-law-corpus-projection";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
 import {
   createSchemaPglite,
@@ -152,29 +157,32 @@ const readCheckpoint = async (generation: string) =>
       .limit(1)
   ).at(0);
 
+const ignoreProjectionRemoval = async () => undefined;
+
 test(
   "replays the snapshot once and reconciles pending rows after completion",
   async () => {
     const sent: SafeId<"caseLawDecision">[][] = [];
     let guardedPages = 0;
-    let pendingCalls = 0;
-    let pendingPages = 1;
     let lease = 0;
     const backfill = createCaseLawGenerationBackfill({
-      backfillIncremental: async () => {
-        pendingCalls += 1;
-        const indexed = pendingPages;
-        pendingPages = 0;
-        return indexed;
-      },
-      backfillRows: async (_scopedDb, rows, _generation, options) => {
+      backfillRows: async (runnerDb, rows, rebuildGeneration, options) => {
         await options.beforeRemoteEffect();
         sent.push(rows.map((row) => row.id));
         guardedPages += 1;
+        await runnerDb(async (tx) => {
+          await options.beforeDatabaseMark(tx);
+          await tx
+            .delete(caseLawCorpusIndexProjections)
+            .where(
+              eq(caseLawCorpusIndexProjections.generation, rebuildGeneration),
+            );
+        });
         return rows.length;
       },
       newLeaseToken: () =>
         `00000000-0000-4000-8000-${String(++lease).padStart(12, "0")}`,
+      removeProjection: ignoreProjectionRemoval,
     });
 
     expect(await backfill(scopedDb, 2, GENERATION)).toMatchObject({
@@ -184,6 +192,12 @@ test(
     expect(await backfill(scopedDb, 2, GENERATION)).toMatchObject({
       indexed: 1,
       status: "advanced",
+    });
+    await db.insert(caseLawCorpusIndexProjections).values({
+      decisionId: publicFirstId,
+      generation: GENERATION,
+      pendingAction: "index",
+      pendingHash: "first",
     });
     expect(await backfill(scopedDb, 2, GENERATION)).toEqual({
       indexed: 1,
@@ -201,9 +215,8 @@ test(
     // Same-timestamp rows are visited in UUID order, exactly once. Restricted
     // and incomplete records advance the keyset cursor as terminal skips but
     // never cross the index boundary.
-    expect(sent).toEqual([[publicFirstId], [publicLastId]]);
-    expect(guardedPages).toBe(2);
-    expect(pendingCalls).toBe(3);
+    expect(sent).toEqual([[publicFirstId], [publicLastId], [publicFirstId]]);
+    expect(guardedPages).toBe(3);
     const checkpoint = await readCheckpoint(GENERATION);
     expect(checkpoint).toMatchObject({
       cursorCreatedAt: CREATED_AT,
@@ -212,6 +225,247 @@ test(
       leaseToken: null,
       status: "complete",
     });
+  },
+  { timeout: 30_000 },
+);
+
+test(
+  "reconciles each generation even when the serving generation marks the hash current",
+  async () => {
+    const generation = "case_law_v2_generation_pending";
+    await db.insert(caseLawCorpusIndexBackfills).values({
+      generation,
+      snapshotAt: new Date("2026-07-31T12:00:00.000Z"),
+      status: "complete",
+    });
+    await db.insert(caseLawCorpusIndexProjections).values({
+      decisionId: publicFirstId,
+      generation,
+      pendingAction: "index",
+      pendingHash: "first",
+    });
+    await db
+      .update(caseLawDecisions)
+      .set({
+        indexedGeneration: corpusIndexId("case_law_v1", "CZE"),
+        indexedHash: "first",
+      })
+      .where(eq(caseLawDecisions.id, publicFirstId));
+
+    const backfill = createCaseLawGenerationBackfill({
+      backfillRows: async (runnerDb, rows, rebuildGeneration, options) => {
+        await options.beforeRemoteEffect();
+        const row = rows.at(0);
+        if (!row) {
+          return 0;
+        }
+        let indexed = 0;
+        await runnerDb(async (tx) => {
+          await options.beforeDatabaseMark(tx);
+          const marked = await caseLawCorpusIndexAdapter.markIndexedBatch(tx, {
+            indexId: corpusIndexId(rebuildGeneration, row.country),
+            mode: { generation: rebuildGeneration, type: "generation-rebuild" },
+            now: new Date("2026-07-31T13:00:00.000Z"),
+            rows,
+          });
+          indexed = marked.size;
+        });
+        return indexed;
+      },
+      newLeaseToken: () => "00000000-0000-4000-8000-000000000050",
+      removeProjection: ignoreProjectionRemoval,
+    });
+
+    expect(await backfill(scopedDb, 10, generation)).toEqual({
+      indexed: 1,
+      status: "advanced",
+    });
+    const projection = (
+      await db
+        .select()
+        .from(caseLawCorpusIndexProjections)
+        .where(eq(caseLawCorpusIndexProjections.generation, generation))
+        .limit(1)
+    ).at(0);
+    expect(projection).toMatchObject({
+      indexId: corpusIndexId(generation, "CZE"),
+      indexedHash: "first",
+      pendingAction: null,
+      pendingHash: null,
+    });
+    const decision = (
+      await db
+        .select({
+          indexedGeneration: caseLawDecisions.indexedGeneration,
+          indexedHash: caseLawDecisions.indexedHash,
+        })
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, publicFirstId))
+        .limit(1)
+    ).at(0);
+    expect(decision).toEqual({
+      indexedGeneration: corpusIndexId("case_law_v1", "CZE"),
+      indexedHash: "first",
+    });
+
+    await db
+      .update(caseLawDecisions)
+      .set({ country: "SVK" })
+      .where(eq(caseLawDecisions.id, publicFirstId));
+    await db
+      .update(caseLawCorpusIndexProjections)
+      .set({ pendingAction: "index", pendingHash: "first" })
+      .where(eq(caseLawCorpusIndexProjections.generation, generation));
+    expect(await backfill(scopedDb, 10, generation)).toEqual({
+      indexed: 1,
+      status: "advanced",
+    });
+    expect(await readCheckpoint(generation)).toMatchObject({
+      status: "complete",
+    });
+    const movedProjection = (
+      await db
+        .select({ indexId: caseLawCorpusIndexProjections.indexId })
+        .from(caseLawCorpusIndexProjections)
+        .where(eq(caseLawCorpusIndexProjections.generation, generation))
+        .limit(1)
+    ).at(0);
+    expect(movedProjection?.indexId).toBe(corpusIndexId(generation, "SVK"));
+    await db
+      .update(caseLawDecisions)
+      .set({ country: "CZE" })
+      .where(eq(caseLawDecisions.id, publicFirstId));
+  },
+  { timeout: 30_000 },
+);
+
+test(
+  "retains the snapshot lease while the first reconciliation is in flight",
+  async () => {
+    const generation = "case_law_v2_completion_lease";
+    let invocation = 0;
+    let reconciliationStarted: (() => void) | undefined;
+    let releaseReconciliation: (() => void) | undefined;
+    const reconciliationStartedPromise = new Promise<void>((resolve) => {
+      reconciliationStarted = resolve;
+    });
+    const releaseReconciliationPromise = new Promise<void>((resolve) => {
+      releaseReconciliation = resolve;
+    });
+    let lease = 60;
+    const backfill = createCaseLawGenerationBackfill({
+      backfillRows: async (runnerDb, rows, rebuildGeneration, options) => {
+        invocation += 1;
+        await options.beforeRemoteEffect();
+        if (invocation === 2) {
+          reconciliationStarted?.();
+          await releaseReconciliationPromise;
+          await runnerDb(async (tx) => {
+            await options.beforeDatabaseMark(tx);
+            await tx
+              .delete(caseLawCorpusIndexProjections)
+              .where(
+                eq(caseLawCorpusIndexProjections.generation, rebuildGeneration),
+              );
+          });
+        }
+        return rows.length;
+      },
+      newLeaseToken: () =>
+        `00000000-0000-4000-8000-${String(++lease).padStart(12, "0")}`,
+      removeProjection: ignoreProjectionRemoval,
+    });
+
+    expect(await backfill(scopedDb, 100, generation)).toMatchObject({
+      status: "advanced",
+    });
+    await db.insert(caseLawCorpusIndexProjections).values({
+      decisionId: publicFirstId,
+      generation,
+      pendingAction: "index",
+      pendingHash: "first",
+    });
+    const completing = backfill(scopedDb, 100, generation);
+    await reconciliationStartedPromise;
+    expect(await readCheckpoint(generation)).toMatchObject({
+      status: "complete",
+    });
+    expect((await readCheckpoint(generation))?.leaseToken).not.toBeNull();
+    expect(await backfill(scopedDb, 100, generation)).toEqual({
+      indexed: 0,
+      status: "busy",
+    });
+    releaseReconciliation?.();
+    expect(await completing).toEqual({ indexed: 1, status: "advanced" });
+    expect(await readCheckpoint(generation)).toMatchObject({
+      leaseExpiresAt: null,
+      leaseToken: null,
+      status: "complete",
+    });
+  },
+  { timeout: 30_000 },
+);
+
+test(
+  "retains and drains the exact generation target after content is removed",
+  async () => {
+    const generation = "case_law_v2_delete_tombstone";
+    const indexId = corpusIndexId(generation, "CZE");
+    await db.insert(caseLawCorpusIndexBackfills).values({
+      generation,
+      snapshotAt: new Date("2026-07-31T14:00:00.000Z"),
+      status: "complete",
+    });
+    await db.insert(caseLawCorpusIndexProjections).values({
+      decisionId: publicFirstId,
+      generation,
+      indexedHash: "first",
+      indexId,
+      pendingAction: "delete",
+    });
+    await db
+      .update(caseLawDecisions)
+      .set({ contentHash: null, indexedHash: null })
+      .where(eq(caseLawDecisions.id, publicFirstId));
+
+    const removed: string[] = [];
+    const backfill = createCaseLawGenerationBackfill({
+      backfillRows: async () => {
+        throw new Error("delete tombstones must not enter the index path");
+      },
+      newLeaseToken: () => "00000000-0000-4000-8000-000000000080",
+      removeProjection: async (runnerDb, { options, row }) => {
+        await options.beforeRemoteEffect();
+        if (row.generationIndexId !== null) {
+          removed.push(row.generationIndexId);
+        }
+        await runnerDb(async (tx) => {
+          await options.beforeDatabaseMark(tx);
+          await tx
+            .delete(caseLawCorpusIndexProjections)
+            .where(eq(caseLawCorpusIndexProjections.generation, generation));
+        });
+      },
+    });
+
+    try {
+      expect(await backfill(scopedDb, 10, generation)).toEqual({
+        indexed: 0,
+        status: "advanced",
+      });
+      expect(removed).toEqual([indexId]);
+      expect(
+        await db
+          .select()
+          .from(caseLawCorpusIndexProjections)
+          .where(eq(caseLawCorpusIndexProjections.generation, generation)),
+      ).toHaveLength(0);
+    } finally {
+      await db
+        .update(caseLawDecisions)
+        .set({ contentHash: "first", indexedHash: "first" })
+        .where(eq(caseLawDecisions.id, publicFirstId));
+    }
   },
   { timeout: 30_000 },
 );
@@ -229,7 +483,6 @@ test(
       releaseFirstPage = resolve;
     });
     const backfill = createCaseLawGenerationBackfill({
-      backfillIncremental: async () => 0,
       backfillRows: async (_scopedDb, _rows, _generation, options) => {
         await options.beforeRemoteEffect();
         firstPageStarted?.();
@@ -237,6 +490,7 @@ test(
         throw new Error("search unavailable");
       },
       newLeaseToken: () => "00000000-0000-4000-8000-000000000100",
+      removeProjection: ignoreProjectionRemoval,
     });
 
     const first = backfill(scopedDb, 1, retryGeneration);
@@ -265,12 +519,12 @@ test(
     });
 
     const incomplete = createCaseLawGenerationBackfill({
-      backfillIncremental: async () => 0,
       backfillRows: async (_scopedDb, _rows, _generation, options) => {
         await options.beforeRemoteEffect();
         return 0;
       },
       newLeaseToken: () => "00000000-0000-4000-8000-000000000101",
+      removeProjection: ignoreProjectionRemoval,
     });
     const incompleteRejection: unknown = await incomplete(
       scopedDb,
@@ -293,13 +547,13 @@ test(
 
     const replayed: SafeId<"caseLawDecision">[][] = [];
     const retry = createCaseLawGenerationBackfill({
-      backfillIncremental: async () => 0,
       backfillRows: async (_scopedDb, rows, _generation, options) => {
         await options.beforeRemoteEffect();
         replayed.push(rows.map((row) => row.id));
         return rows.length;
       },
       newLeaseToken: () => "00000000-0000-4000-8000-000000000102",
+      removeProjection: ignoreProjectionRemoval,
     });
     expect(await retry(scopedDb, 1, retryGeneration)).toMatchObject({
       indexed: 1,
@@ -316,19 +570,18 @@ test(
     const generation = "case_law_v2_takeover";
     let winningRemoteEffects = 0;
     const winner = createCaseLawGenerationBackfill({
-      backfillIncremental: async () => 0,
       backfillRows: async (_scopedDb, rows, _generation, options) => {
         await options.beforeRemoteEffect();
         winningRemoteEffects += 1;
         return rows.length;
       },
       newLeaseToken: () => "00000000-0000-4000-8000-000000000201",
+      removeProjection: ignoreProjectionRemoval,
     });
 
     let staleRemoteEffects = 0;
     let winnerResult: Awaited<ReturnType<typeof winner>> | undefined;
     const stale = createCaseLawGenerationBackfill({
-      backfillIncremental: async () => 0,
       backfillRows: async (_scopedDb, rows, _generation, options) => {
         await db
           .update(caseLawCorpusIndexBackfills)
@@ -340,6 +593,7 @@ test(
         return rows.length;
       },
       newLeaseToken: () => "00000000-0000-4000-8000-000000000200",
+      removeProjection: ignoreProjectionRemoval,
     });
 
     const rejection: unknown = await stale(scopedDb, 1, generation).then(
@@ -370,7 +624,6 @@ test(
     const generation = "case_law_v2_mark_fence";
     let winningRemoteEffects = 0;
     const winner = createCaseLawGenerationBackfill({
-      backfillIncremental: async () => 0,
       backfillRows: async (runnerDb, rows, _generation, options) => {
         await options.beforeRemoteEffect();
         winningRemoteEffects += 1;
@@ -378,13 +631,13 @@ test(
         return rows.length;
       },
       newLeaseToken: () => "00000000-0000-4000-8000-000000000401",
+      removeProjection: ignoreProjectionRemoval,
     });
 
     let staleDatabaseMarks = 0;
     let staleRemoteEffects = 0;
     let winnerResult: Awaited<ReturnType<typeof winner>> | undefined;
     const stale = createCaseLawGenerationBackfill({
-      backfillIncremental: async () => 0,
       backfillRows: async (runnerDb, rows, _generation, options) => {
         await options.beforeRemoteEffect();
         staleRemoteEffects += 1;
@@ -398,6 +651,7 @@ test(
         return rows.length;
       },
       newLeaseToken: () => "00000000-0000-4000-8000-000000000400",
+      removeProjection: ignoreProjectionRemoval,
     });
 
     const rejection: unknown = await stale(scopedDb, 1, generation).then(
@@ -493,13 +747,13 @@ test(
 
     const sent: SafeId<"caseLawDecision">[] = [];
     const backfill = createCaseLawGenerationBackfill({
-      backfillIncremental: async () => 0,
       backfillRows: async (_scopedDb, rows, _generation, options) => {
         await options.beforeRemoteEffect();
         sent.push(...rows.map(({ id }) => id));
         return rows.length;
       },
       newLeaseToken: () => "00000000-0000-4000-8000-000000000300",
+      removeProjection: ignoreProjectionRemoval,
     });
 
     try {
@@ -511,6 +765,99 @@ test(
       await db
         .delete(caseLawDecisions)
         .where(eq(caseLawDecisions.id, refreshedId));
+    }
+  },
+  { timeout: 30_000 },
+);
+
+test(
+  "rehydration admits exactly a current, non-pending generation projection",
+  async () => {
+    const generation = "case_law_v2_rehydration";
+    const decisionId = toSafeId<"caseLawDecision">(
+      "00000000-0000-4000-8000-000000000097",
+    );
+    const indexId = corpusIndexId(generation, "CZE");
+    await db.insert(caseLawCorpusIndexBackfills).values({
+      generation,
+      snapshotAt: new Date("2026-07-31T15:00:00.000Z"),
+      status: "complete",
+    });
+    await db.insert(caseLawDecisions).values({
+      caseNumber: "97 T 97/2026",
+      contentHash: "current",
+      country: "CZE",
+      court: "Projection court",
+      createdAt: CREATED_AT,
+      fulltext: "projection text",
+      id: decisionId,
+      indexedHash: "current",
+      language: "cs",
+      languageGroupKey: "projection",
+      slug: "projection",
+      sourceId: publicSourceId,
+    });
+    const visible = async () =>
+      (
+        await db
+          .select({ id: caseLawDecisions.id })
+          .from(caseLawDecisions)
+          .leftJoin(
+            caseLawCorpusIndexProjections,
+            caseLawCorpusProjectionJoin(generation),
+          )
+          .where(
+            and(
+              eq(caseLawDecisions.id, decisionId),
+              currentCaseLawCorpusProjection(generation),
+            ),
+          )
+      ).length === 1;
+
+    try {
+      expect(await visible()).toBe(true);
+      await db.insert(caseLawCorpusIndexProjections).values({
+        decisionId,
+        generation,
+        indexedHash: "current",
+        indexId,
+      });
+      expect(await visible()).toBe(true);
+
+      await db
+        .update(caseLawCorpusIndexProjections)
+        .set({ pendingAction: "index", pendingHash: "current" })
+        .where(eq(caseLawCorpusIndexProjections.generation, generation));
+      expect(await visible()).toBe(false);
+
+      await db
+        .update(caseLawCorpusIndexProjections)
+        .set({
+          indexId: corpusIndexId(generation, "SVK"),
+          pendingAction: null,
+          pendingHash: null,
+        })
+        .where(eq(caseLawCorpusIndexProjections.generation, generation));
+      expect(await visible()).toBe(false);
+
+      await db
+        .update(caseLawCorpusIndexProjections)
+        .set({ indexId, indexedHash: "stale" })
+        .where(eq(caseLawCorpusIndexProjections.generation, generation));
+      expect(await visible()).toBe(false);
+
+      await db
+        .update(caseLawCorpusIndexProjections)
+        .set({ pendingAction: "delete", pendingHash: null })
+        .where(eq(caseLawCorpusIndexProjections.generation, generation));
+      expect(await visible()).toBe(false);
+    } finally {
+      await db
+        .delete(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, decisionId));
+      await db
+        .delete(caseLawCorpusIndexBackfills)
+        .where(eq(caseLawCorpusIndexBackfills.generation, generation));
     }
   },
   { timeout: 30_000 },

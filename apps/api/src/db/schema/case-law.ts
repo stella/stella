@@ -682,6 +682,57 @@ export const caseLawCorpusIndexBackfills = p.pgTable(
   ],
 );
 
+export const CASE_LAW_CORPUS_INDEX_PROJECTION_ACTIONS = [
+  "index",
+  "delete",
+] as const;
+export type CaseLawCorpusIndexProjectionAction =
+  (typeof CASE_LAW_CORPUS_INDEX_PROJECTION_ACTIONS)[number];
+
+/** Durable state and refresh queue for each active generation projection. */
+export const caseLawCorpusIndexProjections = p.pgTable(
+  "case_law_corpus_index_projections",
+  {
+    generation: p
+      .varchar({ length: 32 })
+      .notNull()
+      .references(() => caseLawCorpusIndexBackfills.generation, {
+        onDelete: "cascade",
+      }),
+    decisionId: safeUuid<"caseLawDecision">("decision_id")
+      .notNull()
+      .references(() => caseLawDecisions.id, { onDelete: "cascade" }),
+    indexId: p.varchar("index_id", { length: 64 }),
+    indexedHash: p.varchar("indexed_hash", { length: 64 }),
+    pendingAction: p.text("pending_action", {
+      enum: CASE_LAW_CORPUS_INDEX_PROJECTION_ACTIONS,
+    }),
+    pendingHash: p.varchar("pending_hash", { length: 64 }),
+    updatedAt: timestamptz("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p.primaryKey({
+      columns: [t.generation, t.decisionId],
+      name: "case_law_corpus_index_projections_pk",
+    }),
+    p.check(
+      "case_law_corpus_index_projections_index_pair",
+      sql`(${t.indexId} IS NULL) = (${t.indexedHash} IS NULL)`,
+    ),
+    p.check(
+      "case_law_corpus_index_projections_pending_shape",
+      sql`(${t.pendingAction} IS NULL AND ${t.pendingHash} IS NULL)
+        OR (${t.pendingAction} = 'index' AND ${t.pendingHash} IS NOT NULL)
+        OR (${t.pendingAction} = 'delete' AND ${t.pendingHash} IS NULL)`,
+    ),
+    p
+      .index("case_law_corpus_index_projections_pending_idx")
+      .on(t.generation, t.decisionId)
+      .where(isNotNull(t.pendingAction)),
+    ...globalCaseLawPolicies(),
+  ],
+);
+
 // ---------------------------------------------------------------------------
 // Legislation / statutes — global corpus (mirrors case law). Point-in-time
 // temporal model: each row is a consolidated expression of a work (`eli`),

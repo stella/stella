@@ -1,7 +1,11 @@
 import { eq } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import { caseLawDecisions, caseLawIndexJobs } from "@/api/db/schema";
+import {
+  caseLawCorpusIndexProjections,
+  caseLawDecisions,
+  caseLawIndexJobs,
+} from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
 import { removeDecisionFromCorpusIndex } from "@/api/handlers/case-law/corpus-index";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -125,11 +129,20 @@ export const redactCaseLawDecision = async ({
   // mid-flight; the recorded pointer is only cleared once both succeed.
   let auditedViaCorpusIndex = false;
   if (envBase.CORPUS_INDEX_ENDPOINT !== undefined) {
+    const projectionTargets = await scopedDb((tx) =>
+      tx
+        .select({ indexId: caseLawCorpusIndexProjections.indexId })
+        .from(caseLawCorpusIndexProjections)
+        .where(eq(caseLawCorpusIndexProjections.decisionId, decisionId)),
+    );
     const targets = new Set([
       ...(decision.indexedGeneration === null
         ? []
         : [decision.indexedGeneration]),
       corpusIndexId(generation, decision.country),
+      ...projectionTargets.flatMap(({ indexId }) =>
+        indexId === null ? [] : [indexId],
+      ),
     ]);
     // Attempt every target: one failing index (already dropped, or a
     // transient error) must not leave copies in the others undeleted.
@@ -152,12 +165,15 @@ export const redactCaseLawDecision = async ({
       throw firstError;
     }
     // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-    await scopedDb((tx) => {
+    await scopedDb(async (tx) => {
       // audit: skip — GDPR redaction bookkeeping; recorded in case_law_index_jobs above
-      return tx
+      await tx
         .update(caseLawDecisions)
         .set({ indexedGeneration: null })
         .where(eq(caseLawDecisions.id, decisionId));
+      await tx
+        .delete(caseLawCorpusIndexProjections)
+        .where(eq(caseLawCorpusIndexProjections.decisionId, decisionId));
     });
     auditedViaCorpusIndex = true;
   }
