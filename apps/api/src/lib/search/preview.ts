@@ -521,9 +521,10 @@ export const readSearchPreview = async (
       return null;
     }
 
-    const candidates: Array<
-      SearchPreviewChatMessage & { isTarget: boolean; position: number }
-    > = [];
+    const candidates: (SearchPreviewChatMessage & {
+      isTarget: boolean;
+      position: number;
+    })[] = [];
     for (const [position, rawMessage] of row.messages.entries()) {
       if (!isSearchPreviewChatRole(rawMessage.role)) {
         continue;
@@ -559,7 +560,7 @@ export const readSearchPreview = async (
             ),
           ];
 
-    const messages: Array<SearchPreviewChatMessage & { position: number }> = [];
+    const messages: (SearchPreviewChatMessage & { position: number })[] = [];
     let remainingCharacters = Math.max(
       0,
       LIMITS.searchPreviewResponseCharacterLimit,
