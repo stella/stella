@@ -71,9 +71,10 @@ export const ChatModelModeSelector = ({
 }: ChatModelModeSelectorProps) => {
   const t = useTranslations();
   const [open, setOpen] = useState(false);
+  const [detailsRequested, setDetailsRequested] = useState(false);
   const { data } = useQuery({
     ...modelOptionsOptions(models.activeOrganizationId),
-    enabled: open || models.selectedModel !== null,
+    enabled: open || detailsRequested || models.selectedModel !== null,
   });
   const favorite = useChatModelFavoriteStore(
     (state) => state.favoritesByOrganization[models.activeOrganizationId],
@@ -85,17 +86,19 @@ export const ChatModelModeSelector = ({
     options,
     selectedModel: models.selectedModel,
   });
-  const selectedExactModel = data?.options.find(
-    (option) => option.value === models.selectedModel,
+  const effectiveModelValue =
+    selectedMode === CHAT_MODEL_MODE.standard
+      ? data?.defaultValue
+      : models.selectedModel;
+  const effectiveModel = data?.options.find(
+    (option) => option.value === effectiveModelValue,
   );
   const TriggerIcon = selectedMode ? MODE_ICON[selectedMode] : CpuIcon;
-  let triggerLabel = models.selectedModel ?? t("chat.modelMode.exactModels");
-  if (selectedExactModel) {
-    triggerLabel = formatModelLabel(selectedExactModel);
-  }
-  if (selectedMode) {
-    triggerLabel = t(MODE_LABEL_KEY[selectedMode]);
-  }
+  const triggerLabel = effectiveModel
+    ? formatModelLabel(effectiveModel)
+    : selectedMode
+      ? t(MODE_LABEL_KEY[selectedMode])
+      : (models.selectedModel ?? t("chat.modelMode.exactModels"));
   const toggleFavorite = (nextFavorite: ChatModelFavorite) => {
     setFavorite(
       models.activeOrganizationId,
@@ -118,11 +121,13 @@ export const ChatModelModeSelector = ({
             aria-label={t("chat.modelMode.select")}
             className="text-muted-foreground hover:text-foreground"
             disabled={disabled}
+            onFocus={() => setDetailsRequested(true)}
+            onMouseEnter={() => setDetailsRequested(true)}
             size="icon-xs"
-            tooltip={triggerLabel}
             variant="ghost"
           />
         }
+        tooltip={triggerLabel}
       >
         <TriggerIcon aria-hidden="true" className="size-3.5" />
       </MenuTrigger>
@@ -138,11 +143,11 @@ export const ChatModelModeSelector = ({
             const pinned = isSameFavorite(favorite, optionFavorite);
             return (
               <div
-                className="grid grid-cols-[minmax(0,1fr)_auto]"
+                className="hover:bg-accent has-[[data-highlighted]]:bg-accent has-[[data-highlighted]]:text-accent-foreground grid grid-cols-[minmax(0,1fr)_auto] rounded-sm"
                 key={option.mode}
               >
                 <MenuRadioItem
-                  className="pe-2"
+                  className="data-highlighted:bg-transparent pe-2"
                   onClick={() => selectValue(option.value)}
                   value={option.value}
                 >
@@ -183,11 +188,11 @@ export const ChatModelModeSelector = ({
                   const pinned = isSameFavorite(favorite, optionFavorite);
                   return (
                     <div
-                      className="grid grid-cols-[minmax(0,1fr)_auto]"
+                      className="hover:bg-accent has-[[data-highlighted]]:bg-accent has-[[data-highlighted]]:text-accent-foreground grid grid-cols-[minmax(0,1fr)_auto] rounded-sm"
                       key={option.value}
                     >
                       <MenuRadioItem
-                        className="grid-cols-[1rem_minmax(0,1fr)] pe-2"
+                        className="data-highlighted:bg-transparent grid-cols-[1rem_minmax(0,1fr)] pe-2"
                         onClick={() => selectValue(option.value)}
                         value={option.value}
                       >
@@ -241,7 +246,7 @@ const FavoriteMenuItem = ({
   return (
     <MenuItem
       aria-label={`${action}: ${label}`}
-      className="justify-center px-2"
+      className="data-highlighted:bg-transparent justify-center px-2"
       onClick={onClick}
       title={`${action}: ${label}`}
     >
