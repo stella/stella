@@ -618,6 +618,7 @@ const parseItemWithDetail = async (
     decisionDate,
     decisionType,
     fulltext,
+    sourceDocumentId: String(item.id ?? dumpItem.id),
     sourceUrl: publicSourceUrl(item.id ?? dumpItem.id),
     documentUrl,
     publisherCitedCases,

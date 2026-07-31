@@ -265,6 +265,7 @@ const parseItemWithDetail = async (
     language: "sk",
     decisionDate,
     decisionType,
+    sourceDocumentId: toOptionalValue(item.guid),
     sourceUrl: item.guid
       ? sanitizeUrl(sourceUrlForDecision(item.guid, detail?.dokument?.url))
       : undefined,

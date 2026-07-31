@@ -309,6 +309,27 @@ a reconciliation pass that reads the coverage ledger (rule 15)
 and re-crawls the slices that are short. Do not rely on "it will
 come around again", because it will not.
 
+### 17. Identity is the publisher's id, never the case number
+
+Courts number their dockets per court, so a source covering many
+courts issues the same number over and over: `0T/42/2019` exists at
+most Slovak district courts, `II AKa 198/23` at several Polish
+appellate courts. A key built from the case number makes two
+unrelated decisions the same row, and the second one stored silently
+replaces the first.
+
+So set `sourceDocumentId` on every `IngestionResult` whose source
+states an id, even where the number looks unique today. It is usually
+there: a `guid` in the list item, or the last segment of the detail
+URL. Uniqueness is enforced on `(source_id, source_document_id)`;
+sources with no such id fall back to the case number, which is sound
+only because they hold a single court.
+
+Watch for a number that embeds something other than the case: a
+trailing sheet number (`-28`, číslo listu) belongs in its own optional
+field, not in the docket, or one case fragments into a row per sheet
+and no citation ever matches it.
+
 ## DocumentAst Conventions
 
 ```typescript
