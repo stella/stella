@@ -33,6 +33,9 @@ SET lock_timeout = 0;
 --> statement-breakpoint
 
 -- Takes SHARE UPDATE EXCLUSIVE: concurrent reads and writes continue.
+-- Outside the transaction on purpose (see above), and safe to re-run:
+-- validating an already-valid constraint is a no-op.
+-- squawk-ignore prefer-robust-stmts
 ALTER TABLE "case_law_citations" VALIDATE CONSTRAINT "citations_kind_values";--> statement-breakpoint
 
 -- stella-migration-safety: reviewed destructive-change - drops only this
