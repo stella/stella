@@ -307,11 +307,13 @@ export const ChatInputSurface = ({
             ref={fileInputRef}
             type="file"
           />
-          <ChatPromptImproveButton
-            anonymized={anonymized}
-            controller={controller}
-            disabled={inputDisabled || isBlank}
-          />
+          <span className="me-0.5 inline-flex">
+            <ChatPromptImproveButton
+              anonymized={anonymized}
+              controller={controller}
+              disabled={inputDisabled || isBlank}
+            />
+          </span>
           {/* The single primary affordance morphs in place: the button
               itself resolves send vs. stop from the state it is fed, so
               this surface cannot render a second, parallel control. */}

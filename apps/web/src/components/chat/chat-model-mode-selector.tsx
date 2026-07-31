@@ -146,7 +146,11 @@ export const ChatModelModeSelector = ({
         render={
           <Button
             aria-label={t("chat.modelMode.select")}
-            className="text-muted-foreground hover:text-foreground"
+            className={
+              selectedChoice.type === "model"
+                ? "bg-accent text-accent-foreground hover:text-accent-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            }
             disabled={disabled}
             onFocus={() => setDetailsRequested(true)}
             onMouseEnter={() => setDetailsRequested(true)}
