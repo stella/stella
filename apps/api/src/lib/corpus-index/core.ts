@@ -594,7 +594,10 @@ export const createCorpusIndexer = <
     scopedDb: ScopedDb,
     batchSize: number,
     generation: string,
-    options: { readConcurrency?: number } = {},
+    options: {
+      readConcurrency?: number;
+      replaceExistingInGeneration?: boolean;
+    } = {},
   ): Promise<number> => {
     const staleReserved = Math.max(1, Math.floor(batchSize / 4));
     // A due duty batch cedes one missing slot up front so granting the
@@ -647,6 +650,22 @@ export const createCorpusIndexer = <
         limit: batchSize,
       });
     }
+    if (rows.length === 0) {
+      return 0;
+    }
+
+    return await backfillSelectedRows(scopedDb, rows, generation, options);
+  };
+
+  const backfillSelectedRows = async (
+    scopedDb: ScopedDb,
+    rows: TRow[],
+    generation: string,
+    options: {
+      readConcurrency?: number;
+      replaceExistingInGeneration?: boolean;
+    },
+  ): Promise<number> => {
     if (rows.length === 0) {
       return 0;
     }
@@ -707,12 +726,18 @@ export const createCorpusIndexer = <
         // generation rebuilds replace whole indexes. Engine delete tasks only
         // affect splits that already exist, so the copies ingested below are not
         // at risk.
-        const moved = group.flatMap(({ row }) =>
-          row.indexedGeneration !== null &&
-          row.indexedGeneration.startsWith(`${generation}_`)
+        const moved = group.flatMap(({ row }) => {
+          // A generation page can be replayed after the external append but
+          // before its database mark commits. Delete its deterministic target
+          // copies first, so a retry converges instead of appending duplicates.
+          if (options.replaceExistingInGeneration) {
+            return [{ id: row.id, oldIndexId: indexId }];
+          }
+          return row.indexedGeneration !== null &&
+            row.indexedGeneration.startsWith(`${generation}_`)
             ? [{ id: row.id, oldIndexId: row.indexedGeneration }]
-            : [],
-        );
+            : [];
+        });
         let staleError: CorpusIndexError | null = null;
         for (const entry of moved) {
           // oxlint-disable-next-line no-await-in-loop -- sequential deletes that early-break on the first error
@@ -824,5 +849,17 @@ export const createCorpusIndexer = <
     return indexed;
   };
 
-  return { loadDocsForBatch, backfill, remove };
+  const backfillRows = async (
+    scopedDb: ScopedDb,
+    rows: readonly TRow[],
+    generation: string,
+    options: {
+      readConcurrency?: number;
+      /** Rebuild retry: delete deterministic target copies before append. */
+      replaceExistingInGeneration?: boolean;
+    } = {},
+  ): Promise<number> =>
+    await backfillSelectedRows(scopedDb, [...rows], generation, options);
+
+  return { loadDocsForBatch, backfill, backfillRows, remove };
 };

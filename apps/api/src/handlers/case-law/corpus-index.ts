@@ -1,10 +1,16 @@
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { panic } from "better-result";
+import { and, asc, desc, eq, isNull, lt, lte, or, sql } from "drizzle-orm";
 
 import {
   caseLawDecisions,
+  caseLawCorpusIndexBackfills,
   caseLawIndexJobs,
   caseLawSources,
 } from "@/api/db/schema";
+import {
+  isRedistributable,
+  type CorpusSourceDescriptor,
+} from "@/api/handlers/case-law/corpus-source";
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
 import type { SafeId } from "@/api/lib/branded-types";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
@@ -29,6 +35,8 @@ import {
   readCorpusAst,
   readCorpusText,
 } from "@/api/lib/legal-search/corpus-storage";
+import { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
+import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
 
 /**
  * corpus index search-projection maintenance for the `case_law` family.
@@ -87,7 +95,13 @@ const SELECT_COLUMNS = {
   contentHash: caseLawDecisions.contentHash,
   indexedHash: caseLawDecisions.indexedHash,
   indexedGeneration: caseLawDecisions.indexedGeneration,
+  createdAt: caseLawDecisions.createdAt,
   updatedAtToken: timestampCasToken(caseLawDecisions.updatedAt),
+};
+
+const GENERATION_PAGE_SELECT_COLUMNS = {
+  ...SELECT_COLUMNS,
+  sourceDescriptor: caseLawSources.descriptor,
 };
 
 // A row is indexable once its canonical payload is in object storage.
@@ -201,12 +215,12 @@ export const caseLawCorpusIndexAdapter = {
   buildDocs,
   readCorpusText,
   readCorpusAst,
-  // The scans deliberately carry no ORDER BY. Any pick order makes
+  // The incremental scan deliberately carries no ORDER BY. Any pick order makes
   // progress (indexed rows leave the pending set), while ordering by
   // created_at steers the planner onto the created_at index and
   // row-by-row heap filtering; the selective content-hash index is what
   // these scans need.
-  selectMissing: async (scopedDb, { generation, limit }) => {
+  selectMissing: async (scopedDb, { limit }) => {
     // Never-indexed rows first: this arm is served by the partial pending
     // index, so its cost tracks the remaining work instead of growing with
     // every row already marked.
@@ -230,32 +244,11 @@ export const caseLawCorpusIndexAdapter = {
     if (fresh.length >= limit) {
       return fresh;
     }
-    // Rows marked under an older generation. Only a generation cutover makes
-    // this arm non-empty, so the unindexed scan it costs is rare and shrinks
-    // as rows re-mark into the current generation.
-    const carried = await scopedDb((tx) =>
-      tx
-        .select(SELECT_COLUMNS)
-        .from(caseLawDecisions)
-        .innerJoin(
-          caseLawSources,
-          eq(caseLawSources.id, caseLawDecisions.sourceId),
-        )
-        .where(
-          and(
-            hasContent,
-            redistributableCaseLawSource,
-            sql`${caseLawDecisions.indexedGeneration} <> (${generation} || '_' || lower(${caseLawDecisions.country}))`,
-          ),
-        )
-        .limit(limit - fresh.length),
-    );
-    // A row read as never-indexed by the first arm can be marked by a
-    // concurrent build under another generation before the second arm
-    // runs, which would select it again; the ingest is append-only, so
-    // the same id must not be submitted twice.
-    const seen = new Set(fresh.map((row) => row.id));
-    return [...fresh, ...carried.filter((row) => !seen.has(row.id))];
+    // A generation rebuild is deliberately not expressed as
+    // a generation-mismatch predicate: it grows into an unbounded
+    // heap scan. The build runner owns the durable keyset walk; this daemon
+    // path only services the indexed pending set.
+    return fresh;
   },
   selectStale: async (scopedDb, { generation, limit }) =>
     await scopedDb((tx) =>
@@ -357,5 +350,313 @@ const indexer = createCorpusIndexer<"caseLawDecision", IndexableRow>(
 );
 
 export const loadDocsForBatch = indexer.loadDocsForBatch;
-export const backfillCorpusIndex = indexer.backfill;
+
+type IncrementalBackfillDependencies = {
+  backfill: typeof indexer.backfill;
+  newestRebuildGeneration: (
+    scopedDb: Parameters<typeof indexer.backfill>[0],
+  ) => Promise<string | null>;
+};
+
+/**
+ * Prevents an older incremental writer from racing a newer generation build.
+ * Once a rebuild checkpoint exists, only that generation may advance corpus
+ * index pointers; compare-and-set handles a batch that was already in flight.
+ */
+export const createCaseLawIncrementalBackfill =
+  ({ backfill, newestRebuildGeneration }: IncrementalBackfillDependencies) =>
+  async (
+    scopedDb: Parameters<typeof indexer.backfill>[0],
+    batchSize: number,
+    generation: string,
+  ): Promise<number> => {
+    const newestGeneration = await newestRebuildGeneration(scopedDb);
+    if (newestGeneration !== null && newestGeneration !== generation) {
+      throw new CorpusIndexError({
+        message: `incremental generation ${generation} is behind rebuild ${newestGeneration}`,
+      });
+    }
+    return await backfill(scopedDb, batchSize, generation);
+  };
+
+export const backfillCorpusIndex = createCaseLawIncrementalBackfill({
+  backfill: indexer.backfill,
+  newestRebuildGeneration: async (scopedDb) =>
+    await scopedDb(
+      async (tx) =>
+        (
+          await tx
+            .select({ generation: caseLawCorpusIndexBackfills.generation })
+            .from(caseLawCorpusIndexBackfills)
+            .orderBy(desc(caseLawCorpusIndexBackfills.snapshotAt))
+            .limit(1)
+        ).at(0)?.generation ?? null,
+    ),
+});
+
+const BACKFILL_STATUS = {
+  ADVANCED: "advanced",
+  BUSY: "busy",
+  COMPLETE: "complete",
+} as const;
+
+const BACKFILL_LEASE_MS = 30 * 60 * 1000;
+
+type GenerationBackfillCheckpoint = {
+  cursorCreatedAt: Date | null;
+  cursorId: SafeId<"caseLawDecision"> | null;
+  generation: string;
+  snapshotAt: Date;
+};
+
+type GenerationBackfillRow = IndexableRow & {
+  createdAt: Date;
+  sourceDescriptor: CorpusSourceDescriptor | null;
+};
+
+type GenerationBackfillResult =
+  | {
+      indexed: number;
+      status: typeof BACKFILL_STATUS.ADVANCED;
+    }
+  | {
+      indexed: 0;
+      status: typeof BACKFILL_STATUS.BUSY | typeof BACKFILL_STATUS.COMPLETE;
+    };
+
+type GenerationBackfillDependencies = {
+  backfillRows: (
+    scopedDb: Parameters<typeof backfillCorpusIndex>[0],
+    rows: readonly IndexableRow[],
+    generation: string,
+    options: { replaceExistingInGeneration: boolean },
+  ) => Promise<number>;
+  clock: () => Date;
+  newLeaseToken: () => string;
+};
+
+const sameCursor = ({
+  checkpoint,
+}: {
+  checkpoint: GenerationBackfillCheckpoint;
+}) =>
+  sql`${caseLawCorpusIndexBackfills.cursorCreatedAt} IS NOT DISTINCT FROM ${checkpoint.cursorCreatedAt}
+      AND ${caseLawCorpusIndexBackfills.cursorId} IS NOT DISTINCT FROM ${checkpoint.cursorId}`;
+
+const selectGenerationBackfillPage = async (
+  scopedDb: Parameters<typeof backfillCorpusIndex>[0],
+  {
+    batchSize,
+    checkpoint,
+  }: { batchSize: number; checkpoint: GenerationBackfillCheckpoint },
+): Promise<GenerationBackfillRow[]> =>
+  await scopedDb((tx) =>
+    tx
+      .select(GENERATION_PAGE_SELECT_COLUMNS)
+      .from(caseLawDecisions)
+      .innerJoin(
+        caseLawSources,
+        eq(caseLawSources.id, caseLawDecisions.sourceId),
+      )
+      .where(
+        and(
+          lte(caseLawDecisions.createdAt, checkpoint.snapshotAt),
+          checkpoint.cursorCreatedAt === null
+            ? undefined
+            : sql`(${caseLawDecisions.createdAt}, ${caseLawDecisions.id}) > (${checkpoint.cursorCreatedAt}, ${checkpoint.cursorId})`,
+        ),
+      )
+      .orderBy(asc(caseLawDecisions.createdAt), asc(caseLawDecisions.id))
+      .limit(batchSize),
+  );
+
+const isEligibleForGeneration = (
+  row: GenerationBackfillRow,
+  generation: string,
+): boolean =>
+  row.contentHash !== null &&
+  isRedistributable(row.sourceDescriptor) &&
+  row.indexedGeneration !== corpusIndexId(generation, row.country);
+
+const withoutSourceDescriptor = ({
+  sourceDescriptor: _sourceDescriptor,
+  ...row
+}: GenerationBackfillRow): IndexableRow => row;
+
+/**
+ * Creates the case-law generation-rebuild runner. Its explicit dependencies
+ * make the state machine deterministic in database tests while production
+ * retains the shared indexer's normal S3, CAS, and audit path.
+ */
+export const createCaseLawGenerationBackfill =
+  ({ backfillRows, clock, newLeaseToken }: GenerationBackfillDependencies) =>
+  async (
+    scopedDb: Parameters<typeof backfillCorpusIndex>[0],
+    batchSize: number,
+    generation: string,
+  ): Promise<GenerationBackfillResult> => {
+    const now = clock();
+    const checkpoint = await scopedDb(async (tx) => {
+      // audit: skip — the checkpoint is the durable audit trail for this derived projection rebuild
+      const inserted = await tx
+        .insert(caseLawCorpusIndexBackfills)
+        .values({ generation })
+        .onConflictDoNothing()
+        .returning();
+      const created = inserted.at(0);
+      if (created) {
+        return created;
+      }
+
+      const existing = (
+        await tx
+          .select()
+          .from(caseLawCorpusIndexBackfills)
+          .where(eq(caseLawCorpusIndexBackfills.generation, generation))
+          .limit(1)
+      ).at(0);
+      if (!existing) {
+        panic("case-law corpus generation checkpoint disappeared");
+      }
+      return existing;
+    });
+    if (checkpoint.status === "complete") {
+      return { indexed: 0, status: BACKFILL_STATUS.COMPLETE };
+    }
+
+    const leaseToken = newLeaseToken();
+    const leaseExpiresAt = new Date(now.getTime() + BACKFILL_LEASE_MS);
+    // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
+    const claimed = await scopedDb(async (tx) => {
+      // audit: skip — lease ownership is ephemeral coordination recorded on the checkpoint itself
+      return (
+        await tx
+          .update(caseLawCorpusIndexBackfills)
+          .set({ leaseExpiresAt, leaseToken })
+          .where(
+            and(
+              eq(caseLawCorpusIndexBackfills.generation, generation),
+              eq(caseLawCorpusIndexBackfills.status, "running"),
+              sameCursor({ checkpoint }),
+              or(
+                isNull(caseLawCorpusIndexBackfills.leaseExpiresAt),
+                lt(caseLawCorpusIndexBackfills.leaseExpiresAt, now),
+              ),
+            ),
+          )
+          .returning()
+      ).at(0);
+    });
+    if (!claimed) {
+      return { indexed: 0, status: BACKFILL_STATUS.BUSY };
+    }
+
+    const claimedCheckpoint: GenerationBackfillCheckpoint = {
+      cursorCreatedAt: claimed.cursorCreatedAt,
+      cursorId: claimed.cursorId,
+      generation: claimed.generation,
+      snapshotAt: claimed.snapshotAt,
+    };
+    const page = await selectGenerationBackfillPage(scopedDb, {
+      batchSize,
+      checkpoint: claimedCheckpoint,
+    });
+    const last = page.at(-1);
+    if (!last) {
+      // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
+      const completed = await scopedDb(async (tx) => {
+        // audit: skip — completion is derived projection state recorded on the checkpoint itself
+        return (
+          await tx
+            .update(caseLawCorpusIndexBackfills)
+            .set({ leaseExpiresAt: null, leaseToken: null, status: "complete" })
+            .where(
+              and(
+                eq(caseLawCorpusIndexBackfills.generation, generation),
+                eq(caseLawCorpusIndexBackfills.status, "running"),
+                sameCursor({ checkpoint: claimedCheckpoint }),
+                eq(caseLawCorpusIndexBackfills.leaseToken, leaseToken),
+              ),
+            )
+            .returning({ generation: caseLawCorpusIndexBackfills.generation })
+        ).at(0);
+      });
+      return completed
+        ? { indexed: 0, status: BACKFILL_STATUS.COMPLETE }
+        : { indexed: 0, status: BACKFILL_STATUS.BUSY };
+    }
+
+    const rows = page
+      .filter((row) => isEligibleForGeneration(row, generation))
+      .map(withoutSourceDescriptor);
+    let indexed: number;
+    try {
+      indexed = await backfillRows(scopedDb, rows, generation, {
+        replaceExistingInGeneration: true,
+      });
+      if (indexed !== rows.length) {
+        throw new CorpusIndexError({
+          message: "generation backfill page did not reach a fixed point",
+        });
+      }
+    } catch (error) {
+      // Keep the cursor intact, but do not make a transient search/S3 failure
+      // wait for a stale lease before its durable retry.
+      // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
+      await scopedDb((tx) => {
+        // audit: skip — releasing a failed lease preserves the durable cursor for replay
+        return tx
+          .update(caseLawCorpusIndexBackfills)
+          .set({ leaseExpiresAt: null, leaseToken: null })
+          .where(
+            and(
+              eq(caseLawCorpusIndexBackfills.generation, generation),
+              eq(caseLawCorpusIndexBackfills.status, "running"),
+              sameCursor({ checkpoint: claimedCheckpoint }),
+              eq(caseLawCorpusIndexBackfills.leaseToken, leaseToken),
+            ),
+          );
+      });
+      throw error;
+    }
+
+    // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
+    const advanced = await scopedDb(async (tx) => {
+      // audit: skip — cursor advancement is the durable audit trail for this derived rebuild
+      return (
+        await tx
+          .update(caseLawCorpusIndexBackfills)
+          .set({
+            cursorCreatedAt: last.createdAt,
+            cursorId: last.id,
+            leaseExpiresAt: null,
+            leaseToken: null,
+          })
+          .where(
+            and(
+              eq(caseLawCorpusIndexBackfills.generation, generation),
+              eq(caseLawCorpusIndexBackfills.status, "running"),
+              sameCursor({ checkpoint: claimedCheckpoint }),
+              eq(caseLawCorpusIndexBackfills.leaseToken, leaseToken),
+            ),
+          )
+          .returning({ generation: caseLawCorpusIndexBackfills.generation })
+      ).at(0);
+    });
+    return advanced
+      ? { indexed, status: BACKFILL_STATUS.ADVANCED }
+      : { indexed: 0, status: BACKFILL_STATUS.BUSY };
+  };
+
+/**
+ * Advance one durable generation-rebuild page. The page is bounded by the
+ * `(created_at,id)` cursor before any generation comparison is made, so a
+ * cutover never turns into a table scan.
+ */
+export const backfillCorpusIndexGenerationPage =
+  createCaseLawGenerationBackfill({
+    backfillRows: indexer.backfillRows,
+    clock: () => new Date(),
+    newLeaseToken: () => Bun.randomUUIDv7(),
+  });
 export const removeDecisionFromCorpusIndex = indexer.remove;

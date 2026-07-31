@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { CorpusJobInput } from "@/api/lib/corpus-index/core";
@@ -269,5 +270,72 @@ describe("failed index jobs always reach the audit trail", () => {
     expect(czJobs.at(0)?.jobs.map((job) => job.entityId)).toEqual([czRow.id]);
     expect(czJobs.at(0)?.jobs.at(0)?.status).toBe("failed");
     expect(czJobs.at(0)?.jobs.at(0)?.operation).toBe("index");
+  });
+
+  test("a replay deletes target copies before appending replacements", async () => {
+    const calls: { method: string; url: string; body?: string }[] = [];
+    const stub = async (
+      input: Parameters<typeof fetch>[0],
+      init?: RequestInit,
+    ) => {
+      let url: string;
+      if (typeof input === "string") {
+        url = input;
+      } else if (input instanceof URL) {
+        url = input.href;
+      } else {
+        url = input.url;
+      }
+      calls.push({
+        method: init?.method ?? "GET",
+        url,
+        ...(typeof init?.body === "string" ? { body: init.body } : {}),
+      });
+      if (url.includes("/ingest")) {
+        return new Response(JSON.stringify({ num_docs_for_processing: 1 }), {
+          status: 200,
+        });
+      }
+      return new Response(JSON.stringify({}), { status: 200 });
+    };
+    globalThis.fetch = Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    });
+
+    const row = makeRow("dec-replay", "CZ");
+    const scopedDb: ScopedDb = async (callback) =>
+      // SAFETY: this test's adapter ignores the transaction; the callback
+      // boundary itself is what the indexer must cross before reporting success.
+      // oxlint-disable-next-line node/callback-return, typescript/no-unsafe-type-assertion -- the fake transaction is deliberately inert
+      await callback({} as Transaction);
+    const indexer = createCorpusIndexer<"caseLawDecision", typeof row>({
+      family: "case_law",
+      captureStep: "test",
+      granularity: "document",
+      buildDocs: (selected) => [{ document_id: selected.id, text: "body" }],
+      readCorpusText: async () => "body",
+      selectMissing: async () => [],
+      selectStale: async () => [],
+      fetchFulltext: async () => "body",
+      markIndexedBatch: async (_tx, { rows }) =>
+        new Set(rows.map((selected) => selected.id)),
+      insertSucceededJobs: async () => undefined,
+      recordJobs: async () => undefined,
+    });
+
+    const indexed = await indexer.backfillRows(scopedDb, [row], GENERATION, {
+      replaceExistingInGeneration: true,
+    });
+
+    expect(indexed).toBe(1);
+    const deleteCall = calls.findIndex(({ url }) =>
+      url.includes("/delete-tasks"),
+    );
+    const ingestCall = calls.findIndex(({ url }) => url.includes("/ingest"));
+    expect(deleteCall).toBeGreaterThanOrEqual(0);
+    expect(ingestCall).toBeGreaterThan(deleteCall);
+    expect(calls.at(deleteCall)?.body).toBe(
+      JSON.stringify({ query: 'document_id:"dec-replay"' }),
+    );
   });
 });

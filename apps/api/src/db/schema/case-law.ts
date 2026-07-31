@@ -614,6 +614,52 @@ export const caseLawIndexJobs = p.pgTable(
   ],
 );
 
+/** Durable cursor for a blue-green corpus-index generation rebuild. */
+export const caseLawCorpusIndexBackfills = p.pgTable(
+  "case_law_corpus_index_backfills",
+  {
+    generation: p.varchar({ length: 32 }).primaryKey(),
+    snapshotAt: timestamptz("snapshot_at").defaultNow().notNull(),
+    cursorCreatedAt: timestamptz("cursor_created_at"),
+    cursorId: safeUuid<"caseLawDecision">("cursor_id"),
+    status: p
+      .varchar({ length: 16 })
+      .notNull()
+      .default("running")
+      .$type<"running" | "complete">(),
+    /**
+     * A rebuild page owns external index writes. Persisting this lease before
+     * the write prevents two workers from appending the same documents; the
+     * expiry makes a process crash recoverable.
+     */
+    leaseToken: p.uuid("lease_token"),
+    leaseExpiresAt: timestamptz("lease_expires_at"),
+    updatedAt: timestamptz("updated_at")
+      .defaultNow()
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    p.check(
+      "case_law_corpus_index_backfills_status_values",
+      sql`${t.status} IN ('running','complete')`,
+    ),
+    p.check(
+      "case_law_corpus_index_backfills_cursor_pair",
+      sql`(${t.cursorCreatedAt} IS NULL) = (${t.cursorId} IS NULL)`,
+    ),
+    p.check(
+      "case_law_corpus_index_backfills_lease_pair",
+      sql`(${t.leaseToken} IS NULL) = (${t.leaseExpiresAt} IS NULL)`,
+    ),
+    p.check(
+      "case_law_corpus_index_backfills_completed_unleased",
+      sql`${t.status} <> 'complete' OR ${t.leaseToken} IS NULL`,
+    ),
+    ...globalCaseLawPolicies(),
+  ],
+);
+
 // ---------------------------------------------------------------------------
 // Legislation / statutes — global corpus (mirrors case law). Point-in-time
 // temporal model: each row is a consolidated expression of a work (`eli`),
