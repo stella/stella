@@ -40,6 +40,7 @@ ALTER TABLE "case_law_decisions"
 -- Order matters: the replacement for the old key is built before the old
 -- one is dropped, so uniqueness is enforced continuously rather than
 -- leaving a window in which duplicates could land.
+-- squawk-ignore transaction-nesting -- deliberate: CREATE INDEX CONCURRENTLY cannot run inside the migrator's transaction, so it is closed here and reopened below
 COMMIT;
 --> statement-breakpoint
 DROP INDEX CONCURRENTLY IF EXISTS "case_law_decisions_source_document_idx";
@@ -59,4 +60,5 @@ CREATE UNIQUE INDEX CONCURRENTLY "case_law_decisions_source_case_lang_null_idx"
 DROP INDEX CONCURRENTLY IF EXISTS "case_law_decisions_source_case_lang_idx";
 --> statement-breakpoint
 -- squawk-ignore ban-uncommitted-transaction -- reopens the migrator transaction the COMMIT above closed; Drizzle commits it after writing its bookkeeping row
+-- squawk-ignore transaction-nesting -- same split; the transaction this reopens is the migrator's own
 BEGIN;
