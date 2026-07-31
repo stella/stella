@@ -267,7 +267,6 @@ const preserveCorpusWriteRetry = async ({
   // next ingestion pass skip this decision before it can retry object storage.
   // Clear corpus keys too so reads fall back to the fresh Postgres columns
   // instead of serving an older object payload.
-  // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
   await scopedDb(async (tx) => {
     // audit: skip — background corpus storage retry bookkeeping; derived state
     const compensationOrder = (
@@ -565,9 +564,9 @@ const processDecisionAttempt = async ({
       incomingRawHash: result.rawHash,
     })
   ) {
-    const watermarkAdvanced = await scopedDb(async (tx) => {
+    const watermarkAdvanced = await scopedDb(async (tx) =>
       // audit: skip — background case-law ingestion ordering metadata; public case-law data, not user actions
-      return (
+      (
         await tx
           .update(caseLawDecisions)
           .set({
@@ -587,8 +586,8 @@ const processDecisionAttempt = async ({
             ),
           )
           .returning({ id: caseLawDecisions.id })
-      ).at(0);
-    });
+      ).at(0),
+    );
     if (!watermarkAdvanced) {
       const current = await scopedDb((tx) =>
         tx.query.caseLawDecisions.findFirst({
