@@ -175,28 +175,6 @@ const nextBackfillSnapshotAt = async (): Promise<Date> => {
 
 const ignoreProjectionRemoval = async () => undefined;
 
-test("rejects a pending hash without a pending action", async () => {
-  const generation = "case_law_invalid_pending";
-  await db.insert(caseLawCorpusIndexBackfills).values({
-    generation,
-    snapshotAt: await nextBackfillSnapshotAt(),
-    status: "complete",
-  });
-
-  const rejection: unknown = await db
-    .insert(caseLawCorpusIndexProjections)
-    .values({
-      decisionId: publicFirstId,
-      generation,
-      pendingHash: "orphaned",
-    })
-    .then(
-      () => null,
-      (error: unknown) => error,
-    );
-  expect(rejection).toBeInstanceOf(Error);
-});
-
 test(
   "one generation writer excludes rebuilds until it releases",
   async () => {
@@ -953,3 +931,25 @@ test(
   },
   { timeout: 30_000 },
 );
+
+test("rejects a pending hash without a pending action", async () => {
+  const generation = "case_law_invalid_pending";
+  await db.insert(caseLawCorpusIndexBackfills).values({
+    generation,
+    snapshotAt: await nextBackfillSnapshotAt(),
+    status: "complete",
+  });
+
+  const rejection: unknown = await db
+    .insert(caseLawCorpusIndexProjections)
+    .values({
+      decisionId: publicFirstId,
+      generation,
+      pendingHash: "orphaned",
+    })
+    .then(
+      () => null,
+      (error: unknown) => error,
+    );
+  expect(rejection).toBeInstanceOf(Error);
+});
