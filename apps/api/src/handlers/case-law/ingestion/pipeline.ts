@@ -238,6 +238,7 @@ export const sanitizeResult = (r: IngestionResult): IngestionResult => {
     // Part of the uniqueness key, so it is sanitized like the case number:
     // an invisible char here would make an already-stored decision look new.
     sourceDocumentId: strip(r.sourceDocumentId),
+    sheetNumber: strip(r.sheetNumber),
     fulltext: r.fulltext
       ? collapseSpacedLetters(strip(r.fulltext) ?? "")
       : undefined,
@@ -594,6 +595,7 @@ export const processDecision = async (
         ? {
             sourceId: { eq: sourceId },
             sourceDocumentId: result.sourceDocumentId,
+            sheetNumber: result.sheetNumber,
           }
         : {
             sourceId: { eq: sourceId },

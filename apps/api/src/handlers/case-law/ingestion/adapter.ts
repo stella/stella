@@ -29,6 +29,13 @@ export type IngestionResult = {
    * Omit it only where the source publishes no such id.
    */
   sourceDocumentId?: string | undefined;
+  /**
+   * Sheet number within the court file, where the source appends one to the
+   * docket. Split it out with `splitCaseReference` rather than leaving it on
+   * `caseNumber`: a citation names the docket alone, so a number carrying a
+   * sheet matches nothing.
+   */
+  sheetNumber?: string | undefined;
   ecli?: string | undefined;
   court: string;
   country: string;

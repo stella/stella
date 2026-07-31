@@ -115,6 +115,17 @@ export const caseLawDecisions = p.pgTable(
      */
     sourceDocumentId: p.varchar("source_document_id", { length: 256 }),
     /**
+     * Sheet number within the court file (číslo listu), where the source
+     * appends one to the docket: `11 C 153/2025-28` is sheet 28 of case
+     * `11 C 153/2025`.
+     *
+     * It is not part of the case reference and no one cites it, so it is kept
+     * out of `caseNumber`, which would otherwise fragment one case into a row
+     * per sheet and match no citation. Null wherever the source appends
+     * nothing.
+     */
+    sheetNumber: p.varchar("sheet_number", { length: 32 }),
+    /**
      * Bookkeeping for sources that ingest metadata first and fetch the
      * document later (see `ingestion/sk-document-backfill.ts`).
      * `documentFetchRequestedAt` is the first read that asked for the
