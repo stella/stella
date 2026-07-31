@@ -170,7 +170,7 @@ const buildSegments = (
 type EngineState =
   | { status: "warming" }
   | { status: "ready"; pairs: readonly HighlightPair[] }
-  | { status: "error"; message: string };
+  | { status: "error" };
 
 /**
  * Which detection the backdrop renders. `precomputed` only ever applies to the
@@ -217,17 +217,11 @@ export const AnonymizeLiveDemo = () => {
         }
         return;
       })
-      .catch((error: unknown) => {
+      .catch(() => {
         if (requestId !== latestRequestRef.current) {
           return;
         }
-        setEngine({
-          status: "error",
-          message:
-            error instanceof Error
-              ? error.message
-              : "The anonymisation engine hit an error.",
-        });
+        setEngine({ status: "error" });
       });
   };
 
@@ -381,7 +375,7 @@ const describeEngineStatus = (
         : "Reading your text…";
     }
     case "error": {
-      return engine.message;
+      return "Something went wrong.";
     }
     case "ready": {
       if (highlights.pairs.length === 0) {

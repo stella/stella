@@ -113,6 +113,21 @@ test("live anonymization demo highlights a city as an address", async ({
     .toMatchObject({ highlighted: [CITY], legend: [ADDRESS_LEGEND] });
 });
 
+test("live anonymization demo does not expose runtime errors", async ({
+  page,
+}) => {
+  await page.route(/\.wasm(?:\?|$)/u, async (route) => {
+    await route.abort("failed");
+  });
+  await page.goto(DEMO_URL, { waitUntil: "domcontentloaded" });
+
+  await expect(page.locator(DEMO_SELECTORS.textarea)).toBeVisible();
+  await expect(page.locator(DEMO_SELECTORS.status)).toHaveText(
+    "Something went wrong.",
+    { timeout: 30_000 },
+  );
+});
+
 // The engine is hundreds of kilobytes of wasm plus name and city
 // dictionaries, so the demo would otherwise open on a loading line and show a
 // visitor nothing until all of it lands. The island renders the untouched
