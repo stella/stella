@@ -565,9 +565,10 @@ const processDecisionAttempt = async ({
     })
   ) {
     const watermarkAdvanced = await scopedDb(
-      // audit: skip — background case-law ingestion ordering metadata; public case-law data, not user actions
-      async (tx) =>
-        (
+      // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
+      async (tx) => {
+        // audit: skip — background case-law ingestion ordering metadata; public case-law data, not user actions
+        return (
           await tx
             .update(caseLawDecisions)
             .set({
@@ -587,7 +588,8 @@ const processDecisionAttempt = async ({
               ),
             )
             .returning({ id: caseLawDecisions.id })
-        ).at(0),
+        ).at(0);
+      },
     );
     if (!watermarkAdvanced) {
       const current = await scopedDb((tx) =>
