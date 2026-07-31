@@ -314,6 +314,7 @@ const readOverviewActivity = createSafeHandler(
                   and(
                     eq(entityVersions.workspaceId, workspaceId),
                     inArray(entityVersions.id, versionIds),
+                    isNull(entityVersions.deletedAt),
                   ),
                 );
         const entityIds = [
