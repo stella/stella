@@ -39,6 +39,7 @@ import { overviewActivityOptions } from "@/routes/_protected.workspaces/-queries
 import { activityDayKey, groupActivityRuns } from "./activity-panel.logic";
 
 type ActivityPanelProps = { workspaceId: string };
+type ActivityDay = [MatterActivityItem, ...MatterActivityItem[]];
 
 const CATEGORIES: MatterActivityCategory[] = [
   "all",
@@ -86,10 +87,7 @@ export const ActivityPanel = ({ workspaceId }: ActivityPanelProps) => {
   );
   const items = query.data.pages.flatMap((page) => page.items);
   const days = useMemo(() => {
-    const result = new Map<
-      string,
-      [MatterActivityItem, ...MatterActivityItem[]]
-    >();
+    const result = new Map<string, ActivityDay>();
     for (const item of items) {
       const key = activityDayKey(item.activityAt);
       const dayItems = result.get(key);
@@ -143,18 +141,23 @@ export const ActivityPanel = ({ workspaceId }: ActivityPanelProps) => {
             {t("workspaces.overview.activity.empty")}
           </p>
         ) : (
-          days.map((dayItems) => (
-            <div key={activityDayKey(dayItems[0].activityAt)}>
-              <TimelineDateMarker activityAt={dayItems[0].activityAt} />
-              {groupActivityRuns(dayItems).map((run) => (
-                <ActivityRunRow
-                  items={run.items}
-                  key={run.id}
-                  workspaceId={workspaceId}
-                />
+          <>
+            <HorizontalTimeline days={days} workspaceId={workspaceId} />
+            <div className="md:hidden">
+              {days.map((dayItems) => (
+                <div key={activityDayKey(dayItems[0].activityAt)}>
+                  <TimelineDateMarker activityAt={dayItems[0].activityAt} />
+                  {groupActivityRuns(dayItems).map((run) => (
+                    <ActivityRunRow
+                      items={run.items}
+                      key={run.id}
+                      workspaceId={workspaceId}
+                    />
+                  ))}
+                </div>
               ))}
             </div>
-          ))
+          </>
         )}
       </div>
 
@@ -175,6 +178,194 @@ export const ActivityPanel = ({ workspaceId }: ActivityPanelProps) => {
         </div>
       )}
     </section>
+  );
+};
+
+const HorizontalTimeline = ({
+  days,
+  workspaceId,
+}: {
+  days: ActivityDay[];
+  workspaceId: string;
+}) => (
+  <div className="hidden overflow-x-auto overscroll-x-contain md:block">
+    <div className="flex min-w-max snap-x snap-proximity px-5 pt-4 pb-5">
+      {days.flatMap((dayItems) =>
+        groupActivityRuns(dayItems).map((run, index) => (
+          <HorizontalActivityMilestone
+            dateAt={index === 0 ? dayItems[0].activityAt : undefined}
+            items={run.items}
+            key={run.id}
+            workspaceId={workspaceId}
+          />
+        )),
+      )}
+    </div>
+  </div>
+);
+
+const HorizontalActivityMilestone = ({
+  dateAt,
+  items,
+  workspaceId,
+}: {
+  dateAt: string | undefined;
+  items: MatterActivityItem[];
+  workspaceId: string;
+}) => {
+  const t = useTranslations();
+  const first = items[0];
+  if (!first) {
+    return null;
+  }
+
+  if (first.runId === null) {
+    const openTarget = getOpenTarget(first, workspaceId);
+    const target = (
+      <BidiText as="span" className="font-medium">
+        {targetName(first, t)}
+      </BidiText>
+    );
+    const content = (
+      <span className="flex items-start gap-2 text-sm leading-5">
+        <span className="text-muted-foreground mt-0.5 flex size-5 shrink-0 items-center justify-center">
+          {targetIcon(first.target.kind)}
+        </span>
+        <span className="min-w-0">
+          <span className="block">
+            {actionSentence(
+              first.action,
+              <Performer item={first} />,
+              target,
+              t,
+            )}
+          </span>
+          {triggerDetail(first, t) && (
+            <span className="text-muted-foreground mt-1 block text-xs">
+              {triggerDetail(first, t)}
+            </span>
+          )}
+        </span>
+      </span>
+    );
+
+    return (
+      <HorizontalMilestoneFrame activityAt={first.activityAt} dateAt={dateAt}>
+        {openTarget ? (
+          <button
+            className="hover:bg-muted/40 -ms-2 flex min-h-11 w-[calc(100%+0.5rem)] items-center rounded-md px-2 text-start transition-colors"
+            onClick={openTarget}
+            type="button"
+          >
+            {content}
+          </button>
+        ) : (
+          <div className="flex min-h-11 items-center">{content}</div>
+        )}
+      </HorizontalMilestoneFrame>
+    );
+  }
+
+  const marker =
+    first.performer.type === "agent" ? (
+      <BotIcon className="size-4" />
+    ) : (
+      <WorkflowIcon className="size-4" />
+    );
+  const detail = triggerDetail(first, t);
+  return (
+    <HorizontalMilestoneFrame activityAt={first.activityAt} dateAt={dateAt}>
+      <div className="flex min-h-6 items-center gap-2 text-sm font-medium">
+        <span className="text-muted-foreground">{marker}</span>
+        <span>{first.performer.name}</span>
+        <span className="text-muted-foreground">·</span>
+        <span className="text-muted-foreground text-xs font-normal">
+          <RunCount count={items.length} />
+        </span>
+      </div>
+      {detail && (
+        <p className="text-muted-foreground mt-1 text-xs">{detail}</p>
+      )}
+      <div className="mt-3 space-y-1">
+        {items.map((item) => (
+          <HorizontalRunActivityItem
+            item={item}
+            key={item.id}
+            workspaceId={workspaceId}
+          />
+        ))}
+      </div>
+    </HorizontalMilestoneFrame>
+  );
+};
+
+const HorizontalMilestoneFrame = ({
+  activityAt,
+  children,
+  dateAt,
+}: {
+  activityAt: string;
+  children: ReactNode;
+  dateAt: string | undefined;
+}) => {
+  const format = useFormatter();
+  const date = new Date(activityAt);
+  return (
+    <article className="w-72 shrink-0 snap-start">
+      <div className="text-muted-foreground h-5 pe-8 text-xs font-medium tabular-nums">
+        {dateAt
+          ? format.dateTime(new Date(dateAt), { dateStyle: "long" })
+          : null}
+      </div>
+      <Tooltip
+        content={format.dateTime(date, {
+          dateStyle: "full",
+          timeStyle: "medium",
+        })}
+        render={
+          <time
+            className="text-muted-foreground mt-1 block h-4 pe-8 text-[11px] tabular-nums"
+            dateTime={activityAt}
+          >
+            {format.dateTime(date, { timeStyle: "short" })}
+          </time>
+        }
+      />
+      <div aria-hidden="true" className="relative mt-2 h-3">
+        <span className="bg-border absolute start-0 end-0 top-1/2 h-px" />
+        <span className="bg-muted-foreground absolute start-0 top-0 h-3 w-px" />
+      </div>
+      <div className="mt-4 min-w-0 pe-8">{children}</div>
+    </article>
+  );
+};
+
+const HorizontalRunActivityItem = ({
+  item,
+  workspaceId,
+}: {
+  item: MatterActivityItem;
+  workspaceId: string;
+}) => {
+  const t = useTranslations();
+  const openTarget = getOpenTarget(item, workspaceId);
+  const target = (
+    <BidiText as="span" className="font-medium">
+      {targetName(item, t)}
+    </BidiText>
+  );
+  const sentence = actionSentence(item.action, null, target, t);
+  if (!openTarget) {
+    return <div className="text-sm leading-5">{sentence}</div>;
+  }
+  return (
+    <button
+      className="hover:bg-muted/40 -ms-2 flex min-h-11 w-[calc(100%+0.5rem)] items-center rounded-md px-2 text-start transition-colors"
+      onClick={openTarget}
+      type="button"
+    >
+      <span className="text-sm leading-5">{sentence}</span>
+    </button>
   );
 };
 
@@ -232,7 +423,7 @@ const ActivityRunRow = ({
 const TimelineDateMarker = ({ activityAt }: { activityAt: string }) => {
   const format = useFormatter();
   return (
-    <div className="grid min-h-11 grid-cols-[4.75rem_1.5rem_minmax(0,1fr)] sm:grid-cols-[6.5rem_1.5rem_minmax(0,1fr)]">
+    <div className="grid min-h-11 grid-cols-[5.5rem_1.5rem_minmax(0,1fr)]">
       <span aria-hidden="true" />
       <span className="relative flex items-center justify-center">
         <span
@@ -266,7 +457,7 @@ const TimelineEntry = ({
   const format = useFormatter();
   const date = new Date(activityAt);
   return (
-    <div className="group grid grid-cols-[4.75rem_1.5rem_minmax(0,1fr)] sm:grid-cols-[6.5rem_1.5rem_minmax(0,1fr)]">
+    <div className="group grid grid-cols-[5.5rem_1.5rem_minmax(0,1fr)]">
       <Tooltip
         content={format.dateTime(date, {
           dateStyle: "full",
@@ -274,7 +465,7 @@ const TimelineEntry = ({
         })}
         render={
           <time
-            className="text-muted-foreground flex items-start justify-end pt-3 text-[11px] tabular-nums"
+            className="text-muted-foreground flex items-start justify-end pt-3 pe-1 text-[11px] tabular-nums"
             dateTime={activityAt}
           >
             {format.dateTime(date, { timeStyle: "short" })}
