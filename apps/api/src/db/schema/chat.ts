@@ -626,7 +626,7 @@ export const chatThreadCompactions = p.pgTable(
     // pending compactions globally.
     memoryExtractionOrganizationId: safeOrganizationId(
       "memory_extraction_organization_id",
-    ).references(() => organization.id, { onDelete: "cascade" }),
+    ),
     // Copies organization_settings.memory_extraction_enabled_at only when
     // extraction consent is active at insert time. Consent generations are
     // part of the queue address, so re-enabling never scans an older window.
@@ -641,6 +641,13 @@ export const chatThreadCompactions = p.pgTable(
     p
       .index("chat_thread_compactions_thread_status_created_idx")
       .on(table.threadId, table.status, table.createdAt),
+    p
+      .foreignKey({
+        name: "chat_compactions_memory_extraction_org_fk",
+        columns: [table.memoryExtractionOrganizationId],
+        foreignColumns: [organization.id],
+      })
+      .onDelete("cascade"),
     p
       .index("chat_thread_compactions_memory_unmined_org_idx")
       .on(
