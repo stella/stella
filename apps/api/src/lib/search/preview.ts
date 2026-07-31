@@ -409,7 +409,7 @@ export const buildSearchPreviewQuery = ({
       `;
     case "chat":
       return sql`
-        SELECT ${chatPreviewMessages(tsQuery)}
+        SELECT ${chatPreviewMessages(locatorTsQuery)}
         FROM chat_thread_search_documents cst
         JOIN chat_threads t ON t.id = cst.thread_id
         WHERE cst.thread_id = ${resultId}

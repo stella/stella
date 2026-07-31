@@ -200,6 +200,16 @@ describe("search preview authorization scope", () => {
     expect(compiled.params).toContain(organizationId);
   });
 
+  test("anchors advanced chat previews with positive locator terms", () => {
+    const compiled = compilePreview(
+      "chat",
+      "indemnity AND liability NOT superseded",
+    );
+
+    expect(compiled.params).toContain("(indemnity:*) | (liability:*)");
+    expect(compiled.params).not.toContain("(superseded:*)");
+  });
+
   test("chat filter-only preview returns a bounded recent message window", () => {
     const compiled = compilePreview("chat", "");
 

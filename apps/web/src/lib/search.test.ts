@@ -111,19 +111,28 @@ describe("search query normalization", () => {
     expect(normalizeSearchQuery(" \t\n ")).toBe("");
   });
 
-  test("uses the full query for native document highlighting", () => {
+  test("uses server-located terms for native document highlighting", () => {
     expect(
       getSearchHighlightText(
         "The <mark>Closing</mark> memorandum",
         "closing memo",
       ),
-    ).toBe("closing memo");
+    ).toBe("Closing");
     expect(getSearchHighlightText(null, "  closing memo ")).toBe(
       "closing memo",
     );
     expect(
       getSearchHighlightText("The <mark>Closing</mark> memorandum", ""),
     ).toBe("Closing");
+  });
+
+  test("excludes advanced-query operators and negated terms from previews", () => {
+    expect(
+      getSearchHighlightText(
+        "<mark>indemnity</mark> and <mark>liability</mark>",
+        "indemnity AND liability NOT superseded",
+      ),
+    ).toBe("indemnity liability");
   });
 });
 

@@ -186,7 +186,9 @@ const PeekPdfViewerContent = ({
           onScrollTopChange={onDocxScrollTopChange}
           onSearchMatchSummaryChange={onSearchMatchSummaryChange}
           scaleOffset={scaleOffset}
-          searchText={searchText}
+          searchText={
+            interactionMode === "preview-only" ? searchText : undefined
+          }
           workspaceId={workspaceId}
         />
       </Suspense>
@@ -459,7 +461,7 @@ const PeekDocxViewer = ({
     | undefined;
   printActionsRef?: RefObject<Map<string, () => void>> | undefined;
   scaleOffset: number;
-  searchText: string;
+  searchText: string | undefined;
   workspaceId: string;
 }) => {
   const analytics = useAnalytics();
@@ -478,6 +480,10 @@ const PeekDocxViewer = ({
   useDocxBlockScroll({ editorRef, fieldId });
 
   const highlightSearchResult = useCallback(() => {
+    if (searchText === undefined) {
+      return true;
+    }
+
     const editor = editorRef.current;
     if (!editor) {
       return false;

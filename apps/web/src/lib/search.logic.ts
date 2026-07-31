@@ -7,26 +7,36 @@ export const normalizeSearchQuery = (query: string): string => query.trim();
 export const stripSearchMarkup = (value: string): string =>
   value.replaceAll("<mark>", " ").replaceAll("</mark>", " ").trim();
 
+const getMarkedSearchText = (headline: string | null): string => {
+  if (!headline) {
+    return "";
+  }
+
+  const terms: string[] = [];
+  for (const match of headline.matchAll(/<mark>(?<term>.*?)<\/mark>/gu)) {
+    const term = match.groups?.["term"]?.trim();
+    if (term && !terms.includes(term)) {
+      terms.push(term);
+    }
+  }
+  return terms.join(" ");
+};
+
 export const getSearchHighlightText = (
   headline: string | null,
   query: string,
 ): string => {
   const normalizedQuery = normalizeSearchQuery(query);
+  const markedSearchText = getMarkedSearchText(headline);
+  if (markedSearchText) {
+    return markedSearchText;
+  }
+
   if (normalizedQuery) {
     return normalizedQuery;
   }
 
-  if (!headline) {
-    return "";
-  }
-
-  const start = headline.indexOf("<mark>");
-  const end = headline.indexOf("</mark>", start);
-  if (start === -1 || end === -1 || end <= start) {
-    return stripSearchMarkup(headline);
-  }
-
-  return stripSearchMarkup(headline.slice(start + "<mark>".length, end));
+  return headline ? stripSearchMarkup(headline) : "";
 };
 
 type SearchPreviewContent =
