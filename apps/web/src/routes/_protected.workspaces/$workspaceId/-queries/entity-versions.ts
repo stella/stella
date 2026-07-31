@@ -1,5 +1,3 @@
-import { queryOptions } from "@tanstack/react-query";
-
 import { api } from "@/lib/api";
 import { shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
 
@@ -38,24 +36,20 @@ type EntityVersionsData = {
 export const entityVersionsKeys = {
   all: ({ workspaceId, entityId }: EntityVersionsKey) =>
     entitiesKeys.versions(workspaceId, entityId),
-  detail: ({
-    workspaceId,
-    entityId,
-    versionId,
-  }: EntityVersionsKey & { versionId: string }) => [
-    ...entityVersionsKeys.all({ workspaceId, entityId }),
-    versionId,
-  ],
 };
 
 export const entityVersionsOptions = ({
   workspaceId,
   entityId,
 }: EntityVersionsKey) =>
-  queryOptions({
+  ({
     queryKey: entityVersionsKeys.all({ workspaceId, entityId }),
     retry: shouldRetryAPIRequest,
-    queryFn: async ({ signal }): Promise<EntityVersionsData> => {
+    queryFn: async ({
+      signal,
+    }: {
+      signal: AbortSignal;
+    }): Promise<EntityVersionsData> => {
       const response = await api
         .entities({ workspaceId })
         .entity({ entityId })
@@ -68,7 +62,7 @@ export const entityVersionsOptions = ({
         currentVersionId: data.currentVersionId,
       };
     },
-  });
+  }) as const;
 
 export const fetchOlderVersions = async ({
   workspaceId,
@@ -140,22 +134,3 @@ export const fieldFileOptions = ({
       };
     },
   }) as const;
-
-export const entityVersionDetailOptions = ({
-  workspaceId,
-  entityId,
-  versionId,
-}: EntityVersionsKey & { versionId: string }) =>
-  queryOptions({
-    queryKey: entityVersionsKeys.detail({ workspaceId, entityId, versionId }),
-    retry: shouldRetryAPIRequest,
-    queryFn: async ({ signal }) => {
-      const response = await api
-        .entities({ workspaceId })
-        .entity({ entityId })
-        .versions({ versionId })
-        .get({ fetch: { signal } });
-
-      return unwrapEden(response);
-    },
-  });
