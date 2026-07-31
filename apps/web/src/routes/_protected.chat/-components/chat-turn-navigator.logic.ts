@@ -3,6 +3,7 @@ import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 
 const PROMPT_PREVIEW_LENGTH = 180;
 const RESPONSE_PREVIEW_LENGTH = 280;
+const PREVIEW_SOURCE_LENGTH_MULTIPLIER = 4;
 const MAX_NAVIGATION_ITEMS = 10;
 const PREVIEW_SEGMENTER = new Intl.Segmenter(undefined, {
   granularity: "grapheme",
@@ -13,9 +14,11 @@ const MARKDOWN_HEADING = /^\s{0,3}#{1,6}\s+/gmu;
 const MARKDOWN_BLOCKQUOTE = /^\s{0,3}>\s?/gmu;
 const MARKDOWN_LIST_MARKER = /^[ \t]*(?:[-+*]|\d+[.)])[ \t]+/gmu;
 const MARKDOWN_ASTERISK_STRONG = /\*\*(\S(?:[^*]*\S)?)\*\*/gu;
-const MARKDOWN_UNDERSCORE_STRONG = /__(\S(?:[^_]*\S)?)__/gu;
+const MARKDOWN_UNDERSCORE_STRONG =
+  /(^|[^\p{L}\p{N}])__(\S(?:[^_]*\S)?)__(?![\p{L}\p{N}])/gu;
 const MARKDOWN_ASTERISK_EMPHASIS = /\*(\S(?:[^*]*\S)?)\*/gu;
-const MARKDOWN_UNDERSCORE_EMPHASIS = /_(\S(?:[^_]*\S)?)_/gu;
+const MARKDOWN_UNDERSCORE_EMPHASIS =
+  /(^|[^\p{L}\p{N}])_(\S(?:[^_]*\S)?)_(?![\p{L}\p{N}])/gu;
 const MARKDOWN_STRIKETHROUGH = /(~~)(\S(?:[\s\S]*?\S)?)\1/gu;
 const MARKDOWN_INLINE_CODE = /(`+)([\s\S]*?)\1/gu;
 const MARKDOWN_ESCAPE = /\\([!#()*+\-.>[\]\\_`{|}~])/gu;
@@ -114,7 +117,7 @@ const stripMarkdownLinkDestinations = (value: string): string => {
       value,
     });
     if (destinationEnd === -1) {
-      output += value.slice(cursor);
+      output += value.slice(labelStart + 1, labelEnd);
       break;
     }
 
@@ -125,16 +128,18 @@ const stripMarkdownLinkDestinations = (value: string): string => {
   return output;
 };
 
-const markdownToPreviewText = (value: string): string =>
-  stripMarkdownLinkDestinations(value)
+const markdownToPreviewText = (value: string, previewLength: number): string =>
+  stripMarkdownLinkDestinations(
+    value.slice(0, previewLength * PREVIEW_SOURCE_LENGTH_MULTIPLIER),
+  )
     .replace(MARKDOWN_FENCE, "")
     .replace(MARKDOWN_HEADING, "")
     .replace(MARKDOWN_BLOCKQUOTE, "")
     .replace(MARKDOWN_LIST_MARKER, "")
     .replace(MARKDOWN_ASTERISK_STRONG, "$1")
-    .replace(MARKDOWN_UNDERSCORE_STRONG, "$1")
+    .replace(MARKDOWN_UNDERSCORE_STRONG, "$1$2")
     .replace(MARKDOWN_ASTERISK_EMPHASIS, "$1")
-    .replace(MARKDOWN_UNDERSCORE_EMPHASIS, "$1")
+    .replace(MARKDOWN_UNDERSCORE_EMPHASIS, "$1$2")
     .replace(MARKDOWN_STRIKETHROUGH, "$2")
     .replace(MARKDOWN_INLINE_CODE, "$2")
     .replace(MARKDOWN_ESCAPE, "$1");
@@ -191,12 +196,14 @@ export const buildChatTurnNavigationItems = (
       ({ message }) => message.role === "assistant",
     )?.message;
     const userTextParts = getMessageTextParts(turn.header).map((value) =>
-      markdownToPreviewText(toUserPlainText(value)),
+      markdownToPreviewText(toUserPlainText(value), PROMPT_PREVIEW_LENGTH),
     );
     const userPreview = buildPreview(userTextParts, PROMPT_PREVIEW_LENGTH);
     const assistantPreview = assistantMessage
       ? buildPreview(
-          getMessageTextParts(assistantMessage).map(markdownToPreviewText),
+          getMessageTextParts(assistantMessage).map((value) =>
+            markdownToPreviewText(value, RESPONSE_PREVIEW_LENGTH),
+          ),
           RESPONSE_PREVIEW_LENGTH,
         )
       : "";

@@ -1519,6 +1519,70 @@ describe("acquireChatRuntime reconcile", () => {
     expect(reattached).toBe(runtime);
   });
 
+  test("keeps a resolved continuation while acknowledged approval data is stale", async () => {
+    const queryClient = new QueryClient();
+    let responseIndex = 0;
+    globalThis.fetch = createFetchMock(async () => {
+      const chunks =
+        responseIndex === 0
+          ? createApprovalSseChunks()
+          : createFinishedSseChunks();
+      responseIndex += 1;
+      return createSseResponse(chunks);
+    });
+    const context = { allowMissingThread: true };
+    const runtime = acquireChatRuntime({
+      activeOrganizationId,
+      context,
+      data: buildThreadData(),
+      key: threadRef,
+      queryClient,
+    });
+
+    const started = runtime.startRouteHandoffMessage(
+      createOutgoingMessage("22222222-2222-4222-8222-2222222222c4"),
+    );
+    await started.stream;
+
+    const persistedPendingData = buildThreadData({
+      lastActivityAt: "2026-07-08T10:00:00.000Z",
+      messages: runtime.getSnapshot().messages,
+      threadRevision: "revision-pending-approval",
+    });
+    expect(
+      acquireChatRuntime({
+        activeOrganizationId,
+        context,
+        data: persistedPendingData,
+        key: threadRef,
+        queryClient,
+      }),
+    ).toBe(runtime);
+
+    await runtime.addToolApprovalResponse({
+      approved: true,
+      id: "approval_tool-A",
+    });
+
+    const afterResolution = acquireChatRuntime({
+      activeOrganizationId,
+      context,
+      data: persistedPendingData,
+      key: threadRef,
+      queryClient,
+    });
+    expect(afterResolution).toBe(runtime);
+    expect(
+      afterResolution
+        .getSnapshot()
+        .messages.flatMap(({ parts }) => parts)
+        .some(
+          (part) =>
+            part.type === "tool-call" && part.state === "approval-requested",
+        ),
+    ).toBe(false);
+  });
+
   test("keeps distinct runtimes per context capability set and sweeps them all on query GC", () => {
     const queryClient = new QueryClient();
     installChatRuntimeCleanup(queryClient);

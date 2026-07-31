@@ -1583,17 +1583,23 @@ export const chatThreadOptions = ({
  * replayed turns; `threadRevision` detects in-place changes to an existing
  * message, such as an approval resolved by another client.
  *
- * INVARIANT: captured once at build time and never updated afterwards —
- * deliberately, even though the runtime's own transcript advances as
- * turns stream. That staleness is what drives replacement: after a turn
- * finishes, `onFinish` only invalidates the pure-data query (it does NOT
- * evict — see the registry docs for the race that eviction caused);
- * until the refetch lands, acquire compares the stale cached data
- * against this equally stale build-time seed → equal → reattach, and the
- * runtime keeps showing the finished turn it holds internally. Once the
- * refetch lands, the fresh data's signal diverges from this frozen seed
- * → idle rebuild from server-authoritative messages. Updating the seed
- * on stream progress would break exactly that divergence detection.
+ * INVARIANT: frozen across ordinary stream progress. That staleness is
+ * what drives replacement: after a turn finishes, `onFinish` only
+ * invalidates the pure-data query (it does NOT evict — see the registry
+ * docs for the race that eviction caused); until the refetch lands,
+ * acquire compares the stale cached data against this equally stale
+ * build-time seed → equal → reattach, and the runtime keeps showing the
+ * finished turn it holds internally. Once the refetch lands, the fresh
+ * data's signal diverges from this frozen seed → idle rebuild from
+ * server-authoritative messages.
+ *
+ * The sole exception is an authoritative refresh that confirms the same
+ * pending approval already held by the runtime. That acknowledgement
+ * advances every alias of the runtime to the persisted approval's seed,
+ * so resolving the approval locally cannot rebuild from that now-stale
+ * pending transcript before the continuation refetch lands. Updating the
+ * seed from stream progress itself would break the normal divergence
+ * detection above.
  */
 type ChatRuntimeSeedSignal = {
   lastActivityAt: string | null;
@@ -1714,26 +1720,6 @@ const getChatRuntimeReconcileDisposition = ({
     : CHAT_RUNTIME_RECONCILE_DISPOSITION.retainPendingApproval;
 };
 
-const shouldRetainBusyChatRuntime = ({
-  data,
-  hasAuthoritativeRefresh,
-  runtime,
-}: {
-  data: ChatThreadFetched;
-  hasAuthoritativeRefresh: boolean;
-  runtime: ChatRuntime;
-}): boolean => {
-  const disposition = getChatRuntimeReconcileDisposition({
-    data,
-    hasAuthoritativeRefresh,
-    runtime,
-  });
-  return (
-    disposition === CHAT_RUNTIME_RECONCILE_DISPOSITION.retainInFlight ||
-    disposition === CHAT_RUNTIME_RECONCILE_DISPOSITION.retainPendingApproval
-  );
-};
-
 /**
  * Live `ChatRuntime` instances, keyed by cache identity (see
  * `chatThreadCacheKey`) PLUS context-capability fingerprint (see
@@ -1782,6 +1768,22 @@ const chatRuntimeRegistry = new LifecycleRegistry<
   ChatRuntimeRegistryEntry
 >();
 
+const advanceAcknowledgedApprovalSeed = ({
+  runtime,
+  seed,
+  threadIdentity,
+}: {
+  runtime: ChatRuntime;
+  seed: ChatRuntimeSeedSignal;
+  threadIdentity: string;
+}): void => {
+  for (const entry of chatRuntimeRegistry.values()) {
+    if (entry.runtime === runtime && entry.threadIdentity === threadIdentity) {
+      entry.seed = seed;
+    }
+  }
+};
+
 /**
  * Registry key: query-key string + capability fingerprint. IDLE entries
  * never cross capability sets even when they share a pure-data cache
@@ -1819,22 +1821,43 @@ const toChatRuntimeRegistryKey = (
  * one thread should not occur; if state ever degrades to that, the
  * first entry in Map insertion order wins, deterministically.
  */
-const findBusyChatRuntimeEntryForThread = (
-  data: ChatThreadFetched,
-  seed: ChatRuntimeSeedSignal,
-  threadIdentity: string,
-): ChatRuntimeRegistryEntry | undefined => {
+const findBusyChatRuntimeEntryForThread = ({
+  data,
+  seed,
+  threadIdentity,
+}: {
+  data: ChatThreadFetched;
+  seed: ChatRuntimeSeedSignal;
+  threadIdentity: string;
+}): ChatRuntimeRegistryEntry | undefined => {
   for (const entry of chatRuntimeRegistry.values()) {
-    if (
-      entry.threadIdentity === threadIdentity &&
-      shouldRetainBusyChatRuntime({
-        data,
-        hasAuthoritativeRefresh: !seedSignalsEqual(entry.seed, seed),
-        runtime: entry.runtime,
-      })
-    ) {
-      return entry;
+    if (entry.threadIdentity !== threadIdentity) {
+      continue;
     }
+    const hasAuthoritativeRefresh = !seedSignalsEqual(entry.seed, seed);
+    const disposition = getChatRuntimeReconcileDisposition({
+      data,
+      hasAuthoritativeRefresh,
+      runtime: entry.runtime,
+    });
+    if (
+      disposition !== CHAT_RUNTIME_RECONCILE_DISPOSITION.retainInFlight &&
+      disposition !== CHAT_RUNTIME_RECONCILE_DISPOSITION.retainPendingApproval
+    ) {
+      continue;
+    }
+    if (
+      disposition ===
+        CHAT_RUNTIME_RECONCILE_DISPOSITION.retainPendingApproval &&
+      hasAuthoritativeRefresh
+    ) {
+      advanceAcknowledgedApprovalSeed({
+        runtime: entry.runtime,
+        seed,
+        threadIdentity,
+      });
+    }
+    return entry;
   }
   return undefined;
 };
@@ -1972,11 +1995,22 @@ export const acquireChatRuntime = ({
   // Priority 1: busy runtime under the exact registry key.
   if (
     existing !== undefined &&
-    (existingDisposition ===
-      CHAT_RUNTIME_RECONCILE_DISPOSITION.retainInFlight ||
-      existingDisposition ===
-        CHAT_RUNTIME_RECONCILE_DISPOSITION.retainPendingApproval)
+    existingDisposition === CHAT_RUNTIME_RECONCILE_DISPOSITION.retainInFlight
   ) {
+    return existing.runtime;
+  }
+  if (
+    existing !== undefined &&
+    existingDisposition ===
+      CHAT_RUNTIME_RECONCILE_DISPOSITION.retainPendingApproval
+  ) {
+    if (!seedSignalsEqual(existing.seed, seed)) {
+      advanceAcknowledgedApprovalSeed({
+        runtime: existing.runtime,
+        seed,
+        threadIdentity,
+      });
+    }
     return existing.runtime;
   }
   // Priority 2: busy runtime under any other registry key for this
@@ -1986,11 +2020,11 @@ export const acquireChatRuntime = ({
   // Overwrites a stale idle exact entry on purpose: the user is looking
   // at the streaming runtime now, so a later seed-equal hit must return
   // it, not the pre-stream leftover.
-  const busyEntry = findBusyChatRuntimeEntryForThread(
+  const busyEntry = findBusyChatRuntimeEntryForThread({
     data,
     seed,
     threadIdentity,
-  );
+  });
   if (busyEntry !== undefined) {
     chatRuntimeRegistry.set(registryKey, {
       runtime: busyEntry.runtime,

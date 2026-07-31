@@ -81,19 +81,21 @@ describe("chat turn navigation items", () => {
         textMessage(
           "user-markdown",
           "user",
-          `# Review **the [filing](${longDestination})**`,
+          `# Review **the [filing](${longDestination})** in case_file_v2`,
         ),
         textMessage(
           "assistant-markdown",
           "assistant",
-          `See [the **short answer**](${longDestination}) and \`section 4\`.`,
+          `See [the **short answer**](${longDestination}) and _section 4_ in annex_file_2.`,
         ),
       ],
       userMessageFallbackText,
     );
 
-    expect(item?.userPreview).toBe("Review the filing");
-    expect(item?.assistantPreview).toBe("See the short answer and section 4.");
+    expect(item?.userPreview).toBe("Review the filing in case_file_v2");
+    expect(item?.assistantPreview).toBe(
+      "See the short answer and section 4 in annex_file_2.",
+    );
   });
 
   test("shows only the ten most recent turns", () => {
