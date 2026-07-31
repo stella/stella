@@ -392,8 +392,7 @@ const documentIdFromLink = (link: string | undefined): string | undefined => {
   if (link === undefined) {
     return undefined;
   }
-  const segment = link.split("?").at(0)?.split("/").filter(Boolean).at(-1);
-  return segment === undefined || segment.length === 0 ? undefined : segment;
+  return /\/(?<id>[^/?#]+)\/*(?:[?#]|$)/u.exec(link)?.groups?.["id"];
 };
 
 const parseItem = (item: CzRegionalApiItem): IngestionResult | null => {

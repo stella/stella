@@ -9,6 +9,7 @@ import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isRecord } from "@/api/lib/type-guards";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -59,7 +60,7 @@ if (!databaseUrl || !runPostgresTests) {
         ORDER BY court
       `);
       const list = Array.isArray(rows) ? rows : [];
-      return list.map((row) => String((row as { court: unknown }).court));
+      return list.map((row) => (isRecord(row) ? String(row["court"]) : ""));
     };
 
     beforeAll(async () => {
