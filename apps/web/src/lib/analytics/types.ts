@@ -1,3 +1,5 @@
+import type { ErrorReference } from "@/lib/analytics/error-reference";
+
 export const WEB_ANALYTICS_EVENTS = {
   exception: "$exception",
   identify: "$identify",
@@ -8,11 +10,15 @@ export type WebAnalyticsEvent =
   (typeof WEB_ANALYTICS_EVENTS)[keyof typeof WEB_ANALYTICS_EVENTS];
 
 export type Analytics = {
-  captureError: (error: unknown, context?: Record<string, string>) => void;
+  captureError: (error: unknown, context?: ErrorCaptureContext) => void;
   capturePageViewed: (properties: PageViewedProperties) => void;
   identifyUser: (user: AnalyticsUserIdentity) => void;
   reset: (options?: AnalyticsResetOptions) => void;
 };
+
+export type ErrorCaptureContext =
+  | { type: "detached"; operation: string }
+  | { type: "recovery"; reference: ErrorReference };
 
 export type AnalyticsResetOptions = {
   onlyIfIdentified?: boolean;

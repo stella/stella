@@ -2344,6 +2344,18 @@
     "settingsDescription": "عدّل اسم مؤسستك والمعرّف",
     "switchOrganization": "تبديل المؤسسة"
   },
+  "routeError": {
+    "backToMatters": "العودة إلى الملفات القانونية",
+    "copyReference": "نسخ مرجع الخطأ",
+    "descriptionAdministrator": "حاول مرة أخرى. إذا استمرت المشكلة، فارجع إلى ملفاتك القانونية أو تواصل مع مسؤولك باستخدام المرجع أدناه.",
+    "descriptionNone": "حاول مرة أخرى. إذا استمرت المشكلة، فارجع إلى ملفاتك القانونية.",
+    "descriptionReport": "حاول مرة أخرى. إذا استمرت المشكلة، فارجع إلى ملفاتك القانونية أو أبلغ عنها باستخدام المرجع أدناه.",
+    "reference": "مرجع الخطأ",
+    "reportBody": "مرجع الخطأ: {reference}\n\nماذا حدث؟\n",
+    "reportProblem": "الإبلاغ عن مشكلة",
+    "reportSubject": "خطأ في stella: {reference}",
+    "title": "تعذر فتح هذه الصفحة"
+  },
   "search": {
     "aiRefine": "تحسين الاستعلام باستخدام AI",
     "continueInChat": "المتابعة في المحادثة",

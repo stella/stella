@@ -2344,6 +2344,18 @@
     "settingsDescription": "Edite o nome e o slug da sua organização",
     "switchOrganization": "Mudar de organização"
   },
+  "routeError": {
+    "backToMatters": "Voltar aos casos",
+    "copyReference": "Copiar referência do erro",
+    "descriptionAdministrator": "Tente novamente. Se o problema continuar, volte aos seus casos ou entre em contato com o administrador usando a referência abaixo.",
+    "descriptionNone": "Tente novamente. Se o problema continuar, volte aos seus casos.",
+    "descriptionReport": "Tente novamente. Se o problema continuar, volte aos seus casos ou relate-o usando a referência abaixo.",
+    "reference": "Referência do erro",
+    "reportBody": "Referência do erro: {reference}\n\nO que aconteceu?\n",
+    "reportProblem": "Relatar problema",
+    "reportSubject": "Erro do stella: {reference}",
+    "title": "Não foi possível abrir esta página"
+  },
   "search": {
     "aiRefine": "Melhore a consulta com IA",
     "continueInChat": "Continuar no bate-papo",

@@ -2344,6 +2344,18 @@
     "settingsDescription": "Redaguokite organizacijos pavadinimą ir slug",
     "switchOrganization": "Pakeisti organizaciją"
   },
+  "routeError": {
+    "backToMatters": "Grįžti į bylas",
+    "copyReference": "Kopijuoti klaidos nuorodą",
+    "descriptionAdministrator": "Bandykite dar kartą. Jei problema išlieka, grįžkite į savo bylas arba susisiekite su administratoriumi naudodami toliau pateiktą nuorodą.",
+    "descriptionNone": "Bandykite dar kartą. Jei problema išlieka, grįžkite į savo bylas.",
+    "descriptionReport": "Bandykite dar kartą. Jei problema išlieka, grįžkite į savo bylas arba praneškite apie ją naudodami toliau pateiktą nuorodą.",
+    "reference": "Klaidos nuoroda",
+    "reportBody": "Klaidos nuoroda: {reference}\n\nKas nutiko?\n",
+    "reportProblem": "Pranešti apie problemą",
+    "reportSubject": "stella klaida: {reference}",
+    "title": "Nepavyko atidaryti šio puslapio"
+  },
   "search": {
     "aiRefine": "Patobulinti užklausą su DI",
     "continueInChat": "Tęsti pokalbyje",

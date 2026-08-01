@@ -3,7 +3,11 @@ import { describe, expect, test } from "bun:test";
 import { APIError } from "@/lib/errors/api";
 import { CriticalQueryTimeoutError } from "@/lib/react-query";
 
-import { isNetworkError } from "./route-components.logic";
+import {
+  buildErrorReportMailto,
+  isNetworkError,
+  resolveRouteErrorSupport,
+} from "./route-components.logic";
 
 describe("route network error classification", () => {
   test("recognises query timeouts and browser network errors", () => {
@@ -43,5 +47,47 @@ describe("route network error classification", () => {
     expect(
       isNetworkError(new TypeError("Cannot read properties of null")),
     ).toBe(false);
+  });
+});
+
+describe("route error support", () => {
+  test("uses a deployment-configured feedback recipient", () => {
+    expect(
+      resolveRouteErrorSupport({
+        deployment: "selfHosted",
+        feedbackRecipient: "ops@example.test",
+      }),
+    ).toEqual({ type: "report", recipient: "ops@example.test" });
+  });
+
+  test("directs self-hosted users to their administrator when email is unset", () => {
+    expect(
+      resolveRouteErrorSupport({
+        deployment: "selfHosted",
+        feedbackRecipient: undefined,
+      }),
+    ).toEqual({ type: "administrator" });
+  });
+
+  test("does not invent a support destination for unconfigured hosted deployments", () => {
+    expect(
+      resolveRouteErrorSupport({
+        deployment: "hosted",
+        feedbackRecipient: undefined,
+      }),
+    ).toEqual({ type: "none" });
+  });
+
+  test("builds a report containing only caller-provided support copy", () => {
+    const href = buildErrorReportMailto({
+      body: "Error reference: ERR-DEAD-BEEF-1234",
+      recipient: "ops@example.test",
+      subject: "stella error ERR-DEAD-BEEF-1234",
+    });
+
+    expect(decodeURIComponent(href)).toBe(
+      "mailto:ops@example.test?subject=stella error ERR-DEAD-BEEF-1234&body=Error reference: ERR-DEAD-BEEF-1234",
+    );
+    expect(href).not.toContain("workspaces");
   });
 });

@@ -32,7 +32,9 @@ let distinctId = "anonymous";
 let identified = false;
 
 const captureMock = mock((_event: string, _properties?: unknown) => undefined);
-const captureExceptionMock = mock((_error: unknown) => undefined);
+const captureExceptionMock = mock(
+  (_error: unknown, _properties?: Record<string, unknown>) => undefined,
+);
 const identifyMock = mock(
   (id: string, _properties?: Record<string, unknown>) => {
     distinctId = id;
@@ -225,6 +227,21 @@ describe("PostHog browser analytics adapter", () => {
     expect(captured.stack).toBeUndefined();
   });
 
+  test("captureError correlates a recovery reference without error details", () => {
+    const { analytics } = createPostHogAnalytics(
+      "phc_test",
+      "https://posthog.test",
+    );
+    analytics.captureError(new TypeError("Privileged document name"), {
+      type: "recovery",
+      reference: "ERR-DEAD-BEEF-1234",
+    });
+
+    expect(captureExceptionMock.mock.calls.at(-1)?.[1]).toEqual({
+      error_reference: "ERR-DEAD-BEEF-1234",
+    });
+  });
+
   test("before_send strips exception messages and stack frames", () => {
     createPostHogAnalytics("phc_test", "https://posthog.test");
     const sanitized = initOptions?.before_send({
@@ -245,6 +262,42 @@ describe("PostHog browser analytics adapter", () => {
       event: WEB_ANALYTICS_EVENTS.exception,
       properties: {
         $distinct_id: "user_123",
+        $exception_list: [{ type: "TypeError", value: "" }],
+        $exception_type: "TypeError",
+      },
+    });
+  });
+
+  test("before_send keeps only valid opaque recovery references", () => {
+    createPostHogAnalytics("phc_test", "https://posthog.test");
+    const sanitized = initOptions?.before_send({
+      event: WEB_ANALYTICS_EVENTS.exception,
+      properties: {
+        error_reference: "ERR-DEAD-BEEF-1234",
+        route: "/workspaces/private-matter",
+        $exception_list: [{ type: "TypeError", value: "Private matter" }],
+      },
+    });
+
+    expect(sanitized).toEqual({
+      event: WEB_ANALYTICS_EVENTS.exception,
+      properties: {
+        error_reference: "ERR-DEAD-BEEF-1234",
+        $exception_list: [{ type: "TypeError", value: "" }],
+        $exception_type: "TypeError",
+      },
+    });
+
+    const rejected = initOptions?.before_send({
+      event: WEB_ANALYTICS_EVENTS.exception,
+      properties: {
+        error_reference: "/workspaces/private-matter",
+        $exception_list: [{ type: "TypeError", value: "Private matter" }],
+      },
+    });
+    expect(rejected).toEqual({
+      event: WEB_ANALYTICS_EVENTS.exception,
+      properties: {
         $exception_list: [{ type: "TypeError", value: "" }],
         $exception_type: "TypeError",
       },

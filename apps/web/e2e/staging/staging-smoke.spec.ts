@@ -35,7 +35,7 @@ test("chat thread page renders for an entitlement-less owner", async ({
 
   // The route error boundary replaces the thread UI wholesale; its
   // title is the canonical signature of a client-side render crash.
-  await expect(page.getByText("Something went wrong")).toBeHidden();
+  await expect(page.getByText("This page couldn’t be opened")).toBeHidden();
 
   // The smoke org has no AI provider credentials, so RequireAIKey
   // legitimately gates the thread with the connect-provider card

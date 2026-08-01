@@ -1,20 +1,34 @@
 import { useState, useTransition } from "react";
 
 import { CancelledError, useQueryClient } from "@tanstack/react-query";
-import { Navigate } from "@tanstack/react-router";
+import { Link, Navigate } from "@tanstack/react-router";
 import type { ErrorComponentProps } from "@tanstack/react-router";
-import { RefreshCcwIcon } from "lucide-react";
+import {
+  CircleAlertIcon,
+  CopyIcon,
+  FolderOpenIcon,
+  MailIcon,
+  RefreshCcwIcon,
+} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
+import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
-import { isNetworkError } from "@/components/route-components.logic";
+import {
+  buildErrorReportMailto,
+  isNetworkError,
+  resolveRouteErrorSupport,
+} from "@/components/route-components.logic";
 import { StellaMark } from "@/components/stella-mark";
+import { env } from "@/env";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useSignOut } from "@/hooks/use-sign-out";
+import { createErrorReference } from "@/lib/analytics/error-reference";
 import { useAnalytics } from "@/lib/analytics/provider";
+import { detached } from "@/lib/detached";
 import { isMemberError, isUnauthorizedError } from "@/lib/errors/auth";
 
 type DefaultErrorComponentProps = ErrorComponentProps & {
@@ -121,16 +135,10 @@ export const DefaultErrorComponent = ({
     retry: retryErroredQueries,
   });
 
-  // Capture errors that aren't auth/cancel/network noise once,
-  // plus network errors once retries are exhausted. Keeping the
-  // two cases in one effect avoids the prior staggered chain.
+  // Capture exhausted network failures. Unexpected errors are captured by
+  // their recovery panel so the visible support reference can be attached.
   useExternalSyncEffect(() => {
-    if (showUnauthorizedError || isCancelledError) {
-      return;
-    }
-
-    if (!networkError) {
-      analytics.captureError(error);
+    if (showUnauthorizedError || isCancelledError || !networkError) {
       return;
     }
 
@@ -188,17 +196,155 @@ export const DefaultErrorComponent = ({
   }
 
   return (
-    <StatusMessage
-      actionButton={
-        <Button disabled={isPending} onClick={retryErroredQueries}>
-          <RefreshCcwIcon /> {t("common.tryAgain")}
-        </Button>
-      }
+    <UnexpectedRouteError
       className={className}
-      description={t("common.unexpectedError")}
-      status="error"
-      title={t("common.somethingWentWrong")}
+      error={error}
+      isPending={isPending}
+      retry={retryErroredQueries}
     />
+  );
+};
+
+type UnexpectedRouteErrorProps = {
+  className?: string | undefined;
+  error: unknown;
+  isPending: boolean;
+  retry: () => void;
+};
+
+const focusHeading = (heading: HTMLHeadingElement | null) => {
+  heading?.focus();
+};
+
+const UnexpectedRouteError = ({
+  className,
+  error,
+  isPending,
+  retry,
+}: UnexpectedRouteErrorProps) => {
+  const analytics = useAnalytics();
+  const t = useTranslations();
+  const [errorReference] = useState(createErrorReference);
+  const support = resolveRouteErrorSupport({
+    deployment: env.VITE_SELFHOST ? "selfHosted" : "hosted",
+    feedbackRecipient: env.VITE_FEEDBACK_EMAIL_TO,
+  });
+  let description: string;
+  switch (support.type) {
+    case "report":
+      description = t("routeError.descriptionReport");
+      break;
+    case "administrator":
+      description = t("routeError.descriptionAdministrator");
+      break;
+    case "none":
+      description = t("routeError.descriptionNone");
+      break;
+    default: {
+      const exhaustive: never = support;
+      description = exhaustive;
+    }
+  }
+
+  useExternalSyncEffect(() => {
+    analytics.captureError(error, {
+      type: "recovery",
+      reference: errorReference,
+    });
+  }, [analytics, error, errorReference]);
+
+  const handleCopyReference = async () => {
+    try {
+      await navigator.clipboard.writeText(errorReference);
+      stellaToast.add({ title: t("common.copied"), type: "success" });
+    } catch {
+      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+    }
+  };
+
+  const reportHref =
+    support.type === "report"
+      ? buildErrorReportMailto({
+          recipient: support.recipient,
+          subject: t("routeError.reportSubject", { reference: errorReference }),
+          body: t("routeError.reportBody", { reference: errorReference }),
+        })
+      : null;
+
+  return (
+    <div
+      className={cn(
+        "flex h-full w-full items-center overflow-auto px-6 py-10 sm:px-10",
+        className,
+      )}
+    >
+      <section
+        aria-labelledby="route-error-title"
+        className="mx-auto flex w-full max-w-xl flex-col gap-6"
+        role="alert"
+      >
+        <div className="bg-muted text-muted-foreground flex size-10 items-center justify-center rounded-xl">
+          <CircleAlertIcon aria-hidden="true" className="size-5" />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <h1
+            className="text-foreground text-xl font-semibold text-balance outline-none"
+            id="route-error-title"
+            ref={focusHeading}
+            tabIndex={-1}
+          >
+            {t("routeError.title")}
+          </h1>
+          <p className="text-muted-foreground max-w-lg text-sm leading-6 text-pretty">
+            {description}
+          </p>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <Button loading={isPending} onClick={retry}>
+            <RefreshCcwIcon /> {t("common.tryAgain")}
+          </Button>
+          <Button render={<Link from="/" to="/workspaces" />} variant="outline">
+            <FolderOpenIcon /> {t("routeError.backToMatters")}
+          </Button>
+          {reportHref ? (
+            <Button
+              render={
+                <a
+                  aria-label={t("routeError.reportProblem")}
+                  href={reportHref}
+                />
+              }
+              variant="ghost"
+            >
+              <MailIcon /> {t("routeError.reportProblem")}
+            </Button>
+          ) : null}
+        </div>
+
+        <div className="border-border bg-muted/40 flex items-center justify-between gap-3 rounded-xl border p-3">
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <span className="text-muted-foreground text-xs">
+              {t("routeError.reference")}
+            </span>
+            <bdi className="text-foreground truncate font-mono text-sm">
+              {errorReference}
+            </bdi>
+          </div>
+          <Button
+            aria-label={t("routeError.copyReference")}
+            onClick={() => {
+              detached(handleCopyReference(), "route-error.copy-reference");
+            }}
+            size="icon"
+            variant="ghost"
+          >
+            <CopyIcon />
+          </Button>
+        </div>
+      </section>
+    </div>
   );
 };
 
@@ -230,7 +376,7 @@ export const StatusMessage = ({
 }: StatusMessageProps) => (
   <div
     className={cn(
-      "mx-auto flex h-full w-screen max-w-md flex-col items-center justify-center gap-y-6 p-6 text-center",
+      "mx-auto flex h-full w-full max-w-md flex-col items-center justify-center gap-y-6 p-6 text-center",
       className,
     )}
   >

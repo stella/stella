@@ -12,11 +12,11 @@ test("chat composer sends a message and renders the assistant reply", async ({
   // the composer below.
   await page.goto("/chat", { waitUntil: "commit" });
 
-  // Route error boundary heading (apps/web/src/components/route-components.tsx:253,
-  // title common.somethingWentWrong). Checked after every step below; declared
+  // Route error boundary heading (apps/web/src/components/route-components.tsx,
+  // title routeError.title). Checked after every step below; declared
   // once so the assertions read the same way each time.
   const errorBoundary = page.getByRole("heading", {
-    name: "Something went wrong",
+    name: "This page couldn’t be opened",
   });
   await expect(errorBoundary).toHaveCount(0);
 

@@ -20,6 +20,9 @@ export const detached = (
   context: string,
 ): void => {
   Promise.resolve(operation).catch((error: unknown) => {
-    getAnalytics().captureError(error, { detached: context });
+    getAnalytics().captureError(error, {
+      type: "detached",
+      operation: context,
+    });
   });
 };
