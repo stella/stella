@@ -3392,14 +3392,14 @@
     "overview": {
       "activity": {
         "actions": {
-          "added": "<actor>Kasutaja</actor> lisas <target>üksuse</target>",
-          "cancelled": "<actor>Kasutaja</actor> tühistas <target>üksuse</target>",
-          "created": "<actor>Kasutaja</actor> lõi <target>üksuse</target>",
-          "deleted": "<actor>Kasutaja</actor> kustutas <target>üksuse</target>",
-          "executed": "<actor>Kasutaja</actor> käivitas <target>üksuse</target>",
-          "removed": "<actor>Kasutaja</actor> eemaldas <target>üksuse</target>",
-          "reviewed": "<actor>Kasutaja</actor> vaatas üle <target>üksuse</target>",
-          "updated": "<actor>Kasutaja</actor> uuendas <target>üksust</target>"
+          "added": "Lisatud",
+          "cancelled": "Tühistati",
+          "created": "Loodud",
+          "deleted": "Kustutati",
+          "executed": "Käivitatud",
+          "removed": "Eemaldatud",
+          "reviewed": "Üle vaadatud",
+          "updated": "Uuendati"
         },
         "approvals": {
           "approved": "Kinnitus antud",
@@ -3463,12 +3463,12 @@
           "mcp": "Ühendatud tööriist"
         },
         "targets": {
-          "automation": "automatiseerimise",
+          "automation": "automatiseerimine",
           "court": "kohtukirje",
-          "document": "kustutatud dokumendi",
-          "matter": "toimiku",
-          "task": "kustutatud päevakorrapunkti",
-          "team": "toimiku meeskonna"
+          "document": "dokument",
+          "matter": "toimik",
+          "task": "päevakorrapunkt",
+          "team": "toimiku meeskond"
         },
         "title": "Tegevus",
         "views": {

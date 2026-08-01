@@ -9,6 +9,7 @@ import {
   redirect,
   useMatch,
 } from "@tanstack/react-router";
+import { useDebouncedCallback } from "use-debounce";
 
 import { stellaToast } from "@stll/ui/components/toast";
 
@@ -41,6 +42,8 @@ import { workspacesKeys } from "@/routes/_protected.workspaces/-queries.logic";
 const EXTRACTION_PREVIEW_EVENT_TYPE = "workflow-extraction-preview";
 const INVALIDATE_QUERY_EVENT_TYPE = "invalidate-query";
 const EXTRACTION_PREVIEW_CLIENT_TTL_MS = 5 * 60 * 1000;
+const ACTIVITY_INVALIDATION_DEBOUNCE_MS = 1000;
+const ACTIVITY_INVALIDATION_MAX_WAIT_MS = 5000;
 
 type ExtractionPreviewEventData = {
   entityId: string;
@@ -184,6 +187,18 @@ function RouteComponent() {
   const [previewClearTimers] = useState(
     () => new Map<string, ReturnType<typeof setTimeout>>(),
   );
+  const invalidateActivity = useDebouncedCallback(
+    (workspaceIdToInvalidate: string) => {
+      detached(
+        queryClient.invalidateQueries({
+          queryKey: workspacesKeys.overviewActivityAll(workspaceIdToInvalidate),
+        }),
+        "handleWorkspaceActivityInvalidation",
+      );
+    },
+    ACTIVITY_INVALIDATION_DEBOUNCE_MS,
+    { maxWait: ACTIVITY_INVALIDATION_MAX_WAIT_MS },
+  );
 
   const handleWorkspaceSSEEvent = ({
     type,
@@ -193,12 +208,7 @@ function RouteComponent() {
     data: unknown;
   }) => {
     if (type === INVALIDATE_QUERY_EVENT_TYPE) {
-      detached(
-        queryClient.invalidateQueries({
-          queryKey: workspacesKeys.overviewActivityAll(workspaceId),
-        }),
-        "handleWorkspaceActivityInvalidation",
-      );
+      invalidateActivity(workspaceId);
     }
 
     const workspaceStore = useWorkspaceStore.getState();
@@ -297,6 +307,7 @@ function RouteComponent() {
   return (
     <WorkflowStartConfirmationPromptProvider>
       <WorkspaceLifecycleCleanup
+        flushActivityInvalidation={invalidateActivity.flush}
         key={workspaceId}
         previewClearTimers={previewClearTimers}
       />
@@ -309,11 +320,14 @@ function RouteComponent() {
 }
 
 const WorkspaceLifecycleCleanup = ({
+  flushActivityInvalidation,
   previewClearTimers,
 }: {
+  flushActivityInvalidation: () => void;
   previewClearTimers: Map<string, ReturnType<typeof setTimeout>>;
 }) => {
   useMountEffect(() => () => {
+    flushActivityInvalidation();
     for (const timer of previewClearTimers.values()) {
       clearTimeout(timer);
     }

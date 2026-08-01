@@ -3392,14 +3392,14 @@
     "overview": {
       "activity": {
         "actions": {
-          "added": "<actor>Lietotājs</actor> pievienoja <target>vienumu</target>",
-          "cancelled": "<actor>Lietotājs</actor> atcēla <target>vienumu</target>",
-          "created": "<actor>Lietotājs</actor> izveidoja <target>vienumu</target>",
-          "deleted": "<actor>Lietotājs</actor> dzēsa <target>vienumu</target>",
-          "executed": "<actor>Lietotājs</actor> palaida <target>vienumu</target>",
-          "removed": "<actor>Lietotājs</actor> noņēma <target>vienumu</target>",
-          "reviewed": "<actor>Lietotājs</actor> pārskatīja <target>vienumu</target>",
-          "updated": "<actor>Lietotājs</actor> atjaunināja <target>vienumu</target>"
+          "added": "Pievienots",
+          "cancelled": "Tika atcelts",
+          "created": "Izveidots",
+          "deleted": "Tika dzēsts",
+          "executed": "Palaists",
+          "removed": "Noņemts",
+          "reviewed": "Pārskatīts",
+          "updated": "Tika atjaunināts"
         },
         "approvals": {
           "approved": "Apstiprinājums piešķirts",
@@ -3463,12 +3463,12 @@
           "mcp": "Pievienots rīks"
         },
         "targets": {
-          "automation": "automatizāciju",
-          "court": "tiesas ierakstu",
-          "document": "dzēstu dokumentu",
-          "matter": "lietu",
-          "task": "dzēstu darba kārtības vienumu",
-          "team": "lietas komandu"
+          "automation": "automatizācija",
+          "court": "tiesas ieraksts",
+          "document": "dokuments",
+          "matter": "lieta",
+          "task": "darba kārtības vienums",
+          "team": "lietas komanda"
         },
         "title": "Darbības",
         "views": {

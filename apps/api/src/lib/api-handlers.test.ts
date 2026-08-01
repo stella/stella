@@ -5,6 +5,7 @@ import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { env } from "@/api/env";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import {
+  createSafeHandler,
   createSafeRootHandler,
   errorCauseChainAttributes,
   resolveMeteringContext,
@@ -12,8 +13,71 @@ import {
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const noopAuditRecorder: AuditRecorder = async () => undefined;
+
+describe("createSafeHandler workspace audit binding", () => {
+  test("rebinds audit recording to the validated workspace", async () => {
+    const workspaceId = toSafeId<"workspace">(
+      "019e7000-0000-7000-8000-000000000003",
+    );
+    const reboundRecorder: AuditRecorder = async () => undefined;
+    let recorderSeenByHandler: AuditRecorder | undefined;
+    let recorderWorkspaceId: string | null | undefined;
+    const endpoint = createSafeHandler(
+      {
+        permissions: { workspace: ["read"] },
+        mcp: { type: "internal", reason: "health_infra" },
+      },
+      async function* ({ recordAuditEvent }) {
+        recorderSeenByHandler = recordAuditEvent;
+        return Result.ok({ ok: true });
+      },
+    );
+    const safeDb: SafeDb = async <T>() =>
+      Result.err<T, SafeDbError>(
+        new DatabaseError({ message: "db should not be read" }),
+      );
+    const context = {
+      request: new Request("https://example.test/workspace-audit"),
+      route: "/workspace-audit",
+      workspaceId,
+      user: {
+        id: toSafeId<"user">("019e7000-0000-7000-8000-000000000001"),
+      },
+      session: {
+        activeOrganizationId: toSafeId<"organization">(
+          "019e7000-0000-7000-8000-000000000002",
+        ),
+      },
+      memberRole: { role: "owner" },
+      safeDb,
+      scopedDb: async () => {
+        throw new DatabaseError({ message: "scopedDb should not be called" });
+      },
+      getActiveWorkspaceIds: async () => [],
+      getAccessibleWorkspaces: async () => [],
+      getWorkspaceAccess: async () => null,
+      pinServerValidatedWorkspaceId: () => false,
+      orgAIConfig: null,
+      promptCachingEnabled: false,
+      recordAuditEvent: noopAuditRecorder,
+      createAuditRecorder: (options?: {
+        workspaceId?: typeof workspaceId | null;
+      }) => {
+        recorderWorkspaceId = options?.workspaceId;
+        return reboundRecorder;
+      },
+    };
+
+    const result = await endpoint.handler(asTestRaw(context));
+
+    expect(result).toEqual({ ok: true });
+    expect(recorderWorkspaceId).toBe(workspaceId);
+    expect(recorderSeenByHandler).toBe(reboundRecorder);
+  });
+});
 
 describe("createSafeRootHandler usage preflight", () => {
   test("uses effective provider tier for preflight cost", () => {

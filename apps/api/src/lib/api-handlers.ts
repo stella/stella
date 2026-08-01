@@ -856,7 +856,25 @@ export const createSafeHandler = <
   config: TConfig,
   handler: SafeHandlerFn<WorkspaceHandlerContext<TConfig>, TResult>,
 ): SafeHandlerDefinition<TConfig, WorkspaceHandlerContext<TConfig>, TResult> =>
-  createSafeScopedHandler(config, handler);
+  createSafeScopedHandler(config, (ctx) => {
+    // Elysia may expand validateAuth again after validateWorkspaceAccess when a
+    // route also declares permissions. That later resolve carries the root
+    // recorder and can overwrite the recorder bound by the workspace macro.
+    // Rebind here, where the context type proves workspaceId was validated, so
+    // workspace mutations cannot emit organization-only audit rows regardless
+    // of macro composition order.
+    // Direct unit tests below the Elysia boundary may intentionally use a
+    // minimal raw context. Real WorkspaceHandlerContext values always carry
+    // this factory; keep those fixture-only omissions from changing handler
+    // behavior while still rebinding every framework-produced request.
+    const recorderFactory: unknown = Reflect.get(ctx, "createAuditRecorder");
+    if (typeof recorderFactory === "function") {
+      ctx.recordAuditEvent = ctx.createAuditRecorder({
+        workspaceId: ctx.workspaceId,
+      });
+    }
+    return handler(ctx);
+  });
 
 export const createSafeSessionHandler = <
   TConfig extends SessionHandlerConfig,

@@ -1694,7 +1694,7 @@
       "GET /v1/workspaces/:id/activity": 1024,
       "GET /v1/workspaces/:id/members": 1024,
       "GET /v1/workspaces/:id/overview": 1024,
-      "GET /v1/workspaces/:id/overview/activity": 1024,
+      "GET /v1/workspaces/:id/overview/activity": 2048,
       "GET /v1/workspaces/:id/workflow": 1024,
       "GET /v1/workspaces/navigation": 20480
     }
@@ -1784,7 +1784,7 @@
       "GET /v1/workspaces/:id/activity": 1024,
       "GET /v1/workspaces/:id/members": 1024,
       "GET /v1/workspaces/:id/overview": 1024,
-      "GET /v1/workspaces/:id/overview/activity": 1024,
+      "GET /v1/workspaces/:id/overview/activity": 2048,
       "GET /v1/workspaces/:id/workflow": 1024,
       "GET /v1/workspaces/navigation": 20480
     }
@@ -2242,7 +2242,7 @@
       "GET /v1/workspaces/:id/activity": 1024,
       "GET /v1/workspaces/:id/members": 1024,
       "GET /v1/workspaces/:id/overview": 1024,
-      "GET /v1/workspaces/:id/overview/activity": 1024,
+      "GET /v1/workspaces/:id/overview/activity": 2048,
       "GET /v1/workspaces/:id/workflow": 1024,
       "GET /v1/workspaces/navigation": 20480
     }

@@ -3395,14 +3395,14 @@ type Messages = {
     "overview": {
       "activity": {
         "actions": {
-          "added": "<actor>Actor</actor> added <target>target</target>";
-          "cancelled": "<actor>Actor</actor> cancelled <target>target</target>";
-          "created": "<actor>Actor</actor> created <target>target</target>";
-          "deleted": "<actor>Actor</actor> deleted <target>target</target>";
-          "executed": "<actor>Actor</actor> ran <target>target</target>";
-          "removed": "<actor>Actor</actor> removed <target>target</target>";
-          "reviewed": "<actor>Actor</actor> reviewed <target>target</target>";
-          "updated": "<actor>Actor</actor> updated <target>target</target>";
+          "added": "Added";
+          "cancelled": "Was cancelled";
+          "created": "Created";
+          "deleted": "Was deleted";
+          "executed": "Ran";
+          "removed": "Removed";
+          "reviewed": "Reviewed";
+          "updated": "Was updated";
         };
         "approvals": {
           "approved": "Approval granted";
@@ -3468,9 +3468,9 @@ type Messages = {
         "targets": {
           "automation": "automation";
           "court": "court record";
-          "document": "deleted document";
+          "document": "document";
           "matter": "matter";
-          "task": "deleted agenda item";
+          "task": "agenda item";
           "team": "matter team";
         };
         "title": "Matter activity";

@@ -1,4 +1,6 @@
 import { toSafeId } from "@/lib/safe-id";
+import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
 
 export type EntityCreatePresignPayloadInput = {
   propertyId: string;
@@ -25,3 +27,13 @@ export const buildEntityCreatePresignPayload = ({
   size,
   sha256Hex,
 });
+
+export const buildEntityCreateInvalidationPayload = (workspaceId: string) => ({
+  queryKey: entitiesKeys.all(workspaceId),
+});
+
+export const entityCreateLocalInvalidationKeys = (workspaceId: string) => [
+  entitiesKeys.all(workspaceId),
+  // This prefix also invalidates every overview activity category.
+  workspacesKeys.overview(workspaceId),
+];

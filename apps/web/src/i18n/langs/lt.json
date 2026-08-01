@@ -3392,14 +3392,14 @@
     "overview": {
       "activity": {
         "actions": {
-          "added": "<actor>Naudotojas</actor> pridėjo <target>elementą</target>",
-          "cancelled": "<actor>Naudotojas</actor> atšaukė <target>elementą</target>",
-          "created": "<actor>Naudotojas</actor> sukūrė <target>elementą</target>",
-          "deleted": "<actor>Naudotojas</actor> ištrynė <target>elementą</target>",
-          "executed": "<actor>Naudotojas</actor> paleido <target>elementą</target>",
-          "removed": "<actor>Naudotojas</actor> pašalino <target>elementą</target>",
-          "reviewed": "<actor>Naudotojas</actor> peržiūrėjo <target>elementą</target>",
-          "updated": "<actor>Naudotojas</actor> atnaujino <target>elementą</target>"
+          "added": "Pridėta",
+          "cancelled": "Atšaukta",
+          "created": "Sukurta",
+          "deleted": "Ištrinta",
+          "executed": "Paleista",
+          "removed": "Pašalinta",
+          "reviewed": "Peržiūrėta",
+          "updated": "Atnaujinta"
         },
         "approvals": {
           "approved": "Patvirtinimas suteiktas",
@@ -3463,12 +3463,12 @@
           "mcp": "Prijungtas įrankis"
         },
         "targets": {
-          "automation": "automatizavimą",
-          "court": "teismo įrašą",
-          "document": "ištrintą dokumentą",
-          "matter": "bylą",
-          "task": "ištrintą darbotvarkės elementą",
-          "team": "bylos komandą"
+          "automation": "automatizavimas",
+          "court": "teismo įrašas",
+          "document": "dokumentas",
+          "matter": "byla",
+          "task": "darbotvarkės elementas",
+          "team": "bylos komanda"
         },
         "title": "Veikla",
         "views": {

@@ -3392,14 +3392,14 @@
     "overview": {
       "activity": {
         "actions": {
-          "added": "<actor>Person</actor> hat <target>Element</target> hinzugefügt",
-          "cancelled": "<actor>Person</actor> hat <target>Element</target> abgebrochen",
-          "created": "<actor>Person</actor> hat <target>Element</target> erstellt",
-          "deleted": "<actor>Person</actor> hat <target>Element</target> gelöscht",
-          "executed": "<actor>Person</actor> hat <target>Element</target> ausgeführt",
-          "removed": "<actor>Person</actor> hat <target>Element</target> entfernt",
-          "reviewed": "<actor>Person</actor> hat <target>Element</target> geprüft",
-          "updated": "<actor>Person</actor> hat <target>Element</target> aktualisiert"
+          "added": "Hinzugefügt",
+          "cancelled": "Wurde abgebrochen",
+          "created": "Erstellt",
+          "deleted": "Wurde gelöscht",
+          "executed": "Ausgeführt",
+          "removed": "Entfernt",
+          "reviewed": "Geprüft",
+          "updated": "Wurde aktualisiert"
         },
         "approvals": {
           "approved": "Genehmigung erteilt",
@@ -3465,9 +3465,9 @@
         "targets": {
           "automation": "Automatisierung",
           "court": "Gerichtseintrag",
-          "document": "gelöschtes Dokument",
+          "document": "Dokument",
           "matter": "Akte",
-          "task": "gelöschter Agendaeintrag",
+          "task": "Agendaeintrag",
           "team": "Aktenteam"
         },
         "title": "Aktivität",
