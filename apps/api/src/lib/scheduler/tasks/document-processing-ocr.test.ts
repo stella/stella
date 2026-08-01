@@ -4,7 +4,7 @@ import { dispatchDocumentOcrBatches } from "@/api/lib/scheduler/tasks/document-p
 
 test("drains queued OCR in bounded batches", async () => {
   const batchSizes = [100, 100, 17];
-  const dispatch = mock(async ({ limit }: { limit?: number }) => {
+  const dispatch = mock(async ({ limit }: { limit?: number } = {}) => {
     expect(limit).toBe(100);
     return batchSizes.shift() ?? 0;
   });
