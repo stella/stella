@@ -132,7 +132,7 @@ export const TabFacetBar = ({
     metadata: t("common.metadata"),
     versions: t("fileDetail.versionHistory"),
     suggestions: t("docxReview.title"),
-    playbook: t("knowledge.playbooks.review.facetTitle"),
+    playbook: t("inspector.review.title"),
     anonymization: t("inspector.facet.anonymization"),
   };
 

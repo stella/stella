@@ -29,6 +29,7 @@ import {
 } from "@/api/handlers/clauses/routes";
 import { contactsRoute } from "@/api/handlers/contacts/routes";
 import { devPublicRoute, devRoute } from "@/api/handlers/dev/routes";
+import { documentReviewsRoute } from "@/api/handlers/document-reviews/routes";
 import { documentTypesRoute } from "@/api/handlers/document-types/routes";
 import { docxSuggestionsRoute } from "@/api/handlers/docx-suggestions/routes";
 import { desktopEditSessionsRoute } from "@/api/handlers/entities/desktop-edit-sessions-route";
@@ -517,6 +518,7 @@ const api = new Elysia()
       .use(workspacesRoute)
       .use(playbooksRoute)
       .use(playbookRunsRoute)
+      .use(documentReviewsRoute)
       .use(reportsRoute)
       .use(flowsRoute)
       .use(flowRunsRoute)

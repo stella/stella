@@ -10,10 +10,6 @@ import { createContactHandler } from "@/api/handlers/contacts/create";
 import { deleteContactHandler } from "@/api/handlers/contacts/delete";
 import { listContactsPage } from "@/api/handlers/contacts/list-query";
 import { updateContactHandler } from "@/api/handlers/contacts/update";
-import {
-  entityListCursorCondition,
-  entityListTimestampCursorExpr,
-} from "@/api/handlers/entities/list-cursor";
 import { addAssigneeHandler } from "@/api/handlers/tasks/assignees-add";
 import { removeAssigneeHandler } from "@/api/handlers/tasks/assignees-remove";
 import { createTaskEntityHandler } from "@/api/handlers/tasks/create";
@@ -30,6 +26,10 @@ import { deleteWorkspaceContactHandler } from "@/api/handlers/workspaces/workspa
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { BUSINESS_REGISTRY_SLUGS } from "@/api/lib/business-registries/dispatch";
+import {
+  entityListCursorCondition,
+  entityListTimestampCursorExpr,
+} from "@/api/lib/entities/list-cursor";
 import { LIMITS } from "@/api/lib/limits";
 import {
   createCursorPage,

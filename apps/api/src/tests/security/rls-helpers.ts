@@ -89,9 +89,15 @@ export const createTestIds = () => ({
   propertyA1: id<"property">(),
   propertyA2: id<"property">(),
   propertyB1: id<"property">(),
+  filePropertyA1: id<"property">(),
+  filePropertyB1: id<"property">(),
   fieldA1: id<"field">(),
   fieldA2: id<"field">(),
   fieldB1: id<"field">(),
+  fileFieldA1: id<"field">(),
+  fileFieldB1: id<"field">(),
+  fileObjectA1: tid(),
+  fileObjectB1: tid(),
   docCounterA1: id<"documentCounter">(),
   docCounterB1: id<"documentCounter">(),
   docxSuggestionA1: id<"docxSuggestion">(),
@@ -477,6 +483,22 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       tool: propTool,
       status: "fresh",
     },
+    {
+      id: ids.filePropertyA1,
+      workspaceId: ids.wsA1,
+      name: "File A1",
+      content: { version: 1, type: "file" as const },
+      tool: propTool,
+      status: "fresh",
+    },
+    {
+      id: ids.filePropertyB1,
+      workspaceId: ids.wsB1,
+      name: "File B1",
+      content: { version: 1, type: "file" as const },
+      tool: propTool,
+      status: "fresh",
+    },
   ]);
 
   const fieldContent = (value: string) => ({
@@ -506,6 +528,42 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       propertyId: ids.propertyB1,
       entityVersionId: ids.entityVersionB1,
       content: fieldContent("b1"),
+    },
+    {
+      id: ids.fileFieldA1,
+      workspaceId: ids.wsA1,
+      propertyId: ids.filePropertyA1,
+      entityVersionId: ids.entityVersionA1,
+      content: {
+        version: 1,
+        type: "file" as const,
+        id: ids.fileObjectA1,
+        fileName: "agreement-a.docx",
+        mimeType:
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        sizeBytes: 1024,
+        encrypted: false,
+        sha256Hex: "a".repeat(64),
+        pdfFileId: null,
+      },
+    },
+    {
+      id: ids.fileFieldB1,
+      workspaceId: ids.wsB1,
+      propertyId: ids.filePropertyB1,
+      entityVersionId: ids.entityVersionB1,
+      content: {
+        version: 1,
+        type: "file" as const,
+        id: ids.fileObjectB1,
+        fileName: "agreement-b.docx",
+        mimeType:
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        sizeBytes: 1024,
+        encrypted: false,
+        sha256Hex: "b".repeat(64),
+        pdfFileId: null,
+      },
     },
   ]);
 

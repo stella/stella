@@ -12,6 +12,7 @@ import { savedSearches } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import readBillingCodes from "@/api/handlers/billing-codes/list";
 import readContactById from "@/api/handlers/contacts/get";
+import listDocumentReviewSources from "@/api/handlers/document-reviews/list-sources";
 import listDocxSuggestions from "@/api/handlers/docx-suggestions/read";
 import readEntityById from "@/api/handlers/entities/get";
 import readVersionById from "@/api/handlers/entities/read-version-by-id";
@@ -206,6 +207,21 @@ const isolationCases: IsolationCase[] = [
     expectDenied: expectEmptyPage,
     expectPositive: (result, { ids: testIds }) =>
       expectPageContainsId(result, testIds.docxSuggestionB1),
+  },
+  {
+    name: "document review source list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listDocumentReviewSources, workspaceA, {
+        query: { limit: 100 },
+      }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(listDocumentReviewSources, workspaceB, {
+        query: { limit: 100 },
+      }),
+    expectDenied: (result, { ids: testIds }) =>
+      expectSourcePageExcludesEntityId(result, testIds.entityB1),
+    expectPositive: (result, { ids: testIds }) =>
+      expectSourcePageContainsEntityId(result, testIds.entityB1),
   },
   {
     name: "invoice read by id",
@@ -492,6 +508,26 @@ function expectPageExcludesId(result: unknown, excludedId: string): void {
   );
 }
 
+function expectSourcePageContainsEntityId(
+  result: unknown,
+  expectedId: string,
+): void {
+  expect(getStatusCode(result)).toBeNull();
+  expect(
+    getPageRecords(result).some((item) => item["entityId"] === expectedId),
+  ).toBe(true);
+}
+
+function expectSourcePageExcludesEntityId(
+  result: unknown,
+  excludedId: string,
+): void {
+  expect(getStatusCode(result)).toBeNull();
+  expect(
+    getPageRecords(result).some((item) => item["entityId"] === excludedId),
+  ).toBe(false);
+}
+
 function expectRecordFieldEquals(
   result: unknown,
   field: string,
@@ -536,16 +572,23 @@ const getStatusCode = (result: unknown): number | null => {
   return null;
 };
 
-const getPageItems = (result: unknown): { id: string }[] => {
-  if (!isRecord(result) || !Array.isArray(result["items"])) {
-    throw new Error("Expected a page response");
-  }
-
-  return result["items"].map((item) => {
-    if (!isRecord(item) || typeof item["id"] !== "string") {
-      throw new Error("Expected every page item to include a string id");
+const getPageItems = (result: unknown): { id: string }[] =>
+  getPageRecords(result).map((item) => {
+    if (typeof item["id"] !== "string") {
+      throw new TypeError("Expected every page item to include a string id");
     }
     return { id: item["id"] };
+  });
+
+const getPageRecords = (result: unknown): Record<string, unknown>[] => {
+  if (!isRecord(result) || !Array.isArray(result["items"])) {
+    throw new TypeError("Expected a page response");
+  }
+  return result["items"].map((item) => {
+    if (!isRecord(item)) {
+      throw new TypeError("Expected every page item to be an object");
+    }
+    return item;
   });
 };
 

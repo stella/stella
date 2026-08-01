@@ -54,6 +54,13 @@ export const LIMITS = {
   playbookDefinitionsCount: 100,
   playbookDefinitionsPageSizeDefault: 50,
   playbookDefinitionsPageSizeMax: 100,
+  /** Maximum precedent documents compared with one target document. */
+  documentReviewReferencesMax: 3,
+  /** Bounded reference-document picker page size. */
+  documentReviewSourcesPageSizeDefault: 20,
+  documentReviewSourcesPageSizeMax: 50,
+  /** Maximum comparison findings accepted from one structured model run. */
+  documentReviewFindingsMax: 50,
   /** Per-org cap on saved flow (Workflows) definitions. Per-definition size
    *  is bounded by MAX_FLOW_STEPS in flow-types.ts. */
   flowDefinitionsCount: 100,
