@@ -64,7 +64,7 @@ export type CaptureDefinition = {
   captureId: string;
   dpr: number;
   sceneId: StoryCaptureId;
-  visualReference?: string;
+  visualReference: string | undefined;
   viewport: CaptureViewport;
   watchedPaths: readonly string[];
 };
