@@ -21,6 +21,10 @@ const generationMigrationSource = new URL(
   "../../../drizzle/20260731170000_case_law_corpus_generation_backfill/migration.sql",
   import.meta.url,
 );
+const ingestionSourceGrantMigration = new URL(
+  "../../../drizzle/20260731210000_case_law_ingestion_source_grants/migration.sql",
+  import.meta.url,
+);
 const GENERATION_STATE_TABLES = [
   "case_law_corpus_index_backfills",
   "case_law_corpus_index_source_reconciliations",
@@ -277,6 +281,16 @@ test("generation checkpoint migration preserves replay and role invariants", asy
   expect(schemaSource).not.toContain(
     '"case_law_decisions_corpus_country_shape"',
   );
+});
+
+test("ordered source progress remains inside the ingestion role boundary", async () => {
+  const source = await Bun.file(ingestionSourceGrantMigration).text();
+
+  expect(source).toContain(
+    "GRANT UPDATE (observation_order, checkpoint_observation_order)",
+  );
+  expect(source).toContain('ON TABLE "case_law_sources"');
+  expect(source).toContain("TO stella_ingestion");
 });
 
 test("every case-law corpus search boundary uses generation projection state", async () => {

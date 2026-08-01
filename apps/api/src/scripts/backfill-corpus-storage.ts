@@ -36,7 +36,10 @@ import type { SQL } from "drizzle-orm";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { rlsDb } from "@/api/db/root";
-import { caseLawDecisions } from "@/api/db/schema";
+import {
+  CASE_LAW_CORPUS_MIRROR_STATUS,
+  caseLawDecisions,
+} from "@/api/db/schema";
 import { createIngestionDb } from "@/api/db/scoped";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -46,6 +49,7 @@ import {
   timestampMatchesCasToken,
 } from "@/api/lib/db/timestamp-cas";
 import {
+  corpusMirrorColumns,
   EMPTY_CORPUS_CONTENT_HASHES,
   writeCorpusDocument,
 } from "@/api/lib/legal-search/corpus-storage";
@@ -115,12 +119,12 @@ const backfillRow = async (row: BackfillRow): Promise<void> => {
     const recorded = await ingestionDb((tx) =>
       tx
         .update(caseLawDecisions)
-        .set({
-          textS3Key: result.textKey,
-          normalizedS3Key: result.sectionsKey,
-          astS3Key: result.astKey,
-          contentHash: result.contentHash,
-        })
+        .set(
+          corpusMirrorColumns({
+            status: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+            written: result,
+          }),
+        )
         // Compare-and-set on the selected row state: a concurrent
         // ingestion refresh may have written newer keys, and an
         // unconditional update would point the row back at the stale

@@ -57,13 +57,13 @@ import type {
   WriteCorpusResult,
 } from "@/api/lib/legal-search/corpus-storage";
 import {
+  corpusMirrorColumns,
   corpusContentHash,
   corpusKeys,
   deleteCorpusDocument,
   EMPTY_CORPUS_CONTENT_HASHES,
   writeCorpusDocument,
 } from "@/api/lib/legal-search/corpus-storage";
-import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import { storedDecisionSignal } from "@/api/lib/legal-search/parsers/validate-ast";
 import { logger } from "@/api/lib/observability/logger";
@@ -132,11 +132,27 @@ export const corpusWriteErrorDetail = (error: unknown): string => {
     : outer;
 };
 
-type ProcessResult = {
-  inserted: boolean;
-  searchVectorFailed: boolean;
-  s3UploadFailed: boolean;
-};
+const PROCESS_DECISION_STATUS = {
+  COMPLETE: "complete",
+  RETRYABLE: "retryable",
+} as const;
+
+const PROCESS_DECISION_RETRY_REASON = {
+  CONTENTION: "contention",
+  CORPUS_WRITE: "corpus-write",
+} as const;
+
+type ProcessResult =
+  | {
+      status: typeof PROCESS_DECISION_STATUS.COMPLETE;
+      inserted: boolean;
+      searchVectorFailed: boolean;
+    }
+  | {
+      status: typeof PROCESS_DECISION_STATUS.RETRYABLE;
+      inserted: boolean;
+      reason: (typeof PROCESS_DECISION_RETRY_REASON)[keyof typeof PROCESS_DECISION_RETRY_REASON];
+    };
 
 const CONTENTION_RECONCILIATION = {
   INITIAL: "initial",
@@ -145,6 +161,16 @@ const CONTENTION_RECONCILIATION = {
 
 type ContentionReconciliation =
   (typeof CONTENTION_RECONCILIATION)[keyof typeof CONTENTION_RECONCILIATION];
+
+const DECISION_ROW_WRITE_STATUS = {
+  APPLIED: "applied",
+  WINNER_PENDING: "winner-pending",
+  WINNER_REDACTED: "winner-redacted",
+  WINNER_SETTLED: "winner-settled",
+} as const;
+
+type DecisionRowWriteStatus =
+  (typeof DECISION_ROW_WRITE_STATUS)[keyof typeof DECISION_ROW_WRITE_STATUS];
 
 type ProcessDecisionAttemptOptions = {
   input: IngestionResult;
@@ -278,6 +304,67 @@ type PlanCorpusWriteInput = CorpusWritePayload & {
   hadExistingRow: boolean;
 };
 
+type SettleCaseLawCorpusMirrorOptions = {
+  decisionId: SafeId<"caseLawDecision">;
+  persistedSourceHash: string | null;
+  observationOrder: bigint;
+  mirrorCarriesDocument: boolean;
+  scopedDb: ScopedDb;
+  written: WriteCorpusResult;
+};
+
+/**
+ * Settle only the observation that owns the pending mirror. A missed CAS is
+ * retryable, not terminal: another run may still leave the durable row
+ * pending, so its page cursor must remain held until a replay proves the
+ * mirror settled.
+ */
+export const settleCaseLawCorpusMirror = async ({
+  decisionId,
+  persistedSourceHash,
+  observationOrder,
+  mirrorCarriesDocument,
+  scopedDb,
+  written,
+}: SettleCaseLawCorpusMirrorOptions): Promise<void> => {
+  // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
+  const settled = await scopedDb((tx) => {
+    // audit: skip — background corpus storage; derived state, not user actions
+    return tx
+      .update(caseLawDecisions)
+      .set(
+        corpusMirrorColumns({
+          status: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+          written,
+        }),
+      )
+      .where(
+        and(
+          eq(caseLawDecisions.id, decisionId),
+          sql`${caseLawDecisions.sourceHash} IS NOT DISTINCT FROM ${persistedSourceHash}`,
+          eq(caseLawDecisions.sourceObservationOrder, observationOrder),
+          eq(
+            caseLawDecisions.corpusMirrorStatus,
+            CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
+          ),
+          isNull(caseLawDecisions.redactedAt),
+          // An empty mirror must not re-point the keys over a row that gained
+          // a document after the mirror began. A document-carrying mirror is
+          // the newer payload by definition.
+          mirrorCarriesDocument
+            ? undefined
+            : sql`NOT ${pgPayloadCarriesDocument}`,
+        ),
+      )
+      .returning({ id: caseLawDecisions.id });
+  });
+  if (!settled.at(0)) {
+    throw new ConcurrentModificationError({
+      message: "Case-law corpus mirror owner changed before settlement",
+    });
+  }
+};
+
 /**
  * `writeCorpusDocument` issues its three PUTs in parallel, so a rejection
  * can still leave one or two objects behind. For a decision that had no
@@ -360,7 +447,10 @@ const hasStoredDocument = async (
 type PendingMirrorPayload = Pick<
   CorpusWritePayload,
   "ast" | "sections" | "text"
->;
+> & {
+  sourceObservationHash: string | null;
+  sourceObservationOrder: bigint | null;
+};
 
 const loadPendingMirrorPayload = async (
   decisionId: SafeId<"caseLawDecision">,
@@ -373,6 +463,8 @@ const loadPendingMirrorPayload = async (
         documentAst: true,
         fulltext: true,
         sections: true,
+        sourceObservationHash: true,
+        sourceObservationOrder: true,
       },
     }),
   );
@@ -382,6 +474,8 @@ const loadPendingMirrorPayload = async (
   return {
     ast: row.documentAst,
     sections: row.sections,
+    sourceObservationHash: row.sourceObservationHash,
+    sourceObservationOrder: row.sourceObservationOrder,
     text: row.fulltext,
   };
 };
@@ -515,12 +609,21 @@ const processDecisionAttempt = async ({
         sourceHash: true,
         sourceObservedAt: true,
         sourceObservationHash: true,
+        redactedAt: true,
         corpusMirrorStatus: true,
         sourceRawS3Key: true,
         sourceRawContentType: true,
       },
     }),
   );
+
+  if (existing?.redactedAt) {
+    return {
+      status: PROCESS_DECISION_STATUS.COMPLETE,
+      inserted: false,
+      searchVectorFailed: false,
+    };
+  }
 
   if (
     existing &&
@@ -551,6 +654,7 @@ const processDecisionAttempt = async ({
               and(
                 eq(caseLawDecisions.id, existing.id),
                 storedObservationPrecedes({ order: observationOrder }),
+                isNull(caseLawDecisions.redactedAt),
                 sql`${caseLawDecisions.sourceHash} IS NOT DISTINCT FROM ${existing.sourceHash}`,
                 sql`${caseLawDecisions.metadata} IS NOT DISTINCT FROM ${JSON.stringify(existing.metadata)}::jsonb`,
               ),
@@ -563,24 +667,33 @@ const processDecisionAttempt = async ({
       const current = await scopedDb((tx) =>
         tx.query.caseLawDecisions.findFirst({
           where: { id: { eq: existing.id } },
-          columns: { sourceObservationOrder: true },
+          columns: { sourceObservationOrder: true, redactedAt: true },
         }),
       );
+      if (current?.redactedAt) {
+        return {
+          status: PROCESS_DECISION_STATUS.COMPLETE,
+          inserted: false,
+          searchVectorFailed: false,
+        };
+      }
       if (
         !current ||
         (current.sourceObservationOrder !== null &&
           current.sourceObservationOrder >= observationOrder)
       ) {
         return {
+          status: PROCESS_DECISION_STATUS.COMPLETE,
           inserted: false,
           searchVectorFailed: false,
-          s3UploadFailed: false,
         };
       }
       if (contentionReconciliation === CONTENTION_RECONCILIATION.RETRY) {
-        throw new ConcurrentModificationError({
-          message: "Case-law decision refresh did not converge",
-        });
+        return {
+          status: PROCESS_DECISION_STATUS.RETRYABLE,
+          inserted: false,
+          reason: PROCESS_DECISION_RETRY_REASON.CONTENTION,
+        };
       }
       return await processDecisionAttempt({
         input,
@@ -592,9 +705,9 @@ const processDecisionAttempt = async ({
       });
     }
     return {
+      status: PROCESS_DECISION_STATUS.COMPLETE,
       inserted: false,
       searchVectorFailed: false,
-      s3UploadFailed: false,
     };
   }
 
@@ -790,7 +903,11 @@ const processDecisionAttempt = async ({
     // Persist nothing: a row would advance sourceHash and the next cycle
     // would dedup-skip the decision before it could retry the write. The
     // caller counts this as an S3 failure, which holds the page cursor.
-    return { inserted: false, searchVectorFailed: false, s3UploadFailed: true };
+    return {
+      status: PROCESS_DECISION_STATUS.RETRYABLE,
+      inserted: false,
+      reason: PROCESS_DECISION_RETRY_REASON.CORPUS_WRITE,
+    };
   }
 
   const postgresPayload = {
@@ -808,11 +925,10 @@ const processDecisionAttempt = async ({
         // that no longer match its columns. Clear them.
         return {
           ...postgresPayload,
-          textS3Key: null,
-          normalizedS3Key: null,
-          astS3Key: null,
-          contentHash: null,
-          corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+          ...corpusMirrorColumns({
+            status: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+            written: null,
+          }),
         };
       case "postgres-mirrored":
         // Persist retry intent with the Postgres payload. Clearing every old
@@ -820,11 +936,9 @@ const processDecisionAttempt = async ({
         // stale mirror while an unchanged replay repairs it.
         return {
           ...postgresPayload,
-          textS3Key: null,
-          normalizedS3Key: null,
-          astS3Key: null,
-          contentHash: null,
-          corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
+          ...corpusMirrorColumns({
+            status: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
+          }),
         };
       case "preserve-stored":
         // Every payload column, and every pointer into object storage,
@@ -836,11 +950,10 @@ const processDecisionAttempt = async ({
           fulltext: null,
           sections: null,
           documentAst: null,
-          textS3Key: corpusPlan.written.textKey,
-          normalizedS3Key: corpusPlan.written.sectionsKey,
-          astS3Key: corpusPlan.written.astKey,
-          contentHash: corpusPlan.written.contentHash,
-          corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+          ...corpusMirrorColumns({
+            status: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+            written: corpusPlan.written,
+          }),
         };
       default: {
         const unhandled: never = corpusPlan;
@@ -849,19 +962,18 @@ const processDecisionAttempt = async ({
     }
   })();
 
-  const writeDecisionRow = async (slug?: string): Promise<boolean> =>
+  const writeDecisionRow = async (
+    slug?: string,
+  ): Promise<DecisionRowWriteStatus> =>
     await scopedDb(async (tx) => {
       // audit: skip — background case-law ingestion pipeline; public case-law data, not user actions
       if (existing) {
-        // A refresh with no document of its own may not overwrite one,
-        // and whether the row has one can change between the check above
-        // and this write. So the payload columns move to their own
-        // statement, carrying the condition in the WHERE where it is
-        // evaluated with the write: a backfill that commits in between
-        // takes the update out of scope instead of losing to it. The
-        // metadata is unconditional either way, so a refresh that
-        // declines to touch the payload still lands and still advances
-        // the source hash.
+        // A refresh with no document of its own may not overwrite one.
+        // Ordinary empty refreshes therefore guard a separate payload
+        // statement, while a pending-mirror repair claims its exact owner
+        // token in the metadata-and-payload update. Both conditions are
+        // evaluated with the write, where a concurrent materializer cannot
+        // slip between the check and mutation.
         const payloadNeedsGuard =
           !incomingCarriesDocument &&
           pendingMirrorPayload === null &&
@@ -902,30 +1014,77 @@ const processDecisionAttempt = async ({
             and(
               eq(caseLawDecisions.id, existing.id),
               storedObservationPrecedes({ order: observationOrder }),
+              isNull(caseLawDecisions.redactedAt),
+              corpusPlan.type === "preserve-stored"
+                ? eq(
+                    caseLawDecisions.corpusMirrorStatus,
+                    CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+                  )
+                : undefined,
+              pendingMirrorPayload === null
+                ? undefined
+                : and(
+                    eq(
+                      caseLawDecisions.corpusMirrorStatus,
+                      CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
+                    ),
+                    sql`${caseLawDecisions.sourceObservationOrder} IS NOT DISTINCT FROM ${pendingMirrorPayload.sourceObservationOrder}`,
+                    sql`${caseLawDecisions.sourceObservationHash} IS NOT DISTINCT FROM ${pendingMirrorPayload.sourceObservationHash}`,
+                  ),
             ),
           )
           .returning({ id: caseLawDecisions.id });
 
         if (updated.length === 0) {
-          return false;
+          // A newer observation owns the row. Its durable mirror state
+          // decides whether this page may advance: a pending winner still
+          // needs the source page as its replay path.
+          const winner = await tx.query.caseLawDecisions.findFirst({
+            where: { id: { eq: existing.id } },
+            columns: { corpusMirrorStatus: true, redactedAt: true },
+          });
+          if (winner?.redactedAt) {
+            return DECISION_ROW_WRITE_STATUS.WINNER_REDACTED;
+          }
+          return winner?.corpusMirrorStatus ===
+            CASE_LAW_CORPUS_MIRROR_STATUS.PENDING
+            ? DECISION_ROW_WRITE_STATUS.WINNER_PENDING
+            : DECISION_ROW_WRITE_STATUS.WINNER_SETTLED;
         }
 
         if (payloadNeedsGuard) {
-          await tx
-            .update(caseLawDecisions)
-            .set(payloadColumns)
-            .where(
-              and(
-                eq(caseLawDecisions.id, existing.id),
-                sql`not ${rowHoldsDocument}`,
-              ),
-            );
+          const payloadApplied = (
+            await tx
+              .update(caseLawDecisions)
+              .set(payloadColumns)
+              .where(
+                and(
+                  eq(caseLawDecisions.id, existing.id),
+                  isNull(caseLawDecisions.redactedAt),
+                  sql`not ${rowHoldsDocument}`,
+                ),
+              )
+              .returning({ id: caseLawDecisions.id })
+          ).at(0);
+          if (!payloadApplied) {
+            const winner = await tx.query.caseLawDecisions.findFirst({
+              where: { id: { eq: existing.id } },
+              columns: { corpusMirrorStatus: true, redactedAt: true },
+            });
+            if (winner?.redactedAt) {
+              return DECISION_ROW_WRITE_STATUS.WINNER_REDACTED;
+            }
+            return winner?.corpusMirrorStatus ===
+              CASE_LAW_CORPUS_MIRROR_STATUS.PENDING
+              ? DECISION_ROW_WRITE_STATUS.WINNER_PENDING
+              : DECISION_ROW_WRITE_STATUS.WINNER_SETTLED;
+          }
         }
 
         // Citations are read out of the document, so a refresh that
         // carries no document has nothing to say about them either.
         if (!incomingCarriesDocument) {
-          return true;
+          return DECISION_ROW_WRITE_STATUS.APPLIED;
         }
 
         await tx
@@ -942,7 +1101,7 @@ const processDecisionAttempt = async ({
             );
         }
 
-        return true;
+        return DECISION_ROW_WRITE_STATUS.APPLIED;
       }
 
       if (slug === undefined) {
@@ -993,7 +1152,7 @@ const processDecisionAttempt = async ({
             ),
           );
       }
-      return true;
+      return DECISION_ROW_WRITE_STATUS.APPLIED;
     });
 
   // Pass the original error through: the pipeline's halt semantics inspect
@@ -1053,9 +1212,11 @@ const processDecisionAttempt = async ({
         await discardOrphanedCorpusObjects(corpusPlan.written, decisionId);
       }
       if (contentionReconciliation === CONTENTION_RECONCILIATION.RETRY) {
-        throw new ConcurrentModificationError({
-          message: "Case-law decision identity did not converge",
-        });
+        return {
+          status: PROCESS_DECISION_STATUS.RETRYABLE,
+          inserted: false,
+          reason: PROCESS_DECISION_RETRY_REASON.CONTENTION,
+        };
       }
       return await processDecisionAttempt({
         input,
@@ -1078,12 +1239,33 @@ const processDecisionAttempt = async ({
     throw rowWrite.error;
   }
 
-  if (!rowWrite.value) {
-    return {
-      inserted: false,
-      searchVectorFailed: false,
-      s3UploadFailed: false,
-    };
+  const writeStatus = rowWrite.value;
+  switch (writeStatus) {
+    case DECISION_ROW_WRITE_STATUS.APPLIED:
+      break;
+    case DECISION_ROW_WRITE_STATUS.WINNER_PENDING:
+      return {
+        status: PROCESS_DECISION_STATUS.RETRYABLE,
+        inserted: false,
+        reason: PROCESS_DECISION_RETRY_REASON.CORPUS_WRITE,
+      };
+    case DECISION_ROW_WRITE_STATUS.WINNER_REDACTED:
+      if (corpusPlan.type === "object-storage") {
+        await discardOrphanedCorpusObjects(corpusPlan.written, decisionId);
+      }
+      return {
+        status: PROCESS_DECISION_STATUS.COMPLETE,
+        inserted: false,
+        searchVectorFailed: false,
+      };
+    case DECISION_ROW_WRITE_STATUS.WINNER_SETTLED:
+      return {
+        status: PROCESS_DECISION_STATUS.COMPLETE,
+        inserted: false,
+        searchVectorFailed: false,
+      };
+    default:
+      return writeStatus satisfies never;
   }
 
   // Mirror text/sections/AST to object storage, then record the keys +
@@ -1104,33 +1286,13 @@ const processDecisionAttempt = async ({
       : result.rawHash;
     try {
       const written = await writeCorpusDocument(corpusPayload);
-      // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-      await scopedDb((tx) => {
-        // audit: skip — background corpus storage; derived state, not user actions
-        return tx
-          .update(caseLawDecisions)
-          .set({
-            textS3Key: written.textKey,
-            normalizedS3Key: written.sectionsKey,
-            astS3Key: written.astKey,
-            contentHash: written.contentHash,
-            corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
-          })
-          .where(
-            and(
-              eq(caseLawDecisions.id, decisionId),
-              sql`${caseLawDecisions.sourceHash} IS NOT DISTINCT FROM ${persistedSourceHash}`,
-              eq(caseLawDecisions.sourceObservationOrder, observationOrder),
-              // An empty mirror must not re-point the keys over a row that
-              // gained a document between the stored-document check and this
-              // update: hydration does not advance the source hash, so the
-              // CAS above cannot see it. A mirror that carries the document
-              // is exempt — it is the newer payload by definition.
-              mirrorCarriesDocument
-                ? undefined
-                : sql`NOT ${pgPayloadCarriesDocument}`,
-            ),
-          );
+      await settleCaseLawCorpusMirror({
+        decisionId,
+        persistedSourceHash,
+        observationOrder,
+        mirrorCarriesDocument,
+        scopedDb,
+        written,
       });
     } catch (error) {
       s3UploadFailed = true;
@@ -1152,7 +1314,17 @@ const processDecisionAttempt = async ({
   // doesn't block cursor advancement. New decisions become
   // searchable within ~30s of insertion.
 
-  return { inserted: true, searchVectorFailed: false, s3UploadFailed };
+  return s3UploadFailed
+    ? {
+        status: PROCESS_DECISION_STATUS.RETRYABLE,
+        inserted: true,
+        reason: PROCESS_DECISION_RETRY_REASON.CORPUS_WRITE,
+      }
+    : {
+        status: PROCESS_DECISION_STATUS.COMPLETE,
+        inserted: true,
+        searchVectorFailed: false,
+      };
 };
 
 export const processDecision = async (
@@ -1297,6 +1469,7 @@ export const runIngestionPipeline = async ({
     const skippedBefore = skipped;
     const s3FailuresBefore = s3UploadFailures;
     try {
+      let retryableDecision = false;
       for (const result of page.decisions) {
         if (maxDecisions !== undefined && inserted >= maxDecisions) {
           // Halting (instead of breaking quietly) keeps the cursor at
@@ -1320,11 +1493,29 @@ export const runIngestionPipeline = async ({
             skipped++;
           }
           consecutiveFailures = 0;
-          if (outcome.searchVectorFailed) {
-            searchVectorFailures++;
+          switch (outcome.status) {
+            case PROCESS_DECISION_STATUS.COMPLETE:
+              if (outcome.searchVectorFailed) {
+                searchVectorFailures++;
+              }
+              break;
+            case PROCESS_DECISION_STATUS.RETRYABLE:
+              if (
+                outcome.reason === PROCESS_DECISION_RETRY_REASON.CORPUS_WRITE
+              ) {
+                s3UploadFailures++;
+                haltReason = "1 corpus write failure(s); cursor held for retry";
+              } else {
+                haltReason =
+                  "Concurrent decision reconciliation; cursor held for retry";
+              }
+              retryableDecision = true;
+              break;
+            default:
+              return outcome satisfies never;
           }
-          if (outcome.s3UploadFailed) {
-            s3UploadFailures++;
+          if (retryableDecision) {
+            break;
           }
         } catch (error) {
           consecutiveFailures++;

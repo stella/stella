@@ -2,6 +2,7 @@ import { Result } from "better-result";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
+import { CASE_LAW_CORPUS_MIRROR_STATUS } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import {
   zstdCompressAsync,
@@ -147,6 +148,61 @@ type WriteCorpusInput = CorpusPayload & {
 };
 
 export type WriteCorpusResult = CorpusKeys & { contentHash: string };
+
+type CorpusMirrorState =
+  | { status: typeof CASE_LAW_CORPUS_MIRROR_STATUS.PENDING }
+  | {
+      status: typeof CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED;
+      written: WriteCorpusResult | null;
+    };
+
+type CorpusMirrorColumns =
+  | {
+      corpusMirrorStatus: typeof CASE_LAW_CORPUS_MIRROR_STATUS.PENDING;
+      textS3Key: null;
+      normalizedS3Key: null;
+      astS3Key: null;
+      contentHash: null;
+    }
+  | {
+      corpusMirrorStatus: typeof CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED;
+      textS3Key: string | null;
+      normalizedS3Key: string | null;
+      astS3Key: string | null;
+      contentHash: string | null;
+    };
+
+/**
+ * The only application-level constructor for the decision mirror columns.
+ * Its discriminated input prevents a pending state from carrying pointers;
+ * the database CHECK enforces the same invariant for every SQL writer.
+ */
+export const corpusMirrorColumns = (
+  state: CorpusMirrorState,
+): CorpusMirrorColumns => {
+  switch (state.status) {
+    case CASE_LAW_CORPUS_MIRROR_STATUS.PENDING:
+      return {
+        corpusMirrorStatus: state.status,
+        textS3Key: null,
+        normalizedS3Key: null,
+        astS3Key: null,
+        contentHash: null,
+      };
+    case CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED:
+      return {
+        corpusMirrorStatus: state.status,
+        textS3Key: state.written?.textKey ?? null,
+        normalizedS3Key: state.written?.sectionsKey ?? null,
+        astS3Key: state.written?.astKey ?? null,
+        contentHash: state.written?.contentHash ?? null,
+      };
+    default: {
+      const unhandled: never = state;
+      return unhandled;
+    }
+  }
+};
 
 export const writeCorpusDocument = async ({
   documentId,

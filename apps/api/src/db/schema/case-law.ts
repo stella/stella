@@ -172,6 +172,7 @@ export const caseLawDecisions = p.pgTable(
       mode: "bigint",
     }),
     sourceObservationHash: p.varchar("source_observation_hash", { length: 64 }),
+    redactedAt: timestamptz("redacted_at"),
     corpusMirrorStatus: p
       .varchar("corpus_mirror_status", {
         length: 16,
@@ -235,6 +236,10 @@ export const caseLawDecisions = p.pgTable(
     p.check(
       "case_law_decisions_pending_corpus_mirror_has_no_pointers",
       sql`${t.corpusMirrorStatus} = 'settled' OR (${t.textS3Key} IS NULL AND ${t.normalizedS3Key} IS NULL AND ${t.astS3Key} IS NULL AND ${t.contentHash} IS NULL)`,
+    ),
+    p.check(
+      "case_law_decisions_redacted_payload_erased",
+      sql`${t.redactedAt} IS NULL OR (${t.fulltext} IS NULL AND ${t.sections} IS NULL AND ${t.documentAst} IS NULL AND ${t.contentHash} IS NULL)`,
     ),
     // Identity, in two halves that together cover every row exactly once.
     // Where the publisher states an id, that is the key. Where it does not,

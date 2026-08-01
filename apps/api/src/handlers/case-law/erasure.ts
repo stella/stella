@@ -2,6 +2,7 @@ import { and, eq, isNotNull, isNull, or } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
+  CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawCorpusIndexProjections,
   caseLawDecisions,
   caseLawIndexJobs,
@@ -166,6 +167,8 @@ export const redactCaseLawDecision = async ({
   // as active content. Keys are only retained when S3 deletion failed so a
   // later retry still knows which immutable objects to remove.
   const scrubValues = {
+    redactedAt: new Date(),
+    corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
     fulltext: null,
     sections: null,
     documentAst: null,

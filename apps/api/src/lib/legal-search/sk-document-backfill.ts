@@ -36,7 +36,10 @@ import {
 } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import { caseLawDecisions } from "@/api/db/schema";
+import {
+  CASE_LAW_CORPUS_MIRROR_STATUS,
+  caseLawDecisions,
+} from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -47,6 +50,7 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { fetchWithTimeout } from "@/api/lib/fetch";
 import { indexDecision } from "@/api/lib/legal-search/case-law-search-index";
 import {
+  corpusMirrorColumns,
   EMPTY_CORPUS_CONTENT_HASHES,
   writeCorpusDocument,
 } from "@/api/lib/legal-search/corpus-storage";
@@ -222,6 +226,7 @@ const outsideFetchCooldown = or(
  * the scan walking trimmed rows to conclude the queue is empty.
  */
 export const pendingDocumentPredicate = and(
+  isNull(caseLawDecisions.redactedAt),
   isNull(caseLawDecisions.fulltext),
   isNotNull(caseLawDecisions.documentUrl),
   or(
@@ -535,18 +540,15 @@ export const storeBackfilledDocument = async ({
         documentAst: document.documentAst,
         sections,
         parserVersion: PARSER_VERSION,
-        ...(corpus === null
-          ? {}
-          : {
-              textS3Key: corpus.textKey,
-              normalizedS3Key: corpus.sectionsKey,
-              astS3Key: corpus.astKey,
-              contentHash: corpus.contentHash,
-            }),
+        ...corpusMirrorColumns({
+          status: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+          written: corpus,
+        }),
       })
       .where(
         and(
           eq(caseLawDecisions.id, decision.id),
+          isNull(caseLawDecisions.redactedAt),
           sql`coalesce(${caseLawDecisions.fulltext}, '') = ''`,
           claimedSourceHash === undefined
             ? undefined
@@ -582,6 +584,7 @@ export const recordDocumentFetchRequest = async (
       UPDATE ${caseLawDecisions}
       SET document_fetch_requested_at = now()
       WHERE id = ${decisionId}
+        AND redacted_at IS NULL
         AND document_fetch_requested_at IS NULL
     `);
   });
@@ -645,6 +648,7 @@ export const claimDocumentFetch = async (
       SET document_fetch_attempted_at = now(),
           document_fetch_attempts = document_fetch_attempts + 1
       WHERE id = ${decisionId}
+        AND redacted_at IS NULL
         AND fulltext IS NULL
         AND (
           document_fetch_attempted_at IS NULL
@@ -689,6 +693,7 @@ export const markDocumentUnavailable = async (
       .where(
         and(
           eq(caseLawDecisions.id, decisionId),
+          isNull(caseLawDecisions.redactedAt),
           isNull(caseLawDecisions.fulltext),
         ),
       );

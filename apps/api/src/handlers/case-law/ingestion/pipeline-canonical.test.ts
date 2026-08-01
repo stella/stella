@@ -7,7 +7,11 @@ import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { createSafeId } from "@/api/lib/branded-types";
-import { DatabaseError, TimeoutError } from "@/api/lib/errors/tagged-errors";
+import {
+  ConcurrentModificationError,
+  DatabaseError,
+  TimeoutError,
+} from "@/api/lib/errors/tagged-errors";
 import type { WriteCorpusResult } from "@/api/lib/legal-search/corpus-storage";
 
 /**
@@ -72,7 +76,7 @@ void mock.module("@/api/lib/legal-search/corpus-storage", () => ({
 
 const { czNsAdapter } =
   await import("@/api/handlers/case-law/ingestion/adapters/cz-ns");
-const { processDecision, runIngestionPipeline } =
+const { processDecision, runIngestionPipeline, settleCaseLawCorpusMirror } =
   await import("@/api/handlers/case-law/ingestion/pipeline");
 
 const originalCzNsFetchPage = czNsAdapter.fetchPage;
@@ -86,6 +90,8 @@ let persistedCursor: string | null | undefined;
 let rowWrite: "ok" | "fault" | "timeout" = "ok";
 /** The row the dedup lookup finds; undefined makes this a new decision. */
 let existingDecision: Record<string, unknown> | undefined;
+/** Whether the observation still owns the mirror when it settles. */
+let mirrorSettlementApplied = true;
 
 afterEach(() => {
   czNsAdapter.fetchPage = originalCzNsFetchPage;
@@ -95,6 +101,7 @@ afterEach(() => {
   persistedCursor = undefined;
   rowWrite = "ok";
   existingDecision = undefined;
+  mirrorSettlementApplied = true;
   writeCorpusDocumentMock.mockClear();
   deleteCorpusDocumentMock.mockClear();
 });
@@ -165,9 +172,12 @@ const scopedDb: ScopedDb = async (callback) => {
         // The checkpoint helper reads back the compare-and-set winner.
         return {
           where: () => ({
-            returning: async () => [
-              { cursor: values.syncCursor ?? null, order: 1n },
-            ],
+            returning: async () => {
+              if (table === caseLawDecisions) {
+                return mirrorSettlementApplied ? [{ id: "decision-id" }] : [];
+              }
+              return [{ cursor: values.syncCursor ?? null, order: 1n }];
+            },
           }),
         };
       },
@@ -181,6 +191,31 @@ const scopedDb: ScopedDb = async (callback) => {
   return await callback(tx as unknown as Transaction);
 };
 
+describe("settleCaseLawCorpusMirror", () => {
+  const settle = async (): Promise<unknown> =>
+    await settleCaseLawCorpusMirror({
+      decisionId: createSafeId<"caseLawDecision">(),
+      persistedSourceHash: "source-hash",
+      observationOrder: 1n,
+      mirrorCarriesDocument: true,
+      scopedDb,
+      written: { ...CORPUS_KEYS, contentHash: "content-hash" },
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+  test("accepts the observation that still owns the pending mirror", async () => {
+    expect(await settle()).toBeNull();
+  });
+
+  test("makes a missed settlement compare-and-set retryable", async () => {
+    mirrorSettlementApplied = false;
+
+    expect(await settle()).toBeInstanceOf(ConcurrentModificationError);
+  });
+});
+
 describe("processDecision — canonical storage mode", () => {
   test("writes the corpus objects before the row, and nulls the text columns", async () => {
     const outcome = await processDecision({
@@ -192,9 +227,9 @@ describe("processDecision — canonical storage mode", () => {
     });
 
     expect(outcome).toEqual({
+      status: "complete",
       inserted: true,
       searchVectorFailed: false,
-      s3UploadFailed: false,
     });
 
     // No row may exist before its objects do.
@@ -229,9 +264,9 @@ describe("processDecision — canonical storage mode", () => {
     });
 
     expect(outcome).toEqual({
+      status: "retryable",
       inserted: false,
-      searchVectorFailed: false,
-      s3UploadFailed: true,
+      reason: "corpus-write",
     });
     // The three PUTs run in parallel, so a rejection can leave one or two
     // objects behind under keys no row will ever reference. They go, at the
@@ -270,7 +305,10 @@ describe("processDecision — canonical storage mode", () => {
       observedAt: new Date("2026-07-31T12:00:00.000Z"),
     });
 
-    expect(outcome.s3UploadFailed).toBe(true);
+    expect(outcome).toMatchObject({
+      status: "retryable",
+      reason: "corpus-write",
+    });
     expect(events).toEqual(["corpus-write-failed"]);
     expect(deleteCorpusDocumentMock).not.toHaveBeenCalled();
   });
@@ -350,5 +388,53 @@ describe("runIngestionPipeline — canonical corpus write failure", () => {
     expect(result.haltReason).toContain("corpus write failure(s)");
     expect(persistedCursor).toBe("cursor-1");
     expect(insertedRows).toHaveLength(0);
+  });
+
+  test("holds the cursor when bounded contention does not converge", async () => {
+    existingDecision = {
+      id: createSafeId<"caseLawDecision">(),
+      metadata: {},
+      sourceHash: decision.rawHash,
+      sourceObservedAt: new Date("2026-07-31T12:00:00.000Z"),
+      sourceObservationHash: decision.rawHash,
+      sourceObservationOrder: 0n,
+      corpusMirrorStatus: "settled",
+      redactedAt: null,
+      sourceRawS3Key: null,
+      sourceRawContentType: null,
+    };
+    mirrorSettlementApplied = false;
+
+    const source = {
+      id: createSafeId<"caseLawSource">(),
+      adapterKey: ADAPTER_KEYS.CZ_NS,
+      name: "Canonical source",
+      enabled: true,
+      syncCursor: "cursor-1",
+      lastSyncAt: null,
+      observationOrder: 0n,
+      checkpointObservationOrder: 0n,
+      config: {},
+      descriptor: null,
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+    } satisfies typeof caseLawSources.$inferSelect;
+
+    czNsAdapter.fetchPage = async () =>
+      await Promise.resolve(
+        Result.ok({ decisions: [decision], nextCursor: "cursor-2" }),
+      );
+
+    const result = await runIngestionPipeline({ source, scopedDb });
+
+    expect(result).toMatchObject({
+      inserted: 0,
+      skipped: 1,
+      s3UploadFailures: 0,
+      pagesProcessed: 0,
+      nextCursor: "cursor-1",
+    });
+    expect(result.haltReason).toContain("Concurrent decision reconciliation");
+    expect(persistedCursor).toBe("cursor-1");
   });
 });

@@ -548,7 +548,13 @@ describe("policy coverage", () => {
         .filter((p) => p.table_name === "case_law_sources")
         .map((p) => p.column_name)
         .sort(),
-    ).toEqual(["last_sync_at", "sync_cursor", "updated_at"]);
+    ).toEqual([
+      "checkpoint_observation_order",
+      "last_sync_at",
+      "observation_order",
+      "sync_cursor",
+      "updated_at",
+    ]);
 
     // Append-only audit trail: ingestion may read and append, never
     // mutate or delete prior rows.
