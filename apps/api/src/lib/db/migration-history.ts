@@ -13,6 +13,8 @@ type RewrittenMigrationHistory = {
 };
 
 export type RequiredMigrationIndex = {
+  definitionBody: string;
+  isUnique: boolean;
   name: string;
   tableName: string;
 };
@@ -33,6 +35,9 @@ const REWRITTEN_MIGRATION_HISTORIES: Readonly<
     ],
     requiredIndexes: [
       {
+        definitionBody:
+          "ON public.case_law_decisions USING btree (slug) WHERE (slug IS NOT NULL)",
+        isUnique: true,
         name: "case_law_decisions_slug_uidx",
         tableName: "case_law_decisions",
       },
@@ -45,7 +50,13 @@ const REWRITTEN_MIGRATION_HISTORIES: Readonly<
       "0088003d298f869017cf4047a74692a9ddefa4bc246aa6c25ca950ebeb29f918",
     ],
     requiredIndexes: [
-      { name: "fields_pending_workspace_idx", tableName: "fields" },
+      {
+        definitionBody:
+          "ON public.fields USING btree (workspace_id) WHERE ((content ->> 'type'::text) = 'pending'::text)",
+        isUnique: false,
+        name: "fields_pending_workspace_idx",
+        tableName: "fields",
+      },
     ],
   },
   "20260629123000_arabic_normalize_function": {
@@ -56,18 +67,30 @@ const REWRITTEN_MIGRATION_HISTORIES: Readonly<
     ],
     requiredIndexes: [
       {
+        definitionBody:
+          "ON public.contacts USING gin (arabic_normalize((display_name)::text) gin_trgm_ops)",
+        isUnique: false,
         name: "contacts_display_name_arabic_norm_trgm_idx",
         tableName: "contacts",
       },
       {
+        definitionBody:
+          "ON public.contacts USING gin (arabic_normalize((first_name)::text) gin_trgm_ops)",
+        isUnique: false,
         name: "contacts_first_name_arabic_norm_trgm_idx",
         tableName: "contacts",
       },
       {
+        definitionBody:
+          "ON public.contacts USING gin (arabic_normalize((last_name)::text) gin_trgm_ops)",
+        isUnique: false,
         name: "contacts_last_name_arabic_norm_trgm_idx",
         tableName: "contacts",
       },
       {
+        definitionBody:
+          "ON public.contacts USING gin (arabic_normalize((organization_name)::text) gin_trgm_ops)",
+        isUnique: false,
         name: "contacts_organization_name_arabic_norm_trgm_idx",
         tableName: "contacts",
       },
@@ -81,6 +104,9 @@ const REWRITTEN_MIGRATION_HISTORIES: Readonly<
     ],
     requiredIndexes: [
       {
+        definitionBody:
+          "ON public.properties USING btree (workspace_id, playbook_definition_id)",
+        isUnique: false,
         name: "properties_workspace_playbook_definition_idx",
         tableName: "properties",
       },
@@ -93,7 +119,13 @@ const REWRITTEN_MIGRATION_HISTORIES: Readonly<
       "ffd1598dc3a56f44095b549438313351e4bfb467b0fdb83c1def5a6d55f74583",
     ],
     requiredIndexes: [
-      { name: "account_credential_singleton_uidx", tableName: "account" },
+      {
+        definitionBody:
+          "ON public.account USING btree (provider_id) WHERE (provider_id = 'credential'::text)",
+        isUnique: true,
+        name: "account_credential_singleton_uidx",
+        tableName: "account",
+      },
     ],
   },
   "20260707120000_property_role": {
@@ -104,6 +136,9 @@ const REWRITTEN_MIGRATION_HISTORIES: Readonly<
     ],
     requiredIndexes: [
       {
+        definitionBody:
+          "ON public.properties USING btree (workspace_id) WHERE (role = 'document-type-classifier'::text)",
+        isUnique: true,
         name: "properties_ws_document_type_classifier_unq",
         tableName: "properties",
       },
@@ -117,6 +152,9 @@ const REWRITTEN_MIGRATION_HISTORIES: Readonly<
     ],
     requiredIndexes: [
       {
+        definitionBody:
+          "ON public.usage_events USING btree (organization_id, idempotency_key) WHERE (idempotency_key IS NOT NULL)",
+        isUnique: true,
         name: "usage_events_org_idempotency_key_uidx",
         tableName: "usage_events",
       },
@@ -130,6 +168,9 @@ const REWRITTEN_MIGRATION_HISTORIES: Readonly<
     ],
     requiredIndexes: [
       {
+        definitionBody:
+          "ON public.report_exports USING btree (created_at, id) WHERE ((notification_status = 'pending'::text) AND (status = ANY (ARRAY['completed'::text, 'failed'::text])))",
+        isUnique: false,
         name: "report_exports_pending_notification_idx",
         tableName: "report_exports",
       },
@@ -141,7 +182,14 @@ const REWRITTEN_MIGRATION_HISTORIES: Readonly<
     priorHashes: [
       "d75842b57e1ba5f734b2dea9926c76da9fca178d41fafe8005f144cdc4960eee",
     ],
-    requiredIndexes: [{ name: "user_createdAt_idx", tableName: "user" }],
+    requiredIndexes: [
+      {
+        definitionBody: 'ON public."user" USING btree (created_at, id)',
+        isUnique: false,
+        name: "user_createdAt_idx",
+        tableName: "user",
+      },
+    ],
   },
   "20260720140000_machine_api_keys_org_index": {
     currentHash:
@@ -150,8 +198,20 @@ const REWRITTEN_MIGRATION_HISTORIES: Readonly<
       "c9c7b5d968fe2efa54ef017592d43bb640688ebd6f56b957aca27b45b1412468",
     ],
     requiredIndexes: [
-      { name: "apikey_metadata_organization_id_idx", tableName: "apikey" },
-      { name: "apikey_org_keyset_idx", tableName: "apikey" },
+      {
+        definitionBody:
+          "ON public.apikey USING btree ((((metadata)::jsonb ->> 'organizationId'::text))) WHERE (metadata IS NOT NULL)",
+        isUnique: false,
+        name: "apikey_metadata_organization_id_idx",
+        tableName: "apikey",
+      },
+      {
+        definitionBody:
+          "ON public.apikey USING btree ((((metadata)::jsonb ->> 'organizationId'::text)), created_at DESC, id DESC) WHERE (metadata IS NOT NULL)",
+        isUnique: false,
+        name: "apikey_org_keyset_idx",
+        tableName: "apikey",
+      },
     ],
   },
   "20260731130000_decision_source_document_id": {
@@ -162,10 +222,16 @@ const REWRITTEN_MIGRATION_HISTORIES: Readonly<
     ],
     requiredIndexes: [
       {
+        definitionBody:
+          "ON public.case_law_decisions USING btree (source_id, source_document_id) WHERE (source_document_id IS NOT NULL)",
+        isUnique: true,
         name: "case_law_decisions_source_document_idx",
         tableName: "case_law_decisions",
       },
       {
+        definitionBody:
+          "ON public.case_law_decisions USING btree (source_id, case_number, language) WHERE (source_document_id IS NULL)",
+        isUnique: true,
         name: "case_law_decisions_source_case_lang_null_idx",
         tableName: "case_law_decisions",
       },

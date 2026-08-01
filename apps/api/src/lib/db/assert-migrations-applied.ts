@@ -5,6 +5,8 @@ import { rootDb } from "@/api/db/root";
 import { assertMigrationHistory } from "@/api/lib/db/migration-history";
 import { logger } from "@/api/lib/observability/logger";
 
+import { assertOnlineMigrationsApplied } from "../../db/online-migrations";
+
 const MIGRATIONS_DIR = nodePath.resolve(process.cwd(), "drizzle");
 const ESCAPE_HATCH_ENV = "SKIP_MIGRATION_CHECK";
 
@@ -36,5 +38,18 @@ export const assertMigrationsApplied = async (): Promise<void> => {
     remedy:
       `Run \`bun run db:migrate\` against this database, or set ${ESCAPE_HATCH_ENV}=true ` +
       "to bypass the check (emergency only).",
+  });
+  await assertOnlineMigrationsApplied({
+    reserve: async () => {
+      const connection = await rootDb.$client.reserve();
+      return {
+        execute: async (query, params = []) => {
+          await connection.unsafe(query, [...params]);
+        },
+        query: async (query, params = []) =>
+          await connection.unsafe(query, [...params]),
+        release: () => connection.release(),
+      };
+    },
   });
 };
