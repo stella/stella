@@ -965,8 +965,8 @@ export const createCorpusIndexer = <
       const groupFailures: CorpusJobInput<TBrand>[] = [];
       try {
         // oxlint-disable-next-line no-await-in-loop -- each jurisdiction reserves and ensures its durable target immediately before sequential remote writes
-        const { ensured, reservedGroup, reservedTargets } =
-          await reserveAndEnsureGroup(indexId, group);
+        const reservation = await reserveAndEnsureGroup(indexId, group);
+        const { ensured, reservedGroup, reservedTargets } = reservation;
         if (ensured === null) {
           continue;
         }
