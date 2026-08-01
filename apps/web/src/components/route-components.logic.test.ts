@@ -6,8 +6,60 @@ import { CriticalQueryTimeoutError } from "@/lib/react-query";
 import {
   buildErrorReportMailto,
   isNetworkError,
+  recoverRouteError,
+  resolveRouteErrorRecovery,
   resolveRouteErrorSupport,
 } from "./route-components.logic";
+
+describe("route error recovery", () => {
+  test("reloads for every browser dynamic-import failure shape", () => {
+    const messages = [
+      "Failed to fetch dynamically imported module: https://example.test/chunk.js",
+      "error loading dynamically imported module: https://example.test/chunk.js",
+      "Importing a module script failed.",
+    ];
+
+    for (const message of messages) {
+      expect(resolveRouteErrorRecovery(new TypeError(message))).toEqual({
+        type: "reload-page",
+      });
+    }
+  });
+
+  test("hard reloads instead of retrying a cached rejected import", () => {
+    const actions: string[] = [];
+
+    recoverRouteError({
+      error: new TypeError(
+        "Failed to fetch dynamically imported module: https://example.test/chunk.js",
+      ),
+      reloadPage: () => {
+        actions.push("reload");
+      },
+      retryRoute: () => {
+        actions.push("retry");
+      },
+    });
+
+    expect(actions).toEqual(["reload"]);
+  });
+
+  test("keeps ordinary route errors on the in-app retry path", () => {
+    const actions: string[] = [];
+
+    recoverRouteError({
+      error: new TypeError("Cannot read properties of null"),
+      reloadPage: () => {
+        actions.push("reload");
+      },
+      retryRoute: () => {
+        actions.push("retry");
+      },
+    });
+
+    expect(actions).toEqual(["retry"]);
+  });
+});
 
 describe("route network error classification", () => {
   test("recognises query timeouts and browser network errors", () => {

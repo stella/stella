@@ -13,6 +13,67 @@ const NETWORK_ERROR_MESSAGES = Object.freeze([
   "Load failed",
 ]);
 
+// Keep this aligned with TanStack Router's cross-browser dynamic-import
+// classifier. A rejected lazy import is cached inside lazyRouteComponent, so
+// resetting the route boundary can only throw the same error again; recovery
+// requires a new page module graph.
+const DYNAMIC_IMPORT_ERROR_PREFIXES = Object.freeze([
+  "Failed to fetch dynamically imported module",
+  "error loading dynamically imported module",
+  "Importing a module script failed",
+]);
+
+export type RouteErrorRecovery =
+  | { type: "reload-page" }
+  | { type: "retry-route" };
+
+const getErrorMessage = (error: unknown): string | undefined => {
+  if (typeof error !== "object" || error === null || !("message" in error)) {
+    return undefined;
+  }
+  const { message } = error;
+  return typeof message === "string" ? message : undefined;
+};
+
+export const resolveRouteErrorRecovery = (
+  error: unknown,
+): RouteErrorRecovery => {
+  const message = getErrorMessage(error);
+  if (
+    message !== undefined &&
+    DYNAMIC_IMPORT_ERROR_PREFIXES.some((prefix) => message.startsWith(prefix))
+  ) {
+    return { type: "reload-page" };
+  }
+  return { type: "retry-route" };
+};
+
+type RecoverRouteErrorOptions = {
+  error: unknown;
+  reloadPage: () => void;
+  retryRoute: () => void;
+};
+
+export const recoverRouteError = ({
+  error,
+  reloadPage,
+  retryRoute,
+}: RecoverRouteErrorOptions): void => {
+  const recovery = resolveRouteErrorRecovery(error);
+  switch (recovery.type) {
+    case "reload-page":
+      reloadPage();
+      return;
+    case "retry-route":
+      retryRoute();
+      return;
+    default: {
+      const exhaustive: never = recovery;
+      return exhaustive;
+    }
+  }
+};
+
 export type RouteErrorSupport =
   | { type: "report"; recipient: string }
   | { type: "administrator" }

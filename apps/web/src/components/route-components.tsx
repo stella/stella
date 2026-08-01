@@ -6,7 +6,6 @@ import type { ErrorComponentProps } from "@tanstack/react-router";
 import {
   CircleAlertIcon,
   CopyIcon,
-  FolderOpenIcon,
   MailIcon,
   RefreshCcwIcon,
 } from "lucide-react";
@@ -16,9 +15,11 @@ import { Button } from "@stll/ui/components/button";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
+import { MattersNavIcon } from "@/components/matter-icon";
 import {
   buildErrorReportMailto,
   isNetworkError,
+  recoverRouteError,
   resolveRouteErrorSupport,
 } from "@/components/route-components.logic";
 import { StellaMark } from "@/components/stella-mark";
@@ -271,6 +272,14 @@ const UnexpectedRouteError = ({
         })
       : null;
 
+  const handleRecovery = () => {
+    recoverRouteError({
+      error,
+      reloadPage: () => window.location.reload(),
+      retryRoute: retry,
+    });
+  };
+
   return (
     <div
       className={cn(
@@ -302,11 +311,11 @@ const UnexpectedRouteError = ({
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <Button loading={isPending} onClick={retry}>
+          <Button loading={isPending} onClick={handleRecovery}>
             <RefreshCcwIcon /> {t("common.tryAgain")}
           </Button>
           <Button render={<Link from="/" to="/workspaces" />} variant="outline">
-            <FolderOpenIcon /> {t("routeError.backToMatters")}
+            <MattersNavIcon /> {t("routeError.backToMatters")}
           </Button>
           {reportHref ? (
             <Button
