@@ -558,30 +558,37 @@ const canonicalizeDedupKey = (text: string): string => {
   return canonical.toLowerCase();
 };
 
-/** Strip known prefixes to get the bare case number. */
+/**
+ * Strip known prefixes to get the bare case number. `citationText` is
+ * stored verbatim, including an embedded line-wrap newline the extraction
+ * patterns above deliberately match through (a CRLF landing in a `\s`
+ * gap); every capture below needs the dotAll flag or `.+` stops at that
+ * newline and truncates the case number instead of spanning it, silently
+ * dropping everything after the line break from the persisted key.
+ */
 const stripPrefix = (text: string): string => {
   const trimmed = text.trim();
 
   // Czech/Slovak: "sp. zn. 21 Cdo 1234/2020", "sp.zn.: 38Csp/281/2025"
-  const spZn = /^sp\.\s*zn\.?:?\s*(?<caseNumber>.+)/iu.exec(trimmed);
+  const spZn = /^sp\.\s*zn\.?:?\s*(?<caseNumber>.+)/isu.exec(trimmed);
   if (spZn?.groups?.["caseNumber"]) {
     return spZn.groups["caseNumber"].trim();
   }
 
   // Czech: "č. j. 5 As 123/2020", "č.j. 5 As 123/2020", "č. j.: 5 As 123/2020"
-  const cj = /^[čc]\.\s*j\.:?\s*(?<caseNumber>.+)/iu.exec(trimmed);
+  const cj = /^[čc]\.\s*j\.:?\s*(?<caseNumber>.+)/isu.exec(trimmed);
   if (cj?.groups?.["caseNumber"]) {
     return cj.groups["caseNumber"].trim();
   }
 
   // Slovak: "č. k. 4 Obo 48/02", "č.k. 4 Obo 48/02" (číslo konania)
-  const ck = /^[čc]\.\s*k\.:?\s*(?<caseNumber>.+)/iu.exec(trimmed);
+  const ck = /^[čc]\.\s*k\.:?\s*(?<caseNumber>.+)/isu.exec(trimmed);
   if (ck?.groups?.["caseNumber"]) {
     return ck.groups["caseNumber"].trim();
   }
 
   // Czech senate file number: "sen. zn. 29 NSČR 55/2013"
-  const senZn = /^sen\.\s*zn\.:?\s*(?<caseNumber>.+)/iu.exec(trimmed);
+  const senZn = /^sen\.\s*zn\.:?\s*(?<caseNumber>.+)/isu.exec(trimmed);
   if (senZn?.groups?.["caseNumber"]) {
     return senZn.groups["caseNumber"].trim();
   }
@@ -589,7 +596,7 @@ const stripPrefix = (text: string): string => {
   // Polish: "sygn. akt II CSK 123/20", "sygn. akt. I CK 363/02", "sygn.
   // akt: I FSK 1261/07" (already case-insensitive via the /i flag,
   // covering the title-case "Sygn. akt" document-header spelling too)
-  const sygn = /^sygn\.\s*(?::\s*)?(?:akt\.?:?\s*)?(?<caseNumber>.+)/iu.exec(
+  const sygn = /^sygn\.\s*(?::\s*)?(?:akt\.?:?\s*)?(?<caseNumber>.+)/isu.exec(
     trimmed,
   );
   if (sygn?.groups?.["caseNumber"]) {

@@ -374,11 +374,33 @@ describe("extractCitations", () => {
     expect(citations).toHaveLength(2);
   });
 
+  test("extracts the glued-registry, slash-separated insolvency spelling on its own", () => {
+    const text = "č. j. KSCB 26INS/8270/2018-A-14";
+    const citations = extractCitations([{ index: 0, text }]);
+    expect(citations).toHaveLength(1);
+    expect(citations[0]?.citationText).toBe("č. j. KSCB 26INS/8270/2018");
+  });
+
   test("dedupes a č.j. insolvency case number cited with different accepted separators", () => {
     const text =
       "č. j. KSCB 26 INS 8270/2018-A-12 a dále č. j. KSCB 26INS/8270/2018-A-14";
     const citations = extractCitations([{ index: 0, text }]);
     expect(citations).toHaveLength(1);
+  });
+
+  test("keeps the full case number when a line wrap lands inside the prefix body", () => {
+    // stripPrefix's capture must span the newline (dotAll), or "sp. zn.
+    // 21\nCdo 1234/2020" truncates to just "21" and the persisted
+    // citation key silently drops everything after the line break.
+    expect(bareCitationKey("sp. zn. 21\nCdo 1234/2020")).toBe(
+      bareCitationKey("sp. zn. 21 Cdo 1234/2020"),
+    );
+  });
+
+  test("keeps the full court-code-prefixed case number when a line wrap lands inside it", () => {
+    expect(bareCitationKey("č. j. KSCB 26 INS\n8270/2018")).toBe(
+      bareCitationKey("č. j. KSCB 26 INS 8270/2018"),
+    );
   });
 
   test("recognizes a self-citation to an insolvency case number spelled with a different separator", () => {
@@ -388,6 +410,13 @@ describe("extractCitations", () => {
         ecli: null,
       }),
     ).toBe(true);
+  });
+
+  test("extracts the slash-joined court-code-prefixed consolidated docket on its own", () => {
+    const text = "č. j. KSCB 26 INS 8270/8271/2018-A-14";
+    const citations = extractCitations([{ index: 0, text }]);
+    expect(citations).toHaveLength(1);
+    expect(citations[0]?.citationText).toBe("č. j. KSCB 26 INS 8270/8271/2018");
   });
 
   test("dedupes a court-code-prefixed consolidated docket cited with different accepted separators", () => {
