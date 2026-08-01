@@ -168,6 +168,19 @@ describe("repair cursor Redis deadlines", () => {
 });
 
 describe("reconciliation fault isolation", () => {
+  test("prioritizes never-dispatched OCR runs ahead of visibility retries", () => {
+    const dispatchStart = queueSource.indexOf(
+      "export const dispatchQueuedDocumentProcessingRuns",
+    );
+    const dispatchEnd = queueSource.indexOf(
+      "const dispatchScheduledDocumentProcessingRetries",
+      dispatchStart,
+    );
+    const dispatchSelection = queueSource.slice(dispatchStart, dispatchEnd);
+
+    expect(dispatchSelection).toContain("ASC NULLS FIRST");
+  });
+
   test("continues later phases after an early phase fails", async () => {
     const calls: string[] = [];
     const failures: { error: unknown; phase: string }[] = [];

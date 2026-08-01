@@ -1694,7 +1694,7 @@ export const dispatchQueuedDocumentProcessingRuns = async ({
       ),
     )
     .orderBy(
-      asc(documentProcessingRuns.nextAttemptAt),
+      sql`${documentProcessingRuns.nextAttemptAt} ASC NULLS FIRST`,
       asc(documentProcessingRuns.createdAt),
       asc(documentProcessingRuns.id),
     )
