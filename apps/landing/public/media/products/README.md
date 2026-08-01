@@ -168,3 +168,21 @@ commands, including a ready-to-run `jq` snippet for the second commit.
 pushing a release tag, so a stale recording fails the tag push instead of
 shipping a landing page that has quietly drifted from the product. Clear it
 with `bun run marketing:reshoot` before bumping `VERSION`.
+
+### Manual verification escape hatch
+
+When existing media has been visually reviewed against the current app and
+does not need new footage, commit an explicit manual verification instead of
+rewriting `recordedAtCommit`:
+
+```sh
+bun run marketing:verify-current -- \
+  --confirm-current-recordings-reviewed \
+  --reason "Existing recordings visually reviewed for this release"
+```
+
+Use `--capture workspace,review` to limit the attestation. The command updates
+only selected stale manifest entries and binds the review to a hash of their
+exact watched source tree, MP4, and poster. Any later relevant code or media
+change invalidates it. A new recording replaces the entry and clears its
+manual verification.
