@@ -951,6 +951,14 @@ export const generationProjectionTargetIds = ({
   return targetIndexIds;
 };
 
+export const hasGenerationProjectionTargets = ({
+  generation,
+  row,
+}: {
+  generation: string;
+  row: GenerationProjectionTargetSources;
+}): boolean => generationProjectionTargetIds({ generation, row }).size > 0;
+
 const removeGenerationProjection: GenerationBackfillDependencies["removeProjection"] =
   async (scopedDb, { generation, options, row }) => {
     const targetIndexIds = generationProjectionTargetIds({ generation, row });
@@ -1423,8 +1431,7 @@ export const createCaseLawGenerationBackfill =
           const removals = sourcePage.filter(
             (row) =>
               !isCorpusEligible(row) &&
-              (row.generationIndexId !== null ||
-                row.generationPendingIndexIds.length > 0),
+              hasGenerationProjectionTargets({ generation, row }),
           );
           await Promise.all(
             removals.map(async (row) => {
@@ -1490,15 +1497,13 @@ export const createCaseLawGenerationBackfill =
           .filter(
             (row) =>
               !isCorpusEligible(row) &&
-              row.generationIndexId === null &&
-              row.generationPendingIndexIds.length === 0,
+              !hasGenerationProjectionTargets({ generation, row }),
           )
           .map(withoutSourceDescriptor);
         const terminalDeletes = pendingIndexRows.filter(
           (row) =>
             !isCorpusEligible(row) &&
-            (row.generationIndexId !== null ||
-              row.generationPendingIndexIds.length > 0),
+            hasGenerationProjectionTargets({ generation, row }),
         );
         const indexed =
           eligible.length === 0

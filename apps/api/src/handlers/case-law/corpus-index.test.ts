@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   generationProjectionTargetIds,
+  hasGenerationProjectionTargets,
   loadDocsForBatch,
 } from "@/api/handlers/case-law/corpus-index";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -67,6 +68,16 @@ test("generation delete targets are the complete union of durable pointers", () 
         ];
 
         expect([...targets].sort()).toEqual(expected.sort());
+        expect(
+          hasGenerationProjectionTargets({
+            generation,
+            row: {
+              generationIndexId,
+              generationPendingIndexIds: pendingIndexIds,
+              indexedGeneration,
+            },
+          }),
+        ).toBe(expected.length > 0);
       }
     }
   }
@@ -81,6 +92,16 @@ test("generation delete targets are the complete union of durable pointers", () 
       },
     }),
   ]).toEqual([]);
+  expect(
+    hasGenerationProjectionTargets({
+      generation,
+      row: {
+        generationIndexId: null,
+        generationPendingIndexIds: [],
+        indexedGeneration: corpusIndexId("case_law_v1", "CZE"),
+      },
+    }),
+  ).toBe(false);
 
   expect([
     ...generationProjectionTargetIds({
