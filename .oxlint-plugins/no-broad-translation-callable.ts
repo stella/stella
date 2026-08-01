@@ -114,46 +114,6 @@ const isBroadTranslatorReturnType = (
   );
 };
 
-const isAstNode = (value) =>
-  value && typeof value === "object" && typeof value.type === "string";
-
-const collectTypeAliases = (root) => {
-  const aliases = new Array<typeof root>();
-  const pending = [root];
-  const visited = new WeakSet();
-
-  while (pending.length > 0) {
-    const node = pending.pop();
-    if (!node || typeof node !== "object" || visited.has(node)) {
-      continue;
-    }
-    visited.add(node);
-
-    if (node.type === "TSTypeAliasDeclaration") {
-      aliases.push(node);
-    }
-
-    for (const [key, value] of Object.entries(node)) {
-      if (key === "parent") {
-        continue;
-      }
-      if (Array.isArray(value)) {
-        for (const child of value) {
-          if (isAstNode(child)) {
-            pending.push(child);
-          }
-        }
-        continue;
-      }
-      if (isAstNode(value)) {
-        pending.push(value);
-      }
-    }
-  }
-
-  return aliases;
-};
-
 export default {
   meta: { name: "no-broad-translation-callable" },
   rules: {
@@ -173,6 +133,12 @@ export default {
         ]);
         const broadKeyTypeNamespaces = new Set<string>();
         const broadTranslatorNamespaces = new Set<string>();
+        const typeAliases = new Array<{
+          id?: { name: string; type: string };
+          typeAnnotation?: unknown;
+        }>();
+        const broadParameterCandidates = new Array<unknown>();
+        const broadReturnTypeCandidates = new Array<unknown>();
 
         const reportBroadParameters = (node) => {
           if (
@@ -225,12 +191,12 @@ export default {
                 }
               }
             }
-
-            const aliases = collectTypeAliases(node);
+          },
+          "Program:exit"() {
             let foundAlias = true;
             while (foundAlias) {
               foundAlias = false;
-              for (const declaration of aliases) {
+              for (const declaration of typeAliases) {
                 const annotation = declaration.typeAnnotation;
                 if (
                   declaration.id?.type !== "Identifier" ||
@@ -247,19 +213,37 @@ export default {
                 foundAlias = true;
               }
             }
+
+            for (const candidate of broadParameterCandidates) {
+              reportBroadParameters(candidate);
+            }
+            for (const candidate of broadReturnTypeCandidates) {
+              if (
+                isBroadTranslatorReturnType(
+                  candidate,
+                  broadTranslatorTypeNames,
+                  broadTranslatorNamespaces,
+                )
+              ) {
+                context.report({ messageId: "broadCallable", node: candidate });
+              }
+            }
           },
-          TSCallSignatureDeclaration: reportBroadParameters,
-          TSFunctionType: reportBroadParameters,
-          TSMethodSignature: reportBroadParameters,
+          TSTypeAliasDeclaration(node) {
+            typeAliases.push(node);
+          },
+          TSCallSignatureDeclaration(node) {
+            broadParameterCandidates.push(node);
+          },
+          TSFunctionType(node) {
+            broadParameterCandidates.push(node);
+          },
+          TSMethodSignature(node) {
+            broadParameterCandidates.push(node);
+          },
           TSTypeReference(node) {
-            if (
-              isBroadTranslatorReturnType(
-                node,
-                broadTranslatorTypeNames,
-                broadTranslatorNamespaces,
-              )
-            ) {
-              context.report({ messageId: "broadCallable", node });
+            if (isIdentifierNamed(node.typeName, "ReturnType")) {
+              broadReturnTypeCandidates.push(node);
             }
           },
         };
