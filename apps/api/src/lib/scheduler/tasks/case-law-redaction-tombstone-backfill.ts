@@ -8,6 +8,7 @@ import {
   caseLawCorpusUploadIntents,
   caseLawDecisions,
   caseLawIndexJobs,
+  caseLawSearchDocuments,
   schedulerJobs,
 } from "@/api/db/schema";
 import { isUuid } from "@/api/lib/custom-schema";
@@ -146,6 +147,11 @@ export const backfillCaseLawRedactionTombstones: SchedulerTask = async ({
     // the same transaction so no restored content remains publicly readable.
     // audit: skip — bounded compatibility repair derived from append-only
     // redaction audit rows.
+    if (repairIds.length > 0) {
+      await tx
+        .delete(caseLawSearchDocuments)
+        .where(inArray(caseLawSearchDocuments.decisionId, repairIds));
+    }
     const repaired =
       repairIds.length === 0
         ? []

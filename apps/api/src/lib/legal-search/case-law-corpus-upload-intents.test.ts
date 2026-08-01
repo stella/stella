@@ -141,6 +141,9 @@ describe("case-law corpus upload intents", () => {
     const tombstoneUpdate = redactionBackfillTask.indexOf(
       ".update(caseLawDecisions)",
     );
+    const searchProjectionDelete = redactionBackfillTask.indexOf(
+      ".delete(caseLawSearchDocuments)",
+    );
     const cleanupOwnership = redactionBackfillTask.indexOf(
       ".insert(caseLawCorpusUploadIntents)",
     );
@@ -148,8 +151,11 @@ describe("case-law corpus upload intents", () => {
       ".set({ payload: { cursor: lastDecisionId } })",
     );
     expect(tombstoneUpdate).toBeGreaterThan(-1);
+    expect(searchProjectionDelete).toBeGreaterThan(-1);
     expect(cleanupOwnership).toBeGreaterThan(-1);
+    expect(searchProjectionDelete).toBeGreaterThan(cleanupOwnership);
     expect(tombstoneUpdate).toBeGreaterThan(cleanupOwnership);
+    expect(tombstoneUpdate).toBeGreaterThan(searchProjectionDelete);
     expect(checkpoint).toBeGreaterThan(tombstoneUpdate);
   });
 

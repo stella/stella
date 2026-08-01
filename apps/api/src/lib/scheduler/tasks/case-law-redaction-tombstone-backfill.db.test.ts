@@ -1,0 +1,144 @@
+/**
+ * Historical redaction repair must erase every readable projection in the
+ * same transaction as the canonical tombstone. Runs in the nightly Postgres
+ * job; skipped elsewhere.
+ */
+
+import { afterAll, describe, expect, test } from "bun:test";
+import { eq } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/bun-sql";
+
+import { authRelationsPart } from "@/api/db/auth-schema";
+import {
+  caseLawDecisions,
+  caseLawIndexJobs,
+  caseLawSearchDocuments,
+  caseLawSources,
+  relations,
+  schedulerJobs,
+} from "@/api/db/schema";
+import { createSafeId } from "@/api/lib/branded-types";
+import { logger } from "@/api/lib/observability/logger";
+
+import {
+  BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK,
+  backfillCaseLawRedactionTombstones,
+} from "./case-law-redaction-tombstone-backfill";
+
+const databaseUrl = process.env["DATABASE_URL"];
+const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
+
+if (!databaseUrl || !runPostgresTests) {
+  describe.skip("case-law redaction tombstone backfill", () => {
+    test("requires STELLA_RUN_POSTGRES_TESTS=true and DATABASE_URL", () => {
+      expect(runPostgresTests && Boolean(databaseUrl)).toBe(false);
+    });
+  });
+} else {
+  describe("case-law redaction tombstone backfill", () => {
+    const db = drizzle(databaseUrl, {
+      relations: { ...relations, ...authRelationsPart },
+    });
+    const suffix = Bun.randomUUIDv7();
+    const schedulerJobId = `test.case-law-redaction-backfill.${suffix}`;
+    const leaseToken = `test-lease-${suffix}`;
+    let sourceId = createSafeId<"caseLawSource">();
+
+    const runTask = async () => {
+      const job = await db.query.schedulerJobs.findFirst({
+        where: { id: { eq: schedulerJobId } },
+      });
+      if (!job) {
+        throw new Error("expected scheduler job");
+      }
+      await backfillCaseLawRedactionTombstones({
+        job,
+        payload: job.payload,
+        runId: createSafeId<"schedulerJobRun">(),
+        signal: new AbortController().signal,
+        logger,
+      });
+    };
+
+    afterAll(async () => {
+      await db
+        .delete(schedulerJobs)
+        .where(eq(schedulerJobs.id, schedulerJobId));
+      await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
+    });
+
+    test("atomically removes stale search projections and reaches a fixed point", async () => {
+      const [source] = await db
+        .insert(caseLawSources)
+        .values({
+          adapterKey: `redaction-backfill-${suffix}`,
+          enabled: false,
+          name: "Redaction backfill test",
+        })
+        .returning({ id: caseLawSources.id });
+      if (!source) {
+        throw new Error("expected source row");
+      }
+      sourceId = source.id;
+
+      const [decision] = await db
+        .insert(caseLawDecisions)
+        .values({
+          caseNumber: `redaction-backfill-${suffix}`,
+          country: "CZE",
+          court: "Test court",
+          fulltext: "text that must no longer be searchable",
+          language: "cs",
+          sourceId,
+        })
+        .returning({ id: caseLawDecisions.id });
+      if (!decision) {
+        throw new Error("expected decision row");
+      }
+
+      await db.insert(caseLawSearchDocuments).values({
+        decisionId: decision.id,
+        searchableText: "stale searchable text",
+        title: "Stale title",
+      });
+      await db.insert(caseLawIndexJobs).values({
+        decisionId: decision.id,
+        generation: "case_law_v1",
+        operation: "redact",
+        status: "succeeded",
+      });
+      await db.insert(schedulerJobs).values({
+        description: "redaction repair test",
+        id: schedulerJobId,
+        lockedBy: leaseToken,
+        nextRunAt: new Date("2026-08-01T00:00:00.000Z"),
+        schedule: { type: "interval", everyMs: 60_000 },
+        task: BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK,
+      });
+
+      await runTask();
+
+      expect(
+        await db.query.caseLawDecisions.findFirst({
+          where: { id: { eq: decision.id } },
+          columns: { fulltext: true, redactedAt: true },
+        }),
+      ).toMatchObject({ fulltext: null, redactedAt: expect.any(Date) });
+      expect(
+        await db
+          .select({ id: caseLawSearchDocuments.decisionId })
+          .from(caseLawSearchDocuments)
+          .where(eq(caseLawSearchDocuments.decisionId, decision.id)),
+      ).toHaveLength(0);
+
+      await runTask();
+
+      expect(
+        await db.query.schedulerJobs.findFirst({
+          where: { id: { eq: schedulerJobId } },
+          columns: { enabled: true },
+        }),
+      ).toEqual({ enabled: false });
+    });
+  });
+}
