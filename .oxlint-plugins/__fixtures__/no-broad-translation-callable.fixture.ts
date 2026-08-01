@@ -5,6 +5,8 @@
 // the unused disable fails CI. Allowed shapes have no disable, so false
 // positives fail the fixture too.
 
+import type { useTranslations as useAliasedTranslations } from "use-intl";
+
 type TranslationKey = "feature.title" | "feature.description";
 type FeatureKey = "feature.title";
 type AppKey = TranslationKey;
@@ -31,6 +33,10 @@ export type ServerTranslator = ReturnType<typeof getTranslator>;
 // MUST flag: the full hook translator type is retained in a helper alias.
 // oxlint-disable-next-line no-broad-translation-callable/no-broad-translation-callable
 export type HookTranslator = ReturnType<typeof useTranslations>;
+
+// MUST flag: import aliases must not bypass the same full translator guard.
+// oxlint-disable-next-line no-broad-translation-callable/no-broad-translation-callable
+export type AliasedHookTranslator = ReturnType<typeof useAliasedTranslations>;
 
 // Allowed: a namespace argument bounds the translator to one feature subtree.
 export type NamespacedTranslator = ReturnType<

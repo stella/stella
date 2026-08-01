@@ -19,6 +19,10 @@
 const isIdentifierNamed = (node, name: string): boolean =>
   node?.type === "Identifier" && node.name === name;
 
+const isBroadTranslatorName = (node): boolean =>
+  isIdentifierNamed(node, "getTranslator") ||
+  isIdentifierNamed(node, "useTranslations");
+
 const unwrapTypeAnnotation = (node) =>
   node?.type === "TSTypeAnnotation" ? node.typeAnnotation : node;
 
@@ -35,7 +39,10 @@ const hasTranslationKeyParameter = (
     );
   });
 
-const isBroadTranslatorReturnType = (node): boolean => {
+const isBroadTranslatorReturnType = (
+  node,
+  broadTranslatorTypeNames: Set<string>,
+): boolean => {
   if (
     node.type !== "TSTypeReference" ||
     !isIdentifierNamed(node.typeName, "ReturnType")
@@ -46,8 +53,8 @@ const isBroadTranslatorReturnType = (node): boolean => {
   return (
     queriedType?.type === "TSTypeQuery" &&
     (queriedType.typeArguments?.params?.length ?? 0) === 0 &&
-    (isIdentifierNamed(queriedType.exprName, "getTranslator") ||
-      isIdentifierNamed(queriedType.exprName, "useTranslations"))
+    queriedType.exprName?.type === "Identifier" &&
+    broadTranslatorTypeNames.has(queriedType.exprName.name)
   );
 };
 
@@ -64,6 +71,10 @@ export default {
       },
       create(context) {
         const broadKeyTypeNames = new Set(["TranslationKey"]);
+        const broadTranslatorTypeNames = new Set([
+          "getTranslator",
+          "useTranslations",
+        ]);
 
         const reportBroadParameters = (node) => {
           if (hasTranslationKeyParameter(node, broadKeyTypeNames)) {
@@ -84,6 +95,13 @@ export default {
                   specifier.local?.type === "Identifier"
                 ) {
                   broadKeyTypeNames.add(specifier.local.name);
+                }
+                if (
+                  specifier.type === "ImportSpecifier" &&
+                  isBroadTranslatorName(specifier.imported) &&
+                  specifier.local?.type === "Identifier"
+                ) {
+                  broadTranslatorTypeNames.add(specifier.local.name);
                 }
               }
             }
@@ -113,7 +131,7 @@ export default {
           TSCallSignatureDeclaration: reportBroadParameters,
           TSFunctionType: reportBroadParameters,
           TSTypeReference(node) {
-            if (isBroadTranslatorReturnType(node)) {
+            if (isBroadTranslatorReturnType(node, broadTranslatorTypeNames)) {
               context.report({ messageId: "broadCallable", node });
             }
           },
