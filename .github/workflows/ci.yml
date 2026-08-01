@@ -1182,6 +1182,7 @@ jobs:
 
       - name: Run Playwright shard
         env:
+          E2E_EXECUTION_PROFILE: ci-production-parallel
           E2E_EXPECT_DEV_ROUTES: "false"
           PLAYWRIGHT_BLOB_OUTPUT_NAME: report-${{ matrix.shard }}.zip
         run: >-

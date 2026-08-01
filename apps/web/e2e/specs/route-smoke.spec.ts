@@ -9,6 +9,10 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
+import {
+  partitionRoundRobin,
+  resolveE2eExecutionProfile,
+} from "../execution-profile";
 import { apiDelete, apiGet, apiPut, apiUploadDocx } from "../helpers/api";
 import {
   type RouteNetworkMetrics,
@@ -342,17 +346,18 @@ test("route coverage matches the authenticated route tree", async () => {
 const baselineMode = process.env["E2E_NETWORK_BASELINE"];
 if (baselineMode === "write" || baselineMode === "rewrite") {
   // Baseline writes need one complete result set and one writer. Normal checks
-  // use two groups below because each independently compares its observed
-  // routes against the same committed per-route budgets.
+  // use isolated groups because each independently compares its observed routes
+  // against the same committed per-route budgets.
   declareRouteSmokeGroup({
     defs: SMOKE_ROUTE_DEFS,
     name: "authenticated routes render without browser errors",
     requireAllRoutes: true,
   });
 } else {
-  const groups = [0, 1].map((groupIndex) =>
-    SMOKE_ROUTE_DEFS.filter((_, index) => index % 2 === groupIndex),
+  const { routeSmokeGroupCount } = resolveE2eExecutionProfile(
+    process.env["E2E_EXECUTION_PROFILE"],
   );
+  const groups = partitionRoundRobin(SMOKE_ROUTE_DEFS, routeSmokeGroupCount);
   for (const [groupIndex, defs] of groups.entries()) {
     declareRouteSmokeGroup({
       defs,

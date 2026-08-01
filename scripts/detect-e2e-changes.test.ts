@@ -92,10 +92,14 @@ describe("detect-e2e-changes", () => {
 
   test("keeps production, Vite canary, and landing work parallel", () => {
     const production = workflowJob("e2e-production-shard");
+    expect(production).toContain(
+      "E2E_EXECUTION_PROFILE: ci-production-parallel",
+    );
     expect(production).not.toContain("Run Vite dependency canary");
     expect(production).not.toContain("Check landing islands");
 
     const canary = workflowJob("e2e-vite-canary");
+    expect(canary).not.toContain("E2E_EXECUTION_PROFILE");
     expect(canary).not.toContain("Build web for route checks");
     expect(canary).not.toContain("Run Playwright shard");
 
