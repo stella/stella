@@ -18,6 +18,7 @@ ALTER TABLE "case_law_sources"
         jsonb_typeof("descriptor") = 'object'
         AND "descriptor" ?& ARRAY['license', 'attribution', 'allowsRedistribution', 'allowsDerivedAi']
         AND jsonb_typeof("descriptor" -> 'license') = 'string'
+        AND "descriptor" ->> 'license' IN ('public-domain', 'official-open-data', 'cc-by', 'cc-by-sa', 'permitted-redistribution', 'restricted')
         AND (
           "descriptor" -> 'attribution' = 'null'::jsonb
           OR jsonb_typeof("descriptor" -> 'attribution') = 'string'

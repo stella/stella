@@ -1269,6 +1269,12 @@ test("the database rejects every malformed corpus source descriptor shape", asyn
       attribution: null,
       license: "public-domain",
     },
+    {
+      allowsDerivedAi: true,
+      allowsRedistribution: true,
+      attribution: null,
+      license: "unknown-license",
+    },
   ];
   const assertRejected = async (index = 0): Promise<void> => {
     const descriptor = malformedDescriptors.at(index);

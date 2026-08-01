@@ -413,7 +413,7 @@ describe("failed index jobs always reach the audit trail", () => {
     expect(czJobs.at(0)?.jobs.at(0)?.operation).toBe("index");
   });
 
-  test("a replay deletes its target and persisted prior jurisdiction before appending", async () => {
+  test("reserved replays delete every durable target in rebuild and serving modes", async () => {
     const calls: { method: string; url: string; body?: string }[] = [];
     const stub = async (
       input: Parameters<typeof fetch>[0],
@@ -461,7 +461,7 @@ describe("failed index jobs always reach the audit trail", () => {
       generationProjectionIndexIds: (selected) => [selected.projectionIndexId],
       buildDocs: (selected) => [{ document_id: selected.id, text: "body" }],
       readCorpusText: async () => "body",
-      selectMissing: async () => [],
+      selectMissing: async () => [row],
       selectStale: async () => [],
       fetchFulltext: async () => "body",
       markIndexedBatch: async (_tx, { rows }) => {
@@ -536,6 +536,40 @@ describe("failed index jobs always reach the audit trail", () => {
     expect(
       calls.filter(({ url }) => url.includes("/delete-tasks")),
     ).toHaveLength(1);
+    expect(guardedEffects).toBe(calls.length);
+    expect(guardedMarks).toBe(2);
+    expect(commitEvents).toEqual(["guard", "guard", "mark"]);
+
+    calls.length = 0;
+    commitEvents.length = 0;
+    guardedEffects = 0;
+    guardedMarks = 0;
+    expect(
+      await indexer.backfillFenced(scopedDb, 1, GENERATION, {
+        beforeDatabaseMark: async () => {
+          guardedMarks += 1;
+          commitEvents.push("guard");
+        },
+        beforeRemoteEffect: async ({ effect }) => {
+          guardedEffects += 1;
+          return await effect();
+        },
+        recoverRemoteEffectLeaseLoss: async () => await Promise.resolve(),
+        reserveExternalAppend: async (_tx, { rows }) =>
+          new Set(rows.map((selected) => selected.id)),
+      }),
+    ).toBe(1);
+    expect(
+      calls
+        .filter(({ url }) => url.includes("/delete-tasks"))
+        .map(({ url }) => new URL(url).pathname)
+        .sort(),
+    ).toEqual(
+      [
+        `/api/v1/${corpusIndexId(GENERATION, "CZ")}/delete-tasks`,
+        `/api/v1/${corpusIndexId(GENERATION, "SK")}/delete-tasks`,
+      ].sort(),
+    );
     expect(guardedEffects).toBe(calls.length);
     expect(guardedMarks).toBe(2);
     expect(commitEvents).toEqual(["guard", "guard", "mark"]);

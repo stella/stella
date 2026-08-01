@@ -959,7 +959,7 @@ export const createCorpusIndexer = <
           // before its database mark commits. Delete its deterministic target
           // copies first, so a retry converges instead of appending duplicates.
           const previousIndexes = new Set<string>();
-          if (options.type === "generation-rebuild") {
+          if (options.type !== "incremental") {
             previousIndexes.add(indexId);
             for (const projectionIndexId of adapter.generationProjectionIndexIds(
               row,

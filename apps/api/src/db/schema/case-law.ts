@@ -1,3 +1,5 @@
+import { CORPUS_LICENSES } from "@/api/lib/legal-search/corpus-source";
+
 import {
   globalCaseLawPolicies,
   isNotNull,
@@ -50,6 +52,10 @@ export const caseLawSources = p.pgTable(
           jsonb_typeof(${t.descriptor}) = 'object'
           AND ${t.descriptor} ?& ARRAY['license', 'attribution', 'allowsRedistribution', 'allowsDerivedAi']
           AND jsonb_typeof(${t.descriptor} -> 'license') = 'string'
+          AND ${t.descriptor} ->> 'license' IN (${sql.join(
+            CORPUS_LICENSES.map((license) => sql.raw(`'${license}'`)),
+            sql.raw(","),
+          )})
           AND (
             ${t.descriptor} -> 'attribution' = 'null'::jsonb
             OR jsonb_typeof(${t.descriptor} -> 'attribution') = 'string'

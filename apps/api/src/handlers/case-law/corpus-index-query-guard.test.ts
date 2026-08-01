@@ -4,6 +4,7 @@ import {
   CASE_LAW_CORPUS_INDEX_BACKFILL_STATUSES,
   CASE_LAW_CORPUS_INDEX_PROJECTION_ACTIONS,
 } from "@/api/db/schema";
+import { CORPUS_LICENSES } from "@/api/lib/legal-search/corpus-source";
 
 const caseLawCorpusIndexSource = new URL("corpus-index.ts", import.meta.url);
 const caseLawErasureSource = new URL("erasure.ts", import.meta.url);
@@ -112,6 +113,10 @@ test("generation checkpoint migration preserves replay and role invariants", asy
     "jsonb_typeof(\"descriptor\" -> 'allowsRedistribution') = 'boolean'",
   );
   expect(schemaSource).toContain('"case_law_sources_descriptor_shape"');
+  for (const license of CORPUS_LICENSES) {
+    expect(source).toContain(`'${license}'`);
+  }
+  expect(schemaSource).toContain("CORPUS_LICENSES.map");
   expect(source).toContain(
     "AFTER INSERT OR UPDATE OF content_hash, indexed_hash, country",
   );
