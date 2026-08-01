@@ -12,8 +12,8 @@ const config = {
 
 // Minimal metadata only (no positions/tiers): the gallery just needs enough
 // to render a card and let the user pick one to instantiate.
-const listStarterPlaybooks = createSafeRootHandler(config, () => {
-  return Result.ok({
+const listStarterPlaybooks = createSafeRootHandler(config, () =>
+  Result.ok({
     items: STARTER_PLAYBOOKS.map((starter) => ({
       starterId: starter.starterId,
       name: starter.name,
@@ -21,7 +21,7 @@ const listStarterPlaybooks = createSafeRootHandler(config, () => {
       documentTypeKey: starter.documentTypeKey,
       positionCount: starter.positions.items.length,
     })),
-  });
-});
+  }),
+);
 
 export default listStarterPlaybooks;

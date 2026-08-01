@@ -102,10 +102,7 @@ const CODE_MODE_RUNTIME_CONFIG = {
  * system-prompt constant (no-op runner, never invoked for prompt generation).
  */
 const buildChatReadTools = (
-  runReadTool: (
-    toolName: RegistryReadToolName,
-    args: unknown,
-  ) => unknown | Promise<unknown>,
+  runReadTool: (toolName: RegistryReadToolName, args: unknown) => unknown,
 ): CodeModeTool[] =>
   chatProjectableReadToolNames().map((toolName) => {
     const definition =

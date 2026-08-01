@@ -18,8 +18,8 @@ const config = {
 
 const getModelOptions = createSafeRootHandler(
   config,
-  ({ orgAIConfig, session }) => {
-    return Result.ok({
+  ({ orgAIConfig, session }) =>
+    Result.ok({
       options: getConfiguredChatModelOptions(orgAIConfig),
       defaultValue: getDefaultChatModelValue({
         orgAIConfig,
@@ -37,8 +37,7 @@ const getModelOptions = createSafeRootHandler(
           role: "fast",
         }),
       },
-    });
-  },
+    }),
 );
 
 export default getModelOptions;

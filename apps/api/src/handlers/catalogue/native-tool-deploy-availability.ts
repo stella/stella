@@ -10,14 +10,14 @@ const config = {
   mcp: { type: "internal", reason: "deploy_mechanics" },
 } satisfies SessionHandlerConfig;
 
-const nativeToolDeployAvailability = createSafeSessionHandler(config, () => {
-  return Result.ok({
+const nativeToolDeployAvailability = createSafeSessionHandler(config, () =>
+  Result.ok({
     unavailableNativeToolBackendSlugs:
       TOGGLEABLE_NATIVE_TOOL_BACKEND_SLUGS.filter(
         (backendSlug) =>
           !isBusinessRegistryNativeToolDeployAvailable(backendSlug),
       ),
-  });
-});
+  }),
+);
 
 export default nativeToolDeployAvailability;

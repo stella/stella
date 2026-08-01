@@ -511,12 +511,14 @@ const runSafeHandler = async <
 ): Promise<SafeHandlerResult<TResult>> => {
   try {
     const execution = handler(ctx);
-    const result =
-      "status" in execution
-        ? execution
-        : Symbol.asyncIterator in execution
-          ? await Result.gen(() => execution)
-          : Result.gen(() => execution);
+    let result: ResultType<TResult, SafeHandlerError>;
+    if ("status" in execution) {
+      result = execution;
+    } else if (Symbol.asyncIterator in execution) {
+      result = await Result.gen(() => execution);
+    } else {
+      result = Result.gen(() => execution);
+    }
 
     if (Result.isOk(result)) {
       return result.value;

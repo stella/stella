@@ -174,7 +174,9 @@ const presignUpload = createSafeHandler(
       if (validation.status === "error") {
         return validation;
       }
-    } else if (purposeBody.purpose === "entity_version") {
+    }
+
+    if (purposeBody.purpose === "entity_version") {
       const validation = yield* validateEntityVersion({
         safeDb,
         workspaceId,
@@ -183,7 +185,9 @@ const presignUpload = createSafeHandler(
       if (validation.status === "error") {
         return validation;
       }
-    } else {
+    }
+
+    if (purposeBody.purpose === "agent_skill") {
       const validation = validateAgentSkill({
         memberRole,
         scope: purposeBody.scope,
