@@ -40,17 +40,19 @@ const collectUnsafeConcurrentIndexes = async (): Promise<string[]> => {
     }
 
     const droppedIndexes = new Set(
-      [...sqlWithoutLineComments.matchAll(CONCURRENT_DROP)].flatMap((match) =>
-        match.at(1) ? [match[1]] : [],
-      ),
+      [...sqlWithoutLineComments.matchAll(CONCURRENT_DROP)].flatMap((match) => {
+        const name = match.at(1);
+        return name ? [name] : [];
+      }),
     );
     const concurrentUniqueCreates = [
       ...sqlWithoutLineComments.matchAll(CONCURRENT_UNIQUE_CREATE),
     ];
     const createdUniqueIndexes = new Set(
-      concurrentUniqueCreates.flatMap(({ groups }) =>
-        groups?.["name"] ? [groups["name"]] : [],
-      ),
+      concurrentUniqueCreates.flatMap(({ groups }) => {
+        const name = groups?.["name"];
+        return name ? [name] : [];
+      }),
     );
     if (
       concurrentUniqueCreates.some(({ groups }) => groups?.["idempotent"]) &&

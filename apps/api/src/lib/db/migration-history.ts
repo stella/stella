@@ -19,7 +19,7 @@ export type RequiredMigrationIndex = {
   tableName: string;
 };
 
-export const REWRITTEN_MIGRATION_HISTORIES = {
+const rewrittenMigrationHistories = {
   // 0.5.0 backfilled slugs inside the migration and built the unique index
   // non-concurrently. The in-transaction backfill exceeded statement_timeout
   // on large corpora, so 0.5.1 rewrote it to build the index CONCURRENTLY and
@@ -238,9 +238,9 @@ export const REWRITTEN_MIGRATION_HISTORIES = {
   },
 } as const satisfies Readonly<Record<string, RewrittenMigrationHistory>>;
 
-const rewrittenMigrationHistoryByName: Readonly<
+export const REWRITTEN_MIGRATION_HISTORIES: Readonly<
   Record<string, RewrittenMigrationHistory>
-> = REWRITTEN_MIGRATION_HISTORIES;
+> = rewrittenMigrationHistories;
 
 export const REWRITTEN_MIGRATION_INDEXES: readonly RequiredMigrationIndex[] =
   Object.values(REWRITTEN_MIGRATION_HISTORIES).flatMap(
@@ -262,7 +262,7 @@ export const findUnappliedMigrations = ({
     if (appliedHashes.has(hash)) {
       return false;
     }
-    const supportedHistory = rewrittenMigrationHistoryByName[name];
+    const supportedHistory = REWRITTEN_MIGRATION_HISTORIES[name];
     if (supportedHistory?.currentHash !== hash) {
       return true;
     }
