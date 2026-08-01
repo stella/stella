@@ -202,29 +202,15 @@ describe("reconciliation fault isolation", () => {
             return 4;
           },
         },
-        {
-          name: "delivery",
-          run: async () => {
-            calls.push("delivery");
-            return 5;
-          },
-        },
       ],
       onPhaseError: (error, phase) => {
         failures.push({ error, phase });
       },
     });
 
-    expect(calls).toEqual([
-      "repair",
-      "reindex",
-      "retry",
-      "stale-lease",
-      "delivery",
-    ]);
+    expect(calls).toEqual(["repair", "reindex", "retry", "stale-lease"]);
     expect(failures).toEqual([{ error: repairError, phase: "repair" }]);
     expect(counts).toEqual({
-      delivery: 5,
       reindex: 2,
       repair: 0,
       retry: 3,

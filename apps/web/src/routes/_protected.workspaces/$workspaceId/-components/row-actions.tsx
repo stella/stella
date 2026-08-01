@@ -97,7 +97,6 @@ import {
   CellLockMenuItem,
   CellMetadataMenuSection,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags";
-import { useDocumentOcrAvailability } from "@/routes/_protected.workspaces/$workspaceId/-components/document-ocr-availability";
 import { getExtension } from "@/routes/_protected.workspaces/$workspaceId/-components/file-extension";
 import { requestManualOcr } from "@/routes/_protected.workspaces/$workspaceId/-components/request-manual-ocr";
 import {
@@ -180,7 +179,6 @@ export const RowActions = ({
   const name = getEntityName(entity);
   const isFolder = entity.kind === "folder";
   const isBulk = selectedEntities !== undefined && selectedEntities.length > 1;
-  const documentOcrAvailable = useDocumentOcrAvailability();
   const bulkTargets = isBulk ? selectedEntities : [entity];
   const isCellContext =
     !isBulk && cellMetadataTarget !== null && cellMetadataTarget !== undefined;
@@ -192,7 +190,6 @@ export const RowActions = ({
   }
   const canRunOcr = canRunManualOcr({
     context: rowActionContext,
-    documentOcrAvailable,
     entity,
     ocrSource,
   });
@@ -201,7 +198,6 @@ export const RowActions = ({
     : ocrSources.filter((source) =>
         canRunManualOcr({
           context: rowActionContext,
-          documentOcrAvailable,
           entity,
           ocrSource: source,
         }),

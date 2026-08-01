@@ -10,7 +10,6 @@ import { Frame, FramePanel } from "@stll/ui/components/frame";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unwrapEden } from "@/lib/errors/api";
-import { documentOcrAvailabilityOptions } from "@/queries/document-ocr-availability";
 import {
   organizationSettingsKeys,
   organizationSettingsOptions,
@@ -26,9 +25,6 @@ export const DocumentProcessingCard = () => {
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const { data: settings } = useQuery(
     organizationSettingsOptions(activeOrganizationId),
-  );
-  const { data: documentOcrAvailability } = useQuery(
-    documentOcrAvailabilityOptions({ organizationId: activeOrganizationId }),
   );
 
   const mutation = useSettingsMutation({
@@ -52,8 +48,6 @@ export const DocumentProcessingCard = () => {
   }
 
   const enabled = settings.documentProcessingMode === SEARCHABLE_TEXT_MODE;
-  const unavailable = documentOcrAvailability?.available !== true;
-
   return (
     <Frame>
       <FramePanel>
@@ -64,15 +58,10 @@ export const DocumentProcessingCard = () => {
           <p className="text-muted-foreground text-xs">
             {t("settings.organization.documentProcessing.description")}
           </p>
-          {unavailable ? (
-            <p className="text-destructive text-xs" role="status">
-              {t("errors.api.serviceUnavailable")}
-            </p>
-          ) : null}
           <Field className="flex-row items-center gap-2">
             <Checkbox
               checked={enabled}
-              disabled={mutation.isPending || (!enabled && unavailable)}
+              disabled={mutation.isPending}
               id={checkboxId}
               onCheckedChange={(next) => {
                 mutation.mutate(next);

@@ -20,6 +20,10 @@ import {
   expireDesktopEditSessions,
 } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry";
 import {
+  DISPATCH_DOCUMENT_OCR_TASK,
+  dispatchDocumentOcr,
+} from "@/api/lib/scheduler/tasks/document-processing-ocr";
+import {
   FLOW_RUN_TASK,
   runScheduledFlow,
 } from "@/api/lib/scheduler/tasks/flow-run";
@@ -50,6 +54,7 @@ export const createSchedulerTaskRegistry = (): SchedulerTaskRegistry =>
     ["scheduler.dispatchBullMq", createBullMqDispatchTask()],
     [INFO_SOUD_SYNC_TRACKED_CASES_TASK, syncInfoSoudTrackedCases],
     [EXPIRE_DESKTOP_EDIT_SESSIONS_TASK, expireDesktopEditSessions],
+    [DISPATCH_DOCUMENT_OCR_TASK, dispatchDocumentOcr],
     [FLOW_RUN_TASK, runScheduledFlow],
     [BACKFILL_SK_DOCUMENTS_TASK, backfillSkDocuments],
     [

@@ -37,6 +37,18 @@ const databasePoolMaxSchema = v.optional(
   "5",
 );
 
+const documentOcrBatchIntervalMinutesSchema = v.optional(
+  v.pipe(
+    v.string(),
+    v.digits(),
+    v.transform(Number),
+    v.integer(),
+    v.minValue(5),
+    v.maxValue(10_080),
+  ),
+  "1440",
+);
+
 // Connection-recycling bounds for the Bun SQL pools, in seconds.
 // Bun never recycles connections by default (maxLifetime/idleTimeout both 0).
 // Keep that default until the runtime retires only idle connections; current
@@ -55,6 +67,7 @@ export const envBase = createEnv({
     DATABASE_RLS_POOL_MAX: databasePoolMaxSchema,
     DATABASE_POOL_MAX_LIFETIME_S: databasePoolSecondsSchema("0"),
     DATABASE_POOL_IDLE_TIMEOUT_S: databasePoolSecondsSchema("0"),
+    DOCUMENT_OCR_BATCH_INTERVAL_MINUTES: documentOcrBatchIntervalMinutesSchema,
     S3_ENDPOINT: v.string(),
     S3_BUCKET: v.string(),
     S3_CREDENTIALS_PROVIDER: v.optional(

@@ -7,19 +7,14 @@ import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import type { documentProcessingRuns } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
-import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const rootTransactionMock = mock();
-const enqueueDocumentProcessingRunMock = mock(async () => undefined);
 const recordAuditEvent = mock(async () => undefined);
 
 void mock.module("@/api/db/root", () => ({
   rootDb: { transaction: rootTransactionMock },
-}));
-void mock.module("@/api/lib/document-processing-enqueue", () => ({
-  enqueueDocumentProcessingRun: enqueueDocumentProcessingRunMock,
 }));
 const { requestManualOcrHandler } =
   await import("@/api/handlers/entities/ocr/create");
@@ -64,46 +59,17 @@ const createSafeDb =
   };
 
 describe("requestManualOcrHandler", () => {
-  test("rejects before persistence when no OCR worker is ready", async () => {
-    const persistRun = mock(async () => ({
-      id: runId,
-      status: "queued" as const,
-    }));
-    const result = await Result.gen(() =>
-      requestManualOcrHandler({
-        entityId,
-        fieldId,
-        organizationId,
-        persistRun,
-        workerAvailable: async () => false,
-        recordAuditEvent,
-        safeDb: createSafeDb(null),
-        userId,
-        workspaceId,
-      }),
-    );
-
-    expect(Result.isError(result)).toBe(true);
-    if (Result.isError(result)) {
-      expect(result.error).toMatchObject({ status: 502 });
-    }
-    expect(persistRun).not.toHaveBeenCalled();
-  });
-
   test("queues a durable run for the current unencrypted PDF field", async () => {
-    const enqueue = mock(async () => undefined);
     const persistRun = mock(async () => ({
       id: runId,
       status: "queued" as const,
     }));
     const result = await Result.gen(() =>
       requestManualOcrHandler({
-        enqueue,
         entityId,
         fieldId,
         organizationId,
         persistRun,
-        workerAvailable: async () => true,
         recordAuditEvent,
         safeDb: createSafeDb({
           content: {
@@ -142,111 +108,19 @@ describe("requestManualOcrHandler", () => {
       userId,
       workspaceId,
     });
-    expect(enqueue).toHaveBeenCalledWith(runId);
   });
 
-  test("acknowledges a durable run when immediate queue delivery fails", async () => {
-    const captureEnqueueError = mock(() => undefined);
-    const enqueueFailure = new Error("queue temporarily unavailable");
-    const enqueue = mock(async () => {
-      throw enqueueFailure;
-    });
-    const persistRun = mock(async () => ({
-      id: runId,
-      status: "queued" as const,
-    }));
-    const result = await Result.gen(() =>
-      requestManualOcrHandler({
-        captureEnqueueError,
-        enqueue,
-        entityId,
-        fieldId,
-        organizationId,
-        persistRun,
-        workerAvailable: async () => true,
-        recordAuditEvent,
-        safeDb: createSafeDb({
-          content: {
-            encrypted: false,
-            fileName: "scan.pdf",
-            id: "00000000-0000-4000-8000-000000000001",
-            mimeType: PDF_MIME_TYPE,
-            pdfFileId: null,
-            sha256Hex: "a".repeat(64),
-            sizeBytes: 123,
-            type: "file",
-            version: 1,
-          },
-          entityId,
-          entityVersionId,
-          fieldId,
-          readOnly: false,
-          versionDeletedAt: null,
-        }),
-        userId,
-        workspaceId,
-      }),
-    );
-
-    expect(result).toEqual(Result.ok({ outcome: "queued", runId }));
-    expect(enqueue).toHaveBeenCalledWith(runId);
-    expect(captureEnqueueError).toHaveBeenCalledWith(enqueueFailure, {
-      runId,
-    });
-  });
-
-  test("acknowledges a durable run when immediate queue delivery stalls", async () => {
-    const captureEnqueueError = mock(() => undefined);
-    const enqueue = mock(async () => await new Promise<void>(() => {}));
-    const persistRun = mock(async () => ({
-      id: runId,
-      status: "queued" as const,
-    }));
-    const result = await Result.gen(() =>
-      requestManualOcrHandler({
-        captureEnqueueError,
-        enqueue,
-        enqueueTimeoutMs: 5,
-        entityId,
-        fieldId,
-        organizationId,
-        persistRun,
-        workerAvailable: async () => true,
-        recordAuditEvent,
-        safeDb: createSafeDb({
-          content: sourceFileContent,
-          entityId,
-          entityVersionId,
-          fieldId,
-          readOnly: false,
-          versionDeletedAt: null,
-        }),
-        userId,
-        workspaceId,
-      }),
-    );
-
-    expect(result).toEqual(Result.ok({ outcome: "queued", runId }));
-    expect(enqueue).toHaveBeenCalledWith(runId);
-    expect(captureEnqueueError).toHaveBeenCalledWith(expect.any(TimeoutError), {
-      runId,
-    });
-  });
-
-  test("reports an already processed outcome without enqueueing a succeeded run", async () => {
-    const enqueue = mock(async () => undefined);
+  test("reports an already processed outcome for a succeeded run", async () => {
     const persistRun = mock(async () => ({
       id: runId,
       status: "succeeded" as const,
     }));
     const result = await Result.gen(() =>
       requestManualOcrHandler({
-        enqueue,
         entityId,
         fieldId,
         organizationId,
         persistRun,
-        workerAvailable: async () => true,
         recordAuditEvent,
         safeDb: createSafeDb({
           content: {
@@ -272,7 +146,6 @@ describe("requestManualOcrHandler", () => {
     );
 
     expect(result).toEqual(Result.ok({ outcome: "already_processed", runId }));
-    expect(enqueue).not.toHaveBeenCalled();
   });
 
   test.each([
@@ -404,7 +277,7 @@ describe("requestManualOcrHandler", () => {
     ["upload", "running"],
     ["repair", "running"],
   ] as const)(
-    "promotes a %s run in %s state to a manual request",
+    "keeps an existing %s run in %s state in the configured batch",
     async (requestSource, status) => {
       let selectCount = 0;
       let updateSet: unknown;
@@ -493,38 +366,9 @@ describe("requestManualOcrHandler", () => {
         workspaceId,
       });
 
-      expect(run).toEqual({ id: runId, status: "queued" });
-      expect(updateSet).toEqual(
-        expect.objectContaining({
-          requestSource: "manual",
-          requestedBy: userId,
-        }),
-      );
-      expect(updateWhere).toBeDefined();
-      if (updateWhere) {
-        const compiled = new PgDialect().sqlToQuery(updateWhere);
-        expect(compiled.params).toEqual(
-          expect.arrayContaining([
-            runId,
-            "queued",
-            "running",
-            "upload",
-            "repair",
-          ]),
-        );
-      }
-      if (status === "running") {
-        expect(updateSet).toEqual(
-          expect.objectContaining({
-            claimedAt: null,
-            claimedBy: null,
-            progressCompleted: 0,
-            progressTotal: null,
-            startedAt: null,
-            status: "queued",
-          }),
-        );
-      }
+      expect(run).toEqual({ id: runId, status });
+      expect(updateSet).toBeUndefined();
+      expect(updateWhere).toBeUndefined();
     },
   );
 

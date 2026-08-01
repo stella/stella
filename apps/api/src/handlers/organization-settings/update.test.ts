@@ -59,7 +59,6 @@ describe("updateOrganizationSettingsHandler", () => {
         organizationId,
         recordAuditEvent,
         safeDb,
-        workerAvailable: async () => true,
       }),
     );
 
@@ -119,7 +118,6 @@ describe("updateOrganizationSettingsHandler", () => {
         organizationId,
         recordAuditEvent,
         safeDb,
-        workerAvailable: async () => true,
       }),
     );
 
@@ -127,32 +125,6 @@ describe("updateOrganizationSettingsHandler", () => {
     if (Result.isError(result)) {
       expect(result.error).toMatchObject({ status: 409 });
     }
-  });
-
-  test("rejects enabling OCR when no worker is ready", async () => {
-    let databaseWasUsed = false;
-    const tx = asTestRaw<Transaction>({});
-    const safeDb: SafeDb = async (operation) => {
-      databaseWasUsed = true;
-      return Result.ok(await operation(tx));
-    };
-    const recordAuditEvent: AuditRecorder = async () => {};
-
-    const result = await Result.gen(() =>
-      updateOrganizationSettingsHandler({
-        body: { documentProcessingMode: "searchable-text" },
-        organizationId,
-        recordAuditEvent,
-        safeDb,
-        workerAvailable: async () => false,
-      }),
-    );
-
-    expect(Result.isError(result)).toBe(true);
-    if (Result.isError(result)) {
-      expect(result.error).toMatchObject({ status: 502 });
-    }
-    expect(databaseWasUsed).toBe(false);
   });
 
   test("preserves OCR mode when updating an unrelated setting", async () => {

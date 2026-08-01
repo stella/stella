@@ -1546,11 +1546,6 @@ const recoverMissingAutomaticOcrRuns = async (): Promise<number> => {
     return [{ ...candidate, content: candidate.content }];
   });
   const runIds = await persistRepairableOcrRuns(repairCandidates);
-  await Promise.all(
-    runIds.map(
-      async (runId) => await tryEnqueueDocumentProcessingRun({ runId }),
-    ),
-  );
   await writeRepairScanCursor({
     expectedCursor: cursor,
     nextCursor:
@@ -1587,13 +1582,18 @@ const updateQueuedRunSchedule = async ({
     );
 };
 
-const enqueueQueuedRuns = async (): Promise<number> => {
+export const dispatchQueuedDocumentProcessingRuns = async ({
+  limit = RECONCILE_BATCH_SIZE,
+}: {
+  limit?: number;
+} = {}): Promise<number> => {
   const now = new Date();
   const runs = await rootDb
     .select({ id: documentProcessingRuns.id })
     .from(documentProcessingRuns)
     .where(
       and(
+        eq(documentProcessingRuns.kind, "ocr"),
         eq(documentProcessingRuns.status, "queued"),
         or(
           isNull(documentProcessingRuns.nextAttemptAt),
@@ -1606,7 +1606,7 @@ const enqueueQueuedRuns = async (): Promise<number> => {
       asc(documentProcessingRuns.createdAt),
       asc(documentProcessingRuns.id),
     )
-    .limit(RECONCILE_BATCH_SIZE);
+    .limit(limit);
 
   const attempts = await Promise.all(
     runs.map(
@@ -2129,7 +2129,6 @@ const handleDocumentProcessingFailure = ({
 };
 
 const RECONCILIATION_PHASE = {
-  DELIVERY: "delivery",
   REINDEX: "reindex",
   REPAIR: "repair",
   RETRY: "retry",
@@ -2154,14 +2153,13 @@ export const runDocumentProcessingReconciliationPhases = async ({
   phases: readonly ReconciliationPhase[];
 }): Promise<ReconciliationCounts> => {
   const counts: ReconciliationCounts = {
-    [RECONCILIATION_PHASE.DELIVERY]: 0,
     [RECONCILIATION_PHASE.REINDEX]: 0,
     [RECONCILIATION_PHASE.REPAIR]: 0,
     [RECONCILIATION_PHASE.RETRY]: 0,
     [RECONCILIATION_PHASE.STALE_LEASE]: 0,
   };
   for (const phase of phases) {
-    // oxlint-disable-next-line no-await-in-loop -- phase order lets recovered durable rows become deliverable in the same pass
+    // oxlint-disable-next-line no-await-in-loop -- repair phases are deliberately isolated and ordered
     const result = await Result.tryPromise({
       try: phase.run,
       catch: (cause) => cause,
@@ -2199,10 +2197,6 @@ const reconcileDocumentProcessing = async ({
           name: RECONCILIATION_PHASE.STALE_LEASE,
           run: recoverStaleDocumentProcessingRuns,
         },
-        {
-          name: RECONCILIATION_PHASE.DELIVERY,
-          run: enqueueQueuedRuns,
-        },
       ],
       onPhaseError: (error, phase) => {
         captureError(error, { phase });
@@ -2216,11 +2210,9 @@ const reconcileDocumentProcessing = async ({
       counts[RECONCILIATION_PHASE.REPAIR] > 0 ||
       counts[RECONCILIATION_PHASE.REINDEX] > 0 ||
       counts[RECONCILIATION_PHASE.RETRY] > 0 ||
-      counts[RECONCILIATION_PHASE.STALE_LEASE] > 0 ||
-      counts[RECONCILIATION_PHASE.DELIVERY] > 0
+      counts[RECONCILIATION_PHASE.STALE_LEASE] > 0
     ) {
       logger.info("document_processing.reconciled", {
-        enqueuedCount: String(counts[RECONCILIATION_PHASE.DELIVERY]),
         recoveredCount: String(counts[RECONCILIATION_PHASE.STALE_LEASE]),
         reindexedCount: String(counts[RECONCILIATION_PHASE.REINDEX]),
         repairedCount: String(counts[RECONCILIATION_PHASE.REPAIR]),

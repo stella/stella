@@ -22,7 +22,6 @@ const RETRYABLE_MANUAL_OCR_CANCELLATION_CODES = [
 ] as const;
 const MANUAL_SELECTION_SUPERSEDED_CODE =
   RETRYABLE_MANUAL_OCR_CANCELLATION_CODES[1];
-const PROMOTABLE_AUTOMATIC_OCR_REQUEST_SOURCES = ["upload", "repair"] as const;
 
 export type ManualOcrSource = {
   entityId: SafeId<"entity">;
@@ -144,7 +143,6 @@ export const persistManualOcrRun = async ({
         .select({
           errorCode: documentProcessingRuns.errorCode,
           id: documentProcessingRuns.id,
-          requestSource: documentProcessingRuns.requestSource,
           status: documentProcessingRuns.status,
         })
         .from(documentProcessingRuns)
@@ -194,69 +192,47 @@ export const persistManualOcrRun = async ({
           RETRYABLE_MANUAL_OCR_CANCELLATION_CODES.some(
             (errorCode) => errorCode === existing.errorCode,
           ));
-      const canPromote =
-        existing !== undefined &&
-        (existing.status === "queued" || existing.status === "running") &&
-        PROMOTABLE_AUTOMATIC_OCR_REQUEST_SOURCES.some(
-          (requestSource) => requestSource === existing.requestSource,
-        );
-      if (!existing || (!canRetry && !canPromote)) {
+      if (!existing || !canRetry) {
         run = existing ?? null;
       } else {
-        const mustRequeue = canRetry || existing.status === "running";
-        const promoted = await tx
+        const retried = await tx
           .update(documentProcessingRuns)
           .set({
             requestSource: "manual",
             requestedBy: userId,
             updatedAt: new Date(),
-            ...(mustRequeue
-              ? {
-                  claimedAt: null,
-                  claimedBy: null,
-                  errorAt: null,
-                  errorCode: null,
-                  finishedAt: null,
-                  nextAttemptAt: null,
-                  progressCompleted: 0,
-                  progressTotal: null,
-                  startedAt: null,
-                  status: "queued",
-                }
-              : {}),
+            claimedAt: null,
+            claimedBy: null,
+            errorAt: null,
+            errorCode: null,
+            finishedAt: null,
+            nextAttemptAt: null,
+            progressCompleted: 0,
+            progressTotal: null,
+            startedAt: null,
+            status: "queued",
           })
           .where(
             and(
               eq(documentProcessingRuns.id, existing.id),
-              canRetry
-                ? or(
-                    eq(documentProcessingRuns.status, "failed"),
-                    eq(documentProcessingRuns.status, "succeeded"),
-                    and(
-                      eq(documentProcessingRuns.status, "cancelled"),
-                      inArray(
-                        documentProcessingRuns.errorCode,
-                        RETRYABLE_MANUAL_OCR_CANCELLATION_CODES,
-                      ),
-                    ),
-                  )
-                : and(
-                    inArray(documentProcessingRuns.status, [
-                      "queued",
-                      "running",
-                    ]),
-                    inArray(
-                      documentProcessingRuns.requestSource,
-                      PROMOTABLE_AUTOMATIC_OCR_REQUEST_SOURCES,
-                    ),
+              or(
+                eq(documentProcessingRuns.status, "failed"),
+                eq(documentProcessingRuns.status, "succeeded"),
+                and(
+                  eq(documentProcessingRuns.status, "cancelled"),
+                  inArray(
+                    documentProcessingRuns.errorCode,
+                    RETRYABLE_MANUAL_OCR_CANCELLATION_CODES,
                   ),
+                ),
+              ),
             ),
           )
           .returning({
             id: documentProcessingRuns.id,
             status: documentProcessingRuns.status,
           });
-        run = promoted.at(0) ?? existing;
+        run = retried.at(0) ?? existing;
       }
     }
 

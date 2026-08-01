@@ -143,6 +143,8 @@ GOTENBERG_PASSWORD="replace-with-a-password"
 # requires a bearer token, generate one with at least 16 characters.
 # OCR_SERVICE_URL="https://ocr.example.internal"
 # OCR_SERVICE_TOKEN=""
+# Release queued OCR requests at this interval. Defaults to 1440 minutes.
+DOCUMENT_OCR_BATCH_INTERVAL_MINUTES="1440"
 # Optional: enable desktop edit session endpoints.
 FEATURE_DESKTOP_EDITING="true"
 ```
@@ -163,9 +165,11 @@ self-host Compose file intentionally does not publish a `ports` entry for the
 Gotenberg service.
 
 The Compose file also starts the document-processing worker from the API image.
-The worker stays idle when no OCR work is queued. To enable OCR, deploy a
-PaddleOCR-compatible service separately and set `OCR_SERVICE_URL`; non-loopback
-endpoints must use HTTPS because requests carry short-lived access credentials.
+The worker stays idle when no OCR work is queued. The scheduler releases queued
+requests every `DOCUMENT_OCR_BATCH_INTERVAL_MINUTES` (minimum 5, maximum 10080).
+To enable OCR, deploy a PaddleOCR-compatible service separately and set
+`OCR_SERVICE_URL`; non-loopback endpoints must use HTTPS because requests carry
+short-lived access credentials.
 The original PDF remains unchanged: stella stores and indexes only the derived
 searchable text.
 
