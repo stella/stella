@@ -20,6 +20,9 @@ import { cn } from "@stll/ui/lib/utils";
 import { MetadataPanelSkeleton } from "@/components/inspector/file-facets";
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import Tooltip from "@/components/tooltip";
+import { CreateProperty } from "@/components/workspaces/create-property";
+import { EditableField } from "@/components/workspaces/editable-field";
+import { Justification } from "@/components/workspaces/justification";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
@@ -39,9 +42,6 @@ import {
   selectJustificationByFieldId,
   useWorkspaceStore,
 } from "@/lib/workspaces/store";
-import { CreateProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/create-property";
-import { EditableField } from "@/routes/_protected.workspaces/$workspaceId/-components/editable-field";
-import { Justification } from "@/routes/_protected.workspaces/$workspaceId/-components/justification";
 
 type AiFieldClickArgs = {
   fieldId: string;

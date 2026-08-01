@@ -21,15 +21,17 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { useInspectorStore } from "@/components/inspector/inspector-store";
+import { countDescendants } from "@/components/workspaces/entity-utils";
+import type { WorkspaceTable as WorkspaceTableType } from "@/components/workspaces/table/types";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { ENTITY_DRAG_TYPE } from "@/lib/workspaces/drag-constants";
+import { useRenameEntity } from "@/lib/workspaces/mutations/entities";
 import { BottomRow } from "@/routes/_protected.workspaces/$workspaceId/-components/bottom-row";
 import { BulkAddColumns } from "@/routes/_protected.workspaces/$workspaceId/-components/bulk-add-columns";
-import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
 import {
   getNextSelectAllRowSelection,
   getSelectAllState,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/select-all.logic";
-import type { WorkspaceTable as WorkspaceTableType } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 import {
   WorkspaceGridFillerCell,
   WorkspaceGridRow,
@@ -71,8 +73,6 @@ import {
 import { DraggableRow } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/row-cells";
 import { useTableStore } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
 import type { TableContentMode } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
-import { useRenameEntity } from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities";
-import { countDescendants } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 type WorkspaceTableProps = {
   workspaceId: string;

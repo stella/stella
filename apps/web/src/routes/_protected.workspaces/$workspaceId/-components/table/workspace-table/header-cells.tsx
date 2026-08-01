@@ -15,9 +15,9 @@ import { CheckIcon, GripVerticalIcon, MinusIcon } from "lucide-react";
 
 import { cn } from "@stll/ui/lib/utils";
 
+import type { TableHeader } from "@/components/workspaces/table/types";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { SelectAllState } from "@/routes/_protected.workspaces/$workspaceId/-components/table/select-all.logic";
-import type { TableHeader } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 import { WorkspaceGridHead } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-grid";
 import type { ColumnDropEdge } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-grid-order";
 import { PinnedBoundary } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals";

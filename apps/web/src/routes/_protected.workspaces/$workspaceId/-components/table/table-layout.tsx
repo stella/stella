@@ -9,6 +9,9 @@ import { TableIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { useAIKeyGate } from "@/components/require-ai-key";
+import { toTableEntities } from "@/components/workspaces/entity-utils";
+import { useSyncJustificationChunks } from "@/components/workspaces/hooks/use-sync-justifications";
+import { workspaceTableFeatures } from "@/components/workspaces/table/table-features";
 import { useMountEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 import type { WorkspaceView } from "@/lib/types";
@@ -28,13 +31,10 @@ import {
   DEFAULT_TABLE_COLUMN_MIN_SIZE,
   useTableColumns,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-columns";
-import { workspaceTableFeatures } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-features";
 import { WorkspaceTable } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table";
-import { useSyncJustificationChunks } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-justifications";
 import { useSyncSelectedEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-selected-entities";
 import { useTableState } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-table-state";
 import { useUpdateView } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
-import { toTableEntities } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 const loadTableDevtoolsGate = async () => {
   const tableDevtoolsModule =

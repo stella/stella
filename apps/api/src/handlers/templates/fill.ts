@@ -35,6 +35,7 @@ import { convertToPdf } from "@/api/lib/files/gotenberg";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
+import { containsNull } from "@/api/lib/templates/template-data";
 import { isRecord } from "@/api/lib/type-guards";
 import { DOCX_MIME_TYPE, OCTET_STREAM_MIME_TYPE } from "@/api/mime-types";
 
@@ -76,19 +77,6 @@ const usageRejectionResponse = (error: HandlerError<402 | 500>): Response =>
       headers: { "Content-Type": "application/json" },
     },
   );
-
-export const containsNull = (value: unknown): boolean => {
-  if (value === null) {
-    return true;
-  }
-  if (Array.isArray(value)) {
-    return value.some(containsNull);
-  }
-  if (typeof value === "object") {
-    return Object.values(value).some(containsNull);
-  }
-  return false;
-};
 
 type TemplateFillUsageArgs = {
   /** Org AI (BYOK) config; null when the org has no usable AI config, in which

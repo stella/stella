@@ -2,11 +2,11 @@ import { useTranslations } from "use-intl";
 
 import { MatterIcon } from "@/components/matter-icon";
 import { MatterRefLink } from "@/components/matter-ref-link";
-import type { PartyMatter } from "@/routes/_protected.contacts/-components/types";
 import {
   PARTY_ROLE_LABEL_KEYS,
   toPartyRole,
-} from "@/routes/_protected.workspaces/$workspaceId/-party-roles";
+} from "@/lib/workspaces/party-roles";
+import type { PartyMatter } from "@/routes/_protected.contacts/-components/types";
 
 export const PartyMatterRow = ({ matter }: { matter: PartyMatter }) => {
   const t = useTranslations();

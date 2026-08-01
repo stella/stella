@@ -28,8 +28,8 @@ import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { getMatterPickerColor, toStoredMatterColor } from "@/lib/matter-colors";
+import { useUpdateWorkspace } from "@/lib/workspaces/mutations";
 import { workspaceOptions } from "@/lib/workspaces/queries";
-import { useUpdateWorkspace } from "@/routes/_protected.workspaces/-mutations";
 import { useConfigStore } from "@/stores/config-store";
 
 const breadcrumbInputClassName =

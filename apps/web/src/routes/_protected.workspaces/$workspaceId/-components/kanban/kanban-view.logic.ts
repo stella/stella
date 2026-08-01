@@ -2,12 +2,12 @@ import { panic } from "better-result";
 
 import type { OptionColor } from "@stll/api/types";
 
-import type { WorkspaceEntity, WorkspaceProperty } from "@/lib/types";
-import { resolveOptionColor } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 import {
   getInternalPropertyId,
   resolveKanbanGroupBy,
-} from "@/routes/_protected.workspaces/$workspaceId/-utils";
+} from "@/components/workspaces/entity-utils";
+import { resolveOptionColor } from "@/components/workspaces/property-utils";
+import type { WorkspaceEntity, WorkspaceProperty } from "@/lib/types";
 
 const STATUS_GROUP_ID = "_status";
 const KIND_GROUP_ID = "_kind";

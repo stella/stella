@@ -2,8 +2,6 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { templateFills } from "@/api/db/schema";
-import { containsNull } from "@/api/handlers/templates/fill";
-import { fillStoredTemplateDocx } from "@/api/handlers/templates/template-fill-service";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   assertUsageAvailableForHandler,
@@ -22,6 +20,8 @@ import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
+import { containsNull } from "@/api/lib/templates/template-data";
+import { fillStoredTemplateDocx } from "@/api/lib/templates/template-fill-service";
 import { isRecord } from "@/api/lib/type-guards";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 

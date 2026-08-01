@@ -91,9 +91,6 @@ const extractChatPreviewTextParts = (content: unknown): string[] => {
 
   const textParts: string[] = [];
   for (const part of normalized.parts) {
-    if (part.type !== "text") {
-      continue;
-    }
     if (part.content.trim()) {
       textParts.push(part.content);
     }

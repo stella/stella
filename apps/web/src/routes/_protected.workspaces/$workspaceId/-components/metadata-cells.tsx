@@ -5,11 +5,11 @@ import {
 } from "@stll/ui/components/avatar";
 
 import Tooltip from "@/components/tooltip";
-import type { WorkspaceEntity } from "@/lib/types";
 import {
   formatFullTimestamp,
   formatRelativeTime,
-} from "@/routes/_protected.workspaces/$workspaceId/-utils";
+} from "@/components/workspaces/entity-utils";
+import type { WorkspaceEntity } from "@/lib/types";
 
 export const AuthorCell = ({ entity }: { entity: WorkspaceEntity }) => {
   if (entity.kind === "folder") {

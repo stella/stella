@@ -3,8 +3,8 @@ import type {
   MattersSortKey,
   Workspace,
   WorkspaceGroup,
-} from "@/routes/_protected.workspaces/-types";
-import { PERSONAL_GROUP_ID } from "@/routes/_protected.workspaces/-types";
+} from "@/lib/workspaces/types";
+import { PERSONAL_GROUP_ID } from "@/lib/workspaces/types";
 
 export const getUniqueClientsFromWorkspace = (
   workspaces: readonly Workspace[],

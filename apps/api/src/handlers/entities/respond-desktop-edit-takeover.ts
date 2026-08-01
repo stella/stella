@@ -10,6 +10,10 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import {
+  closeSessionConnections,
+  pushSessionEvent,
+} from "@/api/lib/desktop-edit-session-notifications";
+import {
   authorizeDesktopEditSession,
   computeTokenExpiresAt,
   createDesktopEditSessionToken,
@@ -19,11 +23,6 @@ import {
 } from "@/api/lib/desktop-edit-sessions";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { broadcast } from "@/api/lib/sse";
-
-import {
-  closeSessionConnections,
-  pushSessionEvent,
-} from "./desktop-edit-session-events";
 
 export const respondDesktopEditTakeoverParamsSchema = t.Object({
   sessionId: tSafeId("desktopEditSession"),

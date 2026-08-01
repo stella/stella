@@ -18,7 +18,7 @@ const {
 } = await import("@/lib/public-law-sitemap");
 const { isPublicSsrPath } = await import("@/lib/public-ssr-paths");
 const { isWorkspaceDocumentRoutePath } =
-  await import("@/routes/_protected.workspaces/$workspaceId/-utils");
+  await import("@/components/workspaces/entity-utils");
 const { WORKSPACE_PRIMARY_NAV_ITEMS } =
   await import("@/components/workspace-primary-nav");
 
@@ -609,7 +609,7 @@ describe("public law sitemap", () => {
 
     for (const source of sources) {
       expect(source).not.toContain("@/routes/-auth-context");
-      expect(source).not.toContain("@/routes/-queries");
+      expect(source).not.toContain("@/lib/auth-queries");
       expect(source).not.toContain("@/routes/_protected");
       expectNoDirectAuthImport(source);
     }
@@ -735,7 +735,7 @@ describe("public law sitemap", () => {
 
     for (const source of sources) {
       expect(source).not.toContain("@/routes/-auth-context");
-      expect(source).not.toContain("@/routes/-queries");
+      expect(source).not.toContain("@/lib/auth-queries");
       expect(source).not.toContain("@/routes/_protected");
       expectNoDirectAuthImport(source);
       expect(source).not.toContain("@/api/");

@@ -3,10 +3,7 @@ import { status, t } from "elysia";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
-import {
-  desktopEditSessionCloseSignal,
-  isDesktopEditSessionCloseSignal,
-} from "@/api/lib/desktop-edit-session-notifications";
+import { isDesktopEditSessionCloseSignal } from "@/api/lib/desktop-edit-session-notifications";
 import {
   authorizeDesktopEditSession,
   DESKTOP_EDIT_SESSION_LIVENESS_REFRESH_INTERVAL_MS,
@@ -15,7 +12,7 @@ import {
   readDesktopEditSessionEventState,
   refreshDesktopEditSessionLiveness,
 } from "@/api/lib/desktop-edit-sessions";
-import { broadcastSessionEvent, registerSessionDelivery } from "@/api/lib/sse";
+import { registerSessionDelivery } from "@/api/lib/sse";
 import type { SSEEvent } from "@/api/lib/sse";
 
 const SESSION_TOKEN_LENGTH = 64;
@@ -99,27 +96,6 @@ const deliverSessionEventLocal = (
 // Cross-instance fan-out: every API instance receives session messages
 // on the shared Redis channel and delivers to its local streams.
 registerSessionDelivery(deliverSessionEventLocal);
-
-/**
- * Push an event to all SSE connections for a session, across every API
- * instance. Called from takeover request, release, and expiry handlers.
- */
-export const pushSessionEvent = (
-  sessionId: SafeId<"desktopEditSession">,
-  event: SSEEvent,
-): void => {
-  broadcastSessionEvent(sessionId, event);
-};
-
-/**
- * Close all SSE connections for a session, across every API instance
- * (e.g., on session finalize or close).
- */
-export const closeSessionConnections = (
-  sessionId: SafeId<"desktopEditSession">,
-): void => {
-  broadcastSessionEvent(sessionId, desktopEditSessionCloseSignal());
-};
 
 type DesktopEditSessionEventsHandlerProps = {
   headers: { authorization?: string };

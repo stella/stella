@@ -4,20 +4,20 @@ import { t } from "elysia";
 
 import { mcpOAuthState, mcpUserConnections } from "@/api/db/schema";
 import { env } from "@/api/env";
-import {
-  decryptMcpSecret,
-  encryptMcpSecret,
-} from "@/api/handlers/mcp-connectors/crypto";
-import {
-  exchangeAuthorizationCode,
-  tokenExpiresAt,
-} from "@/api/handlers/mcp-connectors/oauth";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { refreshCachedMcpToolsForConnection } from "@/api/lib/mcp-upstream/connections";
+import {
+  decryptMcpSecret,
+  encryptMcpSecret,
+} from "@/api/lib/mcp-upstream/crypto";
+import {
+  exchangeAuthorizationCode,
+  tokenExpiresAt,
+} from "@/api/lib/mcp-upstream/oauth";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 const STATE_TTL_MS = 10 * 60 * 1000;

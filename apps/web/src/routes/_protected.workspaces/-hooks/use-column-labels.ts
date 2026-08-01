@@ -1,6 +1,6 @@
 import { useTranslations } from "use-intl";
 
-import type { MattersColumnId } from "@/routes/_protected.workspaces/-types";
+import type { MattersColumnId } from "@/lib/workspaces/types";
 
 export const useColumnLabels = (): Record<MattersColumnId, string> => {
   const t = useTranslations();

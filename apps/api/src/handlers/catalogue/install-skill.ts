@@ -4,10 +4,10 @@ import { t } from "elysia";
 import { findCatalogueSkillInstallPayload } from "@stll/catalogue/install-payloads";
 
 import type { AGENT_SKILL_SCOPES } from "@/api/db/schema";
-import { installSkill } from "@/api/handlers/skills/install";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { installSkill } from "@/api/lib/skills/install";
 
 import {
   toParsedBundledSkillPackage,

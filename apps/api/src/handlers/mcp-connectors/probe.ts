@@ -1,7 +1,7 @@
 import { Result, TaggedError } from "better-result";
 
-import { discoverOAuthMetadata } from "@/api/handlers/mcp-connectors/oauth";
 import { arrayOrEmpty } from "@/api/lib/array";
+import { discoverOAuthMetadata } from "@/api/lib/mcp-upstream/oauth";
 import {
   safeOutboundFetchBytes,
   validateOutboundFetchTarget,

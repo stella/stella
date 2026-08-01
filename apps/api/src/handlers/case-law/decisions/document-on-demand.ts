@@ -27,13 +27,13 @@
 import { Result } from "better-result";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
+import { captureError } from "@/api/lib/analytics/capture";
+import type { SafeId } from "@/api/lib/branded-types";
 import type {
   BackfilledDocument,
   DecisionDocumentOutcome,
   PendingDocument,
-} from "@/api/handlers/case-law/ingestion/sk-document-backfill";
-import { captureError } from "@/api/lib/analytics/capture";
-import type { SafeId } from "@/api/lib/branded-types";
+} from "@/api/lib/legal-search/sk-document-backfill";
 
 /** Sources that ingest metadata first and the document later. */
 const DEFERRED_DOCUMENT_ADAPTER_KEYS: ReadonlySet<string> = new Set([

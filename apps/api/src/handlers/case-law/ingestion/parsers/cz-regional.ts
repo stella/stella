@@ -25,7 +25,7 @@ import type {
 import {
   buildValidationHtml,
   validateAndLog,
-} from "@/api/handlers/case-law/ingestion/parsers/validate-ast";
+} from "@/api/lib/legal-search/parsers/validate-ast";
 
 import {
   CZ_CLOSING_RE as CLOSING_RE,

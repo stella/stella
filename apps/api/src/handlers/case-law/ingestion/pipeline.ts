@@ -1,8 +1,6 @@
 import { Result, panic } from "better-result";
 import { and, eq, notInArray, sql } from "drizzle-orm";
 
-import { collapseSpacedLetters } from "@stll/text-normalize";
-
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawCitations,
@@ -25,12 +23,8 @@ import {
   createAvailableCaseLawDecisionSlug,
   createCaseLawDecisionSlug,
 } from "@/api/handlers/case-law/decisions/slug";
-import {
-  hasUsableAst,
-  isDocumentAst,
-} from "@/api/handlers/case-law/document-ast";
+import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
-import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import {
   bareCitationKey,
@@ -39,7 +33,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { publisherCitationGap } from "@/api/handlers/case-law/ingestion/citation-recall";
 import { recordSliceCoverage } from "@/api/handlers/case-law/ingestion/coverage-ledger";
-import { storedDecisionSignal } from "@/api/handlers/case-law/ingestion/parsers/validate-ast";
 import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
 import { segmentDecision } from "@/api/handlers/case-law/ingestion/segmenter";
 import { extractContext } from "@/api/handlers/case-law/polarity/context";
@@ -55,11 +48,6 @@ import {
 import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
-import {
-  DANGEROUS_CHARS,
-  sanitizeMetadata,
-  stripDangerousChars,
-} from "@/api/lib/legal-search/corpus-sanitize";
 import type { WriteCorpusResult } from "@/api/lib/legal-search/corpus-storage";
 import {
   corpusContentHash,
@@ -69,10 +57,13 @@ import {
   writeCorpusDocument,
 } from "@/api/lib/legal-search/corpus-storage";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
+import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
+import { storedDecisionSignal } from "@/api/lib/legal-search/parsers/validate-ast";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 import { getS3 } from "@/api/lib/s3";
-import { isRecord } from "@/api/lib/type-guards";
+
+export { sanitizeResult };
 
 type DbSlot = {
   acquire: (signal?: AbortSignal) => Promise<void>;
@@ -138,133 +129,6 @@ type ProcessResult = {
   inserted: boolean;
   searchVectorFailed: boolean;
   s3UploadFailed: boolean;
-};
-
-/**
- * Sanitize text fields before DB insertion.
- * Postgres rejects null bytes (\x00) in text columns.
- * Applied once in the pipeline so individual adapters
- * don't need to handle this.
- */
-/**
- * Regex matching characters that must be stripped from all
- * ingested text before DB insertion:
- *
- * - \x00        Null byte — Postgres rejects in text/jsonb
- * - \uFEFF      BOM (byte order mark) — invisible, breaks equality
- * - \uFFFE      Reversed BOM — same concern
- * - [\u0000-\u0008\u000B\u000C\u000E-\u001F]
- *               C0 control chars except HT (\t), LF (\n), CR (\r)
- *               which are valid whitespace. These can appear in
- *               OCR'd PDFs or broken encodings.
- * - \u200B      Zero-width space — invisible, breaks search
- * - \u200C      Zero-width non-joiner
- * - \u200D      Zero-width joiner
- * - \u2060      Word joiner
- * - \uFFF9-\uFFFB  Interlinear annotation anchors
- *
- * Applied once in the pipeline so adapters don't repeat this.
- */
-// Spaced-letter collapse (letter-spaced court headings such as
-// "r o z h o d o l :" -> "rozhodol:") is single-homed in
-// @stll/text-normalize's collapseSpacedLetters, so index-time collapse
-// here and the case-viewer's query-time collapse share one threshold.
-
-export const sanitizeResult = (r: IngestionResult): IngestionResult => {
-  // Strip dangerous chars and normalize non-breaking spaces.
-  // \u00A0 (nbsp) comes from PDF text extraction (@libpdf/core)
-  // and prevents the browser from wrapping at word boundaries.
-  const strip = (s: string | undefined): string | undefined =>
-    s ? stripDangerousChars(s) : undefined;
-
-  // Strip header fragments that the Cheerio extractor sometimes
-  // captures alongside the actual decision type value.
-  const DECISION_TYPE_NOISE =
-    /česk[áa]\s+republik[ay]|jm[ée]nem\s+republik[ay]/giu;
-
-  const normalizeDecisionType = (
-    raw: string | undefined,
-  ): string | undefined => {
-    if (!raw) {
-      return undefined;
-    }
-    return (
-      raw.replace(DECISION_TYPE_NOISE, "").trim().toLowerCase() || undefined
-    );
-  };
-
-  // Recursively sanitize all strings in documentAst.
-  // JSON.stringify escapes control chars to \uXXXX sequences
-  // that the regex wouldn't match, so we walk the tree.
-  const deepSanitizeImpl = (val: unknown, key?: string): unknown => {
-    if (typeof val === "string") {
-      const stripped = val
-        .replace(DANGEROUS_CHARS, "")
-        .replace(/\u00A0/gu, " ");
-      // Collapse spaced-out letters in plainText only (used for
-      // the DB full-text search index). Inline text is left
-      // verbatim so the reader displays exactly what the court
-      // wrote — letter-spacing and all. The frontend normalizer
-      // performs the same collapse at query time with a position
-      // map, keeping highlight offsets aligned.
-      return key === "plainText" ? collapseSpacedLetters(stripped) : stripped;
-    }
-    if (Array.isArray(val)) {
-      return val.map((item) => deepSanitizeImpl(item));
-    }
-    if (isRecord(val)) {
-      // oxlint-disable-next-line no-untyped-updates/no-untyped-updates -- sanitizer accumulator
-      const out: Record<string, unknown> = {};
-      for (const [k, v] of Object.entries(val)) {
-        out[k] = deepSanitizeImpl(v, k);
-      }
-      return out;
-    }
-    return val;
-  };
-
-  const sanitizeDocumentAst = (
-    documentAst: IngestionResult["documentAst"],
-  ): IngestionResult["documentAst"] => {
-    const sanitized = deepSanitizeImpl(documentAst);
-    return isDocumentAst(sanitized) ? sanitized : EMPTY_AST;
-  };
-
-  const sanitizedAst = sanitizeDocumentAst(r.documentAst);
-
-  return {
-    ...r,
-    caseNumber: r.caseNumber.replace(DANGEROUS_CHARS, ""),
-    // Part of the uniqueness key, so it is sanitized like the case number:
-    // an invisible char here would make an already-stored decision look new.
-    sourceDocumentId: strip(r.sourceDocumentId),
-    sheetNumber: strip(r.sheetNumber),
-    fulltext: r.fulltext
-      ? collapseSpacedLetters(strip(r.fulltext) ?? "")
-      : undefined,
-    ecli: strip(r.ecli),
-    decisionType: normalizeDecisionType(strip(r.decisionType)),
-    sourceUrl: strip(r.sourceUrl),
-    documentUrl: strip(r.documentUrl),
-    metadata: sanitizeMetadata(r.metadata),
-    // Publisher-supplied case numbers are compared against citations
-    // extracted from the sanitized text; an unsanitized zero-width char
-    // here would break that key equality.
-    publisherCitedCases: r.publisherCitedCases?.map((cited) =>
-      stripDangerousChars(cited),
-    ),
-    // Adapter-supplied sections come from court HTML like every other
-    // field and must go through the same strip. The fallback path was
-    // safe only incidentally: `segmentDecision` runs on the already
-    // sanitized `fulltext`.
-    sections: r.sections?.map((section) => ({
-      ...section,
-      title: section.title === null ? null : stripDangerousChars(section.title),
-      text: collapseSpacedLetters(strip(section.text) ?? ""),
-    })),
-    documentAst: sanitizedAst,
-    sourceRaw: strip(r.sourceRaw),
-  };
 };
 
 /**

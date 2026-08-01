@@ -26,16 +26,7 @@ import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { pendingUploads } from "@/api/db/schema";
 import type { PendingUploadFinalizedResult } from "@/api/db/schema";
 import { finalizeAgentSkill } from "@/api/handlers/uploads/agent-skill";
-import { finalizeEntityCreate } from "@/api/handlers/uploads/entity-create";
 import { finalizeEntityVersion } from "@/api/handlers/uploads/entity-version";
-import {
-  FINALIZE_CLAIM_TIMEOUT_MS,
-  legacyTmpUploadKey,
-  sha256Base64ToHex,
-  tmpUploadKey,
-  tmpUploadKeys,
-  UploadFinalizeError,
-} from "@/api/handlers/uploads/lib";
 import {
   authorizeUploadPurpose,
   uploadRoutePermission,
@@ -51,6 +42,15 @@ import { scanFile } from "@/api/lib/file-scan/scan";
 import { getS3 } from "@/api/lib/s3";
 import type { HeadObjectResult, S3PresignError } from "@/api/lib/s3-presign";
 import { copyObject, headObject } from "@/api/lib/s3-presign";
+import { finalizeEntityCreate } from "@/api/lib/uploads/entity-create";
+import {
+  FINALIZE_CLAIM_TIMEOUT_MS,
+  legacyTmpUploadKey,
+  sha256Base64ToHex,
+  tmpUploadKey,
+  tmpUploadKeys,
+  UploadFinalizeError,
+} from "@/api/lib/uploads/runtime";
 
 const finalizeParamsSchema = t.Object({
   workspaceId: tSafeId("workspace"),

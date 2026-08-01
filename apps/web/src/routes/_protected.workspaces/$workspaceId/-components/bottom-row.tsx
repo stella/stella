@@ -1,14 +1,14 @@
 import { PlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { getInternalColId } from "@/components/workspaces/entity-utils";
+import type { WorkspaceTable } from "@/components/workspaces/table/types";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { AddEntityMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu";
-import type { WorkspaceTable } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 import {
   WorkspaceGridCell,
   WorkspaceGridRow,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-grid";
-import { getInternalColId } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 const selectColId = getInternalColId("select");
 // Add-row is chrome, not data: it recedes (muted, single hairline border) and

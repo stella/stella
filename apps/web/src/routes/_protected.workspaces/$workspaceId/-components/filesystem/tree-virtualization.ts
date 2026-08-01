@@ -1,4 +1,4 @@
-import type { TableTreeNode } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
+import type { TableTreeNode } from "@/components/workspaces/table/types";
 
 export type FlattenedFilesystemRow = {
   node: TableTreeNode;

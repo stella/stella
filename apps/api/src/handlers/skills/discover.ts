@@ -3,8 +3,7 @@ import { t } from "elysia";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-
-import { discoverSkillPackagesFromUrl } from "./skill-package";
+import { discoverSkillPackagesFromUrl } from "@/api/lib/skills/skill-package";
 
 const discoverSkillUrlBodySchema = t.Object({
   url: t.String({ minLength: 1, maxLength: 2048 }),

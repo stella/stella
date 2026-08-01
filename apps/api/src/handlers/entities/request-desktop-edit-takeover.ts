@@ -8,10 +8,9 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { pushSessionEvent } from "@/api/lib/desktop-edit-session-notifications";
 import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-
-import { pushSessionEvent } from "./desktop-edit-session-events";
 
 const config = {
   permissions: { entity: ["update"] },

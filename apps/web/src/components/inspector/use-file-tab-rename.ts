@@ -5,7 +5,7 @@ import type {
   FileTab,
   InspectorTab,
 } from "@/components/inspector/inspector-store";
-import { useRenameEntity } from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities";
+import { useRenameEntity } from "@/lib/workspaces/mutations/entities";
 
 type UseFileTabRenameOptions = {
   tabs: readonly InspectorTab[];

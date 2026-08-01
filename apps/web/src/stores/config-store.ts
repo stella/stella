@@ -6,8 +6,8 @@ import type {
   MattersColumnId,
   MattersFilters,
   MattersSortKey,
-} from "@/routes/_protected.workspaces/-types";
-import { ALL_COLUMNS } from "@/routes/_protected.workspaces/-types";
+} from "@/lib/workspaces/types";
+import { ALL_COLUMNS } from "@/lib/workspaces/types";
 
 const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null;

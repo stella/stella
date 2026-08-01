@@ -3,11 +3,15 @@ import type { Transaction } from "prosemirror-state";
 
 import { diffWordSegments } from "@stll/folio-react";
 
+import type {
+  ClauseParagraph,
+  ClauseRun,
+} from "@/components/templates/clause-editor-types";
+
 import {
   clauseBodyToTipTap,
   type ParagraphContentOverride,
 } from "./clause-editor-tiptap";
-import type { ClauseParagraph, ClauseRun } from "./clause-editor-types";
 import { DELETION_MARK, INSERTION_MARK } from "./clause-tracked-change-marks";
 
 const TRACKED_AUTHOR = "ai";

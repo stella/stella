@@ -7,15 +7,15 @@ import { assertIdentifierLiteral } from "@/api/db/json-utils";
 import type { SafeDb } from "@/api/db/safe-db";
 import { entities, properties } from "@/api/db/schema";
 import type { EntityKind } from "@/api/db/schema-validators";
-import {
-  buildKanbanGroupCondition,
-  buildOptionArraySql,
-} from "@/api/handlers/entities/kanban-group-condition";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { tConditionNode } from "@/api/lib/conditions/contract";
 import { tSafeId } from "@/api/lib/custom-schema";
+import {
+  buildKanbanGroupCondition,
+  buildOptionArraySql,
+} from "@/api/lib/entities/kanban-group-condition";
 import { buildFilterConditions } from "@/api/lib/entity-filters";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { groupableSql } from "@/api/lib/groupable-sql";

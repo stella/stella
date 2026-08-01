@@ -1,10 +1,10 @@
 import { useTanStackTableDevtools } from "@tanstack/react-table-devtools";
 
-import type { WorkspaceTableFeatures } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-features";
+import type { WorkspaceTableFeatures } from "@/components/workspaces/table/table-features";
 import type {
   TableTreeNode,
   WorkspaceTable,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
+} from "@/components/workspaces/table/types";
 
 type TableDevtoolsProps = {
   table: WorkspaceTable;

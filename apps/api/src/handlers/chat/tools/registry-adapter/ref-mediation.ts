@@ -1,7 +1,7 @@
 import { panic, Result } from "better-result";
 
-import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import type { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import {
   brandPersistedContactId,

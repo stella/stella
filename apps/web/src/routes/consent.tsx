@@ -23,6 +23,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { StellaMark } from "@/components/stella-mark";
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth";
+import { roleOptions } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
@@ -41,7 +42,6 @@ import {
 import { managementRoles } from "@/lib/organization/consts";
 import { pageTitle } from "@/lib/page-title";
 import { loadAuthContext } from "@/routes/-auth-context";
-import { roleOptions } from "@/routes/-queries";
 
 const searchSchema = v.object({
   client_id: v.optional(v.string()),

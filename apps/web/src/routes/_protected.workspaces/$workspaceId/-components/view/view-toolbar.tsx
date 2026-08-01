@@ -42,6 +42,12 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { FolderExpandToggle } from "@/components/file-tree/folder-expand-toggle";
+import {
+  getInternalPropertyId,
+  resolveKanbanGroupBy,
+} from "@/components/workspaces/entity-utils";
+import { PropertyIcon } from "@/components/workspaces/property-helpers";
+import { resolveDocumentTypeClassifier } from "@/components/workspaces/table/group-columns";
 import { usePlaybooksPreviewEnabled } from "@/hooks/use-playbooks-preview";
 import { useLocale } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
@@ -79,19 +85,13 @@ import { BulkAddColumns } from "@/routes/_protected.workspaces/$workspaceId/-com
 import { ExistingFileOrganizerDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog";
 import { ExtractionRunProgress } from "@/routes/_protected.workspaces/$workspaceId/-components/extraction-run-progress";
 import { isGroupableProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
-import { PropertyIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/property-helpers";
 import { RowActions } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
-import { resolveDocumentTypeClassifier } from "@/routes/_protected.workspaces/$workspaceId/-components/table/group-columns";
 import { ExportReportControl } from "@/routes/_protected.workspaces/$workspaceId/-components/view/export-report-dialog";
 import { FilterChips } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-filters";
 import { SortChips } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-sorts";
 import type { TableContentMode } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
 import { useTableStore } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
 import { useUpdateView } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
-import {
-  getInternalPropertyId,
-  resolveKanbanGroupBy,
-} from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 const protectedRouteApi = getRouteApi("/_protected");
 

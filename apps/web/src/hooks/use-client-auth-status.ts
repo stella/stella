@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
+import { sessionOptions } from "@/lib/auth-queries";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
-import { sessionOptions } from "@/routes/-queries";
 
 type ClientAuthStatus =
   | { status: "checking"; isAuthenticated: false }

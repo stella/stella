@@ -12,11 +12,8 @@ import Tooltip from "@/components/tooltip";
 import { UserIdentity } from "@/components/user-avatar";
 import { useLocale } from "@/i18n/formatting-context";
 import { compareByLocale } from "@/lib/collation";
+import type { LeadFilter, Workspace } from "@/lib/workspaces/types";
 import { getDisplayName } from "@/routes/_protected.workspaces/-components/team-avatars";
-import type {
-  LeadFilter,
-  Workspace,
-} from "@/routes/_protected.workspaces/-types";
 
 type TeamFilterPopoverProps = {
   teamValue: string[] | undefined;

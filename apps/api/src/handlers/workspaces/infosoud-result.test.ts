@@ -7,9 +7,8 @@ import type {
   RelatedCase,
 } from "@stll/infosoud";
 
+import { mapInfoSoudResult } from "@/api/lib/infosoud/result";
 import { LIMITS } from "@/api/lib/limits";
-
-import { mapInfoSoudResult } from "./infosoud-result";
 
 const CASE_MARK = {
   bcVec: 64,

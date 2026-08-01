@@ -12,8 +12,8 @@ import {
 import {
   TemplateForm,
   useFillToMatterSaveTarget,
-} from "@/routes/_protected.knowledge/-components/template-form";
-import { useTemplateFillSchema } from "@/routes/_protected.knowledge/-components/use-template-fill-schema";
+} from "@/components/templates/template-form";
+import { useTemplateFillSchema } from "@/components/templates/use-template-fill-schema";
 
 /**
  * "Use template" from the Knowledge templates list: fill the saved template

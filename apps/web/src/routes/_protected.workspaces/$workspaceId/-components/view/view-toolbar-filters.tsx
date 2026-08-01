@@ -58,16 +58,16 @@ import {
   valueEditorFor,
 } from "@/components/conditions/condition-builder-logic";
 import { DatePickerPopover } from "@/components/date-picker-popover";
-import type { TranslationKey } from "@/i18n/types";
-import type { WorkspaceProperty } from "@/lib/types";
-import type { FacetContext } from "@/routes/_protected.workspaces/$workspaceId/-components/conditions/condition-select-values";
+import type { FacetContext } from "@/components/workspaces/conditions/condition-select-values";
 import {
   MultiSelectValue,
   SingleSelectValue,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/conditions/condition-select-values";
-import { filterCapabilities } from "@/routes/_protected.workspaces/$workspaceId/-components/conditions/filter-capabilities";
-import { SelectColorIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/shared";
-import { PropertyIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/property-helpers";
+} from "@/components/workspaces/conditions/condition-select-values";
+import { filterCapabilities } from "@/components/workspaces/conditions/filter-capabilities";
+import { SelectColorIcon } from "@/components/workspaces/properties/shared";
+import { PropertyIcon } from "@/components/workspaces/property-helpers";
+import type { TranslationKey } from "@/i18n/types";
+import type { WorkspaceProperty } from "@/lib/types";
 
 type FilterChipsProps = {
   filters: ConditionNode[];

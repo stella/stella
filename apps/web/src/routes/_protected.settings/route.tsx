@@ -19,10 +19,10 @@ import { useTranslations } from "use-intl";
 import { cn } from "@stll/ui/lib/utils";
 
 import type { TranslationKey } from "@/i18n/types";
+import { roleOptions } from "@/lib/auth-queries";
 import { betaFeaturesAvailable } from "@/lib/beta-features";
 import { managementRoles } from "@/lib/organization/consts";
 import { pageTitle } from "@/lib/page-title";
-import { roleOptions } from "@/routes/-queries";
 
 export const Route = createFileRoute("/_protected/settings")({
   head: () => ({

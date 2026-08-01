@@ -21,24 +21,28 @@ import { renderDragPreview } from "@/components/drag-preview";
 import { InlineEdit } from "@/components/inline-edit";
 import { useInspectorStore } from "@/components/inspector/inspector-store";
 import Tooltip from "@/components/tooltip";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
-import { toSafeId } from "@/lib/safe-id";
-import type { PropertyId } from "@/lib/types";
-import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
-import { RowActions } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
-import type { VirtualAnchor } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
 import {
-  getOcrSource,
-  getOcrSources,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions.logic";
+  getEntityName,
+  getFirstFile,
+} from "@/components/workspaces/entity-utils";
 import type {
   TableCell,
   TableColumn,
   TableRow,
   TableTreeNode,
   WorkspaceTable as WorkspaceTableType,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
+} from "@/components/workspaces/table/types";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import { toSafeId } from "@/lib/safe-id";
+import type { PropertyId } from "@/lib/types";
+import { ENTITY_DRAG_TYPE } from "@/lib/workspaces/drag-constants";
+import { RowActions } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
+import type { VirtualAnchor } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
+import {
+  getOcrSource,
+  getOcrSources,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions.logic";
 import {
   WorkspaceGridCell,
   WorkspaceGridRow,
@@ -59,10 +63,6 @@ import { VersionOrNewFileDialog } from "@/routes/_protected.workspaces/$workspac
 import type { TableContentMode } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
 import { useInspectorFlash } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash";
 import { useVersionOrNewFileDrop } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-version-or-new-file-drop";
-import {
-  getEntityName,
-  getFirstFile,
-} from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 const shouldIgnoreRowExpansionClick = (target: EventTarget) => {
   if (!(target instanceof HTMLElement)) {

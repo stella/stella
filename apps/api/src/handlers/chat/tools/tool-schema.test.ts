@@ -31,7 +31,6 @@ import {
 import { getChatTools as getChatToolsWithPin } from "@/api/handlers/chat/tools/chat-tools";
 import { CREATE_WORKSPACE_DOCUMENT_TOOL_NAME } from "@/api/handlers/chat/tools/create-workspace-document-tools";
 import { EDIT_WORKSPACE_DOCUMENT_TOOL_NAME } from "@/api/handlers/chat/tools/edit-workspace-document-tools";
-import { createChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import {
   ADD_COMMENT_TOOL_NAME,
   FIND_TEXT_TOOL_NAME,
@@ -51,6 +50,7 @@ import {
 } from "@/api/lib/agent-skills/skills";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import {
   PROVIDER_SAFE_JSON_SCHEMA_KEYWORDS,
   providerSafeJsonSchemaOptionsForTanStackProvider,

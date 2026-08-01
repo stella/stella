@@ -15,17 +15,17 @@ import {
   mcpUserConnections,
 } from "@/api/db/schema";
 import type { CachedMcpToolDefinition } from "@/api/db/schema";
-import {
-  decryptMcpSecret,
-  encryptMcpSecret,
-} from "@/api/handlers/mcp-connectors/crypto";
-import {
-  refreshOAuthToken,
-  tokenExpiresAt,
-} from "@/api/handlers/mcp-connectors/oauth";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
+import {
+  decryptMcpSecret,
+  encryptMcpSecret,
+} from "@/api/lib/mcp-upstream/crypto";
+import {
+  refreshOAuthToken,
+  tokenExpiresAt,
+} from "@/api/lib/mcp-upstream/oauth";
 import {
   safeOutboundFetchStream,
   validateOutboundFetchTarget,

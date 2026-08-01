@@ -5,7 +5,7 @@ import { Button } from "@stll/ui/components/button";
 import { Input } from "@stll/ui/components/input";
 import { Separator } from "@stll/ui/components/separator";
 
-import type { NumericFilter } from "@/routes/_protected.workspaces/-types";
+import type { NumericFilter } from "@/lib/workspaces/types";
 
 type ItemsFilterPopoverProps = {
   value: NumericFilter | undefined;

@@ -2,8 +2,8 @@ import { lazy, Suspense } from "react";
 
 import { ClientOnly } from "@tanstack/react-router";
 
+import type { WorkspaceTable } from "@/components/workspaces/table/types";
 import { useDevStore } from "@/lib/dev-store";
-import type { WorkspaceTable } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 
 const TableDevtools = lazy(async () => {
   const module =

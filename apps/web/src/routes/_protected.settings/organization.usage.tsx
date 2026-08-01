@@ -15,9 +15,9 @@ import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { usageEntitlementOptions } from "@/lib/usage-queries";
+import type { UsageEntitlement } from "@/lib/usage-queries";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
-import { usageEntitlementOptions } from "@/routes/_protected.settings/-queries/usage";
-import type { UsageEntitlement } from "@/routes/_protected.settings/-queries/usage";
 
 export const Route = createFileRoute("/_protected/settings/organization/usage")(
   {

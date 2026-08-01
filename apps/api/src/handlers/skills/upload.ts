@@ -5,9 +5,11 @@ import { AGENT_SKILL_SCOPES } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
-
-import { authorizeSkillInstallScope, installSkill } from "./install";
-import { parseUploadedSkillPackage } from "./skill-package";
+import {
+  authorizeSkillInstallScope,
+  installSkill,
+} from "@/api/lib/skills/install";
+import { parseUploadedSkillPackage } from "@/api/lib/skills/skill-package";
 
 const uploadSkillBodySchema = t.Object({
   scope: t.UnionEnum(AGENT_SKILL_SCOPES),

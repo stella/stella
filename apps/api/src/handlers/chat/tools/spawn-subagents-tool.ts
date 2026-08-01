@@ -5,6 +5,7 @@ import * as v from "valibot";
 import type { SafeDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
 import { createChatTextPart } from "@/api/handlers/chat/chat-message-parts";
+import { runSubagent } from "@/api/handlers/chat/subagent-runner";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import {
   createSubagentProposalBuffer,
@@ -17,7 +18,6 @@ import type { ChatMessage } from "@/api/handlers/chat/types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
-import { runSubagent } from "@/api/lib/tanstack-ai-agent";
 import {
   getTanStackTextModelInfoForRole,
   isAllowedBYOKModelForRole,

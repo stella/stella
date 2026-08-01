@@ -46,7 +46,7 @@ import type {
   ParagraphBlock,
   ParagraphRole,
 } from "@/api/handlers/case-law/document-ast";
-import { validateAndLog } from "@/api/handlers/case-law/ingestion/parsers/validate-ast";
+import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 
 import { inlinesToPlainText, walkInlines } from "./shared-inlines";

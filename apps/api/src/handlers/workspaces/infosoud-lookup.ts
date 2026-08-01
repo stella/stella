@@ -2,13 +2,13 @@ import { Result } from "better-result";
 
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { mapInfoSoudResult } from "@/api/lib/infosoud/result";
 
 import {
   getInfoSoudClient,
   infosoudLookupBodySchema,
   toInfoSoudLookupError,
 } from "./infosoud-common";
-import { mapInfoSoudResult } from "./infosoud-result";
 
 const config = {
   body: infosoudLookupBodySchema,

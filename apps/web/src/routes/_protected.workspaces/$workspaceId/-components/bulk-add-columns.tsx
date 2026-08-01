@@ -26,36 +26,36 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import Tooltip from "@/components/tooltip";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
-import { detached } from "@/lib/detached";
-import { toSafeId } from "@/lib/safe-id";
-import type { PropertyDependency, WorkspacePropertyOption } from "@/lib/types";
-import { propertiesOptions } from "@/lib/workspaces/queries/properties";
+import { usePropertiesCountLimit } from "@/components/workspaces/hooks/use-limits";
+import { useStartWorkflow } from "@/components/workspaces/hooks/use-start-workflow";
 import {
   COMPOSER_CARD_CLASS,
   ReadingFromRow,
   TypeChipsRow,
   useChipDefinitions,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/properties/composer-primitives";
+} from "@/components/workspaces/properties/composer-primitives";
 import type {
   CreatableContentType,
   FileChip,
   ManualChipOption,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/properties/composer-primitives";
-import { InlineOptionEditor } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/inline-option-editor";
-import { PropertyPromptInput } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/input";
-import type { PropertyPromptFieldHandle } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/input";
+} from "@/components/workspaces/properties/composer-primitives";
+import { InlineOptionEditor } from "@/components/workspaces/properties/inline-option-editor";
+import { PropertyPromptInput } from "@/components/workspaces/properties/property-input/input";
+import type { PropertyPromptFieldHandle } from "@/components/workspaces/properties/property-input/input";
 import {
   buildDocTypeGate,
   resolveDocumentTypeClassifier,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/table/group-columns";
-import { usePropertiesCountLimit } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-limits";
-import { useStartWorkflow } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-start-workflow";
+} from "@/components/workspaces/table/group-columns";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { detached } from "@/lib/detached";
+import { toSafeId } from "@/lib/safe-id";
+import type { PropertyDependency, WorkspacePropertyOption } from "@/lib/types";
 import {
   useCreatePropertiesBatch,
   useSuggestPrompt,
-} from "@/routes/_protected.workspaces/$workspaceId/-mutations/properties";
-import type { CreatePropertySpec } from "@/routes/_protected.workspaces/$workspaceId/-mutations/properties";
+} from "@/lib/workspaces/mutations/properties";
+import type { CreatePropertySpec } from "@/lib/workspaces/mutations/properties";
+import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 
 // Sentinel for the "every document type" (ungated) scope; a Select value can't
 // be null, so it stands in and maps back to null.

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
-import { hostedUsageWebhookEventSchema } from "@/api/handlers/hosted-usage-webhook/event-schemas";
+import { hostedUsageWebhookEventSchema } from "@/api/lib/hosted-usage-provider/event-schemas";
 import { normalizePolarEvent } from "@/api/lib/hosted-usage-provider/polar/events";
 import { normalizeProviderEvent } from "@/api/lib/hosted-usage-provider/provider-event-normalizer";
 

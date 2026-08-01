@@ -1,7 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 
+import { sessionOptions } from "@/lib/auth-queries";
 import { ensureRouteQueryData } from "@/lib/react-query";
-import { sessionOptions } from "@/routes/-queries";
 
 export const loadAuthContext = async (queryClient: QueryClient) => {
   const sessionData = await ensureRouteQueryData(

@@ -15,6 +15,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { useInspectorStore } from "@/components/inspector/inspector-store";
 import type { FileTab } from "@/components/inspector/inspector-store";
+import { useSyncJustifications } from "@/components/workspaces/hooks/use-sync-justifications";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import { getAnalytics } from "@/lib/analytics/provider";
@@ -34,7 +35,6 @@ import {
   selectJustificationByFieldId,
   useWorkspaceStore,
 } from "@/lib/workspaces/store";
-import { useSyncJustifications } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-justifications";
 
 const BBOX_POLL_INTERVAL_MS = 1000;
 

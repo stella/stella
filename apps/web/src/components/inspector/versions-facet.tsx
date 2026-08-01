@@ -18,6 +18,8 @@ import { useTranslations } from "use-intl";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { useInspectorStore } from "@/components/inspector/inspector-store";
+import { VersionsSidebar } from "@/components/pdf/versions-sidebar";
+import type { Version } from "@/components/pdf/versions-sidebar";
 import { useMountEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
@@ -27,8 +29,6 @@ import {
   entityVersionsOptions,
   fetchOlderVersions,
 } from "@/lib/workspaces/queries/entity-versions";
-import { VersionsSidebar } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/versions-sidebar";
-import type { Version } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/versions-sidebar";
 
 type VersionsFacetProps = {
   workspaceId: string;

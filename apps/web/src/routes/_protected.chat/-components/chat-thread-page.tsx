@@ -54,6 +54,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
 import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
+import { roleOptions } from "@/lib/auth-queries";
 import {
   getChatSendMode,
   useChatAnonymized,
@@ -74,11 +75,10 @@ import type { ChatPrompt } from "@/lib/prompts/types";
 import { useSavedPrompts } from "@/lib/prompts/use-saved-prompts";
 import { matchReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
-import { roleOptions } from "@/routes/-queries";
+import { usageEntitlementOptions } from "@/lib/usage-queries";
 import { ChatThreadRecap } from "@/routes/_protected.chat/-components/chat-thread-recap";
 import { ChatTurnNavigator } from "@/routes/_protected.chat/-components/chat-turn-navigator";
 import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet";
-import { usageEntitlementOptions } from "@/routes/_protected.settings/-queries/usage";
 
 type ChatThreadPageProps = {
   threadRef: ChatThreadRef;

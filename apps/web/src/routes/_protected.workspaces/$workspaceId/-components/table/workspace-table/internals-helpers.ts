@@ -3,14 +3,14 @@ import type { CSSProperties } from "react";
 import type { Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
 import { panic } from "better-result";
 
-import { TOOLBAR_ROW_HEIGHT_PX } from "@/lib/consts";
+import { getInternalColId } from "@/components/workspaces/entity-utils";
 import type {
   TableColumn,
   TableHeader,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
+} from "@/components/workspaces/table/types";
+import { TOOLBAR_ROW_HEIGHT_PX } from "@/lib/consts";
 import { getGridTemplateColumns } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-grid-order";
 import type { ColumnDropEdge } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-grid-order";
-import { getInternalColId } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 export const selectColId = getInternalColId("select");
 export const addPropertyColId = getInternalColId("add-property");

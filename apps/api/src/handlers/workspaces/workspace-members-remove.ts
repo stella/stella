@@ -7,16 +7,16 @@ import {
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
-import {
-  closeSessionConnections,
-  pushSessionEvent,
-} from "@/api/handlers/entities/desktop-edit-session-events";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tUserId, workspaceParams } from "@/api/lib/custom-schema";
+import {
+  closeSessionConnections,
+  pushSessionEvent,
+} from "@/api/lib/desktop-edit-session-notifications";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { broadcast } from "@/api/lib/sse";

@@ -3,8 +3,8 @@ import { t } from "elysia";
 
 import { compileLegalSourceToDocx } from "@stll/docx-core";
 
-import { createChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import { createSafeHandler } from "@/api/lib/api-handlers";
+import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";

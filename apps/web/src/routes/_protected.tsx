@@ -55,11 +55,13 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/sidebar";
+import { CreateMatterDialog } from "@/components/workspaces/create-matter-dialog";
 import { useGlobalChatMentionRegistration } from "@/features/chat/hooks/use-global-chat-mention-registration";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useI18nStore } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
+import { roleOptions } from "@/lib/auth-queries";
 import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
 import { ChromeHeaderActionsSlot } from "@/lib/chrome-header-actions";
 import {
@@ -75,8 +77,6 @@ import { usePinnedStore } from "@/lib/pinned-store";
 import { prefetchRouteQuery } from "@/lib/react-query";
 import { workspaceOptions } from "@/lib/workspaces/queries";
 import { loadAuthContext } from "@/routes/-auth-context";
-import { roleOptions } from "@/routes/-queries";
-import { CreateMatterDialog } from "@/routes/_protected.workspaces/-components/create-matter-dialog";
 
 const LazyInspectorPanel = lazy(
   async () =>

@@ -17,6 +17,8 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions, caseLawSources, relations } from "@/api/db/schema";
 import { ADAPTER_KEYS, PARSER_VERSION } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
+import type { SafeId } from "@/api/lib/branded-types";
+import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";
 import {
   claimDocumentFetch,
   loadPendingDocuments,
@@ -25,10 +27,8 @@ import {
   MAX_PRIORITY_FETCH_ATTEMPTS,
   recordDocumentFetchRequest,
   storeBackfilledDocument,
-} from "@/api/handlers/case-law/ingestion/sk-document-backfill";
-import type { PendingDocument } from "@/api/handlers/case-law/ingestion/sk-document-backfill";
-import type { SafeId } from "@/api/lib/branded-types";
-import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";
+} from "@/api/lib/legal-search/sk-document-backfill";
+import type { PendingDocument } from "@/api/lib/legal-search/sk-document-backfill";
 
 /**
  * Wide enough to hold the whole queue on the migrated-but-unseeded

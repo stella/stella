@@ -17,13 +17,13 @@ import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import type { EntityKind, WorkspaceView } from "@/lib/types";
+import { useUpsertField } from "@/lib/workspaces/mutations/entities";
 import {
   calendarTasksKeys,
   calendarTasksOptions,
 } from "@/lib/workspaces/queries/calendar-tasks";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
-import { useUpsertField } from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities";
 
 import { CalendarDayCell } from "./calendar-day-cell";
 import { CalendarHeader } from "./calendar-header";

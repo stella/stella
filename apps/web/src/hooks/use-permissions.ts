@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { PermissionInput } from "@stll/permissions";
 
 import { authClient } from "@/lib/auth";
-import { roleOptions } from "@/routes/-queries";
+import { roleOptions } from "@/lib/auth-queries";
 
 /**
  * Returns whether the active member's role grants the requested

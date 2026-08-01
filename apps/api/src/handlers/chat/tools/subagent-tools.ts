@@ -68,7 +68,7 @@ const buildProposalWrapper = (
 
 /**
  * Projects the full chat tool map down to the subset a subagent's
- * nested `chat()` loop (see `runSubagent` in `tanstack-ai-agent.ts`)
+ * nested `chat()` loop (see `runSubagent` in `subagent-runner.ts`)
  * is allowed to use. Exclusions and transforms:
  *
  *  - `spawn_subagents` itself is dropped so a subagent cannot spawn

@@ -4,8 +4,7 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 
 const AutocompletePlayground = import.meta.env.DEV
   ? React.lazy(async () => {
-      const module =
-        await import("@/routes/dev/-components/autocomplete-playground");
+      const module = await import("@/components/dev/autocomplete-playground");
       return { default: module.AutocompletePlayground };
     })
   : null;

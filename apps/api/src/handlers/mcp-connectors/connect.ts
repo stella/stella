@@ -9,7 +9,11 @@ import {
   mcpOAuthState,
   mcpUserConnections,
 } from "@/api/db/schema";
-import { encryptMcpSecret } from "@/api/handlers/mcp-connectors/crypto";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { refreshCachedMcpToolsForConnection } from "@/api/lib/mcp-upstream/connections";
+import { encryptMcpSecret } from "@/api/lib/mcp-upstream/crypto";
 import {
   buildAuthorizeUrl,
   buildMcpClientMetadataDocument,
@@ -21,13 +25,9 @@ import {
   getMcpOAuthRedirectUri,
   pickRequestedScopes,
   registerOAuthClient,
-} from "@/api/handlers/mcp-connectors/oauth";
-import type { McpClientRegistrationMode } from "@/api/handlers/mcp-connectors/oauth";
-import { redactMcpOAuthRegistrationResponse } from "@/api/handlers/mcp-connectors/oauth-registration-response";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { refreshCachedMcpToolsForConnection } from "@/api/lib/mcp-upstream/connections";
+} from "@/api/lib/mcp-upstream/oauth";
+import type { McpClientRegistrationMode } from "@/api/lib/mcp-upstream/oauth";
+import { redactMcpOAuthRegistrationResponse } from "@/api/lib/mcp-upstream/oauth-registration-response";
 
 const routeParams = t.Object({
   slug: t.String({ minLength: 1, maxLength: 80 }),

@@ -8,7 +8,7 @@ import {
 import { cn } from "@stll/ui/lib/utils";
 
 import Tooltip from "@/components/tooltip";
-import type { Workspace } from "@/routes/_protected.workspaces/-types";
+import type { Workspace } from "@/lib/workspaces/types";
 
 export const getDisplayName = (name: string | null, userId: string): string =>
   name?.trim() || userId;

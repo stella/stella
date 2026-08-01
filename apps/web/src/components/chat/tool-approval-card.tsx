@@ -44,6 +44,10 @@ import {
   humanizeIdentifier,
 } from "@/components/chat/tool-approval-summary";
 import { useInspectorStore } from "@/components/inspector/inspector-store";
+import {
+  emptyColor,
+  resolveOptionColor,
+} from "@/components/workspaces/property-utils";
 import { useMountEffect } from "@/hooks/use-effect";
 import type { DocxEditRepresentation } from "@/lib/chat-edit-mode";
 import { DOCX_EDIT_REPRESENTATION } from "@/lib/chat-edit-mode";
@@ -52,10 +56,6 @@ import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import type { WorkspaceProperty } from "@/lib/types";
 import { propertiesKeys } from "@/lib/workspaces/queries/properties";
-import {
-  emptyColor,
-  resolveOptionColor,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 
 type UpdateEntityFieldsInput = ChatUITools["update-entity-fields"]["input"];
 type ActiveDocxEditInput = ChatUITools["apply-active-docx-edits"]["input"];

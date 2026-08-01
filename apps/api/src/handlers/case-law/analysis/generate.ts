@@ -39,6 +39,7 @@ import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
+import { formatDecisionForPrompt } from "@/api/lib/case-law/analysis-prompt";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { detached } from "@/api/lib/detached";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -49,7 +50,6 @@ import {
 } from "@/api/lib/tanstack-ai-models";
 
 import { normalizeAnalysisHeadingLabels } from "./category-catalog";
-import { formatDecisionForPrompt } from "./prompts/base";
 import { getSystemPrompt } from "./prompts/prompt-registry";
 
 const SENTINEL_STALE_MS = 5 * 60 * 1000;

@@ -1,11 +1,11 @@
 import type { Editor } from "@tiptap/core";
 
 import type { ChatMentionOption } from "@/components/chat-mention-extension";
-import type { ConditionNode, WorkspaceEntity } from "@/lib/types";
 import {
   getEntityName,
   getFirstFile,
-} from "@/routes/_protected.workspaces/$workspaceId/-utils";
+} from "@/components/workspaces/entity-utils";
+import type { ConditionNode, WorkspaceEntity } from "@/lib/types";
 
 export const CHAT_MENTION_ENTITY_RESULT_LIMIT = 50;
 export const CHAT_MENTION_SEARCH_DEBOUNCE_MS = 150;

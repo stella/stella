@@ -5,10 +5,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
+import { TemplateForm } from "@/components/templates/template-form";
 import { FormattingProvider } from "@/i18n/formatting-context";
 import messages from "@/i18n/langs/en.json";
 import type Messages from "@/i18n/langs/messages.gen";
-import { TemplateForm } from "@/routes/_protected.knowledge/-components/template-form";
 
 // Regression guard for the Template Studio Fill tab having no AI prefill
 // entry point: Studio's TemplateForm call now passes `prefill={{}}` (see

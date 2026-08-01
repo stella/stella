@@ -1,15 +1,15 @@
 import { panic, Result } from "better-result";
 import { t } from "elysia";
 
-import {
-  buildKanbanGroupCondition,
-  tGroupByPropertyId,
-} from "@/api/handlers/entities/kanban-group-condition";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { tConditionNode } from "@/api/lib/conditions/contract";
 import { tSafeId } from "@/api/lib/custom-schema";
+import {
+  buildKanbanGroupCondition,
+  tGroupByPropertyId,
+} from "@/api/lib/entities/kanban-group-condition";
 import { queryEntities } from "@/api/lib/entities/query-entities";
 import {
   decodeEntitiesWindowCursor,

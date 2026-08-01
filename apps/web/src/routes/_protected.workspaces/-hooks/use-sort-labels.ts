@@ -1,6 +1,6 @@
 import { useTranslations } from "use-intl";
 
-import type { MattersSortKey } from "@/routes/_protected.workspaces/-types";
+import type { MattersSortKey } from "@/lib/workspaces/types";
 
 export const useSortLabels = (): Record<MattersSortKey, string> => {
   const t = useTranslations();

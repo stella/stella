@@ -1,5 +1,5 @@
+import { getInternalPropertyId } from "@/components/workspaces/entity-utils";
 import type { WorkspaceEntity, WorkspaceField } from "@/lib/types";
-import { getInternalPropertyId } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 export type KanbanCardMetadataVisibility = {
   showStatus: boolean;

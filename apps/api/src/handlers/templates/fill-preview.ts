@@ -30,9 +30,10 @@ import { readManifest } from "@/api/lib/docx/template-manifest";
 import { isTemplateData } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getS3 } from "@/api/lib/s3";
+import { containsNull } from "@/api/lib/templates/template-data";
 import { isRecord } from "@/api/lib/type-guards";
 
-import { assertTemplateFillUsage, containsNull } from "./fill";
+import { assertTemplateFillUsage } from "./fill";
 
 const fillPreviewBodySchema = t.Object({
   values: t.String(),

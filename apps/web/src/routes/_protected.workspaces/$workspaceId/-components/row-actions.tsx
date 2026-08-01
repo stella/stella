@@ -51,6 +51,18 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { useRequestChatAbout } from "@/components/chat/use-request-chat-about";
 import { useInspectorStore } from "@/components/inspector/inspector-store";
 import Tooltip from "@/components/tooltip";
+import { CopyToMatterDialog } from "@/components/workspaces/copy-to-matter-dialog";
+import {
+  buildSelectionParentLookup,
+  resolveAncestorIds,
+  type CopyToMatterEntity,
+} from "@/components/workspaces/copy-to-matter-dialog.logic";
+import {
+  getEntityName,
+  getFirstFile,
+} from "@/components/workspaces/entity-utils";
+import { useEntitiesCountLimit } from "@/components/workspaces/hooks/use-limits";
+import type { TableTreeNode } from "@/components/workspaces/table/types";
 import { PDF_MIME_TYPE } from "@/consts";
 import { env } from "@/env";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -73,6 +85,10 @@ import type {
 } from "@/lib/types";
 import { isFileDisplayable } from "@/lib/types";
 import { downloadFile } from "@/lib/utils";
+import {
+  useCreateEntities,
+  useDeleteEntities,
+} from "@/lib/workspaces/mutations/entities";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { useIsWorkflowRunning } from "@/lib/workspaces/queries/workspace";
@@ -81,12 +97,6 @@ import {
   CellLockMenuItem,
   CellMetadataMenuSection,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags";
-import { CopyToMatterDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog";
-import {
-  buildSelectionParentLookup,
-  resolveAncestorIds,
-  type CopyToMatterEntity,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog.logic";
 import { useDocumentOcrAvailability } from "@/routes/_protected.workspaces/$workspaceId/-components/document-ocr-availability";
 import { getExtension } from "@/routes/_protected.workspaces/$workspaceId/-components/file-extension";
 import { requestManualOcr } from "@/routes/_protected.workspaces/$workspaceId/-components/request-manual-ocr";
@@ -97,18 +107,8 @@ import {
   type OcrSource,
   type RowActionContext,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions.logic";
-import type { TableTreeNode } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
-import { useEntitiesCountLimit } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-limits";
 import { useRetryCell } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-retry-cell";
 import { useUploadVersion } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-upload-version";
-import {
-  useCreateEntities,
-  useDeleteEntities,
-} from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities";
-import {
-  getEntityName,
-  getFirstFile,
-} from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 export type VirtualAnchor = {
   getBoundingClientRect: () => DOMRect;

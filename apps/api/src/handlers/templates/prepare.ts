@@ -2,12 +2,12 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { prepareTemplateFromDocument } from "@/api/handlers/templates/prepare-template";
-import { suggestTemplateFieldsOrEmpty } from "@/api/handlers/templates/suggest-template-fields";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
+import { suggestTemplateFieldsOrEmpty } from "@/api/lib/templates/suggest-template-fields";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const prepareBodySchema = t.Object({

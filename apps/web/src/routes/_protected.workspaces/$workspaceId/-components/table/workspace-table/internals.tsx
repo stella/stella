@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 
+import type { TableColumn } from "@/components/workspaces/table/types";
 import { TOOLBAR_ROW_HEIGHT_PX } from "@/lib/consts";
-import type { TableColumn } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 import type { ColumnDropEdge } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-grid-order";
 import { isPinnedBoundaryColumn } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals-helpers";
 

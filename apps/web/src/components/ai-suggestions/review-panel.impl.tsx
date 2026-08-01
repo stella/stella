@@ -64,11 +64,11 @@ import {
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { authClient } from "@/lib/auth";
+import { sessionOptions } from "@/lib/auth-queries";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { compareByLocale } from "@/lib/collation";
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
-import { sessionOptions } from "@/routes/-queries";
 
 const EMPTY_SUGGESTIONS: readonly ReviewSuggestion[] = [];
 

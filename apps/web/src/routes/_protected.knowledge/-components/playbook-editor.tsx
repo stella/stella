@@ -50,14 +50,6 @@ import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import {
-  documentTypesOptions,
-  knowledgeKeys,
-  playbookDetailOptions,
-} from "@/lib/knowledge/queries";
-import { toSafeId } from "@/lib/safe-id";
-import { resolvePlaybookScrollTop } from "@/routes/_protected.knowledge/-components/playbook-editor.logic";
-import { usePlaybookNavStore } from "@/routes/_protected.knowledge/-components/playbook-nav-store";
-import {
   duplicatePosition,
   extractToGraded,
   gradedToExtract,
@@ -72,9 +64,17 @@ import {
   type PositionErrors,
   type PositionSeverity,
   validatePosition,
-} from "@/routes/_protected.knowledge/-components/playbook-types";
+} from "@/lib/knowledge/playbook-types";
+import {
+  documentTypesOptions,
+  knowledgeKeys,
+  playbookDetailOptions,
+} from "@/lib/knowledge/queries";
+import { toSafeId } from "@/lib/safe-id";
+import { resolvePlaybookScrollTop } from "@/routes/_protected.knowledge/-components/playbook-editor.logic";
 import { PlaybookVersionHistorySheet } from "@/routes/_protected.knowledge/-components/playbook-version-history-sheet";
 import { PositionEditor } from "@/routes/_protected.knowledge/-components/position-editor";
+import { usePlaybookNavStore } from "@/stores/knowledge/playbook-nav-store";
 
 const PLAYBOOK_JUMP_TOP_OFFSET_PX = 24;
 

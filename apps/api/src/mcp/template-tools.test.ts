@@ -49,7 +49,7 @@ void mock.module("@/api/lib/anonymization-blacklist", () => ({
 // Stub every export this service has, not only the two the MCP tools use, so
 // the module mock stays complete when another test file that imports the other
 // fill helpers (e.g. the chat template tools) is run in the same process.
-void mock.module("@/api/handlers/templates/template-fill-service", () => ({
+void mock.module("@/api/lib/templates/template-fill-service", () => ({
   describeStoredTemplate: describeStoredTemplateMock,
   fillStoredTemplateWithText: fillStoredTemplateWithTextMock,
   fillStoredTemplateWithTextStrict: fillStoredTemplateWithTextStrictMock,
@@ -73,7 +73,7 @@ void mock.module("@/api/lib/templates/create-template", () => ({
   createStoredTemplate: createStoredTemplateMock,
 }));
 
-void mock.module("@/api/handlers/templates/record-use", () => ({
+void mock.module("@/api/lib/templates/record-use", () => ({
   recordTemplateFill: recordTemplateFillMock,
   recordTemplateUse: recordTemplateUseMock,
 }));

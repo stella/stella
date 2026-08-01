@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { validateEntityCreateCapacity } from "@/api/handlers/uploads/entity-create";
 import {
   authorizeUploadPurpose,
   uploadRoutePermission,
@@ -10,6 +9,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
+import { validateEntityCreateCapacity } from "@/api/lib/uploads/entity-create";
 
 const bodySchema = t.Object({
   entityCount: t.Integer({ minimum: 1, maximum: LIMITS.entitiesCount }),

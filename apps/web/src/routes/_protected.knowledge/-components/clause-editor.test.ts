@@ -11,6 +11,8 @@ import {
   rejectAIEditRevision,
 } from "@stll/folio-core/prosemirror/commands/comments";
 
+import type { ClauseParagraph } from "@/components/templates/clause-editor-types";
+
 import {
   buildTrackedChangeDoc,
   canReviewFlushReportResolved,
@@ -29,7 +31,6 @@ import {
 } from "./clause-ai-tracked-changes";
 import { CLAUSE_DIRECTIVE_NODE } from "./clause-directive-extension";
 import { clauseBodyToTipTap, tipTapToClauseBody } from "./clause-editor-tiptap";
-import type { ClauseParagraph } from "./clause-editor-types";
 
 const trackedChangeSchema = new Schema({
   nodes: {

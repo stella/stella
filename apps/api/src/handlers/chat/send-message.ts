@@ -93,7 +93,6 @@ import {
   getChatTools,
   resolveRegisteredDocxEditMode,
 } from "@/api/handlers/chat/tools/chat-tools";
-import { createChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import {
   buildExternalMcpSystemHint,
   createLazyExternalMcpToolsLoader,
@@ -128,6 +127,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resolveEffectiveChatModelId } from "@/api/lib/chat-model-selection";
+import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { detached } from "@/api/lib/detached";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/files/utils";

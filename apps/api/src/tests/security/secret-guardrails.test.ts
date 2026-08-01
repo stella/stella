@@ -31,7 +31,7 @@ describe("secret guardrails", () => {
       "apps/api/src/lib/secret-brands.ts",
     );
     const cryptoSource = readRootFixture(
-      "apps/api/src/handlers/mcp-connectors/crypto.ts",
+      "apps/api/src/lib/mcp-upstream/crypto.ts",
     );
 
     expect(secretBrandsSource).not.toContain("export const toSecret");

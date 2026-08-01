@@ -11,7 +11,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { useLocale } from "@/i18n/formatting-context";
 import { compareByLocale } from "@/lib/collation";
-import type { Workspace } from "@/routes/_protected.workspaces/-types";
+import type { Workspace } from "@/lib/workspaces/types";
 
 type ClientFilterPopoverProps = {
   value: string[] | undefined;

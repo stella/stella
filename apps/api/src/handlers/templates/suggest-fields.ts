@@ -1,13 +1,13 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import {
-  suggestTemplateFields,
-  toSuggestFieldsError,
-} from "@/api/handlers/templates/suggest-template-fields";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import {
+  suggestTemplateFields,
+  toSuggestFieldsError,
+} from "@/api/lib/templates/suggest-template-fields";
 
 const suggestFieldsBodySchema = t.Object({
   // The text the editor chose to send: the whole document or just the current

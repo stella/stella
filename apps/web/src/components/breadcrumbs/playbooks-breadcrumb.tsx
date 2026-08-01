@@ -1,7 +1,7 @@
 import { useTranslations } from "use-intl";
 
 import { DetailBreadcrumb } from "@/components/breadcrumbs/detail-breadcrumb";
-import { usePlaybookNavStore } from "@/routes/_protected.knowledge/-components/playbook-nav-store";
+import { usePlaybookNavStore } from "@/stores/knowledge/playbook-nav-store";
 
 export const PlaybooksBreadcrumb = () => {
   const t = useTranslations();

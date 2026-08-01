@@ -16,6 +16,7 @@ import type {
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth";
+import { roleOptions } from "@/lib/auth-queries";
 import { BoundedSet } from "@/lib/bounded-set";
 import { detached } from "@/lib/detached";
 import { knowledgeKeys } from "@/lib/knowledge/queries";
@@ -26,7 +27,6 @@ import {
 import { subscribeToMcpOAuthOutcome } from "@/lib/mcp-oauth-channel";
 import { organizationSettingsOptions } from "@/lib/organization/settings-queries";
 import { ensureRouteQueryData } from "@/lib/react-query";
-import { roleOptions } from "@/routes/-queries";
 import type { CatalogueBrowserFilterKind } from "@/routes/_protected.knowledge/-components/catalogue/catalogue-browser";
 import type { ToolDetailPayload } from "@/routes/_protected.knowledge/-components/catalogue/tool-detail-view";
 

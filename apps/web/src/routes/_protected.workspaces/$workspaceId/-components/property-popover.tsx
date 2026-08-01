@@ -15,6 +15,15 @@ import { Popover, PopoverPopup } from "@stll/ui/components/popover";
 import { Separator } from "@stll/ui/components/separator";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { CreateProperty } from "@/components/workspaces/create-property";
+import { useStartWorkflow } from "@/components/workspaces/hooks/use-start-workflow";
+import { DeleteProperty } from "@/components/workspaces/properties/delete-property";
+import { PinProperty } from "@/components/workspaces/properties/pin-property";
+import { PropertyConditions } from "@/components/workspaces/properties/property-conditions";
+import { PropertyPopoverTrigger } from "@/components/workspaces/properties/shared";
+import { SortProperty } from "@/components/workspaces/properties/sort-property";
+import { toSortHint } from "@/components/workspaces/property-utils";
+import type { TableHeader } from "@/components/workspaces/table/types";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
@@ -25,18 +34,9 @@ import type {
   PropertyDependency,
   WorkspaceProperty,
 } from "@/lib/types";
+import { useUpdateProperty } from "@/lib/workspaces/mutations/properties";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
-import { CreateProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/create-property";
-import { DeleteProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/delete-property";
-import { PinProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/pin-property";
-import { PropertyConditions } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/property-conditions";
-import { PropertyPopoverTrigger } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/shared";
-import { SortProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/sort-property";
 import { useGroupScope } from "@/routes/_protected.workspaces/$workspaceId/-components/table/group-scope";
-import type { TableHeader } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
-import { toSortHint } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
-import { useStartWorkflow } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-start-workflow";
-import { useUpdateProperty } from "@/routes/_protected.workspaces/$workspaceId/-mutations/properties";
 
 type PropertyPopoverProps = {
   property: WorkspaceProperty;

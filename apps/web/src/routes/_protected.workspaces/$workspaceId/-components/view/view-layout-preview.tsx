@@ -11,6 +11,15 @@ import { useTranslations } from "use-intl";
 import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { PreviewPane } from "@stll/ui/components/preview-pane";
 
+import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
+import type {
+  TaskPriority,
+  TaskStatus,
+} from "@/components/workspaces/tasks/task-detail-constants";
+import {
+  STATUS_COLORS,
+  STATUS_ICONS,
+} from "@/components/workspaces/tasks/task-detail-constants";
 import type { TranslationKey } from "@/i18n/types";
 import { DOCX_MIME } from "@/lib/consts";
 import { toSafeId } from "@/lib/safe-id";
@@ -18,16 +27,7 @@ import type { ViewLayoutType, WorkspaceEntity } from "@/lib/types";
 import type { CalendarTask } from "@/lib/workspaces/queries/calendar-tasks";
 import { CalendarEntityChip } from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-entity-chip";
 import { TASK_STATUS_DOT_COLORS } from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-utils";
-import { EntityKindIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-kind-icon";
 import { KanbanCard } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card";
-import type {
-  TaskPriority,
-  TaskStatus,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-constants";
-import {
-  STATUS_COLORS,
-  STATUS_ICONS,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-constants";
 
 import "./view-layout-preview.css";
 

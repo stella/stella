@@ -2,8 +2,7 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
-
-import { createChatRefRegistry } from "./ref-registry";
+import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 
 type HydratedEntityValue = {
   contactRef?: string;

@@ -2,8 +2,8 @@ import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
-import { createChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import { toSafeId } from "@/api/lib/branded-types";
+import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import {
   brandPersistedEntityId,
   brandPersistedWorkspaceId,

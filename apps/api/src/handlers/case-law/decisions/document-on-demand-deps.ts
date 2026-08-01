@@ -8,12 +8,12 @@
  */
 
 import type { OnDemandDocumentDeps } from "@/api/handlers/case-law/decisions/document-on-demand";
+import { getCaseLawIngestionDb } from "@/api/lib/case-law-ingestion-db";
 import {
   DOCUMENT_FETCH_BUDGET_MS,
   fetchDecisionDocument,
   recordDocumentFetchRequest,
-} from "@/api/handlers/case-law/ingestion/sk-document-backfill";
-import { getCaseLawIngestionDb } from "@/api/lib/case-law-ingestion-db";
+} from "@/api/lib/legal-search/sk-document-backfill";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 export const onDemandDocumentDeps: OnDemandDocumentDeps = {

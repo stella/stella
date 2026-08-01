@@ -29,13 +29,10 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { workspacesRouteOptions } from "@/lib/workspaces/queries";
+import type { MattersColumnId, MattersSortKey } from "@/lib/workspaces/types";
+import { ALL_COLUMNS } from "@/lib/workspaces/types";
 import { useColumnLabels } from "@/routes/_protected.workspaces/-hooks/use-column-labels";
 import { useSortLabels } from "@/routes/_protected.workspaces/-hooks/use-sort-labels";
-import type {
-  MattersColumnId,
-  MattersSortKey,
-} from "@/routes/_protected.workspaces/-types";
-import { ALL_COLUMNS } from "@/routes/_protected.workspaces/-types";
 import { useConfigStore } from "@/stores/config-store";
 
 const routeApi = getRouteApi("/_protected");
