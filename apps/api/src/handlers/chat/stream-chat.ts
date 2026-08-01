@@ -923,8 +923,38 @@ const errorFromRunErrorChunk = (chunk: RunErrorChunk): Error => {
   return error;
 };
 
+// An adapter forwards the provider's structured error body as `rawEvent` only
+// when the SDK exception exposes one. An exception that carries the status as a
+// plain field and stringifies the response body into its message arrives with
+// neither `rawEvent` nor `code`, so the error rebuilt from the chunk holds no
+// status at all, and every failure from that provider (quota, billing, retired
+// model and outage alike) falls to `unknown`. Recover the body from the
+// message when the message is one. It is read for classification only and
+// never logged: a provider message can echo request content.
+const isErrorBodyRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const providerErrorBody = (
+  message: string,
+): Record<string, unknown> | undefined => {
+  // `JSON.parse` skips leading whitespace, so the guard must too; otherwise a
+  // body an adapter passed through verbatim would be dropped over a newline.
+  if (!message.trimStart().startsWith("{")) {
+    return undefined;
+  }
+  const parsed = Result.try((): unknown => JSON.parse(message));
+  if (Result.isError(parsed)) {
+    return undefined;
+  }
+  return isErrorBodyRecord(parsed.value) ? parsed.value : undefined;
+};
+
 const classifyRunErrorChunk = (chunk: RunErrorChunk): AIErrorKind =>
-  classifyAIError(chunk.rawEvent ?? errorFromRunErrorChunk(chunk));
+  classifyAIError(
+    chunk.rawEvent ??
+      providerErrorBody(runErrorMessage(chunk)) ??
+      errorFromRunErrorChunk(chunk),
+  );
 
 // Classified kinds (quota, billing, retired model, provider outage) are
 // expected operational states; `unknown` means a failure shape this code

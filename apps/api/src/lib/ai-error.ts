@@ -23,8 +23,17 @@ export const AI_ERROR_KINDS = [
 
 export type AIErrorKind = (typeof AI_ERROR_KINDS)[number];
 
+const HTTP_STATUS_MIN = 100;
+const HTTP_STATUS_MAX = 599;
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object";
+
+const isHttpStatus = (value: unknown): value is number =>
+  typeof value === "number" &&
+  Number.isInteger(value) &&
+  value >= HTTP_STATUS_MIN &&
+  value <= HTTP_STATUS_MAX;
 
 const providerStatusCode = (error: unknown): number | null => {
   if (!isRecord(error)) {
@@ -39,6 +48,23 @@ const providerStatusCode = (error: unknown): number | null => {
   const status = error["status"];
   if (typeof status === "number" && Number.isInteger(status)) {
     return status;
+  }
+
+  // A provider response body nests the status one level down, as
+  // `{ error: { code, message, status } }`, where `code` is the HTTP status and
+  // `status` its symbolic name. Only an integer inside the HTTP range counts,
+  // so a body whose `code` is symbolic ("insufficient_quota") or an
+  // application error number still falls through to the cause walk.
+  const body = error["error"];
+  if (isRecord(body)) {
+    const bodyStatus = body["status"];
+    if (isHttpStatus(bodyStatus)) {
+      return bodyStatus;
+    }
+    const bodyCode = body["code"];
+    if (isHttpStatus(bodyCode)) {
+      return bodyCode;
+    }
   }
 
   return null;
