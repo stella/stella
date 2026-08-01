@@ -192,12 +192,20 @@ jobs:
               psql -h 127.0.0.1 -U postgres -d stella "$@"
           }
 
-          original_hash=$(psql_smoke -tAc \
+          original_hash=$(psql_smoke -v ON_ERROR_STOP=1 -tAc \
             "SELECT hash FROM drizzle.__drizzle_migrations ORDER BY id DESC LIMIT 1")
+          if [[ ! "$original_hash" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "::error::Could not read the latest applied migration hash."
+            exit 1
+          fi
           restore_hash() {
-            psql_smoke -v ON_ERROR_STOP=1 -v original_hash="$original_hash" -c \
-              "UPDATE drizzle.__drizzle_migrations SET hash = :'original_hash' WHERE hash = repeat('0', 64)" \
-              >/dev/null
+            local restored
+            restored=$(psql_smoke -v ON_ERROR_STOP=1 -v original_hash="$original_hash" -tAc \
+              "WITH restored AS (UPDATE drizzle.__drizzle_migrations SET hash = :'original_hash' WHERE hash = repeat('0', 64) RETURNING 1) SELECT count(*) FROM restored")
+            if [[ "$restored" != "1" ]]; then
+              echo "::error::Restored $restored migration rows; expected 1."
+              return 1
+            fi
           }
           trap restore_hash EXIT
 
