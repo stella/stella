@@ -150,7 +150,7 @@ CREATE TABLE IF NOT EXISTS "case_law_corpus_index_projections" (
   "indexed_hash" varchar(64),
   "pending_action" text,
   "pending_hash" varchar(64),
-  "pending_index_id" varchar(64),
+  "pending_index_ids" varchar(64)[],
   "updated_at" timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT "case_law_corpus_index_projections_pk" PRIMARY KEY ("generation", "decision_id"),
   CONSTRAINT "case_law_corpus_index_projections_generation_fk"
@@ -162,8 +162,8 @@ CREATE TABLE IF NOT EXISTS "case_law_corpus_index_projections" (
   CONSTRAINT "case_law_corpus_index_projections_pending_shape"
     CHECK (
       (
-        ("pending_action" IS NULL AND "pending_hash" IS NULL AND "pending_index_id" IS NULL)
-        OR ("pending_action" = 'index' AND "pending_hash" IS NOT NULL AND "pending_index_id" IS NOT NULL)
+        ("pending_action" IS NULL AND "pending_hash" IS NULL AND "pending_index_ids" IS NULL)
+        OR ("pending_action" = 'index' AND "pending_hash" IS NOT NULL AND cardinality("pending_index_ids") > 0)
         OR ("pending_action" = 'delete' AND "pending_hash" IS NULL)
       ) IS TRUE
     )
@@ -171,6 +171,8 @@ CREATE TABLE IF NOT EXISTS "case_law_corpus_index_projections" (
 CREATE INDEX IF NOT EXISTS "case_law_corpus_index_projections_pending_idx"
   ON "case_law_corpus_index_projections" ("generation", "decision_id")
   WHERE "pending_action" IS NOT NULL;--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "case_law_corpus_index_projections_decision_idx"
+  ON "case_law_corpus_index_projections" ("decision_id");--> statement-breakpoint
 ALTER TABLE "case_law_corpus_index_projections" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 DO $policy$
 BEGIN
@@ -217,7 +219,7 @@ BEGIN
       decision_id,
       pending_action,
       pending_hash,
-      pending_index_id,
+      pending_index_ids,
       updated_at
     )
     SELECT checkpoint.generation, NEW.id, 'delete', null, null, clock_timestamp()
@@ -231,9 +233,15 @@ BEGIN
     ON CONFLICT ON CONSTRAINT case_law_corpus_index_projections_pk DO UPDATE
     SET pending_action = EXCLUDED.pending_action,
         pending_hash = EXCLUDED.pending_hash,
-        pending_index_id = coalesce(
-          case_law_corpus_index_projections.index_id,
-          case_law_corpus_index_projections.pending_index_id
+        pending_index_ids = ARRAY(
+          SELECT DISTINCT target
+          FROM unnest(
+            coalesce(case_law_corpus_index_projections.pending_index_ids, '{}')
+            || CASE
+              WHEN case_law_corpus_index_projections.index_id IS NULL THEN '{}'
+              ELSE ARRAY[case_law_corpus_index_projections.index_id]
+            END
+          ) AS target
         ),
         updated_at = EXCLUDED.updated_at;
     RETURN NEW;
@@ -253,7 +261,7 @@ BEGIN
         indexed_hash = NEW.indexed_hash,
         pending_action = null,
         pending_hash = null,
-        pending_index_id = null,
+        pending_index_ids = null,
         updated_at = clock_timestamp()
     WHERE projection.decision_id = NEW.id
       AND NEW.indexed_generation =
@@ -266,14 +274,14 @@ BEGIN
     decision_id,
     pending_action,
     pending_hash,
-    pending_index_id,
+    pending_index_ids,
     updated_at
   )
   SELECT checkpoint.generation,
          NEW.id,
          'index',
          NEW.content_hash,
-         checkpoint.generation || '_' || lower(NEW.country),
+         ARRAY[checkpoint.generation || '_' || lower(NEW.country)],
          clock_timestamp()
   FROM case_law_corpus_index_backfills AS checkpoint
   WHERE NOT EXISTS (
@@ -285,7 +293,13 @@ BEGIN
   ON CONFLICT ON CONSTRAINT case_law_corpus_index_projections_pk DO UPDATE
   SET pending_action = EXCLUDED.pending_action,
       pending_hash = EXCLUDED.pending_hash,
-      pending_index_id = EXCLUDED.pending_index_id,
+      pending_index_ids = ARRAY(
+        SELECT DISTINCT target
+        FROM unnest(
+          coalesce(case_law_corpus_index_projections.pending_index_ids, '{}')
+          || EXCLUDED.pending_index_ids
+        ) AS target
+      ),
       updated_at = EXCLUDED.updated_at;
 
   RETURN NEW;

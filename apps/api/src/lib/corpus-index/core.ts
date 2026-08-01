@@ -306,8 +306,8 @@ export type CorpusIndexAdapter<
     scopedDb: ScopedDb,
     id: SafeId<TBrand>,
   ) => Promise<string | null>;
-  /** Last physical index recorded for this rebuild generation, if any. */
-  generationProjectionIndexId: (row: TRow) => string | null;
+  /** Physical indexes recorded for this rebuild generation. */
+  generationProjectionIndexIds: (row: TRow) => readonly string[];
   /**
    * Compare-and-set every row's selected state to indexed, within the
    * caller's transaction, as ONE statement. Returns the ids that were
@@ -850,8 +850,9 @@ export const createCorpusIndexer = <
           const previousIndexes = new Set<string>();
           if (options.type === "generation-rebuild") {
             previousIndexes.add(indexId);
-            const projectionIndexId = adapter.generationProjectionIndexId(row);
-            if (projectionIndexId !== null) {
+            for (const projectionIndexId of adapter.generationProjectionIndexIds(
+              row,
+            )) {
               previousIndexes.add(projectionIndexId);
             }
           }

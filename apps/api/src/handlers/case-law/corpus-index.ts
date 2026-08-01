@@ -116,7 +116,7 @@ const GENERATION_PAGE_SELECT_COLUMNS = {
   generationIndexId: caseLawCorpusIndexProjections.indexId,
   generationIndexedHash: caseLawCorpusIndexProjections.indexedHash,
   generationPendingAction: caseLawCorpusIndexProjections.pendingAction,
-  generationPendingIndexId: caseLawCorpusIndexProjections.pendingIndexId,
+  generationPendingIndexIds: caseLawCorpusIndexProjections.pendingIndexIds,
   sourceDescriptor: caseLawSources.descriptor,
 };
 
@@ -168,7 +168,7 @@ const commitCurrentGenerationProjection = async (
         indexed_hash,
         pending_action,
         pending_hash,
-        pending_index_id,
+        pending_index_ids,
         updated_at
       )
       SELECT ${generation}, live.id, ${indexId}, live.content_hash, null, null, null, now()
@@ -186,10 +186,10 @@ const commitCurrentGenerationProjection = async (
               THEN null
             ELSE projection.pending_hash
           END,
-          pending_index_id = CASE
+          pending_index_ids = CASE
             WHEN projection.pending_hash IS NOT DISTINCT FROM EXCLUDED.indexed_hash
               THEN null
-            ELSE projection.pending_index_id
+            ELSE projection.pending_index_ids
           END,
           updated_at = EXCLUDED.updated_at
       RETURNING decision_id
@@ -234,15 +234,21 @@ const reserveGenerationProjectionTargets = async (
         decision_id,
         pending_action,
         pending_hash,
-        pending_index_id,
+        pending_index_ids,
         updated_at
       )
-      SELECT ${generation}, live.id, 'index', live.content_hash, live.index_id, now()
+      SELECT ${generation}, live.id, 'index', live.content_hash, ARRAY[live.index_id], now()
       FROM live
       ON CONFLICT (generation, decision_id) DO UPDATE
       SET pending_action = EXCLUDED.pending_action,
           pending_hash = EXCLUDED.pending_hash,
-          pending_index_id = EXCLUDED.pending_index_id,
+          pending_index_ids = ARRAY(
+            SELECT DISTINCT target
+            FROM unnest(
+              coalesce(projection.pending_index_ids, '{}')
+              || EXCLUDED.pending_index_ids
+            ) AS target
+          ),
           updated_at = EXCLUDED.updated_at
       RETURNING decision_id
     )
@@ -280,7 +286,7 @@ const clearTerminalGenerationPending = async (
     UPDATE ${caseLawCorpusIndexProjections} AS projection
     SET pending_action = null,
         pending_hash = null,
-        pending_index_id = null,
+        pending_index_ids = null,
         updated_at = now()
     FROM live
     WHERE projection.generation = ${generation}
@@ -516,7 +522,13 @@ export const caseLawCorpusIndexAdapter = {
     );
     return fallback.at(0)?.fulltext ?? null;
   },
-  generationProjectionIndexId: (row) => row.generationIndexId,
+  generationProjectionIndexIds: (row) => [
+    ...(row.generationIndexId === null ? [] : [row.generationIndexId]),
+    ...("generationPendingIndexIds" in row &&
+    Array.isArray(row.generationPendingIndexIds)
+      ? row.generationPendingIndexIds
+      : []),
+  ],
   markIndexedBatch: async (tx, { rows, indexId, mode, now }) => {
     if (rows.length === 0) {
       return new Set();
@@ -736,7 +748,7 @@ type GenerationBackfillCheckpoint = {
 type GenerationBackfillRow = IndexableRow & {
   createdAt: Date;
   generationIndexedHash: string | null;
-  generationPendingIndexId: string | null;
+  generationPendingIndexIds: string[] | null;
   sourceDescriptor: CorpusSourceDescriptor | null;
 };
 
@@ -798,18 +810,25 @@ const backfillGenerationRows: GenerationBackfillDependencies["backfillRows"] =
 
 const removeGenerationProjection: GenerationBackfillDependencies["removeProjection"] =
   async (scopedDb, { generation, options, row }) => {
-    const targetIndexId = row.generationIndexId ?? row.generationPendingIndexId;
-    if (targetIndexId !== null) {
-      const removed = await indexer.removeFenced({
-        beforeRemoteEffect: options.beforeRemoteEffect,
-        entityId: row.id,
-        indexId: targetIndexId,
-        operation: "delete",
-        scopedDb,
-      });
-      if (removed.isErr()) {
-        throw removed.error;
-      }
+    const targetIndexIds = new Set(row.generationPendingIndexIds ?? []);
+    if (row.generationIndexId !== null) {
+      targetIndexIds.add(row.generationIndexId);
+    }
+    const removals = await Promise.all(
+      [...targetIndexIds].map(
+        async (targetIndexId) =>
+          await indexer.removeFenced({
+            beforeRemoteEffect: options.beforeRemoteEffect,
+            entityId: row.id,
+            indexId: targetIndexId,
+            operation: "delete",
+            scopedDb,
+          }),
+      ),
+    );
+    const failed = removals.find((removed) => removed.isErr());
+    if (failed?.isErr()) {
+      throw failed.error;
     }
     await scopedDb(async (tx) => {
       await options.beforeDatabaseMark(tx);
@@ -976,6 +995,27 @@ const selectSourceReconciliationCheckpoint = async (
     ).at(0),
   );
 
+const hasPendingGenerationProjection = async (
+  scopedDb: Parameters<typeof backfillIncrementalCorpusIndex>[0],
+  generation: string,
+): Promise<boolean> =>
+  await scopedDb(async (tx) =>
+    Boolean(
+      (
+        await tx
+          .select({ decisionId: caseLawCorpusIndexProjections.decisionId })
+          .from(caseLawCorpusIndexProjections)
+          .where(
+            and(
+              eq(caseLawCorpusIndexProjections.generation, generation),
+              isNotNull(caseLawCorpusIndexProjections.pendingAction),
+            ),
+          )
+          .limit(1)
+      ).at(0),
+    ),
+  );
+
 const sameSourceReconciliation = (checkpoint: SourceReconciliationCheckpoint) =>
   and(
     eq(
@@ -1003,7 +1043,6 @@ const isEligibleForGeneration = (
 const withoutSourceDescriptor = ({
   sourceDescriptor: _sourceDescriptor,
   generationIndexedHash: _generationIndexedHash,
-  generationPendingIndexId: _generationPendingIndexId,
   ...row
 }: GenerationBackfillRow): IndexableRow => row;
 
@@ -1200,7 +1239,7 @@ export const createCaseLawGenerationBackfill =
             (row) =>
               !isCorpusEligible(row) &&
               (row.generationIndexId !== null ||
-                row.generationPendingIndexId !== null),
+                (row.generationPendingIndexIds?.length ?? 0) > 0),
           );
           await Promise.all(
             removals.map(async (row) => {
@@ -1267,14 +1306,14 @@ export const createCaseLawGenerationBackfill =
             (row) =>
               !isCorpusEligible(row) &&
               row.generationIndexId === null &&
-              row.generationPendingIndexId === null,
+              (row.generationPendingIndexIds?.length ?? 0) === 0,
           )
           .map(withoutSourceDescriptor);
         const terminalDeletes = pendingIndexRows.filter(
           (row) =>
             !isCorpusEligible(row) &&
             (row.generationIndexId !== null ||
-              row.generationPendingIndexId !== null),
+              (row.generationPendingIndexIds?.length ?? 0) > 0),
         );
         const indexed =
           eligible.length === 0
@@ -1536,11 +1575,11 @@ export const backfillCorpusIndex = async (
   generation: string,
   options: { readConcurrency?: number } = {},
 ): Promise<number> => {
-  const sourceReconciliation = await selectSourceReconciliationCheckpoint(
-    scopedDb,
-    generation,
-  );
-  if (sourceReconciliation) {
+  const [sourceReconciliation, pendingProjection] = await Promise.all([
+    selectSourceReconciliationCheckpoint(scopedDb, generation),
+    hasPendingGenerationProjection(scopedDb, generation),
+  ]);
+  if (sourceReconciliation || pendingProjection) {
     const result = await backfillCorpusIndexGenerationPage(
       scopedDb,
       batchSize,

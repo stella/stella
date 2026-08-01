@@ -142,7 +142,7 @@ export const redactCaseLawDecision = async ({
         .select({
           generation: caseLawCorpusIndexProjections.generation,
           indexId: caseLawCorpusIndexProjections.indexId,
-          pendingIndexId: caseLawCorpusIndexProjections.pendingIndexId,
+          pendingIndexIds: caseLawCorpusIndexProjections.pendingIndexIds,
         })
         .from(caseLawCorpusIndexProjections)
         .where(eq(caseLawCorpusIndexProjections.decisionId, decisionId)),
@@ -186,8 +186,8 @@ export const redactCaseLawDecision = async ({
       if (projection.indexId !== null) {
         addTarget(projection.generation, projection.indexId);
       }
-      if (projection.pendingIndexId !== null) {
-        addTarget(projection.generation, projection.pendingIndexId);
+      for (const pendingIndexId of projection.pendingIndexIds ?? []) {
+        addTarget(projection.generation, pendingIndexId);
       }
     }
 

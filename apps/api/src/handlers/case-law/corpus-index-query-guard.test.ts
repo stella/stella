@@ -66,9 +66,9 @@ test("generation checkpoint migration preserves replay and role invariants", asy
   ).toHaveLength(2);
   expect(source).not.toContain("ON CONFLICT (");
   expect(source).toContain("pending_hash = EXCLUDED.pending_hash");
-  expect(source).toContain("pending_index_id = EXCLUDED.pending_index_id");
+  expect(source).toContain("pending_index_ids = EXCLUDED.pending_index_ids");
   expect(source).toContain(
-    "case_law_corpus_index_projections.pending_index_id",
+    "case_law_corpus_index_projections.pending_index_ids",
   );
   expect(source).toContain("pending_action = EXCLUDED.pending_action");
   expect(source).toContain("'delete', null, null, clock_timestamp()");
@@ -83,6 +83,9 @@ test("generation checkpoint migration preserves replay and role invariants", asy
   );
   expect(source).toContain(
     'CREATE INDEX CONCURRENTLY "case_law_decisions_corpus_generation_cursor_idx"\n  ON "case_law_decisions" ("created_at", "id")',
+  );
+  expect(source).toContain(
+    'CREATE INDEX IF NOT EXISTS "case_law_corpus_index_projections_decision_idx"\n  ON "case_law_corpus_index_projections" ("decision_id")',
   );
   expect(source).toContain(
     'CREATE INDEX CONCURRENTLY "case_law_decisions_source_generation_cursor_idx"\n  ON "case_law_decisions" ("source_id", "created_at", "id")',

@@ -294,7 +294,7 @@ test(
       generation: GENERATION,
       pendingAction: "index",
       pendingHash: "first",
-      pendingIndexId: corpusIndexId(GENERATION, "CZE"),
+      pendingIndexIds: [corpusIndexId(GENERATION, "CZE")],
     });
     expect(await backfill(scopedDb, 2, GENERATION)).toEqual({
       indexed: 1,
@@ -340,7 +340,7 @@ test(
       generation,
       pendingAction: "index",
       pendingHash: "first",
-      pendingIndexId: corpusIndexId(generation, "CZE"),
+      pendingIndexIds: [corpusIndexId(generation, "CZE")],
     });
     await db
       .update(caseLawDecisions)
@@ -390,7 +390,7 @@ test(
       indexedHash: "first",
       pendingAction: null,
       pendingHash: null,
-      pendingIndexId: null,
+      pendingIndexIds: null,
     });
     const decision = (
       await db
@@ -426,7 +426,7 @@ test(
         .set({
           pendingAction: "index",
           pendingHash: "first",
-          pendingIndexId: corpusIndexId(generation, "SVK"),
+          pendingIndexIds: [corpusIndexId(generation, "SVK")],
         })
         .where(eq(caseLawCorpusIndexProjections.generation, generation));
       expect(await backfill(scopedDb, 10, generation)).toEqual({
@@ -502,7 +502,7 @@ test(
       generation,
       pendingAction: "index",
       pendingHash: "first",
-      pendingIndexId: corpusIndexId(generation, "CZE"),
+      pendingIndexIds: [corpusIndexId(generation, "CZE")],
     });
     const completing = backfill(scopedDb, 100, generation);
     await reconciliationStartedPromise;
@@ -606,7 +606,7 @@ test(
       generation,
       pendingAction: "index",
       pendingHash: "first",
-      pendingIndexId: corpusIndexId(generation, "CZE"),
+      pendingIndexIds: [corpusIndexId(generation, "CZE")],
     });
     await db
       .update(caseLawDecisions)
@@ -1017,7 +1017,7 @@ test(
         .set({
           pendingAction: "index",
           pendingHash: "current",
-          pendingIndexId: indexId,
+          pendingIndexIds: [indexId],
         })
         .where(eq(caseLawCorpusIndexProjections.generation, generation));
       expect(await visible()).toBe(false);
@@ -1028,7 +1028,7 @@ test(
           indexId: corpusIndexId(generation, "SVK"),
           pendingAction: null,
           pendingHash: null,
-          pendingIndexId: null,
+          pendingIndexIds: null,
         })
         .where(eq(caseLawCorpusIndexProjections.generation, generation));
       expect(await visible()).toBe(false);
