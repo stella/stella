@@ -9,10 +9,19 @@ import type * as intl from "use-intl";
 import type { useTranslations as useAliasedTranslations } from "use-intl";
 
 import type * as i18n from "../../apps/web/src/i18n/types";
+import type { TranslationKey as ImportedTranslationKey } from "../../apps/web/src/i18n/types";
+
+// MUST flag: renaming TranslationKey during a direct re-export would let a
+// consumer import the broad key union under an unrecognizable name.
+// oxlint-disable-next-line no-broad-translation-callable/no-broad-translation-callable
+export type { TranslationKey as ReexportedCatalogKey } from "../../apps/web/src/i18n/types";
 
 type TranslationKey = "feature.title" | "feature.description";
 type FeatureKey = "feature.title";
 type AppKey = TranslationKey;
+// MUST flag: exported aliases of the broad union are forbidden at the module
+// boundary, before another module can import the hidden name.
+// oxlint-disable-next-line no-broad-translation-callable/no-broad-translation-callable
 export type ExportedAppKey = TranslationKey;
 
 declare const getTranslator: () => unknown;
@@ -38,6 +47,11 @@ export type ExportedAliasedBroadCallable = (key: ExportedAppKey) => string;
 // union.
 // oxlint-disable-next-line no-broad-translation-callable/no-broad-translation-callable
 export type QualifiedBroadCallable = (key: i18n.TranslationKey) => string;
+
+// MUST flag: renamed imports of the canonical TranslationKey binding remain
+// broad even though the local identifier differs.
+// oxlint-disable-next-line no-broad-translation-callable/no-broad-translation-callable
+export type ImportedBroadCallable = (key: ImportedTranslationKey) => string;
 
 // MUST flag: the full server translator type is retained in a helper alias.
 // oxlint-disable-next-line no-broad-translation-callable/no-broad-translation-callable
@@ -82,6 +96,23 @@ export const nestedAliasFixture = () => {
   type NestedBroadCallable = (key: FirstNestedKey) => string;
 
   return (translator: NestedBroadCallable) => translator;
+};
+
+// MUST flag only the broad binding when separate lexical scopes reuse the
+// same alias name; the narrow binding below must remain allowed.
+export const broadScopedAliasFixture = () => {
+  type ReusedKey = TranslationKey;
+  // oxlint-disable-next-line no-broad-translation-callable/no-broad-translation-callable
+  type ScopedBroadCallable = (key: ReusedKey) => string;
+
+  return (translator: ScopedBroadCallable) => translator;
+};
+
+export const narrowScopedAliasFixture = () => {
+  type ReusedKey = FeatureKey;
+  type ScopedNarrowCallable = (key: ReusedKey) => string;
+
+  return (translator: ScopedNarrowCallable) => translator;
 };
 
 // Allowed: a narrow feature-specific key union keeps assignability bounded.

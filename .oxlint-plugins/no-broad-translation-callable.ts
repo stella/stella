@@ -35,9 +35,9 @@ const broadTranslatorMemberNames = new Set([
 const unwrapTypeAnnotation = (node) =>
   node?.type === "TSTypeAnnotation" ? node.typeAnnotation : node;
 
-const qualifiedNameRoot = (node): string | null => {
+const qualifiedNameRoot = (node) => {
   if (node?.type === "Identifier") {
-    return node.name;
+    return node;
   }
   if (node?.type === "TSQualifiedName") {
     return qualifiedNameRoot(node.left);
@@ -47,52 +47,26 @@ const qualifiedNameRoot = (node): string | null => {
 
 const isQualifiedNamespaceMember = (
   node,
-  namespaces: Set<string>,
+  namespaceVariables: Set<unknown>,
   memberNames: Set<string>,
+  resolveVariable,
 ): boolean => {
   const root = qualifiedNameRoot(node);
+  const variable = root ? resolveVariable(root) : null;
   return (
     node?.type === "TSQualifiedName" &&
     node.right?.type === "Identifier" &&
     memberNames.has(node.right.name) &&
-    root !== null &&
-    namespaces.has(root)
+    variable !== null &&
+    namespaceVariables.has(variable)
   );
 };
-
-const isBroadKeyTypeReference = (
-  node,
-  broadKeyTypeNames: Set<string>,
-  broadKeyTypeNamespaces: Set<string>,
-): boolean =>
-  node?.type === "TSTypeReference" &&
-  (node.typeName?.type === "Identifier" &&
-  broadKeyTypeNames.has(node.typeName.name)
-    ? true
-    : isQualifiedNamespaceMember(
-        node.typeName,
-        broadKeyTypeNamespaces,
-        translationKeyTypeNames,
-      ));
-
-const hasTranslationKeyParameter = (
-  node,
-  broadKeyTypeNames: Set<string>,
-  broadKeyTypeNamespaces: Set<string>,
-): boolean =>
-  (node.params ?? []).some((parameter) => {
-    const annotation = unwrapTypeAnnotation(parameter.typeAnnotation);
-    return isBroadKeyTypeReference(
-      annotation,
-      broadKeyTypeNames,
-      broadKeyTypeNamespaces,
-    );
-  });
 
 const isBroadTranslatorReturnType = (
   node,
   broadTranslatorTypeNames: Set<string>,
-  broadTranslatorNamespaces: Set<string>,
+  broadTranslatorNamespaceVariables: Set<unknown>,
+  resolveVariable,
 ): boolean => {
   if (
     node.type !== "TSTypeReference" ||
@@ -108,8 +82,9 @@ const isBroadTranslatorReturnType = (
       broadTranslatorTypeNames.has(queriedType.exprName.name)) ||
       isQualifiedNamespaceMember(
         queriedType.exprName,
-        broadTranslatorNamespaces,
+        broadTranslatorNamespaceVariables,
         broadTranslatorMemberNames,
+        resolveVariable,
       ))
   );
 };
@@ -121,33 +96,71 @@ export default {
       meta: {
         type: "problem",
         messages: {
+          broadAliasExport:
+            "Do not export an alias of the full TranslationKey union; consumers could reintroduce a broad translation callable under a hidden name.",
           broadCallable:
             "Do not pass the full use-intl translator across a helper boundary; translate fixed keys at the UI call site, pass plain strings, or expose a narrow key union.",
         },
       },
       create(context) {
-        const broadKeyTypeNames = new Set(["TranslationKey"]);
         const broadTranslatorTypeNames = new Set([
           "getTranslator",
           "useTranslations",
         ]);
-        const broadKeyTypeNamespaces = new Set<string>();
-        const broadTranslatorNamespaces = new Set<string>();
+        const broadKeyVariables = new Set();
+        const broadKeyNamespaceVariables = new Set();
+        const broadTranslatorNamespaceVariables = new Set();
         const typeAliases = new Array<{
           id?: { name: string; type: string };
           typeAnnotation?: unknown;
         }>();
         const broadParameterCandidates = new Array<unknown>();
         const broadReturnTypeCandidates = new Array<unknown>();
+        const exportedAliasNodes = new Map();
+        const localExportCandidates = new Array<{
+          local?: { name: string; type: string };
+        }>();
+        const renamedReexportCandidates = new Array<unknown>();
+
+        const resolveVariable = (identifierNode) => {
+          let scope = context.sourceCode.getScope(identifierNode);
+          while (scope) {
+            const variable = scope.set.get(identifierNode.name);
+            if (variable) {
+              return variable;
+            }
+            scope = scope.upper;
+          }
+          return null;
+        };
+
+        const isBroadKeyTypeReference = (node): boolean => {
+          if (node?.type !== "TSTypeReference") {
+            return false;
+          }
+          if (node.typeName?.type === "Identifier") {
+            const variable = resolveVariable(node.typeName);
+            return variable
+              ? broadKeyVariables.has(variable)
+              : node.typeName.name === "TranslationKey";
+          }
+          return isQualifiedNamespaceMember(
+            node.typeName,
+            broadKeyNamespaceVariables,
+            translationKeyTypeNames,
+            resolveVariable,
+          );
+        };
+
+        const hasTranslationKeyParameter = (node): boolean =>
+          (node.params ?? []).some((parameter) =>
+            isBroadKeyTypeReference(
+              unwrapTypeAnnotation(parameter.typeAnnotation),
+            ),
+          );
 
         const reportBroadParameters = (node) => {
-          if (
-            hasTranslationKeyParameter(
-              node,
-              broadKeyTypeNames,
-              broadKeyTypeNamespaces,
-            )
-          ) {
+          if (hasTranslationKeyParameter(node)) {
             context.report({ messageId: "broadCallable", node });
           }
         };
@@ -168,19 +181,30 @@ export default {
                     typeof source === "string" &&
                     isTranslationTypeModule(source)
                   ) {
-                    broadKeyTypeNamespaces.add(specifier.local.name);
+                    const variable = resolveVariable(specifier.local);
+                    if (variable) {
+                      broadKeyNamespaceVariables.add(variable);
+                    }
                   }
                   if (source === "use-intl") {
-                    broadTranslatorNamespaces.add(specifier.local.name);
+                    const variable = resolveVariable(specifier.local);
+                    if (variable) {
+                      broadTranslatorNamespaceVariables.add(variable);
+                    }
                   }
                   continue;
                 }
                 if (
                   specifier.type === "ImportSpecifier" &&
                   isIdentifierNamed(specifier.imported, "TranslationKey") &&
-                  specifier.local?.type === "Identifier"
+                  specifier.local?.type === "Identifier" &&
+                  typeof source === "string" &&
+                  isTranslationTypeModule(source)
                 ) {
-                  broadKeyTypeNames.add(specifier.local.name);
+                  const variable = resolveVariable(specifier.local);
+                  if (variable) {
+                    broadKeyVariables.add(variable);
+                  }
                 }
                 if (
                   specifier.type === "ImportSpecifier" &&
@@ -193,25 +217,70 @@ export default {
             }
           },
           "Program:exit"() {
+            for (const declaration of typeAliases) {
+              if (
+                declaration.id?.type === "Identifier" &&
+                declaration.id.name === "TranslationKey"
+              ) {
+                const variable = resolveVariable(declaration.id);
+                if (variable) {
+                  broadKeyVariables.add(variable);
+                }
+              }
+            }
+
             let foundAlias = true;
             while (foundAlias) {
               foundAlias = false;
               for (const declaration of typeAliases) {
                 const annotation = declaration.typeAnnotation;
+                const variable = declaration.id
+                  ? resolveVariable(declaration.id)
+                  : null;
                 if (
                   declaration.id?.type !== "Identifier" ||
-                  broadKeyTypeNames.has(declaration.id.name) ||
-                  !isBroadKeyTypeReference(
-                    annotation,
-                    broadKeyTypeNames,
-                    broadKeyTypeNamespaces,
-                  )
+                  variable === null ||
+                  broadKeyVariables.has(variable) ||
+                  !isBroadKeyTypeReference(annotation)
                 ) {
                   continue;
                 }
-                broadKeyTypeNames.add(declaration.id.name);
+                broadKeyVariables.add(variable);
                 foundAlias = true;
               }
+            }
+
+            for (const [declaration, exportNode] of exportedAliasNodes) {
+              if (declaration.id?.name === "TranslationKey") {
+                continue;
+              }
+              const variable = declaration.id
+                ? resolveVariable(declaration.id)
+                : null;
+              if (variable && broadKeyVariables.has(variable)) {
+                context.report({
+                  messageId: "broadAliasExport",
+                  node: exportNode,
+                });
+              }
+            }
+            for (const specifier of localExportCandidates) {
+              if (specifier.local?.type !== "Identifier") {
+                continue;
+              }
+              const variable = resolveVariable(specifier.local);
+              if (variable && broadKeyVariables.has(variable)) {
+                context.report({
+                  messageId: "broadAliasExport",
+                  node: specifier,
+                });
+              }
+            }
+            for (const specifier of renamedReexportCandidates) {
+              context.report({
+                messageId: "broadAliasExport",
+                node: specifier,
+              });
             }
 
             for (const candidate of broadParameterCandidates) {
@@ -222,7 +291,8 @@ export default {
                 isBroadTranslatorReturnType(
                   candidate,
                   broadTranslatorTypeNames,
-                  broadTranslatorNamespaces,
+                  broadTranslatorNamespaceVariables,
+                  resolveVariable,
                 )
               ) {
                 context.report({ messageId: "broadCallable", node: candidate });
@@ -231,6 +301,34 @@ export default {
           },
           TSTypeAliasDeclaration(node) {
             typeAliases.push(node);
+          },
+          ExportNamedDeclaration(node) {
+            if (node.declaration?.type === "TSTypeAliasDeclaration") {
+              exportedAliasNodes.set(node.declaration, node);
+            }
+
+            const source = node.source?.value;
+            for (const specifier of node.specifiers ?? []) {
+              if (
+                typeof source === "string" &&
+                isTranslationTypeModule(source)
+              ) {
+                if (
+                  isIdentifierNamed(specifier.local, "TranslationKey") &&
+                  !isIdentifierNamed(specifier.exported, "TranslationKey")
+                ) {
+                  renamedReexportCandidates.push(specifier);
+                }
+                continue;
+              }
+              if (
+                (source === null || source === undefined) &&
+                specifier.local?.type === "Identifier" &&
+                specifier.local.name !== "TranslationKey"
+              ) {
+                localExportCandidates.push(specifier);
+              }
+            }
           },
           TSCallSignatureDeclaration(node) {
             broadParameterCandidates.push(node);
