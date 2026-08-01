@@ -454,10 +454,26 @@ const countLintSuppressions = (content: string): number => {
   return total;
 };
 
-const REQUIRE_QUERY_LIMIT_DISABLE =
-  /(?:\/\/|\/\*)\s*(?:eslint|oxlint)-disable(?:-next-line|-line)?\b(?:(?!--|\*\/)[^\n])*\brequire-query-limit\/require-query-limit\b/u;
-const LINT_DISABLE_WITHOUT_RULES =
-  /(?:\/\/|\/\*)\s*(?:eslint|oxlint)-disable(?:-next-line|-line)?\s*(?:--|\*\/|$)/u;
+const REQUIRE_QUERY_LIMIT_RULE = "require-query-limit/require-query-limit";
+
+const lintDisableRules = (directive: string): string[] | null => {
+  const match = LINT_DISABLE_DIRECTIVE.exec(directive);
+  if (!match || match.index === undefined) {
+    return null;
+  }
+
+  const remainder = directive.slice(match.index + match[0].length);
+  const boundaries = [remainder.indexOf("--"), remainder.indexOf("*/")].filter(
+    (index) => index >= 0,
+  );
+  const ruleList = remainder
+    .slice(0, boundaries.length > 0 ? Math.min(...boundaries) : undefined)
+    .trim();
+  if (ruleList.length === 0) {
+    return [];
+  }
+  return ruleList.split(/[\s,]+/u).filter(Boolean);
+};
 
 // A dedicated guard keeps one newly-added require-query-limit escape hatch
 // from being funded by removing an unrelated lint suppression elsewhere. A
@@ -465,16 +481,41 @@ const LINT_DISABLE_WITHOUT_RULES =
 const countRequireQueryLimitSuppressions = (content: string): number => {
   let total = 0;
   let literalState = NO_OPEN_TEMPLATE;
+  let pendingBlockDirective: string | null = null;
+
+  const countDirective = (directive: string) => {
+    const rules = lintDisableRules(directive);
+    if (
+      rules !== null &&
+      (rules.length === 0 || rules.includes(REQUIRE_QUERY_LIMIT_RULE))
+    ) {
+      total += 1;
+    }
+  };
 
   for (const raw of content.split("\n")) {
     const { code, state } = stripStringLiterals(raw, literalState);
     literalState = state;
-    if (
-      REQUIRE_QUERY_LIMIT_DISABLE.test(code) ||
-      LINT_DISABLE_WITHOUT_RULES.test(code)
-    ) {
-      total += 1;
+
+    if (pendingBlockDirective !== null) {
+      pendingBlockDirective += `\n${code}`;
+      if (code.includes("*/")) {
+        countDirective(pendingBlockDirective);
+        pendingBlockDirective = null;
+      }
+      continue;
     }
+
+    const match = LINT_DISABLE_DIRECTIVE.exec(code);
+    if (!match || match.index === undefined) {
+      continue;
+    }
+    const directive = code.slice(match.index);
+    if (directive.startsWith("/*") && !directive.includes("*/")) {
+      pendingBlockDirective = directive;
+      continue;
+    }
+    countDirective(directive);
   }
   return total;
 };
@@ -1398,10 +1439,10 @@ const SELF_TEST_LINT_SUPPRESSIONS = `${LINT_SUPPRESSION_FIXTURE_LINES.join("\n")
 // Expected from THIS fixture: both linters' -next-line forms, the block-
 // comment form, and the bare `oxlint-disable` = 4. The string copy and the
 // prose comment are excluded. The raw-use-effect fixture contributes 3 more
-// directives, while the query-limit fixtures below contribute 5, so the
-// whole-repo expectation is 4 + 3 + 5.
+// directives, while the query-limit fixtures below contribute 8, so the
+// whole-repo expectation is 4 + 3 + 8.
 const EXPECTED_LINT_SUPPRESSIONS_OWN_FILE = 4;
-const EXPECTED_LINT_SUPPRESSIONS_TOTAL = 12;
+const EXPECTED_LINT_SUPPRESSIONS_TOTAL = 15;
 
 const REQUIRE_QUERY_LIMIT_SUPPRESSION_FIXTURE_LINES = [
   "// eslint-disable-next-line require-query-limit/require-query-limit -- fixed parent cardinality",
@@ -1409,13 +1450,22 @@ const REQUIRE_QUERY_LIMIT_SUPPRESSION_FIXTURE_LINES = [
   "// eslint-disable -- a bare disable applies to every rule",
   "// eslint-disable-next-line no-console -- another rule only",
   "// eslint-disable-next-line no-console -- require-query-limit/require-query-limit remains enabled",
+  "/* eslint-disable",
+  " no-console",
+  "*/",
+  "/* oxlint-disable",
+  " require-query-limit/require-query-limit",
+  "*/",
+  "/* eslint-disable",
+  "*/",
   "// require-query-limit/require-query-limit in prose is not a directive",
   'const doc = "// eslint-disable-next-line require-query-limit/require-query-limit";',
 ];
 const SELF_TEST_REQUIRE_QUERY_LIMIT_SUPPRESSIONS = `${REQUIRE_QUERY_LIMIT_SUPPRESSION_FIXTURE_LINES.join("\n")}\n`;
-// Three targeted/bare directives above, one bare disable in the general lint
-// fixture, and one operational-script directive.
-const EXPECTED_REQUIRE_QUERY_LIMIT_SUPPRESSIONS = 5;
+// Five targeted/bare directives above, one bare disable in the general lint
+// fixture, and one operational-script directive. The multiline no-console
+// directive proves unrelated block rules do not count.
+const EXPECTED_REQUIRE_QUERY_LIMIT_SUPPRESSIONS = 7;
 
 const TS_SUPPRESSION_FIXTURE_LINES = [
   "// @ts-expect-error legacy upstream shape",
