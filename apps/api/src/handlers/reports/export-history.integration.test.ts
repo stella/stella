@@ -7,10 +7,10 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { inArray, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import { reportExports } from "@/api/db/schema";
+import { fields, properties, reportExports } from "@/api/db/schema";
 import type { ViewLayout } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { readReportExportHistory } from "@/api/handlers/reports/export-history";
@@ -45,6 +45,8 @@ const requesterExports: {
   id: SafeId<"reportExport">;
   timestamp: string;
 }[] = [];
+const fallbackPropertyId = toSafeId<"property">(Bun.randomUUIDv7());
+const fallbackFieldId = toSafeId<"field">(Bun.randomUUIDv7());
 
 const readRequesterExportPage = async (cursor: string | undefined) =>
   await Result.gen(() =>
@@ -64,6 +66,33 @@ beforeAll(async () => {
   const scoped = createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1);
   safeDb = toSafeDbMock(asTestRaw<ScopedDb>(scoped));
 
+  await testDb.insert(properties).values({
+    id: fallbackPropertyId,
+    workspaceId: ids.wsA1,
+    name: "Report result file",
+    status: "fresh",
+    content: { version: 1, type: "file" },
+    tool: { version: 1, type: "manual-input" },
+  });
+  await testDb.insert(fields).values({
+    id: fallbackFieldId,
+    workspaceId: ids.wsA1,
+    propertyId: fallbackPropertyId,
+    entityVersionId: ids.entityVersionA1,
+    content: {
+      version: 1,
+      type: "file",
+      id: Bun.randomUUIDv7(),
+      fileName: "historical-report.docx",
+      mimeType:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      sizeBytes: 1024,
+      encrypted: false,
+      sha256Hex: "a".repeat(64),
+      pdfFileId: null,
+    },
+  });
+
   for (let index = 0; index < 7; index++) {
     const exportId = toSafeId<"reportExport">(Bun.randomUUIDv7());
     const timestamp = `2026-07-17T10:00:00.123${Math.floor(index / 2)
@@ -79,6 +108,11 @@ beforeAll(async () => {
       ...(index === 1 && {
         resultEntityId: ids.entityA1,
         resultFieldId: ids.fieldA1,
+      }),
+      ...(index === 2 && { resultEntityId: ids.entityA1 }),
+      ...(index === 3 && {
+        resultEntityId: ids.entityA1,
+        resultFieldId: ids.fieldB1,
       }),
       resultS3Key:
         index === 0 ? `exports/${ids.orgA}/${ids.wsA1}/${exportId}.docx` : null,
@@ -111,6 +145,10 @@ afterAll(async () => {
         .delete(reportExports)
         .where(inArray(reportExports.id, seededExportIds));
     }
+    await testDb.delete(fields).where(eq(fields.id, fallbackFieldId));
+    await testDb
+      .delete(properties)
+      .where(eq(properties.id, fallbackPropertyId));
   } finally {
     await releaseRlsFixture();
   }
@@ -213,6 +251,36 @@ describe("report export history", () => {
     expect(workspaceExport).toMatchObject({
       resultEntityId: ids.entityA1,
       resultFieldId: ids.fieldA1,
+    });
+  });
+
+  test("resolves current file provenance for historical and invalid receipts", async () => {
+    const result = await Result.gen(() =>
+      readReportExportHistory({
+        cursor: undefined,
+        limit: 100,
+        requestedBy: ids.userA1,
+        safeDb,
+        workspaceId: ids.wsA1,
+      }),
+    );
+
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    const historicalExport = result.value.items.find(
+      ({ id }) => id === requesterExports.at(2)?.id,
+    );
+    const foreignFieldExport = result.value.items.find(
+      ({ id }) => id === requesterExports.at(3)?.id,
+    );
+    expect(historicalExport).toMatchObject({
+      resultEntityId: ids.entityA1,
+      resultFieldId: fallbackFieldId,
+    });
+    expect(foreignFieldExport).toMatchObject({
+      resultEntityId: ids.entityA1,
+      resultFieldId: fallbackFieldId,
     });
   });
 });

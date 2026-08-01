@@ -15,7 +15,6 @@ import { isStringLiteral } from "./utils.ts";
 
 const TEMPLATE_PREFIX = "/workspaces/";
 const TEMPLATE_MIDDLE = "/entities/";
-const LEGACY_ROUTE_SUFFIX = /^[/?#]/u;
 const LEGACY_ENTITY_ROUTE_LITERAL =
   /^\/workspaces\/[^/?#]+\/entities\/[^/?#]+(?:[/?#]|$)/u;
 const STATIC_WORKSPACE_ENTITY_PREFIX = /^\/workspaces\/[^/?#]+\/entities\/$/u;
@@ -53,9 +52,6 @@ const templateQuasiText = (template: AstNode, index: number): string | null => {
   return typeof cooked === "string" ? cooked : null;
 };
 
-const isLegacyRouteSuffix = (suffix: string): boolean =>
-  suffix === "" || LEGACY_ROUTE_SUFFIX.test(suffix);
-
 const isLegacyRouteQuasis = (quasis: readonly string[]): boolean => {
   const first = quasis.at(0);
   if (first === undefined) {
@@ -73,15 +69,9 @@ const isLegacyRouteQuasis = (quasis: readonly string[]): boolean => {
       return true;
     }
     const third = quasis.at(2);
-    return (
-      second === TEMPLATE_MIDDLE &&
-      third !== undefined &&
-      isLegacyRouteSuffix(third)
-    );
+    return second === TEMPLATE_MIDDLE && third !== undefined;
   }
-  return (
-    STATIC_WORKSPACE_ENTITY_PREFIX.test(first) && isLegacyRouteSuffix(second)
-  );
+  return STATIC_WORKSPACE_ENTITY_PREFIX.test(first);
 };
 
 const templateQuasis = (template: AstNode): string[] | null => {

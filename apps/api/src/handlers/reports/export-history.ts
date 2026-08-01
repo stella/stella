@@ -20,6 +20,8 @@ import {
 import type { Page } from "@/api/lib/pagination";
 import { brandPersistedReportExportId } from "@/api/lib/safe-id-boundaries";
 
+import { resolvedReportResultFieldId } from "./result-field";
+
 type ReportExportHistoryItem = Pick<
   typeof reportExports.$inferSelect,
   "id" | "mode" | "resultEntityId" | "resultFieldId" | "status"
@@ -102,7 +104,9 @@ export const readReportExportHistory = async function* ({
         status: reportExports.status,
         mode: reportExports.mode,
         resultEntityId: reportExports.resultEntityId,
-        resultFieldId: reportExports.resultFieldId,
+        resultFieldId: resolvedReportResultFieldId.as(
+          "resolved_result_field_id",
+        ),
         resultS3Key: reportExports.resultS3Key,
         createdAt: reportExports.createdAt,
         createdAtCursor: reportExportCreatedAtCursor.as("created_at_cursor"),

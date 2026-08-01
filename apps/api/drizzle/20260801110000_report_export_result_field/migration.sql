@@ -31,9 +31,10 @@ SET lock_timeout = '1s';
 --> statement-breakpoint
 SET statement_timeout = '5s';
 --> statement-breakpoint
--- Install referential actions before writing the historical backfill. The
--- index already exists, so a concurrent field/version delete is both bounded
--- and guaranteed to clear any value inserted below.
+-- The index already exists, so field/version deletion stays bounded as new
+-- workers begin recording exact result fields. Historical and rolling-deploy
+-- receipts are resolved in bounded read queries; this schema migration never
+-- performs an unbounded data rewrite.
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -46,21 +47,3 @@ BEGIN
       FOREIGN KEY ("result_field_id") REFERENCES "fields"("id") ON DELETE SET NULL NOT VALID;
   END IF;
 END $$;
---> statement-breakpoint
--- Existing workspace exports already retain the created entity. Resolve its
--- current file once so dropping the redirect route does not strand old rows.
-UPDATE "report_exports" AS "report_export"
-SET "result_field_id" = (
-  SELECT "field"."id"
-  FROM "entities" AS "entity"
-  INNER JOIN "fields" AS "field"
-    ON "field"."entity_version_id" = "entity"."current_version_id"
-   AND "field"."workspace_id" = "report_export"."workspace_id"
-  WHERE "entity"."id" = "report_export"."result_entity_id"
-    AND "entity"."workspace_id" = "report_export"."workspace_id"
-    AND "field"."content"->>'type' = 'file'
-  ORDER BY "field"."id"
-  LIMIT 1
-)
-WHERE "report_export"."result_entity_id" IS NOT NULL
-  AND "report_export"."result_field_id" IS NULL;

@@ -52,7 +52,8 @@ export const similarlyStructuredPrivatePath =
   "/_protected/workspaces/$workspaceId/entities/$entityId";
 export const entityApiRoute = `/entities/${workspaceId}/entity/${entityId}`;
 export const similarlyNamedRoute = `/workspaces/${workspaceId}/entity-versions/${entityId}`;
-export const similarlySuffixedRoute = `/workspaces/${workspaceId}/entities/${entityId}-archive`;
-export const similarlySuffixedConcatenation =
-  // oxlint-disable-next-line prefer-template -- intentional near-match for the concatenation guard
+// oxlint-disable-next-line no-legacy-entity-route/no-legacy-entity-route -- appended text remains part of the dynamic entity segment
+export const legacyAppendedTemplateRoute = `/workspaces/${workspaceId}/entities/${entityId}-archive`;
+export const legacyAppendedConcatenationRoute =
+  // oxlint-disable-next-line no-legacy-entity-route/no-legacy-entity-route, prefer-template -- appended text remains part of the dynamic entity segment
   "/workspaces/" + workspaceId + "/entities/" + entityId + "-archive";
