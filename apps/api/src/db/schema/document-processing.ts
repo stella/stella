@@ -141,7 +141,7 @@ export const documentProcessingRuns = p.pgTable(
      */
     p
       .index("document_processing_runs_queued_schedule_idx")
-      .on(table.nextAttemptAt, table.createdAt, table.id)
+      .on(table.nextAttemptAt.asc().nullsFirst(), table.createdAt, table.id)
       .where(sql`${table.status} = 'queued'`),
     p
       .index("document_processing_runs_running_lease_idx")
