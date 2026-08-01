@@ -19,7 +19,7 @@ import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
-import { resolveCanonicalDocumentDestinationQuery } from "@/lib/workspaces/resolve-document-destination-query";
+import { resolveReportExportDestinationQuery } from "@/lib/workspaces/resolve-report-export-destination-query";
 
 function ReportExportRecoveryPage() {
   const t = useTranslations();
@@ -86,9 +86,8 @@ function ReportExportRecoveryPage() {
 
   const handleOpen = async () => {
     const result = await Result.tryPromise(async () => {
-      const destination = await resolveCanonicalDocumentDestinationQuery({
-        entityId: data.resultEntityId,
-        fieldId: data.resultFieldId,
+      const destination = await resolveReportExportDestinationQuery({
+        exportId,
         queryClient,
         workspaceId,
       });

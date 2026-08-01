@@ -71,4 +71,31 @@ describe("canonical document destination resolution", () => {
       }),
     ).toBeNull();
   });
+
+  test("rejects empty and malformed identifiers", async () => {
+    const loadForbidden = async () => {
+      throw new Error("invalid identifiers must fail before querying");
+    };
+    const invalidPairs = [
+      { entityId: "", fieldId: "field" },
+      { entityId, fieldId: "" },
+      { entityId, fieldId: false },
+      { entityId, fieldId: 0 },
+      { entityId, fieldId: {} },
+      { entityId, fieldId: [] },
+    ];
+
+    expect(
+      await Promise.all(
+        invalidPairs.map(
+          async (pair) =>
+            await resolveCanonicalDocumentDestination({
+              ...pair,
+              loadCurrentFields: loadForbidden,
+              workspaceId,
+            }),
+        ),
+      ),
+    ).toEqual(invalidPairs.map(() => null));
+  });
 });

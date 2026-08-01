@@ -14,7 +14,7 @@ import {
   REPORT_EXPORTS_PAGE_SIZE,
   reportExportsHistoryOptions,
 } from "@/lib/workspaces/queries/report-exports";
-import { resolveCanonicalDocumentDestinationQuery } from "@/lib/workspaces/resolve-document-destination-query";
+import { resolveReportExportDestinationQuery } from "@/lib/workspaces/resolve-report-export-destination-query";
 
 import { downloadReportExport } from "./report-export-actions";
 import type { ReportExportDeliveryMode } from "./report-export-tracking";
@@ -64,18 +64,11 @@ export const ReportExportHistory = ({
     }
   };
 
-  const handleOpen = async ({
-    entityId,
-    fieldId,
-  }: {
-    entityId: string;
-    fieldId: unknown;
-  }) => {
-    setActiveActionId(entityId);
+  const handleOpen = async (exportId: string) => {
+    setActiveActionId(exportId);
     const result = await Result.tryPromise(async () => {
-      const destination = await resolveCanonicalDocumentDestinationQuery({
-        entityId,
-        fieldId,
+      const destination = await resolveReportExportDestinationQuery({
+        exportId,
         queryClient,
         workspaceId,
       });
@@ -110,8 +103,8 @@ export const ReportExportHistory = ({
     );
   };
 
-  const handleOpenClick = (entityId: string, fieldId: unknown) => {
-    handleOpen({ entityId, fieldId }).catch((error: unknown) =>
+  const handleOpenClick = (exportId: string) => {
+    handleOpen(exportId).catch((error: unknown) =>
       analytics.captureError(error),
     );
   };
@@ -209,13 +202,12 @@ const REPORT_EXPORT_MODE_KEYS = {
 type ReportExportHistoryActionProps = {
   activeActionId: string | null;
   onDownload: (exportId: string) => void;
-  onOpen: (entityId: string, fieldId: unknown) => void;
+  onOpen: (exportId: string) => void;
   reportExport: {
     downloadAvailable: boolean;
     id: string;
     mode: ReportExportDeliveryMode;
     resultEntityId: unknown;
-    resultFieldId: unknown;
     status: ReportExportStatus;
   };
 };
@@ -250,13 +242,11 @@ const ReportExportHistoryAction = ({
   if (typeof reportExport.resultEntityId !== "string") {
     return null;
   }
-  const resultEntityId = reportExport.resultEntityId;
-
   return (
     <Button
-      disabled={activeActionId === resultEntityId}
+      disabled={activeActionId === reportExport.id}
       onClick={() => {
-        onOpen(resultEntityId, reportExport.resultFieldId);
+        onOpen(reportExport.id);
       }}
       size="sm"
       type="button"

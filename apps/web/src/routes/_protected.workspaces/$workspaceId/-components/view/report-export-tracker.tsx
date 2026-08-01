@@ -14,7 +14,7 @@ import {
   reportExportDetailOptions,
   reportExportsKeys,
 } from "@/lib/workspaces/queries/report-exports";
-import { resolveCanonicalDocumentDestinationQuery } from "@/lib/workspaces/resolve-document-destination-query";
+import { resolveReportExportDestinationQuery } from "@/lib/workspaces/resolve-report-export-destination-query";
 
 import { downloadReportExport } from "./report-export-actions";
 import {
@@ -150,7 +150,6 @@ export const ReportExportTracker = ({
     }
 
     if (typeof settledDetail.resultEntityId === "string") {
-      const resultEntityId = settledDetail.resultEntityId;
       queryClient
         .invalidateQueries({
           queryKey: entitiesKeys.all(settledExport.workspaceId),
@@ -158,9 +157,8 @@ export const ReportExportTracker = ({
         .catch((error: unknown) => analytics.captureError(error));
       const handleOpen = async () => {
         const result = await Result.tryPromise(async () => {
-          const destination = await resolveCanonicalDocumentDestinationQuery({
-            entityId: resultEntityId,
-            fieldId: settledDetail.resultFieldId,
+          const destination = await resolveReportExportDestinationQuery({
+            exportId: settledExport.exportId,
             queryClient,
             workspaceId: settledExport.workspaceId,
           });

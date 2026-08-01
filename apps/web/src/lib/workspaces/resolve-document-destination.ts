@@ -20,9 +20,9 @@ type ResolveCanonicalDocumentDestinationOptions = {
 
 /**
  * Resolve an authorized canonical document destination at the client/API
- * boundary. A complete pair stays request-free. If an independently deployed
- * API omits the additive field id, the existing entity read supplies its
- * current file without reviving the deleted entity route.
+ * boundary. A complete server-provided pair stays request-free. If an
+ * independently deployed API omits the additive field id, the existing entity
+ * read supplies its current file without reviving the deleted entity route.
  */
 export const resolveCanonicalDocumentDestination = async ({
   entityId,
@@ -30,7 +30,17 @@ export const resolveCanonicalDocumentDestination = async ({
   loadCurrentFields,
   workspaceId,
 }: ResolveCanonicalDocumentDestinationOptions): Promise<CanonicalDocumentDestination | null> => {
-  if (typeof entityId !== "string") {
+  if (typeof entityId !== "string" || entityId.length === 0) {
+    return null;
+  }
+  if (typeof fieldId === "string" && fieldId.length === 0) {
+    return null;
+  }
+  if (
+    fieldId !== null &&
+    fieldId !== undefined &&
+    typeof fieldId !== "string"
+  ) {
     return null;
   }
   if (typeof fieldId === "string") {
@@ -41,7 +51,7 @@ export const resolveCanonicalDocumentDestination = async ({
   const currentFile = currentFields.find(
     ({ content }) => content.type === "file",
   );
-  if (!currentFile) {
+  if (!currentFile || currentFile.id.length === 0) {
     return null;
   }
 

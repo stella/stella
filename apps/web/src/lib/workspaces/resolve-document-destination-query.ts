@@ -23,9 +23,10 @@ export const resolveCanonicalDocumentDestinationQuery = async ({
       entityId: currentEntityId,
       workspaceId: currentWorkspaceId,
     }) => {
-      const entity = await queryClient.fetchQuery(
-        entityOptions(currentWorkspaceId, currentEntityId),
-      );
+      const entity = await queryClient.fetchQuery({
+        ...entityOptions(currentWorkspaceId, currentEntityId),
+        staleTime: 0,
+      });
       return entity.fields;
     },
     workspaceId,
