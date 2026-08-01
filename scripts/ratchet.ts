@@ -440,80 +440,37 @@ const countRawUseEffectSuppressions = (content: string): number => {
 const LINT_DISABLE_DIRECTIVE =
   /^(?:\/\/|\/\*)\s*(?:eslint|oxlint)-disable(?:-next-line|-line)?\b/u;
 
-const lintDisableDirectives = (content: string): string[] => {
-  const directives: string[] = [];
-  let literalState = NO_OPEN_TEMPLATE;
-  let pendingBlockDirective: string | null = null;
-  let inOrdinaryBlockComment = false;
-
-  for (const raw of content.split("\n")) {
-    const { code, state } = stripStringLiterals(raw, literalState);
-    literalState = state;
-    let remainder = code;
-
-    if (inOrdinaryBlockComment) {
-      const closeIndex = remainder.indexOf("*/");
-      if (closeIndex === -1) {
-        continue;
-      }
-      inOrdinaryBlockComment = false;
-      remainder = remainder.slice(closeIndex + 2);
+const lintDisableDirectives = (content: string, file: string): string[] => {
+  const source = ts.createSourceFile(
+    file,
+    content,
+    ts.ScriptTarget.Latest,
+    true,
+    file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  );
+  const comments = new Map<string, ts.CommentRange>();
+  const collect = (ranges: readonly ts.CommentRange[] | undefined) => {
+    for (const range of ranges ?? []) {
+      comments.set(`${range.pos}:${range.end}`, range);
     }
-
-    if (pendingBlockDirective !== null) {
-      const closeIndex = remainder.indexOf("*/");
-      if (closeIndex === -1) {
-        pendingBlockDirective += `\n${remainder}`;
-        continue;
-      }
-      pendingBlockDirective += `\n${remainder.slice(0, closeIndex + 2)}`;
-      directives.push(pendingBlockDirective);
-      pendingBlockDirective = null;
-      remainder = remainder.slice(closeIndex + 2);
+  };
+  const visit = (node: ts.Node): void => {
+    collect(ts.getLeadingCommentRanges(content, node.pos));
+    collect(ts.getTrailingCommentRanges(content, node.end));
+    for (const child of node.getChildren(source)) {
+      visit(child);
     }
+  };
+  visit(source);
 
-    while (remainder.length > 0) {
-      const lineCommentIndex = remainder.indexOf("//");
-      const blockCommentIndex = remainder.indexOf("/*");
-      const commentIndices = [lineCommentIndex, blockCommentIndex].filter(
-        (index) => index >= 0,
-      );
-      if (commentIndices.length === 0) {
-        break;
-      }
-
-      const commentIndex = Math.min(...commentIndices);
-      const comment = remainder.slice(commentIndex);
-      if (comment.startsWith("//")) {
-        if (LINT_DISABLE_DIRECTIVE.test(comment)) {
-          directives.push(comment);
-        }
-        break;
-      }
-
-      const closeIndex = comment.indexOf("*/");
-      if (!LINT_DISABLE_DIRECTIVE.test(comment)) {
-        if (closeIndex === -1) {
-          inOrdinaryBlockComment = true;
-          break;
-        }
-        remainder = comment.slice(closeIndex + 2);
-        continue;
-      }
-
-      if (closeIndex === -1) {
-        pendingBlockDirective = comment;
-        break;
-      }
-      directives.push(comment.slice(0, closeIndex + 2));
-      remainder = comment.slice(closeIndex + 2);
-    }
-  }
-  return directives;
+  return [...comments.values()]
+    .sort((left, right) => left.pos - right.pos)
+    .map(({ pos, end }) => content.slice(pos, end))
+    .filter((comment) => LINT_DISABLE_DIRECTIVE.test(comment));
 };
 
-const countLintSuppressions = (content: string): number =>
-  lintDisableDirectives(content).length;
+const countLintSuppressions = (content: string, file: string): number =>
+  lintDisableDirectives(content, file).length;
 
 const REQUIRE_QUERY_LIMIT_RULE = "require-query-limit/require-query-limit";
 
@@ -539,9 +496,12 @@ const lintDisableRules = (directive: string): string[] | null => {
 // A dedicated guard keeps one newly-added require-query-limit escape hatch
 // from being funded by removing an unrelated lint suppression elsewhere. A
 // bare disable applies to every rule, so it counts too.
-const countRequireQueryLimitSuppressions = (content: string): number => {
+const countRequireQueryLimitSuppressions = (
+  content: string,
+  file: string,
+): number => {
   let total = 0;
-  for (const directive of lintDisableDirectives(content)) {
+  for (const directive of lintDisableDirectives(content, file)) {
     const rules = lintDisableRules(directive);
     if (
       rules !== null &&
@@ -1477,10 +1437,10 @@ const SELF_TEST_LINT_SUPPRESSIONS = `${LINT_SUPPRESSION_FIXTURE_LINES.join("\n")
 // comment form, and the bare `oxlint-disable` = 4. The string copy and the
 // ordinary block-comment examples, and prose comment are excluded. The
 // raw-use-effect fixture contributes 3 more
-// directives, while the query-limit fixtures below contribute 9, so the
-// whole-repo expectation is 4 + 3 + 9.
+// directives, while the query-limit fixtures below contribute 10, so the
+// whole-repo expectation is 4 + 3 + 10.
 const EXPECTED_LINT_SUPPRESSIONS_OWN_FILE = 4;
-const EXPECTED_LINT_SUPPRESSIONS_TOTAL = 16;
+const EXPECTED_LINT_SUPPRESSIONS_TOTAL = 17;
 
 const REQUIRE_QUERY_LIMIT_SUPPRESSION_FIXTURE_LINES = [
   "// eslint-disable-next-line require-query-limit/require-query-limit -- fixed parent cardinality",
@@ -1498,13 +1458,14 @@ const REQUIRE_QUERY_LIMIT_SUPPRESSION_FIXTURE_LINES = [
   "*/",
   "// require-query-limit/require-query-limit in prose is not a directive",
   'const doc = "// eslint-disable-next-line require-query-limit/require-query-limit";',
+  String.raw`const commentLike = /\/\//u; // eslint-disable-next-line require-query-limit/require-query-limit -- regex literal precedes the real directive`,
 ];
 const SELF_TEST_REQUIRE_QUERY_LIMIT_SUPPRESSIONS = `${REQUIRE_QUERY_LIMIT_SUPPRESSION_FIXTURE_LINES.join("\n")}\n`;
-// Six targeted/bare directives above, one bare disable in the general lint
+// Seven targeted/bare directives above, one bare disable in the general lint
 // fixture, and one operational-script directive. The multiline no-console
 // directive followed by a targeted directive on its close line proves scanning
 // resumes after the first block.
-const EXPECTED_REQUIRE_QUERY_LIMIT_SUPPRESSIONS = 8;
+const EXPECTED_REQUIRE_QUERY_LIMIT_SUPPRESSIONS = 9;
 
 const TS_SUPPRESSION_FIXTURE_LINES = [
   "// @ts-expect-error legacy upstream shape",
