@@ -81,6 +81,7 @@ type IndexableRow = {
   indexedGeneration: string | null;
   generationIndexId: string | null;
   generationPendingAction: CaseLawCorpusIndexProjectionAction | null;
+  generationPendingIndexIds: string[];
   updatedAtToken: TimestampCasToken;
 };
 
@@ -107,6 +108,7 @@ const SELECT_COLUMNS = {
   indexedGeneration: caseLawDecisions.indexedGeneration,
   generationIndexId: sql<string | null>`null`,
   generationPendingAction: sql<CaseLawCorpusIndexProjectionAction | null>`null`,
+  generationPendingIndexIds: sql<string[]>`'{}'::varchar(64)[]`,
   createdAt: caseLawDecisions.createdAt,
   updatedAtToken: timestampCasToken(caseLawDecisions.updatedAt),
 };
@@ -171,7 +173,7 @@ const commitCurrentGenerationProjection = async (
         pending_index_ids,
         updated_at
       )
-      SELECT ${generation}, live.id, ${indexId}, live.content_hash, null, null, null, now()
+      SELECT ${generation}, live.id, ${indexId}, live.content_hash, null, null, '{}', now()
       FROM live
       ON CONFLICT (generation, decision_id) DO UPDATE
       SET index_id = EXCLUDED.index_id,
@@ -188,7 +190,7 @@ const commitCurrentGenerationProjection = async (
           END,
           pending_index_ids = CASE
             WHEN projection.pending_hash IS NOT DISTINCT FROM EXCLUDED.indexed_hash
-              THEN null
+              THEN '{}'
             ELSE projection.pending_index_ids
           END,
           updated_at = EXCLUDED.updated_at
@@ -245,8 +247,7 @@ const reserveGenerationProjectionTargets = async (
           pending_index_ids = ARRAY(
             SELECT DISTINCT target
             FROM unnest(
-              coalesce(projection.pending_index_ids, '{}')
-              || EXCLUDED.pending_index_ids
+              projection.pending_index_ids || EXCLUDED.pending_index_ids
             ) AS target
           ),
           updated_at = EXCLUDED.updated_at
@@ -286,7 +287,7 @@ const clearTerminalGenerationPending = async (
     UPDATE ${caseLawCorpusIndexProjections} AS projection
     SET pending_action = null,
         pending_hash = null,
-        pending_index_ids = null,
+        pending_index_ids = '{}',
         updated_at = now()
     FROM live
     WHERE projection.generation = ${generation}
@@ -524,10 +525,7 @@ export const caseLawCorpusIndexAdapter = {
   },
   generationProjectionIndexIds: (row) => [
     ...(row.generationIndexId === null ? [] : [row.generationIndexId]),
-    ...("generationPendingIndexIds" in row &&
-    Array.isArray(row.generationPendingIndexIds)
-      ? row.generationPendingIndexIds
-      : []),
+    ...row.generationPendingIndexIds,
   ],
   markIndexedBatch: async (tx, { rows, indexId, mode, now }) => {
     if (rows.length === 0) {
@@ -748,7 +746,6 @@ type GenerationBackfillCheckpoint = {
 type GenerationBackfillRow = IndexableRow & {
   createdAt: Date;
   generationIndexedHash: string | null;
-  generationPendingIndexIds: string[] | null;
   sourceDescriptor: CorpusSourceDescriptor | null;
 };
 
@@ -810,7 +807,7 @@ const backfillGenerationRows: GenerationBackfillDependencies["backfillRows"] =
 
 const removeGenerationProjection: GenerationBackfillDependencies["removeProjection"] =
   async (scopedDb, { generation, options, row }) => {
-    const targetIndexIds = new Set(row.generationPendingIndexIds ?? []);
+    const targetIndexIds = new Set(row.generationPendingIndexIds);
     if (row.generationIndexId !== null) {
       targetIndexIds.add(row.generationIndexId);
     }

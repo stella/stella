@@ -757,7 +757,11 @@ export const caseLawCorpusIndexProjections = p.pgTable(
       enum: CASE_LAW_CORPUS_INDEX_PROJECTION_ACTIONS,
     }),
     pendingHash: p.varchar("pending_hash", { length: 64 }),
-    pendingIndexIds: p.varchar("pending_index_ids", { length: 64 }).array(),
+    pendingIndexIds: p
+      .varchar("pending_index_ids", { length: 64 })
+      .array()
+      .default(sql`'{}'::varchar(64)[]`)
+      .notNull(),
     updatedAt: timestamptz("updated_at").defaultNow().notNull(),
   },
   (t) => [
@@ -785,7 +789,7 @@ export const caseLawCorpusIndexProjections = p.pgTable(
     ),
     p.check(
       "case_law_corpus_index_projections_pending_shape",
-      sql`((${t.pendingAction} IS NULL AND ${t.pendingHash} IS NULL AND ${t.pendingIndexIds} IS NULL)
+      sql`((${t.pendingAction} IS NULL AND ${t.pendingHash} IS NULL AND cardinality(${t.pendingIndexIds}) = 0)
         OR (${t.pendingAction} = 'index' AND ${t.pendingHash} IS NOT NULL AND cardinality(${t.pendingIndexIds}) > 0)
         OR (${t.pendingAction} = 'delete' AND ${t.pendingHash} IS NULL)) IS TRUE`,
     ),

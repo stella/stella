@@ -186,7 +186,7 @@ export const redactCaseLawDecision = async ({
       if (projection.indexId !== null) {
         addTarget(projection.generation, projection.indexId);
       }
-      for (const pendingIndexId of projection.pendingIndexIds ?? []) {
+      for (const pendingIndexId of projection.pendingIndexIds) {
         addTarget(projection.generation, pendingIndexId);
       }
     }

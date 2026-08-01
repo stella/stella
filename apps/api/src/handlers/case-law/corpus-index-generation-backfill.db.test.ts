@@ -390,7 +390,7 @@ test(
       indexedHash: "first",
       pendingAction: null,
       pendingHash: null,
-      pendingIndexIds: null,
+      pendingIndexIds: [],
     });
     const decision = (
       await db
@@ -1028,7 +1028,7 @@ test(
           indexId: corpusIndexId(generation, "SVK"),
           pendingAction: null,
           pendingHash: null,
-          pendingIndexIds: null,
+          pendingIndexIds: [],
         })
         .where(eq(caseLawCorpusIndexProjections.generation, generation));
       expect(await visible()).toBe(false);
