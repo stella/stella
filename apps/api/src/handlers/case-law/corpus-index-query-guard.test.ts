@@ -71,7 +71,7 @@ test("generation checkpoint migration preserves replay and role invariants", asy
     "case_law_corpus_index_projections.pending_index_id",
   );
   expect(source).toContain("pending_action = EXCLUDED.pending_action");
-  expect(source).toContain("'delete', null, clock_timestamp()");
+  expect(source).toContain("'delete', null, null, clock_timestamp()");
   expect(source).toContain(
     "NEW.indexed_generation =\n        (projection.generation || '_' || lower(NEW.country))",
   );
