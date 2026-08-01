@@ -1,6 +1,5 @@
 {
   "$schema": "https://turborepo.com/schema.json",
-  "globalDependencies": ["oxlint.config.ts", ".oxfmtrc.json"],
   // Turbo runs tasks in strict env mode, which strips undeclared variables from
   // the task environment. propertyConfig reads these at run time: the nightly
   // factor that scales property numRuns, and CI to enable fast-check verbose
@@ -33,14 +32,25 @@
       "outputs": []
     },
     "lint": {
-      "dependsOn": ["transit"]
+      "dependsOn": ["transit"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/.oxlint-plugins/**"
+      ]
     },
     "lint:fix": {
       "dependsOn": ["transit"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/.oxlint-plugins/**"
+      ],
       "cache": false
     },
     "format": {
-      "dependsOn": ["transit"]
+      "dependsOn": ["transit"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/.oxfmtrc.json"]
     },
     "i18n:check": {
       "dependsOn": ["transit"],

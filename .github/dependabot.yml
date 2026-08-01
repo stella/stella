@@ -116,6 +116,7 @@ updates:
       oxc:
         patterns:
           - "oxlint"
+          - "oxlint-tsgolint"
           - "oxfmt"
       ai:
         patterns:
