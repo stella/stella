@@ -18,9 +18,9 @@ const CONCURRENT_UNIQUE_CREATE =
 const CONCURRENT_DROP =
   /\bDROP\s+INDEX\s+CONCURRENTLY\s+IF\s+EXISTS\s+"([^"]+)"/giu;
 const TYPE_CHANGE =
-  /\bALTER\s+TABLE\b[^;]*?\bALTER\s+COLUMN\b[^;]*?\b(?:SET\s+DATA\s+)?TYPE\b/iu;
+  /\bALTER\s+TABLE\b[^;]*?\bALTER\s+COLUMN\b[^;]*?\b(?:SET\s+DATA\s+)?TYPE\b[^;]*(?:;|$)/iu;
 const TYPE_CHANGE_SAFETY_TOKEN = new RegExp(
-  String.raw`\bSET\s+(?:LOCAL\s+)?(?:statement|lock)_timeout\s*=\s*(?:'[^']*'|[^\s;]+)|${TYPE_CHANGE.source}`,
+  String.raw`\bSET\s+(?:LOCAL\s+)?(?:statement|lock)_timeout\s*=\s*(?:'[^']*'|[^\s;]+)\s*;?|${TYPE_CHANGE.source}`,
   "giu",
 );
 const TYPE_CHANGE_POLICY = {
@@ -45,6 +45,13 @@ const classifyTimeout = (value: string): TimeoutState => {
   return "unset";
 };
 
+const stripMigrationComments = (source: string) =>
+  source
+    .split("\n")
+    .filter((line) => !line.trimStart().startsWith("--"))
+    .join("\n")
+    .replaceAll(/-->\s*statement-breakpoint/giu, "");
+
 const collectUnsafeConcurrentIndexes = async (): Promise<string[]> => {
   const violations: string[] = [];
   const migrationFiles = new Bun.Glob("20*/migration.sql");
@@ -55,10 +62,7 @@ const collectUnsafeConcurrentIndexes = async (): Promise<string[]> => {
     const source = await Bun.file(
       nodePath.join(MIGRATIONS_DIR, relativePath),
     ).text();
-    const sqlWithoutLineComments = source
-      .split("\n")
-      .filter((line) => !line.trimStart().startsWith("--"))
-      .join("\n");
+    const sqlWithoutLineComments = stripMigrationComments(source);
     for (const match of sqlWithoutLineComments.matchAll(
       CONCURRENT_IF_NOT_EXISTS,
     )) {
@@ -134,6 +138,111 @@ const collectUnsafeConcurrentIndexes = async (): Promise<string[]> => {
   return violations.sort();
 };
 
+const collectUnsafeTypeChangesInMigration = (
+  relativePath: string,
+  source: string,
+) => {
+  const violations = [];
+  const sqlWithoutLineComments = stripMigrationComments(source);
+  const isCustomBoundedMigration =
+    CUSTOM_BOUNDED_TYPE_CHANGE_MIGRATIONS.has(relativePath);
+  const hasMetadataOnlyPolicy = source.includes(
+    TYPE_CHANGE_POLICY.metadataOnly,
+  );
+  const hasBoundedRewritePolicy = source.includes(
+    TYPE_CHANGE_POLICY.boundedRewrite,
+  );
+  if (hasMetadataOnlyPolicy && hasBoundedRewritePolicy) {
+    violations.push(`${relativePath}: type change policies conflict`);
+  }
+
+  let lockTimeout: TimeoutState = "unset";
+  let statementTimeout: TimeoutState = "unset";
+  let sawTypeChange = false;
+  let metadataOnlyBlockEnd: number | undefined;
+
+  for (const match of sqlWithoutLineComments.matchAll(
+    TYPE_CHANGE_SAFETY_TOKEN,
+  )) {
+    const token = match[0].replaceAll(/\s+/gu, " ").trim();
+    const setting = /^SET\s/iu.test(token)
+      ? TIMEOUT_SETTING.exec(token.replace(/;$/u, ""))?.groups
+      : undefined;
+    const isTypeChange = TYPE_CHANGE.test(token);
+    const isImmediateRestore =
+      setting?.["name"] === "statement" &&
+      classifyTimeout(setting["value"] ?? "") === "bounded";
+
+    if (metadataOnlyBlockEnd !== undefined) {
+      const gap = sqlWithoutLineComments
+        .slice(metadataOnlyBlockEnd, match.index)
+        .trim();
+      if (gap || (!isTypeChange && !isImmediateRestore)) {
+        violations.push(
+          `${relativePath}: statement timeout is not restored immediately after metadata-only type changes`,
+        );
+        metadataOnlyBlockEnd = undefined;
+      } else if (isImmediateRestore) {
+        metadataOnlyBlockEnd = undefined;
+      }
+    }
+
+    if (setting) {
+      if (setting["name"] === "lock") {
+        lockTimeout = classifyTimeout(setting["value"] ?? "");
+      } else if (setting["name"] === "statement") {
+        statementTimeout = classifyTimeout(setting["value"] ?? "");
+      }
+      continue;
+    }
+
+    sawTypeChange = true;
+    if (
+      !isCustomBoundedMigration &&
+      !hasMetadataOnlyPolicy &&
+      !hasBoundedRewritePolicy
+    ) {
+      violations.push(
+        `${relativePath}: type change lacks an explicit execution policy`,
+      );
+      continue;
+    }
+    if (lockTimeout !== "bounded") {
+      violations.push(
+        `${relativePath}: type change has an unbounded lock wait`,
+      );
+    }
+    if (isCustomBoundedMigration) {
+      continue;
+    }
+    if (hasMetadataOnlyPolicy && statementTimeout !== "unbounded") {
+      violations.push(
+        `${relativePath}: type change has a bounded execution timeout`,
+      );
+    }
+    if (hasMetadataOnlyPolicy) {
+      metadataOnlyBlockEnd = match.index + match[0].length;
+    }
+    if (hasBoundedRewritePolicy && statementTimeout !== "bounded") {
+      violations.push(
+        `${relativePath}: type rewrite lacks a bounded execution timeout`,
+      );
+    }
+  }
+
+  if (hasMetadataOnlyPolicy && !sawTypeChange) {
+    violations.push(`${relativePath}: metadata-only policy is unused`);
+  }
+  if (hasBoundedRewritePolicy && !sawTypeChange) {
+    violations.push(`${relativePath}: bounded-rewrite policy is unused`);
+  }
+  if (hasMetadataOnlyPolicy && statementTimeout === "unbounded") {
+    violations.push(`${relativePath}: statement timeout is not restored`);
+  }
+
+  return violations;
+};
+
 const collectUnsafeTypeChanges = async () => {
   const violations = [];
   const migrationFiles = new Bun.Glob("20*/migration.sql");
@@ -144,76 +253,9 @@ const collectUnsafeTypeChanges = async () => {
     const source = await Bun.file(
       nodePath.join(MIGRATIONS_DIR, relativePath),
     ).text();
-    const sqlWithoutLineComments = source
-      .split("\n")
-      .filter((line) => !line.trimStart().startsWith("--"))
-      .join("\n");
-    const isCustomBoundedMigration =
-      CUSTOM_BOUNDED_TYPE_CHANGE_MIGRATIONS.has(relativePath);
-    const hasMetadataOnlyPolicy = source.includes(
-      TYPE_CHANGE_POLICY.metadataOnly,
+    violations.push(
+      ...collectUnsafeTypeChangesInMigration(relativePath, source),
     );
-    const hasBoundedRewritePolicy = source.includes(
-      TYPE_CHANGE_POLICY.boundedRewrite,
-    );
-    if (hasMetadataOnlyPolicy && hasBoundedRewritePolicy) {
-      violations.push(`${relativePath}: type change policies conflict`);
-    }
-
-    let lockTimeout: TimeoutState = "unset";
-    let statementTimeout: TimeoutState = "unset";
-    let sawTypeChange = false;
-
-    for (const match of sqlWithoutLineComments.matchAll(
-      TYPE_CHANGE_SAFETY_TOKEN,
-    )) {
-      const token = match[0].replaceAll(/\s+/gu, " ").trim();
-      if (/^SET\s/iu.test(token)) {
-        const setting = TIMEOUT_SETTING.exec(token)?.groups;
-        if (setting?.["name"] === "lock") {
-          lockTimeout = classifyTimeout(setting["value"] ?? "");
-        } else if (setting?.["name"] === "statement") {
-          statementTimeout = classifyTimeout(setting["value"] ?? "");
-        }
-        continue;
-      }
-
-      sawTypeChange = true;
-      if (isCustomBoundedMigration) {
-        continue;
-      }
-      if (!hasMetadataOnlyPolicy && !hasBoundedRewritePolicy) {
-        violations.push(
-          `${relativePath}: type change lacks an explicit execution policy`,
-        );
-        continue;
-      }
-      if (lockTimeout !== "bounded") {
-        violations.push(
-          `${relativePath}: type change has an unbounded lock wait`,
-        );
-      }
-      if (hasMetadataOnlyPolicy && statementTimeout !== "unbounded") {
-        violations.push(
-          `${relativePath}: type change has a bounded execution timeout`,
-        );
-      }
-      if (hasBoundedRewritePolicy && statementTimeout !== "bounded") {
-        violations.push(
-          `${relativePath}: type rewrite lacks a bounded execution timeout`,
-        );
-      }
-    }
-
-    if (hasMetadataOnlyPolicy && !sawTypeChange) {
-      violations.push(`${relativePath}: metadata-only policy is unused`);
-    }
-    if (hasBoundedRewritePolicy && !sawTypeChange) {
-      violations.push(`${relativePath}: bounded-rewrite policy is unused`);
-    }
-    if (hasMetadataOnlyPolicy && statementTimeout === "unbounded") {
-      violations.push(`${relativePath}: statement timeout is not restored`);
-    }
   }
 
   return violations.sort();
@@ -246,6 +288,39 @@ describe("lock-sensitive migration DDL", () => {
         'ALTER TABLE "example" ALTER COLUMN "value" SET DATA TYPE varchar(64)',
       ),
     ).toBe(true);
+  });
+
+  test("requires immediate timeout restoration after metadata-only blocks", () => {
+    const safePrefix = `
+-- ${TYPE_CHANGE_POLICY.metadataOnly}
+SET lock_timeout = '1s';
+SET statement_timeout = 0;
+ALTER TABLE "example" ALTER COLUMN "value" TYPE varchar(64);`;
+
+    expect(
+      collectUnsafeTypeChangesInMigration(
+        "safe/migration.sql",
+        `${safePrefix}\nSET statement_timeout = '5s';\nSELECT 1;`,
+      ),
+    ).toEqual([]);
+    expect(
+      collectUnsafeTypeChangesInMigration(
+        "unsafe/migration.sql",
+        `${safePrefix}\nSELECT 1;\nSET statement_timeout = '5s';`,
+      ),
+    ).toContain(
+      "unsafe/migration.sql: statement timeout is not restored immediately after metadata-only type changes",
+    );
+  });
+
+  test("keeps lock waits bounded for custom execution budgets", () => {
+    const relativePath = "20260729150000_timestamptz_everywhere/migration.sql";
+    expect(
+      collectUnsafeTypeChangesInMigration(
+        relativePath,
+        "SET lock_timeout = 0; ALTER TABLE example ALTER COLUMN value TYPE timestamptz;",
+      ),
+    ).toContain(`${relativePath}: type change has an unbounded lock wait`);
   });
 
   test("bounds lock waits without interrupting acquired type changes", async () => {
