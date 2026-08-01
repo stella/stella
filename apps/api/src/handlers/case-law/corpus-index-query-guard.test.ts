@@ -103,9 +103,22 @@ test("generation checkpoint migration preserves replay and role invariants", asy
     '"case_law_source_reconciliations_cursor_upper"',
   );
   expect(source).toContain(
+    'ADD CONSTRAINT "case_law_sources_descriptor_shape"',
+  );
+  expect(source).toContain(
+    "jsonb_typeof(\"descriptor\" -> 'allowsRedistribution') = 'boolean'",
+  );
+  expect(schemaSource).toContain('"case_law_sources_descriptor_shape"');
+  expect(source).toContain(
     "AFTER INSERT OR UPDATE OF content_hash, indexed_hash, country",
   );
   expect(source).toContain("AFTER UPDATE OF descriptor");
+  expect(source).not.toContain(
+    "coalesce(NEW.descriptor ->> 'allowsRedistribution', 'true')",
+  );
+  expect(source).toContain(
+    "OR (NEW.descriptor ->> 'allowsRedistribution') = 'true'",
+  );
   expect(source).toContain(
     "SET revision = case_law_corpus_index_source_reconciliations.revision + 1",
   );

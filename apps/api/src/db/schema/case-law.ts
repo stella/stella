@@ -43,6 +43,22 @@ export const caseLawSources = p.pgTable(
   },
   (t) => [
     p.uniqueIndex("case_law_sources_adapter_key_idx").on(t.adapterKey),
+    p.check(
+      "case_law_sources_descriptor_shape",
+      sql`(
+        ${t.descriptor} IS NULL OR (
+          jsonb_typeof(${t.descriptor}) = 'object'
+          AND ${t.descriptor} ?& ARRAY['license', 'attribution', 'allowsRedistribution', 'allowsDerivedAi']
+          AND jsonb_typeof(${t.descriptor} -> 'license') = 'string'
+          AND (
+            ${t.descriptor} -> 'attribution' = 'null'::jsonb
+            OR jsonb_typeof(${t.descriptor} -> 'attribution') = 'string'
+          )
+          AND jsonb_typeof(${t.descriptor} -> 'allowsRedistribution') = 'boolean'
+          AND jsonb_typeof(${t.descriptor} -> 'allowsDerivedAi') = 'boolean'
+        )
+      ) IS TRUE`,
+    ),
     ...globalCaseLawPolicies(),
   ],
 );

@@ -299,7 +299,9 @@ const recoverLostGenerationProjectionEffect = async (
         pending_index_ids,
         updated_at
       )
-      SELECT ${generation}, decision.id, 'index', decision.content_hash,
+      SELECT ${generation}, decision.id,
+             CASE WHEN decision.content_hash IS NULL THEN 'delete' ELSE 'index' END,
+             decision.content_hash,
              ARRAY(
                SELECT DISTINCT target
                FROM unnest(ARRAY[
@@ -309,7 +311,6 @@ const recoverLostGenerationProjectionEffect = async (
              ), now()
       FROM ${caseLawDecisions} AS decision
       WHERE decision.id IN (${ids})
-        AND decision.content_hash IS NOT NULL
       ON CONFLICT (generation, decision_id) DO UPDATE
       SET pending_action = EXCLUDED.pending_action,
           pending_hash = EXCLUDED.pending_hash,
@@ -1698,6 +1699,11 @@ export const createCaseLawGenerationBackfill =
       const rows = page
         .filter((row) => isEligibleForGeneration(row, generation))
         .map(withoutSourceDescriptor);
+      const removals = page.filter(
+        (row) =>
+          !isCorpusEligible(row) &&
+          hasGenerationProjectionTargets({ generation, row }),
+      );
       let indexed: number;
       try {
         indexed = await backfillRows(scopedDb, rows, generation, runningGuards);
@@ -1706,6 +1712,15 @@ export const createCaseLawGenerationBackfill =
             message: "generation backfill page did not reach a fixed point",
           });
         }
+        await Promise.all(
+          removals.map(async (row) => {
+            await removeProjection(scopedDb, {
+              generation,
+              options: runningGuards,
+              row,
+            });
+          }),
+        );
       } catch (error) {
         // Keep the cursor intact, but do not make a transient search/S3 failure
         // wait for a stale lease before its durable retry.

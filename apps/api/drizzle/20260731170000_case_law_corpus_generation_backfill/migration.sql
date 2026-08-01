@@ -10,6 +10,23 @@ ALTER TABLE "legislation_documents" ALTER COLUMN "indexed_generation" SET DATA T
 -- stella-migration-safety: reviewed destructive-change - widening varchar(32) -> varchar(64) is a metadata-only catalog change with no table rewrite or data loss; it aligns every physical corpus-index identifier column with the maximum constructed identifier length.
 ALTER TABLE "legislation_index_jobs" ALTER COLUMN "generation" SET DATA TYPE varchar(64);--> statement-breakpoint
 
+-- stella-migration-safety: reviewed destructive-change - NOT VALID enforces the typed descriptor boundary on new writes without scanning or rewriting legacy rows.
+ALTER TABLE "case_law_sources"
+  ADD CONSTRAINT "case_law_sources_descriptor_shape"
+  CHECK ((
+      "descriptor" IS NULL OR (
+        jsonb_typeof("descriptor") = 'object'
+        AND "descriptor" ?& ARRAY['license', 'attribution', 'allowsRedistribution', 'allowsDerivedAi']
+        AND jsonb_typeof("descriptor" -> 'license') = 'string'
+        AND (
+          "descriptor" -> 'attribution' = 'null'::jsonb
+          OR jsonb_typeof("descriptor" -> 'attribution') = 'string'
+        )
+        AND jsonb_typeof("descriptor" -> 'allowsRedistribution') = 'boolean'
+        AND jsonb_typeof("descriptor" -> 'allowsDerivedAi') = 'boolean'
+      )
+    ) IS TRUE) NOT VALID;--> statement-breakpoint
+
 CREATE TABLE IF NOT EXISTS "case_law_corpus_index_backfills" (
   "generation" varchar(32) PRIMARY KEY NOT NULL,
   "snapshot_at" timestamptz NOT NULL DEFAULT now(),
@@ -353,9 +370,15 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $function$
 BEGIN
-  IF coalesce(NEW.descriptor ->> 'allowsRedistribution', 'true')
+  IF ((
+      NEW.descriptor IS NULL
+      OR (NEW.descriptor ->> 'allowsRedistribution') = 'true'
+    ) IS TRUE)
     IS NOT DISTINCT FROM
-    coalesce(OLD.descriptor ->> 'allowsRedistribution', 'true')
+    ((
+        OLD.descriptor IS NULL
+        OR (OLD.descriptor ->> 'allowsRedistribution') = 'true'
+      ) IS TRUE)
   THEN
     RETURN NEW;
   END IF;

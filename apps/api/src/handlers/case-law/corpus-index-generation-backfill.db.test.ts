@@ -20,6 +20,7 @@ import {
   backfillCorpusIndex,
   caseLawCorpusIndexAdapter,
   createCaseLawGenerationBackfill,
+  generationProjectionTargetIds,
 } from "@/api/handlers/case-law/corpus-index";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -418,6 +419,66 @@ test(
       leaseToken: null,
       status: "complete",
     });
+  },
+  { timeout: 30_000 },
+);
+
+test(
+  "initial snapshots remove every legacy-only target before advancing",
+  async () => {
+    const generation = "case_law_v2_initial_legacy";
+    const legacyIndexId = corpusIndexId(generation, "CZE");
+    await db
+      .update(caseLawDecisions)
+      .set({ indexedGeneration: legacyIndexId })
+      .where(sql`${caseLawDecisions.id} IN (${restrictedId}, ${noContentId})`);
+    const removed = new Map<SafeId<"caseLawDecision">, string[]>();
+    const backfill = createCaseLawGenerationBackfill({
+      backfillRows: async (_runnerDb, rows, _generation, options) => {
+        await options.beforeRemoteEffect({
+          effect: completeRemoteEffect,
+          onLeaseLost: noRemoteEffectCompensation,
+        });
+        return rows.length;
+      },
+      newLeaseToken: () => "00000000-0000-4000-8000-000000000070",
+      removeProjection: async (_runnerDb, { generation, options, row }) => {
+        await options.beforeRemoteEffect({
+          effect: completeRemoteEffect,
+          onLeaseLost: noRemoteEffectCompensation,
+        });
+        removed.set(row.id, [
+          ...generationProjectionTargetIds({ generation, row }),
+        ]);
+      },
+    });
+
+    try {
+      expect(await backfill(scopedDb, 10, generation)).toEqual({
+        indexed: 2,
+        status: "advanced",
+      });
+      expect(removed).toEqual(
+        new Map([
+          [restrictedId, [legacyIndexId]],
+          [noContentId, [legacyIndexId]],
+        ]),
+      );
+      expect(await readCheckpoint(generation)).toMatchObject({
+        cursorId: publicLastId,
+        status: "running",
+      });
+    } finally {
+      await db
+        .update(caseLawDecisions)
+        .set({ indexedGeneration: null })
+        .where(
+          sql`${caseLawDecisions.id} IN (${restrictedId}, ${noContentId})`,
+        );
+      await db
+        .delete(caseLawCorpusIndexBackfills)
+        .where(eq(caseLawCorpusIndexBackfills.generation, generation));
+    }
   },
   { timeout: 30_000 },
 );
@@ -1090,6 +1151,98 @@ test(
   },
   { timeout: 30_000 },
 );
+
+test(
+  "lease-loss compensation retains an exact late append target after erasure",
+  async () => {
+    const generation = "case_law_v2_erased_late_append";
+    const lateIndexId = corpusIndexId(generation, "CZE");
+    await db.insert(caseLawCorpusIndexBackfills).values({
+      generation,
+      snapshotAt: await nextBackfillSnapshotAt(),
+      status: "complete",
+    });
+    await db
+      .update(caseLawDecisions)
+      .set({ contentHash: null, indexedHash: null })
+      .where(eq(caseLawDecisions.id, publicFirstId));
+    const lease = await acquireCaseLawCorpusGenerationLease({
+      generation,
+      scopedDb,
+    });
+    expect(lease).not.toBeNull();
+
+    try {
+      await lease?.recoverRemoteEffectLeaseLoss({
+        entityIds: [publicFirstId],
+        indexId: lateIndexId,
+      });
+      const projection = (
+        await db
+          .select()
+          .from(caseLawCorpusIndexProjections)
+          .where(
+            and(
+              eq(caseLawCorpusIndexProjections.generation, generation),
+              eq(caseLawCorpusIndexProjections.decisionId, publicFirstId),
+            ),
+          )
+      ).at(0);
+      expect(projection).toMatchObject({
+        pendingAction: "delete",
+        pendingHash: null,
+        pendingIndexIds: [lateIndexId],
+      });
+    } finally {
+      await lease?.release();
+      await db
+        .update(caseLawDecisions)
+        .set({ contentHash: "first", indexedHash: null })
+        .where(eq(caseLawDecisions.id, publicFirstId));
+      await db
+        .delete(caseLawCorpusIndexBackfills)
+        .where(eq(caseLawCorpusIndexBackfills.generation, generation));
+    }
+  },
+  { timeout: 30_000 },
+);
+
+test("the database rejects every malformed corpus source descriptor shape", async () => {
+  const malformedDescriptors = [
+    {},
+    null,
+    {
+      allowsDerivedAi: true,
+      allowsRedistribution: null,
+      attribution: null,
+      license: "public-domain",
+    },
+  ];
+  const assertRejected = async (index = 0): Promise<void> => {
+    const descriptor = malformedDescriptors.at(index);
+    if (descriptor === undefined) {
+      return;
+    }
+    const encoded = JSON.stringify(descriptor);
+    if (encoded === undefined) {
+      throw new Error("expected serializable descriptor fixture");
+    }
+    const rejection: unknown = await db
+      .execute(
+        sql`UPDATE ${caseLawSources}
+            SET descriptor = ${encoded}::jsonb
+            WHERE id = ${publicSourceId}`,
+      )
+      .then(
+        () => null,
+        (error: unknown) => error,
+      );
+    expect(rejection).toBeInstanceOf(Error);
+    await assertRejected(index + 1);
+  };
+
+  await assertRejected();
+});
 
 test(
   "hash-null refreshes remain in the bounded pending selection after moving jurisdiction",
