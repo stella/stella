@@ -461,7 +461,7 @@ describe("custom oxlint guardrails", () => {
     );
     const oxlintConfig = readRootFixture("oxlint.config.ts");
     const legacyEntityRouteFile =
-      /(?:^|\/)_protected\.workspaces(?:\/|\.)\$workspaceId(?:\/|\.)entities(?:\/|\.)\$entityId(?:[./]|$)/u;
+      /(?:^|\/)_protected\.workspaces(?:\/|\.)\$workspaceId(?:\/|\.)entities_?(?:\/|\.)\$entityId(?:[./]|$)/u;
     const routeSourceFile = /\.[cm]?[jt]sx?$/u;
 
     const legacyRouteSourceFiles = existsSync(routesDirectory)
@@ -477,7 +477,9 @@ describe("custom oxlint guardrails", () => {
       [
         "_protected.workspaces/$workspaceId/entities/$entityId.tsx",
         "_protected.workspaces/$workspaceId/entities/$entityId/route.tsx",
+        "_protected.workspaces/$workspaceId/entities_.$entityId.tsx",
         "_protected.workspaces.$workspaceId.entities.$entityId.tsx",
+        "_protected.workspaces.$workspaceId.entities_.$entityId.tsx",
         "_protected.workspaces.$workspaceId.entities.$entityId.lazy.tsx",
       ].every(
         (candidate) =>
