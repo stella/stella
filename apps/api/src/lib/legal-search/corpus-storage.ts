@@ -176,10 +176,10 @@ const startCancellableCorpusIo = <T>(
   let actual: Promise<T> | undefined;
   const result = boundedCorpusIo(
     label,
-    (operationSignal) => {
+    async (operationSignal) => {
       const operationPromise = operation(operationSignal);
       actual = operationPromise;
-      return operationPromise;
+      return await operationPromise;
     },
     options,
   );
@@ -301,10 +301,10 @@ export const writeCorpusDocument = async (
   ];
 
   try {
-    await Promise.all(writes.map(({ result }) => result));
+    await Promise.all(writes.map(async ({ result }) => await result));
   } catch (error) {
     writeController.abort(error);
-    await Promise.allSettled(writes.map(({ settle }) => settle()));
+    await Promise.allSettled(writes.map(async ({ settle }) => await settle()));
     throw error;
   }
 

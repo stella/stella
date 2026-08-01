@@ -141,7 +141,11 @@ describe("corpus object cancellation", () => {
               }
               const rejectAfterRelease = async () => {
                 await releaseSiblings.promise;
-                reject(signal.reason);
+                reject(
+                  signal.reason instanceof Error
+                    ? signal.reason
+                    : new DOMException("Aborted", "AbortError"),
+                );
               };
               void rejectAfterRelease();
             },
@@ -154,12 +158,11 @@ describe("corpus object cancellation", () => {
     const pending = writeRejection(new AbortController().signal);
     await siblingsAborted.promise;
 
-    let returned = false;
-    void pending.then(() => {
-      returned = true;
-    });
-    await Bun.sleep(1);
-    expect(returned).toBe(false);
+    const earlyState = await Promise.race([
+      pending.then(() => "returned" as const),
+      Bun.sleep(1).then(() => "pending" as const),
+    ]);
+    expect(earlyState).toBe("pending");
 
     releaseSiblings.resolve(undefined);
     expect(await pending).toBe(writeFailure);

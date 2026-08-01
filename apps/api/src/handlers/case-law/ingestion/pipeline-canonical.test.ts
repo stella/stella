@@ -216,9 +216,11 @@ const scopedDb: ScopedDb = async (callback) => {
       where: () => {
         if (table === caseLawCorpusUploadIntents) {
           events.push("intent-delete");
-          return { returning: async () => [{ id: "intent-id" }] };
         }
-        return Promise.resolve();
+        return {
+          returning: async () =>
+            table === caseLawCorpusUploadIntents ? [{ id: "intent-id" }] : [],
+        };
       },
     }),
   };
