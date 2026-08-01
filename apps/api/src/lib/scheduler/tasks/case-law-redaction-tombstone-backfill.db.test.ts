@@ -50,7 +50,7 @@ if (!databaseUrl || !runPostgresTests) {
         where: { id: { eq: schedulerJobId } },
       });
       if (!job) {
-        return panic("expected scheduler job");
+        panic("expected scheduler job");
       }
       await backfillCaseLawRedactionTombstones({
         job,
@@ -78,7 +78,7 @@ if (!databaseUrl || !runPostgresTests) {
         })
         .returning({ id: caseLawSources.id });
       if (!source) {
-        return panic("expected source row");
+        panic("expected source row");
       }
       sourceId = source.id;
 
@@ -94,7 +94,7 @@ if (!databaseUrl || !runPostgresTests) {
         })
         .returning({ id: caseLawDecisions.id });
       if (!decision) {
-        return panic("expected decision row");
+        panic("expected decision row");
       }
 
       await db.insert(caseLawSearchDocuments).values({
