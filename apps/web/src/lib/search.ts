@@ -336,6 +336,7 @@ export const recentFilePreviewFieldOptions = (
 ) =>
   queryOptions({
     queryKey: searchKeys.recentFilePreviewField(params),
+    staleTime: 0,
     queryFn: async ({ signal }) => {
       const response = await api
         .entities({ workspaceId: toSafeId<"workspace">(params.workspaceId) })

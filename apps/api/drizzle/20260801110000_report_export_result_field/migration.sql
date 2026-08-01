@@ -14,6 +14,8 @@ ALTER TABLE "report_exports"
 -- squawk-ignore transaction-nesting
 COMMIT;
 --> statement-breakpoint
+SET lock_timeout = '0';
+--> statement-breakpoint
 SET statement_timeout = '0';
 --> statement-breakpoint
 -- stella-migration-safety: reviewed destructive-change - drops only this

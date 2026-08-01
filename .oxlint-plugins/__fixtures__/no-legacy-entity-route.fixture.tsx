@@ -3,6 +3,7 @@
 // diagnostics.
 
 declare const workspaceId: string;
+declare const workspaceUuid: string;
 declare const entityId: string;
 declare const panel: string;
 
@@ -43,9 +44,20 @@ export const oneDynamicWorkspace = `/workspaces/${workspaceId}/entities/entity_4
 // oxlint-disable-next-line no-legacy-entity-route/no-legacy-entity-route -- regression case
 export const oneDynamicEntity = `/workspaces/ws_123/entities/${entityId}`;
 
+// oxlint-disable-next-line no-legacy-entity-route/no-legacy-entity-route -- regression case
+export const composedWorkspaceSegment = `/workspaces/ws_${workspaceUuid}/entities/${entityId}`;
+
 export const concatenatedLegacyRoute =
   // oxlint-disable-next-line no-legacy-entity-route/no-legacy-entity-route, prefer-template -- regression case
   "/workspaces/" + workspaceId + "/entities/" + entityId;
+
+export const concatenatedComposedWorkspaceSegment =
+  // oxlint-disable-next-line no-legacy-entity-route/no-legacy-entity-route, prefer-template -- regression case
+  "/workspaces/ws_" + workspaceUuid + "/entities/" + entityId;
+
+export const nestedTemplateConcatenation =
+  // oxlint-disable-next-line no-legacy-entity-route/no-legacy-entity-route, prefer-template -- regression case
+  `/workspaces/${workspaceId}` + `/entities/${entityId}`;
 
 export const currentDocumentRoute = "/workspaces/$workspaceId/$viewId/document";
 export const similarlyStructuredPrivatePath =

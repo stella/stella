@@ -68,11 +68,12 @@ import {
 } from "@/components/saved-searches.logic";
 import {
   createDialogCloseActionQueue,
-  getEntityDocumentRoute,
   getChatHitRoute,
+  getEntityWorkspaceRoute,
   getRecentFileRoute,
   getRecentFilePreviewDateVisibility,
   getRecentFilePreviewHit,
+  resolveEntityDocumentRoute,
 } from "@/components/search-dialog.logic";
 import {
   canShowSearchSummary,
@@ -881,25 +882,44 @@ export const SearchDialog = ({
     }
 
     if (hit.type === "document") {
-      setRecentFiles(
-        recordRecentFile(
-          {
-            entityId: hit.entityId,
-            fileFieldId: hit.fileFieldId,
-            filePropertyId: hit.filePropertyId,
-            mimeType: hit.mimeType,
-            title: hit.title || hit.id,
-            workspaceId: hit.workspaceId,
-            workspaceName: hit.workspaceName,
-            updatedAt: hit.updatedAt,
-          },
-          searchRecentsScope,
-        ),
-      );
+      navigateAfterClose(async () => {
+        const { fileFieldId, route } = await resolveEntityDocumentRoute({
+          hit,
+          resolveCurrentFileFieldId: async () =>
+            await queryClient.fetchQuery(
+              recentFilePreviewFieldOptions({
+                entityId: hit.entityId,
+                fileFieldId: hit.fileFieldId,
+                filePropertyId: hit.filePropertyId,
+                mimeType: hit.mimeType,
+                organizationId: searchRecentsScope.organizationId,
+                userId: searchRecentsScope.userId,
+                workspaceId: hit.workspaceId,
+              }),
+            ),
+        });
+        setRecentFiles(
+          recordRecentFile(
+            {
+              entityId: hit.entityId,
+              fileFieldId,
+              filePropertyId: hit.filePropertyId,
+              mimeType: hit.mimeType,
+              title: hit.title || hit.id,
+              workspaceId: hit.workspaceId,
+              workspaceName: hit.workspaceName,
+              updatedAt: hit.updatedAt,
+            },
+            searchRecentsScope,
+          ),
+        );
+        await navigate(route);
+      });
+      return;
     }
 
     navigateAfterClose(async () => {
-      await navigate(getEntityDocumentRoute(hit));
+      await navigate(getEntityWorkspaceRoute(hit));
     });
   };
 

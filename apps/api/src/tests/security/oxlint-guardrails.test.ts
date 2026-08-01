@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 const readRootFixture = (relativePath: string) =>
@@ -454,14 +454,23 @@ describe("custom oxlint guardrails", () => {
   });
 
   test("deleted legacy entity route stays deleted and lint-guarded", () => {
-    const legacyRoutePath = path.join(
+    const legacyRouteDirectory = path.join(
       import.meta.dir,
       "../../../../..",
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/entities/$entityId.tsx",
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/entities",
     );
     const oxlintConfig = readRootFixture("oxlint.config.ts");
 
-    expect(existsSync(legacyRoutePath)).toBe(false);
+    const legacyRouteSourceFiles = existsSync(legacyRouteDirectory)
+      ? readdirSync(legacyRouteDirectory, { recursive: true }).filter(
+          (entry) =>
+            (entry.startsWith("$entityId.") ||
+              entry.startsWith("$entityId/")) &&
+            /\.[cm]?[jt]sx?$/u.test(entry),
+        )
+      : [];
+
+    expect(legacyRouteSourceFiles).toEqual([]);
     expect(oxlintConfig).toContain(`
       files: ["apps/web/src/**/*.{ts,tsx}"],
       rules: {

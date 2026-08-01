@@ -16,7 +16,7 @@ export type EntityNavigationRoute =
       params: { workspaceId: string; viewId: "all" };
     };
 
-export const getEntityDocumentRoute = ({
+const getEntityDocumentRoute = ({
   entityId,
   fileFieldId,
   workspaceId,
@@ -37,6 +37,29 @@ export const getEntityDocumentRoute = ({
     search: { entity: entityId, field: fileFieldId },
   };
 };
+
+type ResolveEntityDocumentRouteOptions = {
+  hit: Pick<EntityGlobalSearchHit, "entityId" | "fileFieldId" | "workspaceId">;
+  resolveCurrentFileFieldId: () => Promise<string | null>;
+};
+
+export const resolveEntityDocumentRoute = async ({
+  hit,
+  resolveCurrentFileFieldId,
+}: ResolveEntityDocumentRouteOptions) => {
+  const fileFieldId = await resolveCurrentFileFieldId();
+  return {
+    fileFieldId,
+    route: getEntityDocumentRoute({ ...hit, fileFieldId }),
+  };
+};
+
+export const getEntityWorkspaceRoute = ({
+  workspaceId,
+}: Pick<EntityGlobalSearchHit, "workspaceId">): EntityNavigationRoute => ({
+  to: "/workspaces/$workspaceId/$viewId",
+  params: { workspaceId, viewId: "all" },
+});
 
 export const getRecentFileRoute = ({
   entityId,

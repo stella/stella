@@ -4,11 +4,12 @@ import type { GlobalSearchHit } from "@stll/api/types";
 
 import {
   createDialogCloseActionQueue,
-  getEntityDocumentRoute,
   getChatHitRoute,
+  getEntityWorkspaceRoute,
   getRecentFileRoute,
   getRecentFilePreviewDateVisibility,
   getRecentFilePreviewHit,
+  resolveEntityDocumentRoute,
 } from "./search-dialog.logic";
 
 type ChatGlobalSearchHit = Extract<GlobalSearchHit, { type: "chat" }>;
@@ -81,28 +82,47 @@ describe("search dialog close actions", () => {
 });
 
 describe("document routes", () => {
-  test("opens a server-resolved search file directly in the all view", () => {
+  test("re-resolves a live search file immediately before navigation", async () => {
     expect(
-      getEntityDocumentRoute({
-        entityId: "entity-1",
-        fileFieldId: "field-1",
-        workspaceId: "workspace-1",
+      await resolveEntityDocumentRoute({
+        hit: {
+          entityId: "entity-1",
+          fileFieldId: "stale-field",
+          workspaceId: "workspace-1",
+        },
+        resolveCurrentFileFieldId: async () => "current-field",
       }),
     ).toEqual({
-      to: "/workspaces/$workspaceId/$viewId/document",
-      params: { workspaceId: "workspace-1", viewId: "all" },
-      search: { entity: "entity-1", field: "field-1" },
+      fileFieldId: "current-field",
+      route: {
+        to: "/workspaces/$workspaceId/$viewId/document",
+        params: { workspaceId: "workspace-1", viewId: "all" },
+        search: { entity: "entity-1", field: "current-field" },
+      },
     });
   });
 
-  test("opens the all view when a search result has no file field", () => {
+  test("opens the all view when current resolution finds no file field", async () => {
     expect(
-      getEntityDocumentRoute({
-        entityId: "entity-1",
-        fileFieldId: null,
-        workspaceId: "workspace-1",
+      await resolveEntityDocumentRoute({
+        hit: {
+          entityId: "entity-1",
+          fileFieldId: "stale-field",
+          workspaceId: "workspace-1",
+        },
+        resolveCurrentFileFieldId: async () => null,
       }),
     ).toEqual({
+      fileFieldId: null,
+      route: {
+        to: "/workspaces/$workspaceId/$viewId",
+        params: { workspaceId: "workspace-1", viewId: "all" },
+      },
+    });
+  });
+
+  test("routes non-document entity hits to the all view", () => {
+    expect(getEntityWorkspaceRoute({ workspaceId: "workspace-1" })).toEqual({
       to: "/workspaces/$workspaceId/$viewId",
       params: { workspaceId: "workspace-1", viewId: "all" },
     });
