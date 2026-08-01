@@ -210,7 +210,7 @@ export const LinkClauseDialog = ({
       const trimmed = customSlotName.trim();
       return trimmed === "" ? undefined : trimmed;
     }
-    if (slotValue !== null && slotValue.startsWith(SLOT_VALUE_PREFIX)) {
+    if (slotValue?.startsWith(SLOT_VALUE_PREFIX)) {
       return slotValue.slice(SLOT_VALUE_PREFIX.length);
     }
     return undefined;

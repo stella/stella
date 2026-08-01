@@ -669,10 +669,7 @@ export const useReviewActions = ({
     // resolved is dropped rather than re-rejected.
     const targets = items
       .map((item) => readLive(item.id))
-      .filter(
-        (row): row is ReviewSuggestion =>
-          row !== undefined && row.status === "pending",
-      );
+      .filter((row): row is ReviewSuggestion => row?.status === "pending");
     if (targets.length === 0) {
       return;
     }

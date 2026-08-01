@@ -589,7 +589,7 @@ const OutlineRow = ({
   if (node.type === "field") {
     const field = fields.find((f) => f.path === node.path);
     // Yes/no fields live under the Conditions disclosure as questions.
-    if (field !== undefined && field.inputType === "boolean") {
+    if (field?.inputType === "boolean") {
       return null;
     }
     const Icon =
@@ -681,7 +681,7 @@ const OutlineRow = ({
   // doesn't have to drill into the group to reach the only field inside.
   if (node.kind === "each") {
     const onlyChild = node.children.length === 1 ? node.children[0] : undefined;
-    if (onlyChild !== undefined && onlyChild.type === "field") {
+    if (onlyChild?.type === "field") {
       const loopField = fields.find((f) => f.path === onlyChild.path);
       const LoopIcon =
         loopField === undefined
