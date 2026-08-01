@@ -2344,6 +2344,18 @@
     "settingsDescription": "Upravte název a slug organizace",
     "switchOrganization": "Přepnout organizaci"
   },
+  "routeError": {
+    "backToMatters": "Zpět na spisy",
+    "copyReference": "Kopírovat referenci chyby",
+    "descriptionAdministrator": "Zkuste to znovu. Pokud problém přetrvává, vraťte se ke svým spisům nebo kontaktujte správce s referencí níže.",
+    "descriptionNone": "Zkuste to znovu. Pokud problém přetrvává, vraťte se ke svým spisům.",
+    "descriptionReport": "Zkuste to znovu. Pokud problém přetrvává, vraťte se ke svým spisům nebo jej nahlaste s referencí níže.",
+    "reference": "Reference chyby",
+    "reportBody": "Reference chyby: {reference}\n\nCo se stalo?\n",
+    "reportProblem": "Nahlásit problém",
+    "reportSubject": "Chyba stella {reference}",
+    "title": "Tuto stránku se nepodařilo otevřít"
+  },
   "search": {
     "aiRefine": "Vylepšit dotaz pomocí AI",
     "continueInChat": "Pokračovat v chatu",

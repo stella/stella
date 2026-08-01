@@ -2344,6 +2344,18 @@
     "settingsDescription": "Name und Slug der Organisation bearbeiten",
     "switchOrganization": "Organisation wechseln"
   },
+  "routeError": {
+    "backToMatters": "Zu den Akten zurückkehren",
+    "copyReference": "Fehlerreferenz kopieren",
+    "descriptionAdministrator": "Versuchen Sie es erneut. Wenn das Problem weiterhin besteht, kehren Sie zu Ihren Akten zurück oder wenden Sie sich mit der unten stehenden Referenz an Ihre Administration.",
+    "descriptionNone": "Versuchen Sie es erneut. Wenn das Problem weiterhin besteht, kehren Sie zu Ihren Akten zurück.",
+    "descriptionReport": "Versuchen Sie es erneut. Wenn das Problem weiterhin besteht, kehren Sie zu Ihren Akten zurück oder melden Sie es mit der unten stehenden Referenz.",
+    "reference": "Fehlerreferenz",
+    "reportBody": "Fehlerreferenz: {reference}\n\nWas ist passiert?\n",
+    "reportProblem": "Problem melden",
+    "reportSubject": "stella-Fehler {reference}",
+    "title": "Diese Seite konnte nicht geöffnet werden"
+  },
   "search": {
     "aiRefine": "Suchanfrage mit KI verbessern",
     "continueInChat": "Im Chat fortsetzen",

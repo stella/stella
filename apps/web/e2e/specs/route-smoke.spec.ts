@@ -600,7 +600,7 @@ const comparableHref = (url: URL, assertSearch: boolean) =>
 
 const assertNoRouteBoundary = async (page: Page, routeTemplate: string) => {
   await expect(
-    page.getByRole("heading", { name: "Something went wrong" }),
+    page.getByRole("heading", { name: "This page couldn’t be opened" }),
     `route error boundary rendered on ${routeTemplate}`,
   ).toHaveCount(0);
 };

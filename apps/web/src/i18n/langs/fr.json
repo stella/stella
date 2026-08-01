@@ -2344,6 +2344,18 @@
     "settingsDescription": "Modifier le nom et le slug de votre organisation",
     "switchOrganization": "Changer d'organisation"
   },
+  "routeError": {
+    "backToMatters": "Retourner aux dossiers",
+    "copyReference": "Copier la référence de l’erreur",
+    "descriptionAdministrator": "Réessayez. Si le problème persiste, retournez à vos dossiers ou contactez votre administrateur avec la référence ci-dessous.",
+    "descriptionNone": "Réessayez. Si le problème persiste, retournez à vos dossiers.",
+    "descriptionReport": "Réessayez. Si le problème persiste, retournez à vos dossiers ou signalez-le avec la référence ci-dessous.",
+    "reference": "Référence de l’erreur",
+    "reportBody": "Référence de l’erreur : {reference}\n\nQue s’est-il passé ?\n",
+    "reportProblem": "Signaler un problème",
+    "reportSubject": "Erreur stella {reference}",
+    "title": "Cette page n’a pas pu être ouverte"
+  },
   "search": {
     "aiRefine": "Améliorer la requête avec l’IA",
     "continueInChat": "Continuer dans le chat",

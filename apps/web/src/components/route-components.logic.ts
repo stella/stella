@@ -13,6 +13,44 @@ const NETWORK_ERROR_MESSAGES = Object.freeze([
   "Load failed",
 ]);
 
+export type RouteErrorSupport =
+  | { type: "report"; recipient: string }
+  | { type: "administrator" }
+  | { type: "none" };
+
+type ResolveRouteErrorSupportOptions = {
+  deployment: "hosted" | "selfHosted";
+  feedbackRecipient: string | undefined;
+};
+
+export const resolveRouteErrorSupport = ({
+  deployment,
+  feedbackRecipient,
+}: ResolveRouteErrorSupportOptions): RouteErrorSupport => {
+  if (feedbackRecipient) {
+    return { type: "report", recipient: feedbackRecipient };
+  }
+
+  if (deployment === "selfHosted") {
+    return { type: "administrator" };
+  }
+
+  return { type: "none" };
+};
+
+type BuildErrorReportMailtoOptions = {
+  body: string;
+  recipient: string;
+  subject: string;
+};
+
+export const buildErrorReportMailto = ({
+  body,
+  recipient,
+  subject,
+}: BuildErrorReportMailtoOptions): string =>
+  `mailto:${recipient}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
 export const isNetworkError = (error: unknown): boolean => {
   if (CriticalQueryTimeoutError.is(error)) {
     return true;

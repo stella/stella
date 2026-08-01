@@ -2344,6 +2344,18 @@
     "settingsDescription": "Szervezet nevének és slugjának szerkesztése",
     "switchOrganization": "Szervezet váltása"
   },
+  "routeError": {
+    "backToMatters": "Vissza az ügyekhez",
+    "copyReference": "Hibahivatkozás másolása",
+    "descriptionAdministrator": "Próbálja újra. Ha a probléma továbbra is fennáll, térjen vissza az ügyeihez, vagy forduljon rendszergazdájához az alábbi hivatkozással.",
+    "descriptionNone": "Próbálja újra. Ha a probléma továbbra is fennáll, térjen vissza az ügyeihez.",
+    "descriptionReport": "Próbálja újra. Ha a probléma továbbra is fennáll, térjen vissza az ügyeihez, vagy jelentse a problémát az alábbi hivatkozással.",
+    "reference": "Hibahivatkozás",
+    "reportBody": "Hibahivatkozás: {reference}\n\nMi történt?\n",
+    "reportProblem": "Probléma jelentése",
+    "reportSubject": "stella hiba: {reference}",
+    "title": "Ezt az oldalt nem sikerült megnyitni"
+  },
   "search": {
     "aiRefine": "Keresés javítása AI-val",
     "continueInChat": "Folytatás chatben",

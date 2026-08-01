@@ -3,8 +3,13 @@ import { posthog } from "posthog-js";
 import type { CaptureResult } from "posthog-js";
 
 import { env } from "@/env";
+import { isErrorReference } from "@/lib/analytics/error-reference";
 import { WEB_ANALYTICS_EVENTS } from "@/lib/analytics/types";
-import type { Analytics, WebAnalyticsEvent } from "@/lib/analytics/types";
+import type {
+  Analytics,
+  ErrorCaptureContext,
+  WebAnalyticsEvent,
+} from "@/lib/analytics/types";
 import { logDevError } from "@/lib/errors/utils";
 
 const isWebAnalyticsEvent = (event: string): event is WebAnalyticsEvent =>
@@ -85,6 +90,7 @@ const sanitizeExceptionEvent = (event: CaptureResult): CaptureResult => {
   const distinctId = properties["$distinct_id"];
   const appCommit = properties["app_commit"];
   const appVersion = properties["app_version"];
+  const errorReference = properties["error_reference"];
   const exceptionList = properties["$exception_list"];
   const firstException: unknown = Array.isArray(exceptionList)
     ? exceptionList.at(0)
@@ -100,8 +106,40 @@ const sanitizeExceptionEvent = (event: CaptureResult): CaptureResult => {
       ...(typeof distinctId === "string" ? { $distinct_id: distinctId } : {}),
       ...(typeof appCommit === "string" ? { app_commit: appCommit } : {}),
       ...(typeof appVersion === "string" ? { app_version: appVersion } : {}),
+      ...(isErrorReference(errorReference)
+        ? { error_reference: errorReference }
+        : {}),
     },
   };
+};
+
+const errorContextProperties = (
+  context: ErrorCaptureContext | undefined,
+): Record<string, string> | undefined => {
+  if (context?.type !== "recovery") {
+    return undefined;
+  }
+
+  return { error_reference: context.reference };
+};
+
+const devErrorContext = (
+  context: ErrorCaptureContext | undefined,
+): Record<string, string> | undefined => {
+  if (!context) {
+    return undefined;
+  }
+
+  switch (context.type) {
+    case "detached":
+      return { detached: context.operation };
+    case "recovery":
+      return { error_reference: context.reference };
+    default: {
+      const exhaustive: never = context;
+      return exhaustive;
+    }
+  }
 };
 
 /**
@@ -183,8 +221,11 @@ export const createPostHogAnalytics = (
       ) {
         return;
       }
-      logDevError(error, context);
-      posthog.captureException(toRedactedTelemetryError(error));
+      logDevError(error, devErrorContext(context));
+      posthog.captureException(
+        toRedactedTelemetryError(error),
+        errorContextProperties(context),
+      );
     },
     capturePageViewed: ({ path }) => {
       posthog.capture(WEB_ANALYTICS_EVENTS.pageViewed, {

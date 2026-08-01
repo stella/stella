@@ -2344,6 +2344,18 @@
     "settingsDescription": "Edytuj nazwę i slug organizacji",
     "switchOrganization": "Przełącz organizację"
   },
+  "routeError": {
+    "backToMatters": "Wróć do spraw",
+    "copyReference": "Kopiuj identyfikator błędu",
+    "descriptionAdministrator": "Spróbuj ponownie. Jeśli problem będzie się powtarzał, wróć do swoich spraw lub skontaktuj się z administratorem, podając poniższy identyfikator.",
+    "descriptionNone": "Spróbuj ponownie. Jeśli problem będzie się powtarzał, wróć do swoich spraw.",
+    "descriptionReport": "Spróbuj ponownie. Jeśli problem będzie się powtarzał, wróć do swoich spraw lub zgłoś go, podając poniższy identyfikator.",
+    "reference": "Identyfikator błędu",
+    "reportBody": "Identyfikator błędu: {reference}\n\nCo się stało?\n",
+    "reportProblem": "Zgłoś problem",
+    "reportSubject": "Błąd stella: {reference}",
+    "title": "Nie udało się otworzyć tej strony"
+  },
   "search": {
     "aiRefine": "Ulepsz zapytanie z AI",
     "continueInChat": "Kontynuuj na czacie",

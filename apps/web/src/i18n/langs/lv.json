@@ -2344,6 +2344,18 @@
     "settingsDescription": "Rediģēt organizācijas nosaukumu un slug",
     "switchOrganization": "Mainīt organizāciju"
   },
+  "routeError": {
+    "backToMatters": "Atgriezties pie lietām",
+    "copyReference": "Kopēt kļūdas atsauci",
+    "descriptionAdministrator": "Mēģiniet vēlreiz. Ja problēma turpinās, atgriezieties pie savām lietām vai sazinieties ar administratoru, izmantojot tālāk norādīto atsauci.",
+    "descriptionNone": "Mēģiniet vēlreiz. Ja problēma turpinās, atgriezieties pie savām lietām.",
+    "descriptionReport": "Mēģiniet vēlreiz. Ja problēma turpinās, atgriezieties pie savām lietām vai ziņojiet par to, izmantojot tālāk norādīto atsauci.",
+    "reference": "Kļūdas atsauce",
+    "reportBody": "Kļūdas atsauce: {reference}\n\nKas notika?\n",
+    "reportProblem": "Ziņot par problēmu",
+    "reportSubject": "stella kļūda: {reference}",
+    "title": "Šo lapu neizdevās atvērt"
+  },
   "search": {
     "aiRefine": "Uzlabot vaicājumu ar AI",
     "continueInChat": "Turpināt tērzēšanā",

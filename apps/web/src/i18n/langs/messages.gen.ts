@@ -2347,6 +2347,18 @@ type Messages = {
     "settingsDescription": "Edit your organization name and slug";
     "switchOrganization": "Switch organization";
   };
+  "routeError": {
+    "backToMatters": "Return to matters";
+    "copyReference": "Copy error reference";
+    "descriptionAdministrator": "Try again. If the problem continues, return to your matters or contact your administrator with the reference below.";
+    "descriptionNone": "Try again. If the problem continues, return to your matters.";
+    "descriptionReport": "Try again. If the problem continues, return to your matters or report it with the reference below.";
+    "reference": "Error reference";
+    "reportBody": "Error reference: {reference}\n\nWhat happened?\n";
+    "reportProblem": "Report problem";
+    "reportSubject": "stella error {reference}";
+    "title": "This page couldn’t be opened";
+  };
   "search": {
     "aiRefine": "Improve query with AI";
     "continueInChat": "Continue in chat";

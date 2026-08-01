@@ -339,6 +339,7 @@ const createInspectorBroadcastSession = (
       });
     } catch (error) {
       getAnalytics().captureError(error, {
+        type: "detached",
         operation: "inspector-tabs.broadcast",
       });
     }

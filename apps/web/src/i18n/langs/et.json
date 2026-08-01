@@ -2344,6 +2344,18 @@
     "settingsDescription": "Muutke oma organisatsiooni nime ja slugi",
     "switchOrganization": "Vaheta organisatsiooni"
   },
+  "routeError": {
+    "backToMatters": "Naase toimikute juurde",
+    "copyReference": "Kopeeri vea viide",
+    "descriptionAdministrator": "Proovi uuesti. Kui probleem püsib, naase oma toimikute juurde või võta alloleva viitega ühendust administraatoriga.",
+    "descriptionNone": "Proovi uuesti. Kui probleem püsib, naase oma toimikute juurde.",
+    "descriptionReport": "Proovi uuesti. Kui probleem püsib, naase oma toimikute juurde või teata sellest alloleva viitega.",
+    "reference": "Vea viide",
+    "reportBody": "Vea viide: {reference}\n\nMis juhtus?\n",
+    "reportProblem": "Teata probleemist",
+    "reportSubject": "stella tõrge {reference}",
+    "title": "Seda lehte ei saanud avada"
+  },
   "search": {
     "aiRefine": "Täpsusta päringut AI-ga",
     "continueInChat": "Jätka vestluses",
