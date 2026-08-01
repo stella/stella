@@ -13,7 +13,7 @@ describe("redirectToSchema open-redirect guard", () => {
     for (const ok of [
       "/",
       "/dashboard",
-      "/workspaces/abc/entities/123",
+      "/workspaces/abc/all/document?entity=123&field=456",
       "/auth/accept-invitation/xyz",
       "/path?q=1&r=2",
       "/path#frag",
