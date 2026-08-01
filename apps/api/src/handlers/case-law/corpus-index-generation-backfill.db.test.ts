@@ -27,6 +27,7 @@ import {
   caseLawCorpusProjectionJoin,
   currentCaseLawCorpusProjection,
 } from "@/api/lib/legal-search/case-law-corpus-projection";
+import { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
 import {
   createSchemaPglite,
@@ -255,6 +256,34 @@ test(
   },
   { timeout: 30_000 },
 );
+
+test("rejects an invalid generation before creating durable state", async () => {
+  const generation = "invalid generation";
+  const backfill = createCaseLawGenerationBackfill({
+    backfillRows: async () => 0,
+    newLeaseToken: () => "00000000-0000-4000-8000-000000000099",
+    removeProjection: ignoreProjectionRemoval,
+  });
+
+  const rejection: unknown = await backfill(scopedDb, 1, generation).then(
+    () => null,
+    (error: unknown) => error,
+  );
+
+  expect(rejection).toBeInstanceOf(CorpusIndexError);
+  expect(
+    await db
+      .select()
+      .from(caseLawCorpusIndexWriterLeases)
+      .where(eq(caseLawCorpusIndexWriterLeases.generation, generation)),
+  ).toHaveLength(0);
+  expect(
+    await db
+      .select()
+      .from(caseLawCorpusIndexBackfills)
+      .where(eq(caseLawCorpusIndexBackfills.generation, generation)),
+  ).toHaveLength(0);
+});
 
 test(
   "replays the snapshot once and reconciles pending rows after completion",

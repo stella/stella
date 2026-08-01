@@ -44,7 +44,10 @@ import {
   readCorpusText,
 } from "@/api/lib/legal-search/corpus-storage";
 import { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
-import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
+import {
+  corpusIndexId,
+  isCorpusIndexGeneration,
+} from "@/api/lib/legal-search/index-naming";
 
 /**
  * corpus index search-projection maintenance for the `case_law` family.
@@ -1017,6 +1020,14 @@ const hasPendingGenerationProjection = async (
     ),
   );
 
+const validateGenerationBoundary = (generation: string): void => {
+  if (!isCorpusIndexGeneration(generation)) {
+    throw new CorpusIndexError({
+      message: "Invalid corpus index generation",
+    });
+  }
+};
+
 const sameSourceReconciliation = (checkpoint: SourceReconciliationCheckpoint) =>
   and(
     eq(
@@ -1063,6 +1074,7 @@ export const createCaseLawGenerationBackfill =
     batchSize: number,
     generation: string,
   ): Promise<CorpusIndexBackfillResult> => {
+    validateGenerationBoundary(generation);
     const writerLease = await acquireCaseLawCorpusGenerationLease({
       generation,
       newLeaseToken,
@@ -1575,6 +1587,7 @@ export const backfillCorpusIndex = async (
   generation: string,
   options: { readConcurrency?: number } = {},
 ): Promise<CorpusIndexBackfillResult> => {
+  validateGenerationBoundary(generation);
   const [sourceReconciliation, pendingProjection] = await Promise.all([
     selectSourceReconciliationCheckpoint(scopedDb, generation),
     hasPendingGenerationProjection(scopedDb, generation),
