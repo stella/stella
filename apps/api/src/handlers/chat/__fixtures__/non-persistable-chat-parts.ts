@@ -1,5 +1,3 @@
-import type { UIMessage } from "@tanstack/ai";
-
 /** Every `MessagePart` variant excluded from `PersistableChatPart`. Shared so a
  *  new non-persistable type is added in one place, not per test file. */
 export const nonPersistableChatParts = [
@@ -17,4 +15,4 @@ export const nonPersistableChatParts = [
     toolCallId: "call-1",
     toolName: "widget",
   },
-] as const satisfies UIMessage["parts"];
+] as const;
