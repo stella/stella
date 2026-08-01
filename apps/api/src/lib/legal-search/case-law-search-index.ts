@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, notExists, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, isNull, notExists, or, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -55,7 +55,11 @@ export const indexDecision = async (
         eq(caseLawSources.id, caseLawDecisions.sourceId),
       )
       .where(
-        and(eq(caseLawDecisions.id, decisionId), redistributableCaseLawSource),
+        and(
+          eq(caseLawDecisions.id, decisionId),
+          isNull(caseLawDecisions.redactedAt),
+          redistributableCaseLawSource,
+        ),
       )
       .limit(1),
   );
@@ -190,6 +194,7 @@ export const backfillSearchIndex = async (
       )
       .where(
         and(
+          isNull(caseLawDecisions.redactedAt),
           redistributableCaseLawSource,
           notExists(
             tx
@@ -220,6 +225,7 @@ export const backfillSearchIndex = async (
       )
       .where(
         and(
+          isNull(caseLawDecisions.redactedAt),
           redistributableCaseLawSource,
           or(
             gt(caseLawDecisions.updatedAt, caseLawSearchDocuments.updatedAt),

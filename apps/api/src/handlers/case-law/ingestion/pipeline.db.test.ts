@@ -1,10 +1,10 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sql";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { caseLawSources, relations } from "@/api/db/schema";
+import { caseLawDecisions, caseLawSources, relations } from "@/api/db/schema";
 import { ADAPTER_KEYS, PARSER_VERSION } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
@@ -110,7 +110,13 @@ if (!databaseUrl || !runPostgresTests) {
     });
 
     test("stores adapter documentAst output as a jsonb object", async () => {
-      await processDecision(ingestionResult, sourceId, scopedDb);
+      await processDecision({
+        input: ingestionResult,
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
 
       const [row] = await db.execute(sql<JsonbStorageRow>`
         SELECT
@@ -128,7 +134,13 @@ if (!databaseUrl || !runPostgresTests) {
     });
 
     test("keeps adapter documentAst as an object when refreshing a decision", async () => {
-      await processDecision(ingestionResult, sourceId, scopedDb);
+      await processDecision({
+        input: ingestionResult,
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
       await db.execute(sql`
         UPDATE case_law_decisions
         SET indexed_hash = 'stale-indexed-hash'
@@ -136,15 +148,17 @@ if (!databaseUrl || !runPostgresTests) {
           AND case_number = ${ingestionResult.caseNumber}
           AND language = ${ingestionResult.language}
       `);
-      await processDecision(
-        {
+      await processDecision({
+        input: {
           ...ingestionResult,
           rawHash: "jsonb-regression-hash-refresh",
           metadata: { source: "regression-refresh" },
         },
+        observationOrder: 2n,
         sourceId,
         scopedDb,
-      );
+        observedAt: new Date("2026-07-31T12:00:01.000Z"),
+      });
 
       const [row] = await db.execute(sql<JsonbStorageRow>`
         SELECT
@@ -163,6 +177,224 @@ if (!databaseUrl || !runPostgresTests) {
       // A refresh must clear indexedHash so the corpus indexer re-picks
       // the row even when only metadata changed.
       expect(row?.["indexedHash"]).toBeNull();
+    });
+
+    test("database-fences legacy refreshes after observation ordering activates", async () => {
+      const caseNumber = `legacy-fence-${Bun.randomUUIDv7()}`;
+      const initial = {
+        ...ingestionResult,
+        caseNumber,
+        rawHash: "legacy-fence-current",
+      };
+      await processDecision({
+        input: initial,
+        observationOrder: 10n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T13:00:00.000Z"),
+      });
+
+      const legacyFailure: unknown = await db
+        .execute(sql`
+          UPDATE ${caseLawDecisions}
+          SET source_hash = 'legacy-fence-stale'
+          WHERE source_id = ${sourceId}
+            AND case_number = ${caseNumber}
+        `)
+        .then(
+          () => null,
+          (error: unknown) => error,
+        );
+      expect(legacyFailure).toMatchObject({ code: "55000" });
+
+      await processDecision({
+        input: { ...initial, rawHash: "legacy-fence-newer" },
+        observationOrder: 11n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T13:00:01.000Z"),
+      });
+      const ordered = (
+        await db
+          .select({
+            order: caseLawDecisions.sourceObservationOrder,
+            sourceHash: caseLawDecisions.sourceHash,
+          })
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.caseNumber, caseNumber))
+          .limit(1)
+      ).at(0);
+      expect(ordered).toEqual({
+        order: 11n,
+        sourceHash: "legacy-fence-newer",
+      });
+
+      const compensationOrder = (
+        await db
+          .update(caseLawSources)
+          .set({
+            observationOrder: sql`greatest(${caseLawSources.observationOrder}, 11) + 1`,
+          })
+          .where(eq(caseLawSources.id, sourceId))
+          .returning({ order: caseLawSources.observationOrder })
+      ).at(0)?.order;
+      if (compensationOrder === undefined) {
+        throw new Error("expected compensation order");
+      }
+      await db
+        .update(caseLawDecisions)
+        .set({
+          sourceHash: "legacy-fence-current",
+          sourceObservationHash: "legacy-fence-newer",
+          sourceObservationOrder: compensationOrder,
+        })
+        .where(eq(caseLawDecisions.caseNumber, caseNumber));
+      const compensated = (
+        await db
+          .select({
+            order: caseLawDecisions.sourceObservationOrder,
+            sourceHash: caseLawDecisions.sourceHash,
+          })
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.caseNumber, caseNumber))
+          .limit(1)
+      ).at(0);
+      expect(compensated).toEqual({
+        order: compensationOrder,
+        sourceHash: "legacy-fence-current",
+      });
+
+      const replayCaseNumber = `compensation-cas-${Bun.randomUUIDv7()}`;
+      const replayInput = {
+        ...ingestionResult,
+        caseNumber: replayCaseNumber,
+        rawHash: "compensation-cas-current",
+      };
+      await processDecision({
+        input: replayInput,
+        observationOrder: 20n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T13:01:00.000Z"),
+      });
+      await processDecision({
+        input: replayInput,
+        observationOrder: 21n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T13:01:01.000Z"),
+      });
+      const staleCompensationOrder = (
+        await db
+          .update(caseLawSources)
+          .set({
+            observationOrder: sql`greatest(${caseLawSources.observationOrder}, 21) + 1`,
+          })
+          .where(eq(caseLawSources.id, sourceId))
+          .returning({ order: caseLawSources.observationOrder })
+      ).at(0)?.order;
+      if (staleCompensationOrder === undefined) {
+        throw new Error("expected stale compensation order");
+      }
+      const staleCompensation = await db
+        .update(caseLawDecisions)
+        .set({
+          sourceHash: "compensation-cas-previous",
+          sourceObservationHash: replayInput.rawHash,
+          sourceObservationOrder: staleCompensationOrder,
+        })
+        .where(
+          and(
+            eq(caseLawDecisions.caseNumber, replayCaseNumber),
+            eq(caseLawDecisions.sourceHash, replayInput.rawHash),
+            eq(caseLawDecisions.sourceObservationOrder, 20n),
+          ),
+        )
+        .returning({ id: caseLawDecisions.id });
+      expect(staleCompensation).toHaveLength(0);
+      const replayWinner = (
+        await db
+          .select({
+            order: caseLawDecisions.sourceObservationOrder,
+            sourceHash: caseLawDecisions.sourceHash,
+          })
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.caseNumber, replayCaseNumber))
+          .limit(1)
+      ).at(0);
+      expect(replayWinner).toEqual({
+        order: 21n,
+        sourceHash: replayInput.rawHash,
+      });
+
+      await db
+        .update(caseLawDecisions)
+        .set({ sourceObservationOrder: null })
+        .where(eq(caseLawDecisions.caseNumber, caseNumber));
+      await db.execute(sql`
+        UPDATE ${caseLawDecisions}
+        SET source_hash = 'legacy-transition-allowed'
+        WHERE source_id = ${sourceId}
+          AND case_number = ${caseNumber}
+      `);
+      const transition = (
+        await db
+          .select({ sourceHash: caseLawDecisions.sourceHash })
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.caseNumber, caseNumber))
+          .limit(1)
+      ).at(0);
+      expect(transition?.sourceHash).toBe("legacy-transition-allowed");
+    });
+
+    test("legacy cursor fencing preserves the prior checkpoint token", async () => {
+      const heldCursor = "legacy-checkpoint-held";
+      const heldAt = new Date("2026-07-31T13:02:00.000Z");
+      await db
+        .update(caseLawSources)
+        .set({
+          syncCursor: heldCursor,
+          lastSyncAt: heldAt,
+          observationOrder: sql`greatest(${caseLawSources.observationOrder}, 100)`,
+          checkpointObservationOrder: 100n,
+        })
+        .where(eq(caseLawSources.id, sourceId));
+
+      await db
+        .update(caseLawSources)
+        .set({
+          syncCursor: heldCursor,
+          lastSyncAt: new Date("2026-07-31T13:02:00.500Z"),
+          checkpointObservationOrder: 98n,
+        })
+        .where(eq(caseLawSources.id, sourceId));
+
+      await db
+        .update(caseLawSources)
+        .set({
+          syncCursor: "legacy-checkpoint-advanced",
+          lastSyncAt: new Date("2026-07-31T13:02:01.000Z"),
+          checkpointObservationOrder: 99n,
+        })
+        .where(eq(caseLawSources.id, sourceId));
+
+      const fenced = (
+        await db
+          .select({
+            checkpointObservationOrder:
+              caseLawSources.checkpointObservationOrder,
+            lastSyncAt: caseLawSources.lastSyncAt,
+            syncCursor: caseLawSources.syncCursor,
+          })
+          .from(caseLawSources)
+          .where(eq(caseLawSources.id, sourceId))
+          .limit(1)
+      ).at(0);
+      expect(fenced).toEqual({
+        checkpointObservationOrder: 100n,
+        lastSyncAt: heldAt,
+        syncCursor: heldCursor,
+      });
     });
   });
 }

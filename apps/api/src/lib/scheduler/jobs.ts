@@ -5,6 +5,8 @@ import type { SchedulerPayload, SchedulerSchedule } from "@/api/db/schema";
 import { schedulerJobs } from "@/api/db/schema";
 import { computeNextRunAt } from "@/api/lib/scheduler/schedule";
 import { RECONCILE_BUFFER_INTENTS_TASK } from "@/api/lib/scheduler/tasks/buffer-intent-reconciliation";
+import { RECONCILE_CASE_LAW_CORPUS_UPLOAD_INTENTS_TASK } from "@/api/lib/scheduler/tasks/case-law-corpus-upload-cleanup";
+import { BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK } from "@/api/lib/scheduler/tasks/case-law-redaction-tombstone-backfill";
 import { BACKFILL_SK_DOCUMENTS_TASK } from "@/api/lib/scheduler/tasks/case-law-sk-documents";
 import { EXPIRE_DESKTOP_EDIT_SESSIONS_TASK } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry";
 import { INFO_SOUD_SYNC_TRACKED_CASES_TASK } from "@/api/lib/scheduler/tasks/infosoud";
@@ -120,6 +122,26 @@ export const ensureDefaultSchedulerJobs = async (): Promise<void> => {
       everyMs: 60 * 1000,
     },
     task: RECONCILE_BUFFER_INTENTS_TASK,
+  });
+
+  await ensureSchedulerJob({
+    description: "Delete corpus objects from cancelled case-law uploads",
+    id: "caseLaw.reconcileCorpusUploadIntents.minutely",
+    schedule: {
+      type: "interval",
+      everyMs: 60 * 1000,
+    },
+    task: RECONCILE_CASE_LAW_CORPUS_UPLOAD_INTENTS_TASK,
+  });
+
+  await ensureOneShotSchedulerJob({
+    description: "Backfill durable case-law redaction tombstones",
+    id: "caseLaw.backfillRedactionTombstones.v1",
+    schedule: {
+      type: "interval",
+      everyMs: 60 * 1000,
+    },
+    task: BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK,
   });
 
   await ensureSchedulerJob({

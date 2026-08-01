@@ -208,11 +208,13 @@ if (!databaseUrl || !runPostgresTests) {
       const caseNumber = `refresh-${suffix}`;
       const id = await insertHydratedDecision(caseNumber);
 
-      const outcome = await processDecision(
-        metadataOnlyResult(caseNumber),
+      const outcome = await processDecision({
+        input: metadataOnlyResult(caseNumber),
+        observationOrder: 1n,
         sourceId,
         scopedDb,
-      );
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
 
       expect(outcome.inserted).toBe(true);
 
@@ -269,7 +271,13 @@ if (!databaseUrl || !runPostgresTests) {
         return await scopedDb(callback);
       };
 
-      await processDecision(metadataOnlyResult(caseNumber), sourceId, racingDb);
+      await processDecision({
+        input: metadataOnlyResult(caseNumber),
+        observationOrder: 1n,
+        sourceId,
+        scopedDb: racingDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
 
       // If the sequence ever changes, the injection no longer lands in
       // the window and this test would pass without exercising it.
@@ -293,14 +301,16 @@ if (!databaseUrl || !runPostgresTests) {
       const caseNumber = `refresh-doc-${suffix}`;
       const id = await insertHydratedDecision(caseNumber);
 
-      await processDecision(
-        {
+      await processDecision({
+        input: {
           ...metadataOnlyResult(caseNumber),
           fulltext: "Rozsudok\n\nOdôvodnenie:\n\nRevidovaný text.",
         },
+        observationOrder: 1n,
         sourceId,
         scopedDb,
-      );
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
 
       const row = await readDecision(id);
       expect(row?.fulltext).toContain("Revidovaný");

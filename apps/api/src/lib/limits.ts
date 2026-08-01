@@ -241,7 +241,6 @@ export const LIMITS = {
   caseLawMatterLinksPerWorkspace: 1000,
   caseLawSearchPageSizeDefault: 20,
   caseLawSearchPageSizeMax: 100,
-  caseLawSlugCollisionScanLimit: 1000,
   /** Max language variants for one decision's languageGroupKey. Bounds the
    *  alternate-language reads (decision detail + sitemap hreflang) so a
    *  malformed/over-merged group key cannot load an unbounded set. */

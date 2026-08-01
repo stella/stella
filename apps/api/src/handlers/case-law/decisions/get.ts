@@ -145,6 +145,7 @@ export const readDecisionHandler = async (
         astS3Key: true,
         textS3Key: true,
         contentHash: true,
+        redactedAt: true,
         // fulltext: only as fallback when no AST
         // sections: frontend doesn't use these
       },
@@ -257,29 +258,32 @@ export const readDecisionHandler = async (
   // re-entering the fetch path on every view would cost a claim that can
   // never succeed. Kept as derived booleans rather than a call so this
   // module stays a read.
-  const { documentPending, documentUnavailable } = await resolveDocumentState({
-    hasReadableDocument: hasUsableAst(documentAst) || Boolean(fulltext),
-    documentUrl: decision.documentUrl,
-    corpusServed:
-      corpusReadEnabled() &&
-      decision.textS3Key !== null &&
-      decision.contentHash !== null,
-    contentHash: decision.contentHash,
-    pgAstPresent: decision.documentAst !== null,
-    resolvedFulltext: fulltext,
-    readTextColumnWritten: async () => {
-      const [row] = await caseLawDb((tx) =>
-        tx
-          .select({
-            written: sql<boolean>`${caseLawDecisions.fulltext} IS NOT NULL`,
-          })
-          .from(caseLawDecisions)
-          .where(eq(caseLawDecisions.id, decisionId))
-          .limit(1),
-      );
-      return row?.written ?? null;
-    },
-  });
+  const { documentPending, documentUnavailable } =
+    decision.redactedAt === null
+      ? await resolveDocumentState({
+          hasReadableDocument: hasUsableAst(documentAst) || Boolean(fulltext),
+          documentUrl: decision.documentUrl,
+          corpusServed:
+            corpusReadEnabled() &&
+            decision.textS3Key !== null &&
+            decision.contentHash !== null,
+          contentHash: decision.contentHash,
+          pgAstPresent: decision.documentAst !== null,
+          resolvedFulltext: fulltext,
+          readTextColumnWritten: async () => {
+            const [row] = await caseLawDb((tx) =>
+              tx
+                .select({
+                  written: sql<boolean>`${caseLawDecisions.fulltext} IS NOT NULL`,
+                })
+                .from(caseLawDecisions)
+                .where(eq(caseLawDecisions.id, decisionId))
+                .limit(1),
+            );
+            return row?.written ?? null;
+          },
+        })
+      : { documentPending: false, documentUnavailable: false };
 
   return {
     documentPending,

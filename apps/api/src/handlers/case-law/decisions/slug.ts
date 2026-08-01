@@ -1,13 +1,12 @@
-import { panic } from "better-result";
-import { type SQL, and, eq, like, or, sql } from "drizzle-orm";
-
 import { stripDiacriticsForSlug } from "@stll/text-normalize";
 
-import { caseLawDecisions } from "@/api/db/schema";
-import { escapeLike } from "@/api/lib/escape-like";
-
 const CASE_LAW_DECISION_SLUG_MAX_LENGTH = 256;
-const MIN_CASE_LAW_DECISION_SLUG_SUFFIX = 2;
+const CASE_LAW_DECISION_SLUG_HASH_LENGTH = 16;
+export const CASE_LAW_DECISION_SLUG_ALLOCATION_ATTEMPTS = [
+  0, 1, 2, 3, 4,
+] as const;
+type CaseLawDecisionSlugAllocationAttempt =
+  (typeof CASE_LAW_DECISION_SLUG_ALLOCATION_ATTEMPTS)[number];
 
 const trimSlugHyphens = (value: string): string => {
   let start = 0;
@@ -23,16 +22,13 @@ const trimSlugHyphens = (value: string): string => {
   return value.slice(start, end);
 };
 
-const toSuffixText = (suffix: number): string => `-${suffix}`;
-
-const fitSlug = (baseSlug: string, suffix?: number): string => {
-  const suffixText = suffix === undefined ? "" : toSuffixText(suffix);
+const fitSlug = (baseSlug: string, suffix = ""): string => {
   const maxBaseLength = Math.max(
     0,
-    CASE_LAW_DECISION_SLUG_MAX_LENGTH - suffixText.length,
+    CASE_LAW_DECISION_SLUG_MAX_LENGTH - suffix.length,
   );
   const trimmed = trimSlugHyphens(baseSlug.slice(0, maxBaseLength));
-  return `${trimmed || "unknown"}${suffixText}`;
+  return `${trimmed || "unknown"}${suffix}`;
 };
 
 export const createCaseLawDecisionSlug = (caseNumber: string): string => {
@@ -48,90 +44,30 @@ export const createCaseLawDecisionSlug = (caseNumber: string): string => {
   return fitSlug(slug || "unknown");
 };
 
-type CaseLawDecisionSlugCollisionScanPrefixOptions = {
+type CaseLawDecisionSlugCandidateOptions = {
   baseSlug: string;
-  maxSuffix: number;
-};
-
-export const createCaseLawDecisionSlugCollisionScanPrefix = ({
-  baseSlug,
-  maxSuffix,
-}: CaseLawDecisionSlugCollisionScanPrefixOptions): string => {
-  const normalizedBase = fitSlug(baseSlug);
-  const suffix = Math.max(MIN_CASE_LAW_DECISION_SLUG_SUFFIX, maxSuffix);
-  const suffixText = toSuffixText(suffix);
-  const maxBaseLength = Math.max(
-    0,
-    CASE_LAW_DECISION_SLUG_MAX_LENGTH - suffixText.length,
-  );
-  return trimSlugHyphens(normalizedBase.slice(0, maxBaseLength)) || "unknown";
+  /** Stable allocation identity: publisher identity or a persisted row id. */
+  identity: string;
+  attempt: CaseLawDecisionSlugAllocationAttempt;
 };
 
 /**
- * Builds the WHERE condition that selects every slug colliding with `baseSlug`
- * (the bare base plus its `-<n>` suffixes), for both ingest and the backfill so
- * they share one collision-scan definition.
- *
- * When the base is short enough that no suffix within the scan window truncates
- * it, every colliding slug is exactly `base` or `base-<digits>`, so the filter
- * matches that set precisely. A bare `LIKE base%` would also pull in unrelated
- * slugs that merely share the textual prefix (e.g. base `c-752` matching
- * `c-7524`); on a short or common base those can fill the scan cap and hide the
- * real collision, so the caller would pick an already-used slug. For the rare
- * max-length base whose `-<n>` variants truncate to different prefixes, fall
- * back to the shared prefix scan (collision risk there is negligible since the
- * prefix is already ~250 chars).
+ * Candidate zero preserves the existing public URL shape. On a collision, a
+ * deterministic identity digest makes overlapping ingestion and a replay pick
+ * the same next candidate without reading the global slug namespace.
  */
-export const caseLawDecisionSlugCollisionFilter = ({
+export const createCaseLawDecisionSlugCandidate = ({
   baseSlug,
-  maxSuffix,
-}: CaseLawDecisionSlugCollisionScanPrefixOptions): SQL | undefined => {
-  const normalizedBase = fitSlug(baseSlug);
-  const suffix = Math.max(MIN_CASE_LAW_DECISION_SLUG_SUFFIX, maxSuffix);
-  const longestSuffixLength = toSuffixText(suffix).length;
-
-  if (
-    normalizedBase.length + longestSuffixLength <=
-    CASE_LAW_DECISION_SLUG_MAX_LENGTH
-  ) {
-    // normalizedBase contains only [a-z0-9-], so it is already regex-safe.
-    return or(
-      eq(caseLawDecisions.slug, normalizedBase),
-      and(
-        like(caseLawDecisions.slug, `${escapeLike(normalizedBase)}-%`),
-        sql`${caseLawDecisions.slug} ~ ${`^${normalizedBase}-[0-9]+$`}`,
-      ),
-    );
+  identity,
+  attempt,
+}: CaseLawDecisionSlugCandidateOptions): string => {
+  if (attempt === 0) {
+    return fitSlug(baseSlug);
   }
 
-  const scanPrefix = createCaseLawDecisionSlugCollisionScanPrefix({
-    baseSlug,
-    maxSuffix,
-  });
-  return like(caseLawDecisions.slug, `${escapeLike(scanPrefix)}%`);
-};
-
-export const createAvailableCaseLawDecisionSlug = (
-  baseSlug: string,
-  existingSlugs: readonly (string | null)[],
-): string => {
-  const used = new Set(existingSlugs.filter((slug) => slug !== null));
-  const normalizedBase = fitSlug(baseSlug);
-
-  if (!used.has(normalizedBase)) {
-    return normalizedBase;
-  }
-
-  for (
-    let suffix = MIN_CASE_LAW_DECISION_SLUG_SUFFIX;
-    suffix < Number.MAX_SAFE_INTEGER;
-    suffix += 1
-  ) {
-    const candidate = fitSlug(normalizedBase, suffix);
-    if (!used.has(candidate)) {
-      return candidate;
-    }
-  }
-
-  return panic("No available case-law decision slug");
+  const digest = new Bun.CryptoHasher("sha256")
+    .update(`${identity}\u0000${attempt}`)
+    .digest("hex")
+    .slice(0, CASE_LAW_DECISION_SLUG_HASH_LENGTH);
+  return fitSlug(baseSlug, `-${digest}`);
 };

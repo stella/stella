@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { CASE_LAW_CORPUS_MIRROR_STATUS } from "@/api/db/schema";
 import { zstdCompress } from "@/api/lib/compression";
 import {
   CorpusPayloadUnavailableError,
@@ -7,11 +8,45 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import {
   corpusContentHash,
+  corpusMirrorColumns,
   EMPTY_CORPUS_CONTENT_HASHES,
   readCorpusPayloadOrFallback,
   readCorpusText,
 } from "@/api/lib/legal-search/corpus-storage";
 import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
+
+describe("corpus mirror state columns", () => {
+  test("partition pending and settled pointer states", () => {
+    expect(
+      corpusMirrorColumns({
+        status: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
+      }),
+    ).toEqual({
+      corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
+      textS3Key: null,
+      normalizedS3Key: null,
+      astS3Key: null,
+      contentHash: null,
+    });
+    expect(
+      corpusMirrorColumns({
+        status: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+        written: {
+          textKey: "corpus/text.zst",
+          sectionsKey: "corpus/sections.zst",
+          astKey: "corpus/ast.zst",
+          contentHash: "content-hash",
+        },
+      }),
+    ).toEqual({
+      corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+      textS3Key: "corpus/text.zst",
+      normalizedS3Key: "corpus/sections.zst",
+      astS3Key: "corpus/ast.zst",
+      contentHash: "content-hash",
+    });
+  });
+});
 
 describe("readCorpusText bounded corpus read", () => {
   test("rejects with a TimeoutError when the underlying S3 op never settles", async () => {

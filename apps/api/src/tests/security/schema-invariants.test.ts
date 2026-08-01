@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { getTableConfig } from "drizzle-orm/pg-core";
 
-import { caseLawCitations, caseLawPolarityRules } from "@/api/db/schema";
+import {
+  CASE_LAW_CORPUS_MIRROR_STATUS,
+  caseLawCitations,
+  caseLawDecisions,
+  caseLawPolarityRules,
+} from "@/api/db/schema";
 import { POLARITY } from "@/api/handlers/case-law/polarity/consts";
 
 /**
@@ -61,5 +66,15 @@ describe("schema invariants", () => {
       "polarity_rules_polarity_values",
     ).toSorted();
     expect(dbValues).toEqual(polarityValues);
+  });
+
+  test("corpus mirror CHECK constraint matches its domain type", () => {
+    const dbValues = extractCheckValues(
+      caseLawDecisions,
+      "case_law_decisions_corpus_mirror_status_values",
+    ).toSorted();
+    expect(dbValues).toEqual(
+      Object.values(CASE_LAW_CORPUS_MIRROR_STATUS).toSorted(),
+    );
   });
 });

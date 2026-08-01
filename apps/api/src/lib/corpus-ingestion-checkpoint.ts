@@ -19,6 +19,8 @@ export const INGESTION_CHECKPOINT_STATUS = {
 type CorpusSource =
   | {
       id: SafeId<"caseLawSource">;
+      leaseToken: SafeId<"caseLawSourceIngestionLease">;
+      observationOrder: bigint;
       type: typeof CORPUS_SOURCE_TYPE.CASE_LAW;
     }
   | {
@@ -82,11 +84,18 @@ export const advanceCorpusIngestionCheckpoint = async ({
       case CORPUS_SOURCE_TYPE.CASE_LAW: {
         const advanced = await tx
           .update(caseLawSources)
-          .set({ syncCursor: nextCursor, lastSyncAt: new Date() })
+          .set({
+            syncCursor: nextCursor,
+            lastSyncAt: new Date(),
+            checkpointObservationOrder: source.observationOrder,
+          })
           .where(
             and(
               eq(caseLawSources.id, source.id),
+              eq(caseLawSources.ingestionLeaseToken, source.leaseToken),
+              sql`${caseLawSources.ingestionLeaseExpiresAt} > now()`,
               sql`${caseLawSources.syncCursor} IS NOT DISTINCT FROM ${expectedCursor}`,
+              sql`${caseLawSources.checkpointObservationOrder} <= ${source.observationOrder}`,
             ),
           )
           .returning({ cursor: caseLawSources.syncCursor });

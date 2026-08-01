@@ -35,8 +35,12 @@ import {
   sql,
 } from "drizzle-orm";
 
+import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { caseLawDecisions } from "@/api/db/schema";
+import {
+  CASE_LAW_CORPUS_MIRROR_STATUS,
+  caseLawDecisions,
+} from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -45,11 +49,18 @@ import {
 } from "@/api/lib/case-law/document-ast";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { fetchWithTimeout } from "@/api/lib/fetch";
+import {
+  reserveCaseLawCorpusUploadIntent,
+  writeReservedCaseLawCorpusUpload,
+} from "@/api/lib/legal-search/case-law-corpus-upload-intents";
 import { indexDecision } from "@/api/lib/legal-search/case-law-search-index";
 import {
+  corpusContentHash,
+  corpusMirrorColumns,
   EMPTY_CORPUS_CONTENT_HASHES,
   writeCorpusDocument,
 } from "@/api/lib/legal-search/corpus-storage";
+import type { WriteCorpusResult } from "@/api/lib/legal-search/corpus-storage";
 import {
   ADAPTER_KEYS,
   PARSER_VERSION,
@@ -222,6 +233,7 @@ const outsideFetchCooldown = or(
  * the scan walking trimmed rows to conclude the queue is empty.
  */
 export const pendingDocumentPredicate = and(
+  isNull(caseLawDecisions.redactedAt),
   isNull(caseLawDecisions.fulltext),
   isNotNull(caseLawDecisions.documentUrl),
   or(
@@ -515,18 +527,26 @@ export const storeBackfilledDocument = async ({
   claimedSourceHash,
 }: StoreBackfilledDocumentOptions): Promise<"stored" | "superseded"> => {
   const sections = document.sections.length > 0 ? document.sections : null;
-  const corpus =
-    writeCorpus === null
-      ? null
-      : await writeCorpus({
-          documentId: decision.id,
-          jurisdiction: decision.country,
-          text: document.fulltext,
-          sections,
-          ast: document.documentAst,
-        });
+  const payload = {
+    documentId: decision.id,
+    jurisdiction: decision.country,
+    text: document.fulltext,
+    sections,
+    ast: document.documentAst,
+  };
+  const ownerPredicate = and(
+    eq(caseLawDecisions.id, decision.id),
+    isNull(caseLawDecisions.redactedAt),
+    sql`coalesce(${caseLawDecisions.fulltext}, '') = ''`,
+    claimedSourceHash === undefined
+      ? undefined
+      : sql`${caseLawDecisions.sourceHash} IS NOT DISTINCT FROM ${claimedSourceHash}`,
+  );
 
-  const stored = await scopedDb(async (tx) => {
+  const applyStoredPayload = async (
+    tx: Transaction,
+    written: WriteCorpusResult | null,
+  ): Promise<boolean> => {
     // audit: skip — scheduler backfill of public case-law text; no user action
     const applied = await tx
       .update(caseLawDecisions)
@@ -535,27 +555,52 @@ export const storeBackfilledDocument = async ({
         documentAst: document.documentAst,
         sections,
         parserVersion: PARSER_VERSION,
-        ...(corpus === null
-          ? {}
-          : {
-              textS3Key: corpus.textKey,
-              normalizedS3Key: corpus.sectionsKey,
-              astS3Key: corpus.astKey,
-              contentHash: corpus.contentHash,
-            }),
+        ...corpusMirrorColumns({
+          status: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+          written,
+        }),
       })
-      .where(
-        and(
-          eq(caseLawDecisions.id, decision.id),
-          sql`coalesce(${caseLawDecisions.fulltext}, '') = ''`,
-          claimedSourceHash === undefined
-            ? undefined
-            : sql`${caseLawDecisions.sourceHash} IS NOT DISTINCT FROM ${claimedSourceHash}`,
-        ),
-      )
+      .where(ownerPredicate)
       .returning({ id: caseLawDecisions.id });
     return applied.length > 0;
-  });
+  };
+
+  let stored: boolean;
+  if (writeCorpus === null) {
+    stored = await scopedDb(async (tx) => await applyStoredPayload(tx, null));
+  } else {
+    const intent = await reserveCaseLawCorpusUploadIntent({
+      contentHash: corpusContentHash(payload),
+      decisionId: decision.id,
+      jurisdiction: decision.country,
+      scopedDb,
+    });
+    if (intent.type !== "reserved") {
+      return "superseded";
+    }
+    const outcome = await writeReservedCaseLawCorpusUpload({
+      apply: async ({ tx, written }) => ({
+        type: (await applyStoredPayload(tx, written))
+          ? "applied"
+          : "superseded",
+      }),
+      decisionId: decision.id,
+      intentId: intent.intentId,
+      preflight: async (tx) =>
+        Boolean(
+          (
+            await tx
+              .select({ id: caseLawDecisions.id })
+              .from(caseLawDecisions)
+              .where(ownerPredicate)
+              .limit(1)
+          ).at(0),
+        ),
+      scopedDb,
+      write: async ({ signal }) => await writeCorpus(payload, { signal }),
+    });
+    stored = outcome.type === "applied";
+  }
 
   await indexDecision(decision.id, scopedDb);
   // A missed compare-and-set is a superseded store, not a stored document:
@@ -582,6 +627,7 @@ export const recordDocumentFetchRequest = async (
       UPDATE ${caseLawDecisions}
       SET document_fetch_requested_at = now()
       WHERE id = ${decisionId}
+        AND redacted_at IS NULL
         AND document_fetch_requested_at IS NULL
     `);
   });
@@ -645,6 +691,7 @@ export const claimDocumentFetch = async (
       SET document_fetch_attempted_at = now(),
           document_fetch_attempts = document_fetch_attempts + 1
       WHERE id = ${decisionId}
+        AND redacted_at IS NULL
         AND fulltext IS NULL
         AND (
           document_fetch_attempted_at IS NULL
@@ -685,10 +732,17 @@ export const markDocumentUnavailable = async (
     // audit: skip — scheduler backfill of public case-law text; no user action
     await tx
       .update(caseLawDecisions)
-      .set({ fulltext: "" })
+      .set({
+        fulltext: "",
+        ...corpusMirrorColumns({
+          status: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+          written: null,
+        }),
+      })
       .where(
         and(
           eq(caseLawDecisions.id, decisionId),
+          isNull(caseLawDecisions.redactedAt),
           isNull(caseLawDecisions.fulltext),
         ),
       );

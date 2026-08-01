@@ -1,4 +1,7 @@
+import { eq } from "drizzle-orm";
+
 import {
+  caseLawIngestionOnlyPolicies,
   globalCaseLawPolicies,
   isNotNull,
   isNull,
@@ -22,6 +25,21 @@ import type {
 } from "./common";
 import { workspaces } from "./contacts";
 
+export const CASE_LAW_CORPUS_MIRROR_STATUS = {
+  PENDING: "pending",
+  SETTLED: "settled",
+} as const;
+
+export const CASE_LAW_CORPUS_UPLOAD_INTENT_STATUSES = [
+  "active",
+  "cleanup",
+] as const;
+
+export const CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS = {
+  ACTIVE: CASE_LAW_CORPUS_UPLOAD_INTENT_STATUSES[0],
+  CLEANUP: CASE_LAW_CORPUS_UPLOAD_INTENT_STATUSES[1],
+} as const;
+
 export const caseLawSources = p.pgTable(
   "case_law_sources",
   {
@@ -31,6 +49,16 @@ export const caseLawSources = p.pgTable(
     enabled: p.boolean().default(true).notNull(),
     syncCursor: p.text("sync_cursor"),
     lastSyncAt: timestamptz("last_sync_at"),
+    observationOrder: p
+      .bigint("observation_order", { mode: "bigint" })
+      .default(0n)
+      .notNull(),
+    checkpointObservationOrder: p
+      .bigint("checkpoint_observation_order", { mode: "bigint" })
+      .default(0n)
+      .notNull(),
+    ingestionLeaseToken: p.uuid("ingestion_lease_token"),
+    ingestionLeaseExpiresAt: timestamptz("ingestion_lease_expires_at"),
     config: jsonb().$type<Record<string, unknown>>().default({}),
     // License / redistribution terms. null = legacy source (public
     // court records, treated as redistributable); see corpus-source.ts. A
@@ -44,6 +72,14 @@ export const caseLawSources = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (t) => [
+    p.check(
+      "case_law_sources_checkpoint_observation_order_monotonic",
+      sql`${t.checkpointObservationOrder} <= ${t.observationOrder}`,
+    ),
+    p.check(
+      "case_law_sources_ingestion_lease_pair",
+      sql`(${t.ingestionLeaseToken} IS NULL) = (${t.ingestionLeaseExpiresAt} IS NULL)`,
+    ),
     p.uniqueIndex("case_law_sources_adapter_key_idx").on(t.adapterKey),
     ...globalCaseLawPolicies(),
   ],
@@ -150,6 +186,22 @@ export const caseLawDecisions = p.pgTable(
       .notNull(),
     metadata: jsonb().$type<Record<string, unknown>>().default({}),
     sourceHash: p.varchar("source_hash", { length: 64 }),
+    sourceObservedAt: timestamptz("source_observed_at"),
+    sourceObservationOrder: p.bigint("source_observation_order", {
+      mode: "bigint",
+    }),
+    sourceObservationHash: p.varchar("source_observation_hash", { length: 64 }),
+    redactedAt: timestamptz("redacted_at"),
+    corpusMirrorStatus: p
+      .varchar("corpus_mirror_status", {
+        length: 16,
+        enum: [
+          CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+          CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
+        ],
+      })
+      .default(CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED)
+      .notNull(),
     /**
      * Materialized citation-authority ranking signal: the
      * ln(1 + weighted-citation-density) value that `citationScore()`
@@ -196,6 +248,18 @@ export const caseLawDecisions = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (t) => [
+    p.check(
+      "case_law_decisions_corpus_mirror_status_values",
+      sql`${t.corpusMirrorStatus} IN ('settled', 'pending')`,
+    ),
+    p.check(
+      "case_law_decisions_pending_corpus_mirror_has_no_pointers",
+      sql`${t.corpusMirrorStatus} = 'settled' OR (${t.textS3Key} IS NULL AND ${t.normalizedS3Key} IS NULL AND ${t.astS3Key} IS NULL AND ${t.contentHash} IS NULL)`,
+    ),
+    p.check(
+      "case_law_decisions_redacted_payload_erased",
+      sql`${t.redactedAt} IS NULL OR (${t.fulltext} IS NULL AND ${t.sections} IS NULL AND ${t.documentAst} IS NULL AND ${t.contentHash} IS NULL)`,
+    ),
     // Identity, in two halves that together cover every row exactly once.
     // Where the publisher states an id, that is the key. Where it does not,
     // the case number still serves, because such a source holds one court
@@ -279,6 +343,67 @@ export const caseLawDecisions = p.pgTable(
       )
       .where(sql`${t.fulltext} is null and ${t.documentUrl} is not null`),
     ...globalCaseLawPolicies(),
+  ],
+);
+
+/**
+ * Exact corpus-object keys reserved before an external PUT. This deliberately
+ * has no foreign key: a redaction or source deletion must not remove the
+ * cleanup ownership record before the root scheduler has erased its objects.
+ */
+export const caseLawCorpusUploadIntents = p.pgTable(
+  "case_law_corpus_upload_intents",
+  {
+    id: pUuid<"caseLawCorpusUploadIntent">().primaryKey(),
+    decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
+    textS3Key: p.varchar("text_s3_key", { length: 512 }).notNull(),
+    normalizedS3Key: p
+      .varchar("normalized_s3_key", {
+        length: 512,
+      })
+      .notNull(),
+    astS3Key: p.varchar("ast_s3_key", { length: 512 }).notNull(),
+    status: p
+      .varchar({
+        length: 16,
+        enum: CASE_LAW_CORPUS_UPLOAD_INTENT_STATUSES,
+      })
+      .default(CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.ACTIVE)
+      .notNull(),
+    leaseExpiresAt: timestamptz("lease_expires_at").notNull(),
+    cleanupAttemptCount: p
+      .integer("cleanup_attempt_count")
+      .default(0)
+      .notNull(),
+    nextCleanupAt: timestamptz("next_cleanup_at"),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p
+      .uniqueIndex("case_law_corpus_upload_intents_active_decision_uidx")
+      .on(t.decisionId)
+      .where(eq(t.status, CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.ACTIVE)),
+    p
+      .index("case_law_corpus_upload_intents_cleanup_due_idx")
+      .on(t.nextCleanupAt, t.id)
+      .where(eq(t.status, CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.CLEANUP)),
+    p
+      .index("case_law_corpus_upload_intents_active_lease_idx")
+      .on(t.leaseExpiresAt, t.id)
+      .where(eq(t.status, CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.ACTIVE)),
+    p.check(
+      "case_law_corpus_upload_intents_status_values",
+      sql`${t.status} IN ('active', 'cleanup')`,
+    ),
+    p.check(
+      "case_law_corpus_upload_intents_cleanup_schedule",
+      sql`${t.status} <> 'cleanup' OR ${t.nextCleanupAt} IS NOT NULL`,
+    ),
+    p.check(
+      "case_law_corpus_upload_intents_cleanup_attempts_nonnegative",
+      sql`${t.cleanupAttemptCount} >= 0`,
+    ),
+    ...caseLawIngestionOnlyPolicies(),
   ],
 );
 
@@ -618,6 +743,10 @@ export const caseLawIndexJobs = p.pgTable(
   (t) => [
     p.index("case_law_index_jobs_decision_idx").on(t.decisionId),
     p.index("case_law_index_jobs_created_idx").on(t.createdAt),
+    p
+      .index("case_law_index_jobs_redaction_decision_idx")
+      .on(t.decisionId, t.createdAt.desc())
+      .where(sql`${t.operation} = 'redact' AND ${t.decisionId} IS NOT NULL`),
     p.check(
       "case_law_index_jobs_operation_values",
       sql`${t.operation} IN ('index','delete','redact','rebuild')`,

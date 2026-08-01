@@ -35,6 +35,7 @@ import { backfillLegislationSearchIndex } from "@/api/handlers/legislation/searc
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { backfillSearchIndex } from "@/api/lib/legal-search/case-law-search-index";
+import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
@@ -622,7 +623,20 @@ const runOneCycle = async (
   const initialCursor =
     adapterKey === ADAPTER_KEYS.CZ_REGIONAL ? daysAgoCursor(7) : null;
 
-  const source = await ensureSource(adapterKey, name, initialCursor);
+  const configuredSource = await ensureSource(adapterKey, name, initialCursor);
+  const sourceLease = await acquireCaseLawSourceIngestionLease({
+    scopedDb: ingestionDb,
+    sourceId: configuredSource.id,
+  });
+  if (!sourceLease) {
+    logInfo(`[${adapterKey}] Source is leased by another ingestion worker`);
+    return {
+      outcome: CYCLE_OUTCOME.FAILED,
+      inserted: 0,
+      pagesProcessed: 0,
+    };
+  }
+  const { source } = sourceLease;
   const cursorBefore = source.syncCursor;
 
   logInfo(`[${adapterKey}] Ingesting (cursor: ${cursorBefore ?? "start"})`);
@@ -640,6 +654,7 @@ const runOneCycle = async (
 
     result = await runIngestionPipeline({
       source,
+      sourceLease,
       scopedDb: ingestionDb,
       dbSlot: dbWriteSemaphore,
       signal: AbortSignal.timeout(cycleMs),
@@ -669,6 +684,12 @@ const runOneCycle = async (
         0,
         2048,
       );
+  } finally {
+    try {
+      await sourceLease.release();
+    } catch (error) {
+      logError(`[${adapterKey}] Failed to release source lease:`, error);
+    }
   }
 
   const durationMs = Math.round(performance.now() - t0);

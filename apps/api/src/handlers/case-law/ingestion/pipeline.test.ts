@@ -17,6 +17,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/pipeline";
 import { createSafeId } from "@/api/lib/branded-types";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
+import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 
 const concatInlineText = (inlines: Inline[]): string => {
   let out = "";
@@ -63,6 +64,16 @@ const astMetadata = {
 };
 
 const originalCzNsFetchPage = czNsAdapter.fetchPage;
+
+const testSourceLease = (
+  source: typeof caseLawSources.$inferSelect,
+): CaseLawSourceIngestionLease => ({
+  beforeDatabaseMark: async () => undefined,
+  beforeRemoteEffect: async (effect) => await effect(),
+  leaseToken: createSafeId<"caseLawSourceIngestionLease">(),
+  release: async () => undefined,
+  source,
+});
 
 afterEach(() => {
   czNsAdapter.fetchPage = originalCzNsFetchPage;
@@ -286,6 +297,10 @@ describe("runIngestionPipeline — database timeouts", () => {
       enabled: true,
       syncCursor: "cursor-1",
       lastSyncAt: null,
+      observationOrder: 0n,
+      checkpointObservationOrder: 0n,
+      ingestionLeaseToken: null,
+      ingestionLeaseExpiresAt: null,
       config: {},
       descriptor: null,
       createdAt: new Date("2026-01-01T00:00:00.000Z"),
@@ -318,7 +333,9 @@ describe("runIngestionPipeline — database timeouts", () => {
 
             return {
               where: () => ({
-                returning: async () => [{ cursor: values.syncCursor ?? null }],
+                returning: async () => [
+                  { cursor: values.syncCursor ?? null, order: 1n },
+                ],
               }),
             };
           },
@@ -331,7 +348,11 @@ describe("runIngestionPipeline — database timeouts", () => {
       return await callback(tx as unknown as Transaction);
     };
 
-    const result = await runIngestionPipeline({ source, scopedDb });
+    const result = await runIngestionPipeline({
+      source,
+      sourceLease: testSourceLease(source),
+      scopedDb,
+    });
 
     expect(result.inserted).toBe(0);
     expect(result.skipped).toBe(0);
@@ -351,6 +372,10 @@ describe("runIngestionPipeline — empty-page cursor progress", () => {
       enabled: true,
       syncCursor: "cursor-1",
       lastSyncAt: null,
+      observationOrder: 0n,
+      checkpointObservationOrder: 0n,
+      ingestionLeaseToken: null,
+      ingestionLeaseExpiresAt: null,
       config: {},
       descriptor: null,
       createdAt: new Date("2026-01-01T00:00:00.000Z"),
@@ -389,7 +414,9 @@ describe("runIngestionPipeline — empty-page cursor progress", () => {
 
             return {
               where: () => ({
-                returning: async () => [{ cursor: values.syncCursor ?? null }],
+                returning: async () => [
+                  { cursor: values.syncCursor ?? null, order: 1n },
+                ],
               }),
             };
           },
@@ -405,6 +432,7 @@ describe("runIngestionPipeline — empty-page cursor progress", () => {
 
     const result = await runIngestionPipeline({
       source,
+      sourceLease: testSourceLease(source),
       scopedDb,
       signal: controller.signal,
       maxPages: 1,
@@ -468,7 +496,11 @@ describe("processDecision — corpus storage off", () => {
             if (table === caseLawDecisions) {
               updated = values;
             }
-            return { where: async () => undefined };
+            return {
+              where: () => ({
+                returning: async () => [{ id: existing.id }],
+              }),
+            };
           },
         }),
         delete: () => ({ where: async () => undefined }),
@@ -481,8 +513,8 @@ describe("processDecision — corpus storage off", () => {
       return await callback(tx as unknown as Transaction);
     };
 
-    const outcome = await processDecision(
-      {
+    const outcome = await processDecision({
+      input: {
         caseNumber: "X/1/2026",
         court: "Test Court",
         country: "SVK",
@@ -492,9 +524,11 @@ describe("processDecision — corpus storage off", () => {
         rawHash: "new-hash",
         documentAst: EMPTY_AST,
       },
-      createSafeId<"caseLawSource">(),
+      observationOrder: 1n,
+      sourceId: createSafeId<"caseLawSource">(),
       scopedDb,
-    );
+      observedAt: new Date("2026-07-31T12:00:00.000Z"),
+    });
 
     expect(outcome.inserted).toBe(true);
     expect(updated).toMatchObject({

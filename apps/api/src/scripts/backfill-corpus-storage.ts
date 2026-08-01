@@ -36,7 +36,10 @@ import type { SQL } from "drizzle-orm";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { rlsDb } from "@/api/db/root";
-import { caseLawDecisions } from "@/api/db/schema";
+import {
+  CASE_LAW_CORPUS_MIRROR_STATUS,
+  caseLawDecisions,
+} from "@/api/db/schema";
 import { createIngestionDb } from "@/api/db/scoped";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -46,6 +49,12 @@ import {
   timestampMatchesCasToken,
 } from "@/api/lib/db/timestamp-cas";
 import {
+  reserveCaseLawCorpusUploadIntent,
+  writeReservedCaseLawCorpusUpload,
+} from "@/api/lib/legal-search/case-law-corpus-upload-intents";
+import {
+  corpusContentHash,
+  corpusMirrorColumns,
   EMPTY_CORPUS_CONTENT_HASHES,
   writeCorpusDocument,
 } from "@/api/lib/legal-search/corpus-storage";
@@ -88,6 +97,10 @@ const staleEmptyCorpusObjects = and(
 const rowsToBackfill: SQL | undefined = includeStaleEmpty
   ? or(missingCorpusObjects, staleEmptyCorpusObjects)
   : missingCorpusObjects;
+const eligibleForBackfill = and(
+  rowsToBackfill,
+  isNull(caseLawDecisions.redactedAt),
+);
 
 const ingestionDb = createIngestionDb(rlsDb);
 
@@ -105,43 +118,63 @@ let failed = 0;
 
 const backfillRow = async (row: BackfillRow): Promise<void> => {
   try {
-    const result = await writeCorpusDocument({
+    const payload = {
       documentId: row.id,
       jurisdiction: row.country,
       text: row.fulltext,
       sections: row.sections,
       ast: row.documentAst,
+    };
+    const intent = await reserveCaseLawCorpusUploadIntent({
+      contentHash: corpusContentHash(payload),
+      decisionId: row.id,
+      jurisdiction: row.country,
+      scopedDb: ingestionDb,
     });
-    const recorded = await ingestionDb((tx) =>
-      tx
-        .update(caseLawDecisions)
-        .set({
-          textS3Key: result.textKey,
-          normalizedS3Key: result.sectionsKey,
-          astS3Key: result.astKey,
-          contentHash: result.contentHash,
-        })
-        // Compare-and-set on the selected row state: a concurrent
-        // ingestion refresh may have written newer keys, and an
-        // unconditional update would point the row back at the stale
-        // backfill payload. The hash pins which payload this run read —
-        // for a repaired row the keys are already set, so their absence
-        // no longer proves the row is untouched.
-        .where(
-          and(
-            eq(caseLawDecisions.id, row.id),
-            sql`${caseLawDecisions.contentHash} IS NOT DISTINCT FROM ${row.contentHash}`,
-            timestampMatchesCasToken(
-              caseLawDecisions.updatedAt,
-              row.updatedAtToken,
-            ),
-          ),
-        )
-        .returning({ id: caseLawDecisions.id }),
+    if (intent.type !== "reserved") {
+      skipped += 1;
+      return;
+    }
+    const ownerPredicate = and(
+      eq(caseLawDecisions.id, row.id),
+      isNull(caseLawDecisions.redactedAt),
+      sql`${caseLawDecisions.contentHash} IS NOT DISTINCT FROM ${row.contentHash}`,
+      timestampMatchesCasToken(caseLawDecisions.updatedAt, row.updatedAtToken),
     );
+    const outcome = await writeReservedCaseLawCorpusUpload({
+      apply: async ({ tx, written: uploaded }) => {
+        // audit: skip — one-time corpus storage repair; derived state
+        const recorded = await tx
+          .update(caseLawDecisions)
+          .set(
+            corpusMirrorColumns({
+              status: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+              written: uploaded,
+            }),
+          )
+          .where(ownerPredicate)
+          .returning({ id: caseLawDecisions.id });
+        return { type: recorded.length > 0 ? "applied" : "superseded" };
+      },
+      decisionId: row.id,
+      intentId: intent.intentId,
+      preflight: async (tx) =>
+        Boolean(
+          (
+            await tx
+              .select({ id: caseLawDecisions.id })
+              .from(caseLawDecisions)
+              .where(ownerPredicate)
+              .limit(1)
+          ).at(0),
+        ),
+      scopedDb: ingestionDb,
+      write: async ({ signal }) =>
+        await writeCorpusDocument(payload, { signal }),
+    });
     // A refused CAS is not success: the row changed under the scan and
     // still points at its own payload, so nothing was recorded.
-    if (recorded.length > 0) {
+    if (outcome.type === "applied") {
       written += 1;
     } else {
       skipped += 1;
@@ -157,7 +190,9 @@ while (true) {
   // the scan; re-run the script later to retry the stragglers.
   const idFilter: SQL | undefined =
     lastId === null ? undefined : gt(caseLawDecisions.id, lastId);
-  const where = idFilter ? and(rowsToBackfill, idFilter) : rowsToBackfill;
+  const where = idFilter
+    ? and(eligibleForBackfill, idFilter)
+    : eligibleForBackfill;
 
   // oxlint-disable-next-line no-await-in-loop -- sequential keyset pagination: next page cursor (lastId) depends on this query
   const rows: BackfillRow[] = await ingestionDb((tx) =>

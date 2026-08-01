@@ -21,6 +21,14 @@ const generationMigrationSource = new URL(
   "../../../drizzle/20260731170000_case_law_corpus_generation_backfill/migration.sql",
   import.meta.url,
 );
+const ingestionSourceGrantMigration = new URL(
+  "../../../drizzle/20260731210000_case_law_ingestion_source_grants/migration.sql",
+  import.meta.url,
+);
+const ingestionSourceLeaseMigration = new URL(
+  "../../../drizzle/20260801120000_case_law_source_ingestion_lease/migration.sql",
+  import.meta.url,
+);
 const GENERATION_STATE_TABLES = [
   "case_law_corpus_index_backfills",
   "case_law_corpus_index_source_reconciliations",
@@ -69,6 +77,22 @@ test("a restore racing erasure is durably requeued", async () => {
   expect(source).toContain(
     "eq(\n                        caseLawCorpusIndexProjections.pendingRevision,\n                        projection.pendingRevision,",
   );
+});
+
+test("redaction fences uploads before inspecting or deleting object keys", async () => {
+  const source = await Bun.file(caseLawErasureSource).text();
+  const rowFence = source.indexOf('.for("update")');
+  const tombstone = source.indexOf("redactedAt:", rowFence);
+  const intentFence = source.indexOf(
+    "cancelCaseLawCorpusUploadIntents",
+    tombstone,
+  );
+  const objectDelete = source.indexOf("deleteCorpusDocument", intentFence);
+
+  expect(rowFence).toBeGreaterThan(-1);
+  expect(tombstone).toBeGreaterThan(rowFence);
+  expect(intentFence).toBeGreaterThan(tombstone);
+  expect(objectDelete).toBeGreaterThan(intentFence);
 });
 
 test("lease acquisition failures are audited after local redaction", async () => {
@@ -277,6 +301,24 @@ test("generation checkpoint migration preserves replay and role invariants", asy
   expect(schemaSource).not.toContain(
     '"case_law_decisions_corpus_country_shape"',
   );
+});
+
+test("ordered source progress remains inside the ingestion role boundary", async () => {
+  const [source, leaseSource] = await Promise.all([
+    Bun.file(ingestionSourceGrantMigration).text(),
+    Bun.file(ingestionSourceLeaseMigration).text(),
+  ]);
+
+  expect(source).toContain(
+    "GRANT UPDATE (observation_order, checkpoint_observation_order)",
+  );
+  expect(source).toContain('ON TABLE "case_law_sources"');
+  expect(source).toContain("TO stella_ingestion");
+  expect(leaseSource).toContain(
+    "GRANT UPDATE (ingestion_lease_token, ingestion_lease_expires_at)",
+  );
+  expect(leaseSource).toContain('ON TABLE "case_law_sources"');
+  expect(leaseSource).toContain("TO stella_ingestion");
 });
 
 test("every case-law corpus search boundary uses generation projection state", async () => {

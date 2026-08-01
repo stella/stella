@@ -163,7 +163,13 @@ const createTestDb = async (): Promise<TestDatabase> => {
   );
   await testDb.execute(
     sql.raw(`
-      GRANT UPDATE (sync_cursor, last_sync_at, updated_at)
+      GRANT UPDATE (
+        sync_cursor,
+        last_sync_at,
+        updated_at,
+        observation_order,
+        checkpoint_observation_order
+      )
         ON TABLE "case_law_sources"
         TO stella_ingestion
     `),

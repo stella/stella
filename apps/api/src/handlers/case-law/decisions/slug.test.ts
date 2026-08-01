@@ -1,9 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  createAvailableCaseLawDecisionSlug,
   createCaseLawDecisionSlug,
-  createCaseLawDecisionSlugCollisionScanPrefix,
+  createCaseLawDecisionSlugCandidate,
 } from "@/api/handlers/case-law/decisions/slug";
 
 describe("case-law public slugs", () => {
@@ -13,47 +12,62 @@ describe("case-law public slugs", () => {
     expect(createCaseLawDecisionSlug("!!!")).toBe("unknown");
   });
 
-  test("allocates numeric suffixes only for real collisions", () => {
+  test("keeps the base first, then derives stable collision candidates", () => {
+    const baseSlug = "nao-66-2026";
+    const identity = "source-id\u0000document\u0000publisher-id";
+
     expect(
-      createAvailableCaseLawDecisionSlug("nao-66-2026", [
-        "nao-66-2026",
-        "nao-66-2026-2",
-        "nao-66-2026-title",
-      ]),
-    ).toBe("nao-66-2026-3");
-  });
-
-  test("fills gaps instead of growing suffixes forever", () => {
+      createCaseLawDecisionSlugCandidate({
+        baseSlug,
+        identity,
+        attempt: 0,
+      }),
+    ).toBe(baseSlug);
     expect(
-      createAvailableCaseLawDecisionSlug("nao-66-2026", [
-        "nao-66-2026",
-        "nao-66-2026-3",
-      ]),
-    ).toBe("nao-66-2026-2");
+      createCaseLawDecisionSlugCandidate({
+        baseSlug,
+        identity,
+        attempt: 1,
+      }),
+    ).toBe(
+      createCaseLawDecisionSlugCandidate({
+        baseSlug,
+        identity,
+        attempt: 1,
+      }),
+    );
+    expect(
+      createCaseLawDecisionSlugCandidate({
+        baseSlug,
+        identity,
+        attempt: 1,
+      }),
+    ).not.toBe(
+      createCaseLawDecisionSlugCandidate({
+        baseSlug,
+        identity: `${identity}-other`,
+        attempt: 1,
+      }),
+    );
   });
 
-  test("keeps suffixed slugs within the database column limit", () => {
+  test("keeps deterministic collision candidates within the database column limit", () => {
     const baseSlug = "a".repeat(256);
-    const candidate = createAvailableCaseLawDecisionSlug(baseSlug, [baseSlug]);
-
-    expect(candidate).toHaveLength(256);
-    expect(candidate.endsWith("-2")).toBe(true);
-  });
-
-  test("scans by the fitted collision prefix for max-length base slugs", () => {
-    const baseSlug = "a".repeat(256);
-    const suffixTwoSlug = `${"a".repeat(254)}-2`;
-    const largestScannedSuffixSlug = `${"a".repeat(251)}-1001`;
-    const scanPrefix = createCaseLawDecisionSlugCollisionScanPrefix({
+    const candidate = createCaseLawDecisionSlugCandidate({
       baseSlug,
-      maxSuffix: 1001,
+      identity: "source-id\u0000document\u0000publisher-id",
+      attempt: 1,
     });
 
-    expect(baseSlug.startsWith(scanPrefix)).toBe(true);
-    expect(suffixTwoSlug.startsWith(scanPrefix)).toBe(true);
-    expect(largestScannedSuffixSlug.startsWith(scanPrefix)).toBe(true);
-    expect(
-      createAvailableCaseLawDecisionSlug(baseSlug, [baseSlug, suffixTwoSlug]),
-    ).toBe(`${"a".repeat(254)}-3`);
+    expect(candidate).toHaveLength(256);
+    expect(candidate).toMatch(/-[a-f0-9]{16}$/u);
+  });
+
+  test("keeps slug allocation free of database scans", async () => {
+    const source = await Bun.file(new URL("slug.ts", import.meta.url)).text();
+
+    expect(source).not.toContain("drizzle-orm");
+    expect(source).not.toContain("caseLawDecisions");
+    expect(source).not.toContain(".select(");
   });
 });

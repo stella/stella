@@ -3,19 +3,27 @@ import { afterEach, describe, expect, mock, test } from "bun:test";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import {
+  caseLawCorpusUploadIntents,
+  caseLawDecisions,
+  caseLawSources,
+} from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { createSafeId } from "@/api/lib/branded-types";
-import { DatabaseError, TimeoutError } from "@/api/lib/errors/tagged-errors";
+import {
+  ConcurrentModificationError,
+  DatabaseError,
+  TimeoutError,
+} from "@/api/lib/errors/tagged-errors";
+import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import type { WriteCorpusResult } from "@/api/lib/legal-search/corpus-storage";
 
 /**
  * `canonical` storage mode moves the payload out of Postgres, so what a
- * type cannot check is the ordering (objects must exist before any row
- * points at them), the failure shape (no row at all, and a held cursor so
- * the next cycle retries), and the compensation when the row write is the
- * half that fails.
+ * type cannot check is the ordering: the row and durable upload intent must
+ * exist before external I/O, and the row may only point at objects after the
+ * fenced write succeeds.
  */
 
 const realEnvBase = await import("@/api/env-base");
@@ -24,6 +32,7 @@ const realCorpusStorage = await import("@/api/lib/legal-search/corpus-storage");
 /** Ordered log of the side effects under test, across S3 and the DB. */
 const events: string[] = [];
 const insertedRows: Record<string, unknown>[] = [];
+const updatedDecisionRows: Record<string, unknown>[] = [];
 
 const CORPUS_KEYS = {
   textKey: "corpus/text.zst",
@@ -72,10 +81,20 @@ void mock.module("@/api/lib/legal-search/corpus-storage", () => ({
 
 const { czNsAdapter } =
   await import("@/api/handlers/case-law/ingestion/adapters/cz-ns");
-const { processDecision, runIngestionPipeline } =
+const { processDecision, runIngestionPipeline, settleCaseLawCorpusMirror } =
   await import("@/api/handlers/case-law/ingestion/pipeline");
 
 const originalCzNsFetchPage = czNsAdapter.fetchPage;
+
+const testSourceLease = (
+  source: typeof caseLawSources.$inferSelect,
+): CaseLawSourceIngestionLease => ({
+  beforeDatabaseMark: async () => undefined,
+  beforeRemoteEffect: async (effect) => await effect(),
+  leaseToken: createSafeId<"caseLawSourceIngestionLease">(),
+  release: async () => undefined,
+  source,
+});
 
 let persistedCursor: string | null | undefined;
 /**
@@ -86,15 +105,21 @@ let persistedCursor: string | null | undefined;
 let rowWrite: "ok" | "fault" | "timeout" = "ok";
 /** The row the dedup lookup finds; undefined makes this a new decision. */
 let existingDecision: Record<string, unknown> | undefined;
+/** Whether the observation still owns the mirror when it settles. */
+let mirrorSettlementApplied = true;
+let intentStatus: "active" | "cleanup" = "active";
 
 afterEach(() => {
   czNsAdapter.fetchPage = originalCzNsFetchPage;
   events.length = 0;
   insertedRows.length = 0;
+  updatedDecisionRows.length = 0;
   deletedKeys.length = 0;
   persistedCursor = undefined;
   rowWrite = "ok";
   existingDecision = undefined;
+  mirrorSettlementApplied = true;
+  intentStatus = "active";
   writeCorpusDocumentMock.mockClear();
   deleteCorpusDocumentMock.mockClear();
 });
@@ -123,36 +148,59 @@ const scopedDb: ScopedDb = async (callback) => {
         findFirst: async () => await Promise.resolve(existingDecision),
       },
     },
-    select: () => ({
-      from: () => ({ where: () => ({ limit: async () => [] }) }),
+    select: (selection: Record<string, unknown>) => ({
+      from: (table: unknown) => ({
+        where: () => {
+          const rows = async () => {
+            if (table === caseLawCorpusUploadIntents) {
+              return [{ status: intentStatus }];
+            }
+            if ("redactedAt" in selection) {
+              return [{ redactedAt: null }];
+            }
+            if ("id" in selection) {
+              return [{ id: "decision-id" }];
+            }
+            return [];
+          };
+          return {
+            limit: rows,
+            for: () => ({ limit: rows }),
+          };
+        },
+      }),
     }),
     insert: (table: unknown) => ({
       values: (values: Record<string, unknown>) => {
         const outcome = table === caseLawDecisions ? rowWrite : "ok";
         if (outcome === "ok") {
-          events.push("row-insert");
           if (table === caseLawDecisions) {
+            events.push("row-insert");
             insertedRows.push(values);
+          } else if (table === caseLawCorpusUploadIntents) {
+            events.push("intent-reserve");
           }
         }
+        const returning = async () => {
+          if (outcome === "timeout") {
+            return await Promise.reject(
+              new TimeoutError({
+                message: "decision write exceeded deadline",
+                label: "ingestion-db-transaction",
+                timeoutMs: 10,
+              }),
+            );
+          }
+          if (outcome === "fault") {
+            return await Promise.reject(
+              new DatabaseError({ message: "decision insert rejected" }),
+            );
+          }
+          return await Promise.resolve([{ id: values["id"] }]);
+        };
         return {
-          returning: async () => {
-            if (outcome === "timeout") {
-              return await Promise.reject(
-                new TimeoutError({
-                  message: "decision write exceeded deadline",
-                  label: "ingestion-db-transaction",
-                  timeoutMs: 10,
-                }),
-              );
-            }
-            if (outcome === "fault") {
-              return await Promise.reject(
-                new DatabaseError({ message: "decision insert rejected" }),
-              );
-            }
-            return await Promise.resolve([{ id: values["id"] }]);
-          },
+          onConflictDoNothing: () => ({ returning }),
+          returning: async () => await returning(),
         };
       },
     }),
@@ -161,16 +209,33 @@ const scopedDb: ScopedDb = async (callback) => {
         events.push("row-update");
         if (table === caseLawSources) {
           persistedCursor = values.syncCursor;
+        } else if (table === caseLawDecisions) {
+          updatedDecisionRows.push(values);
         }
         // The checkpoint helper reads back the compare-and-set winner.
         return {
           where: () => ({
-            returning: async () => [{ cursor: values.syncCursor ?? null }],
+            returning: async () => {
+              if (table === caseLawDecisions) {
+                return mirrorSettlementApplied ? [{ id: "decision-id" }] : [];
+              }
+              return [{ cursor: values.syncCursor ?? null, order: 1n }];
+            },
           }),
         };
       },
     }),
-    delete: () => ({ where: async () => undefined }),
+    delete: (table: unknown) => ({
+      where: () => {
+        if (table === caseLawCorpusUploadIntents) {
+          events.push("intent-delete");
+        }
+        return {
+          returning: async () =>
+            table === caseLawCorpusUploadIntents ? [{ id: "intent-id" }] : [],
+        };
+      },
+    }),
   };
 
   // SAFETY: the double implements exactly the chains this insert path
@@ -179,27 +244,64 @@ const scopedDb: ScopedDb = async (callback) => {
   return await callback(tx as unknown as Transaction);
 };
 
-describe("processDecision — canonical storage mode", () => {
-  test("writes the corpus objects before the row, and nulls the text columns", async () => {
-    const outcome = await processDecision(
-      decision,
-      createSafeId<"caseLawSource">(),
+describe("settleCaseLawCorpusMirror", () => {
+  const settle = async (): Promise<unknown> =>
+    await settleCaseLawCorpusMirror({
+      decisionId: createSafeId<"caseLawDecision">(),
+      persistedSourceHash: "source-hash",
+      observationOrder: 1n,
+      mirrorCarriesDocument: true,
       scopedDb,
+      written: { ...CORPUS_KEYS, contentHash: "content-hash" },
+    }).then(
+      () => null,
+      (error: unknown) => error,
     );
 
-    expect(outcome).toEqual({
-      inserted: true,
-      searchVectorFailed: false,
-      s3UploadFailed: false,
+  test("accepts the observation that still owns the pending mirror", async () => {
+    expect(await settle()).toBeNull();
+  });
+
+  test("makes a missed settlement compare-and-set retryable", async () => {
+    mirrorSettlementApplied = false;
+
+    expect(await settle()).toBeInstanceOf(ConcurrentModificationError);
+  });
+});
+
+describe("processDecision — canonical storage mode", () => {
+  test("reserves before upload and publishes pointers only after it succeeds", async () => {
+    const outcome = await processDecision({
+      input: decision,
+      observationOrder: 1n,
+      sourceId: createSafeId<"caseLawSource">(),
+      scopedDb,
+      observedAt: new Date("2026-07-31T12:00:00.000Z"),
     });
 
-    // No row may exist before its objects do.
-    expect(events[0]?.startsWith("corpus-write:")).toBe(true);
-    expect(events[1]).toBe("row-insert");
+    expect(outcome).toEqual({
+      status: "complete",
+      inserted: true,
+      searchVectorFailed: false,
+    });
+
+    expect(events.slice(0, 3)).toEqual([
+      "row-insert",
+      "intent-reserve",
+      expect.stringContaining("corpus-write:"),
+    ]);
 
     const [row] = insertedRows;
-    expect(events[0]).toBe(`corpus-write:${String(row?.["id"])}`);
+    expect(events[2]).toBe(`corpus-write:${String(row?.["id"])}`);
     expect(row).toMatchObject({
+      fulltext: decision.fulltext,
+      corpusMirrorStatus: "pending",
+      textS3Key: null,
+      normalizedS3Key: null,
+      astS3Key: null,
+      contentHash: null,
+    });
+    expect(updatedDecisionRows.at(-1)).toMatchObject({
       fulltext: null,
       sections: null,
       documentAst: null,
@@ -207,36 +309,37 @@ describe("processDecision — canonical storage mode", () => {
       normalizedS3Key: "corpus/sections.json.zst",
       astS3Key: "corpus/ast.json.zst",
       contentHash: "content-hash",
+      corpusMirrorStatus: "settled",
     });
+    expect(events.at(-1)).toBe("intent-delete");
   });
 
-  test("persists nothing when the corpus write fails", async () => {
+  test("keeps a readable pending row when the corpus write fails", async () => {
     writeCorpusDocumentMock.mockImplementationOnce(async () => {
       events.push("corpus-write-failed");
       return await Promise.reject(new Error("bucket unreachable"));
     });
 
-    const outcome = await processDecision(
-      decision,
-      createSafeId<"caseLawSource">(),
+    const outcome = await processDecision({
+      input: decision,
+      observationOrder: 1n,
+      sourceId: createSafeId<"caseLawSource">(),
       scopedDb,
-    );
+      observedAt: new Date("2026-07-31T12:00:00.000Z"),
+    });
 
     expect(outcome).toEqual({
-      inserted: false,
-      searchVectorFailed: false,
-      s3UploadFailed: true,
+      status: "retryable",
+      inserted: true,
+      reason: "corpus-write",
     });
-    // The three PUTs run in parallel, so a rejection can leave one or two
-    // objects behind under keys no row will ever reference. They go, at the
-    // real content-addressed keys derived from the payload.
-    expect(events).toEqual(["corpus-write-failed", "corpus-delete"]);
-    const discarded = deletedKeys.at(0);
-    expect(discarded?.textKey).toContain("/text.zst");
-    expect(discarded?.sectionsKey).toContain("/sections.json.zst");
-    expect(discarded?.astKey).toContain("/ast.json.zst");
-    expect(discarded?.textKey).toContain("jurisdiction=SVK");
-    expect(insertedRows).toHaveLength(0);
+    expect(events).toContain("corpus-write-failed");
+    expect(insertedRows).toHaveLength(1);
+    expect(insertedRows.at(0)).toMatchObject({
+      fulltext: decision.fulltext,
+      corpusMirrorStatus: "pending",
+      contentHash: null,
+    });
   });
 
   test("keeps the objects when the failed write was a refresh", async () => {
@@ -256,30 +359,68 @@ describe("processDecision — canonical storage mode", () => {
       return await Promise.reject(new Error("bucket unreachable"));
     });
 
-    const outcome = await processDecision(
-      decision,
-      createSafeId<"caseLawSource">(),
+    const outcome = await processDecision({
+      input: decision,
+      observationOrder: 1n,
+      sourceId: createSafeId<"caseLawSource">(),
       scopedDb,
-    );
+      observedAt: new Date("2026-07-31T12:00:00.000Z"),
+    });
 
-    expect(outcome.s3UploadFailed).toBe(true);
-    expect(events).toEqual(["corpus-write-failed"]);
+    expect(outcome).toMatchObject({
+      status: "retryable",
+      reason: "corpus-write",
+    });
+    expect(events).toContain("corpus-write-failed");
     expect(deleteCorpusDocumentMock).not.toHaveBeenCalled();
+  });
+
+  test("retries when an expired upload intent was reclaimed", async () => {
+    existingDecision = {
+      id: createSafeId<"caseLawDecision">(),
+      metadata: {},
+      sourceHash: "older-hash",
+      sourceObservedAt: new Date("2026-07-31T11:00:00.000Z"),
+      sourceObservationHash: "older-hash",
+      sourceObservationOrder: 0n,
+      corpusMirrorStatus: "pending",
+      redactedAt: null,
+      sourceRawS3Key: null,
+      sourceRawContentType: null,
+    };
+    intentStatus = "cleanup";
+
+    const outcome = await processDecision({
+      input: decision,
+      observationOrder: 1n,
+      sourceId: createSafeId<"caseLawSource">(),
+      scopedDb,
+      observedAt: new Date("2026-07-31T12:00:00.000Z"),
+    });
+
+    expect(outcome).toEqual({
+      status: "retryable",
+      inserted: false,
+      reason: "corpus-write",
+    });
+    expect(writeCorpusDocumentMock).not.toHaveBeenCalled();
   });
 
   // bun-types declares `.rejects.toBe` as void, so awaiting it trips
   // type-aware lint; capture the rejection explicitly instead.
   const rejectionFrom = async (): Promise<unknown> =>
-    await processDecision(
-      decision,
-      createSafeId<"caseLawSource">(),
+    await processDecision({
+      input: decision,
+      observationOrder: 1n,
+      sourceId: createSafeId<"caseLawSource">(),
       scopedDb,
-    ).then(
+      observedAt: new Date("2026-07-31T12:00:00.000Z"),
+    }).then(
       () => null,
       (error: unknown) => error,
     );
 
-  test("discards the objects and rethrows when the row write fails", async () => {
+  test("never starts an upload when the row write fails", async () => {
     rowWrite = "fault";
 
     const rejection = await rejectionFrom();
@@ -287,20 +428,18 @@ describe("processDecision — canonical storage mode", () => {
     // The pipeline's halt logic branches on the error's own type, so the
     // rethrow must surface the driver error, not a Result wrapper.
     expect(rejection).toBeInstanceOf(DatabaseError);
-    // Nothing references the objects the canonical write left behind: a
-    // retry mints a new decision id, so they have to go.
-    expect(deleteCorpusDocumentMock).toHaveBeenCalledWith({ ...CORPUS_KEYS });
+    expect(writeCorpusDocumentMock).not.toHaveBeenCalled();
+    expect(deleteCorpusDocumentMock).not.toHaveBeenCalled();
     expect(insertedRows).toHaveLength(0);
   });
 
-  test("keeps the objects when the row write only timed out", async () => {
+  test("does not start an upload when the row write times out", async () => {
     rowWrite = "timeout";
 
     const rejection = await rejectionFrom();
 
-    // The transaction bound abandons rather than cancels, so the write may
-    // still commit. Deleting would leave that row pointing at nothing.
     expect(rejection).toBeInstanceOf(TimeoutError);
+    expect(writeCorpusDocumentMock).not.toHaveBeenCalled();
     expect(deleteCorpusDocumentMock).not.toHaveBeenCalled();
   });
 });
@@ -318,6 +457,10 @@ describe("runIngestionPipeline — canonical corpus write failure", () => {
       enabled: true,
       syncCursor: "cursor-1",
       lastSyncAt: null,
+      observationOrder: 0n,
+      checkpointObservationOrder: 0n,
+      ingestionLeaseToken: null,
+      ingestionLeaseExpiresAt: null,
       config: {},
       descriptor: null,
       createdAt: new Date("2026-01-01T00:00:00.000Z"),
@@ -329,14 +472,72 @@ describe("runIngestionPipeline — canonical corpus write failure", () => {
         Result.ok({ decisions: [decision], nextCursor: "cursor-2" }),
       );
 
-    const result = await runIngestionPipeline({ source, scopedDb });
+    const result = await runIngestionPipeline({
+      source,
+      sourceLease: testSourceLease(source),
+      scopedDb,
+    });
 
-    expect(result.inserted).toBe(0);
+    expect(result.inserted).toBe(1);
     expect(result.s3UploadFailures).toBe(1);
     expect(result.pagesProcessed).toBe(0);
     expect(result.nextCursor).toBe("cursor-1");
     expect(result.haltReason).toContain("corpus write failure(s)");
     expect(persistedCursor).toBe("cursor-1");
-    expect(insertedRows).toHaveLength(0);
+    expect(insertedRows).toHaveLength(1);
+  });
+
+  test("holds the cursor when bounded contention does not converge", async () => {
+    existingDecision = {
+      id: createSafeId<"caseLawDecision">(),
+      metadata: {},
+      sourceHash: decision.rawHash,
+      sourceObservedAt: new Date("2026-07-31T12:00:00.000Z"),
+      sourceObservationHash: decision.rawHash,
+      sourceObservationOrder: 0n,
+      corpusMirrorStatus: "settled",
+      redactedAt: null,
+      sourceRawS3Key: null,
+      sourceRawContentType: null,
+    };
+    mirrorSettlementApplied = false;
+
+    const source = {
+      id: createSafeId<"caseLawSource">(),
+      adapterKey: ADAPTER_KEYS.CZ_NS,
+      name: "Canonical source",
+      enabled: true,
+      syncCursor: "cursor-1",
+      lastSyncAt: null,
+      observationOrder: 0n,
+      checkpointObservationOrder: 0n,
+      ingestionLeaseToken: null,
+      ingestionLeaseExpiresAt: null,
+      config: {},
+      descriptor: null,
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+    } satisfies typeof caseLawSources.$inferSelect;
+
+    czNsAdapter.fetchPage = async () =>
+      await Promise.resolve(
+        Result.ok({ decisions: [decision], nextCursor: "cursor-2" }),
+      );
+
+    const result = await runIngestionPipeline({
+      source,
+      sourceLease: testSourceLease(source),
+      scopedDb,
+    });
+
+    expect(result).toMatchObject({
+      inserted: 0,
+      skipped: 1,
+      s3UploadFailures: 0,
+      pagesProcessed: 0,
+      nextCursor: "cursor-1",
+    });
+    expect(result.haltReason).toContain("Concurrent decision reconciliation");
+    expect(persistedCursor).toBe("cursor-1");
   });
 });

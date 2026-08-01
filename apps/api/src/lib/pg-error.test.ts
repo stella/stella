@@ -1,9 +1,19 @@
 import { describe, expect, it } from "bun:test";
 import { DrizzleQueryError } from "drizzle-orm";
 
-import { getPgErrorCode, isPgError, PG_ERROR, pgErrorFields } from "./pg-error";
+import {
+  getPgErrorCode,
+  isPgConstraintError,
+  isPgError,
+  PG_ERROR,
+  pgErrorFields,
+} from "./pg-error";
 
-const drizzleError = (cause: { errno?: string; code?: string }) =>
+const drizzleError = (cause: {
+  errno?: string;
+  code?: string;
+  constraint?: string;
+}) =>
   new DrizzleQueryError(
     "query failed",
     [],
@@ -30,6 +40,30 @@ describe("getPgErrorCode", () => {
 
   it("returns undefined when error is not a DrizzleQueryError", () => {
     expect(getPgErrorCode(new Error("plain"))).toBeUndefined();
+  });
+});
+
+describe("isPgConstraintError", () => {
+  it("does not confuse another unique constraint with the requested one", () => {
+    const error = drizzleError({
+      errno: PG_ERROR.UNIQUE_VIOLATION,
+      constraint: "case_law_decisions_source_document_idx",
+    });
+
+    expect(
+      isPgConstraintError(
+        error,
+        PG_ERROR.UNIQUE_VIOLATION,
+        "case_law_decisions_slug_uidx",
+      ),
+    ).toBe(false);
+    expect(
+      isPgConstraintError(
+        error,
+        PG_ERROR.UNIQUE_VIOLATION,
+        "case_law_decisions_source_document_idx",
+      ),
+    ).toBe(true);
   });
 });
 

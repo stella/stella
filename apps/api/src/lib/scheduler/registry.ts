@@ -4,6 +4,14 @@ import {
   reconcileBufferIntents,
 } from "@/api/lib/scheduler/tasks/buffer-intent-reconciliation";
 import {
+  RECONCILE_CASE_LAW_CORPUS_UPLOAD_INTENTS_TASK,
+  reconcileCaseLawCorpusUploadIntentsTask,
+} from "@/api/lib/scheduler/tasks/case-law-corpus-upload-cleanup";
+import {
+  BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK,
+  backfillCaseLawRedactionTombstones,
+} from "@/api/lib/scheduler/tasks/case-law-redaction-tombstone-backfill";
+import {
   BACKFILL_SK_DOCUMENTS_TASK,
   backfillSkDocuments,
 } from "@/api/lib/scheduler/tasks/case-law-sk-documents";
@@ -44,6 +52,14 @@ export const createSchedulerTaskRegistry = (): SchedulerTaskRegistry =>
     [EXPIRE_DESKTOP_EDIT_SESSIONS_TASK, expireDesktopEditSessions],
     [FLOW_RUN_TASK, runScheduledFlow],
     [BACKFILL_SK_DOCUMENTS_TASK, backfillSkDocuments],
+    [
+      BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK,
+      backfillCaseLawRedactionTombstones,
+    ],
+    [
+      RECONCILE_CASE_LAW_CORPUS_UPLOAD_INTENTS_TASK,
+      reconcileCaseLawCorpusUploadIntentsTask,
+    ],
     [RECONCILE_BUFFER_INTENTS_TASK, reconcileBufferIntents],
     [REPAIR_CHAT_SEARCH_INDEX_TASK, repairChatSearchIndex],
     [

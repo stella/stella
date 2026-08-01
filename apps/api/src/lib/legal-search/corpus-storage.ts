@@ -2,6 +2,7 @@ import { Result } from "better-result";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
+import { CASE_LAW_CORPUS_MIRROR_STATUS } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import {
   zstdCompressAsync,
@@ -14,7 +15,11 @@ import type {
   EmptyAst,
 } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
-import { getCorpusS3 } from "@/api/lib/s3";
+import {
+  deleteCorpusS3ObjectWithSignal,
+  getCorpusS3,
+  putCorpusS3ObjectWithSignal,
+} from "@/api/lib/s3";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 /**
@@ -42,9 +47,12 @@ const PAYLOAD_MAX_BYTES = LIMITS.corpusPayloadMaxDecompressedBytes;
  */
 const boundedCorpusIo = async <T>(
   label: string,
-  operation: () => Promise<T>,
-  timeoutMs: number = CORPUS_IO_TIMEOUT_MS,
-): Promise<T> => await withTimeout(operation, { label, timeoutMs });
+  operation: (signal: AbortSignal) => Promise<T>,
+  {
+    signal,
+    timeoutMs = CORPUS_IO_TIMEOUT_MS,
+  }: { signal?: AbortSignal; timeoutMs?: number } = {},
+): Promise<T> => await withTimeout(operation, { label, signal, timeoutMs });
 
 type CorpusKeyInput = {
   documentId: string;
@@ -146,46 +154,177 @@ type WriteCorpusInput = CorpusPayload & {
   jurisdiction: string;
 };
 
+type CorpusIoOptions = { signal?: AbortSignal };
+
+type StartedCorpusIo<T> = {
+  result: Promise<T>;
+  settle: () => Promise<void>;
+};
+
+type SettleCancellableCorpusIoGroupOptions = {
+  controller: AbortController;
+  operations: StartedCorpusIo<void>[];
+};
+
+/**
+ * Keep a handle to the real cancellable operation as well as its bounded
+ * result. `withTimeout` must return promptly when a deadline fires, but a
+ * caller that will hand the keys to cleanup must first wait for the aborted
+ * S3 request to settle: otherwise a late PUT could recreate an object after
+ * cleanup deleted it.
+ */
+const startCancellableCorpusIo = <T>(
+  label: string,
+  operation: (signal: AbortSignal) => Promise<T>,
+  options: CorpusIoOptions,
+): StartedCorpusIo<T> => {
+  let actual: Promise<T> | undefined;
+  const result = boundedCorpusIo(
+    label,
+    async (operationSignal) => {
+      const operationPromise = operation(operationSignal);
+      actual = operationPromise;
+      return await operationPromise;
+    },
+    options,
+  );
+
+  return {
+    result,
+    settle: async () => {
+      if (actual !== undefined) {
+        await Promise.allSettled([actual]);
+      }
+    },
+  };
+};
+
+/** A failed sibling cannot return ownership until every aborted I/O settles. */
+const settleCancellableCorpusIoGroup = async ({
+  controller,
+  operations,
+}: SettleCancellableCorpusIoGroupOptions): Promise<void> => {
+  try {
+    await Promise.all(operations.map(async ({ result }) => await result));
+  } catch (error) {
+    controller.abort(error);
+    await Promise.allSettled(
+      operations.map(async ({ settle }) => await settle()),
+    );
+    throw error;
+  }
+};
+
 export type WriteCorpusResult = CorpusKeys & { contentHash: string };
 
-export const writeCorpusDocument = async ({
-  documentId,
-  jurisdiction,
-  text,
-  sections,
-  ast,
-}: WriteCorpusInput): Promise<WriteCorpusResult> => {
+type CorpusMirrorState =
+  | { status: typeof CASE_LAW_CORPUS_MIRROR_STATUS.PENDING }
+  | {
+      status: typeof CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED;
+      written: WriteCorpusResult | null;
+    };
+
+type CorpusMirrorColumns =
+  | {
+      corpusMirrorStatus: typeof CASE_LAW_CORPUS_MIRROR_STATUS.PENDING;
+      textS3Key: null;
+      normalizedS3Key: null;
+      astS3Key: null;
+      contentHash: null;
+    }
+  | {
+      corpusMirrorStatus: typeof CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED;
+      textS3Key: string | null;
+      normalizedS3Key: string | null;
+      astS3Key: string | null;
+      contentHash: string | null;
+    };
+
+/**
+ * The only application-level constructor for the decision mirror columns.
+ * Its discriminated input prevents a pending state from carrying pointers;
+ * the database CHECK enforces the same invariant for every SQL writer.
+ */
+export const corpusMirrorColumns = (
+  state: CorpusMirrorState,
+): CorpusMirrorColumns => {
+  switch (state.status) {
+    case CASE_LAW_CORPUS_MIRROR_STATUS.PENDING:
+      return {
+        corpusMirrorStatus: state.status,
+        textS3Key: null,
+        normalizedS3Key: null,
+        astS3Key: null,
+        contentHash: null,
+      };
+    case CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED:
+      return {
+        corpusMirrorStatus: state.status,
+        textS3Key: state.written?.textKey ?? null,
+        normalizedS3Key: state.written?.sectionsKey ?? null,
+        astS3Key: state.written?.astKey ?? null,
+        contentHash: state.written?.contentHash ?? null,
+      };
+    default: {
+      const unhandled: never = state;
+      return unhandled;
+    }
+  }
+};
+
+export const writeCorpusDocument = async (
+  { documentId, jurisdiction, text, sections, ast }: WriteCorpusInput,
+  { signal }: CorpusIoOptions = {},
+): Promise<WriteCorpusResult> => {
   const contentHash = corpusContentHash({ text, sections, ast });
   const keys = corpusKeys({ documentId, jurisdiction, contentHash });
-  const s3 = getCorpusS3();
+  const writeController = new AbortController();
+  const groupSignal =
+    signal === undefined
+      ? writeController.signal
+      : AbortSignal.any([writeController.signal, signal]);
+  const writeOptions = { signal: groupSignal };
 
-  await Promise.all([
-    boundedCorpusIo(
+  const writes = [
+    startCancellableCorpusIo(
       "corpus-write-text",
-      async () =>
-        await s3.write(keys.textKey, await zstdCompressAsync(text ?? ""), {
-          type: CONTENT_TYPE,
-        }),
+      async (writeSignal) =>
+        await putCorpusS3ObjectWithSignal(
+          keys.textKey,
+          await zstdCompressAsync(text ?? ""),
+          CONTENT_TYPE,
+          writeSignal,
+        ),
+      writeOptions,
     ),
-    boundedCorpusIo(
+    startCancellableCorpusIo(
       "corpus-write-sections",
-      async () =>
-        await s3.write(
+      async (writeSignal) =>
+        await putCorpusS3ObjectWithSignal(
           keys.sectionsKey,
           await zstdCompressAsync(JSON.stringify(sections ?? null)),
-          { type: CONTENT_TYPE },
+          CONTENT_TYPE,
+          writeSignal,
         ),
+      writeOptions,
     ),
-    boundedCorpusIo(
+    startCancellableCorpusIo(
       "corpus-write-ast",
-      async () =>
-        await s3.write(
+      async (writeSignal) =>
+        await putCorpusS3ObjectWithSignal(
           keys.astKey,
           await zstdCompressAsync(JSON.stringify(ast ?? null)),
-          { type: CONTENT_TYPE },
+          CONTENT_TYPE,
+          writeSignal,
         ),
+      writeOptions,
     ),
-  ]);
+  ];
+
+  await settleCancellableCorpusIoGroup({
+    controller: writeController,
+    operations: writes,
+  });
 
   return { ...keys, contentHash };
 };
@@ -207,7 +346,7 @@ export const readCorpusText = async (
   const bytes = await boundedCorpusIo(
     "corpus-read-text",
     read ?? (async () => await getCorpusS3().file(key).bytes()),
-    timeoutMs,
+    { timeoutMs },
   );
   return await zstdDecompressToStringBounded(bytes, PAYLOAD_MAX_BYTES);
 };
@@ -292,22 +431,32 @@ export const readCorpusPayloadOrFallback = async <T>({
  * Keys are individually nullable: a partially ingested decision may have
  * only some payloads written, and every present object must still go.
  */
-export const deleteCorpusDocument = async (keys: {
-  textKey: string | null;
-  sectionsKey: string | null;
-  astKey: string | null;
-}): Promise<void> => {
-  const s3 = getCorpusS3();
+export const deleteCorpusDocument = async (
+  keys: {
+    textKey: string | null;
+    sectionsKey: string | null;
+    astKey: string | null;
+  },
+  { signal }: CorpusIoOptions = {},
+): Promise<void> => {
   const present = [keys.textKey, keys.sectionsKey, keys.astKey].filter(
     (key): key is string => key !== null,
   );
-  await Promise.all(
-    present.map(
-      async (key) =>
-        await boundedCorpusIo(
-          "corpus-delete",
-          async () => await s3.delete(key),
-        ),
+  const deleteController = new AbortController();
+  const groupSignal =
+    signal === undefined
+      ? deleteController.signal
+      : AbortSignal.any([deleteController.signal, signal]);
+  const operations = present.map((key) =>
+    startCancellableCorpusIo(
+      "corpus-delete",
+      async (deleteSignal) =>
+        await deleteCorpusS3ObjectWithSignal(key, deleteSignal),
+      { signal: groupSignal },
     ),
   );
+  await settleCancellableCorpusIoGroup({
+    controller: deleteController,
+    operations,
+  });
 };
