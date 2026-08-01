@@ -20,6 +20,7 @@ import {
   getChatAttachmentMimeType,
   getChatAttachmentUrl,
   isChatAttachmentPart,
+  isProviderVisibleChatPart,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
   CHAT_TOOL_POLICY_KIND,
@@ -647,11 +648,17 @@ const removeProviderInvisibleParts = (
   const visibleMessages: ChatMessage[] = [];
 
   for (const message of messages) {
-    if (message.parts.length === 0) {
+    const parts: ChatMessage["parts"] = [];
+    for (const part of message.parts) {
+      if (isProviderVisibleChatPart(part)) {
+        parts.push(part);
+      }
+    }
+    if (parts.length === 0) {
       continue;
     }
 
-    visibleMessages.push(toProviderVisibleMessage(message));
+    visibleMessages.push(toProviderVisibleMessage(message, parts));
   }
 
   return visibleMessages;

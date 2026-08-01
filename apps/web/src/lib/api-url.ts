@@ -1,4 +1,4 @@
-import { buildVersionedApiUrl } from "@stll/api-contract";
+import { buildVersionedApiUrl, MCP_APP_SANDBOX_PATH } from "@stll/api-contract";
 
 import { env } from "@/env";
 
@@ -18,3 +18,6 @@ import { env } from "@/env";
  */
 export const apiUrl = (path: `/${string}`): string =>
   buildVersionedApiUrl(env.VITE_API_URL, path);
+
+export const mcpAppSandboxUrl = (): URL =>
+  new URL(MCP_APP_SANDBOX_PATH, env.VITE_API_URL);

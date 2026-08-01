@@ -25,6 +25,8 @@ import {
 } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
+import { richChatParts } from "./__fixtures__/rich-chat-parts";
+
 const anonymizeTextFieldsMock = mock(
   async ({ fields }: { fields: string[] }) => {
     const swaps: [string, string][] = [
@@ -93,6 +95,37 @@ const createRawBoundary = () => {
 describe("chat third-party anonymization boundary", () => {
   beforeEach(() => {
     anonymizeTextFieldsMock.mockClear();
+  });
+
+  test("omits UI-only rich output before every provider boundary", async () => {
+    const preparedBoundaries = await Promise.all(
+      [createRawBoundary(), createBoundary()].map(
+        async (boundary) =>
+          await prepareMessagesForThirdParty({
+            boundary,
+            messages: [
+              {
+                id: "msg_1",
+                role: "assistant",
+                parts: [
+                  { type: "text", content: "Provider context" },
+                  ...richChatParts,
+                ],
+              },
+            ],
+          }),
+      ),
+    );
+
+    for (const prepared of preparedBoundaries) {
+      expect(Result.isOk(prepared)).toBe(true);
+      if (Result.isError(prepared)) {
+        throw prepared.error;
+      }
+      expect(prepared.value.at(0)?.parts).toEqual([
+        { type: "text", content: "Provider context" },
+      ]);
+    }
   });
 
   test("anonymizes system text and message text before provider use", async () => {

@@ -48,6 +48,7 @@ import { hostedUsageWebhookRoute } from "@/api/handlers/hosted-usage-webhook/rou
 import { invoicesRoute } from "@/api/handlers/invoices/routes";
 import { legislationCorpusRoute } from "@/api/handlers/legislation/corpus-routes";
 import { legislationRoute } from "@/api/handlers/legislation/routes";
+import { handleMcpAppSandboxRequest } from "@/api/handlers/mcp-app-sandbox/routes";
 import { mcpConnectorsRoute } from "@/api/handlers/mcp-connectors/routes";
 import { mcpRoute } from "@/api/handlers/mcp/routes";
 import { meRoute } from "@/api/handlers/me/routes";
@@ -271,7 +272,12 @@ const api = new Elysia()
       set.headers[REQUEST_ID_HEADER] = requestId;
     }
 
-    return await securityCanaryInterceptor(context);
+    const interceptedResponse = await securityCanaryInterceptor(context);
+    if (interceptedResponse) {
+      return interceptedResponse;
+    }
+
+    return handleMcpAppSandboxRequest(request, set);
   })
   .use(
     cors({

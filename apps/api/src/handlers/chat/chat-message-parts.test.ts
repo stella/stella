@@ -1,13 +1,40 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
+
+import { CHAT_RICH_PART_LIMITS } from "@stll/api-contract";
+import { propertyConfig } from "@stll/property-testing";
 
 import {
+  applyChatPartPersistenceBudget,
   chatMessageFromPersisted,
   classifyChatPartForPersistence,
+  createChatTextPart,
+  isIncomingChatPart,
   isChatAttachmentPart,
   isChatPart,
+  isProviderVisibleChatPart,
+  isServerOwnedChatPart,
+  restoreServerOwnedChatParts,
   toChatMessageContent,
 } from "@/api/handlers/chat/chat-message-parts";
+import type { ChatPart } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { LIMITS } from "@/api/lib/limits";
+
+import { richChatParts, unsafeScriptUrl } from "./__fixtures__/rich-chat-parts";
+
+const budgetPropertyPartFromKind = (kind: number): ChatPart => {
+  switch (kind) {
+    case 1:
+      return richChatParts[0];
+    case 2:
+      return richChatParts[1];
+    case 3:
+      return richChatParts[2];
+    default:
+      return createChatTextPart(String(kind));
+  }
+};
 
 describe("persisted chat message parts", () => {
   test("preserves server-owned search-summary provenance", () => {
@@ -62,15 +89,170 @@ describe("chat attachment parts", () => {
     expect(isChatAttachmentPart({ type: "image", source: null })).toBe(false);
   });
 
-  test("rejects unvalidated audio and video content parts", () => {
-    const source = {
-      type: "url",
-      value: "stella://file::file_test123",
-      mimeType: "audio/mpeg",
-    };
+  test("persists rich output without accepting or replaying it", () => {
+    for (const part of richChatParts) {
+      expect(isChatPart(part)).toBe(true);
+      expect(isIncomingChatPart(part)).toBe(false);
+      expect(isProviderVisibleChatPart(part)).toBe(false);
+      expect(classifyChatPartForPersistence(part).type).toBe("persist");
+    }
+  });
 
-    expect(isChatPart({ type: "audio", source })).toBe(false);
-    expect(isChatPart({ type: "video", source })).toBe(false);
+  test("persists only canonical rich output fields", () => {
+    fc.assert(
+      fc.property(
+        fc.jsonValue(),
+        fc.dictionary(fc.string(), fc.jsonValue()),
+        (metadata, meta) => {
+          for (const part of [richChatParts[0], richChatParts[1]]) {
+            expect(
+              classifyChatPartForPersistence({
+                ...part,
+                metadata,
+                unexpected: meta,
+              }),
+            ).toEqual({ type: "persist", part });
+          }
+
+          const uiResource = richChatParts[2];
+          expect(
+            classifyChatPartForPersistence({
+              ...uiResource,
+              meta,
+              unexpected: metadata,
+              resource: { ...uiResource.resource, unexpected: meta },
+            }),
+          ).toEqual({
+            type: "persist",
+            part: { ...uiResource, meta },
+          });
+        },
+      ),
+      propertyConfig(),
+    );
+  });
+
+  test("bounds every mixed rich-part sequence and reaches a fixed point", () => {
+    fc.assert(
+      fc.property(
+        fc.array(fc.integer({ min: 0, max: 3 }), { maxLength: 100 }),
+        (kinds) => {
+          const parts = kinds.map(budgetPropertyPartFromKind);
+          const first = applyChatPartPersistenceBudget(parts);
+          const second = applyChatPartPersistenceBudget(first.parts);
+          const inputText = parts.filter((part) => part.type === "text");
+          const outputText = first.parts.filter((part) => part.type === "text");
+
+          expect(outputText).toEqual(inputText);
+          expect(first.richPartCount).toBeLessThanOrEqual(
+            LIMITS.chatRichPartsPerMessageMax,
+          );
+          expect(first.richPartBytes).toBeLessThanOrEqual(
+            LIMITS.chatRichPartsTotalMaxBytes,
+          );
+          expect(second.parts).toEqual(first.parts);
+          expect(second.droppedPartTypes).toHaveLength(0);
+        },
+      ),
+      propertyConfig(),
+    );
+  });
+
+  test("drops rich resources after their cumulative byte budget", () => {
+    const largeResource = {
+      ...richChatParts[2],
+      resource: {
+        ...richChatParts[2].resource,
+        text: "x".repeat(CHAT_RICH_PART_LIMITS.uiResourceContentMaxChars),
+      },
+    };
+    const parts = Array.from({ length: 6 }, () => largeResource);
+
+    const budgeted = applyChatPartPersistenceBudget(parts);
+
+    expect(budgeted.richPartBytes).toBeLessThanOrEqual(
+      LIMITS.chatRichPartsTotalMaxBytes,
+    );
+    expect(budgeted.parts.length).toBeLessThan(parts.length);
+    expect(budgeted.droppedPartTypes.length).toBeGreaterThan(0);
+  });
+
+  test("restores exactly the persisted server-owned sequence", () => {
+    fc.assert(
+      fc.property(
+        fc.array(fc.integer({ min: 0, max: 3 }), { maxLength: 20 }),
+        fc.array(fc.integer({ min: 1, max: 3 }), { maxLength: 10 }),
+        (persistedKinds, forgedKinds) => {
+          const persistedParts = persistedKinds.map(budgetPropertyPartFromKind);
+          const incomingParts: ChatPart[] = persistedParts.filter(
+            (part) => !isServerOwnedChatPart(part),
+          );
+          incomingParts.push(...forgedKinds.map(budgetPropertyPartFromKind));
+
+          expect(
+            restoreServerOwnedChatParts({ incomingParts, persistedParts }),
+          ).toEqual(persistedParts);
+        },
+      ),
+      propertyConfig(),
+    );
+  });
+
+  test("rejects unsafe rich output shapes", () => {
+    expect(
+      isChatPart({
+        type: "audio",
+        source: { type: "data", value: "Zm9v" },
+      }),
+    ).toBe(false);
+    expect(
+      isChatPart({
+        type: "audio",
+        source: { type: "data", value: "A=", mimeType: "audio/mpeg" },
+      }),
+    ).toBe(false);
+    expect(
+      isChatPart({
+        type: "video",
+        source: {
+          type: "url",
+          value: unsafeScriptUrl,
+          mimeType: "video/mp4",
+        },
+      }),
+    ).toBe(false);
+    expect(
+      isChatPart({
+        type: "ui-resource",
+        resource: {
+          uri: "ui://widget",
+          mimeType: "text/html",
+          text: "<p>Widget</p>",
+        },
+        toolCallId: "call-1",
+        toolName: "widget",
+      }),
+    ).toBe(false);
+    expect(
+      isChatPart({
+        type: "ui-resource",
+        resource: {
+          uri: "ui://widget",
+          mimeType: "text/html;profile=mcp-app",
+          text: "",
+        },
+        toolCallId: "call-1",
+        toolName: "widget",
+      }),
+    ).toBe(false);
+    expect(
+      isChatPart({
+        ...richChatParts[2],
+        meta: {
+          oversized: "x".repeat(LIMITS.chatRichPartsTotalMaxBytes),
+        },
+      }),
+    ).toBe(false);
   });
 
   test("fails loudly for malformed parts whose type must be persisted", () => {

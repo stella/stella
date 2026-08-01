@@ -16,6 +16,7 @@ import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR, pgErrorFields } from "@/api/lib/pg-error";
 
 type ReadThreadValidationStateProps = {
+  messageId: SafeId<"chatMessage">;
   organizationId: SafeId<"organization">;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
@@ -24,10 +25,15 @@ type ReadThreadValidationStateProps = {
 };
 
 type ThreadValidationState = {
+  persistedMessage: {
+    content: PersistedChatMessageContent;
+    role: ChatMessage["role"];
+  } | null;
   webSearchEnabled: boolean;
 };
 
 export const readThreadValidationState = async ({
+  messageId,
   organizationId,
   safeDb,
   threadId,
@@ -49,12 +55,18 @@ export const readThreadValidationState = async ({
             workspaceId: true,
             webSearchEnabled: true,
           },
+          with: {
+            messages: {
+              where: { id: { eq: messageId } },
+              columns: { content: true, role: true },
+            },
+          },
         }),
       ),
     );
 
     if (!thread) {
-      return Result.ok({ webSearchEnabled: false });
+      return Result.ok({ persistedMessage: null, webSearchEnabled: false });
     }
 
     const persistedWorkspaceId = thread.workspaceId ?? null;
@@ -67,7 +79,17 @@ export const readThreadValidationState = async ({
       );
     }
 
-    return Result.ok({ webSearchEnabled: thread.webSearchEnabled });
+    const persistedMessage = thread.messages.at(0);
+    return Result.ok({
+      persistedMessage:
+        persistedMessage === undefined
+          ? null
+          : {
+              content: persistedMessage.content,
+              role: persistedMessage.role,
+            },
+      webSearchEnabled: thread.webSearchEnabled,
+    });
   });
 
 type ChatThreadRecord = {

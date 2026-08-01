@@ -404,6 +404,7 @@ type Messages = {
     "attachFile": "Attach file";
     "attachedImage": "Attached image";
     "attachment": "Attachment";
+    "audioContent": "Generated audio";
     "cancelQueuedMessage": "Cancel queued message";
     "caseLawGreeting": "Ask about this decision — its full text is available here.";
     "chatAbout": "Chat about this";
@@ -546,6 +547,9 @@ type Messages = {
     "renameThread": "Rename conversation";
     "resend": "Resend";
     "resizeThread": "Resize conversation";
+    "richContentLoading": "Loading interactive content…";
+    "richContentTitle": "Interactive content";
+    "richContentUnavailable": "This content cannot be displayed safely.";
     "sendError": "There was an issue sending your message. Contact support if the error persists.";
     "sendErrorAnonymizationBlocked": "stella could not anonymize one attachment, so nothing was sent. Remove the file or send this message without anonymization.";
     "sendErrorLoopDetected": "The AI response repeated too many times. Try again with a narrower request.";
@@ -680,6 +684,7 @@ type Messages = {
     };
     "unsupportedFileType": "Unsupported file type";
     "uploadFailed": "Failed to process file";
+    "videoContent": "Generated video";
     "webSearch": {
       "answer": "Web search summary";
       "answerDisclaimer": "Synthesized from public web results below. Verify against the linked sources.";

@@ -100,6 +100,8 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   "folio-collab": WAIVER_REASON.noTenantReadSurface,
   health: WAIVER_REASON.noTenantReadSurface,
   "hosted-usage-webhook": WAIVER_REASON.noTenantReadSurface,
+  // Fixed-CSP HTML shell with no database access or tenant-scoped input.
+  "mcp-app-sandbox": WAIVER_REASON.noTenantReadSurface,
   mcp: WAIVER_REASON.noTenantReadSurface,
   "mcp-connectors": WAIVER_REASON.noTenantReadSurface,
   // Like mcp-connectors: the only reads are per-user+org connection state

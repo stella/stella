@@ -3,8 +3,11 @@ import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { createChatAttachmentPart } from "@/api/handlers/chat/chat-message-parts";
-import { validateMessage } from "@/api/handlers/chat/chat-schema";
+import {
+  createChatAttachmentPart,
+  toChatMessageContent,
+} from "@/api/handlers/chat/chat-message-parts";
+import { validateMessage as validateMessageWithPersistence } from "@/api/handlers/chat/chat-schema";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
@@ -12,6 +15,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { toUserFileUrl } from "@/api/lib/user-files/types";
 
+import { richChatParts, unsafeScriptUrl } from "./__fixtures__/rich-chat-parts";
 import type { StoredChatFile, StoredFileRef } from "./attachment-validation";
 import {
   validateChatFileParts,
@@ -29,6 +33,12 @@ const noDbReads: SafeDb = async () => {
   throw new Error("This validation path should not read the database");
 };
 const noTools = {} satisfies ChatToolMap;
+const validateMessage = async (
+  input: Omit<
+    Parameters<typeof validateMessageWithPersistence>[0],
+    "persistedMessage"
+  >,
+) => await validateMessageWithPersistence({ ...input, persistedMessage: null });
 const searchTools = {
   "search-documents": {
     name: "search-documents",
@@ -213,6 +223,48 @@ describe("validateMessage", () => {
     }
 
     expect(result.value.message.metadata).toEqual(metadata);
+  });
+
+  test("restores server-owned rich parts on assistant continuations", async () => {
+    const id = chatMessageId("msg_rich_continuation");
+    const trustedAudio = richChatParts[0];
+    const result = await validateMessageWithPersistence({
+      message: {
+        id,
+        role: "assistant",
+        parts: [
+          { type: "text", content: "Done" },
+          {
+            type: "audio",
+            source: {
+              type: "url",
+              value: unsafeScriptUrl,
+              mimeType: "audio/mpeg",
+            },
+          },
+        ],
+      },
+      persistedMessage: {
+        role: "assistant",
+        content: toChatMessageContent({
+          version: 2,
+          data: [{ type: "text", content: "Done" }, trustedAudio],
+        }),
+      },
+      safeDb: noDbReads,
+      threadId: chatThreadId("thread_rich_continuation"),
+      tools: noTools,
+      userId: userId("user_rich_continuation"),
+    });
+
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isError(result)) {
+      return;
+    }
+    expect(result.value.message.parts).toEqual([
+      { type: "text", content: "Done" },
+      trustedAudio,
+    ]);
   });
 
   test("preserves DOCX edit preferences on user messages", async () => {

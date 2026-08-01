@@ -355,6 +355,7 @@ const sendMessage = createSafeRootHandler(
           };
     const validationThreadState = yield* Result.await(
       readThreadValidationState({
+        messageId: body.message.id,
         organizationId: session.activeOrganizationId,
         safeDb,
         threadId: body.threadId,
@@ -499,6 +500,7 @@ const sendMessage = createSafeRootHandler(
 
       const validatedMessageResult = await validateMessage({
         message: body.message,
+        persistedMessage: validationThreadState.persistedMessage,
         safeDb,
         threadId: body.threadId,
         tools: validationTools,
