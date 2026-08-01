@@ -462,9 +462,12 @@ describe("custom oxlint guardrails", () => {
     const oxlintConfig = readRootFixture("oxlint.config.ts");
 
     expect(existsSync(legacyRoutePath)).toBe(false);
-    expect(oxlintConfig).toContain(
-      '"no-legacy-entity-route/no-legacy-entity-route": "error"',
-    );
+    expect(oxlintConfig).toContain(`
+      files: ["apps/web/src/**/*.{ts,tsx}"],
+      rules: {
+        "no-legacy-entity-route/no-legacy-entity-route": "error",
+      },
+    `);
   });
 
   test("tools route keeps heavy catalogue UI behind Suspense", () => {

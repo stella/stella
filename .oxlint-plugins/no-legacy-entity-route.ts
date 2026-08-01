@@ -18,6 +18,8 @@ const TEMPLATE_MIDDLE = "/entities/";
 const LEGACY_ROUTE_SUFFIX = /^[/?#]/u;
 const LEGACY_ENTITY_ROUTE_LITERAL =
   /^\/workspaces\/[^/?#]+\/entities\/[^/?#]+(?:[/?#]|$)/u;
+const STATIC_WORKSPACE_ENTITY_PREFIX = /^\/workspaces\/[^/?#]+\/entities\/$/u;
+const STATIC_ENTITY_AFTER_WORKSPACE = /^\/entities\/[^/?#]+(?:[/?#]|$)/u;
 
 type AstNode = Record<string, unknown> & { type: string };
 
@@ -51,29 +53,108 @@ const templateQuasiText = (template: AstNode, index: number): string | null => {
   return typeof cooked === "string" ? cooked : null;
 };
 
+const isLegacyRouteSuffix = (suffix: string): boolean =>
+  suffix === "" || LEGACY_ROUTE_SUFFIX.test(suffix);
+
+const isLegacyRouteQuasis = (quasis: readonly string[]): boolean => {
+  const first = quasis.at(0);
+  if (first === undefined) {
+    return false;
+  }
+  if (LEGACY_ENTITY_ROUTE_LITERAL.test(first)) {
+    return true;
+  }
+  const second = quasis.at(1);
+  if (second === undefined) {
+    return false;
+  }
+  if (first === TEMPLATE_PREFIX) {
+    if (STATIC_ENTITY_AFTER_WORKSPACE.test(second)) {
+      return true;
+    }
+    const third = quasis.at(2);
+    return (
+      second === TEMPLATE_MIDDLE &&
+      third !== undefined &&
+      isLegacyRouteSuffix(third)
+    );
+  }
+  return (
+    STATIC_WORKSPACE_ENTITY_PREFIX.test(first) && isLegacyRouteSuffix(second)
+  );
+};
+
+const templateQuasis = (template: AstNode): string[] | null => {
+  if (!Array.isArray(template.quasis)) {
+    return null;
+  }
+  const quasis: string[] = [];
+  for (let index = 0; index < template.quasis.length; index += 1) {
+    const text = templateQuasiText(template, index);
+    if (text === null) {
+      return null;
+    }
+    quasis.push(text);
+  }
+  return quasis;
+};
+
+type ConcatenationPart = string | null;
+
+const concatenationParts = (node: unknown): ConcatenationPart[] => {
+  if (isStringLiteral(node)) {
+    return [node.value];
+  }
+  if (
+    !isAstNode(node) ||
+    node.type !== "BinaryExpression" ||
+    node.operator !== "+"
+  ) {
+    return [null];
+  }
+  return concatenationParts(node.left).concat(concatenationParts(node.right));
+};
+
+const concatenationQuasis = (node: AstNode): string[] | null => {
+  if (node.type !== "BinaryExpression" || node.operator !== "+") {
+    return null;
+  }
+  const quasis = [""];
+  for (const part of concatenationParts(node)) {
+    if (part === null) {
+      quasis.push("");
+      continue;
+    }
+    const index = quasis.length - 1;
+    quasis[index] = `${quasis[index]}${part}`;
+  }
+  return quasis;
+};
+
+const hasConcatenationParent = (node: AstNode): boolean =>
+  isAstNode(node.parent) &&
+  node.parent.type === "BinaryExpression" &&
+  node.parent.operator === "+";
+
 const isLegacyEntityRouteConstruction = (node: unknown): boolean => {
   if (isStringLiteral(node)) {
+    if (hasConcatenationParent(node)) {
+      return false;
+    }
     return LEGACY_ENTITY_ROUTE_LITERAL.test(node.value);
   }
-  if (!isAstNode(node) || node.type !== "TemplateLiteral") {
+  if (!isAstNode(node)) {
     return false;
   }
-  const expressions = node.expressions;
-  if (!Array.isArray(expressions)) {
+  if (node.type === "TemplateLiteral") {
+    const quasis = templateQuasis(node);
+    return quasis !== null && isLegacyRouteQuasis(quasis);
+  }
+  if (hasConcatenationParent(node)) {
     return false;
   }
-  if (expressions.length === 0) {
-    const value = templateQuasiText(node, 0);
-    return value !== null && LEGACY_ENTITY_ROUTE_LITERAL.test(value);
-  }
-  const suffix = templateQuasiText(node, 2);
-  return (
-    expressions.length >= 2 &&
-    templateQuasiText(node, 0) === TEMPLATE_PREFIX &&
-    templateQuasiText(node, 1) === TEMPLATE_MIDDLE &&
-    suffix !== null &&
-    (suffix === "" || LEGACY_ROUTE_SUFFIX.test(suffix))
-  );
+  const quasis = concatenationQuasis(node);
+  return quasis !== null && isLegacyRouteQuasis(quasis);
 };
 
 export default {
@@ -96,6 +177,7 @@ export default {
         };
 
         return {
+          BinaryExpression: check,
           Literal: check,
           TemplateLiteral: check,
         };

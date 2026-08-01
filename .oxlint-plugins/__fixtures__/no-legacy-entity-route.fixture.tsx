@@ -37,9 +37,21 @@ export const hardcodedLegacyRoute = "/workspaces/ws_123/entities/entity_456";
 // oxlint-disable-next-line no-legacy-entity-route/no-legacy-entity-route -- regression case
 export const legacyRouteWithDynamicQuery = `/workspaces/${workspaceId}/entities/${entityId}?panel=${panel}`;
 
+// oxlint-disable-next-line no-legacy-entity-route/no-legacy-entity-route -- regression case
+export const oneDynamicWorkspace = `/workspaces/${workspaceId}/entities/entity_456`;
+
+// oxlint-disable-next-line no-legacy-entity-route/no-legacy-entity-route -- regression case
+export const oneDynamicEntity = `/workspaces/ws_123/entities/${entityId}`;
+
+export const concatenatedLegacyRoute =
+  // oxlint-disable-next-line no-legacy-entity-route/no-legacy-entity-route -- regression case
+  "/workspaces/" + workspaceId + "/entities/" + entityId;
+
 export const currentDocumentRoute = "/workspaces/$workspaceId/$viewId/document";
 export const similarlyStructuredPrivatePath =
   "/_protected/workspaces/$workspaceId/entities/$entityId";
 export const entityApiRoute = `/entities/${workspaceId}/entity/${entityId}`;
 export const similarlyNamedRoute = `/workspaces/${workspaceId}/entity-versions/${entityId}`;
 export const similarlySuffixedRoute = `/workspaces/${workspaceId}/entities/${entityId}-archive`;
+export const similarlySuffixedConcatenation =
+  "/workspaces/" + workspaceId + "/entities/" + entityId + "-archive";

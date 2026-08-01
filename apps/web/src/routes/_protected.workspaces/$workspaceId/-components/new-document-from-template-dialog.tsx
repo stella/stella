@@ -246,20 +246,22 @@ const FillStep = ({
         workspaceId,
         parentId,
         onCreated: ({ entityId, fieldId }) => {
-          queryClient
-            .invalidateQueries({ queryKey: entitiesKeys.all(workspaceId) })
-            .catch(() => {
-              /* fire-and-forget */
-            });
+          detached(
+            queryClient.invalidateQueries({
+              queryKey: entitiesKeys.all(workspaceId),
+            }),
+            "NewDocumentFromTemplate.invalidateCreatedDocument",
+          );
           onCreated();
           // Open the just-created document in the editable Folio editor.
-          navigate({
-            to: "/workspaces/$workspaceId/$viewId/document",
-            params: { workspaceId, viewId: "all" },
-            search: { entity: entityId, field: fieldId },
-          }).catch(() => {
-            /* navigation is best-effort; the document is already saved */
-          });
+          detached(
+            navigate({
+              to: "/workspaces/$workspaceId/$viewId/document",
+              params: { workspaceId, viewId: "all" },
+              search: { entity: entityId, field: fieldId },
+            }),
+            "NewDocumentFromTemplate.openCreatedDocument",
+          );
         },
       }}
       structureErrors={fill.schema.structureErrors}

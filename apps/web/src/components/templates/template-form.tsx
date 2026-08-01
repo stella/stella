@@ -2604,19 +2604,21 @@ export const useFillToMatterSaveTarget = (
   return {
     kind: "chooseMatter",
     onCreated: ({ workspaceId, entityId, fieldId }) => {
-      queryClient
-        .invalidateQueries({ queryKey: entitiesKeys.all(workspaceId) })
-        .catch(() => {
-          /* fire-and-forget */
-        });
+      detached(
+        queryClient.invalidateQueries({
+          queryKey: entitiesKeys.all(workspaceId),
+        }),
+        "TemplateForm.invalidateCreatedDocument",
+      );
       onDone?.();
-      navigate({
-        to: "/workspaces/$workspaceId/$viewId/document",
-        params: { workspaceId, viewId: "all" },
-        search: { entity: entityId, field: fieldId },
-      }).catch(() => {
-        /* navigation is best-effort; the document is already saved */
-      });
+      detached(
+        navigate({
+          to: "/workspaces/$workspaceId/$viewId/document",
+          params: { workspaceId, viewId: "all" },
+          search: { entity: entityId, field: fieldId },
+        }),
+        "TemplateForm.openCreatedDocument",
+      );
     },
   };
 };
