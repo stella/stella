@@ -883,6 +883,42 @@ export const createCorpusIndexer = <
     let indexed = 0;
     let firstError: CorpusIndexError | null = null;
 
+    const reserveAndEnsureGroup = async (
+      indexId: string,
+      group: typeof built,
+    ) => {
+      const reservedIds =
+        options.type === "incremental"
+          ? null
+          : await scopedDb(async (tx) => {
+              await options.beforeDatabaseMark(tx);
+              return await options.reserveExternalAppend(tx, {
+                generation,
+                rows: group.map(({ row }) => row),
+              });
+            });
+      // A reservation CAS miss means a concurrent refresh moved the row
+      // after the batch read. Do not let an old payload cross the external
+      // append boundary; the newer row remains in the durable pending set.
+      const reservedGroup =
+        reservedIds === null
+          ? group
+          : group.filter(({ row }) => reservedIds.has(row.id));
+      if (reservedGroup.length === 0) {
+        return { ensured: null, reservedGroup };
+      }
+      // A new generation may not have an index for this jurisdiction yet.
+      // Create it before replay cleanup so an expected empty target does not
+      // turn the delete into a terminal 404.
+      const ensured = await ensureIndex({
+        ...(options.type === "incremental"
+          ? {}
+          : { beforeRemoteEffect: options.beforeRemoteEffect }),
+        indexId,
+      });
+      return { ensured, reservedGroup };
+    };
+
     for (const [indexId, group] of groups) {
       // Failed index-job rows for this group, written in the `finally` below.
       // An ingest failure can now surface at two levels (the index could not
@@ -895,37 +931,14 @@ export const createCorpusIndexer = <
       // keying.
       const groupFailures: CorpusJobInput<TBrand>[] = [];
       try {
-        const reservedIds =
-          options.type === "incremental"
-            ? null
-            : // oxlint-disable-next-line no-await-in-loop -- each jurisdiction reserves its durable targets immediately before its sequential remote writes
-              await scopedDb(async (tx) => {
-                await options.beforeDatabaseMark(tx);
-                return await options.reserveExternalAppend(tx, {
-                  generation,
-                  rows: group.map(({ row }) => row),
-                });
-              });
-        // A reservation CAS miss means a concurrent refresh moved the row
-        // after the batch read. Do not let an old payload cross the external
-        // append boundary; the newer row remains in the durable pending set.
-        const reservedGroup =
-          reservedIds === null
-            ? group
-            : group.filter(({ row }) => reservedIds.has(row.id));
-        if (reservedGroup.length === 0) {
+        // oxlint-disable-next-line no-await-in-loop -- each jurisdiction reserves and ensures its durable target immediately before sequential remote writes
+        const { ensured, reservedGroup } = await reserveAndEnsureGroup(
+          indexId,
+          group,
+        );
+        if (ensured === null) {
           continue;
         }
-        // A new generation may not have an index for this jurisdiction yet.
-        // Create it before replay cleanup so an expected empty target does not
-        // turn the delete into a terminal 404.
-        // oxlint-disable-next-line no-await-in-loop -- per-jurisdiction indexes are ensured/ingested sequentially to avoid overwhelming the search backend
-        const ensured = await ensureIndex({
-          ...(options.type === "incremental"
-            ? {}
-            : { beforeRemoteEffect: options.beforeRemoteEffect }),
-          indexId,
-        });
         if (ensured.isErr()) {
           firstError ??= ensured.error;
           groupFailures.push(...failedIndexJobs(reservedGroup, ensured.error));

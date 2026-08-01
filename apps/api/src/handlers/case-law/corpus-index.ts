@@ -1524,14 +1524,25 @@ export const createCaseLawGenerationBackfill =
             });
           }
         }
-        for (const row of [...pendingDeleteRows, ...terminalDeletes]) {
-          // oxlint-disable-next-line no-await-in-loop -- one durable deletion action owns one remote delete and fenced state transition
+        const removePendingProjection = async (
+          rows: readonly GenerationBackfillRow[],
+          index = 0,
+        ): Promise<void> => {
+          const row = rows.at(index);
+          if (!row) {
+            return;
+          }
           await removeProjection(scopedDb, {
             generation,
             options: guards,
             row,
           });
-        }
+          await removePendingProjection(rows, index + 1);
+        };
+        await removePendingProjection([
+          ...pendingDeleteRows,
+          ...terminalDeletes,
+        ]);
         return { indexed, status: BACKFILL_STATUS.ADVANCED };
       };
 
