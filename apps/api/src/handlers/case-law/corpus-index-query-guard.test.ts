@@ -6,6 +6,10 @@ import {
 } from "@/api/db/schema";
 
 const caseLawCorpusIndexSource = new URL("corpus-index.ts", import.meta.url);
+const caseLawSchemaSource = new URL(
+  "../../db/schema/case-law.ts",
+  import.meta.url,
+);
 const publicSearchSource = new URL("decisions/search.ts", import.meta.url);
 const sharedSearchProviderSource = new URL(
   "../../lib/legal-search/corpus-index-provider.ts",
@@ -34,7 +38,10 @@ test("case-law incremental corpus scans never select a generation inequality", a
 });
 
 test("generation checkpoint migration preserves replay and role invariants", async () => {
-  const source = await Bun.file(generationMigrationSource).text();
+  const [source, schemaSource] = await Promise.all([
+    Bun.file(generationMigrationSource).text(),
+    Bun.file(caseLawSchemaSource).text(),
+  ]);
 
   for (const table of GENERATION_STATE_TABLES) {
     expect(source).toContain(
@@ -50,6 +57,14 @@ test("generation checkpoint migration preserves replay and role invariants", asy
   expect(source).toContain(
     'CONSTRAINT "case_law_corpus_index_projections_pk" PRIMARY KEY ("generation", "decision_id")',
   );
+  for (const constraint of [
+    "case_law_corpus_index_source_reconciliations_pk",
+    "case_law_corpus_index_source_reconciliations_generation_fk",
+    "case_law_corpus_index_source_reconciliations_source_fk",
+  ]) {
+    expect(source).toContain(`CONSTRAINT "${constraint}"`);
+    expect(schemaSource).toContain(`name: "${constraint}"`);
+  }
   expect(source).toContain(
     "AFTER INSERT OR UPDATE OF content_hash, indexed_hash, country",
   );

@@ -610,7 +610,7 @@ const indexer = createCorpusIndexer<"caseLawDecision", IndexableRow>(
 
 export const loadDocsForBatch = indexer.loadDocsForBatch;
 
-const BACKFILL_STATUS = {
+export const BACKFILL_STATUS = {
   ADVANCED: "advanced",
   BUSY: "busy",
   COMPLETE: "complete",
@@ -759,7 +759,7 @@ type SourceReconciliationCheckpoint = {
   sourceId: SafeId<"caseLawSource">;
 };
 
-type GenerationBackfillResult =
+export type CorpusIndexBackfillResult =
   | {
       indexed: number;
       status: typeof BACKFILL_STATUS.ADVANCED;
@@ -871,7 +871,9 @@ const ownsUnexpiredLease = ({
   and(
     eq(caseLawCorpusIndexBackfills.status, status),
     sameCursor({ checkpoint }),
-    hasNoNewerRebuild({ checkpoint }),
+    status === CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.RUNNING
+      ? hasNoNewerRebuild({ checkpoint })
+      : sql`true`,
     eq(caseLawCorpusIndexBackfills.leaseToken, leaseToken),
     sql`${caseLawCorpusIndexBackfills.leaseExpiresAt} > now()`,
   );
@@ -1060,7 +1062,7 @@ export const createCaseLawGenerationBackfill =
     scopedDb: Parameters<typeof backfillIncrementalCorpusIndex>[0],
     batchSize: number,
     generation: string,
-  ): Promise<GenerationBackfillResult> => {
+  ): Promise<CorpusIndexBackfillResult> => {
     const writerLease = await acquireCaseLawCorpusGenerationLease({
       generation,
       newLeaseToken,
@@ -1183,7 +1185,7 @@ export const createCaseLawGenerationBackfill =
         checkpoint: ownedCheckpoint,
         leaseToken,
         status,
-      }: LeaseGuardOptions): Promise<GenerationBackfillResult> => {
+      }: LeaseGuardOptions): Promise<CorpusIndexBackfillResult> => {
         const guards = createLeaseGuards({
           checkpoint: ownedCheckpoint,
           leaseToken,
@@ -1369,7 +1371,6 @@ export const createCaseLawGenerationBackfill =
                   CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.COMPLETE,
                 ),
                 sameCursor({ checkpoint }),
-                hasNoNewerRebuild({ checkpoint }),
                 or(
                   isNull(caseLawCorpusIndexBackfills.leaseExpiresAt),
                   lte(caseLawCorpusIndexBackfills.leaseExpiresAt, sql`now()`),
@@ -1573,7 +1574,7 @@ export const backfillCorpusIndex = async (
   batchSize: number,
   generation: string,
   options: { readConcurrency?: number } = {},
-): Promise<number> => {
+): Promise<CorpusIndexBackfillResult> => {
   const [sourceReconciliation, pendingProjection] = await Promise.all([
     selectSourceReconciliationCheckpoint(scopedDb, generation),
     hasPendingGenerationProjection(scopedDb, generation),
@@ -1584,13 +1585,16 @@ export const backfillCorpusIndex = async (
       batchSize,
       generation,
     );
-    return result.indexed;
+    return result;
   }
-  return await backfillIncrementalCorpusIndex(
+  const indexed = await backfillIncrementalCorpusIndex(
     scopedDb,
     batchSize,
     generation,
     options,
   );
+  return indexed > 0
+    ? { indexed, status: BACKFILL_STATUS.ADVANCED }
+    : { indexed: 0, status: BACKFILL_STATUS.COMPLETE };
 };
 export const removeDecisionFromCorpusIndex = indexer.removeFenced;

@@ -331,84 +331,96 @@ test(
   "reconciles each generation even when the serving generation marks the hash current",
   async () => {
     const generation = "case_law_v2_generation_pending";
-    await db.insert(caseLawCorpusIndexBackfills).values({
-      generation,
-      snapshotAt: await nextBackfillSnapshotAt(),
-      status: "complete",
-    });
-    await db.insert(caseLawCorpusIndexProjections).values({
-      decisionId: publicFirstId,
-      generation,
-      pendingAction: "index",
-      pendingHash: "first",
-      pendingIndexIds: [corpusIndexId(generation, "CZE")],
-    });
-    await db
-      .update(caseLawDecisions)
-      .set({
+    const newerGeneration = "case_law_v3_generation_pending";
+    try {
+      await db.insert(caseLawCorpusIndexBackfills).values({
+        generation,
+        snapshotAt: await nextBackfillSnapshotAt(),
+        status: "complete",
+      });
+      await db.insert(caseLawCorpusIndexBackfills).values({
+        generation: newerGeneration,
+        snapshotAt: await nextBackfillSnapshotAt(),
+        status: "running",
+      });
+      await db.insert(caseLawCorpusIndexProjections).values({
+        decisionId: publicFirstId,
+        generation,
+        pendingAction: "index",
+        pendingHash: "first",
+        pendingIndexIds: [corpusIndexId(generation, "CZE")],
+      });
+      await db
+        .update(caseLawDecisions)
+        .set({
+          indexedGeneration: corpusIndexId("case_law_v1", "CZE"),
+          indexedHash: "first",
+        })
+        .where(eq(caseLawDecisions.id, publicFirstId));
+
+      const backfill = createCaseLawGenerationBackfill({
+        backfillRows: async (runnerDb, rows, rebuildGeneration, options) => {
+          await options.beforeRemoteEffect(completeRemoteEffect);
+          const row = rows.at(0);
+          if (!row) {
+            return 0;
+          }
+          let indexed = 0;
+          await runnerDb(async (tx) => {
+            await options.beforeDatabaseMark(tx);
+            const marked = await caseLawCorpusIndexAdapter.markIndexedBatch(
+              tx,
+              {
+                indexId: corpusIndexId(rebuildGeneration, row.country),
+                mode: {
+                  generation: rebuildGeneration,
+                  type: "generation-rebuild",
+                },
+                now: new Date("2026-07-31T13:00:00.000Z"),
+                rows,
+              },
+            );
+            indexed = marked.size;
+          });
+          return indexed;
+        },
+        newLeaseToken: () => "00000000-0000-4000-8000-000000000050",
+        removeProjection: ignoreProjectionRemoval,
+      });
+
+      expect(await backfill(scopedDb, 10, generation)).toEqual({
+        indexed: 1,
+        status: "advanced",
+      });
+      const projection = (
+        await db
+          .select()
+          .from(caseLawCorpusIndexProjections)
+          .where(eq(caseLawCorpusIndexProjections.generation, generation))
+          .limit(1)
+      ).at(0);
+      expect(projection).toMatchObject({
+        indexId: corpusIndexId(generation, "CZE"),
+        indexedHash: "first",
+        pendingAction: null,
+        pendingHash: null,
+        pendingIndexIds: [],
+      });
+      const decision = (
+        await db
+          .select({
+            indexedGeneration: caseLawDecisions.indexedGeneration,
+            indexedHash: caseLawDecisions.indexedHash,
+          })
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.id, publicFirstId))
+          .limit(1)
+      ).at(0);
+      expect(decision).toEqual({
         indexedGeneration: corpusIndexId("case_law_v1", "CZE"),
         indexedHash: "first",
-      })
-      .where(eq(caseLawDecisions.id, publicFirstId));
+      });
 
-    const backfill = createCaseLawGenerationBackfill({
-      backfillRows: async (runnerDb, rows, rebuildGeneration, options) => {
-        await options.beforeRemoteEffect(completeRemoteEffect);
-        const row = rows.at(0);
-        if (!row) {
-          return 0;
-        }
-        let indexed = 0;
-        await runnerDb(async (tx) => {
-          await options.beforeDatabaseMark(tx);
-          const marked = await caseLawCorpusIndexAdapter.markIndexedBatch(tx, {
-            indexId: corpusIndexId(rebuildGeneration, row.country),
-            mode: { generation: rebuildGeneration, type: "generation-rebuild" },
-            now: new Date("2026-07-31T13:00:00.000Z"),
-            rows,
-          });
-          indexed = marked.size;
-        });
-        return indexed;
-      },
-      newLeaseToken: () => "00000000-0000-4000-8000-000000000050",
-      removeProjection: ignoreProjectionRemoval,
-    });
-
-    expect(await backfill(scopedDb, 10, generation)).toEqual({
-      indexed: 1,
-      status: "advanced",
-    });
-    const projection = (
-      await db
-        .select()
-        .from(caseLawCorpusIndexProjections)
-        .where(eq(caseLawCorpusIndexProjections.generation, generation))
-        .limit(1)
-    ).at(0);
-    expect(projection).toMatchObject({
-      indexId: corpusIndexId(generation, "CZE"),
-      indexedHash: "first",
-      pendingAction: null,
-      pendingHash: null,
-      pendingIndexIds: [],
-    });
-    const decision = (
-      await db
-        .select({
-          indexedGeneration: caseLawDecisions.indexedGeneration,
-          indexedHash: caseLawDecisions.indexedHash,
-        })
-        .from(caseLawDecisions)
-        .where(eq(caseLawDecisions.id, publicFirstId))
-        .limit(1)
-    ).at(0);
-    expect(decision).toEqual({
-      indexedGeneration: corpusIndexId("case_law_v1", "CZE"),
-      indexedHash: "first",
-    });
-
-    try {
       // A prior eligibility delete can remove the remote copy, then lose its
       // database CAS and leave this projection looking current. The new
       // eligible revision must replace it anyway.
@@ -453,6 +465,9 @@ test(
       await db
         .delete(caseLawCorpusIndexBackfills)
         .where(eq(caseLawCorpusIndexBackfills.generation, generation));
+      await db
+        .delete(caseLawCorpusIndexBackfills)
+        .where(eq(caseLawCorpusIndexBackfills.generation, newerGeneration));
     }
   },
   { timeout: 30_000 },

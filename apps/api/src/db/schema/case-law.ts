@@ -693,22 +693,32 @@ export const caseLawCorpusIndexBackfills = p.pgTable(
 export const caseLawCorpusIndexSourceReconciliations = p.pgTable(
   "case_law_corpus_index_source_reconciliations",
   {
-    generation: p
-      .varchar({ length: 32 })
-      .notNull()
-      .references(() => caseLawCorpusIndexBackfills.generation, {
-        onDelete: "cascade",
-      }),
-    sourceId: safeUuid<"caseLawSource">("source_id")
-      .notNull()
-      .references(() => caseLawSources.id, { onDelete: "cascade" }),
+    generation: p.varchar({ length: 32 }).notNull(),
+    sourceId: safeUuid<"caseLawSource">("source_id").notNull(),
     revision: p.integer().default(1).notNull(),
     cursorCreatedAt: timestamptz("cursor_created_at"),
     cursorId: safeUuid<"caseLawDecision">("cursor_id"),
     updatedAt: timestamptz("updated_at").defaultNow().notNull(),
   },
   (t) => [
-    p.primaryKey({ columns: [t.generation, t.sourceId] }),
+    p.primaryKey({
+      columns: [t.generation, t.sourceId],
+      name: "case_law_corpus_index_source_reconciliations_pk",
+    }),
+    p
+      .foreignKey({
+        name: "case_law_corpus_index_source_reconciliations_generation_fk",
+        columns: [t.generation],
+        foreignColumns: [caseLawCorpusIndexBackfills.generation],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: "case_law_corpus_index_source_reconciliations_source_fk",
+        columns: [t.sourceId],
+        foreignColumns: [caseLawSources.id],
+      })
+      .onDelete("cascade"),
     p.check(
       "case_law_corpus_index_source_reconciliations_cursor_pair",
       sql`(${t.cursorCreatedAt} IS NULL) = (${t.cursorId} IS NULL)`,

@@ -20,6 +20,7 @@ import { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
 import { deleteCorpusDocument } from "@/api/lib/legal-search/corpus-storage";
 import {
   corpusIndexId,
+  isCorpusIndexGeneration,
   tryCorpusIndexGeneration,
 } from "@/api/lib/legal-search/index-naming";
 
@@ -50,6 +51,16 @@ export const redactCaseLawDecision = async ({
   scopedDb,
   generation = envBase.LEGAL_SEARCH_INDEX_GENERATION,
 }: RedactInput): Promise<boolean> => {
+  if (!isCorpusIndexGeneration(generation)) {
+    const error = new CorpusIndexError({
+      message: "Invalid corpus index generation",
+    });
+    captureError(error, {
+      decisionId,
+      step: "redactCaseLawDecision.validateGeneration",
+    });
+    throw error;
+  }
   const decision = await scopedDb((tx) =>
     tx.query.caseLawDecisions.findFirst({
       where: { id: { eq: decisionId } },
@@ -208,9 +219,25 @@ export const redactCaseLawDecision = async ({
         }
       }
       if (leases.size !== targets.size) {
-        throw new ConcurrentModificationError({
+        const error = new ConcurrentModificationError({
           message: "Case-law corpus generation is being written",
         });
+        await scopedDb((tx) => {
+          // audit: skip — this insert IS the append-only failed erasure audit row
+          return tx.insert(caseLawIndexJobs).values({
+            decisionId,
+            generation,
+            operation: "redact",
+            status: "failed",
+            contentHash: null,
+            errorMessage: error.message,
+          });
+        });
+        captureError(error, {
+          decisionId,
+          step: "redactCaseLawDecision.acquireGenerationLeases",
+        });
+        throw error;
       }
 
       // Attempt every target: one transient error must not leave copies in
