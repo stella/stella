@@ -1,7 +1,7 @@
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 
--- Additive and nullable for existing report-export receipts. A field can be
+-- Nullable and additive for existing report-export receipts. A field can be
 -- deleted with its source version, so preserve the receipt and clear only the
 -- direct-link hint.
 ALTER TABLE "report_exports"
