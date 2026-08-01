@@ -6,6 +6,7 @@ import {
 } from "@/api/db/schema";
 
 const caseLawCorpusIndexSource = new URL("corpus-index.ts", import.meta.url);
+const caseLawErasureSource = new URL("erasure.ts", import.meta.url);
 const caseLawSchemaSource = new URL(
   "../../db/schema/case-law.ts",
   import.meta.url,
@@ -34,6 +35,18 @@ test("case-law incremental corpus scans never select a generation inequality", a
   expect(source).not.toMatch(/indexed_generation[^`]*<>/su);
   expect(source).toMatch(
     /sql`LOCK TABLE \$\{caseLawDecisions\}, \$\{caseLawSources\} IN SHARE MODE`/u,
+  );
+});
+
+test("a restore racing erasure is durably requeued", async () => {
+  const source = await Bun.file(caseLawErasureSource).text();
+  const branchStart = source.indexOf("if (!stillErased) {");
+  const branchEnd = source.indexOf("return;", branchStart);
+
+  expect(branchStart).toBeGreaterThanOrEqual(0);
+  expect(branchEnd).toBeGreaterThan(branchStart);
+  expect(source.slice(branchStart, branchEnd)).toContain(
+    ".set({ indexedAt: null, indexedHash: null })",
   );
 });
 

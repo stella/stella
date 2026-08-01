@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNotNull, isNull } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -295,8 +295,20 @@ export const redactCaseLawDecision = async ({
             .limit(1)
         ).at(0);
         if (!stillErased) {
-          // A concurrent restore owns the new projection state. The fenced
-          // deletes removed old copies; its pending index action must survive.
+          // A concurrent restore owns the canonical content, but the fenced
+          // deletes may have removed its newly indexed copy. Invalidating the
+          // successful marker fires the projection trigger, which durably
+          // requeues the restored hash for every tracked generation.
+          // audit: skip — search index maintenance; rebuilds derived state
+          await tx
+            .update(caseLawDecisions)
+            .set({ indexedAt: null, indexedHash: null })
+            .where(
+              and(
+                eq(caseLawDecisions.id, decisionId),
+                isNotNull(caseLawDecisions.contentHash),
+              ),
+            );
           return;
         }
         // audit: skip — GDPR redaction bookkeeping; recorded in case_law_index_jobs above
