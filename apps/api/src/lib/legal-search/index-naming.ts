@@ -25,6 +25,27 @@ const GENERATION_PATTERN = new RegExp(
 export const isCorpusIndexGeneration = (value: string): boolean =>
   GENERATION_PATTERN.test(value);
 
+const CASE_LAW_CORPUS_GENERATION_PATTERN = /^case_law_v([1-9][0-9]*)$/u;
+const POSTGRES_INTEGER_MAX = 2_147_483_647;
+
+/** Numeric precedence for the one canonical case-law generation form. */
+export const caseLawCorpusGenerationOrder = (value: string): number | null => {
+  if (!isCorpusIndexGeneration(value)) {
+    return null;
+  }
+  const version = CASE_LAW_CORPUS_GENERATION_PATTERN.exec(value)?.at(1);
+  if (version === undefined) {
+    return null;
+  }
+  const order = Number(version);
+  return Number.isSafeInteger(order) && order <= POSTGRES_INTEGER_MAX
+    ? order
+    : null;
+};
+
+export const isCaseLawCorpusGeneration = (value: string): boolean =>
+  caseLawCorpusGenerationOrder(value) !== null;
+
 // The jurisdiction segment comes from the trusted `country` column (always
 // alpha), but we guard so a malformed value cannot craft an odd id.
 const JURISDICTION_PATTERN = /^[a-z]{2,8}$/u;

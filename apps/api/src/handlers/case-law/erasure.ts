@@ -20,7 +20,7 @@ import { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
 import { deleteCorpusDocument } from "@/api/lib/legal-search/corpus-storage";
 import {
   corpusIndexId,
-  isCorpusIndexGeneration,
+  isCaseLawCorpusGeneration,
   tryCorpusIndexGeneration,
 } from "@/api/lib/legal-search/index-naming";
 
@@ -51,7 +51,7 @@ export const redactCaseLawDecision = async ({
   scopedDb,
   generation = envBase.LEGAL_SEARCH_INDEX_GENERATION,
 }: RedactInput): Promise<boolean> => {
-  if (!isCorpusIndexGeneration(generation)) {
+  if (!isCaseLawCorpusGeneration(generation)) {
     const error = new CorpusIndexError({
       message: "Invalid corpus index generation",
     });

@@ -1345,6 +1345,79 @@ test(
 );
 
 test(
+  "serving selectors hydrate every durable projection retry target",
+  async () => {
+    const generation = "case_law_v39";
+    const decisionId = toSafeId<"caseLawDecision">(
+      "00000000-0000-4000-8000-000000000097",
+    );
+    const staleIndexId = corpusIndexId(generation, "SVK");
+    await db.insert(caseLawCorpusIndexBackfills).values({
+      generation,
+      snapshotAt: await nextBackfillSnapshotAt(),
+      status: "complete",
+    });
+    await db.insert(caseLawDecisions).values({
+      caseNumber: "97 T 97/2026",
+      contentHash: "pending-content",
+      country: "CZE",
+      court: "Pending court",
+      createdAt: CREATED_AT,
+      fulltext: "pending text",
+      id: decisionId,
+      indexedGeneration: corpusIndexId(generation, "CZE"),
+      indexedHash: null,
+      language: "cs",
+      languageGroupKey: "pending",
+      slug: "pending",
+      sourceId: publicSourceId,
+    });
+    await db.insert(caseLawCorpusIndexProjections).values({
+      decisionId,
+      generation,
+      pendingAction: "index",
+      pendingHash: "pending-content",
+      pendingIndexIds: [staleIndexId],
+    });
+
+    try {
+      const pending = await caseLawCorpusIndexAdapter.selectMissing(scopedDb, {
+        generation,
+        limit: 100,
+      });
+      const row = pending.find(({ id }) => id === decisionId);
+      expect(row).toMatchObject({
+        generationIndexId: null,
+        generationPendingAction: "index",
+        generationPendingIndexIds: [staleIndexId],
+      });
+
+      await db
+        .update(caseLawDecisions)
+        .set({ indexedHash: "stale-content" })
+        .where(eq(caseLawDecisions.id, decisionId));
+      const stale = await caseLawCorpusIndexAdapter.selectStale(scopedDb, {
+        generation,
+        limit: 100,
+      });
+      expect(stale.find(({ id }) => id === decisionId)).toMatchObject({
+        generationIndexId: null,
+        generationPendingAction: "index",
+        generationPendingIndexIds: [staleIndexId],
+      });
+    } finally {
+      await db
+        .delete(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, decisionId));
+      await db
+        .delete(caseLawCorpusIndexBackfills)
+        .where(eq(caseLawCorpusIndexBackfills.generation, generation));
+    }
+  },
+  { timeout: 30_000 },
+);
+
+test(
   "generation replay revisits a refreshed row already pointing at its target",
   async () => {
     const generation = "case_law_v34";

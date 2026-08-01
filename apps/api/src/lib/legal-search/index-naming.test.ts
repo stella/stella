@@ -6,9 +6,11 @@ import { propertyConfig } from "@stll/property-testing";
 import {
   CORPUS_INDEX_GENERATION_MAX_LENGTH,
   CORPUS_INDEX_ID_MAX_LENGTH,
+  caseLawCorpusGenerationOrder,
   corpusIndexGeneration,
   corpusIndexId,
   corpusIndexPattern,
+  isCaseLawCorpusGeneration,
   tryCorpusIndexGeneration,
 } from "@/api/lib/legal-search/index-naming";
 
@@ -35,6 +37,27 @@ test("rejects generations outside the shared storage contract", () => {
     corpusIndexId("x".repeat(CORPUS_INDEX_GENERATION_MAX_LENGTH + 1), "svk"),
   ).toThrow();
   expect(() => corpusIndexPattern("case law v1")).toThrow();
+});
+
+test("case-law generation order is canonical and total over its domain", () => {
+  fc.assert(
+    fc.property(fc.integer({ min: 1, max: 2_147_483_647 }), (order) => {
+      const generation = `case_law_v${order}`;
+      expect(isCaseLawCorpusGeneration(generation)).toBe(true);
+      expect(caseLawCorpusGenerationOrder(generation)).toBe(order);
+    }),
+    propertyConfig({ numRuns: 200 }),
+  );
+  for (const invalid of [
+    "case_law_v0",
+    "case_law_v01",
+    "case_law_v2_suffix",
+    "legislation_v2",
+    "case_law_v2147483648",
+  ]) {
+    expect(isCaseLawCorpusGeneration(invalid)).toBe(false);
+    expect(caseLawCorpusGenerationOrder(invalid)).toBeNull();
+  }
 });
 
 test("generation extraction is the inverse of index construction", () => {

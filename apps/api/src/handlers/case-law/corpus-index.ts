@@ -31,6 +31,7 @@ import type {
 import {
   createCorpusIndexer,
   resolveMarkedRowIds,
+  resolveReservedAppendTargets,
 } from "@/api/lib/corpus-index/core";
 import {
   timestampCasToken,
@@ -48,7 +49,7 @@ import {
 } from "@/api/lib/legal-search/corpus-storage";
 import {
   corpusIndexId,
-  isCorpusIndexGeneration,
+  isCaseLawCorpusGeneration,
   tryCorpusIndexGeneration,
 } from "@/api/lib/legal-search/index-naming";
 
@@ -128,6 +129,15 @@ const GENERATION_PAGE_SELECT_COLUMNS = {
     string[]
   >`coalesce(${caseLawCorpusIndexProjections.pendingIndexIds}, '{}'::varchar(64)[])`,
   sourceDescriptor: caseLawSources.descriptor,
+};
+
+const INCREMENTAL_SELECT_COLUMNS = {
+  ...SELECT_COLUMNS,
+  generationIndexId: caseLawCorpusIndexProjections.indexId,
+  generationPendingAction: caseLawCorpusIndexProjections.pendingAction,
+  generationPendingIndexIds: sql<
+    string[]
+  >`coalesce(${caseLawCorpusIndexProjections.pendingIndexIds}, '{}'::varchar(64)[])`,
 };
 
 // A row is indexable once its canonical payload is in object storage.
@@ -212,9 +222,9 @@ const commitCurrentGenerationProjection = async (
 const reserveGenerationProjectionTargets = async (
   tx: Transaction,
   { generation, rows }: { generation: string; rows: readonly IndexableRow[] },
-): Promise<Set<SafeId<"caseLawDecision">>> => {
+): Promise<Map<SafeId<"caseLawDecision">, readonly string[]>> => {
   if (rows.length === 0) {
-    return new Set();
+    return new Map();
   }
   const tuples = sql.join(
     rows.map(
@@ -259,11 +269,13 @@ const reserveGenerationProjectionTargets = async (
             ) AS target
           ),
           updated_at = EXCLUDED.updated_at
-      RETURNING decision_id
+      RETURNING decision_id, pending_index_ids
     )
-    SELECT decision_id AS id FROM queued
+    SELECT decision_id AS id,
+           pending_index_ids AS "pendingIndexIds"
+    FROM queued
   `);
-  return resolveMarkedRowIds(reserved, rows);
+  return resolveReservedAppendTargets(reserved, rows);
 };
 
 const recoverLostGenerationProjectionEffect = async (
@@ -530,14 +542,21 @@ export const caseLawCorpusIndexAdapter = {
   // created_at steers the planner onto the created_at index and
   // row-by-row heap filtering; the selective content-hash index is what
   // these scans need.
-  selectMissing: async (scopedDb, { limit }) => {
+  selectMissing: async (scopedDb, { generation, limit }) => {
     // Hash-null rows are the durable pending set: new rows and every refresh
     // clear this field while retaining the old generation pointer needed to
     // delete a moved jurisdiction copy. The partial index keeps this bounded.
     const fresh = await scopedDb((tx) =>
       tx
-        .select(SELECT_COLUMNS)
+        .select(INCREMENTAL_SELECT_COLUMNS)
         .from(caseLawDecisions)
+        .leftJoin(
+          caseLawCorpusIndexProjections,
+          and(
+            eq(caseLawCorpusIndexProjections.decisionId, caseLawDecisions.id),
+            eq(caseLawCorpusIndexProjections.generation, generation),
+          ),
+        )
         .innerJoin(
           caseLawSources,
           eq(caseLawSources.id, caseLawDecisions.sourceId),
@@ -563,8 +582,15 @@ export const caseLawCorpusIndexAdapter = {
   selectStale: async (scopedDb, { generation, limit }) =>
     await scopedDb((tx) =>
       tx
-        .select(SELECT_COLUMNS)
+        .select(INCREMENTAL_SELECT_COLUMNS)
         .from(caseLawDecisions)
+        .leftJoin(
+          caseLawCorpusIndexProjections,
+          and(
+            eq(caseLawCorpusIndexProjections.decisionId, caseLawDecisions.id),
+            eq(caseLawCorpusIndexProjections.generation, generation),
+          ),
+        )
         .innerJoin(
           caseLawSources,
           eq(caseLawSources.id, caseLawDecisions.sourceId),
@@ -1195,21 +1221,6 @@ const hasGenerationCheckpoint = async (
       ).at(0),
     ),
   );
-
-const CASE_LAW_CORPUS_GENERATION_PATTERN = /^case_law_v([1-9][0-9]*)$/u;
-const POSTGRES_INTEGER_MAX = 2_147_483_647;
-
-const isCaseLawCorpusGeneration = (generation: string): boolean => {
-  if (!isCorpusIndexGeneration(generation)) {
-    return false;
-  }
-  const version = CASE_LAW_CORPUS_GENERATION_PATTERN.exec(generation)?.at(1);
-  if (version === undefined) {
-    return false;
-  }
-  const order = Number(version);
-  return Number.isSafeInteger(order) && order <= POSTGRES_INTEGER_MAX;
-};
 
 const validateGenerationBoundary = (generation: string): void => {
   if (!isCaseLawCorpusGeneration(generation)) {

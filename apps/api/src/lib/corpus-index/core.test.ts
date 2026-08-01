@@ -292,7 +292,12 @@ describe("fenced serving-generation appends", () => {
           events.push("reserved");
           expect(generation).toBe("case_law_v1");
           expect(rows).toEqual([row]);
-          return new Set(rows.map((selected) => selected.id));
+          return new Map(
+            rows.map((selected) => [
+              selected.id,
+              [corpusIndexId(generation, selected.country)],
+            ]),
+          );
         },
       }),
     ).toBe(1);
@@ -484,8 +489,16 @@ describe("failed index jobs always reach the audit trail", () => {
         return await effect();
       },
       recoverRemoteEffectLeaseLoss: async () => await Promise.resolve(),
-      reserveExternalAppend: async (_tx, { rows }) =>
-        new Set(rows.map((selected) => selected.id)),
+      reserveExternalAppend: async (_tx, { generation, rows }) =>
+        new Map(
+          rows.map((selected) => [
+            selected.id,
+            [
+              corpusIndexId(generation, selected.country),
+              selected.projectionIndexId,
+            ],
+          ]),
+        ),
     });
 
     expect(indexed).toBe(1);
@@ -529,8 +542,16 @@ describe("failed index jobs always reach the audit trail", () => {
           return await effect();
         },
         recoverRemoteEffectLeaseLoss: async () => await Promise.resolve(),
-        reserveExternalAppend: async (_tx, { rows }) =>
-          new Set(rows.map((selected) => selected.id)),
+        reserveExternalAppend: async (_tx, { generation, rows }) =>
+          new Map(
+            rows.map((selected) => [
+              selected.id,
+              [
+                corpusIndexId(generation, selected.country),
+                selected.projectionIndexId,
+              ],
+            ]),
+          ),
       }),
     ).toBe(1);
     expect(
@@ -544,6 +565,7 @@ describe("failed index jobs always reach the audit trail", () => {
     commitEvents.length = 0;
     guardedEffects = 0;
     guardedMarks = 0;
+    const lateReservedIndexId = corpusIndexId(GENERATION, "PL");
     expect(
       await indexer.backfillFenced(scopedDb, 1, GENERATION, {
         beforeDatabaseMark: async () => {
@@ -555,8 +577,17 @@ describe("failed index jobs always reach the audit trail", () => {
           return await effect();
         },
         recoverRemoteEffectLeaseLoss: async () => await Promise.resolve(),
-        reserveExternalAppend: async (_tx, { rows }) =>
-          new Set(rows.map((selected) => selected.id)),
+        reserveExternalAppend: async (_tx, { generation, rows }) =>
+          new Map(
+            rows.map((selected) => [
+              selected.id,
+              [
+                corpusIndexId(generation, selected.country),
+                selected.projectionIndexId,
+                lateReservedIndexId,
+              ],
+            ]),
+          ),
       }),
     ).toBe(1);
     expect(
@@ -568,6 +599,7 @@ describe("failed index jobs always reach the audit trail", () => {
       [
         `/api/v1/${corpusIndexId(GENERATION, "CZ")}/delete-tasks`,
         `/api/v1/${corpusIndexId(GENERATION, "SK")}/delete-tasks`,
+        `/api/v1/${lateReservedIndexId}/delete-tasks`,
       ].sort(),
     );
     expect(guardedEffects).toBe(calls.length);

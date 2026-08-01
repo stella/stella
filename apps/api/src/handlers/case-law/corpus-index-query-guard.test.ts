@@ -41,9 +41,17 @@ test("case-law incremental corpus scans never select a generation inequality", a
 
 test("a restore racing erasure is durably requeued", async () => {
   const source = await Bun.file(caseLawErasureSource).text();
+  const generationValidation = source.indexOf(
+    "if (!isCaseLawCorpusGeneration(generation)) {",
+  );
+  const firstIrreversibleMutation = source.indexOf(
+    "await removeDecisionFromIndex(decisionId, scopedDb);",
+  );
   const branchStart = source.indexOf("if (!stillErased) {");
   const branchEnd = source.indexOf("return;", branchStart);
 
+  expect(generationValidation).toBeGreaterThanOrEqual(0);
+  expect(firstIrreversibleMutation).toBeGreaterThan(generationValidation);
   expect(branchStart).toBeGreaterThanOrEqual(0);
   expect(branchEnd).toBeGreaterThan(branchStart);
   expect(source.slice(branchStart, branchEnd)).toContain(
@@ -109,6 +117,9 @@ test("generation checkpoint migration preserves replay and role invariants", asy
   expect(source).toContain(
     'ADD CONSTRAINT "case_law_sources_descriptor_shape"',
   );
+  expect(source).toContain("SELECT 1 FROM pg_constraint");
+  expect(source).toContain("conname = 'case_law_sources_descriptor_shape'");
+  expect(source).toContain("conrelid = 'case_law_sources'::regclass");
   expect(source).toContain(
     "jsonb_typeof(\"descriptor\" -> 'allowsRedistribution') = 'boolean'",
   );

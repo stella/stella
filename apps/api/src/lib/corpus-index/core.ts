@@ -158,6 +158,39 @@ export const resolveMarkedRowIds = <TBrand extends SafeIdType>(
   return ids;
 };
 
+export const resolveReservedAppendTargets = <TBrand extends SafeIdType>(
+  reserved: unknown,
+  rows: readonly CorpusIndexRow<TBrand>[],
+): Map<SafeId<TBrand>, readonly string[]> => {
+  let returned: unknown[] = [];
+  if (Array.isArray(reserved)) {
+    returned = reserved;
+  } else if (isRecord(reserved) && Array.isArray(reserved["rows"])) {
+    returned = reserved["rows"];
+  }
+  const byId = new Map<string, SafeId<TBrand>>(
+    rows.map((row) => [row.id, row.id]),
+  );
+  const targets = new Map<SafeId<TBrand>, readonly string[]>();
+  for (const entry of returned) {
+    if (
+      !isRecord(entry) ||
+      typeof entry["id"] !== "string" ||
+      !Array.isArray(entry["pendingIndexIds"]) ||
+      !entry["pendingIndexIds"].every(
+        (pendingIndexId) => typeof pendingIndexId === "string",
+      )
+    ) {
+      continue;
+    }
+    const id = byId.get(entry["id"]);
+    if (id !== undefined) {
+      targets.set(id, entry["pendingIndexIds"]);
+    }
+  }
+  return targets;
+};
+
 /**
  * Canonical payload one row contributes to the index. `ast` is loaded only by
  * passage-granularity families (see {@link CorpusIndexGranularity}) and is
@@ -232,7 +265,7 @@ type ReserveExternalAppend<
 > = (
   tx: Transaction,
   args: { generation: string; rows: readonly TRow[] },
-) => Promise<Set<SafeId<TBrand>>>;
+) => Promise<Map<SafeId<TBrand>, readonly string[]>>;
 type RecoverRemoteEffectLeaseLoss<TBrand extends SafeIdType> = (args: {
   entityIds: readonly SafeId<TBrand>[];
   indexId: string;
@@ -887,7 +920,7 @@ export const createCorpusIndexer = <
       indexId: string,
       group: typeof built,
     ) => {
-      const reservedIds =
+      const reservedTargets =
         options.type === "incremental"
           ? null
           : await scopedDb(async (tx) => {
@@ -901,11 +934,11 @@ export const createCorpusIndexer = <
       // after the batch read. Do not let an old payload cross the external
       // append boundary; the newer row remains in the durable pending set.
       const reservedGroup =
-        reservedIds === null
+        reservedTargets === null
           ? group
-          : group.filter(({ row }) => reservedIds.has(row.id));
+          : group.filter(({ row }) => reservedTargets.has(row.id));
       if (reservedGroup.length === 0) {
-        return { ensured: null, reservedGroup };
+        return { ensured: null, reservedGroup, reservedTargets };
       }
       // A new generation may not have an index for this jurisdiction yet.
       // Create it before replay cleanup so an expected empty target does not
@@ -916,7 +949,7 @@ export const createCorpusIndexer = <
           : { beforeRemoteEffect: options.beforeRemoteEffect }),
         indexId,
       });
-      return { ensured, reservedGroup };
+      return { ensured, reservedGroup, reservedTargets };
     };
 
     for (const [indexId, group] of groups) {
@@ -932,10 +965,8 @@ export const createCorpusIndexer = <
       const groupFailures: CorpusJobInput<TBrand>[] = [];
       try {
         // oxlint-disable-next-line no-await-in-loop -- each jurisdiction reserves and ensures its durable target immediately before sequential remote writes
-        const { ensured, reservedGroup } = await reserveAndEnsureGroup(
-          indexId,
-          group,
-        );
+        const { ensured, reservedGroup, reservedTargets } =
+          await reserveAndEnsureGroup(indexId, group);
         if (ensured === null) {
           continue;
         }
@@ -965,6 +996,9 @@ export const createCorpusIndexer = <
               row,
             )) {
               previousIndexes.add(projectionIndexId);
+            }
+            for (const reservedIndexId of reservedTargets?.get(row.id) ?? []) {
+              previousIndexes.add(reservedIndexId);
             }
           }
           if (
