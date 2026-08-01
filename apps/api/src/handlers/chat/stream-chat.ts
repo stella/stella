@@ -60,7 +60,7 @@ import type {
   ChatAnonRestoration,
   ChatMessage,
   ChatMessageUsage,
-  ChatPart,
+  PersistableChatPart,
   PersistableChatMessage,
 } from "@/api/handlers/chat/types";
 import { hydrateFilePart } from "@/api/handlers/chat/upload-files";
@@ -1987,8 +1987,8 @@ export const toChatMessage = (message: UIMessage): ChatMessage | null => {
 // outcome before a blank assistant turn can reach persistence.
 const toChatParts = (
   parts: readonly UIMessage["parts"][number][],
-): ChatPart[] => {
-  const chatParts: ChatPart[] = [];
+): PersistableChatPart[] => {
+  const chatParts: PersistableChatPart[] = [];
   for (const part of parts) {
     if (isChatPart(part)) {
       chatParts.push(part);

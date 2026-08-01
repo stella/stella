@@ -59,7 +59,8 @@ export type ChatAttachmentPart =
 
 export type ChatTanStackPart = MessagePart<ChatClientTools>;
 type NonPersistableChatPartType = "audio" | "video" | "ui-resource";
-export type ChatPart = Exclude<
+export type ChatPart = ChatTanStackPart;
+export type PersistableChatPart = Exclude<
   ChatTanStackPart,
   { type: NonPersistableChatPartType }
 >;
@@ -99,9 +100,8 @@ export type ChatMessageMetadata = {
   usage?: ChatMessageUsage | undefined;
 };
 
-export type ChatMessage = Omit<UIMessage<ChatClientTools>, "parts"> & {
+export type ChatMessage = UIMessage<ChatClientTools> & {
   metadata?: ChatMessageMetadata | undefined;
-  parts: ChatPart[];
 };
 
 export type PersistableChatMessage = ChatMessage & {

@@ -10,6 +10,7 @@ import type {
   ChatMessageRole,
   ChatPart,
   ChatTanStackPart,
+  PersistableChatPart,
   PersistableChatMessage,
   PersistedChatMessageContent,
 } from "@/api/handlers/chat/types";
@@ -290,9 +291,9 @@ const isContentPartWithSource = (
 type ChatPartValidator = (part: Record<string, unknown>) => boolean;
 
 // This record is deliberately exhaustive over Stella's persistable subset of
-// TanStack MessagePart. A future SDK variant becomes part of ChatPart by
+// TanStack MessagePart. A future SDK variant becomes persistable by
 // default, then fails typecheck here until its persistence policy and validator
-// are defined. Unsupported modalities stay explicit in ChatPart's excluded union.
+// are defined. Unsupported modalities stay explicit in the excluded union.
 const CHAT_PART_VALIDATORS = {
   document: isContentPartWithSource,
   image: isContentPartWithSource,
@@ -309,14 +310,14 @@ const CHAT_PART_VALIDATORS = {
     isTanStackToolResultContent(part["content"]) &&
     isTanStackToolResultState(part["state"]) &&
     (!("error" in part) || typeof part["error"] === "string"),
-} satisfies Record<ChatPart["type"], ChatPartValidator>;
+} satisfies Record<PersistableChatPart["type"], ChatPartValidator>;
 
 const isChatPartType = (
   type: string,
 ): type is keyof typeof CHAT_PART_VALIDATORS =>
   Object.hasOwn(CHAT_PART_VALIDATORS, type);
 
-export const isChatPart = (part: unknown): part is ChatPart => {
+export const isChatPart = (part: unknown): part is PersistableChatPart => {
   if (!isRecord(part) || typeof part["type"] !== "string") {
     return false;
   }
