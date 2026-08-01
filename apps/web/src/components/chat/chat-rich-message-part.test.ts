@@ -17,6 +17,7 @@ const unsafeScriptUrl = ["java", "script:alert(1)"].join("");
 
 const {
   ChatRichMessagePart,
+  RichContentErrorBoundary,
   normalizeUiResourcePart,
   toRenderableMediaSource,
 } = await import("@/components/chat/chat-rich-message-part");
@@ -35,6 +36,23 @@ const renderMediaPart = (part: RichChatPart) =>
   );
 
 describe("rich chat message parts", () => {
+  test("renders the local fallback after a rich-part failure", () => {
+    const boundary = new RichContentErrorBoundary({
+      children: createElement("div", null, "interactive resource"),
+      fallback: createElement("div", null, "rich content unavailable"),
+    });
+
+    expect(renderToStaticMarkup(boundary.render())).toContain(
+      "interactive resource",
+    );
+
+    boundary.state = RichContentErrorBoundary.getDerivedStateFromError();
+
+    expect(renderToStaticMarkup(boundary.render())).toContain(
+      "rich content unavailable",
+    );
+  });
+
   test("creates playable sources only for matching safe media", () => {
     expect(
       toRenderableMediaSource({

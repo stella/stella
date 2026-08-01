@@ -1,4 +1,5 @@
-import { createElement, lazy, Suspense } from "react";
+import { Component, createElement, lazy, Suspense } from "react";
+import type { ErrorInfo, ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
@@ -9,7 +10,9 @@ import {
 } from "@stll/api-contract";
 
 import type { ChatPart } from "@/components/chat/chat-ui-tools";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { mcpAppSandboxUrl } from "@/lib/api-url";
+import { ClientTelemetryError } from "@/lib/errors/telemetry";
 import { getUserFileContentUrl } from "@/lib/user-files";
 
 export type RichChatPart = Extract<
@@ -23,6 +26,46 @@ const LazyMcpAppResource = lazy(async () => {
   const { MCPAppResource } = await import("@tanstack/ai-react/mcp-apps");
   return { default: MCPAppResource };
 });
+
+const CHAT_RICH_CONTENT_AREA = "chat-rich-content";
+
+type RichContentErrorBoundaryProps = {
+  children: ReactNode;
+  fallback: ReactNode;
+};
+
+type RichContentErrorBoundaryState = {
+  hasError: boolean;
+};
+
+export class RichContentErrorBoundary extends Component<
+  RichContentErrorBoundaryProps,
+  RichContentErrorBoundaryState
+> {
+  constructor(props: RichContentErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(): RichContentErrorBoundaryState {
+    return { hasError: true };
+  }
+
+  override componentDidCatch(error: Error, _info: ErrorInfo) {
+    getAnalytics().captureError(
+      new ClientTelemetryError({
+        area: CHAT_RICH_CONTENT_AREA,
+        message: "[Chat rich content] MCP App resource failed to render",
+        cause: error,
+      }),
+    );
+  }
+
+  // oxlint-disable-next-line typescript-eslint/promise-function-async -- React render() must stay sync; ReactNode children can be thenable
+  override render() {
+    return this.state.hasError ? this.props.fallback : this.props.children;
+  }
+}
 
 export const isRichChatPart = (part: ChatPart): part is RichChatPart =>
   part.type === "audio" || part.type === "video" || part.type === "ui-resource";
@@ -193,9 +236,17 @@ const UiResource = ({ part }: { part: UiResourcePart }) => {
       {isServerRender ? (
         <RichContentStatus loading />
       ) : (
-        <Suspense fallback={<RichContentStatus loading />}>
-          <LazyMcpAppResource part={normalized} sandbox={{ url: sandboxUrl }} />
-        </Suspense>
+        <RichContentErrorBoundary
+          fallback={<RichContentStatus />}
+          key={`${normalized.toolCallId}:${normalized.resource.uri}`}
+        >
+          <Suspense fallback={<RichContentStatus loading />}>
+            <LazyMcpAppResource
+              part={normalized}
+              sandbox={{ url: sandboxUrl }}
+            />
+          </Suspense>
+        </RichContentErrorBoundary>
       )}
     </div>
   );
