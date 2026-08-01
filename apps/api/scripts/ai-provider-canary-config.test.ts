@@ -26,6 +26,18 @@ describe("AI provider canary role budgets", () => {
 });
 
 describe("AI provider canary coverage", () => {
+  test("keeps the scheduled workflow matrix aligned with the provider catalog", async () => {
+    const workflow = await Bun.file(
+      new URL(
+        "../../../.github/workflows/ai-provider-canary.yml",
+        import.meta.url,
+      ),
+    ).text();
+    const scheduledMatrix = JSON.stringify(CANARY_PROVIDERS);
+
+    expect(workflow).toContain(`|| '${scheduledMatrix}'`);
+  });
+
   test("requires every supported provider for an all-provider run", () => {
     const configuredProviders = CANARY_PROVIDERS.filter(
       (provider) => provider !== "bedrock",

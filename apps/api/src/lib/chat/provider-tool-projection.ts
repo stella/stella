@@ -9,8 +9,10 @@ export const projectChatToolSchemasForProvider = ({
   modelTools: ReturnType<typeof chatToolMapToArray>;
   provider: string;
 }): ReturnType<typeof chatToolMapToArray> => {
-  const projectionOptions =
-    providerSafeJsonSchemaOptionsForTanStackProvider(provider);
+  const projectionOptions = providerSafeJsonSchemaOptionsForTanStackProvider(
+    provider,
+    "tool",
+  );
   const projectedTools: ReturnType<typeof chatToolMapToArray> = [];
   for (const tool of modelTools) {
     const projectedTool = { ...tool };

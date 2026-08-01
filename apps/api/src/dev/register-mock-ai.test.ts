@@ -28,7 +28,10 @@ const structuredOutputSchemaFor = (
 ): unknown => {
   const tanStackSchema = toTanStackValibotSchema(
     schema,
-    providerSafeJsonSchemaOptionsForTanStackProvider(provider),
+    providerSafeJsonSchemaOptionsForTanStackProvider(
+      provider,
+      "structured-output",
+    ),
   );
   return convertSchemaToJsonSchema(tanStackSchema, {
     forStructuredOutput: true,

@@ -37,7 +37,7 @@ jobs:
   provider-canary:
     name: ${{ matrix.provider }} capability contract
     runs-on: ubuntu-latest
-    # Weekly serial probe timeouts total at most 410 seconds; leave room for
+    # Weekly serial probe timeouts total at most 650 seconds; leave room for
     # runner setup and install. Daily runs remain below the previous 10-minute budget.
     timeout-minutes: 15
     permissions:

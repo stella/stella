@@ -30,7 +30,7 @@ describe("AI provider weekly tool shapes", () => {
 
         const projected = projectSchemaInputJsonSchema(
           tool.inputSchema,
-          providerSafeJsonSchemaOptionsForTanStackProvider(provider),
+          providerSafeJsonSchemaOptionsForTanStackProvider(provider, "tool"),
         );
         const jsonSchema = convertSchemaToJsonSchema(projected);
 
