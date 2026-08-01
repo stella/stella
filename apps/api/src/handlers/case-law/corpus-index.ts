@@ -1147,7 +1147,7 @@ export const createCaseLawGenerationBackfill =
           leaseToken,
           status,
         });
-        await guards.beforeRemoteEffect(async () => undefined);
+        await guards.beforeRemoteEffect(() => Promise.resolve());
         const sourceCheckpoint = await selectSourceReconciliationCheckpoint(
           scopedDb,
           generation,
@@ -1399,7 +1399,7 @@ export const createCaseLawGenerationBackfill =
         leaseToken,
         status: CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.RUNNING,
       });
-      await runningGuards.beforeRemoteEffect(async () => undefined);
+      await runningGuards.beforeRemoteEffect(() => Promise.resolve());
       const page = await selectGenerationBackfillPage(scopedDb, {
         batchSize,
         checkpoint: claimedCheckpoint,
