@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 
 import { compareReferenceDocuments } from "@/api/handlers/document-reviews/reference-compare";
+import { buildReferenceReviewAuditEvent } from "@/api/handlers/document-reviews/reference-review-audit";
 import { resolveReviewSelection } from "@/api/handlers/document-reviews/review-selection";
 import { compareReferencesBodySchema } from "@/api/handlers/document-reviews/schemas";
 import {
@@ -8,7 +9,6 @@ import {
   createSafeHandler,
 } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
 import { fetchAndPrepareFiles } from "@/api/lib/workflow/generate-batch";
@@ -156,30 +156,14 @@ const compareReferences = createSafeHandler(
 
     yield* Result.await(
       safeDb(async (tx) => {
-        await recordAuditEvent(tx, {
-          action: AUDIT_ACTION.EXECUTE,
-          resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-          resourceId: selection.value.target.entityId,
-          changes: {
-            referenceReview: {
-              old: null,
-              new: {
-                targetFileFieldId: selection.value.target.file.fileFieldId,
-                targetEntityVersionId: selection.value.target.entityVersionId,
-                referenceEntityIds: selection.value.references.map(
-                  (reference) => reference.entityId,
-                ),
-                referenceFileFieldIds: selection.value.references.map(
-                  (reference) => reference.file.fileFieldId,
-                ),
-                referenceEntityVersionIds: selection.value.references.map(
-                  (reference) => reference.entityVersionId,
-                ),
-                findingCount: comparison.value.length,
-              },
-            },
-          },
-        });
+        await recordAuditEvent(
+          tx,
+          buildReferenceReviewAuditEvent({
+            target: selection.value.target,
+            references: selection.value.references,
+            findingCount: comparison.value.length,
+          }),
+        );
         return undefined;
       }),
     );
