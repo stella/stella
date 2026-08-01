@@ -6,15 +6,26 @@ import {
   expect,
   test,
 } from "bun:test";
+import { Result } from "better-result";
 import { pushSchema } from "drizzle-kit/api-postgres";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import * as authSchema from "@/api/db/auth-schema";
+import { authRelationsPart } from "@/api/db/auth-schema";
 import * as rlsExports from "@/api/db/rls";
 import type { ScopedDb } from "@/api/db/safe-db";
 import * as schema from "@/api/db/schema";
-import { caseLawSources, legislationSources } from "@/api/db/schema";
+import {
+  caseLawDecisions,
+  caseLawSources,
+  legislationSources,
+  relations,
+} from "@/api/db/schema";
+import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
+import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
+import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
+import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   advanceCorpusIngestionCheckpoint,
@@ -34,13 +45,17 @@ let db: ReturnType<typeof drizzle>;
 let scopedDb: ScopedDb;
 
 const caseLawSourceId = createSafeId<"caseLawSource">();
+const lifecycleSourceId = createSafeId<"caseLawSource">();
 const legislationSourceId = createSafeId<"legislationSource">();
 const ingestionLeaseToken = createSafeId<"caseLawSourceIngestionLease">();
 
 beforeAll(
   async () => {
     client = await createSchemaPglite();
-    db = drizzle({ client });
+    db = drizzle({
+      client,
+      relations: { ...relations, ...authRelationsPart },
+    });
     await db.execute(sql.raw("CREATE ROLE stella NOLOGIN"));
     await db.execute(sql.raw("CREATE ROLE stella_ingestion NOLOGIN"));
     await installPgliteSchemaPrerequisites(db);
@@ -54,6 +69,11 @@ beforeAll(
       id: caseLawSourceId,
       adapterKey: "checkpoint-case-law",
       name: "Checkpoint case-law source",
+    });
+    await db.insert(caseLawSources).values({
+      id: lifecycleSourceId,
+      adapterKey: ADAPTER_KEYS.CZ_NS,
+      name: "Lifecycle case-law source",
     });
     await db.insert(legislationSources).values({
       id: legislationSourceId,
@@ -82,6 +102,19 @@ beforeEach(async () => {
       ingestionLeaseExpiresAt: new Date("2099-01-01T00:00:00.000Z"),
     })
     .where(eq(caseLawSources.id, caseLawSourceId));
+  await db
+    .update(caseLawSources)
+    .set({
+      syncCursor: null,
+      observationOrder: 0n,
+      checkpointObservationOrder: 0n,
+      ingestionLeaseToken: null,
+      ingestionLeaseExpiresAt: null,
+    })
+    .where(eq(caseLawSources.id, lifecycleSourceId));
+  await db
+    .delete(caseLawDecisions)
+    .where(eq(caseLawDecisions.sourceId, lifecycleSourceId));
   await db
     .update(legislationSources)
     .set({ syncCursor: null })
@@ -352,5 +385,87 @@ describe("case-law source ingestion lease", () => {
     });
     expect(replacement?.source.syncCursor).toBe("page-after-first-owner");
     await replacement?.release();
+  });
+
+  test("owns one complete fetch-to-checkpoint lifecycle", async () => {
+    const originalFetchPage = czNsAdapter.fetchPage;
+    czNsAdapter.fetchPage = async (cursor) => {
+      expect(cursor).toBeNull();
+      return Result.ok({
+        decisions: [
+          {
+            caseNumber: "lifecycle/1/2026",
+            sourceDocumentId: "lifecycle-document-1",
+            court: "Lifecycle Court",
+            country: "CZE",
+            language: "cs",
+            fulltext: "Lifecycle decision text.",
+            metadata: {},
+            rawHash: "lifecycle-hash-1",
+            documentAst: EMPTY_AST,
+          },
+        ],
+        nextCursor: "lifecycle-page-2",
+      });
+    };
+
+    const lease = await acquireCaseLawSourceIngestionLease({
+      scopedDb,
+      sourceId: lifecycleSourceId,
+    });
+    if (!lease) {
+      throw new Error("lifecycle source lease was not acquired");
+    }
+
+    try {
+      const result = await runIngestionPipeline({
+        maxPages: 1,
+        scopedDb,
+        source: lease.source,
+        sourceLease: lease,
+      });
+      expect(result).toMatchObject({
+        inserted: 1,
+        nextCursor: "lifecycle-page-2",
+        pagesProcessed: 1,
+      });
+    } finally {
+      czNsAdapter.fetchPage = originalFetchPage;
+      await lease.release();
+    }
+
+    expect(
+      (
+        await db
+          .select({
+            checkpointOrder: caseLawSources.checkpointObservationOrder,
+            cursor: caseLawSources.syncCursor,
+            leaseToken: caseLawSources.ingestionLeaseToken,
+            observationOrder: caseLawSources.observationOrder,
+          })
+          .from(caseLawSources)
+          .where(eq(caseLawSources.id, lifecycleSourceId))
+          .limit(1)
+      ).at(0),
+    ).toEqual({
+      checkpointOrder: 1n,
+      cursor: "lifecycle-page-2",
+      leaseToken: null,
+      observationOrder: 1n,
+    });
+    expect(
+      await db
+        .select({
+          sourceDocumentId: caseLawDecisions.sourceDocumentId,
+          sourceObservationOrder: caseLawDecisions.sourceObservationOrder,
+        })
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.sourceId, lifecycleSourceId)),
+    ).toEqual([
+      {
+        sourceDocumentId: "lifecycle-document-1",
+        sourceObservationOrder: 1n,
+      },
+    ]);
   });
 });
