@@ -35,9 +35,6 @@ const broadTranslatorMemberNames = new Set([
 const unwrapTypeAnnotation = (node) =>
   node?.type === "TSTypeAnnotation" ? node.typeAnnotation : node;
 
-const unwrapExportedDeclaration = (node) =>
-  node?.type === "ExportNamedDeclaration" ? node.declaration : node;
-
 const qualifiedNameRoot = (node): string | null => {
   if (node?.type === "Identifier") {
     return node.name;
@@ -117,6 +114,46 @@ const isBroadTranslatorReturnType = (
   );
 };
 
+const isAstNode = (value) =>
+  value && typeof value === "object" && typeof value.type === "string";
+
+const collectTypeAliases = (root) => {
+  const aliases = new Array<typeof root>();
+  const pending = [root];
+  const visited = new WeakSet();
+
+  while (pending.length > 0) {
+    const node = pending.pop();
+    if (!node || typeof node !== "object" || visited.has(node)) {
+      continue;
+    }
+    visited.add(node);
+
+    if (node.type === "TSTypeAliasDeclaration") {
+      aliases.push(node);
+    }
+
+    for (const [key, value] of Object.entries(node)) {
+      if (key === "parent") {
+        continue;
+      }
+      if (Array.isArray(value)) {
+        for (const child of value) {
+          if (isAstNode(child)) {
+            pending.push(child);
+          }
+        }
+        continue;
+      }
+      if (isAstNode(value)) {
+        pending.push(value);
+      }
+    }
+  }
+
+  return aliases;
+};
+
 export default {
   meta: { name: "no-broad-translation-callable" },
   rules: {
@@ -189,14 +226,11 @@ export default {
               }
             }
 
+            const aliases = collectTypeAliases(node);
             let foundAlias = true;
             while (foundAlias) {
               foundAlias = false;
-              for (const statement of node.body ?? []) {
-                const declaration = unwrapExportedDeclaration(statement);
-                if (declaration?.type !== "TSTypeAliasDeclaration") {
-                  continue;
-                }
+              for (const declaration of aliases) {
                 const annotation = declaration.typeAnnotation;
                 if (
                   declaration.id?.type !== "Identifier" ||

@@ -72,6 +72,18 @@ export type BroadMethodSignature = {
   translate(key: TranslationKey): string;
 };
 
+// MUST flag: aliases declared inside a local scope are part of the same broad
+// key graph, including forward references and multi-step chains.
+export const nestedAliasFixture = () => {
+  type FirstNestedKey = SecondNestedKey;
+  type SecondNestedKey = ThirdNestedKey;
+  type ThirdNestedKey = TranslationKey;
+  // oxlint-disable-next-line no-broad-translation-callable/no-broad-translation-callable
+  type NestedBroadCallable = (key: FirstNestedKey) => string;
+
+  return (translator: NestedBroadCallable) => translator;
+};
+
 // Allowed: a narrow feature-specific key union keeps assignability bounded.
 export type NarrowCallable = (key: FeatureKey) => string;
 
