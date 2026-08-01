@@ -350,6 +350,30 @@ describe("extractCitations", () => {
     expect(citations[0]?.citationText).toBe("č.j. Konf 4/2011");
   });
 
+  test("extracts a č.j. insolvency case number carrying the issuing court's registry code", () => {
+    // Verbatim prose quoted from a prod insolvency decision: "KSCB" is
+    // the Krajský soud v Českých Budějovicích registry code, cited before
+    // the ordinary senate+INS+docket/year shape. The code must be kept in
+    // the citation, since "26 INS 8270/2018" alone is only unique within
+    // that one court.
+    const text =
+      "Usnesením Krajského soudu v Českých Budějovicích ze dne 3. 5. 2018, " +
+      "č. j. KSCB 26 INS 8270/2018-A-12, bylo rozhodnuto o úpadku dlužníka.";
+    const citations = extractCitations([{ index: 0, text }]);
+    expect(citations).toHaveLength(1);
+    expect(citations[0]?.citationText).toBe("č. j. KSCB 26 INS 8270/2018");
+  });
+
+  test("keeps insolvency case numbers from different courts distinct even with a shared docket", () => {
+    const text =
+      "č. j. KSCB 26 INS 8270/2018-A-12 a dále č. j. KSHK 26 INS 8270/2018-B-11";
+    const citations = extractCitations([{ index: 0, text }]);
+    const texts = citations.map((c) => c.citationText);
+    expect(texts).toContain("č. j. KSCB 26 INS 8270/2018");
+    expect(texts).toContain("č. j. KSHK 26 INS 8270/2018");
+    expect(citations).toHaveLength(2);
+  });
+
   test("extracts č. j. with a colon", () => {
     const text = "vyrozumění soudního exekutora č. j.: 137 Ex 1850/23";
     const citations = extractCitations([{ index: 0, text }]);

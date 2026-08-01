@@ -293,6 +293,18 @@ const CITATION_PATTERNS: RegExp[] = [
   // letter-first fallback above.
   /[čc]\.\s*j\.:?\s*(?<caseNumber>\p{L}{1,6}\s+\d{1,6}\/\d{2,4})(?!\d)/gu,
 
+  // Insolvency filings cite another court's case with that court's own
+  // registry code before the docket: "č. j. KSCB 26 INS 8270/2018"
+  // (Krajský soud v Českých Budějovicích), "č. j. KSHK 33 INS
+  // 21809/2019" (Krajský soud v Hradci Králové). The code stays inside
+  // the caseNumber capture rather than being a stripped label, because
+  // insolvency docket numbers are unique only within the issuing court:
+  // dropping the code would fold two different courts' cases into one
+  // dedup key whenever they happen to share a senate/registry/docket/
+  // year. The code is a bounded 2-5 letter uppercase run so it cannot
+  // swallow ordinary prose before an unprefixed case number.
+  /[čc]\.\s*j\.:?\s*(?<caseNumber>[A-Z]{2,5}\s{1,3}\d{1,3}\s{0,3}\p{L}{1,6}[\s/]{1,3}\d{1,6}(?:[,/]\s{0,3}\d{1,6})?\/\d{2,4})(?!\d)/gu,
+
   // Slovak file number: "č. k. 4 Obo 48/02" (číslo konania), the Slovak
   // counterpart to the Czech č. j. above. Lower-court Slovak decisions are
   // sometimes cited only by this file number, with no accompanying sp.
