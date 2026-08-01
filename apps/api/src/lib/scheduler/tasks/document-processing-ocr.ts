@@ -18,6 +18,28 @@ type DispatchDocumentOcrBatchesOptions = {
 type DispatchDocumentOcrBatchesResult = {
   dispatched: number;
   reachedLimit: boolean;
+  retryAt: Date | null;
+};
+
+export const nextDocumentOcrDispatchAt = ({
+  now,
+  reachedLimit,
+  retryAt,
+}: {
+  now: Date;
+  reachedLimit: boolean;
+  retryAt: Date | null;
+}): Date | undefined => {
+  const capContinuationAt = reachedLimit
+    ? new Date(now.getTime() + DISPATCH_CONTINUATION_DELAY_MS)
+    : undefined;
+  if (!retryAt) {
+    return capContinuationAt;
+  }
+  if (!capContinuationAt || retryAt < capContinuationAt) {
+    return retryAt;
+  }
+  return capContinuationAt;
 };
 
 export const dispatchDocumentOcrBatches = async ({
@@ -25,6 +47,7 @@ export const dispatchDocumentOcrBatches = async ({
   signal,
 }: DispatchDocumentOcrBatchesOptions): Promise<DispatchDocumentOcrBatchesResult> => {
   let dispatched = 0;
+  let retryAt: Date | null = null;
 
   while (!signal.aborted && dispatched < MAX_DISPATCHED_RUNS_PER_TICK) {
     const limit = Math.min(
@@ -32,10 +55,13 @@ export const dispatchDocumentOcrBatches = async ({
       MAX_DISPATCHED_RUNS_PER_TICK - dispatched,
     );
     // oxlint-disable-next-line no-await-in-loop -- sequential bounded drain prevents an unbounded queue fan-out
-    const batchCount = await dispatch({ limit });
-    dispatched += batchCount;
+    const batch = await dispatch({ limit });
+    dispatched += batch.attempted;
+    if (batch.retryAt && (!retryAt || batch.retryAt < retryAt)) {
+      retryAt = batch.retryAt;
+    }
 
-    if (batchCount < limit) {
+    if (batch.attempted < limit) {
       break;
     }
   }
@@ -43,6 +69,7 @@ export const dispatchDocumentOcrBatches = async ({
   return {
     dispatched,
     reachedLimit: dispatched >= MAX_DISPATCHED_RUNS_PER_TICK,
+    retryAt,
   };
 };
 
@@ -52,9 +79,8 @@ export const dispatchDocumentOcr: SchedulerTask = async ({
   scheduleContinuation,
   signal,
 }) => {
-  const { dispatched, reachedLimit } = await dispatchDocumentOcrBatches({
-    signal,
-  });
+  const { dispatched, reachedLimit, retryAt } =
+    await dispatchDocumentOcrBatches({ signal });
 
   logger.info("scheduler.document_ocr_dispatched", {
     "documentProcessing.runs": dispatched,
@@ -64,9 +90,14 @@ export const dispatchDocumentOcr: SchedulerTask = async ({
     panic("SchedulerAborted");
   }
 
-  if (reachedLimit) {
-    // A full final batch may hide more eligible rows. Continue promptly; an
-    // unnecessary empty follow-up is bounded and cheaper than delaying backlog.
-    scheduleContinuation(new Date(Date.now() + DISPATCH_CONTINUATION_DELAY_MS));
+  const continuationAt = nextDocumentOcrDispatchAt({
+    now: new Date(),
+    reachedLimit,
+    retryAt,
+  });
+  if (continuationAt) {
+    // A full final batch may hide more eligible rows, while a failed handoff has
+    // a durable retry deadline. Use the earlier bounded continuation.
+    scheduleContinuation(continuationAt);
   }
 };

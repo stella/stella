@@ -1666,7 +1666,7 @@ export const dispatchQueuedDocumentProcessingRuns = async ({
   limit = RECONCILE_BATCH_SIZE,
 }: {
   limit?: number;
-} = {}): Promise<number> => {
+} = {}): Promise<{ attempted: number; retryAt: Date | null }> => {
   const now = new Date();
   const runs = await rootDb
     .select({ id: documentProcessingRuns.id })
@@ -1719,7 +1719,13 @@ export const dispatchQueuedDocumentProcessingRuns = async ({
     runIds: failedIds,
     updatedAt,
   });
-  return runs.length;
+  return {
+    attempted: runs.length,
+    retryAt:
+      failedIds.length === 0
+        ? null
+        : new Date(updatedAt.getTime() + ENQUEUE_FAILURE_RETRY_MS),
+  };
 };
 
 const recoverRetryableAutomaticOcrFailures = async (): Promise<number> => {
