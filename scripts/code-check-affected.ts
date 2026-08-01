@@ -22,6 +22,7 @@ const FULL_CHECK_FILES = new Set([
   "bunfig.toml",
   "oxlint.config.ts",
   "package.json",
+  "scripts/code-check-affected.ts",
   "scripts/lint-oxlint-fixtures.sh",
   "turbo.json",
   "tsconfig.json",

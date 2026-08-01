@@ -55,6 +55,7 @@ describe("affected code-check planning", () => {
     "package.json",
     "bun.lock",
     "bunfig.toml",
+    "scripts/code-check-affected.ts",
     "scripts/lint-oxlint-fixtures.sh",
     "turbo.json",
     "oxlint.config.ts",

@@ -1,0 +1,22 @@
+name: Setup Playwright Chromium
+description: Restore the pinned Playwright browser and install its system dependencies
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve Playwright version
+      id: version
+      shell: bash
+      run: |
+        version=$(cd apps/web && bunx playwright --version)
+        echo "version=${version#Version }" >> "$GITHUB_OUTPUT"
+
+    - name: Restore Playwright browser
+      uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+      with:
+        path: ~/.cache/ms-playwright
+        key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.version.outputs.version }}
+
+    - name: Install Chromium and system dependencies
+      shell: bash
+      run: cd apps/web && bunx playwright install --with-deps chromium
