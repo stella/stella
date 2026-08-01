@@ -7,9 +7,11 @@ import {
   gte,
   gt,
   inArray,
+  isNotNull,
   isNull,
   lt,
   lte,
+  ne,
   notExists,
   or,
   sql,
@@ -64,6 +66,10 @@ const DORMANT_WORKER_KEEP_ALIVE_MS = 60 * 60_000;
 const RECONCILE_BATCH_SIZE = 100;
 const ENQUEUE_VISIBILITY_TIMEOUT_MS = 5 * 60 * 1000;
 const ENQUEUE_FAILURE_RETRY_MS = 30_000;
+const QUEUED_OCR_SELECTION = {
+  ALL_DUE: "all-due",
+  SCHEDULED_RETRIES: "scheduled-retries",
+} as const;
 const WORKER_LEASE_TIMEOUT_MS = 40 * 60 * 1000;
 const WORKER_LEASE_HEARTBEAT_MS = 5 * 60 * 1000;
 const WORKER_LEASE_HEARTBEAT_TIMEOUT_MS = 30_000;
@@ -307,8 +313,8 @@ const markRunCancelled = async (
     | "policy_disabled"
     | "source_superseded"
     | "workspace_unavailable",
-): Promise<void> => {
-  await rootDb
+): Promise<boolean> => {
+  const cancelled = await rootDb
     .update(documentProcessingRuns)
     .set({
       claimedAt: null,
@@ -324,8 +330,13 @@ const markRunCancelled = async (
         eq(documentProcessingRuns.id, runId),
         eq(documentProcessingRuns.status, "running"),
         eq(documentProcessingRuns.claimedBy, claimToken),
+        cancellationCode === "policy_disabled"
+          ? ne(documentProcessingRuns.requestSource, "manual")
+          : undefined,
       ),
-    );
+    )
+    .returning({ id: documentProcessingRuns.id });
+  return Boolean(cancelled.at(0));
 };
 
 type DocumentProcessingLeaseHeartbeat = {
@@ -544,8 +555,12 @@ const persistOcrProjection = async ({
           eq(documentProcessingRuns.claimedBy, claimToken),
         ),
       )
-      .returning({ id: documentProcessingRuns.id });
-    if (!ownedClaims.at(0)) {
+      .returning({
+        id: documentProcessingRuns.id,
+        requestSource: documentProcessingRuns.requestSource,
+      });
+    const ownedClaim = ownedClaims.at(0);
+    if (!ownedClaim) {
       return false;
     }
 
@@ -581,7 +596,7 @@ const persistOcrProjection = async ({
     // projection. An automatic OCR run that lost that race must index the
     // selected current-version text, even when it came from another file
     // field; an explicit manual request intentionally selects a fresh source.
-    if (shouldPreserveCurrentProjection(run.requestSource)) {
+    if (shouldPreserveCurrentProjection(ownedClaim.requestSource)) {
       const projections = await tx
         .select({
           sourceEntityVersionId: extractedContent.sourceEntityVersionId,
@@ -680,6 +695,22 @@ const persistOcrProjection = async ({
 export const requiresOcrPolicy = (
   requestSource: (typeof documentProcessingRuns.$inferSelect)["requestSource"],
 ): boolean => requestSource !== "manual";
+
+export const ownsPromotedManualOcrClaim = ({
+  claimToken,
+  run,
+}: {
+  claimToken: string;
+  run:
+    | Pick<
+        typeof documentProcessingRuns.$inferSelect,
+        "claimedBy" | "requestSource" | "status"
+      >
+    | undefined;
+}): boolean =>
+  run?.claimedBy === claimToken &&
+  run.requestSource === "manual" &&
+  run.status === "running";
 
 export const isLifecycleInterruptionError = ({
   error,
@@ -911,12 +942,43 @@ export const processDocumentProcessingRun = async (
         where: { organizationId: { eq: run.organizationId } },
         columns: { documentProcessingMode: true },
       });
+      const currentRuns = await rootDb
+        .select({ requestSource: documentProcessingRuns.requestSource })
+        .from(documentProcessingRuns)
+        .where(eq(documentProcessingRuns.id, run.id))
+        .limit(1);
       if (
-        requiresOcrPolicy(run.requestSource) &&
+        requiresOcrPolicy(
+          currentRuns.at(0)?.requestSource ?? run.requestSource,
+        ) &&
         settings?.documentProcessingMode !== "searchable-text"
       ) {
-        await markRunCancelled(run.id, claimToken, "policy_disabled");
-        return;
+        const cancelled = await markRunCancelled(
+          run.id,
+          claimToken,
+          "policy_disabled",
+        );
+        if (cancelled) {
+          return;
+        }
+
+        const promotedRuns = await rootDb
+          .select({
+            claimedBy: documentProcessingRuns.claimedBy,
+            requestSource: documentProcessingRuns.requestSource,
+            status: documentProcessingRuns.status,
+          })
+          .from(documentProcessingRuns)
+          .where(eq(documentProcessingRuns.id, run.id))
+          .limit(1);
+        if (
+          !ownsPromotedManualOcrClaim({
+            claimToken,
+            run: promotedRuns.at(0),
+          })
+        ) {
+          return;
+        }
       }
 
       const source = await readCurrentOcrSource({
@@ -1075,33 +1137,56 @@ const markRunFailed = async ({
   run: typeof documentProcessingRuns.$inferSelect;
 }): Promise<void> => {
   const failureCode = errorCode(error);
-  const retryable = isRetryableAutomaticOcrFailure({
-    attemptCount: run.attemptCount,
-    errorCode: failureCode,
-    requestSource: run.requestSource,
-  });
-  const retryableSearchIndex = isRetryableSearchIndexFailure(failureCode);
-  await rootDb
-    .update(documentProcessingRuns)
-    .set({
-      claimedAt: null,
-      claimedBy: null,
-      errorAt: new Date(),
+  await rootDb.transaction(async (tx) => {
+    const ownedRows = await tx
+      .select({
+        attemptCount: documentProcessingRuns.attemptCount,
+        requestSource: documentProcessingRuns.requestSource,
+      })
+      .from(documentProcessingRuns)
+      .where(
+        and(
+          eq(documentProcessingRuns.id, run.id),
+          eq(documentProcessingRuns.status, "running"),
+          eq(documentProcessingRuns.claimedBy, claimToken),
+        ),
+      )
+      .limit(1)
+      .for("update");
+    const owned = ownedRows.at(0);
+    if (!owned) {
+      return;
+    }
+    const retryable = isRetryableAutomaticOcrFailure({
+      attemptCount: owned.attemptCount,
       errorCode: failureCode,
-      nextAttemptAt:
-        retryable || retryableSearchIndex
-          ? new Date(Date.now() + automaticOcrRetryDelayMs(run.attemptCount))
-          : null,
-      status: "failed",
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(documentProcessingRuns.id, run.id),
-        eq(documentProcessingRuns.status, "running"),
-        eq(documentProcessingRuns.claimedBy, claimToken),
-      ),
-    );
+      requestSource: owned.requestSource,
+    });
+    const retryableSearchIndex = isRetryableSearchIndexFailure(failureCode);
+    await tx
+      .update(documentProcessingRuns)
+      .set({
+        claimedAt: null,
+        claimedBy: null,
+        errorAt: new Date(),
+        errorCode: failureCode,
+        nextAttemptAt:
+          retryable || retryableSearchIndex
+            ? new Date(
+                Date.now() + automaticOcrRetryDelayMs(owned.attemptCount),
+              )
+            : null,
+        status: "failed",
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(documentProcessingRuns.id, run.id),
+          eq(documentProcessingRuns.status, "running"),
+          eq(documentProcessingRuns.claimedBy, claimToken),
+        ),
+      );
+  });
 };
 
 const returnInterruptedRunToQueue = async ({
@@ -1120,7 +1205,7 @@ const returnInterruptedRunToQueue = async ({
       errorAt: null,
       errorCode: null,
       finishedAt: null,
-      nextAttemptAt: null,
+      nextAttemptAt: new Date(),
       progressCompleted: 0,
       progressTotal: null,
       startedAt: null,
@@ -1546,11 +1631,6 @@ const recoverMissingAutomaticOcrRuns = async (): Promise<number> => {
     return [{ ...candidate, content: candidate.content }];
   });
   const runIds = await persistRepairableOcrRuns(repairCandidates);
-  await Promise.all(
-    runIds.map(
-      async (runId) => await tryEnqueueDocumentProcessingRun({ runId }),
-    ),
-  );
   await writeRepairScanCursor({
     expectedCursor: cursor,
     nextCursor:
@@ -1587,14 +1667,26 @@ const updateQueuedRunSchedule = async ({
     );
 };
 
-const enqueueQueuedRuns = async (): Promise<number> => {
+export const dispatchQueuedDocumentProcessingRuns = async ({
+  limit = RECONCILE_BATCH_SIZE,
+  selection = QUEUED_OCR_SELECTION.ALL_DUE,
+}: {
+  limit?: number;
+  selection?:
+    | typeof QUEUED_OCR_SELECTION.ALL_DUE
+    | typeof QUEUED_OCR_SELECTION.SCHEDULED_RETRIES;
+} = {}): Promise<{ attempted: number; retryAt: Date | null }> => {
   const now = new Date();
   const runs = await rootDb
     .select({ id: documentProcessingRuns.id })
     .from(documentProcessingRuns)
     .where(
       and(
+        eq(documentProcessingRuns.kind, "ocr"),
         eq(documentProcessingRuns.status, "queued"),
+        selection === QUEUED_OCR_SELECTION.SCHEDULED_RETRIES
+          ? isNotNull(documentProcessingRuns.nextAttemptAt)
+          : undefined,
         or(
           isNull(documentProcessingRuns.nextAttemptAt),
           lte(documentProcessingRuns.nextAttemptAt, now),
@@ -1602,11 +1694,11 @@ const enqueueQueuedRuns = async (): Promise<number> => {
       ),
     )
     .orderBy(
-      asc(documentProcessingRuns.nextAttemptAt),
+      sql`${documentProcessingRuns.nextAttemptAt} ASC NULLS FIRST`,
       asc(documentProcessingRuns.createdAt),
       asc(documentProcessingRuns.id),
     )
-    .limit(RECONCILE_BATCH_SIZE);
+    .limit(limit);
 
   const attempts = await Promise.all(
     runs.map(
@@ -1639,8 +1731,21 @@ const enqueueQueuedRuns = async (): Promise<number> => {
     runIds: failedIds,
     updatedAt,
   });
-  return runs.length;
+  return {
+    attempted: runs.length,
+    retryAt:
+      failedIds.length === 0
+        ? null
+        : new Date(updatedAt.getTime() + ENQUEUE_FAILURE_RETRY_MS),
+  };
 };
+
+const dispatchScheduledDocumentProcessingRetries = async (): Promise<number> =>
+  (
+    await dispatchQueuedDocumentProcessingRuns({
+      selection: QUEUED_OCR_SELECTION.SCHEDULED_RETRIES,
+    })
+  ).attempted;
 
 const recoverRetryableAutomaticOcrFailures = async (): Promise<number> => {
   const now = new Date();
@@ -1694,7 +1799,7 @@ const recoverRetryableAutomaticOcrFailures = async (): Promise<number> => {
   const recovered = await rootDb
     .update(documentProcessingRuns)
     .set({
-      nextAttemptAt: null,
+      nextAttemptAt: now,
       status: "queued",
       updatedAt: new Date(),
     })
@@ -2006,6 +2111,7 @@ const recoverFailedOcrSearchIndexes = async (): Promise<number> => {
 
 const recoverStaleDocumentProcessingRuns = async (): Promise<number> => {
   const staleBefore = new Date(Date.now() - WORKER_LEASE_TIMEOUT_MS);
+  const recoveredAt = new Date();
   const staleRuns = await rootDb
     .select({
       attemptCount: documentProcessingRuns.attemptCount,
@@ -2098,7 +2204,7 @@ const recoverStaleDocumentProcessingRuns = async (): Promise<number> => {
       claimedBy: null,
       errorAt: new Date(),
       errorCode: "worker_lease_expired",
-      nextAttemptAt: null,
+      nextAttemptAt: recoveredAt,
       status: "queued",
       updatedAt: new Date(),
     })
@@ -2161,7 +2267,7 @@ export const runDocumentProcessingReconciliationPhases = async ({
     [RECONCILIATION_PHASE.STALE_LEASE]: 0,
   };
   for (const phase of phases) {
-    // oxlint-disable-next-line no-await-in-loop -- phase order lets recovered durable rows become deliverable in the same pass
+    // oxlint-disable-next-line no-await-in-loop -- repair phases are deliberately isolated and ordered
     const result = await Result.tryPromise({
       try: phase.run,
       catch: (cause) => cause,
@@ -2201,7 +2307,7 @@ const reconcileDocumentProcessing = async ({
         },
         {
           name: RECONCILIATION_PHASE.DELIVERY,
-          run: enqueueQueuedRuns,
+          run: dispatchScheduledDocumentProcessingRetries,
         },
       ],
       onPhaseError: (error, phase) => {
@@ -2213,14 +2319,14 @@ const reconcileDocumentProcessing = async ({
       },
     });
     if (
+      counts[RECONCILIATION_PHASE.DELIVERY] > 0 ||
       counts[RECONCILIATION_PHASE.REPAIR] > 0 ||
       counts[RECONCILIATION_PHASE.REINDEX] > 0 ||
       counts[RECONCILIATION_PHASE.RETRY] > 0 ||
-      counts[RECONCILIATION_PHASE.STALE_LEASE] > 0 ||
-      counts[RECONCILIATION_PHASE.DELIVERY] > 0
+      counts[RECONCILIATION_PHASE.STALE_LEASE] > 0
     ) {
       logger.info("document_processing.reconciled", {
-        enqueuedCount: String(counts[RECONCILIATION_PHASE.DELIVERY]),
+        deliveredCount: String(counts[RECONCILIATION_PHASE.DELIVERY]),
         recoveredCount: String(counts[RECONCILIATION_PHASE.STALE_LEASE]),
         reindexedCount: String(counts[RECONCILIATION_PHASE.REINDEX]),
         repairedCount: String(counts[RECONCILIATION_PHASE.REPAIR]),

@@ -17,6 +17,7 @@ import {
   isRetryableAutomaticOcrFailure,
   isRetryableSearchIndexFailure,
   mapWithConcurrency,
+  ownsPromotedManualOcrClaim,
   readRepairScanCursor,
   revivableAutomaticOcrCancellationCodes,
   runDocumentProcessingReconciliationPhases,
@@ -167,6 +168,19 @@ describe("repair cursor Redis deadlines", () => {
 });
 
 describe("reconciliation fault isolation", () => {
+  test("prioritizes never-dispatched OCR runs ahead of visibility retries", () => {
+    const dispatchStart = queueSource.indexOf(
+      "export const dispatchQueuedDocumentProcessingRuns",
+    );
+    const dispatchEnd = queueSource.indexOf(
+      "const dispatchScheduledDocumentProcessingRetries",
+      dispatchStart,
+    );
+    const dispatchSelection = queueSource.slice(dispatchStart, dispatchEnd);
+
+    expect(dispatchSelection).toContain("ASC NULLS FIRST");
+  });
+
   test("continues later phases after an early phase fails", async () => {
     const calls: string[] = [];
     const failures: { error: unknown; phase: string }[] = [];
@@ -174,6 +188,13 @@ describe("reconciliation fault isolation", () => {
 
     const counts = await runDocumentProcessingReconciliationPhases({
       phases: [
+        {
+          name: "delivery",
+          run: async () => {
+            calls.push("delivery");
+            return 5;
+          },
+        },
         {
           name: "repair",
           run: async () => {
@@ -202,13 +223,6 @@ describe("reconciliation fault isolation", () => {
             return 4;
           },
         },
-        {
-          name: "delivery",
-          run: async () => {
-            calls.push("delivery");
-            return 5;
-          },
-        },
       ],
       onPhaseError: (error, phase) => {
         failures.push({ error, phase });
@@ -216,11 +230,11 @@ describe("reconciliation fault isolation", () => {
     });
 
     expect(calls).toEqual([
+      "delivery",
       "repair",
       "reindex",
       "retry",
       "stale-lease",
-      "delivery",
     ]);
     expect(failures).toEqual([{ error: repairError, phase: "repair" }]);
     expect(counts).toEqual({
@@ -392,6 +406,46 @@ describe("requiresOcrPolicy", () => {
     expect(requiresOcrPolicy("upload")).toBe(true);
     expect(requiresOcrPolicy("repair")).toBe(true);
     expect(requiresOcrPolicy("manual")).toBe(false);
+  });
+});
+
+describe("ownsPromotedManualOcrClaim", () => {
+  test("continues only for a running manual claim held by this worker", () => {
+    const claimToken = "claim-a";
+
+    expect(
+      ownsPromotedManualOcrClaim({
+        claimToken,
+        run: {
+          claimedBy: claimToken,
+          requestSource: "manual",
+          status: "running",
+        },
+      }),
+    ).toBe(true);
+
+    for (const candidate of [
+      {
+        claimedBy: "claim-b",
+        requestSource: "manual",
+        status: "running",
+      },
+      {
+        claimedBy: claimToken,
+        requestSource: "upload",
+        status: "running",
+      },
+      {
+        claimedBy: claimToken,
+        requestSource: "manual",
+        status: "queued",
+      },
+      undefined,
+    ] as const) {
+      expect(ownsPromotedManualOcrClaim({ claimToken, run: candidate })).toBe(
+        false,
+      );
+    }
   });
 });
 

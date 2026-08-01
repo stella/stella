@@ -56,19 +56,16 @@ export const getOcrSources = (fields: WorkspaceEntity["fields"]): OcrSource[] =>
 
 type CanRunManualOcrInput = {
   context: RowActionContext;
-  documentOcrAvailable: boolean;
   entity: Pick<WorkspaceEntity, "kind" | "readOnly">;
   ocrSource: OcrSource | undefined;
 };
 
 export const canRunManualOcr = ({
   context,
-  documentOcrAvailable,
   entity,
   ocrSource,
 }: CanRunManualOcrInput): boolean =>
   context !== "bulk" &&
-  documentOcrAvailable &&
   entity.kind !== "folder" &&
   !entity.readOnly &&
   ocrSource !== undefined &&

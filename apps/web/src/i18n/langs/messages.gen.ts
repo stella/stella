@@ -3243,11 +3243,11 @@ type Messages = {
       "maxEntitiesReached": "Max entities count reached";
       "ocrAlreadyProcessed": "Text recognition has already completed";
       "ocrQueueFailed": "Couldn't queue text recognition";
-      "ocrQueued": "Text recognition queued";
+      "ocrQueued": "Text recognition queued for the next OCR batch";
       "rateLimited": "Rate limited; resuming in {seconds, number}s";
       "renamedToAvoidConflicts": "{count, plural, one {# file renamed to avoid conflicts} other {# files renamed to avoid conflicts}}";
       "retryFailed": "Retry {count, plural, one {# file} other {# files}}";
-      "runOcr": "Run OCR";
+      "runOcr": "Queue OCR";
       "uploadedPartially": "{failed, plural, one {# file} other {# files}} failed out of {total, number}";
       "uploadedSuccessfully": "Files uploaded successfully";
       "uploading": "Uploading files";

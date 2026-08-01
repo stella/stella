@@ -407,6 +407,7 @@ const runJob = async ({
   let timeoutError: SchedulerJobTimeoutError | undefined;
   let raceError: unknown;
   let raceRejected = false;
+  let continuationAt: Date | undefined;
 
   try {
     if (!task) {
@@ -441,6 +442,9 @@ const runJob = async ({
           logger,
           payload: job.payload,
           runId,
+          scheduleContinuation: (nextRunAt) => {
+            continuationAt = nextRunAt;
+          },
           signal: controller.signal,
         }),
       ),
@@ -472,12 +476,14 @@ const runJob = async ({
     runId,
     runnerId,
     startedAt,
+    continuationAt,
     timeoutError,
   });
 };
 
 type ResolveRunOutcomeOptions = {
   aborted: boolean;
+  continuationAt: Date | undefined;
   db: SchedulerDb;
   job: SchedulerJob;
   leaseToken: string;
@@ -503,6 +509,7 @@ type ResolveRunOutcomeOptions = {
 //   4. the race rejected on its own -> failure.
 const resolveRunOutcome = async ({
   aborted,
+  continuationAt,
   db,
   job,
   leaseToken,
@@ -539,7 +546,14 @@ const resolveRunOutcome = async ({
   }
 
   if (!raceRejected) {
-    await finishRunSuccess({ db, job, leaseToken, runId, startedAt });
+    await finishRunSuccess({
+      db,
+      job,
+      leaseToken,
+      ...(continuationAt ? { nextRunAt: continuationAt } : {}),
+      runId,
+      startedAt,
+    });
     return "success";
   }
 
@@ -610,6 +624,10 @@ type FinishRunOptions = {
   startedAt: Date;
 };
 
+type FinishRunSuccessOptions = FinishRunOptions & {
+  nextRunAt?: Date;
+};
+
 type CompleteRunOptions = {
   db: SchedulerDb;
   jobId: string;
@@ -671,9 +689,10 @@ export const finishRunSuccess = async ({
   db,
   job,
   leaseToken,
+  nextRunAt,
   runId,
   startedAt,
-}: FinishRunOptions): Promise<void> => {
+}: FinishRunSuccessOptions): Promise<void> => {
   const finishedAt = new Date();
 
   await completeRun({
@@ -686,7 +705,7 @@ export const finishRunSuccess = async ({
       lockedAt: null,
       lockedBy: null,
       lockedUntil: null,
-      nextRunAt: computeNextRunAt(job.schedule, finishedAt),
+      nextRunAt: nextRunAt ?? computeNextRunAt(job.schedule, finishedAt),
     },
     leaseToken,
     runId,

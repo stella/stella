@@ -4,7 +4,6 @@ import { t } from "elysia";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { entities, entityVersions, fields } from "@/api/db/schema";
-import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type {
   HandlerConfig,
@@ -13,18 +12,13 @@ import type {
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
-import { enqueueDocumentProcessingRun } from "@/api/lib/document-processing-enqueue";
-import { isDocumentOcrWorkerAvailable } from "@/api/lib/document-processing-readiness";
 import {
   persistManualOcrRun,
   type ManualOcrSource,
   type PersistedDocumentProcessingRun,
 } from "@/api/lib/document-processing-request";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { withTimeout } from "@/api/lib/with-timeout";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
-
-const IMMEDIATE_OCR_ENQUEUE_TIMEOUT_MS = 2000;
 
 const createOcrParams = workspaceParams({
   entityId: tSafeId("entity"),
@@ -36,9 +30,9 @@ const createOcrBody = t.Object({
 
 const config = {
   description:
-    "Queue searchable-text recognition for an unencrypted PDF field on a " +
-    "document. Returns the durable run and reports when that source was " +
-    "already processed.",
+    "Queue an unencrypted PDF field for the next searchable-text " +
+    "recognition batch. Returns the durable run and reports when that source " +
+    "was already processed.",
   permissions: { entity: ["update"] },
   mcp: { type: "capability", reason: "document_processing" },
   access: "write",
@@ -57,14 +51,10 @@ type ManualOcrResponse = {
 };
 
 type RequestManualOcrProps = {
-  captureEnqueueError?: typeof captureError;
-  enqueue?: (runId: PersistedDocumentProcessingRun["id"]) => Promise<void>;
-  enqueueTimeoutMs?: number;
   entityId: SafeId<"entity">;
   fieldId: SafeId<"field">;
   organizationId: SafeId<"organization">;
   persistRun?: typeof persistManualOcrRun;
-  workerAvailable?: () => Promise<boolean>;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   userId: SafeId<"user">;
@@ -159,28 +149,15 @@ const findManualOcrSource = async ({
 };
 
 export const requestManualOcrHandler = async function* ({
-  captureEnqueueError = captureError,
-  enqueue = enqueueDocumentProcessingRun,
-  enqueueTimeoutMs = IMMEDIATE_OCR_ENQUEUE_TIMEOUT_MS,
   entityId,
   fieldId,
   organizationId,
   persistRun = persistManualOcrRun,
-  workerAvailable = isDocumentOcrWorkerAvailable,
   recordAuditEvent,
   safeDb,
   userId,
   workspaceId,
 }: RequestManualOcrProps): SafeHandlerGenerator<ManualOcrResponse> {
-  if (!(await workerAvailable())) {
-    return Result.err(
-      new HandlerError({
-        status: 502,
-        message: "Document processing is not configured",
-      }),
-    );
-  }
-
   const source = yield* Result.await(
     findManualOcrSource({ entityId, fieldId, safeDb, workspaceId }),
   );
@@ -209,22 +186,6 @@ export const requestManualOcrHandler = async function* ({
         message: "Document version changed; retry the request",
       }),
     );
-  }
-
-  if (run.status === "queued") {
-    const enqueueResult = await Result.tryPromise({
-      try: async () =>
-        await withTimeout(async () => await enqueue(run.id), {
-          label: "immediate OCR queue handoff",
-          timeoutMs: enqueueTimeoutMs,
-        }),
-      catch: (cause) => cause,
-    });
-    if (Result.isError(enqueueResult)) {
-      // The durable queued run is reconciled even when this immediate delivery
-      // attempt fails. Keep the failure observable without retracting the ack.
-      captureEnqueueError(enqueueResult.error, { runId: run.id });
-    }
   }
 
   return Result.ok({ outcome: getManualOcrOutcome(run), runId: run.id });

@@ -56,6 +56,7 @@ if (!databaseUrl || !runPostgresTests) {
         job,
         payload: job.payload,
         runId: createSafeId<"schedulerJobRun">(),
+        scheduleContinuation: () => undefined,
         signal: new AbortController().signal,
         logger,
       });

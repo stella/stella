@@ -1449,7 +1449,7 @@ export const buildPreparationSteps = ({
   return steps;
 };
 
-const buildPersistentSteps = ({
+export const buildPersistentSteps = ({
   infraOffset,
   infraPorts,
   mode,
@@ -1553,6 +1553,15 @@ const buildPersistentSteps = ({
       cwd: path.resolve(rootDir, "apps/desktop"),
       env: desktopEnv,
       label: "Desktop app",
+    });
+  }
+
+  if (modeIncludesApi(mode)) {
+    secondary.push({
+      cmd: [resolveCommandPath("bun"), "--watch", "src/scheduler/scheduler.ts"],
+      cwd: path.resolve(rootDir, "apps/api"),
+      env: apiEnv,
+      label: "Scheduler",
     });
   }
 

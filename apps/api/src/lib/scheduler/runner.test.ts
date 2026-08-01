@@ -316,6 +316,26 @@ describe("failure accounting", () => {
   });
 });
 
+describe("task-requested continuation", () => {
+  test("schedules the requested continuation instead of the configured interval", async () => {
+    const continuationAt = new Date("2030-01-01T00:00:00.000Z");
+    await seedJob({ task: "test.continue" });
+    const registry = registryOf("test.continue", ({ scheduleContinuation }) => {
+      scheduleContinuation(continuationAt);
+    });
+
+    const result = await runSchedulerOnce({
+      db,
+      leaseMs: LEASE_MS,
+      registry,
+      runnerId: "runner-a",
+    });
+
+    expect(result).toMatchObject({ acquired: 1, failed: 0, succeeded: 1 });
+    expect((await readJob("test.job")).nextRunAt).toEqual(continuationAt);
+  });
+});
+
 describe("per-job runtime ceiling", () => {
   test("a task exceeding the ceiling is timed out, the runner continues, and a late zombie completion does not overwrite the timeout", async () => {
     await seedJob({ id: "hanging.job", task: "test.hangs" });

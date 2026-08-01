@@ -8,6 +8,7 @@ export type SchedulerTaskContext = {
   job: SchedulerJob;
   payload: SchedulerPayload | null;
   runId: SafeId<"schedulerJobRun">;
+  scheduleContinuation: (nextRunAt: Date) => void;
   signal: AbortSignal;
   logger: typeof logger;
 };

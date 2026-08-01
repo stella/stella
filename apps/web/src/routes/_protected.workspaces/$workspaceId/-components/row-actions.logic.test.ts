@@ -111,7 +111,6 @@ describe("manual OCR action visibility", () => {
     expect(
       canRunManualOcr({
         context: "cell",
-        documentOcrAvailable: true,
         entity: { kind: "document", readOnly: false },
         ocrSource: ocrSource ?? undefined,
       }),
@@ -122,7 +121,6 @@ describe("manual OCR action visibility", () => {
     expect(
       canRunManualOcr({
         context: "bulk",
-        documentOcrAvailable: true,
         entity: { kind: "document", readOnly: false },
         ocrSource: {
           encrypted: false,

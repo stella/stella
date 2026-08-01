@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
+  buildPersistentSteps,
   buildPreparationSteps,
   checkPortAvailabilityOnHosts,
   createApiEnv,
@@ -612,6 +613,37 @@ describe("worktree helpers", () => {
 });
 
 describe("dev env factories", () => {
+  test("starts the scheduler whenever API development is enabled", () => {
+    const rootDir = createTempDir();
+    mkdirSync(path.resolve(rootDir, "apps/api"), { recursive: true });
+
+    const apiSteps = buildPersistentSteps({
+      infraOffset: 0,
+      infraPorts: infraPortsForOffset(0),
+      mode: "dev:api",
+      ports: portsForOffset(0),
+      rootDir,
+    });
+    const webSteps = buildPersistentSteps({
+      infraOffset: 0,
+      infraPorts: infraPortsForOffset(0),
+      mode: "dev:web",
+      ports: portsForOffset(0),
+      rootDir,
+    });
+
+    expect(apiSteps.secondary).toHaveLength(1);
+    expect(apiSteps.secondary.at(0)?.cmd.slice(1)).toEqual([
+      "--watch",
+      "src/scheduler/scheduler.ts",
+    ]);
+    expect(apiSteps.secondary.at(0)?.cwd).toBe(
+      path.resolve(rootDir, "apps/api"),
+    );
+    expect(apiSteps.secondary.at(0)?.label).toBe("Scheduler");
+    expect(webSteps.secondary).toEqual([]);
+  });
+
   test("prepares API databases by applying migrations", () => {
     const rootDir = createTempDir();
     mkdirSync(path.resolve(rootDir, "apps/api"), { recursive: true });

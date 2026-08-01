@@ -58,6 +58,25 @@ services:
     mem_limit: ${STELLA_DOCUMENT_PROCESSING_WORKER_MEM_LIMIT:-1g}
     cpus: ${STELLA_DOCUMENT_PROCESSING_WORKER_CPUS:-1.0}
 
+  scheduler:
+    image: ${STELLA_API_IMAGE:-ghcr.io/stella/stella-api:latest}
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    env_file:
+      - ${STELLA_API_ENV_FILE:-apps/api/.env}
+    environment:
+      NODE_ENV: production
+    command: ["bun", "/app/scheduler.js"]
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: ${STELLA_SCHEDULER_PIDS_LIMIT:-256}
+    mem_limit: ${STELLA_SCHEDULER_MEM_LIMIT:-1g}
+    cpus: ${STELLA_SCHEDULER_CPUS:-0.5}
+
   gotenberg:
     image: gotenberg/gotenberg:8
     environment:
