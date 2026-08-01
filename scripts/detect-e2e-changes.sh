@@ -4,8 +4,8 @@ set -euo pipefail
 scope=${1:-}
 shift || true
 
-if [[ "$scope" != "core" && "$scope" != "marketing" && "$scope" != "landing" ]]; then
-  echo "usage: $0 <core|marketing|landing> [changed-file ...]" >&2
+if [[ "$scope" != "core" && "$scope" != "landing" ]]; then
+  echo "usage: $0 <core|landing> [changed-file ...]" >&2
   exit 2
 fi
 
@@ -20,15 +20,7 @@ for file in "$@"; do
   case "$scope:$file" in
     core:apps/web/e2e/marketing/*|core:apps/web/e2e/playwright.marketing.config.ts)
       ;;
-    marketing:apps/api/scripts/*.test.*|marketing:apps/api/scripts/*.spec.*|marketing:apps/api/src/*.test.*|marketing:apps/api/src/*.spec.*|marketing:apps/web/src/*.test.*|marketing:apps/web/src/*.spec.*|marketing:packages/*.test.*|marketing:packages/*.spec.*)
-      ;;
-    marketing:apps/web/e2e/marketing/landing-*.spec.ts)
-      ;;
     core:apps/api/*|core:apps/web/*|core:packages/*|core:docker-compose.yml)
-      echo true
-      exit 0
-      ;;
-    marketing:apps/web/e2e/marketing/*|marketing:apps/web/e2e/playwright.marketing.config.ts|marketing:apps/api/src/*|marketing:apps/api/scripts/*|marketing:apps/api/.env.example|marketing:apps/api/package.json|marketing:apps/web/src/*|marketing:apps/web/public/*|marketing:apps/web/.env.example|marketing:apps/web/index.html|marketing:apps/web/package.json|marketing:apps/web/vite.config.*|marketing:packages/*|marketing:apps/landing/public/media/products/*.png)
       echo true
       exit 0
       ;;

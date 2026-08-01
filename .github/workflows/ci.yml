@@ -144,7 +144,6 @@ jobs:
       desktop_rust_checks_required: ${{ steps.changed-files.outputs.desktop_rust_checks_required }}
       e2e_core_required: ${{ steps.changed-files.outputs.e2e_core_required }}
       e2e_landing_required: ${{ steps.changed-files.outputs.e2e_landing_required }}
-      e2e_marketing_required: ${{ steps.changed-files.outputs.e2e_marketing_required }}
       package_checks_required: ${{ steps.changed-files.outputs.package_checks_required }}
 
     steps:
@@ -165,7 +164,6 @@ jobs:
               echo "desktop_rust_checks_required=true"
               echo "e2e_core_required=true"
               echo "e2e_landing_required=true"
-              echo "e2e_marketing_required=true"
               echo "package_checks_required=true"
             } >> "$GITHUB_OUTPUT"
             exit 0
@@ -179,7 +177,6 @@ jobs:
               echo "desktop_rust_checks_required=false"
               echo "e2e_core_required=false"
               echo "e2e_landing_required=false"
-              echo "e2e_marketing_required=false"
               echo "package_checks_required=true"
             } >> "$GITHUB_OUTPUT"
             exit 0
@@ -188,7 +185,6 @@ jobs:
           desktop_rust_checks_required=$(bash scripts/detect-tauri-rust-changes.sh "${changed_files[@]}")
           e2e_core_required=$(bash scripts/detect-e2e-changes.sh core "${changed_files[@]}")
           e2e_landing_required=$(bash scripts/detect-e2e-changes.sh landing "${changed_files[@]}")
-          e2e_marketing_required=$(bash scripts/detect-e2e-changes.sh marketing "${changed_files[@]}")
           package_checks_required=false
           for file in "${changed_files[@]}"; do
             case "$file" in
@@ -209,7 +205,6 @@ jobs:
             echo "desktop_rust_checks_required=$desktop_rust_checks_required"
             echo "e2e_core_required=$e2e_core_required"
             echo "e2e_landing_required=$e2e_landing_required"
-            echo "e2e_marketing_required=$e2e_marketing_required"
             echo "package_checks_required=$package_checks_required"
           } >> "$GITHUB_OUTPUT"
 
@@ -966,15 +961,14 @@ jobs:
 
   # Browser checks are split across isolated runners. The broad app suite uses
   # a production build; one shard first runs a tiny Vite canary to retain the
-  # dependency re-optimization guard. Marketing and landing checks are gated
-  # independently by their declared inputs.
+  # dependency re-optimization guard. Landing checks are gated independently;
+  # marketing screenshots run in the nightly test workflow.
   e2e-shard:
     needs: [trust-check, ci-changes]
     if: >-
       (needs.trust-check.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && (needs.ci-changes.outputs.e2e_core_required == 'true'
-          || needs.ci-changes.outputs.e2e_marketing_required == 'true'
           || needs.ci-changes.outputs.e2e_landing_required == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -996,25 +990,17 @@ jobs:
         env:
           CORE_REQUIRED: ${{ needs.ci-changes.outputs.e2e_core_required }}
           LANDING_REQUIRED: ${{ needs.ci-changes.outputs.e2e_landing_required }}
-          MARKETING_REQUIRED: ${{ needs.ci-changes.outputs.e2e_marketing_required }}
           SHARD: ${{ matrix.shard }}
         run: |
           run=false
           if [[ "$CORE_REQUIRED" == "true" \
-            || ("$SHARD" == "1" && "$MARKETING_REQUIRED" == "true") \
             || ("$SHARD" == "2" && "$LANDING_REQUIRED" == "true") ]]; then
             run=true
           fi
-          app_stack=false
-          if [[ "$CORE_REQUIRED" == "true" \
-            || ("$SHARD" == "1" && "$MARKETING_REQUIRED" == "true") ]]; then
-            app_stack=true
-          fi
           {
-            echo "app_stack=$app_stack"
+            echo "app_stack=$CORE_REQUIRED"
             echo "core=$CORE_REQUIRED"
             echo "landing=$LANDING_REQUIRED"
-            echo "marketing=$MARKETING_REQUIRED"
             echo "run=$run"
           } >> "$GITHUB_OUTPUT"
 
@@ -1130,20 +1116,14 @@ jobs:
           exit 1
 
       - name: Start web dev server
-        if: >-
-          matrix.shard == 1
-          && (steps.changed.outputs.core == 'true'
-              || steps.changed.outputs.marketing == 'true')
+        if: matrix.shard == 1 && steps.changed.outputs.core == 'true'
         run: |
           cd apps/web
           nohup bun --bun vite --port 3000 > /tmp/web.log 2>&1 &
           echo $! > /tmp/web.pid
 
       - name: Wait for web dev server
-        if: >-
-          matrix.shard == 1
-          && (steps.changed.outputs.core == 'true'
-              || steps.changed.outputs.marketing == 'true')
+        if: matrix.shard == 1 && steps.changed.outputs.core == 'true'
         run: |
           for i in {1..60}; do
             if curl --connect-timeout 2 --max-time 5 -sf http://localhost:3000 > /dev/null 2>&1; then
@@ -1166,22 +1146,13 @@ jobs:
           bun --filter @stll/web test:e2e --
           --project chromium --grep @dev-canary
 
-      - name: Seed deterministic marketing content
-        if: matrix.shard == 1 && steps.changed.outputs.marketing == 'true'
-        run: bun --filter @stll/api db:seed-dev
-
-      - name: Check landing product screenshots
-        if: matrix.shard == 1 && steps.changed.outputs.marketing == 'true'
-        run: bun --filter @stll/web test:e2e:marketing
-
       # Flake guard: the tiny dev pass covers the lazy chat and Folio imports
       # that have historically escaped Vite's cold dependency scan.
       - name: Guard against mid-test Vite re-optimize
         if: >-
           always()
           && matrix.shard == 1
-          && (steps.changed.outputs.core == 'true'
-              || steps.changed.outputs.marketing == 'true')
+          && steps.changed.outputs.core == 'true'
         run: |
           if grep -q "optimized dependencies changed. reloading" /tmp/web.log; then
             echo "::error::Vite re-optimized dependencies mid-session and forced a reload. Add the lazy/runtime dependency named below to optimizeDeps.include in apps/web/vite.config.ts."
@@ -1194,8 +1165,7 @@ jobs:
         if: >-
           always()
           && matrix.shard == 1
-          && (steps.changed.outputs.core == 'true'
-              || steps.changed.outputs.marketing == 'true')
+          && steps.changed.outputs.core == 'true'
         run: |
           kill "$(cat /tmp/web.pid)" || true
           rm -f /tmp/web.pid
