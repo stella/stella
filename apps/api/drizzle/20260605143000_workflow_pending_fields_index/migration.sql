@@ -6,7 +6,10 @@ SET statement_timeout = 0;
 --> statement-breakpoint
 COMMIT;
 --> statement-breakpoint
-CREATE INDEX CONCURRENTLY IF NOT EXISTS "fields_pending_workspace_idx" ON "fields" ("workspace_id") WHERE "content"->>'type' = 'pending';
+-- stella-migration-safety: reviewed destructive-change - retry cleanup drops only this migration's index before rebuilding it, so an interrupted INVALID index cannot be mistaken for completion.
+DROP INDEX CONCURRENTLY IF EXISTS "fields_pending_workspace_idx";
+--> statement-breakpoint
+CREATE INDEX CONCURRENTLY "fields_pending_workspace_idx" ON "fields" ("workspace_id") WHERE "content"->>'type' = 'pending';
 --> statement-breakpoint
 BEGIN;
 --> statement-breakpoint
