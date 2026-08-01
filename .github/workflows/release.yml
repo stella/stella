@@ -192,34 +192,34 @@ jobs:
               psql -h 127.0.0.1 -U postgres -d stella "$@"
           }
 
-          original_hash=$(psql_smoke -v ON_ERROR_STOP=1 -tAc \
-            "SELECT hash FROM drizzle.__drizzle_migrations ORDER BY id DESC LIMIT 1")
-          if [[ ! "$original_hash" =~ ^[0-9a-f]{64}$ ]]; then
-            echo "::error::Could not read the latest applied migration hash."
+          inserted=$(psql_smoke -v ON_ERROR_STOP=1 -tAc \
+            "WITH inserted AS (INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES (repeat('0', 64), 0) RETURNING 1) SELECT count(*) FROM inserted")
+          if [[ "$inserted" != "1" ]]; then
+            echo "::error::Inserted $inserted synthetic migration rows; expected 1."
             exit 1
           fi
-          restore_hash() {
-            local restored
-            restored=$(psql_smoke -v ON_ERROR_STOP=1 -v original_hash="$original_hash" -tAc \
-              "WITH restored AS (UPDATE drizzle.__drizzle_migrations SET hash = :'original_hash' WHERE hash = repeat('0', 64) RETURNING 1) SELECT count(*) FROM restored")
-            if [[ "$restored" != "1" ]]; then
-              echo "::error::Restored $restored migration rows; expected 1."
-              return 1
-            fi
-          }
-          trap restore_hash EXIT
 
-          psql_smoke -v ON_ERROR_STOP=1 -c \
-            "UPDATE drizzle.__drizzle_migrations SET hash = repeat('0', 64) WHERE id = (SELECT max(id) FROM drizzle.__drizzle_migrations)" \
-            >/dev/null
-
-          if docker run --rm --network host \
+          migration_exit=0
+          docker run --rm --network host \
             --env DATABASE_URL \
             stella-api:smoke \
-            bun /app/apps/api/src/db/migrate.js; then
+            bun /app/apps/api/src/db/migrate.js || migration_exit=$?
+
+          deleted=$(psql_smoke -v ON_ERROR_STOP=1 -tAc \
+            "WITH deleted AS (DELETE FROM drizzle.__drizzle_migrations WHERE hash = repeat('0', 64) AND created_at = 0 RETURNING 1) SELECT count(*) FROM deleted")
+          if [[ "$deleted" != "1" ]]; then
+            echo "::error::Deleted $deleted synthetic migration rows; expected 1."
+            exit 1
+          fi
+          if [[ "$migration_exit" == "0" ]]; then
             echo "::error::Migration command accepted inconsistent applied history."
             exit 1
           fi
+
+          docker run --rm --network host \
+            --env DATABASE_URL \
+            stella-api:smoke \
+            bun /app/apps/api/src/db/migrate.js
 
       - name: Run smoke container
         env:

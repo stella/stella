@@ -13,6 +13,7 @@ on:
       - "scripts/check-migrations.sh"
       - ".squawk.toml"
       - ".github/workflows/db-migrations.yml"
+      - ".github/workflows/release.yml"
   workflow_dispatch:
 
 concurrency:
@@ -139,6 +140,35 @@ jobs:
             echo "::error::Migration count mismatch: $APPLIED applied, $EXPECTED on disk."
             exit 1
           }
+
+      - name: Reject inconsistent migration history
+        env:
+          DATABASE_URL: postgres://stella:stella@127.0.0.1:5432/stella
+          PGPASSWORD: stella
+        run: |
+          set -euo pipefail
+          inserted=$(psql -h 127.0.0.1 -U stella -d stella -tAc \
+            "WITH inserted AS (INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES (repeat('0', 64), 0) RETURNING 1) SELECT count(*) FROM inserted")
+          if [[ "$inserted" != "1" ]]; then
+            echo "::error::Inserted $inserted synthetic migration rows; expected 1."
+            exit 1
+          fi
+
+          migration_exit=0
+          (cd apps/api && bun run src/db/migrate.ts) || migration_exit=$?
+
+          deleted=$(psql -h 127.0.0.1 -U stella -d stella -tAc \
+            "WITH deleted AS (DELETE FROM drizzle.__drizzle_migrations WHERE hash = repeat('0', 64) AND created_at = 0 RETURNING 1) SELECT count(*) FROM deleted")
+          if [[ "$deleted" != "1" ]]; then
+            echo "::error::Deleted $deleted synthetic migration rows; expected 1."
+            exit 1
+          fi
+          if [[ "$migration_exit" == "0" ]]; then
+            echo "::error::Migration command accepted inconsistent applied history."
+            exit 1
+          fi
+
+          (cd apps/api && bun run src/db/migrate.ts)
 
       - name: Verify API boots with migration check enabled
         working-directory: apps/api

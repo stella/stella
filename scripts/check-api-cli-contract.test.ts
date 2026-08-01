@@ -148,6 +148,27 @@ describe("API and CLI release contract", () => {
     );
   });
 
+  test("release and pull-request smoke tests reject synthetic migration history", async () => {
+    const workflows = await Promise.all([
+      Bun.file(new URL("../.github/workflows/release.yml", import.meta.url)).text(),
+      Bun.file(
+        new URL("../.github/workflows/db-migrations.yml", import.meta.url),
+      ).text(),
+    ]);
+
+    for (const workflow of workflows) {
+      expect(workflow).toContain(
+        "INSERT INTO drizzle.__drizzle_migrations (hash, created_at)",
+      );
+      expect(workflow).toContain(
+        "DELETE FROM drizzle.__drizzle_migrations WHERE hash = repeat('0', 64) AND created_at = 0",
+      );
+      expect(workflow).not.toContain(
+        "UPDATE drizzle.__drizzle_migrations SET hash",
+      );
+    }
+  });
+
   test("shared package publishing uses Changesets release signals", async () => {
     const [changesetConfig, ciWorkflow, publishWorkflow] = await Promise.all([
       Bun.file(new URL("../.changeset/config.json", import.meta.url)).text(),
