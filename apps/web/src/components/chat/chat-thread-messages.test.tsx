@@ -142,6 +142,65 @@ describe("chat thread messages", () => {
     expect(html).toContain(">Copy</button>");
   });
 
+  test("renders persisted audio, video, and sandboxed app output", () => {
+    const chatMessages: PersistedChatMessage[] = [
+      {
+        id: "message-rich",
+        role: "assistant",
+        parts: [
+          {
+            type: "audio",
+            source: {
+              type: "url",
+              value: "https://example.test/audio.mp3",
+              mimeType: "audio/mpeg",
+            },
+          },
+          {
+            type: "video",
+            source: {
+              type: "url",
+              value: "https://example.test/video.mp4",
+              mimeType: "video/mp4",
+            },
+          },
+          {
+            type: "ui-resource",
+            resource: {
+              uri: "ui://widget",
+              mimeType: "text/html;profile=mcp-app",
+              text: "<p>Widget</p>",
+            },
+            toolCallId: "call-1",
+            toolName: "widget",
+          },
+        ],
+      },
+    ];
+
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        approvalPendingMessageId={null}
+        messages={chatMessages}
+        onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+      />,
+    );
+
+    expect(html).toContain('aria-label="Generated audio"');
+    expect(html).toContain('preload="none"');
+    expect(html).not.toContain('preload="metadata"');
+    expect(html).toContain('src="https://example.test/audio.mp3"');
+    expect(html).toContain('aria-label="Generated video"');
+    expect(html).toContain('src="https://example.test/video.mp4"');
+    expect(html).toContain("Loading interactive content…");
+    expect(html).not.toContain("&lt;p&gt;Widget&lt;/p&gt;");
+  });
+
   test("keeps historical exports available while the latest answer streams", () => {
     const chatMessages: PersistedChatMessage[] = [
       {

@@ -1,5 +1,16 @@
-import type { ContentPartSource } from "@tanstack/ai";
+import type {
+  AudioPart,
+  ContentPartSource,
+  UIResourcePart,
+  VideoPart,
+} from "@tanstack/ai";
 import { panic } from "better-result";
+import { Buffer } from "node:buffer";
+
+import {
+  isBoundedBase64Content,
+  MCP_APP_RESOURCE_MIME_TYPE,
+} from "@stll/api-contract";
 
 import { normalizeLegacyRawToolInputs } from "@/api/handlers/chat/legacy-tool-compat";
 import type {
@@ -19,6 +30,7 @@ import type {
 } from "@/api/handlers/chat/types";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
+import { LIMITS } from "@/api/lib/limits";
 import { isUserFileUrl, parseUserFileId } from "@/api/lib/user-files/types";
 
 const IMAGE_MIME_PREFIX = "image/";
@@ -249,13 +261,80 @@ export const chatMessageContentFromMessage = (
     ...(message.metadata === undefined ? {} : { metadata: message.metadata }),
   });
 
+type ChatPartClientAcceptance = "accept" | "server-only";
+type ChatPartProviderVisibility = "model" | "ui-only";
+type InvalidChatPartHandling = "drop" | "panic";
+
+// Rich output parts are issued by the trusted stream processor. Accepting
+// them from the request body would let a client mint active HTML or remote
+// media and have the server return it as trusted persisted history.
+const CHAT_PART_CLIENT_ACCEPTANCE = {
+  audio: "server-only",
+  document: "accept",
+  image: "accept",
+  "structured-output": "accept",
+  text: "accept",
+  thinking: "accept",
+  "tool-call": "accept",
+  "tool-result": "accept",
+  "ui-resource": "server-only",
+  video: "server-only",
+} as const satisfies Record<PersistableChatPartType, ChatPartClientAcceptance>;
+
+// Bounded rich output is external presentation data, so an invalid instance
+// is dropped without sacrificing surrounding text. Malformed core protocol
+// parts still indicate an SDK/programmer contract violation and fail loudly.
+const INVALID_CHAT_PART_HANDLING = {
+  audio: "drop",
+  document: "panic",
+  image: "panic",
+  "structured-output": "panic",
+  text: "panic",
+  thinking: "panic",
+  "tool-call": "panic",
+  "tool-result": "panic",
+  "ui-resource": "drop",
+  video: "drop",
+} as const satisfies Record<PersistableChatPartType, InvalidChatPartHandling>;
+
+// These parts are presentation output, not conversation context. TanStack
+// currently omits UI resources during model conversion; keeping the policy
+// explicit here also prevents audio/video replay into a model that may not
+// support those modalities on the next turn.
+const CHAT_PART_PROVIDER_VISIBILITY = {
+  audio: "ui-only",
+  document: "model",
+  image: "model",
+  "structured-output": "model",
+  text: "model",
+  thinking: "model",
+  "tool-call": "model",
+  "tool-result": "model",
+  "ui-resource": "ui-only",
+  video: "ui-only",
+} as const satisfies Record<
+  PersistableChatPartType,
+  ChatPartProviderVisibility
+>;
+
+export const isProviderVisibleChatPart = (part: ChatPart): boolean =>
+  CHAT_PART_PROVIDER_VISIBILITY[part.type] === "model";
+
 export const toProviderVisibleMessage = (
   message: ChatMessage,
 ): ChatMessage | null => {
-  if (message.parts.length === 0) {
+  const parts: ChatPart[] = [];
+  for (const part of message.parts) {
+    if (isProviderVisibleChatPart(part)) {
+      parts.push(part);
+    }
+  }
+  if (parts.length === 0) {
     return null;
   }
-  return message;
+  return parts.length === message.parts.length
+    ? message
+    : { ...message, parts };
 };
 
 export const toProviderVisibleMessages = (
@@ -292,6 +371,83 @@ const isContentPartWithSource = (
   (!("mimeType" in part["source"]) ||
     typeof part["source"]["mimeType"] === "string");
 
+const isHttpUrl = (value: string): boolean => {
+  if (value.length > LIMITS.chatRichMediaUrlMaxChars || !URL.canParse(value)) {
+    return false;
+  }
+  const { protocol } = new URL(value);
+  return protocol === "http:" || protocol === "https:";
+};
+
+const isMediaPart = (
+  part: Record<string, unknown>,
+  mimePrefix: "audio/" | "video/",
+): boolean => {
+  if (!isContentPartWithSource(part)) {
+    return false;
+  }
+  const { source } = part;
+  if (
+    source.mimeType !== undefined &&
+    source.mimeType.length > LIMITS.chatRichMediaMimeTypeMaxChars
+  ) {
+    return false;
+  }
+  if (source.type === "data") {
+    return (
+      source.mimeType?.startsWith(mimePrefix) === true &&
+      isBoundedBase64Content(source.value, LIMITS.chatRichMediaInlineMaxChars)
+    );
+  }
+  return (
+    (source.mimeType === undefined || source.mimeType.startsWith(mimePrefix)) &&
+    isHttpUrl(source.value)
+  );
+};
+
+const isUiResourcePart = (part: Record<string, unknown>): boolean => {
+  if (
+    !isRecord(part["resource"]) ||
+    typeof part["toolCallId"] !== "string" ||
+    part["toolCallId"].length === 0 ||
+    part["toolCallId"].length > LIMITS.chatRichPartIdentifierMaxChars ||
+    typeof part["toolName"] !== "string" ||
+    part["toolName"].length === 0 ||
+    part["toolName"].length > LIMITS.chatRichPartIdentifierMaxChars ||
+    ("serverId" in part &&
+      part["serverId"] !== undefined &&
+      (typeof part["serverId"] !== "string" ||
+        part["serverId"].length > LIMITS.chatRichPartIdentifierMaxChars)) ||
+    ("meta" in part && part["meta"] !== undefined && !isRecord(part["meta"]))
+  ) {
+    return false;
+  }
+
+  const resource = part["resource"];
+  if (
+    typeof resource["uri"] !== "string" ||
+    !resource["uri"].startsWith("ui://") ||
+    resource["uri"].length > LIMITS.chatUiResourceUriMaxChars ||
+    resource["mimeType"] !== MCP_APP_RESOURCE_MIME_TYPE
+  ) {
+    return false;
+  }
+
+  const text = resource["text"];
+  const blob = resource["blob"];
+  if (typeof text === "string") {
+    return (
+      typeof blob !== "string" &&
+      text.length > 0 &&
+      text.length <= LIMITS.chatUiResourceContentMaxChars
+    );
+  }
+  return (
+    typeof blob === "string" &&
+    isBoundedBase64Content(blob, LIMITS.chatUiResourceContentMaxChars)
+  );
+};
+
 type ChatPartValidator = (part: Record<string, unknown>) => boolean;
 
 type ChatPartPersistence = "drop" | "persist";
@@ -299,7 +455,7 @@ type ChatPartPersistence = "drop" | "persist";
 // Every TanStack part must receive an explicit persistence policy. A future SDK
 // variant fails typecheck here until it is deliberately persisted or dropped.
 const CHAT_PART_PERSISTENCE = {
-  audio: "drop",
+  audio: "persist",
   document: "persist",
   image: "persist",
   "structured-output": "persist",
@@ -307,13 +463,14 @@ const CHAT_PART_PERSISTENCE = {
   thinking: "persist",
   "tool-call": "persist",
   "tool-result": "persist",
-  "ui-resource": "drop",
-  video: "drop",
+  "ui-resource": "persist",
+  video: "persist",
 } as const satisfies Record<ChatTanStackPart["type"], ChatPartPersistence>;
 
 // Validators are independently exhaustive over the persistable subset, so a
 // part cannot enter the persistence boundary without structural validation.
 const CHAT_PART_VALIDATORS = {
+  audio: (part) => isMediaPart(part, "audio/"),
   document: isContentPartWithSource,
   image: isContentPartWithSource,
   "structured-output": (part) => "data" in part,
@@ -329,12 +486,18 @@ const CHAT_PART_VALIDATORS = {
     isTanStackToolResultContent(part["content"]) &&
     isTanStackToolResultState(part["state"]) &&
     (!("error" in part) || typeof part["error"] === "string"),
+  "ui-resource": isUiResourcePart,
+  video: (part) => isMediaPart(part, "video/"),
 } satisfies Record<PersistableChatPartType, ChatPartValidator>;
 
 const isChatPartPersistenceType = (
   type: string,
 ): type is keyof typeof CHAT_PART_PERSISTENCE =>
   Object.hasOwn(CHAT_PART_PERSISTENCE, type);
+
+const chatPartPersistenceFor = (
+  type: keyof typeof CHAT_PART_PERSISTENCE,
+): ChatPartPersistence => CHAT_PART_PERSISTENCE[type];
 
 const isChatPartType = (
   type: string,
@@ -348,11 +511,151 @@ export const isChatPart = (part: unknown): part is ChatPart => {
   const type = part["type"];
   if (
     !isChatPartPersistenceType(type) ||
-    CHAT_PART_PERSISTENCE[type] === "drop"
+    chatPartPersistenceFor(type) === "drop"
   ) {
     return false;
   }
   return isChatPartType(type) && CHAT_PART_VALIDATORS[type](part);
+};
+
+export const isIncomingChatPart = (part: unknown): part is ChatPart =>
+  isChatPart(part) && CHAT_PART_CLIENT_ACCEPTANCE[part.type] === "accept";
+
+export const hasServerOwnedChatPartType = (part: unknown): boolean => {
+  if (!isRecord(part) || typeof part["type"] !== "string") {
+    return false;
+  }
+  const { type } = part;
+  return (
+    isChatPartPersistenceType(type) &&
+    CHAT_PART_CLIENT_ACCEPTANCE[type] === "server-only"
+  );
+};
+
+export const isServerOwnedChatPart = (
+  part: ChatPart,
+): part is AudioPart | UIResourcePart | VideoPart =>
+  CHAT_PART_CLIENT_ACCEPTANCE[part.type] === "server-only";
+
+export const applyChatPartPersistenceBudget = (parts: readonly ChatPart[]) => {
+  const acceptedParts: ChatPart[] = [];
+  const droppedPartTypes: string[] = [];
+  let richPartBytes = 0;
+  let richPartCount = 0;
+
+  for (const part of parts) {
+    if (!isServerOwnedChatPart(part)) {
+      acceptedParts.push(part);
+      continue;
+    }
+
+    const partBytes = Buffer.byteLength(JSON.stringify(part), "utf8");
+    if (
+      richPartCount >= LIMITS.chatRichPartsPerMessageMax ||
+      richPartBytes + partBytes > LIMITS.chatRichPartsTotalMaxBytes
+    ) {
+      droppedPartTypes.push(part.type);
+      continue;
+    }
+
+    acceptedParts.push(part);
+    richPartBytes += partBytes;
+    richPartCount += 1;
+  }
+
+  return {
+    droppedPartTypes,
+    parts: acceptedParts,
+    richPartBytes,
+    richPartCount,
+  };
+};
+
+export const restoreServerOwnedChatParts = ({
+  incomingParts,
+  persistedParts,
+}: {
+  incomingParts: readonly ChatPart[];
+  persistedParts: readonly ChatPart[];
+}): ChatPart[] => {
+  const restored: ChatPart[] = [];
+  for (const part of incomingParts) {
+    if (!isServerOwnedChatPart(part)) {
+      restored.push(part);
+    }
+  }
+  for (const [index, part] of persistedParts.entries()) {
+    if (isServerOwnedChatPart(part)) {
+      restored.splice(Math.min(index, restored.length), 0, part);
+    }
+  }
+  return restored;
+};
+
+const normalizeMediaSource = (source: ContentPartSource): ContentPartSource => {
+  if (source.type === "data") {
+    return {
+      type: "data",
+      value: source.value,
+      mimeType: source.mimeType,
+    };
+  }
+  return {
+    type: "url",
+    value: source.value,
+    ...(source.mimeType === undefined ? {} : { mimeType: source.mimeType }),
+  };
+};
+
+const normalizeChatPartForPersistence = (part: ChatPart): ChatPart => {
+  switch (part.type) {
+    case "audio":
+      return {
+        type: "audio",
+        source: normalizeMediaSource(part.source),
+      };
+    case "video":
+      return {
+        type: "video",
+        source: normalizeMediaSource(part.source),
+      };
+    case "ui-resource": {
+      const { resource } = part;
+      const normalizedResource =
+        resource.text === undefined
+          ? {
+              uri: resource.uri,
+              mimeType: MCP_APP_RESOURCE_MIME_TYPE,
+              blob:
+                resource.blob ??
+                panic("Validated UI resource has no text or blob"),
+            }
+          : {
+              uri: resource.uri,
+              mimeType: MCP_APP_RESOURCE_MIME_TYPE,
+              text: resource.text,
+            };
+      return {
+        type: "ui-resource",
+        resource: normalizedResource,
+        toolCallId: part.toolCallId,
+        toolName: part.toolName,
+        ...(part.serverId === undefined ? {} : { serverId: part.serverId }),
+      };
+    }
+    case "document":
+    case "image":
+    case "structured-output":
+    case "text":
+    case "thinking":
+    case "tool-call":
+    case "tool-result":
+      return part;
+    default: {
+      const exhaustive: never = part;
+      return exhaustive;
+    }
+  }
 };
 
 type ChatPartPersistenceDecision =
@@ -369,18 +672,31 @@ export const classifyChatPartForPersistence = (
   if (!isChatPartPersistenceType(type)) {
     panic(`Cannot classify unknown chat part type: ${type}`);
   }
-  if (CHAT_PART_PERSISTENCE[type] === "drop") {
+  if (chatPartPersistenceFor(type) === "drop") {
     return { type: "drop", partType: type };
   }
   if (!isChatPart(part)) {
+    if (INVALID_CHAT_PART_HANDLING[type] === "drop") {
+      return { type: "drop", partType: type };
+    }
     panic(`Cannot persist malformed chat part type: ${type}`);
   }
-  return { type: "persist", part };
+  return { type: "persist", part: normalizeChatPartForPersistence(part) };
 };
 
 const isPersistableChatMessage = (
   message: PersistableChatMessageCandidate,
 ): message is PersistableChatMessage => message.parts.every(isChatPart);
+
+const normalizeChatPartsForPersistence = (
+  parts: readonly ChatPart[],
+): ChatPart[] => {
+  const normalized: ChatPart[] = [];
+  for (const part of parts) {
+    normalized.push(normalizeChatPartForPersistence(part));
+  }
+  return applyChatPartPersistenceBudget(normalized).parts;
+};
 
 export const toPersistableChatMessage = (
   message: PersistableChatMessageCandidate,
@@ -388,7 +704,19 @@ export const toPersistableChatMessage = (
   if (!isPersistableChatMessage(message)) {
     panic("Cannot mark a chat message with unsupported parts as persistable");
   }
-  return message;
+  const normalized = {
+    id: message.id,
+    role: message.role,
+    parts: normalizeChatPartsForPersistence(message.parts),
+    ...(message.createdAt === undefined
+      ? {}
+      : { createdAt: message.createdAt }),
+    ...(message.metadata === undefined ? {} : { metadata: message.metadata }),
+  };
+  if (!isPersistableChatMessage(normalized)) {
+    panic("Normalized chat message violates the persistence policy");
+  }
+  return normalized;
 };
 
 const isChatMessageContent = (
@@ -401,7 +729,15 @@ export const toChatMessageContent = (
   if (!isChatMessageContent(content)) {
     panic("Cannot persist chat message content with unsupported parts");
   }
-  return content;
+  const normalized = {
+    version: content.version,
+    data: normalizeChatPartsForPersistence(content.data),
+    ...(content.metadata === undefined ? {} : { metadata: content.metadata }),
+  };
+  if (!isChatMessageContent(normalized)) {
+    panic("Normalized chat content violates the persistence policy");
+  }
+  return normalized;
 };
 
 const isLegacyAnonRestorationsPart = (

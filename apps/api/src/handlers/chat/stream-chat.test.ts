@@ -26,7 +26,7 @@ import { toUserFileUrl } from "@/api/lib/user-files/types";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
-import { nonPersistableChatParts } from "./__fixtures__/non-persistable-chat-parts";
+import { richChatParts } from "./__fixtures__/rich-chat-parts";
 import {
   chatMessageUsageFromTokenUsage,
   collectInitialRestorationPlaceholders,
@@ -1014,33 +1014,32 @@ describe("chat message usage metadata", () => {
 });
 
 describe("streamed chat message conversion", () => {
-  // Each is a part the SDK may legally stream, so none may cost the message
-  // the model finished.
-  for (const unsupported of nonPersistableChatParts) {
-    test(`keeps the surrounding parts when a ${unsupported.type} part arrives`, () => {
+  for (const richPart of richChatParts) {
+    test(`persists a streamed ${richPart.type} part with its surrounding text`, () => {
       const message = toChatMessage({
         id: "assistant-message",
         role: "assistant",
         parts: [
           { content: "Dobrý den", type: "text" },
-          unsupported,
+          richPart,
           { content: "Na shledanou", type: "text" },
         ],
       });
 
       expect(message?.parts).toEqual([
         { content: "Dobrý den", type: "text" },
+        richPart,
         { content: "Na shledanou", type: "text" },
       ]);
     });
   }
 
-  test("does not finish a turn whose parts were all unsupported", async () => {
+  test("does not finish a part-less turn", async () => {
     const messageId = toSafeId<"chatMessage">(
       "11111111-1111-4111-8111-111111111111",
     );
     let finishCount = 0;
-    // Every part was dropped, so the turn has nothing to persist. Finishing it
+    // A provider can finish without emitting content. Finishing that turn
     // would insert a blank assistant message into the history.
     const responseMessage: ChatMessage = {
       id: messageId,

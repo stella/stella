@@ -48,6 +48,7 @@ import { hostedUsageWebhookRoute } from "@/api/handlers/hosted-usage-webhook/rou
 import { invoicesRoute } from "@/api/handlers/invoices/routes";
 import { legislationCorpusRoute } from "@/api/handlers/legislation/corpus-routes";
 import { legislationRoute } from "@/api/handlers/legislation/routes";
+import { mcpAppSandboxRoute } from "@/api/handlers/mcp-app-sandbox/routes";
 import { mcpConnectorsRoute } from "@/api/handlers/mcp-connectors/routes";
 import { mcpRoute } from "@/api/handlers/mcp/routes";
 import { meRoute } from "@/api/handlers/me/routes";
@@ -565,7 +566,11 @@ const api = new Elysia()
       .use(meRoute)
       .use(devRoute)
       .use(verifyAuthRoute),
-  );
+  )
+  // Mount the protocol-only document after the large inferred REST tree. Its
+  // route stays outside /v1 without making every downstream plugin carry an
+  // unrelated HTML response through Elysia's generic accumulator.
+  .use(mcpAppSandboxRoute);
 
 export default api;
 

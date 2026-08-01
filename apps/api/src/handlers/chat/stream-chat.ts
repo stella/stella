@@ -27,6 +27,7 @@ import type { ChatSendMode } from "@stll/anonymize-chat";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { modelAcceptsDocumentAttachment } from "@/api/handlers/chat/attachment-modality";
 import {
+  applyChatPartPersistenceBudget,
   classifyChatPartForPersistence,
   getChatAttachmentMimeType,
   getUserFileIdFromAttachmentPart,
@@ -1979,15 +1980,11 @@ export const toChatMessage = (message: UIMessage): ChatMessage | null => {
   };
 };
 
-// Which parts a message carries is decided by the model and the SDK, not by
-// this code. Stella's persistable subset excludes TanStack's `audio`, `video`,
-// and `ui-resource` parts. A rejected part is therefore ordinary external input
-// rather than the broken internal invariant `panic` is for.
-//
-// Skipping one also keeps the rest of a finished turn, which throwing does not.
-// When nothing persistable remains, `toChatMessage` returns null rather than an
-// empty message; its nullable return type forces every caller to handle that
-// outcome before a blank assistant turn can reach persistence.
+// Which parts a message carries is decided by the model and SDK. The exhaustive
+// persistence policy validates and canonicalizes every supported variant. When
+// a future SDK variant is deliberately classified as dropped, the rest of the
+// turn still persists; an entirely part-less turn remains null so no blank
+// assistant message can reach storage.
 const toChatParts = (
   parts: readonly UIMessage["parts"][number][],
 ): ChatPart[] => {
@@ -2004,7 +2001,13 @@ const toChatParts = (
       "chat.part_type": decision.partType,
     });
   }
-  return chatParts;
+  const budgeted = applyChatPartPersistenceBudget(chatParts);
+  for (const partType of budgeted.droppedPartTypes) {
+    logger.warn("Dropped a rich part that exceeded the message budget", {
+      "chat.part_type": partType,
+    });
+  }
+  return budgeted.parts;
 };
 
 type HydrateMessagesProps = {

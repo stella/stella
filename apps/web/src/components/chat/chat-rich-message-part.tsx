@@ -1,0 +1,218 @@
+import { lazy, Suspense } from "react";
+
+import { useTranslations } from "use-intl";
+
+import {
+  CHAT_RICH_PART_LIMITS,
+  isBoundedBase64Content,
+  MCP_APP_RESOURCE_MIME_TYPE,
+} from "@stll/api-contract";
+
+import type { ChatPart } from "@/components/chat/chat-ui-tools";
+import { mcpAppSandboxUrl } from "@/lib/api-url";
+import { getUserFileContentUrl } from "@/lib/user-files";
+
+export type RichChatPart = Extract<
+  ChatPart,
+  { type: "audio" | "ui-resource" | "video" }
+>;
+type MediaChatPart = Extract<RichChatPart, { type: "audio" | "video" }>;
+type UiResourcePart = Extract<RichChatPart, { type: "ui-resource" }>;
+
+const LazyMcpAppResource = lazy(async () => {
+  const { MCPAppResource } = await import("@tanstack/ai-react/mcp-apps");
+  return { default: MCPAppResource };
+});
+
+export const isRichChatPart = (part: ChatPart): part is RichChatPart =>
+  part.type === "audio" || part.type === "video" || part.type === "ui-resource";
+
+export const toRenderableMediaSource = (part: MediaChatPart): string | null => {
+  const mimePrefix = `${part.type}/`;
+  const { source } = part;
+  const { mimeType } = source;
+  if (
+    mimeType !== undefined &&
+    mimeType.length > CHAT_RICH_PART_LIMITS.mediaMimeTypeMaxChars
+  ) {
+    return null;
+  }
+  if (source.type === "data") {
+    if (
+      mimeType === undefined ||
+      !mimeType.startsWith(mimePrefix) ||
+      !isBoundedBase64Content(
+        source.value,
+        CHAT_RICH_PART_LIMITS.inlineMediaMaxChars,
+      )
+    ) {
+      return null;
+    }
+    return `data:${mimeType};base64,${source.value}`;
+  }
+
+  if (mimeType && !mimeType.startsWith(mimePrefix)) {
+    return null;
+  }
+  if (source.value.length > CHAT_RICH_PART_LIMITS.mediaUrlMaxChars) {
+    return null;
+  }
+  const storedFileUrl = getUserFileContentUrl(source.value);
+  if (storedFileUrl) {
+    return storedFileUrl;
+  }
+  if (!URL.canParse(source.value)) {
+    return null;
+  }
+  const { protocol } = new URL(source.value);
+  return protocol === "http:" || protocol === "https:" ? source.value : null;
+};
+
+const decodeBase64Utf8 = (value: string): string | null => {
+  if (
+    !isBoundedBase64Content(
+      value,
+      CHAT_RICH_PART_LIMITS.uiResourceContentMaxChars,
+    )
+  ) {
+    return null;
+  }
+  const padding = (4 - (value.length % 4)) % 4;
+  const decoded = atob(`${value}${"=".repeat(padding)}`);
+  const bytes = Uint8Array.from(
+    decoded,
+    (character) => character.codePointAt(0) ?? 0,
+  );
+  return new TextDecoder().decode(bytes);
+};
+
+export const normalizeUiResourcePart = (
+  part: UiResourcePart,
+): UiResourcePart | null => {
+  const { resource } = part;
+  if (
+    !resource.uri.startsWith("ui://") ||
+    resource.uri.length > CHAT_RICH_PART_LIMITS.uiResourceUriMaxChars ||
+    resource.mimeType !== MCP_APP_RESOURCE_MIME_TYPE
+  ) {
+    return null;
+  }
+
+  const resourceText = resource.text;
+  const resourceBlob = resource.blob;
+  let text: string | null;
+  if (typeof resourceText === "string") {
+    if (typeof resourceBlob === "string") {
+      return null;
+    }
+    text = resourceText;
+  } else {
+    if (typeof resourceBlob !== "string") {
+      return null;
+    }
+    text = decodeBase64Utf8(resourceBlob);
+  }
+  if (
+    text === null ||
+    text.length === 0 ||
+    text.length > CHAT_RICH_PART_LIMITS.uiResourceContentMaxChars
+  ) {
+    return null;
+  }
+
+  return {
+    type: "ui-resource",
+    resource: {
+      uri: resource.uri,
+      mimeType: MCP_APP_RESOURCE_MIME_TYPE,
+      text,
+    },
+    toolCallId: part.toolCallId,
+    toolName: part.toolName,
+    ...(part.serverId === undefined ? {} : { serverId: part.serverId }),
+    ...(part.meta === undefined ? {} : { meta: part.meta }),
+  };
+};
+
+const RichContentStatus = ({ loading = false }: { loading?: boolean }) => {
+  const t = useTranslations();
+  return (
+    <div
+      aria-busy={loading || undefined}
+      className="bg-muted/40 text-muted-foreground rounded-md border px-3 py-2 text-sm"
+    >
+      {t(loading ? "chat.richContentLoading" : "chat.richContentUnavailable")}
+    </div>
+  );
+};
+
+const MediaPart = ({ part }: { part: MediaChatPart }) => {
+  const t = useTranslations();
+  const source = toRenderableMediaSource(part);
+  if (!source) {
+    return <RichContentStatus />;
+  }
+  const mimeType = part.source.mimeType;
+  if (part.type === "audio") {
+    return (
+      <audio
+        aria-label={t("chat.audioContent")}
+        className="w-full max-w-xl"
+        controls
+        preload="none"
+        src={source}
+      >
+        <track kind="captions" />
+      </audio>
+    );
+  }
+  return (
+    <video
+      aria-label={t("chat.videoContent")}
+      className="bg-foreground aspect-video w-full max-w-2xl rounded-md"
+      controls
+      preload="none"
+    >
+      <source src={source} {...(mimeType ? { type: mimeType } : {})} />
+      <track kind="captions" />
+    </video>
+  );
+};
+
+const UiResource = ({ part }: { part: UiResourcePart }) => {
+  const normalized = normalizeUiResourcePart(part);
+  if (!normalized) {
+    return <RichContentStatus />;
+  }
+  const sandboxUrl = mcpAppSandboxUrl();
+  const isServerRender = typeof window === "undefined";
+  if (!isServerRender && sandboxUrl.origin === window.location.origin) {
+    return <RichContentStatus />;
+  }
+
+  return (
+    <div className="min-h-32 w-full overflow-hidden rounded-md border">
+      {isServerRender ? (
+        <RichContentStatus loading />
+      ) : (
+        <Suspense fallback={<RichContentStatus loading />}>
+          <LazyMcpAppResource part={normalized} sandbox={{ url: sandboxUrl }} />
+        </Suspense>
+      )}
+    </div>
+  );
+};
+
+export const ChatRichMessagePart = ({ part }: { part: RichChatPart }) => {
+  switch (part.type) {
+    case "audio":
+    case "video":
+      return <MediaPart part={part} />;
+    case "ui-resource":
+      return <UiResource part={part} />;
+    default: {
+      const exhaustive: never = part;
+      return exhaustive;
+    }
+  }
+};

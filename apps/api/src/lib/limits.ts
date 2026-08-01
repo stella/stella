@@ -1,3 +1,4 @@
+import { CHAT_RICH_PART_LIMITS } from "@stll/api-contract";
 import {
   CHAT_CONTEXT_FILE_MAX_BYTES,
   CHAT_CONTEXT_FILE_MAX_MEGABYTES,
@@ -291,6 +292,23 @@ export const LIMITS = {
   chatContextTextMaxChars: 32_000,
   /** Max number of file attachments per chat message. */
   chatContextFilesPerMessage: 5,
+  /** Max encoded inline audio/video payload stored in one chat part. Large
+   * generated media should use a URL instead of inflating every history read. */
+  chatRichMediaInlineMaxChars: CHAT_RICH_PART_LIMITS.inlineMediaMaxChars,
+  chatRichMediaMimeTypeMaxChars: CHAT_RICH_PART_LIMITS.mediaMimeTypeMaxChars,
+  chatRichMediaUrlMaxChars: CHAT_RICH_PART_LIMITS.mediaUrlMaxChars,
+  chatRichPartIdentifierMaxChars: CHAT_RICH_PART_LIMITS.identifierMaxChars,
+  /** Max number of rich presentation parts stored in one message. */
+  chatRichPartsPerMessageMax: 16,
+  /** Max serialized UTF-8 bytes across rich presentation parts in one
+   * message. Keeps one generated media payload valid while bounding JSONB
+   * row size and repeated history transfer cost. */
+  chatRichPartsTotalMaxBytes: 5 * 1024 * 1024,
+  /** Max text or base64 payload stored for one sandboxed MCP App resource. */
+  chatUiResourceContentMaxChars:
+    CHAT_RICH_PART_LIMITS.uiResourceContentMaxChars,
+  /** Max length of the routing URI on one persisted MCP App resource. */
+  chatUiResourceUriMaxChars: CHAT_RICH_PART_LIMITS.uiResourceUriMaxChars,
   /** Default page size for the user's chat thread history. */
   chatThreadListPageSizeDefault: 50,
   /** Max page size for the user's chat thread history. */

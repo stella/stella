@@ -29,6 +29,11 @@ import { AskUserCard } from "@/components/chat/ask-user-card";
 import { useChatApproval } from "@/components/chat/chat-approval-context";
 import { ChatImageAttachment } from "@/components/chat/chat-image-attachment";
 import {
+  ChatRichMessagePart,
+  isRichChatPart,
+} from "@/components/chat/chat-rich-message-part";
+import type { RichChatPart } from "@/components/chat/chat-rich-message-part";
+import {
   buildMessageTurns,
   collectAnonRestorations,
   EMPTY_RESTORATION_PAIRS,
@@ -834,6 +839,10 @@ const hasVisibleContent = (
       if (part.type === "thinking" && part.content.trim()) {
         return true;
       }
+
+      if (isRichChatPart(part)) {
+        return true;
+      }
     }
   }
 
@@ -1109,6 +1118,55 @@ type AssistantMessagePartsProps = Pick<
   shouldShowToolCalls: boolean;
 };
 
+type AssistantPartRenderEntry =
+  | { type: "rich"; key: string; part: RichChatPart }
+  | {
+      type: "standard";
+      part: Exclude<ChatPart, RichChatPart>;
+    };
+
+const richPartRenderIdentity = (part: RichChatPart): string => {
+  if (part.type === "ui-resource") {
+    return `ui-resource:${part.toolCallId}`;
+  }
+
+  const { source } = part;
+  const edgeChars = 32;
+  return [
+    part.type,
+    source.type,
+    source.mimeType ?? "",
+    source.value.length,
+    source.value.slice(0, edgeChars),
+    source.value.slice(-edgeChars),
+  ].join(":");
+};
+
+const toAssistantPartRenderEntries = (
+  parts: readonly ChatPart[],
+): AssistantPartRenderEntry[] => {
+  const entries: AssistantPartRenderEntry[] = [];
+  const richPartOccurrences = new Map<string, number>();
+
+  for (const part of parts) {
+    if (!isRichChatPart(part)) {
+      entries.push({ type: "standard", part });
+      continue;
+    }
+
+    const identity = richPartRenderIdentity(part);
+    const occurrence = (richPartOccurrences.get(identity) ?? 0) + 1;
+    richPartOccurrences.set(identity, occurrence);
+    entries.push({
+      type: "rich",
+      key: `${identity}:${occurrence}`,
+      part,
+    });
+  }
+
+  return entries;
+};
+
 /**
  * Renders the body of an assistant message. Splitting this out of
  * the parent `messages.map` lets React Compiler memoize the
@@ -1135,13 +1193,24 @@ const AssistantMessageParts = ({
   const restorationPairs = collectAnonRestorations(message);
   const firstThinkingPartIndex = getFirstThinkingPartIndex(message.parts);
   const reasoningTokenCount = getReasoningTokenCount(message);
-  const hasAnswerText = hasAssistantAnswerText(message.parts);
+  const hasAnswerContent = hasAssistantAnswerContent(message.parts);
+  const renderEntries = toAssistantPartRenderEntries(message.parts);
   return (
     <>
       {firstThinkingPartIndex === -1 && reasoningTokenCount !== null && (
         <AssistantReasoningTokenSummary count={reasoningTokenCount} />
       )}
-      {message.parts.map((part, index) => {
+      {renderEntries.map((entry, index) => {
+        if (entry.type === "rich") {
+          return (
+            <ChatRichMessagePart
+              key={`${message.id}-${entry.key}`}
+              part={entry.part}
+            />
+          );
+        }
+
+        const { part } = entry;
         if (part.type === "thinking") {
           return (
             <AssistantThinkingPart
@@ -1153,7 +1222,7 @@ const AssistantMessageParts = ({
                 // answer text — render the collapsible `<details>`, collapsed
                 // by default and clickable, so a completed reasoning block can
                 // always be minimised.
-                !hasAnswerText && isGenerating && isLatestAssistantMessage
+                !hasAnswerContent && isGenerating && isLatestAssistantMessage
                   ? { isStreaming: true, status: "expanded" }
                   : { status: "folded" }
               }
@@ -1289,9 +1358,12 @@ const getReasoningTokenCount = (
   return count !== undefined && count > 0 ? count : null;
 };
 
-const hasAssistantAnswerText = (parts: readonly ChatPart[]): boolean => {
+const hasAssistantAnswerContent = (parts: readonly ChatPart[]): boolean => {
   for (const part of parts) {
     if (part.type === "text" && part.content.trim()) {
+      return true;
+    }
+    if (isRichChatPart(part)) {
       return true;
     }
   }

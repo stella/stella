@@ -17,8 +17,11 @@ import {
   validateStoredFileRefs,
 } from "@/api/handlers/chat/attachment-validation";
 import {
-  isChatPart,
+  chatMessageFromPersisted,
+  hasServerOwnedChatPartType,
+  isIncomingChatPart,
   isChatTextPart,
+  restoreServerOwnedChatParts,
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
 import { CHAT_TOOL_SCOPE } from "@/api/handlers/chat/tools/tool-scope";
@@ -26,8 +29,10 @@ import type {
   ChatMention,
   ChatMessage,
   ChatMessageMetadata,
+  ChatMessageRole,
   ChatPart,
   PersistableChatMessage,
+  PersistedChatMessageContent,
 } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
@@ -236,6 +241,10 @@ export type IncomingActiveSkill = Static<typeof activeSkillSchema>;
 
 type ValidateMessageInput = {
   message: RawIncomingMessage;
+  persistedMessage: {
+    content: PersistedChatMessageContent;
+    role: ChatMessageRole;
+  } | null;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
   tools: ChatToolMap;
@@ -261,13 +270,17 @@ type ValidatedToolCallPart = {
 
 export const validateMessage = async ({
   message,
+  persistedMessage,
   safeDb,
   threadId,
   tools,
   userId,
 }: ValidateMessageInput): Promise<ValidateMessageResult> =>
   await Result.gen(async function* () {
-    const partsResult = validateIncomingChatParts(message.parts);
+    const partsResult = validateIncomingChatParts({
+      message,
+      persistedMessage,
+    });
     if (Result.isError(partsResult)) {
       return Result.err(partsResult.error);
     }
@@ -350,22 +363,47 @@ export const validateMessage = async ({
     });
   });
 
-const validateIncomingChatParts = (
-  parts: readonly unknown[],
-): Result<ChatPart[], HandlerError<400>> => {
+const validateIncomingChatParts = ({
+  message,
+  persistedMessage,
+}: {
+  message: RawIncomingMessage;
+  persistedMessage: ValidateMessageInput["persistedMessage"];
+}): Result<ChatPart[], HandlerError<400>> => {
   const validatedParts: ChatPart[] = [];
-  for (const part of parts) {
-    if (!isChatPart(part)) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Invalid chat message part",
-        }),
-      );
+  for (const part of message.parts) {
+    if (isIncomingChatPart(part)) {
+      validatedParts.push(part);
+      continue;
     }
-    validatedParts.push(part);
+    // Assistant continuations echo the complete client-side message. Ignore
+    // every client copy of server-owned presentation output; the canonical
+    // persisted copies are restored below. User messages cannot carry them.
+    if (message.role === "assistant" && hasServerOwnedChatPartType(part)) {
+      continue;
+    }
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Invalid chat message part",
+      }),
+    );
   }
-  return Result.ok(validatedParts);
+
+  const persistedParts =
+    message.role === "assistant" && persistedMessage?.role === "assistant"
+      ? chatMessageFromPersisted({
+          id: message.id,
+          role: persistedMessage.role,
+          content: persistedMessage.content,
+        }).parts
+      : [];
+  return Result.ok(
+    restoreServerOwnedChatParts({
+      incomingParts: validatedParts,
+      persistedParts,
+    }),
+  );
 };
 
 const validateIncomingChatMetadata = (

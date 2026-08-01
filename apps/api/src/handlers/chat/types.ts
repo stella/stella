@@ -61,13 +61,16 @@ export type ChatAttachmentPart =
 export type ChatTanStackPart = MessagePart<ChatClientTools>;
 export type ChatPart = ChatTanStackPart;
 export type PersistableChatPartType =
+  | "audio"
   | "document"
   | "image"
   | "structured-output"
   | "text"
   | "thinking"
   | "tool-call"
-  | "tool-result";
+  | "tool-result"
+  | "ui-resource"
+  | "video";
 
 export type ChatMessageUsage = Pick<
   TokenUsage,
