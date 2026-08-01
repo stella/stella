@@ -20,12 +20,12 @@ import { findMcpConnectorIconHref } from "@/components/inspector/external-source
 import { getActiveSkillChatContext } from "@/components/inspector/inspector-active-skill";
 import {
   isGenericInspectorTab,
-  useInspectorStore,
-} from "@/components/inspector/inspector-store";
+  useInspectorTabsStore,
+} from "@/components/inspector/inspector-tabs-store";
 import type {
   ChatTab,
   InspectorTab,
-} from "@/components/inspector/inspector-store";
+} from "@/components/inspector/inspector-tabs-store";
 import { buildMaximizeTabAction } from "@/components/inspector/maximize-tab";
 import { useRailContextMenu } from "@/components/inspector/use-rail-context-menu";
 import { useTabContextMenu } from "@/components/inspector/use-tab-context-menu";
@@ -342,8 +342,8 @@ const VerticalTabIcon = ({
  */
 const SuggestedReviveTab = () => {
   const t = useTranslations();
-  const suggestion = useInspectorStore((s) => s.reviveSuggestion);
-  const reviveSuggestedTab = useInspectorStore((s) => s.reviveSuggestedTab);
+  const suggestion = useInspectorTabsStore((s) => s.reviveSuggestion);
+  const reviveSuggestedTab = useInspectorTabsStore((s) => s.reviveSuggestedTab);
   if (suggestion === null) {
     return null;
   }
@@ -474,7 +474,7 @@ const VerticalTab = ({
   });
 
   // Flash the tab on (re-)activation.
-  const activationSeq = useInspectorStore((s) => s.activationSeq);
+  const activationSeq = useInspectorTabsStore((s) => s.activationSeq);
   const prevSeq = useRef(activationSeq);
   useExternalSyncEffect(() => {
     const el = tabRef.current;
@@ -486,8 +486,8 @@ const VerticalTab = ({
 
   // Targeted flash: flash this tab when something asks for it by id
   // (e.g. clicking a field in the document), regardless of active state.
-  const flashSeq = useInspectorStore((s) => s.flashSeq);
-  const flashTabId = useInspectorStore((s) => s.flashTabId);
+  const flashSeq = useInspectorTabsStore((s) => s.flashSeq);
+  const flashTabId = useInspectorTabsStore((s) => s.flashTabId);
   const prevFlashSeq = useRef(flashSeq);
   useExternalSyncEffect(() => {
     const el = tabRef.current;

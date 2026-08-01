@@ -42,9 +42,9 @@ import { ChatMentionProviders } from "@/components/chat-mention-providers";
 import { ModelSelectorDialog } from "@/components/chat/model-selector-dialog";
 import {
   initializeInspectorTabBroadcast,
-  useInspectorStore,
-} from "@/components/inspector/inspector-store";
-import type { InspectorTab } from "@/components/inspector/inspector-store";
+  useInspectorTabsStore,
+} from "@/components/inspector/inspector-tabs-store";
+import type { InspectorTab } from "@/components/inspector/inspector-tabs-store";
 import { MatterIcon } from "@/components/matter-icon";
 import { AIAvailabilityProvider } from "@/components/require-ai-key";
 import { SelfhostUpdateBanner } from "@/components/selfhost-update-banner";
@@ -308,7 +308,7 @@ function ProtectedComponent() {
   // meaningful inside a matter (we need somewhere to scope the
   // chat to); on non-workspace routes it's a no-op.
   const handleToggleInspectorHotkey = useCallback(() => {
-    const store = useInspectorStore.getState();
+    const store = useInspectorTabsStore.getState();
     if (store.tabs.length > 0) {
       store.toggleMinimized();
       return;
@@ -367,11 +367,11 @@ function ProtectedContent() {
   // not just inside a matter, so users can pop a minimised pane
   // back open from any route. Inside a workspace it doubles as
   // "create new chat" when no tabs are open yet.
-  const inspectorMinimized = useInspectorStore((s) => s.minimized);
-  const inspectorTabsCount = useInspectorStore((s) => s.tabs.length);
-  const toggleInspector = useInspectorStore((s) => s.toggleMinimized);
-  const openInspectorChat = useInspectorStore((s) => s.openChat);
-  const openMatterInspector = useInspectorStore((s) => s.openMatter);
+  const inspectorMinimized = useInspectorTabsStore((s) => s.minimized);
+  const inspectorTabsCount = useInspectorTabsStore((s) => s.tabs.length);
+  const toggleInspector = useInspectorTabsStore((s) => s.toggleMinimized);
+  const openInspectorChat = useInspectorTabsStore((s) => s.openChat);
+  const openMatterInspector = useInspectorTabsStore((s) => s.openMatter);
   const handleInspectorButtonClick = () => {
     if (inspectorTabsCount === 0) {
       // No tabs yet — open a new chat. With a matter context the
@@ -630,10 +630,10 @@ function WorkspaceInspectorSidePanel() {
     shouldThrow: false,
   });
   const routeWorkspaceId = projectMatch?.params.workspaceId;
-  const tabs = useInspectorStore((s) => s.tabs);
-  const activeId = useInspectorStore((s) => s.activeId);
-  const minimized = useInspectorStore((s) => s.minimized);
-  const setMinimized = useInspectorStore((s) => s.setMinimized);
+  const tabs = useInspectorTabsStore((s) => s.tabs);
+  const activeId = useInspectorTabsStore((s) => s.activeId);
+  const minimized = useInspectorTabsStore((s) => s.minimized);
+  const setMinimized = useInspectorTabsStore((s) => s.setMinimized);
   // Desktop keeps a rail-mounted inspector shell; mobile uses a
   // sheet and relies on the topbar restore button after Back.
   // Pane content is shown only when a tab exists and the inspector

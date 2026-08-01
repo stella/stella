@@ -1,6 +1,6 @@
 import type { PipelineConfig } from "@stll/anonymize-wasm";
 
-import { useInspectorStore } from "@/components/inspector/inspector-store";
+import { useInspectorAnonymizationStore } from "@/components/inspector/inspector-anonymization-store";
 import {
   createPipelineRunRegistry,
   type PipelineRun,
@@ -63,7 +63,9 @@ export const anonymizePdf = async ({
   // Tell the inspector facet a producer is in flight so
   // it shows "Detecting entities…" while the wasm pipeline
   // runs. Mirrored on every terminal exit below.
-  useInspectorStore.getState().markAnonymizationPipelineStarted(fieldId);
+  useInspectorAnonymizationStore
+    .getState()
+    .markAnonymizationPipelineStarted(fieldId);
   try {
     await runPipelineAndCommit({ workspaceId, fieldId, isPdf, run });
   } finally {
@@ -76,7 +78,9 @@ export const anonymizePdf = async ({
     // same document would keep the inspector facet stuck
     // on the "Detecting…" placeholder.
     if (pipelineRuns.finish(fieldId, run)) {
-      useInspectorStore.getState().markAnonymizationPipelineRan(fieldId);
+      useInspectorAnonymizationStore
+        .getState()
+        .markAnonymizationPipelineRan(fieldId);
     }
   }
 };
@@ -200,11 +204,13 @@ const runPipelineAndCommit = async ({
     }
     totalMatches += 1;
   }
-  useInspectorStore.getState().publishAnonymizationMatches(fieldId, {
-    totalMatches,
-    countByCanonical,
-    labelByCanonical,
-  });
+  useInspectorAnonymizationStore
+    .getState()
+    .publishAnonymizationMatches(fieldId, {
+      totalMatches,
+      countByCanonical,
+      labelByCanonical,
+    });
 };
 
 export const clearAnonymization = (fieldId: string): void => {
@@ -214,5 +220,5 @@ export const clearAnonymization = (fieldId: string): void => {
   // the inspector facet stops showing a stale count when
   // the user navigates away mid-detection. Idempotent for
   // fields that were never published.
-  useInspectorStore.getState().clearAnonymizationMatches(fieldId);
+  useInspectorAnonymizationStore.getState().clearAnonymizationMatches(fieldId);
 };

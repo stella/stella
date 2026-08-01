@@ -1,7 +1,7 @@
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { isEntityActiveInMainRoute } from "@/components/chat/entity-route-detect";
-import { useInspectorStore } from "@/components/inspector/inspector-store";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { getTranslator } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -41,7 +41,7 @@ const openDisplayableFile = ({
       continue;
     }
 
-    useInspectorStore.getState().openFile({
+    useInspectorTabsStore.getState().openFile({
       id: field.id,
       entityId,
       label,
@@ -88,7 +88,7 @@ const openEntityByKind = ({
   workspaceId: string;
 }): OpenEntityResult | null => {
   if (kind === "task") {
-    useInspectorStore
+    useInspectorTabsStore
       .getState()
       .openTask({ taskId: entityId, workspaceId, label });
     return { type: "opened" };

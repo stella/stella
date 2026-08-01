@@ -1,4 +1,4 @@
-import { useInspectorStore } from "@/components/inspector/inspector-store";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 
 /**
  * Public hook for non-workspace routes to open, close, and switch
@@ -7,8 +7,8 @@ import { useInspectorStore } from "@/components/inspector/inspector-store";
  * have to import the store directly.
  */
 export const useInspectorView = () => {
-  const open = useInspectorStore((s) => s.openView);
-  const close = useInspectorStore((s) => s.closeTab);
-  const setActive = useInspectorStore((s) => s.setActive);
+  const open = useInspectorTabsStore((s) => s.openView);
+  const close = useInspectorTabsStore((s) => s.closeTab);
+  const setActive = useInspectorTabsStore((s) => s.setActive);
   return { open, close, setActive };
 };

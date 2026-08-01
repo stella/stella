@@ -39,7 +39,7 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { DocumentIcon } from "@/components/document-icon";
-import { useInspectorStore } from "@/components/inspector/inspector-store";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MatterIcon } from "@/components/matter-icon";
 import { PersonMentionLabel } from "@/components/person-mention-label";
 import Tooltip from "@/components/tooltip";
@@ -1406,7 +1406,7 @@ const getOpenTarget = (item: MatterActivityItem, workspaceId: string) => {
   }
   if (target.kind === "task") {
     return () =>
-      useInspectorStore.getState().openTask({
+      useInspectorTabsStore.getState().openTask({
         label: target.name ?? "",
         taskId: target.entityId ?? target.id,
         workspaceId,
@@ -1428,7 +1428,7 @@ const getOpenTarget = (item: MatterActivityItem, workspaceId: string) => {
     return undefined;
   }
   return () =>
-    useInspectorStore.getState().openFile({
+    useInspectorTabsStore.getState().openFile({
       entityId: target.entityId ?? target.id,
       fileName: target.name ?? "",
       id: target.fieldId ?? "",

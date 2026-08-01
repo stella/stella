@@ -5,8 +5,8 @@ import {
   closeInspectorTabsForEntities,
   getInspectorTabsBroadcastChannelName,
   initializeInspectorTabBroadcast,
-  useInspectorStore,
-} from "@/components/inspector/inspector-store";
+  useInspectorTabsStore,
+} from "@/components/inspector/inspector-tabs-store";
 import { registerInspectorView } from "@/components/inspector/view-registry";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 
@@ -28,33 +28,20 @@ afterEach(() => {
   } else {
     Reflect.deleteProperty(globalThis, "window");
   }
-  useInspectorStore.setState({
+  useInspectorTabsStore.setState({
     tabs: [],
     activeId: null,
     activationSeq: 0,
     flashTabId: null,
     flashSeq: 0,
-    pendingRenameTabId: null,
     minimized: false,
-    pendingBlockScroll: null,
-    pendingDocxEditTabId: null,
     reviveSuggestion: null,
-    anonymizationActiveMountCount: 0,
-    documentTextSelectionByFieldId: {},
-    anonymizationMatchesByFieldId: {},
-    anonymizationPipelineStartedFieldIds: new Set(),
-    anonymizationSelection: {
-      canonical: null,
-      label: null,
-      source: null,
-      fieldId: null,
-      seq: 0,
-    },
   });
 });
 
 class FakeBroadcastChannel {
   static readonly channels = new Map<string, Set<FakeBroadcastChannel>>();
+  static postError: Error | null = null;
 
   readonly name: string;
 
@@ -70,6 +57,9 @@ class FakeBroadcastChannel {
   }
 
   postMessage(message: unknown) {
+    if (FakeBroadcastChannel.postError !== null) {
+      throw FakeBroadcastChannel.postError;
+    }
     this.dispatchToPeers(message);
   }
 
@@ -121,6 +111,7 @@ class FakeBroadcastChannel {
 
   static reset() {
     FakeBroadcastChannel.channels.clear();
+    FakeBroadcastChannel.postError = null;
   }
 }
 
@@ -143,13 +134,13 @@ const freezeDateNow = (updatedAt: number) => {
 describe("openChat", () => {
   test("creates a workspace-scoped tab when workspaceId is provided", () => {
     const threadId = toChatThreadId("thread-A");
-    useInspectorStore.getState().openChat({
+    useInspectorTabsStore.getState().openChat({
       id: threadId,
       workspaceId: "ws-1",
       contextMatterIds: ["ws-1"],
     });
 
-    const tab = useInspectorStore
+    const tab = useInspectorTabsStore
       .getState()
       .tabs.find((t) => t.id === threadId);
     expect(tab?.type).toBe("chat");
@@ -162,9 +153,9 @@ describe("openChat", () => {
 
   test("creates a global tab when workspaceId is omitted", () => {
     const threadId = toChatThreadId("thread-B");
-    useInspectorStore.getState().openChat({ id: threadId });
+    useInspectorTabsStore.getState().openChat({ id: threadId });
 
-    const tab = useInspectorStore
+    const tab = useInspectorTabsStore
       .getState()
       .tabs.find((t) => t.id === threadId);
     expect(tab?.type).toBe("chat");
@@ -177,16 +168,16 @@ describe("openChat", () => {
 
   test("re-opening an existing tab updates workspaceId only when supplied", () => {
     const threadId = toChatThreadId("thread-C");
-    useInspectorStore.getState().openChat({
+    useInspectorTabsStore.getState().openChat({
       id: threadId,
       workspaceId: "ws-1",
     });
-    useInspectorStore.getState().openChat({
+    useInspectorTabsStore.getState().openChat({
       id: threadId,
       contextMatterIds: ["ws-2"],
     });
 
-    const tab = useInspectorStore
+    const tab = useInspectorTabsStore
       .getState()
       .tabs.find((t) => t.id === threadId);
     if (tab?.type !== "chat") {
@@ -200,17 +191,17 @@ describe("openChat", () => {
 
   test("preserves active skill context on chat tabs", () => {
     const threadId = toChatThreadId("thread-skill");
-    useInspectorStore.getState().openChat({
+    useInspectorTabsStore.getState().openChat({
       id: threadId,
       activeSkill: { skillId: "skill-1", skillName: "Review Skill" },
     });
 
-    useInspectorStore.getState().openChat({
+    useInspectorTabsStore.getState().openChat({
       id: threadId,
       label: "Renamed skill chat",
     });
 
-    const tab = useInspectorStore
+    const tab = useInspectorTabsStore
       .getState()
       .tabs.find((t) => t.id === threadId);
     if (tab?.type !== "chat") {
@@ -227,7 +218,7 @@ describe("openChat", () => {
 
 describe("openExternal", () => {
   test("preserves the source connector icon on the external tab", () => {
-    useInspectorStore.getState().openExternal({
+    useInspectorTabsStore.getState().openExternal({
       connectorSlug: "salvia",
       iconHref: "https://salvia.example/favicon.ico",
       label: "Decision",
@@ -235,13 +226,13 @@ describe("openExternal", () => {
       workspaceId: "ws-origin",
     });
 
-    useInspectorStore.getState().openExternal({
+    useInspectorTabsStore.getState().openExternal({
       label: "Decision",
       url: "https://example.test/decision",
       workspaceId: "ws-origin",
     });
 
-    const tab = useInspectorStore
+    const tab = useInspectorTabsStore
       .getState()
       .tabs.find(
         (item) => item.id === "external:https://example.test/decision",
@@ -267,19 +258,19 @@ describe("openSkillResourceTab", () => {
       skillName: "review",
     };
 
-    useInspectorStore.getState().openSkillResourceTab(resource);
-    useInspectorStore
+    useInspectorTabsStore.getState().openSkillResourceTab(resource);
+    useInspectorTabsStore
       .getState()
       .updateSkillResourceTabContent(
         buildSkillResourceTabId(resource),
         "Edited content",
       );
-    useInspectorStore.getState().openSkillResourceTab({
+    useInspectorTabsStore.getState().openSkillResourceTab({
       ...resource,
       content: "Stale tool output",
     });
 
-    const tab = useInspectorStore
+    const tab = useInspectorTabsStore
       .getState()
       .tabs.find((item) => item.id === buildSkillResourceTabId(resource));
     expect(tab).toMatchObject({
@@ -299,15 +290,15 @@ describe("openSkillResourceTab", () => {
       skillName: "review",
     };
 
-    useInspectorStore.getState().openSkillResourceTab(resource);
-    useInspectorStore.getState().openSkillResourceTab({
+    useInspectorTabsStore.getState().openSkillResourceTab(resource);
+    useInspectorTabsStore.getState().openSkillResourceTab({
       ...resource,
       content: "Installed content",
       origin: "upload",
       skillId: "agentSkill_1",
     });
 
-    const tab = useInspectorStore
+    const tab = useInspectorTabsStore
       .getState()
       .tabs.find((item) => item.id === buildSkillResourceTabId(resource));
     expect(tab).toMatchObject({
@@ -329,20 +320,20 @@ describe("openSkillResourceTab", () => {
       skillName: "review",
     };
 
-    useInspectorStore.getState().openSkillResourceTab(resource);
-    useInspectorStore
+    useInspectorTabsStore.getState().openSkillResourceTab(resource);
+    useInspectorTabsStore
       .getState()
       .updateSkillResourceTabContent(
         buildSkillResourceTabId(resource),
         "Edited buffer",
       );
-    useInspectorStore.getState().openSkillResourceTab({
+    useInspectorTabsStore.getState().openSkillResourceTab({
       ...resource,
       content: "Tool output",
       refreshContent: true,
     });
 
-    const tab = useInspectorStore
+    const tab = useInspectorTabsStore
       .getState()
       .tabs.find((item) => item.id === buildSkillResourceTabId(resource));
     expect(tab).toMatchObject({
@@ -354,7 +345,7 @@ describe("openSkillResourceTab", () => {
 
 describe("replaceFileFieldId", () => {
   test("re-opening an existing pdf tab refreshes the file label", () => {
-    useInspectorStore.getState().openFile({
+    useInspectorTabsStore.getState().openFile({
       id: "field-1",
       entityId: "entity-1",
       label: "Document 4",
@@ -365,7 +356,7 @@ describe("replaceFileFieldId", () => {
       workspaceId: "workspace-1",
     });
 
-    useInspectorStore.getState().openFile({
+    useInspectorTabsStore.getState().openFile({
       id: "field-1",
       entityId: "entity-1",
       label: "0041_Pleadings_draft.pdf",
@@ -376,7 +367,7 @@ describe("replaceFileFieldId", () => {
       workspaceId: "workspace-1",
     });
 
-    const tab = useInspectorStore
+    const tab = useInspectorTabsStore
       .getState()
       .tabs.find((item) => item.id === "field-1");
     if (tab?.type !== "pdf") {
@@ -387,7 +378,7 @@ describe("replaceFileFieldId", () => {
   });
 
   test("openFile with a different fieldId for the same entity keeps a single tab", () => {
-    useInspectorStore.getState().openFile({
+    useInspectorTabsStore.getState().openFile({
       id: "field-v1",
       entityId: "entity-1",
       label: "Contract.docx",
@@ -399,7 +390,7 @@ describe("replaceFileFieldId", () => {
       workspaceId: "workspace-1",
     });
 
-    useInspectorStore.getState().openFile({
+    useInspectorTabsStore.getState().openFile({
       id: "field-v2",
       entityId: "entity-1",
       label: "Contract.docx",
@@ -411,16 +402,16 @@ describe("replaceFileFieldId", () => {
       workspaceId: "workspace-1",
     });
 
-    const pdfTabs = useInspectorStore
+    const pdfTabs = useInspectorTabsStore
       .getState()
       .tabs.filter((t) => t.type === "pdf");
     expect(pdfTabs).toHaveLength(1);
     expect(pdfTabs[0]?.id).toBe("field-v2");
-    expect(useInspectorStore.getState().activeId).toBe("field-v2");
+    expect(useInspectorTabsStore.getState().activeId).toBe("field-v2");
   });
 
   test("openFileForEntity drops a stale tab whose id collides with the new field", () => {
-    useInspectorStore.getState().openFile({
+    useInspectorTabsStore.getState().openFile({
       id: "field-shared",
       entityId: "entity-A",
       label: "A.docx",
@@ -431,7 +422,7 @@ describe("replaceFileFieldId", () => {
       workspaceId: "workspace-1",
     });
 
-    useInspectorStore.getState().openFileForEntity({
+    useInspectorTabsStore.getState().openFileForEntity({
       id: "field-shared",
       entityId: "entity-B",
       label: "B.docx",
@@ -442,7 +433,7 @@ describe("replaceFileFieldId", () => {
       workspaceId: "workspace-1",
     });
 
-    const pdfTabs = useInspectorStore
+    const pdfTabs = useInspectorTabsStore
       .getState()
       .tabs.filter((t) => t.type === "pdf");
     expect(pdfTabs).toHaveLength(1);
@@ -450,7 +441,7 @@ describe("replaceFileFieldId", () => {
   });
 
   test("bumps the pdf tab render id across version replacement", () => {
-    useInspectorStore.getState().openFile({
+    useInspectorTabsStore.getState().openFile({
       id: "field-old",
       entityId: "entity-1",
       label: "Contract.docx",
@@ -462,7 +453,7 @@ describe("replaceFileFieldId", () => {
       workspaceId: "workspace-1",
     });
 
-    const before = useInspectorStore
+    const before = useInspectorTabsStore
       .getState()
       .tabs.find((tab) => tab.id === "field-old");
     if (before?.type !== "pdf") {
@@ -470,9 +461,11 @@ describe("replaceFileFieldId", () => {
     }
     const beforeRenderId = before.renderId;
 
-    useInspectorStore.getState().replaceFileFieldId("field-old", "field-new");
+    useInspectorTabsStore
+      .getState()
+      .replaceFileFieldId("field-old", "field-new");
 
-    const after = useInspectorStore
+    const after = useInspectorTabsStore
       .getState()
       .tabs.find((tab) => tab.id === "field-new");
     if (after?.type !== "pdf") {
@@ -480,11 +473,11 @@ describe("replaceFileFieldId", () => {
     }
 
     expect(after.renderId).not.toBe(beforeRenderId);
-    expect(useInspectorStore.getState().activeId).toBe("field-new");
+    expect(useInspectorTabsStore.getState().activeId).toBe("field-new");
   });
 
   test("refreshes file tab metadata across version replacement", () => {
-    useInspectorStore.getState().openFile({
+    useInspectorTabsStore.getState().openFile({
       id: "field-old",
       entityId: "entity-1",
       label: "Contract.docx",
@@ -496,7 +489,7 @@ describe("replaceFileFieldId", () => {
       workspaceId: "workspace-1",
     });
 
-    useInspectorStore.getState().replaceFileFieldId("field-old", {
+    useInspectorTabsStore.getState().replaceFileFieldId("field-old", {
       id: "field-new",
       fileName: "Contract revised.docx",
       label: "Contract revised.docx",
@@ -505,7 +498,7 @@ describe("replaceFileFieldId", () => {
       propertyId: "property-2",
     });
 
-    const tab = useInspectorStore
+    const tab = useInspectorTabsStore
       .getState()
       .tabs.find((item) => item.id === "field-new");
     if (tab?.type !== "pdf") {
@@ -521,7 +514,7 @@ describe("replaceFileFieldId", () => {
 });
 
 const openFullscreenFileTab = () => {
-  useInspectorStore.getState().openFile({
+  useInspectorTabsStore.getState().openFile({
     id: "field-1",
     entityId: "entity-1",
     label: "Contract.docx",
@@ -538,36 +531,40 @@ const openFullscreenFileTab = () => {
 describe("revive suggestion", () => {
   test("user close of a fullscreen file tab leaves a suggestion; revive restores the exact tab", () => {
     openFullscreenFileTab();
-    const before = useInspectorStore
+    const before = useInspectorTabsStore
       .getState()
       .tabs.find((tab) => tab.id === "field-1");
     if (before?.type !== "pdf") {
       throw new Error("expected pdf tab");
     }
 
-    useInspectorStore.getState().closeTab("field-1", { suggestRevive: true });
-    expect(useInspectorStore.getState().tabs).toHaveLength(0);
-    expect(useInspectorStore.getState().reviveSuggestion?.id).toBe("field-1");
+    useInspectorTabsStore
+      .getState()
+      .closeTab("field-1", { suggestRevive: true });
+    expect(useInspectorTabsStore.getState().tabs).toHaveLength(0);
+    expect(useInspectorTabsStore.getState().reviveSuggestion?.id).toBe(
+      "field-1",
+    );
 
-    useInspectorStore.getState().reviveSuggestedTab();
-    const after = useInspectorStore
+    useInspectorTabsStore.getState().reviveSuggestedTab();
+    const after = useInspectorTabsStore
       .getState()
       .tabs.find((tab) => tab.id === "field-1");
     // Same renderId = same tab identity; the viewer subtree and any
     // per-tab state reconnect instead of remounting fresh.
     expect(after).toEqual(before);
-    expect(useInspectorStore.getState().activeId).toBe("field-1");
-    expect(useInspectorStore.getState().reviveSuggestion).toBeNull();
+    expect(useInspectorTabsStore.getState().activeId).toBe("field-1");
+    expect(useInspectorTabsStore.getState().reviveSuggestion).toBeNull();
   });
 
   test("programmatic close (route unmount) leaves no suggestion", () => {
     openFullscreenFileTab();
-    useInspectorStore.getState().closeTab("field-1");
-    expect(useInspectorStore.getState().reviveSuggestion).toBeNull();
+    useInspectorTabsStore.getState().closeTab("field-1");
+    expect(useInspectorTabsStore.getState().reviveSuggestion).toBeNull();
   });
 
   test("closing a side-peek file tab leaves no suggestion", () => {
-    useInspectorStore.getState().openFile({
+    useInspectorTabsStore.getState().openFile({
       id: "field-1",
       entityId: "entity-1",
       label: "Contract.docx",
@@ -577,24 +574,30 @@ describe("revive suggestion", () => {
       propertyId: "property-1",
       workspaceId: "workspace-1",
     });
-    useInspectorStore.getState().closeTab("field-1", { suggestRevive: true });
-    expect(useInspectorStore.getState().reviveSuggestion).toBeNull();
+    useInspectorTabsStore
+      .getState()
+      .closeTab("field-1", { suggestRevive: true });
+    expect(useInspectorTabsStore.getState().reviveSuggestion).toBeNull();
   });
 
   test("document route unmount clears the suggestion via lane demotion", () => {
     openFullscreenFileTab();
-    useInspectorStore.getState().closeTab("field-1", { suggestRevive: true });
-    expect(useInspectorStore.getState().reviveSuggestion).not.toBeNull();
+    useInspectorTabsStore
+      .getState()
+      .closeTab("field-1", { suggestRevive: true });
+    expect(useInspectorTabsStore.getState().reviveSuggestion).not.toBeNull();
 
-    useInspectorStore.getState().setFileMetadataLane("field-1", "closed");
-    expect(useInspectorStore.getState().reviveSuggestion).toBeNull();
+    useInspectorTabsStore.getState().setFileMetadataLane("field-1", "closed");
+    expect(useInspectorTabsStore.getState().reviveSuggestion).toBeNull();
   });
 
   test("reopening another version of the same entity supersedes the suggestion", () => {
     openFullscreenFileTab();
-    useInspectorStore.getState().closeTab("field-1", { suggestRevive: true });
+    useInspectorTabsStore
+      .getState()
+      .closeTab("field-1", { suggestRevive: true });
 
-    useInspectorStore.getState().openFileForEntity({
+    useInspectorTabsStore.getState().openFileForEntity({
       id: "field-2",
       entityId: "entity-1",
       label: "Contract.docx",
@@ -604,16 +607,20 @@ describe("revive suggestion", () => {
       propertyId: "property-1",
       workspaceId: "workspace-1",
     });
-    expect(useInspectorStore.getState().reviveSuggestion).toBeNull();
+    expect(useInspectorTabsStore.getState().reviveSuggestion).toBeNull();
   });
 
   test("closeAll keeps a suggestion for the swept-away bound tab", () => {
     openFullscreenFileTab();
-    useInspectorStore.getState().openChat({ id: toChatThreadId("thread-1") });
+    useInspectorTabsStore
+      .getState()
+      .openChat({ id: toChatThreadId("thread-1") });
 
-    useInspectorStore.getState().closeAll();
-    expect(useInspectorStore.getState().tabs).toHaveLength(0);
-    expect(useInspectorStore.getState().reviveSuggestion?.id).toBe("field-1");
+    useInspectorTabsStore.getState().closeAll();
+    expect(useInspectorTabsStore.getState().tabs).toHaveLength(0);
+    expect(useInspectorTabsStore.getState().reviveSuggestion?.id).toBe(
+      "field-1",
+    );
   });
 
   test("route-owned view tab: user close suggests, owner unmount close clears", () => {
@@ -628,7 +635,7 @@ describe("revive suggestion", () => {
         "templateId" in value &&
         typeof value.templateId === "string",
     });
-    useInspectorStore.getState().openView({
+    useInspectorTabsStore.getState().openView({
       type: "test-bound-view",
       id: "test-bound-view:tpl-1",
       label: "NDA template",
@@ -636,10 +643,10 @@ describe("revive suggestion", () => {
       ownerRouteId: "/_protected/knowledge/templates",
     });
 
-    useInspectorStore
+    useInspectorTabsStore
       .getState()
       .closeTab("test-bound-view:tpl-1", { suggestRevive: true });
-    const suggestion = useInspectorStore.getState().reviveSuggestion;
+    const suggestion = useInspectorTabsStore.getState().reviveSuggestion;
     expect(suggestion?.id).toBe("test-bound-view:tpl-1");
     if (suggestion?.type !== "view") {
       throw new Error("expected view suggestion");
@@ -649,14 +656,14 @@ describe("revive suggestion", () => {
     // The owner page unmounts (user leaves the studio) and runs its
     // cleanup close for a tab that is already gone — the suggestion
     // must not outlive the main view it points at.
-    useInspectorStore.getState().closeTab("test-bound-view:tpl-1");
-    expect(useInspectorStore.getState().reviveSuggestion).toBeNull();
+    useInspectorTabsStore.getState().closeTab("test-bound-view:tpl-1");
+    expect(useInspectorTabsStore.getState().reviveSuggestion).toBeNull();
   });
 });
 
 describe("closeTabsForEntities", () => {
   test("clears the inspector when its only file is deleted", () => {
-    useInspectorStore.getState().openFile({
+    useInspectorTabsStore.getState().openFile({
       id: "field-1",
       entityId: "entity-1",
       label: "Contract.pdf",
@@ -668,12 +675,12 @@ describe("closeTabsForEntities", () => {
 
     closeInspectorTabsForEntities(["entity-1"]);
 
-    expect(useInspectorStore.getState().tabs).toEqual([]);
-    expect(useInspectorStore.getState().activeId).toBeNull();
+    expect(useInspectorTabsStore.getState().tabs).toEqual([]);
+    expect(useInspectorTabsStore.getState().activeId).toBeNull();
   });
 
   test("activates the nearest surviving tab after deleting the active file", () => {
-    useInspectorStore.getState().openFile({
+    useInspectorTabsStore.getState().openFile({
       id: "field-before",
       entityId: "entity-before",
       label: "Before.pdf",
@@ -682,7 +689,7 @@ describe("closeTabsForEntities", () => {
       pdfFileId: null,
       workspaceId: "workspace-1",
     });
-    useInspectorStore.getState().openFile({
+    useInspectorTabsStore.getState().openFile({
       id: "field-1",
       entityId: "entity-1",
       label: "Contract.pdf",
@@ -691,31 +698,33 @@ describe("closeTabsForEntities", () => {
       pdfFileId: null,
       workspaceId: "workspace-1",
     });
-    useInspectorStore.getState().openChat({
+    useInspectorTabsStore.getState().openChat({
       id: toChatThreadId("thread-after"),
     });
-    useInspectorStore.getState().openChat({
+    useInspectorTabsStore.getState().openChat({
       id: toChatThreadId("thread-last"),
     });
-    useInspectorStore.getState().setActive("field-1");
+    useInspectorTabsStore.getState().setActive("field-1");
 
     closeInspectorTabsForEntities(["entity-before", "entity-1"]);
 
-    expect(useInspectorStore.getState().tabs.map((tab) => tab.id)).toEqual([
+    expect(useInspectorTabsStore.getState().tabs.map((tab) => tab.id)).toEqual([
       "thread-after",
       "thread-last",
     ]);
-    expect(useInspectorStore.getState().activeId).toBe("thread-after");
+    expect(useInspectorTabsStore.getState().activeId).toBe("thread-after");
   });
 
   test("closes every deleted entity tab and clears a stale revive suggestion", () => {
     openFullscreenFileTab();
-    useInspectorStore.getState().closeTab("field-1", { suggestRevive: true });
-    useInspectorStore.getState().openTask({
+    useInspectorTabsStore
+      .getState()
+      .closeTab("field-1", { suggestRevive: true });
+    useInspectorTabsStore.getState().openTask({
       taskId: "entity-2",
       workspaceId: "workspace-1",
     });
-    useInspectorStore.getState().openFile({
+    useInspectorTabsStore.getState().openFile({
       id: "field-3",
       entityId: "entity-3",
       label: "Keep.pdf",
@@ -727,15 +736,15 @@ describe("closeTabsForEntities", () => {
 
     closeInspectorTabsForEntities(["entity-1", "entity-2"]);
 
-    expect(useInspectorStore.getState().tabs.map((tab) => tab.id)).toEqual([
+    expect(useInspectorTabsStore.getState().tabs.map((tab) => tab.id)).toEqual([
       "field-3",
     ]);
-    expect(useInspectorStore.getState().activeId).toBe("field-3");
-    expect(useInspectorStore.getState().reviveSuggestion).toBeNull();
+    expect(useInspectorTabsStore.getState().activeId).toBe("field-3");
+    expect(useInspectorTabsStore.getState().reviveSuggestion).toBeNull();
   });
 
   test("preserves the active tab when another entity is deleted", () => {
-    useInspectorStore.getState().openFile({
+    useInspectorTabsStore.getState().openFile({
       id: "field-1",
       entityId: "entity-1",
       label: "Delete.pdf",
@@ -744,24 +753,24 @@ describe("closeTabsForEntities", () => {
       pdfFileId: null,
       workspaceId: "workspace-1",
     });
-    useInspectorStore.getState().openChat({
+    useInspectorTabsStore.getState().openChat({
       id: toChatThreadId("thread-keep"),
     });
 
     closeInspectorTabsForEntities(["entity-1"]);
 
-    expect(useInspectorStore.getState().activeId).toBe("thread-keep");
+    expect(useInspectorTabsStore.getState().activeId).toBe("thread-keep");
   });
 
   test("preserves the tabs reference when no open tab was deleted", () => {
-    useInspectorStore.getState().openChat({
+    useInspectorTabsStore.getState().openChat({
       id: toChatThreadId("thread-keep"),
     });
-    const tabsBefore = useInspectorStore.getState().tabs;
+    const tabsBefore = useInspectorTabsStore.getState().tabs;
 
     closeInspectorTabsForEntities(["entity-missing"]);
 
-    expect(useInspectorStore.getState().tabs).toBe(tabsBefore);
+    expect(useInspectorTabsStore.getState().tabs).toBe(tabsBefore);
   });
 });
 
@@ -779,7 +788,7 @@ describe("Inspector tab broadcast", () => {
 
     cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
 
-    useInspectorStore.getState().openFile({
+    useInspectorTabsStore.getState().openFile({
       id: "field-1",
       entityId: "entity-1",
       label: "Contract.docx",
@@ -790,7 +799,7 @@ describe("Inspector tab broadcast", () => {
       propertyId: "property-1",
       workspaceId: "workspace-1",
     });
-    useInspectorStore.getState().setFileFacet("field-1", "versions", {
+    useInspectorTabsStore.getState().setFileFacet("field-1", "versions", {
       pulse: true,
     });
 
@@ -802,7 +811,7 @@ describe("Inspector tab broadcast", () => {
     );
     expect(syncMessage).toBeDefined();
     expect(Reflect.get(syncMessage ?? {}, "tabs")).toEqual(
-      useInspectorStore.getState().tabs,
+      useInspectorTabsStore.getState().tabs,
     );
     expect(Reflect.get(syncMessage ?? {}, "activeId")).toBeUndefined();
     expect(Reflect.get(syncMessage ?? {}, "minimized")).toBeUndefined();
@@ -844,7 +853,7 @@ describe("Inspector tab broadcast", () => {
 
     cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
 
-    expect(useInspectorStore.getState().tabs).toEqual([
+    expect(useInspectorTabsStore.getState().tabs).toEqual([
       {
         type: "chat",
         id: toChatThreadId("thread-1"),
@@ -853,7 +862,7 @@ describe("Inspector tab broadcast", () => {
         contextMatterIds: ["workspace-1"],
       },
     ]);
-    expect(useInspectorStore.getState().activeId).toBe("thread-1");
+    expect(useInspectorTabsStore.getState().activeId).toBe("thread-1");
   });
 
   test("keeps local active tab when the shared tab set still contains it", () => {
@@ -864,7 +873,7 @@ describe("Inspector tab broadcast", () => {
     );
 
     const localThreadId = toChatThreadId("thread-local");
-    useInspectorStore.getState().openChat({ id: localThreadId });
+    useInspectorTabsStore.getState().openChat({ id: localThreadId });
     cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
 
     peer.emit({
@@ -887,8 +896,8 @@ describe("Inspector tab broadcast", () => {
       ],
     });
 
-    expect(useInspectorStore.getState().activeId).toBe(localThreadId);
-    expect(useInspectorStore.getState().tabs).toEqual([
+    expect(useInspectorTabsStore.getState().activeId).toBe(localThreadId);
+    expect(useInspectorTabsStore.getState().tabs).toEqual([
       {
         type: "chat",
         id: toChatThreadId("thread-remote"),
@@ -919,7 +928,7 @@ describe("Inspector tab broadcast", () => {
     cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
 
     const localThreadId = toChatThreadId("thread-local");
-    useInspectorStore.getState().openChat({
+    useInspectorTabsStore.getState().openChat({
       id: localThreadId,
       label: "Local chat",
     });
@@ -950,7 +959,7 @@ describe("Inspector tab broadcast", () => {
         },
       ],
     });
-    expect(useInspectorStore.getState().tabs).toEqual([
+    expect(useInspectorTabsStore.getState().tabs).toEqual([
       {
         type: "chat",
         id: localThreadId,
@@ -973,7 +982,7 @@ describe("Inspector tab broadcast", () => {
         },
       ],
     });
-    expect(useInspectorStore.getState().tabs).toEqual([
+    expect(useInspectorTabsStore.getState().tabs).toEqual([
       {
         type: "chat",
         id: higherPeerThreadId,
@@ -1027,7 +1036,7 @@ describe("Inspector tab broadcast", () => {
 
     cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
 
-    expect(useInspectorStore.getState().tabs).toEqual([
+    expect(useInspectorTabsStore.getState().tabs).toEqual([
       {
         type: "external",
         id: "external:https://example.test/decision",
@@ -1043,9 +1052,55 @@ describe("Inspector tab broadcast", () => {
         workspaceId: null,
       },
     ]);
-    expect(useInspectorStore.getState().activeId).toBe(
+    expect(useInspectorTabsStore.getState().activeId).toBe(
       "external:https://example.test/decision",
     );
+  });
+
+  test("rejects external tabs with an invalid workspace scope", () => {
+    installFakeBroadcastChannel();
+    const scope = { organizationId: "org-1", userId: "user-1" };
+    const peer = new FakeBroadcastChannel(
+      getInspectorTabsBroadcastChannelName(scope),
+    );
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+
+    peer.emit({
+      type: "inspector-tabs:sync",
+      senderId: "peer-tab",
+      updatedAt: 1,
+      tabs: [
+        {
+          type: "external",
+          id: "external:https://example.test/decision",
+          chatThreadId: toChatThreadId("thread-external"),
+          label: "External decision",
+          url: "https://example.test/decision",
+          workspaceId: 42,
+        },
+      ],
+    });
+
+    expect(useInspectorTabsStore.getState().tabs).toEqual([]);
+  });
+
+  test("keeps local tab mutations when browser broadcast fails", () => {
+    installFakeBroadcastChannel();
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast({
+      organizationId: "org-1",
+      userId: "user-1",
+    });
+    FakeBroadcastChannel.postError = new DOMException(
+      "The object could not be cloned.",
+      "DataCloneError",
+    );
+
+    expect(() =>
+      useInspectorTabsStore
+        .getState()
+        .openChat({ id: toChatThreadId("thread-local") }),
+    ).not.toThrow();
+    expect(useInspectorTabsStore.getState().tabs).toHaveLength(1);
   });
 
   test("does not exchange tabs across organization scopes", () => {
@@ -1065,7 +1120,9 @@ describe("Inspector tab broadcast", () => {
       organizationId: "org-1",
       userId: "user-1",
     });
-    useInspectorStore.getState().openChat({ id: toChatThreadId("thread-1") });
+    useInspectorTabsStore
+      .getState()
+      .openChat({ id: toChatThreadId("thread-1") });
 
     expect(received).toEqual([]);
   });

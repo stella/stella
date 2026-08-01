@@ -1,8 +1,8 @@
 import type { QueryClient } from "@tanstack/react-query";
 import type { useNavigate } from "@tanstack/react-router";
 
-import type { InspectorTab } from "@/components/inspector/inspector-store";
-import { useInspectorStore } from "@/components/inspector/inspector-store";
+import type { InspectorTab } from "@/components/inspector/inspector-tabs-store";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import type { ChatThreadFetched } from "@/features/chat/queries";
 import {
   chatKeys,
@@ -71,7 +71,7 @@ export const buildMaximizeTabAction = (
       }),
       "buildMaximizeTabAction",
     );
-    useInspectorStore.getState().closeTab(tab.id);
+    useInspectorTabsStore.getState().closeTab(tab.id);
     if (tabWorkspaceId === undefined) {
       detached(
         navigate({

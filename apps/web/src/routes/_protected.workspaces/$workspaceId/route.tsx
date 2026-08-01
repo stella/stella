@@ -13,7 +13,7 @@ import { useDebouncedCallback } from "use-debounce";
 
 import { stellaToast } from "@stll/ui/components/toast";
 
-import { useInspectorStore } from "@/components/inspector/inspector-store";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { WorkflowServiceTierPromptProvider } from "@/components/workspaces/workflow-service-tier-prompt";
 import { WorkflowStartConfirmationPromptProvider } from "@/components/workspaces/workflow-start-confirmation-prompt";
 import { useWorkspaceChatMentionRegistration } from "@/features/chat/hooks/use-workspace-chat-mention-registration";
@@ -280,7 +280,7 @@ function RouteComponent() {
   // `Mod+Shift+J` here always spawns a fresh chat tab, so a user
   // can start a new conversation without first dismissing whatever
   // is currently open.
-  const openChat = useInspectorStore((s) => s.openChat);
+  const openChat = useInspectorTabsStore((s) => s.openChat);
   const handleOpenChat = () => {
     openChat({ workspaceId, contextMatterIds: [workspaceId] });
   };

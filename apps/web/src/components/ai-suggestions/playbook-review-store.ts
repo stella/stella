@@ -16,7 +16,7 @@
 import { Result } from "better-result";
 import { create } from "zustand";
 
-import { useInspectorStore } from "@/components/inspector/inspector-store";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { api } from "@/lib/api";
 import type { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
@@ -261,7 +261,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
     // Surface where the results landed (mirrors the chat review's
     // auto-switch to the Suggestions facet). Locating the tab by
     // entity id keeps this store ignorant of inspector tab internals.
-    const inspectorState = useInspectorStore.getState();
+    const inspectorState = useInspectorTabsStore.getState();
     const tab = inspectorState.tabs.find(
       (candidate) =>
         candidate.type === "pdf" && candidate.entityId === entityId,

@@ -53,7 +53,7 @@ import { cn } from "@stll/ui/lib/utils";
 import { EmptyScreen } from "@/components/empty-screen";
 import { EMPTY_SCREEN_MATTERS_VIDEO } from "@/components/empty-screen-media";
 import { isTerminalFlowRunStatus } from "@/components/flows/flow-meta";
-import { useInspectorStore } from "@/components/inspector/inspector-store";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { PersonMentionLabel } from "@/components/person-mention-label";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { getWeekStart, toISODate } from "@/components/workspaces/entity-utils";
@@ -204,7 +204,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
       }),
       "OverviewView",
     );
-    useInspectorStore
+    useInspectorTabsStore
       .getState()
       .openTask({ taskId: entityId, workspaceId, isNew: true });
   }, [workspaceId, t, queryClient]);
@@ -480,7 +480,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
           onClick={() => {
             const task = tasksWithDue.at(0);
             if (task) {
-              useInspectorStore.getState().openTask({
+              useInspectorTabsStore.getState().openTask({
                 taskId: task.entityId,
                 workspaceId,
                 label: task.name,
@@ -580,7 +580,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                         className="hover:bg-accent/50 flex w-full items-center gap-3 px-3 py-2.5 text-start transition-colors"
                         key={task.entityId}
                         onClick={() =>
-                          useInspectorStore.getState().openTask({
+                          useInspectorTabsStore.getState().openTask({
                             taskId: task.entityId,
                             workspaceId,
                             label: task.name,
@@ -678,7 +678,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                       if (task === null) {
                         return;
                       }
-                      useInspectorStore.getState().openTask({
+                      useInspectorTabsStore.getState().openTask({
                         taskId: task.entityId,
                         workspaceId,
                         label: task.name,

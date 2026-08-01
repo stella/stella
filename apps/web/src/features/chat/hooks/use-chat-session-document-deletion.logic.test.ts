@@ -2,7 +2,7 @@ import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 
 import type { DocumentDeletionMessage } from "@/components/chat/chat-ui-tools";
-import type { InspectorTab } from "@/components/inspector/inspector-store";
+import type { InspectorTab } from "@/components/inspector/inspector-tabs-store";
 import { reconcileDocumentDeletionToolCalls } from "@/features/chat/hooks/use-chat-session-document-deletion.logic";
 import { fileMetadataQueryKey } from "@/lib/files/file-metadata-query.logic";
 import { workspacesKeys } from "@/lib/workspaces/queries.logic";

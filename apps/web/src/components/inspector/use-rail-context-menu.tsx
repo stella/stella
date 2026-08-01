@@ -3,8 +3,8 @@ import { useTranslations } from "use-intl";
 
 import { MenuItem } from "@stll/ui/components/menu";
 
-import { useInspectorStore } from "@/components/inspector/inspector-store";
-import type { ChatTab } from "@/components/inspector/inspector-store";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import type { ChatTab } from "@/components/inspector/inspector-tabs-store";
 import { useAnchoredMenu } from "@/components/inspector/use-anchored-menu";
 
 /**
@@ -21,7 +21,7 @@ export const useRailContextMenu = ({
   workspaceId?: string | undefined;
 }) => {
   const t = useTranslations();
-  const openChat = useInspectorStore((s) => s.openChat);
+  const openChat = useInspectorTabsStore((s) => s.openChat);
 
   return useAnchoredMenu({
     children: (

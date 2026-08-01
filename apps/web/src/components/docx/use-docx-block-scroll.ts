@@ -2,7 +2,7 @@ import type { RefObject } from "react";
 
 import type { DocxEditorRef } from "@stll/folio-react";
 
-import { useInspectorStore } from "@/components/inspector/inspector-store";
+import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { FOLIO_SCROLL_EVENT } from "@/lib/folio-scroll-event";
 
@@ -68,8 +68,10 @@ export const useDocxBlockScroll = ({
   editorRef,
   fieldId,
 }: UseDocxBlockScrollProps) => {
-  const pendingBlockScroll = useInspectorStore((s) => s.pendingBlockScroll);
-  const clearPendingBlockScroll = useInspectorStore(
+  const pendingBlockScroll = useInspectorCommandStore(
+    (s) => s.pendingBlockScroll,
+  );
+  const clearPendingBlockScroll = useInspectorCommandStore(
     (s) => s.clearPendingBlockScroll,
   );
 

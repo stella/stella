@@ -7,7 +7,7 @@ import { useTranslations } from "use-intl";
 
 import { stellaToast } from "@stll/ui/components/toast";
 
-import { useInspectorStore } from "@/components/inspector/inspector-store";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useLocale } from "@/i18n/formatting-context";
 import { getFirstWeekday, getWeekendDays } from "@/i18n/week";
@@ -141,7 +141,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
       await invalidateCalendarTasks();
     }
 
-    useInspectorStore
+    useInspectorTabsStore
       .getState()
       .openTask({ taskId: entityId, workspaceId, isNew: true });
   };

@@ -4,7 +4,7 @@ import { useTranslations } from "use-intl";
 
 import { cn } from "@stll/ui/lib/utils";
 
-import { useInspectorStore } from "@/components/inspector/inspector-store";
+import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import Tooltip from "@/components/tooltip";
 import { useCreateBBoxes } from "@/components/workspaces/hooks/use-create-b-boxes";
 import type { Citation } from "@/lib/citations";
@@ -148,7 +148,9 @@ type DocxQuoteProps = {
 
 const DocxQuote = ({ citation }: DocxQuoteProps) => {
   const t = useTranslations();
-  const requestBlockScroll = useInspectorStore((s) => s.requestBlockScroll);
+  const requestBlockScroll = useInspectorCommandStore(
+    (s) => s.requestBlockScroll,
+  );
   const trimmed = citation.text.trim();
   const preview =
     trimmed.length > DOCX_CHIP_PREVIEW_CHARS

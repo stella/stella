@@ -14,8 +14,8 @@ import { cn } from "@stll/ui/lib/utils";
 
 import {
   closeInspectorTabsForEntities,
-  useInspectorStore,
-} from "@/components/inspector/inspector-store";
+  useInspectorTabsStore,
+} from "@/components/inspector/inspector-tabs-store";
 import {
   isTaskPriority,
   isTaskStatus,
@@ -56,13 +56,13 @@ export const TaskDetailPanel = ({
 }: TaskDetailPanelProps) => {
   const t = useTranslations("tasks");
   const tCommon = useTranslations("common");
-  const closeTab = useInspectorStore((s) => s.closeTab);
-  const setMinimized = useInspectorStore((s) => s.setMinimized);
-  const isNewTask = useInspectorStore((s) => {
+  const closeTab = useInspectorTabsStore((s) => s.closeTab);
+  const setMinimized = useInspectorTabsStore((s) => s.setMinimized);
+  const isNewTask = useInspectorTabsStore((s) => {
     const found = s.tabs.find((tab) => tab.id === taskId);
     return found?.type === "task" && found.isNew;
   });
-  const clearNewFlag = useInspectorStore((s) => s.clearTaskNewFlag);
+  const clearNewFlag = useInspectorTabsStore((s) => s.clearTaskNewFlag);
   const handleBack = () => setMinimized(true);
   const handleClose = () => closeTab(taskId);
   const queryClient = useQueryClient();
@@ -239,7 +239,7 @@ export const TaskDetailPanel = ({
   }
   useExternalSyncEffect(() => {
     if (resolvedStatus !== null) {
-      useInspectorStore.getState().updateTaskStatus(taskId, resolvedStatus);
+      useInspectorTabsStore.getState().updateTaskStatus(taskId, resolvedStatus);
     }
   }, [taskId, resolvedStatus]);
 

@@ -34,7 +34,7 @@ import { ChatInputSurface } from "@/components/chat-input-surface";
 import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
 import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
 import { useChatModelSelection } from "@/components/chat/use-chat-model-selection";
-import { useInspectorStore } from "@/components/inspector/inspector-store";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MatterIcon } from "@/components/matter-icon";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { StellaMark } from "@/components/stella-mark";
@@ -128,7 +128,7 @@ function ChatIndex() {
   );
   const anonymized = useChatAnonymized(threadRef);
   const getSendMode = useLatestCallback(() => getChatSendMode(threadRef));
-  const openInspectorChat = useInspectorStore((s) => s.openChat);
+  const openInspectorChat = useInspectorTabsStore((s) => s.openChat);
   const [contextMatterIds, setContextMatterIds] = useState<string[]>([]);
   const getContextMatterIds = useLatestCallback(() => contextMatterIds);
   // Standalone, non-suspense fetch of the draft thread metadata.

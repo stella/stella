@@ -19,7 +19,7 @@ import { useTranslations } from "use-intl";
 import type { OptionColor } from "@stll/api/types";
 import { stellaToast } from "@stll/ui/components/toast";
 
-import { useInspectorStore } from "@/components/inspector/inspector-store";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { getInternalPropertyId } from "@/components/workspaces/entity-utils";
 import { useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -114,7 +114,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
         title: t("success.taskCreated"),
         type: "success",
       });
-      useInspectorStore
+      useInspectorTabsStore
         .getState()
         .openTask({ taskId: entityId, workspaceId, isNew: true });
       return;

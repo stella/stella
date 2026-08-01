@@ -17,7 +17,7 @@ import { useTranslations } from "use-intl";
 
 import { stellaToast } from "@stll/ui/components/toast";
 
-import { useInspectorStore } from "@/components/inspector/inspector-store";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { VersionsSidebar } from "@/components/pdf/versions-sidebar";
 import type { Version } from "@/components/pdf/versions-sidebar";
 import { useMountEffect } from "@/hooks/use-effect";
@@ -46,7 +46,7 @@ export const VersionsFacet = ({
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
-  const openFileForEntity = useInspectorStore((s) => s.openFileForEntity);
+  const openFileForEntity = useInspectorTabsStore((s) => s.openFileForEntity);
   const { data } = useQuery(entityVersionsOptions({ workspaceId, entityId }));
 
   // Accumulated list seeded from the query's newest page and extended

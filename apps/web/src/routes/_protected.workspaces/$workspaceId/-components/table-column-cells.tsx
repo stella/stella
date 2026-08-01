@@ -13,7 +13,7 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 
-import { useInspectorStore } from "@/components/inspector/inspector-store";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import Tooltip from "@/components/tooltip";
 import { EditableField } from "@/components/workspaces/editable-field";
 import {
@@ -235,7 +235,7 @@ export const PropertyCell = ({
           entity={entity}
           justification={justification}
           onOpen={() =>
-            useInspectorStore.getState().openFile({
+            useInspectorTabsStore.getState().openFile({
               id: targets.sourceFile.fieldId,
               entityId: entity.entityId,
               label: targets.sourceFile.label,
@@ -459,8 +459,8 @@ const WithOpenEntityButton = ({
 }: PropsWithChildren<WithOpenEntityButtonProps>) => {
   const t = useTranslations();
   const workspaceId = extraction.property.workspaceId;
-  const openFile = useInspectorStore((s) => s.openFile);
-  const isFileAlreadyOpen = useInspectorStore((s) =>
+  const openFile = useInspectorTabsStore((s) => s.openFile);
+  const isFileAlreadyOpen = useInspectorTabsStore((s) =>
     s.tabs.some((tab) => tab.type === "pdf" && tab.id === sourceFile.fieldId),
   );
   const retryCell = useRetryCell(workspaceId);

@@ -1,7 +1,7 @@
 import type {
   ChatTab,
   InspectorTab,
-} from "@/components/inspector/inspector-store";
+} from "@/components/inspector/inspector-tabs-store";
 
 export type ActiveSkillChatContext = NonNullable<ChatTab["activeSkill"]>;
 

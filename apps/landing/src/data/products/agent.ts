@@ -124,8 +124,13 @@ export const agent: Product = {
     },
     {
       type: "source",
-      path: "apps/web/src/components/inspector/inspector-store.ts",
-      contains: ["requestBlockScroll", "exact-passage"],
+      path: "apps/web/src/components/inspector/inspector-command-slice.ts",
+      contains: ["requestBlockScroll"],
+    },
+    {
+      type: "source",
+      path: "apps/web/src/components/docx/use-docx-block-scroll.ts",
+      contains: ["exact-passage"],
     },
   ],
   cta: {

@@ -50,8 +50,8 @@ import { AnonymizationContextMenu } from "@/components/inspector/anonymization-c
 import {
   useAnonymizationMatches,
   useAnonymizationMatchesReady,
-  useInspectorStore,
-} from "@/components/inspector/inspector-store";
+  useInspectorAnonymizationStore,
+} from "@/components/inspector/inspector-anonymization-store";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -280,7 +280,7 @@ export const AnonymizationFacet = ({
       return undefined;
     }
     const { acquireAnonymizationActive, releaseAnonymizationActive } =
-      useInspectorStore.getState();
+      useInspectorAnonymizationStore.getState();
     acquireAnonymizationActive();
     return releaseAnonymizationActive;
   }, [isVisible]);
@@ -355,7 +355,7 @@ export const AnonymizationFacet = ({
       return;
     }
     const selection =
-      useInspectorStore.getState().documentTextSelectionByFieldId[
+      useInspectorAnonymizationStore.getState().documentTextSelectionByFieldId[
         activeFieldId
       ];
     if (
@@ -369,7 +369,7 @@ export const AnonymizationFacet = ({
   });
   useExternalSyncEffect(() => {
     consumeFolioSelection();
-    return useInspectorStore.subscribe(consumeFolioSelection);
+    return useInspectorAnonymizationStore.subscribe(consumeFolioSelection);
   }, [activeFieldId, consumeFolioSelection]);
 
   const addTerm = async (canonical: string, label: LabelOption) => {
@@ -589,19 +589,19 @@ export const AnonymizationFacet = ({
   // object literal would re-render on every store change and risk
   // an infinite getSnapshot loop. Each primitive selector is
   // stable across unrelated updates.
-  const docSelectionCanonical = useInspectorStore((s) =>
+  const docSelectionCanonical = useInspectorAnonymizationStore((s) =>
     s.anonymizationSelection.source === "doc" &&
     s.anonymizationSelection.fieldId === activeFieldId
       ? s.anonymizationSelection.canonical
       : null,
   );
-  const docSelectionLabel = useInspectorStore((s) =>
+  const docSelectionLabel = useInspectorAnonymizationStore((s) =>
     s.anonymizationSelection.source === "doc" &&
     s.anonymizationSelection.fieldId === activeFieldId
       ? s.anonymizationSelection.label
       : null,
   );
-  const docSelectionSeq = useInspectorStore((s) =>
+  const docSelectionSeq = useInspectorAnonymizationStore((s) =>
     s.anonymizationSelection.source === "doc" &&
     s.anonymizationSelection.fieldId === activeFieldId
       ? s.anonymizationSelection.seq
@@ -661,7 +661,7 @@ export const AnonymizationFacet = ({
     if (activeFieldId === null) {
       return;
     }
-    useInspectorStore
+    useInspectorAnonymizationStore
       .getState()
       .selectAnonymizationTerm(canonical, label, "sidebar", activeFieldId);
   };

@@ -49,7 +49,7 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { useRequestChatAbout } from "@/components/chat/use-request-chat-about";
-import { useInspectorStore } from "@/components/inspector/inspector-store";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import Tooltip from "@/components/tooltip";
 import { CopyToMatterDialog } from "@/components/workspaces/copy-to-matter-dialog";
 import {
@@ -253,7 +253,7 @@ export const RowActions = ({
     (() => {
       if (entity.kind === "task") {
         return () =>
-          useInspectorStore.getState().openTask({
+          useInspectorTabsStore.getState().openTask({
             taskId: entity.entityId,
             workspaceId,
             label: name,
@@ -261,7 +261,7 @@ export const RowActions = ({
       }
       if (file && isFileDisplayable(file)) {
         return () =>
-          useInspectorStore.getState().openFile({
+          useInspectorTabsStore.getState().openFile({
             id: file.fieldId,
             entityId: file.entityId,
             label: name,

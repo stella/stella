@@ -21,7 +21,7 @@ import { contentDir } from "@stll/ui/hooks/use-content-dir";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { DocumentIcon } from "@/components/document-icon";
-import { useInspectorStore } from "@/components/inspector/inspector-store";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import Tooltip from "@/components/tooltip";
 import type { EditableFieldContent } from "@/components/workspaces/edit-field-dialog";
 import {
@@ -722,7 +722,7 @@ const TableFileField = ({
     pdfFileId: content.pdfFileId ?? null,
     encrypted: content.encrypted,
   });
-  const openFile = useInspectorStore((s) => s.openFile);
+  const openFile = useInspectorTabsStore((s) => s.openFile);
 
   if (isDisplayable) {
     return (

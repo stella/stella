@@ -15,7 +15,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import type { DragPreviewData } from "@/components/drag-preview";
 import { renderDragPreview } from "@/components/drag-preview";
-import { useInspectorStore } from "@/components/inspector/inspector-store";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLocale } from "@/i18n/formatting-context";
 import { ENTITY_DRAG_TYPE } from "@/lib/workspaces/drag-constants";
@@ -44,7 +44,7 @@ export const CalendarEntityChip = ({
   const t = useTranslations();
   const locale = useLocale();
   const name = entity.name || t("tasks.untitled");
-  const openTask = useInspectorStore((s) => s.openTask);
+  const openTask = useInspectorTabsStore((s) => s.openTask);
 
   const dragRef = useRef<HTMLButtonElement>(null);
 

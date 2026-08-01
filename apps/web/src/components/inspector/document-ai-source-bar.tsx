@@ -13,8 +13,9 @@ import { Button } from "@stll/ui/components/button";
 import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { cn } from "@stll/ui/lib/utils";
 
-import { useInspectorStore } from "@/components/inspector/inspector-store";
-import type { FileTab } from "@/components/inspector/inspector-store";
+import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import type { FileTab } from "@/components/inspector/inspector-tabs-store";
 import { useSyncJustifications } from "@/components/workspaces/hooks/use-sync-justifications";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
@@ -51,7 +52,7 @@ export const DocumentAiSourceBar = ({
 }) => {
   const t = useTranslations();
   const format = useFormatter();
-  const openFile = useInspectorStore((s) => s.openFile);
+  const openFile = useInspectorTabsStore((s) => s.openFile);
 
   const propertiesQuery = useQuery(propertiesOptions(workspaceId));
   const properties = propertiesQuery.data;
@@ -91,7 +92,9 @@ export const DocumentAiSourceBar = ({
   const setActiveJustification = useWorkspaceStore(
     (s) => s.setActiveJustification,
   );
-  const requestBlockScroll = useInspectorStore((s) => s.requestBlockScroll);
+  const requestBlockScroll = useInspectorCommandStore(
+    (s) => s.requestBlockScroll,
+  );
   const [isAnswerExpanded, setIsAnswerExpanded] = useState(false);
 
   // Eagerly generate bboxes when the justification bar mounts.

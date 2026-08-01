@@ -1,10 +1,11 @@
 import { useCallback, useLayoutEffect, useState } from "react";
 
-import { useInspectorStore } from "@/components/inspector/inspector-store";
+import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import type {
   FileTab,
   InspectorTab,
-} from "@/components/inspector/inspector-store";
+} from "@/components/inspector/inspector-tabs-store";
 import { useRenameEntity } from "@/lib/workspaces/mutations/entities";
 
 type UseFileTabRenameOptions = {
@@ -22,7 +23,9 @@ export const useFileTabRename = ({ tabs }: UseFileTabRenameOptions) => {
     setEditingTabId(tab.id);
   }, []);
 
-  const pendingRenameTabId = useInspectorStore((s) => s.pendingRenameTabId);
+  const pendingRenameTabId = useInspectorCommandStore(
+    (s) => s.pendingRenameTabId,
+  );
   useLayoutEffect(() => {
     if (pendingRenameTabId === null) {
       return;
@@ -34,7 +37,7 @@ export const useFileTabRename = ({ tabs }: UseFileTabRenameOptions) => {
     if (target) {
       // eslint-disable-next-line react/react-compiler -- commit-safe store request relay; layout timing opens rename before paint when either the keyed request or async tab arrives
       startRename(target);
-      const store = useInspectorStore.getState();
+      const store = useInspectorCommandStore.getState();
       if (store.pendingRenameTabId === pendingRenameTabId) {
         store.clearRenameRequest();
       }
@@ -59,14 +62,14 @@ export const useFileTabRename = ({ tabs }: UseFileTabRenameOptions) => {
     }
 
     const previousLabel = tab.label;
-    useInspectorStore.getState().updateLabel(tab.id, newName);
+    useInspectorTabsStore.getState().updateLabel(tab.id, newName);
     renameEntity.mutate(
       { workspaceId: tab.workspaceId, entityId: tab.entityId, name: newName },
       {
         // Roll back the optimistic label; the shared rename hook
         // surfaces the failure toast.
         onError: () => {
-          useInspectorStore.getState().updateLabel(tab.id, previousLabel);
+          useInspectorTabsStore.getState().updateLabel(tab.id, previousLabel);
         },
       },
     );

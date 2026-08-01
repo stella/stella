@@ -42,7 +42,7 @@ import {
 } from "@/components/catalogue/catalogue-row";
 import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
 import type { ContextMenuAction } from "@/components/context-menu";
-import { useInspectorStore } from "@/components/inspector/inspector-store";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import { McpIcon } from "@/components/mcp-icon";
 import {
@@ -141,7 +141,7 @@ export const CatalogueBrowser = ({
   // Active tool-detail tab in the inspector → focused slug for the
   // row highlight. One source of truth; closing the inspector tab
   // clears the highlight automatically.
-  const focusedTabId = useInspectorStore((s) => {
+  const focusedTabId = useInspectorTabsStore((s) => {
     const active = s.tabs.find((tab) => tab.id === s.activeId);
     if (active === undefined || active.type !== "view") {
       return null;

@@ -47,7 +47,7 @@ import {
 } from "@/components/docx-preview-zoom";
 import { shouldUseDocxBrowserEditor } from "@/components/docx/docx-browser-editor.logic";
 import { DocxLoadingShell } from "@/components/docx/docx-loading-shell";
-import { useInspectorStore } from "@/components/inspector/inspector-store";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import PdfViewer, { PDFSuspenseFallback } from "@/components/pdf/pdf-viewer";
 import Tooltip from "@/components/tooltip";
 import { TranslateDocumentDialog } from "@/components/translate-document-dialog";
@@ -253,7 +253,7 @@ const AnonymizeScrollSync = () => {
 
 const InspectorFieldLifecycle = ({ fieldId }: { fieldId: string }) => {
   useMountEffect(() => () => {
-    const inspectorState = useInspectorStore.getState();
+    const inspectorState = useInspectorTabsStore.getState();
     for (const tab of inspectorState.tabs) {
       if (tab.type !== "pdf" || tab.id !== fieldId) {
         continue;
@@ -290,7 +290,7 @@ const InspectorFileOpenLifecycle = ({
   propertyId,
   workspaceId,
 }: InspectorFileOpenLifecycleProps) => {
-  const openFileForEntity = useInspectorStore((s) => s.openFileForEntity);
+  const openFileForEntity = useInspectorTabsStore((s) => s.openFileForEntity);
   useMountEffect(() => {
     openFileForEntity({
       id: fieldId,
@@ -592,7 +592,7 @@ function RouteComponentInner({
       latestFileFieldForProperty.id,
     );
     setActiveFieldId(latestFileFieldForProperty.id);
-    useInspectorStore
+    useInspectorTabsStore
       .getState()
       .replaceFileFieldId(fieldId, latestFileFieldForProperty.id);
     detached(
