@@ -13,3 +13,5 @@ CREATE INDEX CONCURRENTLY "user_createdAt_idx" ON "user" USING btree ("created_a
 --> statement-breakpoint
 -- squawk-ignore transaction-nesting, ban-uncommitted-transaction
 BEGIN;
+--> statement-breakpoint
+SET statement_timeout = DEFAULT;

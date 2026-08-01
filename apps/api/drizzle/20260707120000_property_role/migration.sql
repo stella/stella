@@ -21,5 +21,7 @@ CREATE UNIQUE INDEX CONCURRENTLY "properties_ws_document_type_classifier_unq" ON
 --> statement-breakpoint
 SET lock_timeout = '1s';
 --> statement-breakpoint
+SET statement_timeout = '5s';
+--> statement-breakpoint
 -- squawk-ignore transaction-nesting, ban-uncommitted-transaction
 BEGIN;

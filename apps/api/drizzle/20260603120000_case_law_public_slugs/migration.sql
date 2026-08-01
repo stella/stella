@@ -19,6 +19,8 @@
 -- migration record as applied, so `slug` would silently not be unique. Drop
 -- any leftover index first (no-op on a clean run) and build without
 -- IF NOT EXISTS so a retry always rebuilds a valid index.
+SET statement_timeout = 0;
+--> statement-breakpoint
 COMMIT;
 --> statement-breakpoint
 DROP INDEX CONCURRENTLY IF EXISTS "case_law_decisions_slug_uidx";
@@ -28,3 +30,5 @@ CREATE UNIQUE INDEX CONCURRENTLY "case_law_decisions_slug_uidx"
   WHERE "slug" IS NOT NULL;
 --> statement-breakpoint
 BEGIN;
+--> statement-breakpoint
+SET statement_timeout = DEFAULT;

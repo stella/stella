@@ -54,5 +54,7 @@ CREATE INDEX CONCURRENTLY "apikey_org_keyset_idx" ON "apikey" (((metadata::jsonb
 --> statement-breakpoint
 SET lock_timeout = '1s';
 --> statement-breakpoint
+SET statement_timeout = '5s';
+--> statement-breakpoint
 -- squawk-ignore transaction-nesting, ban-uncommitted-transaction
 BEGIN;

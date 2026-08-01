@@ -16,3 +16,5 @@ CREATE INDEX CONCURRENTLY "report_exports_pending_notification_idx" ON "report_e
 --> statement-breakpoint
 -- squawk-ignore transaction-nesting, ban-uncommitted-transaction
 BEGIN;
+--> statement-breakpoint
+SET statement_timeout = '5s';
