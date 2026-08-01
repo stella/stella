@@ -158,14 +158,15 @@ describe("API and CLI release contract", () => {
 
     for (const workflow of workflows) {
       expect(workflow).toContain(
-        "INSERT INTO drizzle.__drizzle_migrations (hash, created_at)",
+        "CREATE TABLE drizzle.__migration_history_smoke_backup AS SELECT id, hash",
       );
       expect(workflow).toContain(
-        "DELETE FROM drizzle.__drizzle_migrations WHERE hash = repeat('0', 64) AND created_at = 0",
+        "SET hash = backup.hash FROM drizzle.__migration_history_smoke_backup AS backup",
       );
-      expect(workflow).not.toContain(
-        "UPDATE drizzle.__drizzle_migrations SET hash",
+      expect(workflow).toContain(
+        "DROP TABLE drizzle.__migration_history_smoke_backup",
       );
+      expect(workflow).not.toContain(":'original_hash'");
     }
   });
 

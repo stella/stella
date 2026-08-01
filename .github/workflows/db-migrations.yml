@@ -147,22 +147,34 @@ jobs:
           PGPASSWORD: stella
         run: |
           set -euo pipefail
-          inserted=$(psql -h 127.0.0.1 -U stella -d stella -tAc \
-            "WITH inserted AS (INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES (repeat('0', 64), 0) RETURNING 1) SELECT count(*) FROM inserted")
-          if [[ "$inserted" != "1" ]]; then
-            echo "::error::Inserted $inserted synthetic migration rows; expected 1."
+          psql -h 127.0.0.1 -U stella -d stella -c \
+            "CREATE TABLE drizzle.__migration_history_smoke_backup AS SELECT id, hash FROM drizzle.__drizzle_migrations ORDER BY id DESC LIMIT 1" \
+            >/dev/null
+          backup_count=$(psql -h 127.0.0.1 -U stella -d stella -tAc \
+            "SELECT count(*) FROM drizzle.__migration_history_smoke_backup")
+          if [[ "$backup_count" != "1" ]]; then
+            echo "::error::Backed up $backup_count migration rows; expected 1."
+            exit 1
+          fi
+          corrupted=$(psql -h 127.0.0.1 -U stella -d stella -tAc \
+            "WITH corrupted AS (UPDATE drizzle.__drizzle_migrations AS migration SET hash = repeat('0', 64) FROM drizzle.__migration_history_smoke_backup AS backup WHERE migration.id = backup.id RETURNING 1) SELECT count(*) FROM corrupted")
+          if [[ "$corrupted" != "1" ]]; then
+            echo "::error::Corrupted $corrupted migration rows; expected 1."
             exit 1
           fi
 
           migration_exit=0
           (cd apps/api && bun run src/db/migrate.ts) || migration_exit=$?
 
-          deleted=$(psql -h 127.0.0.1 -U stella -d stella -tAc \
-            "WITH deleted AS (DELETE FROM drizzle.__drizzle_migrations WHERE hash = repeat('0', 64) AND created_at = 0 RETURNING 1) SELECT count(*) FROM deleted")
-          if [[ "$deleted" != "1" ]]; then
-            echo "::error::Deleted $deleted synthetic migration rows; expected 1."
+          restored=$(psql -h 127.0.0.1 -U stella -d stella -tAc \
+            "WITH restored AS (UPDATE drizzle.__drizzle_migrations AS migration SET hash = backup.hash FROM drizzle.__migration_history_smoke_backup AS backup WHERE migration.id = backup.id AND migration.hash = repeat('0', 64) RETURNING 1) SELECT count(*) FROM restored")
+          if [[ "$restored" != "1" ]]; then
+            echo "::error::Restored $restored migration rows; expected 1."
             exit 1
           fi
+          psql -h 127.0.0.1 -U stella -d stella -c \
+            "DROP TABLE drizzle.__migration_history_smoke_backup" \
+            >/dev/null
           if [[ "$migration_exit" == "0" ]]; then
             echo "::error::Migration command accepted inconsistent applied history."
             exit 1
