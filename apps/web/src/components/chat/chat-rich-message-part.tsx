@@ -6,7 +6,7 @@ import {
   useMemo,
   useRef,
 } from "react";
-import type { ErrorInfo, ReactNode } from "react";
+import type { ErrorInfo, ReactElement } from "react";
 
 import { useTranslations } from "use-intl";
 
@@ -39,8 +39,8 @@ const LazyMcpAppResource = lazy(async () => {
 const CHAT_RICH_CONTENT_AREA = "chat-rich-content";
 
 type RichContentErrorBoundaryProps = {
-  children: ReactNode;
-  fallback: ReactNode;
+  children: ReactElement;
+  fallback: ReactElement;
 };
 
 type RichContentErrorBoundaryState = {
@@ -70,7 +70,6 @@ export class RichContentErrorBoundary extends Component<
     );
   }
 
-  // oxlint-disable-next-line typescript-eslint/promise-function-async -- React render() must stay sync; ReactNode children can be thenable
   override render() {
     return this.state.hasError ? this.props.fallback : this.props.children;
   }
