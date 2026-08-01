@@ -1,11 +1,3 @@
--- stella-migration-safety: reviewed destructive-change - drops indexes only, no
--- table or column data. Two of the three drops are the idempotency guard the
--- CONCURRENTLY pattern requires (an interrupted build leaves an INVALID index
--- that a later CREATE IF NOT EXISTS would skip), so they are no-ops on a clean
--- run. The third drops the old case-number unique index only after its partial
--- replacement has been built, so uniqueness is enforced throughout. Rollback is
--- to recreate that index CONCURRENTLY over the same columns without the
--- predicate; no data is lost either way.
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 
@@ -32,32 +24,27 @@ ALTER TABLE "case_law_decisions"
 -- BEGIN for the migration bookkeeping row (same split as
 -- 20260603120000_case_law_public_slugs).
 --
--- An interrupted CONCURRENTLY build leaves an INVALID index under the same
--- name, and a `CREATE ... IF NOT EXISTS` retry would skip it and record the
--- migration as applied with uniqueness silently unenforced. Drop first
--- (no-op on a clean run), then build without IF NOT EXISTS.
+-- The migration runner validates both replacement indexes after the ledger
+-- update and concurrently repairs interrupted INVALID builds. IF NOT EXISTS
+-- preserves an already-valid uniqueness boundary across retries.
 --
--- Order matters: the replacement for the old key is built before the old
--- one is dropped, so uniqueness is enforced continuously rather than
--- leaving a window in which duplicates could land.
+-- The online migration runner retires the old key only after catalog checks
+-- prove that both replacements are valid and ready. This keeps uniqueness
+-- enforced across interrupted and retried builds.
+SET statement_timeout = 0;
+--> statement-breakpoint
 -- squawk-ignore transaction-nesting -- deliberate: CREATE INDEX CONCURRENTLY cannot run inside the migrator's transaction, so it is closed here and reopened below
 COMMIT;
 --> statement-breakpoint
-DROP INDEX CONCURRENTLY IF EXISTS "case_law_decisions_source_document_idx";
---> statement-breakpoint
--- squawk-ignore prefer-robust-stmts -- IF NOT EXISTS would skip an INVALID index left by an interrupted CONCURRENTLY build; the preceding DROP is what makes a retry robust
-CREATE UNIQUE INDEX CONCURRENTLY "case_law_decisions_source_document_idx"
+CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "case_law_decisions_source_document_idx"
   ON "case_law_decisions" ("source_id","source_document_id")
   WHERE "source_document_id" IS NOT NULL;
 --> statement-breakpoint
-DROP INDEX CONCURRENTLY IF EXISTS "case_law_decisions_source_case_lang_null_idx";
---> statement-breakpoint
--- squawk-ignore prefer-robust-stmts -- see the note on the index above
-CREATE UNIQUE INDEX CONCURRENTLY "case_law_decisions_source_case_lang_null_idx"
+CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "case_law_decisions_source_case_lang_null_idx"
   ON "case_law_decisions" ("source_id","case_number","language")
   WHERE "source_document_id" IS NULL;
 --> statement-breakpoint
-DROP INDEX CONCURRENTLY IF EXISTS "case_law_decisions_source_case_lang_idx";
---> statement-breakpoint
 -- squawk-ignore ban-uncommitted-transaction, transaction-nesting -- reopens the migrator's own transaction, closed above so the concurrent builds could run outside it; Drizzle commits it after writing its bookkeeping row
 BEGIN;
+--> statement-breakpoint
+SET statement_timeout = '5s';

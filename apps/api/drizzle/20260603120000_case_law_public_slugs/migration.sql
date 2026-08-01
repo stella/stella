@@ -13,18 +13,18 @@
 -- partial predicate keeps the index valid while legacy rows still carry a
 -- NULL slug.
 --
--- A CONCURRENTLY build that is interrupted (timeout, cancel, dropped
--- connection) leaves an INVALID index behind under the same name. A plain
--- `CREATE ... IF NOT EXISTS` retry would skip that invalid index and let the
--- migration record as applied, so `slug` would silently not be unique. Drop
--- any leftover index first (no-op on a clean run) and build without
--- IF NOT EXISTS so a retry always rebuilds a valid index.
+-- The migration runner validates this index after the ledger update and
+-- concurrently repairs an interrupted INVALID build. IF NOT EXISTS preserves
+-- an already-valid uniqueness boundary when a prior run reached the index but
+-- stopped before recording the migration.
+SET statement_timeout = 0;
+--> statement-breakpoint
 COMMIT;
 --> statement-breakpoint
-DROP INDEX CONCURRENTLY IF EXISTS "case_law_decisions_slug_uidx";
---> statement-breakpoint
-CREATE UNIQUE INDEX CONCURRENTLY "case_law_decisions_slug_uidx"
+CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "case_law_decisions_slug_uidx"
   ON "case_law_decisions" ("slug")
   WHERE "slug" IS NOT NULL;
 --> statement-breakpoint
 BEGIN;
+--> statement-breakpoint
+SET statement_timeout = DEFAULT;

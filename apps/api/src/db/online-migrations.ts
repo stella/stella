@@ -1,11 +1,21 @@
 import { panic } from "better-result";
 
+import {
+  REWRITTEN_MIGRATION_INDEXES,
+  type RequiredMigrationIndex,
+} from "../lib/db/migration-history";
+
 const ONLINE_MIGRATIONS_LOCK_SQL =
   "SELECT pg_advisory_lock(hashtext('stella-online-migrations'))";
 const ONLINE_MIGRATIONS_UNLOCK_SQL =
   "SELECT pg_advisory_unlock(hashtext('stella-online-migrations'))";
 const READ_INDEX_STATE_SQL = `
-  SELECT index_state.indisvalid AS "isValid"
+  SELECT
+    index_state.indisready AS "isReady",
+    index_state.indisunique AS "isUnique",
+    index_state.indisvalid AS "isValid",
+    pg_get_indexdef(index_relation.oid) AS "definition",
+    index_relation.relname AS "name"
   FROM pg_catalog.pg_class index_relation
   JOIN pg_catalog.pg_namespace index_namespace
     ON index_namespace.oid = index_relation.relnamespace
@@ -13,14 +23,67 @@ const READ_INDEX_STATE_SQL = `
     ON index_state.indexrelid = index_relation.oid
   JOIN pg_catalog.pg_class table_relation
     ON table_relation.oid = index_state.indrelid
-  WHERE index_namespace.nspname = 'public'
-    AND index_relation.relname = 'report_exports_workspace_requester_created_idx'
-    AND table_relation.relname = 'report_exports'
+  WHERE index_namespace.nspname = $1
+    AND index_relation.relname = $2
+    AND table_relation.relname = $3
 `;
-const DROP_INVALID_INDEX_SQL =
-  'DROP INDEX CONCURRENTLY IF EXISTS public."report_exports_workspace_requester_created_idx"';
-const CREATE_INDEX_SQL =
-  'CREATE INDEX CONCURRENTLY "report_exports_workspace_requester_created_idx" ON public."report_exports" USING btree ("workspace_id", "requested_by", "created_at", "id")';
+const READ_REINDEX_ARTIFACTS_SQL = `
+  SELECT
+    index_state.indisready AS "isReady",
+    index_state.indisunique AS "isUnique",
+    index_state.indisvalid AS "isValid",
+    pg_get_indexdef(index_relation.oid) AS "definition",
+    index_relation.relname AS "name"
+  FROM pg_catalog.pg_class index_relation
+  JOIN pg_catalog.pg_namespace index_namespace
+    ON index_namespace.oid = index_relation.relnamespace
+  JOIN pg_catalog.pg_index index_state
+    ON index_state.indexrelid = index_relation.oid
+  JOIN pg_catalog.pg_class table_relation
+    ON table_relation.oid = index_state.indrelid
+  WHERE index_namespace.nspname = $1
+    AND table_relation.relname = $2
+    AND (
+      starts_with(index_relation.relname, $3)
+      OR starts_with(index_relation.relname, $4)
+    )
+`;
+
+type OnlineIndex = RequiredMigrationIndex & {
+  createSql?: string;
+};
+
+export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "report_exports_workspace_requester_created_idx" ON public."report_exports" USING btree ("workspace_id", "requested_by", "created_at", "id")',
+    definitionBody:
+      "ON public.report_exports USING btree (workspace_id, requested_by, created_at, id)",
+    isUnique: false,
+    name: "report_exports_workspace_requester_created_idx",
+    tableName: "report_exports",
+  },
+  ...REWRITTEN_MIGRATION_INDEXES,
+];
+
+export const ONLINE_VALIDATED_INDEX_NAMES: ReadonlySet<string> = new Set(
+  ONLINE_MIGRATION_INDEXES.map(({ name }) => name),
+);
+
+type OnlineIndexReplacement = {
+  legacyName: string;
+  replacementNames: readonly string[];
+};
+
+const ONLINE_INDEX_REPLACEMENTS: readonly OnlineIndexReplacement[] = [
+  {
+    legacyName: "case_law_decisions_source_case_lang_idx",
+    replacementNames: [
+      "case_law_decisions_source_document_idx",
+      "case_law_decisions_source_case_lang_null_idx",
+    ],
+  },
+];
 
 type OnlineMigrationConnection = {
   execute: (query: string, params?: readonly unknown[]) => Promise<void>;
@@ -31,17 +94,34 @@ type OnlineMigrationConnection = {
   release: () => void;
 };
 
-type OnlineMigrationPool = {
+export type OnlineMigrationPool = {
   reserve: () => Promise<OnlineMigrationConnection>;
 };
 
-type OnlineIndexState =
-  | { type: "invalid" }
-  | { type: "missing" }
-  | { type: "valid" };
+type PresentIndexState = {
+  definition: string;
+  isReady: boolean;
+  isUnique: boolean;
+  isValid: boolean;
+  name: string;
+  type: "present";
+};
+
+type OnlineIndexState = { type: "missing" } | PresentIndexState;
+
+type OnlineMigrationOperation = "repair" | "validate";
 
 export const runOnlineMigrations = async (
   pool: OnlineMigrationPool,
+): Promise<void> => await processOnlineMigrations(pool, "repair");
+
+export const assertOnlineMigrationsApplied = async (
+  pool: OnlineMigrationPool,
+): Promise<void> => await processOnlineMigrations(pool, "validate");
+
+const processOnlineMigrations = async (
+  pool: OnlineMigrationPool,
+  operation: OnlineMigrationOperation,
 ): Promise<void> => {
   const connection = await pool.reserve();
   let lockAcquired = false;
@@ -49,20 +129,15 @@ export const runOnlineMigrations = async (
   try {
     await connection.execute(ONLINE_MIGRATIONS_LOCK_SQL);
     lockAcquired = true;
-    await connection.execute("SET lock_timeout = '1s'");
-    await connection.execute("SET statement_timeout = '0'");
 
-    const initialState = await readIndexState(connection);
-    if (initialState.type === "invalid") {
-      await connection.execute(DROP_INVALID_INDEX_SQL);
-    }
-    if (initialState.type !== "valid") {
-      await connection.execute(CREATE_INDEX_SQL);
+    if (operation === "repair") {
+      await connection.execute("SET lock_timeout = '1s'");
+      await connection.execute("SET statement_timeout = '0'");
     }
 
-    const completedState = await readIndexState(connection);
-    if (completedState.type !== "valid") {
-      panic("Online report export history index is not valid after creation");
+    await processOnlineIndexAt(connection, operation);
+    if (operation === "repair") {
+      await retireReplacedIndexAt(connection);
     }
   } finally {
     try {
@@ -75,20 +150,225 @@ export const runOnlineMigrations = async (
   }
 };
 
-const readIndexState = async (
+const processOnlineIndexAt = async (
   connection: OnlineMigrationConnection,
-): Promise<OnlineIndexState> => {
-  const row = (await connection.query(READ_INDEX_STATE_SQL)).at(0);
-  if (row === undefined) {
-    return { type: "missing" };
+  operation: OnlineMigrationOperation,
+  offset = 0,
+): Promise<void> => {
+  const index = ONLINE_MIGRATION_INDEXES.at(offset);
+  if (!index) {
+    return;
   }
+
+  if (operation === "repair") {
+    await ensureIndexValid(connection, index);
+  } else {
+    await assertIndexReady(connection, index);
+  }
+  await processOnlineIndexAt(connection, operation, offset + 1);
+};
+
+const retireReplacedIndexAt = async (
+  connection: OnlineMigrationConnection,
+  offset = 0,
+): Promise<void> => {
+  const replacement = ONLINE_INDEX_REPLACEMENTS.at(offset);
+  if (!replacement) {
+    return;
+  }
+
+  await assertReplacementIndexAt(connection, replacement);
+  await connection.execute(
+    `DROP INDEX CONCURRENTLY IF EXISTS public.${quoteIdentifier(replacement.legacyName)}`,
+  );
+  await retireReplacedIndexAt(connection, offset + 1);
+};
+
+const assertReplacementIndexAt = async (
+  connection: OnlineMigrationConnection,
+  replacement: OnlineIndexReplacement,
+  offset = 0,
+): Promise<void> => {
+  const replacementName = replacement.replacementNames.at(offset);
+  if (!replacementName) {
+    return;
+  }
+  const index = ONLINE_MIGRATION_INDEXES.find(
+    ({ name }) => name === replacementName,
+  );
+  if (!index) {
+    panic(
+      `Replacement index ${replacementName} is not registered for online validation`,
+    );
+  }
+
+  await assertIndexReady(connection, index);
+  await assertReplacementIndexAt(connection, replacement, offset + 1);
+};
+
+const parsePresentIndexState = (row: unknown): PresentIndexState => {
   if (
     typeof row !== "object" ||
     row === null ||
+    !("definition" in row) ||
+    typeof row.definition !== "string" ||
+    !("isReady" in row) ||
+    typeof row.isReady !== "boolean" ||
+    !("isUnique" in row) ||
+    typeof row.isUnique !== "boolean" ||
     !("isValid" in row) ||
-    typeof row.isValid !== "boolean"
+    typeof row.isValid !== "boolean" ||
+    !("name" in row) ||
+    typeof row.name !== "string"
   ) {
-    panic("Online report export history index state has an invalid shape");
+    panic("Online migration index state has an invalid shape");
   }
-  return row.isValid ? { type: "valid" } : { type: "invalid" };
+
+  return {
+    definition: row.definition,
+    isReady: row.isReady,
+    isUnique: row.isUnique,
+    isValid: row.isValid,
+    name: row.name,
+    type: "present",
+  };
+};
+
+const readIndexState = async (
+  connection: OnlineMigrationConnection,
+  { name, tableName }: RequiredMigrationIndex,
+): Promise<OnlineIndexState> => {
+  const row = (
+    await connection.query(READ_INDEX_STATE_SQL, ["public", name, tableName])
+  ).at(0);
+  return row === undefined ? { type: "missing" } : parsePresentIndexState(row);
+};
+
+const POSTGRES_IDENTIFIER_MAX_LENGTH = 63;
+
+const reindexArtifactPrefix = (name: string, suffix: "_ccnew" | "_ccold") =>
+  `${name.slice(0, POSTGRES_IDENTIFIER_MAX_LENGTH - suffix.length)}${suffix}`;
+
+const readReindexArtifacts = async (
+  connection: OnlineMigrationConnection,
+  { name, tableName }: RequiredMigrationIndex,
+): Promise<PresentIndexState[]> =>
+  (
+    await connection.query(READ_REINDEX_ARTIFACTS_SQL, [
+      "public",
+      tableName,
+      reindexArtifactPrefix(name, "_ccnew"),
+      reindexArtifactPrefix(name, "_ccold"),
+    ])
+  ).map(parsePresentIndexState);
+
+const definitionBody = (definition: string): string => {
+  const bodyStart = definition.indexOf(" ON ");
+  if (bodyStart === -1) {
+    panic("Online migration index definition has an invalid shape");
+  }
+  return definition.slice(bodyStart + 1);
+};
+
+const assertIndexDefinition = (
+  index: RequiredMigrationIndex,
+  state: PresentIndexState,
+): void => {
+  if (
+    state.isUnique !== index.isUnique ||
+    definitionBody(state.definition) !== index.definitionBody
+  ) {
+    panic(
+      `Required migration index ${index.name} has an unexpected definition`,
+    );
+  }
+};
+
+const assertNoReindexArtifacts = async (
+  connection: OnlineMigrationConnection,
+  index: RequiredMigrationIndex,
+): Promise<void> => {
+  const artifacts = await readReindexArtifacts(connection, index);
+  if (artifacts.length > 0) {
+    panic(`Required migration index ${index.name} has reindex artifacts`);
+  }
+};
+
+const cleanupFailedReindexArtifacts = async (
+  connection: OnlineMigrationConnection,
+  index: RequiredMigrationIndex,
+): Promise<void> => {
+  const artifacts = await readReindexArtifacts(connection, index);
+  await cleanupReindexArtifactAt(connection, index, artifacts);
+};
+
+const cleanupReindexArtifactAt = async (
+  connection: OnlineMigrationConnection,
+  index: RequiredMigrationIndex,
+  artifacts: readonly PresentIndexState[],
+  offset = 0,
+): Promise<void> => {
+  const artifact = artifacts.at(offset);
+  if (!artifact) {
+    return;
+  }
+
+  assertIndexDefinition(index, artifact);
+  if (artifact.isValid) {
+    panic(
+      `Required migration index ${index.name} has a valid reindex artifact`,
+    );
+  }
+  await connection.execute(
+    `DROP INDEX CONCURRENTLY public.${quoteIdentifier(artifact.name)}`,
+  );
+  await cleanupReindexArtifactAt(connection, index, artifacts, offset + 1);
+};
+
+const assertIndexReady = async (
+  connection: OnlineMigrationConnection,
+  index: RequiredMigrationIndex,
+): Promise<void> => {
+  const state = await readIndexState(connection, index);
+  if (state.type === "missing") {
+    panic(`Required migration index ${index.name} is missing`);
+  }
+  assertIndexDefinition(index, state);
+  if (!state.isValid || !state.isReady) {
+    panic(`Required migration index ${index.name} is not ready`);
+  }
+  await assertNoReindexArtifacts(connection, index);
+};
+
+const ensureIndexValid = async (
+  connection: OnlineMigrationConnection,
+  index: OnlineIndex,
+): Promise<void> => {
+  await cleanupFailedReindexArtifacts(connection, index);
+  const initialState = await readIndexState(connection, index);
+  if (initialState.type === "present") {
+    assertIndexDefinition(index, initialState);
+    if (initialState.isValid && initialState.isReady) {
+      return;
+    }
+
+    await connection.execute(
+      `REINDEX INDEX CONCURRENTLY public.${quoteIdentifier(index.name)}`,
+    );
+  } else if (index.createSql) {
+    await connection.execute(index.createSql);
+  } else {
+    panic(`Required migration index ${index.name} is missing`);
+  }
+
+  await assertIndexReady(connection, index);
+};
+
+const POSTGRES_IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/u;
+
+const quoteIdentifier = (identifier: string): string => {
+  if (!POSTGRES_IDENTIFIER.test(identifier)) {
+    panic(`Invalid internal PostgreSQL identifier: ${identifier}`);
+  }
+  return `"${identifier}"`;
 };

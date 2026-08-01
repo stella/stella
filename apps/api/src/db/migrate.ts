@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 import { SQL } from "bun";
+import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sql";
 import { migrate } from "drizzle-orm/bun-sql/migrator";
 import nodePath from "node:path";
@@ -7,6 +8,7 @@ import nodePath from "node:path";
 // Relative imports (not the `@/api` alias): this script ships as a loose
 // file in the runtime image, which has no tsconfig to resolve paths.
 import { resolveDatabaseUrl } from "../db-url";
+import { assertMigrationHistory } from "../lib/db/migration-history";
 import { runOnlineMigrations } from "./online-migrations";
 
 // Migrations run through Bun's SQL client — the same driver the API uses
@@ -69,10 +71,23 @@ $$;
 // lands on the same migrations folder either way. Keep the bundle's COPY
 // destination two directories above its drizzle/ copy to preserve this.
 const migrationsFolder = nodePath.resolve(import.meta.dir, "../../drizzle");
+type AppliedMigrationRow = { hash: string };
 
 try {
   await client.unsafe(bootstrapRoleSql);
-  await migrate(drizzle({ client }), { migrationsFolder });
+  const database = drizzle({ client });
+  await migrate(database, { migrationsFolder });
+  await assertMigrationHistory({
+    context: "migrate",
+    migrationsDir: migrationsFolder,
+    queryAppliedHashes: async () => {
+      const rows = await database.execute<AppliedMigrationRow>(
+        sql`SELECT hash FROM drizzle.__drizzle_migrations`,
+      );
+      return new Set(rows.map(({ hash }) => hash));
+    },
+    remedy: "Migration completion requires every bundled migration hash.",
+  });
   await runOnlineMigrations({
     reserve: async () => {
       const connection = await client.reserve();
