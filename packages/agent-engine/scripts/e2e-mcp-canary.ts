@@ -43,7 +43,7 @@ const DOCKER_TIMEOUT_MS = 30_000;
 class AgentSandboxCanaryError extends TaggedError("AgentSandboxCanaryError")<{
   message: string;
   cause?: unknown;
-}>() {}
+}> {}
 
 const fail = (message: string, cause?: unknown): never => {
   throw new AgentSandboxCanaryError({

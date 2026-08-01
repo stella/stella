@@ -18,7 +18,7 @@ import { TaggedError } from "better-result";
 /** A Docker Engine API call failed (non-2xx, malformed response, …). */
 export class DockerApiError extends TaggedError("DockerApiError")<{
   message: string;
-}>() {}
+}> {}
 
 /** A demultiplexed frame from Docker's non-TTY exec stream. */
 export type ExecFrame = { stream: "stdout" | "stderr"; data: Uint8Array };
