@@ -222,6 +222,7 @@ export const redactCaseLawDecision = async ({
         const error = new ConcurrentModificationError({
           message: "Case-law corpus generation is being written",
         });
+        // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
         await scopedDb((tx) => {
           // audit: skip — this insert IS the append-only failed erasure audit row
           return tx.insert(caseLawIndexJobs).values({
