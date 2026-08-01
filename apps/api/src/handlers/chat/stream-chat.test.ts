@@ -7,7 +7,10 @@ import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { createPipelineContext } from "@stll/anonymize-wasm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import { createChatAttachmentPart } from "@/api/handlers/chat/chat-message-parts";
+import {
+  createChatAttachmentPart,
+  toPersistableChatMessage,
+} from "@/api/handlers/chat/chat-message-parts";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import type {
   ChatAnonRestoration,
@@ -23,6 +26,7 @@ import { toUserFileUrl } from "@/api/lib/user-files/types";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
+import { nonPersistableChatParts } from "./__fixtures__/non-persistable-chat-parts";
 import {
   chatMessageUsageFromTokenUsage,
   collectInitialRestorationPlaceholders,
@@ -34,6 +38,7 @@ import {
   processServerChatStream,
   recordChatAttemptFinish,
   remapOutgoingMessageIds,
+  toChatMessage,
   transformOutgoingStream,
 } from "./stream-chat";
 
@@ -201,23 +206,25 @@ describe("outgoing chat stream message ids", () => {
           ],
         },
       }),
-    ).toEqual({
-      id: messageId,
-      role: "assistant",
-      parts: [
-        {
-          content: "Checking source law.",
-          type: "thinking",
-        },
-        {
-          arguments: "{}",
-          id: "tool-1",
-          name: "ask-user",
-          state: "input-complete",
-          type: "tool-call",
-        },
-      ],
-    });
+    ).toEqual(
+      toPersistableChatMessage({
+        id: messageId,
+        role: "assistant",
+        parts: [
+          {
+            content: "Checking source law.",
+            type: "thinking",
+          },
+          {
+            arguments: "{}",
+            id: "tool-1",
+            name: "ask-user",
+            state: "input-complete",
+            type: "tool-call",
+          },
+        ],
+      }),
+    );
   });
 
   test("seeds tanstack message state before reasoning-only chunks", async () => {
@@ -1003,6 +1010,115 @@ describe("chat message usage metadata", () => {
       promptTokens: 10,
       totalTokens: 32,
     });
+  });
+});
+
+describe("streamed chat message conversion", () => {
+  // Each is a part the SDK may legally stream, so none may cost the message
+  // the model finished.
+  for (const unsupported of nonPersistableChatParts) {
+    test(`keeps the surrounding parts when a ${unsupported.type} part arrives`, () => {
+      const message = toChatMessage({
+        id: "assistant-message",
+        role: "assistant",
+        parts: [
+          { content: "Dobrý den", type: "text" },
+          unsupported,
+          { content: "Na shledanou", type: "text" },
+        ],
+      });
+
+      expect(message?.parts).toEqual([
+        { content: "Dobrý den", type: "text" },
+        { content: "Na shledanou", type: "text" },
+      ]);
+    });
+  }
+
+  test("does not finish a turn whose parts were all unsupported", async () => {
+    const messageId = toSafeId<"chatMessage">(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    let finishCount = 0;
+    // Every part was dropped, so the turn has nothing to persist. Finishing it
+    // would insert a blank assistant message into the history.
+    const responseMessage: ChatMessage = {
+      id: messageId,
+      parts: [],
+      role: "assistant",
+    };
+    const processor = new StreamProcessor({ events: {} });
+
+    await collectChunks(
+      processServerChatStream({
+        abortSignal: new AbortController().signal,
+        getResponseMessage: () => responseMessage,
+        mapMessageId: createChatMessageIdMapper(() => messageId),
+        onFinish: () => {
+          finishCount += 1;
+        },
+        processor,
+        source: streamChunks([
+          { type: EventType.RUN_STARTED, runId: "run-1", threadId: "thread-1" },
+          {
+            type: EventType.RUN_FINISHED,
+            finishReason: "stop",
+            runId: "run-1",
+            threadId: "thread-1",
+          },
+        ]),
+      }),
+    );
+
+    expect(finishCount).toBe(0);
+  });
+
+  // The teardown `finally` reaches the same guard by a different route, so a
+  // dropped connection must not persist the blank turn either.
+  test("does not finish a part-less turn when the client disconnects", async () => {
+    const messageId = toSafeId<"chatMessage">(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    let finishCount = 0;
+    const responseMessage: ChatMessage = {
+      id: messageId,
+      parts: [],
+      role: "assistant",
+    };
+    const processor = new StreamProcessor({ events: {} });
+
+    const stream = processServerChatStream({
+      abortSignal: new AbortController().signal,
+      getResponseMessage: () => responseMessage,
+      mapMessageId: createChatMessageIdMapper(() => messageId),
+      onFinish: () => {
+        finishCount += 1;
+      },
+      processor,
+      source: streamChunks([
+        { type: EventType.RUN_STARTED, runId: "run-1", threadId: "thread-1" },
+        {
+          type: EventType.TEXT_MESSAGE_START,
+          messageId: "provider-message",
+          role: "assistant",
+        },
+        {
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          delta: "Dobrý den",
+          messageId: "provider-message",
+        },
+      ]),
+    });
+
+    // Breaking the `for await` `.return()`s the generator, running the teardown
+    // `finally` that calls `finalizeInterruptedResponseMessage`.
+    for await (const chunk of stream) {
+      if (chunk.type === EventType.TEXT_MESSAGE_CONTENT) {
+        break;
+      }
+    }
+
+    expect(finishCount).toBe(0);
   });
 });
 

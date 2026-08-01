@@ -27,11 +27,12 @@ import type { ChatSendMode } from "@stll/anonymize-chat";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { modelAcceptsDocumentAttachment } from "@/api/handlers/chat/attachment-modality";
 import {
+  classifyChatPartForPersistence,
   getChatAttachmentMimeType,
   getUserFileIdFromAttachmentPart,
-  isChatPart,
   isChatAttachmentPart,
   isChatDocumentPart,
+  toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
 import type {
   ChatSafePrompt,
@@ -278,10 +279,14 @@ export const streamChat = async ({
     initialMessages: preparedMessages.value,
     events: {
       onStreamEnd: (message) => {
-        responseMessage = attachRestorationMetadata({
-          message: toChatMessage(message),
-          restorationPairs,
-        });
+        const convertedMessage = toChatMessage(message);
+        responseMessage =
+          convertedMessage === null
+            ? null
+            : attachRestorationMetadata({
+                message: convertedMessage,
+                restorationPairs,
+              });
       },
     },
   });
@@ -1095,7 +1100,11 @@ const finishResponseMessage = async ({
   usage,
 }: FinishResponseMessageProps): Promise<boolean> => {
   const responseMessage = getResponseMessage();
-  if (!responseMessage) {
+  // A part-less message is not a turn. `planAssistantFinishPersistence` inserts
+  // whatever a `completed` finish hands it, so letting one through would put a
+  // blank assistant turn in the history that hydration then renders as an empty
+  // reply. Both callers funnel through here, so no path can persist one.
+  if (!responseMessage || responseMessage.parts.length === 0) {
     return false;
   }
 
@@ -1167,7 +1176,7 @@ export const normalizeFinalAssistantMessageId = ({
   message: ChatMessage;
 }): PersistableChatMessage => {
   const id = mapMessageId(message.id);
-  return { ...message, id };
+  return toPersistableChatMessage({ ...message, id });
 };
 
 type RemapOutgoingMessageIdsProps = {
@@ -1956,21 +1965,42 @@ export const chatMessageUsageFromTokenUsage = (
   };
 };
 
-const toChatMessage = (message: UIMessage): ChatMessage => ({
-  id: message.id,
-  role: message.role,
-  parts: toChatParts(message.parts),
-});
+export const toChatMessage = (message: UIMessage): ChatMessage | null => {
+  const parts = toChatParts(message.parts);
+  if (parts.length === 0) {
+    return null;
+  }
+  return {
+    id: message.id,
+    role: message.role,
+    parts,
+  };
+};
 
+// Which parts a message carries is decided by the model and the SDK, not by
+// this code. Stella's persistable subset excludes TanStack's `audio`, `video`,
+// and `ui-resource` parts. A rejected part is therefore ordinary external input
+// rather than the broken internal invariant `panic` is for.
+//
+// Skipping one also keeps the rest of a finished turn, which throwing does not.
+// When nothing persistable remains, `toChatMessage` returns null rather than an
+// empty message; its nullable return type forces every caller to handle that
+// outcome before a blank assistant turn can reach persistence.
 const toChatParts = (
   parts: readonly UIMessage["parts"][number][],
 ): ChatPart[] => {
   const chatParts: ChatPart[] = [];
   for (const part of parts) {
-    if (!isChatPart(part)) {
-      panic("TanStack stream emitted an unsupported chat part");
+    const decision = classifyChatPartForPersistence(part);
+    if (decision.type === "persist") {
+      chatParts.push(decision.part);
+      continue;
     }
-    chatParts.push(part);
+    // Telemetry only: the discriminator alone. A part's content can carry
+    // document text, so it is never logged.
+    logger.warn("Dropped an unsupported part from a streamed chat message", {
+      "chat.part_type": decision.partType,
+    });
   }
   return chatParts;
 };

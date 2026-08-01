@@ -1,15 +1,19 @@
 import type { ContentPartSource } from "@tanstack/ai";
+import { panic } from "better-result";
 
 import { normalizeLegacyRawToolInputs } from "@/api/handlers/chat/legacy-tool-compat";
 import type {
   ChatAttachmentMetadata,
   ChatAttachmentPart,
   ChatMessage,
+  ChatMessageContentCandidate,
   ChatMessageContent,
   ChatMessageMetadata,
   ChatMessageRole,
   ChatPart,
   ChatTanStackPart,
+  PersistableChatPartType,
+  PersistableChatMessageCandidate,
   PersistableChatMessage,
   PersistedChatMessageContent,
 } from "@/api/handlers/chat/types";
@@ -226,23 +230,24 @@ export const chatMessageFromPersisted = ({
   role,
 }: PersistedChatMessageRow): PersistableChatMessage => {
   const normalized = normalizePersistedChatMessageContent(content);
-  return {
+  return toPersistableChatMessage({
     id,
     role,
     parts: normalized.parts,
     ...(isChatMessageMetadataEmpty(normalized.metadata)
       ? {}
       : { metadata: normalized.metadata }),
-  };
+  });
 };
 
 export const chatMessageContentFromMessage = (
-  message: ChatMessage,
-): ChatMessageContent => ({
-  version: 2,
-  data: message.parts,
-  ...(message.metadata === undefined ? {} : { metadata: message.metadata }),
-});
+  message: PersistableChatMessage,
+): ChatMessageContent =>
+  toChatMessageContent({
+    version: 2,
+    data: message.parts,
+    ...(message.metadata === undefined ? {} : { metadata: message.metadata }),
+  });
 
 export const toProviderVisibleMessage = (
   message: ChatMessage,
@@ -276,43 +281,6 @@ export const getUserFileIdFromAttachmentPart = (
   return parseUserFileId(url);
 };
 
-export const isChatPart = (part: unknown): part is ChatPart => {
-  if (!isRecord(part) || typeof part["type"] !== "string") {
-    return false;
-  }
-
-  switch (part["type"]) {
-    case "text":
-      return typeof part["content"] === "string";
-    case "image":
-    case "document":
-      return isContentPartWithSource(part);
-    case "audio":
-    case "video":
-      return false;
-    case "tool-call":
-      return (
-        typeof part["id"] === "string" &&
-        typeof part["name"] === "string" &&
-        typeof part["arguments"] === "string" &&
-        isTanStackToolCallState(part["state"])
-      );
-    case "tool-result":
-      return (
-        typeof part["toolCallId"] === "string" &&
-        isTanStackToolResultContent(part["content"]) &&
-        isTanStackToolResultState(part["state"]) &&
-        (!("error" in part) || typeof part["error"] === "string")
-      );
-    case "thinking":
-      return typeof part["content"] === "string";
-    case "structured-output":
-      return "data" in part;
-    default:
-      return false;
-  }
-};
-
 const isContentPartWithSource = (
   part: Record<string, unknown>,
 ): part is Record<string, unknown> & {
@@ -323,6 +291,118 @@ const isContentPartWithSource = (
   typeof part["source"]["value"] === "string" &&
   (!("mimeType" in part["source"]) ||
     typeof part["source"]["mimeType"] === "string");
+
+type ChatPartValidator = (part: Record<string, unknown>) => boolean;
+
+type ChatPartPersistence = "drop" | "persist";
+
+// Every TanStack part must receive an explicit persistence policy. A future SDK
+// variant fails typecheck here until it is deliberately persisted or dropped.
+const CHAT_PART_PERSISTENCE = {
+  audio: "drop",
+  document: "persist",
+  image: "persist",
+  "structured-output": "persist",
+  text: "persist",
+  thinking: "persist",
+  "tool-call": "persist",
+  "tool-result": "persist",
+  "ui-resource": "drop",
+  video: "drop",
+} as const satisfies Record<ChatTanStackPart["type"], ChatPartPersistence>;
+
+// Validators are independently exhaustive over the persistable subset, so a
+// part cannot enter the persistence boundary without structural validation.
+const CHAT_PART_VALIDATORS = {
+  document: isContentPartWithSource,
+  image: isContentPartWithSource,
+  "structured-output": (part) => "data" in part,
+  text: (part) => typeof part["content"] === "string",
+  thinking: (part) => typeof part["content"] === "string",
+  "tool-call": (part) =>
+    typeof part["id"] === "string" &&
+    typeof part["name"] === "string" &&
+    typeof part["arguments"] === "string" &&
+    isTanStackToolCallState(part["state"]),
+  "tool-result": (part) =>
+    typeof part["toolCallId"] === "string" &&
+    isTanStackToolResultContent(part["content"]) &&
+    isTanStackToolResultState(part["state"]) &&
+    (!("error" in part) || typeof part["error"] === "string"),
+} satisfies Record<PersistableChatPartType, ChatPartValidator>;
+
+const isChatPartPersistenceType = (
+  type: string,
+): type is keyof typeof CHAT_PART_PERSISTENCE =>
+  Object.hasOwn(CHAT_PART_PERSISTENCE, type);
+
+const isChatPartType = (
+  type: string,
+): type is keyof typeof CHAT_PART_VALIDATORS =>
+  Object.hasOwn(CHAT_PART_VALIDATORS, type);
+
+export const isChatPart = (part: unknown): part is ChatPart => {
+  if (!isRecord(part) || typeof part["type"] !== "string") {
+    return false;
+  }
+  const type = part["type"];
+  if (
+    !isChatPartPersistenceType(type) ||
+    CHAT_PART_PERSISTENCE[type] === "drop"
+  ) {
+    return false;
+  }
+  return isChatPartType(type) && CHAT_PART_VALIDATORS[type](part);
+};
+
+type ChatPartPersistenceDecision =
+  | { type: "drop"; partType: string }
+  | { type: "persist"; part: ChatPart };
+
+export const classifyChatPartForPersistence = (
+  part: unknown,
+): ChatPartPersistenceDecision => {
+  if (!isRecord(part) || typeof part["type"] !== "string") {
+    panic("Cannot classify a malformed chat part for persistence");
+  }
+  const type = part["type"];
+  if (!isChatPartPersistenceType(type)) {
+    panic(`Cannot classify unknown chat part type: ${type}`);
+  }
+  if (CHAT_PART_PERSISTENCE[type] === "drop") {
+    return { type: "drop", partType: type };
+  }
+  if (!isChatPart(part)) {
+    panic(`Cannot persist malformed chat part type: ${type}`);
+  }
+  return { type: "persist", part };
+};
+
+const isPersistableChatMessage = (
+  message: PersistableChatMessageCandidate,
+): message is PersistableChatMessage => message.parts.every(isChatPart);
+
+export const toPersistableChatMessage = (
+  message: PersistableChatMessageCandidate,
+): PersistableChatMessage => {
+  if (!isPersistableChatMessage(message)) {
+    panic("Cannot mark a chat message with unsupported parts as persistable");
+  }
+  return message;
+};
+
+const isChatMessageContent = (
+  content: ChatMessageContentCandidate,
+): content is ChatMessageContent => content.data.every(isChatPart);
+
+export const toChatMessageContent = (
+  content: ChatMessageContentCandidate,
+): ChatMessageContent => {
+  if (!isChatMessageContent(content)) {
+    panic("Cannot persist chat message content with unsupported parts");
+  }
+  return content;
+};
 
 const isLegacyAnonRestorationsPart = (
   part: unknown,

@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
+import { toChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
 import {
   clientMessageFromPageRow,
   decodeMessagePageCursor,
   encodeMessagePageCursor,
 } from "@/api/handlers/chat/message-page";
-import type { ChatMessageContent } from "@/api/handlers/chat/types";
 import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
 
 const MESSAGE_ID = brandPersistedChatMessageId(
@@ -50,7 +50,7 @@ describe("clientMessageFromPageRow", () => {
       {
         id: MESSAGE_ID,
         role: "assistant",
-        content: {
+        content: toChatMessageContent({
           version: 2,
           data: [{ type: "text", content: "Done" }],
           metadata: {
@@ -72,7 +72,7 @@ describe("clientMessageFromPageRow", () => {
               totalTokens: 5,
             },
           },
-        } satisfies ChatMessageContent,
+        }),
       },
       new Map(),
     );

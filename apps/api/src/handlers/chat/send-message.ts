@@ -9,7 +9,10 @@ import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { env } from "@/api/env";
-import { chatMessageContentFromMessage } from "@/api/handlers/chat/chat-message-parts";
+import {
+  chatMessageContentFromMessage,
+  isChatPart,
+} from "@/api/handlers/chat/chat-message-parts";
 import {
   appendAnonymizedModeHintToChatSafePrompt,
   buildChatPromptCacheKey,
@@ -1980,7 +1983,7 @@ const resolveAssistantMessageRefs = ({
     part: ChatMessage["parts"][number],
   ): ChatMessage["parts"][number] => {
     const resolved = refRegistry.resolveAssistantValueRefs(part);
-    if (!isChatMessagePart(resolved)) {
+    if (!isChatPart(resolved)) {
       panic("Resolving assistant refs changed the message part shape");
     }
     return resolved;

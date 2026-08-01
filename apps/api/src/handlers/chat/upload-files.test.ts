@@ -11,8 +11,10 @@ import {
   TEXT_MARKDOWN_MIME_TYPE,
   TEXT_PLAIN_MIME_TYPE,
 } from "@/api/handlers/chat/attachment-validation";
-import { createChatAttachmentPart } from "@/api/handlers/chat/chat-message-parts";
-import type { PersistableChatMessage } from "@/api/handlers/chat/types";
+import {
+  createChatAttachmentPart,
+  toPersistableChatMessage,
+} from "@/api/handlers/chat/chat-message-parts";
 import { toSafeId } from "@/api/lib/branded-types";
 import { toDataUrl } from "@/api/lib/data-url";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
@@ -234,7 +236,7 @@ describe("chat attachment hydration", () => {
     const safeDb: SafeDb = async (callback) =>
       // oxlint-disable-next-line node/callback-return -- arrow body already returns the callback result
       await Result.tryPromise(async () => await callback(testTx));
-    const message: PersistableChatMessage = {
+    const message = toPersistableChatMessage({
       id: toSafeId<"chatMessage">("11111111-1111-4111-8111-111111111111"),
       role: "user",
       parts: [
@@ -252,7 +254,7 @@ describe("chat attachment hydration", () => {
           url: "not-a-data-url",
         }),
       ],
-    };
+    });
 
     const recordAuditEvent = mock(async () => undefined);
     const result = await uploadMessageFiles({
