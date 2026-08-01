@@ -22,6 +22,7 @@ import {
 } from "@/api/handlers/case-law/corpus-index";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { ConcurrentModificationError } from "@/api/lib/errors/tagged-errors";
 import {
   caseLawCorpusProjectionJoin,
   currentCaseLawCorpusProjection,
@@ -785,9 +786,7 @@ test(
       (error: unknown) => error,
     );
 
-    expect(rejection).toMatchObject({
-      message: "Case-law corpus generation lease was lost",
-    });
+    expect(rejection).toBeInstanceOf(ConcurrentModificationError);
     expect(winnerResult).toMatchObject({ indexed: 1, status: "advanced" });
     expect(winningRemoteEffects).toBe(1);
     expect(staleRemoteEffects).toBe(0);
@@ -847,9 +846,7 @@ test(
       (error: unknown) => error,
     );
 
-    expect(rejection).toMatchObject({
-      message: "Case-law corpus generation lease was lost",
-    });
+    expect(rejection).toBeInstanceOf(ConcurrentModificationError);
     expect(winnerResult).toMatchObject({ indexed: 1, status: "advanced" });
     expect(winningRemoteEffects).toBe(1);
     expect(staleRemoteEffects).toBe(1);

@@ -120,7 +120,7 @@ const GENERATION_PAGE_SELECT_COLUMNS = {
   generationPendingAction: caseLawCorpusIndexProjections.pendingAction,
   generationPendingIndexIds: sql<
     string[]
-  >`${caseLawCorpusIndexProjections.pendingIndexIds}`,
+  >`coalesce(${caseLawCorpusIndexProjections.pendingIndexIds}, '{}'::varchar(64)[])`,
   sourceDescriptor: caseLawSources.descriptor,
 };
 
