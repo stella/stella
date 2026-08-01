@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import {
   AlertTriangleIcon,
   ChevronDownIcon,
@@ -66,6 +66,7 @@ import type {
   StructureError,
 } from "@/components/templates/template-discover-types";
 import type { LookupRegistry } from "@/components/templates/template-field-manifest";
+import { runLeadingSingleFlight } from "@/components/templates/template-form.logic";
 import Tooltip from "@/components/tooltip";
 import { useMountEffect } from "@/hooks/use-effect";
 import { useLocale } from "@/i18n/formatting-context";
@@ -77,6 +78,7 @@ import { detached } from "@/lib/detached";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
+import { resolveCanonicalDocumentDestinationQuery } from "@/lib/workspaces/resolve-document-destination-query";
 
 import { FillClausesSection } from "./fill-clauses-section";
 import { TemplatePrefillPanel } from "./template-prefill-panel";
@@ -307,16 +309,29 @@ type ServerFillProps = TemplateFormBaseProps & {
 /** Where the filled document can land (server-side fill only): a fixed
  *  matter (the form was opened from one) or a matter the user picks at the
  *  end. Without it the form offers the existing downloads only. */
+type CreatedDocumentDestination =
+  | { type: "document"; entityId: string; fieldId: string }
+  | { type: "workspace"; entityId: string };
+
+type ChosenDocumentDestination =
+  | {
+      type: "document";
+      workspaceId: string;
+      entityId: string;
+      fieldId: string;
+    }
+  | { type: "workspace"; workspaceId: string; entityId: string };
+
 type SaveTarget =
   | {
       kind: "matter";
       workspaceId: string;
       parentId?: string | null | undefined;
-      onCreated: (entityId: string) => void;
+      onCreated: (created: CreatedDocumentDestination) => void;
     }
   | {
       kind: "chooseMatter";
-      onCreated: (created: { workspaceId: string; entityId: string }) => void;
+      onCreated: (created: ChosenDocumentDestination) => void;
     };
 
 type TemplateFormProps = (TransientFillProps | ServerFillProps) & {
@@ -1544,6 +1559,7 @@ export const TemplateForm = ({
   initialValues,
 }: TemplateFormProps) => {
   const t = useTranslations();
+  const queryClient = useQueryClient();
   // Formula fields are derived server-side at fill time, never user-entered:
   // the form renders no input for them and submits no value.
   // Derived fields never render as inputs: formulas compute from other
@@ -1599,6 +1615,7 @@ export const TemplateForm = ({
     Record<string, ClauseBody>
   >({});
   const [loading, setLoading] = useState(false);
+  const fillToMatterFlight = useRef<Promise<void> | null>(null);
   const [touched, setTouched] = useState<TouchedFields>({});
   const [errors, setErrors] = useState<FieldErrors>({});
   // Source snippets for AI-prefilled fields, keyed by field path. Presence
@@ -2125,7 +2142,10 @@ export const TemplateForm = ({
 
   /** Fill server-side and persist the result as a document entity in the
    *  given matter (the fill-to endpoint). Validates like a download. */
-  const fillToMatter = async (workspaceId: string, parentId: string | null) => {
+  const performFillToMatter = async (
+    workspaceId: string,
+    parentId: string | null,
+  ) => {
     if (!templateId || !saveTarget) {
       return;
     }
@@ -2138,50 +2158,92 @@ export const TemplateForm = ({
     }
 
     setLoading(true);
-    const submitValues = buildSubmitValues(values, fields, conditions);
-    const response = await api
-      .templates({ templateId })
-      ["fill-to"]({ workspaceId })
-      .post({
-        values: JSON.stringify(submitValues),
-        clauseOverrides,
-        ...(parentId !== null && { parentId: toSafeId<"entity">(parentId) }),
-      });
-    setLoading(false);
+    try {
+      const submitValues = buildSubmitValues(values, fields, conditions);
+      const response = await api
+        .templates({ templateId })
+        ["fill-to"]({ workspaceId })
+        .post({
+          values: JSON.stringify(submitValues),
+          clauseOverrides,
+          ...(parentId !== null && {
+            parentId: toSafeId<"entity">(parentId),
+          }),
+        });
 
-    if (response.error) {
-      stellaToast.add({
-        type: "error",
-        title: t("templates.fillFailed"),
-        description: userErrorMessage(
-          response.error,
-          t("common.unexpectedError"),
-        ),
-      });
-      return;
-    }
+      if (response.error) {
+        stellaToast.add({
+          type: "error",
+          title: t("templates.fillFailed"),
+          description: userErrorMessage(
+            response.error,
+            t("common.unexpectedError"),
+          ),
+        });
+        return;
+      }
 
-    const created = response.data;
-    stellaToast.add({
-      type: "success",
-      title: t("success.documentCreated"),
-    });
-    if (created.unmatchedPlaceholders.length > 0) {
+      const created = response.data;
       stellaToast.add({
-        type: "warning",
-        title: t("templates.unmatchedPlaceholders", {
-          list: created.unmatchedPlaceholders.join(", "),
+        type: "success",
+        title: t("success.documentCreated"),
+      });
+      if (created.unmatchedPlaceholders.length > 0) {
+        stellaToast.add({
+          type: "warning",
+          title: t("templates.unmatchedPlaceholders", {
+            list: created.unmatchedPlaceholders.join(", "),
+          }),
+        });
+      }
+
+      setMatterDialogOpen(false);
+      const destinationResult = await Result.tryPromise(async () =>
+        resolveCanonicalDocumentDestinationQuery({
+          entityId: created.entityId,
+          fieldId: created.fieldId,
+          queryClient,
+          workspaceId,
         }),
-      });
+      );
+      if (Result.isError(destinationResult)) {
+        getAnalytics().captureError(destinationResult.error);
+      }
+      const destination = Result.isError(destinationResult)
+        ? null
+        : destinationResult.value;
+      if (saveTarget.kind === "matter") {
+        saveTarget.onCreated(
+          destination === null
+            ? { type: "workspace", entityId: created.entityId }
+            : {
+                type: "document",
+                entityId: destination.entityId,
+                fieldId: destination.fieldId,
+              },
+        );
+      } else {
+        saveTarget.onCreated(
+          destination === null
+            ? { type: "workspace", workspaceId, entityId: created.entityId }
+            : {
+                type: "document",
+                workspaceId,
+                entityId: destination.entityId,
+                fieldId: destination.fieldId,
+              },
+        );
+      }
+      onDone(created.fileName);
+    } finally {
+      setLoading(false);
     }
+  };
 
-    setMatterDialogOpen(false);
-    if (saveTarget.kind === "matter") {
-      saveTarget.onCreated(created.entityId);
-    } else {
-      saveTarget.onCreated({ workspaceId, entityId: created.entityId });
-    }
-    onDone(created.fileName);
+  const fillToMatter = async (workspaceId: string, parentId: string | null) => {
+    await runLeadingSingleFlight(fillToMatterFlight, async () => {
+      await performFillToMatter(workspaceId, parentId);
+    });
   };
 
   /** "Move to matter": validate first so the picker only opens over a
@@ -2577,10 +2639,10 @@ const normalizeBinaryResponse = async (
 /**
  * A `chooseMatter` {@link SaveTarget} whose `onCreated` opens the filled DOCX
  * in the editable Folio editor: it invalidates the destination matter's entity
- * list, then navigates to the entities route, which resolves the document's
- * file field and redirects into the document view. Reused by every "fill into
- * a matter the user picks" surface (the Knowledge "Use template" dialog and the
- * Template Studio Fill facet) so the post-fill behaviour stays identical.
+ * list, then opens the created file directly in the document view. Reused by
+ * every "fill into a matter the user picks" surface (the Knowledge "Use
+ * template" dialog and the Template Studio Fill facet) so the post-fill
+ * behaviour stays identical.
  *
  * `onDone` runs after the entity is created and navigation is kicked off (the
  * Studio facet has no use for it; the dialog uses it to close itself).
@@ -2592,19 +2654,38 @@ export const useFillToMatterSaveTarget = (
   const navigate = useNavigate();
   return {
     kind: "chooseMatter",
-    onCreated: ({ workspaceId, entityId }) => {
-      queryClient
-        .invalidateQueries({ queryKey: entitiesKeys.all(workspaceId) })
-        .catch(() => {
-          /* fire-and-forget */
-        });
+    onCreated: (created) => {
+      const { workspaceId, entityId } = created;
+      detached(
+        queryClient.invalidateQueries({
+          queryKey: entitiesKeys.all(workspaceId),
+        }),
+        "TemplateForm.invalidateCreatedDocument",
+      );
       onDone?.();
-      navigate({
-        to: "/workspaces/$workspaceId/entities/$entityId",
-        params: { workspaceId, entityId },
-      }).catch(() => {
-        /* navigation is best-effort; the document is already saved */
-      });
+      switch (created.type) {
+        case "document":
+          detached(
+            navigate({
+              to: "/workspaces/$workspaceId/$viewId/document",
+              params: { workspaceId, viewId: "all" },
+              search: { entity: entityId, field: created.fieldId },
+            }),
+            "TemplateForm.openCreatedDocument",
+          );
+          return;
+        case "workspace":
+          detached(
+            navigate({
+              to: "/workspaces/$workspaceId/$viewId",
+              params: { workspaceId, viewId: "all" },
+            }),
+            "TemplateForm.openCreatedWorkspace",
+          );
+          return;
+        default:
+          created satisfies never;
+      }
     },
   };
 };

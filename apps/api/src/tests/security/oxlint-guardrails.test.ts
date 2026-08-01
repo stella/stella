@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 const readRootFixture = (relativePath: string) =>
@@ -453,17 +453,47 @@ describe("custom oxlint guardrails", () => {
     );
   });
 
-  test("legacy entity redirects do not block protected shell commit", () => {
-    const entityRouteSource = readRootFixture(
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/entities/$entityId.tsx",
+  test("deleted legacy entity route stays deleted and lint-guarded", () => {
+    const routesDirectory = path.join(
+      import.meta.dir,
+      "../../../../..",
+      "apps/web/src/routes",
     );
+    const oxlintConfig = readRootFixture("oxlint.config.ts");
+    const legacyEntityRouteFile =
+      /(?:^|\/)_protected\.workspaces(?:\/|\.)\$workspaceId(?:\/|\.)entities_?(?:\/|\.)\$entityId(?:[./]|$)/u;
+    const routeSourceFile = /\.[cm]?[jt]sx?$/u;
 
-    expect(entityRouteSource).toContain("component: LegacyEntityRedirect");
-    expect(entityRouteSource).toContain("useQuery");
-    expect(entityRouteSource).toContain("DocxLoadingShell");
-    expect(entityRouteSource).toContain("Navigate");
-    expect(entityRouteSource).not.toContain("beforeLoad");
-    expect(entityRouteSource).not.toContain("ensureRouteQueryData");
+    const legacyRouteSourceFiles = existsSync(routesDirectory)
+      ? readdirSync(routesDirectory, { recursive: true }).filter(
+          (entry) =>
+            typeof entry === "string" &&
+            legacyEntityRouteFile.test(entry) &&
+            routeSourceFile.test(entry),
+        )
+      : [];
+
+    expect(
+      [
+        "_protected.workspaces/$workspaceId/entities/$entityId.tsx",
+        "_protected.workspaces/$workspaceId/entities/$entityId/route.tsx",
+        "_protected.workspaces/$workspaceId/entities_.$entityId.tsx",
+        "_protected.workspaces.$workspaceId.entities.$entityId.tsx",
+        "_protected.workspaces.$workspaceId.entities_.$entityId.tsx",
+        "_protected.workspaces.$workspaceId.entities.$entityId.lazy.tsx",
+      ].every(
+        (candidate) =>
+          legacyEntityRouteFile.test(candidate) &&
+          routeSourceFile.test(candidate),
+      ),
+    ).toBe(true);
+    expect(legacyRouteSourceFiles).toEqual([]);
+    expect(oxlintConfig).toContain(`
+      files: ["apps/web/src/**/*.{ts,tsx}"],
+      rules: {
+        "no-legacy-entity-route/no-legacy-entity-route": "error",
+      },
+    `);
   });
 
   test("tools route keeps heavy catalogue UI behind Suspense", () => {

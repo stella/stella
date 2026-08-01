@@ -124,12 +124,12 @@ describe("sidebar matter context", () => {
 });
 
 describe("sidebar entity activity navigation", () => {
-  test("routes non-file entity kinds through the entity route", () => {
+  test("routes non-file entity kinds to the all view", () => {
     expect(resolveEntityActivityDestination("message")).toEqual({
-      type: "entity-route",
+      type: "all-view",
     });
     expect(resolveEntityActivityDestination("link")).toEqual({
-      type: "entity-route",
+      type: "all-view",
     });
   });
 });

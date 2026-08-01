@@ -21,6 +21,8 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getS3 } from "@/api/lib/s3";
 import { presignDownloadUrl } from "@/api/lib/s3-presign";
 
+import { resolvedReportResultFieldId } from "./result-field";
+
 /** Presigned result URLs are short-lived; the client fetches immediately. */
 const DOWNLOAD_URL_EXPIRES_SECONDS = 5 * 60;
 
@@ -39,24 +41,31 @@ const config = {
 const readReportExport = createSafeHandler(
   config,
   async function* ({ safeDb, workspaceId, session, user, params }) {
-    const row = yield* Result.await(
+    const rows = yield* Result.await(
       safeDb((tx) =>
-        tx.query.reportExports.findFirst({
-          where: {
-            id: { eq: params.exportId },
-            workspaceId: { eq: workspaceId },
-            requestedBy: { eq: user.id },
-          },
-          columns: {
-            status: true,
-            error: true,
-            mode: true,
-            resultEntityId: true,
-            resultS3Key: true,
-          },
-        }),
+        tx
+          .select({
+            status: reportExports.status,
+            error: reportExports.error,
+            mode: reportExports.mode,
+            resultEntityId: reportExports.resultEntityId,
+            resultFieldId: resolvedReportResultFieldId.as(
+              "resolved_result_field_id",
+            ),
+            resultS3Key: reportExports.resultS3Key,
+          })
+          .from(reportExports)
+          .where(
+            and(
+              eq(reportExports.id, params.exportId),
+              eq(reportExports.workspaceId, workspaceId),
+              eq(reportExports.requestedBy, user.id),
+            ),
+          )
+          .limit(1),
       ),
     );
+    const row = rows.at(0);
 
     if (!row) {
       return Result.err(
@@ -128,6 +137,7 @@ const readReportExport = createSafeHandler(
       status: row.status,
       error: row.error,
       resultEntityId: row.resultEntityId,
+      resultFieldId: row.resultFieldId,
       downloadUrl,
     });
   },

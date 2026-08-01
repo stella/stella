@@ -12,7 +12,7 @@ import {
 } from "./common";
 import type { AnyPgColumn, SafeId, ViewLayout } from "./common";
 import { workspaces } from "./contacts";
-import { entities } from "./entities";
+import { entities, fields } from "./entities";
 import { workspaceViews } from "./files-views";
 
 /** Lifecycle of one view->report export job. `queued` on insert, `running`
@@ -87,6 +87,12 @@ export const reportExports = p.pgTable(
       (): AnyPgColumn => entities.id,
       { onDelete: "set null" },
     ),
+    // The exact file field created with a workspace-mode export. Retaining it
+    // avoids re-resolving a mutable entity/version when opening the result.
+    resultFieldId: safeUuid<"field">("result_field_id").references(
+      (): AnyPgColumn => fields.id,
+      { onDelete: "set null" },
+    ),
     resultS3Key: p.varchar("result_s3_key", { length: 512 }),
     notificationStatus: p
       .text("notification_status", {
@@ -112,6 +118,7 @@ export const reportExports = p.pgTable(
     p
       .index("report_exports_workspace_requester_created_idx")
       .on(table.workspaceId, table.requestedBy, table.createdAt, table.id),
+    p.index("report_exports_result_field_idx").on(table.resultFieldId),
     p
       .index("report_exports_pending_notification_idx")
       .on(table.createdAt, table.id)

@@ -14,6 +14,7 @@ import {
   REPORT_EXPORTS_PAGE_SIZE,
   reportExportsHistoryOptions,
 } from "@/lib/workspaces/queries/report-exports";
+import { resolveReportExportDestinationQuery } from "@/lib/workspaces/resolve-report-export-destination-query";
 
 import { downloadReportExport } from "./report-export-actions";
 import type { ReportExportDeliveryMode } from "./report-export-tracking";
@@ -63,18 +64,32 @@ export const ReportExportHistory = ({
     }
   };
 
-  const handleOpen = async (entityId: string) => {
-    setActiveActionId(entityId);
-    const result = await Result.tryPromise(
-      async () =>
-        await navigate({
-          to: "/workspaces/$workspaceId/entities/$entityId",
-          params: { workspaceId, entityId },
-        }),
-    );
+  const handleOpen = async (exportId: string) => {
+    setActiveActionId(exportId);
+    const result = await Result.tryPromise(async () => {
+      const destination = await resolveReportExportDestinationQuery({
+        exportId,
+        queryClient,
+        workspaceId,
+      });
+      if (destination === null) {
+        return null;
+      }
+      await navigate({
+        to: "/workspaces/$workspaceId/$viewId/document",
+        params: { workspaceId, viewId: "all" },
+        search: {
+          entity: destination.entityId,
+          field: destination.fieldId,
+        },
+      });
+      return destination;
+    });
     setActiveActionId(null);
-    if (Result.isError(result)) {
-      analytics.captureError(result.error);
+    if (Result.isError(result) || result.value === null) {
+      if (Result.isError(result)) {
+        analytics.captureError(result.error);
+      }
       stellaToast.add({
         type: "error",
         title: t("common.unexpectedError"),
@@ -88,8 +103,8 @@ export const ReportExportHistory = ({
     );
   };
 
-  const handleOpenClick = (entityId: string) => {
-    handleOpen(entityId).catch((error: unknown) =>
+  const handleOpenClick = (exportId: string) => {
+    handleOpen(exportId).catch((error: unknown) =>
       analytics.captureError(error),
     );
   };
@@ -187,12 +202,12 @@ const REPORT_EXPORT_MODE_KEYS = {
 type ReportExportHistoryActionProps = {
   activeActionId: string | null;
   onDownload: (exportId: string) => void;
-  onOpen: (entityId: string) => void;
+  onOpen: (exportId: string) => void;
   reportExport: {
     downloadAvailable: boolean;
     id: string;
     mode: ReportExportDeliveryMode;
-    resultEntityId: string | null;
+    resultEntityId: unknown;
     status: ReportExportStatus;
   };
 };
@@ -224,16 +239,14 @@ const ReportExportHistoryAction = ({
     );
   }
 
-  if (reportExport.resultEntityId === null) {
+  if (typeof reportExport.resultEntityId !== "string") {
     return null;
   }
-  const resultEntityId = reportExport.resultEntityId;
-
   return (
     <Button
-      disabled={activeActionId === resultEntityId}
+      disabled={activeActionId === reportExport.id}
       onClick={() => {
-        onOpen(resultEntityId);
+        onOpen(reportExport.id);
       }}
       size="sm"
       type="button"

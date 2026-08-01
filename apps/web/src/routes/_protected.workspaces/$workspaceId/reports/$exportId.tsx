@@ -1,7 +1,11 @@
 import { useState } from "react";
 
-import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import {
+  queryOptions,
+  useQueryClient,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -15,10 +19,13 @@ import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
+import { resolveReportExportDestinationQuery } from "@/lib/workspaces/resolve-report-export-destination-query";
 
 function ReportExportRecoveryPage() {
   const t = useTranslations();
   const analytics = useAnalytics();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { exportId, workspaceId } = Route.useParams({
     select: (params) => ({
       exportId: params.exportId,
@@ -77,6 +84,37 @@ function ReportExportRecoveryPage() {
     );
   };
 
+  const handleOpen = async () => {
+    const result = await Result.tryPromise(async () => {
+      const destination = await resolveReportExportDestinationQuery({
+        exportId,
+        queryClient,
+        workspaceId,
+      });
+      if (destination === null) {
+        return null;
+      }
+      await navigate({
+        to: "/workspaces/$workspaceId/$viewId/document",
+        params: { workspaceId, viewId: "all" },
+        search: {
+          entity: destination.entityId,
+          field: destination.fieldId,
+        },
+      });
+      return destination;
+    });
+    if (Result.isError(result) || result.value === null) {
+      if (Result.isError(result)) {
+        analytics.captureError(result.error);
+      }
+      stellaToast.add({
+        type: "error",
+        title: t("common.unexpectedError"),
+      });
+    }
+  };
+
   return (
     <main className="flex h-full flex-col">
       <header className="border-b px-4 py-3">
@@ -104,23 +142,16 @@ function ReportExportRecoveryPage() {
             </Button>
           )}
 
-          {data.status === "completed" && data.resultEntityId && (
-            <Button
-              render={
-                <Link
-                  from="/workspaces/$workspaceId/reports/$exportId"
-                  params={{ entityId: data.resultEntityId, workspaceId }}
-                  to="/workspaces/$workspaceId/entities/$entityId"
-                />
-              }
-            >
-              {t("workspaces.views.reportExport.openReport")}
-            </Button>
-          )}
+          {data.status === "completed" &&
+            typeof data.resultEntityId === "string" && (
+              <Button onClick={() => detached(handleOpen(), "openReport")}>
+                {t("workspaces.views.reportExport.openReport")}
+              </Button>
+            )}
 
           {data.status === "completed" &&
             !data.downloadUrl &&
-            !data.resultEntityId && (
+            typeof data.resultEntityId !== "string" && (
               <p className="text-muted-foreground text-sm">
                 {t("common.unexpectedError")}
               </p>

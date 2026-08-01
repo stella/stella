@@ -245,22 +245,39 @@ const FillStep = ({
         kind: "matter",
         workspaceId,
         parentId,
-        onCreated: (entityId) => {
-          queryClient
-            .invalidateQueries({ queryKey: entitiesKeys.all(workspaceId) })
-            .catch(() => {
-              /* fire-and-forget */
-            });
+        onCreated: (created) => {
+          const { entityId } = created;
+          detached(
+            queryClient.invalidateQueries({
+              queryKey: entitiesKeys.all(workspaceId),
+            }),
+            "NewDocumentFromTemplate.invalidateCreatedDocument",
+          );
           onCreated();
-          // Open the just-created document in the editable Folio editor (the
-          // entities route resolves the file field and redirects into the
-          // document view) so the user can hand-edit it right away.
-          navigate({
-            to: "/workspaces/$workspaceId/entities/$entityId",
-            params: { workspaceId, entityId },
-          }).catch(() => {
-            /* navigation is best-effort; the document is already saved */
-          });
+          switch (created.type) {
+            case "document":
+              // Open the just-created document in the editable Folio editor.
+              detached(
+                navigate({
+                  to: "/workspaces/$workspaceId/$viewId/document",
+                  params: { workspaceId, viewId: "all" },
+                  search: { entity: entityId, field: created.fieldId },
+                }),
+                "NewDocumentFromTemplate.openCreatedDocument",
+              );
+              return;
+            case "workspace":
+              detached(
+                navigate({
+                  to: "/workspaces/$workspaceId/$viewId",
+                  params: { workspaceId, viewId: "all" },
+                }),
+                "NewDocumentFromTemplate.openCreatedWorkspace",
+              );
+              return;
+            default:
+              created satisfies never;
+          }
         },
       }}
       structureErrors={fill.schema.structureErrors}

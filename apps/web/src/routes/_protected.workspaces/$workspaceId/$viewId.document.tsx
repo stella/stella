@@ -129,6 +129,24 @@ export const Route = createFileRoute(
       return;
     }
 
+    // Versions power the inspector and field switching. Start the request at
+    // navigation time alongside the entity read so direct document links do
+    // not add a component-mount waterfall. A fresh entity-version read is
+    // reused through the shared query key and route stale time.
+    detached(
+      prefetchRouteQuery(
+        context.queryClient,
+        entityVersionsOptions({
+          workspaceId: params.workspaceId,
+          entityId: deps.entity,
+        }),
+        (error: unknown) => {
+          getAnalytics().captureError(error);
+        },
+      ),
+      "loader",
+    );
+
     const entity = await ensureRouteQueryData(
       context.queryClient,
       entityOptions(params.workspaceId, deps.entity),

@@ -5,6 +5,83 @@ import type { RecentFile } from "@/lib/search-recents";
 type ChatGlobalSearchHit = Extract<GlobalSearchHit, { type: "chat" }>;
 type EntityGlobalSearchHit = Extract<GlobalSearchHit, { entityId: string }>;
 
+export type EntityNavigationRoute =
+  | {
+      to: "/workspaces/$workspaceId/$viewId/document";
+      params: { workspaceId: string; viewId: "all" };
+      search: { entity: string; field: string };
+    }
+  | {
+      to: "/workspaces/$workspaceId/$viewId";
+      params: { workspaceId: string; viewId: "all" };
+    };
+
+const getEntityDocumentRoute = ({
+  entityId,
+  fileFieldId,
+  workspaceId,
+}: Pick<
+  EntityGlobalSearchHit,
+  "entityId" | "fileFieldId" | "workspaceId"
+>): EntityNavigationRoute => {
+  if (fileFieldId === null) {
+    return {
+      to: "/workspaces/$workspaceId/$viewId",
+      params: { workspaceId, viewId: "all" },
+    };
+  }
+
+  return {
+    to: "/workspaces/$workspaceId/$viewId/document",
+    params: { workspaceId, viewId: "all" },
+    search: { entity: entityId, field: fileFieldId },
+  };
+};
+
+type ResolveEntityDocumentRouteOptions = {
+  hit: Pick<EntityGlobalSearchHit, "entityId" | "fileFieldId" | "workspaceId">;
+  resolveCurrentFileFieldId: () => Promise<string | null>;
+};
+
+export const resolveEntityDocumentRoute = async ({
+  hit,
+  resolveCurrentFileFieldId,
+}: ResolveEntityDocumentRouteOptions) => {
+  const fileFieldId = await resolveCurrentFileFieldId();
+  return {
+    fileFieldId,
+    route: getEntityDocumentRoute({ ...hit, fileFieldId }),
+  };
+};
+
+export const getEntityWorkspaceRoute = ({
+  workspaceId,
+}: Pick<EntityGlobalSearchHit, "workspaceId">): EntityNavigationRoute => ({
+  to: "/workspaces/$workspaceId/$viewId",
+  params: { workspaceId, viewId: "all" },
+});
+
+export const getRecentFileRoute = ({
+  entityId,
+  fileFieldId,
+  workspaceId,
+}: Pick<RecentFile, "entityId" | "workspaceId"> & {
+  fileFieldId: string | null;
+}): EntityNavigationRoute => {
+  if (fileFieldId === null) {
+    return {
+      to: "/workspaces/$workspaceId/$viewId",
+      params: { workspaceId, viewId: "all" },
+    };
+  }
+
+  return {
+    to: "/workspaces/$workspaceId/$viewId/document",
+    params: { workspaceId, viewId: "all" },
+    search: { entity: entityId, field: fileFieldId },
+  };
+};
+
 type DialogCloseActionState =
   | { status: "idle" }
   | { status: "pending"; run: () => void };

@@ -261,7 +261,11 @@ describe("search preview targets", () => {
         propertyId: "property_1",
       },
       {
-        content: { mimeType: "application/pdf", type: "file" },
+        content: {
+          mimeType:
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          type: "file",
+        },
         id: "field_2",
         propertyId: "property_2",
       },
@@ -297,6 +301,20 @@ describe("search preview targets", () => {
         mimeType: "application/pdf",
       }),
     ).toBe("field_1");
+  });
+
+  test("resolves current file identity from a fresh entity read", () => {
+    const options = recentFilePreviewFieldOptions({
+      entityId: "entity_1",
+      fileFieldId: "field_1",
+      filePropertyId: "property_1",
+      mimeType: "application/pdf",
+      organizationId: "org_1",
+      userId: "user_1",
+      workspaceId: "workspace_1",
+    });
+
+    expect(options.staleTime).toBe(0);
   });
 
   test("reauthorizes cached previews whenever they mount", () => {

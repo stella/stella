@@ -303,6 +303,7 @@ const fillTemplateToWorkspace = createSafeHandler(
 
     return Result.ok({
       entityId,
+      fieldId: created.value.fieldId,
       fileName: created.value.fileName,
       unmatchedPlaceholders: filled.unmatchedPlaceholders,
       unusedValues: filled.unusedValues,

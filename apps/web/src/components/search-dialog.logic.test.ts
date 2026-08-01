@@ -5,8 +5,11 @@ import type { GlobalSearchHit } from "@stll/api/types";
 import {
   createDialogCloseActionQueue,
   getChatHitRoute,
+  getEntityWorkspaceRoute,
+  getRecentFileRoute,
   getRecentFilePreviewDateVisibility,
   getRecentFilePreviewHit,
+  resolveEntityDocumentRoute,
 } from "./search-dialog.logic";
 
 type ChatGlobalSearchHit = Extract<GlobalSearchHit, { type: "chat" }>;
@@ -75,6 +78,81 @@ describe("search dialog close actions", () => {
     queue.complete(false);
 
     expect(runCount).toBe(0);
+  });
+});
+
+describe("document routes", () => {
+  test("re-resolves a live search file immediately before navigation", async () => {
+    expect(
+      await resolveEntityDocumentRoute({
+        hit: {
+          entityId: "entity-1",
+          fileFieldId: "stale-field",
+          workspaceId: "workspace-1",
+        },
+        resolveCurrentFileFieldId: async () => "current-field",
+      }),
+    ).toEqual({
+      fileFieldId: "current-field",
+      route: {
+        to: "/workspaces/$workspaceId/$viewId/document",
+        params: { workspaceId: "workspace-1", viewId: "all" },
+        search: { entity: "entity-1", field: "current-field" },
+      },
+    });
+  });
+
+  test("opens the all view when current resolution finds no file field", async () => {
+    expect(
+      await resolveEntityDocumentRoute({
+        hit: {
+          entityId: "entity-1",
+          fileFieldId: "stale-field",
+          workspaceId: "workspace-1",
+        },
+        resolveCurrentFileFieldId: async () => null,
+      }),
+    ).toEqual({
+      fileFieldId: null,
+      route: {
+        to: "/workspaces/$workspaceId/$viewId",
+        params: { workspaceId: "workspace-1", viewId: "all" },
+      },
+    });
+  });
+
+  test("routes non-document entity hits to the all view", () => {
+    expect(getEntityWorkspaceRoute({ workspaceId: "workspace-1" })).toEqual({
+      to: "/workspaces/$workspaceId/$viewId",
+      params: { workspaceId: "workspace-1", viewId: "all" },
+    });
+  });
+
+  test("opens a recent file directly when its field id was persisted", () => {
+    expect(
+      getRecentFileRoute({
+        entityId: "entity-1",
+        fileFieldId: "field-1",
+        workspaceId: "workspace-1",
+      }),
+    ).toEqual({
+      to: "/workspaces/$workspaceId/$viewId/document",
+      params: { workspaceId: "workspace-1", viewId: "all" },
+      search: { entity: "entity-1", field: "field-1" },
+    });
+  });
+
+  test("opens the all view for a recent file without a field id", () => {
+    expect(
+      getRecentFileRoute({
+        entityId: "entity-1",
+        fileFieldId: null,
+        workspaceId: "workspace-1",
+      }),
+    ).toEqual({
+      to: "/workspaces/$workspaceId/$viewId",
+      params: { workspaceId: "workspace-1", viewId: "all" },
+    });
   });
 });
 

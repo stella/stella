@@ -22,6 +22,12 @@ fi
 
 CHANGED_FILES="$(git diff --name-only "$BASE_REF"...HEAD)"
 
+# A fresh-database apply cannot detect a late-arriving migration whose
+# timestamp predates migrations already recorded on the target database.
+# Enforce strictly increasing timestamps against the merge base so rolling
+# deployments cannot silently skip a new migration.
+bun scripts/check-migration-order.ts "$BASE_REF"
+
 extract_schema_files() {
   local source_file="$1"
 

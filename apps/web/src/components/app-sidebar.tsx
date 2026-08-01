@@ -1336,8 +1336,8 @@ const MatterActivityList = ({
     }
 
     await navigate({
-      to: "/workspaces/$workspaceId/entities/$entityId",
-      params: { entityId, workspaceId },
+      to: "/workspaces/$workspaceId/$viewId",
+      params: { workspaceId, viewId: "all" },
     });
   };
 

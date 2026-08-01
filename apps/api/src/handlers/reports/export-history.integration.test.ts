@@ -7,10 +7,15 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { inArray, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import { reportExports } from "@/api/db/schema";
+import {
+  entityVersions,
+  fields,
+  properties,
+  reportExports,
+} from "@/api/db/schema";
 import type { ViewLayout } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { readReportExportHistory } from "@/api/handlers/reports/export-history";
@@ -45,6 +50,10 @@ const requesterExports: {
   id: SafeId<"reportExport">;
   timestamp: string;
 }[] = [];
+const fallbackPropertyId = toSafeId<"property">(Bun.randomUUIDv7());
+const fallbackFieldId = toSafeId<"field">(Bun.randomUUIDv7());
+const tombstonedVersionId = toSafeId<"entityVersion">(Bun.randomUUIDv7());
+const tombstonedFieldId = toSafeId<"field">(Bun.randomUUIDv7());
 
 const readRequesterExportPage = async (cursor: string | undefined) =>
   await Result.gen(() =>
@@ -64,6 +73,60 @@ beforeAll(async () => {
   const scoped = createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1);
   safeDb = toSafeDbMock(asTestRaw<ScopedDb>(scoped));
 
+  await testDb.insert(properties).values({
+    id: fallbackPropertyId,
+    workspaceId: ids.wsA1,
+    name: "Report result file",
+    status: "fresh",
+    content: { version: 1, type: "file" },
+    tool: { version: 1, type: "manual-input" },
+  });
+  await testDb.insert(entityVersions).values({
+    id: tombstonedVersionId,
+    workspaceId: ids.wsA1,
+    entityId: ids.entityA1,
+    deletedAt: new Date("2026-07-17T09:00:00.000Z"),
+    deletedBy: ids.userA1,
+  });
+  await testDb.insert(fields).values([
+    {
+      id: fallbackFieldId,
+      workspaceId: ids.wsA1,
+      propertyId: fallbackPropertyId,
+      entityVersionId: ids.entityVersionA1,
+      content: {
+        version: 1,
+        type: "file",
+        id: Bun.randomUUIDv7(),
+        fileName: "historical-report.docx",
+        mimeType:
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        sizeBytes: 1024,
+        encrypted: false,
+        sha256Hex: "a".repeat(64),
+        pdfFileId: null,
+      },
+    },
+    {
+      id: tombstonedFieldId,
+      workspaceId: ids.wsA1,
+      propertyId: fallbackPropertyId,
+      entityVersionId: tombstonedVersionId,
+      content: {
+        version: 1,
+        type: "file",
+        id: Bun.randomUUIDv7(),
+        fileName: "withdrawn-report.docx",
+        mimeType:
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        sizeBytes: 1024,
+        encrypted: false,
+        sha256Hex: "b".repeat(64),
+        pdfFileId: null,
+      },
+    },
+  ]);
+
   for (let index = 0; index < 7; index++) {
     const exportId = toSafeId<"reportExport">(Bun.randomUUIDv7());
     const timestamp = `2026-07-17T10:00:00.123${Math.floor(index / 2)
@@ -76,6 +139,19 @@ beforeAll(async () => {
       exportId,
       mode: index === 0 ? "download" : "workspace",
       requestedBy: ids.userA1,
+      ...(index === 1 && {
+        resultEntityId: ids.entityA1,
+        resultFieldId: ids.fieldA1,
+      }),
+      ...(index === 2 && { resultEntityId: ids.entityA1 }),
+      ...(index === 3 && {
+        resultEntityId: ids.entityA1,
+        resultFieldId: ids.fieldB1,
+      }),
+      ...(index === 4 && {
+        resultEntityId: ids.entityA1,
+        resultFieldId: tombstonedFieldId,
+      }),
       resultS3Key:
         index === 0 ? `exports/${ids.orgA}/${ids.wsA1}/${exportId}.docx` : null,
       timestamp,
@@ -107,6 +183,15 @@ afterAll(async () => {
         .delete(reportExports)
         .where(inArray(reportExports.id, seededExportIds));
     }
+    await testDb
+      .delete(fields)
+      .where(inArray(fields.id, [fallbackFieldId, tombstonedFieldId]));
+    await testDb
+      .delete(entityVersions)
+      .where(eq(entityVersions.id, tombstonedVersionId));
+    await testDb
+      .delete(properties)
+      .where(eq(properties.id, fallbackPropertyId));
   } finally {
     await releaseRlsFixture();
   }
@@ -188,12 +273,74 @@ describe("report export history", () => {
         .every(({ downloadAvailable }) => !downloadAvailable),
     ).toBe(true);
   });
+
+  test("returns the persisted workspace result field for direct document links", async () => {
+    const result = await Result.gen(() =>
+      readReportExportHistory({
+        cursor: undefined,
+        limit: 100,
+        requestedBy: ids.userA1,
+        safeDb,
+        workspaceId: ids.wsA1,
+      }),
+    );
+
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    const workspaceExport = result.value.items.find(
+      ({ id }) => id === requesterExports.at(1)?.id,
+    );
+    expect(workspaceExport).toMatchObject({
+      resultEntityId: ids.entityA1,
+      resultFieldId: ids.fieldA1,
+    });
+  });
+
+  test("resolves current file provenance for historical, invalid, and tombstoned receipts", async () => {
+    const result = await Result.gen(() =>
+      readReportExportHistory({
+        cursor: undefined,
+        limit: 100,
+        requestedBy: ids.userA1,
+        safeDb,
+        workspaceId: ids.wsA1,
+      }),
+    );
+
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    const historicalExport = result.value.items.find(
+      ({ id }) => id === requesterExports.at(2)?.id,
+    );
+    const foreignFieldExport = result.value.items.find(
+      ({ id }) => id === requesterExports.at(3)?.id,
+    );
+    const tombstonedFieldExport = result.value.items.find(
+      ({ id }) => id === requesterExports.at(4)?.id,
+    );
+    expect(historicalExport).toMatchObject({
+      resultEntityId: ids.entityA1,
+      resultFieldId: fallbackFieldId,
+    });
+    expect(foreignFieldExport).toMatchObject({
+      resultEntityId: ids.entityA1,
+      resultFieldId: fallbackFieldId,
+    });
+    expect(tombstonedFieldExport).toMatchObject({
+      resultEntityId: ids.entityA1,
+      resultFieldId: fallbackFieldId,
+    });
+  });
 });
 
 const seedExport = async ({
   exportId,
   mode = "workspace",
   requestedBy,
+  resultEntityId = null,
+  resultFieldId = null,
   resultS3Key = null,
   timestamp,
   workspaceId,
@@ -201,6 +348,8 @@ const seedExport = async ({
   exportId: SafeId<"reportExport">;
   mode?: "download" | "workspace";
   requestedBy: SafeId<"user">;
+  resultEntityId?: SafeId<"entity"> | null;
+  resultFieldId?: SafeId<"field"> | null;
   resultS3Key?: string | null;
   timestamp: string;
   workspaceId: SafeId<"workspace">;
@@ -214,6 +363,8 @@ const seedExport = async ({
       layout,
       status,
       mode,
+      result_entity_id,
+      result_field_id,
       result_s3_key,
       created_at,
       updated_at
@@ -225,6 +376,8 @@ const seedExport = async ({
       ${JSON.stringify(tableLayout)}::jsonb,
       'completed',
       ${mode},
+      ${resultEntityId},
+      ${resultFieldId},
       ${resultS3Key},
       ${timestamp}::timestamptz,
       ${timestamp}::timestamptz

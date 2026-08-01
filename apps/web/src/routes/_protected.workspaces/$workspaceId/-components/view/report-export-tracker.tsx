@@ -14,6 +14,7 @@ import {
   reportExportDetailOptions,
   reportExportsKeys,
 } from "@/lib/workspaces/queries/report-exports";
+import { resolveReportExportDestinationQuery } from "@/lib/workspaces/resolve-report-export-destination-query";
 
 import { downloadReportExport } from "./report-export-actions";
 import {
@@ -148,26 +149,39 @@ export const ReportExportTracker = ({
       return;
     }
 
-    if (settledDetail.resultEntityId !== null) {
-      const resultEntityId = settledDetail.resultEntityId;
+    if (typeof settledDetail.resultEntityId === "string") {
       queryClient
         .invalidateQueries({
           queryKey: entitiesKeys.all(settledExport.workspaceId),
         })
         .catch((error: unknown) => analytics.captureError(error));
       const handleOpen = async () => {
-        const result = await Result.tryPromise(
-          async () =>
-            await navigate({
-              to: "/workspaces/$workspaceId/entities/$entityId",
-              params: {
-                workspaceId: settledExport.workspaceId,
-                entityId: resultEntityId,
-              },
-            }),
-        );
-        if (Result.isError(result)) {
-          analytics.captureError(result.error);
+        const result = await Result.tryPromise(async () => {
+          const destination = await resolveReportExportDestinationQuery({
+            exportId: settledExport.exportId,
+            queryClient,
+            workspaceId: settledExport.workspaceId,
+          });
+          if (destination === null) {
+            return null;
+          }
+          await navigate({
+            to: "/workspaces/$workspaceId/$viewId/document",
+            params: {
+              workspaceId: settledExport.workspaceId,
+              viewId: "all",
+            },
+            search: {
+              entity: destination.entityId,
+              field: destination.fieldId,
+            },
+          });
+          return destination;
+        });
+        if (Result.isError(result) || result.value === null) {
+          if (Result.isError(result)) {
+            analytics.captureError(result.error);
+          }
           stellaToast.add({
             type: "error",
             title: t("common.unexpectedError"),
