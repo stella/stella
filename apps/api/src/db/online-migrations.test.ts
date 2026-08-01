@@ -144,7 +144,11 @@ describe("online migrations", () => {
       indexStates: { [SOURCE_CASE_INDEX]: [false, false] },
     });
 
-    await expect(runOnlineMigrations(harness.pool)).rejects.toMatchObject({
+    const rejection: unknown = await runOnlineMigrations(harness.pool).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(rejection).toMatchObject({
       message: `Required migration index ${SOURCE_CASE_INDEX} is not ready`,
     });
     expect(indexOfStatement(harness.statements, LEGACY_SOURCE_CASE_INDEX)).toBe(
