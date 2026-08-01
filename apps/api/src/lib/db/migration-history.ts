@@ -178,7 +178,7 @@ const rewrittenMigrationHistories = {
   // lock wait from the unbounded execution budget for metadata-only DDL.
   "20260718120000_chat_thread_title_source_default": {
     currentHash:
-      "73b6fdc0e031505b2f09a5819ad636c5687583cfff8668a2dfbb3483f8a28af5",
+      "98d87d9f20bcc8f379f428c954abacadab2feb7c9784fe58b2aa0a56f0b4489b",
     priorHashes: [
       "eb0a41ec2f1c3baec7d0371fc9b380a3151ff793edb6e67fef974294582f7930",
     ],
@@ -250,7 +250,7 @@ const rewrittenMigrationHistories = {
   // lock wait from the unbounded execution budget for metadata-only DDL.
   "20260731170000_case_law_corpus_generation_backfill": {
     currentHash:
-      "a4c8015331dbb9db991059920cd24ac90fa06368b79035493aeba4badfccae85",
+      "4e35ff3e0fce8117382eb87ff73df18751954da90014ca9a2619a4a544de89e8",
     priorHashes: [
       "6eeb473a0902a7a807133c5057c2b582c2d40f748705b36d967a75bec6df8a7b",
     ],

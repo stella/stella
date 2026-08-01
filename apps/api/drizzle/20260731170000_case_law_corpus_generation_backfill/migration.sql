@@ -2,6 +2,7 @@ SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 
 -- Keep lock acquisition bounded, but do not interrupt metadata-only catalog work after PostgreSQL grants the lock.
+-- stella-migration-safety: metadata-only-type-change
 SET statement_timeout = 0;--> statement-breakpoint
 -- stella-migration-safety: reviewed destructive-change - widening varchar(32) -> varchar(64) is a metadata-only catalog change with no table rewrite or data loss; it aligns every physical corpus-index identifier column with the maximum constructed identifier length.
 ALTER TABLE "case_law_decisions" ALTER COLUMN "indexed_generation" SET DATA TYPE varchar(64);--> statement-breakpoint

@@ -1,6 +1,7 @@
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 -- Keep lock acquisition bounded, but do not interrupt metadata-only catalog work after PostgreSQL grants the lock.
+-- stella-migration-safety: metadata-only-type-change
 SET statement_timeout = 0;--> statement-breakpoint
 -- stella-migration-safety: reviewed destructive-change - widening varchar(4) -> varchar(7) is a metadata-only catalog change (no table rewrite, no data loss); it only enlarges the length limit so the new "default" title-source value fits. Rollback is to shrink back to varchar(4) once no row exceeds it.
 ALTER TABLE "chat_threads" ALTER COLUMN "title_source" SET DATA TYPE varchar(7);--> statement-breakpoint
