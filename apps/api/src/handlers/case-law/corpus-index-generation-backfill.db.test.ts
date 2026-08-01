@@ -1109,10 +1109,28 @@ test(
     const indexed: SafeId<"caseLawDecision">[] = [];
     const removed: SafeId<"caseLawDecision">[] = [];
     const backfill = createCaseLawGenerationBackfill({
-      backfillRows: async (_runnerDb, rows, _generation, options) => {
+      backfillRows: async (runnerDb, rows, rebuildGeneration, options) => {
         await options.beforeRemoteEffect(completeRemoteEffect);
         indexed.push(...rows.map(({ id }) => id));
-        return rows.length;
+        const row = rows.at(0);
+        if (!row) {
+          return 0;
+        }
+        let markedCount = 0;
+        await runnerDb(async (tx) => {
+          await options.beforeDatabaseMark(tx);
+          const marked = await caseLawCorpusIndexAdapter.markIndexedBatch(tx, {
+            indexId: corpusIndexId(rebuildGeneration, row.country),
+            mode: {
+              generation: rebuildGeneration,
+              type: "generation-rebuild",
+            },
+            now: new Date("2026-07-31T13:00:00.000Z"),
+            rows,
+          });
+          markedCount = marked.size;
+        });
+        return markedCount;
       },
       newLeaseToken: () => "00000000-0000-4000-8000-000000000900",
       removeProjection: async (runnerDb, { options, row }) => {
