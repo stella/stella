@@ -113,6 +113,7 @@ jobs:
           src/db/root.test.ts
           src/handlers/case-law/decisions/get-document-state.db.test.ts
           src/handlers/case-law/ingestion/pipeline.db.test.ts
+          src/handlers/case-law/ingestion/pipeline-identity.db.test.ts
           src/handlers/case-law/ingestion/pipeline-refresh.db.test.ts
           src/handlers/case-law/ingestion/sk-document-backfill.db.test.ts
           src/handlers/case-law/ingestion/sk-document-backfill-corpus.db.test.ts
