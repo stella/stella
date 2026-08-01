@@ -13,6 +13,7 @@ import {
   reconcileSharedInspectorTabs,
 } from "@/components/inspector/inspector-tabs-slice";
 import { getInspectorView } from "@/components/inspector/view-registry";
+import { getAnalytics } from "@/lib/analytics/provider";
 
 export type InspectorBroadcastScope = {
   userId: string;
@@ -211,10 +212,12 @@ const isInspectorTab = (value: unknown): value is InspectorTab => {
     );
   }
   if (type === "external") {
+    const workspaceId = value["workspaceId"];
     return (
       typeof label === "string" &&
       typeof value["chatThreadId"] === "string" &&
       typeof value["url"] === "string" &&
+      (workspaceId === null || typeof workspaceId === "string") &&
       isOptionalString(value["connectorSlug"]) &&
       isOptionalString(value["iconHref"]) &&
       isOptionalString(value["provider"]) &&
@@ -322,24 +325,23 @@ const createInspectorBroadcastSession = (
     const tabs = store
       .getState()
       .tabs.filter((tab) => !isGenericInspectorTab(tab));
-    if (import.meta.env.DEV) {
-      try {
-        structuredClone(tabs);
-      } catch {
-        return;
-      }
-    }
     if (recipientId !== undefined && tabs.length === 0) {
       return;
     }
     const clock = lastTabsClock ?? { senderId: clientId, updatedAt: 0 };
-    postInspectorBroadcastMessage(channel, {
-      type: "inspector-tabs:sync",
-      senderId: clientId,
-      recipientId,
-      updatedAt: clock.updatedAt,
-      tabs,
-    });
+    try {
+      postInspectorBroadcastMessage(channel, {
+        type: "inspector-tabs:sync",
+        senderId: clientId,
+        recipientId,
+        updatedAt: clock.updatedAt,
+        tabs,
+      });
+    } catch (error) {
+      getAnalytics().captureError(error, {
+        operation: "inspector-tabs.broadcast",
+      });
+    }
   };
 
   const unsubscribe = store.subscribe((state, previousState) => {

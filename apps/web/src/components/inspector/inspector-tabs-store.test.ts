@@ -41,6 +41,7 @@ afterEach(() => {
 
 class FakeBroadcastChannel {
   static readonly channels = new Map<string, Set<FakeBroadcastChannel>>();
+  static postError: Error | null = null;
 
   readonly name: string;
 
@@ -56,6 +57,9 @@ class FakeBroadcastChannel {
   }
 
   postMessage(message: unknown) {
+    if (FakeBroadcastChannel.postError !== null) {
+      throw FakeBroadcastChannel.postError;
+    }
     this.dispatchToPeers(message);
   }
 
@@ -107,6 +111,7 @@ class FakeBroadcastChannel {
 
   static reset() {
     FakeBroadcastChannel.channels.clear();
+    FakeBroadcastChannel.postError = null;
   }
 }
 
@@ -1050,6 +1055,52 @@ describe("Inspector tab broadcast", () => {
     expect(useInspectorTabsStore.getState().activeId).toBe(
       "external:https://example.test/decision",
     );
+  });
+
+  test("rejects external tabs with an invalid workspace scope", () => {
+    installFakeBroadcastChannel();
+    const scope = { organizationId: "org-1", userId: "user-1" };
+    const peer = new FakeBroadcastChannel(
+      getInspectorTabsBroadcastChannelName(scope),
+    );
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+
+    peer.emit({
+      type: "inspector-tabs:sync",
+      senderId: "peer-tab",
+      updatedAt: 1,
+      tabs: [
+        {
+          type: "external",
+          id: "external:https://example.test/decision",
+          chatThreadId: toChatThreadId("thread-external"),
+          label: "External decision",
+          url: "https://example.test/decision",
+          workspaceId: 42,
+        },
+      ],
+    });
+
+    expect(useInspectorTabsStore.getState().tabs).toEqual([]);
+  });
+
+  test("keeps local tab mutations when browser broadcast fails", () => {
+    installFakeBroadcastChannel();
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast({
+      organizationId: "org-1",
+      userId: "user-1",
+    });
+    FakeBroadcastChannel.postError = new DOMException(
+      "The object could not be cloned.",
+      "DataCloneError",
+    );
+
+    expect(() =>
+      useInspectorTabsStore
+        .getState()
+        .openChat({ id: toChatThreadId("thread-local") }),
+    ).not.toThrow();
+    expect(useInspectorTabsStore.getState().tabs).toHaveLength(1);
   });
 
   test("does not exchange tabs across organization scopes", () => {

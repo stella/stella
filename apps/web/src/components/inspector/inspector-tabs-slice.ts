@@ -1,4 +1,4 @@
-import { current } from "immer";
+import { current, type Draft } from "immer";
 import { v7 as uuidv7 } from "uuid";
 
 import type {
@@ -55,6 +55,70 @@ const dropSupersededFileSuggestion = (
   }
 };
 
+const FILE_TAB_RENDER_ID_POLICY = {
+  always: "always",
+  whenIdChanges: "when-id-changes",
+} as const;
+
+type UpsertFileTabOptions = {
+  renderIdPolicy: (typeof FILE_TAB_RENDER_ID_POLICY)[keyof typeof FILE_TAB_RENDER_ID_POLICY];
+};
+
+const upsertFileTab = (
+  state: Draft<InspectorTabsStore>,
+  tab: Omit<FileTab, "type">,
+  { renderIdPolicy }: UpsertFileTabOptions,
+) => {
+  const matchIndex = state.tabs.findIndex(
+    (candidate) =>
+      candidate.type === "pdf" &&
+      (candidate.entityId === tab.entityId || candidate.id === tab.id),
+  );
+  if (matchIndex === -1) {
+    state.tabs.push({ type: "pdf", renderId: uuidv7(), ...tab });
+    state.activeId = tab.id;
+    return;
+  }
+
+  const existing = state.tabs[matchIndex];
+  if (existing?.type !== "pdf") {
+    return;
+  }
+
+  const previousId = existing.id;
+  existing.id = tab.id;
+  existing.entityId = tab.entityId;
+  existing.workspaceId = tab.workspaceId;
+  existing.justificationFieldId = tab.justificationFieldId;
+  existing.propertyId = tab.propertyId;
+  existing.metadataLane = tab.metadataLane;
+  if (tab.label) {
+    existing.label = tab.label;
+  }
+  existing.fileName = tab.fileName;
+  if (tab.mimeType !== undefined) {
+    existing.mimeType = tab.mimeType;
+  }
+  existing.pdfFileId = tab.pdfFileId;
+  if (
+    renderIdPolicy === FILE_TAB_RENDER_ID_POLICY.always ||
+    previousId !== tab.id
+  ) {
+    existing.renderId = uuidv7();
+  }
+  state.tabs = state.tabs.filter(
+    (candidate, index) =>
+      index === matchIndex ||
+      !(
+        candidate.type === "pdf" &&
+        (candidate.entityId === tab.entityId || candidate.id === tab.id)
+      ),
+  );
+  if (state.activeId === previousId) {
+    state.activeId = tab.id;
+  }
+};
+
 export const createInspectorTabsSlice = (
   set: InspectorTabsSet,
 ): InspectorTabsStore => ({
@@ -68,48 +132,9 @@ export const createInspectorTabsSlice = (
 
   openFile: (tab) =>
     set((state) => {
-      const matchIndex = state.tabs.findIndex(
-        (candidate) =>
-          candidate.type === "pdf" &&
-          (candidate.entityId === tab.entityId || candidate.id === tab.id),
-      );
-      if (matchIndex === -1) {
-        state.tabs.push({ type: "pdf", renderId: uuidv7(), ...tab });
-      } else {
-        const existing = state.tabs[matchIndex];
-        if (existing?.type === "pdf") {
-          const previousId = existing.id;
-          const idChanged = previousId !== tab.id;
-          existing.id = tab.id;
-          existing.entityId = tab.entityId;
-          existing.workspaceId = tab.workspaceId;
-          existing.justificationFieldId = tab.justificationFieldId;
-          existing.propertyId = tab.propertyId;
-          existing.metadataLane = tab.metadataLane;
-          if (tab.label) {
-            existing.label = tab.label;
-          }
-          existing.fileName = tab.fileName;
-          if (tab.mimeType !== undefined) {
-            existing.mimeType = tab.mimeType;
-          }
-          existing.pdfFileId = tab.pdfFileId;
-          if (idChanged) {
-            existing.renderId = uuidv7();
-          }
-          state.tabs = state.tabs.filter(
-            (candidate, index) =>
-              index === matchIndex ||
-              !(
-                candidate.type === "pdf" &&
-                (candidate.entityId === tab.entityId || candidate.id === tab.id)
-              ),
-          );
-          if (state.activeId === previousId) {
-            state.activeId = tab.id;
-          }
-        }
-      }
+      upsertFileTab(state, tab, {
+        renderIdPolicy: FILE_TAB_RENDER_ID_POLICY.whenIdChanges,
+      });
       state.activeId = tab.id;
       state.activationSeq += 1;
       state.minimized = false;
@@ -118,46 +143,9 @@ export const createInspectorTabsSlice = (
 
   openFileForEntity: (tab) =>
     set((state) => {
-      const matchIndex = state.tabs.findIndex(
-        (candidate) =>
-          candidate.type === "pdf" &&
-          (candidate.entityId === tab.entityId || candidate.id === tab.id),
-      );
-      if (matchIndex === -1) {
-        state.tabs.push({ type: "pdf", renderId: uuidv7(), ...tab });
-        state.activeId = tab.id;
-      } else {
-        const existing = state.tabs[matchIndex];
-        if (existing?.type === "pdf") {
-          const previousId = existing.id;
-          existing.id = tab.id;
-          existing.entityId = tab.entityId;
-          existing.workspaceId = tab.workspaceId;
-          existing.justificationFieldId = tab.justificationFieldId;
-          existing.propertyId = tab.propertyId;
-          existing.metadataLane = tab.metadataLane;
-          if (tab.label) {
-            existing.label = tab.label;
-          }
-          existing.fileName = tab.fileName;
-          if (tab.mimeType !== undefined) {
-            existing.mimeType = tab.mimeType;
-          }
-          existing.pdfFileId = tab.pdfFileId;
-          existing.renderId = uuidv7();
-          state.tabs = state.tabs.filter(
-            (candidate, index) =>
-              index === matchIndex ||
-              !(
-                candidate.type === "pdf" &&
-                (candidate.entityId === tab.entityId || candidate.id === tab.id)
-              ),
-          );
-          if (state.activeId === previousId) {
-            state.activeId = tab.id;
-          }
-        }
-      }
+      upsertFileTab(state, tab, {
+        renderIdPolicy: FILE_TAB_RENDER_ID_POLICY.always,
+      });
       state.activationSeq += 1;
       state.minimized = false;
       dropSupersededFileSuggestion(state, tab);

@@ -35,11 +35,13 @@ describe("inspector commands", () => {
   test("reconciliation clears only commands owned by missing tabs", () => {
     const commands = useInspectorCommandStore.getState();
     commands.requestRename("missing-tab");
+    commands.requestDocxEdit("missing-tab");
     commands.requestBlockScroll({ tabId: "open-tab", blockId: "block-1" });
 
     commands.clearCommandsForMissingTabs(new Set(["open-tab"]));
 
     expect(useInspectorCommandStore.getState().pendingRenameTabId).toBeNull();
+    expect(useInspectorCommandStore.getState().pendingDocxEditTabId).toBeNull();
     expect(useInspectorCommandStore.getState().pendingBlockScroll).toEqual({
       tabId: "open-tab",
       blockId: "block-1",

@@ -44,6 +44,12 @@ export const createInspectorCommandSlice = (
   clearCommandsForMissingTabs: (tabIds) =>
     set((state) => {
       if (
+        state.pendingDocxEditTabId !== null &&
+        !tabIds.has(state.pendingDocxEditTabId)
+      ) {
+        state.pendingDocxEditTabId = null;
+      }
+      if (
         state.pendingRenameTabId !== null &&
         !tabIds.has(state.pendingRenameTabId)
       ) {
