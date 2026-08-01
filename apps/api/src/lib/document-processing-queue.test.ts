@@ -17,6 +17,7 @@ import {
   isRetryableAutomaticOcrFailure,
   isRetryableSearchIndexFailure,
   mapWithConcurrency,
+  ownsPromotedManualOcrClaim,
   readRepairScanCursor,
   revivableAutomaticOcrCancellationCodes,
   runDocumentProcessingReconciliationPhases,
@@ -378,6 +379,46 @@ describe("requiresOcrPolicy", () => {
     expect(requiresOcrPolicy("upload")).toBe(true);
     expect(requiresOcrPolicy("repair")).toBe(true);
     expect(requiresOcrPolicy("manual")).toBe(false);
+  });
+});
+
+describe("ownsPromotedManualOcrClaim", () => {
+  test("continues only for a running manual claim held by this worker", () => {
+    const claimToken = "claim-a";
+
+    expect(
+      ownsPromotedManualOcrClaim({
+        claimToken,
+        run: {
+          claimedBy: claimToken,
+          requestSource: "manual",
+          status: "running",
+        },
+      }),
+    ).toBe(true);
+
+    for (const candidate of [
+      {
+        claimedBy: "claim-b",
+        requestSource: "manual",
+        status: "running",
+      },
+      {
+        claimedBy: claimToken,
+        requestSource: "upload",
+        status: "running",
+      },
+      {
+        claimedBy: claimToken,
+        requestSource: "manual",
+        status: "queued",
+      },
+      undefined,
+    ] as const) {
+      expect(ownsPromotedManualOcrClaim({ claimToken, run: candidate })).toBe(
+        false,
+      );
+    }
   });
 });
 

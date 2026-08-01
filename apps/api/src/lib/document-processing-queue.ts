@@ -691,6 +691,22 @@ export const requiresOcrPolicy = (
   requestSource: (typeof documentProcessingRuns.$inferSelect)["requestSource"],
 ): boolean => requestSource !== "manual";
 
+export const ownsPromotedManualOcrClaim = ({
+  claimToken,
+  run,
+}: {
+  claimToken: string;
+  run:
+    | Pick<
+        typeof documentProcessingRuns.$inferSelect,
+        "claimedBy" | "requestSource" | "status"
+      >
+    | undefined;
+}): boolean =>
+  run?.claimedBy === claimToken &&
+  run.requestSource === "manual" &&
+  run.status === "running";
+
 export const isLifecycleInterruptionError = ({
   error,
   lifecycleSignal,
@@ -938,6 +954,24 @@ export const processDocumentProcessingRun = async (
           "policy_disabled",
         );
         if (cancelled) {
+          return;
+        }
+
+        const promotedRuns = await rootDb
+          .select({
+            claimedBy: documentProcessingRuns.claimedBy,
+            requestSource: documentProcessingRuns.requestSource,
+            status: documentProcessingRuns.status,
+          })
+          .from(documentProcessingRuns)
+          .where(eq(documentProcessingRuns.id, run.id))
+          .limit(1);
+        if (
+          !ownsPromotedManualOcrClaim({
+            claimToken,
+            run: promotedRuns.at(0),
+          })
+        ) {
           return;
         }
       }

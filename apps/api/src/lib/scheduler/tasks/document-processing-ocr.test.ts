@@ -9,12 +9,12 @@ test("drains queued OCR in bounded batches", async () => {
     return batchSizes.shift() ?? 0;
   });
 
-  const dispatched = await dispatchDocumentOcrBatches({
+  const result = await dispatchDocumentOcrBatches({
     dispatch,
     signal: new AbortController().signal,
   });
 
-  expect(dispatched).toBe(217);
+  expect(result).toEqual({ dispatched: 217, reachedLimit: false });
   expect(dispatch).toHaveBeenCalledTimes(3);
 });
 
@@ -23,23 +23,23 @@ test("does not dispatch after scheduler cancellation", async () => {
   controller.abort();
   const dispatch = mock(async () => 0);
 
-  const dispatched = await dispatchDocumentOcrBatches({
+  const result = await dispatchDocumentOcrBatches({
     dispatch,
     signal: controller.signal,
   });
 
-  expect(dispatched).toBe(0);
+  expect(result).toEqual({ dispatched: 0, reachedLimit: false });
   expect(dispatch).not.toHaveBeenCalled();
 });
 
 test("caps each scheduler tick at ten thousand OCR runs", async () => {
   const dispatch = mock(async () => 100);
 
-  const dispatched = await dispatchDocumentOcrBatches({
+  const result = await dispatchDocumentOcrBatches({
     dispatch,
     signal: new AbortController().signal,
   });
 
-  expect(dispatched).toBe(10_000);
+  expect(result).toEqual({ dispatched: 10_000, reachedLimit: true });
   expect(dispatch).toHaveBeenCalledTimes(100);
 });
