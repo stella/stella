@@ -442,13 +442,19 @@ test(
         return rows.length;
       },
       newLeaseToken: () => "00000000-0000-4000-8000-000000000070",
-      removeProjection: async (_runnerDb, { generation, options, row }) => {
+      removeProjection: async (
+        _runnerDb,
+        { generation: rebuildGeneration, options, row },
+      ) => {
         await options.beforeRemoteEffect({
           effect: completeRemoteEffect,
           onLeaseLost: noRemoteEffectCompensation,
         });
         removed.set(row.id, [
-          ...generationProjectionTargetIds({ generation, row }),
+          ...generationProjectionTargetIds({
+            generation: rebuildGeneration,
+            row,
+          }),
         ]);
       },
     });
@@ -1224,9 +1230,6 @@ test("the database rejects every malformed corpus source descriptor shape", asyn
       return;
     }
     const encoded = JSON.stringify(descriptor);
-    if (encoded === undefined) {
-      throw new Error("expected serializable descriptor fixture");
-    }
     const rejection: unknown = await db
       .execute(
         sql`UPDATE ${caseLawSources}
