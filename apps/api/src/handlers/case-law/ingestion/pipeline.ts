@@ -1357,24 +1357,28 @@ export const runIngestionPipeline = async ({
     fetchCursor: string | null,
     pageSignal: AbortSignal,
   ) =>
-    await sourceLease.beforeRemoteEffect(async () => {
-      const pageResult = await adapter.fetchPage(
-        fetchCursor,
-        source.config ?? {},
-        pageSignal,
-      );
-      if (Result.isError(pageResult)) {
-        return { error: pageResult.error, type: "fetch-error" } as const;
-      }
-      return {
-        observationOrder: await allocateSourceObservationOrder({
-          leaseToken: sourceLease.leaseToken,
-          scopedDb,
-          sourceId: source.id,
+    await Result.tryPromise({
+      try: async () =>
+        await sourceLease.beforeRemoteEffect(async () => {
+          const pageResult = await adapter.fetchPage(
+            fetchCursor,
+            source.config ?? {},
+            pageSignal,
+          );
+          if (Result.isError(pageResult)) {
+            return { error: pageResult.error, type: "fetch-error" } as const;
+          }
+          return {
+            observationOrder: await allocateSourceObservationOrder({
+              leaseToken: sourceLease.leaseToken,
+              scopedDb,
+              sourceId: source.id,
+            }),
+            page: pageResult.value,
+            type: "fetched",
+          } as const;
         }),
-        page: pageResult.value,
-        type: "fetched",
-      } as const;
+      catch: (cause) => cause,
     });
 
   // oxlint-disable-next-line no-unreachable-loop -- successful pages advance the cursor and pagesProcessed at the loop tail; break paths halt ingestion
@@ -1397,10 +1401,7 @@ export const runIngestionPipeline = async ({
       : AbortSignal.timeout(pageTimeout);
     recentCursors.add(cursor);
     // oxlint-disable-next-line no-await-in-loop -- sequential paginated crawl (each page's cursor depends on the previous page)
-    const observedPageResult = await Result.tryPromise({
-      try: async () => await fetchObservedPage(cursor, pageSignal),
-      catch: (cause) => cause,
-    });
+    const observedPageResult = await fetchObservedPage(cursor, pageSignal);
 
     if (Result.isError(observedPageResult)) {
       if (observedPageResult.error instanceof TimeoutError) {
