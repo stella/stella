@@ -191,4 +191,69 @@ describe("corpus object cancellation", () => {
     expect(rejection).toMatchObject({ name: "AbortError" });
     expect(signals.every((signal) => signal.aborted)).toBe(true);
   });
+
+  test("waits for aborted sibling DELETEs before reporting a delete failure", async () => {
+    deleteCorpusObjectMock.mockClear();
+    const deleteFailure = new Error("text delete failed");
+    const allDeletesStarted = Promise.withResolvers<undefined>();
+    const siblingsAborted = Promise.withResolvers<undefined>();
+    const releaseSiblings = Promise.withResolvers<undefined>();
+    let started = 0;
+    let abortedSiblings = 0;
+
+    deleteCorpusObjectMock.mockImplementation(
+      async (key: string, signal: AbortSignal): Promise<void> => {
+        started += 1;
+        if (started === 3) {
+          allDeletesStarted.resolve(undefined);
+        }
+        await allDeletesStarted.promise;
+
+        if (key.endsWith("/text")) {
+          throw deleteFailure;
+        }
+
+        await new Promise<never>((_resolve, reject) => {
+          signal.addEventListener(
+            "abort",
+            () => {
+              abortedSiblings += 1;
+              if (abortedSiblings === 2) {
+                siblingsAborted.resolve(undefined);
+              }
+              const rejectAfterRelease = async () => {
+                await releaseSiblings.promise;
+                reject(
+                  signal.reason instanceof Error
+                    ? signal.reason
+                    : new DOMException("Aborted", "AbortError"),
+                );
+              };
+              void rejectAfterRelease();
+            },
+            { once: true },
+          );
+        });
+      },
+    );
+
+    const pending = deleteCorpusDocument({
+      textKey: "corpus/text",
+      sectionsKey: "corpus/sections",
+      astKey: "corpus/ast",
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    await siblingsAborted.promise;
+
+    const earlyState = await Promise.race([
+      pending.then(() => "returned" as const),
+      Bun.sleep(1).then(() => "pending" as const),
+    ]);
+    expect(earlyState).toBe("pending");
+
+    releaseSiblings.resolve(undefined);
+    expect(await pending).toBe(deleteFailure);
+  });
 });

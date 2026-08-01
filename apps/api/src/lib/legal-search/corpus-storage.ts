@@ -161,6 +161,11 @@ type StartedCorpusIo<T> = {
   settle: () => Promise<void>;
 };
 
+type SettleCancellableCorpusIoGroupOptions = {
+  controller: AbortController;
+  operations: StartedCorpusIo<void>[];
+};
+
 /**
  * Keep a handle to the real cancellable operation as well as its bounded
  * result. `withTimeout` must return promptly when a deadline fires, but a
@@ -192,6 +197,22 @@ const startCancellableCorpusIo = <T>(
       }
     },
   };
+};
+
+/** A failed sibling cannot return ownership until every aborted I/O settles. */
+const settleCancellableCorpusIoGroup = async ({
+  controller,
+  operations,
+}: SettleCancellableCorpusIoGroupOptions): Promise<void> => {
+  try {
+    await Promise.all(operations.map(async ({ result }) => await result));
+  } catch (error) {
+    controller.abort(error);
+    await Promise.allSettled(
+      operations.map(async ({ settle }) => await settle()),
+    );
+    throw error;
+  }
 };
 
 export type WriteCorpusResult = CorpusKeys & { contentHash: string };
@@ -300,13 +321,10 @@ export const writeCorpusDocument = async (
     ),
   ];
 
-  try {
-    await Promise.all(writes.map(async ({ result }) => await result));
-  } catch (error) {
-    writeController.abort(error);
-    await Promise.allSettled(writes.map(async ({ settle }) => await settle()));
-    throw error;
-  }
+  await settleCancellableCorpusIoGroup({
+    controller: writeController,
+    operations: writes,
+  });
 
   return { ...keys, contentHash };
 };
@@ -424,16 +442,21 @@ export const deleteCorpusDocument = async (
   const present = [keys.textKey, keys.sectionsKey, keys.astKey].filter(
     (key): key is string => key !== null,
   );
-  const options = signal === undefined ? {} : { signal };
-  await Promise.all(
-    present.map(
-      async (key) =>
-        await boundedCorpusIo(
-          "corpus-delete",
-          async (deleteSignal) =>
-            await deleteCorpusS3ObjectWithSignal(key, deleteSignal),
-          options,
-        ),
+  const deleteController = new AbortController();
+  const groupSignal =
+    signal === undefined
+      ? deleteController.signal
+      : AbortSignal.any([deleteController.signal, signal]);
+  const operations = present.map((key) =>
+    startCancellableCorpusIo(
+      "corpus-delete",
+      async (deleteSignal) =>
+        await deleteCorpusS3ObjectWithSignal(key, deleteSignal),
+      { signal: groupSignal },
     ),
   );
+  await settleCancellableCorpusIoGroup({
+    controller: deleteController,
+    operations,
+  });
 };

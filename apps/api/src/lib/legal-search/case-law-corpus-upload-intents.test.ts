@@ -87,6 +87,9 @@ describe("case-law corpus upload intents", () => {
     expect(corpusUploadCleanupDelayMs(0)).toBe(60_000);
     expect(corpusUploadCleanupDelayMs(1)).toBe(120_000);
     expect(corpusUploadCleanupDelayMs(100)).toBe(24 * 60 * 60 * 1000);
+    expect(source).toMatch(
+      /\.orderBy\(\s*asc\(\s*sql`COALESCE\(\$\{caseLawCorpusUploadIntents\.nextCleanupAt\}, \$\{caseLawCorpusUploadIntents\.leaseExpiresAt\}\)`/u,
+    );
   });
 
   test("locks and preflights before the external write, then retains failed writes", () => {

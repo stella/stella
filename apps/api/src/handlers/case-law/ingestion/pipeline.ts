@@ -493,6 +493,26 @@ const planCorpusWrite = (mode: CorpusStorageMode): CorpusWritePlan => {
   }
 };
 
+type CaseLawDecisionIdentityOptions = Pick<
+  IngestionResult,
+  "caseNumber" | "language" | "sourceDocumentId"
+> & { sourceId: SafeId<"caseLawSource"> };
+
+/** Match exactly the two partial unique indexes that define source identity. */
+const caseLawDecisionIdentityWhere = ({
+  caseNumber,
+  language,
+  sourceDocumentId,
+  sourceId,
+}: CaseLawDecisionIdentityOptions) =>
+  sourceDocumentId
+    ? { sourceId: { eq: sourceId }, sourceDocumentId }
+    : {
+        sourceId: { eq: sourceId },
+        caseNumber,
+        language,
+      };
+
 /**
  * Insert a single decision and its citations into the database.
  * Skips duplicates based on sourceHash.
@@ -513,17 +533,12 @@ const processDecisionAttempt = async ({
   // index does or it would find a row the insert cannot replace.
   const existing = await scopedDb((tx) =>
     tx.query.caseLawDecisions.findFirst({
-      where: result.sourceDocumentId
-        ? {
-            sourceId: { eq: sourceId },
-            sourceDocumentId: result.sourceDocumentId,
-            sheetNumber: result.sheetNumber,
-          }
-        : {
-            sourceId: { eq: sourceId },
-            caseNumber: result.caseNumber,
-            language: result.language,
-          },
+      where: caseLawDecisionIdentityWhere({
+        caseNumber: result.caseNumber,
+        language: result.language,
+        sourceDocumentId: result.sourceDocumentId,
+        sourceId,
+      }),
       columns: {
         id: true,
         metadata: true,
@@ -896,6 +911,7 @@ const processDecisionAttempt = async ({
             court: result.court,
             country: result.country,
             language: result.language,
+            sheetNumber: result.sheetNumber,
             languageGroupKey,
             decisionDate: result.decisionDate,
             decisionType: result.decisionType,
@@ -1025,6 +1041,7 @@ const processDecisionAttempt = async ({
           sourceId,
           caseNumber: result.caseNumber,
           sourceDocumentId: result.sourceDocumentId,
+          sheetNumber: result.sheetNumber,
           citationKey: citationKeyOf(result.caseNumber),
           slug,
           ecli: result.ecli,

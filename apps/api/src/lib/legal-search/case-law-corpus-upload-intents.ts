@@ -503,7 +503,9 @@ export const reconcileCaseLawCorpusUploadIntents = async ({
         ),
       )
       .orderBy(
-        asc(caseLawCorpusUploadIntents.nextCleanupAt),
+        asc(
+          sql`COALESCE(${caseLawCorpusUploadIntents.nextCleanupAt}, ${caseLawCorpusUploadIntents.leaseExpiresAt})`,
+        ),
         asc(caseLawCorpusUploadIntents.id),
       )
       .limit(limit)

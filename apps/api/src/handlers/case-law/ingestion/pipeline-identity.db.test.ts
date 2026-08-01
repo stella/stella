@@ -139,6 +139,39 @@ if (!databaseUrl || !runPostgresTests) {
       expect(await storedCourts()).toEqual(before);
     });
 
+    test("uses publisher identity when a replay also carries a sheet number", async () => {
+      const publisherId = "publisher-id-with-sheet";
+      const decision = {
+        ...decisionAt("Krajský súd Brno", publisherId),
+        sheetNumber: "42",
+      };
+
+      await processDecision({
+        input: decision,
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
+      await processDecision({
+        input: decision,
+        observationOrder: 2n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:01.000Z"),
+      });
+
+      const rows = await db.execute(sql<{ count: number; sheetNumber: string }>`
+        SELECT count(*)::int AS count, min(sheet_number) AS "sheetNumber"
+        FROM case_law_decisions
+        WHERE source_id = ${sourceId}
+          AND source_document_id = ${publisherId}
+      `);
+      const row = Array.isArray(rows) ? rows.at(0) : undefined;
+      expect(isRecord(row) ? Number(row["count"]) : 0).toBe(1);
+      expect(isRecord(row) ? row["sheetNumber"] : undefined).toBe("42");
+    });
+
     test("an older overlapping observation cannot overwrite a newer winner", async () => {
       const publisherId = "observed-order";
       const newer = decisionAt("Newest observation", publisherId);

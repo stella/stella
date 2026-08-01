@@ -25,4 +25,9 @@ END
 $$;--> statement-breakpoint
 
 ALTER TABLE "case_law_sources"
-  VALIDATE CONSTRAINT "case_law_sources_ingestion_lease_pair";
+  VALIDATE CONSTRAINT "case_law_sources_ingestion_lease_pair";--> statement-breakpoint
+
+-- The ingestion role owns the lease but no other source configuration.
+GRANT UPDATE (ingestion_lease_token, ingestion_lease_expires_at)
+  ON TABLE "case_law_sources"
+  TO stella_ingestion;
