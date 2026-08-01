@@ -7,8 +7,7 @@ import {
   caseLawIndexJobs,
   schedulerJobs,
 } from "@/api/db/schema";
-import type { SafeId } from "@/api/lib/branded-types";
-import { toSafeId } from "@/api/lib/branded-types";
+import { isUuid } from "@/api/lib/custom-schema";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 
 export const BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK =
@@ -18,15 +17,15 @@ const BACKFILL_LIMIT = 100;
 
 const parseCursor = (
   payload: Record<string, unknown> | null,
-): SafeId<"caseLawDecision"> | null => {
+): string | null => {
   const value = payload?.["cursor"];
   if (value === undefined || value === null) {
     return null;
   }
-  if (typeof value !== "string") {
-    return panic("Case-law redaction tombstone cursor must be a string");
+  if (typeof value !== "string" || !isUuid(value)) {
+    return panic("Case-law redaction tombstone cursor must be a UUID");
   }
-  return toSafeId<"caseLawDecision">(value);
+  return value;
 };
 
 /**

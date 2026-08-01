@@ -108,9 +108,9 @@ describe("corpus object cancellation", () => {
 
   test("waits for aborted sibling PUTs before reporting a write failure", async () => {
     const writeFailure = new Error("text write failed");
-    const allWritesStarted = Promise.withResolvers<void>();
-    const siblingsAborted = Promise.withResolvers<void>();
-    const releaseSiblings = Promise.withResolvers<void>();
+    const allWritesStarted = Promise.withResolvers<undefined>();
+    const siblingsAborted = Promise.withResolvers<undefined>();
+    const releaseSiblings = Promise.withResolvers<undefined>();
     let started = 0;
     let abortedSiblings = 0;
 
@@ -123,7 +123,7 @@ describe("corpus object cancellation", () => {
       ): Promise<void> => {
         started += 1;
         if (started === 3) {
-          allWritesStarted.resolve();
+          allWritesStarted.resolve(undefined);
         }
         await allWritesStarted.promise;
 
@@ -137,9 +137,13 @@ describe("corpus object cancellation", () => {
             () => {
               abortedSiblings += 1;
               if (abortedSiblings === 2) {
-                siblingsAborted.resolve();
+                siblingsAborted.resolve(undefined);
               }
-              void releaseSiblings.promise.then(() => reject(signal.reason));
+              const rejectAfterRelease = async () => {
+                await releaseSiblings.promise;
+                reject(signal.reason);
+              };
+              void rejectAfterRelease();
             },
             { once: true },
           );
@@ -157,7 +161,7 @@ describe("corpus object cancellation", () => {
     await Bun.sleep(1);
     expect(returned).toBe(false);
 
-    releaseSiblings.resolve();
+    releaseSiblings.resolve(undefined);
     expect(await pending).toBe(writeFailure);
   });
 

@@ -51,8 +51,7 @@ describe("case-law corpus upload intents", () => {
     );
     const activeLeaseIndex = config.indexes.find(
       (index) =>
-        index.config.name ===
-        "case_law_corpus_upload_intents_active_lease_idx",
+        index.config.name === "case_law_corpus_upload_intents_active_lease_idx",
     );
 
     expect(config.foreignKeys).toHaveLength(0);
@@ -139,11 +138,19 @@ describe("case-law corpus upload intents", () => {
       textKey: "text",
     };
     const keyList = Object.values(keys);
+    const currentKeySubsets = [
+      [],
+      [keys.astKey],
+      [keys.sectionsKey],
+      [keys.textKey],
+      [keys.astKey, keys.sectionsKey],
+      [keys.astKey, keys.textKey],
+      [keys.sectionsKey, keys.textKey],
+      keyList,
+    ];
 
-    for (let currentMask = 0; currentMask < 8; currentMask += 1) {
-      const currentKeys = new Set(
-        keyList.filter((_key, index) => (currentMask & (1 << index)) !== 0),
-      );
+    for (const subset of currentKeySubsets) {
+      const currentKeys = new Set(subset);
       const plan = planCorpusUploadIntentCleanup(keys, currentKeys, new Set());
       expect(plan.type).toBe("delete");
       if (plan.type !== "delete") {

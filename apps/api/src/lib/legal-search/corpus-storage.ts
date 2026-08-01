@@ -258,11 +258,11 @@ export const writeCorpusDocument = async (
   const contentHash = corpusContentHash({ text, sections, ast });
   const keys = corpusKeys({ documentId, jurisdiction, contentHash });
   const writeController = new AbortController();
-  const writeSignal =
+  const groupSignal =
     signal === undefined
       ? writeController.signal
       : AbortSignal.any([writeController.signal, signal]);
-  const writeOptions = { signal: writeSignal };
+  const writeOptions = { signal: groupSignal };
 
   const writes = [
     startCancellableCorpusIo(
