@@ -61,6 +61,30 @@ describe("marketing recording freshness", () => {
     });
   });
 
+  test("does not let source verification hide capture-contract drift", () => {
+    const recordedAtCommit = execFileSync("git", ["rev-parse", "HEAD"], {
+      encoding: "utf-8",
+    }).trim();
+    const verdict = judgeEntry({
+      captureId: definition.captureId,
+      dpr: definition.dpr,
+      manualVerification: {
+        reason: "Reviewed for a maintenance release",
+        watchedPathsHash: watchedPathsHashAtHead(definition.watchedPaths),
+      },
+      recordedAtCommit,
+      theme: "light",
+      viewport: {
+        height: definition.viewport.height + 1,
+        width: definition.viewport.width,
+      },
+      watchedPaths: definition.watchedPaths,
+    });
+
+    expect(verdict.status).toBe("STALE");
+    expect(verdict.reasons.at(0)).toStartWith("viewport drifted");
+  });
+
   test("requires deliberate confirmation and a review reason", () => {
     expect(() => parseVerificationOptions([])).toThrow(
       "--confirm-current-recordings-reviewed",
@@ -72,6 +96,14 @@ describe("marketing recording freshness", () => {
         "Reviewed for a maintenance release",
       ]),
     ).not.toThrow();
+    expect(() =>
+      parseVerificationOptions([
+        "--confirm-current-recordings-reviewed",
+        "--reason",
+        "Reviewed for a maintenance release",
+        "--capture",
+      ]),
+    ).toThrow("--capture must name at least one capture");
   });
 
   test("never claims to attest a recording missing from the manifest", () => {

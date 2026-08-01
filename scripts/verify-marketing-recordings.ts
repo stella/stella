@@ -15,6 +15,7 @@ import {
 } from "../apps/web/e2e/marketing/captures";
 import {
   computeVerdicts,
+  judgeEntry,
   readManifestEntries,
   watchedPathsHashAtHead,
 } from "./check-marketing-recordings";
@@ -43,7 +44,8 @@ class MarketingVerificationError extends Error {
 
 const optionValue = (args: readonly string[], flag: string) => {
   const index = args.indexOf(flag);
-  return index === -1 ? undefined : args.at(index + 1);
+  const value = index === -1 ? undefined : args.at(index + 1);
+  return value?.startsWith("--") ? undefined : value;
 };
 
 export const parseVerificationOptions = (
@@ -66,10 +68,15 @@ export const parseVerificationOptions = (
     );
   }
   const captureValue = optionValue(args, CAPTURE_FLAG);
+  if (args.includes(CAPTURE_FLAG) && !captureValue) {
+    throw new MarketingVerificationError(
+      `${CAPTURE_FLAG} must name at least one capture`,
+    );
+  }
   const captureIds = captureValue
     ? new Set(captureValue.split(",").filter(Boolean))
     : null;
-  if (captureValue !== undefined && captureIds?.size === 0) {
+  if (captureIds?.size === 0) {
     throw new MarketingVerificationError(
       `${CAPTURE_FLAG} must name at least one capture`,
     );
@@ -148,8 +155,8 @@ const main = () => {
     manifestKeys,
   );
   if (neverRecorded.length > 0) {
-    process.stdout.write(
-      `marketing-verification: skipped never-recorded ${neverRecorded.join(", ")}\n`,
+    throw new MarketingVerificationError(
+      `Cannot verify never-recorded capture(s): ${neverRecorded.join(", ")}`,
     );
   }
   if (staleKeys.size === 0) {
@@ -190,6 +197,20 @@ const main = () => {
       },
     };
   });
+  const unresolved = entries
+    .filter((entry) => staleKeys.has(`${entry.captureId}:${entry.theme}`))
+    .map(judgeEntry)
+    .filter(({ status }) => status === "STALE");
+  if (unresolved.length > 0) {
+    throw new MarketingVerificationError(
+      `Verification cannot clear: ${unresolved
+        .map(
+          ({ captureId, reasons, theme }) =>
+            `${captureId}:${theme} (${reasons.join("; ")})`,
+        )
+        .join(", ")}`,
+    );
+  }
 
   writeFileSync(
     nodePath.join(ROOT_DIR, RECORDINGS_MANIFEST_PATH),
