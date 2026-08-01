@@ -278,10 +278,14 @@ export const streamChat = async ({
     initialMessages: preparedMessages.value,
     events: {
       onStreamEnd: (message) => {
-        responseMessage = attachRestorationMetadata({
-          message: toChatMessage(message),
-          restorationPairs,
-        });
+        const convertedMessage = toChatMessage(message);
+        responseMessage =
+          convertedMessage === null
+            ? null
+            : attachRestorationMetadata({
+                message: convertedMessage,
+                restorationPairs,
+              });
       },
     },
   });
@@ -1960,23 +1964,27 @@ export const chatMessageUsageFromTokenUsage = (
   };
 };
 
-export const toChatMessage = (message: UIMessage): ChatMessage => ({
-  id: message.id,
-  role: message.role,
-  parts: toChatParts(message.parts),
-});
+export const toChatMessage = (message: UIMessage): ChatMessage | null => {
+  const parts = toChatParts(message.parts);
+  if (parts.length === 0) {
+    return null;
+  }
+  return {
+    id: message.id,
+    role: message.role,
+    parts,
+  };
+};
 
 // Which parts a message carries is decided by the model and the SDK, not by
-// this code: `isChatPart` rejects `audio` and `video`, and its `default` rejects
-// `ui-resource` and any part type a later SDK version adds, all of which
-// `MessagePart` permits. An unrecognized part is therefore ordinary external
-// input rather than the broken internal invariant `panic` is for.
+// this code. Stella's persistable subset excludes TanStack's `audio`, `video`,
+// and `ui-resource` parts. A rejected part is therefore ordinary external input
+// rather than the broken internal invariant `panic` is for.
 //
 // Skipping one also keeps the rest of a finished turn, which throwing does not.
-// This runs in the processor's `onStreamEnd`, inside `processServerChatStream`'s
-// `try`, where a throw sets `streamFailed`; that suppresses the `finally`
-// persist, so a single unsupported part would discard an assistant message the
-// model had already completed and the client had already been streamed.
+// When nothing persistable remains, `toChatMessage` returns null rather than an
+// empty message; its nullable return type forces every caller to handle that
+// outcome before a blank assistant turn can reach persistence.
 const toChatParts = (
   parts: readonly UIMessage["parts"][number][],
 ): ChatPart[] => {

@@ -276,43 +276,6 @@ export const getUserFileIdFromAttachmentPart = (
   return parseUserFileId(url);
 };
 
-export const isChatPart = (part: unknown): part is ChatPart => {
-  if (!isRecord(part) || typeof part["type"] !== "string") {
-    return false;
-  }
-
-  switch (part["type"]) {
-    case "text":
-      return typeof part["content"] === "string";
-    case "image":
-    case "document":
-      return isContentPartWithSource(part);
-    case "audio":
-    case "video":
-      return false;
-    case "tool-call":
-      return (
-        typeof part["id"] === "string" &&
-        typeof part["name"] === "string" &&
-        typeof part["arguments"] === "string" &&
-        isTanStackToolCallState(part["state"])
-      );
-    case "tool-result":
-      return (
-        typeof part["toolCallId"] === "string" &&
-        isTanStackToolResultContent(part["content"]) &&
-        isTanStackToolResultState(part["state"]) &&
-        (!("error" in part) || typeof part["error"] === "string")
-      );
-    case "thinking":
-      return typeof part["content"] === "string";
-    case "structured-output":
-      return "data" in part;
-    default:
-      return false;
-  }
-};
-
 const isContentPartWithSource = (
   part: Record<string, unknown>,
 ): part is Record<string, unknown> & {
@@ -323,6 +286,43 @@ const isContentPartWithSource = (
   typeof part["source"]["value"] === "string" &&
   (!("mimeType" in part["source"]) ||
     typeof part["source"]["mimeType"] === "string");
+
+type ChatPartValidator = (part: Record<string, unknown>) => boolean;
+
+// This record is deliberately exhaustive over Stella's persistable subset of
+// TanStack MessagePart. A future SDK variant becomes part of ChatPart by
+// default, then fails typecheck here until its persistence policy and validator
+// are defined. Unsupported modalities stay explicit in ChatPart's excluded union.
+const CHAT_PART_VALIDATORS = {
+  document: isContentPartWithSource,
+  image: isContentPartWithSource,
+  "structured-output": (part) => "data" in part,
+  text: (part) => typeof part["content"] === "string",
+  thinking: (part) => typeof part["content"] === "string",
+  "tool-call": (part) =>
+    typeof part["id"] === "string" &&
+    typeof part["name"] === "string" &&
+    typeof part["arguments"] === "string" &&
+    isTanStackToolCallState(part["state"]),
+  "tool-result": (part) =>
+    typeof part["toolCallId"] === "string" &&
+    isTanStackToolResultContent(part["content"]) &&
+    isTanStackToolResultState(part["state"]) &&
+    (!("error" in part) || typeof part["error"] === "string"),
+} satisfies Record<ChatPart["type"], ChatPartValidator>;
+
+const isChatPartType = (
+  type: string,
+): type is keyof typeof CHAT_PART_VALIDATORS =>
+  Object.hasOwn(CHAT_PART_VALIDATORS, type);
+
+export const isChatPart = (part: unknown): part is ChatPart => {
+  if (!isRecord(part) || typeof part["type"] !== "string") {
+    return false;
+  }
+  const type = part["type"];
+  return isChatPartType(type) && CHAT_PART_VALIDATORS[type](part);
+};
 
 const isLegacyAnonRestorationsPart = (
   part: unknown,

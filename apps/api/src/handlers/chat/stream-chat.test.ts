@@ -1044,7 +1044,7 @@ describe("streamed chat message conversion", () => {
         ],
       });
 
-      expect(message.parts).toEqual([
+      expect(message?.parts).toEqual([
         { content: "Dobrý den", type: "text" },
         { content: "Na shledanou", type: "text" },
       ]);
