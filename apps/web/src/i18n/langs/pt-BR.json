@@ -545,6 +545,7 @@
     "resend": "Reenviar",
     "resizeThread": "Redimensionar conversa",
     "richContentLoading": "Carregando conteúdo interativo…",
+    "richContentTitle": "Conteúdo interativo",
     "richContentUnavailable": "Não é possível exibir este conteúdo com segurança.",
     "sendError": "Ocorreu um problema ao enviar sua mensagem. Entre em contato com o suporte se o erro persistir.",
     "sendErrorAnonymizationBlocked": "A stella não conseguiu anonimizar um anexo, então nada foi enviado. Remova o arquivo ou envie esta mensagem sem anonimização.",

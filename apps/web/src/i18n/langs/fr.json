@@ -545,6 +545,7 @@
     "resend": "Renvoyer",
     "resizeThread": "Redimensionner la conversation",
     "richContentLoading": "Chargement du contenu interactif…",
+    "richContentTitle": "Contenu interactif",
     "richContentUnavailable": "Ce contenu ne peut pas être affiché en toute sécurité.",
     "sendError": "Un problème est survenu lors de l’envoi de ton message. Contacte le support si l’erreur persiste.",
     "sendErrorAnonymizationBlocked": "stella n’a pas pu anonymiser une pièce jointe, donc rien n’a été envoyé. Retire le fichier ou envoie ce message sans anonymisation.",

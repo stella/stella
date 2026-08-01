@@ -545,6 +545,7 @@
     "resend": "Wyślij ponownie",
     "resizeThread": "Zmień rozmiar konwersacji",
     "richContentLoading": "Wczytywanie interaktywnej treści…",
+    "richContentTitle": "Treść interaktywna",
     "richContentUnavailable": "Nie można bezpiecznie wyświetlić tej treści.",
     "sendError": "Wystąpił problem podczas wysyłania wiadomości. Jeśli błąd będzie się powtarzał, skontaktuj się z pomocą techniczną.",
     "sendErrorAnonymizationBlocked": "stella nie mogła zanonimizować jednego załącznika, więc nic nie wysłano. Usuń plik albo wyślij tę wiadomość bez anonimizacji.",

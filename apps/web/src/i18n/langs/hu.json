@@ -545,6 +545,7 @@
     "resend": "Újraküldés",
     "resizeThread": "Beszélgetés méretezése",
     "richContentLoading": "Interaktív tartalom betöltése…",
+    "richContentTitle": "Interaktív tartalom",
     "richContentUnavailable": "Ez a tartalom nem jeleníthető meg biztonságosan.",
     "sendError": "Probléma történt az üzenet elküldésekor. Ha a hiba továbbra is fennáll, vedd fel a kapcsolatot a támogatással.",
     "sendErrorAnonymizationBlocked": "A stella nem tudta anonimizálni az egyik mellékletet, ezért semmi sem lett elküldve. Távolítsd el a fájlt, vagy küldd el az üzenetet anonimizálás nélkül.",

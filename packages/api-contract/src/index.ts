@@ -15,6 +15,8 @@ export type {
 /** Path prefix shared by the REST router and direct-fetch clients. */
 export const STELLA_API_VERSION_PREFIX = "/v1" as const;
 export const MCP_APP_SANDBOX_PATH = "/mcp-app-sandbox" as const;
+export const MCP_APP_FRAME_TITLE_HASH_PARAM = "frame-title" as const;
+export const MCP_APP_FRAME_TITLE_MAX_CHARS = 200;
 export const MCP_APP_RESOURCE_MIME_TYPE = "text/html;profile=mcp-app" as const;
 export const CHAT_RICH_PART_LIMITS = {
   identifierMaxChars: 512,

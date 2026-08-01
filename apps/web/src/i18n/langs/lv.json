@@ -545,6 +545,7 @@
     "resend": "Nosūtīt vēlreiz",
     "resizeThread": "Mainīt sarunas izmēru",
     "richContentLoading": "Notiek interaktīvā satura ielāde…",
+    "richContentTitle": "Interaktīvs saturs",
     "richContentUnavailable": "Šo saturu nevar droši parādīt.",
     "sendError": "Nosūtot ziņu, radās problēma. Ja kļūda nepazūd, sazinieties ar atbalsta dienestu.",
     "sendErrorAnonymizationBlocked": "stella nevarēja anonimizēt vienu pielikumu, tāpēc nekas netika nosūtīts. Noņemiet failu vai nosūtiet šo ziņu bez anonimizācijas.",

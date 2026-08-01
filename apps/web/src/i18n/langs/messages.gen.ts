@@ -548,6 +548,7 @@ type Messages = {
     "resend": "Resend";
     "resizeThread": "Resize conversation";
     "richContentLoading": "Loading interactive content…";
+    "richContentTitle": "Interactive content";
     "richContentUnavailable": "This content cannot be displayed safely.";
     "sendError": "There was an issue sending your message. Contact support if the error persists.";
     "sendErrorAnonymizationBlocked": "stella could not anonymize one attachment, so nothing was sent. Remove the file or send this message without anonymization.";

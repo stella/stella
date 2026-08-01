@@ -26,6 +26,55 @@ const sandboxScript = () => {
   return MCP_APP_SANDBOX_DOCUMENT.slice(start + openingTag.length, end);
 };
 
+const runSandboxScript = (hash: string) => {
+  const hostOrigin = new URL(env.FRONTEND_URL).origin;
+  const parentPostMessage = mock(() => undefined);
+  const parentWindow = { postMessage: parentPostMessage };
+  const innerPostMessage = mock(() => undefined);
+  const innerWindow = { postMessage: innerPostMessage };
+  const innerFrame = {
+    contentWindow: innerWindow,
+    setAttribute: mock(() => undefined),
+    srcdoc: "",
+  };
+  let messageHandler: ((event: SandboxMessageEvent) => void) | undefined;
+
+  runInNewContext(sandboxScript(), {
+    URL,
+    URLSearchParams,
+    document: {
+      body: { appendChild: mock(() => undefined) },
+      createElement: () => innerFrame,
+      referrer: "",
+    },
+    window: {
+      addEventListener: (
+        _type: string,
+        handler: (event: SandboxMessageEvent) => void,
+      ) => {
+        messageHandler = handler;
+      },
+      location: { hash, origin: "https://api.example.test" },
+      parent: parentWindow,
+      self: {},
+      top: {},
+    },
+  });
+
+  if (!messageHandler) {
+    throw new Error("Expected the sandbox to install a message handler");
+  }
+
+  return {
+    hostOrigin,
+    innerFrame,
+    innerWindow,
+    messageHandler,
+    parentPostMessage,
+    parentWindow,
+  };
+};
+
 describe("MCP App sandbox", () => {
   test("serves a different-origin, display-only security boundary", async () => {
     const response = await api.handle(
@@ -55,38 +104,19 @@ describe("MCP App sandbox", () => {
   });
 
   test("pins an allowlisted parent origin when no referrer is available", () => {
-    const hostOrigin = new URL(env.FRONTEND_URL).origin;
-    const parentPostMessage = mock(() => undefined);
-    const parentWindow = { postMessage: parentPostMessage };
-    const innerPostMessage = mock(() => undefined);
-    const innerWindow = { postMessage: innerPostMessage };
-    const innerFrame = {
-      contentWindow: innerWindow,
-      setAttribute: mock(() => undefined),
-      srcdoc: "",
-    };
-    let messageHandler: ((event: SandboxMessageEvent) => void) | undefined;
+    const {
+      hostOrigin,
+      innerFrame,
+      innerWindow,
+      messageHandler,
+      parentPostMessage,
+      parentWindow,
+    } = runSandboxScript("#frame-title=Interaktivn%C3%AD+obsah");
 
-    runInNewContext(sandboxScript(), {
-      URL,
-      document: {
-        body: { appendChild: mock(() => undefined) },
-        createElement: () => innerFrame,
-        referrer: "",
-      },
-      window: {
-        addEventListener: (
-          _type: string,
-          handler: (event: SandboxMessageEvent) => void,
-        ) => {
-          messageHandler = handler;
-        },
-        location: { origin: "https://api.example.test" },
-        parent: parentWindow,
-        self: {},
-        top: {},
-      },
-    });
+    expect(innerFrame.setAttribute).toHaveBeenCalledWith(
+      "title",
+      "Interaktivní obsah",
+    );
 
     expect(parentPostMessage).toHaveBeenCalledWith(
       {
@@ -96,10 +126,6 @@ describe("MCP App sandbox", () => {
       },
       hostOrigin,
     );
-    if (!messageHandler) {
-      throw new Error("Expected the sandbox to install a message handler");
-    }
-
     messageHandler({
       data: {
         method: "ui/notifications/sandbox-resource-ready",
@@ -124,6 +150,18 @@ describe("MCP App sandbox", () => {
     const guestMessage = { jsonrpc: "2.0", method: "ui/initialize" };
     messageHandler({ data: guestMessage, origin: "null", source: innerWindow });
     expect(parentPostMessage).toHaveBeenCalledWith(guestMessage, hostOrigin);
+  });
+
+  test("falls back to a bounded frame title", () => {
+    const invalidTitles = [
+      "#frame-title=+++",
+      `#frame-title=${"x".repeat(201)}`,
+    ];
+
+    for (const hash of invalidTitles) {
+      const { innerFrame } = runSandboxScript(hash);
+      expect(innerFrame.setAttribute).toHaveBeenCalledWith("title", "MCP App");
+    }
   });
 
   test("keeps its framable policy when mounted under global API headers", async () => {

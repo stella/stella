@@ -18,8 +18,10 @@ const unsafeScriptUrl = ["java", "script:alert(1)"].join("");
 const {
   ChatRichMessagePart,
   RichContentErrorBoundary,
+  applyMcpAppFrameTitle,
   normalizeUiResourcePart,
   toRenderableMediaSource,
+  withMcpAppFrameTitle,
 } = await import("@/components/chat/chat-rich-message-part");
 
 const renderMediaPart = (part: RichChatPart) =>
@@ -36,6 +38,24 @@ const renderMediaPart = (part: RichChatPart) =>
   );
 
 describe("rich chat message parts", () => {
+  test("names the outer MCP App frame", () => {
+    const frame = { title: "" };
+
+    applyMcpAppFrameTitle(frame, "Interaktivní obsah");
+
+    expect(frame.title).toBe("Interaktivní obsah");
+  });
+
+  test("passes an accessible frame title without mutating the sandbox URL", () => {
+    const sandboxUrl = new URL("https://api.example.test/mcp-app-sandbox");
+    const titledUrl = withMcpAppFrameTitle(sandboxUrl, "Interaktivní obsah");
+
+    expect(sandboxUrl.hash).toBe("");
+    expect(
+      new URLSearchParams(titledUrl.hash.slice(1)).get("frame-title"),
+    ).toBe("Interaktivní obsah");
+  });
+
   test("renders the local fallback after a rich-part failure", () => {
     const boundary = new RichContentErrorBoundary({
       children: createElement("div", null, "interactive resource"),

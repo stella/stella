@@ -1,6 +1,10 @@
 import type { Context } from "elysia";
 
-import { MCP_APP_SANDBOX_PATH } from "@stll/api-contract";
+import {
+  MCP_APP_FRAME_TITLE_HASH_PARAM,
+  MCP_APP_FRAME_TITLE_MAX_CHARS,
+  MCP_APP_SANDBOX_PATH,
+} from "@stll/api-contract";
 
 import { env } from "@/api/env";
 import { frontendOrigins } from "@/api/lib/dev-origins";
@@ -12,6 +16,7 @@ const allowedHostOrigins = frontendOrigins({
 
 const allowedHostOriginsJson = JSON.stringify(allowedHostOrigins);
 const frameAncestors = allowedHostOrigins.join(" ");
+const frameTitleHashParamJson = JSON.stringify(MCP_APP_FRAME_TITLE_HASH_PARAM);
 
 export const MCP_APP_SANDBOX_DOCUMENT = `<!doctype html>
 <html>
@@ -19,7 +24,7 @@ export const MCP_APP_SANDBOX_DOCUMENT = `<!doctype html>
     <meta charset="utf-8" />
     <meta name="color-scheme" content="light dark" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>MCP App sandbox</title>
+    <title>MCP App</title>
     <style>
       html, body { margin: 0; width: 100%; height: 100%; background: transparent; }
       body { display: flex; }
@@ -42,6 +47,15 @@ export const MCP_APP_SANDBOX_DOCUMENT = `<!doctype html>
       let expectedHostOrigin = referrerOrigin;
 
       const inner = document.createElement("iframe");
+      const requestedFrameTitle = new URLSearchParams(
+        window.location.hash.slice(1)
+      ).get(${frameTitleHashParamJson});
+      const normalizedFrameTitle = requestedFrameTitle?.trim();
+      const frameTitle = normalizedFrameTitle &&
+        normalizedFrameTitle.length <= ${MCP_APP_FRAME_TITLE_MAX_CHARS}
+        ? normalizedFrameTitle
+        : "MCP App";
+      inner.setAttribute("title", frameTitle);
       inner.setAttribute("sandbox", "allow-scripts allow-forms");
       document.body.appendChild(inner);
 

@@ -545,6 +545,7 @@
     "resend": "Odeslat znovu",
     "resizeThread": "Změnit velikost konverzace",
     "richContentLoading": "Načítání interaktivního obsahu…",
+    "richContentTitle": "Interaktivní obsah",
     "richContentUnavailable": "Tento obsah nelze bezpečně zobrazit.",
     "sendError": "Při odesílání zprávy došlo k problému. Pokud chyba přetrvává, kontaktujte podporu.",
     "sendErrorAnonymizationBlocked": "stella nedokázala anonymizovat jednu přílohu, takže se nic neodeslalo. Odeberte soubor, nebo odešlete zprávu bez anonymizace.",

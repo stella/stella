@@ -1,4 +1,11 @@
-import { Component, createElement, lazy, Suspense } from "react";
+import {
+  Component,
+  createElement,
+  lazy,
+  Suspense,
+  useMemo,
+  useRef,
+} from "react";
 import type { ErrorInfo, ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
@@ -6,10 +13,12 @@ import { useTranslations } from "use-intl";
 import {
   CHAT_RICH_PART_LIMITS,
   isBoundedBase64Content,
+  MCP_APP_FRAME_TITLE_HASH_PARAM,
   MCP_APP_RESOURCE_MIME_TYPE,
 } from "@stll/api-contract";
 
 import type { ChatPart } from "@/components/chat/chat-ui-tools";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { mcpAppSandboxUrl } from "@/lib/api-url";
 import { ClientTelemetryError } from "@/lib/errors/telemetry";
@@ -189,6 +198,70 @@ const RichContentStatus = ({ loading = false }: { loading?: boolean }) => {
   );
 };
 
+export const withMcpAppFrameTitle = (
+  sandboxUrl: URL,
+  frameTitle: string,
+): URL => {
+  const titledUrl = new URL(sandboxUrl);
+  const hashParams = new URLSearchParams(titledUrl.hash.slice(1));
+  hashParams.set(MCP_APP_FRAME_TITLE_HASH_PARAM, frameTitle);
+  titledUrl.hash = hashParams.toString();
+  return titledUrl;
+};
+
+export const applyMcpAppFrameTitle = (
+  frame: { title: string } | null,
+  frameTitle: string,
+): void => {
+  if (frame) {
+    frame.title = frameTitle;
+  }
+};
+
+const McpAppFrame = ({
+  frameTitle,
+  normalized,
+  sandboxUrl,
+}: {
+  frameTitle: string;
+  normalized: UiResourcePart;
+  sandboxUrl: URL;
+}) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  useExternalSyncEffect(() => {
+    const container = containerRef.current;
+    if (!container) {
+      return undefined;
+    }
+
+    const titleFrames = () => {
+      applyMcpAppFrameTitle(container.querySelector("iframe"), frameTitle);
+    };
+    titleFrames();
+    const observer = new MutationObserver(titleFrames);
+    observer.observe(container, { childList: true, subtree: true });
+    return () => {
+      observer.disconnect();
+    };
+  }, [frameTitle]);
+
+  return (
+    <div
+      className="min-h-32 w-full overflow-hidden rounded-md border"
+      ref={containerRef}
+    >
+      <RichContentErrorBoundary
+        fallback={<RichContentStatus />}
+        key={`${normalized.toolCallId}:${normalized.resource.uri}`}
+      >
+        <Suspense fallback={<RichContentStatus loading />}>
+          <LazyMcpAppResource part={normalized} sandbox={{ url: sandboxUrl }} />
+        </Suspense>
+      </RichContentErrorBoundary>
+    </div>
+  );
+};
+
 const MediaPart = ({ part }: { part: MediaChatPart }) => {
   const t = useTranslations();
   const source = toRenderableMediaSource(part);
@@ -221,34 +294,35 @@ const MediaPart = ({ part }: { part: MediaChatPart }) => {
 };
 
 const UiResource = ({ part }: { part: UiResourcePart }) => {
+  const t = useTranslations();
+  const frameTitle = t("chat.richContentTitle");
+  const sandboxUrl = useMemo(
+    () => withMcpAppFrameTitle(mcpAppSandboxUrl(), frameTitle),
+    [frameTitle],
+  );
   const normalized = normalizeUiResourcePart(part);
   if (!normalized) {
     return <RichContentStatus />;
   }
-  const sandboxUrl = mcpAppSandboxUrl();
   const isServerRender = typeof window === "undefined";
   if (!isServerRender && sandboxUrl.origin === window.location.origin) {
     return <RichContentStatus />;
   }
 
-  return (
-    <div className="min-h-32 w-full overflow-hidden rounded-md border">
-      {isServerRender ? (
+  if (isServerRender) {
+    return (
+      <div className="min-h-32 w-full overflow-hidden rounded-md border">
         <RichContentStatus loading />
-      ) : (
-        <RichContentErrorBoundary
-          fallback={<RichContentStatus />}
-          key={`${normalized.toolCallId}:${normalized.resource.uri}`}
-        >
-          <Suspense fallback={<RichContentStatus loading />}>
-            <LazyMcpAppResource
-              part={normalized}
-              sandbox={{ url: sandboxUrl }}
-            />
-          </Suspense>
-        </RichContentErrorBoundary>
-      )}
-    </div>
+      </div>
+    );
+  }
+
+  return (
+    <McpAppFrame
+      frameTitle={frameTitle}
+      normalized={normalized}
+      sandboxUrl={sandboxUrl}
+    />
   );
 };
 
