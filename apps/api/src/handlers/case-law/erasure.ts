@@ -16,11 +16,11 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { ConcurrentModificationError } from "@/api/lib/errors/tagged-errors";
 import { removeDecisionFromIndex } from "@/api/lib/legal-search/case-law-search-index";
-import type { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
+import { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
 import { deleteCorpusDocument } from "@/api/lib/legal-search/corpus-storage";
 import {
-  corpusIndexGeneration,
   corpusIndexId,
+  tryCorpusIndexGeneration,
 } from "@/api/lib/legal-search/index-naming";
 
 /**
@@ -142,6 +142,7 @@ export const redactCaseLawDecision = async ({
         .select({
           generation: caseLawCorpusIndexProjections.generation,
           indexId: caseLawCorpusIndexProjections.indexId,
+          pendingIndexId: caseLawCorpusIndexProjections.pendingIndexId,
         })
         .from(caseLawCorpusIndexProjections)
         .where(eq(caseLawCorpusIndexProjections.decisionId, decisionId)),
@@ -157,10 +158,23 @@ export const redactCaseLawDecision = async ({
     };
     addTarget(generation, corpusIndexId(generation, decision.country));
     if (decision.indexedGeneration !== null) {
-      addTarget(
-        corpusIndexGeneration(decision.indexedGeneration),
+      const storedGeneration = tryCorpusIndexGeneration(
         decision.indexedGeneration,
       );
+      if (storedGeneration === null) {
+        captureError(
+          new CorpusIndexError({
+            message: "Stored corpus index target is not a physical index id",
+          }),
+          {
+            decisionId,
+            indexedGeneration: decision.indexedGeneration,
+            step: "redactCaseLawDecision.readStoredIndexTarget",
+          },
+        );
+      } else {
+        addTarget(storedGeneration, decision.indexedGeneration);
+      }
     }
     for (const projection of projectionTargets) {
       // The deterministic target also covers an append that landed before its
@@ -171,6 +185,9 @@ export const redactCaseLawDecision = async ({
       );
       if (projection.indexId !== null) {
         addTarget(projection.generation, projection.indexId);
+      }
+      if (projection.pendingIndexId !== null) {
+        addTarget(projection.generation, projection.pendingIndexId);
       }
     }
 
@@ -186,12 +203,14 @@ export const redactCaseLawDecision = async ({
         })),
       );
       for (const { lease, targetGeneration } of claims) {
-        if (!lease) {
-          throw new ConcurrentModificationError({
-            message: "Case-law corpus generation is being written",
-          });
+        if (lease) {
+          leases.set(targetGeneration, lease);
         }
-        leases.set(targetGeneration, lease);
+      }
+      if (leases.size !== targets.size) {
+        throw new ConcurrentModificationError({
+          message: "Case-law corpus generation is being written",
+        });
       }
 
       // Attempt every target: one transient error must not leave copies in

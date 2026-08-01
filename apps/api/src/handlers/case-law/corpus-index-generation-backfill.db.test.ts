@@ -257,7 +257,7 @@ test(
     let lease = 0;
     const backfill = createCaseLawGenerationBackfill({
       backfillRows: async (runnerDb, rows, rebuildGeneration, options) => {
-        await options.beforeRemoteEffect();
+        await options.beforeRemoteEffect(async () => undefined);
         sent.push(rows.map((row) => row.id));
         guardedPages += 1;
         await runnerDb(async (tx) => {
@@ -288,6 +288,7 @@ test(
       generation: GENERATION,
       pendingAction: "index",
       pendingHash: "first",
+      pendingIndexId: corpusIndexId(GENERATION, "CZE"),
     });
     expect(await backfill(scopedDb, 2, GENERATION)).toEqual({
       indexed: 1,
@@ -333,6 +334,7 @@ test(
       generation,
       pendingAction: "index",
       pendingHash: "first",
+      pendingIndexId: corpusIndexId(generation, "CZE"),
     });
     await db
       .update(caseLawDecisions)
@@ -344,7 +346,7 @@ test(
 
     const backfill = createCaseLawGenerationBackfill({
       backfillRows: async (runnerDb, rows, rebuildGeneration, options) => {
-        await options.beforeRemoteEffect();
+        await options.beforeRemoteEffect(async () => undefined);
         const row = rows.at(0);
         if (!row) {
           return 0;
@@ -382,6 +384,7 @@ test(
       indexedHash: "first",
       pendingAction: null,
       pendingHash: null,
+      pendingIndexId: null,
     });
     const decision = (
       await db
@@ -398,33 +401,40 @@ test(
       indexedHash: "first",
     });
 
-    await db
-      .update(caseLawDecisions)
-      .set({ country: "SVK" })
-      .where(eq(caseLawDecisions.id, publicFirstId));
-    await db
-      .update(caseLawCorpusIndexProjections)
-      .set({ pendingAction: "index", pendingHash: "first" })
-      .where(eq(caseLawCorpusIndexProjections.generation, generation));
-    expect(await backfill(scopedDb, 10, generation)).toEqual({
-      indexed: 1,
-      status: "advanced",
-    });
-    expect(await readCheckpoint(generation)).toMatchObject({
-      status: "complete",
-    });
-    const movedProjection = (
+    try {
       await db
-        .select({ indexId: caseLawCorpusIndexProjections.indexId })
-        .from(caseLawCorpusIndexProjections)
-        .where(eq(caseLawCorpusIndexProjections.generation, generation))
-        .limit(1)
-    ).at(0);
-    expect(movedProjection?.indexId).toBe(corpusIndexId(generation, "SVK"));
-    await db
-      .update(caseLawDecisions)
-      .set({ country: "CZE" })
-      .where(eq(caseLawDecisions.id, publicFirstId));
+        .update(caseLawDecisions)
+        .set({ country: "SVK" })
+        .where(eq(caseLawDecisions.id, publicFirstId));
+      await db
+        .update(caseLawCorpusIndexProjections)
+        .set({
+          pendingAction: "index",
+          pendingHash: "first",
+          pendingIndexId: corpusIndexId(generation, "SVK"),
+        })
+        .where(eq(caseLawCorpusIndexProjections.generation, generation));
+      expect(await backfill(scopedDb, 10, generation)).toEqual({
+        indexed: 1,
+        status: "advanced",
+      });
+      expect(await readCheckpoint(generation)).toMatchObject({
+        status: "complete",
+      });
+      const movedProjection = (
+        await db
+          .select({ indexId: caseLawCorpusIndexProjections.indexId })
+          .from(caseLawCorpusIndexProjections)
+          .where(eq(caseLawCorpusIndexProjections.generation, generation))
+          .limit(1)
+      ).at(0);
+      expect(movedProjection?.indexId).toBe(corpusIndexId(generation, "SVK"));
+    } finally {
+      await db
+        .update(caseLawDecisions)
+        .set({ country: "CZE" })
+        .where(eq(caseLawDecisions.id, publicFirstId));
+    }
   },
   { timeout: 30_000 },
 );
@@ -446,7 +456,7 @@ test(
     const backfill = createCaseLawGenerationBackfill({
       backfillRows: async (runnerDb, rows, rebuildGeneration, options) => {
         invocation += 1;
-        await options.beforeRemoteEffect();
+        await options.beforeRemoteEffect(async () => undefined);
         if (invocation === 2) {
           reconciliationStarted?.();
           await releaseReconciliationPromise;
@@ -474,6 +484,7 @@ test(
       generation,
       pendingAction: "index",
       pendingHash: "first",
+      pendingIndexId: corpusIndexId(generation, "CZE"),
     });
     const completing = backfill(scopedDb, 100, generation);
     await reconciliationStartedPromise;
@@ -525,7 +536,7 @@ test(
       },
       newLeaseToken: () => "00000000-0000-4000-8000-000000000080",
       removeProjection: async (runnerDb, { options, row }) => {
-        await options.beforeRemoteEffect();
+        await options.beforeRemoteEffect(async () => undefined);
         if (row.generationIndexId !== null) {
           removed.push(row.generationIndexId);
         }
@@ -561,6 +572,64 @@ test(
 );
 
 test(
+  "clears an index action whose content was erased before reconciliation",
+  async () => {
+    const generation = "case_law_v2_erased_pending_index";
+    await db.insert(caseLawCorpusIndexBackfills).values({
+      generation,
+      snapshotAt: await nextBackfillSnapshotAt(),
+      status: "complete",
+    });
+    await db.insert(caseLawCorpusIndexProjections).values({
+      decisionId: publicFirstId,
+      generation,
+      pendingAction: "index",
+      pendingHash: "first",
+      pendingIndexId: corpusIndexId(generation, "CZE"),
+    });
+    await db
+      .update(caseLawDecisions)
+      .set({ contentHash: null, indexedHash: null })
+      .where(eq(caseLawDecisions.id, publicFirstId));
+    const backfill = createCaseLawGenerationBackfill({
+      backfillRows: async () => {
+        throw new Error("erased content must not enter the index path");
+      },
+      newLeaseToken: () => "00000000-0000-4000-8000-000000000081",
+      removeProjection: async (runnerDb, { options }) => {
+        await options.beforeRemoteEffect(async () => undefined);
+        await runnerDb(async (tx) => {
+          await options.beforeDatabaseMark(tx);
+          await tx
+            .delete(caseLawCorpusIndexProjections)
+            .where(eq(caseLawCorpusIndexProjections.generation, generation));
+        });
+      },
+    });
+
+    try {
+      expect(await backfill(scopedDb, 10, generation)).toEqual({
+        indexed: 0,
+        status: "advanced",
+      });
+      expect(await backfill(scopedDb, 10, generation)).toEqual({
+        indexed: 0,
+        status: "complete",
+      });
+    } finally {
+      await db
+        .update(caseLawDecisions)
+        .set({ contentHash: "first", indexedHash: "first" })
+        .where(eq(caseLawDecisions.id, publicFirstId));
+      await db
+        .delete(caseLawCorpusIndexBackfills)
+        .where(eq(caseLawCorpusIndexBackfills.generation, generation));
+    }
+  },
+  { timeout: 30_000 },
+);
+
+test(
   "holds the full cursor on failure and lets only one runner own external index writes",
   async () => {
     const retryGeneration = "case_law_v2_retry";
@@ -574,7 +643,7 @@ test(
     });
     const backfill = createCaseLawGenerationBackfill({
       backfillRows: async (_scopedDb, _rows, _generation, options) => {
-        await options.beforeRemoteEffect();
+        await options.beforeRemoteEffect(async () => undefined);
         firstPageStarted?.();
         await firstPageReleasePromise;
         throw new Error("search unavailable");
@@ -610,7 +679,7 @@ test(
 
     const incomplete = createCaseLawGenerationBackfill({
       backfillRows: async (_scopedDb, _rows, _generation, options) => {
-        await options.beforeRemoteEffect();
+        await options.beforeRemoteEffect(async () => undefined);
         return 0;
       },
       newLeaseToken: () => "00000000-0000-4000-8000-000000000101",
@@ -638,7 +707,7 @@ test(
     const replayed: SafeId<"caseLawDecision">[][] = [];
     const retry = createCaseLawGenerationBackfill({
       backfillRows: async (_scopedDb, rows, _generation, options) => {
-        await options.beforeRemoteEffect();
+        await options.beforeRemoteEffect(async () => undefined);
         replayed.push(rows.map((row) => row.id));
         return rows.length;
       },
@@ -661,7 +730,7 @@ test(
     let winningRemoteEffects = 0;
     const winner = createCaseLawGenerationBackfill({
       backfillRows: async (_scopedDb, rows, _generation, options) => {
-        await options.beforeRemoteEffect();
+        await options.beforeRemoteEffect(async () => undefined);
         winningRemoteEffects += 1;
         return rows.length;
       },
@@ -678,7 +747,7 @@ test(
           .set({ leaseExpiresAt: new Date("2000-01-01T00:00:00.000Z") })
           .where(eq(caseLawCorpusIndexBackfills.generation, generation));
         winnerResult = await winner(scopedDb, 1, generation);
-        await options.beforeRemoteEffect();
+        await options.beforeRemoteEffect(async () => undefined);
         staleRemoteEffects += 1;
         return rows.length;
       },
@@ -715,7 +784,7 @@ test(
     let winningRemoteEffects = 0;
     const winner = createCaseLawGenerationBackfill({
       backfillRows: async (runnerDb, rows, _generation, options) => {
-        await options.beforeRemoteEffect();
+        await options.beforeRemoteEffect(async () => undefined);
         winningRemoteEffects += 1;
         await runnerDb(options.beforeDatabaseMark);
         return rows.length;
@@ -729,7 +798,7 @@ test(
     let winnerResult: Awaited<ReturnType<typeof winner>> | undefined;
     const stale = createCaseLawGenerationBackfill({
       backfillRows: async (runnerDb, rows, _generation, options) => {
-        await options.beforeRemoteEffect();
+        await options.beforeRemoteEffect(async () => undefined);
         staleRemoteEffects += 1;
         await db
           .update(caseLawCorpusIndexBackfills)
@@ -838,7 +907,7 @@ test(
     const sent: SafeId<"caseLawDecision">[] = [];
     const backfill = createCaseLawGenerationBackfill({
       backfillRows: async (_scopedDb, rows, _generation, options) => {
-        await options.beforeRemoteEffect();
+        await options.beforeRemoteEffect(async () => undefined);
         sent.push(...rows.map(({ id }) => id));
         return rows.length;
       },
@@ -916,7 +985,11 @@ test(
 
       await db
         .update(caseLawCorpusIndexProjections)
-        .set({ pendingAction: "index", pendingHash: "current" })
+        .set({
+          pendingAction: "index",
+          pendingHash: "current",
+          pendingIndexId: indexId,
+        })
         .where(eq(caseLawCorpusIndexProjections.generation, generation));
       expect(await visible()).toBe(false);
 
@@ -926,6 +999,7 @@ test(
           indexId: corpusIndexId(generation, "SVK"),
           pendingAction: null,
           pendingHash: null,
+          pendingIndexId: null,
         })
         .where(eq(caseLawCorpusIndexProjections.generation, generation));
       expect(await visible()).toBe(false);
@@ -966,13 +1040,13 @@ test(
     const removed: SafeId<"caseLawDecision">[] = [];
     const backfill = createCaseLawGenerationBackfill({
       backfillRows: async (_runnerDb, rows, _generation, options) => {
-        await options.beforeRemoteEffect();
+        await options.beforeRemoteEffect(async () => undefined);
         indexed.push(...rows.map(({ id }) => id));
         return rows.length;
       },
       newLeaseToken: () => "00000000-0000-4000-8000-000000000900",
       removeProjection: async (runnerDb, { options, row }) => {
-        await options.beforeRemoteEffect();
+        await options.beforeRemoteEffect(async () => undefined);
         removed.push(row.id);
         await runnerDb(async (tx) => {
           await options.beforeDatabaseMark(tx);
@@ -1088,4 +1162,18 @@ test("rejects a pending hash without a pending action", async () => {
       (error: unknown) => error,
     );
   expect(rejection).toBeInstanceOf(Error);
+
+  const missingTarget: unknown = await db
+    .insert(caseLawCorpusIndexProjections)
+    .values({
+      decisionId: publicFirstId,
+      generation,
+      pendingAction: "index",
+      pendingHash: "first",
+    })
+    .then(
+      () => null,
+      (error: unknown) => error,
+    );
+  expect(missingTarget).toBeInstanceOf(Error);
 });

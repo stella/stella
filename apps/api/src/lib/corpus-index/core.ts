@@ -213,7 +213,7 @@ export type FetchFulltext<TBrand extends SafeIdType> = (
 
 type SelectBatchArgs = { generation: string; limit: number };
 
-type BeforeRemoteEffect = () => Promise<void>;
+type GuardRemoteEffect = <T>(effect: () => Promise<T>) => Promise<T>;
 type BeforeDatabaseMark = (tx: Transaction) => Promise<void>;
 
 type BackfillSelectedRowsOptions =
@@ -224,19 +224,19 @@ type BackfillSelectedRowsOptions =
   | {
       type: "fenced-incremental";
       beforeDatabaseMark: BeforeDatabaseMark;
-      beforeRemoteEffect: BeforeRemoteEffect;
+      beforeRemoteEffect: GuardRemoteEffect;
       readConcurrency?: number;
     }
   | {
       type: "generation-rebuild";
       beforeDatabaseMark: BeforeDatabaseMark;
-      beforeRemoteEffect: BeforeRemoteEffect;
+      beforeRemoteEffect: GuardRemoteEffect;
       readConcurrency?: number;
     };
 
 type GenerationBackfillRowsOptions = {
   beforeDatabaseMark: BeforeDatabaseMark;
-  beforeRemoteEffect: BeforeRemoteEffect;
+  beforeRemoteEffect: GuardRemoteEffect;
   readConcurrency?: number;
 };
 
@@ -251,12 +251,13 @@ const ingestBatchWithGuard = async ({
   indexId,
   ndjson,
 }: {
-  beforeRemoteEffect?: BeforeRemoteEffect;
+  beforeRemoteEffect?: GuardRemoteEffect;
   indexId: string;
   ndjson: string;
 }): Promise<Result<void, CorpusIndexError>> => {
-  await beforeRemoteEffect?.();
-  return await getCorpusIndexClient().ingestBatch(indexId, ndjson);
+  const effect = async () =>
+    await getCorpusIndexClient().ingestBatch(indexId, ndjson);
+  return beforeRemoteEffect ? await beforeRemoteEffect(effect) : await effect();
 };
 
 /**
@@ -444,23 +445,26 @@ export const createCorpusIndexer = <
     beforeRemoteEffect,
     indexId,
   }: {
-    beforeRemoteEffect?: BeforeRemoteEffect;
+    beforeRemoteEffect?: GuardRemoteEffect;
     indexId: string;
   }): Promise<Result<void, CorpusIndexError>> => {
     if (ensuredIndexes.has(indexId)) {
       return Result.ok(undefined);
     }
     const client = getCorpusIndexClient();
-    await beforeRemoteEffect?.();
-    const exists = await client.indexExists(indexId);
+    const indexExists = async () => await client.indexExists(indexId);
+    const exists = beforeRemoteEffect
+      ? await beforeRemoteEffect(indexExists)
+      : await indexExists();
     if (exists.isErr()) {
       return Result.err(exists.error);
     }
     if (!exists.value) {
-      await beforeRemoteEffect?.();
-      const created = await client.createIndex(
-        corpusIndexConfig(adapter.family, indexId),
-      );
+      const createIndex = async () =>
+        await client.createIndex(corpusIndexConfig(adapter.family, indexId));
+      const created = beforeRemoteEffect
+        ? await beforeRemoteEffect(createIndex)
+        : await createIndex();
       if (created.isErr()) {
         return Result.err(created.error);
       }
@@ -615,17 +619,20 @@ export const createCorpusIndexer = <
     operation,
     scopedDb,
   }: {
-    beforeRemoteEffect?: BeforeRemoteEffect;
+    beforeRemoteEffect?: GuardRemoteEffect;
     entityId: SafeId<TBrand>;
     indexId: string;
     operation: "delete" | "redact";
     scopedDb: ScopedDb;
   }): Promise<Result<void, CorpusIndexError>> => {
-    await beforeRemoteEffect?.();
-    const deleted = await getCorpusIndexClient().deleteByQuery(
-      indexId,
-      corpusDocumentDeleteQuery(entityId),
-    );
+    const deleteByQuery = async () =>
+      await getCorpusIndexClient().deleteByQuery(
+        indexId,
+        corpusDocumentDeleteQuery(entityId),
+      );
+    const deleted = beforeRemoteEffect
+      ? await beforeRemoteEffect(deleteByQuery)
+      : await deleteByQuery();
     // A retired generation is already at the requested fixed point. Treating
     // its missing index as a successful delete keeps cleanup idempotent and
     // avoids retrying an index that can no longer contain the document.

@@ -7,6 +7,7 @@ import {
   corpusIndexGeneration,
   corpusIndexId,
   corpusIndexPattern,
+  tryCorpusIndexGeneration,
 } from "@/api/lib/legal-search/index-naming";
 
 test("index id is the generation prefix + lowercased jurisdiction", () => {
@@ -43,4 +44,6 @@ test("generation extraction is the inverse of index construction", () => {
 test("rejects malformed physical index ids", () => {
   expect(() => corpusIndexGeneration("case_law_v1_12")).toThrow();
   expect(() => corpusIndexGeneration("svk")).toThrow();
+  expect(tryCorpusIndexGeneration("case_law_v1")).toBeNull();
+  expect(tryCorpusIndexGeneration("case_law_v1_svk")).toBe("case_law_v1");
 });

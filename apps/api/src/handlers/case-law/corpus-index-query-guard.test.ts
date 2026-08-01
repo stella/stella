@@ -66,6 +66,10 @@ test("generation checkpoint migration preserves replay and role invariants", asy
   ).toHaveLength(2);
   expect(source).not.toContain("ON CONFLICT (");
   expect(source).toContain("pending_hash = EXCLUDED.pending_hash");
+  expect(source).toContain("pending_index_id = EXCLUDED.pending_index_id");
+  expect(source).toContain(
+    "case_law_corpus_index_projections.pending_index_id",
+  );
   expect(source).toContain("pending_action = EXCLUDED.pending_action");
   expect(source).toContain("'delete', null, clock_timestamp()");
   expect(source).toContain(

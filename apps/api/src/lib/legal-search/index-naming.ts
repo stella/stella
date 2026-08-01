@@ -31,7 +31,7 @@ export const corpusIndexId = (
 };
 
 /** Recovers the generation prefix from a validated physical index id. */
-export const corpusIndexGeneration = (indexId: string): string => {
+export const tryCorpusIndexGeneration = (indexId: string): string | null => {
   const separator = indexId.lastIndexOf("_");
   const generation = indexId.slice(0, separator);
   const jurisdiction = indexId.slice(separator + 1);
@@ -40,6 +40,15 @@ export const corpusIndexGeneration = (indexId: string): string => {
     generation.length === 0 ||
     !isCorpusIndexJurisdiction(jurisdiction)
   ) {
+    return null;
+  }
+  return generation;
+};
+
+/** Recovers the generation prefix where malformed state is impossible. */
+export const corpusIndexGeneration = (indexId: string): string => {
+  const generation = tryCorpusIndexGeneration(indexId);
+  if (generation === null) {
     panic(`Invalid corpus index index id: ${indexId}`);
   }
   return generation;

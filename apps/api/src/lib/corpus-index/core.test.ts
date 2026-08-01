@@ -397,8 +397,9 @@ describe("failed index jobs always reach the audit trail", () => {
         guardedMarks += 1;
         commitEvents.push("guard");
       },
-      beforeRemoteEffect: async () => {
+      beforeRemoteEffect: async (effect) => {
         guardedEffects += 1;
+        return await effect();
       },
     });
 
@@ -438,8 +439,9 @@ describe("failed index jobs always reach the audit trail", () => {
           guardedMarks += 1;
           commitEvents.push("guard");
         },
-        beforeRemoteEffect: async () => {
+        beforeRemoteEffect: async (effect) => {
           guardedEffects += 1;
+          return await effect();
         },
       }),
     ).toBe(1);

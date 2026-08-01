@@ -150,6 +150,7 @@ CREATE TABLE IF NOT EXISTS "case_law_corpus_index_projections" (
   "indexed_hash" varchar(64),
   "pending_action" text,
   "pending_hash" varchar(64),
+  "pending_index_id" varchar(64),
   "updated_at" timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT "case_law_corpus_index_projections_pk" PRIMARY KEY ("generation", "decision_id"),
   CONSTRAINT "case_law_corpus_index_projections_generation_fk"
@@ -161,8 +162,8 @@ CREATE TABLE IF NOT EXISTS "case_law_corpus_index_projections" (
   CONSTRAINT "case_law_corpus_index_projections_pending_shape"
     CHECK (
       (
-        ("pending_action" IS NULL AND "pending_hash" IS NULL)
-        OR ("pending_action" = 'index' AND "pending_hash" IS NOT NULL)
+        ("pending_action" IS NULL AND "pending_hash" IS NULL AND "pending_index_id" IS NULL)
+        OR ("pending_action" = 'index' AND "pending_hash" IS NOT NULL AND "pending_index_id" IS NOT NULL)
         OR ("pending_action" = 'delete' AND "pending_hash" IS NULL)
       ) IS TRUE
     )
@@ -216,9 +217,10 @@ BEGIN
       decision_id,
       pending_action,
       pending_hash,
+      pending_index_id,
       updated_at
     )
-    SELECT checkpoint.generation, NEW.id, 'delete', null, clock_timestamp()
+    SELECT checkpoint.generation, NEW.id, 'delete', null, null, clock_timestamp()
     FROM case_law_corpus_index_backfills AS checkpoint
     WHERE NOT EXISTS (
       SELECT 1
@@ -229,6 +231,10 @@ BEGIN
     ON CONFLICT ON CONSTRAINT case_law_corpus_index_projections_pk DO UPDATE
     SET pending_action = EXCLUDED.pending_action,
         pending_hash = EXCLUDED.pending_hash,
+        pending_index_id = coalesce(
+          case_law_corpus_index_projections.index_id,
+          case_law_corpus_index_projections.pending_index_id
+        ),
         updated_at = EXCLUDED.updated_at;
     RETURN NEW;
   END IF;
@@ -247,6 +253,7 @@ BEGIN
         indexed_hash = NEW.indexed_hash,
         pending_action = null,
         pending_hash = null,
+        pending_index_id = null,
         updated_at = clock_timestamp()
     WHERE projection.decision_id = NEW.id
       AND NEW.indexed_generation =
@@ -259,9 +266,15 @@ BEGIN
     decision_id,
     pending_action,
     pending_hash,
+    pending_index_id,
     updated_at
   )
-  SELECT checkpoint.generation, NEW.id, 'index', NEW.content_hash, clock_timestamp()
+  SELECT checkpoint.generation,
+         NEW.id,
+         'index',
+         NEW.content_hash,
+         checkpoint.generation || '_' || lower(NEW.country),
+         clock_timestamp()
   FROM case_law_corpus_index_backfills AS checkpoint
   WHERE NOT EXISTS (
     SELECT 1
@@ -272,6 +285,7 @@ BEGIN
   ON CONFLICT ON CONSTRAINT case_law_corpus_index_projections_pk DO UPDATE
   SET pending_action = EXCLUDED.pending_action,
       pending_hash = EXCLUDED.pending_hash,
+      pending_index_id = EXCLUDED.pending_index_id,
       updated_at = EXCLUDED.updated_at;
 
   RETURN NEW;
