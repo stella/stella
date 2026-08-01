@@ -47,11 +47,11 @@ const collectUnsafeConcurrentIndexes = async (): Promise<string[]> => {
     for (const { groups } of sqlWithoutLineComments.matchAll(
       CONCURRENT_UNIQUE_CREATE,
     )) {
-      const name = groups?.name;
+      const name = groups?.["name"];
       if (!name) {
         continue;
       }
-      if (!groups.idempotent) {
+      if (!groups["idempotent"]) {
         violations.push(
           `${relativePath}: unique index ${name} is not retry-idempotent`,
         );

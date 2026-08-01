@@ -133,7 +133,7 @@ describe("migration history invariant", () => {
           ).bytes(),
         )
         .digest("hex");
-      expect(currentHash).toBe(actualHash);
+      expect(actualHash).toBe(currentHash);
       expect(
         findUnappliedMigrations({
           appliedHashes: new Set([priorHash]),
