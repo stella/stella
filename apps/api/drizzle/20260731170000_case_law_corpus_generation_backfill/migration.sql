@@ -88,6 +88,8 @@ CREATE TABLE IF NOT EXISTS "case_law_corpus_index_source_reconciliations" (
       )
     )
 );--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "case_law_corpus_index_source_reconciliations_source_idx"
+  ON "case_law_corpus_index_source_reconciliations" ("source_id");--> statement-breakpoint
 ALTER TABLE "case_law_corpus_index_source_reconciliations" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 DO $policy$
 BEGIN

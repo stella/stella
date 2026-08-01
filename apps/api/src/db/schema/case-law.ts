@@ -736,6 +736,9 @@ export const caseLawCorpusIndexSourceReconciliations = p.pgTable(
       "case_law_source_reconciliations_cursor_upper",
       sql`${t.cursorCreatedAt} IS NULL OR (${t.upperCreatedAt} IS NOT NULL AND (${t.cursorCreatedAt}, ${t.cursorId}) <= (${t.upperCreatedAt}, ${t.upperId}))`,
     ),
+    p
+      .index("case_law_corpus_index_source_reconciliations_source_idx")
+      .on(t.sourceId),
     ...globalCaseLawPolicies(),
   ],
 );

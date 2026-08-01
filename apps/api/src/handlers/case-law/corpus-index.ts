@@ -41,14 +41,15 @@ import {
   type TimestampCasToken,
 } from "@/api/lib/db/timestamp-cas";
 import { ConcurrentModificationError } from "@/api/lib/errors/tagged-errors";
+import { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
 import {
   readCorpusAst,
   readCorpusText,
 } from "@/api/lib/legal-search/corpus-storage";
-import { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
 import {
   corpusIndexId,
   isCorpusIndexGeneration,
+  tryCorpusIndexGeneration,
 } from "@/api/lib/legal-search/index-naming";
 
 /**
@@ -920,12 +921,39 @@ const backfillGenerationRows: GenerationBackfillDependencies["backfillRows"] =
       reserveExternalAppend: reserveGenerationProjectionTargets,
     });
 
+type GenerationProjectionTargetSources = Pick<
+  GenerationBackfillRow,
+  "generationIndexId" | "generationPendingIndexIds" | "indexedGeneration"
+>;
+
+/**
+ * Every durable pointer that can name a physical copy for this generation.
+ * Keep this as one state-table union: a first rebuild can see a legacy
+ * `indexed_generation` before it has ever written a projection row.
+ */
+export const generationProjectionTargetIds = ({
+  generation,
+  row,
+}: {
+  generation: string;
+  row: GenerationProjectionTargetSources;
+}): Set<string> => {
+  const targetIndexIds = new Set(row.generationPendingIndexIds);
+  if (row.generationIndexId !== null) {
+    targetIndexIds.add(row.generationIndexId);
+  }
+  if (
+    row.indexedGeneration !== null &&
+    tryCorpusIndexGeneration(row.indexedGeneration) === generation
+  ) {
+    targetIndexIds.add(row.indexedGeneration);
+  }
+  return targetIndexIds;
+};
+
 const removeGenerationProjection: GenerationBackfillDependencies["removeProjection"] =
   async (scopedDb, { generation, options, row }) => {
-    const targetIndexIds = new Set(row.generationPendingIndexIds);
-    if (row.generationIndexId !== null) {
-      targetIndexIds.add(row.generationIndexId);
-    }
+    const targetIndexIds = generationProjectionTargetIds({ generation, row });
     const removals = await Promise.all(
       [...targetIndexIds].map(
         async (targetIndexId) =>
