@@ -372,10 +372,17 @@ const CONSOLIDATED_DOCKET_NORMALIZE_RE =
  * dedup key can rebuild the numeric body with one canonical separator
  * while keeping the code itself: it is what makes the docket unique to
  * begin with (rule 17), not a label to strip. "KSCB 26 INS 8270/2018"
- * and "KSCB 26INS/8270/2018" must resolve to the same key.
+ * and "KSCB 26INS/8270/2018" must resolve to the same key. Case-
+ * insensitive: this normalizer also runs on a decision's own stored
+ * `caseNumber` (via `isSelfCitation`), which is publisher text, not
+ * extractor output, so it is never guaranteed to carry the extractor's
+ * all-uppercase code spelling ("Msph" vs "MSPH"). The final
+ * `.toLowerCase()` on the assembled key already folds the casing, so
+ * matching case-insensitively here is enough -- no need to normalize
+ * the captured code itself.
  */
 const COURT_CODE_NORMALIZE_RE =
-  /^(?<code>[A-Z]{2,5})\s(?<number>\d{1,3})\s?(?<registry>\p{L}{1,6})[\s/](?<docket>\d{1,6}\/\d{2,4})$/u;
+  /^(?<code>[A-Z]{2,5})\s(?<number>\d{1,3})\s?(?<registry>\p{L}{1,6})[\s/](?<docket>\d{1,6}\/\d{2,4})$/iu;
 
 /**
  * Matches a court-code-prefixed case number whose docket joins a second
@@ -386,7 +393,7 @@ const COURT_CODE_NORMALIZE_RE =
  * "KSCB 26 INS 8270/8271/2018" resolve to one key.
  */
 const COURT_CODE_CONSOLIDATED_NORMALIZE_RE =
-  /^(?<code>[A-Z]{2,5})\s(?<number>\d{1,3})\s?(?<registry>\p{L}{1,6})[\s/](?<docket1>\d{1,6})[,/](?<docket2>\d{1,6})\/(?<year>\d{2,4})$/u;
+  /^(?<code>[A-Z]{2,5})\s(?<number>\d{1,3})\s?(?<registry>\p{L}{1,6})[\s/](?<docket1>\d{1,6})[,/](?<docket2>\d{1,6})\/(?<year>\d{2,4})$/iu;
 
 /**
  * Matches a Czech/Slovak Constitutional Court case number (chamber,

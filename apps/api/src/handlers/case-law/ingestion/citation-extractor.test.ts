@@ -397,6 +397,15 @@ describe("extractCitations", () => {
     expect(citations).toHaveLength(1);
   });
 
+  test("recognizes a self-citation to an insolvency case number whose stored court code is not uppercase", () => {
+    expect(
+      isSelfCitation("č. j. MSPH 99 INS 19057/2012", {
+        caseNumber: "Msph 99 INS 19057/2012",
+        ecli: null,
+      }),
+    ).toBe(true);
+  });
+
   test("extracts č. j. with a colon", () => {
     const text = "vyrozumění soudního exekutora č. j.: 137 Ex 1850/23";
     const citations = extractCitations([{ index: 0, text }]);
