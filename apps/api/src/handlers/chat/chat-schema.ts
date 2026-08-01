@@ -319,8 +319,6 @@ export const validateMessage = async ({
 
     const files = yield* Result.await(
       safeDb((tx) =>
-        // SAFETY: bounded by the `id IN (...)` set of this one message's stored file refs (userFiles.id is the PK), itself capped by LIMITS.chatContextFilesPerMessage.
-        // eslint-disable-next-line require-query-limit/require-query-limit
         tx.query.userFiles.findMany({
           where: {
             id: { in: storedFileRefs.map((ref) => ref.id) },
@@ -331,6 +329,7 @@ export const validateMessage = async ({
             threadId: true,
             mimeType: true,
           },
+          limit: storedFileRefs.length,
         }),
       ),
     );

@@ -14,6 +14,7 @@ import { arrayOrEmpty } from "@/api/lib/array";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LIMITS } from "@/api/lib/limits";
 import { serializeAITool } from "@/api/lib/markdown/ai-tool";
 import { getBatchGenerator } from "@/api/lib/workflow/generate-batch-provider";
 import type { AIResult } from "@/api/lib/workflow/generate-batch-shared";
@@ -44,7 +45,9 @@ const previewBodySchema = t.Object({
   contentType: previewableContentType,
   entityId: tSafeId("entity"),
   options: t.Optional(t.Array(optionSchema)),
-  dependencies: t.Optional(t.Array(dependencySchema)),
+  dependencies: t.Optional(
+    t.Array(dependencySchema, { maxItems: LIMITS.propertiesCount }),
+  ),
 });
 
 const config = {
@@ -95,14 +98,13 @@ const previewProperty = createSafeHandler(
     if (dependencyIds.length > 0) {
       const dependencyRows = yield* Result.await(
         safeDb((tx) =>
-          // SAFETY: filtered to an IN-list of dependency property IDs, bounded by LIMITS.propertiesCount per workspace
-          // eslint-disable-next-line require-query-limit/require-query-limit
           tx.query.properties.findMany({
             where: {
               id: { in: dependencyIds },
               workspaceId: { eq: workspaceId },
             },
             columns: { id: true },
+            limit: dependencyIds.length,
           }),
         ),
       );

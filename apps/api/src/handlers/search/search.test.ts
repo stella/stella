@@ -240,6 +240,7 @@ describe("search handler workspace scoping", () => {
 
     expect(findManyMock).toHaveBeenCalledWith({
       columns: { id: true },
+      limit: 1,
       where: {
         id: { in: [workspaceId] },
         organizationId: { eq: organizationId },
@@ -275,6 +276,7 @@ describe("search handler workspace scoping", () => {
 
     expect(findManyMock).toHaveBeenCalledWith({
       columns: { id: true },
+      limit: 1,
       where: {
         id: { in: [workspaceId] },
         organizationId: { eq: organizationId },

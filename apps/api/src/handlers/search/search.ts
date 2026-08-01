@@ -107,8 +107,6 @@ export const resolveSelectedWorkspaceIds = async ({
   }
 
   const found = await scopedDb((tx) =>
-    // SAFETY: IN-list over `accessible`, derived from `body.workspaceIds` which the route schema caps at maxItems: 64
-    // eslint-disable-next-line require-query-limit/require-query-limit
     tx.query.workspaces.findMany({
       where: {
         id: { in: accessible },
@@ -116,6 +114,7 @@ export const resolveSelectedWorkspaceIds = async ({
         status: { ne: "deleting" },
       },
       columns: { id: true },
+      limit: accessible.length,
     }),
   );
   if (found.length !== accessible.length) {
