@@ -188,7 +188,7 @@ const presignUpload = createSafeHandler(
         memberRole,
         scope: purposeBody.scope,
       });
-      if (Result.isError(validation)) {
+      if (validation.status === "error") {
         return validation;
       }
     }
