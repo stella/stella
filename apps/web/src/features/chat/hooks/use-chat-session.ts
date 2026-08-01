@@ -40,7 +40,8 @@ import {
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import type { NeedsMatterMatter } from "@/components/chat/needs-matter-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
-import { useInspectorStore } from "@/components/inspector/inspector-store";
+import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { invalidateCreatedDocumentQueries } from "@/features/chat/hooks/use-chat-session-created-document.logic";
 import { reconcileDocumentDeletionToolCalls } from "@/features/chat/hooks/use-chat-session-document-deletion.logic";
 import {
@@ -655,7 +656,7 @@ export const useChatSession = ({
         handledToolCallIds: handledDocumentDeletionToolCallIdsRef.current,
         messages,
         queryClient,
-        tabs: useInspectorStore.getState().tabs,
+        tabs: useInspectorTabsStore.getState().tabs,
         workspaceKeys: workspacesKeys,
         workspaceId,
       }),
@@ -690,7 +691,7 @@ export const useChatSession = ({
         }
 
         handledDocxReplacementToolCallIdsRef.current.add(part.id);
-        useInspectorStore
+        useInspectorTabsStore
           .getState()
           .replaceFileFieldId(part.output.replacedFieldId, part.output.fieldId);
         shouldInvalidateEntities = true;
@@ -800,14 +801,14 @@ export const useChatSession = ({
         output.fileName,
         output.workspaceId,
       );
-      const tab = useInspectorStore
+      const tab = useInspectorTabsStore
         .getState()
         .tabs.find(
           (candidate) =>
             candidate.type === "pdf" && candidate.entityId === output.entityId,
         );
       if (tab) {
-        useInspectorStore.getState().requestDocxEdit(tab.id);
+        useInspectorCommandStore.getState().requestDocxEdit(tab.id);
       }
     },
     [],

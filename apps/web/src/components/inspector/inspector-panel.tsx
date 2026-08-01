@@ -27,18 +27,18 @@ import {
 } from "@/components/inspector/inspector-panel.logic";
 import { InspectorRail } from "@/components/inspector/inspector-rail";
 import {
-  closeInspectorTabsForEntities,
-  isGenericInspectorTab,
-  useInspectorStore,
-} from "@/components/inspector/inspector-store";
-import type {
-  FileTab,
-  GenericTab,
-} from "@/components/inspector/inspector-store";
-import {
   InspectorTabHeader,
   MatterOriginLink,
 } from "@/components/inspector/inspector-tab-header";
+import {
+  closeInspectorTabsForEntities,
+  isGenericInspectorTab,
+  useInspectorTabsStore,
+} from "@/components/inspector/inspector-tabs-store";
+import type {
+  FileTab,
+  GenericTab,
+} from "@/components/inspector/inspector-tabs-store";
 import { buildMaximizeTabAction } from "@/components/inspector/maximize-tab";
 import { SkillResourcePanel } from "@/components/inspector/skill-resource-panel";
 import { useDocxTabEditSession } from "@/components/inspector/use-docx-tab-edit-session";
@@ -100,18 +100,18 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   const t = useTranslations();
   const canUpdateEntity = usePermissions({ entity: ["update"] });
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  const { tabs, activeId } = useInspectorStore(
+  const { tabs, activeId } = useInspectorTabsStore(
     useShallow((s) => ({
       tabs: s.tabs,
       activeId: s.activeId,
     })),
   );
-  const setActive = useInspectorStore((s) => s.setActive);
-  const closeTab = useInspectorStore((s) => s.closeTab);
-  const closeAll = useInspectorStore((s) => s.closeAll);
-  const minimized = useInspectorStore((s) => s.minimized);
-  const setMinimized = useInspectorStore((s) => s.setMinimized);
-  const openChat = useInspectorStore((s) => s.openChat);
+  const setActive = useInspectorTabsStore((s) => s.setActive);
+  const closeTab = useInspectorTabsStore((s) => s.closeTab);
+  const closeAll = useInspectorTabsStore((s) => s.closeAll);
+  const minimized = useInspectorTabsStore((s) => s.minimized);
+  const setMinimized = useInspectorTabsStore((s) => s.setMinimized);
+  const openChat = useInspectorTabsStore((s) => s.openChat);
   // The inspector pane mounts under non-workspace routes too
   // (e.g. /chat for a global chat tab). All callers below use
   // absolute `to:` paths, so we don't need a `from` template —
@@ -199,12 +199,12 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   // suggestions don't need this watcher: the document route clears
   // them itself via its `setFileMetadataLane(id, "closed")` unmount
   // hook.
-  const suggestionOwnerRouteId = useInspectorStore((s) =>
+  const suggestionOwnerRouteId = useInspectorTabsStore((s) =>
     s.reviveSuggestion !== null && isGenericInspectorTab(s.reviveSuggestion)
       ? s.reviveSuggestion.ownerRouteId
       : undefined,
   );
-  const clearReviveSuggestion = useInspectorStore(
+  const clearReviveSuggestion = useInspectorTabsStore(
     (s) => s.clearReviveSuggestion,
   );
   const suggestionOwnerRouteActive = useRouterState({
@@ -371,12 +371,12 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
       // Switch the surviving tab into "metadata-only" persona only
       // after full-view navigation succeeds; otherwise side peek stays
       // visually intact on rejected or aborted transitions.
-      useInspectorStore
+      useInspectorTabsStore
         .getState()
         .setFileMetadataLane(activeTab.id, "expanded");
     } catch (error) {
       setPdfViewerState(previousPdfViewer);
-      useInspectorStore
+      useInspectorTabsStore
         .getState()
         .setFileMetadataLane(activeTab.id, previousMetadataLane);
       throw error;
@@ -396,7 +396,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
       // where the file was maximized from. Full-view internal file
       // switches use replace navigation, so browser back lands on
       // the original table/overview/filesystem context.
-      useInspectorStore.getState().setFileMetadataLane(tab.id, "closed");
+      useInspectorTabsStore.getState().setFileMetadataLane(tab.id, "closed");
       if (hasInAppHistoryEntry()) {
         window.history.back();
         return;
@@ -649,7 +649,7 @@ const CurrentFileFieldSync = ({
   isActive: boolean;
   tab: FileTab;
 }) => {
-  const replaceFileFieldId = useInspectorStore((s) => s.replaceFileFieldId);
+  const replaceFileFieldId = useInspectorTabsStore((s) => s.replaceFileFieldId);
   const [currentFileFieldIdsByProperty] = useState(
     () => new Map<string, string>(),
   );

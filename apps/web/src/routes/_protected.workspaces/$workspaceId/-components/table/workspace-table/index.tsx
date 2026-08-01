@@ -20,7 +20,7 @@ import { useTranslations } from "use-intl";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
-import { useInspectorStore } from "@/components/inspector/inspector-store";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { countDescendants } from "@/components/workspaces/entity-utils";
 import type { WorkspaceTable as WorkspaceTableType } from "@/components/workspaces/table/types";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -193,14 +193,14 @@ export const WorkspaceTable = ({
 
   const renameEntity = useRenameEntity();
 
-  const activeEntityId = useInspectorStore((s) => {
+  const activeEntityId = useInspectorTabsStore((s) => {
     if (!s.activeId) {
       return null;
     }
     const tab = s.tabs.find((candidate) => candidate.id === s.activeId);
     return tab?.type === "pdf" ? tab.entityId : null;
   });
-  const activePropertyId = useInspectorStore((s) => {
+  const activePropertyId = useInspectorTabsStore((s) => {
     if (!s.activeId) {
       return null;
     }
@@ -208,7 +208,7 @@ export const WorkspaceTable = ({
     return tab?.type === "pdf" ? (tab.propertyId ?? null) : null;
   });
 
-  const activeTaskId = useInspectorStore((s) => {
+  const activeTaskId = useInspectorTabsStore((s) => {
     if (!s.activeId) {
       return null;
     }

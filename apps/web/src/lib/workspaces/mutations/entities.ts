@@ -3,7 +3,7 @@ import { useTranslations } from "use-intl";
 
 import { stellaToast } from "@stll/ui/components/toast";
 
-import { closeInspectorTabsForEntities } from "@/components/inspector/inspector-store";
+import { closeInspectorTabsForEntities } from "@/components/inspector/inspector-tabs-store";
 import type { EditableFieldContent } from "@/components/workspaces/edit-field-dialog";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";

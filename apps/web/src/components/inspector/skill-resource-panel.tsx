@@ -21,9 +21,9 @@ import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 
-import type { SkillResourceTab } from "./inspector-store";
-import { useInspectorStore } from "./inspector-store";
 import { InspectorTabHeader } from "./inspector-tab-header";
+import type { SkillResourceTab } from "./inspector-tabs-store";
+import { useInspectorTabsStore } from "./inspector-tabs-store";
 
 type RenderMode = "markdown" | "text" | "pdf";
 
@@ -56,7 +56,7 @@ export const SkillResourcePanel = ({
   onClose,
 }: SkillResourcePanelProps) => {
   const t = useTranslations();
-  const updateSkillResourceTabContent = useInspectorStore(
+  const updateSkillResourceTabContent = useInspectorTabsStore(
     (s) => s.updateSkillResourceTabContent,
   );
 

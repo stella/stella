@@ -21,7 +21,7 @@ import {
   collectSourceDocuments,
 } from "@/components/chat/source-chips.logic";
 import { DocumentIcon } from "@/components/document-icon";
-import { useInspectorStore } from "@/components/inspector/inspector-store";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
@@ -229,7 +229,7 @@ const ExternalSourceChip = ({
   const [faviconRequested, setFaviconRequested] = useState(false);
   const revealFavicon = () => setFaviconRequested(true);
   const handleClick = () => {
-    useInspectorStore.getState().openExternal({
+    useInspectorTabsStore.getState().openExternal({
       connectorSlug: source.connectorSlug,
       iconHref: source.iconHref,
       label: source.title,

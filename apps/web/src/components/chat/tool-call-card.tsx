@@ -22,7 +22,7 @@ import {
   advanceToolCallTiming,
   createToolCallTiming,
 } from "@/components/chat/tool-call-timing.logic";
-import { useInspectorStore } from "@/components/inspector/inspector-store";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
@@ -468,7 +468,7 @@ export const ToolCallCard = ({
           )}
           onClick={() => {
             if (skillResourceOutput) {
-              useInspectorStore.getState().openSkillResourceTab({
+              useInspectorTabsStore.getState().openSkillResourceTab({
                 skillName: skillResourceOutput.skillName,
                 skillId: skillResourceOutput.skillId,
                 origin: skillResourceOutput.origin,

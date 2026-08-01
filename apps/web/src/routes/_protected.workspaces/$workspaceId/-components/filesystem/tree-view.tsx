@@ -54,8 +54,8 @@ import {
 import type { DragPreviewData } from "@/components/drag-preview";
 import { FileTreeNameCell } from "@/components/file-tree/file-tree";
 import { InlineEdit } from "@/components/inline-edit";
-import { useInspectorStore } from "@/components/inspector/inspector-store";
-import type { FileTab } from "@/components/inspector/inspector-store";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import type { FileTab } from "@/components/inspector/inspector-tabs-store";
 import Tooltip from "@/components/tooltip";
 import { resolveAncestorIds } from "@/components/workspaces/copy-to-matter-dialog.logic";
 import {
@@ -1549,7 +1549,7 @@ const FilesystemRow = ({
         return undefined;
       }
       return () => {
-        const store = useInspectorStore.getState();
+        const store = useInspectorTabsStore.getState();
         for (const tab of navigables) {
           store.openFile(tab);
         }
@@ -1557,13 +1557,13 @@ const FilesystemRow = ({
     }
     if (node.kind === "task") {
       return () =>
-        useInspectorStore
+        useInspectorTabsStore
           .getState()
           .openTask({ taskId: node.entityId, workspaceId, label: name });
     }
     if (navigable) {
       return () =>
-        useInspectorStore.getState().openFile({
+        useInspectorTabsStore.getState().openFile({
           id: file.fieldId,
           entityId: file.entityId,
           label: name,

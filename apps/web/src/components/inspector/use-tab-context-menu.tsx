@@ -10,7 +10,8 @@ import { useTranslations } from "use-intl";
 
 import { MenuItem, MenuSeparator } from "@stll/ui/components/menu";
 
-import { useInspectorStore } from "@/components/inspector/inspector-store";
+import { requestInspectorRename } from "@/components/inspector/inspector-actions";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useAnchoredMenu } from "@/components/inspector/use-anchored-menu";
 
 /**
@@ -36,11 +37,10 @@ export const useTabContextMenu = ({
   onMaximize?: (() => void) | undefined;
 }) => {
   const t = useTranslations();
-  const closeOthers = useInspectorStore((s) => s.closeOthers);
-  const closeAll = useInspectorStore((s) => s.closeAll);
-  const requestRename = useInspectorStore((s) => s.requestRename);
-  const setMinimized = useInspectorStore((s) => s.setMinimized);
-  const tabsCount = useInspectorStore((s) => s.tabs.length);
+  const closeOthers = useInspectorTabsStore((s) => s.closeOthers);
+  const closeAll = useInspectorTabsStore((s) => s.closeAll);
+  const setMinimized = useInspectorTabsStore((s) => s.setMinimized);
+  const tabsCount = useInspectorTabsStore((s) => s.tabs.length);
   const hasOthers = tabsCount > 1;
 
   return useAnchoredMenu({
@@ -58,7 +58,7 @@ export const useTabContextMenu = ({
         )}
         <MenuSeparator />
         {canRename && (
-          <MenuItem onClick={() => requestRename(tabId)}>
+          <MenuItem onClick={() => requestInspectorRename(tabId)}>
             <PenLineIcon />
             {t("common.rename")}
           </MenuItem>

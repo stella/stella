@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { getActiveSkillChatContext } from "@/components/inspector/inspector-active-skill";
-import type { InspectorTab } from "@/components/inspector/inspector-store";
+import type { InspectorTab } from "@/components/inspector/inspector-tabs-store";
 
 describe("getActiveSkillChatContext", () => {
   test("extracts active skill context from a skill resource tab", () => {

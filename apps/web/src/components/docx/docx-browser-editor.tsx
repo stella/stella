@@ -66,9 +66,10 @@ import { useDocxBlockScroll } from "@/components/docx/use-docx-block-scroll";
 import { useFolioCollaborationSession } from "@/components/docx/use-folio-collaboration-session";
 import { useSyncDocxSuggestions } from "@/components/docx/use-sync-docx-suggestions";
 import {
-  useInspectorStore,
+  useInspectorAnonymizationStore,
   useIsAnonymizationActive,
-} from "@/components/inspector/inspector-store";
+} from "@/components/inspector/inspector-anonymization-store";
+import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import { StatusMessage } from "@/components/route-components";
 import Tooltip from "@/components/tooltip";
@@ -283,7 +284,9 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     // itself). The first `run()` also calls it again
     // (idempotent set-add); subsequent runs flip it on
     // around each worker call.
-    useInspectorStore.getState().markAnonymizationPipelineStarted(fieldId);
+    useInspectorAnonymizationStore
+      .getState()
+      .markAnonymizationPipelineStarted(fieldId);
     // Track the text+exclusions we received *results* for (not
     // just dispatched). The worker can occasionally drop a
     // request across dev HMR (the singleton's pending map loses
@@ -302,7 +305,9 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     let inFlightUntil = 0;
     const IN_FLIGHT_TIMEOUT_MS = 10_000;
     const markRan = () =>
-      useInspectorStore.getState().markAnonymizationPipelineRan(fieldId);
+      useInspectorAnonymizationStore
+        .getState()
+        .markAnonymizationPipelineRan(fieldId);
     const run = () => {
       if (cancelled) {
         return;
@@ -351,7 +356,9 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       // (Re-)mark started: handles reruns triggered by
       // edits or allowlist changes after the first run
       // already called `markAnonymizationPipelineRan`.
-      useInspectorStore.getState().markAnonymizationPipelineStarted(fieldId);
+      useInspectorAnonymizationStore
+        .getState()
+        .markAnonymizationPipelineStarted(fieldId);
       anonymizeChatTextInWorker({
         text,
         workspaceId,
@@ -482,7 +489,8 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   // workspace terms" list stay in sync.
   const handleAnonymizationMatchesChange = useCallback(
     (matches: readonly { canonical: string; label: string }[]) => {
-      const { publishAnonymizationMatches } = useInspectorStore.getState();
+      const { publishAnonymizationMatches } =
+        useInspectorAnonymizationStore.getState();
       if (!isAnonymizationActive) {
         return;
       }
@@ -494,7 +502,8 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     [fieldId, isAnonymizationActive],
   );
   useExternalSyncEffect(() => {
-    const { clearAnonymizationMatches } = useInspectorStore.getState();
+    const { clearAnonymizationMatches } =
+      useInspectorAnonymizationStore.getState();
     if (!isAnonymizationActive) {
       clearAnonymizationMatches(fieldId);
     }
@@ -518,7 +527,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       if (single.length < 2 || single.length > 200) {
         return;
       }
-      useInspectorStore
+      useInspectorAnonymizationStore
         .getState()
         .publishDocumentTextSelection(fieldId, single);
     },
@@ -526,7 +535,9 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   );
   useExternalSyncEffect(
     () => () => {
-      useInspectorStore.getState().clearDocumentTextSelection(fieldId);
+      useInspectorAnonymizationStore
+        .getState()
+        .clearDocumentTextSelection(fieldId);
     },
     [fieldId],
   );
@@ -543,19 +554,19 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   //   that would re-scroll on its own click.
   const handleAnonymizationTermClick = useCallback(
     (canonical: string, label: string) => {
-      useInspectorStore
+      useInspectorAnonymizationStore
         .getState()
         .selectAnonymizationTerm(canonical, label, "doc", fieldId);
     },
     [fieldId],
   );
-  const sidebarSelectedCanonical = useInspectorStore((s) =>
+  const sidebarSelectedCanonical = useInspectorAnonymizationStore((s) =>
     s.anonymizationSelection.source === "sidebar" &&
     s.anonymizationSelection.fieldId === fieldId
       ? s.anonymizationSelection.canonical
       : null,
   );
-  const sidebarSelectionSeq = useInspectorStore((s) =>
+  const sidebarSelectionSeq = useInspectorAnonymizationStore((s) =>
     s.anonymizationSelection.source === "sidebar" &&
     s.anonymizationSelection.fieldId === fieldId
       ? s.anonymizationSelection.seq
@@ -772,7 +783,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       // slot; `use-docx-tab-edit-session` re-runs once
       // `canSafelyEdit` resolves and silently enters edit mode then.
       pendingEditRequestRef.current = true;
-      useInspectorStore.getState().requestDocxEdit(fieldId);
+      useInspectorCommandStore.getState().requestDocxEdit(fieldId);
       return false;
     }
 
@@ -1276,7 +1287,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     if (blockReason === "pendingCompatibility") {
       // Queue silently — see requestEditMode for rationale.
       pendingEditRequestRef.current = true;
-      useInspectorStore.getState().requestDocxEdit(fieldId);
+      useInspectorCommandStore.getState().requestDocxEdit(fieldId);
       return;
     }
 

@@ -23,7 +23,8 @@ import { useExternalSourceStore } from "@/components/chat/external-source-store"
 import { navigateToWorkspaceFolder } from "@/components/chat/folder-navigation";
 import { DocumentIcon } from "@/components/document-icon";
 import { InlinePill } from "@/components/inline-pill";
-import { useInspectorStore } from "@/components/inspector/inspector-store";
+import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MatterIcon } from "@/components/matter-icon";
 import { PDF_MIME_TYPE } from "@/consts";
 import { DOCX_MIME } from "@/lib/consts";
@@ -667,10 +668,12 @@ const FolioBlockChip = ({
   children,
 }: FolioBlockChipProps) => {
   const handleClick = () => {
-    const state = useInspectorStore.getState();
-    const docxTabId = pickActiveDocxTabId(state);
+    const tabsState = useInspectorTabsStore.getState();
+    const docxTabId = pickActiveDocxTabId(tabsState);
     if (docxTabId !== null) {
-      state.requestBlockScroll({ tabId: docxTabId, blockId });
+      useInspectorCommandStore
+        .getState()
+        .requestBlockScroll({ tabId: docxTabId, blockId });
     }
     // Always also broadcast — the overlay editor isn't tracked in
     // the inspector store, so the store path alone is a no-op
@@ -734,7 +737,7 @@ const collectChipText = (node: React.ReactNode): string => {
 };
 
 const pickActiveDocxTabId = (
-  state: ReturnType<typeof useInspectorStore.getState>,
+  state: ReturnType<typeof useInspectorTabsStore.getState>,
 ): string | null => {
   const active = state.tabs.find(
     (tab) =>
@@ -782,7 +785,7 @@ const FaviconCitationChip = ({
   const showInlineLabel =
     inlineLabel.length > 0 && !isFootnoteLabel(inlineLabel, hostname);
   const handleClick = () => {
-    useInspectorStore.getState().openExternal({
+    useInspectorTabsStore.getState().openExternal({
       url: url.toString(),
       connectorSlug: source?.connectorSlug,
       iconHref: source?.iconHref,

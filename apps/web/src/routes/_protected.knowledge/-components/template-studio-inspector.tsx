@@ -50,8 +50,8 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { FacetBar } from "@/components/inspector/inspector-facet-bar";
-import { useInspectorStore } from "@/components/inspector/inspector-store";
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import type {
   InspectorRailIconProps,
   InspectorViewRenderProps,
@@ -162,7 +162,7 @@ export function TemplateStudioInspectorView({
       ? detailData
       : null;
   const languages = detail ? detail.languages : [];
-  const openView = useInspectorStore((s) => s.openView);
+  const openView = useInspectorTabsStore((s) => s.openView);
   const setNavName = useTemplateNavStore((s) => s.setName);
   const [rename, setRename] = useState<{ active: boolean; value: string }>({
     active: false,

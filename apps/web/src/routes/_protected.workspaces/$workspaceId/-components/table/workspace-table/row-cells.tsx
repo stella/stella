@@ -19,7 +19,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { renderDragPreview } from "@/components/drag-preview";
 import { InlineEdit } from "@/components/inline-edit";
-import { useInspectorStore } from "@/components/inspector/inspector-store";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import Tooltip from "@/components/tooltip";
 import {
   getEntityName,
@@ -250,7 +250,7 @@ export const DraggableRow = ({
     activeTaskId,
     entityId: entity.entityId,
   });
-  const activationSeq = useInspectorStore((s) => s.activationSeq);
+  const activationSeq = useInspectorTabsStore((s) => s.activationSeq);
 
   useInspectorFlash(entity.entityId, rowRef, {
     enabled: activeCellPropertyId === null,
@@ -295,7 +295,7 @@ export const DraggableRow = ({
       return;
     }
 
-    useInspectorStore.getState().openTask({
+    useInspectorTabsStore.getState().openTask({
       taskId: entity.entityId,
       workspaceId,
       label: name,

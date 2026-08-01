@@ -15,7 +15,7 @@ import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
 import { cn } from "@stll/ui/lib/utils";
 
 import { InlineEdit } from "@/components/inline-edit";
-import { useInspectorStore } from "@/components/inspector/inspector-store";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { EditableField } from "@/components/workspaces/editable-field";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import {
@@ -73,7 +73,7 @@ export const KanbanCard = ({
   const name = getEntityName(entity);
   const file = getFirstFile(entity);
   const navigable = file !== null && isFileDisplayable(file);
-  const isActivePeek = useInspectorStore((s) => {
+  const isActivePeek = useInspectorTabsStore((s) => {
     if (!s.activeId) {
       return false;
     }
@@ -270,7 +270,7 @@ export const KanbanCard = ({
     </div>
   ) : null;
 
-  const isActiveTask = useInspectorStore((s) => {
+  const isActiveTask = useInspectorTabsStore((s) => {
     if (!s.activeId) {
       return false;
     }
@@ -293,7 +293,7 @@ export const KanbanCard = ({
           )}
           // eslint-disable-next-line react/react-compiler -- containedHandler house pattern; cardRef is handed to the helper, not read for rendered output
           onClick={containedHandler(cardRef, () =>
-            useInspectorStore.getState().openTask({
+            useInspectorTabsStore.getState().openTask({
               taskId: entity.entityId,
               workspaceId,
               label: name,
@@ -301,7 +301,7 @@ export const KanbanCard = ({
           )}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
-              useInspectorStore.getState().openTask({
+              useInspectorTabsStore.getState().openTask({
                 taskId: entity.entityId,
                 workspaceId,
                 label: name,
@@ -329,7 +329,7 @@ export const KanbanCard = ({
           )}
           // eslint-disable-next-line react/react-compiler -- containedHandler house pattern; cardRef is handed to the helper, not read for rendered output
           onClick={containedHandler(cardRef, () =>
-            useInspectorStore.getState().openFile({
+            useInspectorTabsStore.getState().openFile({
               id: file.fieldId,
               entityId: file.entityId,
               label: name,
@@ -342,7 +342,7 @@ export const KanbanCard = ({
           )}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
-              useInspectorStore.getState().openFile({
+              useInspectorTabsStore.getState().openFile({
                 id: file.fieldId,
                 entityId: file.entityId,
                 label: name,

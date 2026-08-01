@@ -1,6 +1,6 @@
 import { useRef } from "react";
 
-import { useInspectorStore } from "@/components/inspector/inspector-store";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 
 /**
@@ -14,7 +14,7 @@ export const useInspectorFlash = (
   ref: React.RefObject<HTMLElement | null>,
   { enabled = true }: { enabled?: boolean } = {},
 ) => {
-  const isActive = useInspectorStore((s) => {
+  const isActive = useInspectorTabsStore((s) => {
     if (!s.activeId) {
       return false;
     }
@@ -24,7 +24,7 @@ export const useInspectorFlash = (
     }
     return tab.type === "pdf" ? tab.entityId === entityId : tab.id === entityId;
   });
-  const seq = useInspectorStore((s) => s.activationSeq);
+  const seq = useInspectorTabsStore((s) => s.activationSeq);
   const prevSeq = useRef(seq);
 
   useExternalSyncEffect(() => {

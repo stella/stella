@@ -50,9 +50,10 @@ import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
-import type { ChatTab } from "@/components/inspector/inspector-store";
-import { useInspectorStore } from "@/components/inspector/inspector-store";
+import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
+import type { ChatTab } from "@/components/inspector/inspector-tabs-store";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { buildMaximizeTabAction } from "@/components/inspector/maximize-tab";
 import {
   AIUnavailableDialogTrigger,
@@ -168,7 +169,7 @@ export const ChatTabPanel = ({
   const chatContextLabel = useChatContextLabel(tab, activeOrganizationId);
 
   const { openChat, resetChatTabId, setChatContext, updateLabel } =
-    useInspectorStore(
+    useInspectorTabsStore(
       useShallow((s) => ({
         openChat: s.openChat,
         resetChatTabId: s.resetChatTabId,
@@ -355,7 +356,7 @@ export const ChatTabPanel = ({
   // rename state locally so they consume the flag here.
   const startRenameFromStore = labelRename.startEditing;
   const consumeRenameRequest = useLatestCallback(() => {
-    const store = useInspectorStore.getState();
+    const store = useInspectorCommandStore.getState();
     if (store.pendingRenameTabId === tab.id) {
       startRenameFromStore();
       store.clearRenameRequest();
@@ -363,7 +364,7 @@ export const ChatTabPanel = ({
   });
   useMountEffect(() => {
     consumeRenameRequest();
-    return useInspectorStore.subscribe(consumeRenameRequest);
+    return useInspectorCommandStore.subscribe(consumeRenameRequest);
   });
 
   return (

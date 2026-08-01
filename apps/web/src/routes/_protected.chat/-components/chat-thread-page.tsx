@@ -32,7 +32,7 @@ import { getUserMessageHtmlHistory } from "@/components/chat/chat-ui-tools";
 import { ComposerVeil } from "@/components/chat/composer-veil";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
 import { useChatModelSelection } from "@/components/chat/use-chat-model-selection";
-import { useInspectorStore } from "@/components/inspector/inspector-store";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import Tooltip from "@/components/tooltip";
 import { UsageLimitModal } from "@/components/usage/usage-limit-modal";
@@ -351,7 +351,7 @@ export const ChatThreadPage = ({
     threadRef,
   });
 
-  const openInspectorChat = useInspectorStore((s) => s.openChat);
+  const openInspectorChat = useInspectorTabsStore((s) => s.openChat);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 

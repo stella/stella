@@ -82,7 +82,7 @@ import type {
 } from "@/components/chat/chat-ui-tools";
 import { useChatModelSelection } from "@/components/chat/use-chat-model-selection";
 import type { DocxComments } from "@/components/docx/app-docx-editor";
-import { useInspectorStore } from "@/components/inspector/inspector-store";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { SuggestedFollowupChips } from "@/features/chat/components/suggested-followup-chips";
 import { useChatSession } from "@/features/chat/hooks/use-chat-session";
@@ -625,7 +625,7 @@ const queueReviewSuggestions = ({
   // immediately sees where the proposals landed. Locating the tab
   // by entityId rather than by tab id keeps the chat overlay
   // ignorant of inspector internals.
-  const inspectorState = useInspectorStore.getState();
+  const inspectorState = useInspectorTabsStore.getState();
   const tab = inspectorState.tabs.find(
     (candidate) => candidate.type === "pdf" && candidate.entityId === entityId,
   );

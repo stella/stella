@@ -4,7 +4,7 @@ import {
   consumeDocumentDeletionToolCalls,
   type DocumentDeletionMessage,
 } from "@/components/chat/chat-ui-tools";
-import type { InspectorTab } from "@/components/inspector/inspector-store";
+import type { InspectorTab } from "@/components/inspector/inspector-tabs-store";
 import { filesQueryRoot } from "@/lib/files/file-metadata-query.logic";
 
 type ReconcileDocumentDeletionToolCallsOptions = {

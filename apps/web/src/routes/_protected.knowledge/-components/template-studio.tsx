@@ -24,7 +24,7 @@ import { isClauseSlotName, isFieldPath } from "@stll/template-conditions";
 import "@stll/folio-react/editor.css";
 import { stellaToast } from "@stll/ui/components/toast";
 
-import { useInspectorStore } from "@/components/inspector/inspector-store";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { api } from "@/lib/api";
@@ -234,9 +234,9 @@ export const TemplateStudioPage = ({
   const upsertField = useTemplateStudioStore((s) => s.upsertField);
   const markDirty = useTemplateStudioStore((s) => s.markDirty);
   const markSaved = useTemplateStudioStore((s) => s.markSaved);
-  const openView = useInspectorStore((s) => s.openView);
-  const closeTab = useInspectorStore((s) => s.closeTab);
-  const flashTab = useInspectorStore((s) => s.flashTab);
+  const openView = useInspectorTabsStore((s) => s.openView);
+  const closeTab = useInspectorTabsStore((s) => s.closeTab);
+  const flashTab = useInspectorTabsStore((s) => s.flashTab);
 
   const [hasSelection, setHasSelection] = useState(false);
   const [isSaving, setIsSaving] = useState(false);

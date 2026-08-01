@@ -8,7 +8,7 @@ import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { cn } from "@stll/ui/lib/utils";
 
 import { InlineEdit } from "@/components/inline-edit";
-import { useInspectorStore } from "@/components/inspector/inspector-store";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MatterIcon } from "@/components/matter-icon";
 
 /**
@@ -97,7 +97,7 @@ export const InspectorTabHeader = ({
   onClose,
 }: InspectorTabHeaderProps) => {
   const tCommon = useTranslations("common");
-  const setMinimized = useInspectorStore((s) => s.setMinimized);
+  const setMinimized = useInspectorTabsStore((s) => s.setMinimized);
 
   return (
     <div

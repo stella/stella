@@ -39,13 +39,14 @@ import {
   getFileTabNativePreviewKind,
   getMarkdownDraftSyncDecision,
 } from "@/components/inspector/file-tab-panel.logic";
+import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { InspectorPdfErrorFallback } from "@/components/inspector/inspector-pdf-error-fallback";
-import { useInspectorStore } from "@/components/inspector/inspector-store";
-import type { FileTab } from "@/components/inspector/inspector-store";
 import {
   InspectorTabHeader,
   MatterOriginLink,
 } from "@/components/inspector/inspector-tab-header";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import type { FileTab } from "@/components/inspector/inspector-tabs-store";
 import { MeasuredPdfProvider } from "@/components/inspector/measured-pdf-provider";
 import { PlaybookFacet } from "@/components/inspector/playbook-facet";
 import { SuggestionsFacet } from "@/components/inspector/suggestions-facet";
@@ -169,10 +170,10 @@ export const FileTabPanel = ({
   const analytics = useAnalytics();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const openFile = useInspectorStore((s) => s.openFile);
-  const replaceFileFieldId = useInspectorStore((s) => s.replaceFileFieldId);
-  const setFileFacet = useInspectorStore((s) => s.setFileFacet);
-  const requestDocxEdit = useInspectorStore((s) => s.requestDocxEdit);
+  const openFile = useInspectorTabsStore((s) => s.openFile);
+  const replaceFileFieldId = useInspectorTabsStore((s) => s.replaceFileFieldId);
+  const setFileFacet = useInspectorTabsStore((s) => s.setFileFacet);
+  const requestDocxEdit = useInspectorCommandStore((s) => s.requestDocxEdit);
   const playbooksEnabled = usePlaybooksPreviewEnabled();
   const isNativeDocxDisplay = tab.mimeType === DOCX_MIME;
   const nativePreviewKind = getFileTabNativePreviewKind({
@@ -814,7 +815,9 @@ export const FileTabPanel = ({
                 next.set(fieldId, scaleOffset);
                 return next;
               });
-              useInspectorStore.getState().replaceFileFieldId(tab.id, fieldId);
+              useInspectorTabsStore
+                .getState()
+                .replaceFileFieldId(tab.id, fieldId);
             }
           }}
           onScrollTopChange={handleDocxScrollTopChange}

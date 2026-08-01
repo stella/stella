@@ -52,7 +52,7 @@ import {
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import { navigateToWorkspaceFolder } from "@/components/chat/folder-navigation";
 import { FeedbackDialog } from "@/components/feedback-dialog";
-import { useInspectorStore } from "@/components/inspector/inspector-store";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MatterIcon } from "@/components/matter-icon";
 import { SearchDialog } from "@/components/search-dialog";
 import {
@@ -1314,7 +1314,7 @@ const MatterActivityList = ({
   }: (typeof items)[number] & { type: "entity" }) => {
     const destination = resolveEntityActivityDestination(entityKind);
     if (destination.type === "task") {
-      useInspectorStore
+      useInspectorTabsStore
         .getState()
         .openTask({ taskId: entityId, workspaceId, label: title });
       return;

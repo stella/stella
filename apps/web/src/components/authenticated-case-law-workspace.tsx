@@ -6,7 +6,7 @@ import { TOAST_RIGHT_OFFSET_VAR } from "@stll/ui/components/toast";
 import { ChatEditorProvider } from "@/components/chat-editor-provider";
 import { ChatMentionProviders } from "@/components/chat-mention-providers";
 import { InspectorPanel } from "@/components/inspector/inspector-panel";
-import { useInspectorStore } from "@/components/inspector/inspector-store";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import {
   AIAvailabilityProvider,
   useAIKeyGate,
@@ -79,8 +79,8 @@ function CaseLawInspector({
 }: {
   decisionId: SafeId<"caseLawDecision">;
 }) {
-  const tabs = useInspectorStore((s) => s.tabs);
-  const minimized = useInspectorStore((s) => s.minimized);
+  const tabs = useInspectorTabsStore((s) => s.tabs);
+  const minimized = useInspectorTabsStore((s) => s.minimized);
   const [width, setWidth] = useState(INSPECTOR_PANE_DEFAULT_WIDTH);
   const isDragging = useRef(false);
 
@@ -151,7 +151,7 @@ const AutoOpenDecisionChat = ({
 }: {
   decisionId: SafeId<"caseLawDecision">;
 }) => {
-  const openChat = useInspectorStore((state) => state.openChat);
+  const openChat = useInspectorTabsStore((state) => state.openChat);
   useMountEffect(() => {
     openChat({ activeDecisionId: decisionId });
   });

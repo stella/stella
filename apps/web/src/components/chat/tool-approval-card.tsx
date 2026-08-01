@@ -43,7 +43,7 @@ import {
   getReadableInputRows,
   humanizeIdentifier,
 } from "@/components/chat/tool-approval-summary";
-import { useInspectorStore } from "@/components/inspector/inspector-store";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import {
   emptyColor,
   resolveOptionColor,
@@ -593,7 +593,7 @@ export const ToolApprovalCard = ({
           if (!entityIdMatch) {
             return;
           }
-          const inspector = useInspectorStore.getState();
+          const inspector = useInspectorTabsStore.getState();
           const tab = inspector.tabs.find(
             (candidate) =>
               candidate.type === "pdf" && candidate.entityId === entityIdMatch,
