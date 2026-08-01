@@ -10,6 +10,7 @@ import * as schema from "@/api/db/schema";
 import {
   caseLawCorpusIndexBackfills,
   caseLawCorpusIndexProjections,
+  caseLawCorpusIndexSourceReconciliations,
   caseLawCorpusIndexWriterLeases,
   caseLawDecisions,
   caseLawSources,
@@ -174,6 +175,26 @@ const nextBackfillSnapshotAt = async (): Promise<Date> => {
 };
 
 const ignoreProjectionRemoval = async () => undefined;
+
+const queueSourceReconciliation = async (
+  generation: string,
+  sourceId: SafeId<"caseLawSource">,
+): Promise<void> => {
+  await db
+    .insert(caseLawCorpusIndexSourceReconciliations)
+    .values({ generation, sourceId })
+    .onConflictDoUpdate({
+      target: [
+        caseLawCorpusIndexSourceReconciliations.generation,
+        caseLawCorpusIndexSourceReconciliations.sourceId,
+      ],
+      set: {
+        cursorCreatedAt: null,
+        cursorId: null,
+        revision: sql`${caseLawCorpusIndexSourceReconciliations.revision} + 1`,
+      },
+    });
+};
 
 test(
   "one generation writer excludes rebuilds until it releases",
@@ -924,6 +945,121 @@ test(
       await db
         .delete(caseLawDecisions)
         .where(eq(caseLawDecisions.id, decisionId));
+      await db
+        .delete(caseLawCorpusIndexBackfills)
+        .where(eq(caseLawCorpusIndexBackfills.generation, generation));
+    }
+  },
+  { timeout: 30_000 },
+);
+
+test(
+  "reconciles source eligibility after the generation snapshot has passed",
+  async () => {
+    const generation = "case_law_v2_source_eligibility";
+    await db.insert(caseLawCorpusIndexBackfills).values({
+      generation,
+      snapshotAt: await nextBackfillSnapshotAt(),
+      status: "complete",
+    });
+    const indexed: SafeId<"caseLawDecision">[] = [];
+    const removed: SafeId<"caseLawDecision">[] = [];
+    const backfill = createCaseLawGenerationBackfill({
+      backfillRows: async (_runnerDb, rows, _generation, options) => {
+        await options.beforeRemoteEffect();
+        indexed.push(...rows.map(({ id }) => id));
+        return rows.length;
+      },
+      newLeaseToken: () => "00000000-0000-4000-8000-000000000900",
+      removeProjection: async (runnerDb, { options, row }) => {
+        await options.beforeRemoteEffect();
+        removed.push(row.id);
+        await runnerDb(async (tx) => {
+          await options.beforeDatabaseMark(tx);
+          await tx
+            .delete(caseLawCorpusIndexProjections)
+            .where(
+              and(
+                eq(caseLawCorpusIndexProjections.generation, generation),
+                eq(caseLawCorpusIndexProjections.decisionId, row.id),
+              ),
+            );
+        });
+      },
+    });
+
+    try {
+      await db
+        .update(caseLawSources)
+        .set({
+          descriptor: {
+            allowsDerivedAi: true,
+            allowsRedistribution: true,
+            attribution: null,
+            license: "public-domain",
+          },
+        })
+        .where(eq(caseLawSources.id, restrictedSourceId));
+      // pushSchema creates tables and constraints but not migration triggers;
+      // this is the exact bounded work item produced by the SQL trigger.
+      await queueSourceReconciliation(generation, restrictedSourceId);
+
+      expect(await backfill(scopedDb, 10, generation)).toEqual({
+        indexed: 1,
+        status: "advanced",
+      });
+      expect(indexed).toEqual([restrictedId]);
+      expect(await backfill(scopedDb, 10, generation)).toMatchObject({
+        status: "advanced",
+      });
+
+      await db.insert(caseLawCorpusIndexProjections).values({
+        decisionId: restrictedId,
+        generation,
+        indexId: corpusIndexId(generation, "CZE"),
+        indexedHash: "restricted",
+      });
+      await db
+        .update(caseLawSources)
+        .set({
+          descriptor: {
+            allowsDerivedAi: false,
+            allowsRedistribution: false,
+            attribution: null,
+            license: "restricted",
+          },
+        })
+        .where(eq(caseLawSources.id, restrictedSourceId));
+      await queueSourceReconciliation(generation, restrictedSourceId);
+
+      expect(await backfill(scopedDb, 10, generation)).toEqual({
+        indexed: 0,
+        status: "advanced",
+      });
+      expect(removed).toEqual([restrictedId]);
+      expect(
+        await db
+          .select()
+          .from(caseLawCorpusIndexProjections)
+          .where(
+            and(
+              eq(caseLawCorpusIndexProjections.generation, generation),
+              eq(caseLawCorpusIndexProjections.decisionId, restrictedId),
+            ),
+          ),
+      ).toHaveLength(0);
+    } finally {
+      await db
+        .update(caseLawSources)
+        .set({
+          descriptor: {
+            allowsDerivedAi: false,
+            allowsRedistribution: false,
+            attribution: null,
+            license: "restricted",
+          },
+        })
+        .where(eq(caseLawSources.id, restrictedSourceId));
       await db
         .delete(caseLawCorpusIndexBackfills)
         .where(eq(caseLawCorpusIndexBackfills.generation, generation));

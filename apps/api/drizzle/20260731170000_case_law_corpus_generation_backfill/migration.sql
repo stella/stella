@@ -49,6 +49,57 @@ GRANT SELECT ON TABLE "case_law_corpus_index_backfills" TO stella;--> statement-
 GRANT SELECT, INSERT, UPDATE, DELETE
   ON TABLE "case_law_corpus_index_backfills" TO stella_ingestion;--> statement-breakpoint
 
+CREATE TABLE IF NOT EXISTS "case_law_corpus_index_source_reconciliations" (
+  "generation" varchar(32) NOT NULL,
+  "source_id" uuid NOT NULL,
+  "revision" integer NOT NULL DEFAULT 1,
+  "cursor_created_at" timestamptz,
+  "cursor_id" uuid,
+  "updated_at" timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT "case_law_corpus_index_source_reconciliations_pk"
+    PRIMARY KEY ("generation", "source_id"),
+  CONSTRAINT "case_law_corpus_index_source_reconciliations_generation_fk"
+    FOREIGN KEY ("generation") REFERENCES "case_law_corpus_index_backfills"("generation") ON DELETE CASCADE,
+  CONSTRAINT "case_law_corpus_index_source_reconciliations_source_fk"
+    FOREIGN KEY ("source_id") REFERENCES "case_law_sources"("id") ON DELETE CASCADE,
+  CONSTRAINT "case_law_corpus_index_source_reconciliations_cursor_pair"
+    CHECK (("cursor_created_at" IS NULL) = ("cursor_id" IS NULL))
+);--> statement-breakpoint
+ALTER TABLE "case_law_corpus_index_source_reconciliations" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+DO $policy$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'case_law_corpus_index_source_reconciliations'
+      AND policyname = 'case_law_global_access'
+  ) THEN
+    CREATE POLICY "case_law_global_access"
+      ON "case_law_corpus_index_source_reconciliations"
+      AS PERMISSIVE FOR SELECT TO stella
+      USING (true);
+  END IF;
+END
+$policy$;--> statement-breakpoint
+DO $policy$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'case_law_corpus_index_source_reconciliations'
+      AND policyname = 'case_law_ingestion_access'
+  ) THEN
+    CREATE POLICY "case_law_ingestion_access"
+      ON "case_law_corpus_index_source_reconciliations"
+      AS PERMISSIVE FOR ALL TO stella_ingestion
+      USING (true) WITH CHECK (true);
+  END IF;
+END
+$policy$;--> statement-breakpoint
+GRANT SELECT ON TABLE "case_law_corpus_index_source_reconciliations" TO stella;--> statement-breakpoint
+GRANT SELECT, INSERT, UPDATE, DELETE
+  ON TABLE "case_law_corpus_index_source_reconciliations" TO stella_ingestion;--> statement-breakpoint
+
 CREATE TABLE IF NOT EXISTS "case_law_corpus_index_writer_leases" (
   "generation" varchar(32) PRIMARY KEY NOT NULL,
   "lease_token" uuid,
@@ -236,6 +287,50 @@ ON "case_law_decisions"
 FOR EACH ROW
 EXECUTE FUNCTION enqueue_case_law_corpus_index_projection();--> statement-breakpoint
 
+CREATE OR REPLACE FUNCTION enqueue_case_law_corpus_source_reconciliation()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $function$
+BEGIN
+  IF NEW.descriptor IS NOT DISTINCT FROM OLD.descriptor THEN
+    RETURN NEW;
+  END IF;
+
+  INSERT INTO case_law_corpus_index_source_reconciliations (
+    generation,
+    source_id,
+    revision,
+    cursor_created_at,
+    cursor_id,
+    updated_at
+  )
+  SELECT checkpoint.generation, NEW.id, 1, null, null, clock_timestamp()
+  FROM case_law_corpus_index_backfills AS checkpoint
+  WHERE NOT EXISTS (
+    SELECT 1
+    FROM case_law_corpus_index_backfills AS newer
+    WHERE (newer.snapshot_at, newer.generation) >
+      (checkpoint.snapshot_at, checkpoint.generation)
+  )
+  ON CONFLICT ON CONSTRAINT case_law_corpus_index_source_reconciliations_pk DO UPDATE
+  SET revision = case_law_corpus_index_source_reconciliations.revision + 1,
+      cursor_created_at = null,
+      cursor_id = null,
+      updated_at = EXCLUDED.updated_at;
+
+  RETURN NEW;
+END
+$function$;--> statement-breakpoint
+
+-- stella-migration-safety: reviewed destructive-change - retry cleanup replaces only this migration's source reconciliation trigger; table data is unchanged.
+DROP TRIGGER IF EXISTS case_law_sources_enqueue_corpus_reconciliation
+  ON "case_law_sources";--> statement-breakpoint
+CREATE TRIGGER case_law_sources_enqueue_corpus_reconciliation
+AFTER UPDATE OF descriptor
+ON "case_law_sources"
+FOR EACH ROW
+EXECUTE FUNCTION enqueue_case_law_corpus_source_reconciliation();--> statement-breakpoint
+
 -- Statement time, rather than transaction-start time, makes the rebuild's
 -- short table-lock barrier a valid created_at high-water mark.
 ALTER TABLE "case_law_decisions"
@@ -252,6 +347,11 @@ DROP INDEX CONCURRENTLY IF EXISTS "case_law_decisions_corpus_generation_cursor_i
 -- squawk-ignore prefer-robust-stmts
 CREATE INDEX CONCURRENTLY "case_law_decisions_corpus_generation_cursor_idx"
   ON "case_law_decisions" ("created_at", "id");--> statement-breakpoint
+-- stella-migration-safety: reviewed destructive-change - retry cleanup removes only this migration's derived-state index.
+DROP INDEX CONCURRENTLY IF EXISTS "case_law_decisions_source_generation_cursor_idx";--> statement-breakpoint
+-- squawk-ignore prefer-robust-stmts
+CREATE INDEX CONCURRENTLY "case_law_decisions_source_generation_cursor_idx"
+  ON "case_law_decisions" ("source_id", "created_at", "id");--> statement-breakpoint
 -- Refreshes clear indexed_hash while retaining indexed_generation so the
 -- indexer can remove a prior jurisdiction copy. Build that durable pending
 -- signal under a new name: rolling-deployment tasks still use the legacy

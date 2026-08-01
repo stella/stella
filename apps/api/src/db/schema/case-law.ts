@@ -222,6 +222,9 @@ export const caseLawDecisions = p.pgTable(
       .index("case_law_decisions_corpus_generation_cursor_idx")
       .on(t.createdAt, t.id),
     p
+      .index("case_law_decisions_source_generation_cursor_idx")
+      .on(t.sourceId, t.createdAt, t.id),
+    p
       .index("case_law_decisions_updated_id_idx")
       .on(t.updatedAt.desc(), t.id.desc()),
     p
@@ -677,6 +680,38 @@ export const caseLawCorpusIndexBackfills = p.pgTable(
     p.check(
       "case_law_corpus_index_backfills_lease_pair",
       sql`(${t.leaseToken} IS NULL) = (${t.leaseExpiresAt} IS NULL)`,
+    ),
+    ...globalCaseLawPolicies(),
+  ],
+);
+
+/**
+ * Durable, bounded work created when a source's corpus eligibility changes.
+ * A new revision resets the decision cursor, so a racing worker cannot advance
+ * over or delete newer eligibility work.
+ */
+export const caseLawCorpusIndexSourceReconciliations = p.pgTable(
+  "case_law_corpus_index_source_reconciliations",
+  {
+    generation: p
+      .varchar({ length: 32 })
+      .notNull()
+      .references(() => caseLawCorpusIndexBackfills.generation, {
+        onDelete: "cascade",
+      }),
+    sourceId: safeUuid<"caseLawSource">("source_id")
+      .notNull()
+      .references(() => caseLawSources.id, { onDelete: "cascade" }),
+    revision: p.integer().default(1).notNull(),
+    cursorCreatedAt: timestamptz("cursor_created_at"),
+    cursorId: safeUuid<"caseLawDecision">("cursor_id"),
+    updatedAt: timestamptz("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p.primaryKey({ columns: [t.generation, t.sourceId] }),
+    p.check(
+      "case_law_corpus_index_source_reconciliations_cursor_pair",
+      sql`(${t.cursorCreatedAt} IS NULL) = (${t.cursorId} IS NULL)`,
     ),
     ...globalCaseLawPolicies(),
   ],

@@ -6,6 +6,7 @@ import {
   caseLawDecisions,
   caseLawCorpusIndexBackfills,
   caseLawCorpusIndexProjections,
+  caseLawCorpusIndexSourceReconciliations,
   caseLawCorpusIndexWriterLeases,
   CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS,
   type CaseLawCorpusIndexBackfillStatus,
@@ -113,6 +114,7 @@ const SELECT_COLUMNS = {
 const GENERATION_PAGE_SELECT_COLUMNS = {
   ...SELECT_COLUMNS,
   generationIndexId: caseLawCorpusIndexProjections.indexId,
+  generationIndexedHash: caseLawCorpusIndexProjections.indexedHash,
   generationPendingAction: caseLawCorpusIndexProjections.pendingAction,
   sourceDescriptor: caseLawSources.descriptor,
 };
@@ -246,6 +248,33 @@ const clearDeletedGenerationProjection = async (
     WHERE projection.generation = ${generation}
       AND projection.decision_id = live.id
       AND projection.pending_action = 'delete'
+  `);
+};
+
+const clearIneligibleGenerationProjection = async (
+  tx: Transaction,
+  { generation, row }: { generation: string; row: GenerationBackfillRow },
+): Promise<void> => {
+  // The source revision joins the external delete to the exact eligibility
+  // observation that caused it. A later descriptor change remains ahead of
+  // the durable cursor and will be reconciled as a new revision.
+  // audit: skip — source eligibility controls derived projection membership
+  await tx.execute(sql`
+    WITH live AS MATERIALIZED (
+      SELECT d.id
+      FROM ${caseLawDecisions} AS d
+      INNER JOIN ${caseLawSources} AS source ON source.id = d.source_id
+      WHERE d.id = ${row.id}
+        AND d.content_hash IS NOT DISTINCT FROM ${row.contentHash}
+        AND d.updated_at IS NOT DISTINCT FROM ${row.updatedAtToken}::timestamptz
+        AND source.descriptor IS NOT NULL
+        AND (source.descriptor ->> 'allowsRedistribution') IS DISTINCT FROM 'true'
+      FOR UPDATE OF d, source
+    )
+    DELETE FROM ${caseLawCorpusIndexProjections} AS projection
+    USING live
+    WHERE projection.generation = ${generation}
+      AND projection.decision_id = live.id
   `);
 };
 
@@ -602,7 +631,7 @@ export const acquireCaseLawCorpusGenerationLease = async ({
   };
 };
 
-export const backfillCorpusIndex = async (
+const backfillIncrementalCorpusIndex = async (
   scopedDb: Parameters<typeof indexer.backfill>[0],
   batchSize: number,
   generation: string,
@@ -635,7 +664,16 @@ type GenerationBackfillCheckpoint = {
 
 type GenerationBackfillRow = IndexableRow & {
   createdAt: Date;
+  generationIndexedHash: string | null;
   sourceDescriptor: CorpusSourceDescriptor | null;
+};
+
+type SourceReconciliationCheckpoint = {
+  cursorCreatedAt: Date | null;
+  cursorId: SafeId<"caseLawDecision"> | null;
+  generation: string;
+  revision: number;
+  sourceId: SafeId<"caseLawSource">;
 };
 
 type GenerationBackfillResult =
@@ -655,15 +693,15 @@ type GenerationProjectionGuards = {
 
 type GenerationBackfillDependencies = {
   backfillRows: (
-    scopedDb: Parameters<typeof backfillCorpusIndex>[0],
+    scopedDb: Parameters<typeof backfillIncrementalCorpusIndex>[0],
     rows: readonly IndexableRow[],
     generation: string,
     options: GenerationProjectionGuards,
   ) => Promise<number>;
   removeProjection: (
-    scopedDb: Parameters<typeof backfillCorpusIndex>[0],
+    scopedDb: Parameters<typeof backfillIncrementalCorpusIndex>[0],
     args: {
-      row: IndexableRow;
+      row: GenerationBackfillRow;
       generation: string;
       options: GenerationProjectionGuards;
     },
@@ -687,7 +725,11 @@ const removeGenerationProjection: GenerationBackfillDependencies["removeProjecti
     }
     await scopedDb(async (tx) => {
       await options.beforeDatabaseMark(tx);
-      await clearDeletedGenerationProjection(tx, { generation, row });
+      if (row.contentHash === null) {
+        await clearDeletedGenerationProjection(tx, { generation, row });
+        return;
+      }
+      await clearIneligibleGenerationProjection(tx, { generation, row });
     });
   };
 
@@ -729,7 +771,7 @@ const ownsUnexpiredLease = ({
   );
 
 const selectGenerationBackfillPage = async (
-  scopedDb: Parameters<typeof backfillCorpusIndex>[0],
+  scopedDb: Parameters<typeof backfillIncrementalCorpusIndex>[0],
   {
     batchSize,
     checkpoint,
@@ -763,7 +805,7 @@ const selectGenerationBackfillPage = async (
   );
 
 const selectGenerationPendingPage = async (
-  scopedDb: Parameters<typeof backfillCorpusIndex>[0],
+  scopedDb: Parameters<typeof backfillIncrementalCorpusIndex>[0],
   { generation, limit }: { generation: string; limit: number },
 ): Promise<GenerationBackfillRow[]> =>
   await scopedDb((tx) =>
@@ -788,6 +830,76 @@ const selectGenerationPendingPage = async (
       .limit(limit),
   );
 
+const selectGenerationEligibilityPage = async (
+  scopedDb: Parameters<typeof backfillIncrementalCorpusIndex>[0],
+  {
+    checkpoint,
+    limit,
+  }: { checkpoint: SourceReconciliationCheckpoint; limit: number },
+): Promise<GenerationBackfillRow[]> =>
+  await scopedDb((tx) =>
+    tx
+      .select(GENERATION_PAGE_SELECT_COLUMNS)
+      .from(caseLawDecisions)
+      .innerJoin(
+        caseLawSources,
+        eq(caseLawDecisions.sourceId, caseLawSources.id),
+      )
+      .leftJoin(
+        caseLawCorpusIndexProjections,
+        and(
+          eq(caseLawCorpusIndexProjections.decisionId, caseLawDecisions.id),
+          eq(caseLawCorpusIndexProjections.generation, checkpoint.generation),
+        ),
+      )
+      .where(
+        and(
+          eq(caseLawDecisions.sourceId, checkpoint.sourceId),
+          checkpoint.cursorCreatedAt === null
+            ? undefined
+            : sql`(${caseLawDecisions.createdAt}, ${caseLawDecisions.id}) > (${checkpoint.cursorCreatedAt}, ${checkpoint.cursorId})`,
+        ),
+      )
+      .orderBy(asc(caseLawDecisions.createdAt), asc(caseLawDecisions.id))
+      .limit(limit),
+  );
+
+const selectSourceReconciliationCheckpoint = async (
+  scopedDb: Parameters<typeof backfillIncrementalCorpusIndex>[0],
+  generation: string,
+): Promise<SourceReconciliationCheckpoint | undefined> =>
+  await scopedDb(async (tx) =>
+    (
+      await tx
+        .select({
+          cursorCreatedAt:
+            caseLawCorpusIndexSourceReconciliations.cursorCreatedAt,
+          cursorId: caseLawCorpusIndexSourceReconciliations.cursorId,
+          generation: caseLawCorpusIndexSourceReconciliations.generation,
+          revision: caseLawCorpusIndexSourceReconciliations.revision,
+          sourceId: caseLawCorpusIndexSourceReconciliations.sourceId,
+        })
+        .from(caseLawCorpusIndexSourceReconciliations)
+        .where(
+          eq(caseLawCorpusIndexSourceReconciliations.generation, generation),
+        )
+        .orderBy(asc(caseLawCorpusIndexSourceReconciliations.sourceId))
+        .limit(1)
+    ).at(0),
+  );
+
+const sameSourceReconciliation = (checkpoint: SourceReconciliationCheckpoint) =>
+  and(
+    eq(
+      caseLawCorpusIndexSourceReconciliations.generation,
+      checkpoint.generation,
+    ),
+    eq(caseLawCorpusIndexSourceReconciliations.sourceId, checkpoint.sourceId),
+    eq(caseLawCorpusIndexSourceReconciliations.revision, checkpoint.revision),
+    sql`${caseLawCorpusIndexSourceReconciliations.cursorCreatedAt} IS NOT DISTINCT FROM ${checkpoint.cursorCreatedAt}`,
+    sql`${caseLawCorpusIndexSourceReconciliations.cursorId} IS NOT DISTINCT FROM ${checkpoint.cursorId}`,
+  );
+
 const isCorpusEligible = (row: GenerationBackfillRow): boolean =>
   row.contentHash !== null && isRedistributable(row.sourceDescriptor);
 
@@ -796,11 +908,13 @@ const isEligibleForGeneration = (
   generation: string,
 ): boolean =>
   isCorpusEligible(row) &&
-  (row.indexedGeneration !== corpusIndexId(generation, row.country) ||
-    row.indexedHash !== row.contentHash);
+  (row.generationIndexId !== corpusIndexId(generation, row.country) ||
+    row.generationIndexedHash !== row.contentHash ||
+    row.generationPendingAction !== null);
 
 const withoutSourceDescriptor = ({
   sourceDescriptor: _sourceDescriptor,
+  generationIndexedHash: _generationIndexedHash,
   ...row
 }: GenerationBackfillRow): IndexableRow => row;
 
@@ -816,7 +930,7 @@ export const createCaseLawGenerationBackfill =
     removeProjection,
   }: GenerationBackfillDependencies) =>
   async (
-    scopedDb: Parameters<typeof backfillCorpusIndex>[0],
+    scopedDb: Parameters<typeof backfillIncrementalCorpusIndex>[0],
     batchSize: number,
     generation: string,
   ): Promise<GenerationBackfillResult> => {
@@ -846,7 +960,9 @@ export const createCaseLawGenerationBackfill =
         // capture statement time while new writers are held out. Together with
         // the decision column's clock_timestamp() default, no later commit can
         // appear behind this rebuild's (created_at,id) cursor.
-        await tx.execute(sql`LOCK TABLE ${caseLawDecisions} IN SHARE MODE`);
+        await tx.execute(
+          sql`LOCK TABLE ${caseLawDecisions}, ${caseLawSources} IN SHARE MODE`,
+        );
         const inserted = await tx
           .insert(caseLawCorpusIndexBackfills)
           .values({ generation, snapshotAt: sql`clock_timestamp()` })
@@ -943,6 +1059,80 @@ export const createCaseLawGenerationBackfill =
           status,
         });
         await guards.beforeRemoteEffect();
+        const sourceCheckpoint = await selectSourceReconciliationCheckpoint(
+          scopedDb,
+          generation,
+        );
+        if (sourceCheckpoint) {
+          const sourcePage = await selectGenerationEligibilityPage(scopedDb, {
+            checkpoint: sourceCheckpoint,
+            limit: batchSize,
+          });
+          const lastSourceRow = sourcePage.at(-1);
+          if (!lastSourceRow) {
+            const removed = await scopedDb(async (tx) => {
+              await guards.beforeDatabaseMark(tx);
+              // audit: skip — deleting a drained revision is its durable completion marker
+              const rows = await tx
+                .delete(caseLawCorpusIndexSourceReconciliations)
+                .where(sameSourceReconciliation(sourceCheckpoint))
+                .returning({
+                  sourceId: caseLawCorpusIndexSourceReconciliations.sourceId,
+                });
+              return rows.at(0);
+            });
+            return removed
+              ? { indexed: 0, status: BACKFILL_STATUS.ADVANCED }
+              : { indexed: 0, status: BACKFILL_STATUS.BUSY };
+          }
+
+          const eligible = sourcePage
+            .filter((row) => isEligibleForGeneration(row, generation))
+            .map(withoutSourceDescriptor);
+          const indexed =
+            eligible.length === 0
+              ? 0
+              : await backfillRows(scopedDb, eligible, generation, guards);
+          if (indexed !== eligible.length) {
+            throw new CorpusIndexError({
+              message:
+                "source eligibility reconciliation did not reach a fixed point",
+            });
+          }
+          const removals = sourcePage.filter(
+            (row) => !isCorpusEligible(row) && row.generationIndexId !== null,
+          );
+          await Promise.all(
+            removals.map(async (row) => {
+              await removeProjection(scopedDb, {
+                generation,
+                options: guards,
+                row,
+              });
+            }),
+          );
+
+          const advanced = await scopedDb(async (tx) => {
+            await guards.beforeDatabaseMark(tx);
+            // audit: skip — the revision-scoped keyset cursor is durable reconciliation progress
+            const rows = await tx
+              .update(caseLawCorpusIndexSourceReconciliations)
+              .set({
+                cursorCreatedAt: lastSourceRow.createdAt,
+                cursorId: lastSourceRow.id,
+                updatedAt: sql`now()`,
+              })
+              .where(sameSourceReconciliation(sourceCheckpoint))
+              .returning({
+                sourceId: caseLawCorpusIndexSourceReconciliations.sourceId,
+              });
+            return rows.at(0);
+          });
+          return advanced
+            ? { indexed, status: BACKFILL_STATUS.ADVANCED }
+            : { indexed: 0, status: BACKFILL_STATUS.BUSY };
+        }
+
         const pendingPage = await selectGenerationPendingPage(scopedDb, {
           generation,
           limit: batchSize,
@@ -998,7 +1188,7 @@ export const createCaseLawGenerationBackfill =
           await removeProjection(scopedDb, {
             generation,
             options: guards,
-            row: withoutSourceDescriptor(row),
+            row,
           });
         }
         return { indexed, status: BACKFILL_STATUS.ADVANCED };
@@ -1222,4 +1412,30 @@ export const backfillCorpusIndexGenerationPage =
     newLeaseToken: () => Bun.randomUUIDv7(),
     removeProjection: removeGenerationProjection,
   });
+
+export const backfillCorpusIndex = async (
+  scopedDb: Parameters<typeof backfillIncrementalCorpusIndex>[0],
+  batchSize: number,
+  generation: string,
+  options: { readConcurrency?: number } = {},
+): Promise<number> => {
+  const sourceReconciliation = await selectSourceReconciliationCheckpoint(
+    scopedDb,
+    generation,
+  );
+  if (sourceReconciliation) {
+    const result = await backfillCorpusIndexGenerationPage(
+      scopedDb,
+      batchSize,
+      generation,
+    );
+    return result.indexed;
+  }
+  return await backfillIncrementalCorpusIndex(
+    scopedDb,
+    batchSize,
+    generation,
+    options,
+  );
+};
 export const removeDecisionFromCorpusIndex = indexer.removeFenced;

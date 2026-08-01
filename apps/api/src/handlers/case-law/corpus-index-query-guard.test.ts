@@ -17,6 +17,7 @@ const generationMigrationSource = new URL(
 );
 const GENERATION_STATE_TABLES = [
   "case_law_corpus_index_backfills",
+  "case_law_corpus_index_source_reconciliations",
   "case_law_corpus_index_writer_leases",
   "case_law_corpus_index_projections",
 ] as const;
@@ -28,7 +29,7 @@ test("case-law incremental corpus scans never select a generation inequality", a
   expect(source).not.toMatch(/indexedGeneration\}[^`]*<>/su);
   expect(source).not.toMatch(/indexed_generation[^`]*<>/su);
   expect(source).toMatch(
-    /sql`LOCK TABLE \$\{caseLawDecisions\} IN SHARE MODE`/u,
+    /sql`LOCK TABLE \$\{caseLawDecisions\}, \$\{caseLawSources\} IN SHARE MODE`/u,
   );
 });
 
@@ -52,6 +53,12 @@ test("generation checkpoint migration preserves replay and role invariants", asy
   expect(source).toContain(
     "AFTER INSERT OR UPDATE OF content_hash, indexed_hash, country",
   );
+  expect(source).toContain("AFTER UPDATE OF descriptor");
+  expect(source).toContain(
+    "SET revision = case_law_corpus_index_source_reconciliations.revision + 1",
+  );
+  expect(source).toContain("cursor_created_at = null");
+  expect(source).toContain("cursor_id = null");
   expect(
     source.match(
       /ON CONFLICT ON CONSTRAINT case_law_corpus_index_projections_pk DO UPDATE/gu,
@@ -72,6 +79,9 @@ test("generation checkpoint migration preserves replay and role invariants", asy
   );
   expect(source).toContain(
     'CREATE INDEX CONCURRENTLY "case_law_decisions_corpus_generation_cursor_idx"\n  ON "case_law_decisions" ("created_at", "id")',
+  );
+  expect(source).toContain(
+    'CREATE INDEX CONCURRENTLY "case_law_decisions_source_generation_cursor_idx"\n  ON "case_law_decisions" ("source_id", "created_at", "id")',
   );
   expect(source).toContain(
     'CREATE INDEX CONCURRENTLY "case_law_decisions_corpus_hash_pending_idx"\n  ON "case_law_decisions" ("id")\n  WHERE "content_hash" IS NOT NULL AND "indexed_hash" IS NULL',
