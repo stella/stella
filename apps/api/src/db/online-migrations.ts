@@ -120,15 +120,7 @@ const processOnlineMigrations = async (
       await connection.execute("SET statement_timeout = '0'");
     }
 
-    for (const index of ONLINE_MIGRATION_INDEXES) {
-      if (operation === "repair") {
-        // oxlint-disable-next-line no-await-in-loop -- PostgreSQL permits only one concurrent index build per table; preserve deterministic order.
-        await ensureIndexValid(connection, index);
-      } else {
-        // oxlint-disable-next-line no-await-in-loop -- Startup must validate the complete catalog before serving.
-        await assertIndexReady(connection, index);
-      }
-    }
+    await processOnlineIndexAt(connection, operation);
   } finally {
     try {
       if (lockAcquired) {
@@ -138,6 +130,24 @@ const processOnlineMigrations = async (
       connection.release();
     }
   }
+};
+
+const processOnlineIndexAt = async (
+  connection: OnlineMigrationConnection,
+  operation: OnlineMigrationOperation,
+  offset = 0,
+): Promise<void> => {
+  const index = ONLINE_MIGRATION_INDEXES.at(offset);
+  if (!index) {
+    return;
+  }
+
+  if (operation === "repair") {
+    await ensureIndexValid(connection, index);
+  } else {
+    await assertIndexReady(connection, index);
+  }
+  await processOnlineIndexAt(connection, operation, offset + 1);
 };
 
 const parsePresentIndexState = (row: unknown): PresentIndexState => {
@@ -233,18 +243,30 @@ const cleanupFailedReindexArtifacts = async (
   index: RequiredMigrationIndex,
 ): Promise<void> => {
   const artifacts = await readReindexArtifacts(connection, index);
-  for (const artifact of artifacts) {
-    assertIndexDefinition(index, artifact);
-    if (artifact.isValid) {
-      panic(
-        `Required migration index ${index.name} has a valid reindex artifact`,
-      );
-    }
-    // oxlint-disable-next-line no-await-in-loop -- Each concurrent drop must finish before the next repair step.
-    await connection.execute(
-      `DROP INDEX CONCURRENTLY public.${quoteIdentifier(artifact.name)}`,
+  await cleanupReindexArtifactAt(connection, index, artifacts);
+};
+
+const cleanupReindexArtifactAt = async (
+  connection: OnlineMigrationConnection,
+  index: RequiredMigrationIndex,
+  artifacts: readonly PresentIndexState[],
+  offset = 0,
+): Promise<void> => {
+  const artifact = artifacts.at(offset);
+  if (!artifact) {
+    return;
+  }
+
+  assertIndexDefinition(index, artifact);
+  if (artifact.isValid) {
+    panic(
+      `Required migration index ${index.name} has a valid reindex artifact`,
     );
   }
+  await connection.execute(
+    `DROP INDEX CONCURRENTLY public.${quoteIdentifier(artifact.name)}`,
+  );
+  await cleanupReindexArtifactAt(connection, index, artifacts, offset + 1);
 };
 
 const assertIndexReady = async (
