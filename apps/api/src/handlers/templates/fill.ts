@@ -3,7 +3,6 @@ import { t } from "elysia";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { templateFills } from "@/api/db/schema";
-import { convertToPdf } from "@/api/handlers/files/gotenberg";
 import { isTemplateOutputValid } from "@/api/handlers/templates/validate-template-output";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
@@ -32,6 +31,7 @@ import { resolveAiFields } from "@/api/lib/docx/resolve-ai-fields";
 import { readManifest } from "@/api/lib/docx/template-manifest";
 import { isTemplateData, type TemplateData } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { convertToPdf } from "@/api/lib/files/gotenberg";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";

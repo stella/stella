@@ -76,6 +76,7 @@ import { compareByLocale } from "@/lib/collation";
 import { isDocxFile, TOOLBAR_ROW_MIN_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
+import { knowledgeKeys } from "@/lib/knowledge/queries";
 import { formatRelativeTime } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
 import { CategoryMobileFilterBar } from "@/routes/_protected.knowledge/-components/category-sidebar";
@@ -88,7 +89,6 @@ import type { TemplateCategoryItem } from "@/routes/_protected.knowledge/-compon
 import { TEMPLATE_DRAG_MIME } from "@/routes/_protected.knowledge/-components/template-drag";
 import { TemplateUpload } from "@/routes/_protected.knowledge/-components/template-upload";
 import { UseTemplateDialog } from "@/routes/_protected.knowledge/-components/use-template-dialog";
-import { knowledgeKeys } from "@/routes/_protected.knowledge/-queries";
 
 type DiscoverResponse = Awaited<ReturnType<typeof api.templates.discover.post>>;
 

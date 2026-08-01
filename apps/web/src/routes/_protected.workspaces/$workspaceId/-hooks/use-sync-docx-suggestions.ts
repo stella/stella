@@ -27,7 +27,7 @@ import {
 } from "@/components/ai-suggestions/review-suggestion-builder";
 import type { SnapshotBlock } from "@/components/ai-suggestions/review-suggestion-builder";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { docxSuggestionsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/docx-suggestions";
+import { docxSuggestionsOptions } from "@/lib/workspaces/queries/docx-suggestions";
 
 type UseSyncDocxSuggestionsInput = {
   workspaceId: string;

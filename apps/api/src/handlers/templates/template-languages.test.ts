@@ -6,7 +6,7 @@ import {
   detectTemplateLanguagesFromDocx,
   LANGUAGE_STOPWORDS,
   normalizeTemplateLanguages,
-} from "@/api/handlers/templates/template-languages";
+} from "@/api/lib/templates/template-languages";
 
 // ── normalizeTemplateLanguages ───────────────────────────
 

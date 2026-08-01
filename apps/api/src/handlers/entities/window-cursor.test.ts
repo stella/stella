@@ -4,7 +4,7 @@ import { describe, expect, test } from "bun:test";
 import {
   decodeEntitiesWindowCursor,
   encodeEntitiesWindowCursor,
-} from "@/api/handlers/entities/window-cursor";
+} from "@/api/lib/entities/window-cursor";
 
 describe("entities window cursor", () => {
   test("round-trips sort tuple values", () => {

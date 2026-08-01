@@ -7,9 +7,9 @@ import { Button } from "@stll/ui/components/button";
 import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { cn } from "@stll/ui/lib/utils";
 
+import { InlineEdit } from "@/components/inline-edit";
 import { useInspectorStore } from "@/components/inspector/inspector-store";
 import { MatterIcon } from "@/components/matter-icon";
-import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
 
 /**
  * Shared header strip used at the top of every inspector tab —

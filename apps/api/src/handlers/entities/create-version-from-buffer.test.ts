@@ -20,13 +20,13 @@ const broadcastMock = mock();
 let persistenceEvents: string[] = [];
 let intentStatuses: string[] = [];
 
-void mock.module("@/api/handlers/entities/write-file-version", () => ({
+void mock.module("@/api/lib/entity-versions/write-file-version", () => ({
   writeFileVersion: writeFileVersionMock,
 }));
-void mock.module("@/api/handlers/files/file-object-ids", () => ({
+void mock.module("@/api/lib/files/file-object-ids", () => ({
   allocateFileObject: () => "file_1",
 }));
-void mock.module("@/api/handlers/files/utils", () => ({
+void mock.module("@/api/lib/files/utils", () => ({
   createFileKey: () => "org_1/ws_1/file_1.docx",
 }));
 void mock.module("@/api/lib/s3", () => ({
@@ -40,7 +40,7 @@ void mock.module("@/api/lib/file-derivative-queue", () => ({
   enqueuePdfDerivativeOrMarkFailed: pdfDerivativeMock,
   enqueueImageThumbnailOrMarkFailed: thumbnailDerivativeMock,
 }));
-void mock.module("@/api/handlers/entities/compute-version-diff", () => ({
+void mock.module("@/api/lib/entity-versions/compute-version-diff", () => ({
   computeVersionDiffStats: diffStatsMock,
 }));
 void mock.module("@/api/lib/root-scoped-db", () => ({

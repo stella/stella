@@ -27,14 +27,14 @@ import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
+import { organizationOptions } from "@/lib/organization/queries";
 import { toSafeId } from "@/lib/safe-id";
-import { organizationOptions } from "@/routes/_protected.organization/-queries";
-import { formatCurrencyAmount } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
 import {
   rateEntriesOptions,
   ratesKeys,
   rateTablesOptions,
-} from "@/routes/_protected.workspaces/$workspaceId/-queries/rates";
+} from "@/lib/workspaces/queries/rates";
+import { formatCurrencyAmount } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
 
 type RateManagementDialogProps = {
   open: boolean;

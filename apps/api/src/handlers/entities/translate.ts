@@ -14,9 +14,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { t } from "elysia";
 
 import { entities, entityVersions, fields } from "@/api/db/schema";
-import { createEntityFromBuffer } from "@/api/handlers/entities/create-from-buffer";
 import { resolveTranslatedOutput } from "@/api/handlers/entities/translate-output";
-import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -31,8 +29,10 @@ import {
   DeepLUpstreamError,
   translateDocument,
 } from "@/api/lib/deepl/deepl";
+import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getScanWarnings, scanFile } from "@/api/lib/file-scan/scan";
+import { createFileKey } from "@/api/lib/files/utils";
 import { getS3 } from "@/api/lib/s3";
 import { DOC_MIME_TYPE, DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 

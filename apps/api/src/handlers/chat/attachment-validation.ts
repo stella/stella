@@ -7,11 +7,11 @@ import {
   isChatAttachmentPart,
 } from "@/api/handlers/chat/chat-message-parts";
 import type { ChatMessage, ChatPart } from "@/api/handlers/chat/types";
-import { isUserFileUrl } from "@/api/handlers/user-files/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { validateDataUrl } from "@/api/lib/data-url";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
+import { isUserFileUrl } from "@/api/lib/user-files/types";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
 export const TEXT_PLAIN_MIME_TYPE = "text/plain" as const;

@@ -47,7 +47,6 @@ import {
   workspaceViewTemplates,
   workspaces,
 } from "@/api/db/schema";
-import { createFileKey, createUserFileKey } from "@/api/handlers/files/utils";
 import {
   ACTIVE_TASK_REASSIGNMENT_STATUSES,
   buildAccountDeletionTaskReassignmentTargets,
@@ -58,6 +57,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { preserveBufferObjectCleanupIntents } from "@/api/lib/buffer-intent-reconciliation";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { createFileKey, createUserFileKey } from "@/api/lib/files/utils";
 import { FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE } from "@/api/lib/folio-collab-sessions";
 import { LIMITS } from "@/api/lib/limits";
 import { pendingUploadS3KeysForDeletion } from "@/api/lib/pending-upload-keys";

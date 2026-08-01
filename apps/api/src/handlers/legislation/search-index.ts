@@ -6,12 +6,12 @@ import {
   legislationSearchDocuments,
   legislationSources,
 } from "@/api/db/schema";
-import { resolveFtsConfig } from "@/api/handlers/case-law/fts-config";
-import type { DecisionSection } from "@/api/handlers/case-law/types";
 import { redistributableLegislationSource } from "@/api/handlers/legislation/redistribution";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { setCorpusBackfillStatementTimeout } from "@/api/lib/legal-search/backfill-statement-timeout";
+import type { DecisionSection } from "@/api/lib/legal-search/document-types";
+import { resolveFtsConfig } from "@/api/lib/legal-search/fts-config";
 import { logger } from "@/api/lib/observability/logger";
 
 /**

@@ -17,8 +17,6 @@ import {
   workspaceViews,
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
-import { THUMBNAIL_MIME_TYPE } from "@/api/handlers/files/image-derivative";
-import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -32,6 +30,8 @@ import {
 import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
+import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
+import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
 import {
   DEFAULT_MATTER_NUMBER_PADDING,

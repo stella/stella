@@ -5,7 +5,7 @@ import { useShallow } from "zustand/react/shallow";
 import type { BoundingBox } from "@stll/api/types";
 
 import { usePDFStore } from "@/lib/pdf/pdf-context";
-import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
+import { useWorkspaceStore } from "@/lib/workspaces/store";
 
 const PAGE_HIGHLIGHT_FILTER_ID = "page-highlight-filter";
 const PAGE_HIGHLIGHT_OPACITY = 0.2;

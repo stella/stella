@@ -1,11 +1,11 @@
 import { Result } from "better-result";
 
-import { materializePlaybookRun } from "@/api/handlers/playbooks/materialize-run";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { startWorkflow } from "@/api/lib/workflow-queue";
+import { materializePlaybookRun } from "@/api/lib/workflow/materialize-playbook-run";
 
 const config = {
   description:

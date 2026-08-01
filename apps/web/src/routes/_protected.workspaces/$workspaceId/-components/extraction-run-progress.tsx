@@ -1,7 +1,7 @@
 import { LoaderCircleIcon, SparklesIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { useWorkflowStatus } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
+import { useWorkflowStatus } from "@/lib/workspaces/queries/workspace";
 
 import { hasActiveExtractionProgress } from "./extraction-run-progress.logic";
 

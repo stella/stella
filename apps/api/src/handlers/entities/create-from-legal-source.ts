@@ -4,8 +4,8 @@ import { t } from "elysia";
 import { compileLegalSourceToDocx } from "@stll/docx-core";
 
 import { createChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
-import { createEntityFromBuffer } from "@/api/handlers/entities/create-from-buffer";
 import { createSafeHandler } from "@/api/lib/api-handlers";
+import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";

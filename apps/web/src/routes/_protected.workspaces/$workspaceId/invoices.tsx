@@ -20,9 +20,9 @@ import { cn } from "@stll/ui/lib/utils";
 import { usePermissions } from "@/hooks/use-permissions";
 import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { detached } from "@/lib/detached";
+import { invoicesInfiniteOptions } from "@/lib/workspaces/queries/invoices";
 import { formatCurrencyAmount } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
 import { InvoiceStatusBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-status-badge";
-import { invoicesInfiniteOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/invoices";
 
 export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/invoices",

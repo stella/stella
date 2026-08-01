@@ -3,8 +3,9 @@ import { useRouteContext } from "@tanstack/react-router";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { aiAvailabilityOptions } from "@/lib/organization/ai-config-queries";
 import { toSafeId } from "@/lib/safe-id";
-import { aiAvailabilityOptions } from "@/routes/_protected.organization/-ai-config-queries";
+import { workspaceKeys } from "@/lib/workspaces/queries/workspace";
 import { useWorkflowServiceTierPrompt } from "@/routes/_protected.workspaces/$workspaceId/-components/workflow-service-tier-prompt";
 import { useWorkflowStartConfirmationPrompt } from "@/routes/_protected.workspaces/$workspaceId/-components/workflow-start-confirmation-prompt";
 import {
@@ -13,7 +14,6 @@ import {
   resolveWorkflowServiceTier,
 } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-start-workflow.logic";
 import type { StartWorkflowArgs } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-start-workflow.logic";
-import { workspaceKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
 
 /**
  * Returns a function that starts an AI extraction workflow via REST.

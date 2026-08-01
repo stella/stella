@@ -72,21 +72,15 @@ import { TableSkeletonRows } from "@/components/table-skeleton-rows";
 import Tooltip from "@/components/tooltip";
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
+import { useCreateContact, useDeleteContact } from "@/lib/contacts/mutations";
+import { contactsKeys, contactsOptions } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { pageTitle } from "@/lib/page-title";
 import { toSafeId } from "@/lib/safe-id";
 import { toFormErrors } from "@/lib/schema";
-import {
-  useCreateContact,
-  useDeleteContact,
-} from "@/routes/_protected.contacts/-mutations";
-import {
-  contactsKeys,
-  contactsOptions,
-} from "@/routes/_protected.contacts/-queries";
-import { mcpConnectorsOptions } from "@/routes/_protected.knowledge/-queries";
 
 const ARES_NATIVE_TOOL_SLUG = "ares";
 

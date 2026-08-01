@@ -68,10 +68,10 @@ import {
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { getChatThreadKey } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
+import { skillsOptions } from "@/lib/knowledge/queries";
 import type { WorkspaceEntity } from "@/lib/types";
-import { skillsOptions } from "@/routes/_protected.knowledge/-queries";
-import { entitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
-import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
+import { entitiesOptions } from "@/lib/workspaces/queries/entities";
+import { viewsOptions } from "@/lib/workspaces/queries/views";
 
 const CHAT_FILES_PER_MESSAGE = 5;
 const CHAT_MAX_FILE_BYTES = CHAT_CONTEXT_FILE_MAX_BYTES;

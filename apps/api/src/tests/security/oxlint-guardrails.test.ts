@@ -372,7 +372,7 @@ describe("custom oxlint guardrails", () => {
     const authSource = readRootFixture("apps/api/src/lib/auth.ts");
     const limitsSource = readRootFixture("apps/api/src/lib/limits.ts");
     const organizationConstsSource = readRootFixture(
-      "apps/web/src/routes/_protected.organization/-consts.ts",
+      "apps/web/src/lib/organization/consts.ts",
     );
     const protectedRouteSource = readRootFixture(
       "apps/web/src/routes/_protected.tsx",
@@ -381,13 +381,13 @@ describe("custom oxlint guardrails", () => {
       "apps/web/src/components/sidebar-user-menu.tsx",
     );
     const aiConfigQuerySource = readRootFixture(
-      "apps/web/src/routes/_protected.organization/-ai-config-queries.ts",
+      "apps/web/src/lib/organization/ai-config-queries.ts",
     );
     const organizationQuerySource = readRootFixture(
-      "apps/web/src/routes/_protected.organization/-queries.ts",
+      "apps/web/src/lib/organization/queries.ts",
     );
     const workspacesQuerySource = readRootFixture(
-      "apps/web/src/routes/_protected.workspaces/-queries.ts",
+      "apps/web/src/lib/workspaces/queries.ts",
     );
 
     expect(protectedRouteSource).not.toContain("ensureRouteQueryData");
@@ -429,7 +429,7 @@ describe("custom oxlint guardrails", () => {
       "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.route.tsx",
     );
     const entityQuerySource = readRootFixture(
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/-queries/entities.ts",
+      "apps/web/src/lib/workspaces/queries/entities.ts",
     );
     const entitiesWindowOptionsSource = entityQuerySource.slice(
       entityQuerySource.indexOf("export const entitiesWindowOptions"),

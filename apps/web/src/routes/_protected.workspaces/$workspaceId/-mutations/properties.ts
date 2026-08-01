@@ -11,7 +11,7 @@ import type {
   WorkspaceProperty,
   WorkspacePropertyOption,
 } from "@/lib/types";
-import { propertiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
+import { propertiesKeys } from "@/lib/workspaces/queries/properties";
 
 type CreatePropertyDependency = {
   dependsOnPropertyId: string;

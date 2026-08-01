@@ -9,13 +9,13 @@ import { Button } from "@stll/ui/components/button";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { resolvedRateOptions } from "@/lib/workspaces/queries/rates";
+import { activeTimerOptions } from "@/lib/workspaces/queries/time-entries";
 import { MatterCombobox } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/matter-combobox";
 import {
   useStartTimer,
   useStopTimer,
 } from "@/routes/_protected.workspaces/$workspaceId/-mutations/time-entries";
-import { resolvedRateOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/rates";
-import { activeTimerOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/time-entries";
 
 type TimerControlsProps = {
   workspaceId: string;

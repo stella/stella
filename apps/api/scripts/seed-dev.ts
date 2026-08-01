@@ -67,13 +67,13 @@ import {
   DEFAULT_DOCUMENT_TYPES,
   ensureDefaultDocumentTypes,
 } from "@/api/handlers/document-types/defaults";
-import type { PlaybookPositions } from "@/api/handlers/playbooks/positions";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
 import { getS3 } from "@/api/lib/s3";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import { buildDefaultViewRows } from "@/api/lib/views";
+import type { PlaybookPositions } from "@/api/lib/workflow/playbook-positions";
 
 import { seedCaseLaw } from "./seed-case-law";
 import { seedTemplates } from "./seed-templates";

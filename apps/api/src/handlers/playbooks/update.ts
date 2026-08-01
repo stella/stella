@@ -3,7 +3,6 @@ import { and, eq } from "drizzle-orm";
 
 import { playbookDefinitions } from "@/api/db/schema";
 import { deriveAutoAsks } from "@/api/handlers/playbooks/derive-ask";
-import { assertPositionsValid } from "@/api/handlers/playbooks/positions-validation";
 import {
   playbookDefinitionBodySchema,
   playbookDefinitionParamsSchema,
@@ -12,6 +11,7 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { assertPositionsValid } from "@/api/lib/workflow/playbook-positions-validation";
 
 const config = {
   permissions: { playbook: ["update"] },

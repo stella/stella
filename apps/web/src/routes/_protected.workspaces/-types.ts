@@ -1,4 +1,4 @@
-import type { WorkspacesData } from "@/routes/_protected.workspaces/-queries";
+import type { WorkspacesData } from "@/lib/workspaces/queries";
 
 export type Workspace = WorkspacesData["workspaces"][number];
 

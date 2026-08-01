@@ -8,21 +8,21 @@ import type {
   PendingUploadPurposeData,
 } from "@/api/db/schema";
 import { pendingUploads } from "@/api/db/schema";
-import { computeVersionDiffStats } from "@/api/handlers/entities/compute-version-diff";
-import { writeFileVersion } from "@/api/handlers/entities/write-file-version";
-import { allocateFileObject } from "@/api/handlers/files/file-object-ids";
-import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { BUFFER_INTENT_DELETE_TIMEOUT_MS } from "@/api/lib/buffer-intent-reconciliation";
 import { UPLOAD_DOCUMENT_SOURCE } from "@/api/lib/document-source";
+import { computeVersionDiffStats } from "@/api/lib/entity-versions/compute-version-diff";
+import { writeFileVersion } from "@/api/lib/entity-versions/write-file-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   enqueueImageThumbnailOrMarkFailed,
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
+import { allocateFileObject } from "@/api/lib/files/file-object-ids";
+import { createFileKey } from "@/api/lib/files/utils";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { deleteS3ObjectWithSignal } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";

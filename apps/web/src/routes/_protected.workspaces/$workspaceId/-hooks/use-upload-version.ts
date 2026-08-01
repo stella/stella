@@ -9,8 +9,8 @@ import { unwrapEden } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
+import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { extensionMatches } from "@/routes/_protected.workspaces/$workspaceId/-components/file-extension";
-import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 
 type UploadVersionVars = {
   workspaceId: string;

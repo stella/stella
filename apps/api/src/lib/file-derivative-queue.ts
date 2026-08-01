@@ -4,22 +4,22 @@ import { and, eq, sql } from "drizzle-orm";
 
 import { fields } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
-import { allocateFileObject } from "@/api/handlers/files/file-object-ids";
-import {
-  convertToPdf,
-  shouldGeneratePdfDerivative,
-} from "@/api/handlers/files/gotenberg";
-import {
-  generateImageThumbnail,
-  shouldGenerateImageThumbnail,
-  THUMBNAIL_MIME_TYPE,
-} from "@/api/handlers/files/image-derivative";
-import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
 import { decidePdfDerivativeAction } from "@/api/lib/file-derivative-decision";
+import { allocateFileObject } from "@/api/lib/files/file-object-ids";
+import {
+  convertToPdf,
+  shouldGeneratePdfDerivative,
+} from "@/api/lib/files/gotenberg";
+import {
+  generateImageThumbnail,
+  shouldGenerateImageThumbnail,
+  THUMBNAIL_MIME_TYPE,
+} from "@/api/lib/files/image-derivative";
+import { createFileKey } from "@/api/lib/files/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";

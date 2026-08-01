@@ -10,12 +10,6 @@ import {
   propertyContentSchema,
 } from "@/api/db/schema-validators";
 import type { PropertyContent, PropertyTool } from "@/api/db/schema-validators";
-import {
-  DOCUMENT_TYPE_CLASSIFIER_ROLE,
-  isDocumentTypeClassifierProperty,
-  isDocumentTypeClassifierShape,
-} from "@/api/handlers/properties/create-schema";
-import { lockWorkspacePropertyWrites } from "@/api/handlers/properties/property-lock";
 import { comparePropertiesForStale } from "@/api/handlers/properties/utils";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -31,6 +25,12 @@ import {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { serializeAITool } from "@/api/lib/markdown/ai-tool";
+import {
+  DOCUMENT_TYPE_CLASSIFIER_ROLE,
+  isDocumentTypeClassifierProperty,
+  isDocumentTypeClassifierShape,
+} from "@/api/lib/properties/create-schema";
+import { lockWorkspacePropertyWrites } from "@/api/lib/properties/property-lock";
 
 type PropertyWithDeps = {
   id: SafeId<"property">;

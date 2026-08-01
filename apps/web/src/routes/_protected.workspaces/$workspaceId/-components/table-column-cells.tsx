@@ -13,6 +13,7 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 
+import { useInspectorStore } from "@/components/inspector/inspector-store";
 import Tooltip from "@/components/tooltip";
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
@@ -21,6 +22,10 @@ import type {
   WorkspaceField,
   WorkspaceProperty,
 } from "@/lib/types";
+import {
+  selectJustificationByFieldId,
+  useWorkspaceStore,
+} from "@/lib/workspaces/store";
 import { ActiveEditBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/active-edit-badge";
 import { AICellSourceCard } from "@/routes/_protected.workspaces/$workspaceId/-components/ai-cell-source-card";
 import {
@@ -28,7 +33,6 @@ import {
   useCellMetadataFlags,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags";
 import { EditableField } from "@/routes/_protected.workspaces/$workspaceId/-components/editable-field";
-import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import {
   isAIExtractionProperty,
   resolveAiCellTargets,
@@ -41,10 +45,6 @@ import {
   resolveOptionColor,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 import { useRetryCell } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-retry-cell";
-import {
-  selectJustificationByFieldId,
-  useWorkspaceStore,
-} from "@/routes/_protected.workspaces/$workspaceId/-store";
 
 export const PropertyCell = ({
   entity,

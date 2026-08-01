@@ -49,13 +49,14 @@ import { Tabs, TabsList, TabsTab } from "@stll/ui/components/tabs";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
+import { InlineEdit } from "@/components/inline-edit";
 import { useAnchoredMenu } from "@/components/inspector/use-anchored-menu";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
 import type { TranslationKey } from "@/i18n/types";
 import type { WorkspaceView } from "@/lib/types";
-import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
+import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { SaveAsTemplateDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/view/save-as-template-dialog";
 import { TemplatePickerDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/view/template-picker-dialog";
 import type { ViewLayoutPreviewKind } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-layout-preview";
@@ -67,7 +68,6 @@ import {
   useReorderViews,
   useUpdateView,
 } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
-import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
 
 const VIEW_DRAG_TYPE = "stella/view-id";
 

@@ -16,9 +16,9 @@ import { cn } from "@stll/ui/lib/utils";
 import { UserIdentity } from "@/components/user-avatar";
 import { usePermissions } from "@/hooks/use-permissions";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
-import { workspaceMembersOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace-members";
+import { workspaceOptions } from "@/lib/workspaces/queries";
+import { workspaceMembersOptions } from "@/lib/workspaces/queries/workspace-members";
 import { useUpdateWorkspace } from "@/routes/_protected.workspaces/-mutations";
-import { workspaceOptions } from "@/routes/_protected.workspaces/-queries";
 
 type LeadSectionProps = {
   workspaceId: string;

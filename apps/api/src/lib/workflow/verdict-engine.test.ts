@@ -3,9 +3,9 @@ import { describe, expect, test } from "bun:test";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
-import type { ResolvedTiers } from "@/api/handlers/playbooks/positions";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { VerdictBatchProperty } from "@/api/lib/workflow/get-execution-plan";
+import type { ResolvedTiers } from "@/api/lib/workflow/playbook-positions";
 import {
   buildTierMatchUserMessage,
   computeVerdictBatch,

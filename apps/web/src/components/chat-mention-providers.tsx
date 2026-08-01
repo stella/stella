@@ -12,8 +12,8 @@ import { buildWorkspaceMentionOptions } from "@/components/chat-mention-helpers"
 import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
-import { workspacesNavigationOptions } from "@/routes/_protected.workspaces/-queries";
+import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
+import { viewsOptions } from "@/lib/workspaces/queries/views";
 
 type MentionProviders = {
   getItems: (

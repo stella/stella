@@ -2,12 +2,12 @@ import { panic, Result } from "better-result";
 
 import type { JustificationContent } from "@/api/db/schema";
 import type { FieldContent, PropertyContent } from "@/api/db/schema-validators";
-import { createDefaultTool } from "@/api/handlers/properties/create-schema";
 import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
+import { createDefaultTool } from "@/api/lib/properties/create-schema";
 import { generateWorkflowData } from "@/api/lib/workflow/ai-generate-batch";
 import { validateAIOutput } from "@/api/lib/workflow/ai-validators";
 import type { ValidatedResult } from "@/api/lib/workflow/ai-validators";

@@ -38,8 +38,8 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import {
   aiConfigKeys,
   aiConfigOptions,
-} from "@/routes/_protected.organization/-ai-config-queries";
-import type { OrganizationAIConfig } from "@/routes/_protected.organization/-ai-config-queries";
+} from "@/lib/organization/ai-config-queries";
+import type { OrganizationAIConfig } from "@/lib/organization/ai-config-queries";
 
 export const AIConfigCard = () => {
   const activeOrganizationId = useRouteContext({

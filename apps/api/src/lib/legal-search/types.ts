@@ -1,8 +1,8 @@
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
-import type { EmptyAst } from "@/api/handlers/case-law/ingestion/adapter";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-family";
+import type { EmptyAst } from "@/api/lib/legal-search/document-types";
 import type { FacetBucket } from "@/api/lib/search/types";
 
 /**

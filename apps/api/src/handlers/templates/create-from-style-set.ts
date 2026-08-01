@@ -2,10 +2,6 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import {
-  type CreatedTemplate,
-  createStoredTemplate,
-} from "@/api/handlers/templates/create-template-service";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type {
   HandlerConfig,
@@ -16,6 +12,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import { readStyleSetBuffer } from "@/api/lib/style-sets";
+import {
+  type CreatedTemplate,
+  createStoredTemplate,
+} from "@/api/lib/templates/create-template";
 
 const bodySchema = t.Object({
   name: tDefaultVarchar,

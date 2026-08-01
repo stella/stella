@@ -15,8 +15,8 @@ import { cn } from "@stll/ui/lib/utils";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import type { EntityKind } from "@/lib/types";
+import type { CalendarTask } from "@/lib/workspaces/queries/calendar-tasks";
 import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
-import type { CalendarTask } from "@/routes/_protected.workspaces/$workspaceId/-queries/calendar-tasks";
 
 import { CalendarEntityChip } from "./calendar-entity-chip";
 import type { CalendarDay } from "./calendar-utils";

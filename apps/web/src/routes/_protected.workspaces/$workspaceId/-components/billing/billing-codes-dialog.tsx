@@ -21,7 +21,7 @@ import { toSafeId } from "@/lib/safe-id";
 import {
   billingCodesKeys,
   billingCodesOptions,
-} from "@/routes/_protected.workspaces/$workspaceId/-queries/billing-codes";
+} from "@/lib/workspaces/queries/billing-codes";
 
 type BillingCodesDialogProps = {
   open: boolean;

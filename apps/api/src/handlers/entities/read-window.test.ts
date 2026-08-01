@@ -2,12 +2,12 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { encodeEntitiesWindowCursor } from "@/api/lib/entities/window-cursor";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import readEntities from "./list";
 import readKanbanGroup from "./read-kanban-group";
 import readEntitiesWindow from "./read-window";
-import { encodeEntitiesWindowCursor } from "./window-cursor";
 
 const workspaceId = toSafeId<"workspace">("ws_entity_window");
 const organizationId = toSafeId<"organization">("org_entity_window");

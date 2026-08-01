@@ -1,9 +1,9 @@
 import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
-import type { CreateStoredTemplateOptions } from "@/api/handlers/templates/create-template-service";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import type { CreateStoredTemplateOptions } from "@/api/lib/templates/create-template";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 // The real `createStoredTemplate` cannot be exercised here: the MCP template
@@ -27,7 +27,7 @@ const createStoredTemplateMock = mock(function* (
   });
 });
 
-void mock.module("@/api/handlers/templates/create-template-service", () => ({
+void mock.module("@/api/lib/templates/create-template", () => ({
   createStoredTemplate: createStoredTemplateMock,
 }));
 

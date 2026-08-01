@@ -16,7 +16,6 @@ import { authRelationsPart } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions, caseLawSources, relations } from "@/api/db/schema";
 import { ADAPTER_KEYS, PARSER_VERSION } from "@/api/handlers/case-law/consts";
-import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/handlers/case-law/corpus-storage";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
   claimDocumentFetch,
@@ -29,6 +28,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/sk-document-backfill";
 import type { PendingDocument } from "@/api/handlers/case-law/ingestion/sk-document-backfill";
 import type { SafeId } from "@/api/lib/branded-types";
+import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";
 
 /**
  * Wide enough to hold the whole queue on the migrated-but-unseeded

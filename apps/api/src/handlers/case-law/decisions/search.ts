@@ -9,7 +9,6 @@ import { courtWeightSql } from "@/api/handlers/case-law/citation-score";
 import { loadCourtWeightEntriesForSql } from "@/api/handlers/case-law/court-weights";
 import { validCaseLawLanguageAlternateCountSql } from "@/api/handlers/case-law/decisions/language";
 import type { searchDecisionsBodySchema } from "@/api/handlers/case-law/decisions/search-schema";
-import { loadFtsSearchConfigs } from "@/api/handlers/case-law/fts-config";
 import { arrayOrEmpty } from "@/api/lib/array";
 // eslint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
 import { toSafeId } from "@/api/lib/branded-types";
@@ -29,6 +28,7 @@ import {
   corpusFreeTextClause,
   quoteCorpusValue,
 } from "@/api/lib/legal-search/corpus-query";
+import { loadFtsSearchConfigs } from "@/api/lib/legal-search/fts-config";
 import {
   corpusIndexId,
   corpusIndexPattern,

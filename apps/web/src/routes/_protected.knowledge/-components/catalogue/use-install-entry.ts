@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
-import { catalogueKeys } from "@/routes/_protected.knowledge/-queries/catalogue";
+import { catalogueKeys } from "@/lib/knowledge/queries/catalogue";
 
 import type { CatalogueEntry } from "./catalogue-types";
 

@@ -9,12 +9,11 @@ import type { AuditRecorder, FieldDiffs } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { clauseBodySchema } from "@/api/lib/clauses/body-schema";
 import { tDefaultVarchar } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { pickDefined } from "@/api/lib/pick-defined";
-
-import { clauseBodySchema } from "./shared-schemas";
 
 // ── Schemas ─────────────────────────────────────────
 

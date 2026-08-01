@@ -19,7 +19,6 @@ import { eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { reportExports } from "@/api/db/schema";
-import { queryEntities } from "@/api/handlers/entities/query-entities";
 import { isReportRowCountOverCap } from "@/api/handlers/reports/build-report-data";
 import { getBuiltinReportTemplate } from "@/api/handlers/reports/builtin-templates";
 import { enqueueReportExport } from "@/api/handlers/reports/report-export-queue";
@@ -27,6 +26,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { queryEntities } from "@/api/lib/entities/query-entities";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { extractLangFromRequest } from "@/api/lib/locale";

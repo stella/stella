@@ -62,6 +62,7 @@ import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
+import { knowledgeKeys, templateClausesOptions } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
 import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
 import { LinkClauseDialog } from "@/routes/_protected.knowledge/-components/link-clause-dialog";
@@ -96,10 +97,6 @@ import {
   type StudioField,
 } from "@/routes/_protected.knowledge/-components/template-studio-store";
 import { FieldConfigEditor } from "@/routes/_protected.knowledge/-components/template-wizard";
-import {
-  knowledgeKeys,
-  templateClausesOptions,
-} from "@/routes/_protected.knowledge/-queries";
 
 const effectiveSlotByLink = (
   pending: readonly { linkId: string; slotName: string }[],

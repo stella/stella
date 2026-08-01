@@ -20,9 +20,9 @@ import { cn } from "@stll/ui/lib/utils";
 
 import type { TranslationKey } from "@/i18n/types";
 import { betaFeaturesAvailable } from "@/lib/beta-features";
+import { managementRoles } from "@/lib/organization/consts";
 import { pageTitle } from "@/lib/page-title";
 import { roleOptions } from "@/routes/-queries";
-import { managementRoles } from "@/routes/_protected.organization/-consts";
 
 export const Route = createFileRoute("/_protected/settings")({
   head: () => ({

@@ -40,12 +40,12 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { detached } from "@/lib/detached";
+import type { WorkspaceViewTemplate } from "@/lib/workspaces/queries/view-templates";
+import { viewTemplatesOptions } from "@/lib/workspaces/queries/view-templates";
 import { ViewLayoutPreview } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-layout-preview";
 import { useStartWorkflow } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-start-workflow";
 import { useDeleteViewTemplate } from "@/routes/_protected.workspaces/$workspaceId/-mutations/view-templates";
 import { useCreateView } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
-import type { WorkspaceViewTemplate } from "@/routes/_protected.workspaces/$workspaceId/-queries/view-templates";
-import { viewTemplatesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/view-templates";
 
 const layoutIcons = {
   overview: LayoutDashboardIcon,

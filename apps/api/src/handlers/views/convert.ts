@@ -3,7 +3,6 @@ import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { workspaceViews } from "@/api/db/schema";
-import { convertLayout } from "@/api/handlers/views/utils";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -11,6 +10,7 @@ import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { broadcast } from "@/api/lib/sse";
 import { parseViewLayout } from "@/api/lib/views-schema";
+import { convertLayout } from "@/api/lib/views/utils";
 
 const VIEW_LAYOUT_TYPES = [
   "overview",

@@ -8,7 +8,6 @@ import type { Transaction } from "@/api/db/root";
 import { entities, templates } from "@/api/db/schema";
 import type { TemplatePersistenceResult } from "@/api/db/schema";
 import { configureTemplateFields } from "@/api/handlers/templates/configure-template-fields-service";
-import { createStoredTemplate } from "@/api/handlers/templates/create-template-service";
 import { containsNull } from "@/api/handlers/templates/fill";
 import {
   recordTemplateFill,
@@ -51,6 +50,7 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
+import { createStoredTemplate } from "@/api/lib/templates/create-template";
 import { withTimeout } from "@/api/lib/with-timeout";
 import type { McpRequestContext } from "@/api/mcp/context";
 import {

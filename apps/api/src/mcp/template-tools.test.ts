@@ -69,7 +69,7 @@ void mock.module("@/api/mcp/template-persistence", () => ({
   releaseTemplatePersistenceClaim: releaseTemplatePersistenceClaimMock,
 }));
 
-void mock.module("@/api/handlers/templates/create-template-service", () => ({
+void mock.module("@/api/lib/templates/create-template", () => ({
   createStoredTemplate: createStoredTemplateMock,
 }));
 

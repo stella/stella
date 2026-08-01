@@ -3,7 +3,6 @@ import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { templates, templateVersions } from "@/api/db/schema";
-import { buildTemplateVersionS3Key } from "@/api/handlers/templates/storage-keys";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
@@ -26,6 +25,7 @@ import { isTemplateManifest } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
+import { buildTemplateVersionS3Key } from "@/api/lib/templates/storage-keys";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 /** Every path discovery still found in the saved body, including nested

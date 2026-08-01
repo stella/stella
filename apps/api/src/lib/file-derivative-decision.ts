@@ -1,5 +1,5 @@
 import type { FieldContent } from "@/api/db/schema-validators";
-import { shouldGeneratePdfDerivative } from "@/api/handlers/files/gotenberg";
+import { shouldGeneratePdfDerivative } from "@/api/lib/files/gotenberg";
 
 type FileContent = Extract<FieldContent, { type: "file" }>;
 

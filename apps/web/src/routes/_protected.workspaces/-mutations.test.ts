@@ -18,8 +18,7 @@ describe("workspace update cache invalidation", () => {
   test("invalidates the root workspace cache that covers sidebar navigation", async () => {
     const { workspaceUpdateInvalidationKeys } =
       await import("@/routes/_protected.workspaces/-mutations");
-    const { workspacesKeys } =
-      await import("@/routes/_protected.workspaces/-queries");
+    const { workspacesKeys } = await import("@/lib/workspaces/queries");
 
     expect(workspaceUpdateInvalidationKeys()).toContainEqual(
       workspacesKeys.all,
@@ -32,8 +31,7 @@ describe("workspace update cache invalidation", () => {
   test("refetches active workspace caches and the inactive loader cache", async () => {
     const { workspaceUpdateRefetchFilters } =
       await import("@/routes/_protected.workspaces/-mutations");
-    const { workspacesKeys } =
-      await import("@/routes/_protected.workspaces/-queries");
+    const { workspacesKeys } = await import("@/lib/workspaces/queries");
 
     expect(workspaceUpdateRefetchFilters("ws_test")).toEqual([
       { queryKey: workspacesKeys.all, type: "active" },
@@ -49,9 +47,8 @@ describe("workspace update cache invalidation", () => {
     const { workspaceMemberMutationInvalidationKeys } =
       await import("@/routes/_protected.workspaces/$workspaceId/-mutations/workspace-members");
     const { workspaceMembersKeys } =
-      await import("@/routes/_protected.workspaces/$workspaceId/-queries/workspace-members");
-    const { workspacesKeys } =
-      await import("@/routes/_protected.workspaces/-queries");
+      await import("@/lib/workspaces/queries/workspace-members");
+    const { workspacesKeys } = await import("@/lib/workspaces/queries");
 
     expect(workspaceMemberMutationInvalidationKeys("ws_test")).toEqual([
       workspaceMembersKeys.all("ws_test"),

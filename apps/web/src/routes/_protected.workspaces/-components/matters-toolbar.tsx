@@ -27,10 +27,10 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
+import { workspacesRouteOptions } from "@/lib/workspaces/queries";
 import { useColumnLabels } from "@/routes/_protected.workspaces/-hooks/use-column-labels";
 import { useSortLabels } from "@/routes/_protected.workspaces/-hooks/use-sort-labels";
-import { workspacesRouteOptions } from "@/routes/_protected.workspaces/-queries";
-import { useCreateMatterStore } from "@/routes/_protected.workspaces/-store/create-matter-store";
 import type {
   MattersColumnId,
   MattersSortKey,

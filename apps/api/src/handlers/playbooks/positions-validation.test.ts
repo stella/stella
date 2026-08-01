@@ -2,12 +2,12 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import type { Transaction } from "@/api/db/root";
+import { toSafeId } from "@/api/lib/branded-types";
 import type {
   PlaybookPositions,
   Position,
-} from "@/api/handlers/playbooks/positions";
-import { assertPositionsValid } from "@/api/handlers/playbooks/positions-validation";
-import { toSafeId } from "@/api/lib/branded-types";
+} from "@/api/lib/workflow/playbook-positions";
+import { assertPositionsValid } from "@/api/lib/workflow/playbook-positions-validation";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 

@@ -12,7 +12,7 @@ import type { FileTab } from "@/components/inspector/inspector-store";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePlaybooksPreviewEnabled } from "@/hooks/use-playbooks-preview";
 import { DOCX_MIME } from "@/lib/consts";
-import { entityVersionsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entity-versions";
+import { entityVersionsOptions } from "@/lib/workspaces/queries/entity-versions";
 
 export type Facet = NonNullable<FileTab["facet"]>;
 

@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { entitySummariesCountOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
-import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
-import { workspaceOptions } from "@/routes/_protected.workspaces/-queries";
+import { workspaceOptions } from "@/lib/workspaces/queries";
+import { entitySummariesCountOptions } from "@/lib/workspaces/queries/entities";
+import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 
 // These hooks are consumed inside menus and other chrome surfaces, so
 // they use useQuery (not useSuspenseQuery) per CLAUDE.md — a cache miss

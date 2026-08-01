@@ -42,15 +42,12 @@ import {
   getSignedOauthQueryFromHash,
   hasSignedOauthQuery,
 } from "@/lib/oauth-provider";
+import { createSlug, getOrganizationSchema } from "@/lib/organization/utils";
 import {
   isAcceptInvitationRedirect,
   normalizeRedirectTo,
 } from "@/lib/redirect";
 import { toFormErrors } from "@/lib/schema";
-import {
-  createSlug,
-  getOrganizationSchema,
-} from "@/routes/_protected.organization/-utils";
 
 const searchSchema = v.object({
   redirectTo: v.optional(v.pipe(v.string(), v.transform(normalizeRedirectTo))),

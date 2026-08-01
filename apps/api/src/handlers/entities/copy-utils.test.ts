@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
 import type { FieldContent } from "@/api/db/schema-validators";
-import { allocateFileObject } from "@/api/handlers/files/file-object-ids";
 import { toSafeId } from "@/api/lib/branded-types";
+import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 
 import {
   remapFileIds,

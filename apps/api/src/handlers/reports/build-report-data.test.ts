@@ -7,11 +7,11 @@ import type {
   PropertyContent,
   PropertyTool,
 } from "@/api/db/schema-validators";
-import type { QueryEntityResult } from "@/api/handlers/entities/query-entities";
-import { buildExportColumns } from "@/api/handlers/views/table-export";
 import { toSafeId } from "@/api/lib/branded-types";
+import type { QueryEntityResult } from "@/api/lib/entities/query-entities";
 import { isStuckReportExport } from "@/api/lib/report-export-recovery";
 import type { ViewLayout } from "@/api/lib/views-schema";
+import { buildExportColumns } from "@/api/lib/views/export-columns";
 
 import {
   assembleReportData,

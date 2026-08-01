@@ -15,12 +15,12 @@ import { cn } from "@stll/ui/lib/utils";
 
 import type { DragPreviewData } from "@/components/drag-preview";
 import { renderDragPreview } from "@/components/drag-preview";
+import { useInspectorStore } from "@/components/inspector/inspector-store";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLocale } from "@/i18n/formatting-context";
+import type { CalendarTask } from "@/lib/workspaces/queries/calendar-tasks";
 import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
-import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { useInspectorFlash } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash";
-import type { CalendarTask } from "@/routes/_protected.workspaces/$workspaceId/-queries/calendar-tasks";
 
 const TASK_STATUS_BORDER_COLORS: Record<string, string> = {
   open: "border-s-muted-foreground",

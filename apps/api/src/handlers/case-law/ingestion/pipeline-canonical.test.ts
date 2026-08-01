@@ -5,10 +5,10 @@ import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import type { WriteCorpusResult } from "@/api/handlers/case-law/corpus-storage";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { createSafeId } from "@/api/lib/branded-types";
 import { DatabaseError, TimeoutError } from "@/api/lib/errors/tagged-errors";
+import type { WriteCorpusResult } from "@/api/lib/legal-search/corpus-storage";
 
 /**
  * `canonical` storage mode moves the payload out of Postgres, so what a
@@ -19,8 +19,7 @@ import { DatabaseError, TimeoutError } from "@/api/lib/errors/tagged-errors";
  */
 
 const realEnvBase = await import("@/api/env-base");
-const realCorpusStorage =
-  await import("@/api/handlers/case-law/corpus-storage");
+const realCorpusStorage = await import("@/api/lib/legal-search/corpus-storage");
 
 /** Ordered log of the side effects under test, across S3 and the DB. */
 const events: string[] = [];
@@ -65,7 +64,7 @@ void mock.module("@/api/env-base", () => ({
 
 // Only the two I/O entry points are faked; the key derivation stays real so
 // the partial-write cleanup is exercised against the actual key layout.
-void mock.module("@/api/handlers/case-law/corpus-storage", () => ({
+void mock.module("@/api/lib/legal-search/corpus-storage", () => ({
   ...realCorpusStorage,
   writeCorpusDocument: writeCorpusDocumentMock,
   deleteCorpusDocument: deleteCorpusDocumentMock,

@@ -46,11 +46,11 @@ import { createChatThreadId, toChatThreadId } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { APIError, toAPIError } from "@/lib/errors/api";
 import { fetchWithTimeout } from "@/lib/fetch";
+import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { PDFPage } from "@/lib/pdf/pdf-page";
 import type { PDFPageFallback } from "@/lib/pdf/pdf-page";
 import { PDFViewport } from "@/lib/pdf/pdf-viewport";
 import { sanitizeHref } from "@/lib/sanitize-href";
-import { mcpConnectorsOptions } from "@/routes/_protected.knowledge/-queries";
 
 const SERVER_PREVIEW_ERROR_THRESHOLD = 500;
 

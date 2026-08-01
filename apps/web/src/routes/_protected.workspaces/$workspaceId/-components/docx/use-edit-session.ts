@@ -17,9 +17,9 @@ import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { fetchWithTimeout } from "@/lib/fetch";
+import { filesKeys } from "@/lib/files/queries";
 import { toSafeId } from "@/lib/safe-id";
-import { filesKeys } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
-import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 
 import { selectStableArrayBuffer } from "./array-buffer-utils";
 

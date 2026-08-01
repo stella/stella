@@ -2,10 +2,6 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import {
-  type CreatedTemplate,
-  createStoredTemplate,
-} from "@/api/handlers/templates/create-template-service";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type {
   HandlerConfig,
@@ -18,6 +14,10 @@ import { tDefaultVarchar } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
+import {
+  type CreatedTemplate,
+  createStoredTemplate,
+} from "@/api/lib/templates/create-template";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const createTemplateFromStylesBodySchema = t.Object({

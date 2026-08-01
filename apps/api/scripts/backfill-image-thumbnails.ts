@@ -23,13 +23,13 @@ import { and, asc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
 import { userFiles } from "@/api/db/schema";
+import type { SafeId } from "@/api/lib/branded-types";
+import { enqueueImageThumbnailOrMarkFailed } from "@/api/lib/file-derivative-queue";
 import {
   generateImageThumbnail,
   THUMBNAIL_MIME_TYPE,
-} from "@/api/handlers/files/image-derivative";
-import { createUserFileKey } from "@/api/handlers/files/utils";
-import type { SafeId } from "@/api/lib/branded-types";
-import { enqueueImageThumbnailOrMarkFailed } from "@/api/lib/file-derivative-queue";
+} from "@/api/lib/files/image-derivative";
+import { createUserFileKey } from "@/api/lib/files/utils";
 import { getS3 } from "@/api/lib/s3";
 import {
   brandPersistedEntityId,

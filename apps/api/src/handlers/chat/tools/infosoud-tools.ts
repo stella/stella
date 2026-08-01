@@ -2,8 +2,8 @@ import { toolDefinition } from "@tanstack/ai";
 import * as v from "valibot";
 
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
-import { getInfoSoudClient } from "@/api/handlers/workspaces/infosoud-common";
 import { mapInfoSoudResult } from "@/api/handlers/workspaces/infosoud-result";
+import { getInfoSoudClient } from "@/api/lib/infosoud/client";
 
 export const createInfosoudTools = () => ({
   infosoud_lookup_case: toolDefinition({

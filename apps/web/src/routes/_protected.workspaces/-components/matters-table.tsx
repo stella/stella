@@ -19,13 +19,13 @@ import {
 } from "@stll/ui/components/table";
 import { cn } from "@stll/ui/lib/utils";
 
+import { InlineEdit } from "@/components/inline-edit";
 import Tooltip from "@/components/tooltip";
 import { useFormatter } from "@/i18n/formatting-context";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { detached } from "@/lib/detached";
 import { getMatterColor } from "@/lib/matter-colors";
 import { formatRelativeTime } from "@/lib/relative-time";
-import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
 import { useMatterContextMenu } from "@/routes/_protected.workspaces/-components/matter-context-menu";
 import {
   getInitials,

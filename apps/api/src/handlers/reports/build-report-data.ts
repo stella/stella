@@ -22,20 +22,18 @@ import { Result } from "better-result";
 import type { SafeDb } from "@/api/db/safe-db";
 import type { JustificationContent, PropertyRole } from "@/api/db/schema";
 import type { PropertyContent, PropertyTool } from "@/api/db/schema-validators";
-import type { QueryEntityResult } from "@/api/handlers/entities/query-entities";
-import { queryEntities } from "@/api/handlers/entities/query-entities";
-import type { PositionSeverity } from "@/api/handlers/playbooks/position-facets";
-import { isDocumentTypeClassifierShape } from "@/api/handlers/properties/create-schema";
-import {
-  buildExportColumns,
-  formatFieldContent,
-} from "@/api/handlers/views/table-export";
 import type { SafeId } from "@/api/lib/branded-types";
 // eslint-disable-next-line no-restricted-imports -- brands field ids returned by queryEntities (server-validated, workspace-scoped) to re-hydrate their justifications
 import { toSafeId } from "@/api/lib/branded-types";
+import type { QueryEntityResult } from "@/api/lib/entities/query-entities";
+import { queryEntities } from "@/api/lib/entities/query-entities";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { isDocumentTypeClassifierShape } from "@/api/lib/properties/create-schema";
 import type { ViewLayout } from "@/api/lib/views-schema";
+import { buildExportColumns } from "@/api/lib/views/export-columns";
+import { formatFieldContent } from "@/api/lib/views/export-format";
+import type { PositionSeverity } from "@/api/lib/workflow/playbook-position-facets";
 
 /** Report display locale. i18n of the default report is out of scope; the data
  *  object is language-neutral and values render with the en formatter. */

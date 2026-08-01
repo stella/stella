@@ -38,6 +38,8 @@ import {
 } from "@stll/ui/components/sheet";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { DocumentIcon } from "@/components/document-icon";
+import { useInspectorStore } from "@/components/inspector/inspector-store";
 import { MatterIcon } from "@/components/matter-icon";
 import { PersonMentionLabel } from "@/components/person-mention-label";
 import Tooltip from "@/components/tooltip";
@@ -48,13 +50,11 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { isFileDisplayable } from "@/lib/types";
-import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
-import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import type {
   MatterActivityCategory,
   MatterActivityItem,
-} from "@/routes/_protected.workspaces/-queries";
-import { overviewActivityOptions } from "@/routes/_protected.workspaces/-queries";
+} from "@/lib/workspaces/queries";
+import { overviewActivityOptions } from "@/lib/workspaces/queries";
 
 import type { ActivityGroup } from "./activity-panel.logic";
 import {

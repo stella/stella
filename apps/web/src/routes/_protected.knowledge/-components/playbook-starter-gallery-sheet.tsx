@@ -22,7 +22,7 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import {
   knowledgeKeys,
   playbookStartersOptions,
-} from "@/routes/_protected.knowledge/-queries";
+} from "@/lib/knowledge/queries";
 
 export type PlaybookStarterCreated = {
   id: string;

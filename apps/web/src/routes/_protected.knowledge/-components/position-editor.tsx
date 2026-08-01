@@ -67,6 +67,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import type { TranslationKey } from "@/i18n/types";
 import { optionalArray } from "@/lib/arrays";
+import { clauseDetailOptions, clausesOptions } from "@/lib/knowledge/queries";
 import {
   type DeterministicCheck,
   type FallbackEntry,
@@ -82,10 +83,6 @@ import {
   type PositionSeverity,
   type TierRule,
 } from "@/routes/_protected.knowledge/-components/playbook-types";
-import {
-  clauseDetailOptions,
-  clausesOptions,
-} from "@/routes/_protected.knowledge/-queries";
 
 // Drag payload shared by the position cards; the parent list interprets a drop
 // as "move dragged sourceId to target sourceId's index".

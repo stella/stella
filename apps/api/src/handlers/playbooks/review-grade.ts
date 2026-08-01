@@ -2,22 +2,21 @@ import { Result } from "better-result";
 
 import type { VerdictMatchedRef } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
-import type { GradedPosition } from "@/api/handlers/playbooks/position-runtime";
-import type {
-  Position,
-  PositionSeverity,
-  ResolvedTiers,
-} from "@/api/handlers/playbooks/positions";
 import type {
   AskExtraction,
   DocxFolioCitation,
 } from "@/api/handlers/playbooks/review-extract";
-import type { VerdictTier } from "@/api/handlers/playbooks/verdict-tiers";
 import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import type {
+  Position,
+  PositionSeverity,
+  ResolvedTiers,
+} from "@/api/lib/workflow/playbook-positions";
+import type { GradedPosition } from "@/api/lib/workflow/position-runtime";
 import {
   askPresence,
   askText,
@@ -26,6 +25,7 @@ import {
   gradeTierMatch,
   POSITION_MATCH_CONCURRENCY,
 } from "@/api/lib/workflow/verdict-engine";
+import type { VerdictTier } from "@/api/lib/workflow/verdict-tiers";
 
 // Ephemeral grading for the single-doc review: grade each position from the
 // in-memory ASK value (never the DB) using the same per-rule graders

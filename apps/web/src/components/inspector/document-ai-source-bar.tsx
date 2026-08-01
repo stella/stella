@@ -27,14 +27,14 @@ import { useOptionalPDFStore } from "@/lib/pdf/pdf-context";
 import { getPDFPageIdByNumber } from "@/lib/pdf/utils";
 import { renderJustificationContent } from "@/lib/render-justification-content";
 import { toSafeId } from "@/lib/safe-id";
-import { useSyncJustifications } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-justifications";
-import { entityOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
-import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
-import { workspaceKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
+import { entityOptions } from "@/lib/workspaces/queries/entities";
+import { propertiesOptions } from "@/lib/workspaces/queries/properties";
+import { workspaceKeys } from "@/lib/workspaces/queries/workspace";
 import {
   selectJustificationByFieldId,
   useWorkspaceStore,
-} from "@/routes/_protected.workspaces/$workspaceId/-store";
+} from "@/lib/workspaces/store";
+import { useSyncJustifications } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-justifications";
 
 const BBOX_POLL_INTERVAL_MS = 1000;
 

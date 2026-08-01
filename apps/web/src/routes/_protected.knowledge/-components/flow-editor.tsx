@@ -50,7 +50,9 @@ import { getFormattingLocale } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
+import { flowDetailOptions, knowledgeKeys } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
+import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import {
   buildFlowExample,
   type FlowExampleKey,
@@ -61,11 +63,6 @@ import type {
   FlowStep,
   FlowTrigger,
 } from "@/routes/_protected.knowledge/-components/flow-types";
-import {
-  flowDetailOptions,
-  knowledgeKeys,
-} from "@/routes/_protected.knowledge/-queries";
-import { workspacesNavigationOptions } from "@/routes/_protected.workspaces/-queries";
 
 const MAX_FLOW_STEPS = 20;
 

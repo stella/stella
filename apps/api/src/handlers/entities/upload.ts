@@ -7,14 +7,6 @@ import { jsonField } from "@/api/db/json-utils";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
-import {
-  allocateFileObject,
-  fileContentWithMintedObject,
-} from "@/api/handlers/files/file-object-ids";
-import { pdfDerivativeStateForFile } from "@/api/handlers/files/gotenberg";
-import { thumbnailDerivativeStateForFile } from "@/api/handlers/files/image-derivative";
-import { isEncryptedPdf } from "@/api/handlers/files/pdf-utils";
-import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -32,6 +24,14 @@ import {
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
 import { scanFile } from "@/api/lib/file-scan/scan";
+import {
+  allocateFileObject,
+  fileContentWithMintedObject,
+} from "@/api/lib/files/file-object-ids";
+import { pdfDerivativeStateForFile } from "@/api/lib/files/gotenberg";
+import { thumbnailDerivativeStateForFile } from "@/api/lib/files/image-derivative";
+import { isEncryptedPdf } from "@/api/lib/files/pdf-utils";
+import { createFileKey } from "@/api/lib/files/utils";
 import { maybeStartUploadTriggeredFlows } from "@/api/lib/flows/maybe-start-upload-triggered-flows";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";

@@ -35,15 +35,15 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
+import { organizationOptions } from "@/lib/organization/queries";
 import { toSafeId } from "@/lib/safe-id";
-import { organizationOptions } from "@/routes/_protected.organization/-queries";
-import { MATTER_INFO_ICON_SLOT_CLASS } from "@/routes/_protected.workspaces/$workspaceId/-components/matter-info-layout";
-import { useAddWorkspaceMember } from "@/routes/_protected.workspaces/$workspaceId/-mutations/workspace-members";
+import { workspacesKeys } from "@/lib/workspaces/queries";
 import {
   workspaceMembersKeys,
   workspaceMembersOptions,
-} from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace-members";
-import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
+} from "@/lib/workspaces/queries/workspace-members";
+import { MATTER_INFO_ICON_SLOT_CLASS } from "@/routes/_protected.workspaces/$workspaceId/-components/matter-info-layout";
+import { useAddWorkspaceMember } from "@/routes/_protected.workspaces/$workspaceId/-mutations/workspace-members";
 
 type MembersSectionProps = {
   workspaceId: string;

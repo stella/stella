@@ -1,18 +1,17 @@
 import { describe, expect, test } from "bun:test";
 
 import type { Transaction } from "@/api/db/root";
-import {
-  allocateFileObject,
-  fileContentWithMintedObject,
-} from "@/api/handlers/files/file-object-ids";
 import { toSafeId } from "@/api/lib/branded-types";
-import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-
 import {
   buildVersionStamp,
   cloneFieldsForRevision,
   nextEntityVersionNumber,
-} from "./version-utils";
+} from "@/api/lib/entity-versions/version-utils";
+import {
+  allocateFileObject,
+  fileContentWithMintedObject,
+} from "@/api/lib/files/file-object-ids";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 describe("nextEntityVersionNumber", () => {
   // The allocator reads MAX(versionNumber); the mock returns that scalar row.

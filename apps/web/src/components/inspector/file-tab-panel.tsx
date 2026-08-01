@@ -56,20 +56,17 @@ import { DOCX_MIME, MARKDOWN_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { filesKeys, textFileOptions } from "@/lib/files/queries";
 import { toSafeId } from "@/lib/safe-id";
+import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { DocxBrowserEditor } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor";
 import type { DocxBrowserEditorActions } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor";
 import { getDocxEditBlockReason } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.logic";
-import {
-  filesKeys,
-  textFileOptions,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
 import {
   PeekPdfControls,
   PeekPdfViewer,
   PeekSuspenseFallback,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer";
-import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 
 type MatterOrigin = {
   color: string | null;

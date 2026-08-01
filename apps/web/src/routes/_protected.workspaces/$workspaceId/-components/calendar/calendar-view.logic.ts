@@ -1,10 +1,10 @@
+import type { CalendarTask } from "@/lib/workspaces/queries/calendar-tasks";
 import type { CalendarEntry } from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-day-cell";
 import {
   getMonthDays,
   getWeekDays,
   TASK_DATE_IDS,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-utils";
-import type { CalendarTask } from "@/routes/_protected.workspaces/$workspaceId/-queries/calendar-tasks";
 
 export const toDayStartDateTime = (date: string): string =>
   new Date(`${date}T00:00:00.000Z`).toISOString();

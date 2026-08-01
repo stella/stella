@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
-import type { GradedPosition } from "@/api/handlers/playbooks/position-runtime";
-import type { Position } from "@/api/handlers/playbooks/positions";
-import { resolveTiers } from "@/api/handlers/playbooks/resolve-standards";
+import type { Position } from "@/api/lib/workflow/playbook-positions";
+import type { GradedPosition } from "@/api/lib/workflow/position-runtime";
+import { resolveTiers } from "@/api/lib/workflow/resolve-standards";
 
 const CLAUSE_ID = "cccccccc-0000-4000-8000-000000000001";
 const textContent = { version: 1, type: "text" } as const;

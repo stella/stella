@@ -17,7 +17,6 @@ import type {
   ChatPart,
   PersistedChatMessageContent,
 } from "@/api/handlers/chat/types";
-import { parseUserFileId } from "@/api/handlers/user-files/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -26,6 +25,7 @@ import {
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
 import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
+import { parseUserFileId } from "@/api/lib/user-files/types";
 
 export type ClientMessage = {
   id: SafeId<"chatMessage">;

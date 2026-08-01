@@ -21,13 +21,13 @@ import {
 import type { ParseEcjDecisionInput } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj";
 import { parseEcjDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj";
 import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
-import type { DecisionSection } from "@/api/handlers/case-law/types";
 import { captureError } from "@/api/lib/analytics/capture";
 import {
   AdapterFetchError,
   TelemetryError,
 } from "@/api/lib/errors/tagged-errors";
 import { fetchWithTimeout } from "@/api/lib/fetch";
+import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 

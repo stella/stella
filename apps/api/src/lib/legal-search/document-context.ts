@@ -1,11 +1,11 @@
 import { rootDb } from "@/api/db/root";
 import { corpusStorageMode } from "@/api/env-base";
+import type { SafeId } from "@/api/lib/branded-types";
 import {
   readCorpusAst,
   readCorpusPayloadOrFallback,
   readCorpusText,
-} from "@/api/handlers/case-law/corpus-storage";
-import type { SafeId } from "@/api/lib/branded-types";
+} from "@/api/lib/legal-search/corpus-storage";
 import type { LegalDocumentContext } from "@/api/lib/legal-search/types";
 
 /**

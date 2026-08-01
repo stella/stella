@@ -32,10 +32,14 @@ import { optionalArray } from "@/lib/arrays";
 import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
+import {
+  knowledgeKeys,
+  templateDocxBufferOptions,
+} from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
 import { forceReflow } from "@/lib/utils";
-import { inputTypeValueKind } from "@/lib/value-types";
 import "@/routes/_protected.knowledge/-components/template-studio-inspector";
+import { inputTypeValueKind } from "@/lib/value-types";
 import { TemplateStudioChat } from "@/routes/_protected.knowledge/-components/template-studio-chat";
 import {
   protectedRouteApi,
@@ -68,10 +72,6 @@ import {
   type StudioField,
 } from "@/routes/_protected.knowledge/-components/template-studio-store";
 import { filledByForFieldMeta } from "@/routes/_protected.knowledge/-components/template-studio-suggestions";
-import {
-  knowledgeKeys,
-  templateDocxBufferOptions,
-} from "@/routes/_protected.knowledge/-queries";
 
 const DocxEditor = lazy(async () => {
   const m = await import("@/components/docx/app-docx-editor");

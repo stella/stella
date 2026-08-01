@@ -9,7 +9,7 @@ import {
   ComboboxPopup,
 } from "@stll/ui/components/combobox";
 
-import { entitySummariesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+import { entitySummariesOptions } from "@/lib/workspaces/queries/entities";
 
 type MatterComboboxProps = {
   workspaceId: string;

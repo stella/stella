@@ -70,13 +70,13 @@ import {
 import { detached } from "@/lib/detached";
 import { HOTKEYS } from "@/lib/hotkeys";
 import { resolveMatterColor } from "@/lib/matter-colors";
+import { aiAvailabilityOptions } from "@/lib/organization/ai-config-queries";
 import { usePinnedStore } from "@/lib/pinned-store";
 import { prefetchRouteQuery } from "@/lib/react-query";
+import { workspaceOptions } from "@/lib/workspaces/queries";
 import { loadAuthContext } from "@/routes/-auth-context";
 import { roleOptions } from "@/routes/-queries";
-import { aiAvailabilityOptions } from "@/routes/_protected.organization/-ai-config-queries";
 import { CreateMatterDialog } from "@/routes/_protected.workspaces/-components/create-matter-dialog";
-import { workspaceOptions } from "@/routes/_protected.workspaces/-queries";
 
 const LazyInspectorPanel = lazy(
   async () =>

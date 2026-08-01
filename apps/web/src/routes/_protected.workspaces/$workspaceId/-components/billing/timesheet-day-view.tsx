@@ -11,6 +11,7 @@ import { Checkbox } from "@stll/ui/components/checkbox";
 import { Dialog, DialogPopup } from "@stll/ui/components/dialog";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { timeEntriesOptions } from "@/lib/workspaces/queries/time-entries";
 import { BatchActionBar } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/batch-action-bar";
 import {
   DEFAULT_CURRENCY,
@@ -30,7 +31,6 @@ import {
   useDeleteTimeEntry,
   useUpdateTimeEntry,
 } from "@/routes/_protected.workspaces/$workspaceId/-mutations/time-entries";
-import { timeEntriesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/time-entries";
 
 type TimesheetDayViewProps = {
   workspaceId: string;

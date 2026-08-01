@@ -30,6 +30,7 @@ import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { detached } from "@/lib/detached";
 import { toSafeId } from "@/lib/safe-id";
 import type { PropertyDependency, WorkspacePropertyOption } from "@/lib/types";
+import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import {
   COMPOSER_CARD_CLASS,
   ReadingFromRow,
@@ -55,7 +56,6 @@ import {
   useSuggestPrompt,
 } from "@/routes/_protected.workspaces/$workspaceId/-mutations/properties";
 import type { CreatePropertySpec } from "@/routes/_protected.workspaces/$workspaceId/-mutations/properties";
-import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 
 // Sentinel for the "every document type" (ungated) scope; a Select value can't
 // be null, so it stands in and maps back to null.

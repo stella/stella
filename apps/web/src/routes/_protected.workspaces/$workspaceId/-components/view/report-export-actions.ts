@@ -4,7 +4,7 @@ import { APIError } from "@/lib/errors/api";
 import {
   reportExportDetailOptions,
   reportExportsKeys,
-} from "@/routes/_protected.workspaces/$workspaceId/-queries/report-exports";
+} from "@/lib/workspaces/queries/report-exports";
 
 type DownloadReportExportOptions = {
   exportId: string;

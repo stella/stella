@@ -4,12 +4,12 @@ import { and, asc, eq, isNull, lt, or, sql } from "drizzle-orm";
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import { infoSoudTrackedCases } from "@/api/db/schema";
-import { getInfoSoudClient } from "@/api/handlers/workspaces/infosoud-common";
 import { errorTag } from "@/api/lib/errors/utils";
 import {
   buildInfoSoudAgendaItems,
   importInfoSoudAgendaItems,
 } from "@/api/lib/infosoud/agenda-import";
+import { getInfoSoudClient } from "@/api/lib/infosoud/client";
 import { LIMITS } from "@/api/lib/limits";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 

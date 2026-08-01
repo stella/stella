@@ -5,9 +5,9 @@ import {
   deriveAutoAsks,
 } from "@/api/handlers/playbooks/derive-ask";
 import type { DeriveAskGenerate } from "@/api/handlers/playbooks/derive-ask";
-import type { GradedPosition } from "@/api/handlers/playbooks/position-runtime";
-import type { PlaybookPositions } from "@/api/handlers/playbooks/positions";
 import { toSafeId } from "@/api/lib/branded-types";
+import type { PlaybookPositions } from "@/api/lib/workflow/playbook-positions";
+import type { GradedPosition } from "@/api/lib/workflow/position-runtime";
 
 const textContent = { version: 1, type: "text" } as const;
 

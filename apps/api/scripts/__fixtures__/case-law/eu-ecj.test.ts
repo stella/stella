@@ -15,7 +15,7 @@ import { describe, expect, test } from "bun:test";
 
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
-import type { DecisionSection } from "@/api/handlers/case-law/types";
+import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 
 type FixtureDecision = {
   case_number: string;

@@ -6,13 +6,13 @@ import { useTranslations } from "use-intl";
 import { TextSeparator } from "@stll/ui/components/separator";
 
 import { optionalArray } from "@/lib/arrays";
+import { templatePreviewOptions } from "@/lib/knowledge/queries";
 import { CONDITIONAL_KINDS } from "@/routes/_protected.knowledge/-components/directive-kinds";
 import type { BlockDirectiveKind } from "@/routes/_protected.knowledge/-components/directive-kinds";
 import {
   DirectiveLabel,
   HighlightedText,
 } from "@/routes/_protected.knowledge/-components/paragraph-rendering";
-import { templatePreviewOptions } from "@/routes/_protected.knowledge/-queries";
 
 // ── Types ────────────────────────────────────────────────
 

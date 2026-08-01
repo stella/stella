@@ -49,6 +49,7 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { useRequestChatAbout } from "@/components/chat/use-request-chat-about";
+import { useInspectorStore } from "@/components/inspector/inspector-store";
 import Tooltip from "@/components/tooltip";
 import { PDF_MIME_TYPE } from "@/consts";
 import { env } from "@/env";
@@ -72,6 +73,10 @@ import type {
 } from "@/lib/types";
 import { isFileDisplayable } from "@/lib/types";
 import { downloadFile } from "@/lib/utils";
+import { entitiesKeys } from "@/lib/workspaces/queries/entities";
+import { propertiesOptions } from "@/lib/workspaces/queries/properties";
+import { useIsWorkflowRunning } from "@/lib/workspaces/queries/workspace";
+import { useWorkspaceStore } from "@/lib/workspaces/store";
 import {
   CellLockMenuItem,
   CellMetadataMenuSection,
@@ -84,7 +89,6 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog.logic";
 import { useDocumentOcrAvailability } from "@/routes/_protected.workspaces/$workspaceId/-components/document-ocr-availability";
 import { getExtension } from "@/routes/_protected.workspaces/$workspaceId/-components/file-extension";
-import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { requestManualOcr } from "@/routes/_protected.workspaces/$workspaceId/-components/request-manual-ocr";
 import {
   canRunManualOcr,
@@ -101,10 +105,6 @@ import {
   useCreateEntities,
   useDeleteEntities,
 } from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities";
-import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
-import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
-import { useIsWorkflowRunning } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
-import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 import {
   getEntityName,
   getFirstFile,

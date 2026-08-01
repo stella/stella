@@ -54,6 +54,7 @@ import {
 } from "@stll/ui/components/popover";
 import { cn } from "@stll/ui/lib/utils";
 
+import { InlineEdit } from "@/components/inline-edit";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useExternalFileDrop } from "@/hooks/use-external-file-drop";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -67,7 +68,6 @@ import {
   COLUMN_DRAG_TYPE,
   ENTITY_DRAG_TYPE,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
-import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
 import { KanbanCard } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card";
 
 const KANBAN_CARD_ESTIMATE_PX = 128;

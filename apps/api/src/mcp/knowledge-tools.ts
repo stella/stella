@@ -12,8 +12,6 @@ import {
   listClausesHandler,
 } from "@/api/handlers/clauses/read";
 import { updateClauseHandler } from "@/api/handlers/clauses/update";
-import { materializePlaybookRun } from "@/api/handlers/playbooks/materialize-run";
-import type { Position } from "@/api/handlers/playbooks/positions";
 import {
   getPlaybookDefinitionHandler,
   listPlaybookDefinitionsHandler,
@@ -31,6 +29,8 @@ import {
   brandPersistedPlaybookDefinitionId,
 } from "@/api/lib/safe-id-boundaries";
 import { startWorkflow } from "@/api/lib/workflow-queue";
+import { materializePlaybookRun } from "@/api/lib/workflow/materialize-playbook-run";
+import type { Position } from "@/api/lib/workflow/playbook-positions";
 import type { McpRequestContext } from "@/api/mcp/context";
 import {
   defineTextFieldSpec,

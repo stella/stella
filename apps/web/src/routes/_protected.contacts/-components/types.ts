@@ -1,4 +1,4 @@
-import type { contactOptions } from "@/routes/_protected.contacts/-queries";
+import type { contactOptions } from "@/lib/contacts/queries";
 
 export type ContactData = NonNullable<
   Awaited<ReturnType<NonNullable<ReturnType<typeof contactOptions>["queryFn"]>>>

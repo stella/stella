@@ -1,4 +1,4 @@
-import type { DecisionSection } from "@/api/handlers/case-law/types";
+import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 
 /**
  * Patterns for detecting structural section boundaries in

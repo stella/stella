@@ -10,12 +10,12 @@ import {
 import { member, user } from "@/api/db/auth-schema";
 import { desktopEditSessions, entityVersions, fields } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
-import { countVersionDiffWords } from "@/api/handlers/entities/version-diff-word-counts";
-import { createFileKey } from "@/api/handlers/files/utils";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { countVersionDiffWords } from "@/api/lib/entity-versions/version-diff-word-counts";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { createFileKey } from "@/api/lib/files/utils";
 import { getS3 } from "@/api/lib/s3";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 

@@ -4,7 +4,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
-import { expensesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/expenses";
+import { expensesKeys } from "@/lib/workspaces/queries/expenses";
 
 type ExpenseCategory =
   | "filing_fee"

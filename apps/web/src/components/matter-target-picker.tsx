@@ -14,9 +14,9 @@ import { cn } from "@stll/ui/lib/utils";
 import { MatterIcon } from "@/components/matter-icon";
 import Tooltip from "@/components/tooltip";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { workspaceFoldersOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
-import type { WorkspaceFolder } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
-import { workspacesOptions } from "@/routes/_protected.workspaces/-queries";
+import { workspacesOptions } from "@/lib/workspaces/queries";
+import { workspaceFoldersOptions } from "@/lib/workspaces/queries/entities";
+import type { WorkspaceFolder } from "@/lib/workspaces/queries/entities";
 
 /**
  * Shared "pick a matter (and optionally a folder in it)" control: matter

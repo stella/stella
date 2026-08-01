@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   DOCUMENT_TYPE_CLASSIFIER_ROLE,
   buildPropertyParts,
-} from "@/api/handlers/properties/create-schema";
+} from "@/api/lib/properties/create-schema";
 
 describe("property creation schema", () => {
   test("tags AI single-select Document Type columns as classifiers", () => {

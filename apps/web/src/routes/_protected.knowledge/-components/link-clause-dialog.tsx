@@ -34,15 +34,15 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
-import type { SafeId } from "@/lib/safe-id";
-import { toSafeId } from "@/lib/safe-id";
-import { ClauseBody } from "@/routes/_protected.knowledge/-components/clause-body";
 import {
   clauseCategoriesOptions,
   clausesOptions,
   templateClausesOptions,
   templatePreviewOptions,
-} from "@/routes/_protected.knowledge/-queries";
+} from "@/lib/knowledge/queries";
+import type { SafeId } from "@/lib/safe-id";
+import { toSafeId } from "@/lib/safe-id";
+import { ClauseBody } from "@/routes/_protected.knowledge/-components/clause-body";
 
 // ── Types ────────────────────────────────────────────
 

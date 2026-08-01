@@ -43,6 +43,10 @@ import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
+import {
+  clausesOptions as clauseLibraryOptions,
+  knowledgeKeys,
+} from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
 import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
 import {
@@ -53,10 +57,6 @@ import {
   useTemplateStudioStore,
   type StudioField,
 } from "@/routes/_protected.knowledge/-components/template-studio-store";
-import {
-  clausesOptions as clauseLibraryOptions,
-  knowledgeKeys,
-} from "@/routes/_protected.knowledge/-queries";
 
 type SlashMenuPopoverProps = {
   slash: SlashMenu;

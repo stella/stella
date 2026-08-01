@@ -12,8 +12,8 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
+import { templateVersionsOptions } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
-import { templateVersionsOptions } from "@/routes/_protected.knowledge/-queries";
 
 // ── Types ────────────────────────────────────────────
 

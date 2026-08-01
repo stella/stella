@@ -4,6 +4,7 @@ import { useTranslations } from "use-intl";
 
 import { cn } from "@stll/ui/lib/utils";
 
+import { useInspectorStore } from "@/components/inspector/inspector-store";
 import Tooltip from "@/components/tooltip";
 import type { Citation } from "@/lib/citations";
 import { detached } from "@/lib/detached";
@@ -15,9 +16,8 @@ import { useOptionalPDFStore } from "@/lib/pdf/pdf-context";
 import { getPDFPageIdByNumber } from "@/lib/pdf/utils";
 import { renderJustificationContent } from "@/lib/render-justification-content";
 import type { WorkspaceJustification } from "@/lib/types";
-import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
+import { useWorkspaceStore } from "@/lib/workspaces/store";
 import { useCreateBBoxes } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-b-boxes";
-import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 
 const CITATION_CHIP_CLASSES =
   "bg-primary/10 text-primary hover:bg-primary/20 inline-flex items-center align-baseline rounded-md px-1.5 py-0.5 text-[11px] font-medium not-italic transition-colors";

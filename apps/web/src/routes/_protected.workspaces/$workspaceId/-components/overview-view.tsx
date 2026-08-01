@@ -53,6 +53,7 @@ import { cn } from "@stll/ui/lib/utils";
 import { EmptyScreen } from "@/components/empty-screen";
 import { EMPTY_SCREEN_MATTERS_VIDEO } from "@/components/empty-screen-media";
 import { isTerminalFlowRunStatus } from "@/components/flows/flow-meta";
+import { useInspectorStore } from "@/components/inspector/inspector-store";
 import { PersonMentionLabel } from "@/components/person-mention-label";
 import { useMountEffect } from "@/hooks/use-effect";
 import { useWorkflowsPreviewEnabled } from "@/hooks/use-workflows-preview";
@@ -69,9 +70,15 @@ import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { routeQueryOptions } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
+import { overviewOptions, workspacesKeys } from "@/lib/workspaces/queries";
+import { entitiesKeys } from "@/lib/workspaces/queries/entities";
+import { flowRunsOptions } from "@/lib/workspaces/queries/flow-runs";
+import { taskKeys } from "@/lib/workspaces/queries/tasks";
+import { timeEntriesOptions } from "@/lib/workspaces/queries/time-entries";
+import { viewsOptions } from "@/lib/workspaces/queries/views";
+import { workspaceMembersOptions } from "@/lib/workspaces/queries/workspace-members";
 import { ActivityPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel";
 import { EntityKindIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-kind-icon";
-import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { AddMemberDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/members-section";
 import type { TaskStatus } from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-constants";
 import {
@@ -81,20 +88,10 @@ import {
   TASK_STATUSES,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-constants";
 import { useCreateFileEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities";
-import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
-import { flowRunsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/flow-runs";
-import { taskKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/tasks";
-import { timeEntriesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/time-entries";
-import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
-import { workspaceMembersOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace-members";
 import {
   getWeekStart,
   toISODate,
 } from "@/routes/_protected.workspaces/$workspaceId/-utils";
-import {
-  overviewOptions,
-  workspacesKeys,
-} from "@/routes/_protected.workspaces/-queries";
 
 type OverviewViewProps = {
   workspaceId: string;

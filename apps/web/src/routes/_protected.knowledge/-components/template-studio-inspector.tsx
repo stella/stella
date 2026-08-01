@@ -68,6 +68,15 @@ import { BoundedMap } from "@/lib/bounded-set";
 import { SIDE_RAIL_TAB_ICON_SIZE_PX, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
+import {
+  knowledgeKeys,
+  templateCheckOptions,
+  templateClausePreviewOptions,
+  templateClausesOptions,
+  templateDetailOptions,
+  templateFillDiscoverOptions,
+  templateRecipesOptions,
+} from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
 import { LinkClauseDialog } from "@/routes/_protected.knowledge/-components/link-clause-dialog";
 import { parseArrayItemKey } from "@/routes/_protected.knowledge/-components/template-array-item-key";
@@ -102,15 +111,6 @@ import {
   type StudioField,
 } from "@/routes/_protected.knowledge/-components/template-studio-store";
 import { TemplateVersionsTab } from "@/routes/_protected.knowledge/-components/template-versions-tab";
-import {
-  knowledgeKeys,
-  templateCheckOptions,
-  templateClausePreviewOptions,
-  templateClausesOptions,
-  templateDetailOptions,
-  templateFillDiscoverOptions,
-  templateRecipesOptions,
-} from "@/routes/_protected.knowledge/-queries";
 
 type StudioFacet = "fields" | "guidance" | "history" | "fill";
 type TemplateStudioPayload = { templateId: string };

@@ -22,11 +22,11 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
+import { billingCodesOptions } from "@/lib/workspaces/queries/billing-codes";
+import { resolvedRateOptions } from "@/lib/workspaces/queries/rates";
 import { DurationInput } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/duration-input";
 import { formatCurrencyAmount } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
 import { MatterCombobox } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/matter-combobox";
-import { billingCodesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/billing-codes";
-import { resolvedRateOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/rates";
 
 export type TimeEntryFormValues = {
   matterId: string;

@@ -1,13 +1,13 @@
 import { panic, Result } from "better-result";
 import { t } from "elysia";
 
-import { THUMBNAIL_MIME_TYPE } from "@/api/handlers/files/image-derivative";
-import { createUserFileKey } from "@/api/handlers/files/utils";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
+import { createUserFileKey } from "@/api/lib/files/utils";
 
 const readUserFileThumbnail = createSafeRootHandler(
   {

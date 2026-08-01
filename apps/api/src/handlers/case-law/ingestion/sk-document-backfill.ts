@@ -40,10 +40,6 @@ import { caseLawDecisions } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
 import { ADAPTER_KEYS, PARSER_VERSION } from "@/api/handlers/case-law/consts";
 import {
-  EMPTY_CORPUS_CONTENT_HASHES,
-  writeCorpusDocument,
-} from "@/api/handlers/case-law/corpus-storage";
-import {
   type DocumentAst,
   isDocumentAst,
 } from "@/api/handlers/case-law/document-ast";
@@ -54,6 +50,10 @@ import { indexDecision } from "@/api/handlers/case-law/search-index";
 import type { SafeId } from "@/api/lib/branded-types";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { fetchWithTimeout } from "@/api/lib/fetch";
+import {
+  EMPTY_CORPUS_CONTENT_HASHES,
+  writeCorpusDocument,
+} from "@/api/lib/legal-search/corpus-storage";
 import { isRecord } from "@/api/lib/type-guards";
 import { withTimeout } from "@/api/lib/with-timeout";
 

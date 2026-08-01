@@ -19,6 +19,7 @@ import { useTranslations } from "use-intl";
 import type { OptionColor } from "@stll/api/types";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { useInspectorStore } from "@/components/inspector/inspector-store";
 import { useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -26,10 +27,16 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { toSafeId } from "@/lib/safe-id";
 import type { EntityKind, WorkspaceView } from "@/lib/types";
+import {
+  entitiesKeys,
+  useKanbanGroupOptions,
+  visibleEntityFieldIds,
+} from "@/lib/workspaces/queries/entities";
+import { propertiesOptions } from "@/lib/workspaces/queries/properties";
+import { taskKeys } from "@/lib/workspaces/queries/tasks";
 // -- Auto-scrolling board container with forgiving column drop --
 import { COLUMN_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
-import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { KanbanColumn } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column";
 import {
   getEntityGroups,
@@ -49,13 +56,6 @@ import {
   useUpsertField,
 } from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities";
 import { useUpdateProperty } from "@/routes/_protected.workspaces/$workspaceId/-mutations/properties";
-import {
-  entitiesKeys,
-  useKanbanGroupOptions,
-  visibleEntityFieldIds,
-} from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
-import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
-import { taskKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/tasks";
 import { getInternalPropertyId } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 type KanbanViewProps = {

@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
-import type { CorpusPayload } from "@/api/handlers/case-law/corpus-storage";
-import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/handlers/case-law/corpus-storage";
+import type { CorpusPayload } from "@/api/lib/legal-search/corpus-storage";
+import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";
 import {
   columnTrimGate,
   corpusObjectState,

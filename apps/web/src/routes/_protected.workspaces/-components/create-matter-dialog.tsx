@@ -41,21 +41,21 @@ import { ContactPicker } from "@/components/contact-picker";
 import { UserIdentity } from "@/components/user-avatar";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useLocale } from "@/i18n/formatting-context";
+import { useCreateContact } from "@/lib/contacts/mutations";
+import { contactsKeys } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { organizationOptions } from "@/lib/organization/queries";
 import { toSafeId } from "@/lib/safe-id";
-import { useCreateContact } from "@/routes/_protected.contacts/-mutations";
-import { contactsKeys } from "@/routes/_protected.contacts/-queries";
-import { organizationOptions } from "@/routes/_protected.organization/-queries";
+import type { MatterDraftClient } from "@/lib/workspaces/create-matter-store";
+import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
+import { workspacesOptions } from "@/lib/workspaces/queries";
 import {
   buildCollaboratorStats,
   compareMembersByCollaboratorStats,
   getPossibleDuplicateMatters,
 } from "@/routes/_protected.workspaces/-components/create-matter-dialog.logic";
 import { useCreateWorkspace } from "@/routes/_protected.workspaces/-mutations";
-import { workspacesOptions } from "@/routes/_protected.workspaces/-queries";
-import type { MatterDraftClient } from "@/routes/_protected.workspaces/-store/create-matter-store";
-import { useCreateMatterStore } from "@/routes/_protected.workspaces/-store/create-matter-store";
 
 const routeApi = getRouteApi("/_protected");
 

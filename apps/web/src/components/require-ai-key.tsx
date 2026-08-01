@@ -48,7 +48,7 @@ import {
   aiAvailabilityOptions,
   aiConfigOptions,
   aiConfigKeys,
-} from "@/routes/_protected.organization/-ai-config-queries";
+} from "@/lib/organization/ai-config-queries";
 
 type AIAvailabilityContextValue = {
   ensureAIAvailable: () => Promise<boolean>;

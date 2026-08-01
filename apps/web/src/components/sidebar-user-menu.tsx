@@ -54,8 +54,8 @@ import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { getInitials } from "@/lib/get-initials";
+import { organizationListOptions } from "@/lib/organization/queries";
 import { roleOptions } from "@/routes/-queries";
-import { organizationListOptions } from "@/routes/_protected.organization/-queries";
 
 const CHANGELOG_URL = "https://stll.app/changelog";
 const isDev = import.meta.env.DEV;

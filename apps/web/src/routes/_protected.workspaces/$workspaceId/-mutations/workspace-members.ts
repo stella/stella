@@ -5,8 +5,8 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
-import { workspaceMembersKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace-members";
-import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
+import { workspacesKeys } from "@/lib/workspaces/queries";
+import { workspaceMembersKeys } from "@/lib/workspaces/queries/workspace-members";
 
 type AddMemberVars = {
   workspaceId: string;

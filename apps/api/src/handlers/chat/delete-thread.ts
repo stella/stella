@@ -6,14 +6,14 @@ import { t } from "elysia";
 import { defaultDatabaseRetry } from "@/api/db/safe-db";
 import { chatThreads, userFiles } from "@/api/db/schema";
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
-import { THUMBNAIL_MIME_TYPE } from "@/api/handlers/files/image-derivative";
-import { createUserFileKey, deleteS3Keys } from "@/api/handlers/files/utils";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
+import { createUserFileKey, deleteS3Keys } from "@/api/lib/files/utils";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 const THREAD_FILE_CLEANUP_BATCH_SIZE = 200;

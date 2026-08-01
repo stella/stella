@@ -12,10 +12,10 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
+import { aiAvailabilityOptions } from "@/lib/organization/ai-config-queries";
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceJustification } from "@/lib/types";
-import { aiAvailabilityOptions } from "@/routes/_protected.organization/-ai-config-queries";
-import { workspaceKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
+import { workspaceKeys } from "@/lib/workspaces/queries/workspace";
 
 type UseCreateBBoxesProps = {
   workspaceId: string;

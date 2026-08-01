@@ -26,11 +26,11 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { toSafeId } from "@/lib/safe-id";
+import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import {
   getCopyToMatterRootEntities,
   type CopyToMatterEntity,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog.logic";
-import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 
 type CopyToMatterDialogProps = {
   open: boolean;

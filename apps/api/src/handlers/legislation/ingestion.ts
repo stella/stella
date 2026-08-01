@@ -6,13 +6,6 @@ import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { legislationDocuments } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
-import { writeCorpusDocument } from "@/api/handlers/case-law/corpus-storage";
-import type { EmptyAst } from "@/api/handlers/case-law/ingestion/adapter";
-import {
-  sanitizeMetadata,
-  stripDangerousChars,
-} from "@/api/handlers/case-law/ingestion/sanitize";
-import type { DecisionSection } from "@/api/handlers/case-law/types";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -20,6 +13,15 @@ import {
   CORPUS_SOURCE_TYPE,
   INGESTION_CHECKPOINT_STATUS,
 } from "@/api/lib/corpus-ingestion-checkpoint";
+import {
+  sanitizeMetadata,
+  stripDangerousChars,
+} from "@/api/lib/legal-search/corpus-sanitize";
+import { writeCorpusDocument } from "@/api/lib/legal-search/corpus-storage";
+import type {
+  DecisionSection,
+  EmptyAst,
+} from "@/api/lib/legal-search/document-types";
 import { logger } from "@/api/lib/observability/logger";
 
 /**

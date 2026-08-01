@@ -12,13 +12,13 @@ import { eq, inArray } from "drizzle-orm";
 import { documentTypes, playbookDefinitions } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import createPlaybookFromStarter from "@/api/handlers/playbooks/from-starter";
-import type { PlaybookPositions } from "@/api/handlers/playbooks/positions";
-import { assertPositionsValid } from "@/api/handlers/playbooks/positions-validation";
 import { STARTER_PLAYBOOKS } from "@/api/handlers/playbooks/starters";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { isUuid } from "@/api/lib/custom-schema";
+import type { PlaybookPositions } from "@/api/lib/workflow/playbook-positions";
+import { assertPositionsValid } from "@/api/lib/workflow/playbook-positions-validation";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 import {

@@ -22,6 +22,12 @@ import type {
   WorkspaceProperty,
   WorkspaceView,
 } from "@/lib/types";
+import {
+  groupCountsOptions,
+  useKanbanGroupOptions,
+  visibleEntityFieldIds,
+} from "@/lib/workspaces/queries/entities";
+import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { BottomRow } from "@/routes/_protected.workspaces/$workspaceId/-components/bottom-row";
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
 import {
@@ -65,12 +71,6 @@ import { useTableStore } from "@/routes/_protected.workspaces/$workspaceId/-hook
 import { useSyncJustificationChunks } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-justifications";
 import { useSyncSelectedEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-selected-entities";
 import { useTableState } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-table-state";
-import {
-  groupCountsOptions,
-  useKanbanGroupOptions,
-  visibleEntityFieldIds,
-} from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
-import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import {
   getInternalPropertyId,
   toTableEntities,

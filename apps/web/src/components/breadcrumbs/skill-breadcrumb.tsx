@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 
 import { BreadcrumbLink } from "@/components/breadcrumbs/shared";
-import { skillDetailOptions } from "@/routes/_protected.knowledge/-queries";
+import { skillDetailOptions } from "@/lib/knowledge/queries";
 
 const protectedRoute = getRouteApi("/_protected");
 const skillRoute = getRouteApi("/_protected/knowledge/tools_/$skillId");

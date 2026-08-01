@@ -4,7 +4,7 @@ import type { NodeViewProps } from "@tiptap/react";
 
 import { cn } from "@stll/ui/lib/utils";
 
-import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
+import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 
 type MentionNodeProps = NodeViewProps & {
   workspaceId: string;

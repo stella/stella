@@ -5,8 +5,8 @@ import { panic } from "better-result";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { WorkspaceJustification } from "@/lib/types";
-import { justificationsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
-import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
+import { justificationsOptions } from "@/lib/workspaces/queries/workspace";
+import { useWorkspaceStore } from "@/lib/workspaces/store";
 
 const normalizeEntityIds = (entityIds: readonly string[]) =>
   [...new Set(entityIds)].toSorted();

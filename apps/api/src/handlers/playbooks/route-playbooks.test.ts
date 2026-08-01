@@ -1,15 +1,15 @@
 import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
 
-import type { PlaybookScope } from "@/api/handlers/playbooks/positions";
-import { playbookScopeSchema } from "@/api/handlers/playbooks/positions";
+import { toSafeId } from "@/api/lib/branded-types";
+import type { PlaybookScope } from "@/api/lib/workflow/playbook-positions";
+import { playbookScopeSchema } from "@/api/lib/workflow/playbook-positions";
 import {
   classifierParticipatedInPlan,
   filterPlaybooksByPresentLabels,
   playbookTrigger,
   selectRoutablePlaybooks,
-} from "@/api/handlers/playbooks/route-playbooks";
-import { toSafeId } from "@/api/lib/branded-types";
+} from "@/api/lib/workflow/route-playbooks";
 
 // ── The Elysia optional-UnionEnum coercion gotcha ──────────────────────
 // Elysia coerces an absent optional UnionEnum to its FIRST member (driven by

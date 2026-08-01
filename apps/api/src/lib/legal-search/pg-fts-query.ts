@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import type { FtsSearchConfig } from "@/api/handlers/case-law/fts-config";
+import type { FtsSearchConfig } from "@/api/lib/legal-search/fts-config";
 import { buildPlainSearchTsQuery } from "@/api/lib/search/query";
 
 type PgFtsSearchSqlRefs = {

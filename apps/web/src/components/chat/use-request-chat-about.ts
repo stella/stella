@@ -1,8 +1,8 @@
 import { useChatEditorManager } from "@/components/chat-editor-provider";
 import type { ChatMentionOption } from "@/components/chat-mention-extension";
+import { useInspectorStore } from "@/components/inspector/inspector-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { createChatThreadId } from "@/lib/chat-thread-ref";
-import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 
 /**
  * "Ask AI about this entity" — opens a fresh inspector chat tab

@@ -6,21 +6,21 @@ import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
-import {
-  allowsDerivedAi,
-  isRedistributable,
-} from "@/api/handlers/case-law/corpus-source";
-import {
-  readCorpusAst,
-  readCorpusPayloadOrFallback,
-  readCorpusText,
-} from "@/api/handlers/case-law/corpus-storage";
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
-import type { EmptyAst } from "@/api/handlers/case-law/ingestion/adapter";
 import { corpusCarriesDocument } from "@/api/handlers/case-law/stored-payload";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
+import {
+  allowsDerivedAi,
+  isRedistributable,
+} from "@/api/lib/legal-search/corpus-source";
+import {
+  readCorpusAst,
+  readCorpusPayloadOrFallback,
+  readCorpusText,
+} from "@/api/lib/legal-search/corpus-storage";
+import type { EmptyAst } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
 
 type PublicDecisionLanguageAlternate = {

@@ -67,16 +67,16 @@ import { modelOptionsOptions } from "@/features/chat/queries";
 import { api } from "@/lib/api";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
-import { toSafeId } from "@/lib/safe-id";
 import {
   knowledgeKeys,
   mcpConnectionsOptions,
   mcpConnectorsOptions,
   skillsOptions,
-} from "@/routes/_protected.knowledge/-queries";
-import { useEntitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
-import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
-import { workspacesNavigationOptions } from "@/routes/_protected.workspaces/-queries";
+} from "@/lib/knowledge/queries";
+import { toSafeId } from "@/lib/safe-id";
+import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
+import { useEntitiesOptions } from "@/lib/workspaces/queries/entities";
+import { viewsOptions } from "@/lib/workspaces/queries/views";
 
 const PROVIDER_LABEL_FALLBACKS: Readonly<Partial<Record<string, string>>> =
   PROVIDER_LABELS;

@@ -35,11 +35,11 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { formatRelativeTime } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceCellMetadata } from "@/lib/types";
+import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import {
   cellOverrideKey,
   useCellMetadataOverridesStore,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-overrides-store";
-import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 
 const NO_MANUAL_FLAGS: readonly string[] = Object.freeze([]);
 

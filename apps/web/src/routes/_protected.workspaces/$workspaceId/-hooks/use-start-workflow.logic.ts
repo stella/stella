@@ -1,4 +1,4 @@
-import { workflowTargetCountOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
+import { workflowTargetCountOptions } from "@/lib/workspaces/queries/workspace";
 
 export type StartWorkflowArgs = {
   entityIds?: string[];

@@ -2,13 +2,13 @@ import { describe, expect, mock, test } from "bun:test";
 
 import type { Transaction } from "@/api/db/root";
 import { properties, propertyDependencies } from "@/api/db/schema";
-import {
-  collectTemplateProperties,
-  resolveTemplateProperties,
-} from "@/api/handlers/view-templates/properties";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { ViewLayout, ViewTemplateProperty } from "@/api/lib/views-schema";
+import {
+  collectTemplateProperties,
+  resolveTemplateProperties,
+} from "@/api/lib/views/template-properties";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const workspaceId = toSafeId<"workspace">("workspace_1");

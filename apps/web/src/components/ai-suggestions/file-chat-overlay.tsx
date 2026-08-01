@@ -82,6 +82,7 @@ import type {
 } from "@/components/chat/chat-ui-tools";
 import { useChatModelSelection } from "@/components/chat/use-chat-model-selection";
 import type { DocxComments } from "@/components/docx/app-docx-editor";
+import { useInspectorStore } from "@/components/inspector/inspector-store";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { SuggestedFollowupChips } from "@/features/chat/components/suggested-followup-chips";
 import { useChatSession } from "@/features/chat/hooks/use-chat-session";
@@ -125,7 +126,6 @@ import { toAPIError } from "@/lib/errors/api";
 import { useModelSelectorStore } from "@/lib/model-selector-store";
 import { matchReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
-import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 
 type ActiveFile = {
   docxEditSnapshot?:

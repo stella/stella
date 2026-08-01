@@ -10,8 +10,8 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/handlers/case-law/corpus-storage";
 import { resolveDocumentState } from "@/api/handlers/case-law/decisions/get";
+import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";
 
 const REAL_HASH = "a-real-content-hash";
 const EMPTY_HASH = EMPTY_CORPUS_CONTENT_HASHES.at(0) ?? "";

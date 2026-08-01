@@ -3,10 +3,10 @@ import { Result } from "better-result";
 
 import { FolioDocxReviewer, type FolioAIBlock } from "@stll/folio-core/server";
 
-import { createFileKey } from "@/api/handlers/files/utils";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { Unreachable } from "@/api/lib/errors/tagged-errors";
+import { createFileKey } from "@/api/lib/files/utils";
 import { getS3 } from "@/api/lib/s3";
 import { generateWorkflowData } from "@/api/lib/workflow/ai-generate-batch";
 import { validateAIOutput } from "@/api/lib/workflow/ai-validators";

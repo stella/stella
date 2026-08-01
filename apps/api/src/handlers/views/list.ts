@@ -2,13 +2,13 @@ import { Result } from "better-result";
 import { eq } from "drizzle-orm";
 
 import { workspaceViews } from "@/api/db/schema";
-import { cleanStalePropertyIds } from "@/api/handlers/views/utils";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { LIMITS } from "@/api/lib/limits";
 import { extractLangFromRequest, type SupportedLang } from "@/api/lib/locale";
 import { localizeDefaultViewName } from "@/api/lib/views";
 import { parseViewLayoutSafe } from "@/api/lib/views-schema";
+import { cleanStalePropertyIds } from "@/api/lib/views/utils";
 
 const config = {
   permissions: { workspace: ["read"] },

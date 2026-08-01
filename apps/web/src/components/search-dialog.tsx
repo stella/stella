@@ -54,6 +54,7 @@ import { useIsMobile } from "@stll/ui/hooks/use-mobile";
 import { cn } from "@stll/ui/lib/utils";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
+import { DocumentIcon } from "@/components/document-icon";
 import { MatterIcon } from "@/components/matter-icon";
 import { SavedSearches } from "@/components/saved-searches";
 import {
@@ -138,7 +139,6 @@ import {
   selectSearchPreviewHit,
   shouldShowSearchPreview,
 } from "@/lib/search.logic";
-import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 
 type SearchSummaryCitation = {
   id: string;

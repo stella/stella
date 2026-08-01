@@ -12,6 +12,7 @@ import { BreadcrumbItem } from "@stll/ui/components/breadcrumb";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { shouldFetchChatThreadTitle } from "@/components/breadcrumbs/chat-breadcrumb.logic";
+import { InlineEdit } from "@/components/inline-edit";
 import Tooltip from "@/components/tooltip";
 import {
   chatThreadOptions,
@@ -28,7 +29,6 @@ import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
-import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
 
 const protectedRoute = getRouteApi("/_protected");
 

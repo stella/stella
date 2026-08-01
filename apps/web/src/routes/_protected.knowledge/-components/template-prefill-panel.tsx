@@ -26,7 +26,7 @@ import { DOCX_MIME, PDF_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
-import { workspaceFilesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+import { workspaceFilesOptions } from "@/lib/workspaces/queries/entities";
 
 /**
  * "Prefill from documents" affordance on the template fill form: a drop

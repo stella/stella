@@ -20,8 +20,6 @@ import { and, eq, inArray } from "drizzle-orm";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { reportExports } from "@/api/db/schema";
 import type { ReportTemplateRef } from "@/api/db/schema";
-import { createEntityFromBuffer } from "@/api/handlers/entities/create-from-buffer";
-import { convertToPdf } from "@/api/handlers/files/gotenberg";
 import { buildReportData } from "@/api/handlers/reports/build-report-data";
 import { getBuiltinReportTemplate } from "@/api/handlers/reports/builtin-templates";
 import { notifyReportExportStatus } from "@/api/handlers/reports/report-export-notification";
@@ -42,7 +40,9 @@ import {
   buildAiFieldGenerator,
   buildAiOccurrenceAdapter,
 } from "@/api/lib/docx/ai-field-generator";
+import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
+import { convertToPdf } from "@/api/lib/files/gotenberg";
 import { logger } from "@/api/lib/observability/logger";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 import { listPendingReportExportNotifications } from "@/api/lib/report-export-notification-recovery";

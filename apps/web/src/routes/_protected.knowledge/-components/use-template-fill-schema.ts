@@ -5,7 +5,7 @@ import type { api } from "@/lib/api";
 import {
   templateDetailOptions,
   templateFillDiscoverOptions,
-} from "@/routes/_protected.knowledge/-queries";
+} from "@/lib/knowledge/queries";
 
 /**
  * The fillable shape of a *saved* template, for hosts that render the fill

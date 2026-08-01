@@ -13,8 +13,8 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { usePulse } from "@/hooks/use-pulse";
 import { detached } from "@/lib/detached";
+import { createSlug } from "@/lib/organization/utils";
 import { toFormErrors } from "@/lib/schema";
-import { createSlug } from "@/routes/_protected.organization/-utils";
 
 type OrganizationStepProps = {
   defaultName: string;

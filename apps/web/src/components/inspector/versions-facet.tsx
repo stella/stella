@@ -23,12 +23,12 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
 import { fileContentQueryKey } from "@/lib/files/file-metadata-query.logic";
-import { VersionsSidebar } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/versions-sidebar";
-import type { Version } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/versions-sidebar";
 import {
   entityVersionsOptions,
   fetchOlderVersions,
-} from "@/routes/_protected.workspaces/$workspaceId/-queries/entity-versions";
+} from "@/lib/workspaces/queries/entity-versions";
+import { VersionsSidebar } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/versions-sidebar";
+import type { Version } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/versions-sidebar";
 
 type VersionsFacetProps = {
   workspaceId: string;

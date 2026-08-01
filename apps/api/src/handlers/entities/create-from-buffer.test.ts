@@ -46,7 +46,8 @@ void mock.module("@/api/lib/file-derivative-queue", () => ({
 
 void mock.module("@/api/lib/sse", () => ({ broadcast: broadcastMock }));
 
-const { createEntityFromBuffer } = await import("./create-from-buffer");
+const { createEntityFromBuffer } =
+  await import("@/api/lib/entities/create-from-buffer");
 
 const organizationId = toSafeId<"organization">(
   "00000000-0000-0000-0000-000000000001",

@@ -4,12 +4,12 @@ import { and, asc, eq, lt, lte, or, sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
 import { entityDeletionCleanupRequests } from "@/api/db/schema";
-import { deleteS3Keys } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { detached } from "@/api/lib/detached";
 import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
+import { deleteS3Keys } from "@/api/lib/files/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 import { withTimeout } from "@/api/lib/with-timeout";

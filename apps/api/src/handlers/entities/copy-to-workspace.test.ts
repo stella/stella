@@ -2,11 +2,11 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { documentCounters, entities, fields } from "@/api/db/schema";
 import type { FieldContent, PropertyContent } from "@/api/db/schema-validators";
-import { DOCUMENT_TYPE_CLASSIFIER_ROLE } from "@/api/handlers/properties/create-schema";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { DOCUMENT_TYPE_CLASSIFIER_ROLE } from "@/api/lib/properties/create-schema";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 

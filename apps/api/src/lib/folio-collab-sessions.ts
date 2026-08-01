@@ -13,10 +13,10 @@ import {
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
-import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createFileKey } from "@/api/lib/files/utils";
 import { isMemberRole } from "@/api/lib/member-roles";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { getS3 } from "@/api/lib/s3";
