@@ -135,8 +135,9 @@ export const ensureDefaultSchedulerJobs = async (): Promise<void> => {
   });
 
   await ensureOneShotSchedulerJob({
-    description: "Backfill durable case-law redaction tombstones",
-    id: "caseLaw.backfillRedactionTombstones.v1",
+    description:
+      "Backfill durable case-law redaction tombstones and search cleanup",
+    id: "caseLaw.backfillRedactionTombstones.v2",
     schedule: {
       type: "interval",
       everyMs: 60 * 1000,

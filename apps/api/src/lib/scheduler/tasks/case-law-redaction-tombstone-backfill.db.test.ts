@@ -68,7 +68,7 @@ if (!databaseUrl || !runPostgresTests) {
       await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
     });
 
-    test("atomically removes stale search projections and reaches a fixed point", async () => {
+    test("replays v1 rows, fences projection restoration, and reaches a fixed point", async () => {
       const [source] = await db
         .insert(caseLawSources)
         .values({
@@ -108,6 +108,10 @@ if (!databaseUrl || !runPostgresTests) {
         operation: "redact",
         status: "succeeded",
       });
+      await db
+        .update(caseLawDecisions)
+        .set({ fulltext: null })
+        .where(eq(caseLawDecisions.id, decision.id));
       await db.insert(schedulerJobs).values({
         description: "redaction repair test",
         id: schedulerJobId,
@@ -125,6 +129,25 @@ if (!databaseUrl || !runPostgresTests) {
           columns: { fulltext: true, redactedAt: true },
         }),
       ).toMatchObject({ fulltext: null, redactedAt: expect.any(Date) });
+      expect(
+        await db
+          .select({ id: caseLawSearchDocuments.decisionId })
+          .from(caseLawSearchDocuments)
+          .where(eq(caseLawSearchDocuments.decisionId, decision.id)),
+      ).toHaveLength(0);
+
+      const rejectedProjection = await db
+        .insert(caseLawSearchDocuments)
+        .values({
+          decisionId: decision.id,
+          searchableText: "attempted restored text",
+          title: "Attempted restored title",
+        })
+        .then(
+          () => null,
+          (error: unknown) => error,
+        );
+      expect(rejectedProjection).toBeInstanceOf(Error);
       expect(
         await db
           .select({ id: caseLawSearchDocuments.decisionId })

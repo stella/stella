@@ -103,6 +103,24 @@ export const indexDecision = async (
     // CPU-intensive. The helper scopes the higher timeout to
     // this transaction only; user-facing queries keep the default.
     await setCorpusBackfillStatementTimeout(tx);
+    const writableDecision = await tx
+      .select({ id: caseLawDecisions.id })
+      .from(caseLawDecisions)
+      .where(
+        and(
+          eq(caseLawDecisions.id, decision.id),
+          isNull(caseLawDecisions.redactedAt),
+        ),
+      )
+      .for("key share")
+      .limit(1);
+    if (!writableDecision.at(0)) {
+      // audit: skip — search index maintenance; rebuilds derived state
+      await tx
+        .delete(caseLawSearchDocuments)
+        .where(eq(caseLawSearchDocuments.decisionId, decision.id));
+      return;
+    }
     await tx.execute(sql`
     INSERT INTO case_law_search_documents (
       decision_id, title, searchable_text,
