@@ -230,7 +230,7 @@ const queueSourceReconciliation = async (
 test(
   "one generation writer excludes rebuilds until it releases",
   async () => {
-    const generation = "case_law_writer_fence";
+    const generation = "case_law_v20";
     let lease = 0;
     const first = await acquireCaseLawCorpusGenerationLease({
       generation,
@@ -298,7 +298,7 @@ test("generation lease releases its transaction before a remote effect", async (
       }
     });
   const lease = await acquireCaseLawCorpusGenerationLease({
-    generation: "case_law_remote_effect_boundary",
+    generation: "case_law_v21",
     scopedDb: trackedScopedDb,
   });
   expect(lease).not.toBeNull();
@@ -310,7 +310,7 @@ test("generation lease releases its transaction before a remote effect", async (
     effect: async () => {
       expect(databaseCallbackActive).toBe(false);
       const contender = await acquireCaseLawCorpusGenerationLease({
-        generation: "case_law_remote_effect_boundary",
+        generation: "case_law_v21",
         scopedDb,
       });
       expect(contender).toBeNull();
@@ -320,6 +320,52 @@ test("generation lease releases its transaction before a remote effect", async (
 
   await lease.release();
 });
+
+test(
+  "generation precedence is immutable when a serving checkpoint is created late",
+  async () => {
+    const rebuildGeneration = "case_law_v23";
+    const servingGeneration = "case_law_v22";
+    await db.insert(caseLawCorpusIndexBackfills).values([
+      {
+        generation: rebuildGeneration,
+        snapshotAt: new Date("2026-07-31T00:00:00.000Z"),
+      },
+      {
+        generation: servingGeneration,
+        snapshotAt: new Date("2026-08-01T00:00:00.000Z"),
+      },
+    ]);
+    let writes = 0;
+    const backfill = createCaseLawGenerationBackfill({
+      backfillRows: async (_runnerDb, rows, _generation, options) => {
+        await options.beforeRemoteEffect({
+          effect: completeRemoteEffect,
+          onLeaseLost: noRemoteEffectCompensation,
+        });
+        writes += 1;
+        return rows.length;
+      },
+      newLeaseToken: () => "00000000-0000-4000-8000-000000000060",
+      removeProjection: ignoreProjectionRemoval,
+    });
+
+    try {
+      expect(await backfill(scopedDb, 1, rebuildGeneration)).toEqual({
+        indexed: 1,
+        status: "advanced",
+      });
+      expect(writes).toBe(1);
+    } finally {
+      await db
+        .delete(caseLawCorpusIndexBackfills)
+        .where(
+          sql`${caseLawCorpusIndexBackfills.generation} IN (${rebuildGeneration}, ${servingGeneration})`,
+        );
+    }
+  },
+  { timeout: 30_000 },
+);
 
 test("rejects an invalid generation before creating durable state", async () => {
   const generation = "invalid generation";
@@ -426,7 +472,7 @@ test(
 test(
   "initial snapshots remove every legacy-only target before advancing",
   async () => {
-    const generation = "case_law_v2_initial_legacy";
+    const generation = "case_law_v24";
     const legacyIndexId = corpusIndexId(generation, "CZE");
     await db
       .update(caseLawDecisions)
@@ -492,8 +538,8 @@ test(
 test(
   "reconciles each generation even when the serving generation marks the hash current",
   async () => {
-    const generation = "case_law_v2_generation_pending";
-    const newerGeneration = "case_law_v3_generation_pending";
+    const generation = "case_law_v25";
+    const newerGeneration = "case_law_v26";
     try {
       await db.insert(caseLawCorpusIndexBackfills).values({
         generation,
@@ -641,7 +687,7 @@ test(
 test(
   "retains the snapshot lease while the first reconciliation is in flight",
   async () => {
-    const generation = "case_law_v2_completion_lease";
+    const generation = "case_law_v27";
     let invocation = 0;
     let reconciliationStarted: (() => void) | undefined;
     let releaseReconciliation: (() => void) | undefined;
@@ -712,7 +758,7 @@ test(
 test(
   "retains and drains the exact generation target after content is removed",
   async () => {
-    const generation = "case_law_v2_delete_tombstone";
+    const generation = "case_law_v28";
     const indexId = corpusIndexId(generation, "CZE");
     await db.insert(caseLawCorpusIndexBackfills).values({
       generation,
@@ -782,7 +828,7 @@ test(
 test(
   "clears an index action whose content was erased before reconciliation",
   async () => {
-    const generation = "case_law_v2_erased_pending_index";
+    const generation = "case_law_v29";
     await db.insert(caseLawCorpusIndexBackfills).values({
       generation,
       snapshotAt: await nextBackfillSnapshotAt(),
@@ -843,7 +889,7 @@ test(
 test(
   "holds the full cursor on failure and lets only one runner own external index writes",
   async () => {
-    const retryGeneration = "case_law_v2_retry";
+    const retryGeneration = "case_law_v30";
     let releaseFirstPage: (() => void) | undefined;
     let firstPageStarted: (() => void) | undefined;
     const firstPageStartedPromise = new Promise<void>((resolve) => {
@@ -946,7 +992,7 @@ test(
 test(
   "an expired owner cannot issue another remote write after a new owner advances",
   async () => {
-    const generation = "case_law_v2_takeover";
+    const generation = "case_law_v31";
     let winningRemoteEffects = 0;
     const winner = createCaseLawGenerationBackfill({
       backfillRows: async (_scopedDb, rows, _generation, options) => {
@@ -1008,7 +1054,7 @@ test(
 test(
   "a remote effect that outlives its lease cannot expose a successful result",
   async () => {
-    const generation = "case_law_v2_mark_fence";
+    const generation = "case_law_v32";
     const staleDecisionId = toSafeId<"caseLawDecision">(
       "00000000-0000-4000-8000-000000000010",
     );
@@ -1161,7 +1207,7 @@ test(
 test(
   "lease-loss compensation retains an exact late append target after erasure",
   async () => {
-    const generation = "case_law_v2_erased_late_append";
+    const generation = "case_law_v33";
     const lateIndexId = corpusIndexId(generation, "CZE");
     await db.insert(caseLawCorpusIndexBackfills).values({
       generation,
@@ -1295,7 +1341,7 @@ test(
 test(
   "generation replay revisits a refreshed row already pointing at its target",
   async () => {
-    const generation = "case_law_v2_refreshed";
+    const generation = "case_law_v34";
     const refreshedId = toSafeId<"caseLawDecision">(
       "00000000-0000-4000-8000-000000000098",
     );
@@ -1346,7 +1392,7 @@ test(
 test(
   "rehydration admits exactly a current, non-pending generation projection",
   async () => {
-    const generation = "case_law_v2_rehydration";
+    const generation = "case_law_v35";
     const decisionId = toSafeId<"caseLawDecision">(
       "00000000-0000-4000-8000-000000000097",
     );
@@ -1444,7 +1490,7 @@ test(
 test(
   "reconciles source eligibility after the generation snapshot has passed",
   async () => {
-    const generation = "case_law_v2_source_eligibility";
+    const generation = "case_law_v36";
     await db.insert(caseLawCorpusIndexBackfills).values({
       generation,
       snapshotAt: await nextBackfillSnapshotAt(),
@@ -1577,7 +1623,7 @@ test(
 test(
   "source reconciliation drains its creation watermark despite later inserts",
   async () => {
-    const generation = "case_law_v2_source_watermark";
+    const generation = "case_law_v37";
     const lateDecisionId = toSafeId<"caseLawDecision">(
       "00000000-0000-4000-8000-000000000015",
     );
@@ -1672,7 +1718,7 @@ test(
 );
 
 test("rejects a pending hash without a pending action", async () => {
-  const generation = "case_law_invalid_pending";
+  const generation = "case_law_v38";
   await db.insert(caseLawCorpusIndexBackfills).values({
     generation,
     snapshotAt: await nextBackfillSnapshotAt(),

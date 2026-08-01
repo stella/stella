@@ -29,6 +29,7 @@ ALTER TABLE "case_law_sources"
 
 CREATE TABLE IF NOT EXISTS "case_law_corpus_index_backfills" (
   "generation" varchar(32) PRIMARY KEY NOT NULL,
+  "generation_order" integer GENERATED ALWAYS AS (substring("generation" from '^case_law_v([1-9][0-9]*)$')::integer) STORED NOT NULL,
   "snapshot_at" timestamptz NOT NULL DEFAULT now(),
   "cursor_created_at" timestamptz,
   "cursor_id" uuid,
@@ -40,8 +41,8 @@ CREATE TABLE IF NOT EXISTS "case_law_corpus_index_backfills" (
   CONSTRAINT "case_law_corpus_index_backfills_cursor_pair" CHECK (("cursor_created_at" IS NULL) = ("cursor_id" IS NULL)),
   CONSTRAINT "case_law_corpus_index_backfills_lease_pair" CHECK (("lease_token" IS NULL) = ("lease_expires_at" IS NULL))
 );--> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "case_law_corpus_index_backfills_snapshot_generation_idx"
-  ON "case_law_corpus_index_backfills" ("snapshot_at", "generation");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "case_law_corpus_index_backfills_order_generation_idx"
+  ON "case_law_corpus_index_backfills" ("generation_order", "generation");--> statement-breakpoint
 ALTER TABLE "case_law_corpus_index_backfills" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 DO $policy$
 BEGIN
@@ -274,8 +275,8 @@ BEGIN
     ) OR NOT EXISTS (
         SELECT 1
         FROM case_law_corpus_index_backfills AS newer
-        WHERE (newer.snapshot_at, newer.generation) >
-          (checkpoint.snapshot_at, checkpoint.generation)
+        WHERE (newer.generation_order, newer.generation) >
+          (checkpoint.generation_order, checkpoint.generation)
       )
     ON CONFLICT ON CONSTRAINT case_law_corpus_index_projections_pk DO UPDATE
     SET pending_action = EXCLUDED.pending_action,
@@ -338,8 +339,8 @@ BEGIN
   ) OR NOT EXISTS (
       SELECT 1
       FROM case_law_corpus_index_backfills AS newer
-      WHERE (newer.snapshot_at, newer.generation) >
-        (checkpoint.snapshot_at, checkpoint.generation)
+      WHERE (newer.generation_order, newer.generation) >
+        (checkpoint.generation_order, checkpoint.generation)
     )
   ON CONFLICT ON CONSTRAINT case_law_corpus_index_projections_pk DO UPDATE
   SET pending_action = EXCLUDED.pending_action,
@@ -413,8 +414,8 @@ BEGIN
   ) OR NOT EXISTS (
       SELECT 1
       FROM case_law_corpus_index_backfills AS newer
-      WHERE (newer.snapshot_at, newer.generation) >
-        (checkpoint.snapshot_at, checkpoint.generation)
+      WHERE (newer.generation_order, newer.generation) >
+        (checkpoint.generation_order, checkpoint.generation)
     )
   ON CONFLICT ON CONSTRAINT case_law_corpus_index_source_reconciliations_pk DO UPDATE
   SET revision = case_law_corpus_index_source_reconciliations.revision + 1,

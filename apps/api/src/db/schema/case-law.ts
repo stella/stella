@@ -660,6 +660,12 @@ export const caseLawCorpusIndexBackfills = p.pgTable(
   "case_law_corpus_index_backfills",
   {
     generation: p.varchar({ length: 32 }).primaryKey(),
+    generationOrder: p
+      .integer("generation_order")
+      .notNull()
+      .generatedAlwaysAs(
+        sql`substring("generation" from '^case_law_v([1-9][0-9]*)$')::integer`,
+      ),
     snapshotAt: timestamptz("snapshot_at").defaultNow().notNull(),
     cursorCreatedAt: timestamptz("cursor_created_at"),
     cursorId: safeUuid<"caseLawDecision">("cursor_id"),
@@ -698,8 +704,8 @@ export const caseLawCorpusIndexBackfills = p.pgTable(
       sql`(${t.leaseToken} IS NULL) = (${t.leaseExpiresAt} IS NULL)`,
     ),
     p
-      .index("case_law_corpus_index_backfills_snapshot_generation_idx")
-      .on(t.snapshotAt, t.generation),
+      .index("case_law_corpus_index_backfills_order_generation_idx")
+      .on(t.generationOrder, t.generation),
     ...globalCaseLawPolicies(),
   ],
 );

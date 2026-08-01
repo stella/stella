@@ -71,11 +71,14 @@ test("generation checkpoint migration preserves replay and role invariants", asy
     'CONSTRAINT "case_law_corpus_index_projections_pk" PRIMARY KEY ("generation", "decision_id")',
   );
   expect(source).toContain(
-    'CREATE INDEX IF NOT EXISTS "case_law_corpus_index_backfills_snapshot_generation_idx"\n  ON "case_law_corpus_index_backfills" ("snapshot_at", "generation")',
+    'CREATE INDEX IF NOT EXISTS "case_law_corpus_index_backfills_order_generation_idx"\n  ON "case_law_corpus_index_backfills" ("generation_order", "generation")',
   );
   expect(schemaSource).toContain(
-    '.index("case_law_corpus_index_backfills_snapshot_generation_idx")\n      .on(t.snapshotAt, t.generation)',
+    '.index("case_law_corpus_index_backfills_order_generation_idx")\n      .on(t.generationOrder, t.generation)',
   );
+  expect(source).toContain('"generation_order" integer GENERATED ALWAYS AS');
+  expect(source.match(/newer\.generation_order/gu)).toHaveLength(3);
+  expect(source).not.toContain("newer.snapshot_at");
   expect(source).toContain(
     'CREATE INDEX IF NOT EXISTS "case_law_corpus_index_source_reconciliations_source_idx"\n  ON "case_law_corpus_index_source_reconciliations" ("source_id")',
   );

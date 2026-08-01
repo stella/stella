@@ -744,6 +744,7 @@ export const acquireCaseLawCorpusGenerationLease = async ({
   newLeaseToken = () => Bun.randomUUIDv7(),
   scopedDb,
 }: AcquireGenerationLeaseOptions): Promise<CaseLawCorpusGenerationLease | null> => {
+  validateGenerationBoundary(generation);
   const leaseToken = newLeaseToken();
   const claimed = await scopedDb(async (tx) => {
     // audit: skip — this row is ephemeral mutual-exclusion state
@@ -869,6 +870,7 @@ type GenerationBackfillCheckpoint = {
   cursorCreatedAt: Date | null;
   cursorId: SafeId<"caseLawDecision"> | null;
   generation: string;
+  generationOrder: number;
   snapshotAt: Date;
 };
 
@@ -1011,7 +1013,7 @@ const hasNoNewerRebuild = ({
   checkpoint: GenerationBackfillCheckpoint;
 }) => sql`NOT EXISTS (
   SELECT 1 FROM ${caseLawCorpusIndexBackfills} AS newer
-  WHERE (newer.snapshot_at, newer.generation) > (${checkpoint.snapshotAt}, ${checkpoint.generation})
+  WHERE (newer.generation_order, newer.generation) > (${checkpoint.generationOrder}, ${checkpoint.generation})
 )`;
 
 const ownsUnexpiredLease = ({
@@ -1194,8 +1196,23 @@ const hasGenerationCheckpoint = async (
     ),
   );
 
-const validateGenerationBoundary = (generation: string): void => {
+const CASE_LAW_CORPUS_GENERATION_PATTERN = /^case_law_v([1-9][0-9]*)$/u;
+const POSTGRES_INTEGER_MAX = 2_147_483_647;
+
+const isCaseLawCorpusGeneration = (generation: string): boolean => {
   if (!isCorpusIndexGeneration(generation)) {
+    return false;
+  }
+  const version = CASE_LAW_CORPUS_GENERATION_PATTERN.exec(generation)?.at(1);
+  if (version === undefined) {
+    return false;
+  }
+  const order = Number(version);
+  return Number.isSafeInteger(order) && order <= POSTGRES_INTEGER_MAX;
+};
+
+const validateGenerationBoundary = (generation: string): void => {
+  if (!isCaseLawCorpusGeneration(generation)) {
     throw new CorpusIndexError({
       message: "Invalid corpus index generation",
     });
@@ -1588,6 +1605,7 @@ export const createCaseLawGenerationBackfill =
           cursorCreatedAt: claimedReconciliation.cursorCreatedAt,
           cursorId: claimedReconciliation.cursorId,
           generation: claimedReconciliation.generation,
+          generationOrder: claimedReconciliation.generationOrder,
           snapshotAt: claimedReconciliation.snapshotAt,
         };
         try {
@@ -1636,6 +1654,7 @@ export const createCaseLawGenerationBackfill =
         cursorCreatedAt: claimed.cursorCreatedAt,
         cursorId: claimed.cursorId,
         generation: claimed.generation,
+        generationOrder: claimed.generationOrder,
         snapshotAt: claimed.snapshotAt,
       };
       const runningGuards = createLeaseGuards({
@@ -1680,6 +1699,7 @@ export const createCaseLawGenerationBackfill =
           cursorCreatedAt: completed.cursorCreatedAt,
           cursorId: completed.cursorId,
           generation: completed.generation,
+          generationOrder: completed.generationOrder,
           snapshotAt: completed.snapshotAt,
         };
         try {
