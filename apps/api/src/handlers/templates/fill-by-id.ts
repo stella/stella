@@ -39,10 +39,11 @@ import { convertToPdf } from "@/api/lib/files/gotenberg";
 import { getS3 } from "@/api/lib/s3";
 import { DOCX_EXT_RE } from "@/api/lib/sanitize-filename";
 import { recordTemplateUse } from "@/api/lib/templates/record-use";
+import { containsNull } from "@/api/lib/templates/template-data";
 import { isRecord } from "@/api/lib/type-guards";
 import { DOCX_MIME_TYPE, OCTET_STREAM_MIME_TYPE } from "@/api/mime-types";
 
-import { assertTemplateFillUsage, containsNull } from "./fill";
+import { assertTemplateFillUsage } from "./fill";
 
 const fillByIdBodySchema = t.Object({
   values: t.String(),

@@ -152,11 +152,9 @@ export const extractMessageSearchText = (
     return "";
   }
   for (const part of message.parts) {
-    if (part.type === "text") {
-      const trimmed = part.content.trim();
-      if (trimmed) {
-        parts.push(trimmed);
-      }
+    const trimmed = part.content.trim();
+    if (trimmed) {
+      parts.push(trimmed);
     }
   }
 

@@ -33,7 +33,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { publisherCitationGap } from "@/api/handlers/case-law/ingestion/citation-recall";
 import { recordSliceCoverage } from "@/api/handlers/case-law/ingestion/coverage-ledger";
-import { storedDecisionSignal } from "@/api/lib/legal-search/parsers/validate-ast";
 import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
 import { segmentDecision } from "@/api/handlers/case-law/ingestion/segmenter";
 import { extractContext } from "@/api/handlers/case-law/polarity/context";
@@ -59,6 +58,7 @@ import {
 } from "@/api/lib/legal-search/corpus-storage";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
+import { storedDecisionSignal } from "@/api/lib/legal-search/parsers/validate-ast";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 import { getS3 } from "@/api/lib/s3";

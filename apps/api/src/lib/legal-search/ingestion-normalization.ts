@@ -44,7 +44,6 @@ export const sanitizeResult = (result: IngestionResult): IngestionResult => {
       return value.map((item) => deepSanitize(item));
     }
     if (isRecord(value)) {
-      // oxlint-disable-next-line no-untyped-updates/no-untyped-updates -- sanitizer accumulator
       const sanitized: Record<string, unknown> = {};
       for (const [entryKey, entryValue] of Object.entries(value)) {
         sanitized[entryKey] = deepSanitize(entryValue, entryKey);

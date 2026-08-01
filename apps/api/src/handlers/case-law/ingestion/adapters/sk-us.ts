@@ -45,9 +45,9 @@ import {
   adapterCatch,
   hashContent,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import { parseSkDecisionPdf } from "@/api/lib/legal-search/parsers/sk-courts";
 import { FetchBoundaryError } from "@/api/lib/errors/tagged-errors";
 import { fetchWithTimeout } from "@/api/lib/fetch";
+import { parseSkDecisionPdf } from "@/api/lib/legal-search/parsers/sk-courts";
 import { isRecord } from "@/api/lib/type-guards";
 
 // ── Constants ─────────────────────────────────────────────
