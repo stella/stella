@@ -1,16 +1,16 @@
 import { panic } from "better-result";
 
-export type PersistedChatMessageContentCandidate<TPart, TMetadata> = {
+type PersistedChatMessageContentCandidate<TPart, TMetadata> = {
   data: TPart[];
   metadata?: TMetadata | undefined;
   version: 2;
 };
 
 export declare const persistedChatMessageContentProof: unique symbol;
-export type PersistedChatMessageContentProof = {
+type PersistedChatMessageContentProof = {
   readonly [persistedChatMessageContentProof]: true;
 };
-export type ProvenPersistedChatMessageContent<TContent> = TContent &
+type ProvenPersistedChatMessageContent<TContent> = TContent &
   PersistedChatMessageContentProof;
 
 const hasOnlyProvenParts = <TPart, TMetadata>(
@@ -20,7 +20,7 @@ const hasOnlyProvenParts = <TPart, TMetadata>(
   PersistedChatMessageContentCandidate<TPart, TMetadata>
 > => content.data.every(isPersistablePart);
 
-export const provePersistedChatMessageContent = <TPart, TMetadata>(
+const provePersistedChatMessageContent = <TPart, TMetadata>(
   content: PersistedChatMessageContentCandidate<TPart, TMetadata>,
   isPersistablePart: (part: TPart) => boolean,
 ): ProvenPersistedChatMessageContent<

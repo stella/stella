@@ -19,7 +19,6 @@ import type {
 } from "@/api/handlers/chat/types";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
-import { provePersistedChatMessageContent } from "@/api/lib/chat/persisted-message-content";
 import { isUserFileUrl, parseUserFileId } from "@/api/lib/user-files/types";
 
 const IMAGE_MIME_PREFIX = "image/";
@@ -392,9 +391,18 @@ export const toPersistableChatMessage = (
   return message;
 };
 
+const isChatMessageContent = (
+  content: ChatMessageContentCandidate,
+): content is ChatMessageContent => content.data.every(isChatPart);
+
 export const toChatMessageContent = (
   content: ChatMessageContentCandidate,
-): ChatMessageContent => provePersistedChatMessageContent(content, isChatPart);
+): ChatMessageContent => {
+  if (!isChatMessageContent(content)) {
+    panic("Cannot persist chat message content with unsupported parts");
+  }
+  return content;
+};
 
 const isLegacyAnonRestorationsPart = (
   part: unknown,
