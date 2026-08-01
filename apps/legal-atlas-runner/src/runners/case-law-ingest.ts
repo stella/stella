@@ -1143,7 +1143,7 @@ export const runCaseLawIngest = async (
       }
       try {
         // oxlint-disable-next-line no-await-in-loop -- one bounded backfill batch per interval; the next poll only runs after this batch completes
-        const indexed = await runWithHardDeadline(
+        const result = await runWithHardDeadline(
           "corpus-index",
           BACKFILL_HARD_DEADLINE_MS,
           async () =>
@@ -1153,8 +1153,8 @@ export const runCaseLawIngest = async (
               generation,
             ),
         );
-        if (indexed > 0) {
-          logInfo(`[corpus-index] Indexed ${indexed} decisions`);
+        if (result.indexed > 0) {
+          logInfo(`[corpus-index] Indexed ${result.indexed} decisions`);
         }
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);

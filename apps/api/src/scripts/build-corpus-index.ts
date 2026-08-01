@@ -20,7 +20,8 @@ import { rlsDb } from "@/api/db/root";
  */
 import { createIngestionDb } from "@/api/db/scoped";
 import { envBase } from "@/api/env-base";
-import { backfillCorpusIndex } from "@/api/handlers/case-law/corpus-index";
+import { backfillCorpusIndexGenerationPage } from "@/api/handlers/case-law/corpus-index";
+import { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
 import { LIMITS } from "@/api/lib/limits";
 import { refreshCorpusS3, refreshS3 } from "@/api/lib/s3";
 
@@ -35,16 +36,26 @@ console.log(`=== BUILD CORPUS INDEX: generation ${generation} ===`);
 let total = 0;
 while (true) {
   // oxlint-disable-next-line no-await-in-loop -- drives backfill to completion one batch at a time until none remain
-  const indexed = await backfillCorpusIndex(
+  const result = await backfillCorpusIndexGenerationPage(
     ingestionDb,
     LIMITS.corpusIndexBatchSize,
     generation,
   );
-  if (indexed === 0) {
-    break;
+  switch (result.status) {
+    case "complete":
+      break;
+    case "busy":
+      throw new CorpusIndexError({
+        message: `generation backfill ${generation} is already leased by another worker`,
+      });
+    case "advanced":
+      total += result.indexed;
+      console.log(`  indexed ${total}...`);
+      continue;
+    default:
+      result satisfies never;
   }
-  total += indexed;
-  console.log(`  indexed ${total}...`);
+  break;
 }
 
 console.log(`Done. Indexed ${total} decisions for generation ${generation}.`);

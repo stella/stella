@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { loadDocsForBatch } from "@/api/handlers/case-law/corpus-index";
+import {
+  generationProjectionTargetIds,
+  hasGenerationProjectionTargets,
+  loadDocsForBatch,
+} from "@/api/handlers/case-law/corpus-index";
 import { toSafeId } from "@/api/lib/branded-types";
 import { corpusDocumentDeleteQuery } from "@/api/lib/corpus-index/core";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
@@ -31,10 +35,85 @@ const makeRow = ({ id, contentHash, textS3Key }: MakeRowOptions) => ({
   contentHash,
   indexedHash: null,
   indexedGeneration: null,
+  generationIndexId: null,
+  generationPendingAction: null,
+  generationPendingIndexIds: [],
+  generationPendingRevision: 0,
   // SAFETY: tests fabricate the branded token the adapters normally
   // select as `updated_at::text`.
   // eslint-disable-next-line typescript/no-unsafe-type-assertion
   updatedAtToken: "2024-01-01 00:00:00" as TimestampCasToken,
+});
+
+test("generation delete targets are the complete union of durable pointers", () => {
+  const generation = "case_law_v2";
+  const pendingIndexId = corpusIndexId(generation, "CZE");
+  const projectionIndexId = corpusIndexId(generation, "SVK");
+  const legacyIndexId = corpusIndexId(generation, "POL");
+
+  for (const pendingIndexIds of [[], [pendingIndexId]]) {
+    for (const generationIndexId of [null, projectionIndexId]) {
+      for (const indexedGeneration of [null, legacyIndexId]) {
+        const targets = generationProjectionTargetIds({
+          generation,
+          row: {
+            generationIndexId,
+            generationPendingIndexIds: pendingIndexIds,
+            indexedGeneration,
+          },
+        });
+        const expected = [
+          ...pendingIndexIds,
+          ...(generationIndexId === null ? [] : [generationIndexId]),
+          ...(indexedGeneration === null ? [] : [indexedGeneration]),
+        ];
+
+        expect([...targets].sort()).toEqual(expected.sort());
+        expect(
+          hasGenerationProjectionTargets({
+            generation,
+            row: {
+              generationIndexId,
+              generationPendingIndexIds: pendingIndexIds,
+              indexedGeneration,
+            },
+          }),
+        ).toBe(expected.length > 0);
+      }
+    }
+  }
+
+  expect([
+    ...generationProjectionTargetIds({
+      generation,
+      row: {
+        generationIndexId: null,
+        generationPendingIndexIds: [],
+        indexedGeneration: corpusIndexId("case_law_v1", "CZE"),
+      },
+    }),
+  ]).toEqual([]);
+  expect(
+    hasGenerationProjectionTargets({
+      generation,
+      row: {
+        generationIndexId: null,
+        generationPendingIndexIds: [],
+        indexedGeneration: corpusIndexId("case_law_v1", "CZE"),
+      },
+    }),
+  ).toBe(false);
+
+  expect([
+    ...generationProjectionTargetIds({
+      generation,
+      row: {
+        generationIndexId: pendingIndexId,
+        generationPendingIndexIds: [pendingIndexId],
+        indexedGeneration: pendingIndexId,
+      },
+    }),
+  ]).toEqual([pendingIndexId]);
 });
 
 describe("loadDocsForBatch read-failure isolation", () => {

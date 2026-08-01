@@ -4,7 +4,10 @@ import type { SQL } from "drizzle-orm";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { caseLawDecisions, legislationDocuments } from "@/api/db/schema";
-import { backfillCorpusIndex } from "@/api/handlers/case-law/corpus-index";
+import {
+  BACKFILL_STATUS,
+  backfillCorpusIndex,
+} from "@/api/handlers/case-law/corpus-index";
 import { backfillLegislationCorpusIndex } from "@/api/handlers/legislation/corpus-index";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -13,6 +16,7 @@ import {
   type TimestampCasToken,
   timestampMatchesCasToken,
 } from "@/api/lib/db/timestamp-cas";
+import { ConcurrentModificationError } from "@/api/lib/errors/tagged-errors";
 import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
 import { writeCorpusDocument } from "@/api/lib/legal-search/corpus-storage";
 import type {
@@ -455,8 +459,8 @@ const backfillCaseLawIndex = async (
     // oxlint-disable-next-line no-await-in-loop -- credential refresh must complete before the next batch's S3 reads; sequential by design
     await refreshStaleS3();
 
-    // oxlint-disable-next-line no-await-in-loop -- batches drain a queue sequentially; the next iteration only proceeds once this batch's count is known
-    const count = await backfillCorpusIndex(
+    // oxlint-disable-next-line no-await-in-loop -- batches drain a queue sequentially; the next iteration only proceeds once this batch's progress is known
+    const result = await backfillCorpusIndex(
       ingestionDb,
       batchSize,
       generation,
@@ -464,12 +468,25 @@ const backfillCaseLawIndex = async (
         ? {}
         : { readConcurrency: bulk.indexReadConcurrency },
     );
-    if (count === 0) {
-      break;
+    switch (result.status) {
+      case BACKFILL_STATUS.ADVANCED:
+        indexed += result.indexed;
+        if (result.indexed > 0) {
+          logInfo(`  case-law indexed=${indexed}`);
+        }
+        break;
+      case BACKFILL_STATUS.COMPLETE:
+        return { indexed };
+      case BACKFILL_STATUS.BUSY:
+        throw new ConcurrentModificationError({
+          message:
+            "Case-law corpus index backfill is already running for this generation; retry after the active writer finishes.",
+        });
+      default: {
+        const exhausted: never = result;
+        return exhausted;
+      }
     }
-
-    indexed += count;
-    logInfo(`  case-law indexed=${indexed}`);
   }
 
   return { indexed };

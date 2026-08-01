@@ -1,0 +1,292 @@
+import { expect, test } from "bun:test";
+
+import {
+  CASE_LAW_CORPUS_INDEX_BACKFILL_STATUSES,
+  CASE_LAW_CORPUS_INDEX_PROJECTION_ACTIONS,
+} from "@/api/db/schema";
+import { CORPUS_LICENSES } from "@/api/lib/legal-search/corpus-source";
+
+const caseLawCorpusIndexSource = new URL("corpus-index.ts", import.meta.url);
+const caseLawErasureSource = new URL("erasure.ts", import.meta.url);
+const caseLawSchemaSource = new URL(
+  "../../db/schema/case-law.ts",
+  import.meta.url,
+);
+const publicSearchSource = new URL("decisions/search.ts", import.meta.url);
+const sharedSearchProviderSource = new URL(
+  "../../lib/legal-search/corpus-index-provider.ts",
+  import.meta.url,
+);
+const generationMigrationSource = new URL(
+  "../../../drizzle/20260731170000_case_law_corpus_generation_backfill/migration.sql",
+  import.meta.url,
+);
+const GENERATION_STATE_TABLES = [
+  "case_law_corpus_index_backfills",
+  "case_law_corpus_index_source_reconciliations",
+  "case_law_corpus_index_writer_leases",
+  "case_law_corpus_index_projections",
+] as const;
+
+test("case-law incremental corpus scans never select a generation inequality", async () => {
+  const source = await Bun.file(caseLawCorpusIndexSource).text();
+  // A generation cutover must be a durable keyset walk. `<>` turns its
+  // selector into a corpus-wide scan and can starve request traffic.
+  expect(source).not.toMatch(/indexedGeneration\}[^`]*<>/su);
+  expect(source).not.toMatch(/indexed_generation[^`]*<>/su);
+  expect(source).toMatch(
+    /sql`LOCK TABLE \$\{caseLawDecisions\}, \$\{caseLawSources\} IN SHARE MODE`/u,
+  );
+});
+
+test("a restore racing erasure is durably requeued", async () => {
+  const source = await Bun.file(caseLawErasureSource).text();
+  const generationValidation = source.indexOf(
+    "if (!isCaseLawCorpusGeneration(generation)) {",
+  );
+  const firstIrreversibleMutation = source.indexOf(
+    "await removeDecisionFromIndex(decisionId, scopedDb);",
+  );
+  const storedTargetValidation = source.indexOf(
+    "const storedIndexTarget = (() => {",
+  );
+  const branchStart = source.indexOf("if (!stillErased) {");
+  const branchEnd = source.indexOf("return;", branchStart);
+
+  expect(generationValidation).toBeGreaterThanOrEqual(0);
+  expect(storedTargetValidation).toBeGreaterThan(generationValidation);
+  expect(firstIrreversibleMutation).toBeGreaterThan(generationValidation);
+  expect(firstIrreversibleMutation).toBeGreaterThan(storedTargetValidation);
+  expect(branchStart).toBeGreaterThanOrEqual(0);
+  expect(branchEnd).toBeGreaterThan(branchStart);
+  expect(source.slice(branchStart, branchEnd)).toContain(
+    ".set({ indexedAt: null, indexedHash: null })",
+  );
+  expect(source).toContain("auditedViaCorpusIndex = targets.size > 0");
+  expect(source).toContain(
+    "pendingRevision: caseLawCorpusIndexProjections.pendingRevision",
+  );
+  expect(source).toContain(
+    "eq(\n                        caseLawCorpusIndexProjections.pendingRevision,\n                        projection.pendingRevision,",
+  );
+});
+
+test("lease acquisition failures are audited after local redaction", async () => {
+  const source = await Bun.file(caseLawErasureSource).text();
+  const firstIrreversibleMutation = source.indexOf(
+    "await removeDecisionFromIndex(decisionId, scopedDb);",
+  );
+  const rejectedClaim = source.indexOf("if (claimRejected) {");
+  const rejectedClaimAudit = source.indexOf(
+    "await recordFailedRedactionAudit({",
+    rejectedClaim,
+  );
+  const rejectedClaimThrow = source.indexOf(
+    "throw firstClaimError;",
+    rejectedClaim,
+  );
+
+  expect(rejectedClaim).toBeGreaterThan(firstIrreversibleMutation);
+  expect(rejectedClaimAudit).toBeGreaterThan(rejectedClaim);
+  expect(rejectedClaimThrow).toBeGreaterThan(rejectedClaimAudit);
+});
+
+test("generation checkpoint migration preserves replay and role invariants", async () => {
+  const [source, schemaSource] = await Promise.all([
+    Bun.file(generationMigrationSource).text(),
+    Bun.file(caseLawSchemaSource).text(),
+  ]);
+
+  for (const table of GENERATION_STATE_TABLES) {
+    expect(source).toContain(
+      `ALTER TABLE "${table}" ENABLE ROW LEVEL SECURITY`,
+    );
+    expect(source).toContain(
+      `GRANT SELECT, INSERT, UPDATE, DELETE\n  ON TABLE "${table}" TO stella_ingestion`,
+    );
+    expect(
+      source.match(new RegExp(`tablename = '${table}'`, "gu")),
+    ).toHaveLength(2);
+  }
+  expect(source).toContain(
+    'CONSTRAINT "case_law_corpus_index_projections_pk" PRIMARY KEY ("generation", "decision_id")',
+  );
+  expect(source).toContain(
+    'CREATE INDEX IF NOT EXISTS "case_law_corpus_index_backfills_order_generation_idx"\n  ON "case_law_corpus_index_backfills" ("generation_order", "generation")',
+  );
+  expect(schemaSource).toContain(
+    '.index("case_law_corpus_index_backfills_order_generation_idx")\n      .on(t.generationOrder, t.generation)',
+  );
+  expect(source).toContain('"generation_order" integer GENERATED ALWAYS AS');
+  expect(source.match(/newer\.generation_order/gu)).toHaveLength(3);
+  expect(source).not.toContain("newer.snapshot_at");
+  expect(source).toContain(
+    'CREATE INDEX IF NOT EXISTS "case_law_corpus_index_source_reconciliations_source_idx"\n  ON "case_law_corpus_index_source_reconciliations" ("source_id")',
+  );
+  expect(schemaSource).toContain(
+    '.index("case_law_corpus_index_source_reconciliations_source_idx")\n      .on(t.sourceId)',
+  );
+  for (const constraint of [
+    "case_law_corpus_index_source_reconciliations_pk",
+    "case_law_corpus_index_source_reconciliations_generation_fk",
+    "case_law_corpus_index_source_reconciliations_source_fk",
+  ]) {
+    expect(source).toContain(`CONSTRAINT "${constraint}"`);
+    expect(schemaSource).toContain(`name: "${constraint}"`);
+  }
+  expect(source).toContain(
+    'CONSTRAINT "case_law_corpus_index_source_reconciliations_upper_pair"',
+  );
+  expect(schemaSource).toContain(
+    '"case_law_corpus_index_source_reconciliations_upper_pair"',
+  );
+  expect(source).toContain(
+    'CONSTRAINT "case_law_source_reconciliations_cursor_upper"',
+  );
+  expect(schemaSource).toContain(
+    '"case_law_source_reconciliations_cursor_upper"',
+  );
+  expect(source).toContain(
+    "CREATE OR REPLACE FUNCTION enforce_case_law_sources_descriptor_shape()",
+  );
+  expect(source).toContain("BEFORE INSERT OR UPDATE OF descriptor");
+  expect(source).toContain("NEW.descriptor IS DISTINCT FROM OLD.descriptor");
+  expect(source).toContain(
+    "jsonb_typeof(NEW.descriptor -> 'allowsRedistribution') = 'boolean'",
+  );
+  expect(source).toContain("CONSTRAINT = 'case_law_sources_descriptor_shape'");
+  expect(schemaSource).not.toContain('"case_law_sources_descriptor_shape"');
+  for (const license of CORPUS_LICENSES) {
+    expect(source).toContain(`'${license}'`);
+  }
+  expect(source).toContain(
+    "AFTER INSERT OR UPDATE OF content_hash, indexed_hash, country",
+  );
+  expect(source).toContain("AFTER UPDATE OF descriptor");
+  expect(source).not.toContain(
+    "coalesce(NEW.descriptor ->> 'allowsRedistribution', 'true')",
+  );
+  expect(source).toContain(
+    "OR (NEW.descriptor ->> 'allowsRedistribution') = 'true'",
+  );
+  expect(source).toContain(
+    "SET revision = case_law_corpus_index_source_reconciliations.revision + 1",
+  );
+  expect(source).toContain("cursor_created_at = null");
+  expect(source).toContain("cursor_id = null");
+  expect(source).toContain("upper_created_at = EXCLUDED.upper_created_at");
+  expect(source).toContain("upper_id = EXCLUDED.upper_id");
+  expect(source).toContain("LEFT JOIN LATERAL (");
+  expect(source).toContain(
+    "ORDER BY decision.created_at DESC, decision.id DESC",
+  );
+  expect(
+    source.match(
+      /ON CONFLICT ON CONSTRAINT case_law_corpus_index_projections_pk DO UPDATE/gu,
+    ),
+  ).toHaveLength(2);
+  expect(source).not.toContain("ON CONFLICT (");
+  expect(source).toContain("pending_hash = EXCLUDED.pending_hash");
+  expect(source).toContain(
+    "\"pending_index_ids\" varchar(64)[] DEFAULT '{}'::varchar(64)[] NOT NULL",
+  );
+  expect(source).toContain('"pending_revision" integer DEFAULT 0 NOT NULL');
+  expect(source).toContain(
+    'ADD COLUMN IF NOT EXISTS "pending_revision" integer DEFAULT 0 NOT NULL',
+  );
+  expect(source).toContain(
+    'CONSTRAINT "case_law_corpus_index_projections_pending_revision_nonnegative"',
+  );
+  expect(source).toContain(
+    "conname = 'case_law_corpus_index_projections_pending_revision_nonnegative'",
+  );
+  expect(source).toContain(
+    "conrelid = 'case_law_corpus_index_projections'::regclass",
+  );
+  expect(schemaSource).toContain(
+    '"case_law_corpus_index_projections_pending_revision_nonnegative"',
+  );
+  expect(source).toContain("pending_index_ids = ARRAY(");
+  expect(source).toContain(
+    "case_law_corpus_index_projections.pending_index_ids",
+  );
+  expect(source).toContain("pending_action = EXCLUDED.pending_action");
+  expect(source).toContain("'delete', null, '{}', 1, clock_timestamp()");
+  expect(
+    source.match(
+      /pending_revision = case_law_corpus_index_projections\.pending_revision \+ 1/gu,
+    ),
+  ).toHaveLength(2);
+  expect(source.match(/existing\.decision_id = NEW\.id/gu)).toHaveLength(2);
+  expect(source).toContain("existing_decision.source_id = NEW.id");
+  expect(source).toContain(
+    "NEW.indexed_generation =\n          (projection.generation || '_' || lower(NEW.country))",
+  );
+  for (const action of CASE_LAW_CORPUS_INDEX_PROJECTION_ACTIONS) {
+    expect(source).toContain(`"pending_action" = '${action}'`);
+  }
+  expect(source).toContain(
+    'DROP INDEX CONCURRENTLY IF EXISTS "case_law_decisions_corpus_generation_cursor_idx"',
+  );
+  expect(source).toContain(
+    'CREATE INDEX CONCURRENTLY "case_law_decisions_corpus_generation_cursor_idx"\n  ON "case_law_decisions" ("created_at", "id")',
+  );
+  expect(source).toContain(
+    'CREATE INDEX IF NOT EXISTS "case_law_corpus_index_projections_decision_idx"\n  ON "case_law_corpus_index_projections" ("decision_id")',
+  );
+  for (const alteration of [
+    'ALTER TABLE "case_law_decisions" ALTER COLUMN "indexed_generation" SET DATA TYPE varchar(64)',
+    'ALTER TABLE "case_law_index_jobs" ALTER COLUMN "generation" SET DATA TYPE varchar(64)',
+    'ALTER TABLE "legislation_documents" ALTER COLUMN "indexed_generation" SET DATA TYPE varchar(64)',
+    'ALTER TABLE "legislation_index_jobs" ALTER COLUMN "generation" SET DATA TYPE varchar(64)',
+  ]) {
+    expect(source).toContain(alteration);
+  }
+  expect(source).toContain(
+    'CREATE INDEX CONCURRENTLY "case_law_decisions_source_generation_cursor_idx"\n  ON "case_law_decisions" ("source_id", "created_at", "id")',
+  );
+  expect(source).toContain(
+    'CREATE INDEX CONCURRENTLY "case_law_decisions_corpus_hash_pending_idx"\n  ON "case_law_decisions" ("id")\n  WHERE "content_hash" IS NOT NULL AND "indexed_hash" IS NULL',
+  );
+  expect(source).toContain(
+    'CREATE INDEX CONCURRENTLY "legislation_documents_corpus_hash_pending_idx"\n  ON "legislation_documents" ("id")\n  WHERE "content_hash" IS NOT NULL AND "indexed_hash" IS NULL',
+  );
+  expect(source).not.toContain(
+    'DROP INDEX CONCURRENTLY IF EXISTS "case_law_decisions_corpus_pending_idx"',
+  );
+  expect(source).not.toContain(
+    'DROP INDEX CONCURRENTLY IF EXISTS "legislation_documents_corpus_pending_idx"',
+  );
+  expect(source).toContain(
+    `CHECK ("status" IN (${CASE_LAW_CORPUS_INDEX_BACKFILL_STATUSES.map(
+      (status) => `'${status}'`,
+    ).join(",")}))`,
+  );
+  expect(source).toContain(
+    'ALTER COLUMN "created_at" SET DEFAULT clock_timestamp()',
+  );
+  expect(source).toContain(
+    "CREATE OR REPLACE FUNCTION enforce_case_law_decisions_corpus_country_shape()",
+  );
+  expect(source).toContain("BEFORE INSERT OR UPDATE OF country");
+  expect(source).toContain("NEW.country IS DISTINCT FROM OLD.country");
+  expect(source).toContain("NEW.country !~ '^[A-Za-z]{2,8}$'");
+  expect(source).toContain(
+    "CONSTRAINT = 'case_law_decisions_corpus_country_shape'",
+  );
+  expect(schemaSource).not.toContain(
+    '"case_law_decisions_corpus_country_shape"',
+  );
+});
+
+test("every case-law corpus search boundary uses generation projection state", async () => {
+  const consumers = await Promise.all(
+    [publicSearchSource, sharedSearchProviderSource].map(
+      async (source) => await Bun.file(source).text(),
+    ),
+  );
+  for (const source of consumers) {
+    expect(source).toContain("caseLawCorpusProjectionJoin(generation)");
+    expect(source).toContain("currentCaseLawCorpusProjection(generation)");
+  }
+});

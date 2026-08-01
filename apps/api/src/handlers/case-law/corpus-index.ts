@@ -1,13 +1,26 @@
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { panic } from "better-result";
+import { and, asc, eq, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 
+import type { Transaction } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawDecisions,
+  caseLawCorpusIndexBackfills,
+  caseLawCorpusIndexProjections,
+  caseLawCorpusIndexSourceReconciliations,
+  caseLawCorpusIndexWriterLeases,
+  CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS,
+  type CaseLawCorpusIndexBackfillStatus,
+  type CaseLawCorpusIndexProjectionAction,
   caseLawIndexJobs,
   caseLawSources,
 } from "@/api/db/schema";
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
 import type { SafeId } from "@/api/lib/branded-types";
-import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
+import {
+  redistributableCaseLawSource,
+  redistributableCaseLawSourceSqlFor,
+} from "@/api/lib/case-law/redistribution";
 import type { CorpusChunk } from "@/api/lib/corpus-index/chunking";
 import {
   chunkDocument,
@@ -16,19 +29,37 @@ import {
 import type {
   CorpusDocumentPayload,
   CorpusIndexAdapter,
+  FencedRemoteEffect,
+  ReservedAppendTargets,
 } from "@/api/lib/corpus-index/core";
 import {
   createCorpusIndexer,
+  FENCED_BACKFILL_BATCH_STATUS,
   resolveMarkedRowIds,
+  resolveReservedAppendTargets,
+  settleAll,
 } from "@/api/lib/corpus-index/core";
 import {
   timestampCasToken,
   type TimestampCasToken,
 } from "@/api/lib/db/timestamp-cas";
+import { ConcurrentModificationError } from "@/api/lib/errors/tagged-errors";
+import { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
+import {
+  isRedistributable,
+  type CorpusSourceDescriptor,
+} from "@/api/lib/legal-search/corpus-source";
 import {
   readCorpusAst,
   readCorpusText,
 } from "@/api/lib/legal-search/corpus-storage";
+import {
+  corpusIndexId,
+  isCaseLawCorpusGeneration,
+  isCorpusIndexGeneration,
+  isCorpusIndexJurisdiction,
+  tryCorpusIndexGeneration,
+} from "@/api/lib/legal-search/index-naming";
 
 /**
  * corpus index search-projection maintenance for the `case_law` family.
@@ -63,6 +94,10 @@ type IndexableRow = {
   contentHash: string | null;
   indexedHash: string | null;
   indexedGeneration: string | null;
+  generationIndexId: string | null;
+  generationPendingAction: CaseLawCorpusIndexProjectionAction | null;
+  generationPendingIndexIds: string[];
+  generationPendingRevision: number;
   updatedAtToken: TimestampCasToken;
 };
 
@@ -87,11 +122,405 @@ const SELECT_COLUMNS = {
   contentHash: caseLawDecisions.contentHash,
   indexedHash: caseLawDecisions.indexedHash,
   indexedGeneration: caseLawDecisions.indexedGeneration,
+  generationIndexId: sql<string | null>`null`,
+  generationPendingAction: sql<CaseLawCorpusIndexProjectionAction | null>`null`,
+  generationPendingIndexIds: sql<string[]>`'{}'::varchar(64)[]`,
+  generationPendingRevision: sql<number>`0`,
+  createdAt: caseLawDecisions.createdAt,
   updatedAtToken: timestampCasToken(caseLawDecisions.updatedAt),
+};
+
+const GENERATION_PAGE_SELECT_COLUMNS = {
+  ...SELECT_COLUMNS,
+  generationIndexId: caseLawCorpusIndexProjections.indexId,
+  generationIndexedHash: caseLawCorpusIndexProjections.indexedHash,
+  generationPendingAction: caseLawCorpusIndexProjections.pendingAction,
+  generationPendingIndexIds: sql<
+    string[]
+  >`coalesce(${caseLawCorpusIndexProjections.pendingIndexIds}, '{}'::varchar(64)[])`,
+  generationPendingRevision: sql<number>`coalesce(${caseLawCorpusIndexProjections.pendingRevision}, 0)`,
+  sourceDescriptor: caseLawSources.descriptor,
+};
+
+const INCREMENTAL_SELECT_COLUMNS = {
+  ...SELECT_COLUMNS,
+  generationIndexId: caseLawCorpusIndexProjections.indexId,
+  generationPendingAction: caseLawCorpusIndexProjections.pendingAction,
+  generationPendingIndexIds: sql<
+    string[]
+  >`coalesce(${caseLawCorpusIndexProjections.pendingIndexIds}, '{}'::varchar(64)[])`,
+  generationPendingRevision: sql<number>`coalesce(${caseLawCorpusIndexProjections.pendingRevision}, 0)`,
 };
 
 // A row is indexable once its canonical payload is in object storage.
 const hasContent = sql`${caseLawDecisions.contentHash} IS NOT NULL`;
+const hasCorpusJurisdiction = sql`${caseLawDecisions.country} ~ '^[A-Za-z]{2,8}$'`;
+
+const settleReservedGenerationProjections = async (
+  tx: Transaction,
+  {
+    generation,
+    marked,
+    reservations,
+    rows,
+  }: {
+    generation: string;
+    marked: ReadonlySet<SafeId<"caseLawDecision">>;
+    reservations: ReadonlyMap<SafeId<"caseLawDecision">, ReservedAppendTargets>;
+    rows: readonly IndexableRow[];
+  },
+): Promise<void> => {
+  const markedRows = rows.filter(({ id }) => marked.has(id));
+  if (markedRows.length === 0) {
+    return;
+  }
+  const tuples = sql.join(
+    markedRows.map((row) => {
+      const reservation = reservations.get(row.id);
+      if (reservation === undefined) {
+        panic("marked corpus row has no reservation epoch");
+      }
+      return sql`(${row.id}::uuid, ${row.contentHash}::text, ${reservation.revision}::integer)`;
+    }),
+    sql`, `,
+  );
+  // Only the exact reservation epoch whose targets were deleted may settle.
+  // A lease-loss compensation or refresh increments the revision, preserving
+  // every target it adds after this operation's cleanup snapshot.
+  // audit: skip — search index maintenance; rebuilds derived state
+  await tx.execute(sql`
+    WITH settled(decision_id, content_hash, pending_revision) AS (
+      VALUES ${tuples}
+    )
+    UPDATE ${caseLawCorpusIndexProjections} AS projection
+    SET pending_action = null,
+        pending_hash = null,
+        pending_index_ids = '{}',
+        updated_at = now()
+    FROM settled
+    WHERE projection.generation = ${generation}
+      AND projection.decision_id = settled.decision_id
+      AND projection.pending_hash IS NOT DISTINCT FROM settled.content_hash
+      AND projection.pending_revision = settled.pending_revision
+  `);
+};
+
+const commitCurrentGenerationProjection = async (
+  tx: Transaction,
+  {
+    generation,
+    indexId,
+    reservations,
+    rows,
+  }: {
+    generation: string;
+    indexId: string;
+    reservations: ReadonlyMap<SafeId<"caseLawDecision">, ReservedAppendTargets>;
+    rows: readonly IndexableRow[];
+  },
+): Promise<Set<SafeId<"caseLawDecision">>> => {
+  if (rows.length === 0) {
+    return new Set();
+  }
+  const tuples = sql.join(
+    rows.map((row) => {
+      const reservation = reservations.get(row.id);
+      if (reservation === undefined) {
+        panic("generation commit has no reservation epoch");
+      }
+      return sql`(${row.id}::uuid, ${row.contentHash}::text, ${reservation.revision}::integer, ${row.updatedAtToken}::timestamptz)`;
+    }),
+    sql`, `,
+  );
+  // The generation queue is the commit marker for a rebuild. Locking the
+  // decision rows makes the content/update-token check atomic with queue
+  // removal; a refresh that races this commit waits, then re-enqueues its
+  // newer hash after the transaction releases the row lock.
+  // audit: skip — search index maintenance; rebuilds derived state
+  const marked: unknown = await tx.execute(sql`
+    WITH expected(id, content_hash, pending_revision, expected_updated) AS (
+      VALUES ${tuples}
+    ), live AS MATERIALIZED (
+      SELECT d.id, d.content_hash, v.pending_revision
+      FROM ${caseLawDecisions} AS d
+      INNER JOIN expected AS v ON v.id = d.id
+      WHERE d.content_hash IS NOT DISTINCT FROM v.content_hash
+        AND d.updated_at IS NOT DISTINCT FROM v.expected_updated
+      FOR UPDATE OF d
+    ), committed AS (
+      INSERT INTO ${caseLawCorpusIndexProjections} AS projection (
+        generation,
+        decision_id,
+        index_id,
+        indexed_hash,
+        pending_action,
+        pending_hash,
+        pending_index_ids,
+        pending_revision,
+        updated_at
+      )
+      SELECT ${generation}, live.id, ${indexId}, live.content_hash, null, null, '{}', live.pending_revision, now()
+      FROM live
+      ON CONFLICT (generation, decision_id) DO UPDATE
+      SET index_id = EXCLUDED.index_id,
+          indexed_hash = EXCLUDED.indexed_hash,
+          updated_at = EXCLUDED.updated_at
+      RETURNING decision_id
+    )
+    SELECT live.id FROM live
+  `);
+  const markedIds = resolveMarkedRowIds(marked, rows);
+  await settleReservedGenerationProjections(tx, {
+    generation,
+    marked: markedIds,
+    reservations,
+    rows,
+  });
+  return markedIds;
+};
+
+export const reserveGenerationProjectionTargets = async (
+  tx: Transaction,
+  { generation, rows }: { generation: string; rows: readonly IndexableRow[] },
+): Promise<Map<SafeId<"caseLawDecision">, ReservedAppendTargets>> => {
+  if (rows.length === 0) {
+    return new Map();
+  }
+  const tuples = sql.join(
+    rows.map(
+      (row) =>
+        sql`(${row.id}::uuid, ${row.contentHash}::text, ${row.country}::text, ${corpusIndexId(generation, row.country)}::text, ${row.updatedAtToken}::timestamptz)`,
+    ),
+    sql`, `,
+  );
+  // Persist the target before append. A crash can leave an uncommitted copy,
+  // but erasure and replay can always discover and delete it.
+  // audit: skip — pending projection state is derived rebuild bookkeeping
+  const reserved: unknown = await tx.execute(sql`
+    WITH expected(id, content_hash, country, index_id, expected_updated) AS (
+      VALUES ${tuples}
+    ), live AS MATERIALIZED (
+      SELECT d.id, d.content_hash, v.index_id
+      FROM ${caseLawDecisions} AS d
+      INNER JOIN expected AS v ON v.id = d.id
+      INNER JOIN ${caseLawSources} AS source ON source.id = d.source_id
+      WHERE d.content_hash IS NOT DISTINCT FROM v.content_hash
+        AND d.country = v.country
+        AND d.updated_at IS NOT DISTINCT FROM v.expected_updated
+        AND d.content_hash IS NOT NULL
+        AND d.country ~ '^[A-Za-z]{2,8}$'
+        AND ${sql.raw(redistributableCaseLawSourceSqlFor("source"))}
+      FOR UPDATE OF d, source
+    ), queued AS (
+      INSERT INTO ${caseLawCorpusIndexProjections} AS projection (
+        generation,
+        decision_id,
+        pending_action,
+        pending_hash,
+        pending_index_ids,
+        pending_revision,
+        updated_at
+      )
+      SELECT ${generation}, live.id, 'index', live.content_hash, ARRAY[live.index_id], 1, now()
+      FROM live
+      ON CONFLICT (generation, decision_id) DO UPDATE
+      SET pending_action = EXCLUDED.pending_action,
+          pending_hash = EXCLUDED.pending_hash,
+          pending_index_ids = ARRAY(
+            SELECT DISTINCT target
+            FROM unnest(
+              projection.pending_index_ids || EXCLUDED.pending_index_ids
+            ) AS target
+          ),
+          pending_revision = projection.pending_revision + 1,
+          updated_at = EXCLUDED.updated_at
+      RETURNING decision_id, pending_index_ids, pending_revision
+    )
+    SELECT decision_id AS id,
+           pending_index_ids AS "pendingIndexIds",
+           pending_revision AS "pendingRevision"
+    FROM queued
+  `);
+  return resolveReservedAppendTargets(reserved, rows);
+};
+
+const recoverLostGenerationProjectionEffect = async (
+  scopedDb: ScopedDb,
+  generation: string,
+  {
+    decisionIds,
+    indexId,
+  }: {
+    decisionIds: readonly SafeId<"caseLawDecision">[];
+    indexId: string;
+  },
+): Promise<void> => {
+  if (decisionIds.length === 0) {
+    return;
+  }
+  const ids = sql.join(
+    decisionIds.map((decisionId) => sql`${decisionId}::uuid`),
+    sql`, `,
+  );
+  await scopedDb(async (tx) => {
+    // A successor may have committed and cleared an older reservation before
+    // that older remote request returns. Reinsert the exact index the stale
+    // operation touched plus the current-country target: replay deletes both
+    // before appending current canonical content.
+    // audit: skip — compensating search-index maintenance
+    await tx.execute(sql`
+      INSERT INTO ${caseLawCorpusIndexProjections} AS projection (
+        generation,
+        decision_id,
+        pending_action,
+        pending_hash,
+        pending_index_ids,
+        pending_revision,
+        updated_at
+      )
+      SELECT ${generation}, decision.id,
+             CASE WHEN decision.content_hash IS NULL THEN 'delete' ELSE 'index' END,
+             decision.content_hash,
+             ARRAY(
+               SELECT DISTINCT target
+               FROM unnest(ARRAY[
+                 ${indexId},
+               ${generation} || '_' || lower(decision.country)
+               ]) AS target
+             ), 1, now()
+      FROM ${caseLawDecisions} AS decision
+      WHERE decision.id IN (${ids})
+      ON CONFLICT (generation, decision_id) DO UPDATE
+      SET pending_action = EXCLUDED.pending_action,
+          pending_hash = EXCLUDED.pending_hash,
+          pending_index_ids = ARRAY(
+            SELECT DISTINCT target
+            FROM unnest(
+              projection.pending_index_ids || EXCLUDED.pending_index_ids
+            ) AS target
+          ),
+          pending_revision = projection.pending_revision + 1,
+          updated_at = EXCLUDED.updated_at
+    `);
+  });
+};
+
+const clearTerminalGenerationPending = async (
+  tx: Transaction,
+  { generation, rows }: { generation: string; rows: readonly IndexableRow[] },
+): Promise<number> => {
+  if (rows.length === 0) {
+    return 0;
+  }
+  const tuples = sql.join(
+    rows.map(
+      (row) =>
+        sql`(${row.id}::uuid, ${row.contentHash}::text, ${row.generationPendingRevision}::integer, ${row.updatedAtToken}::timestamptz)`,
+    ),
+    sql`, `,
+  );
+  // audit: skip — terminal projection state is derived rebuild bookkeeping
+  const cleared: unknown = await tx.execute(sql`
+    WITH expected(id, content_hash, pending_revision, expected_updated) AS (
+      VALUES ${tuples}
+    ), live AS MATERIALIZED (
+      SELECT d.id, d.content_hash
+      FROM ${caseLawDecisions} AS d
+      INNER JOIN expected AS v ON v.id = d.id
+      WHERE d.content_hash IS NOT DISTINCT FROM v.content_hash
+        AND d.updated_at IS NOT DISTINCT FROM v.expected_updated
+      FOR UPDATE OF d
+    )
+    UPDATE ${caseLawCorpusIndexProjections} AS projection
+    SET pending_action = null,
+        pending_hash = null,
+        pending_index_ids = '{}',
+        updated_at = now()
+    FROM live
+    WHERE projection.generation = ${generation}
+      AND projection.decision_id = live.id
+      AND projection.pending_revision = (
+        SELECT expected.pending_revision
+        FROM expected
+        WHERE expected.id = live.id
+      )
+      AND (
+        live.content_hash IS NULL
+        OR projection.pending_hash IS NOT DISTINCT FROM live.content_hash
+      )
+    RETURNING projection.decision_id AS id
+  `);
+  return resolveMarkedRowIds(cleared, rows).size;
+};
+
+const clearDeletedGenerationProjection = async (
+  tx: Transaction,
+  { generation, row }: { generation: string; row: IndexableRow },
+): Promise<void> => {
+  // audit: skip — deletion completes derived projection bookkeeping
+  await tx.execute(sql`
+    WITH live AS MATERIALIZED (
+      SELECT d.id
+      FROM ${caseLawDecisions} AS d
+      WHERE d.id = ${row.id}
+        AND d.content_hash IS NULL
+        AND d.updated_at IS NOT DISTINCT FROM ${row.updatedAtToken}::timestamptz
+      FOR UPDATE OF d
+    )
+    DELETE FROM ${caseLawCorpusIndexProjections} AS projection
+    USING live
+    WHERE projection.generation = ${generation}
+      AND projection.decision_id = live.id
+      AND projection.pending_revision = ${row.generationPendingRevision}
+      AND projection.pending_action IN ('index', 'delete')
+  `);
+};
+
+/** Exported for the database-backed eligibility lifecycle invariant. */
+export const clearIneligibleGenerationProjection = async (
+  tx: Transaction,
+  {
+    generation,
+    row,
+  }: {
+    generation: string;
+    row: {
+      id: SafeId<"caseLawDecision">;
+      contentHash: string | null;
+      generationPendingRevision: number;
+      updatedAtToken: TimestampCasToken;
+    };
+  },
+): Promise<void> => {
+  // The source revision joins the external delete to the exact eligibility
+  // observation that caused it. A later descriptor change remains ahead of
+  // the durable cursor and will be reconciled as a new revision.
+  // audit: skip — source eligibility controls derived projection membership
+  await tx.execute(sql`
+    WITH live AS MATERIALIZED (
+      SELECT d.id
+      FROM ${caseLawDecisions} AS d
+      INNER JOIN ${caseLawSources} AS source ON source.id = d.source_id
+      WHERE d.id = ${row.id}
+        AND d.content_hash IS NOT DISTINCT FROM ${row.contentHash}
+        AND d.updated_at IS NOT DISTINCT FROM ${row.updatedAtToken}::timestamptz
+        AND source.descriptor IS NOT NULL
+        AND (source.descriptor ->> 'allowsRedistribution') IS DISTINCT FROM 'true'
+      FOR UPDATE OF d, source
+    )
+    UPDATE ${caseLawCorpusIndexProjections} AS projection
+    SET index_id = null,
+        indexed_hash = null,
+        pending_action = null,
+        pending_hash = null,
+        pending_index_ids = '{}',
+        updated_at = now()
+    FROM live
+    WHERE projection.generation = ${generation}
+      AND projection.decision_id = live.id
+      AND projection.pending_revision = ${row.generationPendingRevision}
+  `);
+};
 
 /**
  * Doc-level fields, shared by every passage of a decision. Duplicating them
@@ -201,19 +630,26 @@ export const caseLawCorpusIndexAdapter = {
   buildDocs,
   readCorpusText,
   readCorpusAst,
-  // The scans deliberately carry no ORDER BY. Any pick order makes
+  // The incremental scan deliberately carries no ORDER BY. Any pick order makes
   // progress (indexed rows leave the pending set), while ordering by
   // created_at steers the planner onto the created_at index and
   // row-by-row heap filtering; the selective content-hash index is what
   // these scans need.
   selectMissing: async (scopedDb, { generation, limit }) => {
-    // Never-indexed rows first: this arm is served by the partial pending
-    // index, so its cost tracks the remaining work instead of growing with
-    // every row already marked.
+    // Hash-null rows are the durable pending set: new rows and every refresh
+    // clear this field while retaining the old generation pointer needed to
+    // delete a moved jurisdiction copy. The partial index keeps this bounded.
     const fresh = await scopedDb((tx) =>
       tx
-        .select(SELECT_COLUMNS)
+        .select(INCREMENTAL_SELECT_COLUMNS)
         .from(caseLawDecisions)
+        .leftJoin(
+          caseLawCorpusIndexProjections,
+          and(
+            eq(caseLawCorpusIndexProjections.decisionId, caseLawDecisions.id),
+            eq(caseLawCorpusIndexProjections.generation, generation),
+          ),
+        )
         .innerJoin(
           caseLawSources,
           eq(caseLawSources.id, caseLawDecisions.sourceId),
@@ -221,8 +657,9 @@ export const caseLawCorpusIndexAdapter = {
         .where(
           and(
             hasContent,
+            hasCorpusJurisdiction,
             redistributableCaseLawSource,
-            isNull(caseLawDecisions.indexedGeneration),
+            isNull(caseLawDecisions.indexedHash),
           ),
         )
         .limit(limit),
@@ -230,38 +667,24 @@ export const caseLawCorpusIndexAdapter = {
     if (fresh.length >= limit) {
       return fresh;
     }
-    // Rows marked under an older generation. Only a generation cutover makes
-    // this arm non-empty, so the unindexed scan it costs is rare and shrinks
-    // as rows re-mark into the current generation.
-    const carried = await scopedDb((tx) =>
-      tx
-        .select(SELECT_COLUMNS)
-        .from(caseLawDecisions)
-        .innerJoin(
-          caseLawSources,
-          eq(caseLawSources.id, caseLawDecisions.sourceId),
-        )
-        .where(
-          and(
-            hasContent,
-            redistributableCaseLawSource,
-            sql`${caseLawDecisions.indexedGeneration} <> (${generation} || '_' || lower(${caseLawDecisions.country}))`,
-          ),
-        )
-        .limit(limit - fresh.length),
-    );
-    // A row read as never-indexed by the first arm can be marked by a
-    // concurrent build under another generation before the second arm
-    // runs, which would select it again; the ingest is append-only, so
-    // the same id must not be submitted twice.
-    const seen = new Set(fresh.map((row) => row.id));
-    return [...fresh, ...carried.filter((row) => !seen.has(row.id))];
+    // A generation rebuild is deliberately not expressed as
+    // a generation-mismatch predicate: it grows into an unbounded
+    // heap scan. The build runner owns the durable keyset walk; this daemon
+    // path only services the indexed pending set.
+    return fresh;
   },
   selectStale: async (scopedDb, { generation, limit }) =>
     await scopedDb((tx) =>
       tx
-        .select(SELECT_COLUMNS)
+        .select(INCREMENTAL_SELECT_COLUMNS)
         .from(caseLawDecisions)
+        .leftJoin(
+          caseLawCorpusIndexProjections,
+          and(
+            eq(caseLawCorpusIndexProjections.decisionId, caseLawDecisions.id),
+            eq(caseLawCorpusIndexProjections.generation, generation),
+          ),
+        )
         .innerJoin(
           caseLawSources,
           eq(caseLawSources.id, caseLawDecisions.sourceId),
@@ -269,7 +692,9 @@ export const caseLawCorpusIndexAdapter = {
         .where(
           and(
             hasContent,
+            hasCorpusJurisdiction,
             redistributableCaseLawSource,
+            isNotNull(caseLawDecisions.indexedHash),
             sql`${caseLawDecisions.indexedGeneration} = (${generation} || '_' || lower(${caseLawDecisions.country}))`,
             sql`${caseLawDecisions.indexedHash} IS DISTINCT FROM ${caseLawDecisions.contentHash}`,
           ),
@@ -286,9 +711,23 @@ export const caseLawCorpusIndexAdapter = {
     );
     return fallback.at(0)?.fulltext ?? null;
   },
-  markIndexedBatch: async (tx, { rows, indexId, now }) => {
+  generationProjectionIndexIds: (row) => [
+    ...(row.generationIndexId === null ? [] : [row.generationIndexId]),
+    ...row.generationPendingIndexIds,
+  ],
+  markIndexedBatch: async (tx, { rows, indexId, mode, now }) => {
     if (rows.length === 0) {
       return new Set();
+    }
+    if (mode.type === "generation-rebuild") {
+      // Serving-index markers remain untouched, so an overlapping generation
+      // cannot hide or invalidate another generation's successful projection.
+      return await commitCurrentGenerationProjection(tx, {
+        generation: mode.generation,
+        indexId,
+        reservations: mode.reservations,
+        rows,
+      });
     }
     // audit: skip — search index maintenance; rebuilds derived state
     // One statement for the whole request: each tuple carries the row's
@@ -317,7 +756,16 @@ export const caseLawCorpusIndexAdapter = {
         AND d.updated_at IS NOT DISTINCT FROM v.expected_updated
       RETURNING d.id
     `);
-    return resolveMarkedRowIds(marked, rows);
+    const markedIds = resolveMarkedRowIds(marked, rows);
+    if (mode.type === "fenced-incremental") {
+      await settleReservedGenerationProjections(tx, {
+        generation: mode.generation,
+        marked: markedIds,
+        reservations: mode.reservations,
+        rows,
+      });
+    }
+    return markedIds;
   },
   insertSucceededJobs: async (tx, { rows, indexId }) => {
     // audit: skip — append-only index-job rows ARE the indexing audit trail
@@ -357,5 +805,1156 @@ const indexer = createCorpusIndexer<"caseLawDecision", IndexableRow>(
 );
 
 export const loadDocsForBatch = indexer.loadDocsForBatch;
-export const backfillCorpusIndex = indexer.backfill;
-export const removeDecisionFromCorpusIndex = indexer.remove;
+
+export const BACKFILL_STATUS = {
+  ADVANCED: "advanced",
+  BUSY: "busy",
+  COMPLETE: "complete",
+} as const;
+
+const BACKFILL_LEASE_MS = 30 * 60 * 1000;
+
+const completeRemoteEffect = async (): Promise<void> => {
+  await Promise.resolve();
+};
+
+const createRemoteEffectGuard =
+  (
+    scopedDb: Parameters<typeof indexer.backfill>[0],
+    beforeDatabaseMark: GenerationProjectionGuards["beforeDatabaseMark"],
+  ): GenerationProjectionGuards["beforeRemoteEffect"] =>
+  async ({ effect, onLeaseLost }) => {
+    // The durable lease row serializes writers across the remote operation.
+    // Renew it in a short transaction, release the connection, then start
+    // HTTP/S3 work. Every generation lease uses this boundary so remote I/O
+    // cannot accidentally move back inside a database callback.
+    await scopedDb(async (tx) => {
+      await beforeDatabaseMark(tx);
+    });
+    const result = await effect();
+    // A process can be paused after the pre-effect renewal for longer than
+    // the lease. Revalidate in a second short transaction before exposing the
+    // result to a caller that could advance a cursor or clear a durable
+    // projection target. On failure the pending index/delete target remains
+    // replayable, so a late append or delete converges without retaining a
+    // stale physical copy.
+    try {
+      await scopedDb(async (tx) => {
+        await beforeDatabaseMark(tx);
+      });
+    } catch (error) {
+      if (error instanceof ConcurrentModificationError) {
+        await onLeaseLost();
+        throw new ConcurrentModificationError({
+          message:
+            "Case-law corpus remote effect completed after its writer lease was lost",
+        });
+      }
+      throw error;
+    }
+    return result;
+  };
+
+export type CaseLawCorpusGenerationLease = GenerationProjectionGuards & {
+  release: () => Promise<void>;
+};
+
+type AcquireGenerationLeaseOptions = {
+  generation: string;
+  newLeaseToken?: () => string;
+  scopedDb: Parameters<typeof indexer.backfill>[0];
+};
+
+/**
+ * Claims the single writer slot for a physical generation. Rebuilds,
+ * incremental writes, and erasure all cross this boundary, so no operation
+ * can make a database mark based on a remote effect another writer invalidated.
+ */
+export const acquireCaseLawCorpusGenerationLease = async ({
+  generation,
+  newLeaseToken = () => Bun.randomUUIDv7(),
+  scopedDb,
+}: AcquireGenerationLeaseOptions): Promise<CaseLawCorpusGenerationLease | null> => {
+  if (!isCorpusIndexGeneration(generation)) {
+    throw new CorpusIndexError({
+      message: "Invalid corpus index generation",
+    });
+  }
+  const leaseToken = newLeaseToken();
+  const claimed = await scopedDb(async (tx) => {
+    // audit: skip — this row is ephemeral mutual-exclusion state
+    const rows = await tx
+      .insert(caseLawCorpusIndexWriterLeases)
+      .values({
+        generation,
+        leaseExpiresAt: nextLeaseExpiry(),
+        leaseToken,
+      })
+      .onConflictDoUpdate({
+        target: caseLawCorpusIndexWriterLeases.generation,
+        set: {
+          leaseExpiresAt: nextLeaseExpiry(),
+          leaseToken,
+        },
+        setWhere: sql`${caseLawCorpusIndexWriterLeases.leaseExpiresAt} IS NULL
+          OR ${caseLawCorpusIndexWriterLeases.leaseExpiresAt} <= now()`,
+      })
+      .returning({ generation: caseLawCorpusIndexWriterLeases.generation });
+    return rows.at(0);
+  });
+  if (!claimed) {
+    return null;
+  }
+
+  const beforeDatabaseMark = async (tx: Transaction): Promise<void> => {
+    // audit: skip — renewal extends ownership without changing domain state
+    const renewed = (
+      await tx
+        .update(caseLawCorpusIndexWriterLeases)
+        .set({ leaseExpiresAt: nextLeaseExpiry() })
+        .where(
+          and(
+            eq(caseLawCorpusIndexWriterLeases.generation, generation),
+            eq(caseLawCorpusIndexWriterLeases.leaseToken, leaseToken),
+            sql`${caseLawCorpusIndexWriterLeases.leaseExpiresAt} > now()`,
+          ),
+        )
+        .returning({ generation: caseLawCorpusIndexWriterLeases.generation })
+    ).at(0);
+    if (!renewed) {
+      throw new ConcurrentModificationError({
+        message: "Case-law corpus generation writer lease was lost",
+      });
+    }
+  };
+
+  return {
+    beforeDatabaseMark,
+    beforeRemoteEffect: createRemoteEffectGuard(scopedDb, beforeDatabaseMark),
+    recoverRemoteEffectLeaseLoss: isCaseLawCorpusGeneration(generation)
+      ? async ({ entityIds, indexId }) =>
+          await recoverLostGenerationProjectionEffect(scopedDb, generation, {
+            decisionIds: entityIds,
+            indexId,
+          })
+      : completeRemoteEffect,
+    release: async () => {
+      await scopedDb(async (tx) => {
+        // audit: skip — release only the caller's writer lease
+        await tx
+          .update(caseLawCorpusIndexWriterLeases)
+          .set({ leaseExpiresAt: null, leaseToken: null })
+          .where(
+            and(
+              eq(caseLawCorpusIndexWriterLeases.generation, generation),
+              eq(caseLawCorpusIndexWriterLeases.leaseToken, leaseToken),
+            ),
+          );
+      });
+    },
+  };
+};
+
+export type CorpusIndexBackfillResult =
+  | {
+      indexed: number;
+      status: typeof BACKFILL_STATUS.ADVANCED;
+    }
+  | {
+      indexed: 0;
+      status: typeof BACKFILL_STATUS.BUSY;
+    }
+  | {
+      indexed: 0;
+      status: typeof BACKFILL_STATUS.COMPLETE;
+    };
+
+const backfillIncrementalCorpusIndex = async (
+  scopedDb: Parameters<typeof indexer.backfill>[0],
+  batchSize: number,
+  generation: string,
+  options: { readConcurrency?: number } = {},
+): Promise<CorpusIndexBackfillResult> => {
+  const lease = await acquireCaseLawCorpusGenerationLease({
+    generation,
+    scopedDb,
+  });
+  if (!lease) {
+    return { indexed: 0, status: BACKFILL_STATUS.BUSY };
+  }
+  try {
+    const result = await indexer.backfillFenced(
+      scopedDb,
+      batchSize,
+      generation,
+      {
+        beforeDatabaseMark: lease.beforeDatabaseMark,
+        beforeRemoteEffect: lease.beforeRemoteEffect,
+        recoverRemoteEffectLeaseLoss: lease.recoverRemoteEffectLeaseLoss,
+        reserveExternalAppend: reserveGenerationProjectionTargets,
+        ...options,
+      },
+    );
+    switch (result.status) {
+      case FENCED_BACKFILL_BATCH_STATUS.ADVANCED:
+        return { indexed: result.indexed, status: BACKFILL_STATUS.ADVANCED };
+      case FENCED_BACKFILL_BATCH_STATUS.RETRY:
+        return { indexed: 0, status: BACKFILL_STATUS.BUSY };
+      case FENCED_BACKFILL_BATCH_STATUS.COMPLETE:
+        return { indexed: 0, status: BACKFILL_STATUS.COMPLETE };
+      default:
+        return result satisfies never;
+    }
+  } finally {
+    await lease.release();
+  }
+};
+
+type GenerationBackfillCheckpoint = {
+  cursorCreatedAt: Date | null;
+  cursorId: SafeId<"caseLawDecision"> | null;
+  generation: string;
+  generationOrder: number;
+  snapshotAt: Date;
+};
+
+type GenerationBackfillRow = IndexableRow & {
+  createdAt: Date;
+  generationIndexedHash: string | null;
+  sourceDescriptor: CorpusSourceDescriptor | null;
+};
+
+type SourceReconciliationCheckpoint = {
+  cursorCreatedAt: Date | null;
+  cursorId: SafeId<"caseLawDecision"> | null;
+  generation: string;
+  revision: number;
+  sourceId: SafeId<"caseLawSource">;
+  upperCreatedAt: Date | null;
+  upperId: SafeId<"caseLawDecision"> | null;
+};
+
+type GenerationProjectionGuards = {
+  beforeDatabaseMark: (tx: Transaction) => Promise<void>;
+  beforeRemoteEffect: <T>(effect: FencedRemoteEffect<T>) => Promise<T>;
+  recoverRemoteEffectLeaseLoss: (args: {
+    entityIds: readonly SafeId<"caseLawDecision">[];
+    indexId: string;
+  }) => Promise<void>;
+};
+
+type GenerationBackfillDependencies = {
+  backfillRows: (
+    scopedDb: Parameters<typeof backfillIncrementalCorpusIndex>[0],
+    rows: readonly IndexableRow[],
+    generation: string,
+    options: GenerationProjectionGuards,
+  ) => Promise<number>;
+  removeProjection: (
+    scopedDb: Parameters<typeof backfillIncrementalCorpusIndex>[0],
+    args: {
+      row: GenerationBackfillRow;
+      generation: string;
+      options: GenerationProjectionGuards;
+    },
+  ) => Promise<void>;
+  newLeaseToken: () => string;
+};
+
+const backfillGenerationRows: GenerationBackfillDependencies["backfillRows"] =
+  async (scopedDb, rows, generation, options) =>
+    await indexer.backfillRows(scopedDb, [...rows], generation, {
+      ...options,
+      reserveExternalAppend: reserveGenerationProjectionTargets,
+    });
+
+type GenerationProjectionTargetSources = Pick<
+  GenerationBackfillRow,
+  "generationIndexId" | "generationPendingIndexIds" | "indexedGeneration"
+>;
+
+/**
+ * Every durable pointer that can name a physical copy for this generation.
+ * Keep this as one state-table union: a first rebuild can see a legacy
+ * `indexed_generation` before it has ever written a projection row.
+ */
+export const generationProjectionTargetIds = ({
+  generation,
+  row,
+}: {
+  generation: string;
+  row: GenerationProjectionTargetSources;
+}): Set<string> => {
+  const targetIndexIds = new Set(row.generationPendingIndexIds);
+  if (row.generationIndexId !== null) {
+    targetIndexIds.add(row.generationIndexId);
+  }
+  if (
+    row.indexedGeneration !== null &&
+    tryCorpusIndexGeneration(row.indexedGeneration) === generation
+  ) {
+    targetIndexIds.add(row.indexedGeneration);
+  }
+  return targetIndexIds;
+};
+
+export const hasGenerationProjectionTargets = ({
+  generation,
+  row,
+}: {
+  generation: string;
+  row: GenerationProjectionTargetSources;
+}): boolean => generationProjectionTargetIds({ generation, row }).size > 0;
+
+const removeGenerationProjection: GenerationBackfillDependencies["removeProjection"] =
+  async (scopedDb, { generation, options, row }) => {
+    const targetIndexIds = generationProjectionTargetIds({ generation, row });
+    const removals = await settleAll(
+      [...targetIndexIds].map(
+        async (targetIndexId) =>
+          await indexer.removeFenced({
+            beforeRemoteEffect: options.beforeRemoteEffect,
+            entityId: row.id,
+            indexId: targetIndexId,
+            onLeaseLost: async () =>
+              await options.recoverRemoteEffectLeaseLoss({
+                entityIds: [row.id],
+                indexId: targetIndexId,
+              }),
+            operation: "delete",
+            scopedDb,
+          }),
+      ),
+    );
+    const failed = removals.find((removed) => removed.isErr());
+    if (failed?.isErr()) {
+      throw failed.error;
+    }
+    await scopedDb(async (tx) => {
+      await options.beforeDatabaseMark(tx);
+      if (row.contentHash === null) {
+        await clearDeletedGenerationProjection(tx, { generation, row });
+        return;
+      }
+      await clearIneligibleGenerationProjection(tx, { generation, row });
+    });
+  };
+
+const sameCursor = ({
+  checkpoint,
+}: {
+  checkpoint: GenerationBackfillCheckpoint;
+}) =>
+  sql`${caseLawCorpusIndexBackfills.cursorCreatedAt} IS NOT DISTINCT FROM ${checkpoint.cursorCreatedAt}
+      AND ${caseLawCorpusIndexBackfills.cursorId} IS NOT DISTINCT FROM ${checkpoint.cursorId}`;
+
+const nextLeaseExpiry = () =>
+  sql<Date>`now() + (${BACKFILL_LEASE_MS} * interval '1 millisecond')`;
+
+const ownsUnexpiredLease = ({
+  checkpoint,
+  leaseToken,
+  status,
+}: {
+  checkpoint: GenerationBackfillCheckpoint;
+  leaseToken: string;
+  status: CaseLawCorpusIndexBackfillStatus;
+}) =>
+  and(
+    eq(caseLawCorpusIndexBackfills.status, status),
+    sameCursor({ checkpoint }),
+    eq(caseLawCorpusIndexBackfills.leaseToken, leaseToken),
+    sql`${caseLawCorpusIndexBackfills.leaseExpiresAt} > now()`,
+  );
+
+const selectGenerationBackfillPage = async (
+  scopedDb: Parameters<typeof backfillIncrementalCorpusIndex>[0],
+  {
+    batchSize,
+    checkpoint,
+  }: { batchSize: number; checkpoint: GenerationBackfillCheckpoint },
+): Promise<GenerationBackfillRow[]> =>
+  await scopedDb((tx) =>
+    tx
+      .select(GENERATION_PAGE_SELECT_COLUMNS)
+      .from(caseLawDecisions)
+      .leftJoin(
+        caseLawCorpusIndexProjections,
+        and(
+          eq(caseLawCorpusIndexProjections.decisionId, caseLawDecisions.id),
+          eq(caseLawCorpusIndexProjections.generation, checkpoint.generation),
+        ),
+      )
+      .innerJoin(
+        caseLawSources,
+        eq(caseLawSources.id, caseLawDecisions.sourceId),
+      )
+      .where(
+        and(
+          lte(caseLawDecisions.createdAt, checkpoint.snapshotAt),
+          checkpoint.cursorCreatedAt === null
+            ? undefined
+            : sql`(${caseLawDecisions.createdAt}, ${caseLawDecisions.id}) > (${checkpoint.cursorCreatedAt}, ${checkpoint.cursorId})`,
+        ),
+      )
+      .orderBy(asc(caseLawDecisions.createdAt), asc(caseLawDecisions.id))
+      .limit(batchSize),
+  );
+
+const selectGenerationPendingPage = async (
+  scopedDb: Parameters<typeof backfillIncrementalCorpusIndex>[0],
+  { generation, limit }: { generation: string; limit: number },
+): Promise<GenerationBackfillRow[]> =>
+  await scopedDb((tx) =>
+    tx
+      .select(GENERATION_PAGE_SELECT_COLUMNS)
+      .from(caseLawCorpusIndexProjections)
+      .innerJoin(
+        caseLawDecisions,
+        eq(caseLawDecisions.id, caseLawCorpusIndexProjections.decisionId),
+      )
+      .innerJoin(
+        caseLawSources,
+        eq(caseLawSources.id, caseLawDecisions.sourceId),
+      )
+      .where(
+        and(
+          eq(caseLawCorpusIndexProjections.generation, generation),
+          isNotNull(caseLawCorpusIndexProjections.pendingAction),
+        ),
+      )
+      .orderBy(asc(caseLawCorpusIndexProjections.decisionId))
+      .limit(limit),
+  );
+
+const selectGenerationEligibilityPage = async (
+  scopedDb: Parameters<typeof backfillIncrementalCorpusIndex>[0],
+  {
+    checkpoint,
+    limit,
+  }: { checkpoint: SourceReconciliationCheckpoint; limit: number },
+): Promise<GenerationBackfillRow[]> =>
+  await scopedDb((tx) =>
+    tx
+      .select(GENERATION_PAGE_SELECT_COLUMNS)
+      .from(caseLawDecisions)
+      .innerJoin(
+        caseLawSources,
+        eq(caseLawDecisions.sourceId, caseLawSources.id),
+      )
+      .leftJoin(
+        caseLawCorpusIndexProjections,
+        and(
+          eq(caseLawCorpusIndexProjections.decisionId, caseLawDecisions.id),
+          eq(caseLawCorpusIndexProjections.generation, checkpoint.generation),
+        ),
+      )
+      .where(
+        and(
+          eq(caseLawDecisions.sourceId, checkpoint.sourceId),
+          checkpoint.upperCreatedAt === null
+            ? sql`false`
+            : sql`(${caseLawDecisions.createdAt}, ${caseLawDecisions.id}) <= (${checkpoint.upperCreatedAt}, ${checkpoint.upperId})`,
+          checkpoint.cursorCreatedAt === null
+            ? undefined
+            : sql`(${caseLawDecisions.createdAt}, ${caseLawDecisions.id}) > (${checkpoint.cursorCreatedAt}, ${checkpoint.cursorId})`,
+        ),
+      )
+      .orderBy(asc(caseLawDecisions.createdAt), asc(caseLawDecisions.id))
+      .limit(limit),
+  );
+
+const selectSourceReconciliationCheckpoint = async (
+  scopedDb: Parameters<typeof backfillIncrementalCorpusIndex>[0],
+  generation: string,
+): Promise<SourceReconciliationCheckpoint | undefined> =>
+  await scopedDb(async (tx) =>
+    (
+      await tx
+        .select({
+          cursorCreatedAt:
+            caseLawCorpusIndexSourceReconciliations.cursorCreatedAt,
+          cursorId: caseLawCorpusIndexSourceReconciliations.cursorId,
+          generation: caseLawCorpusIndexSourceReconciliations.generation,
+          revision: caseLawCorpusIndexSourceReconciliations.revision,
+          sourceId: caseLawCorpusIndexSourceReconciliations.sourceId,
+          upperCreatedAt:
+            caseLawCorpusIndexSourceReconciliations.upperCreatedAt,
+          upperId: caseLawCorpusIndexSourceReconciliations.upperId,
+        })
+        .from(caseLawCorpusIndexSourceReconciliations)
+        .where(
+          eq(caseLawCorpusIndexSourceReconciliations.generation, generation),
+        )
+        .orderBy(asc(caseLawCorpusIndexSourceReconciliations.sourceId))
+        .limit(1)
+    ).at(0),
+  );
+
+const hasPendingGenerationProjection = async (
+  scopedDb: Parameters<typeof backfillIncrementalCorpusIndex>[0],
+  generation: string,
+): Promise<boolean> =>
+  await scopedDb(async (tx) =>
+    Boolean(
+      (
+        await tx
+          .select({ decisionId: caseLawCorpusIndexProjections.decisionId })
+          .from(caseLawCorpusIndexProjections)
+          .where(
+            and(
+              eq(caseLawCorpusIndexProjections.generation, generation),
+              isNotNull(caseLawCorpusIndexProjections.pendingAction),
+            ),
+          )
+          .limit(1)
+      ).at(0),
+    ),
+  );
+
+const hasGenerationCheckpoint = async (
+  scopedDb: Parameters<typeof backfillIncrementalCorpusIndex>[0],
+  generation: string,
+): Promise<boolean> =>
+  await scopedDb(async (tx) =>
+    Boolean(
+      (
+        await tx
+          .select({ generation: caseLawCorpusIndexBackfills.generation })
+          .from(caseLawCorpusIndexBackfills)
+          .where(eq(caseLawCorpusIndexBackfills.generation, generation))
+          .limit(1)
+      ).at(0),
+    ),
+  );
+
+const validateGenerationBoundary = (generation: string): void => {
+  if (!isCaseLawCorpusGeneration(generation)) {
+    throw new CorpusIndexError({
+      message: "Invalid corpus index generation",
+    });
+  }
+};
+
+const sameSourceReconciliation = (checkpoint: SourceReconciliationCheckpoint) =>
+  and(
+    eq(
+      caseLawCorpusIndexSourceReconciliations.generation,
+      checkpoint.generation,
+    ),
+    eq(caseLawCorpusIndexSourceReconciliations.sourceId, checkpoint.sourceId),
+    eq(caseLawCorpusIndexSourceReconciliations.revision, checkpoint.revision),
+    sql`${caseLawCorpusIndexSourceReconciliations.cursorCreatedAt} IS NOT DISTINCT FROM ${checkpoint.cursorCreatedAt}`,
+    sql`${caseLawCorpusIndexSourceReconciliations.cursorId} IS NOT DISTINCT FROM ${checkpoint.cursorId}`,
+    sql`${caseLawCorpusIndexSourceReconciliations.upperCreatedAt} IS NOT DISTINCT FROM ${checkpoint.upperCreatedAt}`,
+    sql`${caseLawCorpusIndexSourceReconciliations.upperId} IS NOT DISTINCT FROM ${checkpoint.upperId}`,
+  );
+
+const isCorpusEligible = (row: GenerationBackfillRow): boolean =>
+  row.contentHash !== null &&
+  isCorpusIndexJurisdiction(row.country) &&
+  isRedistributable(row.sourceDescriptor);
+
+const isEligibleForGeneration = (
+  row: GenerationBackfillRow,
+  generation: string,
+): boolean =>
+  isCorpusEligible(row) &&
+  (row.generationIndexId !== corpusIndexId(generation, row.country) ||
+    row.generationIndexedHash !== row.contentHash ||
+    row.generationPendingAction !== null);
+
+const withoutSourceDescriptor = ({
+  sourceDescriptor: _sourceDescriptor,
+  generationIndexedHash: _generationIndexedHash,
+  ...row
+}: GenerationBackfillRow): IndexableRow => row;
+
+/**
+ * Creates the case-law generation-rebuild runner. Its explicit dependencies
+ * make the state machine deterministic in database tests while production
+ * retains the shared indexer's normal S3, CAS, and audit path.
+ */
+export const createCaseLawGenerationBackfill =
+  ({
+    backfillRows,
+    newLeaseToken,
+    removeProjection,
+  }: GenerationBackfillDependencies) =>
+  async (
+    scopedDb: Parameters<typeof backfillIncrementalCorpusIndex>[0],
+    batchSize: number,
+    generation: string,
+  ): Promise<CorpusIndexBackfillResult> => {
+    validateGenerationBoundary(generation);
+    const writerLease = await acquireCaseLawCorpusGenerationLease({
+      generation,
+      newLeaseToken,
+      scopedDb,
+    });
+    if (!writerLease) {
+      return { indexed: 0, status: BACKFILL_STATUS.BUSY };
+    }
+    try {
+      const checkpoint = await scopedDb(async (tx) => {
+        // audit: skip — the checkpoint is the durable audit trail for this derived projection rebuild
+        const existing = (
+          await tx
+            .select()
+            .from(caseLawCorpusIndexBackfills)
+            .where(eq(caseLawCorpusIndexBackfills.generation, generation))
+            .limit(1)
+        ).at(0);
+        if (existing) {
+          return existing;
+        }
+
+        // Wait for decision writes that already acquired their table lock, then
+        // capture statement time while new writers are held out. Together with
+        // the decision column's clock_timestamp() default, no later commit can
+        // appear behind this rebuild's (created_at,id) cursor.
+        await tx.execute(
+          sql`LOCK TABLE ${caseLawDecisions}, ${caseLawSources} IN SHARE MODE`,
+        );
+        const inserted = await tx
+          .insert(caseLawCorpusIndexBackfills)
+          .values({ generation, snapshotAt: sql`clock_timestamp()` })
+          .onConflictDoNothing()
+          .returning();
+        const created = inserted.at(0);
+        if (created) {
+          return created;
+        }
+
+        const concurrent = (
+          await tx
+            .select()
+            .from(caseLawCorpusIndexBackfills)
+            .where(eq(caseLawCorpusIndexBackfills.generation, generation))
+            .limit(1)
+        ).at(0);
+        if (!concurrent) {
+          panic("case-law corpus generation checkpoint disappeared");
+        }
+        return concurrent;
+      });
+
+      type LeaseGuardOptions = {
+        checkpoint: GenerationBackfillCheckpoint;
+        leaseToken: string;
+        status: CaseLawCorpusIndexBackfillStatus;
+      };
+      const createLeaseGuards = ({
+        checkpoint: ownedCheckpoint,
+        leaseToken,
+        status,
+      }: LeaseGuardOptions) => {
+        const beforeDatabaseMark = async (tx: Transaction): Promise<void> => {
+          await writerLease.beforeDatabaseMark(tx);
+          // audit: skip — renewal extends ephemeral ownership without changing rebuild progress
+          const renewed = (
+            await tx
+              .update(caseLawCorpusIndexBackfills)
+              .set({ leaseExpiresAt: nextLeaseExpiry() })
+              .where(
+                and(
+                  eq(caseLawCorpusIndexBackfills.generation, generation),
+                  ownsUnexpiredLease({
+                    checkpoint: ownedCheckpoint,
+                    leaseToken,
+                    status,
+                  }),
+                ),
+              )
+              .returning({
+                generation: caseLawCorpusIndexBackfills.generation,
+              })
+          ).at(0);
+          if (!renewed) {
+            throw new ConcurrentModificationError({
+              message: "Case-law corpus generation lease was lost",
+            });
+          }
+        };
+        const beforeRemoteEffect = createRemoteEffectGuard(
+          scopedDb,
+          beforeDatabaseMark,
+        );
+        return {
+          beforeDatabaseMark,
+          beforeRemoteEffect,
+          recoverRemoteEffectLeaseLoss:
+            writerLease.recoverRemoteEffectLeaseLoss,
+        };
+      };
+
+      const releaseLease = async ({
+        leaseToken,
+        status,
+      }: Pick<LeaseGuardOptions, "leaseToken" | "status">): Promise<void> => {
+        await scopedDb(async (tx) => {
+          // audit: skip — release only the caller's durable lease
+          await tx
+            .update(caseLawCorpusIndexBackfills)
+            .set({ leaseExpiresAt: null, leaseToken: null })
+            .where(
+              and(
+                eq(caseLawCorpusIndexBackfills.generation, generation),
+                eq(caseLawCorpusIndexBackfills.status, status),
+                eq(caseLawCorpusIndexBackfills.leaseToken, leaseToken),
+              ),
+            );
+        });
+      };
+
+      const reconcilePending = async ({
+        checkpoint: ownedCheckpoint,
+        leaseToken,
+        status,
+      }: LeaseGuardOptions): Promise<CorpusIndexBackfillResult> => {
+        const guards = createLeaseGuards({
+          checkpoint: ownedCheckpoint,
+          leaseToken,
+          status,
+        });
+        await guards.beforeRemoteEffect({
+          effect: completeRemoteEffect,
+          onLeaseLost: async () => await Promise.resolve(),
+        });
+        const sourceCheckpoint = await selectSourceReconciliationCheckpoint(
+          scopedDb,
+          generation,
+        );
+        if (sourceCheckpoint) {
+          const sourcePage = await selectGenerationEligibilityPage(scopedDb, {
+            checkpoint: sourceCheckpoint,
+            limit: batchSize,
+          });
+          const lastSourceRow = sourcePage.at(-1);
+          if (!lastSourceRow) {
+            const removed = await scopedDb(async (tx) => {
+              await guards.beforeDatabaseMark(tx);
+              // audit: skip — deleting a drained revision is its durable completion marker
+              const rows = await tx
+                .delete(caseLawCorpusIndexSourceReconciliations)
+                .where(sameSourceReconciliation(sourceCheckpoint))
+                .returning({
+                  sourceId: caseLawCorpusIndexSourceReconciliations.sourceId,
+                });
+              return rows.at(0);
+            });
+            return removed
+              ? { indexed: 0, status: BACKFILL_STATUS.ADVANCED }
+              : { indexed: 0, status: BACKFILL_STATUS.BUSY };
+          }
+
+          // The source revision is authoritative even when the projection
+          // still looks current: a prior ineligible delete may have removed
+          // the remote documents and then lost its database CAS to this
+          // revision. Replacing every eligible row makes that race converge.
+          const eligible = sourcePage
+            .filter(isCorpusEligible)
+            .map(withoutSourceDescriptor);
+          const indexed =
+            eligible.length === 0
+              ? 0
+              : await backfillRows(scopedDb, eligible, generation, guards);
+          if (indexed !== eligible.length) {
+            throw new CorpusIndexError({
+              message:
+                "source eligibility reconciliation did not reach a fixed point",
+            });
+          }
+          const removals = sourcePage.filter(
+            (row) =>
+              !isCorpusEligible(row) &&
+              hasGenerationProjectionTargets({ generation, row }),
+          );
+          await settleAll(
+            removals.map(async (row) => {
+              await removeProjection(scopedDb, {
+                generation,
+                options: guards,
+                row,
+              });
+            }),
+          );
+
+          const advanced = await scopedDb(async (tx) => {
+            await guards.beforeDatabaseMark(tx);
+            // audit: skip — the revision-scoped keyset cursor is durable reconciliation progress
+            const rows = await tx
+              .update(caseLawCorpusIndexSourceReconciliations)
+              .set({
+                cursorCreatedAt: lastSourceRow.createdAt,
+                cursorId: lastSourceRow.id,
+                updatedAt: sql`now()`,
+              })
+              .where(sameSourceReconciliation(sourceCheckpoint))
+              .returning({
+                sourceId: caseLawCorpusIndexSourceReconciliations.sourceId,
+              });
+            return rows.at(0);
+          });
+          return advanced
+            ? { indexed, status: BACKFILL_STATUS.ADVANCED }
+            : { indexed: 0, status: BACKFILL_STATUS.BUSY };
+        }
+
+        const pendingPage = await selectGenerationPendingPage(scopedDb, {
+          generation,
+          limit: batchSize,
+        });
+        if (pendingPage.length === 0) {
+          return { indexed: 0, status: BACKFILL_STATUS.COMPLETE };
+        }
+
+        const pendingIndexRows: GenerationBackfillRow[] = [];
+        const pendingDeleteRows: GenerationBackfillRow[] = [];
+        for (const row of pendingPage) {
+          switch (row.generationPendingAction) {
+            case "index":
+              pendingIndexRows.push(row);
+              break;
+            case "delete":
+              pendingDeleteRows.push(row);
+              break;
+            case null:
+              return panic("selected corpus projection has no pending action");
+            default: {
+              const unhandled: never = row.generationPendingAction;
+              panic(`Unhandled corpus projection action: ${String(unhandled)}`);
+            }
+          }
+        }
+        const eligible = pendingIndexRows
+          .filter(isCorpusEligible)
+          .map(withoutSourceDescriptor);
+        const terminal = pendingIndexRows
+          .filter(
+            (row) =>
+              !isCorpusEligible(row) &&
+              !hasGenerationProjectionTargets({ generation, row }),
+          )
+          .map(withoutSourceDescriptor);
+        const terminalDeletes = pendingIndexRows.filter(
+          (row) =>
+            !isCorpusEligible(row) &&
+            hasGenerationProjectionTargets({ generation, row }),
+        );
+        const indexed =
+          eligible.length === 0
+            ? 0
+            : await backfillRows(scopedDb, eligible, generation, guards);
+        if (indexed !== eligible.length) {
+          throw new CorpusIndexError({
+            message: "generation reconciliation did not reach a fixed point",
+          });
+        }
+        if (terminal.length > 0) {
+          const cleared = await scopedDb(async (tx) => {
+            await guards.beforeDatabaseMark(tx);
+            return await clearTerminalGenerationPending(tx, {
+              generation,
+              rows: terminal,
+            });
+          });
+          if (cleared !== terminal.length) {
+            throw new CorpusIndexError({
+              message:
+                "terminal generation reconciliation did not reach a fixed point",
+            });
+          }
+        }
+        const removePendingProjection = async (
+          rows: readonly GenerationBackfillRow[],
+          index = 0,
+        ): Promise<void> => {
+          const row = rows.at(index);
+          if (!row) {
+            return;
+          }
+          await removeProjection(scopedDb, {
+            generation,
+            options: guards,
+            row,
+          });
+          await removePendingProjection(rows, index + 1);
+        };
+        await removePendingProjection([
+          ...pendingDeleteRows,
+          ...terminalDeletes,
+        ]);
+        return { indexed, status: BACKFILL_STATUS.ADVANCED };
+      };
+
+      if (
+        checkpoint.status === CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.COMPLETE
+      ) {
+        const reconciliationToken = newLeaseToken();
+        const claimedReconciliation = await scopedDb(async (tx) => {
+          // audit: skip — completed rebuild reconciliation uses the durable lease for mutual exclusion
+          const claimedRows = await tx
+            .update(caseLawCorpusIndexBackfills)
+            .set({
+              leaseExpiresAt: nextLeaseExpiry(),
+              leaseToken: reconciliationToken,
+            })
+            .where(
+              and(
+                eq(caseLawCorpusIndexBackfills.generation, generation),
+                eq(
+                  caseLawCorpusIndexBackfills.status,
+                  CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.COMPLETE,
+                ),
+                sameCursor({ checkpoint }),
+                or(
+                  isNull(caseLawCorpusIndexBackfills.leaseExpiresAt),
+                  lte(caseLawCorpusIndexBackfills.leaseExpiresAt, sql`now()`),
+                ),
+              ),
+            )
+            .returning();
+          return claimedRows.at(0);
+        });
+        if (!claimedReconciliation) {
+          return { indexed: 0, status: BACKFILL_STATUS.BUSY };
+        }
+        const reconciliationCheckpoint: GenerationBackfillCheckpoint = {
+          cursorCreatedAt: claimedReconciliation.cursorCreatedAt,
+          cursorId: claimedReconciliation.cursorId,
+          generation: claimedReconciliation.generation,
+          generationOrder: claimedReconciliation.generationOrder,
+          snapshotAt: claimedReconciliation.snapshotAt,
+        };
+        try {
+          return await reconcilePending({
+            checkpoint: reconciliationCheckpoint,
+            leaseToken: reconciliationToken,
+            status: CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.COMPLETE,
+          });
+        } finally {
+          await releaseLease({
+            leaseToken: reconciliationToken,
+            status: CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.COMPLETE,
+          });
+        }
+      }
+
+      const leaseToken = newLeaseToken();
+      const claimed = await scopedDb(async (tx) => {
+        // audit: skip — lease ownership is ephemeral coordination recorded on the checkpoint itself
+        const rows = await tx
+          .update(caseLawCorpusIndexBackfills)
+          .set({ leaseExpiresAt: nextLeaseExpiry(), leaseToken })
+          .where(
+            and(
+              eq(caseLawCorpusIndexBackfills.generation, generation),
+              eq(
+                caseLawCorpusIndexBackfills.status,
+                CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.RUNNING,
+              ),
+              sameCursor({ checkpoint }),
+              or(
+                isNull(caseLawCorpusIndexBackfills.leaseExpiresAt),
+                lte(caseLawCorpusIndexBackfills.leaseExpiresAt, sql`now()`),
+              ),
+            ),
+          )
+          .returning();
+        return rows.at(0);
+      });
+      if (!claimed) {
+        return { indexed: 0, status: BACKFILL_STATUS.BUSY };
+      }
+
+      const claimedCheckpoint: GenerationBackfillCheckpoint = {
+        cursorCreatedAt: claimed.cursorCreatedAt,
+        cursorId: claimed.cursorId,
+        generation: claimed.generation,
+        generationOrder: claimed.generationOrder,
+        snapshotAt: claimed.snapshotAt,
+      };
+      const runningGuards = createLeaseGuards({
+        checkpoint: claimedCheckpoint,
+        leaseToken,
+        status: CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.RUNNING,
+      });
+      await runningGuards.beforeRemoteEffect({
+        effect: completeRemoteEffect,
+        onLeaseLost: async () => await Promise.resolve(),
+      });
+      const page = await selectGenerationBackfillPage(scopedDb, {
+        batchSize,
+        checkpoint: claimedCheckpoint,
+      });
+      const last = page.at(-1);
+      if (!last) {
+        const completed = await scopedDb(async (tx) => {
+          // audit: skip — completion is derived projection state recorded on the checkpoint itself
+          const rows = await tx
+            .update(caseLawCorpusIndexBackfills)
+            .set({
+              status: CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.COMPLETE,
+            })
+            .where(
+              and(
+                eq(caseLawCorpusIndexBackfills.generation, generation),
+                ownsUnexpiredLease({
+                  checkpoint: claimedCheckpoint,
+                  leaseToken,
+                  status: CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.RUNNING,
+                }),
+              ),
+            )
+            .returning();
+          return rows.at(0);
+        });
+        if (!completed) {
+          return { indexed: 0, status: BACKFILL_STATUS.BUSY };
+        }
+        const completedCheckpoint: GenerationBackfillCheckpoint = {
+          cursorCreatedAt: completed.cursorCreatedAt,
+          cursorId: completed.cursorId,
+          generation: completed.generation,
+          generationOrder: completed.generationOrder,
+          snapshotAt: completed.snapshotAt,
+        };
+        try {
+          return await reconcilePending({
+            checkpoint: completedCheckpoint,
+            leaseToken,
+            status: CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.COMPLETE,
+          });
+        } finally {
+          await releaseLease({
+            leaseToken,
+            status: CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.COMPLETE,
+          });
+        }
+      }
+
+      const rows = page
+        .filter((row) => isEligibleForGeneration(row, generation))
+        .map(withoutSourceDescriptor);
+      const removals = page.filter(
+        (row) =>
+          !isCorpusEligible(row) &&
+          hasGenerationProjectionTargets({ generation, row }),
+      );
+      let indexed: number;
+      try {
+        indexed = await backfillRows(scopedDb, rows, generation, runningGuards);
+        if (indexed !== rows.length) {
+          throw new CorpusIndexError({
+            message: "generation backfill page did not reach a fixed point",
+          });
+        }
+        await settleAll(
+          removals.map(async (row) => {
+            await removeProjection(scopedDb, {
+              generation,
+              options: runningGuards,
+              row,
+            });
+          }),
+        );
+      } catch (error) {
+        // Keep the cursor intact, but do not make a transient search/S3 failure
+        // wait for a stale lease before its durable retry.
+        await scopedDb(async (tx) => {
+          // audit: skip — releasing a failed lease preserves the durable cursor for replay
+          const released = await tx
+            .update(caseLawCorpusIndexBackfills)
+            .set({ leaseExpiresAt: null, leaseToken: null })
+            .where(
+              and(
+                eq(caseLawCorpusIndexBackfills.generation, generation),
+                ownsUnexpiredLease({
+                  checkpoint: claimedCheckpoint,
+                  leaseToken,
+                  status: CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.RUNNING,
+                }),
+              ),
+            );
+          return released;
+        });
+        throw error;
+      }
+
+      const advanced = await scopedDb(async (tx) => {
+        // audit: skip — cursor advancement is the durable audit trail for this derived rebuild
+        const advancedRows = await tx
+          .update(caseLawCorpusIndexBackfills)
+          .set({
+            cursorCreatedAt: last.createdAt,
+            cursorId: last.id,
+            leaseExpiresAt: null,
+            leaseToken: null,
+          })
+          .where(
+            and(
+              eq(caseLawCorpusIndexBackfills.generation, generation),
+              ownsUnexpiredLease({
+                checkpoint: claimedCheckpoint,
+                leaseToken,
+                status: CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.RUNNING,
+              }),
+            ),
+          )
+          .returning({ generation: caseLawCorpusIndexBackfills.generation });
+        return advancedRows.at(0);
+      });
+      return advanced
+        ? { indexed, status: BACKFILL_STATUS.ADVANCED }
+        : { indexed: 0, status: BACKFILL_STATUS.BUSY };
+    } finally {
+      await writerLease.release();
+    }
+  };
+
+/**
+ * Advance one durable generation-rebuild page. The page is bounded by the
+ * `(created_at,id)` cursor before any generation comparison is made, so a
+ * cutover never turns into a table scan.
+ */
+export const backfillCorpusIndexGenerationPage =
+  createCaseLawGenerationBackfill({
+    backfillRows: backfillGenerationRows,
+    newLeaseToken: () => Bun.randomUUIDv7(),
+    removeProjection: removeGenerationProjection,
+  });
+
+export const backfillCorpusIndex = async (
+  scopedDb: Parameters<typeof backfillIncrementalCorpusIndex>[0],
+  batchSize: number,
+  generation: string,
+  options: { readConcurrency?: number } = {},
+): Promise<CorpusIndexBackfillResult> => {
+  validateGenerationBoundary(generation);
+  const [sourceReconciliation, pendingProjection, checkpoint] =
+    await Promise.all([
+      selectSourceReconciliationCheckpoint(scopedDb, generation),
+      hasPendingGenerationProjection(scopedDb, generation),
+      hasGenerationCheckpoint(scopedDb, generation),
+    ]);
+  // A serving generation without a checkpoint has no durable projection
+  // targets yet. Start its bounded snapshot first; inventing a synthetic
+  // completed checkpoint would suppress that replay and leave future appends
+  // without a crash-recoverable target record.
+  if (!checkpoint || sourceReconciliation || pendingProjection) {
+    const result = await backfillCorpusIndexGenerationPage(
+      scopedDb,
+      batchSize,
+      generation,
+    );
+    return result;
+  }
+  return await backfillIncrementalCorpusIndex(
+    scopedDb,
+    batchSize,
+    generation,
+    options,
+  );
+};
+export const removeDecisionFromCorpusIndex = indexer.removeFenced;

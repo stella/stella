@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { Buffer } from "node:buffer";
 
 import type { Transaction } from "@/api/db/root";
@@ -8,8 +8,8 @@ import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-family";
 import {
+  CorpusIndexError,
   getCorpusIndexClient,
-  type CorpusIndexError,
 } from "@/api/lib/legal-search/corpus-index-client";
 import { corpusIndexConfig } from "@/api/lib/legal-search/corpus-index-config";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
@@ -33,6 +33,35 @@ const INDEX_CONCURRENCY = 4;
 /** Run the stale scan at least once per this many batches under a full
  *  missing backlog (see the duty-cycle note in `backfill`). */
 const STALE_SCAN_DUTY_CYCLE = 20;
+
+export const FENCED_BACKFILL_BATCH_STATUS = {
+  ADVANCED: "advanced",
+  COMPLETE: "complete",
+  RETRY: "retry",
+} as const;
+
+export type FencedBackfillBatchResult =
+  | {
+      indexed: number;
+      status: typeof FENCED_BACKFILL_BATCH_STATUS.ADVANCED;
+    }
+  | {
+      indexed: 0;
+      status:
+        | typeof FENCED_BACKFILL_BATCH_STATUS.COMPLETE
+        | typeof FENCED_BACKFILL_BATCH_STATUS.RETRY;
+    };
+
+const corpusIndexErrorFromThrown = (error: unknown): CorpusIndexError =>
+  error instanceof CorpusIndexError
+    ? error
+    : new CorpusIndexError({
+        message:
+          error instanceof Error
+            ? error.message
+            : "corpus index operation failed",
+        cause: error,
+      });
 
 /**
  * Delete-task query selecting every search document a row projects to. Keyed
@@ -158,6 +187,45 @@ export const resolveMarkedRowIds = <TBrand extends SafeIdType>(
   return ids;
 };
 
+export const resolveReservedAppendTargets = <TBrand extends SafeIdType>(
+  reserved: unknown,
+  rows: readonly CorpusIndexRow<TBrand>[],
+): Map<SafeId<TBrand>, ReservedAppendTargets> => {
+  let returned: unknown[] = [];
+  if (Array.isArray(reserved)) {
+    returned = reserved;
+  } else if (isRecord(reserved) && Array.isArray(reserved["rows"])) {
+    returned = reserved["rows"];
+  }
+  const byId = new Map<string, SafeId<TBrand>>(
+    rows.map((row) => [row.id, row.id]),
+  );
+  const targets = new Map<SafeId<TBrand>, ReservedAppendTargets>();
+  for (const entry of returned) {
+    if (
+      !isRecord(entry) ||
+      typeof entry["id"] !== "string" ||
+      !Array.isArray(entry["pendingIndexIds"]) ||
+      !entry["pendingIndexIds"].every(
+        (pendingIndexId) => typeof pendingIndexId === "string",
+      ) ||
+      typeof entry["pendingRevision"] !== "number" ||
+      !Number.isInteger(entry["pendingRevision"]) ||
+      entry["pendingRevision"] < 0
+    ) {
+      continue;
+    }
+    const id = byId.get(entry["id"]);
+    if (id !== undefined) {
+      targets.set(id, {
+        indexIds: entry["pendingIndexIds"],
+        revision: entry["pendingRevision"],
+      });
+    }
+  }
+  return targets;
+};
+
 /**
  * Canonical payload one row contributes to the index. `ast` is loaded only by
  * passage-granularity families (see {@link CorpusIndexGranularity}) and is
@@ -213,6 +281,117 @@ export type FetchFulltext<TBrand extends SafeIdType> = (
 
 type SelectBatchArgs = { generation: string; limit: number };
 
+export type FencedRemoteEffect<T> = {
+  /** The remote operation; no database transaction may remain open here. */
+  effect: () => Promise<T>;
+  /**
+   * Durable compensation for a remote mutation which completed after its
+   * writer lease was lost. Required so a newly acquired writer cannot clear
+   * an older reservation and strand that older physical effect.
+   */
+  onLeaseLost: () => Promise<void>;
+};
+
+type GuardRemoteEffect = <T>(effect: FencedRemoteEffect<T>) => Promise<T>;
+type BeforeDatabaseMark = (tx: Transaction) => Promise<void>;
+type ReserveExternalAppend<
+  TBrand extends SafeIdType,
+  TRow extends CorpusIndexRow<TBrand>,
+> = (
+  tx: Transaction,
+  args: { generation: string; rows: readonly TRow[] },
+) => Promise<Map<SafeId<TBrand>, ReservedAppendTargets>>;
+type RecoverRemoteEffectLeaseLoss<TBrand extends SafeIdType> = (args: {
+  entityIds: readonly SafeId<TBrand>[];
+  indexId: string;
+}) => Promise<void>;
+
+type BackfillSelectedRowsOptions<
+  TBrand extends SafeIdType,
+  TRow extends CorpusIndexRow<TBrand>,
+> =
+  | {
+      type: "incremental";
+      readConcurrency?: number;
+    }
+  | {
+      type: "fenced-incremental";
+      beforeDatabaseMark: BeforeDatabaseMark;
+      beforeRemoteEffect: GuardRemoteEffect;
+      recoverRemoteEffectLeaseLoss: RecoverRemoteEffectLeaseLoss<TBrand>;
+      reserveExternalAppend: ReserveExternalAppend<TBrand, TRow>;
+      readConcurrency?: number;
+    }
+  | {
+      type: "generation-rebuild";
+      beforeDatabaseMark: BeforeDatabaseMark;
+      beforeRemoteEffect: GuardRemoteEffect;
+      recoverRemoteEffectLeaseLoss: RecoverRemoteEffectLeaseLoss<TBrand>;
+      reserveExternalAppend: ReserveExternalAppend<TBrand, TRow>;
+      readConcurrency?: number;
+    };
+
+type GenerationBackfillRowsOptions<
+  TBrand extends SafeIdType,
+  TRow extends CorpusIndexRow<TBrand>,
+> = {
+  beforeDatabaseMark: BeforeDatabaseMark;
+  beforeRemoteEffect: GuardRemoteEffect;
+  recoverRemoteEffectLeaseLoss: RecoverRemoteEffectLeaseLoss<TBrand>;
+  reserveExternalAppend: ReserveExternalAppend<TBrand, TRow>;
+  readConcurrency?: number;
+};
+
+type FencedIncrementalBackfillOptions<
+  TBrand extends SafeIdType,
+  TRow extends CorpusIndexRow<TBrand>,
+> = GenerationBackfillRowsOptions<TBrand, TRow>;
+
+export type ReservedAppendTargets = {
+  indexIds: readonly string[];
+  revision: number;
+};
+
+type CorpusIndexMarkMode<TBrand extends SafeIdType> =
+  | { type: "incremental" }
+  | {
+      generation: string;
+      reservations: ReadonlyMap<SafeId<TBrand>, ReservedAppendTargets>;
+      type: "fenced-incremental" | "generation-rebuild";
+    };
+
+type IngestBatchWithGuardArgs = {
+  indexId: string;
+  ndjson: string;
+} & (
+  | {
+      beforeRemoteEffect: GuardRemoteEffect;
+      onLeaseLost: () => Promise<void>;
+    }
+  | {
+      beforeRemoteEffect?: undefined;
+      onLeaseLost?: undefined;
+    }
+);
+
+const ingestBatchWithGuard = async ({
+  beforeRemoteEffect,
+  indexId,
+  ndjson,
+  onLeaseLost,
+}: IngestBatchWithGuardArgs): Promise<Result<void, CorpusIndexError>> => {
+  const effect = async () =>
+    await getCorpusIndexClient().ingestBatch(indexId, ndjson);
+  if (beforeRemoteEffect === undefined) {
+    return await effect();
+  }
+  const guarded = await Result.tryPromise({
+    try: async () => await beforeRemoteEffect({ effect, onLeaseLost }),
+    catch: corpusIndexErrorFromThrown,
+  });
+  return guarded.isErr() ? Result.err(guarded.error) : guarded.value;
+};
+
 /**
  * Family-specific surface consumed by the shared core. Everything that touches
  * a family's Drizzle tables or its per-document shape lives here; the core
@@ -259,6 +438,8 @@ export type CorpusIndexAdapter<
     scopedDb: ScopedDb,
     id: SafeId<TBrand>,
   ) => Promise<string | null>;
+  /** Physical indexes recorded for this rebuild generation. */
+  generationProjectionIndexIds: (row: TRow) => readonly string[];
   /**
    * Compare-and-set every row's selected state to indexed, within the
    * caller's transaction, as ONE statement. Returns the ids that were
@@ -270,8 +451,9 @@ export type CorpusIndexAdapter<
   markIndexedBatch: (
     tx: Transaction,
     args: {
-      rows: readonly CorpusIndexRow<TBrand>[];
+      rows: readonly TRow[];
       indexId: string;
+      mode: CorpusIndexMarkMode<TBrand>;
       now: Date;
     },
   ) => Promise<Set<SafeId<TBrand>>>;
@@ -358,6 +540,43 @@ export const settleBoth = async <TFirst, TSecond>(
   return [firstOutcome.value, secondOutcome.value];
 };
 
+/** Waits for every sibling before exposing the first rejection in input order. */
+export const settleAll = async <T>(
+  promises: readonly Promise<T>[],
+): Promise<T[]> => {
+  const outcomes = await Promise.allSettled(promises);
+  const values: T[] = [];
+  let firstError: unknown;
+  let rejected = false;
+  for (const outcome of outcomes) {
+    if (outcome.status === "fulfilled") {
+      values.push(outcome.value);
+      continue;
+    }
+    if (!rejected) {
+      firstError = outcome.reason;
+      rejected = true;
+    }
+  }
+  if (rejected) {
+    throw firstError;
+  }
+  return values;
+};
+
+/** Waits for best-effort cleanup and reports every failure without throwing. */
+export const settleAllCleanup = async (
+  promises: readonly Promise<unknown>[],
+  reportError: (error: unknown) => void,
+): Promise<void> => {
+  const outcomes = await Promise.allSettled(promises);
+  for (const outcome of outcomes) {
+    if (outcome.status === "rejected") {
+      reportError(outcome.reason);
+    }
+  }
+};
+
 const loadText = async <TBrand extends SafeIdType>(
   row: CorpusIndexRow<TBrand>,
   fetchFulltext: FetchFulltext<TBrand>,
@@ -391,21 +610,39 @@ export const createCorpusIndexer = <
   // have confirmed this process so we don't probe corpus index every batch.
   const ensuredIndexes = new Set<string>();
 
-  const ensureIndex = async (
-    indexId: string,
-  ): Promise<Result<void, CorpusIndexError>> => {
+  const ensureIndex = async ({
+    beforeRemoteEffect,
+    indexId,
+  }: {
+    beforeRemoteEffect?: GuardRemoteEffect;
+    indexId: string;
+  }): Promise<Result<void, CorpusIndexError>> => {
     if (ensuredIndexes.has(indexId)) {
       return Result.ok(undefined);
     }
     const client = getCorpusIndexClient();
-    const exists = await client.indexExists(indexId);
+    const indexExists = async () => await client.indexExists(indexId);
+    const exists = beforeRemoteEffect
+      ? await beforeRemoteEffect({
+          effect: indexExists,
+          // A probe has no physical mutation to compensate.
+          onLeaseLost: async () => await Promise.resolve(),
+        })
+      : await indexExists();
     if (exists.isErr()) {
       return Result.err(exists.error);
     }
     if (!exists.value) {
-      const created = await client.createIndex(
-        corpusIndexConfig(adapter.family, indexId),
-      );
+      const createIndex = async () =>
+        await client.createIndex(corpusIndexConfig(adapter.family, indexId));
+      const created = beforeRemoteEffect
+        ? await beforeRemoteEffect({
+            effect: createIndex,
+            // An empty index is a safe fixed point; document writes carry
+            // explicit compensation below.
+            onLeaseLost: async () => await Promise.resolve(),
+          })
+        : await createIndex();
       if (created.isErr()) {
         return Result.err(created.error);
       }
@@ -553,16 +790,56 @@ export const createCorpusIndexer = <
    * stable Postgres id keeps erasure and re-index correct without that
    * bookkeeping.
    */
-  const remove = async (
-    entityId: SafeId<TBrand>,
-    scopedDb: ScopedDb,
-    indexId: string,
-    operation: "delete" | "redact" = "delete",
-  ): Promise<Result<void, CorpusIndexError>> => {
-    const result = await getCorpusIndexClient().deleteByQuery(
-      indexId,
-      corpusDocumentDeleteQuery(entityId),
-    );
+  type RemoveWithOptionsArgs = {
+    entityId: SafeId<TBrand>;
+    indexId: string;
+    operation: "delete" | "redact";
+    scopedDb: ScopedDb;
+  } & (
+    | {
+        beforeRemoteEffect: GuardRemoteEffect;
+        onLeaseLost: () => Promise<void>;
+      }
+    | {
+        beforeRemoteEffect?: undefined;
+        onLeaseLost?: undefined;
+      }
+  );
+
+  const removeWithOptions = async ({
+    beforeRemoteEffect,
+    entityId,
+    indexId,
+    onLeaseLost,
+    operation,
+    scopedDb,
+  }: RemoveWithOptionsArgs): Promise<Result<void, CorpusIndexError>> => {
+    const deleteByQuery = async () =>
+      await getCorpusIndexClient().deleteByQuery(
+        indexId,
+        corpusDocumentDeleteQuery(entityId),
+      );
+    let deleted: Awaited<ReturnType<typeof deleteByQuery>>;
+    if (beforeRemoteEffect === undefined) {
+      deleted = await deleteByQuery();
+    } else {
+      const guarded = await Result.tryPromise({
+        try: async () =>
+          await beforeRemoteEffect({
+            effect: deleteByQuery,
+            onLeaseLost,
+          }),
+        catch: corpusIndexErrorFromThrown,
+      });
+      deleted = guarded.isErr() ? Result.err(guarded.error) : guarded.value;
+    }
+    // A retired generation is already at the requested fixed point. Treating
+    // its missing index as a successful delete keeps cleanup idempotent and
+    // avoids retrying an index that can no longer contain the document.
+    const result =
+      deleted.isErr() && deleted.error.status === 404
+        ? Result.ok(undefined)
+        : deleted;
     await adapter.recordJobs(
       scopedDb,
       [
@@ -581,6 +858,14 @@ export const createCorpusIndexer = <
     return result;
   };
 
+  const remove = async (
+    entityId: SafeId<TBrand>,
+    scopedDb: ScopedDb,
+    indexId: string,
+    operation: "delete" | "redact" = "delete",
+  ): Promise<Result<void, CorpusIndexError>> =>
+    await removeWithOptions({ entityId, scopedDb, indexId, operation });
+
   /**
    * Index a batch of corpus-backed rows into the given generation. Two-query
    * missing/stale split mirrors backfillSearchIndex: `missing` = not yet in
@@ -590,12 +875,12 @@ export const createCorpusIndexer = <
    */
   let staleSkips = 0;
 
-  const backfill = async (
+  const backfillWithOptions = async (
     scopedDb: ScopedDb,
     batchSize: number,
     generation: string,
-    options: { readConcurrency?: number } = {},
-  ): Promise<number> => {
+    options: BackfillSelectedRowsOptions<TBrand, TRow>,
+  ): Promise<FencedBackfillBatchResult> => {
     const staleReserved = Math.max(1, Math.floor(batchSize / 4));
     // A due duty batch cedes one missing slot up front so granting the
     // stale scan capacity below cannot push the batch past its requested
@@ -648,6 +933,51 @@ export const createCorpusIndexer = <
       });
     }
     if (rows.length === 0) {
+      return { indexed: 0, status: FENCED_BACKFILL_BATCH_STATUS.COMPLETE };
+    }
+
+    const indexed = await backfillSelectedRows(
+      scopedDb,
+      rows,
+      generation,
+      options,
+    );
+    return indexed > 0
+      ? { indexed, status: FENCED_BACKFILL_BATCH_STATUS.ADVANCED }
+      : { indexed: 0, status: FENCED_BACKFILL_BATCH_STATUS.RETRY };
+  };
+
+  const backfill = async (
+    scopedDb: ScopedDb,
+    batchSize: number,
+    generation: string,
+    options: { readConcurrency?: number } = {},
+  ): Promise<number> => {
+    const result = await backfillWithOptions(scopedDb, batchSize, generation, {
+      ...options,
+      type: "incremental",
+    });
+    return result.indexed;
+  };
+
+  const backfillFenced = async (
+    scopedDb: ScopedDb,
+    batchSize: number,
+    generation: string,
+    options: FencedIncrementalBackfillOptions<TBrand, TRow>,
+  ): Promise<FencedBackfillBatchResult> =>
+    await backfillWithOptions(scopedDb, batchSize, generation, {
+      ...options,
+      type: "fenced-incremental",
+    });
+
+  const backfillSelectedRows = async (
+    scopedDb: ScopedDb,
+    rows: TRow[],
+    generation: string,
+    options: BackfillSelectedRowsOptions<TBrand, TRow>,
+  ): Promise<number> => {
+    if (rows.length === 0) {
       return 0;
     }
 
@@ -686,6 +1016,42 @@ export const createCorpusIndexer = <
     let indexed = 0;
     let firstError: CorpusIndexError | null = null;
 
+    const reserveAndEnsureGroup = async (
+      indexId: string,
+      group: typeof built,
+    ) => {
+      const reservedTargets =
+        options.type === "incremental"
+          ? null
+          : await scopedDb(async (tx) => {
+              await options.beforeDatabaseMark(tx);
+              return await options.reserveExternalAppend(tx, {
+                generation,
+                rows: group.map(({ row }) => row),
+              });
+            });
+      // A reservation CAS miss means a concurrent refresh moved the row
+      // after the batch read. Do not let an old payload cross the external
+      // append boundary; the newer row remains in the durable pending set.
+      const reservedGroup =
+        reservedTargets === null
+          ? group
+          : group.filter(({ row }) => reservedTargets.has(row.id));
+      if (reservedGroup.length === 0) {
+        return { ensured: null, reservedGroup, reservedTargets };
+      }
+      // A new generation may not have an index for this jurisdiction yet.
+      // Create it before replay cleanup so an expected empty target does not
+      // turn the delete into a terminal 404.
+      const ensured = await ensureIndex({
+        ...(options.type === "incremental"
+          ? {}
+          : { beforeRemoteEffect: options.beforeRemoteEffect }),
+        indexId,
+      });
+      return { ensured, reservedGroup, reservedTargets };
+    };
+
     for (const [indexId, group] of groups) {
       // Failed index-job rows for this group, written in the `finally` below.
       // An ingest failure can now surface at two levels (the index could not
@@ -698,6 +1064,18 @@ export const createCorpusIndexer = <
       // keying.
       const groupFailures: CorpusJobInput<TBrand>[] = [];
       try {
+        // oxlint-disable-next-line no-await-in-loop -- each jurisdiction reserves and ensures its durable target immediately before sequential remote writes
+        const reservation = await reserveAndEnsureGroup(indexId, group);
+        const { ensured, reservedGroup, reservedTargets } = reservation;
+        if (ensured === null) {
+          continue;
+        }
+        if (ensured.isErr()) {
+          firstError ??= ensured.error;
+          groupFailures.push(...failedIndexJobs(reservedGroup, ensured.error));
+          continue;
+        }
+
         // Ingest appends; it never replaces. Before re-ingesting, delete the
         // previously indexed copies from wherever they live (the same index for
         // a content refresh, another jurisdiction index for a corrected
@@ -707,16 +1085,55 @@ export const createCorpusIndexer = <
         // generation rebuilds replace whole indexes. Engine delete tasks only
         // affect splits that already exist, so the copies ingested below are not
         // at risk.
-        const moved = group.flatMap(({ row }) =>
-          row.indexedGeneration !== null &&
-          row.indexedGeneration.startsWith(`${generation}_`)
-            ? [{ id: row.id, oldIndexId: row.indexedGeneration }]
-            : [],
-        );
+        const moved = reservedGroup.flatMap(({ row }) => {
+          // A generation page can be replayed after the external append but
+          // before its database mark commits. Delete its deterministic target
+          // copies first, so a retry converges instead of appending duplicates.
+          const previousIndexes = new Set<string>();
+          if (reservedTargets !== null) {
+            previousIndexes.add(indexId);
+            for (const projectionIndexId of adapter.generationProjectionIndexIds(
+              row,
+            )) {
+              previousIndexes.add(projectionIndexId);
+            }
+            const durableTargets = reservedTargets.get(row.id);
+            if (durableTargets !== undefined) {
+              for (const reservedIndexId of durableTargets.indexIds) {
+                previousIndexes.add(reservedIndexId);
+              }
+            }
+          }
+          if (
+            row.indexedGeneration !== null &&
+            row.indexedGeneration.startsWith(`${generation}_`)
+          ) {
+            previousIndexes.add(row.indexedGeneration);
+          }
+          return [...previousIndexes].map((oldIndexId) => ({
+            id: row.id,
+            oldIndexId,
+          }));
+        });
         let staleError: CorpusIndexError | null = null;
         for (const entry of moved) {
           // oxlint-disable-next-line no-await-in-loop -- sequential deletes that early-break on the first error
-          const removed = await remove(entry.id, scopedDb, entry.oldIndexId);
+          const removed = await removeWithOptions({
+            ...(options.type === "incremental"
+              ? {}
+              : {
+                  beforeRemoteEffect: options.beforeRemoteEffect,
+                  onLeaseLost: async () =>
+                    await options.recoverRemoteEffectLeaseLoss({
+                      entityIds: [entry.id],
+                      indexId: entry.oldIndexId,
+                    }),
+                }),
+            entityId: entry.id,
+            indexId: entry.oldIndexId,
+            operation: "delete",
+            scopedDb,
+          });
           if (removed.isErr()) {
             staleError = removed.error;
             break;
@@ -727,14 +1144,6 @@ export const createCorpusIndexer = <
           continue;
         }
 
-        // oxlint-disable-next-line no-await-in-loop -- per-jurisdiction indexes are ensured/ingested sequentially to avoid overwhelming the search backend
-        const ensured = await ensureIndex(indexId);
-        if (ensured.isErr()) {
-          firstError ??= ensured.error;
-          groupFailures.push(...failedIndexJobs(group, ensured.error));
-          continue;
-        }
-
         // One group can exceed a single request's byte budget once rows project
         // to many documents, so it goes out as a sequence of requests. Each is
         // committed on its own: a later request failing must not un-commit the
@@ -742,14 +1151,24 @@ export const createCorpusIndexer = <
         // index and re-ingesting them next cycle would append a second copy that
         // nothing points at.
         for (const { entries, ndjson } of splitIngestRequests(
-          group,
+          reservedGroup,
           LIMITS.corpusIndexIngestMaxBytes,
         )) {
           // oxlint-disable-next-line no-await-in-loop -- sequential ingest paces NDJSON pushes to the search backend
-          const ingest = await getCorpusIndexClient().ingestBatch(
+          const ingest = await ingestBatchWithGuard({
+            ...(options.type === "incremental"
+              ? {}
+              : {
+                  beforeRemoteEffect: options.beforeRemoteEffect,
+                  onLeaseLost: async () =>
+                    await options.recoverRemoteEffectLeaseLoss({
+                      entityIds: entries.map(({ row }) => row.id),
+                      indexId,
+                    }),
+                }),
             indexId,
             ndjson,
-          );
+          });
 
           if (ingest.isErr()) {
             firstError ??= ingest.error;
@@ -764,15 +1183,39 @@ export const createCorpusIndexer = <
           // oxlint-disable-next-line no-await-in-loop -- one CAS transaction per ingest request; sequential to keep index writes and audit rows consistent
           await scopedDb(async (tx) => {
             // audit: skip — search index maintenance; rebuilds derived state
+            if (options.type !== "incremental") {
+              await options.beforeDatabaseMark(tx);
+            }
             // Compare-and-set on each row's selected state: a concurrent
             // re-ingest clears indexedHash (possibly leaving it null-to-null
             // when the row was already pending) and bumps updatedAt, and an
             // unconditional write would mask that refresh so the stale index
             // document would never be retried. All rows go in one statement;
             // per-row round-trips dominated bulk-build batch cost.
+            let mode: CorpusIndexMarkMode<TBrand>;
+            if (options.type === "incremental") {
+              mode = { type: "incremental" };
+            } else {
+              if (reservedTargets === null) {
+                panic("fenced corpus append reached mark without reservations");
+              }
+              const reservations = new Map<
+                SafeId<TBrand>,
+                ReservedAppendTargets
+              >();
+              for (const { row } of entries) {
+                const rowReservation = reservedTargets.get(row.id);
+                if (rowReservation === undefined) {
+                  panic("reserved corpus row reached mark without its epoch");
+                }
+                reservations.set(row.id, rowReservation);
+              }
+              mode = { generation, reservations, type: options.type };
+            }
             const marked = await adapter.markIndexedBatch(tx, {
               rows: entries.map(({ row }) => row),
               indexId,
+              mode,
               now,
             });
             for (const { row } of entries) {
@@ -796,7 +1239,22 @@ export const createCorpusIndexer = <
           // re-indexed by a later cycle.
           for (const missedId of casMissed) {
             // oxlint-disable-next-line no-await-in-loop -- sequential cleanup deletes of the unrecorded copies; matches this file's established sequential-vs-search-backend design (see ensureIndex/ingestBatch above)
-            const removed = await remove(missedId, scopedDb, indexId);
+            const removed = await removeWithOptions({
+              ...(options.type === "incremental"
+                ? {}
+                : {
+                    beforeRemoteEffect: options.beforeRemoteEffect,
+                    onLeaseLost: async () =>
+                      await options.recoverRemoteEffectLeaseLoss({
+                        entityIds: [missedId],
+                        indexId,
+                      }),
+                  }),
+              entityId: missedId,
+              indexId,
+              operation: "delete",
+              scopedDb,
+            });
             if (removed.isErr()) {
               firstError ??= removed.error;
             }
@@ -824,5 +1282,23 @@ export const createCorpusIndexer = <
     return indexed;
   };
 
-  return { loadDocsForBatch, backfill, remove };
+  const backfillRows = async (
+    scopedDb: ScopedDb,
+    rows: readonly TRow[],
+    generation: string,
+    options: GenerationBackfillRowsOptions<TBrand, TRow>,
+  ): Promise<number> =>
+    await backfillSelectedRows(scopedDb, [...rows], generation, {
+      ...options,
+      type: "generation-rebuild",
+    });
+
+  return {
+    loadDocsForBatch,
+    backfill,
+    backfillFenced,
+    backfillRows,
+    remove,
+    removeFenced: removeWithOptions,
+  };
 };

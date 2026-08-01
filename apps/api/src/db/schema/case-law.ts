@@ -33,7 +33,9 @@ export const caseLawSources = p.pgTable(
     lastSyncAt: timestamptz("last_sync_at"),
     config: jsonb().$type<Record<string, unknown>>().default({}),
     // License / redistribution terms. null = legacy source (public
-    // court records, treated as redistributable); see corpus-source.ts.
+    // court records, treated as redistributable); see corpus-source.ts. A
+    // migration-owned trigger validates inserts and descriptor changes while
+    // permitting unrelated checkpoint updates on legacy malformed rows.
     descriptor: jsonb().$type<CorpusSourceDescriptor>(),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
     updatedAt: timestamptz("updated_at")
@@ -65,6 +67,8 @@ export const caseLawDecisions = p.pgTable(
     slug: p.varchar({ length: 256 }),
     ecli: p.varchar({ length: 256 }),
     court: p.varchar({ length: 512 }).notNull(),
+    // A migration-owned trigger validates inserts and actual country changes,
+    // while permitting unrelated updates that repair legacy malformed rows.
     country: p.varchar({ length: 3 }).notNull(),
     language: p.varchar({ length: 8 }).notNull(),
     languageGroupKey: p.varchar("language_group_key", {
@@ -176,14 +180,16 @@ export const caseLawDecisions = p.pgTable(
      * the sha256 of the canonical payload (what S3 is keyed on);
      * `indexedHash` is the last hash pushed to the search projection,
      * so `indexedHash IS DISTINCT FROM contentHash` marks a stale row.
-     * `indexedGeneration` is which generation (e.g. case_law_v1) the
-     * row was last written into.
+     * `indexedGeneration` is the physical index the row was last written
+     * into (e.g. case_law_v1_sk: generation plus jurisdiction).
      */
     contentHash: p.varchar("content_hash", { length: 64 }),
     indexedHash: p.varchar("indexed_hash", { length: 64 }),
-    indexedGeneration: p.varchar("indexed_generation", { length: 32 }),
+    indexedGeneration: p.varchar("indexed_generation", { length: 64 }),
     indexedAt: timestamptz("indexed_at"),
-    createdAt: timestamptz("created_at").defaultNow().notNull(),
+    createdAt: timestamptz("created_at")
+      .default(sql`clock_timestamp()`)
+      .notNull(),
     updatedAt: timestamptz("updated_at")
       .defaultNow()
       .notNull()
@@ -217,6 +223,12 @@ export const caseLawDecisions = p.pgTable(
       .where(isNotNull(t.languageGroupKey)),
     p.index("case_law_decisions_created_at_idx").on(t.createdAt),
     p
+      .index("case_law_decisions_corpus_generation_cursor_idx")
+      .on(t.createdAt, t.id),
+    p
+      .index("case_law_decisions_source_generation_cursor_idx")
+      .on(t.sourceId, t.createdAt, t.id),
+    p
       .index("case_law_decisions_updated_id_idx")
       .on(t.updatedAt.desc(), t.id.desc()),
     p
@@ -236,6 +248,10 @@ export const caseLawDecisions = p.pgTable(
       .where(
         sql`${t.contentHash} is not null and ${t.indexedGeneration} is null`,
       ),
+    p
+      .index("case_law_decisions_corpus_hash_pending_idx")
+      .on(t.id)
+      .where(sql`${t.contentHash} is not null and ${t.indexedHash} is null`),
     p
       .index("case_law_decisions_citation_key_idx")
       .on(t.citationKey)
@@ -589,7 +605,7 @@ export const caseLawIndexJobs = p.pgTable(
       () => caseLawDecisions.id,
       { onDelete: "cascade" },
     ),
-    generation: p.varchar({ length: 32 }).notNull(),
+    generation: p.varchar({ length: 64 }).notNull(),
     operation: p
       .varchar({ length: 16 })
       .notNull()
@@ -610,6 +626,219 @@ export const caseLawIndexJobs = p.pgTable(
       "case_law_index_jobs_status_values",
       sql`${t.status} IN ('succeeded','failed')`,
     ),
+    ...globalCaseLawPolicies(),
+  ],
+);
+
+export const CASE_LAW_CORPUS_INDEX_BACKFILL_STATUSES = [
+  "running",
+  "complete",
+] as const;
+
+export type CaseLawCorpusIndexBackfillStatus =
+  (typeof CASE_LAW_CORPUS_INDEX_BACKFILL_STATUSES)[number];
+
+export const CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS = {
+  RUNNING: CASE_LAW_CORPUS_INDEX_BACKFILL_STATUSES[0],
+  COMPLETE: CASE_LAW_CORPUS_INDEX_BACKFILL_STATUSES[1],
+} as const satisfies Record<string, CaseLawCorpusIndexBackfillStatus>;
+
+/** Durable cursor for a blue-green corpus-index generation rebuild. */
+export const caseLawCorpusIndexBackfills = p.pgTable(
+  "case_law_corpus_index_backfills",
+  {
+    generation: p.varchar({ length: 32 }).primaryKey(),
+    generationOrder: p
+      .integer("generation_order")
+      .notNull()
+      .generatedAlwaysAs(
+        sql`substring("generation" from '^case_law_v([1-9][0-9]*)$')::integer`,
+      ),
+    snapshotAt: timestamptz("snapshot_at").defaultNow().notNull(),
+    cursorCreatedAt: timestamptz("cursor_created_at"),
+    cursorId: safeUuid<"caseLawDecision">("cursor_id"),
+    status: p
+      .text({ enum: CASE_LAW_CORPUS_INDEX_BACKFILL_STATUSES })
+      .notNull()
+      .default(CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.RUNNING),
+    /**
+     * A rebuild page owns external index writes. Persisting this lease before
+     * the write prevents two workers from appending the same documents; the
+     * expiry makes a process crash recoverable.
+     */
+    leaseToken: p.uuid("lease_token"),
+    leaseExpiresAt: timestamptz("lease_expires_at"),
+    updatedAt: timestamptz("updated_at")
+      .defaultNow()
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    p.check(
+      "case_law_corpus_index_backfills_status_values",
+      sql`${t.status} IN (${sql.join(
+        CASE_LAW_CORPUS_INDEX_BACKFILL_STATUSES.map((status) =>
+          sql.raw(`'${status}'`),
+        ),
+        sql.raw(","),
+      )})`,
+    ),
+    p.check(
+      "case_law_corpus_index_backfills_cursor_pair",
+      sql`(${t.cursorCreatedAt} IS NULL) = (${t.cursorId} IS NULL)`,
+    ),
+    p.check(
+      "case_law_corpus_index_backfills_lease_pair",
+      sql`(${t.leaseToken} IS NULL) = (${t.leaseExpiresAt} IS NULL)`,
+    ),
+    p
+      .index("case_law_corpus_index_backfills_order_generation_idx")
+      .on(t.generationOrder, t.generation),
+    ...globalCaseLawPolicies(),
+  ],
+);
+
+/**
+ * Durable, bounded work created when a source's corpus eligibility changes.
+ * A new revision resets the decision cursor, so a racing worker cannot advance
+ * over or delete newer eligibility work.
+ */
+export const caseLawCorpusIndexSourceReconciliations = p.pgTable(
+  "case_law_corpus_index_source_reconciliations",
+  {
+    generation: p.varchar({ length: 32 }).notNull(),
+    sourceId: safeUuid<"caseLawSource">("source_id").notNull(),
+    revision: p.integer().default(1).notNull(),
+    cursorCreatedAt: timestamptz("cursor_created_at"),
+    cursorId: safeUuid<"caseLawDecision">("cursor_id"),
+    upperCreatedAt: timestamptz("upper_created_at"),
+    upperId: safeUuid<"caseLawDecision">("upper_id"),
+    updatedAt: timestamptz("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p.primaryKey({
+      columns: [t.generation, t.sourceId],
+      name: "case_law_corpus_index_source_reconciliations_pk",
+    }),
+    p
+      .foreignKey({
+        name: "case_law_corpus_index_source_reconciliations_generation_fk",
+        columns: [t.generation],
+        foreignColumns: [caseLawCorpusIndexBackfills.generation],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: "case_law_corpus_index_source_reconciliations_source_fk",
+        columns: [t.sourceId],
+        foreignColumns: [caseLawSources.id],
+      })
+      .onDelete("cascade"),
+    p.check(
+      "case_law_corpus_index_source_reconciliations_cursor_pair",
+      sql`(${t.cursorCreatedAt} IS NULL) = (${t.cursorId} IS NULL)`,
+    ),
+    p.check(
+      "case_law_corpus_index_source_reconciliations_upper_pair",
+      sql`(${t.upperCreatedAt} IS NULL) = (${t.upperId} IS NULL)`,
+    ),
+    p.check(
+      "case_law_source_reconciliations_cursor_upper",
+      sql`${t.cursorCreatedAt} IS NULL OR (${t.upperCreatedAt} IS NOT NULL AND (${t.cursorCreatedAt}, ${t.cursorId}) <= (${t.upperCreatedAt}, ${t.upperId}))`,
+    ),
+    p
+      .index("case_law_corpus_index_source_reconciliations_source_idx")
+      .on(t.sourceId),
+    ...globalCaseLawPolicies(),
+  ],
+);
+
+/** Mutual exclusion for every writer targeting one physical generation. */
+export const caseLawCorpusIndexWriterLeases = p.pgTable(
+  "case_law_corpus_index_writer_leases",
+  {
+    generation: p.varchar({ length: 32 }).primaryKey(),
+    leaseToken: p.uuid("lease_token"),
+    leaseExpiresAt: timestamptz("lease_expires_at"),
+    updatedAt: timestamptz("updated_at")
+      .defaultNow()
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    p.check(
+      "case_law_corpus_index_writer_leases_pair",
+      sql`(${t.leaseToken} IS NULL) = (${t.leaseExpiresAt} IS NULL)`,
+    ),
+    ...globalCaseLawPolicies(),
+  ],
+);
+
+export const CASE_LAW_CORPUS_INDEX_PROJECTION_ACTIONS = [
+  "index",
+  "delete",
+] as const;
+export type CaseLawCorpusIndexProjectionAction =
+  (typeof CASE_LAW_CORPUS_INDEX_PROJECTION_ACTIONS)[number];
+
+/** Durable state and refresh queue for each active generation projection. */
+export const caseLawCorpusIndexProjections = p.pgTable(
+  "case_law_corpus_index_projections",
+  {
+    generation: p.varchar({ length: 32 }).notNull(),
+    decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
+    indexId: p.varchar("index_id", { length: 64 }),
+    indexedHash: p.varchar("indexed_hash", { length: 64 }),
+    pendingAction: p.text("pending_action", {
+      enum: CASE_LAW_CORPUS_INDEX_PROJECTION_ACTIONS,
+    }),
+    pendingHash: p.varchar("pending_hash", { length: 64 }),
+    pendingIndexIds: p
+      .varchar("pending_index_ids", { length: 64 })
+      .array()
+      .notNull()
+      .default(sql`'{}'::varchar(64)[]`),
+    pendingRevision: p.integer("pending_revision").default(0).notNull(),
+    updatedAt: timestamptz("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p.primaryKey({
+      columns: [t.generation, t.decisionId],
+      name: "case_law_corpus_index_projections_pk",
+    }),
+    p
+      .foreignKey({
+        name: "case_law_corpus_index_projections_generation_fk",
+        columns: [t.generation],
+        foreignColumns: [caseLawCorpusIndexBackfills.generation],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: "case_law_corpus_index_projections_decision_fk",
+        columns: [t.decisionId],
+        foreignColumns: [caseLawDecisions.id],
+      })
+      .onDelete("cascade"),
+    p.check(
+      "case_law_corpus_index_projections_index_pair",
+      sql`(${t.indexId} IS NULL) = (${t.indexedHash} IS NULL)`,
+    ),
+    p.check(
+      "case_law_corpus_index_projections_pending_shape",
+      sql`((${t.pendingAction} IS NULL AND ${t.pendingHash} IS NULL AND cardinality(${t.pendingIndexIds}) = 0)
+        OR (${t.pendingAction} = 'index' AND ${t.pendingHash} IS NOT NULL AND cardinality(${t.pendingIndexIds}) > 0)
+        OR (${t.pendingAction} = 'delete' AND ${t.pendingHash} IS NULL)) IS TRUE`,
+    ),
+    p.check(
+      "case_law_corpus_index_projections_pending_revision_nonnegative",
+      sql`${t.pendingRevision} >= 0`,
+    ),
+    p.index("case_law_corpus_index_projections_decision_idx").on(t.decisionId),
+    p
+      .index("case_law_corpus_index_projections_pending_idx")
+      .on(t.generation, t.decisionId)
+      .where(isNotNull(t.pendingAction)),
     ...globalCaseLawPolicies(),
   ],
 );
