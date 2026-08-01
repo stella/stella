@@ -7,6 +7,7 @@ COMMIT;
 -- stella-migration-safety: reviewed destructive-change - retry cleanup drops only this migration's index before rebuilding it, so an interrupted INVALID index cannot be mistaken for completion.
 DROP INDEX CONCURRENTLY IF EXISTS "account_credential_singleton_uidx";
 --> statement-breakpoint
+-- squawk-ignore prefer-robust-stmts -- preceding DROP removes invalid retry artifacts; IF NOT EXISTS could accept one.
 CREATE UNIQUE INDEX CONCURRENTLY "account_credential_singleton_uidx" ON "account" ("provider_id") WHERE provider_id = 'credential';
 --> statement-breakpoint
 -- squawk-ignore transaction-nesting, ban-uncommitted-transaction

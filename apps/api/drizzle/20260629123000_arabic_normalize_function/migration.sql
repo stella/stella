@@ -46,21 +46,25 @@ COMMIT;
 --> statement-breakpoint
 DROP INDEX CONCURRENTLY IF EXISTS "contacts_display_name_arabic_norm_trgm_idx";
 --> statement-breakpoint
+-- squawk-ignore prefer-robust-stmts -- preceding DROP removes invalid retry artifacts; IF NOT EXISTS could accept one.
 CREATE INDEX CONCURRENTLY "contacts_display_name_arabic_norm_trgm_idx"
   ON "contacts" USING gin (arabic_normalize("display_name") gin_trgm_ops);
 --> statement-breakpoint
 DROP INDEX CONCURRENTLY IF EXISTS "contacts_first_name_arabic_norm_trgm_idx";
 --> statement-breakpoint
+-- squawk-ignore prefer-robust-stmts -- preceding DROP removes invalid retry artifacts; IF NOT EXISTS could accept one.
 CREATE INDEX CONCURRENTLY "contacts_first_name_arabic_norm_trgm_idx"
   ON "contacts" USING gin (arabic_normalize("first_name") gin_trgm_ops);
 --> statement-breakpoint
 DROP INDEX CONCURRENTLY IF EXISTS "contacts_last_name_arabic_norm_trgm_idx";
 --> statement-breakpoint
+-- squawk-ignore prefer-robust-stmts -- preceding DROP removes invalid retry artifacts; IF NOT EXISTS could accept one.
 CREATE INDEX CONCURRENTLY "contacts_last_name_arabic_norm_trgm_idx"
   ON "contacts" USING gin (arabic_normalize("last_name") gin_trgm_ops);
 --> statement-breakpoint
 DROP INDEX CONCURRENTLY IF EXISTS "contacts_organization_name_arabic_norm_trgm_idx";
 --> statement-breakpoint
+-- squawk-ignore prefer-robust-stmts -- preceding DROP removes invalid retry artifacts; IF NOT EXISTS could accept one.
 CREATE INDEX CONCURRENTLY "contacts_organization_name_arabic_norm_trgm_idx"
   ON "contacts" USING gin (arabic_normalize("organization_name") gin_trgm_ops);
 --> statement-breakpoint

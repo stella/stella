@@ -23,9 +23,7 @@ const collectUnsafeConcurrentIndexes = async (): Promise<string[]> => {
       .filter((line) => !line.trimStart().startsWith("--"))
       .join("\n");
     if (UNSAFE_IDEMPOTENCE.test(sqlWithoutLineComments)) {
-      violations.push(
-        `${relativePath}: concurrent index uses IF NOT EXISTS`,
-      );
+      violations.push(`${relativePath}: concurrent index uses IF NOT EXISTS`);
     }
     let hasUnboundedTimeout = false;
     let sawConcurrentIndex = false;

@@ -74,22 +74,22 @@ describe("migration history invariant", () => {
       ],
       [
         "20260605143000_workflow_pending_fields_index",
-        "e01fb3a73766f84e0ee0ea062f64d38cd56f777f71f9b74c5fb1fd42b282312e",
+        "798fdbc4b5e88b6e6aae86815d2aab3b4d4e1c05207f86dd17dce4e2c1ca71fe",
         "0088003d298f869017cf4047a74692a9ddefa4bc246aa6c25ca950ebeb29f918",
       ],
       [
         "20260629123000_arabic_normalize_function",
-        "6e7b6481011f0eea42b5ca645e959ec95e91d9f1a8f7eb920e071dc9cba654b9",
+        "5c18323c0211930aee1eb476720d3a6f00b808156f1c72b758ff0458f92a685d",
         "36ccbd00b7e98f6489d4a493ff61eba96eec145b38ef684045ae408fe88521ce",
       ],
       [
         "20260701160000_property_playbook_definition_id",
-        "424a1d2b0ae33d434efdea8f82fcbfd08bdf19f5f5c500857f3028fd7d6b76b2",
+        "428aea6ac33b60c3e401a9c83b1eae0a5b87a9fbadaecd5ab48b38bb31ec64ca",
         "423af8ce20ec27fa4895b37e3caf64f3470e1ebaa92da58cee04ea5c3dc9085e",
       ],
       [
         "20260703233000_account_credential_singleton",
-        "c2d26af1dc97f687ab3a1a0a41538fe2eac7dbf60824d2d74187104be957ade6",
+        "1e3a3cd7ef1373e6a6c48ded10bd53dc32169066a79fb3a808552d52849fb9ff",
         "ffd1598dc3a56f44095b549438313351e4bfb467b0fdb83c1def5a6d55f74583",
       ],
       [
