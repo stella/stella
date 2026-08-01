@@ -15,7 +15,11 @@ import type {
   EmptyAst,
 } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
-import { getCorpusS3 } from "@/api/lib/s3";
+import {
+  deleteCorpusS3ObjectWithSignal,
+  getCorpusS3,
+  putCorpusS3ObjectWithSignal,
+} from "@/api/lib/s3";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 /**
@@ -43,9 +47,12 @@ const PAYLOAD_MAX_BYTES = LIMITS.corpusPayloadMaxDecompressedBytes;
  */
 const boundedCorpusIo = async <T>(
   label: string,
-  operation: () => Promise<T>,
-  timeoutMs: number = CORPUS_IO_TIMEOUT_MS,
-): Promise<T> => await withTimeout(operation, { label, timeoutMs });
+  operation: (signal: AbortSignal) => Promise<T>,
+  {
+    signal,
+    timeoutMs = CORPUS_IO_TIMEOUT_MS,
+  }: { signal?: AbortSignal; timeoutMs?: number } = {},
+): Promise<T> => await withTimeout(operation, { label, signal, timeoutMs });
 
 type CorpusKeyInput = {
   documentId: string;
@@ -147,6 +154,8 @@ type WriteCorpusInput = CorpusPayload & {
   jurisdiction: string;
 };
 
+type CorpusIoOptions = { signal?: AbortSignal };
+
 export type WriteCorpusResult = CorpusKeys & { contentHash: string };
 
 type CorpusMirrorState =
@@ -204,42 +213,46 @@ export const corpusMirrorColumns = (
   }
 };
 
-export const writeCorpusDocument = async ({
-  documentId,
-  jurisdiction,
-  text,
-  sections,
-  ast,
-}: WriteCorpusInput): Promise<WriteCorpusResult> => {
+export const writeCorpusDocument = async (
+  { documentId, jurisdiction, text, sections, ast }: WriteCorpusInput,
+  { signal }: CorpusIoOptions = {},
+): Promise<WriteCorpusResult> => {
   const contentHash = corpusContentHash({ text, sections, ast });
   const keys = corpusKeys({ documentId, jurisdiction, contentHash });
-  const s3 = getCorpusS3();
 
   await Promise.all([
     boundedCorpusIo(
       "corpus-write-text",
-      async () =>
-        await s3.write(keys.textKey, await zstdCompressAsync(text ?? ""), {
-          type: CONTENT_TYPE,
-        }),
+      async (writeSignal) =>
+        await putCorpusS3ObjectWithSignal(
+          keys.textKey,
+          await zstdCompressAsync(text ?? ""),
+          CONTENT_TYPE,
+          writeSignal,
+        ),
+      { signal },
     ),
     boundedCorpusIo(
       "corpus-write-sections",
-      async () =>
-        await s3.write(
+      async (writeSignal) =>
+        await putCorpusS3ObjectWithSignal(
           keys.sectionsKey,
           await zstdCompressAsync(JSON.stringify(sections ?? null)),
-          { type: CONTENT_TYPE },
+          CONTENT_TYPE,
+          writeSignal,
         ),
+      { signal },
     ),
     boundedCorpusIo(
       "corpus-write-ast",
-      async () =>
-        await s3.write(
+      async (writeSignal) =>
+        await putCorpusS3ObjectWithSignal(
           keys.astKey,
           await zstdCompressAsync(JSON.stringify(ast ?? null)),
-          { type: CONTENT_TYPE },
+          CONTENT_TYPE,
+          writeSignal,
         ),
+      { signal },
     ),
   ]);
 
@@ -263,7 +276,7 @@ export const readCorpusText = async (
   const bytes = await boundedCorpusIo(
     "corpus-read-text",
     read ?? (async () => await getCorpusS3().file(key).bytes()),
-    timeoutMs,
+    { timeoutMs },
   );
   return await zstdDecompressToStringBounded(bytes, PAYLOAD_MAX_BYTES);
 };
@@ -348,12 +361,14 @@ export const readCorpusPayloadOrFallback = async <T>({
  * Keys are individually nullable: a partially ingested decision may have
  * only some payloads written, and every present object must still go.
  */
-export const deleteCorpusDocument = async (keys: {
-  textKey: string | null;
-  sectionsKey: string | null;
-  astKey: string | null;
-}): Promise<void> => {
-  const s3 = getCorpusS3();
+export const deleteCorpusDocument = async (
+  keys: {
+    textKey: string | null;
+    sectionsKey: string | null;
+    astKey: string | null;
+  },
+  { signal }: CorpusIoOptions = {},
+): Promise<void> => {
   const present = [keys.textKey, keys.sectionsKey, keys.astKey].filter(
     (key): key is string => key !== null,
   );
@@ -362,7 +377,9 @@ export const deleteCorpusDocument = async (keys: {
       async (key) =>
         await boundedCorpusIo(
           "corpus-delete",
-          async () => await s3.delete(key),
+          async (deleteSignal) =>
+            await deleteCorpusS3ObjectWithSignal(key, deleteSignal),
+          { signal },
         ),
     ),
   );

@@ -1,6 +1,7 @@
 import { Result, panic } from "better-result";
 import { and, eq, isNull, lt, notInArray, or, sql } from "drizzle-orm";
 
+import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
@@ -52,6 +53,10 @@ import {
   TimeoutError,
 } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
+import {
+  reserveCaseLawCorpusUploadIntent,
+  writeReservedCaseLawCorpusUpload,
+} from "@/api/lib/legal-search/case-law-corpus-upload-intents";
 import type {
   CorpusPayload,
   WriteCorpusResult,
@@ -59,8 +64,6 @@ import type {
 import {
   corpusMirrorColumns,
   corpusContentHash,
-  corpusKeys,
-  deleteCorpusDocument,
   EMPTY_CORPUS_CONTENT_HASHES,
   writeCorpusDocument,
 } from "@/api/lib/legal-search/corpus-storage";
@@ -279,29 +282,20 @@ const citationRow = (
  *
  * - `postgres-only` the row carries text/sections/AST and nothing mirrors
  *   it, so any corpus pointers left over from an earlier mode are stale.
- * - `postgres-mirrored` the row carries the payload and the post-commit
- *   write refreshes the corpus pointers under a compare-and-set.
- * - `object-storage` the payload is already in the corpus bucket, so the
- *   row stores the keys and leaves the columns NULL.
- * - `write-failed` the canonical write did not land, so no row may be
- *   written: the stale source hash is what makes the next cycle retry.
+ * - `postgres-mirrored` the row carries the payload while its durable upload
+ *   intent refreshes the corpus pointers under a compare-and-set.
+ * - `object-storage` uses the same pending representation, then clears the
+ *   Postgres payload atomically when the durable upload settles.
  */
 type CorpusWritePlan =
   | { type: "postgres-only" }
   | { type: "postgres-mirrored" }
-  | { type: "object-storage"; written: WriteCorpusResult }
-  | { type: "preserve-stored" }
-  | { type: "write-failed" };
+  | { type: "object-storage" }
+  | { type: "preserve-stored" };
 
 type CorpusWritePayload = CorpusPayload & {
   documentId: SafeId<"caseLawDecision">;
   jurisdiction: string;
-};
-
-type PlanCorpusWriteInput = CorpusWritePayload & {
-  mode: CorpusStorageMode;
-  /** Whether a row for this decision already existed before this run. */
-  hadExistingRow: boolean;
 };
 
 type SettleCaseLawCorpusMirrorOptions = {
@@ -311,6 +305,54 @@ type SettleCaseLawCorpusMirrorOptions = {
   mirrorCarriesDocument: boolean;
   scopedDb: ScopedDb;
   written: WriteCorpusResult;
+};
+
+type SettleCaseLawCorpusMirrorTxOptions = Omit<
+  SettleCaseLawCorpusMirrorOptions,
+  "scopedDb"
+> & {
+  storage: "dual-write" | "canonical";
+  tx: Transaction;
+};
+
+const settleCaseLawCorpusMirrorTx = async ({
+  decisionId,
+  persistedSourceHash,
+  observationOrder,
+  mirrorCarriesDocument,
+  storage,
+  tx,
+  written,
+}: SettleCaseLawCorpusMirrorTxOptions): Promise<boolean> => {
+  // audit: skip — background corpus storage; derived state, not user actions
+  const settled = await tx
+    .update(caseLawDecisions)
+    .set({
+      ...(storage === "canonical"
+        ? { fulltext: null, sections: null, documentAst: null }
+        : {}),
+      ...corpusMirrorColumns({
+        status: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+        written,
+      }),
+    })
+    .where(
+      and(
+        eq(caseLawDecisions.id, decisionId),
+        sql`${caseLawDecisions.sourceHash} IS NOT DISTINCT FROM ${persistedSourceHash}`,
+        eq(caseLawDecisions.sourceObservationOrder, observationOrder),
+        eq(
+          caseLawDecisions.corpusMirrorStatus,
+          CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
+        ),
+        isNull(caseLawDecisions.redactedAt),
+        mirrorCarriesDocument
+          ? undefined
+          : sql`NOT ${pgPayloadCarriesDocument}`,
+      ),
+    )
+    .returning({ id: caseLawDecisions.id });
+  return settled.length > 0;
 };
 
 /**
@@ -327,80 +369,21 @@ export const settleCaseLawCorpusMirror = async ({
   scopedDb,
   written,
 }: SettleCaseLawCorpusMirrorOptions): Promise<void> => {
-  // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-  const settled = await scopedDb((tx) => {
-    // audit: skip — background corpus storage; derived state, not user actions
-    return tx
-      .update(caseLawDecisions)
-      .set(
-        corpusMirrorColumns({
-          status: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
-          written,
-        }),
-      )
-      .where(
-        and(
-          eq(caseLawDecisions.id, decisionId),
-          sql`${caseLawDecisions.sourceHash} IS NOT DISTINCT FROM ${persistedSourceHash}`,
-          eq(caseLawDecisions.sourceObservationOrder, observationOrder),
-          eq(
-            caseLawDecisions.corpusMirrorStatus,
-            CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
-          ),
-          isNull(caseLawDecisions.redactedAt),
-          // An empty mirror must not re-point the keys over a row that gained
-          // a document after the mirror began. A document-carrying mirror is
-          // the newer payload by definition.
-          mirrorCarriesDocument
-            ? undefined
-            : sql`NOT ${pgPayloadCarriesDocument}`,
-        ),
-      )
-      .returning({ id: caseLawDecisions.id });
-  });
-  if (!settled.at(0)) {
-    throw new ConcurrentModificationError({
-      message: "Case-law corpus mirror owner changed before settlement",
-    });
-  }
-};
-
-/**
- * `writeCorpusDocument` issues its three PUTs in parallel, so a rejection
- * can still leave one or two objects behind. For a decision that had no
- * row, the retry mints a different id and keys its objects under that,
- * stranding these for good. Delete them best-effort; the keys are
- * content-addressed, so they are derivable from the payload without the
- * write having returned.
- *
- * New decisions only, for the same reason `canDiscardCorpusObjects` scopes
- * post-transaction cleanup: a refresh derives these keys from the
- * existing id and the payload hash, so whenever the text, sections, and AST
- * are unchanged (only metadata or the raw source moved) they are the very
- * objects the live row already references — and under canonical storage
- * that row's payload columns are NULL, so deleting them empties the
- * decision. An orphaned object is harmless; that is not.
- */
-const discardPartialCorpusWrite = async (
-  payload: CorpusWritePayload,
-): Promise<void> => {
-  const keys = corpusKeys({
-    documentId: payload.documentId,
-    jurisdiction: payload.jurisdiction,
-    contentHash: corpusContentHash(payload),
-  });
-  const discarded = await Result.tryPromise(
-    async () =>
-      await deleteCorpusDocument({
-        textKey: keys.textKey,
-        sectionsKey: keys.sectionsKey,
-        astKey: keys.astKey,
+  const settled = await scopedDb(
+    async (tx) =>
+      await settleCaseLawCorpusMirrorTx({
+        decisionId,
+        persistedSourceHash,
+        observationOrder,
+        mirrorCarriesDocument,
+        storage: "dual-write",
+        tx,
+        written,
       }),
   );
-  if (Result.isError(discarded)) {
-    captureError(discarded.error, {
-      decisionId: payload.documentId,
-      step: "processDecision.canonicalCorpusWriteCleanup",
+  if (!settled) {
+    throw new ConcurrentModificationError({
+      message: "Case-law corpus mirror owner changed before settlement",
     });
   }
 };
@@ -480,95 +463,18 @@ const loadPendingMirrorPayload = async (
   };
 };
 
-const planCorpusWrite = async ({
-  mode,
-  hadExistingRow,
-  ...payload
-}: PlanCorpusWriteInput): Promise<CorpusWritePlan> => {
+const planCorpusWrite = (mode: CorpusStorageMode): CorpusWritePlan => {
   switch (mode) {
     case "off":
       return { type: "postgres-only" };
     case "dual-write":
       return { type: "postgres-mirrored" };
-    case "canonical": {
-      // Object storage first. It keeps the S3 round-trip out of the
-      // transaction (the same reason `dual-write` writes after commit)
-      // while guaranteeing no row can point at an object that is missing.
-      const written = await Result.tryPromise(
-        async () => await writeCorpusDocument(payload),
-      );
-      if (Result.isError(written)) {
-        captureError(written.error, {
-          decisionId: payload.documentId,
-          step: "processDecision.canonicalCorpusWrite",
-        });
-        if (!hadExistingRow) {
-          await discardPartialCorpusWrite(payload);
-        }
-        return { type: "write-failed" };
-      }
-      return { type: "object-storage", written: written.value };
-    }
+    case "canonical":
+      return { type: "object-storage" };
     default: {
       const unhandled: never = mode;
       return panic(`Unhandled corpus storage mode: ${String(unhandled)}`);
     }
-  }
-};
-
-type CanDiscardCorpusObjectsInput = {
-  /** Whether a row for this decision already existed before this run. */
-  hadExistingRow: boolean;
-  /** What the row write failed with. */
-  error: unknown;
-};
-
-/**
- * Whether the objects a canonical write just placed in the bucket may be
- * deleted now that the row write has failed. Two things have to hold.
- *
- * The decision must have had no row yet. On a refresh the keys derive from
- * the existing id and the payload hash, so the stored row may already point
- * at these exact objects (a re-parse that reproduces the payload rewrites
- * identical bytes) and deleting them would empty a live decision.
- *
- * And the failure must be unambiguous. The transaction's wall-clock bound
- * abandons the statement instead of cancelling it, so a TimeoutError does
- * not prove the write did not land: it may still commit after the timer
- * fires. An orphaned object is harmless — content-addressed, unreachable,
- * and reclaimed by a later sweep — while a committed row pointing at
- * deleted payloads is not recoverable.
- */
-const canDiscardCorpusObjects = ({
-  hadExistingRow,
-  error,
-}: CanDiscardCorpusObjectsInput): boolean =>
-  !hadExistingRow && !(error instanceof TimeoutError);
-
-/**
- * A canonical write puts the objects in the bucket before the row exists, so
- * a failed row write can leave them unreferenced: the retry mints a new
- * decision id and keys its objects under that instead. Delete them
- * best-effort; a failure here is telemetry only, because the caller still
- * has to surface the original row-write error.
- */
-const discardOrphanedCorpusObjects = async (
-  written: Parameters<typeof deleteCorpusDocument>[0],
-  decisionId: SafeId<"caseLawDecision">,
-): Promise<void> => {
-  const discarded = await Result.tryPromise(
-    async () =>
-      await deleteCorpusDocument({
-        textKey: written.textKey,
-        sectionsKey: written.sectionsKey,
-        astKey: written.astKey,
-      }),
-  );
-  if (Result.isError(discarded)) {
-    captureError(discarded.error, {
-      decisionId,
-      step: "processDecision.canonicalCorpusCleanup",
-    });
   }
 };
 
@@ -667,7 +573,11 @@ const processDecisionAttempt = async ({
       const current = await scopedDb((tx) =>
         tx.query.caseLawDecisions.findFirst({
           where: { id: { eq: existing.id } },
-          columns: { sourceObservationOrder: true, redactedAt: true },
+          columns: {
+            corpusMirrorStatus: true,
+            sourceObservationOrder: true,
+            redactedAt: true,
+          },
         }),
       );
       if (current?.redactedAt) {
@@ -675,6 +585,15 @@ const processDecisionAttempt = async ({
           status: PROCESS_DECISION_STATUS.COMPLETE,
           inserted: false,
           searchVectorFailed: false,
+        };
+      }
+      if (
+        current?.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.PENDING
+      ) {
+        return {
+          status: PROCESS_DECISION_STATUS.RETRYABLE,
+          inserted: false,
+          reason: PROCESS_DECISION_RETRY_REASON.CORPUS_WRITE,
         };
       }
       if (
@@ -893,22 +812,7 @@ const processDecisionAttempt = async ({
   const corpusPlan: CorpusWritePlan =
     preserveStoredDocument && pendingMirrorPayload === null
       ? { type: "preserve-stored" }
-      : await planCorpusWrite({
-          mode: corpusStorageMode,
-          hadExistingRow: Boolean(existing),
-          ...corpusPayload,
-        });
-
-  if (corpusPlan.type === "write-failed") {
-    // Persist nothing: a row would advance sourceHash and the next cycle
-    // would dedup-skip the decision before it could retry the write. The
-    // caller counts this as an S3 failure, which holds the page cursor.
-    return {
-      status: PROCESS_DECISION_STATUS.RETRYABLE,
-      inserted: false,
-      reason: PROCESS_DECISION_RETRY_REASON.CORPUS_WRITE,
-    };
-  }
+      : planCorpusWrite(corpusStorageMode);
 
   const postgresPayload = {
     fulltext: corpusPayload.text,
@@ -931,6 +835,7 @@ const processDecisionAttempt = async ({
           }),
         };
       case "postgres-mirrored":
+      case "object-storage":
         // Persist retry intent with the Postgres payload. Clearing every old
         // pointer makes the pending branch structurally unable to serve a
         // stale mirror while an unchanged replay repairs it.
@@ -945,16 +850,6 @@ const processDecisionAttempt = async ({
         // stays exactly as stored. Leaving them out of the update is
         // what preserves them.
         return {};
-      case "object-storage":
-        return {
-          fulltext: null,
-          sections: null,
-          documentAst: null,
-          ...corpusMirrorColumns({
-            status: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
-            written: corpusPlan.written,
-          }),
-        };
       default: {
         const unhandled: never = corpusPlan;
         return panic(`Unhandled corpus write plan: ${String(unhandled)}`);
@@ -1208,9 +1103,6 @@ const processDecisionAttempt = async ({
         "case_law_decisions_source_case_lang_null_idx",
       );
     if (isConcurrentIdentityInsert) {
-      if (corpusPlan.type === "object-storage") {
-        await discardOrphanedCorpusObjects(corpusPlan.written, decisionId);
-      }
       if (contentionReconciliation === CONTENTION_RECONCILIATION.RETRY) {
         return {
           status: PROCESS_DECISION_STATUS.RETRYABLE,
@@ -1227,15 +1119,6 @@ const processDecisionAttempt = async ({
         contentionReconciliation: CONTENTION_RECONCILIATION.RETRY,
       });
     }
-    if (
-      corpusPlan.type === "object-storage" &&
-      canDiscardCorpusObjects({
-        hadExistingRow: Boolean(existing),
-        error: rowWrite.error,
-      })
-    ) {
-      await discardOrphanedCorpusObjects(corpusPlan.written, decisionId);
-    }
     throw rowWrite.error;
   }
 
@@ -1250,9 +1133,6 @@ const processDecisionAttempt = async ({
         reason: PROCESS_DECISION_RETRY_REASON.CORPUS_WRITE,
       };
     case DECISION_ROW_WRITE_STATUS.WINNER_REDACTED:
-      if (corpusPlan.type === "object-storage") {
-        await discardOrphanedCorpusObjects(corpusPlan.written, decisionId);
-      }
       return {
         status: PROCESS_DECISION_STATUS.COMPLETE,
         inserted: false,
@@ -1268,32 +1148,113 @@ const processDecisionAttempt = async ({
       return writeStatus satisfies never;
   }
 
-  // Mirror text/sections/AST to object storage, then record the keys +
-  // content hash. Done outside the DB transaction (S3 I/O must not hold a
-  // transaction open). The row enters `pending` with no object pointers in
-  // the same transaction as its Postgres payload; a failure therefore stays
-  // readable and an unchanged replay cannot deduplicate before repairing the
-  // mirror. `canonical` has already written its objects above, before the
-  // row. Keyed off the plan rather than the mode, so a refresh preserving a
-  // stored document does not mirror the nothing it arrived with over the
-  // objects that hold it.
-  if (corpusPlan.type === "postgres-mirrored") {
+  if (
+    corpusPlan.type === "postgres-mirrored" ||
+    corpusPlan.type === "object-storage"
+  ) {
     // The sourceHash this call just persisted: corpus-key and retry
-    // updates below only apply while the row still carries it, so a
-    // slower run cannot overwrite a concurrent newer refresh.
+    // updates only apply while the row still carries it. The upload helper
+    // holds the same row fence as redaction across the bounded object write.
     const persistedSourceHash = s3UploadFailed
       ? (existing?.sourceHash ?? null)
       : result.rawHash;
     try {
-      const written = await writeCorpusDocument(corpusPayload);
-      await settleCaseLawCorpusMirror({
+      const intent = await reserveCaseLawCorpusUploadIntent({
+        contentHash: corpusContentHash(corpusPayload),
         decisionId,
-        persistedSourceHash,
-        observationOrder,
-        mirrorCarriesDocument,
+        jurisdiction: corpusPayload.jurisdiction,
         scopedDb,
-        written,
       });
+      if (intent.type === "redacted") {
+        return {
+          status: PROCESS_DECISION_STATUS.COMPLETE,
+          inserted: false,
+          searchVectorFailed: false,
+        };
+      }
+      if (intent.type === "busy") {
+        return {
+          status: PROCESS_DECISION_STATUS.RETRYABLE,
+          inserted: false,
+          reason: PROCESS_DECISION_RETRY_REASON.CORPUS_WRITE,
+        };
+      }
+
+      const ownerPredicate = and(
+        eq(caseLawDecisions.id, decisionId),
+        sql`${caseLawDecisions.sourceHash} IS NOT DISTINCT FROM ${persistedSourceHash}`,
+        eq(caseLawDecisions.sourceObservationOrder, observationOrder),
+        eq(
+          caseLawDecisions.corpusMirrorStatus,
+          CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
+        ),
+        isNull(caseLawDecisions.redactedAt),
+        mirrorCarriesDocument
+          ? undefined
+          : sql`NOT ${pgPayloadCarriesDocument}`,
+      );
+      const upload = await writeReservedCaseLawCorpusUpload({
+        apply: async ({ tx, written }) => ({
+          type: (await settleCaseLawCorpusMirrorTx({
+            decisionId,
+            persistedSourceHash,
+            observationOrder,
+            mirrorCarriesDocument,
+            storage:
+              corpusPlan.type === "object-storage" ? "canonical" : "dual-write",
+            tx,
+            written,
+          }))
+            ? "applied"
+            : "superseded",
+        }),
+        decisionId,
+        intentId: intent.intentId,
+        preflight: async (tx) =>
+          Boolean(
+            (
+              await tx
+                .select({ id: caseLawDecisions.id })
+                .from(caseLawDecisions)
+                .where(ownerPredicate)
+                .limit(1)
+            ).at(0),
+          ),
+        scopedDb,
+        write: async ({ signal }) =>
+          await writeCorpusDocument(corpusPayload, { signal }),
+      });
+      if (upload.type === "cancelled") {
+        return {
+          status: PROCESS_DECISION_STATUS.COMPLETE,
+          inserted: false,
+          searchVectorFailed: false,
+        };
+      }
+      if (upload.type === "superseded") {
+        const winner = await scopedDb((tx) =>
+          tx.query.caseLawDecisions.findFirst({
+            where: { id: { eq: decisionId } },
+            columns: { corpusMirrorStatus: true, redactedAt: true },
+          }),
+        );
+        if (winner?.redactedAt || !winner) {
+          return {
+            status: PROCESS_DECISION_STATUS.COMPLETE,
+            inserted: false,
+            searchVectorFailed: false,
+          };
+        }
+        if (
+          winner.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.PENDING
+        ) {
+          return {
+            status: PROCESS_DECISION_STATUS.RETRYABLE,
+            inserted: false,
+            reason: PROCESS_DECISION_RETRY_REASON.CORPUS_WRITE,
+          };
+        }
+      }
     } catch (error) {
       s3UploadFailed = true;
       // The halt reason only carries a failure count; without this line the

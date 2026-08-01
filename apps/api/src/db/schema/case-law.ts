@@ -1,4 +1,7 @@
+import { eq } from "drizzle-orm";
+
 import {
+  caseLawIngestionOnlyPolicies,
   globalCaseLawPolicies,
   isNotNull,
   isNull,
@@ -25,6 +28,16 @@ import { workspaces } from "./contacts";
 export const CASE_LAW_CORPUS_MIRROR_STATUS = {
   PENDING: "pending",
   SETTLED: "settled",
+} as const;
+
+export const CASE_LAW_CORPUS_UPLOAD_INTENT_STATUSES = [
+  "active",
+  "cleanup",
+] as const;
+
+export const CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS = {
+  ACTIVE: CASE_LAW_CORPUS_UPLOAD_INTENT_STATUSES[0],
+  CLEANUP: CASE_LAW_CORPUS_UPLOAD_INTENT_STATUSES[1],
 } as const;
 
 export const caseLawSources = p.pgTable(
@@ -324,6 +337,62 @@ export const caseLawDecisions = p.pgTable(
       )
       .where(sql`${t.fulltext} is null and ${t.documentUrl} is not null`),
     ...globalCaseLawPolicies(),
+  ],
+);
+
+/**
+ * Exact corpus-object keys reserved before an external PUT. This deliberately
+ * has no foreign key: a redaction or source deletion must not remove the
+ * cleanup ownership record before the root scheduler has erased its objects.
+ */
+export const caseLawCorpusUploadIntents = p.pgTable(
+  "case_law_corpus_upload_intents",
+  {
+    id: pUuid<"caseLawCorpusUploadIntent">().primaryKey(),
+    decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
+    textS3Key: p.varchar("text_s3_key", { length: 512 }).notNull(),
+    normalizedS3Key: p
+      .varchar("normalized_s3_key", {
+        length: 512,
+      })
+      .notNull(),
+    astS3Key: p.varchar("ast_s3_key", { length: 512 }).notNull(),
+    status: p
+      .varchar({
+        length: 16,
+        enum: CASE_LAW_CORPUS_UPLOAD_INTENT_STATUSES,
+      })
+      .default(CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.ACTIVE)
+      .notNull(),
+    cleanupAttemptCount: p
+      .integer("cleanup_attempt_count")
+      .default(0)
+      .notNull(),
+    nextCleanupAt: timestamptz("next_cleanup_at"),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p
+      .uniqueIndex("case_law_corpus_upload_intents_active_decision_uidx")
+      .on(t.decisionId)
+      .where(eq(t.status, CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.ACTIVE)),
+    p
+      .index("case_law_corpus_upload_intents_cleanup_due_idx")
+      .on(t.nextCleanupAt, t.id)
+      .where(eq(t.status, CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.CLEANUP)),
+    p.check(
+      "case_law_corpus_upload_intents_status_values",
+      sql`${t.status} IN ('active', 'cleanup')`,
+    ),
+    p.check(
+      "case_law_corpus_upload_intents_cleanup_schedule",
+      sql`${t.status} <> 'cleanup' OR ${t.nextCleanupAt} IS NOT NULL`,
+    ),
+    p.check(
+      "case_law_corpus_upload_intents_cleanup_attempts_nonnegative",
+      sql`${t.cleanupAttemptCount} >= 0`,
+    ),
+    ...caseLawIngestionOnlyPolicies(),
   ],
 );
 

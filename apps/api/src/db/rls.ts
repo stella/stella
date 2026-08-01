@@ -441,6 +441,21 @@ export const globalCaseLawPolicies = () => [
   }),
 ];
 
+/**
+ * Corpus-upload intents contain object keys for payloads that may have been
+ * redacted. They are operational recovery records, never application data:
+ * only the ingestion role may read or mutate them; the root scheduler bypasses
+ * RLS for bounded cleanup.
+ */
+export const caseLawIngestionOnlyPolicies = () => [
+  p.pgPolicy("case_law_ingestion_access", {
+    for: "all",
+    to: stellaIngestion,
+    using: allowAllRows,
+    withCheck: allowAllRows,
+  }),
+];
+
 const mcpConnectorVisibleCheck = sql`(
   organization_id IS NULL OR ${organizationCheck}
 )`;

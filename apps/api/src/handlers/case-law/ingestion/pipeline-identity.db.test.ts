@@ -1,10 +1,15 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sql";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { caseLawSources, relations } from "@/api/db/schema";
+import {
+  CASE_LAW_CORPUS_MIRROR_STATUS,
+  caseLawDecisions,
+  caseLawSources,
+  relations,
+} from "@/api/db/schema";
 import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline";
@@ -278,6 +283,54 @@ if (!databaseUrl || !runPostgresTests) {
         court: "Initial content",
         sourceHash: "hash-Initial content",
         observationOrder: 32n,
+      });
+    });
+
+    test("a missed watermark compare-and-set holds a pending winner for replay", async () => {
+      const publisherId = "watermark-pending-winner";
+      const initial = decisionAt("Initial content", publisherId);
+
+      await processDecision({
+        input: initial,
+        observationOrder: 40n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:04:00.000Z"),
+      });
+
+      let transactions = 0;
+      const racingDb: ScopedDb = async (transactionWork) => {
+        transactions += 1;
+        if (transactions === 2) {
+          await db
+            .update(caseLawDecisions)
+            .set({
+              corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
+              sourceObservationOrder: 42n,
+            })
+            .where(
+              and(
+                eq(caseLawDecisions.sourceId, sourceId),
+                eq(caseLawDecisions.sourceDocumentId, publisherId),
+              ),
+            );
+        }
+        return await scopedDb(transactionWork);
+      };
+
+      const outcome = await processDecision({
+        input: initial,
+        observationOrder: 41n,
+        sourceId,
+        scopedDb: racingDb,
+        observedAt: new Date("2026-07-31T12:04:01.000Z"),
+      });
+
+      expect(transactions).toBe(3);
+      expect(outcome).toEqual({
+        status: "retryable",
+        inserted: false,
+        reason: "corpus-write",
       });
     });
 

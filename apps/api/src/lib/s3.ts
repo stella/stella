@@ -431,16 +431,50 @@ export const isS3Stale = (): boolean =>
 // resolver but targets a different bucket, with its own staleness clock
 // so the long-running ingestion daemon refreshes both before STS expiry.
 let _corpusClient: S3Client | null = null;
+let _abortableCorpusClient: AwsS3Client | null = null;
 let _corpusClientCreatedAt = 0;
 
 export const refreshCorpusS3 = async (): Promise<void> => {
-  _corpusClient = buildS3Client(corpusBucket(), await resolveS3Credentials());
+  const credentials = await resolveS3Credentials();
+  _corpusClient = buildS3Client(corpusBucket(), credentials);
+  _abortableCorpusClient = buildAbortableS3Client(credentials);
   _corpusClientCreatedAt = Date.now();
 };
 
 export const getCorpusS3 = (): S3Client => {
   _corpusClient ??= buildS3Client(corpusBucket(), staticCredentialsFromEnv());
   return _corpusClient;
+};
+
+/** Publish into the legal-corpus bucket with an abortable AWS SDK request. */
+export const putCorpusS3ObjectWithSignal = async (
+  key: string,
+  bytes: Uint8Array,
+  mimeType: string,
+  signal: AbortSignal,
+): Promise<void> => {
+  _abortableCorpusClient ??= buildAbortableS3Client(staticCredentialsFromEnv());
+  await _abortableCorpusClient.send(
+    new PutObjectCommand({
+      Body: bytes,
+      Bucket: corpusBucket(),
+      ContentType: mimeType,
+      Key: key,
+    }),
+    { abortSignal: signal },
+  );
+};
+
+/** Delete from the legal-corpus bucket with an abortable AWS SDK request. */
+export const deleteCorpusS3ObjectWithSignal = async (
+  key: string,
+  signal: AbortSignal,
+): Promise<void> => {
+  _abortableCorpusClient ??= buildAbortableS3Client(staticCredentialsFromEnv());
+  await _abortableCorpusClient.send(
+    new DeleteObjectCommand({ Bucket: corpusBucket(), Key: key }),
+    { abortSignal: signal },
+  );
 };
 
 export const isCorpusS3Stale = (): boolean =>

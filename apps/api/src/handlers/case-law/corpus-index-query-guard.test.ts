@@ -75,6 +75,22 @@ test("a restore racing erasure is durably requeued", async () => {
   );
 });
 
+test("redaction fences uploads before inspecting or deleting object keys", async () => {
+  const source = await Bun.file(caseLawErasureSource).text();
+  const rowFence = source.indexOf('.for("update")');
+  const tombstone = source.indexOf("redactedAt:", rowFence);
+  const intentFence = source.indexOf(
+    "cancelCaseLawCorpusUploadIntents",
+    tombstone,
+  );
+  const objectDelete = source.indexOf("deleteCorpusDocument", intentFence);
+
+  expect(rowFence).toBeGreaterThan(-1);
+  expect(tombstone).toBeGreaterThan(rowFence);
+  expect(intentFence).toBeGreaterThan(tombstone);
+  expect(objectDelete).toBeGreaterThan(intentFence);
+});
+
 test("lease acquisition failures are audited after local redaction", async () => {
   const source = await Bun.file(caseLawErasureSource).text();
   const firstIrreversibleMutation = source.indexOf(

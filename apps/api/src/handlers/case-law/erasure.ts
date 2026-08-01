@@ -17,6 +17,10 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { settleAll, settleAllCleanup } from "@/api/lib/corpus-index/core";
 import { ConcurrentModificationError } from "@/api/lib/errors/tagged-errors";
+import {
+  cancelCaseLawCorpusUploadIntents,
+  completeCaseLawCorpusUploadIntentCleanup,
+} from "@/api/lib/legal-search/case-law-corpus-upload-intents";
 import { removeDecisionFromIndex } from "@/api/lib/legal-search/case-law-search-index";
 import { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
 import { deleteCorpusDocument } from "@/api/lib/legal-search/corpus-storage";
@@ -93,23 +97,52 @@ export const redactCaseLawDecision = async ({
     });
     throw error;
   }
-  const decision = await scopedDb((tx) =>
-    tx.query.caseLawDecisions.findFirst({
-      where: { id: { eq: decisionId } },
-      columns: {
-        id: true,
-        country: true,
-        textS3Key: true,
-        normalizedS3Key: true,
-        astS3Key: true,
-        indexedGeneration: true,
-      },
-    }),
-  );
+  const fenced = await scopedDb(async (tx) => {
+    const decision = (
+      await tx
+        .select({
+          id: caseLawDecisions.id,
+          country: caseLawDecisions.country,
+          textS3Key: caseLawDecisions.textS3Key,
+          normalizedS3Key: caseLawDecisions.normalizedS3Key,
+          astS3Key: caseLawDecisions.astS3Key,
+          indexedGeneration: caseLawDecisions.indexedGeneration,
+          redactedAt: caseLawDecisions.redactedAt,
+        })
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, decisionId))
+        .for("update")
+        .limit(1)
+    ).at(0);
+    if (!decision) {
+      return null;
+    }
 
-  if (!decision) {
+    // audit: skip — GDPR redaction; recorded in case_law_index_jobs below
+    await tx
+      .update(caseLawDecisions)
+      .set({
+        redactedAt: decision.redactedAt ?? new Date(),
+        corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+        fulltext: null,
+        sections: null,
+        documentAst: null,
+        contentHash: null,
+        indexedHash: null,
+        indexedAt: null,
+      })
+      .where(eq(caseLawDecisions.id, decisionId));
+    const cancelledIntents = await cancelCaseLawCorpusUploadIntents({
+      decisionId,
+      tx,
+    });
+    return { cancelledIntents, decision };
+  });
+
+  if (!fenced) {
     return false;
   }
+  const { cancelledIntents, decision } = fenced;
 
   const storedIndexTarget = (() => {
     if (decision.indexedGeneration === null) {
@@ -162,40 +195,40 @@ export const redactCaseLawDecision = async ({
     }
   }
 
-  // 3. Postgres canonical text + key/hash columns. Nulling content_hash
-  // stops reads and both backfill loops from treating retained corpus keys
-  // as active content. Keys are only retained when S3 deletion failed so a
-  // later retry still knows which immutable objects to remove.
-  const scrubValues = {
-    redactedAt: new Date(),
-    corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
-    fulltext: null,
-    sections: null,
-    documentAst: null,
-    ...(corpusObjectsDeleted
-      ? {
-          textS3Key: null,
-          normalizedS3Key: null,
-          astS3Key: null,
-        }
-      : {}),
-    contentHash: null,
-    indexedHash: null,
-    // indexedGeneration is intentionally NOT scrubbed here: it records
-    // which corpus index holds the indexed copy, and is only cleared
-    // below once the index delete-task succeeds, so a failed delete
-    // keeps the retry target.
-    indexedAt: null,
-  };
+  const cancelledCleanup = await Promise.allSettled(
+    cancelledIntents.map(async (intent) => {
+      await deleteCorpusDocument({
+        textKey: intent.textKey,
+        sectionsKey: intent.sectionsKey,
+        astKey: intent.astKey,
+      });
+      await completeCaseLawCorpusUploadIntentCleanup({
+        intentId: intent.id,
+        scopedDb,
+      });
+    }),
+  );
+  for (const cleanup of cancelledCleanup) {
+    if (cleanup.status === "rejected") {
+      captureError(cleanup.reason, {
+        decisionId,
+        step: "redactCaseLawDecision.deleteReservedCorpusUpload",
+      });
+    }
+  }
 
-  // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-  await scopedDb((tx) => {
-    // audit: skip — GDPR redaction; recorded in case_law_index_jobs below
-    return tx
-      .update(caseLawDecisions)
-      .set(scrubValues)
-      .where(eq(caseLawDecisions.id, decisionId));
-  });
+  // Clear pointers only after their delete succeeds; failed deletes retain
+  // exact retry targets while the tombstone already blocks every reader.
+  if (corpusObjectsDeleted) {
+    // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
+    await scopedDb((tx) => {
+      // audit: skip — GDPR redaction; recorded in case_law_index_jobs below
+      return tx
+        .update(caseLawDecisions)
+        .set({ textS3Key: null, normalizedS3Key: null, astS3Key: null })
+        .where(eq(caseLawDecisions.id, decisionId));
+    });
+  }
 
   // 4. corpus index (delete-task + audit row). Skipped when corpus index
   // isn't configured. This intentionally happens after local authoritative

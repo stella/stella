@@ -3,7 +3,11 @@ import { afterEach, describe, expect, mock, test } from "bun:test";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import {
+  caseLawCorpusUploadIntents,
+  caseLawDecisions,
+  caseLawSources,
+} from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -16,10 +20,9 @@ import type { WriteCorpusResult } from "@/api/lib/legal-search/corpus-storage";
 
 /**
  * `canonical` storage mode moves the payload out of Postgres, so what a
- * type cannot check is the ordering (objects must exist before any row
- * points at them), the failure shape (no row at all, and a held cursor so
- * the next cycle retries), and the compensation when the row write is the
- * half that fails.
+ * type cannot check is the ordering: the row and durable upload intent must
+ * exist before external I/O, and the row may only point at objects after the
+ * fenced write succeeds.
  */
 
 const realEnvBase = await import("@/api/env-base");
@@ -28,6 +31,7 @@ const realCorpusStorage = await import("@/api/lib/legal-search/corpus-storage");
 /** Ordered log of the side effects under test, across S3 and the DB. */
 const events: string[] = [];
 const insertedRows: Record<string, unknown>[] = [];
+const updatedDecisionRows: Record<string, unknown>[] = [];
 
 const CORPUS_KEYS = {
   textKey: "corpus/text.zst",
@@ -97,6 +101,7 @@ afterEach(() => {
   czNsAdapter.fetchPage = originalCzNsFetchPage;
   events.length = 0;
   insertedRows.length = 0;
+  updatedDecisionRows.length = 0;
   deletedKeys.length = 0;
   persistedCursor = undefined;
   rowWrite = "ok";
@@ -130,35 +135,60 @@ const scopedDb: ScopedDb = async (callback) => {
         findFirst: async () => await Promise.resolve(existingDecision),
       },
     },
-    select: () => ({
-      from: () => ({ where: () => ({ limit: async () => [] }) }),
+    select: (selection: Record<string, unknown>) => ({
+      from: (table: unknown) => ({
+        where: () => {
+          const rows = async () => {
+            if (table === caseLawCorpusUploadIntents) {
+              return [{ status: "active" }];
+            }
+            if ("redactedAt" in selection) {
+              return [{ redactedAt: null }];
+            }
+            if ("id" in selection) {
+              return [{ id: "decision-id" }];
+            }
+            return [];
+          };
+          return {
+            limit: rows,
+            for: () => ({ limit: rows }),
+          };
+        },
+      }),
     }),
     insert: (table: unknown) => ({
       values: (values: Record<string, unknown>) => {
         const outcome = table === caseLawDecisions ? rowWrite : "ok";
         if (outcome === "ok") {
-          events.push("row-insert");
           if (table === caseLawDecisions) {
+            events.push("row-insert");
             insertedRows.push(values);
+          } else if (table === caseLawCorpusUploadIntents) {
+            events.push("intent-reserve");
           }
         }
+        const returning = async () => {
+          if (outcome === "timeout") {
+            return await Promise.reject(
+              new TimeoutError({
+                message: "decision write exceeded deadline",
+                label: "ingestion-db-transaction",
+                timeoutMs: 10,
+              }),
+            );
+          }
+          if (outcome === "fault") {
+            return await Promise.reject(
+              new DatabaseError({ message: "decision insert rejected" }),
+            );
+          }
+          return await Promise.resolve([{ id: values["id"] }]);
+        };
         return {
+          onConflictDoNothing: () => ({ returning }),
           returning: async () => {
-            if (outcome === "timeout") {
-              return await Promise.reject(
-                new TimeoutError({
-                  message: "decision write exceeded deadline",
-                  label: "ingestion-db-transaction",
-                  timeoutMs: 10,
-                }),
-              );
-            }
-            if (outcome === "fault") {
-              return await Promise.reject(
-                new DatabaseError({ message: "decision insert rejected" }),
-              );
-            }
-            return await Promise.resolve([{ id: values["id"] }]);
+            return await returning();
           },
         };
       },
@@ -168,6 +198,8 @@ const scopedDb: ScopedDb = async (callback) => {
         events.push("row-update");
         if (table === caseLawSources) {
           persistedCursor = values.syncCursor;
+        } else if (table === caseLawDecisions) {
+          updatedDecisionRows.push(values);
         }
         // The checkpoint helper reads back the compare-and-set winner.
         return {
@@ -182,7 +214,15 @@ const scopedDb: ScopedDb = async (callback) => {
         };
       },
     }),
-    delete: () => ({ where: async () => undefined }),
+    delete: (table: unknown) => ({
+      where: () => {
+        if (table === caseLawCorpusUploadIntents) {
+          events.push("intent-delete");
+          return { returning: async () => [{ id: "intent-id" }] };
+        }
+        return Promise.resolve();
+      },
+    }),
   };
 
   // SAFETY: the double implements exactly the chains this insert path
@@ -217,7 +257,7 @@ describe("settleCaseLawCorpusMirror", () => {
 });
 
 describe("processDecision — canonical storage mode", () => {
-  test("writes the corpus objects before the row, and nulls the text columns", async () => {
+  test("reserves before upload and publishes pointers only after it succeeds", async () => {
     const outcome = await processDecision({
       input: decision,
       observationOrder: 1n,
@@ -232,13 +272,23 @@ describe("processDecision — canonical storage mode", () => {
       searchVectorFailed: false,
     });
 
-    // No row may exist before its objects do.
-    expect(events[0]?.startsWith("corpus-write:")).toBe(true);
-    expect(events[1]).toBe("row-insert");
+    expect(events.slice(0, 3)).toEqual([
+      "row-insert",
+      "intent-reserve",
+      expect.stringContaining("corpus-write:"),
+    ]);
 
     const [row] = insertedRows;
-    expect(events[0]).toBe(`corpus-write:${String(row?.["id"])}`);
+    expect(events[2]).toBe(`corpus-write:${String(row?.["id"])}`);
     expect(row).toMatchObject({
+      fulltext: decision.fulltext,
+      corpusMirrorStatus: "pending",
+      textS3Key: null,
+      normalizedS3Key: null,
+      astS3Key: null,
+      contentHash: null,
+    });
+    expect(updatedDecisionRows.at(-1)).toMatchObject({
       fulltext: null,
       sections: null,
       documentAst: null,
@@ -246,10 +296,12 @@ describe("processDecision — canonical storage mode", () => {
       normalizedS3Key: "corpus/sections.json.zst",
       astS3Key: "corpus/ast.json.zst",
       contentHash: "content-hash",
+      corpusMirrorStatus: "settled",
     });
+    expect(events.at(-1)).toBe("intent-delete");
   });
 
-  test("persists nothing when the corpus write fails", async () => {
+  test("keeps a readable pending row when the corpus write fails", async () => {
     writeCorpusDocumentMock.mockImplementationOnce(async () => {
       events.push("corpus-write-failed");
       return await Promise.reject(new Error("bucket unreachable"));
@@ -265,19 +317,16 @@ describe("processDecision — canonical storage mode", () => {
 
     expect(outcome).toEqual({
       status: "retryable",
-      inserted: false,
+      inserted: true,
       reason: "corpus-write",
     });
-    // The three PUTs run in parallel, so a rejection can leave one or two
-    // objects behind under keys no row will ever reference. They go, at the
-    // real content-addressed keys derived from the payload.
-    expect(events).toEqual(["corpus-write-failed", "corpus-delete"]);
-    const discarded = deletedKeys.at(0);
-    expect(discarded?.textKey).toContain("/text.zst");
-    expect(discarded?.sectionsKey).toContain("/sections.json.zst");
-    expect(discarded?.astKey).toContain("/ast.json.zst");
-    expect(discarded?.textKey).toContain("jurisdiction=SVK");
-    expect(insertedRows).toHaveLength(0);
+    expect(events).toContain("corpus-write-failed");
+    expect(insertedRows).toHaveLength(1);
+    expect(insertedRows.at(0)).toMatchObject({
+      fulltext: decision.fulltext,
+      corpusMirrorStatus: "pending",
+      contentHash: null,
+    });
   });
 
   test("keeps the objects when the failed write was a refresh", async () => {
@@ -309,7 +358,7 @@ describe("processDecision — canonical storage mode", () => {
       status: "retryable",
       reason: "corpus-write",
     });
-    expect(events).toEqual(["corpus-write-failed"]);
+    expect(events).toContain("corpus-write-failed");
     expect(deleteCorpusDocumentMock).not.toHaveBeenCalled();
   });
 
@@ -327,7 +376,7 @@ describe("processDecision — canonical storage mode", () => {
       (error: unknown) => error,
     );
 
-  test("discards the objects and rethrows when the row write fails", async () => {
+  test("never starts an upload when the row write fails", async () => {
     rowWrite = "fault";
 
     const rejection = await rejectionFrom();
@@ -335,20 +384,18 @@ describe("processDecision — canonical storage mode", () => {
     // The pipeline's halt logic branches on the error's own type, so the
     // rethrow must surface the driver error, not a Result wrapper.
     expect(rejection).toBeInstanceOf(DatabaseError);
-    // Nothing references the objects the canonical write left behind: a
-    // retry mints a new decision id, so they have to go.
-    expect(deleteCorpusDocumentMock).toHaveBeenCalledWith({ ...CORPUS_KEYS });
+    expect(writeCorpusDocumentMock).not.toHaveBeenCalled();
+    expect(deleteCorpusDocumentMock).not.toHaveBeenCalled();
     expect(insertedRows).toHaveLength(0);
   });
 
-  test("keeps the objects when the row write only timed out", async () => {
+  test("does not start an upload when the row write times out", async () => {
     rowWrite = "timeout";
 
     const rejection = await rejectionFrom();
 
-    // The transaction bound abandons rather than cancels, so the write may
-    // still commit. Deleting would leave that row pointing at nothing.
     expect(rejection).toBeInstanceOf(TimeoutError);
+    expect(writeCorpusDocumentMock).not.toHaveBeenCalled();
     expect(deleteCorpusDocumentMock).not.toHaveBeenCalled();
   });
 });
@@ -381,13 +428,13 @@ describe("runIngestionPipeline — canonical corpus write failure", () => {
 
     const result = await runIngestionPipeline({ source, scopedDb });
 
-    expect(result.inserted).toBe(0);
+    expect(result.inserted).toBe(1);
     expect(result.s3UploadFailures).toBe(1);
     expect(result.pagesProcessed).toBe(0);
     expect(result.nextCursor).toBe("cursor-1");
     expect(result.haltReason).toContain("corpus write failure(s)");
     expect(persistedCursor).toBe("cursor-1");
-    expect(insertedRows).toHaveLength(0);
+    expect(insertedRows).toHaveLength(1);
   });
 
   test("holds the cursor when bounded contention does not converge", async () => {
