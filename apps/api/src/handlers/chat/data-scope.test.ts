@@ -405,6 +405,20 @@ describe("computeAssistantTurnWorkspaceIds", () => {
     expect(ids).toEqual([wsA]);
   });
 
+  test("folds in every workspace an opaque sandbox run could read", () => {
+    const ids = computeAssistantTurnWorkspaceIds({
+      accessibleWorkspaceIds: new Set([wsA, wsB]),
+      opaqueReadWorkspaceIds: [wsA, wsB],
+      registeredWorkspaceIdsAfterStream: [],
+      responseParts: [
+        { content: "A summary without structured refs", type: "text" },
+      ],
+      workspaceIdsBeforeStream: new Set(),
+    });
+
+    expect(ids).toEqual([wsA, wsB]);
+  });
+
   test("excludes a workspace that was already registered before the stream started", () => {
     // Prompt-time pins / prior-turn history refs should not re-widen scope
     // on every later turn.

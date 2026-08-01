@@ -1,5 +1,5 @@
 /**
- * End-to-end proof for the cloud agent engine (plan 050). Spins the codex
+ * End-to-end proof for the cloud agent engine. Spins the codex
  * harness up inside a Docker sandbox via the real engine wiring and asserts
  * its output streams back as chat chunks.
  *
@@ -33,7 +33,7 @@ const socketPath = process.env["AGENT_SANDBOX_DOCKER_SOCKET"];
 
 // Auto-detect the harness credential. codex speaks the OpenAI Responses API,
 // so a plain OpenAI key is the default; `AGENT_HARNESS_BASE_URL` switches to a
-// self-declared Responses-compatible gateway (the org's BYOK in production).
+// self-declared Responses-compatible gateway.
 const apiKey = process.env["OPENAI_API_KEY"] ?? process.env["CODEX_API_KEY"];
 const baseUrl = process.env["AGENT_HARNESS_BASE_URL"];
 

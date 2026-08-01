@@ -175,6 +175,13 @@ type ComputeAssistantTurnWorkspaceIdsInput = {
   // a hallucinated or stale UUID (from the model, or a workspace the
   // caller lost access to mid-turn) ever landing in `data_workspace_ids`.
   accessibleWorkspaceIds: ReadonlySet<string>;
+  // Workspace-scoped reads performed outside the in-process ref registry.
+  // Agent-sandbox MCP calls arrive as separate HTTP requests, so the chat
+  // process cannot observe which subset the agent actually touched. Passing
+  // the token's full workspace attenuation here conservatively prevents
+  // persisted summaries from outliving access to any workspace the run could
+  // have read.
+  opaqueReadWorkspaceIds?: readonly SafeId<"workspace">[];
 };
 
 // Computes the workspace ids to fold into `chat_threads.data_workspace_ids`
@@ -197,8 +204,10 @@ export const computeAssistantTurnWorkspaceIds = ({
   workspaceIdsBeforeStream,
   registeredWorkspaceIdsAfterStream,
   accessibleWorkspaceIds,
+  opaqueReadWorkspaceIds = [],
 }: ComputeAssistantTurnWorkspaceIdsInput): SafeId<"workspace">[] => {
   const candidateIds = [
+    ...opaqueReadWorkspaceIds,
     ...extractAssistantWorkspaceIds(responseParts),
     ...registeredWorkspaceIdsAfterStream.filter(
       (id) => !workspaceIdsBeforeStream.has(id),

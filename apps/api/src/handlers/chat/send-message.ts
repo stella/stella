@@ -29,6 +29,7 @@ import type {
   ChatToolAvailability,
   ChatUntrustedPromptSuffix,
 } from "@/api/handlers/chat/chat-prompt";
+import { resolveChatSandboxPlan } from "@/api/handlers/chat/chat-sandbox-plan";
 import type {
   ChatSendRequest,
   IncomingActiveDecision,
@@ -1231,6 +1232,42 @@ const sendMessage = createSafeRootHandler(
         pinnedIds: effectiveContextMatterIds,
         accessibleWorkspaceIds,
       });
+      const sandboxRunResult =
+        body.runMode === CHAT_RUN_MODE.agent
+          ? await Result.tryPromise({
+              try: async () =>
+                await resolveChatSandboxPlan({
+                  organizationId: session.activeOrganizationId,
+                  runId: Bun.randomUUIDv7(),
+                  userId: user.id,
+                  workspaceIds: toolWorkspaceIds,
+                }),
+              catch: (cause) =>
+                cause instanceof HandlerError
+                  ? cause
+                  : new HandlerError({
+                      cause,
+                      message: "Failed to prepare agent sandbox run",
+                      status: 500,
+                    }),
+            })
+          : Result.ok(undefined);
+      if (Result.isError(sandboxRunResult)) {
+        const rollbackResult = await rollbackUnpersistedChatSideEffects({
+          recordAuditEvent,
+          safeDb,
+          threadId: body.threadId,
+          threadState: thread,
+          uploadedFiles: uploadResult.uploadedFiles,
+          userId: user.id,
+        });
+        if (Result.isError(rollbackResult)) {
+          captureError(sandboxRunResult.error, { threadId: body.threadId });
+          return yield* Result.err(rollbackResult.error);
+        }
+        return yield* Result.err(sandboxRunResult.error);
+      }
+      const sandboxRun = sandboxRunResult.value;
       const registeredDocxEditMode = resolveRegisteredDocxEditMode({
         activeFile: activeFileForTools,
         editApplyMode,
@@ -1463,7 +1500,6 @@ const sendMessage = createSafeRootHandler(
               );
 
               const chatResponse = await streamChat({
-                agentWorkspaceIds: toolWorkspaceIds,
                 abortSignal: createMeteredAIAbortSignal(),
                 messages: chatContext.hydratedMessages,
                 latestMessageId: parsedMessage.message.id,
@@ -1514,6 +1550,10 @@ const sendMessage = createSafeRootHandler(
                   // that delta matters for subagent reads.
                   const assistantWorkspaceIds =
                     computeAssistantTurnWorkspaceIds({
+                      opaqueReadWorkspaceIds:
+                        body.runMode === CHAT_RUN_MODE.agent
+                          ? toolWorkspaceIds
+                          : [],
                       responseParts: resolvedResponseMessage.parts,
                       workspaceIdsBeforeStream,
                       registeredWorkspaceIdsAfterStream:
@@ -1605,6 +1645,7 @@ const sendMessage = createSafeRootHandler(
                 promptCacheKey: chatContext.promptCacheKey,
                 promptCachingEnabled,
                 runMode: body.runMode,
+                sandboxRun,
                 resolveAssistantTextRefs: refRegistry.resolveAssistantTextRefs,
                 resolveAssistantValueRefs:
                   refRegistry.resolveAssistantValueRefs,

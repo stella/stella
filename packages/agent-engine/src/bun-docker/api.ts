@@ -27,6 +27,41 @@ export type DockerConn = { socketPath: string };
 
 const DOCKER_REQUEST_TIMEOUT_MS = 30_000;
 const DOCKER_EXEC_TIMEOUT_MS = 15 * 60_000;
+const DOCKER_IMAGE_PULL_TIMEOUT_MS = 10 * 60_000;
+
+const UNSAFE_DOCKER_NETWORK_MODES: ReadonlySet<string> = new Set([
+  "bridge",
+  "default",
+  "host",
+  "none",
+]);
+const USER_DEFINED_DOCKER_NETWORK_NAME = /^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/u;
+
+/**
+ * A Docker network mode proven to name a user-defined network rather than a
+ * built-in or shared container namespace.
+ */
+export class UserDefinedDockerNetwork {
+  readonly name: string;
+
+  private constructor(name: string) {
+    this.name = name;
+  }
+
+  static parse(name: string): UserDefinedDockerNetwork {
+    const normalized = name.trim();
+    if (
+      normalized !== name ||
+      !USER_DEFINED_DOCKER_NETWORK_NAME.test(normalized) ||
+      UNSAFE_DOCKER_NETWORK_MODES.has(normalized.toLowerCase())
+    ) {
+      throw new DockerApiError({
+        message: `Docker network mode must name a safe user-defined network; received ${JSON.stringify(name)}`,
+      });
+    }
+    return new UserDefinedDockerNetwork(normalized);
+  }
+}
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
@@ -36,21 +71,26 @@ const dockerUrl = (path: string): string => `http://docker${path}`;
 // bun's fetch accepts a `unix` socket path; the types ship with @types/bun.
 type BunFetchInit = RequestInit & { unix?: string };
 
+type SendOptions = {
+  body?: unknown;
+  timeoutMs?: number;
+};
+
 const send = async (
   conn: DockerConn,
   method: string,
   path: string,
-  body?: unknown,
+  options: SendOptions = {},
 ): Promise<Response> => {
   const init: BunFetchInit = {
     method,
     unix: conn.socketPath,
-    signal: AbortSignal.timeout(DOCKER_REQUEST_TIMEOUT_MS),
-    ...(body === undefined
+    signal: AbortSignal.timeout(options.timeoutMs ?? DOCKER_REQUEST_TIMEOUT_MS),
+    ...(options.body === undefined
       ? {}
       : {
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
+          body: JSON.stringify(options.body),
         }),
   };
   return await fetch(dockerUrl(path), init);
@@ -73,7 +113,7 @@ const sendJson = async (
   body?: unknown,
 ): Promise<unknown> => {
   const res = await ensureOk(
-    await send(conn, method, path, body),
+    await send(conn, method, path, { body }),
     `${method} ${path}`,
   );
   const text = await res.text();
@@ -239,14 +279,30 @@ export type CreateContainerInput = {
    * (e.g. an internal network fronted by an egress allowlist) so a run cannot
    * open arbitrary outbound connections and exfiltrate injected secrets.
    */
-  networkMode?: string;
+  networkMode?: UserDefinedDockerNetwork;
 };
+
+const CONTAINER_MEMORY_BYTES = 2 * 1024 * 1024 * 1024;
+const CONTAINER_NANO_CPUS = 2_000_000_000;
+const CONTAINER_PIDS_LIMIT = 256;
+// Keep this in sync with the explicit UID/GID in docker/sandbox.Dockerfile.
+const CONTAINER_AGENT_ID = 10_000;
+const containerTmpfs = (workdir: string): Record<string, string> => ({
+  "/home/agent": `rw,nosuid,nodev,noexec,size=256m,uid=${CONTAINER_AGENT_ID},gid=${CONTAINER_AGENT_ID},mode=0700`,
+  "/tmp": `rw,nosuid,nodev,noexec,size=256m,uid=${CONTAINER_AGENT_ID},gid=${CONTAINER_AGENT_ID},mode=1777`,
+  [workdir]: `rw,nosuid,nodev,size=1g,uid=${CONTAINER_AGENT_ID},gid=${CONTAINER_AGENT_ID},mode=0750`,
+});
 
 export const createContainer = async (
   conn: DockerConn,
   input: CreateContainerInput,
-): Promise<string> =>
-  readId(
+): Promise<string> => {
+  // Re-parse at the Docker API boundary too. The class makes unsafe values a
+  // TypeScript error, while this check also rejects forged/plain JS inputs.
+  const networkMode = input.networkMode
+    ? UserDefinedDockerNetwork.parse(input.networkMode.name).name
+    : undefined;
+  return readId(
     await sendJson(conn, "POST", "/containers/create", {
       Image: input.image,
       Cmd: input.cmd,
@@ -258,14 +314,20 @@ export const createContainer = async (
         // Keep privilege escalation blocked even if model-authored code finds
         // a vulnerable executable inside the container.
         CapDrop: ["ALL"],
+        Memory: CONTAINER_MEMORY_BYTES,
+        NanoCpus: CONTAINER_NANO_CPUS,
+        PidsLimit: CONTAINER_PIDS_LIMIT,
+        ReadonlyRootfs: true,
         SecurityOpt: ["no-new-privileges"],
+        Tmpfs: containerTmpfs(input.workdir),
         ...(input.hostGateway
           ? { ExtraHosts: ["host.docker.internal:host-gateway"] }
           : {}),
-        ...(input.networkMode ? { NetworkMode: input.networkMode } : {}),
+        ...(networkMode ? { NetworkMode: networkMode } : {}),
       },
     }),
   );
+};
 
 export const startContainer = async (
   conn: DockerConn,
@@ -353,6 +415,9 @@ export const pullImage = async (
       conn,
       "POST",
       `/images/create?fromImage=${encodeURIComponent(image)}`,
+      {
+        timeoutMs: DOCKER_IMAGE_PULL_TIMEOUT_MS,
+      },
     ),
     `pull ${image}`,
   );

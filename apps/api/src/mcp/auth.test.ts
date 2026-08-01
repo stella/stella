@@ -94,6 +94,58 @@ describe("extractMcpSession", () => {
     ).toEqual(["workspace_1"]);
   });
 
+  test("preserves agent-run provenance and workspace attenuation", () => {
+    expect(
+      extractMcpSession({
+        org_id: "org_123",
+        purpose: "agent-run",
+        run_id: "run_123",
+        scope: "stella:read",
+        sub: "user_123",
+        workspace_ids: ["workspace_1"],
+      }),
+    ).toEqual({
+      credential: { runId: "run_123", type: "agent_run" },
+      organizationId: "org_123",
+      scopes: ["stella:read"],
+      userId: "user_123",
+      workspaceIds: ["workspace_1"],
+    });
+  });
+
+  test("rejects agent-run tokens without a run id or workspace attenuation", () => {
+    expect(() =>
+      extractMcpSession({
+        org_id: "org_123",
+        purpose: "agent-run",
+        scope: "stella:read",
+        sub: "user_123",
+        workspace_ids: ["workspace_1"],
+      }),
+    ).toThrow("Agent-run token missing run_id claim");
+
+    expect(() =>
+      extractMcpSession({
+        org_id: "org_123",
+        purpose: "agent-run",
+        run_id: "run_123",
+        scope: "stella:read",
+        sub: "user_123",
+      }),
+    ).toThrow("Agent-run token missing workspace_ids claim");
+  });
+
+  test("rejects an unclassified run id", () => {
+    expect(() =>
+      extractMcpSession({
+        org_id: "org_123",
+        run_id: "run_123",
+        scope: "stella:read",
+        sub: "user_123",
+      }),
+    ).toThrow("Token run_id claim requires agent-run purpose");
+  });
+
   test("rejects a malformed workspace attenuation", () => {
     expect(() =>
       extractMcpSession({

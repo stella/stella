@@ -368,15 +368,14 @@ export const envApiServerSchema = {
   /** Enables pre-flight usage-limit enforcement when true. */
   USAGE_ENFORCEMENT_ENABLED: featureFlagSchema,
 
-  /** Enables agent-sandbox chat runs (plan 050) when true. */
+  /** Enables agent-sandbox chat runs when true. */
   AGENT_SANDBOX_RUNS_ENABLED: featureFlagSchema,
 
   /**
-   * Agent-sandbox engine config (plan 050). The schema keeps these optional
+   * Agent-sandbox engine config. The schema keeps these optional
    * so deployments with the feature disabled need no sandbox infrastructure.
    * An explicit agent request fails closed unless every required field is
-   * present. Harness credential sourcing from org BYOK is a follow-up; for
-   * now the harness key is env-provided.
+   * present. The harness key is supplied through deployment configuration.
    */
   AGENT_SANDBOX_IMAGE: v.optional(v.string()),
   AGENT_SANDBOX_HARNESS_MODEL: v.optional(v.string()),

@@ -26,6 +26,7 @@ import {
   startExecStream,
   stopContainer,
   type DockerConn,
+  type UserDefinedDockerNetwork,
 } from "./api";
 
 const DEFAULT_WORKDIR = "/workspace";
@@ -64,12 +65,10 @@ export type BunDockerSandboxConfig = {
   hostGateway?: boolean;
   /**
    * Pin the container onto a specific Docker network (`HostConfig.NetworkMode`).
-   * Omit to use the daemon default bridge. Set this to a locked-down network to
-   * deny the run arbitrary egress (the harness reaches stella only via the
-   * bridged MCP server), so an injected MCP token or harness key cannot be
-   * exfiltrated over unrestricted outbound connections.
+   * The nominal type can only be constructed from a validated user-defined
+   * network name. Omit only for credential-free connectivity smoke tests.
    */
-  networkMode?: string;
+  networkMode?: UserDefinedDockerNetwork;
   /** Remove the container on destroy (vs. just stop). Defaults to true. */
   removeOnDestroy?: boolean;
 };
@@ -231,6 +230,14 @@ const createBunDockerHandle = (deps: HandleDeps): SandboxHandle => {
             queue.push(text);
           }
         }
+      } catch (error) {
+        // `startExecStream` has its own bounded lifetime. Its internal timeout
+        // is intentionally separate from the caller signal, so the stream can
+        // fail while `controller.signal.aborted` remains false. An eager catch
+        // here guarantees that every abnormal stream settlement removes the
+        // credential-bearing container even when `wait()` is never observed.
+        await teardown();
+        throw error;
       } finally {
         opts?.signal?.removeEventListener("abort", forwardAbort);
         const stdoutRemainder = stdoutDecoder.decode();
@@ -243,9 +250,6 @@ const createBunDockerHandle = (deps: HandleDeps): SandboxHandle => {
         }
         stdout.close();
         stderr.close();
-        if (controller.signal.aborted) {
-          await teardown();
-        }
       }
     })();
     // Mark the eager pump's rejection as observed even when a caller kills the
@@ -335,8 +339,7 @@ const createBunDockerHandle = (deps: HandleDeps): SandboxHandle => {
             : Buffer.from(data);
         // The base64 payload rides as a single argv entry, so a write is
         // bounded by the container's ARG_MAX (~128KB–2MB). That covers the
-        // harness's config/prompt files; streaming large binaries via the
-        // archive API (PUT /containers/{id}/archive) is a follow-up.
+        // harness's config/prompt files. Larger writes are unsupported.
         const b64 = bytes.toString("base64");
         const dir = absPath.replace(/\/[^/]*$/u, "") || "/";
         const r = await exec(
@@ -369,13 +372,30 @@ const createBunDockerHandle = (deps: HandleDeps): SandboxHandle => {
           });
       },
       mkdir: async (p) => {
-        await exec(`mkdir -p ${shellQuote(abs(p))}`);
+        const r = await exec(`mkdir -p ${shellQuote(abs(p))}`);
+        if (r.exitCode !== 0) {
+          throw new DockerApiError({
+            message: `mkdir failed: ${r.stderr.trim()}`,
+          });
+        }
       },
       remove: async (p) => {
-        await exec(`rm -rf ${shellQuote(abs(p))}`);
+        const r = await exec(`rm -rf ${shellQuote(abs(p))}`);
+        if (r.exitCode !== 0) {
+          throw new DockerApiError({
+            message: `remove failed: ${r.stderr.trim()}`,
+          });
+        }
       },
       rename: async (from, to) => {
-        await exec(`mv ${shellQuote(abs(from))} ${shellQuote(abs(to))}`);
+        const r = await exec(
+          `mv ${shellQuote(abs(from))} ${shellQuote(abs(to))}`,
+        );
+        if (r.exitCode !== 0) {
+          throw new DockerApiError({
+            message: `rename failed: ${r.stderr.trim()}`,
+          });
+        }
       },
       exists: async (p) => {
         const r = await exec(`test -e ${shellQuote(abs(p))}`);

@@ -1,6 +1,20 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 
-import { demuxExecStream, DockerApiError } from "./api";
+import {
+  createContainer,
+  demuxExecStream,
+  DockerApiError,
+  imageExists,
+  pullImage,
+  UserDefinedDockerNetwork,
+} from "./api";
+
+const originalFetch = globalThis.fetch;
+
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+  mock.restore();
+});
 
 const dockerFrame = (streamType: number, payload: Uint8Array): Uint8Array => {
   const frame = new Uint8Array(8 + payload.length);
@@ -70,5 +84,91 @@ describe("Docker exec stream demultiplexing", () => {
     const operation = collectFrames(streamChunks([frame.slice(0, -1)]));
 
     expect(operation).rejects.toBeInstanceOf(DockerApiError);
+  });
+});
+
+describe("Docker container isolation", () => {
+  test("rejects built-in, shared, empty, and malformed network modes", () => {
+    for (const mode of [
+      "",
+      " ",
+      "bridge",
+      "DEFAULT",
+      "host",
+      "none",
+      "container:peer",
+      " stella-private",
+    ]) {
+      expect(() => UserDefinedDockerNetwork.parse(mode)).toThrow(
+        /safe user-defined network/u,
+      );
+    }
+  });
+
+  test("accepts an explicit user-defined network name", () => {
+    expect(
+      UserDefinedDockerNetwork.parse("stella-egress_restricted.v1").name,
+    ).toBe("stella-egress_restricted.v1");
+  });
+
+  test("creates containers with bounded compute and writable filesystems", async () => {
+    let requestBody: unknown;
+    globalThis.fetch = Object.assign(
+      mock(async (_url, init) => {
+        requestBody = init?.body ? JSON.parse(String(init.body)) : undefined;
+        return new Response(JSON.stringify({ Id: "container-1" }), {
+          headers: { "Content-Type": "application/json" },
+          status: 201,
+        });
+      }),
+      { preconnect: originalFetch.preconnect.bind(originalFetch) },
+    );
+
+    await createContainer(
+      { socketPath: "/var/run/docker.sock" },
+      {
+        cmd: ["sleep", "infinity"],
+        hostGateway: false,
+        image: "stella/agent-sandbox:test",
+        networkMode: UserDefinedDockerNetwork.parse("stella-private"),
+        workdir: "/workspace",
+      },
+    );
+
+    expect(requestBody).toMatchObject({
+      HostConfig: {
+        Memory: 2_147_483_648,
+        NanoCpus: 2_000_000_000,
+        NetworkMode: "stella-private",
+        PidsLimit: 256,
+        ReadonlyRootfs: true,
+        Tmpfs: {
+          "/home/agent": expect.stringContaining("size=256m"),
+          "/tmp": expect.stringContaining("size=256m"),
+          "/workspace": expect.stringContaining("size=1g"),
+        },
+      },
+    });
+  });
+
+  test("gives cold image pulls a longer timeout than ordinary daemon calls", async () => {
+    const timeouts: number[] = [];
+    spyOn(AbortSignal, "timeout").mockImplementation((milliseconds) => {
+      timeouts.push(milliseconds);
+      return new AbortController().signal;
+    });
+    globalThis.fetch = Object.assign(
+      mock(async (input) =>
+        String(input).includes("/images/create")
+          ? new Response('{"status":"done"}\n')
+          : new Response(null, { status: 404 }),
+      ),
+      { preconnect: originalFetch.preconnect.bind(originalFetch) },
+    );
+
+    await imageExists({ socketPath: "/var/run/docker.sock" }, "sandbox:test");
+    await pullImage({ socketPath: "/var/run/docker.sock" }, "sandbox:test");
+
+    expect(timeouts).toEqual([30_000, 600_000]);
   });
 });

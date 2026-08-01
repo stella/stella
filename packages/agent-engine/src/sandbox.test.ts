@@ -85,6 +85,26 @@ describe("defineStellaSandbox", () => {
     expect(definition.workspace?.skills?.length).toBe(1);
   });
 
+  test("rejects Docker built-in networks for credential-bearing runs", () => {
+    const unsafeNetwork: string = "host";
+    expect(() =>
+      defineStellaSandbox({
+        ...baseInput,
+        cloudNetworkMode: unsafeNetwork,
+      }),
+    ).toThrow(/safe user-defined network/u);
+  });
+
+  test("rejects an explicitly empty Docker network in smoke-test mode", () => {
+    expect(() =>
+      defineStellaSandbox({
+        ...baseInput,
+        cloudNetworkMode: "",
+        mcp: SANDBOX_NO_MCP,
+      }),
+    ).toThrow(/safe user-defined network/u);
+  });
+
   test("the SANDBOX_NO_MCP sentinel yields no tool surface", () => {
     const definition = defineStellaSandbox({
       ...baseInput,

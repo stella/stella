@@ -3,6 +3,7 @@ import type { JWTPayload } from "jose";
 
 import { getAuthEndpointUrl, getAuthIssuerUrl } from "@/api/lib/auth-paths";
 import { isMachineApiKeyCredential } from "@/api/lib/machine-api-key-config";
+import { AGENT_RUN_TOKEN_PURPOSE } from "@/api/mcp/agent-run-token";
 import { resolveMachineApiKeySession } from "@/api/mcp/api-key-auth";
 import type { McpMode } from "@/api/mcp/constants";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
@@ -16,6 +17,7 @@ export type McpSession = {
   organizationId: string;
   scopes: string[];
   credential?:
+    | { type: "agent_run"; runId: string }
     | { type: "oauth_client"; clientId: string }
     | { type: "machine_api_key"; id: string; name: string }
     | { type: "delegated_user" };
@@ -45,7 +47,7 @@ export const getMcpAccessTokenVerificationOptions = (
   },
 });
 
-const isNonEmptyStringArray = (value: unknown): value is string[] =>
+const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) &&
   value.every((item) => typeof item === "string" && item.length > 0);
 
@@ -66,19 +68,38 @@ export const extractMcpSession = (payload: JWTPayload): McpSession => {
   const scopes =
     typeof rawScopes === "string" ? rawScopes.split(" ").filter(Boolean) : [];
   const rawClientId = payload["client_id"] ?? payload["azp"];
-  const credential =
-    typeof rawClientId === "string" && rawClientId.length > 0
-      ? ({ type: "oauth_client", clientId: rawClientId } as const)
-      : ({ type: "delegated_user" } as const);
-
+  const rawPurpose = payload["purpose"];
+  const rawRunId = payload["run_id"];
   const rawWorkspaceIds = payload["workspace_ids"];
-  if (
-    rawWorkspaceIds !== undefined &&
-    !isNonEmptyStringArray(rawWorkspaceIds)
-  ) {
+  if (rawWorkspaceIds !== undefined && !isStringArray(rawWorkspaceIds)) {
     throw new McpAuthenticationError({
       message: "Token has invalid workspace_ids claim",
     });
+  }
+
+  let credential: NonNullable<McpSession["credential"]>;
+  if (rawPurpose === AGENT_RUN_TOKEN_PURPOSE) {
+    if (typeof rawRunId !== "string" || rawRunId.length === 0) {
+      throw new McpAuthenticationError({
+        message: "Agent-run token missing run_id claim",
+      });
+    }
+    if (rawWorkspaceIds === undefined) {
+      throw new McpAuthenticationError({
+        message: "Agent-run token missing workspace_ids claim",
+      });
+    }
+    credential = { type: "agent_run", runId: rawRunId };
+  } else {
+    if (rawRunId !== undefined) {
+      throw new McpAuthenticationError({
+        message: "Token run_id claim requires agent-run purpose",
+      });
+    }
+    credential =
+      typeof rawClientId === "string" && rawClientId.length > 0
+        ? { type: "oauth_client", clientId: rawClientId }
+        : { type: "delegated_user" };
   }
 
   return {

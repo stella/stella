@@ -30,6 +30,21 @@ export const resolveAgentAuditExecution = async ({
   }
 
   switch (credential.type) {
+    case "agent_run":
+      return {
+        performer: {
+          type: "agent",
+          id: "stella-assistant",
+          name: "Stella AI",
+        },
+        runId: credential.runId,
+        trigger: {
+          type: "credential",
+          ownerUserId: userId,
+          source: "mcp",
+          sourceId: credential.runId,
+        },
+      };
     case "delegated_user":
       return {
         performer: { id: userId, type: "user" },

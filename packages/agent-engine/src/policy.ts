@@ -3,9 +3,8 @@ import { defineSandboxPolicy, type SandboxPolicy } from "@tanstack/ai-sandbox";
 /**
  * Baseline guardrails for a stella agent run. Network is denied by default:
  * the only outbound path a run has is the bridged stella MCP server, which
- * the harness reaches over the in-process tool bridge, not raw egress. Cloud
- * hosts additionally sit behind an egress-proxy allowlist (infra layer), so
- * this policy is defense-in-depth, not the sole control.
+ * the harness reaches over the in-process tool bridge, not raw egress. The
+ * container network must enforce the same deny-by-default boundary.
  *
  * Destructive shell verbs are denied outright; everything unmatched falls to
  * `ask`. The Codex adapter maps that policy to `on-request`, and `codex exec`

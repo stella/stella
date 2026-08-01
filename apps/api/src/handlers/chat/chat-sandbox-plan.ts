@@ -19,7 +19,7 @@ type ChatSandboxContext = {
 };
 
 /**
- * Build the full agent-sandbox run input (plan 050), including a freshly minted,
+ * Build the full agent-sandbox run input, including a freshly minted,
  * user-attributed, least-privilege MCP token bound to this run.
  *
  * The caller invokes this only for an explicit `runMode: "agent"` request, so

@@ -8,13 +8,14 @@ import {
 } from "@tanstack/ai-sandbox";
 import { panic } from "better-result";
 
+import { UserDefinedDockerNetwork } from "./bun-docker/api";
 import { bunDockerSandbox } from "./bun-docker/provider";
 import { stellaSandboxPolicy } from "./policy";
 
 /**
  * Where an agent run executes. `cloud` runs in a stella-operated Docker
- * sandbox metered on credits; `local` runs on the user's own machine through
- * the desktop bridge on their own harness login. Pinned per run at creation —
+ * sandbox; `local` runs on the user's own machine through the desktop bridge
+ * on their own harness login. Pinned per run at creation —
  * a run never migrates between engines.
  */
 export const AGENT_ENGINES = ["cloud", "local"] as const;
@@ -66,8 +67,7 @@ type StellaSandboxBaseInput = {
   cloudImage: string;
   /**
    * Docker daemon unix socket for the `cloud` engine. Omit to use the ambient
-   * daemon (`/var/run/docker.sock`); production points this at the
-   * stella-operated host pool's socket.
+   * daemon (`/var/run/docker.sock`).
    */
   cloudSocketPath?: string;
   /** AGENTS.md guidance written into the sandbox for the harness. */
@@ -101,9 +101,8 @@ const MCP_TOKEN_SECRET = "STELLA_MCP_TOKEN";
  * engines; the workspace, MCP binding, and policy are identical, so a run
  * streams the same chunks and enforces the same guardrails wherever it runs.
  *
- * The `local` engine is not wired here yet — the desktop bridge provider is a
- * follow-up (plan 050, phase 2). Passing `engine: "local"` throws so a
- * half-built path can never silently fall back to cloud.
+ * The `local` engine is unsupported here. Passing `engine: "local"` throws so
+ * it can never silently fall back to cloud.
  */
 export const defineStellaSandbox = (
   input: StellaSandboxInput,
@@ -119,6 +118,11 @@ export const defineStellaSandbox = (
       "defineStellaSandbox: a real MCP binding requires a locked-down cloudNetworkMode",
     );
   }
+
+  const cloudNetwork =
+    input.cloudNetworkMode === undefined
+      ? undefined
+      : UserDefinedDockerNetwork.parse(input.cloudNetworkMode);
 
   const mcp = input.mcp === SANDBOX_NO_MCP ? undefined : input.mcp;
   const mcpWorkspace = mcp
@@ -149,9 +153,7 @@ export const defineStellaSandbox = (
     provider: bunDockerSandbox({
       image: input.cloudImage,
       ...(input.cloudSocketPath ? { socketPath: input.cloudSocketPath } : {}),
-      ...(input.cloudNetworkMode
-        ? { networkMode: input.cloudNetworkMode }
-        : {}),
+      ...(cloudNetwork ? { networkMode: cloudNetwork } : {}),
     }),
     workspace,
     policy: stellaSandboxPolicy(),

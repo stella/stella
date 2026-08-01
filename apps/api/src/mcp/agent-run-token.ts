@@ -9,7 +9,7 @@ import { getMcpResourceUrl, type McpOAuthScope } from "@/api/mcp/constants";
  * — semantically RFC 8693 token exchange: the run acts ON BEHALF OF the user
  * (`sub` carries the user id, so every tool call audits back to a person), with
  * an attenuated `scope` (a strict subset of what a person can do), a short
- * `exp`, and a `run_id` for audit correlation and revocation.
+ * `exp`, and a `run_id` for audit correlation.
  *
  * It is signed by the same key the MCP server already verifies via JWKS, so the
  * MCP verification path (`authenticateMcpRequest`) accepts it UNCHANGED — no
@@ -40,6 +40,7 @@ export const AGENT_RUN_DEFAULT_SCOPES = [
 
 /** Agent-run tokens are short-lived: a run should outlive its token rarely. */
 export const AGENT_RUN_TOKEN_TTL_SECONDS = 15 * 60;
+export const AGENT_RUN_TOKEN_PURPOSE = "agent-run" as const;
 
 export type AgentRunTokenClaims = {
   sub: string;
@@ -51,7 +52,7 @@ export type AgentRunTokenClaims = {
   exp: number;
   run_id: string;
   workspace_ids: string[];
-  purpose: "agent-run";
+  purpose: typeof AGENT_RUN_TOKEN_PURPOSE;
 };
 
 type BuildAgentRunTokenClaimsInput = {
@@ -90,7 +91,7 @@ export const buildAgentRunTokenClaims = ({
   exp: nowSeconds + ttlSeconds,
   run_id: runId,
   workspace_ids: [...workspaceIds],
-  purpose: "agent-run",
+  purpose: AGENT_RUN_TOKEN_PURPOSE,
 });
 
 export type MintAgentRunTokenInput = {

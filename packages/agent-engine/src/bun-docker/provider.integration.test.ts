@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { UserDefinedDockerNetwork } from "./api";
 import { bunDockerSandbox } from "./provider";
 
 const RUN_DOCKER_TESTS = process.env["AGENT_ENGINE_DOCKER_TEST"] === "1";
@@ -10,7 +11,9 @@ const NETWORK_CANARY_URL = process.env["AGENT_ENGINE_DOCKER_CANARY_URL"] ?? "";
 
 const provider = bunDockerSandbox({
   image: IMAGE,
-  ...(NETWORK_MODE ? { networkMode: NETWORK_MODE } : {}),
+  ...(NETWORK_MODE
+    ? { networkMode: UserDefinedDockerNetwork.parse(NETWORK_MODE) }
+    : {}),
 });
 
 const collect = async (source: AsyncIterable<string>): Promise<string> => {
@@ -112,7 +115,16 @@ describe.skipIf(!RUN_DOCKER_TESTS)("bun Docker provider integration", () => {
         HostConfig: {
           Binds: null,
           CapDrop: ["ALL"],
+          Memory: 2_147_483_648,
+          NanoCpus: 2_000_000_000,
+          PidsLimit: 256,
+          ReadonlyRootfs: true,
           SecurityOpt: ["no-new-privileges"],
+          Tmpfs: {
+            "/home/agent": expect.stringContaining("size=256m"),
+            "/tmp": expect.stringContaining("size=256m"),
+            "/workspace": expect.stringContaining("size=1g"),
+          },
         },
         Mounts: [],
       });
@@ -198,7 +210,9 @@ describe.skipIf(!RUN_DOCKER_TESTS)("bun Docker provider integration", () => {
     const failingProvider = bunDockerSandbox({
       image: IMAGE,
       workdir: "/proc/stella-agent-invalid",
-      ...(NETWORK_MODE ? { networkMode: NETWORK_MODE } : {}),
+      ...(NETWORK_MODE
+        ? { networkMode: UserDefinedDockerNetwork.parse(NETWORK_MODE) }
+        : {}),
     });
 
     expect(await rejectionState(failingProvider.create({}))).toBe("rejected");

@@ -55,8 +55,7 @@ const harnessBaseUrl = (input: StellaSandboxRunInput): string => {
  * must use. The harness adapter declares it `requires` a sandbox capability,
  * and `withSandbox()` provides it, so these two must travel together — that
  * coupling is the reason this returns both rather than letting the caller
- * assemble them. Only codex is wired today; other harnesses throw until their
- * adapters and approvals land (plan 050).
+ * assemble them. Unsupported harnesses fail closed.
  *
  * The model credential is injected into the codex process env under a fixed
  * key name and wired through a custom `model_provider`, so the same code path

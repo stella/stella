@@ -158,6 +158,7 @@ const createContext = ({
   },
   request = new Request("http://localhost/v1/chat/send"),
   onSafeDbTransaction,
+  runMode,
   truncateAfterMessageId,
   turnIntent,
   transaction = {
@@ -172,6 +173,7 @@ const createContext = ({
   message?: SendMessageCtx["body"]["message"];
   request?: Request;
   onSafeDbTransaction?: (() => void) | undefined;
+  runMode?: SendMessageCtx["body"]["runMode"];
   truncateAfterMessageId?: SendMessageCtx["body"]["truncateAfterMessageId"];
   turnIntent?: SendMessageCtx["body"]["turnIntent"];
   transaction?: unknown;
@@ -192,6 +194,7 @@ const createContext = ({
         ? {}
         : { truncateAfterMessageId }),
       ...(turnIntent === undefined ? {} : { turnIntent }),
+      ...(runMode === undefined ? {} : { runMode }),
     },
     createAuditRecorder: () => async () => {},
     getAccessibleWorkspaces: async () => [
@@ -235,6 +238,42 @@ describe("send message context-matter authorization", () => {
       code: 403,
       response: { message: "contextMatterIds includes inaccessible matter" },
     });
+  });
+});
+
+describe("agent sandbox preflight", () => {
+  test("fails before persisting the incoming message when sandbox runs are disabled", async () => {
+    const insertValues = mock(async () => undefined);
+    const deleteReturning = mock(async () => [{ id: threadId }]);
+
+    const result = await sendMessage.handler(
+      createContext({
+        contextMatterIds: [],
+        runMode: CHAT_RUN_MODE.agent,
+        transaction: {
+          delete: () => ({
+            where: () => ({ returning: deleteReturning }),
+          }),
+          insert: () => ({ values: insertValues }),
+          query: {
+            chatMessages: { findFirst: async () => null },
+            chatThreadCompactions: { findFirst: async () => null },
+            chatThreads: { findFirst: async () => null },
+            organizationSettings: { findFirst: async () => null },
+          },
+          select: selectChatMessages,
+        },
+      }),
+    );
+
+    expect(result).toEqual({
+      code: 422,
+      response: {
+        message: "Agent sandbox runs are not enabled for this deployment.",
+      },
+    });
+    expect(insertValues).toHaveBeenCalledTimes(1);
+    expect(deleteReturning).toHaveBeenCalledTimes(1);
   });
 });
 
