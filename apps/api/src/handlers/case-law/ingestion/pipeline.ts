@@ -1353,6 +1353,30 @@ export const runIngestionPipeline = async ({
 
   const maxPages = maxPagesOverride ?? adapter.maxSyncPages ?? MAX_SYNC_PAGES;
 
+  const fetchObservedPage = async (
+    fetchCursor: string | null,
+    pageSignal: AbortSignal,
+  ) =>
+    await sourceLease.beforeRemoteEffect(async () => {
+      const pageResult = await adapter.fetchPage(
+        fetchCursor,
+        source.config ?? {},
+        pageSignal,
+      );
+      if (Result.isError(pageResult)) {
+        return { error: pageResult.error, type: "fetch-error" } as const;
+      }
+      return {
+        observationOrder: await allocateSourceObservationOrder({
+          leaseToken: sourceLease.leaseToken,
+          scopedDb,
+          sourceId: source.id,
+        }),
+        page: pageResult.value,
+        type: "fetched",
+      } as const;
+    });
+
   // oxlint-disable-next-line no-unreachable-loop -- successful pages advance the cursor and pagesProcessed at the loop tail; break paths halt ingestion
   while (pagesProcessed < maxPages) {
     if (signal?.aborted) {
@@ -1372,19 +1396,32 @@ export const runIngestionPipeline = async ({
       ? AbortSignal.any([signal, AbortSignal.timeout(pageTimeout)])
       : AbortSignal.timeout(pageTimeout);
     recentCursors.add(cursor);
-    const fetchCursor = cursor;
     // oxlint-disable-next-line no-await-in-loop -- sequential paginated crawl (each page's cursor depends on the previous page)
-    const pageResult = await sourceLease.beforeRemoteEffect(
-      async () =>
-        await adapter.fetchPage(fetchCursor, source.config ?? {}, pageSignal),
-    );
+    const observedPageResult = await Result.tryPromise({
+      try: async () => await fetchObservedPage(cursor, pageSignal),
+      catch: (cause) => cause,
+    });
 
-    if (Result.isError(pageResult)) {
-      captureError(pageResult.error, {
+    if (Result.isError(observedPageResult)) {
+      if (observedPageResult.error instanceof TimeoutError) {
+        haltReason = databaseTimeoutHaltReason(observedPageResult.error);
+        break;
+      }
+      if (observedPageResult.error instanceof Error) {
+        throw observedPageResult.error;
+      }
+      throw new ConcurrentModificationError({
+        message: "Case-law source observation failed",
+      });
+    }
+
+    const observedPage = observedPageResult.value;
+    if (observedPage.type === "fetch-error") {
+      captureError(observedPage.error, {
         adapterKey: adapter.key,
         cursor: cursor ?? "",
       });
-      haltReason = `Page fetch failed: ${pageResult.error.message}`;
+      haltReason = `Page fetch failed: ${observedPage.error.message}`;
       logger.error("case_law.ingestion.adapter_halted", {
         adapterKey: adapter.key,
         cursor: cursor ?? "",
@@ -1399,24 +1436,9 @@ export const runIngestionPipeline = async ({
     // token can invert two overlapping responses and make an older payload
     // dominate a newer one. The source lease prevents those fetches from
     // overlapping; this durable token orders the resulting database writes.
-    let observationOrder: bigint;
-    try {
-      // oxlint-disable-next-line no-await-in-loop -- each fetched page needs one durable order token before its dependent writes
-      observationOrder = await allocateSourceObservationOrder({
-        leaseToken: sourceLease.leaseToken,
-        scopedDb,
-        sourceId: source.id,
-      });
-      checkpointObservationOrder = observationOrder;
-    } catch (error) {
-      if (error instanceof TimeoutError) {
-        haltReason = databaseTimeoutHaltReason(error);
-        break;
-      }
-      throw error;
-    }
+    const { observationOrder, page } = observedPage;
+    checkpointObservationOrder = observationOrder;
     const observedAt = new Date();
-    const page = pageResult.value;
 
     // Acquire DB slot before processing decisions (DB-heavy:
     // insert, search index, citation extraction). Released

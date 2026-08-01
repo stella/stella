@@ -1,5 +1,6 @@
 import { and, eq, isNull, lte, or, sql } from "drizzle-orm";
 
+import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawSources } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -70,27 +71,27 @@ export const acquireCaseLawSourceIngestionLease = async ({
     return null;
   }
 
+  const renewLeaseTx = async (tx: Transaction) =>
+    // audit: skip — renews ephemeral ownership without domain mutation
+    (
+      await tx
+        .update(caseLawSources)
+        .set({
+          ingestionLeaseExpiresAt: nextLeaseExpiry(),
+          updatedAt: sql`${caseLawSources.updatedAt}`,
+        })
+        .where(
+          and(
+            eq(caseLawSources.id, sourceId),
+            eq(caseLawSources.ingestionLeaseToken, leaseToken),
+            sql`${caseLawSources.ingestionLeaseExpiresAt} > now()`,
+          ),
+        )
+        .returning({ id: caseLawSources.id })
+    ).at(0);
+
   const beforeDatabaseMark = async (): Promise<void> => {
-    // eslint-disable-next-line arrow-body-style -- block body keeps the audit directive inside the mutation callback
-    const renewed = await scopedDb(async (tx) => {
-      // audit: skip — renews ephemeral ownership without domain mutation
-      return (
-        await tx
-          .update(caseLawSources)
-          .set({
-            ingestionLeaseExpiresAt: nextLeaseExpiry(),
-            updatedAt: sql`${caseLawSources.updatedAt}`,
-          })
-          .where(
-            and(
-              eq(caseLawSources.id, sourceId),
-              eq(caseLawSources.ingestionLeaseToken, leaseToken),
-              sql`${caseLawSources.ingestionLeaseExpiresAt} > now()`,
-            ),
-          )
-          .returning({ id: caseLawSources.id })
-      ).at(0);
-    });
+    const renewed = await scopedDb(renewLeaseTx);
     if (!renewed) {
       throw new ConcurrentModificationError({
         message: "Case-law source ingestion lease was lost",
