@@ -25,15 +25,9 @@ import { loadCompactionTranscript } from "@/api/lib/memory/compaction-transcript
 import { sanitizeMemoryContent } from "@/api/lib/memory/memory-content-safety";
 import { createMemoryDedupIdentity } from "@/api/lib/memory/memory-dedup";
 import { isMemoryExtractionConsentValid } from "@/api/lib/memory/memory-extraction-consent";
-import {
-  buildExtractionPrompt,
-  escapeUntrustedSummary,
-} from "@/api/lib/memory/memory-extraction-prompt";
+import { buildExtractionPrompt } from "@/api/lib/memory/memory-extraction-prompt";
 import { createRootSafeDb } from "@/api/lib/root-scoped-db";
-import {
-  resolveExtractedMemoryScope,
-  type ExtractableMemoryKind,
-} from "@/api/lib/scheduler/tasks/memory-extractor-scope";
+import { runMemoryExtractionFailureStamp } from "@/api/lib/scheduler/tasks/memory-extractor-failure";
 import {
   buildClaimMemoryExtractionQueueQuery,
   buildSettleMemoryExtractionQueueQuery,
@@ -42,7 +36,14 @@ import {
   MEMORY_EXTRACTION_QUEUE_LEASE_MS,
   type QueuedMemoryCompaction,
 } from "@/api/lib/scheduler/tasks/memory-extractor-queue";
-import type { SchedulerTask } from "@/api/lib/scheduler/types";
+import {
+  resolveExtractedMemoryScope,
+  type ExtractableMemoryKind,
+} from "@/api/lib/scheduler/tasks/memory-extractor-scope";
+import type {
+  SchedulerTask,
+  SchedulerTaskContext,
+} from "@/api/lib/scheduler/types";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 
 export const MEMORY_EXTRACTOR_TASK = "memory.extractor" as const;
@@ -143,19 +144,14 @@ export const extractMemoriesFromCompactions: SchedulerTask = async ({
     if (Result.isError(candidatesResult)) {
       // Rotate failures behind untouched work. They remain retryable on a
       // later run, but cannot permanently occupy its tenant's oldest slots.
-      await rootDb
-        .update(chatThreadCompactions)
-        .set({ memoryExtractionAttemptedAt: new Date() })
-        .where(eq(chatThreadCompactions.id, compaction.compactionId));
-      failed += 1;
-      captureError(candidatesResult.error, {
-        feature: "memory.extractor",
+      await recordMemoryExtractionFailure({
         compactionId: compaction.compactionId,
+        error: candidatesResult.error,
+        feature: "memory.extractor",
+        logEvent: "scheduler.memory_extractor_failed",
+        logger,
       });
-      logger.warn("scheduler.memory_extractor_failed", {
-        "error.type": errorTag(candidatesResult.error),
-        "compaction.id": compaction.compactionId,
-      });
+      failed += 1;
       await processCompactionAt(index + 1);
       return;
     }
@@ -177,19 +173,14 @@ export const extractMemoriesFromCompactions: SchedulerTask = async ({
       // A source row can disappear while the provider call is in flight.
       // Keep that tenant-local race inside this compaction's failure boundary
       // so later organizations in the fair batch are still processed.
-      await rootDb
-        .update(chatThreadCompactions)
-        .set({ memoryExtractionAttemptedAt: new Date() })
-        .where(eq(chatThreadCompactions.id, compaction.compactionId));
-      failed += 1;
-      captureError(persistedResult.error, {
-        feature: "memory.extractor.persistence",
+      await recordMemoryExtractionFailure({
         compactionId: compaction.compactionId,
+        error: persistedResult.error,
+        feature: "memory.extractor.persistence",
+        logEvent: "scheduler.memory_extractor_persistence_failed",
+        logger,
       });
-      logger.warn("scheduler.memory_extractor_persistence_failed", {
-        "error.type": errorTag(persistedResult.error),
-        "compaction.id": compaction.compactionId,
-      });
+      failed += 1;
       await processCompactionAt(index + 1);
       return;
     }
@@ -220,6 +211,47 @@ export const extractMemoriesFromCompactions: SchedulerTask = async ({
   }
 };
 
+type RecordMemoryExtractionFailureOptions = {
+  compactionId: SafeId<"chatThreadCompaction">;
+  error: unknown;
+  feature: "memory.extractor" | "memory.extractor.persistence";
+  logEvent:
+    | "scheduler.memory_extractor_failed"
+    | "scheduler.memory_extractor_persistence_failed";
+  logger: SchedulerTaskContext["logger"];
+};
+
+const recordMemoryExtractionFailure = async ({
+  compactionId,
+  error,
+  feature,
+  logEvent,
+  logger,
+}: RecordMemoryExtractionFailureOptions): Promise<void> => {
+  const stampResult = await runMemoryExtractionFailureStamp(async () => {
+    await rootDb
+      .update(chatThreadCompactions)
+      .set({ memoryExtractionAttemptedAt: new Date() })
+      .where(eq(chatThreadCompactions.id, compactionId));
+  });
+  if (Result.isError(stampResult)) {
+    captureError(stampResult.error, {
+      feature: "memory.extractor.failure_stamp",
+      compactionId,
+    });
+    logger.warn("scheduler.memory_extractor_failure_stamp_failed", {
+      "error.type": errorTag(stampResult.error),
+      "compaction.id": compactionId,
+    });
+  }
+
+  captureError(error, { feature, compactionId });
+  logger.warn(logEvent, {
+    "error.type": errorTag(error),
+    "compaction.id": compactionId,
+  });
+};
+
 type ClaimedMemoryExtractionBatch = {
   leaseExpiresAt: Date;
   organizations: ReturnType<typeof groupClaimedMemoryExtractionRows>;
@@ -245,16 +277,17 @@ const settleMemoryExtractionBatch = async ({
   organizations,
 }: ClaimedMemoryExtractionBatch): Promise<void> => {
   const now = new Date();
-  for (const { organizationId } of organizations) {
-    // oxlint-disable-next-line no-await-in-loop -- each CAS releases one independently leased tenant queue row
-    await rootDb.execute(
-      buildSettleMemoryExtractionQueueQuery({
-        leaseExpiresAt,
-        now,
-        organizationId,
-      }),
-    );
-  }
+  await Promise.all(
+    organizations.map((organization) =>
+      rootDb.execute(
+        buildSettleMemoryExtractionQueueQuery({
+          leaseExpiresAt,
+          now,
+          organizationId: organization.organizationId,
+        }),
+      ),
+    ),
+  );
 };
 
 type ExtractedCandidate = {
@@ -266,9 +299,7 @@ const extractCandidates = async (
   compaction: CompactionRow,
   schedulerSignal: AbortSignal,
 ): Promise<Result<ExtractedCandidate[] | null, unknown>> => {
-  const summary = escapeUntrustedSummary(
-    compaction.summaryMarkdown.slice(0, SUMMARY_MAX_CHARS),
-  );
+  const summary = compaction.summaryMarkdown.slice(0, SUMMARY_MAX_CHARS);
   // The summary is lossy by design; the messages it replaced are still in
   // the database, so mine those too. A failure here degrades to
   // summary-only extraction rather than losing the whole compaction.

@@ -1,12 +1,12 @@
 import { Result } from "better-result";
-import { t } from "elysia";
 
 import { roles } from "@stll/permissions";
 
+import { createMemoryBodySchema } from "@/api/handlers/memories/create-schema";
+import type { CreateMemoryBody } from "@/api/handlers/memories/create-schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { sanitizeMemoryContent } from "@/api/lib/memory/memory-content-safety";
 import { createMemoryDedupIdentity } from "@/api/lib/memory/memory-dedup";
@@ -34,37 +34,18 @@ type MemoryWorkspaceScope =
 // Keeps the schema's cross-field rules (workspace scope requires a
 // workspace; user scope forbids one) as the single gate.
 const resolveMemoryWorkspaceScope = ({
-  scope,
-  requestedWorkspaceId,
+  request,
   accessibleWorkspaceIds,
 }: {
-  scope: "user" | "workspace";
-  requestedWorkspaceId: SafeId<"workspace"> | undefined;
+  request: CreateMemoryBody;
   accessibleWorkspaceIds: SafeId<"workspace">[];
-}): Result<MemoryWorkspaceScope, HandlerError<400 | 404>> => {
-  if (scope === "user") {
-    if (requestedWorkspaceId) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "workspaceId is only valid for workspace-scoped memory",
-        }),
-      );
-    }
+}): Result<MemoryWorkspaceScope, HandlerError<404>> => {
+  if (request.scope === "user") {
     return Result.ok({ scope: "user", workspaceId: null });
   }
 
-  if (!requestedWorkspaceId) {
-    return Result.err(
-      new HandlerError({
-        status: 400,
-        message: "workspaceId is required for workspace-scoped memory",
-      }),
-    );
-  }
-
   const matchedWorkspaceId = accessibleWorkspaceIds.find(
-    (accessibleWorkspaceId) => accessibleWorkspaceId === requestedWorkspaceId,
+    (accessibleWorkspaceId) => accessibleWorkspaceId === request.workspaceId,
   );
   if (!matchedWorkspaceId) {
     return Result.err(
@@ -80,33 +61,13 @@ const config = {
   // Firm-scoped writes go through the separate, permission-gated route.
   permissions: { chat: ["create"] },
   mcp: { type: "internal", reason: "assistant_chat" },
-  body: t.Object({
-    scope: t.UnionEnum(["user", "workspace"]),
-    kind: t.UnionEnum([
-      "preference",
-      "instruction",
-      "fact",
-      "decision",
-      "relationship",
-    ]),
-    content: t.String({ minLength: 1, maxLength: 4000 }),
-    workspaceId: t.Optional(tSafeId("workspace")),
-    pinned: t.Optional(t.Boolean()),
-    language: t.Optional(t.String({ maxLength: 10 })),
-  }),
+  body: createMemoryBodySchema,
 } satisfies HandlerConfig;
 
 const createMemory = createSafeRootHandler(
   config,
   async function* ({
-    body: {
-      scope,
-      kind,
-      content,
-      workspaceId: requestedWorkspaceId,
-      pinned,
-      language,
-    },
+    body,
     getAccessibleWorkspaces,
     memberRole,
     recordAuditEvent,
@@ -114,14 +75,14 @@ const createMemory = createSafeRootHandler(
     session,
     user,
   }) {
+    const { kind, content, pinned, language } = body;
     const accessibleWorkspaces = yield* Result.await(
       Result.tryPromise(async () => await getAccessibleWorkspaces()),
     );
     // Resolve ownership up front: the raw body workspaceId only becomes a
     // usable SafeId after matching the session's own accessible workspaces.
     const memoryScope = yield* resolveMemoryWorkspaceScope({
-      scope,
-      requestedWorkspaceId,
+      request: body,
       accessibleWorkspaceIds: accessibleWorkspaces
         .filter(({ status }) => status === "active")
         .map(({ id }) => id),

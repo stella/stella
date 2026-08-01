@@ -42,7 +42,7 @@ export const MemoryPanel = () => {
   const t = useTranslations("memory");
   const [tab, setTab] = useState<MemoryTab>("mine");
   const canManageFirmMemory = usePermissions({ firmMemory: ["create"] });
-  const canManageMatterMemory = usePermissions({ workspace: ["update"] });
+  const canManageWorkspaceMemory = usePermissions({ workspace: ["update"] });
 
   return (
     <Tabs onValueChange={setTab} value={tab}>
@@ -59,7 +59,7 @@ export const MemoryPanel = () => {
         <FirmMemories canManage={canManageFirmMemory} />
       </TabsPanel>
       <TabsPanel value="matter">
-        <MatterMemories canManage={canManageMatterMemory} />
+        <MatterMemories canManage={canManageWorkspaceMemory} />
       </TabsPanel>
     </Tabs>
   );

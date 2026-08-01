@@ -173,9 +173,7 @@ export const organizationSettings = p.pgTable(
      * Durable tenant queue position for background extraction. Null means no
      * known eligible work; a compaction-insert trigger wakes the organization.
      */
-    memoryExtractionScheduledAt: timestamptz(
-      "memory_extraction_scheduled_at",
-    ),
+    memoryExtractionScheduledAt: timestamptz("memory_extraction_scheduled_at"),
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [

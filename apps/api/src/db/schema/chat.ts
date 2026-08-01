@@ -631,6 +631,15 @@ export const chatThreadCompactions = p.pgTable(
     // extraction consent is active at insert time. Consent generations are
     // part of the queue address, so re-enabling never scans an older window.
     memoryExtractionConsentAt: timestamptz("memory_extraction_consent_at"),
+    // Snapshot of the thread's validated matter-data scope when this
+    // compaction was created. Extraction must never read the thread's later,
+    // mutable scope when deciding where the checkpoint's facts may surface.
+    memoryExtractionDataWorkspaceIds: safeWorkspaceId(
+      "memory_extraction_data_workspace_ids",
+    )
+      .array()
+      .notNull()
+      .default([]),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
@@ -805,7 +814,7 @@ export const aiMemories = p.pgTable(
     ),
     p.check(
       "ai_memories_confidence_check",
-      sql`confidence IS NULL OR (confidence >= 0 AND confidence <= 1)`,
+      sql`confidence IS NULL OR (source = 'extracted' AND confidence >= 0 AND confidence <= 1)`,
     ),
     p.check("ai_memories_dedup_key_check", sql`dedup_key ~ '^[0-9a-f]{64}$'`),
     ...aiMemoryPolicies(),

@@ -7,6 +7,7 @@ import { roles } from "@stll/permissions";
 import { aiMemories } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { FieldDiffs } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -32,6 +33,8 @@ const config = {
   }),
 } satisfies HandlerConfig;
 
+const REDACTED_AUDIT_VALUE = "[redacted]";
+
 const updateMemory = createSafeRootHandler(
   config,
   async function* ({
@@ -42,72 +45,10 @@ const updateMemory = createSafeRootHandler(
     recordAuditEvent,
     safeDb,
   }) {
-    const accessibleWorkspaces = yield* Result.await(
-      Result.tryPromise(async () => await getAccessibleWorkspaces()),
-    );
-    const existing = yield* Result.await(
-      safeDb((tx) =>
-        tx
-          .select({
-            scope: aiMemories.scope,
-            userId: aiMemories.userId,
-            workspaceId: aiMemories.workspaceId,
-            kind: aiMemories.kind,
-            status: aiMemories.status,
-            sourceDataWorkspaceIds: aiMemories.sourceDataWorkspaceIds,
-          })
-          .from(aiMemories)
-          .where(eq(aiMemories.id, params.memoryId))
-          .limit(1),
-      ),
-    );
-
-    const row = existing.at(0);
-    if (!row) {
-      return Result.err(
-        new HandlerError({ status: 404, message: "Memory not found" }),
-      );
-    }
-
-    // Firm memory is governance-gated. The row's scope is only known
-    // after the fetch, so the firm permission is checked here rather
-    // than statically in `config` (static permissions cannot branch on
-    // the persisted row).
-    if (row.scope === "organization") {
-      const allowed = roles[memberRole.role].authorize({
-        firmMemory: ["update"],
-      });
-      if (!allowed.success) {
-        return Result.err(
-          new HandlerError({ status: 403, message: "Forbidden" }),
-        );
-      }
-    }
-
-    if (
-      row.scope === "workspace" &&
-      (!roles[memberRole.role].authorize({ workspace: ["update"] }).success ||
-        !accessibleWorkspaces.some(
-          ({ id, status }) => id === row.workspaceId && status === "active",
-        ))
-    ) {
-      return Result.err(
-        new HandlerError({ status: 403, message: "Forbidden" }),
-      );
-    }
-
-    // An edited body re-enters future prompts, so re-run the same
-    // fail-closed sanitizer the create paths use.
+    // An edited body re-enters future prompts, so re-run the same fail-closed
+    // sanitizer the create paths use before opening the transaction.
     let sanitizedContent: string | undefined;
     if (body.content !== undefined) {
-      if (row.status === "archived") {
-        return Result.err(
-          new HandlerError({
-            status: 409,
-            message: "Archived memories must be restored before editing",
-          }),
-        );
-      }
       const sanitized = sanitizeMemoryContent(body.content);
       if (Result.isError(sanitized)) {
         return Result.err(
@@ -119,61 +60,123 @@ const updateMemory = createSafeRootHandler(
       }
       sanitizedContent = sanitized.value;
     }
-    const dedupIdentity = (() => {
-      if (sanitizedContent === undefined) {
-        return undefined;
-      }
-      const common = {
-        kind: row.kind,
-        content: sanitizedContent,
-        sourceDataWorkspaceIds: row.sourceDataWorkspaceIds,
-      } as const;
-      if (row.scope === "organization") {
-        return createMemoryDedupIdentity({
-          ...common,
-          scope: row.scope,
-          userId: null,
-          workspaceId: null,
-        });
-      }
-      if (row.scope === "user" && row.userId !== null) {
-        return createMemoryDedupIdentity({
-          ...common,
-          scope: row.scope,
-          userId: row.userId,
-          workspaceId: null,
-        });
-      }
-      if (row.scope === "workspace" && row.workspaceId !== null) {
-        return createMemoryDedupIdentity({
-          ...common,
-          scope: row.scope,
-          userId: null,
-          workspaceId: row.workspaceId,
-        });
-      }
-      return panic("Invalid memory scope identity");
-    })();
 
-    const archiving = body.status === "archived";
-    const activating = body.status === "active";
-    const dedupUpdate = dedupIdentity
-      ? {
-          dedupKey: dedupIdentity.dedupKey,
-          sourceDataWorkspaceIds: dedupIdentity.sourceDataWorkspaceIds,
-        }
-      : {};
+    const accessibleWorkspaces = yield* Result.await(
+      Result.tryPromise(async () => await getAccessibleWorkspaces()),
+    );
 
     const updateResult = await safeDb(async (tx) => {
+      // Lock the row that drives authorization, lifecycle validation, dedup,
+      // mutation, and audit. No curator or concurrent PATCH can change its
+      // status between those decisions and the write.
+      const existing = await tx
+        .select({
+          content: aiMemories.content,
+          kind: aiMemories.kind,
+          pinned: aiMemories.pinned,
+          scope: aiMemories.scope,
+          sourceDataWorkspaceIds: aiMemories.sourceDataWorkspaceIds,
+          status: aiMemories.status,
+          userId: aiMemories.userId,
+          workspaceId: aiMemories.workspaceId,
+        })
+        .from(aiMemories)
+        .where(eq(aiMemories.id, params.memoryId))
+        .limit(1)
+        .for("update");
+
+      const row = existing.at(0);
+      if (!row) {
+        return { type: "not_found" } as const;
+      }
+
+      // Firm memory is governance-gated. The row's scope is only known after
+      // the locked fetch, so this permission cannot be static in `config`.
+      if (row.scope === "organization") {
+        const allowed = roles[memberRole.role].authorize({
+          firmMemory: ["update"],
+        });
+        if (!allowed.success) {
+          return { type: "forbidden" } as const;
+        }
+      }
+
+      if (
+        row.scope === "workspace" &&
+        (!roles[memberRole.role].authorize({ workspace: ["update"] }).success ||
+          !accessibleWorkspaces.some(
+            ({ id, status }) => id === row.workspaceId && status === "active",
+          ))
+      ) {
+        return { type: "forbidden" } as const;
+      }
+
+      if (sanitizedContent !== undefined && row.status === "archived") {
+        return { type: "archived_content" } as const;
+      }
+
+      const contentChanged =
+        sanitizedContent !== undefined && sanitizedContent !== row.content;
+      const statusChanged =
+        body.status !== undefined && body.status !== row.status;
+      const pinnedChanged =
+        body.pinned !== undefined && body.pinned !== row.pinned;
+      if (!(contentChanged || statusChanged || pinnedChanged)) {
+        return { type: "updated", id: params.memoryId } as const;
+      }
+
+      const dedupIdentity = (() => {
+        if (!contentChanged || sanitizedContent === undefined) {
+          return undefined;
+        }
+        const common = {
+          kind: row.kind,
+          content: sanitizedContent,
+          sourceDataWorkspaceIds: row.sourceDataWorkspaceIds,
+        } as const;
+        if (row.scope === "organization") {
+          return createMemoryDedupIdentity({
+            ...common,
+            scope: row.scope,
+            userId: null,
+            workspaceId: null,
+          });
+        }
+        if (row.scope === "user" && row.userId !== null) {
+          return createMemoryDedupIdentity({
+            ...common,
+            scope: row.scope,
+            userId: row.userId,
+            workspaceId: null,
+          });
+        }
+        if (row.scope === "workspace" && row.workspaceId !== null) {
+          return createMemoryDedupIdentity({
+            ...common,
+            scope: row.scope,
+            userId: null,
+            workspaceId: row.workspaceId,
+          });
+        }
+        return panic("Invalid memory scope identity");
+      })();
+      const archiving = statusChanged && body.status === "archived";
+      const activating = statusChanged && body.status === "active";
       const [result] = await tx
         .update(aiMemories)
         .set({
-          ...(body.status !== undefined ? { status: body.status } : {}),
-          ...(body.pinned !== undefined ? { pinned: body.pinned } : {}),
-          ...(sanitizedContent !== undefined
+          ...(statusChanged ? { status: body.status } : {}),
+          ...(pinnedChanged ? { pinned: body.pinned } : {}),
+          ...(contentChanged && sanitizedContent !== undefined
             ? {
                 content: sanitizedContent,
-                ...dedupUpdate,
+                ...(dedupIdentity
+                  ? {
+                      dedupKey: dedupIdentity.dedupKey,
+                      sourceDataWorkspaceIds:
+                        dedupIdentity.sourceDataWorkspaceIds,
+                    }
+                  : {}),
               }
             : {}),
           ...(archiving ? { archivedAt: new Date() } : {}),
@@ -182,27 +185,37 @@ const updateMemory = createSafeRootHandler(
         .where(eq(aiMemories.id, params.memoryId))
         .returning({ id: aiMemories.id });
 
-      if (result) {
-        await recordAuditEvent(tx, {
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.AI_MEMORY,
-          resourceId: result.id,
-          workspaceId: row.workspaceId,
-          changes: {
-            updated: {
-              old: null,
-              new: {
-                ...(body.status !== undefined ? { status: body.status } : {}),
-                ...(body.pinned !== undefined ? { pinned: body.pinned } : {}),
-                ...(body.content !== undefined ? { contentEdited: true } : {}),
-              },
-            },
-          },
-        });
+      if (!result) {
+        return { type: "not_found" } as const;
       }
 
-      return result;
+      const changes: FieldDiffs = {
+        ...(statusChanged
+          ? { status: { old: row.status, new: body.status } }
+          : {}),
+        ...(pinnedChanged
+          ? { pinned: { old: row.pinned, new: body.pinned } }
+          : {}),
+        ...(contentChanged
+          ? {
+              content: {
+                old: REDACTED_AUDIT_VALUE,
+                new: REDACTED_AUDIT_VALUE,
+              },
+            }
+          : {}),
+      };
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.AI_MEMORY,
+        resourceId: result.id,
+        workspaceId: row.workspaceId,
+        changes,
+      });
+
+      return { type: "updated", id: result.id } as const;
     });
+
     if (Result.isError(updateResult)) {
       if (
         DatabaseError.is(updateResult.error) &&
@@ -217,15 +230,30 @@ const updateMemory = createSafeRootHandler(
       }
       return Result.err(updateResult.error);
     }
-    const updated = updateResult.value;
-
-    if (!updated) {
-      return Result.err(
-        new HandlerError({ status: 500, message: "Failed to update memory" }),
-      );
+    const outcome = updateResult.value;
+    switch (outcome.type) {
+      case "updated":
+        return Result.ok({ id: outcome.id });
+      case "not_found":
+        return Result.err(
+          new HandlerError({ status: 404, message: "Memory not found" }),
+        );
+      case "forbidden":
+        return Result.err(
+          new HandlerError({ status: 403, message: "Forbidden" }),
+        );
+      case "archived_content":
+        return Result.err(
+          new HandlerError({
+            status: 409,
+            message: "Archived memories must be restored before editing",
+          }),
+        );
+      default: {
+        const exhaustive: never = outcome;
+        return exhaustive;
+      }
     }
-
-    return Result.ok({ id: updated.id });
   },
 );
 

@@ -73,4 +73,23 @@ describe("memory prompt rendering", () => {
     expect(omittedRowCount).toBe(0);
     expect(renderedRowIds).toEqual([MEMORY_ID]);
   });
+
+  test("does not count sanitized-empty rows as rendered", () => {
+    const { omittedRowCount, renderedRowIds } = renderMemoryBlock({
+      contextMatterIds: [],
+      rows: [
+        {
+          id: MEMORY_ID,
+          content: "\u0000\u0001",
+          kind: "instruction",
+          pinned: false,
+          scope: "user",
+          workspaceId: null,
+        },
+      ],
+    });
+
+    expect(omittedRowCount).toBe(0);
+    expect(renderedRowIds).toHaveLength(0);
+  });
 });

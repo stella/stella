@@ -1,8 +1,15 @@
 import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 
-import type { SafeId } from "@/api/lib/branded-types";
-import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
+import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
+import {
+  brandPersistedChatMessageId,
+  brandPersistedChatThreadCompactionId,
+  brandPersistedChatThreadId,
+  brandPersistedOrganizationId,
+  brandPersistedUserId,
+  brandPersistedWorkspaceId,
+} from "@/api/lib/safe-id-boundaries";
 
 export const MEMORY_EXTRACTION_BATCH_SIZE = 25;
 export const MEMORY_EXTRACTION_PER_ORGANIZATION_LIMIT = 3;
@@ -90,7 +97,7 @@ export const buildClaimMemoryExtractionQueueQuery = ({
     candidate.thread_id AS "threadId",
     candidate.thread_user_id AS "threadUserId",
     candidate.thread_workspace_id AS "threadWorkspaceId",
-    candidate.thread_data_workspace_ids AS "threadDataWorkspaceIds"
+    candidate.memory_extraction_data_workspace_ids AS "threadDataWorkspaceIds"
   FROM due_organizations AS due
   INNER JOIN claimed_organizations AS claimed
     ON claimed.organization_id = due.organization_id
@@ -105,7 +112,7 @@ export const buildClaimMemoryExtractionQueueQuery = ({
       thread.id AS thread_id,
       thread.user_id AS thread_user_id,
       thread.workspace_id AS thread_workspace_id,
-      thread.data_workspace_ids AS thread_data_workspace_ids
+      compaction.memory_extraction_data_workspace_ids
     FROM chat_thread_compactions AS compaction
     INNER JOIN chat_threads AS thread ON thread.id = compaction.thread_id
     WHERE compaction.memory_extraction_organization_id = due.organization_id
@@ -164,10 +171,11 @@ export const buildSettleMemoryExtractionQueueQuery = ({
 `;
 
 export const groupClaimedMemoryExtractionRows = (
-  rows: readonly MemoryExtractionQueueRow[],
+  rows: readonly unknown[],
 ): ClaimedMemoryExtractionOrganization[] => {
   const organizations: ClaimedMemoryExtractionOrganization[] = [];
-  for (const row of rows) {
+  for (const rawRow of rows) {
+    const row = parseMemoryExtractionQueueRow(rawRow);
     let organization = organizations.at(-1);
     if (organization?.organizationId !== row.organizationId) {
       organization = {
@@ -183,6 +191,99 @@ export const groupClaimedMemoryExtractionRows = (
     organization.compactions.push(toQueuedMemoryCompaction(row));
   }
   return organizations;
+};
+
+const optionalString = (value: unknown): string | null => {
+  if (value === null || typeof value === "string") {
+    return value;
+  }
+  return panic("Memory extraction queue returned an invalid string field");
+};
+
+const optionalDate = (value: unknown): Date | null => {
+  if (value === null || value instanceof Date) {
+    return value;
+  }
+  return panic("Memory extraction queue returned an invalid date field");
+};
+
+const optionalSafeId = <T extends SafeIdType>(
+  value: unknown,
+  brand: (id: string) => SafeId<T>,
+): SafeId<T> | null => {
+  const id = optionalString(value);
+  return id === null ? null : brand(id);
+};
+
+const parseMemoryExtractionQueueRow = (
+  value: unknown,
+): MemoryExtractionQueueRow => {
+  if (typeof value !== "object" || value === null) {
+    return panic("Memory extraction queue returned an invalid row");
+  }
+
+  const organizationId =
+    "organizationId" in value ? value.organizationId : undefined;
+  const queueScheduledAt =
+    "queueScheduledAt" in value ? value.queueScheduledAt : undefined;
+  if (
+    typeof organizationId !== "string" ||
+    !(queueScheduledAt instanceof Date)
+  ) {
+    return panic("Memory extraction queue returned invalid tenant metadata");
+  }
+
+  const dataWorkspaceIds =
+    "threadDataWorkspaceIds" in value
+      ? value.threadDataWorkspaceIds
+      : undefined;
+  if (
+    dataWorkspaceIds !== null &&
+    (!Array.isArray(dataWorkspaceIds) ||
+      !dataWorkspaceIds.every((id) => typeof id === "string"))
+  ) {
+    return panic("Memory extraction queue returned invalid workspace ids");
+  }
+
+  return {
+    compactionCreatedAt: optionalDate(
+      "compactionCreatedAt" in value ? value.compactionCreatedAt : undefined,
+    ),
+    compactionId: optionalSafeId(
+      "compactionId" in value ? value.compactionId : undefined,
+      brandPersistedChatThreadCompactionId,
+    ),
+    firstSummarizedMessageId: optionalSafeId(
+      "firstSummarizedMessageId" in value
+        ? value.firstSummarizedMessageId
+        : undefined,
+      brandPersistedChatMessageId,
+    ),
+    organizationId: brandPersistedOrganizationId(organizationId),
+    queueScheduledAt,
+    sourceMessageId: optionalSafeId(
+      "sourceMessageId" in value ? value.sourceMessageId : undefined,
+      brandPersistedChatMessageId,
+    ),
+    summaryMarkdown: optionalString(
+      "summaryMarkdown" in value ? value.summaryMarkdown : undefined,
+    ),
+    threadDataWorkspaceIds:
+      dataWorkspaceIds === null
+        ? null
+        : dataWorkspaceIds.map(brandPersistedWorkspaceId),
+    threadId: optionalSafeId(
+      "threadId" in value ? value.threadId : undefined,
+      brandPersistedChatThreadId,
+    ),
+    threadUserId: optionalString(
+      "threadUserId" in value ? value.threadUserId : undefined,
+    ),
+    threadWorkspaceId: optionalSafeId(
+      "threadWorkspaceId" in value ? value.threadWorkspaceId : undefined,
+      brandPersistedWorkspaceId,
+    ),
+  };
 };
 
 export const interleaveClaimedMemoryCompactions = (

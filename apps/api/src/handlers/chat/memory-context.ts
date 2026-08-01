@@ -159,7 +159,7 @@ export const buildMemoryPromptParts = async ({
       // Surface it so the cap can be retuned against real usage.
       logger.info("memory.block_truncated", {
         "memory.omitted_rows": omittedRowCount,
-        "memory.rendered_rows": rows.length - omittedRowCount,
+        "memory.rendered_rows": renderedRowIds.length,
       });
     }
     return Result.ok(block);

@@ -2,11 +2,7 @@ import { infiniteQueryOptions } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 
 import { fetchMemoriesPage } from "@/lib/memory-api";
-import type {
-  MemoryListItem,
-  MemoryScope,
-  MemoryStatus,
-} from "@/lib/memory-api";
+import type { MemoryScope, MemoryStatus } from "@/lib/memory-api";
 
 export type {
   MemoryListItem,

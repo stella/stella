@@ -10,17 +10,15 @@
  * there; reading the summarized range recovers that lost signal while the
  * summary continues to supply the thread-level narrative.
  *
- * Everything here is untrusted tenant content. It is escaped for the trust
- * delimiter and hard-capped before it reaches a prompt.
+ * Everything here is untrusted tenant content. It is flattened and hard-capped
+ * before the prompt constructor escapes it at the trust boundary.
  */
 
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
 import { chatMessages } from "@/api/db/schema";
-import { normalizePersistedChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
 import type { SafeId } from "@/api/lib/branded-types";
-import { escapeUntrustedSummary } from "@/api/lib/memory/memory-extraction-prompt";
 
 // One background extraction must not turn into an unbounded prompt on the
 // tenant's own provider key: cap both the rows read and the rendered text.
@@ -37,7 +35,7 @@ type LoadCompactionTranscriptOptions = {
 };
 
 /**
- * Load the summarized message range and render it as an escaped transcript.
+ * Load the summarized message range and render it as a bounded transcript.
  *
  * Returns an empty string when the range resolves to nothing (messages since
  * deleted by the user, or a range that no longer exists), which leaves the
@@ -91,7 +89,7 @@ export const loadCompactionTranscript = async ({
 
 type TranscriptRow = {
   role: string;
-  content: Parameters<typeof normalizePersistedChatMessageContent>[0];
+  content: typeof chatMessages.$inferSelect.content;
 };
 
 export const renderTranscript = (rows: readonly TranscriptRow[]): string => {
@@ -107,9 +105,7 @@ export const renderTranscript = (rows: readonly TranscriptRow[]): string => {
       text.length > TRANSCRIPT_MESSAGE_MAX_CHARS
         ? `${text.slice(0, TRANSCRIPT_MESSAGE_MAX_CHARS)}…`
         : text;
-    // Escape after clipping: escaping expands the string, and the delimiter
-    // characters must stay encoded no matter where the cut lands.
-    const line = `${row.role}: ${escapeUntrustedSummary(clipped)}`;
+    const line = `${row.role}: ${clipped}`;
     if (usedChars + line.length > TRANSCRIPT_MAX_CHARS) {
       break;
     }
@@ -121,13 +117,10 @@ export const renderTranscript = (rows: readonly TranscriptRow[]): string => {
 };
 
 const messageText = (content: TranscriptRow["content"]): string => {
-  const message = normalizePersistedChatMessageContent(content);
   const parts: string[] = [];
-  for (const part of message.parts) {
-    if (part.type !== "text") {
-      continue;
-    }
-    const trimmed = part.content.trim();
+  for (const part of content.data) {
+    const text = persistedTextPartContent(part);
+    const trimmed = text?.trim();
     if (trimmed) {
       parts.push(trimmed);
     }
@@ -135,4 +128,20 @@ const messageText = (content: TranscriptRow["content"]): string => {
   // Collapse whitespace so a multi-line payload cannot forge extra
   // `role:` lines once rendered into the transcript.
   return parts.join(" ").replace(/\s+/gu, " ").trim();
+};
+
+const persistedTextPartContent = (part: unknown): string | null => {
+  if (typeof part !== "object" || part === null || !("type" in part)) {
+    return null;
+  }
+  if (part.type !== "text") {
+    return null;
+  }
+  if ("content" in part && typeof part.content === "string") {
+    return part.content;
+  }
+  if ("text" in part && typeof part.text === "string") {
+    return part.text;
+  }
+  return null;
 };

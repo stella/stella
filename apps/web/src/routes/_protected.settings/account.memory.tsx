@@ -5,11 +5,11 @@ import { Skeleton } from "@stll/ui/components/skeleton";
 
 import { getAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth";
+import { roleOptions } from "@/lib/auth-queries";
 import {
   ensureRouteInfiniteQueryData,
   ensureRouteQueryData,
 } from "@/lib/react-query";
-import { roleOptions } from "@/routes/-queries";
 import { MemoryPanel } from "@/routes/_protected.settings/-components/organization/memory/memory-panel";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 import { memoriesOptions } from "@/routes/_protected.settings/-queries/memories";

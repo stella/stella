@@ -40,6 +40,10 @@ describe("memory extraction tenant queue", () => {
     expect(query.sql).toContain(
       "compaction.memory_extraction_consent_at = due.memory_extraction_enabled_at",
     );
+    expect(query.sql).toContain(
+      "candidate.memory_extraction_data_workspace_ids",
+    );
+    expect(query.sql).not.toContain("thread.data_workspace_ids");
     expect(query.sql).not.toContain("row_number");
     expect(query.params).toContain(MEMORY_EXTRACTION_ORGANIZATION_BATCH_SIZE);
     expect(query.params).toContain(MEMORY_EXTRACTION_PER_ORGANIZATION_LIMIT);
@@ -91,9 +95,7 @@ describe("memory extraction tenant queue", () => {
       }),
     );
 
-    expect(query.sql).toContain(
-      "settings.memory_extraction_scheduled_at = $3",
-    );
+    expect(query.sql).toContain("settings.memory_extraction_scheduled_at = $3");
     expect(query.sql).toContain(
       "compaction.memory_extraction_organization_id = settings.organization_id",
     );

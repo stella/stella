@@ -59,8 +59,10 @@ not just a UX nicety.
   the organization's own AI provider key with no user in the loop, so
   `organization_settings.memory_extraction_enabled` (admin toggle in AI
   settings) must be switched on before any org's compactions are mined. The
-  extractor filters orgs in the compaction query itself. Cost attribution
-  stays explicit; the `remember` tool and manual creation work regardless.
+  extractor filters orgs in the compaction query, re-checks consent immediately
+  before each provider call, and shares a transaction lock with the disable
+  path before persisting suggestions. Cost attribution stays explicit; the
+  `remember` tool and manual creation work regardless.
 - **Own Postgres/Drizzle, not Anthropic Memory Stores.** No lock-in;
   self-hosting stays first-class; data residency stays ours.
 - **No embeddings in v1.** Deterministic scoped fetch (active + pinned + recent,
@@ -107,7 +109,7 @@ not just a UX nicety.
 ### Phase 0 — Schema + migration + RLS
 
 - `apps/api/src/db/schema/chat.ts` — new `aiMemories` table:
-  - `id` uuid pk; `organizationId` text → `organization` (cascade on explicit
+  - `id` uuid pk; `organizationId` non-null text → `organization` (cascade on explicit
     parent erasure; direct memory deletion remains denied).
   - `scope` enum `organization | user | workspace`.
   - `userId` text → `user` (cascade, set iff scope=user);
@@ -120,7 +122,8 @@ not just a UX nicety.
   - `status` enum `suggested | active | stale | archived` (default `active`);
     `pinned` bool.
   - `source` enum `user | tool | extracted`; `sourceMessageId` uuid →
-    `chatMessages` (set null); `confidence` real (null for user/tool).
+    `chatMessages` (set null); `confidence` real (null for user/tool, optional
+    and range-checked to 0–1 for extracted memories).
   - `createdBy` text → `user`; `supersededById` uuid self-FK (set null).
   - `createdAt`/`updatedAt`/`lastUsedAt`/`archivedAt`.
   - **CHECK** `ai_memories_scope_ids` — mutually exclusive ids _and_ kind-by-scope
@@ -145,8 +148,8 @@ not just a UX nicety.
   - RLS (mirror `chatThreads`, see `apps/api/src/db/rls.ts`): org match AND
     (`scope<>'user'` OR `user_id = app.user_id`) AND (`scope<>'workspace'` OR
     `workspace_id = ANY(app.workspace_ids)`) AND a **data-scope subset check**
-    (`cardinality(source_data_workspace_ids) = 0 OR source_data_workspace_ids <@
-    app.workspace_ids`), reusing the `chatThreadDataScopeCheck` shape. Separate
+    (`cardinality(source_data_workspace_ids) = 0 OR source_data_workspace_ids <@ app.workspace_ids`),
+    reusing the `chatThreadDataScopeCheck` shape. Separate
     insert/update policies; no delete policy (archive-only).
 - Migration: hand-author a timestamped dir under `apps/api/drizzle/`; apply via
   `bun --filter @stll/api db:migrate` (root `package.json` only exposes
@@ -159,16 +162,19 @@ not just a UX nicety.
   (sibling to `chat-history-tools.ts` etc.); register in
   `apps/api/src/handlers/chat/tools/chat-tools.ts`, gate in `tool-policy.ts`.
   Tool writes user/matter memory; it cannot write firm memory (firm is
-  governance-gated, below).
+  governance-gated, below). The server derives `sourceDataWorkspaceIds` from
+  the current thread; the model and client cannot provide provenance.
 - `apps/api/src/handlers/memories/create.ts` — user + matter writes, via
-  **`createSafeRootHandler`** (root-scoped: the endpoint accepts an optional
-  `workspaceId`, so it is not workspace-pathed and must not use the
-  workspace-scoped `createSafeHandler`). Valibot `v.strictObject` body (`scope ∈
-  {user, workspace}`, `kind`, `content`, optional `workspaceId`, `pinned`). When
-  `scope=workspace`, validate `workspaceId` explicitly against
+  **`createSafeRootHandler`** (root-scoped: it is not workspace-pathed and must
+  not use the workspace-scoped `createSafeHandler`). A closed TypeBox
+  discriminated union forbids `workspaceId` for user scope and requires it for
+  workspace scope before the handler runs. When `scope=workspace`, validate the
+  requested ID explicitly against
   `ctx.accessibleWorkspaces` / `activeWorkspaceIds` (the same check root handlers
-  use elsewhere). Ownership IDs from server context: `organizationId` from
-  `session.activeOrganizationId`, `userId` from `session`, never from the body.
+  use elsewhere). Manual HTTP writes are settings actions, not chat-thread
+  writes, so they have no thread-derived provenance. Ownership IDs come from
+  server context: `organizationId` from `session.activeOrganizationId`, `userId`
+  from `session`, never from the body.
 - `apps/api/src/handlers/memories/create-firm.ts` — firm (organization) writes,
   separate handler with the dedicated static `firmMemory.create` permission in
   `config`; owner/admin role mappings grant create/update and all lower roles
@@ -181,10 +187,11 @@ not just a UX nicety.
 
 ### Phase 2 — Read / inject
 
-- `apps/api/src/handlers/chat/memory-context.ts` — `buildMemoryPromptParts({
-  organizationId, userId, contextMatterIds })`: fetch `active`+`pinned`+recent
-  per scope, bound to top-N, token-budgeted; emit one labelled block ordered
-  matter → user → firm so precedence is explicit to the model.
+- `apps/api/src/handlers/chat/memory-context.ts` —
+  `buildMemoryPromptParts({ organizationId, userId, contextMatterIds })`: fetch
+  active, pinned, and recent memory per scope; bound to top-N, token-budgeted;
+  emit one labelled block ordered matter → user → firm so precedence is explicit
+  to the model.
 - `apps/api/src/handlers/chat/chat-prompt.ts` — append the memory block to the
   **`untrustedSuffix`**, not the `safePrompt` / `cacheStablePrefix` and not the
   `userContext` seam (both feed the no-anonymization safe half). Memory thus

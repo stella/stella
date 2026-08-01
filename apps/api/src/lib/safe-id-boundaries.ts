@@ -94,6 +94,11 @@ export const brandPersistedChatThreadId = (
   chatThreadId: string,
 ): SafeId<"chatThread"> => toSafeId<"chatThread">(chatThreadId);
 
+export const brandPersistedChatThreadCompactionId = (
+  chatThreadCompactionId: string,
+): SafeId<"chatThreadCompaction"> =>
+  toSafeId<"chatThreadCompaction">(chatThreadCompactionId);
+
 export const brandPersistedChatMessageId = (
   chatMessageId: string,
 ): SafeId<"chatMessage"> => toSafeId<"chatMessage">(chatMessageId);

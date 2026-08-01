@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { afterEach, describe, expect, mock, test } from "bun:test";
 
 import {
@@ -51,7 +51,7 @@ describe("memory API boundary", () => {
     expect(page.items.at(0)?.status).toBe("active");
     expect(page.nextCursor).toBe("next_page");
     const [input] = fetchMock.mock.calls.at(0) ?? [];
-    const url = new URL(String(input));
+    const url = requestUrl(input);
     expect(url.pathname).toBe("/v1/memories");
     expect(url.searchParams.get("cursor")).toBe("current_page");
     expect(url.searchParams.get("workspaceId")).toBe("workspace_1");
@@ -93,7 +93,7 @@ describe("memory API boundary", () => {
       expect(result.error).toMatchObject({ _tag: "ApiError", status: 502 });
     }
     const [input, init] = fetchMock.mock.calls.at(0) ?? [];
-    expect(new URL(String(input)).pathname).toBe("/v1/memories/memory%2F1");
+    expect(requestUrl(input).pathname).toBe("/v1/memories/memory%2F1");
     expect(init).toMatchObject({
       body: JSON.stringify({ status: "active" }),
       credentials: "include",
@@ -119,4 +119,11 @@ const setFetch = (handler: FetchHandler) => {
     preconnect: originalFetch.preconnect,
   });
   return fetchMock;
+};
+
+const requestUrl = (input: Parameters<typeof fetch>[0] | undefined): URL => {
+  if (input === undefined) {
+    return panic("Expected fetch to be called");
+  }
+  return new URL(input instanceof Request ? input.url : input);
 };

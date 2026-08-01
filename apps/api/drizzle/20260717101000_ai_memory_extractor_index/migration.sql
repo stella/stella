@@ -15,8 +15,26 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS "chat_thread_compactions_memory_unmined_
 --> statement-breakpoint
 CREATE INDEX CONCURRENTLY IF NOT EXISTS "organization_settings_memory_extraction_queue_idx" ON "organization_settings" ("memory_extraction_scheduled_at", "organization_id") WHERE memory_extraction_enabled = true AND memory_extraction_scheduled_at IS NOT NULL;
 --> statement-breakpoint
--- stella-migration-safety: reviewed destructive-change - this only removes a possibly INVALID index left by an interrupted concurrent build; the following statement recreates it before any composite foreign key is installed.
-DROP INDEX CONCURRENTLY IF EXISTS "workspaces_id_org_unq";
+-- stella-migration-safety: reviewed destructive-change - remove only an INVALID
+-- artifact left by an interrupted concurrent build. A valid index may already
+-- back the composite unique constraint and must never be dropped.
+DO $$
+BEGIN
+	IF EXISTS (
+		SELECT 1
+		FROM pg_catalog.pg_class AS index_relation
+		INNER JOIN pg_catalog.pg_index AS index_state
+			ON index_state.indexrelid = index_relation.oid
+		INNER JOIN pg_catalog.pg_namespace AS namespace
+			ON namespace.oid = index_relation.relnamespace
+		WHERE namespace.nspname = 'public'
+			AND index_relation.relname = 'workspaces_id_org_unq'
+			AND index_state.indisvalid = false
+	) THEN
+		DROP INDEX public.workspaces_id_org_unq;
+	END IF;
+END
+$$;
 --> statement-breakpoint
 CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "workspaces_id_org_unq" ON "workspaces" ("id", "organization_id");
 --> statement-breakpoint

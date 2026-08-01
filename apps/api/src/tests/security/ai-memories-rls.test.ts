@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import { aiMemories, workspaces } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -294,6 +294,33 @@ describe("ai_memories archive-only", () => {
 });
 
 describe("ai_memories CHECK constraints", () => {
+  test("rejects a missing tenant identifier", async () => {
+    const error = await tryCatch(async () =>
+      testDb.execute(sql`
+        INSERT INTO ai_memories (
+          id,
+          organization_id,
+          scope,
+          user_id,
+          kind,
+          content,
+          dedup_key,
+          source
+        ) VALUES (
+          ${memId()},
+          NULL,
+          'user',
+          ${ids.userA1},
+          'preference',
+          'missing tenant',
+          ${dedupKey()},
+          'user'
+        )
+      `),
+    );
+    expect(error).not.toBeNull();
+  });
+
   test("user scope with a workspace_id is rejected", async () => {
     const error = await tryCatch(async () =>
       testDb.insert(aiMemories).values({
@@ -338,6 +365,40 @@ describe("ai_memories CHECK constraints", () => {
         content: "firm memory with a stray user id",
         dedupKey: dedupKey(),
         source: "user",
+      }),
+    );
+    expect(error).not.toBeNull();
+  });
+
+  test("explicit memories cannot carry model confidence", async () => {
+    const error = await tryCatch(async () =>
+      testDb.insert(aiMemories).values({
+        id: memId(),
+        organizationId: ids.orgA,
+        scope: "user",
+        userId: ids.userA1,
+        kind: "preference",
+        content: "explicit confidence",
+        confidence: 0.9,
+        dedupKey: dedupKey(),
+        source: "user",
+      }),
+    );
+    expect(error).not.toBeNull();
+  });
+
+  test("extracted confidence is bounded to the unit interval", async () => {
+    const error = await tryCatch(async () =>
+      testDb.insert(aiMemories).values({
+        id: memId(),
+        organizationId: ids.orgA,
+        scope: "user",
+        userId: ids.userA1,
+        kind: "preference",
+        content: "invalid extracted confidence",
+        confidence: 1.1,
+        dedupKey: dedupKey(),
+        source: "extracted",
       }),
     );
     expect(error).not.toBeNull();
