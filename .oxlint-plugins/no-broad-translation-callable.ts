@@ -91,6 +91,30 @@ const isBroadTranslatorReturnType = (
   );
 };
 
+const isCanonicalTranslationKeyDerivation = (node): boolean => {
+  const returnTypeArguments = node?.parent;
+  const parametersReference = returnTypeArguments?.parent;
+  const indexedAccess = parametersReference?.parent;
+  const alias = indexedAccess?.parent;
+
+  return (
+    returnTypeArguments?.type === "TSTypeParameterInstantiation" &&
+    returnTypeArguments.params?.length === 1 &&
+    returnTypeArguments.params.at(0) === node &&
+    parametersReference?.type === "TSTypeReference" &&
+    isIdentifierNamed(parametersReference.typeName, "Parameters") &&
+    parametersReference.typeArguments === returnTypeArguments &&
+    indexedAccess?.type === "TSIndexedAccessType" &&
+    indexedAccess.objectType === parametersReference &&
+    indexedAccess.indexType?.type === "TSLiteralType" &&
+    indexedAccess.indexType.literal?.type === "Literal" &&
+    indexedAccess.indexType.literal.value === 0 &&
+    alias?.type === "TSTypeAliasDeclaration" &&
+    isIdentifierNamed(alias.id, "TranslationKey") &&
+    alias.typeAnnotation === indexedAccess
+  );
+};
+
 export default {
   meta: { name: "no-broad-translation-callable" },
   rules: {
@@ -295,6 +319,7 @@ export default {
             }
             for (const candidate of broadReturnTypeCandidates) {
               if (
+                !isCanonicalTranslationKeyDerivation(candidate) &&
                 isBroadTranslatorReturnType(
                   candidate,
                   broadTranslatorTypeNames,

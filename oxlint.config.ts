@@ -705,10 +705,6 @@ export default defineConfig({
         "apps/landing/src/**/*.{ts,tsx}",
         ".oxlint-plugins/__fixtures__/no-broad-translation-callable.fixture.ts",
       ],
-      excludeFiles: [
-        "apps/web/src/i18n/types.ts",
-        "apps/landing/src/i18n/utils.ts",
-      ],
       rules: {
         "no-broad-translation-callable/no-broad-translation-callable": "error",
       },

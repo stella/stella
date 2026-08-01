@@ -18,7 +18,7 @@ import type { TranslationKey as ImportedTranslationKey } from "../../apps/web/sr
 // oxlint-disable-next-line no-broad-translation-callable/no-broad-translation-callable
 export type { TranslationKey as ReexportedCatalogKey } from "../../apps/web/src/i18n/types";
 
-type TranslationKey = "feature.title" | "feature.description";
+type TranslationKey = Parameters<ReturnType<typeof getTranslations>>[0];
 type FeatureKey = "feature.title";
 type AppKey = TranslationKey;
 // MUST flag: exported aliases of the broad union are forbidden at the module
@@ -27,7 +27,9 @@ type AppKey = TranslationKey;
 export type ExportedAppKey = TranslationKey;
 
 declare const getTranslator: () => unknown;
-declare const getTranslations: () => unknown;
+declare const getTranslations: () => (
+  key: "feature.title" | "feature.description",
+) => string;
 // oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- The generic namespace syntax is the allowed use-intl shape under test.
 declare const useTranslations: <Namespace extends string>() => {
   namespace: Namespace;
