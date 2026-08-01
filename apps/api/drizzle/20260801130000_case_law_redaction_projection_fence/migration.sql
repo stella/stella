@@ -13,7 +13,7 @@ BEGIN
   FROM "case_law_decisions"
   WHERE "id" = NEW."decision_id"
     AND "redacted_at" IS NULL
-  FOR KEY SHARE;
+  FOR SHARE;
 
   IF NOT FOUND THEN
     RAISE EXCEPTION 'cannot write a search projection for a redacted case-law decision'

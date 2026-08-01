@@ -144,11 +144,11 @@ describe("case-law corpus upload intents", () => {
     expect(redactionIndexMigration).toContain(
       'CREATE INDEX CONCURRENTLY "case_law_index_jobs_redaction_decision_idx"',
     );
-    expect(redactionProjectionFenceMigration).toContain("FOR KEY SHARE");
+    expect(redactionProjectionFenceMigration).toContain("FOR SHARE");
     expect(redactionProjectionFenceMigration).toContain(
       "cannot write a search projection for a redacted case-law decision",
     );
-    expect(searchIndexSource).toContain('.for("key share")');
+    expect(searchIndexSource).toContain('.for("share")');
     expect(schedulerJobsSource).toContain(
       'id: "caseLaw.backfillRedactionTombstones.v2"',
     );

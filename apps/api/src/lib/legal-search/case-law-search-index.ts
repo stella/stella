@@ -112,7 +112,7 @@ export const indexDecision = async (
           isNull(caseLawDecisions.redactedAt),
         ),
       )
-      .for("key share")
+      .for("share")
       .limit(1);
     if (!writableDecision.at(0)) {
       // audit: skip — search index maintenance; rebuilds derived state

@@ -155,6 +155,68 @@ if (!databaseUrl || !runPostgresTests) {
           .where(eq(caseLawSearchDocuments.decisionId, decision.id)),
       ).toHaveLength(0);
 
+      const [raceDecision] = await db
+        .insert(caseLawDecisions)
+        .values({
+          caseNumber: `redaction-race-${suffix}`,
+          country: "CZE",
+          court: "Test court",
+          fulltext: "text from a stale projection writer",
+          language: "cs",
+          sourceId,
+        })
+        .returning({ id: caseLawDecisions.id });
+      if (!raceDecision) {
+        panic("expected race decision row");
+      }
+
+      let markRedactionReady: (() => void) | undefined;
+      let releaseRedaction: (() => void) | undefined;
+      const redactionReady = new Promise<void>((resolve) => {
+        markRedactionReady = resolve;
+      });
+      const heldRedaction = db.transaction(async (tx) => {
+        await tx
+          .update(caseLawDecisions)
+          .set({ redactedAt: new Date() })
+          .where(eq(caseLawDecisions.id, raceDecision.id));
+        markRedactionReady?.();
+        await new Promise<void>((resolve) => {
+          releaseRedaction = resolve;
+        });
+      });
+      await redactionReady;
+
+      const staleWriter = db
+        .insert(caseLawSearchDocuments)
+        .values({
+          decisionId: raceDecision.id,
+          searchableText: "attempted concurrent restoration",
+          title: "Attempted concurrent restoration",
+        })
+        .then(
+          () => "written" as const,
+          () => "rejected" as const,
+        );
+      try {
+        expect(
+          await Promise.race([
+            staleWriter,
+            Bun.sleep(100).then(() => "blocked" as const),
+          ]),
+        ).toBe("blocked");
+      } finally {
+        releaseRedaction?.();
+        await heldRedaction;
+      }
+      expect(await staleWriter).toBe("rejected");
+      expect(
+        await db
+          .select({ id: caseLawSearchDocuments.decisionId })
+          .from(caseLawSearchDocuments)
+          .where(eq(caseLawSearchDocuments.decisionId, raceDecision.id)),
+      ).toHaveLength(0);
+
       await runTask();
 
       expect(
