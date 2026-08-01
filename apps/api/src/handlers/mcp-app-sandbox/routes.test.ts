@@ -1,17 +1,16 @@
 import { describe, expect, test } from "bun:test";
-import Elysia from "elysia";
 import fc from "fast-check";
 
 import { propertyConfig } from "@stll/property-testing";
 
 import { env } from "@/api/env";
-import { setSecurityHeaders } from "@/api/lib/security-headers";
+import api from "@/api/server";
 
-import { MCP_APP_SANDBOX_DOCUMENT, mcpAppSandboxRoute } from "./routes";
+import { MCP_APP_SANDBOX_DOCUMENT } from "./routes";
 
 describe("MCP App sandbox", () => {
   test("serves a different-origin, display-only security boundary", async () => {
-    const response = await mcpAppSandboxRoute.handle(
+    const response = await api.handle(
       new Request("http://localhost/mcp-app-sandbox"),
     );
     const body = await response.text();
@@ -34,11 +33,7 @@ describe("MCP App sandbox", () => {
   });
 
   test("keeps its framable policy when mounted under global API headers", async () => {
-    const app = new Elysia()
-      .onRequest(({ set }) => setSecurityHeaders(set))
-      .use(mcpAppSandboxRoute);
-
-    const response = await app.handle(
+    const response = await api.handle(
       new Request("http://localhost/mcp-app-sandbox"),
     );
     const csp = response.headers.get("Content-Security-Policy") ?? "";
@@ -54,7 +49,7 @@ describe("MCP App sandbox", () => {
     await fc.assert(
       fc.asyncProperty(fc.string(), async (query) => {
         const injectedOrigin = `https://attacker.invalid/${query}`;
-        const response = await mcpAppSandboxRoute.handle(
+        const response = await api.handle(
           new Request(
             `http://localhost/mcp-app-sandbox?csp=${encodeURIComponent(injectedOrigin)}`,
           ),

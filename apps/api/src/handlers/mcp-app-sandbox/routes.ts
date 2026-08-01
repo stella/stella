@@ -1,4 +1,3 @@
-import Elysia from "elysia";
 import type { Context } from "elysia";
 
 import { MCP_APP_SANDBOX_PATH } from "@stll/api-contract";
@@ -94,19 +93,24 @@ const clearInheritedFrameDenial = (set: Context["set"]): void => {
   delete set.headers["Content-Security-Policy"];
 };
 
-export const mcpAppSandboxRoute = new Elysia().get(
-  MCP_APP_SANDBOX_PATH,
-  ({ set }) => {
-    clearInheritedFrameDenial(set);
-    return new Response(MCP_APP_SANDBOX_DOCUMENT, {
-      headers: {
-        "Cache-Control": "public, max-age=86400",
-        "Content-Security-Policy": SANDBOX_CONTENT_SECURITY_POLICY,
-        "Content-Type": "text/html; charset=utf-8",
-        "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
-        "Referrer-Policy": "no-referrer",
-        "X-Content-Type-Options": "nosniff",
-      },
-    });
-  },
-);
+export const handleMcpAppSandboxRequest = (
+  request: Request,
+  set: Context["set"],
+): Response | undefined => {
+  const { pathname } = new URL(request.url);
+  if (request.method !== "GET" || pathname !== MCP_APP_SANDBOX_PATH) {
+    return undefined;
+  }
+
+  clearInheritedFrameDenial(set);
+  return new Response(MCP_APP_SANDBOX_DOCUMENT, {
+    headers: {
+      "Cache-Control": "public, max-age=86400",
+      "Content-Security-Policy": SANDBOX_CONTENT_SECURITY_POLICY,
+      "Content-Type": "text/html; charset=utf-8",
+      "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+      "Referrer-Policy": "no-referrer",
+      "X-Content-Type-Options": "nosniff",
+    },
+  });
+};

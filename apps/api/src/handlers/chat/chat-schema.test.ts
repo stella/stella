@@ -33,12 +33,12 @@ const noDbReads: SafeDb = async () => {
   throw new Error("This validation path should not read the database");
 };
 const noTools = {} satisfies ChatToolMap;
-const validateMessage = (
+const validateMessage = async (
   input: Omit<
     Parameters<typeof validateMessageWithPersistence>[0],
     "persistedMessage"
   >,
-) => validateMessageWithPersistence({ ...input, persistedMessage: null });
+) => await validateMessageWithPersistence({ ...input, persistedMessage: null });
 const searchTools = {
   "search-documents": {
     name: "search-documents",

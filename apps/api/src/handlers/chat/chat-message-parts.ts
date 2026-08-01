@@ -1,9 +1,4 @@
-import type {
-  AudioPart,
-  ContentPartSource,
-  UIResourcePart,
-  VideoPart,
-} from "@tanstack/ai";
+import type { ContentPartSource } from "@tanstack/ai";
 import { panic } from "better-result";
 import { Buffer } from "node:buffer";
 
@@ -264,61 +259,77 @@ export const chatMessageContentFromMessage = (
 type ChatPartClientAcceptance = "accept" | "server-only";
 type ChatPartProviderVisibility = "model" | "ui-only";
 type InvalidChatPartHandling = "drop" | "panic";
+type ChatPartPolicy = {
+  clientAcceptance: ChatPartClientAcceptance;
+  invalidHandling: InvalidChatPartHandling;
+  providerVisibility: ChatPartProviderVisibility;
+};
 
 // Rich output parts are issued by the trusted stream processor. Accepting
 // them from the request body would let a client mint active HTML or remote
 // media and have the server return it as trusted persisted history.
-const CHAT_PART_CLIENT_ACCEPTANCE = {
-  audio: "server-only",
-  document: "accept",
-  image: "accept",
-  "structured-output": "accept",
-  text: "accept",
-  thinking: "accept",
-  "tool-call": "accept",
-  "tool-result": "accept",
-  "ui-resource": "server-only",
-  video: "server-only",
-} as const satisfies Record<PersistableChatPartType, ChatPartClientAcceptance>;
-
 // Bounded rich output is external presentation data, so an invalid instance
 // is dropped without sacrificing surrounding text. Malformed core protocol
 // parts still indicate an SDK/programmer contract violation and fail loudly.
-const INVALID_CHAT_PART_HANDLING = {
-  audio: "drop",
-  document: "panic",
-  image: "panic",
-  "structured-output": "panic",
-  text: "panic",
-  thinking: "panic",
-  "tool-call": "panic",
-  "tool-result": "panic",
-  "ui-resource": "drop",
-  video: "drop",
-} as const satisfies Record<PersistableChatPartType, InvalidChatPartHandling>;
-
 // These parts are presentation output, not conversation context. TanStack
 // currently omits UI resources during model conversion; keeping the policy
 // explicit here also prevents audio/video replay into a model that may not
 // support those modalities on the next turn.
-const CHAT_PART_PROVIDER_VISIBILITY = {
-  audio: "ui-only",
-  document: "model",
-  image: "model",
-  "structured-output": "model",
-  text: "model",
-  thinking: "model",
-  "tool-call": "model",
-  "tool-result": "model",
-  "ui-resource": "ui-only",
-  video: "ui-only",
-} as const satisfies Record<
-  PersistableChatPartType,
-  ChatPartProviderVisibility
->;
+const CHAT_PART_POLICY = {
+  audio: {
+    clientAcceptance: "server-only",
+    invalidHandling: "drop",
+    providerVisibility: "ui-only",
+  },
+  document: {
+    clientAcceptance: "accept",
+    invalidHandling: "panic",
+    providerVisibility: "model",
+  },
+  image: {
+    clientAcceptance: "accept",
+    invalidHandling: "panic",
+    providerVisibility: "model",
+  },
+  "structured-output": {
+    clientAcceptance: "accept",
+    invalidHandling: "panic",
+    providerVisibility: "model",
+  },
+  text: {
+    clientAcceptance: "accept",
+    invalidHandling: "panic",
+    providerVisibility: "model",
+  },
+  thinking: {
+    clientAcceptance: "accept",
+    invalidHandling: "panic",
+    providerVisibility: "model",
+  },
+  "tool-call": {
+    clientAcceptance: "accept",
+    invalidHandling: "panic",
+    providerVisibility: "model",
+  },
+  "tool-result": {
+    clientAcceptance: "accept",
+    invalidHandling: "panic",
+    providerVisibility: "model",
+  },
+  "ui-resource": {
+    clientAcceptance: "server-only",
+    invalidHandling: "drop",
+    providerVisibility: "ui-only",
+  },
+  video: {
+    clientAcceptance: "server-only",
+    invalidHandling: "drop",
+    providerVisibility: "ui-only",
+  },
+} as const satisfies Record<PersistableChatPartType, ChatPartPolicy>;
 
 export const isProviderVisibleChatPart = (part: ChatPart): boolean =>
-  CHAT_PART_PROVIDER_VISIBILITY[part.type] === "model";
+  CHAT_PART_POLICY[part.type].providerVisibility === "model";
 
 export const toProviderVisibleMessage = (
   message: ChatMessage,
@@ -519,7 +530,7 @@ export const isChatPart = (part: unknown): part is ChatPart => {
 };
 
 export const isIncomingChatPart = (part: unknown): part is ChatPart =>
-  isChatPart(part) && CHAT_PART_CLIENT_ACCEPTANCE[part.type] === "accept";
+  isChatPart(part) && CHAT_PART_POLICY[part.type].clientAcceptance === "accept";
 
 export const hasServerOwnedChatPartType = (part: unknown): boolean => {
   if (!isRecord(part) || typeof part["type"] !== "string") {
@@ -528,14 +539,12 @@ export const hasServerOwnedChatPartType = (part: unknown): boolean => {
   const { type } = part;
   return (
     isChatPartPersistenceType(type) &&
-    CHAT_PART_CLIENT_ACCEPTANCE[type] === "server-only"
+    CHAT_PART_POLICY[type].clientAcceptance === "server-only"
   );
 };
 
-export const isServerOwnedChatPart = (
-  part: ChatPart,
-): part is AudioPart | UIResourcePart | VideoPart =>
-  CHAT_PART_CLIENT_ACCEPTANCE[part.type] === "server-only";
+export const isServerOwnedChatPart = (part: ChatPart): boolean =>
+  CHAT_PART_POLICY[part.type].clientAcceptance === "server-only";
 
 export const applyChatPartPersistenceBudget = (parts: readonly ChatPart[]) => {
   const acceptedParts: ChatPart[] = [];
@@ -549,7 +558,7 @@ export const applyChatPartPersistenceBudget = (parts: readonly ChatPart[]) => {
       continue;
     }
 
-    const partBytes = Buffer.byteLength(JSON.stringify(part), "utf8");
+    const partBytes = Buffer.byteLength(JSON.stringify(part), "utf-8");
     if (
       richPartCount >= LIMITS.chatRichPartsPerMessageMax ||
       richPartBytes + partBytes > LIMITS.chatRichPartsTotalMaxBytes
@@ -676,7 +685,7 @@ export const classifyChatPartForPersistence = (
     return { type: "drop", partType: type };
   }
   if (!isChatPart(part)) {
-    if (INVALID_CHAT_PART_HANDLING[type] === "drop") {
+    if (CHAT_PART_POLICY[type].invalidHandling === "drop") {
       return { type: "drop", partType: type };
     }
     panic(`Cannot persist malformed chat part type: ${type}`);
