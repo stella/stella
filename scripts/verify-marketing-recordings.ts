@@ -42,21 +42,52 @@ class MarketingVerificationError extends Error {
   }
 }
 
-const optionValue = (args: readonly string[], flag: string) => {
-  const index = args.indexOf(flag);
-  const value = index === -1 ? undefined : args.at(index + 1);
-  return value?.startsWith("--") ? undefined : value;
-};
-
 export const parseVerificationOptions = (
   args: readonly string[],
 ): VerificationOptions => {
-  if (!args.includes(CONFIRMATION_FLAG)) {
+  let confirmed = false;
+  let reason: string | undefined;
+  let captureValue: string | undefined;
+  const seenFlags = new Set<string>();
+
+  for (let index = 0; index < args.length; index += 1) {
+    const flag = args.at(index);
+    if (!flag) {
+      throw new MarketingVerificationError("Unknown empty argument");
+    }
+    if (
+      flag !== CONFIRMATION_FLAG &&
+      flag !== REASON_FLAG &&
+      flag !== CAPTURE_FLAG
+    ) {
+      throw new MarketingVerificationError(`Unknown argument: ${flag}`);
+    }
+    if (seenFlags.has(flag)) {
+      throw new MarketingVerificationError(`${flag} may be passed only once`);
+    }
+    seenFlags.add(flag);
+
+    if (flag === CONFIRMATION_FLAG) {
+      confirmed = true;
+      continue;
+    }
+    const value = args.at(index + 1);
+    if (!value || value.startsWith("--")) {
+      throw new MarketingVerificationError(`${flag} requires a value`);
+    }
+    index += 1;
+    if (flag === REASON_FLAG) {
+      reason = value;
+    } else {
+      captureValue = value;
+    }
+  }
+
+  if (!confirmed) {
     throw new MarketingVerificationError(
       `Pass ${CONFIRMATION_FLAG} after visually reviewing every selected recording`,
     );
   }
-  const reason = optionValue(args, REASON_FLAG);
   if (
     !reason ||
     reason.trim() !== reason ||
@@ -65,12 +96,6 @@ export const parseVerificationOptions = (
   ) {
     throw new MarketingVerificationError(
       `${REASON_FLAG} must be a trimmed reason between 12 and 240 characters`,
-    );
-  }
-  const captureValue = optionValue(args, CAPTURE_FLAG);
-  if (args.includes(CAPTURE_FLAG) && !captureValue) {
-    throw new MarketingVerificationError(
-      `${CAPTURE_FLAG} must name at least one capture`,
     );
   }
   const captureIds = captureValue

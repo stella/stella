@@ -103,7 +103,16 @@ describe("marketing recording freshness", () => {
         "Reviewed for a maintenance release",
         "--capture",
       ]),
-    ).toThrow("--capture must name at least one capture");
+    ).toThrow("--capture requires a value");
+    expect(() =>
+      parseVerificationOptions([
+        "--confirm-current-recordings-reviewed",
+        "--reason",
+        "Reviewed for a maintenance release",
+        "--captur",
+        "workspace",
+      ]),
+    ).toThrow("Unknown argument: --captur");
   });
 
   test("never claims to attest a recording missing from the manifest", () => {
