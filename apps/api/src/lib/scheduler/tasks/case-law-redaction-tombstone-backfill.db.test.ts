@@ -178,7 +178,7 @@ if (!databaseUrl || !runPostgresTests) {
       const heldRedaction = db.transaction(async (tx) => {
         await tx
           .update(caseLawDecisions)
-          .set({ redactedAt: new Date() })
+          .set({ fulltext: null, redactedAt: new Date() })
           .where(eq(caseLawDecisions.id, raceDecision.id));
         markRedactionReady?.();
         await new Promise<void>((resolve) => {
