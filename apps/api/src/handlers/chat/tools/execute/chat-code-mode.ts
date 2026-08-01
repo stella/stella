@@ -105,7 +105,7 @@ const buildChatReadTools = (
   runReadTool: (
     toolName: RegistryReadToolName,
     args: unknown,
-  ) => Promise<unknown>,
+  ) => unknown | Promise<unknown>,
 ): CodeModeTool[] =>
   chatProjectableReadToolNames().map((toolName) => {
     const definition =
@@ -197,7 +197,6 @@ export const CHAT_CODE_MODE_SYSTEM_PROMPT: string = createCodeModeSystemPrompt({
   driver: createStellaIsolateDriver({
     concurrencyKey: "chat-code-mode-prompt",
   }),
-  // eslint-disable-next-line require-await -- prompt generation never invokes the runner; an async no-op keeps the ServerTool execute contract
-  tools: buildChatReadTools(async () => ({})),
+  tools: buildChatReadTools(() => ({})),
   ...CODE_MODE_RUNTIME_CONFIG,
 });

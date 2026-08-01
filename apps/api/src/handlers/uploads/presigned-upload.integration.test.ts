@@ -68,6 +68,40 @@ afterAll(async () => {
 });
 
 describe("presigned upload mutation flow", () => {
+  test("presigns an agent skill for an authorized owner", async () => {
+    const presignResult = await presignUpload.handler(
+      asTestRaw<PresignCtx>(
+        createContext({
+          body: {
+            purpose: "agent_skill",
+            scope: "private",
+            name: "review.skill.md",
+            mimeType: "text/markdown",
+            size: 12,
+            sha256Hex:
+              "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          },
+          workspaceId: ids.wsA1,
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        }),
+      ),
+    );
+    const uploadId = getUploadId(presignResult);
+    seededUploadIds.push(uploadId);
+
+    expect(
+      await testDb.query.pendingUploads.findFirst({
+        where: { id: { eq: uploadId } },
+        columns: { purpose: true, purposeData: true, status: true },
+      }),
+    ).toEqual({
+      purpose: "agent_skill",
+      purposeData: { type: "agent_skill", scope: "private" },
+      status: "pending",
+    });
+  });
+
   test("persists upload intent, aborts it, then replays the terminal rejection on finalize", async () => {
     const body = {
       purpose: "entity_version" as const,

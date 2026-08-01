@@ -474,7 +474,7 @@ const socialSignInTwoFactorRedirectPlugin = {
       {
         matcher: (ctx: HookEndpointContext) =>
           isSocialSignInCallbackPath(ctx.path),
-        // eslint-disable-next-line require-await -- createAuthMiddleware requires a Promise-returning handler; this one only reads a synchronous flag and throws a redirect, with no work to await (sync and non-async-promise variants trip promise-function-async / TS2345 instead).
+        // eslint-disable-next-line typescript/require-await -- createAuthMiddleware requires a Promise-returning handler; this one only reads a synchronous flag and throws a redirect, with no work to await (sync and non-async-promise variants trip promise-function-async / TS2345 instead).
         handler: createAuthMiddleware(async (ctx) => {
           if (!isTwoFactorRedirectResponse(ctx.context.returned)) {
             return;
