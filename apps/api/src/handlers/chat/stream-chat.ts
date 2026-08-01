@@ -1095,7 +1095,11 @@ const finishResponseMessage = async ({
   usage,
 }: FinishResponseMessageProps): Promise<boolean> => {
   const responseMessage = getResponseMessage();
-  if (!responseMessage) {
+  // A part-less message is not a turn. `planAssistantFinishPersistence` inserts
+  // whatever a `completed` finish hands it, so letting one through would put a
+  // blank assistant turn in the history that hydration then renders as an empty
+  // reply. Both callers funnel through here, so no path can persist one.
+  if (!responseMessage || responseMessage.parts.length === 0) {
     return false;
   }
 

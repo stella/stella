@@ -1050,6 +1050,44 @@ describe("streamed chat message conversion", () => {
       ]);
     });
   }
+
+  test("does not finish a turn whose parts were all unsupported", async () => {
+    const messageId = toSafeId<"chatMessage">(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    let finishCount = 0;
+    // Every part was dropped, so the turn has nothing to persist. Finishing it
+    // would insert a blank assistant message into the history.
+    const responseMessage: ChatMessage = {
+      id: messageId,
+      parts: [],
+      role: "assistant",
+    };
+    const processor = new StreamProcessor({ events: {} });
+
+    await collectChunks(
+      processServerChatStream({
+        abortSignal: new AbortController().signal,
+        getResponseMessage: () => responseMessage,
+        mapMessageId: createChatMessageIdMapper(() => messageId),
+        onFinish: () => {
+          finishCount += 1;
+        },
+        processor,
+        source: streamChunks([
+          { type: EventType.RUN_STARTED, runId: "run-1", threadId: "thread-1" },
+          {
+            type: EventType.RUN_FINISHED,
+            finishReason: "stop",
+            runId: "run-1",
+            threadId: "thread-1",
+          },
+        ]),
+      }),
+    );
+
+    expect(finishCount).toBe(0);
+  });
 });
 
 describe("chat attempt terminal classification", () => {
