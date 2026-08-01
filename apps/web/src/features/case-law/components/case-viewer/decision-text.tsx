@@ -603,11 +603,7 @@ const renderBlocksWithHoldingZone = ({
     const headingId = info?.headingId ?? null;
     const lastGroup = groups.at(-1);
 
-    if (
-      lastGroup &&
-      lastGroup.headingId === headingId &&
-      lastGroup.cssVar === cssVar
-    ) {
+    if (lastGroup?.headingId === headingId && lastGroup.cssVar === cssVar) {
       lastGroup.blocks.push(block);
       continue;
     }

@@ -1180,7 +1180,7 @@ export const Inspector = ({
   onFieldUpdate,
   onFieldBack,
 }: InspectorProps) => {
-  if (selected && selected.kind === "placeholder") {
+  if (selected?.kind === "placeholder") {
     const field =
       fields.find((f) => f.path === selected.expr) ??
       defaultStudioField(selected.expr);
@@ -1198,11 +1198,11 @@ export const Inspector = ({
     return <ConditionFace fields={fields} selected={selected} />;
   }
 
-  if (selected && selected.kind === "clause") {
+  if (selected?.kind === "clause") {
     return <ClauseFace selected={selected} />;
   }
 
-  if (selected && selected.kind === "each") {
+  if (selected?.kind === "each") {
     return <LoopFace key={selected.expr} selected={selected} />;
   }
 

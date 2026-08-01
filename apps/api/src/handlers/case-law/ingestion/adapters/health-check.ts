@@ -167,7 +167,7 @@ export const checkAdapterHealth = async (
     // Determine status
     const requiredOk = REQUIRED_FIELDS.every((f) => {
       const check = fields.find((c) => c.field === f);
-      return check && check.missing === 0;
+      return check?.missing === 0;
     });
 
     let status: HealthResult["status"] = "degraded";

@@ -21,6 +21,7 @@ const getBindingCatalog = createSafeRootHandler(
   // The catalog is static (built from the binding-sources taxonomy), so there
   // is no failable IO; yielding the already-built catalog through `Result.ok`
   // keeps the generator form consistent with every other endpoint handler.
+  // eslint-disable-next-line typescript/require-await -- safe handlers must remain async generators for Result.gen error capture.
   async function* () {
     const catalog = yield* Result.ok(buildBindingCatalog());
     return Result.ok(catalog);

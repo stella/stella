@@ -36,13 +36,12 @@ export type ValidateAgentSkillProps = {
  * verbatim. Returning early at presign time keeps the API from
  * minting a URL for an upload the user can't legitimately finalize.
  *
- * @yields nothing — pure check.
+ * @returns the authorization result.
  */
-// eslint-disable-next-line require-yield -- generator shape matches the dispatch contract
-export const validateAgentSkill = async function* ({
+export const validateAgentSkill = ({
   memberRole,
   scope,
-}: ValidateAgentSkillProps) {
+}: ValidateAgentSkillProps) => {
   const authorization = authorizeSkillInstallScope({ memberRole, scope });
   if (Result.isError(authorization)) {
     return Result.err(authorization.error);

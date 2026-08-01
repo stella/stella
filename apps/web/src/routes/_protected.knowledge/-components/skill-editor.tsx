@@ -462,7 +462,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
       });
       const { tabs, closeTab } = useInspectorTabsStore.getState();
       const openTab = tabs.find((tab) => tab.id === oldTabId);
-      if (openTab && openTab.type === "skill-resource") {
+      if (openTab?.type === "skill-resource") {
         closeTab(oldTabId);
         openResourceInInspector({ path: data.path, content: openTab.content });
       }

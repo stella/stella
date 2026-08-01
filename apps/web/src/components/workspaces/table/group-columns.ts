@@ -56,11 +56,7 @@ export const docTypeGateLabel = (
     return null;
   }
   const { condition } = dependency;
-  if (
-    condition === null ||
-    condition.type !== "compare" ||
-    condition.op !== "eq"
-  ) {
+  if (condition?.type !== "compare" || condition.op !== "eq") {
     return null;
   }
   const { left, right } = condition;

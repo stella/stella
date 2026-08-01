@@ -1588,7 +1588,7 @@ const runChatCompactionCheckpoint = async ({
 
 const isChatStreamResponse = (response: Response): boolean => {
   const contentType = response.headers.get("content-type");
-  return contentType !== null && contentType.includes("text/event-stream");
+  return contentType?.includes("text/event-stream") === true;
 };
 
 const messageNeedsExternalMcpValidation = (

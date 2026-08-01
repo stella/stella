@@ -538,7 +538,7 @@ const stripRowMarkerParagraph = (
 ): void => {
   const cell = ancestorByLocalName(paragraph, TAG.cell);
   paragraph.parentNode?.removeChild(paragraph);
-  if (cell && cell.getElementsByTagNameNS(W_NS, TAG.paragraph).length === 0) {
+  if (cell?.getElementsByTagNameNS(W_NS, TAG.paragraph).length === 0) {
     cell.append(doc.createElementNS(W_NS, "w:p"));
   }
 };

@@ -271,8 +271,7 @@ export const ChatThreadPage = ({
   // with downstream replies, where the persisted `output-available` state no
   // longer reflects the live edit-and-rerun form.
   const lastMessageHasPendingAskUser =
-    lastMessage !== undefined &&
-    lastMessage.role === "assistant" &&
+    lastMessage?.role === "assistant" &&
     lastMessage.parts.some(
       (part) =>
         part.type === "tool-call" &&

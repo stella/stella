@@ -171,21 +171,27 @@ const presignUpload = createSafeHandler(
         propertyId: purposeBody.propertyId,
         parentId: purposeBody.parentId ?? null,
       });
-      if (Result.isError(validation)) {
+      if (validation.status === "error") {
         return validation;
       }
-    } else {
-      const validation =
-        purposeBody.purpose === "entity_version"
-          ? yield* validateEntityVersion({
-              safeDb,
-              workspaceId,
-              entityId: purposeBody.entityId,
-            })
-          : yield* validateAgentSkill({
-              memberRole,
-              scope: purposeBody.scope,
-            });
+    }
+
+    if (purposeBody.purpose === "entity_version") {
+      const validation = yield* validateEntityVersion({
+        safeDb,
+        workspaceId,
+        entityId: purposeBody.entityId,
+      });
+      if (validation.status === "error") {
+        return validation;
+      }
+    }
+
+    if (purposeBody.purpose === "agent_skill") {
+      const validation = validateAgentSkill({
+        memberRole,
+        scope: purposeBody.scope,
+      });
       if (validation.status === "error") {
         return validation;
       }

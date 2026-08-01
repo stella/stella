@@ -352,15 +352,14 @@ const PropertyComposerBody = ({
   }, [missingForEdit, onClose]);
 
   const editingTool = editingProperty?.tool;
-  const isManualEdit =
-    editingTool !== undefined && editingTool.type === "manual-input";
+  const isManualEdit = editingTool?.type === "manual-input";
   const showAiSections = !isManualEdit;
   const initialContentType: CreatableContentType =
     editingProperty && isCreatableContentType(editingProperty.content.type)
       ? editingProperty.content.type
       : "text";
   const initialPromptHtml =
-    editingTool && editingTool.type === "ai-model" ? editingTool.prompt : "";
+    editingTool?.type === "ai-model" ? editingTool.prompt : "";
   const initialOptions: WorkspacePropertyOption[] =
     editingProperty &&
     (editingProperty.content.type === "single-select" ||

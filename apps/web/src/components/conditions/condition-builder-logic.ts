@@ -378,7 +378,7 @@ export const fieldForNode = (
 
 /** Normalizes the controlled `value` prop into a concrete group root. */
 export const asGroup = (value: ConditionNode | null): GroupNode => {
-  if (value && value.type === "group") {
+  if (value?.type === "group") {
     return value;
   }
   if (value) {

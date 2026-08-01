@@ -1062,10 +1062,9 @@ const FileChatOverlayInner = ({
     }
     const session = state.sessions[reviewEntityId];
     return (
-      session !== undefined &&
-      session.some(
+      session?.some(
         (item) => item.status === "pending" || item.status === "applying",
-      )
+      ) === true
     );
   });
   const editModeOptionId = useChatEditModeStore((state) => state.optionId);

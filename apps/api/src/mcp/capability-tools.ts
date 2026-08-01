@@ -543,13 +543,12 @@ const successEgress = (
 
 const CAPABILITY_LIST_CURSOR = "cursor";
 
-// eslint-disable-next-line require-await -- the McpToolHandler contract is Promise-returning, but listing the static catalog does no async work
-const listCapabilitiesHandler = async ({
+const listCapabilitiesHandler = ({
   args,
 }: {
   args: Record<string, unknown>;
   context: McpRequestContext;
-}): Promise<McpToolResponse> => {
+}): McpToolResponse => {
   const domain = args["domain"];
   if (domain !== undefined && typeof domain !== "string") {
     return structuredErrorResult({

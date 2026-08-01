@@ -515,7 +515,7 @@ export const useChatComposerWiring = ({
     if (submitDisabled) {
       return;
     }
-    if (onSubmitGuard && onSubmitGuard() === false) {
+    if (onSubmitGuard?.() === false) {
       return;
     }
     try {
@@ -1084,7 +1084,7 @@ export const useChatEditor = ({
         ) {
           const suggestion = suggestedFollowupPromptRef.current;
           const targetEditor = editorRef.current;
-          if (suggestion && targetEditor && targetEditor.isEmpty) {
+          if (suggestion && targetEditor?.isEmpty) {
             event.preventDefault();
             targetEditor.commands.setContent(suggestion);
             return true;

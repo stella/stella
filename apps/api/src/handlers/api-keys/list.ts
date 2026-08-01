@@ -56,7 +56,7 @@ const decodeMachineApiKeyCursor = (
   cursor: string,
 ): MachineApiKeyCursor | null => {
   const parts = decodePaginationCursor(cursor);
-  if (parts === null || parts.length !== 2) {
+  if (parts?.length !== 2) {
     return null;
   }
 

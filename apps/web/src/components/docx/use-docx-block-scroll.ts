@@ -53,10 +53,8 @@ const debugDocxBlockScroll = (
   event: string,
   details: Record<string, unknown>,
 ) => {
-  if (
-    typeof window === "undefined" ||
-    window.localStorage.getItem(FOLIO_SCROLL_DEBUG_KEY) !== "1"
-  ) {
+  const browserWindow = typeof window === "undefined" ? null : window;
+  if (browserWindow?.localStorage.getItem(FOLIO_SCROLL_DEBUG_KEY) !== "1") {
     return;
   }
 

@@ -61,6 +61,7 @@ const buildUserPrompt = (input: {
 
 const autocompleteStream = createSafeRootHandler(
   config,
+  // eslint-disable-next-line typescript/require-await -- safe handlers must remain async generators for Result.gen error capture.
   async function* ({
     body,
     orgAIConfig,

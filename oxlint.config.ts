@@ -20,12 +20,15 @@ export default defineConfig({
     // Override ultracite defaults for Stella
     "no-console": "error",
     "no-shadow": "error",
-    "require-await": "error",
+    // The TypeScript extension below recognizes returned thenables. Retain
+    // the base rule only for JavaScript through the override below.
+    "require-await": "off",
     "no-useless-catch": "error",
     "no-non-null-assertion": "error",
 
     "typescript/no-explicit-any": "error",
     "typescript/no-dynamic-delete": "error",
+    "typescript/require-await": "error",
     "typescript/no-misused-promises": [
       "error",
       { checksVoidReturn: { attributes: false } },
@@ -261,6 +264,9 @@ export default defineConfig({
       "error",
       { ignorePrimitives: { string: true, boolean: true } },
     ],
+    // The rule is still nursery; restrict it to actual nullish operands so
+    // replacing a truthiness check cannot change 0/false/empty-string behavior.
+    "typescript/prefer-optional-chain": ["error", { requireNullish: true }],
     "typescript/only-throw-error": [
       "error",
       {
@@ -395,6 +401,13 @@ export default defineConfig({
   overrides: [
     ...(core.overrides ?? []),
     ...libraryOverrides,
+    {
+      files: ["**/*.{js,jsx,mjs,cjs}"],
+      rules: {
+        "require-await": "error",
+        "typescript/require-await": "off",
+      },
+    },
     {
       // Custom oxlint plugin rules traverse AST nodes that the runtime
       // delivers as untyped (effectively `any`). Strict any-flow rules
@@ -1867,6 +1880,7 @@ export default defineConfig({
         "jest/valid-title": "off",
         "no-console": "off",
         "require-await": "off",
+        "typescript/require-await": "off",
         "require-yield": "off",
         "typescript/unbound-method": "off",
         "no-bare-error/no-bare-error": "off",

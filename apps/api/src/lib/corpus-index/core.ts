@@ -1104,10 +1104,7 @@ export const createCorpusIndexer = <
               }
             }
           }
-          if (
-            row.indexedGeneration !== null &&
-            row.indexedGeneration.startsWith(`${generation}_`)
-          ) {
+          if (row.indexedGeneration?.startsWith(`${generation}_`) === true) {
             previousIndexes.add(row.indexedGeneration);
           }
           return [...previousIndexes].map((oldIndexId) => ({

@@ -24,9 +24,7 @@ export const createDetailNavStore = () =>
     setOpen: (open) => set({ open }),
     setName: (id, name) =>
       set((state) =>
-        state.open && state.open.id === id
-          ? { open: { ...state.open, name } }
-          : state,
+        state.open?.id === id ? { open: { ...state.open, name } } : state,
       ),
     clear: () => set({ open: null }),
   }));

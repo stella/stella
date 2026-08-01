@@ -116,7 +116,8 @@ export const startAutomatedFlowRun = async ({
     });
     return;
   }
-  if (authorization.value === null || authorization.value.workspace === null) {
+  const authorizedWorkspace = authorization.value?.workspace;
+  if (authorizedWorkspace === undefined || authorizedWorkspace === null) {
     logger.warn("flow.automated_run_actor_unauthorized", logContext);
     return;
   }

@@ -374,9 +374,7 @@ export const chunkDocument = ({
   // word, while dropping bad blocks would silently lose whatever they held.
   // The structure is what is untrustworthy here, not the content.
   const fromAst =
-    ast !== null && ast.blocks.every(isChunkableBlock)
-      ? chunkBlocks(ast.blocks)
-      : [];
+    ast?.blocks.every(isChunkableBlock) === true ? chunkBlocks(ast.blocks) : [];
   if (fromAst.length > 0) {
     return fromAst;
   }

@@ -10,6 +10,7 @@ const config = {
   mcp: { type: "capability", reason: "template_authoring_ui" },
 } satisfies HandlerConfig;
 
+// eslint-disable-next-line typescript/require-await -- safe handlers must remain async generators for Result.gen error capture.
 export default createSafeRootHandler(config, async function* () {
   const editor = yield* Result.ok(createStellaStyleEditorPreset());
   return Result.ok({ settings: editor.settings });

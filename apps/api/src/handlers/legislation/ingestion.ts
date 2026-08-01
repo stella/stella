@@ -208,7 +208,7 @@ export const processLegislationDocument = async (
       .limit(1),
   );
 
-  if (existing && existing.sourceHash === sourceHash) {
+  if (existing?.sourceHash === sourceHash) {
     return {
       id: existing.id,
       inserted: false,

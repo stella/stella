@@ -90,7 +90,7 @@ const createHostedSetup = createSafeRootHandler(
           )
           .limit(1);
         const entitlement = entitlementRows.at(0);
-        if (entitlement && entitlement.source === "manual") {
+        if (entitlement?.source === "manual") {
           return { kind: "manual_entitlement_present" as const };
         }
         // An add-on allocation is resolved against the buyer's hosted

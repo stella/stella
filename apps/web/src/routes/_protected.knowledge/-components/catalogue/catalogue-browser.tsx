@@ -143,7 +143,7 @@ export const CatalogueBrowser = ({
   // clears the highlight automatically.
   const focusedTabId = useInspectorTabsStore((s) => {
     const active = s.tabs.find((tab) => tab.id === s.activeId);
-    if (active === undefined || active.type !== "view") {
+    if (active?.type !== "view") {
       return null;
     }
     if (active.viewType !== "tool-detail") {
