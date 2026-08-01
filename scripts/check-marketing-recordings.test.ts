@@ -109,6 +109,33 @@ describe("marketing recording freshness", () => {
     expect(verdict.reasons.at(0)).toStartWith("viewport drifted");
   });
 
+  test("does not fall back to the recording stamp after media drift", () => {
+    const recordedAtCommit = execFileSync("git", ["rev-parse", "HEAD"], {
+      encoding: "utf-8",
+    }).trim();
+    const verdict = judgeEntry({
+      captureId: definition.captureId,
+      dpr: definition.dpr,
+      manualVerification: {
+        artifactsHash: "0".repeat(64),
+        reason: "Reviewed for a maintenance release",
+        watchedPathsHash: watchedPathsHashAtHead(definition.watchedPaths),
+      },
+      recordedAtCommit,
+      theme: "light",
+      viewport: definition.viewport,
+      watchedPaths: definition.watchedPaths,
+    });
+
+    expect(verdict).toMatchObject({
+      basis: null,
+      reasons: [
+        "manual verification does not match the watched source tree or recording artifacts",
+      ],
+      status: "STALE",
+    });
+  });
+
   test("requires deliberate confirmation and a review reason", () => {
     expect(() => parseVerificationOptions([])).toThrow(
       "--confirm-current-recordings-reviewed",

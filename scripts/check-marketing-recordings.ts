@@ -254,15 +254,14 @@ export const judgeEntry = (
       })
     ) {
       basis = "manual-verification";
+    } else if (entry.manualVerification) {
+      reasons.push(
+        "manual verification does not match the watched source tree or recording artifacts",
+      );
     } else if (changedPaths.length === 0) {
       basis = "recording";
     } else {
       reasons.push(...changedPaths.map((path) => `changed: ${path}`));
-      if (entry.manualVerification && reasons.length > 0) {
-        reasons.unshift(
-          "manual verification does not match the watched source tree",
-        );
-      }
     }
   }
 
