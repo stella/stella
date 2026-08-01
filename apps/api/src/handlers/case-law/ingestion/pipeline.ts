@@ -57,6 +57,7 @@ import {
   reserveCaseLawCorpusUploadIntent,
   writeReservedCaseLawCorpusUpload,
 } from "@/api/lib/legal-search/case-law-corpus-upload-intents";
+import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import type {
   CorpusPayload,
   WriteCorpusResult,
@@ -82,6 +83,7 @@ type DbSlot = {
 
 type PipelineInput = {
   source: typeof caseLawSources.$inferSelect;
+  sourceLease: CaseLawSourceIngestionLease;
   scopedDb: ScopedDb;
   /** Per-cycle abort signal. Fires when the adapter's time budget is exhausted. */
   signal?: AbortSignal;
@@ -189,9 +191,7 @@ type ProcessDecisionOptions = Omit<
   "contentionReconciliation"
 >;
 
-type SourceObservation = {
-  order: bigint;
-};
+type SourceObservation = { order: bigint };
 
 const storedObservationPrecedes = ({ order }: SourceObservation) =>
   or(
@@ -199,10 +199,17 @@ const storedObservationPrecedes = ({ order }: SourceObservation) =>
     lt(caseLawDecisions.sourceObservationOrder, order),
   );
 
-const allocateSourceObservationOrder = async (
-  sourceId: SafeId<"caseLawSource">,
-  scopedDb: ScopedDb,
-): Promise<bigint> =>
+type AllocateSourceObservationOrderOptions = {
+  leaseToken: SafeId<"caseLawSourceIngestionLease">;
+  scopedDb: ScopedDb;
+  sourceId: SafeId<"caseLawSource">;
+};
+
+const allocateSourceObservationOrder = async ({
+  leaseToken,
+  scopedDb,
+  sourceId,
+}: AllocateSourceObservationOrderOptions): Promise<bigint> =>
   await scopedDb(async (tx) => {
     // audit: skip — background ingestion ordering state for public source data
     const allocated = (
@@ -212,11 +219,19 @@ const allocateSourceObservationOrder = async (
           observationOrder: sql`${caseLawSources.observationOrder} + 1`,
           updatedAt: sql`${caseLawSources.updatedAt}`,
         })
-        .where(eq(caseLawSources.id, sourceId))
+        .where(
+          and(
+            eq(caseLawSources.id, sourceId),
+            eq(caseLawSources.ingestionLeaseToken, leaseToken),
+            sql`${caseLawSources.ingestionLeaseExpiresAt} > now()`,
+          ),
+        )
         .returning({ order: caseLawSources.observationOrder })
     ).at(0);
     if (!allocated) {
-      panic("Case-law source disappeared while allocating observation order");
+      throw new ConcurrentModificationError({
+        message: "Case-law source ingestion lease was lost before ordering",
+      });
     }
     return allocated.order;
   });
@@ -1224,14 +1239,14 @@ const processDecisionAttempt = async ({
         write: async ({ signal: uploadSignal }) =>
           await writeCorpusDocument(corpusPayload, { signal: uploadSignal }),
       });
-      if (upload.type === "cancelled") {
+      if (upload.type === "redacted-or-missing") {
         return {
           status: PROCESS_DECISION_STATUS.COMPLETE,
           inserted: false,
           searchVectorFailed: false,
         };
       }
-      if (upload.type === "superseded") {
+      if (upload.type === "intent-reclaimed" || upload.type === "superseded") {
         const winner = await scopedDb((tx) =>
           tx.query.caseLawDecisions.findFirst({
             where: { id: { eq: decisionId } },
@@ -1305,6 +1320,7 @@ export const processDecision = async (
  */
 export const runIngestionPipeline = async ({
   source,
+  sourceLease,
   scopedDb,
   signal,
   maxPages: maxPagesOverride,
@@ -1356,29 +1372,10 @@ export const runIngestionPipeline = async ({
       ? AbortSignal.any([signal, AbortSignal.timeout(pageTimeout)])
       : AbortSignal.timeout(pageTimeout);
     recentCursors.add(cursor);
-    // Allocate from the source row before the request: PostgreSQL serializes
-    // overlapping workers without relying on replica wall clocks.
-    let observationOrder: bigint;
-    try {
-      // oxlint-disable-next-line no-await-in-loop -- each page needs one durable order token before its dependent fetch
-      observationOrder = await allocateSourceObservationOrder(
-        source.id,
-        scopedDb,
-      );
-      checkpointObservationOrder = observationOrder;
-    } catch (error) {
-      if (error instanceof TimeoutError) {
-        haltReason = databaseTimeoutHaltReason(error);
-        break;
-      }
-      throw error;
-    }
-    const observedAt = new Date();
     // oxlint-disable-next-line no-await-in-loop -- sequential paginated crawl (each page's cursor depends on the previous page)
-    const pageResult = await adapter.fetchPage(
-      cursor,
-      source.config ?? {},
-      pageSignal,
+    const pageResult = await sourceLease.beforeRemoteEffect(
+      async () =>
+        await adapter.fetchPage(cursor, source.config ?? {}, pageSignal),
     );
 
     if (Result.isError(pageResult)) {
@@ -1397,6 +1394,27 @@ export const runIngestionPipeline = async ({
       break;
     }
 
+    // Order the observation after the source response exists. A request-start
+    // token can invert two overlapping responses and make an older payload
+    // dominate a newer one. The source lease prevents those fetches from
+    // overlapping; this durable token orders the resulting database writes.
+    let observationOrder: bigint;
+    try {
+      // oxlint-disable-next-line no-await-in-loop -- each fetched page needs one durable order token before its dependent writes
+      observationOrder = await allocateSourceObservationOrder({
+        leaseToken: sourceLease.leaseToken,
+        scopedDb,
+        sourceId: source.id,
+      });
+      checkpointObservationOrder = observationOrder;
+    } catch (error) {
+      if (error instanceof TimeoutError) {
+        haltReason = databaseTimeoutHaltReason(error);
+        break;
+      }
+      throw error;
+    }
+    const observedAt = new Date();
     const page = pageResult.value;
 
     // Acquire DB slot before processing decisions (DB-heavy:
@@ -1605,12 +1623,14 @@ export const runIngestionPipeline = async ({
     }
   }
 
+  await sourceLease.beforeDatabaseMark();
   const checkpoint = await advanceCorpusIngestionCheckpoint({
     expectedCursor: source.syncCursor,
     nextCursor: cursor,
     scopedDb,
     source: {
       id: source.id,
+      leaseToken: sourceLease.leaseToken,
       observationOrder: checkpointObservationOrder,
       type: CORPUS_SOURCE_TYPE.CASE_LAW,
     },

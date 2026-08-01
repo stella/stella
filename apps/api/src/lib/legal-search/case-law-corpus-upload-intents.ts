@@ -217,7 +217,8 @@ class CorpusUploadWriteError extends TaggedError("CorpusUploadWriteError")<{
 
 export type WriteReservedCaseLawCorpusUploadResult =
   | CaseLawCorpusUploadApplyResult
-  | { type: "cancelled" };
+  | { type: "redacted-or-missing" }
+  | { type: "intent-reclaimed" };
 
 /**
  * The exceptional transaction that holds a decision fence over its corpus
@@ -261,7 +262,7 @@ export const writeReservedCaseLawCorpusUpload = async ({
               ),
             ),
           );
-        return { type: "cancelled" };
+        return { type: "redacted-or-missing" };
       }
 
       const intent = (
@@ -278,7 +279,7 @@ export const writeReservedCaseLawCorpusUpload = async ({
           .limit(1)
       ).at(0);
       if (intent?.status !== CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.ACTIVE) {
-        return { type: "cancelled" };
+        return { type: "intent-reclaimed" };
       }
 
       if (!(await preflight(tx))) {

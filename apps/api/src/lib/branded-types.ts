@@ -21,6 +21,7 @@ export type SafeIdType =
   | "caseLawMatterLink"
   | "caseLawPolarityRule"
   | "caseLawSource"
+  | "caseLawSourceIngestionLease"
   | "chatMessage"
   | "chatThreadCompaction"
   | "chatThread"

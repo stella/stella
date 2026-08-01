@@ -57,6 +57,8 @@ export const caseLawSources = p.pgTable(
       .bigint("checkpoint_observation_order", { mode: "bigint" })
       .default(0n)
       .notNull(),
+    ingestionLeaseToken: p.uuid("ingestion_lease_token"),
+    ingestionLeaseExpiresAt: timestamptz("ingestion_lease_expires_at"),
     config: jsonb().$type<Record<string, unknown>>().default({}),
     // License / redistribution terms. null = legacy source (public
     // court records, treated as redistributable); see corpus-source.ts. A
@@ -73,6 +75,10 @@ export const caseLawSources = p.pgTable(
     p.check(
       "case_law_sources_checkpoint_observation_order_monotonic",
       sql`${t.checkpointObservationOrder} <= ${t.observationOrder}`,
+    ),
+    p.check(
+      "case_law_sources_ingestion_lease_pair",
+      sql`(${t.ingestionLeaseToken} IS NULL) = (${t.ingestionLeaseExpiresAt} IS NULL)`,
     ),
     p.uniqueIndex("case_law_sources_adapter_key_idx").on(t.adapterKey),
     ...globalCaseLawPolicies(),

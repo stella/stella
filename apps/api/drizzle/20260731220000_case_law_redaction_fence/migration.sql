@@ -14,6 +14,28 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $function$
 BEGIN
+  -- Historical audit rows predate this migration's AFTER INSERT trigger. Until
+  -- the bounded repair reaches them, reject any attempt to restore a scrubbed
+  -- payload at the database boundary. The failed write remains retryable; once
+  -- the repair stamps redacted_at, normal tombstone predicates stop it earlier.
+  IF NEW.redacted_at IS NULL
+    AND (
+      NEW.fulltext IS NOT NULL
+      OR NEW.sections IS NOT NULL
+      OR NEW.document_ast IS NOT NULL
+      OR NEW.content_hash IS NOT NULL
+    )
+    AND EXISTS (
+      SELECT 1
+      FROM "case_law_index_jobs" AS redaction_audit
+      WHERE redaction_audit."decision_id" = OLD."id"
+        AND redaction_audit."operation" = 'redact'
+    )
+  THEN
+    RAISE EXCEPTION 'cannot restore a historically redacted case-law payload'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
   IF NEW.redacted_at IS NULL
     AND NEW.fulltext IS NULL
     AND NEW.sections IS NULL

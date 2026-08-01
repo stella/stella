@@ -16,6 +16,7 @@ import {
   DatabaseError,
   TimeoutError,
 } from "@/api/lib/errors/tagged-errors";
+import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import type { WriteCorpusResult } from "@/api/lib/legal-search/corpus-storage";
 
 /**
@@ -85,6 +86,16 @@ const { processDecision, runIngestionPipeline, settleCaseLawCorpusMirror } =
 
 const originalCzNsFetchPage = czNsAdapter.fetchPage;
 
+const testSourceLease = (
+  source: typeof caseLawSources.$inferSelect,
+): CaseLawSourceIngestionLease => ({
+  beforeDatabaseMark: async () => undefined,
+  beforeRemoteEffect: async (effect) => await effect(),
+  leaseToken: createSafeId<"caseLawSourceIngestionLease">(),
+  release: async () => undefined,
+  source,
+});
+
 let persistedCursor: string | null | undefined;
 /**
  * How the decision insert behaves. `fault` is an unambiguous failure;
@@ -96,6 +107,7 @@ let rowWrite: "ok" | "fault" | "timeout" = "ok";
 let existingDecision: Record<string, unknown> | undefined;
 /** Whether the observation still owns the mirror when it settles. */
 let mirrorSettlementApplied = true;
+let intentStatus: "active" | "cleanup" = "active";
 
 afterEach(() => {
   czNsAdapter.fetchPage = originalCzNsFetchPage;
@@ -107,6 +119,7 @@ afterEach(() => {
   rowWrite = "ok";
   existingDecision = undefined;
   mirrorSettlementApplied = true;
+  intentStatus = "active";
   writeCorpusDocumentMock.mockClear();
   deleteCorpusDocumentMock.mockClear();
 });
@@ -140,7 +153,7 @@ const scopedDb: ScopedDb = async (callback) => {
         where: () => {
           const rows = async () => {
             if (table === caseLawCorpusUploadIntents) {
-              return [{ status: "active" }];
+              return [{ status: intentStatus }];
             }
             if ("redactedAt" in selection) {
               return [{ redactedAt: null }];
@@ -362,6 +375,37 @@ describe("processDecision — canonical storage mode", () => {
     expect(deleteCorpusDocumentMock).not.toHaveBeenCalled();
   });
 
+  test("retries when an expired upload intent was reclaimed", async () => {
+    existingDecision = {
+      id: createSafeId<"caseLawDecision">(),
+      metadata: {},
+      sourceHash: "older-hash",
+      sourceObservedAt: new Date("2026-07-31T11:00:00.000Z"),
+      sourceObservationHash: "older-hash",
+      sourceObservationOrder: 0n,
+      corpusMirrorStatus: "pending",
+      redactedAt: null,
+      sourceRawS3Key: null,
+      sourceRawContentType: null,
+    };
+    intentStatus = "cleanup";
+
+    const outcome = await processDecision({
+      input: decision,
+      observationOrder: 1n,
+      sourceId: createSafeId<"caseLawSource">(),
+      scopedDb,
+      observedAt: new Date("2026-07-31T12:00:00.000Z"),
+    });
+
+    expect(outcome).toEqual({
+      status: "retryable",
+      inserted: false,
+      reason: "corpus-write",
+    });
+    expect(writeCorpusDocumentMock).not.toHaveBeenCalled();
+  });
+
   // bun-types declares `.rejects.toBe` as void, so awaiting it trips
   // type-aware lint; capture the rejection explicitly instead.
   const rejectionFrom = async (): Promise<unknown> =>
@@ -415,6 +459,8 @@ describe("runIngestionPipeline — canonical corpus write failure", () => {
       lastSyncAt: null,
       observationOrder: 0n,
       checkpointObservationOrder: 0n,
+      ingestionLeaseToken: null,
+      ingestionLeaseExpiresAt: null,
       config: {},
       descriptor: null,
       createdAt: new Date("2026-01-01T00:00:00.000Z"),
@@ -426,7 +472,11 @@ describe("runIngestionPipeline — canonical corpus write failure", () => {
         Result.ok({ decisions: [decision], nextCursor: "cursor-2" }),
       );
 
-    const result = await runIngestionPipeline({ source, scopedDb });
+    const result = await runIngestionPipeline({
+      source,
+      sourceLease: testSourceLease(source),
+      scopedDb,
+    });
 
     expect(result.inserted).toBe(1);
     expect(result.s3UploadFailures).toBe(1);
@@ -461,6 +511,8 @@ describe("runIngestionPipeline — canonical corpus write failure", () => {
       lastSyncAt: null,
       observationOrder: 0n,
       checkpointObservationOrder: 0n,
+      ingestionLeaseToken: null,
+      ingestionLeaseExpiresAt: null,
       config: {},
       descriptor: null,
       createdAt: new Date("2026-01-01T00:00:00.000Z"),
@@ -472,7 +524,11 @@ describe("runIngestionPipeline — canonical corpus write failure", () => {
         Result.ok({ decisions: [decision], nextCursor: "cursor-2" }),
       );
 
-    const result = await runIngestionPipeline({ source, scopedDb });
+    const result = await runIngestionPipeline({
+      source,
+      sourceLease: testSourceLease(source),
+      scopedDb,
+    });
 
     expect(result).toMatchObject({
       inserted: 0,

@@ -363,6 +363,15 @@ if (!databaseUrl || !runPostgresTests) {
       await db
         .update(caseLawSources)
         .set({
+          syncCursor: heldCursor,
+          lastSyncAt: new Date("2026-07-31T13:02:00.500Z"),
+          checkpointObservationOrder: 98n,
+        })
+        .where(eq(caseLawSources.id, sourceId));
+
+      await db
+        .update(caseLawSources)
+        .set({
           syncCursor: "legacy-checkpoint-advanced",
           lastSyncAt: new Date("2026-07-31T13:02:01.000Z"),
           checkpointObservationOrder: 99n,

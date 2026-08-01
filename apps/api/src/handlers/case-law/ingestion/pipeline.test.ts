@@ -17,6 +17,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/pipeline";
 import { createSafeId } from "@/api/lib/branded-types";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
+import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 
 const concatInlineText = (inlines: Inline[]): string => {
   let out = "";
@@ -63,6 +64,16 @@ const astMetadata = {
 };
 
 const originalCzNsFetchPage = czNsAdapter.fetchPage;
+
+const testSourceLease = (
+  source: typeof caseLawSources.$inferSelect,
+): CaseLawSourceIngestionLease => ({
+  beforeDatabaseMark: async () => undefined,
+  beforeRemoteEffect: async (effect) => await effect(),
+  leaseToken: createSafeId<"caseLawSourceIngestionLease">(),
+  release: async () => undefined,
+  source,
+});
 
 afterEach(() => {
   czNsAdapter.fetchPage = originalCzNsFetchPage;
@@ -288,6 +299,8 @@ describe("runIngestionPipeline — database timeouts", () => {
       lastSyncAt: null,
       observationOrder: 0n,
       checkpointObservationOrder: 0n,
+      ingestionLeaseToken: null,
+      ingestionLeaseExpiresAt: null,
       config: {},
       descriptor: null,
       createdAt: new Date("2026-01-01T00:00:00.000Z"),
@@ -335,7 +348,11 @@ describe("runIngestionPipeline — database timeouts", () => {
       return await callback(tx as unknown as Transaction);
     };
 
-    const result = await runIngestionPipeline({ source, scopedDb });
+    const result = await runIngestionPipeline({
+      source,
+      sourceLease: testSourceLease(source),
+      scopedDb,
+    });
 
     expect(result.inserted).toBe(0);
     expect(result.skipped).toBe(0);
@@ -357,6 +374,8 @@ describe("runIngestionPipeline — empty-page cursor progress", () => {
       lastSyncAt: null,
       observationOrder: 0n,
       checkpointObservationOrder: 0n,
+      ingestionLeaseToken: null,
+      ingestionLeaseExpiresAt: null,
       config: {},
       descriptor: null,
       createdAt: new Date("2026-01-01T00:00:00.000Z"),
@@ -413,6 +432,7 @@ describe("runIngestionPipeline — empty-page cursor progress", () => {
 
     const result = await runIngestionPipeline({
       source,
+      sourceLease: testSourceLease(source),
       scopedDb,
       signal: controller.signal,
       maxPages: 1,

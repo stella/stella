@@ -116,6 +116,12 @@ describe("case-law corpus upload intents", () => {
     expect(redactionMigration).toContain(
       "CREATE TRIGGER case_law_index_jobs_legacy_redaction_tombstone",
     );
+    expect(redactionMigration).toContain(
+      "cannot restore a historically redacted case-law payload",
+    );
+    expect(redactionMigration).toContain(
+      `redaction_audit."operation" = 'redact'`,
+    );
     expect(redactionMigration).not.toContain("WITH redactions AS (");
     expect(redactionIndexMigration).toContain(
       'CREATE INDEX CONCURRENTLY "case_law_index_jobs_redaction_decision_idx"',

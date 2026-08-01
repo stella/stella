@@ -21,6 +21,7 @@ import {
   CORPUS_SOURCE_TYPE,
   INGESTION_CHECKPOINT_STATUS,
 } from "@/api/lib/corpus-ingestion-checkpoint";
+import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import {
   createSchemaPglite,
   installPgliteSchemaPrerequisites,
@@ -34,6 +35,7 @@ let scopedDb: ScopedDb;
 
 const caseLawSourceId = createSafeId<"caseLawSource">();
 const legislationSourceId = createSafeId<"legislationSource">();
+const ingestionLeaseToken = createSafeId<"caseLawSourceIngestionLease">();
 
 beforeAll(
   async () => {
@@ -76,6 +78,8 @@ beforeEach(async () => {
       syncCursor: null,
       observationOrder: 1n,
       checkpointObservationOrder: 0n,
+      ingestionLeaseToken,
+      ingestionLeaseExpiresAt: new Date("2099-01-01T00:00:00.000Z"),
     })
     .where(eq(caseLawSources.id, caseLawSourceId));
   await db
@@ -98,6 +102,7 @@ describe("advanceCorpusIngestionCheckpoint", () => {
       scopedDb,
       source: {
         id: caseLawSourceId,
+        leaseToken: ingestionLeaseToken,
         observationOrder: 1n,
         type: CORPUS_SOURCE_TYPE.CASE_LAW,
       },
@@ -140,6 +145,7 @@ describe("advanceCorpusIngestionCheckpoint", () => {
       scopedDb,
       source: {
         id: caseLawSourceId,
+        leaseToken: ingestionLeaseToken,
         observationOrder: 1n,
         type: CORPUS_SOURCE_TYPE.CASE_LAW,
       },
@@ -162,6 +168,7 @@ describe("advanceCorpusIngestionCheckpoint", () => {
         scopedDb,
         source: {
           id: caseLawSourceId,
+          leaseToken: ingestionLeaseToken,
           observationOrder: 1n,
           type: CORPUS_SOURCE_TYPE.CASE_LAW,
         },
@@ -172,6 +179,7 @@ describe("advanceCorpusIngestionCheckpoint", () => {
         scopedDb,
         source: {
           id: caseLawSourceId,
+          leaseToken: ingestionLeaseToken,
           observationOrder: 1n,
           type: CORPUS_SOURCE_TYPE.CASE_LAW,
         },
@@ -205,6 +213,7 @@ describe("advanceCorpusIngestionCheckpoint", () => {
       scopedDb,
       source: {
         id: caseLawSourceId,
+        leaseToken: ingestionLeaseToken,
         observationOrder: 1n,
         type: CORPUS_SOURCE_TYPE.CASE_LAW,
       },
@@ -216,6 +225,7 @@ describe("advanceCorpusIngestionCheckpoint", () => {
       scopedDb,
       source: {
         id: caseLawSourceId,
+        leaseToken: ingestionLeaseToken,
         observationOrder: 1n,
         type: CORPUS_SOURCE_TYPE.CASE_LAW,
       },
@@ -227,6 +237,69 @@ describe("advanceCorpusIngestionCheckpoint", () => {
     });
   });
 
+  test("holds a cursor behind the greatest observation token", async () => {
+    await db
+      .update(caseLawSources)
+      .set({
+        syncCursor: "page-3",
+        observationOrder: 3n,
+        checkpointObservationOrder: 3n,
+      })
+      .where(eq(caseLawSources.id, caseLawSourceId));
+
+    const delayedHold = await advanceCorpusIngestionCheckpoint({
+      expectedCursor: "page-3",
+      nextCursor: "page-3",
+      scopedDb,
+      source: {
+        id: caseLawSourceId,
+        leaseToken: ingestionLeaseToken,
+        observationOrder: 1n,
+        type: CORPUS_SOURCE_TYPE.CASE_LAW,
+      },
+    });
+    const delayedAdvance = await advanceCorpusIngestionCheckpoint({
+      expectedCursor: "page-3",
+      nextCursor: "page-4",
+      scopedDb,
+      source: {
+        id: caseLawSourceId,
+        leaseToken: ingestionLeaseToken,
+        observationOrder: 2n,
+        type: CORPUS_SOURCE_TYPE.CASE_LAW,
+      },
+    });
+    const currentAdvance = await advanceCorpusIngestionCheckpoint({
+      expectedCursor: "page-3",
+      nextCursor: "page-4",
+      scopedDb,
+      source: {
+        id: caseLawSourceId,
+        leaseToken: ingestionLeaseToken,
+        observationOrder: 3n,
+        type: CORPUS_SOURCE_TYPE.CASE_LAW,
+      },
+    });
+
+    expect(delayedHold.status).toBe(
+      INGESTION_CHECKPOINT_STATUS.ALREADY_CURRENT,
+    );
+    expect(delayedAdvance.status).toBe(INGESTION_CHECKPOINT_STATUS.SUPERSEDED);
+    expect(currentAdvance.status).toBe(INGESTION_CHECKPOINT_STATUS.ADVANCED);
+    expect(
+      (
+        await db
+          .select({
+            cursor: caseLawSources.syncCursor,
+            order: caseLawSources.checkpointObservationOrder,
+          })
+          .from(caseLawSources)
+          .where(eq(caseLawSources.id, caseLawSourceId))
+          .limit(1)
+      ).at(0),
+    ).toEqual({ cursor: "page-4", order: 3n });
+  });
+
   test("reports a missing source", async () => {
     const result = await advanceCorpusIngestionCheckpoint({
       expectedCursor: null,
@@ -234,6 +307,7 @@ describe("advanceCorpusIngestionCheckpoint", () => {
       scopedDb,
       source: {
         id: createSafeId<"caseLawSource">(),
+        leaseToken: ingestionLeaseToken,
         observationOrder: 1n,
         type: CORPUS_SOURCE_TYPE.CASE_LAW,
       },
@@ -242,5 +316,41 @@ describe("advanceCorpusIngestionCheckpoint", () => {
     expect(result).toEqual({
       status: INGESTION_CHECKPOINT_STATUS.MISSING,
     });
+  });
+});
+
+describe("case-law source ingestion lease", () => {
+  test("admits one fetch owner and reloads the cursor after handoff", async () => {
+    await db
+      .update(caseLawSources)
+      .set({ ingestionLeaseToken: null, ingestionLeaseExpiresAt: null })
+      .where(eq(caseLawSources.id, caseLawSourceId));
+
+    const first = await acquireCaseLawSourceIngestionLease({
+      scopedDb,
+      sourceId: caseLawSourceId,
+    });
+    if (!first) {
+      throw new Error("first source lease was not acquired");
+    }
+
+    const overlapping = await acquireCaseLawSourceIngestionLease({
+      scopedDb,
+      sourceId: caseLawSourceId,
+    });
+    expect(overlapping).toBeNull();
+
+    await db
+      .update(caseLawSources)
+      .set({ syncCursor: "page-after-first-owner" })
+      .where(eq(caseLawSources.id, caseLawSourceId));
+    await first.release();
+
+    const replacement = await acquireCaseLawSourceIngestionLease({
+      scopedDb,
+      sourceId: caseLawSourceId,
+    });
+    expect(replacement?.source.syncCursor).toBe("page-after-first-owner");
+    await replacement?.release();
   });
 });

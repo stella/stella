@@ -85,10 +85,10 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $function$
 BEGIN
-  IF NEW.sync_cursor IS DISTINCT FROM OLD.sync_cursor
-    AND NEW.checkpoint_observation_order <= OLD.checkpoint_observation_order
-  THEN
-    NEW.sync_cursor := OLD.sync_cursor;
+  IF NEW.checkpoint_observation_order <= OLD.checkpoint_observation_order THEN
+    IF NEW.sync_cursor IS DISTINCT FROM OLD.sync_cursor THEN
+      NEW.sync_cursor := OLD.sync_cursor;
+    END IF;
     NEW.last_sync_at := OLD.last_sync_at;
     NEW.checkpoint_observation_order := OLD.checkpoint_observation_order;
   END IF;
