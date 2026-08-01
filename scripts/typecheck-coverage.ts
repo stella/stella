@@ -287,14 +287,13 @@ const assertProxyTargets = (proxies: readonly OxcProjectProxy[]): void => {
 const hasDiscoverableAncestorConfig = (
   file: string,
   discoverableConfigFiles: Map<string, Set<string>>,
+  configExists: (config: string) => boolean,
 ): boolean => {
   let directory = path.posix.dirname(file);
   while (directory !== ".") {
-    const configFiles = discoverableConfigFiles.get(
-      `${directory}/${CONVENTIONAL_TSCONFIG}`,
-    );
-    if (configFiles) {
-      return configFiles.has(file);
+    const config = `${directory}/${CONVENTIONAL_TSCONFIG}`;
+    if (configExists(config)) {
+      return discoverableConfigFiles.get(config)?.has(file) ?? false;
     }
     directory = path.posix.dirname(directory);
   }
@@ -305,6 +304,7 @@ const findSourcesWithoutDiscoverableConfig = (
   repositoryFiles: Set<string>,
   covered: Set<string>,
   discoverableConfigFiles: Map<string, Set<string>>,
+  configExists: (config: string) => boolean,
 ): string[] =>
   [...repositoryFiles]
     .filter((file) =>
@@ -312,7 +312,12 @@ const findSourcesWithoutDiscoverableConfig = (
     )
     .filter((file) => covered.has(file))
     .filter(
-      (file) => !hasDiscoverableAncestorConfig(file, discoverableConfigFiles),
+      (file) =>
+        !hasDiscoverableAncestorConfig(
+          file,
+          discoverableConfigFiles,
+          configExists,
+        ),
     )
     .sort();
 
@@ -540,6 +545,7 @@ const selfTest = (): void => {
       "packages/missing/src/uncovered.ts",
     ]),
     discoverableConfigs,
+    (config) => discoverableConfigs.has(config),
   );
   assert(
     sourcesWithoutConfig.join(",") ===
@@ -556,10 +562,30 @@ const selfTest = (): void => {
         new Set(["apps/desktop/tests/rpc.golden.test.ts"]),
       ],
     ]),
+    (config) => config === "apps/desktop/tests/tsconfig.json",
   );
   assert(
     testProxySources.length === 0,
     "must accept a dedicated Oxc proxy for a co-located test project",
+  );
+
+  const sourceMaskedByUnregisteredConfig = findSourcesWithoutDiscoverableConfig(
+    new Set(["apps/example/scripts/unregistered.ts"]),
+    new Set(["apps/example/scripts/unregistered.ts"]),
+    new Map([
+      [
+        "apps/example/tsconfig.json",
+        new Set(["apps/example/scripts/unregistered.ts"]),
+      ],
+    ]),
+    (config) =>
+      config === "apps/example/scripts/tsconfig.json" ||
+      config === "apps/example/tsconfig.json",
+  );
+  assert(
+    sourceMaskedByUnregisteredConfig.join(",") ===
+      "apps/example/scripts/unregistered.ts",
+    "must reject a nearer physical tsconfig that is absent from CI project discovery",
   );
 
   const oxcFilesWithoutProject = findOxcFilesWithoutProject(
@@ -609,6 +635,7 @@ const main = (): void => {
     oxcFiles,
     covered,
     discoverableConfigs,
+    (config) => existsSync(path.join(REPO_ROOT, config)),
   );
   const oxcFilesWithoutProject = findOxcFilesWithoutProject(oxcFiles, covered);
   if (oxcFilesWithoutProject.length > 0) {
