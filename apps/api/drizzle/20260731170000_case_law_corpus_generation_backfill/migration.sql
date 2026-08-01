@@ -79,7 +79,7 @@ CREATE TABLE IF NOT EXISTS "case_law_corpus_index_source_reconciliations" (
     CHECK (("cursor_created_at" IS NULL) = ("cursor_id" IS NULL)),
   CONSTRAINT "case_law_corpus_index_source_reconciliations_upper_pair"
     CHECK (("upper_created_at" IS NULL) = ("upper_id" IS NULL)),
-  CONSTRAINT "case_law_corpus_index_source_reconciliations_cursor_within_upper"
+  CONSTRAINT "case_law_source_reconciliations_cursor_upper"
     CHECK (
       "cursor_created_at" IS NULL
       OR (

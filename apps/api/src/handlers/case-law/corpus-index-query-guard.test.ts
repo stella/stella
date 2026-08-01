@@ -91,10 +91,10 @@ test("generation checkpoint migration preserves replay and role invariants", asy
     '"case_law_corpus_index_source_reconciliations_upper_pair"',
   );
   expect(source).toContain(
-    'CONSTRAINT "case_law_corpus_index_source_reconciliations_cursor_within_upper"',
+    'CONSTRAINT "case_law_source_reconciliations_cursor_upper"',
   );
   expect(schemaSource).toContain(
-    '"case_law_corpus_index_source_reconciliations_cursor_within_upper"',
+    '"case_law_source_reconciliations_cursor_upper"',
   );
   expect(source).toContain(
     "AFTER INSERT OR UPDATE OF content_hash, indexed_hash, country",
