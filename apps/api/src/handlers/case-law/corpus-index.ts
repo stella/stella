@@ -717,25 +717,43 @@ export const acquireCaseLawCorpusGenerationLease = async ({
   };
 };
 
+export type CorpusIndexBackfillResult =
+  | {
+      indexed: number;
+      status: typeof BACKFILL_STATUS.ADVANCED;
+    }
+  | {
+      indexed: 0;
+      status: typeof BACKFILL_STATUS.BUSY | typeof BACKFILL_STATUS.COMPLETE;
+    };
+
 const backfillIncrementalCorpusIndex = async (
   scopedDb: Parameters<typeof indexer.backfill>[0],
   batchSize: number,
   generation: string,
   options: { readConcurrency?: number } = {},
-): Promise<number> => {
+): Promise<CorpusIndexBackfillResult> => {
   const lease = await acquireCaseLawCorpusGenerationLease({
     generation,
     scopedDb,
   });
   if (!lease) {
-    return 0;
+    return { indexed: 0, status: BACKFILL_STATUS.BUSY };
   }
   try {
-    return await indexer.backfillFenced(scopedDb, batchSize, generation, {
-      beforeDatabaseMark: lease.beforeDatabaseMark,
-      beforeRemoteEffect: lease.beforeRemoteEffect,
-      ...options,
-    });
+    const indexed = await indexer.backfillFenced(
+      scopedDb,
+      batchSize,
+      generation,
+      {
+        beforeDatabaseMark: lease.beforeDatabaseMark,
+        beforeRemoteEffect: lease.beforeRemoteEffect,
+        ...options,
+      },
+    );
+    return indexed > 0
+      ? { indexed, status: BACKFILL_STATUS.ADVANCED }
+      : { indexed: 0, status: BACKFILL_STATUS.COMPLETE };
   } finally {
     await lease.release();
   }
@@ -761,16 +779,6 @@ type SourceReconciliationCheckpoint = {
   revision: number;
   sourceId: SafeId<"caseLawSource">;
 };
-
-export type CorpusIndexBackfillResult =
-  | {
-      indexed: number;
-      status: typeof BACKFILL_STATUS.ADVANCED;
-    }
-  | {
-      indexed: 0;
-      status: typeof BACKFILL_STATUS.BUSY | typeof BACKFILL_STATUS.COMPLETE;
-    };
 
 type GenerationProjectionGuards = {
   beforeDatabaseMark: (tx: Transaction) => Promise<void>;
@@ -1600,14 +1608,11 @@ export const backfillCorpusIndex = async (
     );
     return result;
   }
-  const indexed = await backfillIncrementalCorpusIndex(
+  return await backfillIncrementalCorpusIndex(
     scopedDb,
     batchSize,
     generation,
     options,
   );
-  return indexed > 0
-    ? { indexed, status: BACKFILL_STATUS.ADVANCED }
-    : { indexed: 0, status: BACKFILL_STATUS.COMPLETE };
 };
 export const removeDecisionFromCorpusIndex = indexer.removeFenced;

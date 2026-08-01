@@ -17,6 +17,7 @@ import {
 } from "@/api/db/schema";
 import {
   acquireCaseLawCorpusGenerationLease,
+  backfillCorpusIndex,
   caseLawCorpusIndexAdapter,
   createCaseLawGenerationBackfill,
 } from "@/api/handlers/case-law/corpus-index";
@@ -228,6 +229,10 @@ test(
       removeProjection: ignoreProjectionRemoval,
     });
     expect(await backfill(scopedDb, 10, generation)).toEqual({
+      indexed: 0,
+      status: "busy",
+    });
+    expect(await backfillCorpusIndex(scopedDb, 10, generation)).toEqual({
       indexed: 0,
       status: "busy",
     });
