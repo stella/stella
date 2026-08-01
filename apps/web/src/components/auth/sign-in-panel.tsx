@@ -16,6 +16,7 @@ import { TextSeparator } from "@stll/ui/components/separator";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
+import { SecretInput } from "@/components/secret-input";
 import { env } from "@/env";
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -431,13 +432,12 @@ function PasswordSignInForm({
       <form.Field name="password">
         {(field) => (
           <Field name={field.name}>
-            <Input
+            <SecretInput
               autoComplete="current-password"
               onBlur={field.handleBlur}
               onChange={(e) => field.handleChange(e.target.value)}
               placeholder={t("auth.password")}
               size="lg"
-              type="password"
               value={field.state.value}
             />
             <FieldError />
@@ -554,13 +554,12 @@ function BootstrapSignUpForm({
         <form.Field name="password">
           {(field) => (
             <Field name={field.name}>
-              <Input
+              <SecretInput
                 autoComplete="new-password"
                 onBlur={field.handleBlur}
                 onChange={(e) => field.handleChange(e.target.value)}
                 placeholder={t("auth.password")}
                 size="lg"
-                type="password"
                 value={field.state.value}
               />
               <FieldError />
@@ -570,13 +569,12 @@ function BootstrapSignUpForm({
         <form.Field name="bootstrapToken">
           {(field) => (
             <Field name={field.name}>
-              <Input
+              <SecretInput
                 autoComplete="one-time-code"
                 onBlur={field.handleBlur}
                 onChange={(e) => field.handleChange(e.target.value)}
                 placeholder={t("auth.bootstrapToken")}
                 size="lg"
-                type="password"
                 value={field.state.value}
               />
               <FieldError />

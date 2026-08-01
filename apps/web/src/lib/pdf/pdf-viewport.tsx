@@ -9,9 +9,9 @@ import { useShallow } from "zustand/react/shallow";
 
 import { Button } from "@stll/ui/components/button";
 import { Field, FieldError, FieldLabel } from "@stll/ui/components/field";
-import { Input } from "@stll/ui/components/input";
 import { ScrollArea } from "@stll/ui/components/scroll-area";
 
+import { SecretInput } from "@/components/secret-input";
 import { useTheme } from "@/components/theme-provider";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePageVisibility } from "@/lib/pdf/hooks/use-page-visibility";
@@ -336,14 +336,13 @@ const PDFPasswordPrompt = ({
           <FieldLabel htmlFor={id}>
             {t("workspaces.pdf.passwordLabel")}
           </FieldLabel>
-          <Input
+          <SecretInput
             aria-invalid={incorrectPassword}
             autoComplete="off"
             id={id}
             onChange={(e) => {
               setValue(e.target.value);
             }}
-            type="password"
             value={value}
           />
           {incorrectPassword && (

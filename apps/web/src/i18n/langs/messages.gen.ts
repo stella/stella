@@ -887,6 +887,7 @@ type Messages = {
     "filter": "Filter";
     "formula": "Formula";
     "goBack": "Go back";
+    "hideSecretValue": "Hide secret value";
     "history": "History";
     "import": "Import";
     "invite": "Invite";
@@ -987,6 +988,7 @@ type Messages = {
     "showAll": "Show all";
     "showLess": "Show less";
     "showMore": "Show more";
+    "showSecretValue": "Show secret value";
     "signOut": "Sign out";
     "somethingWentWrong": "Something went wrong";
     "sort": "Sort";
