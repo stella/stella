@@ -72,6 +72,7 @@ export const runOnlineMigrations = async (
     await connection.execute("SET statement_timeout = '0'");
 
     for (const index of ONLINE_INDEXES) {
+      // oxlint-disable-next-line no-await-in-loop -- PostgreSQL permits only one concurrent index build per table; preserve deterministic order.
       await ensureIndexValid(connection, index);
     }
   } finally {
@@ -131,7 +132,7 @@ const ensureIndexValid = async (
   }
 };
 
-const POSTGRES_IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const POSTGRES_IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/u;
 
 const quoteIdentifier = (identifier: string): string => {
   if (!POSTGRES_IDENTIFIER.test(identifier)) {

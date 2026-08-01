@@ -125,28 +125,30 @@ describe("migration history invariant", () => {
       ],
     ] as const;
 
-    for (const [name, currentHash, priorHash] of supportedHistories) {
-      const actualHash = new Bun.CryptoHasher("sha256")
-        .update(
-          await Bun.file(
-            nodePath.join(MIGRATIONS_DIR, name, "migration.sql"),
-          ).bytes(),
-        )
-        .digest("hex");
-      expect(actualHash).toBe(currentHash);
-      expect(
-        findUnappliedMigrations({
-          appliedHashes: new Set([priorHash]),
-          localMigrations: [{ hash: currentHash, name }],
-        }),
-      ).toEqual([]);
-      expect(
-        findUnappliedMigrations({
-          appliedHashes: new Set([priorHash]),
-          localMigrations: [{ hash: `modified-${currentHash}`, name }],
-        }),
-      ).toEqual([{ hash: `modified-${currentHash}`, name }]);
-    }
+    await Promise.all(
+      supportedHistories.map(async ([name, currentHash, priorHash]) => {
+        const actualHash = new Bun.CryptoHasher("sha256")
+          .update(
+            await Bun.file(
+              nodePath.join(MIGRATIONS_DIR, name, "migration.sql"),
+            ).bytes(),
+          )
+          .digest("hex");
+        expect(actualHash).toBe(currentHash);
+        expect(
+          findUnappliedMigrations({
+            appliedHashes: new Set([priorHash]),
+            localMigrations: [{ hash: currentHash, name }],
+          }),
+        ).toEqual([]);
+        expect(
+          findUnappliedMigrations({
+            appliedHashes: new Set([priorHash]),
+            localMigrations: [{ hash: `modified-${currentHash}`, name }],
+          }),
+        ).toEqual([{ hash: `modified-${currentHash}`, name }]);
+      }),
+    );
   });
 
   test("reports the intended error when the migrations directory is absent", async () => {

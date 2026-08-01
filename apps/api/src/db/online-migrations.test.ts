@@ -54,9 +54,13 @@ describe("online migrations", () => {
       [CREDENTIAL_INDEX]: [undefined],
     });
 
-    await expect(runOnlineMigrations(harness.pool)).rejects.toThrow(
-      `Required migration index ${CREDENTIAL_INDEX} is missing`,
+    const rejection: unknown = await runOnlineMigrations(harness.pool).then(
+      () => null,
+      (error: unknown) => error,
     );
+    expect(rejection).toMatchObject({
+      message: `Required migration index ${CREDENTIAL_INDEX} is missing`,
+    });
     expect(harness.released()).toBe(true);
   });
 });
