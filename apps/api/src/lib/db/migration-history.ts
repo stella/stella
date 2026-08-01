@@ -174,6 +174,16 @@ const rewrittenMigrationHistories = {
       },
     ],
   },
+  // The schema effect is unchanged; the current file separates the bounded
+  // lock wait from the unbounded execution budget for metadata-only DDL.
+  "20260718120000_chat_thread_title_source_default": {
+    currentHash:
+      "73b6fdc0e031505b2f09a5819ad636c5687583cfff8668a2dfbb3483f8a28af5",
+    priorHashes: [
+      "eb0a41ec2f1c3baec7d0371fc9b380a3151ff793edb6e67fef974294582f7930",
+    ],
+    requiredIndexes: [],
+  },
   "20260719172000_user_created_at_index": {
     currentHash:
       "60e691372d1eaff6bab6009ed2bc88fff625836b50253203e065c125accdf164",
@@ -235,6 +245,16 @@ const rewrittenMigrationHistories = {
         tableName: "case_law_decisions",
       },
     ],
+  },
+  // The schema effect is unchanged; the current file separates the bounded
+  // lock wait from the unbounded execution budget for metadata-only DDL.
+  "20260731170000_case_law_corpus_generation_backfill": {
+    currentHash:
+      "a4c8015331dbb9db991059920cd24ac90fa06368b79035493aeba4badfccae85",
+    priorHashes: [
+      "6eeb473a0902a7a807133c5057c2b582c2d40f748705b36d967a75bec6df8a7b",
+    ],
+    requiredIndexes: [],
   },
 } as const satisfies Readonly<Record<string, RewrittenMigrationHistory>>;
 
