@@ -1,8 +1,11 @@
+import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
 
+import { LIMITS } from "@/api/lib/limits";
 import {
   DOCUMENT_TYPE_CLASSIFIER_ROLE,
   buildPropertyParts,
+  createPropertyBodySchema,
 } from "@/api/lib/properties/create-schema";
 
 describe("property creation schema", () => {
@@ -35,5 +38,28 @@ describe("property creation schema", () => {
       return;
     }
     expect(built.role).toBeNull();
+  });
+
+  test("rejects dependency arrays above the workspace property bound", () => {
+    const dependency = {
+      dependsOnPropertyId: Bun.randomUUIDv7(),
+      condition: null,
+    };
+    const body = {
+      name: "Bounded property",
+      contentType: "text",
+      dependencies: Array.from(
+        { length: LIMITS.propertiesCount },
+        () => dependency,
+      ),
+    };
+
+    expect(Value.Check(createPropertyBodySchema, body)).toBe(true);
+    expect(
+      Value.Check(createPropertyBodySchema, {
+        ...body,
+        dependencies: [...body.dependencies, dependency],
+      }),
+    ).toBe(false);
   });
 });

@@ -8,6 +8,7 @@ import {
 import type { PropertyContent, PropertyTool } from "@/api/db/schema-validators";
 import { tConditionNode } from "@/api/lib/conditions/contract";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
+import { LIMITS } from "@/api/lib/limits";
 import { serializeAITool } from "@/api/lib/markdown/ai-tool";
 
 type SelectOption = {
@@ -36,6 +37,7 @@ export const createPropertyBodySchema = t.Object({
         dependsOnPropertyId: tSafeId("property"),
         condition: t.Nullable(tConditionNode),
       }),
+      { maxItems: LIMITS.propertiesCount },
     ),
   ),
   options: t.Optional(t.Array(selectOptionSchema)),

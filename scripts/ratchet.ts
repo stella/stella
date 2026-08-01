@@ -455,7 +455,7 @@ const countLintSuppressions = (content: string): number => {
 };
 
 const REQUIRE_QUERY_LIMIT_DISABLE =
-  /(?:\/\/|\/\*)\s*(?:eslint|oxlint)-disable(?:-next-line|-line)?\b[^\n]*\brequire-query-limit\/require-query-limit\b/u;
+  /(?:\/\/|\/\*)\s*(?:eslint|oxlint)-disable(?:-next-line|-line)?\b(?:(?!--|\*\/)[^\n])*\brequire-query-limit\/require-query-limit\b/u;
 const LINT_DISABLE_WITHOUT_RULES =
   /(?:\/\/|\/\*)\s*(?:eslint|oxlint)-disable(?:-next-line|-line)?\s*(?:--|\*\/|$)/u;
 
@@ -1398,16 +1398,17 @@ const SELF_TEST_LINT_SUPPRESSIONS = `${LINT_SUPPRESSION_FIXTURE_LINES.join("\n")
 // Expected from THIS fixture: both linters' -next-line forms, the block-
 // comment form, and the bare `oxlint-disable` = 4. The string copy and the
 // prose comment are excluded. The raw-use-effect fixture contributes 3 more
-// directives, while the query-limit fixtures below contribute 4, so the
-// whole-repo expectation is 4 + 3 + 4.
+// directives, while the query-limit fixtures below contribute 5, so the
+// whole-repo expectation is 4 + 3 + 5.
 const EXPECTED_LINT_SUPPRESSIONS_OWN_FILE = 4;
-const EXPECTED_LINT_SUPPRESSIONS_TOTAL = 11;
+const EXPECTED_LINT_SUPPRESSIONS_TOTAL = 12;
 
 const REQUIRE_QUERY_LIMIT_SUPPRESSION_FIXTURE_LINES = [
   "// eslint-disable-next-line require-query-limit/require-query-limit -- fixed parent cardinality",
   "// oxlint-disable-next-line no-console, require-query-limit/require-query-limit -- reviewed",
   "// eslint-disable -- a bare disable applies to every rule",
   "// eslint-disable-next-line no-console -- another rule only",
+  "// eslint-disable-next-line no-console -- require-query-limit/require-query-limit remains enabled",
   "// require-query-limit/require-query-limit in prose is not a directive",
   'const doc = "// eslint-disable-next-line require-query-limit/require-query-limit";',
 ];
