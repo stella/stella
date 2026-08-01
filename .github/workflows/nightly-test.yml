@@ -231,7 +231,7 @@ jobs:
           exit 1
 
       - name: Install Playwright browsers
-        run: cd apps/web && bunx playwright install --with-deps chromium
+        uses: ./.github/actions/setup-playwright
 
       - name: Seed deterministic marketing content
         run: bun --filter @stll/api db:seed-dev

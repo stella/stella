@@ -11,7 +11,7 @@ fi
 
 for file in "$@"; do
   case "$file" in
-    .github/workflows/ci.yml|scripts/detect-e2e-changes.sh|bun.lock|package.json|patches/*)
+    .github/actions/setup-playwright/*|.github/workflows/ci.yml|scripts/detect-e2e-changes.sh|bun.lock|package.json|patches/*)
       echo true
       exit 0
       ;;

@@ -3,8 +3,20 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 const script = path.join(import.meta.dirname, "detect-e2e-changes.sh");
+const githubExpression = (value: string) => ["$", "{{ ", value, " }}"].join("");
 const workflow = readFileSync(
   path.join(import.meta.dirname, "../.github/workflows/ci.yml"),
+  "utf-8",
+);
+const nightlyWorkflow = readFileSync(
+  path.join(import.meta.dirname, "../.github/workflows/nightly-test.yml"),
+  "utf-8",
+);
+const playwrightSetup = readFileSync(
+  path.join(
+    import.meta.dirname,
+    "../.github/actions/setup-playwright/action.yml",
+  ),
   "utf-8",
 );
 
@@ -69,9 +81,13 @@ describe("detect-e2e-changes", () => {
   });
 
   test("runs both PR scopes when their orchestration changes", () => {
-    const files = [".github/workflows/ci.yml"];
-    expect(detects("core", files)).toBe("true");
-    expect(detects("landing", files)).toBe("true");
+    for (const file of [
+      ".github/workflows/ci.yml",
+      ".github/actions/setup-playwright/action.yml",
+    ]) {
+      expect(detects("core", [file])).toBe("true");
+      expect(detects("landing", [file])).toBe("true");
+    }
   });
 
   test("keeps production, Vite canary, and landing work parallel", () => {
@@ -95,5 +111,57 @@ describe("detect-e2e-changes", () => {
     ]) {
       expect(aggregate).toContain(requiredJob);
     }
+  });
+
+  test("keeps full code quality for manual sweeps and scopes pull requests", () => {
+    const codeQuality = workflowJob("code-quality");
+    expect(codeQuality).toContain(
+      `EVENT_NAME: ${githubExpression("github.event_name")}`,
+    );
+    expect(codeQuality).toContain(
+      'if [[ "$EVENT_NAME" == "workflow_dispatch" ]]',
+    );
+    expect(codeQuality).toContain("bun run code-check\n");
+    expect(codeQuality).toContain(
+      'bun run code-check:affected -- --base "origin/$BASE_REF"',
+    );
+  });
+
+  test("builds the production web artifact once per workflow run", () => {
+    const webBuild = workflowJob("web-build");
+    expect(webBuild).toContain("needs: [trust-check, ci-changes]");
+    expect(webBuild).toContain("Upload production E2E web build");
+    expect(webBuild).toContain("VITE_FEATURE_TIME_BILLING");
+
+    const production = workflowJob("e2e-production-shard");
+    expect(production).not.toContain("Build web for route checks");
+    expect(production).toContain("Wait for production web build");
+    expect(production).toContain("Download production web build");
+    expect(production).toContain("Validate production web build");
+    expect(production.indexOf("Install Playwright browsers")).toBeLessThan(
+      production.indexOf("Wait for production web build"),
+    );
+  });
+
+  test("shares a version-keyed Playwright browser cache across browser jobs", () => {
+    expect(
+      workflow.match(/uses: \.\/\.github\/actions\/setup-playwright/gu),
+    ).toHaveLength(3);
+    expect(nightlyWorkflow).toContain(
+      "uses: ./.github/actions/setup-playwright",
+    );
+    expect(playwrightSetup).toContain("bunx playwright --version");
+    expect(playwrightSetup).toContain("~/.cache/ms-playwright");
+    expect(playwrightSetup).toContain(
+      [
+        "playwright",
+        githubExpression("runner.os"),
+        githubExpression("runner.arch"),
+        githubExpression("steps.version.outputs.version"),
+      ].join("-"),
+    );
+    expect(playwrightSetup).toContain(
+      "actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae",
+    );
   });
 });
