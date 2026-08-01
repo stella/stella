@@ -56,7 +56,7 @@ export const concatenatedComposedWorkspaceSegment =
   "/workspaces/ws_" + workspaceUuid + "/entities/" + entityId;
 
 export const nestedTemplateConcatenation =
-  // oxlint-disable-next-line no-legacy-entity-route/no-legacy-entity-route, prefer-template -- regression case
+  // oxlint-disable-next-line no-legacy-entity-route/no-legacy-entity-route, no-useless-concat -- regression case
   `/workspaces/${workspaceId}` + `/entities/${entityId}`;
 
 export const currentDocumentRoute = "/workspaces/$workspaceId/$viewId/document";

@@ -464,6 +464,7 @@ describe("custom oxlint guardrails", () => {
     const legacyRouteSourceFiles = existsSync(legacyRouteDirectory)
       ? readdirSync(legacyRouteDirectory, { recursive: true }).filter(
           (entry) =>
+            typeof entry === "string" &&
             (entry.startsWith("$entityId.") ||
               entry.startsWith("$entityId/")) &&
             /\.[cm]?[jt]sx?$/u.test(entry),
