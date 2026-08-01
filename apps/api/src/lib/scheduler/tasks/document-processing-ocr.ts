@@ -49,12 +49,14 @@ export const dispatchDocumentOcrBatches = async ({
   let dispatched = 0;
   let retryAt: Date | null = null;
 
-  while (!signal.aborted && dispatched < MAX_DISPATCHED_RUNS_PER_TICK) {
+  const dispatchNextBatch = async (): Promise<void> => {
+    if (signal.aborted || dispatched >= MAX_DISPATCHED_RUNS_PER_TICK) {
+      return;
+    }
     const limit = Math.min(
       DISPATCH_BATCH_SIZE,
       MAX_DISPATCHED_RUNS_PER_TICK - dispatched,
     );
-    // oxlint-disable-next-line no-await-in-loop -- sequential bounded drain prevents an unbounded queue fan-out
     const batch = await dispatch({ limit });
     dispatched += batch.attempted;
     if (batch.retryAt && (!retryAt || batch.retryAt < retryAt)) {
@@ -62,9 +64,12 @@ export const dispatchDocumentOcrBatches = async ({
     }
 
     if (batch.attempted < limit) {
-      break;
+      return;
     }
-  }
+    return dispatchNextBatch();
+  };
+
+  await dispatchNextBatch();
 
   return {
     dispatched,
