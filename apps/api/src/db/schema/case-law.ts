@@ -701,6 +701,8 @@ export const caseLawCorpusIndexSourceReconciliations = p.pgTable(
     revision: p.integer().default(1).notNull(),
     cursorCreatedAt: timestamptz("cursor_created_at"),
     cursorId: safeUuid<"caseLawDecision">("cursor_id"),
+    upperCreatedAt: timestamptz("upper_created_at"),
+    upperId: safeUuid<"caseLawDecision">("upper_id"),
     updatedAt: timestamptz("updated_at").defaultNow().notNull(),
   },
   (t) => [
@@ -725,6 +727,14 @@ export const caseLawCorpusIndexSourceReconciliations = p.pgTable(
     p.check(
       "case_law_corpus_index_source_reconciliations_cursor_pair",
       sql`(${t.cursorCreatedAt} IS NULL) = (${t.cursorId} IS NULL)`,
+    ),
+    p.check(
+      "case_law_corpus_index_source_reconciliations_upper_pair",
+      sql`(${t.upperCreatedAt} IS NULL) = (${t.upperId} IS NULL)`,
+    ),
+    p.check(
+      "case_law_corpus_index_source_reconciliations_cursor_within_upper",
+      sql`${t.cursorCreatedAt} IS NULL OR (${t.upperCreatedAt} IS NOT NULL AND (${t.cursorCreatedAt}, ${t.cursorId}) <= (${t.upperCreatedAt}, ${t.upperId}))`,
     ),
     ...globalCaseLawPolicies(),
   ],

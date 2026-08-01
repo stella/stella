@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { Buffer } from "node:buffer";
 
 import type { Transaction } from "@/api/db/root";
@@ -213,7 +213,18 @@ export type FetchFulltext<TBrand extends SafeIdType> = (
 
 type SelectBatchArgs = { generation: string; limit: number };
 
-type GuardRemoteEffect = <T>(effect: () => Promise<T>) => Promise<T>;
+export type FencedRemoteEffect<T> = {
+  /** The remote operation; no database transaction may remain open here. */
+  effect: () => Promise<T>;
+  /**
+   * Durable compensation for a remote mutation which completed after its
+   * writer lease was lost. Required so a newly acquired writer cannot clear
+   * an older reservation and strand that older physical effect.
+   */
+  onLeaseLost: () => Promise<void>;
+};
+
+type GuardRemoteEffect = <T>(effect: FencedRemoteEffect<T>) => Promise<T>;
 type BeforeDatabaseMark = (tx: Transaction) => Promise<void>;
 type ReserveExternalAppend<
   TBrand extends SafeIdType,
@@ -222,6 +233,10 @@ type ReserveExternalAppend<
   tx: Transaction,
   args: { generation: string; rows: readonly TRow[] },
 ) => Promise<Set<SafeId<TBrand>>>;
+type RecoverRemoteEffectLeaseLoss<TBrand extends SafeIdType> = (args: {
+  entityIds: readonly SafeId<TBrand>[];
+  indexId: string;
+}) => Promise<void>;
 
 type BackfillSelectedRowsOptions<
   TBrand extends SafeIdType,
@@ -235,6 +250,7 @@ type BackfillSelectedRowsOptions<
       type: "fenced-incremental";
       beforeDatabaseMark: BeforeDatabaseMark;
       beforeRemoteEffect: GuardRemoteEffect;
+      recoverRemoteEffectLeaseLoss: RecoverRemoteEffectLeaseLoss<TBrand>;
       reserveExternalAppend: ReserveExternalAppend<TBrand, TRow>;
       readConcurrency?: number;
     }
@@ -242,6 +258,7 @@ type BackfillSelectedRowsOptions<
       type: "generation-rebuild";
       beforeDatabaseMark: BeforeDatabaseMark;
       beforeRemoteEffect: GuardRemoteEffect;
+      recoverRemoteEffectLeaseLoss: RecoverRemoteEffectLeaseLoss<TBrand>;
       reserveExternalAppend: ReserveExternalAppend<TBrand, TRow>;
       readConcurrency?: number;
     };
@@ -252,6 +269,7 @@ type GenerationBackfillRowsOptions<
 > = {
   beforeDatabaseMark: BeforeDatabaseMark;
   beforeRemoteEffect: GuardRemoteEffect;
+  recoverRemoteEffectLeaseLoss: RecoverRemoteEffectLeaseLoss<TBrand>;
   reserveExternalAppend: ReserveExternalAppend<TBrand, TRow>;
   readConcurrency?: number;
 };
@@ -265,18 +283,35 @@ type CorpusIndexMarkMode =
   | { type: "incremental" }
   | { generation: string; type: "generation-rebuild" };
 
+type IngestBatchWithGuardArgs = {
+  indexId: string;
+  ndjson: string;
+} & (
+  | {
+      beforeRemoteEffect: GuardRemoteEffect;
+      onLeaseLost: () => Promise<void>;
+    }
+  | {
+      beforeRemoteEffect?: undefined;
+      onLeaseLost?: undefined;
+    }
+);
+
 const ingestBatchWithGuard = async ({
   beforeRemoteEffect,
   indexId,
   ndjson,
-}: {
-  beforeRemoteEffect?: GuardRemoteEffect;
-  indexId: string;
-  ndjson: string;
-}): Promise<Result<void, CorpusIndexError>> => {
+  onLeaseLost,
+}: IngestBatchWithGuardArgs): Promise<Result<void, CorpusIndexError>> => {
   const effect = async () =>
     await getCorpusIndexClient().ingestBatch(indexId, ndjson);
-  return beforeRemoteEffect ? await beforeRemoteEffect(effect) : await effect();
+  if (beforeRemoteEffect === undefined) {
+    return await effect();
+  }
+  if (onLeaseLost === undefined) {
+    panic("fenced corpus ingest is missing lease-loss compensation");
+  }
+  return await beforeRemoteEffect({ effect, onLeaseLost });
 };
 
 /**
@@ -473,7 +508,11 @@ export const createCorpusIndexer = <
     const client = getCorpusIndexClient();
     const indexExists = async () => await client.indexExists(indexId);
     const exists = beforeRemoteEffect
-      ? await beforeRemoteEffect(indexExists)
+      ? await beforeRemoteEffect({
+          effect: indexExists,
+          // A probe has no physical mutation to compensate.
+          onLeaseLost: async () => await Promise.resolve(),
+        })
       : await indexExists();
     if (exists.isErr()) {
       return Result.err(exists.error);
@@ -482,7 +521,12 @@ export const createCorpusIndexer = <
       const createIndex = async () =>
         await client.createIndex(corpusIndexConfig(adapter.family, indexId));
       const created = beforeRemoteEffect
-        ? await beforeRemoteEffect(createIndex)
+        ? await beforeRemoteEffect({
+            effect: createIndex,
+            // An empty index is a safe fixed point; document writes carry
+            // explicit compensation below.
+            onLeaseLost: async () => await Promise.resolve(),
+          })
         : await createIndex();
       if (created.isErr()) {
         return Result.err(created.error);
@@ -631,27 +675,47 @@ export const createCorpusIndexer = <
    * stable Postgres id keeps erasure and re-index correct without that
    * bookkeeping.
    */
-  const removeWithOptions = async ({
-    beforeRemoteEffect,
-    entityId,
-    indexId,
-    operation,
-    scopedDb,
-  }: {
-    beforeRemoteEffect?: GuardRemoteEffect;
+  type RemoveWithOptionsArgs = {
     entityId: SafeId<TBrand>;
     indexId: string;
     operation: "delete" | "redact";
     scopedDb: ScopedDb;
-  }): Promise<Result<void, CorpusIndexError>> => {
+  } & (
+    | {
+        beforeRemoteEffect: GuardRemoteEffect;
+        onLeaseLost: () => Promise<void>;
+      }
+    | {
+        beforeRemoteEffect?: undefined;
+        onLeaseLost?: undefined;
+      }
+  );
+
+  const removeWithOptions = async ({
+    beforeRemoteEffect,
+    entityId,
+    indexId,
+    onLeaseLost,
+    operation,
+    scopedDb,
+  }: RemoveWithOptionsArgs): Promise<Result<void, CorpusIndexError>> => {
     const deleteByQuery = async () =>
       await getCorpusIndexClient().deleteByQuery(
         indexId,
         corpusDocumentDeleteQuery(entityId),
       );
-    const deleted = beforeRemoteEffect
-      ? await beforeRemoteEffect(deleteByQuery)
-      : await deleteByQuery();
+    let deleted: Awaited<ReturnType<typeof deleteByQuery>>;
+    if (beforeRemoteEffect === undefined) {
+      deleted = await deleteByQuery();
+    } else {
+      if (onLeaseLost === undefined) {
+        panic("fenced corpus delete is missing lease-loss compensation");
+      }
+      deleted = await beforeRemoteEffect({
+        effect: deleteByQuery,
+        onLeaseLost,
+      });
+    }
     // A retired generation is already at the requested fixed point. Treating
     // its missing index as a successful delete keeps cleanup idempotent and
     // avoids retrying an index that can no longer contain the document.
@@ -913,7 +977,14 @@ export const createCorpusIndexer = <
           const removed = await removeWithOptions({
             ...(options.type === "incremental"
               ? {}
-              : { beforeRemoteEffect: options.beforeRemoteEffect }),
+              : {
+                  beforeRemoteEffect: options.beforeRemoteEffect,
+                  onLeaseLost: async () =>
+                    await options.recoverRemoteEffectLeaseLoss({
+                      entityIds: [entry.id],
+                      indexId: entry.oldIndexId,
+                    }),
+                }),
             entityId: entry.id,
             indexId: entry.oldIndexId,
             operation: "delete",
@@ -943,7 +1014,14 @@ export const createCorpusIndexer = <
           const ingest = await ingestBatchWithGuard({
             ...(options.type === "incremental"
               ? {}
-              : { beforeRemoteEffect: options.beforeRemoteEffect }),
+              : {
+                  beforeRemoteEffect: options.beforeRemoteEffect,
+                  onLeaseLost: async () =>
+                    await options.recoverRemoteEffectLeaseLoss({
+                      entityIds: entries.map(({ row }) => row.id),
+                      indexId,
+                    }),
+                }),
             indexId,
             ndjson,
           });
@@ -1003,7 +1081,14 @@ export const createCorpusIndexer = <
             const removed = await removeWithOptions({
               ...(options.type === "incremental"
                 ? {}
-                : { beforeRemoteEffect: options.beforeRemoteEffect }),
+                : {
+                    beforeRemoteEffect: options.beforeRemoteEffect,
+                    onLeaseLost: async () =>
+                      await options.recoverRemoteEffectLeaseLoss({
+                        entityIds: [missedId],
+                        indexId,
+                      }),
+                  }),
               entityId: missedId,
               indexId,
               operation: "delete",

@@ -66,6 +66,8 @@ CREATE TABLE IF NOT EXISTS "case_law_corpus_index_source_reconciliations" (
   "revision" integer NOT NULL DEFAULT 1,
   "cursor_created_at" timestamptz,
   "cursor_id" uuid,
+  "upper_created_at" timestamptz,
+  "upper_id" uuid,
   "updated_at" timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT "case_law_corpus_index_source_reconciliations_pk"
     PRIMARY KEY ("generation", "source_id"),
@@ -74,7 +76,17 @@ CREATE TABLE IF NOT EXISTS "case_law_corpus_index_source_reconciliations" (
   CONSTRAINT "case_law_corpus_index_source_reconciliations_source_fk"
     FOREIGN KEY ("source_id") REFERENCES "case_law_sources"("id") ON DELETE CASCADE,
   CONSTRAINT "case_law_corpus_index_source_reconciliations_cursor_pair"
-    CHECK (("cursor_created_at" IS NULL) = ("cursor_id" IS NULL))
+    CHECK (("cursor_created_at" IS NULL) = ("cursor_id" IS NULL)),
+  CONSTRAINT "case_law_corpus_index_source_reconciliations_upper_pair"
+    CHECK (("upper_created_at" IS NULL) = ("upper_id" IS NULL)),
+  CONSTRAINT "case_law_corpus_index_source_reconciliations_cursor_within_upper"
+    CHECK (
+      "cursor_created_at" IS NULL
+      OR (
+        "upper_created_at" IS NOT NULL
+        AND ("cursor_created_at", "cursor_id") <= ("upper_created_at", "upper_id")
+      )
+    )
 );--> statement-breakpoint
 ALTER TABLE "case_law_corpus_index_source_reconciliations" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 DO $policy$
@@ -352,10 +364,20 @@ BEGIN
     revision,
     cursor_created_at,
     cursor_id,
+    upper_created_at,
+    upper_id,
     updated_at
   )
-  SELECT checkpoint.generation, NEW.id, 1, null, null, clock_timestamp()
+  SELECT checkpoint.generation, NEW.id, 1, null, null,
+    boundary.created_at, boundary.id, clock_timestamp()
   FROM case_law_corpus_index_backfills AS checkpoint
+  LEFT JOIN LATERAL (
+    SELECT decision.created_at, decision.id
+    FROM case_law_decisions AS decision
+    WHERE decision.source_id = NEW.id
+    ORDER BY decision.created_at DESC, decision.id DESC
+    LIMIT 1
+  ) AS boundary ON true
   WHERE EXISTS (
     SELECT 1
     FROM case_law_corpus_index_projections AS existing
@@ -373,6 +395,8 @@ BEGIN
   SET revision = case_law_corpus_index_source_reconciliations.revision + 1,
       cursor_created_at = null,
       cursor_id = null,
+      upper_created_at = EXCLUDED.upper_created_at,
+      upper_id = EXCLUDED.upper_id,
       updated_at = EXCLUDED.updated_at;
 
   RETURN NEW;

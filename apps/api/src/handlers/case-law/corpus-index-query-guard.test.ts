@@ -85,6 +85,18 @@ test("generation checkpoint migration preserves replay and role invariants", asy
     expect(schemaSource).toContain(`name: "${constraint}"`);
   }
   expect(source).toContain(
+    'CONSTRAINT "case_law_corpus_index_source_reconciliations_upper_pair"',
+  );
+  expect(schemaSource).toContain(
+    '"case_law_corpus_index_source_reconciliations_upper_pair"',
+  );
+  expect(source).toContain(
+    'CONSTRAINT "case_law_corpus_index_source_reconciliations_cursor_within_upper"',
+  );
+  expect(schemaSource).toContain(
+    '"case_law_corpus_index_source_reconciliations_cursor_within_upper"',
+  );
+  expect(source).toContain(
     "AFTER INSERT OR UPDATE OF content_hash, indexed_hash, country",
   );
   expect(source).toContain("AFTER UPDATE OF descriptor");
@@ -93,6 +105,12 @@ test("generation checkpoint migration preserves replay and role invariants", asy
   );
   expect(source).toContain("cursor_created_at = null");
   expect(source).toContain("cursor_id = null");
+  expect(source).toContain("upper_created_at = EXCLUDED.upper_created_at");
+  expect(source).toContain("upper_id = EXCLUDED.upper_id");
+  expect(source).toContain("LEFT JOIN LATERAL (");
+  expect(source).toContain(
+    "ORDER BY decision.created_at DESC, decision.id DESC",
+  );
   expect(
     source.match(
       /ON CONFLICT ON CONSTRAINT case_law_corpus_index_projections_pk DO UPDATE/gu,

@@ -283,10 +283,11 @@ describe("fenced serving-generation appends", () => {
         beforeDatabaseMark: async () => {
           events.push("mark-guard");
         },
-        beforeRemoteEffect: async (effect) => {
+        beforeRemoteEffect: async ({ effect }) => {
           events.push("remote-guard");
           return await effect();
         },
+        recoverRemoteEffectLeaseLoss: async () => await Promise.resolve(),
         reserveExternalAppend: async (_tx, { generation, rows }) => {
           events.push("reserved");
           expect(generation).toBe("case_law_v1");
@@ -478,10 +479,11 @@ describe("failed index jobs always reach the audit trail", () => {
         guardedMarks += 1;
         commitEvents.push("guard");
       },
-      beforeRemoteEffect: async (effect) => {
+      beforeRemoteEffect: async ({ effect }) => {
         guardedEffects += 1;
         return await effect();
       },
+      recoverRemoteEffectLeaseLoss: async () => await Promise.resolve(),
       reserveExternalAppend: async (_tx, { rows }) =>
         new Set(rows.map((selected) => selected.id)),
     });
@@ -522,10 +524,11 @@ describe("failed index jobs always reach the audit trail", () => {
           guardedMarks += 1;
           commitEvents.push("guard");
         },
-        beforeRemoteEffect: async (effect) => {
+        beforeRemoteEffect: async ({ effect }) => {
           guardedEffects += 1;
           return await effect();
         },
+        recoverRemoteEffectLeaseLoss: async () => await Promise.resolve(),
         reserveExternalAppend: async (_tx, { rows }) =>
           new Set(rows.map((selected) => selected.id)),
       }),

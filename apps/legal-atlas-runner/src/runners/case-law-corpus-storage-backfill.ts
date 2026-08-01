@@ -16,6 +16,7 @@ import {
   type TimestampCasToken,
   timestampMatchesCasToken,
 } from "@/api/lib/db/timestamp-cas";
+import { ConcurrentModificationError } from "@/api/lib/errors/tagged-errors";
 import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
 import { writeCorpusDocument } from "@/api/lib/legal-search/corpus-storage";
 import type {
@@ -467,13 +468,24 @@ const backfillCaseLawIndex = async (
         ? {}
         : { readConcurrency: bulk.indexReadConcurrency },
     );
-    if (result.status !== BACKFILL_STATUS.ADVANCED) {
-      break;
-    }
-
-    indexed += result.indexed;
-    if (result.indexed > 0) {
-      logInfo(`  case-law indexed=${indexed}`);
+    switch (result.status) {
+      case BACKFILL_STATUS.ADVANCED:
+        indexed += result.indexed;
+        if (result.indexed > 0) {
+          logInfo(`  case-law indexed=${indexed}`);
+        }
+        break;
+      case BACKFILL_STATUS.COMPLETE:
+        return { indexed };
+      case BACKFILL_STATUS.BUSY:
+        throw new ConcurrentModificationError({
+          message:
+            "Case-law corpus index backfill is already running for this generation; retry after the active writer finishes.",
+        });
+      default: {
+        const exhausted: never = result;
+        return exhausted;
+      }
     }
   }
 

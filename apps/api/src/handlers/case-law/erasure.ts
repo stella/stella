@@ -259,6 +259,11 @@ export const redactCaseLawDecision = async ({
                 beforeRemoteEffect: lease.beforeRemoteEffect,
                 entityId: decisionId,
                 indexId,
+                onLeaseLost: async () =>
+                  await lease.recoverRemoteEffectLeaseLoss({
+                    entityIds: [decisionId],
+                    indexId,
+                  }),
                 operation: "redact",
                 scopedDb,
               }),

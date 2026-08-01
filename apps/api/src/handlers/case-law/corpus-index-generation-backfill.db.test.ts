@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { pushSchema } from "drizzle-kit/api-postgres";
-import { and, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import * as authSchema from "@/api/db/auth-schema";
@@ -38,6 +38,9 @@ import {
 const allSchema = { ...schema, ...authSchema, ...rlsExports };
 const CREATED_AT = new Date("2026-07-30T12:00:00.000Z");
 const GENERATION = "case_law_v2";
+const noRemoteEffectCompensation = async (): Promise<void> => {
+  await Promise.resolve();
+};
 
 const publicSourceId = toSafeId<"caseLawSource">(
   "00000000-0000-4000-8000-000000000001",
@@ -189,9 +192,25 @@ const queueSourceReconciliation = async (
   generation: string,
   sourceId: SafeId<"caseLawSource">,
 ): Promise<void> => {
+  const boundary = (
+    await db
+      .select({
+        createdAt: caseLawDecisions.createdAt,
+        id: caseLawDecisions.id,
+      })
+      .from(caseLawDecisions)
+      .where(eq(caseLawDecisions.sourceId, sourceId))
+      .orderBy(desc(caseLawDecisions.createdAt), desc(caseLawDecisions.id))
+      .limit(1)
+  ).at(0);
   await db
     .insert(caseLawCorpusIndexSourceReconciliations)
-    .values({ generation, sourceId })
+    .values({
+      generation,
+      sourceId,
+      upperCreatedAt: boundary?.createdAt ?? null,
+      upperId: boundary?.id ?? null,
+    })
     .onConflictDoUpdate({
       target: [
         caseLawCorpusIndexSourceReconciliations.generation,
@@ -201,6 +220,8 @@ const queueSourceReconciliation = async (
         cursorCreatedAt: null,
         cursorId: null,
         revision: sql`${caseLawCorpusIndexSourceReconciliations.revision} + 1`,
+        upperCreatedAt: boundary?.createdAt ?? null,
+        upperId: boundary?.id ?? null,
       },
     });
 };
@@ -284,13 +305,16 @@ test("generation lease releases its transaction before a remote effect", async (
     return;
   }
 
-  await lease.beforeRemoteEffect(async () => {
-    expect(databaseCallbackActive).toBe(false);
-    const contender = await acquireCaseLawCorpusGenerationLease({
-      generation: "case_law_remote_effect_boundary",
-      scopedDb,
-    });
-    expect(contender).toBeNull();
+  await lease.beforeRemoteEffect({
+    effect: async () => {
+      expect(databaseCallbackActive).toBe(false);
+      const contender = await acquireCaseLawCorpusGenerationLease({
+        generation: "case_law_remote_effect_boundary",
+        scopedDb,
+      });
+      expect(contender).toBeNull();
+    },
+    onLeaseLost: noRemoteEffectCompensation,
   });
 
   await lease.release();
@@ -332,7 +356,10 @@ test(
     let lease = 0;
     const backfill = createCaseLawGenerationBackfill({
       backfillRows: async (runnerDb, rows, rebuildGeneration, options) => {
-        await options.beforeRemoteEffect(completeRemoteEffect);
+        await options.beforeRemoteEffect({
+          effect: completeRemoteEffect,
+          onLeaseLost: noRemoteEffectCompensation,
+        });
         sent.push(rows.map((row) => row.id));
         guardedPages += 1;
         await runnerDb(async (tx) => {
@@ -428,7 +455,10 @@ test(
 
       const backfill = createCaseLawGenerationBackfill({
         backfillRows: async (runnerDb, rows, rebuildGeneration, options) => {
-          await options.beforeRemoteEffect(completeRemoteEffect);
+          await options.beforeRemoteEffect({
+            effect: completeRemoteEffect,
+            onLeaseLost: noRemoteEffectCompensation,
+          });
           const row = rows.at(0);
           if (!row) {
             return 0;
@@ -558,7 +588,10 @@ test(
     const backfill = createCaseLawGenerationBackfill({
       backfillRows: async (runnerDb, rows, rebuildGeneration, options) => {
         invocation += 1;
-        await options.beforeRemoteEffect(completeRemoteEffect);
+        await options.beforeRemoteEffect({
+          effect: completeRemoteEffect,
+          onLeaseLost: noRemoteEffectCompensation,
+        });
         if (invocation === 2) {
           reconciliationStarted?.();
           await releaseReconciliationPromise;
@@ -638,7 +671,10 @@ test(
       },
       newLeaseToken: () => "00000000-0000-4000-8000-000000000080",
       removeProjection: async (runnerDb, { options, row }) => {
-        await options.beforeRemoteEffect(completeRemoteEffect);
+        await options.beforeRemoteEffect({
+          effect: completeRemoteEffect,
+          onLeaseLost: noRemoteEffectCompensation,
+        });
         if (row.generationIndexId !== null) {
           removed.push(row.generationIndexId);
         }
@@ -702,7 +738,10 @@ test(
       },
       newLeaseToken: () => "00000000-0000-4000-8000-000000000081",
       removeProjection: async (runnerDb, { options }) => {
-        await options.beforeRemoteEffect(completeRemoteEffect);
+        await options.beforeRemoteEffect({
+          effect: completeRemoteEffect,
+          onLeaseLost: noRemoteEffectCompensation,
+        });
         await runnerDb(async (tx) => {
           await options.beforeDatabaseMark(tx);
           await tx
@@ -748,7 +787,10 @@ test(
     });
     const backfill = createCaseLawGenerationBackfill({
       backfillRows: async (_scopedDb, _rows, _generation, options) => {
-        await options.beforeRemoteEffect(completeRemoteEffect);
+        await options.beforeRemoteEffect({
+          effect: completeRemoteEffect,
+          onLeaseLost: noRemoteEffectCompensation,
+        });
         firstPageStarted?.();
         await firstPageReleasePromise;
         throw new Error("search unavailable");
@@ -784,7 +826,10 @@ test(
 
     const incomplete = createCaseLawGenerationBackfill({
       backfillRows: async (_scopedDb, _rows, _generation, options) => {
-        await options.beforeRemoteEffect(completeRemoteEffect);
+        await options.beforeRemoteEffect({
+          effect: completeRemoteEffect,
+          onLeaseLost: noRemoteEffectCompensation,
+        });
         return 0;
       },
       newLeaseToken: () => "00000000-0000-4000-8000-000000000101",
@@ -812,7 +857,10 @@ test(
     const replayed: SafeId<"caseLawDecision">[][] = [];
     const retry = createCaseLawGenerationBackfill({
       backfillRows: async (_scopedDb, rows, _generation, options) => {
-        await options.beforeRemoteEffect(completeRemoteEffect);
+        await options.beforeRemoteEffect({
+          effect: completeRemoteEffect,
+          onLeaseLost: noRemoteEffectCompensation,
+        });
         replayed.push(rows.map((row) => row.id));
         return rows.length;
       },
@@ -835,7 +883,10 @@ test(
     let winningRemoteEffects = 0;
     const winner = createCaseLawGenerationBackfill({
       backfillRows: async (_scopedDb, rows, _generation, options) => {
-        await options.beforeRemoteEffect(completeRemoteEffect);
+        await options.beforeRemoteEffect({
+          effect: completeRemoteEffect,
+          onLeaseLost: noRemoteEffectCompensation,
+        });
         winningRemoteEffects += 1;
         return rows.length;
       },
@@ -856,7 +907,10 @@ test(
           .set({ leaseExpiresAt: new Date("2000-01-01T00:00:00.000Z") })
           .where(eq(caseLawCorpusIndexWriterLeases.generation, generation));
         winnerResult = await winner(scopedDb, 1, generation);
-        await options.beforeRemoteEffect(completeRemoteEffect);
+        await options.beforeRemoteEffect({
+          effect: completeRemoteEffect,
+          onLeaseLost: noRemoteEffectCompensation,
+        });
         staleRemoteEffects += 1;
         return rows.length;
       },
@@ -885,15 +939,58 @@ test(
 );
 
 test(
-  "an owner that expires after ingest cannot commit the database mark",
+  "a remote effect that outlives its lease cannot expose a successful result",
   async () => {
     const generation = "case_law_v2_mark_fence";
+    const staleDecisionId = toSafeId<"caseLawDecision">(
+      "00000000-0000-4000-8000-000000000010",
+    );
+    const staleIndexId = corpusIndexId(generation, "CZE");
+    const successorIndexId = corpusIndexId(generation, "SVK");
+    await db.insert(caseLawDecisions).values({
+      caseNumber: "stale fence",
+      contentHash: "stale",
+      country: "CZE",
+      court: "Test court",
+      createdAt: CREATED_AT,
+      decisionDate: "2026-01-01",
+      fulltext: "stale text",
+      id: staleDecisionId,
+      language: "cs",
+      languageGroupKey: "stale-fence",
+      slug: "stale-fence",
+      sourceId: publicSourceId,
+    });
     let winningRemoteEffects = 0;
     const winner = createCaseLawGenerationBackfill({
       backfillRows: async (runnerDb, rows, _generation, options) => {
-        await options.beforeRemoteEffect(completeRemoteEffect);
+        await options.beforeRemoteEffect({
+          effect: completeRemoteEffect,
+          onLeaseLost: async () =>
+            await options.recoverRemoteEffectLeaseLoss({
+              entityIds: rows.map(({ id }) => id),
+              indexId: successorIndexId,
+            }),
+        });
         winningRemoteEffects += 1;
-        await runnerDb(options.beforeDatabaseMark);
+        await runnerDb(async (tx) => {
+          await options.beforeDatabaseMark(tx);
+          await tx
+            .update(caseLawCorpusIndexProjections)
+            .set({
+              indexId: successorIndexId,
+              indexedHash: "stale",
+              pendingAction: null,
+              pendingHash: null,
+              pendingIndexIds: [],
+            })
+            .where(
+              and(
+                eq(caseLawCorpusIndexProjections.generation, generation),
+                eq(caseLawCorpusIndexProjections.decisionId, staleDecisionId),
+              ),
+            );
+        });
         return rows.length;
       },
       newLeaseToken: () => "00000000-0000-4000-8000-000000000401",
@@ -905,17 +1002,39 @@ test(
     let winnerResult: Awaited<ReturnType<typeof winner>> | undefined;
     const stale = createCaseLawGenerationBackfill({
       backfillRows: async (runnerDb, rows, _generation, options) => {
-        await options.beforeRemoteEffect(completeRemoteEffect);
-        staleRemoteEffects += 1;
-        await db
-          .update(caseLawCorpusIndexBackfills)
-          .set({ leaseExpiresAt: new Date("2000-01-01T00:00:00.000Z") })
-          .where(eq(caseLawCorpusIndexBackfills.generation, generation));
-        await db
-          .update(caseLawCorpusIndexWriterLeases)
-          .set({ leaseExpiresAt: new Date("2000-01-01T00:00:00.000Z") })
-          .where(eq(caseLawCorpusIndexWriterLeases.generation, generation));
-        winnerResult = await winner(scopedDb, 1, generation);
+        await runnerDb(async (tx) => {
+          await options.beforeDatabaseMark(tx);
+          await tx.insert(caseLawCorpusIndexProjections).values({
+            decisionId: staleDecisionId,
+            generation,
+            pendingAction: "index",
+            pendingHash: "stale",
+            pendingIndexIds: [staleIndexId],
+          });
+        });
+        await options.beforeRemoteEffect({
+          effect: async () => {
+            staleRemoteEffects += 1;
+            await db
+              .update(caseLawCorpusIndexBackfills)
+              .set({ leaseExpiresAt: new Date("2000-01-01T00:00:00.000Z") })
+              .where(eq(caseLawCorpusIndexBackfills.generation, generation));
+            await db
+              .update(caseLawCorpusIndexWriterLeases)
+              .set({ leaseExpiresAt: new Date("2000-01-01T00:00:00.000Z") })
+              .where(eq(caseLawCorpusIndexWriterLeases.generation, generation));
+            await db
+              .update(caseLawDecisions)
+              .set({ country: "SVK", indexedHash: null })
+              .where(eq(caseLawDecisions.id, staleDecisionId));
+            winnerResult = await winner(scopedDb, 1, generation);
+          },
+          onLeaseLost: async () =>
+            await options.recoverRemoteEffectLeaseLoss({
+              entityIds: rows.map(({ id }) => id),
+              indexId: staleIndexId,
+            }),
+        });
         await runnerDb(options.beforeDatabaseMark);
         staleDatabaseMarks += 1;
         return rows.length;
@@ -934,13 +1053,40 @@ test(
     expect(winningRemoteEffects).toBe(1);
     expect(staleRemoteEffects).toBe(1);
     expect(staleDatabaseMarks).toBe(0);
+    const recoveredProjection = (
+      await db
+        .select({
+          indexId: caseLawCorpusIndexProjections.indexId,
+          pendingAction: caseLawCorpusIndexProjections.pendingAction,
+          pendingHash: caseLawCorpusIndexProjections.pendingHash,
+          pendingIndexIds: caseLawCorpusIndexProjections.pendingIndexIds,
+        })
+        .from(caseLawCorpusIndexProjections)
+        .where(
+          and(
+            eq(caseLawCorpusIndexProjections.generation, generation),
+            eq(caseLawCorpusIndexProjections.decisionId, staleDecisionId),
+          ),
+        )
+    ).at(0);
+    expect(recoveredProjection).toMatchObject({
+      indexId: successorIndexId,
+      pendingAction: "index",
+      pendingHash: "stale",
+    });
+    expect(recoveredProjection?.pendingIndexIds).toEqual(
+      expect.arrayContaining([staleIndexId, successorIndexId]),
+    );
     expect(await readCheckpoint(generation)).toMatchObject({
       cursorCreatedAt: CREATED_AT,
-      cursorId: publicFirstId,
+      cursorId: staleDecisionId,
       leaseExpiresAt: null,
       leaseToken: null,
       status: "running",
     });
+    await db
+      .delete(caseLawDecisions)
+      .where(eq(caseLawDecisions.id, staleDecisionId));
   },
   { timeout: 30_000 },
 );
@@ -1016,7 +1162,10 @@ test(
     const sent: SafeId<"caseLawDecision">[] = [];
     const backfill = createCaseLawGenerationBackfill({
       backfillRows: async (_scopedDb, rows, _generation, options) => {
-        await options.beforeRemoteEffect(completeRemoteEffect);
+        await options.beforeRemoteEffect({
+          effect: completeRemoteEffect,
+          onLeaseLost: noRemoteEffectCompensation,
+        });
         sent.push(...rows.map(({ id }) => id));
         return rows.length;
       },
@@ -1149,7 +1298,10 @@ test(
     const removed: SafeId<"caseLawDecision">[] = [];
     const backfill = createCaseLawGenerationBackfill({
       backfillRows: async (runnerDb, rows, rebuildGeneration, options) => {
-        await options.beforeRemoteEffect(completeRemoteEffect);
+        await options.beforeRemoteEffect({
+          effect: completeRemoteEffect,
+          onLeaseLost: noRemoteEffectCompensation,
+        });
         indexed.push(...rows.map(({ id }) => id));
         const row = rows.at(0);
         if (!row) {
@@ -1173,7 +1325,10 @@ test(
       },
       newLeaseToken: () => "00000000-0000-4000-8000-000000000900",
       removeProjection: async (runnerDb, { options, row }) => {
-        await options.beforeRemoteEffect(completeRemoteEffect);
+        await options.beforeRemoteEffect({
+          effect: completeRemoteEffect,
+          onLeaseLost: noRemoteEffectCompensation,
+        });
         removed.push(row.id);
         await runnerDb(async (tx) => {
           await options.beforeDatabaseMark(tx);
@@ -1244,6 +1399,103 @@ test(
           ),
       ).toHaveLength(0);
     } finally {
+      await db
+        .update(caseLawSources)
+        .set({
+          descriptor: {
+            allowsDerivedAi: false,
+            allowsRedistribution: false,
+            attribution: null,
+            license: "restricted",
+          },
+        })
+        .where(eq(caseLawSources.id, restrictedSourceId));
+      await db
+        .delete(caseLawCorpusIndexBackfills)
+        .where(eq(caseLawCorpusIndexBackfills.generation, generation));
+    }
+  },
+  { timeout: 30_000 },
+);
+
+test(
+  "source reconciliation drains its creation watermark despite later inserts",
+  async () => {
+    const generation = "case_law_v2_source_watermark";
+    const lateDecisionId = toSafeId<"caseLawDecision">(
+      "00000000-0000-4000-8000-000000000015",
+    );
+    const indexed: SafeId<"caseLawDecision">[] = [];
+    const backfill = createCaseLawGenerationBackfill({
+      backfillRows: async (_runnerDb, rows, _generation, options) => {
+        await options.beforeRemoteEffect({
+          effect: completeRemoteEffect,
+          onLeaseLost: noRemoteEffectCompensation,
+        });
+        indexed.push(...rows.map(({ id }) => id));
+        return rows.length;
+      },
+      newLeaseToken: () => "00000000-0000-4000-8000-000000000901",
+      removeProjection: async () => {
+        await Promise.resolve();
+      },
+    });
+
+    await db.insert(caseLawCorpusIndexBackfills).values({
+      generation,
+      snapshotAt: await nextBackfillSnapshotAt(),
+      status: "complete",
+    });
+    try {
+      await db
+        .update(caseLawSources)
+        .set({
+          descriptor: {
+            allowsDerivedAi: true,
+            allowsRedistribution: true,
+            attribution: null,
+            license: "public-domain",
+          },
+        })
+        .where(eq(caseLawSources.id, restrictedSourceId));
+      await queueSourceReconciliation(generation, restrictedSourceId);
+
+      await db.insert(caseLawDecisions).values({
+        caseNumber: "5 T 5/2026",
+        contentHash: "late",
+        country: "CZE",
+        court: "Test court",
+        createdAt: new Date("2026-07-30T12:00:01.000Z"),
+        decisionDate: "2026-01-01",
+        fulltext: "late text",
+        id: lateDecisionId,
+        language: "cs",
+        languageGroupKey: "late",
+        slug: "late",
+        sourceId: restrictedSourceId,
+      });
+
+      expect(await backfill(scopedDb, 1, generation)).toEqual({
+        indexed: 1,
+        status: "advanced",
+      });
+      expect(await backfill(scopedDb, 1, generation)).toEqual({
+        indexed: 0,
+        status: "advanced",
+      });
+      expect(indexed).toEqual([restrictedId]);
+      expect(
+        await db
+          .select()
+          .from(caseLawCorpusIndexSourceReconciliations)
+          .where(
+            eq(caseLawCorpusIndexSourceReconciliations.generation, generation),
+          ),
+      ).toHaveLength(0);
+    } finally {
+      await db
+        .delete(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, lateDecisionId));
       await db
         .update(caseLawSources)
         .set({
