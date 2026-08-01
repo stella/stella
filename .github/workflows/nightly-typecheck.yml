@@ -32,6 +32,6 @@ jobs:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Full typecheck (no --affected, no turbo cache)
-        run: bun run typecheck
+        run: bun run typecheck && bun run typecheck:repo
         env:
           TURBO_FORCE: "true"

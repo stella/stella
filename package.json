@@ -20,6 +20,7 @@
     "typegen": "turbo run typegen",
     "typecheck": "turbo run typecheck",
     "typecheck:repo": "bun packages/scripts/src/tsc-native.ts --noEmit -p tsconfig.scripts.json && bun packages/scripts/src/tsc-native.ts --noEmit -p tsconfig.tooling.json && bun packages/scripts/src/tsc-native.ts --noEmit -p tsconfig.oxlint-plugins.json",
+    "code-check": "bash scripts/lint-oxlint-fixtures.sh && bun --cwd apps/landing typecheck && bun apps/landing/scripts/check-logical-properties.ts && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware --type-check --ignore-pattern apps/web/start-runtime.js apps packages && bun --bun oxlint -c oxlint.config.ts --deny-warnings apps/web/start-runtime.js && bun run typecheck:repo",
     "secrets:check:staged": "bash scripts/check-staged-secrets.sh",
     "security:audit": "bun scripts/dependency-audit.ts --check",
     "security:audit:report": "bun scripts/dependency-audit.ts",

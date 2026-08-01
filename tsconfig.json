@@ -1,3 +1,4 @@
 {
-  "extends": "@stll/typescript-config/base.json"
+  "extends": "@stll/typescript-config/base.json",
+  "files": []
 }

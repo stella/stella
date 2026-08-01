@@ -82,17 +82,16 @@
             "name: CI Checks",
             "name: Policy evidence",
             "name: Format",
-            "name: Typecheck",
+            "name: Code quality",
             "name: Test"
           ]
         },
         {
           "path": "scripts/verify.sh",
           "contains": [
-            "run_step \"Lint\"",
             "run_step \"Policy evidence\"",
             "run_step \"Format\"",
-            "run_step \"Typecheck\"",
+            "run_step \"Code quality\"",
             "run_step \"Test\""
           ]
         }

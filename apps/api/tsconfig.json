@@ -26,5 +26,5 @@
     "jsx": "react-jsx",
     "types": ["bun"]
   },
-  "include": ["src", "../../types"]
+  "include": ["src", "drizzle.config.ts", "../../types"]
 }

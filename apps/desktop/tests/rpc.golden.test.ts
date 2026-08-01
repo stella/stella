@@ -12,7 +12,7 @@ import {
   type OpenDocxResponse,
   type SessionSnapshot,
   type TrustedSelfHostConnection,
-} from "./rpc";
+} from "../src/shared/rpc";
 
 // Golden-fixture contract for the desktop bridge RPC surface.
 //
@@ -38,7 +38,7 @@ import {
 // same files via serde, so a change on either side that is not mirrored
 // in the fixtures fails one of the two suites.
 
-const FIXTURE_DIR = path.join(import.meta.dir, "../../fixtures/rpc");
+const FIXTURE_DIR = path.join(import.meta.dir, "../fixtures/rpc");
 
 const readFixture = (name: string): unknown =>
   JSON.parse(readFileSync(path.join(FIXTURE_DIR, name), "utf-8"));

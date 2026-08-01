@@ -202,7 +202,7 @@ jobs:
       needs.trust-check.outputs.trusted == 'true'
       || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    # 25m, matching lint/typecheck-baseline: this job's own "Test" step
+    # 25m, matching code-quality/typecheck-baseline: this job's own "Test" step
     # duration scales with however many packages `turbo --affected` marks
     # (any PR touching multiple large packages' test suites at once runs
     # them with --concurrency=2 on a standard runner, not in isolation).
@@ -576,7 +576,7 @@ jobs:
         if: github.event_name == 'pull_request'
         run: bash scripts/check-bridge-version.sh
 
-  lint:
+  code-quality:
     needs: [trust-check, ci-changes]
     if: >-
       needs.ci-changes.outputs.package_checks_required == 'true'
@@ -599,66 +599,6 @@ jobs:
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version-file: "package.json"
-
-      - name: Turbo remote cache
-        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
-
-      - name: Install dependencies
-        run: bash scripts/bun-ci-retry.sh --ignore-scripts
-        env:
-          # .npmrc references NPM_TOKEN, but PR installs must not expose
-          # the real npm token to dependency lifecycle scripts.
-          NPM_TOKEN: ""
-
-      - name: Compute affected flag
-        id: affected
-        env:
-          BASE_REF: ${{ github.base_ref || 'main' }}
-          EVENT_NAME: ${{ github.event_name }}
-        run: |
-          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
-            echo "flag=" >> "$GITHUB_OUTPUT"
-          else
-            echo "flag=--affected" >> "$GITHUB_OUTPUT"
-            echo "TURBO_SCM_BASE=origin/$BASE_REF" >> "$GITHUB_ENV"
-          fi
-
-      - name: Lint
-        env:
-          AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
-        run: |
-          args=()
-          [[ -z "$AFFECTED_FLAG" ]] || args+=("$AFFECTED_FLAG")
-          # Type-aware API and web linting together can exhaust the hosted
-          # runner. Serialize packages so lint failures remain deterministic.
-          bun run lint -- "${args[@]}" --concurrency=1
-
-  typecheck:
-    needs: [trust-check, ci-changes]
-    if: >-
-      needs.ci-changes.outputs.package_checks_required == 'true'
-      && (needs.trust-check.outputs.trusted == 'true'
-          || github.event_name == 'workflow_dispatch')
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    permissions:
-      contents: read
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-          submodules: true
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version-file: "package.json"
-
-      - name: Turbo remote cache
-        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
 
       - name: Install dependencies
         run: bash scripts/bun-ci-retry.sh --ignore-scripts
@@ -682,36 +622,18 @@ jobs:
           bun scripts/typecheck-coverage.ts --self-test
           bun scripts/typecheck-coverage.ts
 
-      - name: Compute affected flag
-        id: affected
+      - name: Code quality
+        run: bun run code-check
+
+      - name: Result consumption
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
-            echo "flag=" >> "$GITHUB_OUTPUT"
-          else
-            echo "flag=--affected" >> "$GITHUB_OUTPUT"
-            echo "TURBO_SCM_BASE=origin/$BASE_REF" >> "$GITHUB_ENV"
-          fi
-
-      - name: Typecheck
-        env:
-          AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
-        run: |
-          args=()
-          [[ -z "$AFFECTED_FLAG" ]] || args+=("$AFFECTED_FLAG")
-          bun run typecheck -- "${args[@]}"
-          bun run typecheck:repo
-
-      - name: Result consumption
-        env:
-          AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
-        run: |
-          if [[ -z "$AFFECTED_FLAG" ]]; then
             bun run check:result-consumption -- --all
           else
-            bun run check:result-consumption -- --base "$TURBO_SCM_BASE"
+            bun run check:result-consumption -- --base "origin/$BASE_REF"
           fi
 
   # Typecheck-cost baseline guard. What silently rots is the compiler's
@@ -769,7 +691,7 @@ jobs:
           bun scripts/typecheck-baseline.ts --check
 
   # Vite web build. Same rationale as landing-build below: the
-  # required lint, typecheck, and test checks don't exercise the
+  # required code-quality and test checks don't exercise the
   # bundler, so worker bundling / wasm-loader / plugin issues
   # surface only at deploy time. Run `vite build` on every PR
   # that could plausibly affect the web output so this class of
@@ -952,8 +874,8 @@ jobs:
         if: steps.changed.outputs.run == 'true'
         run: bun --filter @stll/mobile build
 
-  # Astro landing build. The required checks run lint, typecheck,
-  # and test, but no `astro build`, so plugin/runtime
+  # Astro landing build. The required checks run code quality and tests,
+  # but no `astro build`, so plugin/runtime
   # incompatibilities surface only at deploy time. Catch those
   # here on every PR that could plausibly affect the landing
   # output.
@@ -1022,7 +944,7 @@ jobs:
   # (Postgres, MinIO, Valkey, Gotenberg) plus the API and web
   # dev server, then runs the E2E specs under
   # apps/web/e2e/. Catches integration regressions that
-  # lint/typecheck/unit tests miss (auth, routing, upload flow,
+  # code-quality/unit tests miss (auth, routing, upload flow,
   # document rendering). Finishes with the landing suite against a
   # built `astro preview`, which is the only place bundler-only
   # island regressions are visible.
@@ -1666,8 +1588,7 @@ jobs:
         trust-check,
         changeset,
         ci-checks,
-        lint,
-        typecheck,
+        code-quality,
         typecheck-baseline,
         web-build,
         mobile-build,
@@ -1693,13 +1614,12 @@ jobs:
           E2E_RESULT: ${{ needs.e2e.result }}
           EVENT: ${{ github.event_name }}
           LANDING_RESULT: ${{ needs.landing-build.result }}
-          LINT_RESULT: ${{ needs.lint.result }}
+          CODE_QUALITY_RESULT: ${{ needs.code-quality.result }}
           MOBILE_RESULT: ${{ needs.mobile-build.result }}
           OCR_IMAGE_RESULT: ${{ needs.ocr-image.result }}
           TRUSTED: ${{ needs.trust-check.outputs.trusted }}
           TRUST_RESULT: ${{ needs.trust-check.result }}
           TYPECHECK_BASELINE_RESULT: ${{ needs.typecheck-baseline.result }}
-          TYPECHECK_RESULT: ${{ needs.typecheck.result }}
           WEB_RESULT: ${{ needs.web-build.result }}
           WINDOWS_SCRIPTS_RESULT: ${{ needs.windows-scripts.result }}
         run: |
@@ -1713,8 +1633,7 @@ jobs:
 
           if [[ "$EVENT" == "workflow_dispatch" ]]; then
             if [[ "$CI_RESULT" == "failure" || "$CI_RESULT" == "cancelled" \
-                  || "$LINT_RESULT" == "failure" || "$LINT_RESULT" == "cancelled" \
-                  || "$TYPECHECK_RESULT" == "failure" || "$TYPECHECK_RESULT" == "cancelled" \
+                  || "$CODE_QUALITY_RESULT" == "failure" || "$CODE_QUALITY_RESULT" == "cancelled" \
                   || "$TYPECHECK_BASELINE_RESULT" == "failure" || "$TYPECHECK_BASELINE_RESULT" == "cancelled" \
                   || "$WEB_RESULT" == "failure" || "$WEB_RESULT" == "cancelled" \
                   || "$MOBILE_RESULT" == "failure" || "$MOBILE_RESULT" == "cancelled" \
@@ -1739,12 +1658,12 @@ jobs:
 
           # "cancelled" means cancel-in-progress replaced this
           # run with a newer one; the newer run is authoritative.
-          if [[ "$CI_RESULT" == "cancelled" || "$LINT_RESULT" == "cancelled" || "$TYPECHECK_RESULT" == "cancelled" || "$TYPECHECK_BASELINE_RESULT" == "cancelled" || "$WEB_RESULT" == "cancelled" || "$MOBILE_RESULT" == "cancelled" || "$LANDING_RESULT" == "cancelled" || "$E2E_RESULT" == "cancelled" || "$API_IMAGE_DEPS_RESULT" == "cancelled" || "$OCR_IMAGE_RESULT" == "cancelled" || "$WINDOWS_SCRIPTS_RESULT" == "cancelled" || "$CI_CHANGES_RESULT" == "cancelled" || "$CHANGESET_RESULT" == "cancelled" || "$DESKTOP_CLIPPY_RESULT" == "cancelled" ]]; then
+          if [[ "$CI_RESULT" == "cancelled" || "$CODE_QUALITY_RESULT" == "cancelled" || "$TYPECHECK_BASELINE_RESULT" == "cancelled" || "$WEB_RESULT" == "cancelled" || "$MOBILE_RESULT" == "cancelled" || "$LANDING_RESULT" == "cancelled" || "$E2E_RESULT" == "cancelled" || "$API_IMAGE_DEPS_RESULT" == "cancelled" || "$OCR_IMAGE_RESULT" == "cancelled" || "$WINDOWS_SCRIPTS_RESULT" == "cancelled" || "$CI_CHANGES_RESULT" == "cancelled" || "$CHANGESET_RESULT" == "cancelled" || "$DESKTOP_CLIPPY_RESULT" == "cancelled" ]]; then
             echo "CI run was superseded by a newer run (cancel-in-progress). Passing."
             exit 0
           fi
 
-          if [[ "$CI_RESULT" == "failure" || "$LINT_RESULT" == "failure" || "$TYPECHECK_RESULT" == "failure" || "$TYPECHECK_BASELINE_RESULT" == "failure" || "$WEB_RESULT" == "failure" || "$MOBILE_RESULT" == "failure" || "$LANDING_RESULT" == "failure" || "$E2E_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "failure" || "$OCR_IMAGE_RESULT" == "failure" || "$WINDOWS_SCRIPTS_RESULT" == "failure" || "$CI_CHANGES_RESULT" == "failure" || "$CHANGESET_RESULT" == "failure" || "$DESKTOP_CLIPPY_RESULT" == "failure" ]]; then
+          if [[ "$CI_RESULT" == "failure" || "$CODE_QUALITY_RESULT" == "failure" || "$TYPECHECK_BASELINE_RESULT" == "failure" || "$WEB_RESULT" == "failure" || "$MOBILE_RESULT" == "failure" || "$LANDING_RESULT" == "failure" || "$E2E_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "failure" || "$OCR_IMAGE_RESULT" == "failure" || "$WINDOWS_SCRIPTS_RESULT" == "failure" || "$CI_CHANGES_RESULT" == "failure" || "$CHANGESET_RESULT" == "failure" || "$DESKTOP_CLIPPY_RESULT" == "failure" ]]; then
             echo "::error::CI checks failed."
             exit 1
           fi

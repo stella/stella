@@ -52,16 +52,15 @@ The `ci.yml` workflow runs on every PR and produces a single
 `ci-result` status check that gates merging. The pipeline
 includes:
 
-| Check              | Tool                      | Purpose                                |
-| ------------------ | ------------------------- | -------------------------------------- |
-| Dependency install | `bun ci`                  | Verify lockfile integrity              |
-| i18n sync          | `bun run i18n:check`      | Ensure translation keys are consistent |
-| Lint               | oxlint (ultracite preset) | Code quality and security rules        |
-| Custom lint rules  | oxlint JS plugins         | Semantic tokens, RTL, ownership IDs    |
-| Format             | oxfmt                     | Consistent code formatting             |
-| Type check         | TypeScript native preview | Type safety                            |
-| Tests              | Bun test runner           | Functional correctness                 |
-| Policy evidence    | Repository guard          | Policy-to-implementation drift         |
+| Check              | Tool                 | Purpose                                |
+| ------------------ | -------------------- | -------------------------------------- |
+| Dependency install | `bun ci`             | Verify lockfile integrity              |
+| i18n sync          | `bun run i18n:check` | Ensure translation keys are consistent |
+| Code quality       | oxlint + tsgolint    | Lint rules and TypeScript diagnostics  |
+| Custom lint rules  | oxlint JS plugins    | Semantic tokens, RTL, ownership IDs    |
+| Format             | oxfmt                | Consistent code formatting             |
+| Tests              | Bun test runner      | Functional correctness                 |
+| Policy evidence    | Repository guard     | Policy-to-implementation drift         |
 
 All checks must pass. The `ci-result` aggregation job
 (`if: always()`) ensures the gate is never accidentally
