@@ -13,6 +13,10 @@ const CONCURRENT_UNIQUE_CREATE =
   /\bCREATE\s+UNIQUE\s+INDEX\s+CONCURRENTLY(?<idempotent>\s+IF\s+NOT\s+EXISTS)?\s+"(?<name>[^"]+)"/giu;
 const CONCURRENT_DROP =
   /\bDROP\s+INDEX\s+CONCURRENTLY\s+IF\s+EXISTS\s+"([^"]+)"/giu;
+const TYPE_CHANGE_SAFETY_TOKEN =
+  /\bSET\s+(?:LOCAL\s+)?(?:statement|lock)_timeout\s*=\s*(?:'[^']*'|[^\s;]+)|\bALTER\s+TABLE\b[^;]*?\bALTER\s+COLUMN\b[^;]*?\bSET\s+DATA\s+TYPE\b/giu;
+const BOUNDED_LOCK_TIMEOUT =
+  /^SET\s+(?:LOCAL\s+)?lock_timeout\s*=\s*(?!'0'$|0$).+$/iu;
 
 const collectUnsafeConcurrentIndexes = async (): Promise<string[]> => {
   const violations: string[] = [];
@@ -103,8 +107,66 @@ const collectUnsafeConcurrentIndexes = async (): Promise<string[]> => {
   return violations.sort();
 };
 
+const collectUnsafeTypeChanges = async (): Promise<string[]> => {
+  const violations: string[] = [];
+  const migrationFiles = new Bun.Glob("20*/migration.sql");
+
+  for await (const relativePath of migrationFiles.scan({
+    cwd: MIGRATIONS_DIR,
+  })) {
+    const source = await Bun.file(
+      nodePath.join(MIGRATIONS_DIR, relativePath),
+    ).text();
+    const sqlWithoutLineComments = source
+      .split("\n")
+      .filter((line) => !line.trimStart().startsWith("--"))
+      .join("\n");
+    let hasBoundedLockTimeout = false;
+    let hasUnboundedStatementTimeout = false;
+    let sawTypeChange = false;
+
+    for (const match of sqlWithoutLineComments.matchAll(
+      TYPE_CHANGE_SAFETY_TOKEN,
+    )) {
+      const token = match[0].replaceAll(/\s+/gu, " ").trim();
+      if (/^SET\s/iu.test(token)) {
+        if (/\block_timeout\b/iu.test(token)) {
+          hasBoundedLockTimeout = BOUNDED_LOCK_TIMEOUT.test(token);
+        } else {
+          hasUnboundedStatementTimeout = UNBOUNDED_TIMEOUT.test(token);
+        }
+        continue;
+      }
+
+      sawTypeChange = true;
+      if (!hasBoundedLockTimeout) {
+        violations.push(
+          `${relativePath}: type change has an unbounded lock wait`,
+        );
+      }
+      if (!hasUnboundedStatementTimeout) {
+        violations.push(
+          `${relativePath}: type change has a bounded execution timeout`,
+        );
+      }
+    }
+
+    if (sawTypeChange && hasUnboundedStatementTimeout) {
+      violations.push(`${relativePath}: statement timeout is not restored`);
+    }
+  }
+
+  return violations.sort();
+};
+
 describe("concurrent index migration safety", () => {
   test("enforces bounded-lock, unbounded-build, and validity-aware retries", async () => {
     expect(await collectUnsafeConcurrentIndexes()).toEqual([]);
+  });
+});
+
+describe("lock-sensitive migration DDL", () => {
+  test("bounds lock waits without interrupting acquired type changes", async () => {
+    expect(await collectUnsafeTypeChanges()).toEqual([]);
   });
 });
