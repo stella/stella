@@ -49,7 +49,7 @@ import {
   ensureRouteInfiniteQueryData,
   ensureRouteQueryData,
 } from "@/lib/react-query";
-import { workspacesOptions } from "@/lib/workspaces/queries";
+import { workspacesRouteOptions } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import type {
   MyWorkItem,
@@ -68,7 +68,7 @@ export const Route = createFileRoute("/_protected/todos/")({
       ),
       ensureRouteQueryData(
         context.queryClient,
-        workspacesOptions(context.user.activeOrganizationId),
+        workspacesRouteOptions(context.user.activeOrganizationId),
       ),
     ]);
   },
@@ -162,7 +162,7 @@ function MyTodosPage() {
     isLoading,
   } = useInfiniteQuery(myWorkOptions(queue, asOf));
   const { data: workspaces } = useQuery(
-    workspacesOptions(activeOrganizationId),
+    workspacesRouteOptions(activeOrganizationId),
   );
 
   const tasks = data ? data.pages.flatMap((page) => page.items) : [];
