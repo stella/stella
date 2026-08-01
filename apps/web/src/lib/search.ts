@@ -295,12 +295,11 @@ export const resolveRecentFilePreviewFieldId = ({
   filePropertyId,
   mimeType,
 }: ResolveRecentFilePreviewFieldIdOptions): string | null => {
-  const matchesFile = ({ content }: RecentFilePreviewCandidate) =>
-    content.type === "file" &&
-    (mimeType === null || content.mimeType === mimeType);
+  const isFile = ({ content }: RecentFilePreviewCandidate) =>
+    content.type === "file";
   const exactField = fileFieldId
     ? fields.find(
-        (candidate) => candidate.id === fileFieldId && matchesFile(candidate),
+        (candidate) => candidate.id === fileFieldId && isFile(candidate),
       )
     : undefined;
   if (exactField) {
@@ -309,7 +308,7 @@ export const resolveRecentFilePreviewFieldId = ({
   const replacementField = filePropertyId
     ? fields.find(
         (candidate) =>
-          candidate.propertyId === filePropertyId && matchesFile(candidate),
+          candidate.propertyId === filePropertyId && isFile(candidate),
       )
     : undefined;
   if (replacementField) {
@@ -318,7 +317,13 @@ export const resolveRecentFilePreviewFieldId = ({
   if (fileFieldId || filePropertyId) {
     return null;
   }
-  return fields.find(matchesFile)?.id ?? null;
+  return (
+    fields.find(
+      (candidate) =>
+        isFile(candidate) &&
+        (mimeType === null || candidate.content.mimeType === mimeType),
+    )?.id ?? null
+  );
 };
 
 /**

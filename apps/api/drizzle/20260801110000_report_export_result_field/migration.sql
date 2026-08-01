@@ -25,6 +25,30 @@ SET "result_field_id" = (
 WHERE "report_export"."result_entity_id" IS NOT NULL
   AND "report_export"."result_field_id" IS NULL;
 --> statement-breakpoint
+-- Drizzle wraps migrations in a transaction, but this referencing-side index
+-- must not block writes while the report history grows. A cancelled concurrent
+-- build leaves an INVALID index, so retry by dropping this migration's index
+-- before recreating it rather than relying on IF NOT EXISTS.
+-- squawk-ignore transaction-nesting
+COMMIT;
+--> statement-breakpoint
+SET statement_timeout = '0';
+--> statement-breakpoint
+-- stella-migration-safety: reviewed destructive-change - drops only this
+-- migration's index if a cancelled concurrent build left it invalid; no table
+-- or column data is removed.
+DROP INDEX CONCURRENTLY IF EXISTS "report_exports_result_field_idx";
+--> statement-breakpoint
+-- squawk-ignore prefer-robust-stmts
+CREATE INDEX CONCURRENTLY "report_exports_result_field_idx"
+  ON "report_exports" ("result_field_id");
+--> statement-breakpoint
+-- squawk-ignore transaction-nesting, ban-uncommitted-transaction
+BEGIN;
+SET lock_timeout = '1s';
+--> statement-breakpoint
+SET statement_timeout = '5s';
+--> statement-breakpoint
 DO $$
 BEGIN
   IF NOT EXISTS (

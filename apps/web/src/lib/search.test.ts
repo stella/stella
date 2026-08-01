@@ -261,7 +261,11 @@ describe("search preview targets", () => {
         propertyId: "property_1",
       },
       {
-        content: { mimeType: "application/pdf", type: "file" },
+        content: {
+          mimeType:
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          type: "file",
+        },
         id: "field_2",
         propertyId: "property_2",
       },

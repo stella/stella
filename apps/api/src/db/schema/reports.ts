@@ -118,6 +118,7 @@ export const reportExports = p.pgTable(
     p
       .index("report_exports_workspace_requester_created_idx")
       .on(table.workspaceId, table.requestedBy, table.createdAt, table.id),
+    p.index("report_exports_result_field_idx").on(table.resultFieldId),
     p
       .index("report_exports_pending_notification_idx")
       .on(table.createdAt, table.id)

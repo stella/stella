@@ -13,14 +13,19 @@
 
 import { isStringLiteral } from "./utils.ts";
 
-const LEGACY_ENTITY_ROUTE = "/workspaces/$workspaceId/entities/$entityId";
 const TEMPLATE_PREFIX = "/workspaces/";
 const TEMPLATE_MIDDLE = "/entities/";
+const LEGACY_ROUTE_SUFFIX = /^[/?#]/u;
+const LEGACY_ENTITY_ROUTE_LITERAL =
+  /^\/workspaces\/[^/?#]+\/entities\/[^/?#]+(?:[/?#]|$)/u;
 
 type AstNode = Record<string, unknown> & { type: string };
 
 type RuleContext = {
-  report: (descriptor: { node: unknown; messageId: "legacyEntityRoute" }) => void;
+  report: (descriptor: {
+    node: unknown;
+    messageId: "legacyEntityRoute";
+  }) => void;
 };
 
 const isAstNode = (value: unknown): value is AstNode =>
@@ -29,10 +34,7 @@ const isAstNode = (value: unknown): value is AstNode =>
   "type" in value &&
   typeof (value as { type: unknown }).type === "string";
 
-const templateQuasiText = (
-  template: AstNode,
-  index: number,
-): string | null => {
+const templateQuasiText = (template: AstNode, index: number): string | null => {
   const quasis = template.quasis;
   if (!Array.isArray(quasis)) {
     return null;
@@ -51,7 +53,7 @@ const templateQuasiText = (
 
 const isLegacyEntityRouteConstruction = (node: unknown): boolean => {
   if (isStringLiteral(node)) {
-    return node.value === LEGACY_ENTITY_ROUTE;
+    return LEGACY_ENTITY_ROUTE_LITERAL.test(node.value);
   }
   if (!isAstNode(node) || node.type !== "TemplateLiteral") {
     return false;
@@ -61,13 +63,16 @@ const isLegacyEntityRouteConstruction = (node: unknown): boolean => {
     return false;
   }
   if (expressions.length === 0) {
-    return templateQuasiText(node, 0) === LEGACY_ENTITY_ROUTE;
+    const value = templateQuasiText(node, 0);
+    return value !== null && LEGACY_ENTITY_ROUTE_LITERAL.test(value);
   }
+  const suffix = templateQuasiText(node, 2);
   return (
-    expressions.length === 2 &&
+    expressions.length >= 2 &&
     templateQuasiText(node, 0) === TEMPLATE_PREFIX &&
     templateQuasiText(node, 1) === TEMPLATE_MIDDLE &&
-    templateQuasiText(node, 2) === ""
+    suffix !== null &&
+    (suffix === "" || LEGACY_ROUTE_SUFFIX.test(suffix))
   );
 };
 
