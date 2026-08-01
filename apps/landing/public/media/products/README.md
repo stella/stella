@@ -183,5 +183,6 @@ bun run marketing:verify-current -- \
 
 Use `--capture workspace,review` to limit the attestation. The command updates
 only selected stale manifest entries and binds the review to a hash of their
-exact watched source tree. Any later relevant code change invalidates it. A
-new recording replaces the entry and clears its manual verification.
+exact watched source tree, MP4, and poster. Any later relevant code or media
+change invalidates it. A new recording replaces the entry and clears its
+manual verification.

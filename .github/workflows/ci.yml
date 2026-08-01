@@ -529,6 +529,10 @@ jobs:
         if: needs.ci-changes.outputs.package_checks_required == 'true'
         run: bun test packages/property-testing/src/convention.test.ts
 
+      - name: Test marketing recording verification guard
+        if: needs.ci-changes.outputs.package_checks_required == 'true'
+        run: bun test scripts/check-marketing-recordings.test.ts
+
       # Self-test the bridge-version guard so a regression in the
       # script itself is caught immediately, not on the next desktop
       # bridge change. Always runs (no `if:` gate) — it's seconds

@@ -6,6 +6,7 @@ import { captureDefinitions } from "../apps/web/e2e/marketing/captures";
 import {
   judgeEntry,
   manualVerificationMatches,
+  recordingArtifactsHash,
   watchedPathsHashAtHead,
 } from "./check-marketing-recordings";
 import {
@@ -17,23 +18,44 @@ const definition =
   captureDefinitions.at(0) ?? panic("expected a marketing capture definition");
 
 describe("marketing recording freshness", () => {
-  test("binds manual verification to the exact watched source tree", () => {
+  test("binds manual verification to the exact reviewed source and media", () => {
     const watchedPathsHash = watchedPathsHashAtHead(definition.watchedPaths);
 
     expect(
-      manualVerificationMatches(
-        { reason: "Reviewed for a maintenance release", watchedPathsHash },
-        [...definition.watchedPaths].reverse(),
-      ),
+      manualVerificationMatches({
+        captureId: definition.captureId,
+        theme: "light",
+        verification: {
+          artifactsHash: recordingArtifactsHash(definition.captureId, "light"),
+          reason: "Reviewed for a maintenance release",
+          watchedPathsHash,
+        },
+        watchedPaths: [...definition.watchedPaths].reverse(),
+      }),
     ).toBe(true);
     expect(
-      manualVerificationMatches(
-        {
+      manualVerificationMatches({
+        captureId: definition.captureId,
+        theme: "light",
+        verification: {
+          artifactsHash: recordingArtifactsHash(definition.captureId, "light"),
           reason: "Reviewed for a maintenance release",
           watchedPathsHash: "0".repeat(64),
         },
-        definition.watchedPaths,
-      ),
+        watchedPaths: definition.watchedPaths,
+      }),
+    ).toBe(false);
+    expect(
+      manualVerificationMatches({
+        captureId: definition.captureId,
+        theme: "light",
+        verification: {
+          artifactsHash: "0".repeat(64),
+          reason: "Reviewed for a maintenance release",
+          watchedPathsHash,
+        },
+        watchedPaths: definition.watchedPaths,
+      }),
     ).toBe(false);
   });
 
@@ -45,6 +67,7 @@ describe("marketing recording freshness", () => {
       captureId: definition.captureId,
       dpr: definition.dpr,
       manualVerification: {
+        artifactsHash: recordingArtifactsHash(definition.captureId, "light"),
         reason: "Reviewed for a maintenance release",
         watchedPathsHash: watchedPathsHashAtHead(definition.watchedPaths),
       },
@@ -69,6 +92,7 @@ describe("marketing recording freshness", () => {
       captureId: definition.captureId,
       dpr: definition.dpr,
       manualVerification: {
+        artifactsHash: recordingArtifactsHash(definition.captureId, "light"),
         reason: "Reviewed for a maintenance release",
         watchedPathsHash: watchedPathsHashAtHead(definition.watchedPaths),
       },

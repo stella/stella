@@ -27,6 +27,7 @@ const ROOT_DIR = nodePath.resolve(import.meta.dirname, "..");
 const STRICT = process.argv.includes("--strict");
 
 export type ManualRecordingVerification = {
+  artifactsHash: string;
   reason: string;
   watchedPathsHash: string;
 };
@@ -64,6 +65,8 @@ const isManualVerification = (
   value["reason"].trim() === value["reason"] &&
   value["reason"].length >= 12 &&
   value["reason"].length <= 240 &&
+  typeof value["artifactsHash"] === "string" &&
+  SHA_256_PATTERN.test(value["artifactsHash"]) &&
   typeof value["watchedPathsHash"] === "string" &&
   SHA_256_PATTERN.test(value["watchedPathsHash"]);
 
@@ -123,14 +126,45 @@ export const watchedPathsHashAtHead = (
     .digest("hex");
 };
 
-export const manualVerificationMatches = (
-  verification: ManualRecordingVerification | undefined,
-  watchedPaths: readonly string[],
-): boolean => {
+const recordingArtifactPaths = (captureId: string, theme: CaptureTheme) => {
+  const base = `apps/landing/public/media/products/story-${captureId}${
+    theme === "dark" ? "-dark" : ""
+  }`;
+  return [`${base}.mp4`, `${base}-poster.jpg`] as const;
+};
+
+export const recordingArtifactsHash = (
+  captureId: string,
+  theme: CaptureTheme,
+): string => {
+  const hasher = new Bun.CryptoHasher("sha256");
+  for (const path of recordingArtifactPaths(captureId, theme)) {
+    hasher.update(`${path}\0`);
+    hasher.update(readFileSync(nodePath.join(ROOT_DIR, path)));
+  }
+  return hasher.digest("hex");
+};
+
+type ManualVerificationMatchOptions = {
+  captureId: string;
+  theme: CaptureTheme;
+  verification: ManualRecordingVerification | undefined;
+  watchedPaths: readonly string[];
+};
+
+export const manualVerificationMatches = ({
+  captureId,
+  theme,
+  verification,
+  watchedPaths,
+}: ManualVerificationMatchOptions): boolean => {
   if (!verification) {
     return false;
   }
-  return verification.watchedPathsHash === watchedPathsHashAtHead(watchedPaths);
+  return (
+    verification.watchedPathsHash === watchedPathsHashAtHead(watchedPaths) &&
+    verification.artifactsHash === recordingArtifactsHash(captureId, theme)
+  );
 };
 
 const isKnownCommit = (commit: string): boolean => {
@@ -211,7 +245,14 @@ export const judgeEntry = (
       entry.recordedAtCommit,
       watchedPaths,
     );
-    if (manualVerificationMatches(entry.manualVerification, watchedPaths)) {
+    if (
+      manualVerificationMatches({
+        captureId: entry.captureId,
+        theme: entry.theme,
+        verification: entry.manualVerification,
+        watchedPaths,
+      })
+    ) {
       basis = "manual-verification";
     } else if (changedPaths.length === 0) {
       basis = "recording";

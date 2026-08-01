@@ -17,6 +17,7 @@ import {
   computeVerdicts,
   judgeEntry,
   readManifestEntries,
+  recordingArtifactsHash,
   watchedPathsHashAtHead,
 } from "./check-marketing-recordings";
 
@@ -217,6 +218,7 @@ const main = () => {
     return {
       ...entry,
       manualVerification: {
+        artifactsHash: recordingArtifactsHash(entry.captureId, entry.theme),
         reason: options.reason,
         watchedPathsHash: watchedPathsHashAtHead(definition.watchedPaths),
       },
