@@ -606,6 +606,10 @@ const BACKFILL_STATUS = {
 
 const BACKFILL_LEASE_MS = 30 * 60 * 1000;
 
+const completeRemoteEffect = async (): Promise<void> => {
+  await Promise.resolve();
+};
+
 export type CaseLawCorpusGenerationLease = GenerationProjectionGuards & {
   release: () => Promise<void>;
 };
@@ -1147,7 +1151,7 @@ export const createCaseLawGenerationBackfill =
           leaseToken,
           status,
         });
-        await guards.beforeRemoteEffect(() => Promise.resolve());
+        await guards.beforeRemoteEffect(completeRemoteEffect);
         const sourceCheckpoint = await selectSourceReconciliationCheckpoint(
           scopedDb,
           generation,
@@ -1399,7 +1403,7 @@ export const createCaseLawGenerationBackfill =
         leaseToken,
         status: CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.RUNNING,
       });
-      await runningGuards.beforeRemoteEffect(() => Promise.resolve());
+      await runningGuards.beforeRemoteEffect(completeRemoteEffect);
       const page = await selectGenerationBackfillPage(scopedDb, {
         batchSize,
         checkpoint: claimedCheckpoint,

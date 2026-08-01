@@ -174,7 +174,13 @@ const nextBackfillSnapshotAt = async (): Promise<Date> => {
   return snapshot;
 };
 
-const ignoreProjectionRemoval = () => Promise.resolve();
+const ignoreProjectionRemoval = async () => {
+  await Promise.resolve();
+};
+
+const completeRemoteEffect = async (): Promise<void> => {
+  await Promise.resolve();
+};
 
 const queueSourceReconciliation = async (
   generation: string,
@@ -257,7 +263,7 @@ test(
     let lease = 0;
     const backfill = createCaseLawGenerationBackfill({
       backfillRows: async (runnerDb, rows, rebuildGeneration, options) => {
-        await options.beforeRemoteEffect(() => Promise.resolve());
+        await options.beforeRemoteEffect(completeRemoteEffect);
         sent.push(rows.map((row) => row.id));
         guardedPages += 1;
         await runnerDb(async (tx) => {
@@ -346,7 +352,7 @@ test(
 
     const backfill = createCaseLawGenerationBackfill({
       backfillRows: async (runnerDb, rows, rebuildGeneration, options) => {
-        await options.beforeRemoteEffect(() => Promise.resolve());
+        await options.beforeRemoteEffect(completeRemoteEffect);
         const row = rows.at(0);
         if (!row) {
           return 0;
@@ -465,7 +471,7 @@ test(
     const backfill = createCaseLawGenerationBackfill({
       backfillRows: async (runnerDb, rows, rebuildGeneration, options) => {
         invocation += 1;
-        await options.beforeRemoteEffect(() => Promise.resolve());
+        await options.beforeRemoteEffect(completeRemoteEffect);
         if (invocation === 2) {
           reconciliationStarted?.();
           await releaseReconciliationPromise;
@@ -545,7 +551,7 @@ test(
       },
       newLeaseToken: () => "00000000-0000-4000-8000-000000000080",
       removeProjection: async (runnerDb, { options, row }) => {
-        await options.beforeRemoteEffect(() => Promise.resolve());
+        await options.beforeRemoteEffect(completeRemoteEffect);
         if (row.generationIndexId !== null) {
           removed.push(row.generationIndexId);
         }
@@ -606,7 +612,7 @@ test(
       },
       newLeaseToken: () => "00000000-0000-4000-8000-000000000081",
       removeProjection: async (runnerDb, { options }) => {
-        await options.beforeRemoteEffect(() => Promise.resolve());
+        await options.beforeRemoteEffect(completeRemoteEffect);
         await runnerDb(async (tx) => {
           await options.beforeDatabaseMark(tx);
           await tx
@@ -652,7 +658,7 @@ test(
     });
     const backfill = createCaseLawGenerationBackfill({
       backfillRows: async (_scopedDb, _rows, _generation, options) => {
-        await options.beforeRemoteEffect(() => Promise.resolve());
+        await options.beforeRemoteEffect(completeRemoteEffect);
         firstPageStarted?.();
         await firstPageReleasePromise;
         throw new Error("search unavailable");
@@ -688,7 +694,7 @@ test(
 
     const incomplete = createCaseLawGenerationBackfill({
       backfillRows: async (_scopedDb, _rows, _generation, options) => {
-        await options.beforeRemoteEffect(() => Promise.resolve());
+        await options.beforeRemoteEffect(completeRemoteEffect);
         return 0;
       },
       newLeaseToken: () => "00000000-0000-4000-8000-000000000101",
@@ -716,7 +722,7 @@ test(
     const replayed: SafeId<"caseLawDecision">[][] = [];
     const retry = createCaseLawGenerationBackfill({
       backfillRows: async (_scopedDb, rows, _generation, options) => {
-        await options.beforeRemoteEffect(() => Promise.resolve());
+        await options.beforeRemoteEffect(completeRemoteEffect);
         replayed.push(rows.map((row) => row.id));
         return rows.length;
       },
@@ -739,7 +745,7 @@ test(
     let winningRemoteEffects = 0;
     const winner = createCaseLawGenerationBackfill({
       backfillRows: async (_scopedDb, rows, _generation, options) => {
-        await options.beforeRemoteEffect(() => Promise.resolve());
+        await options.beforeRemoteEffect(completeRemoteEffect);
         winningRemoteEffects += 1;
         return rows.length;
       },
@@ -756,7 +762,7 @@ test(
           .set({ leaseExpiresAt: new Date("2000-01-01T00:00:00.000Z") })
           .where(eq(caseLawCorpusIndexBackfills.generation, generation));
         winnerResult = await winner(scopedDb, 1, generation);
-        await options.beforeRemoteEffect(() => Promise.resolve());
+        await options.beforeRemoteEffect(completeRemoteEffect);
         staleRemoteEffects += 1;
         return rows.length;
       },
@@ -793,7 +799,7 @@ test(
     let winningRemoteEffects = 0;
     const winner = createCaseLawGenerationBackfill({
       backfillRows: async (runnerDb, rows, _generation, options) => {
-        await options.beforeRemoteEffect(() => Promise.resolve());
+        await options.beforeRemoteEffect(completeRemoteEffect);
         winningRemoteEffects += 1;
         await runnerDb(options.beforeDatabaseMark);
         return rows.length;
@@ -807,7 +813,7 @@ test(
     let winnerResult: Awaited<ReturnType<typeof winner>> | undefined;
     const stale = createCaseLawGenerationBackfill({
       backfillRows: async (runnerDb, rows, _generation, options) => {
-        await options.beforeRemoteEffect(() => Promise.resolve());
+        await options.beforeRemoteEffect(completeRemoteEffect);
         staleRemoteEffects += 1;
         await db
           .update(caseLawCorpusIndexBackfills)
@@ -916,7 +922,7 @@ test(
     const sent: SafeId<"caseLawDecision">[] = [];
     const backfill = createCaseLawGenerationBackfill({
       backfillRows: async (_scopedDb, rows, _generation, options) => {
-        await options.beforeRemoteEffect(() => Promise.resolve());
+        await options.beforeRemoteEffect(completeRemoteEffect);
         sent.push(...rows.map(({ id }) => id));
         return rows.length;
       },
@@ -1049,13 +1055,13 @@ test(
     const removed: SafeId<"caseLawDecision">[] = [];
     const backfill = createCaseLawGenerationBackfill({
       backfillRows: async (_runnerDb, rows, _generation, options) => {
-        await options.beforeRemoteEffect(() => Promise.resolve());
+        await options.beforeRemoteEffect(completeRemoteEffect);
         indexed.push(...rows.map(({ id }) => id));
         return rows.length;
       },
       newLeaseToken: () => "00000000-0000-4000-8000-000000000900",
       removeProjection: async (runnerDb, { options, row }) => {
-        await options.beforeRemoteEffect(() => Promise.resolve());
+        await options.beforeRemoteEffect(completeRemoteEffect);
         removed.push(row.id);
         await runnerDb(async (tx) => {
           await options.beforeDatabaseMark(tx);
