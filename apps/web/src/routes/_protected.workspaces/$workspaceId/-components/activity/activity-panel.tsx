@@ -45,7 +45,7 @@ import { PersonMentionLabel } from "@/components/person-mention-label";
 import Tooltip from "@/components/tooltip";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFormatter } from "@/i18n/formatting-context";
-import type { getTranslator } from "@/i18n/i18n-store";
+import type { TranslationKey } from "@/i18n/types";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
@@ -68,7 +68,6 @@ import {
 type ActivityPanelProps = { workspaceId: string };
 type ActivityDay = [ActivityGroup, ...ActivityGroup[]];
 type ActivityViewMode = "timeline" | "list";
-type ActivityTranslator = ReturnType<typeof getTranslator>;
 
 const groupActivityDays = (groups: ActivityGroup[]): ActivityDay[] => {
   const result = new Map<string, ActivityDay>();
@@ -99,31 +98,15 @@ const CATEGORIES: MatterActivityCategory[] = [
   "automation",
 ];
 
-const categoryLabel = (
-  category: MatterActivityCategory,
-  t: ActivityTranslator,
-) => {
-  switch (category) {
-    case "all":
-      return t("workspaces.overview.activity.filters.all");
-    case "documents":
-      return t("workspaces.overview.activity.filters.documents");
-    case "tasks":
-      return t("workspaces.overview.activity.filters.tasks");
-    case "matter":
-      return t("workspaces.overview.activity.filters.matter");
-    case "team":
-      return t("workspaces.overview.activity.filters.team");
-    case "court":
-      return t("workspaces.overview.activity.filters.court");
-    case "automation":
-      return t("workspaces.overview.activity.filters.automation");
-    default: {
-      const exhaustive: never = category;
-      return exhaustive;
-    }
-  }
-};
+const categoryLabelKeys = {
+  all: "workspaces.overview.activity.filters.all",
+  automation: "workspaces.overview.activity.filters.automation",
+  court: "workspaces.overview.activity.filters.court",
+  documents: "workspaces.overview.activity.filters.documents",
+  matter: "workspaces.overview.activity.filters.matter",
+  tasks: "workspaces.overview.activity.filters.tasks",
+  team: "workspaces.overview.activity.filters.team",
+} as const satisfies Record<MatterActivityCategory, TranslationKey>;
 
 export const ActivityPanel = ({ workspaceId }: ActivityPanelProps) => {
   const t = useTranslations();
@@ -168,7 +151,7 @@ export const ActivityPanel = ({ workspaceId }: ActivityPanelProps) => {
               render={<Button size="sm" variant="ghost" />}
             >
               <ListFilterIcon className="size-3.5" />
-              {categoryLabel(category, t)}
+              {t(categoryLabelKeys[category])}
               <ChevronDownIcon className="size-3" />
             </MenuTrigger>
             <MenuPopup align="end">
@@ -182,7 +165,7 @@ export const ActivityPanel = ({ workspaceId }: ActivityPanelProps) => {
                     }}
                     value={value}
                   >
-                    {categoryLabel(value, t)}
+                    {t(categoryLabelKeys[value])}
                   </MenuRadioItem>
                 ))}
               </MenuRadioGroup>
@@ -583,7 +566,7 @@ const HorizontalActivityMilestone = ({
   const first = items[0];
 
   if (group.type !== "automation_run") {
-    const detail = triggerDetail(first, t);
+    const detail = <TriggerDetail item={first} />;
 
     return (
       <HorizontalMilestoneFrame activityAt={first.activityAt} dateAt={dateAt}>
@@ -604,7 +587,7 @@ const HorizontalActivityMilestone = ({
     ) : (
       <WorkflowIcon className="size-4" />
     );
-  const detail = triggerDetail(first, t);
+  const detail = <TriggerDetail item={first} />;
   return (
     <HorizontalMilestoneFrame activityAt={first.activityAt} dateAt={dateAt}>
       <div className="flex min-h-5 items-center gap-1.5 text-[13px] leading-5 font-medium">
@@ -705,7 +688,7 @@ const ActivityRunRow = ({
     return <ActivityItemRow group={group} onSelectGroup={onSelectGroup} />;
   }
 
-  const detail = triggerDetail(first, t);
+  const detail = <TriggerDetail item={first} />;
   const marker =
     first.performer.type === "agent" ? (
       <BotIcon className="size-3.5" />
@@ -836,8 +819,7 @@ const ActivityItemRow = ({
   onSelectGroup: (group: ActivityGroup) => void;
 }) => {
   const item = group.items[0];
-  const t = useTranslations();
-  const detail = triggerDetail(item, t);
+  const detail = <TriggerDetail item={item} />;
   const icon = activityGroupTargetIcon(group);
 
   return (
@@ -877,7 +859,7 @@ const ActivityList = ({
         </div>
         {listGroups.map((group) => {
           const item = group.items[0];
-          const provenance = triggerDetail(item, t);
+          const provenance = <TriggerDetail item={item} />;
           return (
             <div
               className="border-b last:border-b-0"
@@ -902,13 +884,15 @@ const ActivityList = ({
                   <Performer item={item} />
                 </span>
                 <span className="min-w-0 text-sm leading-5">
-                  <span className="block">{activityAction(item, t)}</span>
+                  <span className="block">
+                    <ActivityAction item={item} />
+                  </span>
                   <span className="mt-1 grid grid-cols-[1.25rem_minmax(0,1fr)] items-start gap-x-1.5 font-medium">
                     <span className="flex size-5 items-center justify-center">
                       {activityGroupTargetIcon(group)}
                     </span>
                     <BidiText as="span">
-                      {activityGroupTargetName(group, t)}
+                      <ActivityGroupTargetName group={group} />
                     </BidiText>
                   </span>
                 </span>
@@ -940,7 +924,7 @@ const ActivityDetailsSheet = ({
   }
 
   const item = group.items[0];
-  const provenance = triggerDetail(item, t);
+  const provenance = <TriggerDetail item={item} />;
   const openTarget =
     group.items.length === 1 ? getOpenTarget(item, workspaceId) : undefined;
   const rows = [
@@ -970,7 +954,7 @@ const ActivityDetailsSheet = ({
                       </span>
                       <span className="min-w-0">
                         <BidiText as="span" className="block break-words">
-                          {targetName(batchItem, t)}
+                          <TargetName item={batchItem} />
                         </BidiText>
                         <span className="text-muted-foreground mt-0.5 block text-xs leading-4 tabular-nums">
                           <time dateTime={batchItem.activityAt}>
@@ -1025,7 +1009,7 @@ const ActivityDetailsSheet = ({
       ? [
           {
             label: t("workspaces.overview.activity.details.approval"),
-            value: approvalName(item.approval.status, t),
+            value: <ApprovalName status={item.approval.status} />,
           },
         ]
       : []),
@@ -1092,10 +1076,12 @@ const ActivityDetailsSheet = ({
   );
 };
 
-const sourceName = (
-  source: MatterActivityItem["trigger"]["source"],
-  t: ActivityTranslator,
-) => {
+const SourceName = ({
+  source,
+}: {
+  source: MatterActivityItem["trigger"]["source"];
+}) => {
+  const t = useTranslations();
   if (!source) {
     return t("workspaces.overview.activity.details.notAvailable");
   }
@@ -1111,10 +1097,12 @@ const sourceName = (
   }
 };
 
-const approvalName = (
-  status: MatterActivityItem["approval"]["status"],
-  t: ActivityTranslator,
-) => {
+const ApprovalName = ({
+  status,
+}: {
+  status: MatterActivityItem["approval"]["status"];
+}) => {
+  const t = useTranslations();
   switch (status) {
     case "not_required":
       return t("workspaces.overview.activity.approvals.notRequired");
@@ -1175,7 +1163,6 @@ type ActivityTripletProps = {
 };
 
 const ActivityTriplet = ({ detail, group, size }: ActivityTripletProps) => {
-  const t = useTranslations();
   const item = group.items[0];
   const compact = size === "compact";
   return (
@@ -1189,13 +1176,17 @@ const ActivityTriplet = ({ detail, group, size }: ActivityTripletProps) => {
       </span>
       <span className="mt-1 grid grid-cols-[1.25rem_minmax(0,1fr)] gap-x-1.5">
         <span aria-hidden="true" />
-        <span>{activityAction(item, t)}</span>
+        <span>
+          <ActivityAction item={item} />
+        </span>
       </span>
       <span className="mt-1 grid grid-cols-[1.25rem_minmax(0,1fr)] items-start gap-x-1.5 font-medium">
         <span className="flex size-5 items-center justify-center">
           {activityGroupTargetIcon(group)}
         </span>
-        <BidiText as="span">{activityGroupTargetName(group, t)}</BidiText>
+        <BidiText as="span">
+          <ActivityGroupTargetName group={group} />
+        </BidiText>
       </span>
       {detail !== null && detail !== undefined && (
         <span
@@ -1213,10 +1204,8 @@ const ActivityTriplet = ({ detail, group, size }: ActivityTripletProps) => {
   );
 };
 
-const activityAction = (
-  item: MatterActivityItem,
-  t: ActivityTranslator,
-): string => {
+const ActivityAction = ({ item }: { item: MatterActivityItem }) => {
+  const t = useTranslations();
   switch (item.action) {
     case "add":
       return t("workspaces.overview.activity.actions.added");
@@ -1239,7 +1228,8 @@ const activityAction = (
   }
 };
 
-const targetName = (item: MatterActivityItem, t: ActivityTranslator) => {
+const TargetName = ({ item }: { item: MatterActivityItem }) => {
+  const t = useTranslations();
   if (item.target.name) {
     return item.target.name;
   }
@@ -1263,22 +1253,25 @@ const targetName = (item: MatterActivityItem, t: ActivityTranslator) => {
   }
 };
 
-const triggerLabelWithSource = (
-  label: string,
-  source: MatterActivityItem["trigger"]["source"],
-  t: ActivityTranslator,
-) => {
+const TriggerLabelWithSource = ({
+  children,
+  source,
+}: {
+  children: ReactNode;
+  source: MatterActivityItem["trigger"]["source"];
+}): ReactNode => {
   if (!source) {
-    return label;
+    return children;
   }
   return (
     <>
-      {label} · {sourceName(source, t)}
+      {children} · <SourceName source={source} />
     </>
   );
 };
 
-const triggerDetail = (item: MatterActivityItem, t: ActivityTranslator) => {
+const TriggerDetail = ({ item }: { item: MatterActivityItem }) => {
+  const t = useTranslations();
   const rawUser = item.trigger.user?.name;
   const user = rawUser ? isolateBidi(rawUser) : null;
   switch (item.trigger.type) {
@@ -1308,22 +1301,22 @@ const triggerDetail = (item: MatterActivityItem, t: ActivityTranslator) => {
         ? t("workspaces.overview.activity.provenance.delegatedBy", { user })
         : t("workspaces.overview.activity.provenance.delegated");
     case "direct":
-      return triggerLabelWithSource(
-        t("workspaces.overview.activity.details.direct"),
-        item.trigger.source,
-        t,
+      return (
+        <TriggerLabelWithSource source={item.trigger.source}>
+          {t("workspaces.overview.activity.details.direct")}
+        </TriggerLabelWithSource>
       );
     case "webhook":
-      return triggerLabelWithSource(
-        t("workspaces.overview.activity.details.webhook"),
-        item.trigger.source,
-        t,
+      return (
+        <TriggerLabelWithSource source={item.trigger.source}>
+          {t("workspaces.overview.activity.details.webhook")}
+        </TriggerLabelWithSource>
       );
     case "system":
-      return triggerLabelWithSource(
-        t("workspaces.overview.activity.details.system"),
-        item.trigger.source,
-        t,
+      return (
+        <TriggerLabelWithSource source={item.trigger.source}>
+          {t("workspaces.overview.activity.details.system")}
+        </TriggerLabelWithSource>
       );
     default: {
       const exhaustive: never = item.trigger.type;
@@ -1389,14 +1382,12 @@ const activityGroupTargetIcon = (group: ActivityGroup) => {
   return activityTargetIcon(group.items[0]);
 };
 
-const activityGroupTargetName = (
-  group: ActivityGroup,
-  t: ActivityTranslator,
-) => {
+const ActivityGroupTargetName = ({ group }: { group: ActivityGroup }) => {
+  const t = useTranslations();
   if (group.type === "document_batch" && group.items.length > 1) {
     return t("workspaces.documentsCount", { count: group.items.length });
   }
-  return targetName(group.items[0], t);
+  return <TargetName item={group.items[0]} />;
 };
 
 const getOpenTarget = (item: MatterActivityItem, workspaceId: string) => {

@@ -2,6 +2,31 @@ import type { TranslationKey } from "../i18n/utils";
 import { pillars, type ProductSlug } from "./products/pillars";
 import { productBySlug } from "./products/registry";
 
+type NavLabelKey = Extract<
+  TranslationKey,
+  | "footer.anonymization"
+  | "footer.agent"
+  | "footer.contact"
+  | "footer.editor"
+  | "footer.publicData"
+  | "footer.status"
+  | "footer.tabularReview"
+  | "footer.templates"
+  | "footer.workspace"
+  | "hero.selfHost"
+  | "nav.aiFactSheet"
+  | "nav.blog"
+  | "nav.security"
+>;
+type ProductEyebrowKey = Extract<
+  TranslationKey,
+  `nav.products.${ProductSlug}.eyebrow`
+>;
+type ProductDiscoverKey = Extract<
+  TranslationKey,
+  `nav.products.${ProductSlug}.discover`
+>;
+
 // Single source of truth for the Resources/Connect link groups and product nav
 // entries shared by MainNav, MobileNav, and LandingFooter. Labels that are
 // translated are stored as message keys (locale resolution happens at render
@@ -10,7 +35,7 @@ import { productBySlug } from "./products/registry";
 // structural.
 
 export type NavLabel =
-  | { kind: "translated"; labelKey: TranslationKey }
+  | { kind: "translated"; labelKey: NavLabelKey }
   | { kind: "literal"; label: string };
 
 export type NavLink = NavLabel & { href: string };
@@ -43,12 +68,12 @@ export const isExternal = (href: string) => href.startsWith("http");
 
 export const resolveNavLabel = (
   label: NavLabel,
-  t: (key: TranslationKey) => string,
+  t: (key: NavLabelKey) => string,
 ): string => (label.kind === "translated" ? t(label.labelKey) : label.label);
 
 export const resolveNavLinks = (
   links: readonly NavLink[],
-  t: (key: TranslationKey) => string,
+  t: (key: NavLabelKey) => string,
 ) =>
   links.map((link) => ({ label: resolveNavLabel(link, t), href: link.href }));
 
@@ -69,7 +94,7 @@ const productFooterLabels = {
 
 export type ProductNavEntry = {
   slug: ProductSlug;
-  eyebrowKey: TranslationKey;
+  eyebrowKey: ProductEyebrowKey;
   footerLabel: NavLabel;
 };
 
@@ -101,7 +126,7 @@ export const productNavEntries = pillars.flatMap((pillar) =>
  * here makes a pillar slug without an eyebrow a typecheck error instead of an
  * undefined label at runtime.
  */
-export const resolveProductEyebrows = (t: (key: TranslationKey) => string) =>
+export const resolveProductEyebrows = (t: (key: ProductEyebrowKey) => string) =>
   ({
     "public-data": t("nav.products.public-data.eyebrow"),
     anonymization: t("nav.products.anonymization.eyebrow"),
@@ -120,7 +145,7 @@ export const resolveProductEyebrows = (t: (key: TranslationKey) => string) =>
  * Romance languages need an article, so only the translator can write it.
  */
 export const resolveProductDiscoverLabels = (
-  t: (key: TranslationKey) => string,
+  t: (key: ProductDiscoverKey) => string,
 ) =>
   ({
     "public-data": t("nav.products.public-data.discover"),

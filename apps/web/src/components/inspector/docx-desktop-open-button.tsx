@@ -49,8 +49,25 @@ export const DocxDesktopOpenButton = ({
       });
 
       await showDesktopEditOpenResultToast({
+        messages: {
+          notOpenedDescription: t(
+            "workspaces.files.desktopEdit.notOpenedDescription",
+          ),
+          openedDescription: t(
+            "workspaces.files.desktopEdit.openedDescription",
+          ),
+          openedTitle: t("workspaces.files.desktopEdit.openedTitle"),
+          sentDescription: t("workspaces.files.desktopEdit.sentDescription"),
+          sentTitle: t("workspaces.files.desktopEdit.sentTitle"),
+          unavailableTitle: t("workspaces.files.desktopEdit.unavailableTitle"),
+          updateRequiredDescription: t(
+            "workspaces.files.desktopEdit.updateRequiredDescription",
+          ),
+          updateRequiredTitle: t(
+            "workspaces.files.desktopEdit.updateRequiredTitle",
+          ),
+        },
         result: openResult,
-        t,
       });
     } catch (error) {
       if (error instanceof Error && isUnauthorizedError(error)) {

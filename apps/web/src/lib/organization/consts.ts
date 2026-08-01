@@ -1,41 +1,41 @@
-import type { getTranslator } from "@/i18n/i18n-store";
+import type { TranslationKey } from "@/i18n/types";
 import type { Role } from "@/lib/auth";
-
-type Translator = ReturnType<typeof getTranslator>;
 
 export const managementRoles: readonly Role[] = ["owner", "admin"];
 
 export const ORGANIZATION_MEMBERS_LIMIT = 500;
 
-export const getRoles = (
-  t: Translator,
-): { label: string; value: Role; description: string }[] => [
+export const roleTranslationKeys = [
   {
-    label: t("organization.roles.owner"),
+    descriptionKey: "organization.roles.descriptions.owner",
+    labelKey: "organization.roles.owner",
     value: "owner",
-    description: t("organization.roles.descriptions.owner"),
   },
   {
-    label: t("organization.roles.admin"),
+    descriptionKey: "organization.roles.descriptions.admin",
+    labelKey: "organization.roles.admin",
     value: "admin",
-    description: t("organization.roles.descriptions.admin"),
   },
   {
-    label: t("organization.roles.member"),
+    descriptionKey: "organization.roles.descriptions.member",
+    labelKey: "organization.roles.member",
     value: "member",
-    description: t("organization.roles.descriptions.member"),
   },
   {
-    label: t("organization.roles.intern"),
+    descriptionKey: "organization.roles.descriptions.intern",
+    labelKey: "organization.roles.intern",
     value: "intern",
-    description: t("organization.roles.descriptions.intern"),
   },
   {
-    label: t("organization.roles.external"),
+    descriptionKey: "organization.roles.descriptions.external",
+    labelKey: "organization.roles.external",
     value: "external",
-    description: t("organization.roles.descriptions.external"),
   },
-];
+] as const satisfies readonly {
+  descriptionKey: TranslationKey;
+  labelKey: TranslationKey;
+  value: Role;
+}[];
 
 export const rolePriority = {
   owner: 0,

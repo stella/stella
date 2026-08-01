@@ -1,55 +1,61 @@
 import { stellaToast } from "@stll/ui/components/toast";
 
-import type { TranslationKey } from "@/i18n/types";
 import type { OpenDocxInDesktopResult } from "@/lib/desktop-bridge";
 import { DesktopBridgeIncompatibleError } from "@/lib/desktop-bridge";
 
-type DesktopEditToastTranslator = (key: TranslationKey) => string;
+type DesktopEditToastMessages = {
+  notOpenedDescription: string;
+  openedDescription: string;
+  openedTitle: string;
+  sentDescription: string;
+  sentTitle: string;
+  unavailableTitle: string;
+  updateRequiredDescription: string;
+  updateRequiredTitle: string;
+};
 
 export const showDesktopEditOpenResultToast = async ({
+  messages,
   result,
-  t,
 }: {
+  messages: DesktopEditToastMessages;
   result: OpenDocxInDesktopResult;
-  t: DesktopEditToastTranslator;
 }) => {
   if (result.type === "opened") {
     stellaToast.add({
-      description: t("workspaces.files.desktopEdit.openedDescription"),
-      title: t("workspaces.files.desktopEdit.openedTitle"),
+      description: messages.openedDescription,
+      title: messages.openedTitle,
       type: "success",
     });
     return;
   }
 
   const toastId = stellaToast.add({
-    description: t("workspaces.files.desktopEdit.sentDescription"),
-    title: t("workspaces.files.desktopEdit.sentTitle"),
+    description: messages.sentDescription,
+    title: messages.sentTitle,
     type: "loading",
   });
 
   try {
     await result.waitUntilOpened;
     stellaToast.update(toastId, {
-      description: t("workspaces.files.desktopEdit.openedDescription"),
-      title: t("workspaces.files.desktopEdit.openedTitle"),
+      description: messages.openedDescription,
+      title: messages.openedTitle,
       type: "success",
     });
   } catch (error) {
     if (error instanceof DesktopBridgeIncompatibleError) {
       stellaToast.update(toastId, {
-        description: t(
-          "workspaces.files.desktopEdit.updateRequiredDescription",
-        ),
-        title: t("workspaces.files.desktopEdit.updateRequiredTitle"),
+        description: messages.updateRequiredDescription,
+        title: messages.updateRequiredTitle,
         type: "error",
       });
       return;
     }
 
     stellaToast.update(toastId, {
-      description: t("workspaces.files.desktopEdit.notOpenedDescription"),
-      title: t("workspaces.files.desktopEdit.unavailableTitle"),
+      description: messages.notOpenedDescription,
+      title: messages.unavailableTitle,
       type: "error",
     });
   }

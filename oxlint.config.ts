@@ -78,8 +78,8 @@ export default defineConfig({
     "promise/no-return-in-finally": "error",
     "no-useless-assignment": "error",
 
-    // Keep `import/no-cycle` despite its ~20% share of lint time: the
-    // Module Side Effects section in CLAUDE.md documents the TDZ class
+    // Keep `import/no-cycle`: current web profiling puts it below 1% of rule
+    // time. The Module Side Effects section in CLAUDE.md documents the TDZ class
     // of bugs that circular imports cause with module-level singletons.
     // The rule has 0 current hits, but its job is regression protection.
     "import/no-cycle": "error",
@@ -396,6 +396,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-use-shallow.ts",
     "./.oxlint-plugins/no-raw-stored-json.ts",
     "./.oxlint-plugins/no-detached-void.ts",
+    "./.oxlint-plugins/no-broad-translation-callable.ts",
   ],
 
   overrides: [
@@ -693,6 +694,19 @@ export default defineConfig({
       ],
       rules: {
         "no-detached-void/no-detached-void": "off",
+      },
+    },
+    {
+      // A use-intl translator is an overloaded callable whose signatures span
+      // the whole message catalogue. Passing it through a broad helper type can
+      // turn one assignability check into minutes of compiler work.
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        "apps/landing/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-broad-translation-callable.fixture.ts",
+      ],
+      rules: {
+        "no-broad-translation-callable/no-broad-translation-callable": "error",
       },
     },
     {
@@ -1276,9 +1290,7 @@ export default defineConfig({
       rules: { "no-physical-properties/no-physical-properties": "off" },
     },
     {
-      files: [
-        "apps/web/src/components/pdf/**",
-      ],
+      files: ["apps/web/src/components/pdf/**"],
       rules: {
         "unicorn/prefer-dom-node-remove": "off",
         "unicorn/prefer-dom-node-append": "off",

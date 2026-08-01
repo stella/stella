@@ -37,9 +37,9 @@ import { roleOptions } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import {
-  getRoles,
   managementRoles,
   rolePriority,
+  roleTranslationKeys,
 } from "@/lib/organization/consts";
 import { useInviteMember } from "@/lib/organization/mutations";
 import { emailSchema, toFormErrors } from "@/lib/schema";
@@ -87,7 +87,13 @@ export const InviteMemberDialog = ({
     ...roleOptions,
     staleTime: Number.POSITIVE_INFINITY,
   });
-  const roles = getRoles(t);
+  const roles = roleTranslationKeys.map(
+    ({ descriptionKey, labelKey, value }) => ({
+      description: t(descriptionKey),
+      label: t(labelKey),
+      value,
+    }),
+  );
 
   const form = useForm({
     defaultValues,
