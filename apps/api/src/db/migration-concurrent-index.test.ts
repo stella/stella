@@ -44,9 +44,23 @@ const collectUnsafeConcurrentIndexes = async (): Promise<string[]> => {
         match.at(1) ? [match[1]] : [],
       ),
     );
-    for (const { groups } of sqlWithoutLineComments.matchAll(
-      CONCURRENT_UNIQUE_CREATE,
-    )) {
+    const concurrentUniqueCreates = [
+      ...sqlWithoutLineComments.matchAll(CONCURRENT_UNIQUE_CREATE),
+    ];
+    const createdUniqueIndexes = new Set(
+      concurrentUniqueCreates.flatMap(({ groups }) =>
+        groups?.["name"] ? [groups["name"]] : [],
+      ),
+    );
+    if (
+      concurrentUniqueCreates.some(({ groups }) => groups?.["idempotent"]) &&
+      [...droppedIndexes].some((name) => !createdUniqueIndexes.has(name))
+    ) {
+      violations.push(
+        `${relativePath}: unique replacement drop must follow online validity postconditions`,
+      );
+    }
+    for (const { groups } of concurrentUniqueCreates) {
       const name = groups?.["name"];
       if (!name) {
         continue;

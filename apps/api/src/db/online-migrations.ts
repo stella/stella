@@ -70,6 +70,21 @@ export const ONLINE_VALIDATED_INDEX_NAMES: ReadonlySet<string> = new Set(
   ONLINE_MIGRATION_INDEXES.map(({ name }) => name),
 );
 
+type OnlineIndexReplacement = {
+  legacyName: string;
+  replacementNames: readonly string[];
+};
+
+const ONLINE_INDEX_REPLACEMENTS: readonly OnlineIndexReplacement[] = [
+  {
+    legacyName: "case_law_decisions_source_case_lang_idx",
+    replacementNames: [
+      "case_law_decisions_source_document_idx",
+      "case_law_decisions_source_case_lang_null_idx",
+    ],
+  },
+];
+
 type OnlineMigrationConnection = {
   execute: (query: string, params?: readonly unknown[]) => Promise<void>;
   query: (
@@ -121,6 +136,9 @@ const processOnlineMigrations = async (
     }
 
     await processOnlineIndexAt(connection, operation);
+    if (operation === "repair") {
+      await retireReplacedIndexAt(connection);
+    }
   } finally {
     try {
       if (lockAcquired) {
@@ -148,6 +166,44 @@ const processOnlineIndexAt = async (
     await assertIndexReady(connection, index);
   }
   await processOnlineIndexAt(connection, operation, offset + 1);
+};
+
+const retireReplacedIndexAt = async (
+  connection: OnlineMigrationConnection,
+  offset = 0,
+): Promise<void> => {
+  const replacement = ONLINE_INDEX_REPLACEMENTS.at(offset);
+  if (!replacement) {
+    return;
+  }
+
+  await assertReplacementIndexAt(connection, replacement);
+  await connection.execute(
+    `DROP INDEX CONCURRENTLY IF EXISTS public.${quoteIdentifier(replacement.legacyName)}`,
+  );
+  await retireReplacedIndexAt(connection, offset + 1);
+};
+
+const assertReplacementIndexAt = async (
+  connection: OnlineMigrationConnection,
+  replacement: OnlineIndexReplacement,
+  offset = 0,
+): Promise<void> => {
+  const replacementName = replacement.replacementNames.at(offset);
+  if (!replacementName) {
+    return;
+  }
+  const index = ONLINE_MIGRATION_INDEXES.find(
+    ({ name }) => name === replacementName,
+  );
+  if (!index) {
+    panic(
+      `Replacement index ${replacementName} is not registered for online validation`,
+    );
+  }
+
+  await assertIndexReady(connection, index);
+  await assertReplacementIndexAt(connection, replacement, offset + 1);
 };
 
 const parsePresentIndexState = (row: unknown): PresentIndexState => {

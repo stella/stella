@@ -11,6 +11,9 @@ const DROP_INDEX_FRAGMENT = "DROP INDEX CONCURRENTLY";
 const REINDEX_FRAGMENT = "REINDEX INDEX CONCURRENTLY";
 const REPORT_EXPORT_INDEX = "report_exports_workspace_requester_created_idx";
 const CREDENTIAL_INDEX = "account_credential_singleton_uidx";
+const SOURCE_DOCUMENT_INDEX = "case_law_decisions_source_document_idx";
+const SOURCE_CASE_INDEX = "case_law_decisions_source_case_lang_null_idx";
+const LEGACY_SOURCE_CASE_INDEX = "case_law_decisions_source_case_lang_idx";
 
 describe("online migrations", () => {
   test("accepts an already valid index without rebuilding it", async () => {
@@ -119,6 +122,36 @@ describe("online migrations", () => {
     expect(indexOfStatement(harness.statements, REINDEX_FRAGMENT)).toBe(-1);
   });
 
+  test("retires a legacy index only after both replacements validate", async () => {
+    const harness = createHarness();
+
+    await runOnlineMigrations(harness.pool);
+
+    const dropOffset = indexOfStatement(
+      harness.statements,
+      `DROP INDEX CONCURRENTLY IF EXISTS public."${LEGACY_SOURCE_CASE_INDEX}"`,
+    );
+    expect(dropOffset).toBeGreaterThan(
+      indexOfStatement(harness.statements, SOURCE_DOCUMENT_INDEX),
+    );
+    expect(dropOffset).toBeGreaterThan(
+      indexOfStatement(harness.statements, SOURCE_CASE_INDEX),
+    );
+  });
+
+  test("preserves a legacy index when a replacement is not ready", async () => {
+    const harness = createHarness({
+      indexStates: { [SOURCE_CASE_INDEX]: [false, false] },
+    });
+
+    await expect(runOnlineMigrations(harness.pool)).rejects.toMatchObject({
+      message: `Required migration index ${SOURCE_CASE_INDEX} is not ready`,
+    });
+    expect(indexOfStatement(harness.statements, LEGACY_SOURCE_CASE_INDEX)).toBe(
+      -1,
+    );
+  });
+
   test("rejects a missing index required by a rewritten migration", async () => {
     const harness = createHarness({
       indexStates: { [CREDENTIAL_INDEX]: [undefined] },
@@ -183,7 +216,7 @@ const createHarness = ({
           }
         },
         query: async (query: string, params: readonly unknown[] = []) => {
-          statements.push(query);
+          statements.push(`${query}\n-- params ${JSON.stringify(params)}`);
           if (query.includes("starts_with")) {
             const newPrefix = params.at(2);
             const oldPrefix = params.at(3);
@@ -212,7 +245,10 @@ const createHarness = ({
           }
           const offset = indexOffsets.get(indexName) ?? 0;
           const states = indexStates[indexName];
-          const state = states ? states.at(offset) : true;
+          let state: IndexState = true;
+          if (states) {
+            state = offset < states.length ? states.at(offset) : states.at(-1);
+          }
           indexOffsets.set(indexName, offset + 1);
           if (state === undefined) {
             return [];
