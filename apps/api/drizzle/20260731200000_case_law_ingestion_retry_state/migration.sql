@@ -90,6 +90,7 @@ BEGIN
   THEN
     NEW.sync_cursor := OLD.sync_cursor;
     NEW.last_sync_at := OLD.last_sync_at;
+    NEW.checkpoint_observation_order := OLD.checkpoint_observation_order;
   END IF;
   RETURN NEW;
 END

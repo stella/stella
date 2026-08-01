@@ -6,23 +6,67 @@ SET statement_timeout = '5s';--> statement-breakpoint
 ALTER TABLE "case_law_decisions"
   ADD COLUMN IF NOT EXISTS "redacted_at" timestamptz;--> statement-breakpoint
 
--- stella-migration-safety: reviewed bulk-backfill - only rows with a redact audit and an already-erased payload are touched; the audit join is keyed by decision_id and the statement timeout bounds the operation.
-WITH redactions AS (
-  SELECT "decision_id", max("created_at") AS "redacted_at"
-  FROM "case_law_index_jobs"
-  WHERE "operation" = 'redact'
-    AND "decision_id" IS NOT NULL
-  GROUP BY "decision_id"
-)
-UPDATE "case_law_decisions" AS "decision"
-SET "redacted_at" = redactions."redacted_at"
-FROM redactions
-WHERE "decision"."id" = redactions."decision_id"
-  AND "decision"."redacted_at" IS NULL
-  AND "decision"."fulltext" IS NULL
-  AND "decision"."sections" IS NULL
-  AND "decision"."document_ast" IS NULL
-  AND "decision"."content_hash" IS NULL;--> statement-breakpoint
+-- Old rollout tasks cannot name redacted_at. Fence their payload scrub in the
+-- database so the tombstone lands in the same statement, before a new reader
+-- can observe an erased-but-refetchable row.
+CREATE OR REPLACE FUNCTION fence_legacy_case_law_redaction()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $function$
+BEGIN
+  IF NEW.redacted_at IS NULL
+    AND NEW.fulltext IS NULL
+    AND NEW.sections IS NULL
+    AND NEW.document_ast IS NULL
+    AND NEW.content_hash IS NULL
+    AND (
+      OLD.fulltext IS NOT NULL
+      OR OLD.sections IS NOT NULL
+      OR OLD.document_ast IS NOT NULL
+      OR OLD.content_hash IS NOT NULL
+    )
+  THEN
+    NEW.redacted_at := clock_timestamp();
+  END IF;
+  RETURN NEW;
+END
+$function$;--> statement-breakpoint
+-- stella-migration-safety: reviewed destructive-change - replaces only this migration's compatibility trigger; table data is unchanged.
+DROP TRIGGER IF EXISTS case_law_decisions_legacy_redaction_fence
+  ON "case_law_decisions";--> statement-breakpoint
+CREATE TRIGGER case_law_decisions_legacy_redaction_fence
+BEFORE UPDATE OF fulltext, sections, document_ast, content_hash
+ON "case_law_decisions"
+FOR EACH ROW
+EXECUTE FUNCTION fence_legacy_case_law_redaction();--> statement-breakpoint
+
+-- A metadata-only decision has no payload transition for the fence above to
+-- observe. Its append-only redaction audit closes that compatibility case.
+CREATE OR REPLACE FUNCTION tombstone_legacy_case_law_redaction_audit()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $function$
+BEGIN
+  IF NEW.operation = 'redact' AND NEW.decision_id IS NOT NULL THEN
+    UPDATE "case_law_decisions"
+    SET "redacted_at" = COALESCE("redacted_at", NEW.created_at)
+    WHERE "id" = NEW.decision_id
+      AND "redacted_at" IS NULL
+      AND "fulltext" IS NULL
+      AND "sections" IS NULL
+      AND "document_ast" IS NULL
+      AND "content_hash" IS NULL;
+  END IF;
+  RETURN NEW;
+END
+$function$;--> statement-breakpoint
+-- stella-migration-safety: reviewed destructive-change - replaces only this migration's compatibility trigger; append-only audit data is unchanged.
+DROP TRIGGER IF EXISTS case_law_index_jobs_legacy_redaction_tombstone
+  ON "case_law_index_jobs";--> statement-breakpoint
+CREATE TRIGGER case_law_index_jobs_legacy_redaction_tombstone
+AFTER INSERT ON "case_law_index_jobs"
+FOR EACH ROW
+EXECUTE FUNCTION tombstone_legacy_case_law_redaction_audit();--> statement-breakpoint
 
 DO $$
 BEGIN
@@ -49,12 +93,13 @@ $$;--> statement-breakpoint
 -- Exact keys are persisted before a corpus PUT. The table has deliberately no
 -- decision FK: a source/delete cascade must not discard erasure cleanup work.
 CREATE TABLE "case_law_corpus_upload_intents" (
-  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+  "id" uuid PRIMARY KEY NOT NULL,
   "decision_id" uuid NOT NULL,
   "text_s3_key" varchar(512) NOT NULL,
   "normalized_s3_key" varchar(512) NOT NULL,
   "ast_s3_key" varchar(512) NOT NULL,
   "status" varchar(16) DEFAULT 'active' NOT NULL,
+  "lease_expires_at" timestamptz NOT NULL,
   "cleanup_attempt_count" integer DEFAULT 0 NOT NULL,
   "next_cleanup_at" timestamptz,
   "created_at" timestamptz DEFAULT now() NOT NULL,
@@ -72,6 +117,10 @@ CREATE INDEX "case_law_corpus_upload_intents_cleanup_due_idx"
 
 CREATE UNIQUE INDEX "case_law_corpus_upload_intents_active_decision_uidx"
   ON "case_law_corpus_upload_intents" ("decision_id")
+  WHERE "status" = 'active';--> statement-breakpoint
+
+CREATE INDEX "case_law_corpus_upload_intents_active_lease_idx"
+  ON "case_law_corpus_upload_intents" ("lease_expires_at", "id")
   WHERE "status" = 'active';--> statement-breakpoint
 
 -- Object keys can expose a redacted payload's location. Keep them out of the

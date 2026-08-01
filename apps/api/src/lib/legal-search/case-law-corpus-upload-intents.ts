@@ -1,5 +1,7 @@
-import { Result, panic } from "better-result";
-import { and, asc, eq, lte } from "drizzle-orm";
+import { Result, TaggedError, panic } from "better-result";
+import { and, asc, eq, inArray, lte, or, sql } from "drizzle-orm";
+
+import { DAY_IN_MS } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -17,13 +19,45 @@ import {
 } from "@/api/lib/legal-search/corpus-storage";
 import type { WriteCorpusResult } from "@/api/lib/legal-search/corpus-storage";
 
-const CLEANUP_RETRY_MAX_DELAY_MS = 24 * 60 * 60 * 1000;
+const CLEANUP_RETRY_MAX_DELAY_MS = DAY_IN_MS;
 const CLEANUP_RETRY_UNIT_MS = 60 * 1000;
+const CORPUS_UPLOAD_INTENT_LEASE_MS = 5 * 60 * 1000;
 
 type CorpusUploadKeys = Pick<
   WriteCorpusResult,
   "astKey" | "sectionsKey" | "textKey"
 >;
+
+type CorpusUploadIntentCleanupPlan =
+  | { type: "defer" }
+  | {
+      type: "delete";
+      keys: {
+        astKey: string | null;
+        sectionsKey: string | null;
+        textKey: string | null;
+      };
+    };
+
+/** A cleanup may delete only keys owned by neither a live row nor an upload. */
+export const planCorpusUploadIntentCleanup = (
+  keys: CorpusUploadKeys,
+  currentKeys: ReadonlySet<string>,
+  activeKeys: ReadonlySet<string>,
+): CorpusUploadIntentCleanupPlan => {
+  const rowKeys = [keys.astKey, keys.sectionsKey, keys.textKey];
+  if (rowKeys.some((key) => activeKeys.has(key))) {
+    return { type: "defer" };
+  }
+  return {
+    type: "delete",
+    keys: {
+      astKey: currentKeys.has(keys.astKey) ? null : keys.astKey,
+      sectionsKey: currentKeys.has(keys.sectionsKey) ? null : keys.sectionsKey,
+      textKey: currentKeys.has(keys.textKey) ? null : keys.textKey,
+    },
+  };
+};
 
 type ReserveCaseLawCorpusUploadIntentOptions = {
   contentHash: string;
@@ -71,6 +105,7 @@ export const reserveCaseLawCorpusUploadIntent = async ({
     }
 
     const intentId = createSafeId<"caseLawCorpusUploadIntent">();
+    const leaseExpiresAt = new Date(Date.now() + CORPUS_UPLOAD_INTENT_LEASE_MS);
     const reserved = (
       await tx
         .insert(caseLawCorpusUploadIntents)
@@ -80,13 +115,76 @@ export const reserveCaseLawCorpusUploadIntent = async ({
           textS3Key: keys.textKey,
           normalizedS3Key: keys.sectionsKey,
           astS3Key: keys.astKey,
+          leaseExpiresAt,
         })
         .onConflictDoNothing()
         .returning({ id: caseLawCorpusUploadIntents.id })
     ).at(0);
-    if (!reserved) {
+    if (reserved) {
+      return {
+        intentId,
+        type: "reserved",
+        written: { ...keys, contentHash },
+      };
+    }
+
+    const active = (
+      await tx
+        .select({
+          id: caseLawCorpusUploadIntents.id,
+          textKey: caseLawCorpusUploadIntents.textS3Key,
+          sectionsKey: caseLawCorpusUploadIntents.normalizedS3Key,
+          astKey: caseLawCorpusUploadIntents.astS3Key,
+          leaseExpiresAt: caseLawCorpusUploadIntents.leaseExpiresAt,
+        })
+        .from(caseLawCorpusUploadIntents)
+        .where(
+          and(
+            eq(caseLawCorpusUploadIntents.decisionId, decisionId),
+            eq(
+              caseLawCorpusUploadIntents.status,
+              CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.ACTIVE,
+            ),
+          ),
+        )
+        .for("update")
+        .limit(1)
+    ).at(0);
+    if (!active || active.leaseExpiresAt.getTime() > Date.now()) {
       return { type: "busy" };
     }
+
+    const samePayload =
+      active.textKey === keys.textKey &&
+      active.sectionsKey === keys.sectionsKey &&
+      active.astKey === keys.astKey;
+    if (samePayload) {
+      await tx
+        .update(caseLawCorpusUploadIntents)
+        .set({ leaseExpiresAt })
+        .where(eq(caseLawCorpusUploadIntents.id, active.id));
+      return {
+        intentId: active.id,
+        type: "reserved",
+        written: { ...keys, contentHash },
+      };
+    }
+
+    await tx
+      .update(caseLawCorpusUploadIntents)
+      .set({
+        status: CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.CLEANUP,
+        nextCleanupAt: new Date(),
+      })
+      .where(eq(caseLawCorpusUploadIntents.id, active.id));
+    await tx.insert(caseLawCorpusUploadIntents).values({
+      id: intentId,
+      decisionId,
+      textS3Key: keys.textKey,
+      normalizedS3Key: keys.sectionsKey,
+      astS3Key: keys.astKey,
+      leaseExpiresAt,
+    });
     return {
       intentId,
       type: "reserved",
@@ -112,6 +210,11 @@ type WriteReservedCaseLawCorpusUploadOptions = {
   write: (args: { signal: AbortSignal }) => Promise<WriteCorpusResult>;
 };
 
+class CorpusUploadWriteError extends TaggedError("CorpusUploadWriteError")<{
+  cause: unknown;
+  message: string;
+}>() {}
+
 export type WriteReservedCaseLawCorpusUploadResult =
   | CaseLawCorpusUploadApplyResult
   | { type: "cancelled" };
@@ -131,7 +234,6 @@ export const writeReservedCaseLawCorpusUpload = async ({
   signal,
   write,
 }: WriteReservedCaseLawCorpusUploadOptions): Promise<WriteReservedCaseLawCorpusUploadResult> => {
-  let writeFailed = false;
   try {
     return await scopedDb(async (tx) => {
       signal?.throwIfAborted();
@@ -144,6 +246,21 @@ export const writeReservedCaseLawCorpusUpload = async ({
           .limit(1)
       ).at(0);
       if (!decision || decision.redactedAt !== null) {
+        await tx
+          .update(caseLawCorpusUploadIntents)
+          .set({
+            status: CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.CLEANUP,
+            nextCleanupAt: new Date(),
+          })
+          .where(
+            and(
+              eq(caseLawCorpusUploadIntents.id, intentId),
+              eq(
+                caseLawCorpusUploadIntents.status,
+                CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.ACTIVE,
+              ),
+            ),
+          );
         return { type: "cancelled" };
       }
 
@@ -181,8 +298,10 @@ export const writeReservedCaseLawCorpusUpload = async ({
           signal: signal ?? new AbortController().signal,
         });
       } catch (error) {
-        writeFailed = true;
-        throw error;
+        throw new CorpusUploadWriteError({
+          cause: error,
+          message: "Reserved corpus upload failed",
+        });
       }
       const outcome = await apply({ tx, written });
       if (outcome.type === "superseded") {
@@ -216,8 +335,9 @@ export const writeReservedCaseLawCorpusUpload = async ({
       return outcome;
     });
   } catch (error) {
-    if (writeFailed) {
+    if (error instanceof CorpusUploadWriteError) {
       await enqueueCaseLawCorpusUploadIntentCleanup({ intentId, scopedDb });
+      throw error.cause;
     }
     throw error;
   }
@@ -337,9 +457,9 @@ export type ReconcileCaseLawCorpusUploadIntentsResult = {
 };
 
 /**
- * Bounded durable cleanup worker. Locking due rows with SKIP LOCKED makes
- * multiple scheduler replicas converge without duplicate ownership; duplicate
- * S3 DELETEs after a lease-like retry remain safe and idempotent.
+ * Bounded durable cleanup worker. Expired active leases become cleanup work;
+ * locking candidates with SKIP LOCKED makes scheduler replicas converge
+ * without duplicate ownership.
  */
 export const reconcileCaseLawCorpusUploadIntents = async ({
   deleteCorpus = deleteCorpusDocument,
@@ -356,6 +476,7 @@ export const reconcileCaseLawCorpusUploadIntents = async ({
     const rows = await tx
       .select({
         id: caseLawCorpusUploadIntents.id,
+        decisionId: caseLawCorpusUploadIntents.decisionId,
         textKey: caseLawCorpusUploadIntents.textS3Key,
         sectionsKey: caseLawCorpusUploadIntents.normalizedS3Key,
         astKey: caseLawCorpusUploadIntents.astS3Key,
@@ -363,12 +484,21 @@ export const reconcileCaseLawCorpusUploadIntents = async ({
       })
       .from(caseLawCorpusUploadIntents)
       .where(
-        and(
-          eq(
-            caseLawCorpusUploadIntents.status,
-            CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.CLEANUP,
+        or(
+          and(
+            eq(
+              caseLawCorpusUploadIntents.status,
+              CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.CLEANUP,
+            ),
+            lte(caseLawCorpusUploadIntents.nextCleanupAt, now),
           ),
-          lte(caseLawCorpusUploadIntents.nextCleanupAt, now),
+          and(
+            eq(
+              caseLawCorpusUploadIntents.status,
+              CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.ACTIVE,
+            ),
+            lte(caseLawCorpusUploadIntents.leaseExpiresAt, now),
+          ),
         ),
       )
       .orderBy(
@@ -378,68 +508,134 @@ export const reconcileCaseLawCorpusUploadIntents = async ({
       .limit(limit)
       .for("update", { skipLocked: true });
 
-    await Promise.all(
-      rows.map(
-        async (row) =>
-          await tx
-            .update(caseLawCorpusUploadIntents)
-            .set({
-              cleanupAttemptCount: row.cleanupAttemptCount + 1,
-              nextCleanupAt: new Date(
-                now.getTime() +
-                  corpusUploadCleanupDelayMs(row.cleanupAttemptCount),
-              ),
-            })
-            .where(eq(caseLawCorpusUploadIntents.id, row.id)),
-      ),
-    );
+    if (rows.length > 0) {
+      await tx
+        .update(caseLawCorpusUploadIntents)
+        .set({
+          status: CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.CLEANUP,
+          cleanupAttemptCount: sql`${caseLawCorpusUploadIntents.cleanupAttemptCount} + 1`,
+          nextCleanupAt: sql`now() + (
+            LEAST(
+              ${CLEANUP_RETRY_MAX_DELAY_MS},
+              ${CLEANUP_RETRY_UNIT_MS} * POWER(
+                2,
+                LEAST(${caseLawCorpusUploadIntents.cleanupAttemptCount}, 11)
+              )
+            ) * interval '1 millisecond'
+          )`,
+        })
+        .where(
+          inArray(
+            caseLawCorpusUploadIntents.id,
+            rows.map(({ id }) => id),
+          ),
+        );
+    }
     return rows;
   });
   if (Result.isError(claimedResult)) {
     throw claimedResult.error;
   }
 
-  const cleanupResults = await Promise.all(
-    claimedResult.value.map(async (row) => {
-      signal?.throwIfAborted();
-      try {
-        await deleteCorpus(
+  if (claimedResult.value.length === 0) {
+    return { claimed: 0, cleaned: 0 };
+  }
+
+  const cleanupResult = await safeDb(async (tx) => {
+    signal?.throwIfAborted();
+    const decisionIds = claimedResult.value.map(({ decisionId }) => decisionId);
+    const decisions = await tx
+      .select({
+        id: caseLawDecisions.id,
+        textKey: caseLawDecisions.textS3Key,
+        sectionsKey: caseLawDecisions.normalizedS3Key,
+        astKey: caseLawDecisions.astS3Key,
+      })
+      .from(caseLawDecisions)
+      .where(inArray(caseLawDecisions.id, decisionIds))
+      .for("update");
+    const activeIntents = await tx
+      .select({
+        textKey: caseLawCorpusUploadIntents.textS3Key,
+        sectionsKey: caseLawCorpusUploadIntents.normalizedS3Key,
+        astKey: caseLawCorpusUploadIntents.astS3Key,
+      })
+      .from(caseLawCorpusUploadIntents)
+      .where(
+        and(
+          inArray(caseLawCorpusUploadIntents.decisionId, decisionIds),
+          eq(
+            caseLawCorpusUploadIntents.status,
+            CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.ACTIVE,
+          ),
+        ),
+      );
+
+    const currentKeys = new Set(
+      decisions.flatMap(({ astKey, sectionsKey, textKey }) =>
+        [astKey, sectionsKey, textKey].filter(
+          (key): key is string => key !== null,
+        ),
+      ),
+    );
+    const activeKeys = new Set(
+      activeIntents.flatMap(({ astKey, sectionsKey, textKey }) => [
+        astKey,
+        sectionsKey,
+        textKey,
+      ]),
+    );
+    const corpusIoOptions = signal === undefined ? {} : { signal };
+    const cleanupResults = await Promise.all(
+      claimedResult.value.map(async (row) => {
+        const plan = planCorpusUploadIntentCleanup(
           {
-            textKey: row.textKey,
-            sectionsKey: row.sectionsKey,
             astKey: row.astKey,
+            sectionsKey: row.sectionsKey,
+            textKey: row.textKey,
           },
-          { signal },
+          currentKeys,
+          activeKeys,
         );
-        const removed = await safeDb(
-          async (tx) =>
-            await tx
-              .delete(caseLawCorpusUploadIntents)
-              .where(
-                and(
-                  eq(caseLawCorpusUploadIntents.id, row.id),
-                  eq(
-                    caseLawCorpusUploadIntents.status,
-                    CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.CLEANUP,
-                  ),
-                ),
-              )
-              .returning({ id: caseLawCorpusUploadIntents.id }),
-        );
-        if (Result.isError(removed)) {
-          throw removed.error;
+        if (plan.type === "defer") {
+          return null;
         }
-        return removed.value.at(0) ? 1 : 0;
-      } catch (error) {
-        captureError(error, {
-          corpusUploadIntentId: row.id,
-          step: "reconcileCaseLawCorpusUploadIntents.delete",
-        });
-        return 0;
-      }
-    }),
-  );
-  const cleaned = cleanupResults.reduce((total, count) => total + count, 0);
+        try {
+          await deleteCorpus(plan.keys, corpusIoOptions);
+          return row.id;
+        } catch (error) {
+          captureError(error, {
+            corpusUploadIntentId: row.id,
+            step: "reconcileCaseLawCorpusUploadIntents.delete",
+          });
+          return null;
+        }
+      }),
+    );
+    const cleanedIds = cleanupResults.filter(
+      (id): id is SafeId<"caseLawCorpusUploadIntent"> => id !== null,
+    );
+    if (cleanedIds.length === 0) {
+      return 0;
+    }
+    const removed = await tx
+      .delete(caseLawCorpusUploadIntents)
+      .where(
+        and(
+          inArray(caseLawCorpusUploadIntents.id, cleanedIds),
+          eq(
+            caseLawCorpusUploadIntents.status,
+            CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.CLEANUP,
+          ),
+        ),
+      )
+      .returning({ id: caseLawCorpusUploadIntents.id });
+    return removed.length;
+  });
+  if (Result.isError(cleanupResult)) {
+    throw cleanupResult.error;
+  }
+  const cleaned = cleanupResult.value;
 
   return { claimed: claimedResult.value.length, cleaned };
 };

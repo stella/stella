@@ -81,6 +81,7 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   // nor widen a key's permissions, so every access goes through better-auth on
   // the owner connection.
   "apikey",
+  "case_law_corpus_upload_intents",
 ]);
 
 const SQL_IDENTIFIER_PATTERN =

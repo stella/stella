@@ -346,5 +346,46 @@ if (!databaseUrl || !runPostgresTests) {
       ).at(0);
       expect(transition?.sourceHash).toBe("legacy-transition-allowed");
     });
+
+    test("legacy cursor fencing preserves the prior checkpoint token", async () => {
+      const heldCursor = "legacy-checkpoint-held";
+      const heldAt = new Date("2026-07-31T13:02:00.000Z");
+      await db
+        .update(caseLawSources)
+        .set({
+          syncCursor: heldCursor,
+          lastSyncAt: heldAt,
+          observationOrder: sql`greatest(${caseLawSources.observationOrder}, 100)`,
+          checkpointObservationOrder: 100n,
+        })
+        .where(eq(caseLawSources.id, sourceId));
+
+      await db
+        .update(caseLawSources)
+        .set({
+          syncCursor: "legacy-checkpoint-advanced",
+          lastSyncAt: new Date("2026-07-31T13:02:01.000Z"),
+          checkpointObservationOrder: 99n,
+        })
+        .where(eq(caseLawSources.id, sourceId));
+
+      const fenced = (
+        await db
+          .select({
+            checkpointObservationOrder:
+              caseLawSources.checkpointObservationOrder,
+            lastSyncAt: caseLawSources.lastSyncAt,
+            syncCursor: caseLawSources.syncCursor,
+          })
+          .from(caseLawSources)
+          .where(eq(caseLawSources.id, sourceId))
+          .limit(1)
+      ).at(0);
+      expect(fenced).toEqual({
+        checkpointObservationOrder: 100n,
+        lastSyncAt: heldAt,
+        syncCursor: heldCursor,
+      });
+    });
   });
 }

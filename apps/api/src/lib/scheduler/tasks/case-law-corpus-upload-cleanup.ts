@@ -19,7 +19,7 @@ export const reconcileCaseLawCorpusUploadIntentsTask: SchedulerTask = async ({
   signal,
 }) => {
   if (signal.aborted) {
-    return panic("SchedulerAborted");
+    panic("SchedulerAborted");
   }
   const result = await reconcileCaseLawCorpusUploadIntents({
     limit: CLEANUP_LIMIT,

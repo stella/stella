@@ -187,9 +187,7 @@ const scopedDb: ScopedDb = async (callback) => {
         };
         return {
           onConflictDoNothing: () => ({ returning }),
-          returning: async () => {
-            return await returning();
-          },
+          returning: async () => await returning(),
         };
       },
     }),

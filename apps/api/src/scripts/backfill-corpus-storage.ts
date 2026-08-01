@@ -142,14 +142,14 @@ const backfillRow = async (row: BackfillRow): Promise<void> => {
       timestampMatchesCasToken(caseLawDecisions.updatedAt, row.updatedAtToken),
     );
     const outcome = await writeReservedCaseLawCorpusUpload({
-      apply: async ({ tx, written }) => {
+      apply: async ({ tx, written: uploaded }) => {
         // audit: skip — one-time corpus storage repair; derived state
         const recorded = await tx
           .update(caseLawDecisions)
           .set(
             corpusMirrorColumns({
               status: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
-              written,
+              written: uploaded,
             }),
           )
           .where(ownerPredicate)

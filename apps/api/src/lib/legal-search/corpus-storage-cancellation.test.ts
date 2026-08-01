@@ -49,6 +49,22 @@ void mock.module("@/api/lib/s3", () => ({
 const { deleteCorpusDocument, writeCorpusDocument } =
   await import("@/api/lib/legal-search/corpus-storage");
 
+const waitForCallCount = async (
+  callCount: () => number,
+  expected: number,
+): Promise<void> => {
+  await new Promise<void>((resolve) => {
+    const check = () => {
+      if (callCount() >= expected) {
+        resolve();
+        return;
+      }
+      setTimeout(check, 1);
+    };
+    check();
+  });
+};
+
 const writeRejection = async (signal: AbortSignal): Promise<unknown> =>
   await writeCorpusDocument(
     {
@@ -79,9 +95,7 @@ describe("corpus object cancellation", () => {
     const controller = new AbortController();
     const pending = writeRejection(controller.signal);
 
-    while (putCorpusObjectMock.mock.calls.length < 3) {
-      await Bun.sleep(1);
-    }
+    await waitForCallCount(() => putCorpusObjectMock.mock.calls.length, 3);
     const signals = putCorpusObjectMock.mock.calls.map((call) => call[3]);
     controller.abort();
 
@@ -89,7 +103,62 @@ describe("corpus object cancellation", () => {
 
     expect(rejection).toMatchObject({ name: "AbortError" });
     expect(signals).toHaveLength(3);
-    expect(signals.every((signal) => signal?.aborted)).toBe(true);
+    expect(signals.every((signal) => signal.aborted)).toBe(true);
+  });
+
+  test("waits for aborted sibling PUTs before reporting a write failure", async () => {
+    const writeFailure = new Error("text write failed");
+    const allWritesStarted = Promise.withResolvers<void>();
+    const siblingsAborted = Promise.withResolvers<void>();
+    const releaseSiblings = Promise.withResolvers<void>();
+    let started = 0;
+    let abortedSiblings = 0;
+
+    putCorpusObjectMock.mockImplementation(
+      async (
+        key: string,
+        _bytes: Uint8Array,
+        _mimeType: string,
+        signal: AbortSignal,
+      ): Promise<void> => {
+        started += 1;
+        if (started === 3) {
+          allWritesStarted.resolve();
+        }
+        await allWritesStarted.promise;
+
+        if (key.endsWith("/text.zst")) {
+          throw writeFailure;
+        }
+
+        await new Promise<never>((_resolve, reject) => {
+          signal.addEventListener(
+            "abort",
+            () => {
+              abortedSiblings += 1;
+              if (abortedSiblings === 2) {
+                siblingsAborted.resolve();
+              }
+              void releaseSiblings.promise.then(() => reject(signal.reason));
+            },
+            { once: true },
+          );
+        });
+      },
+    );
+
+    const pending = writeRejection(new AbortController().signal);
+    await siblingsAborted.promise;
+
+    let returned = false;
+    void pending.then(() => {
+      returned = true;
+    });
+    await Bun.sleep(1);
+    expect(returned).toBe(false);
+
+    releaseSiblings.resolve();
+    expect(await pending).toBe(writeFailure);
   });
 
   test("passes caller cancellation to every in-flight corpus DELETE", async () => {
@@ -106,15 +175,13 @@ describe("corpus object cancellation", () => {
       (error: unknown) => error,
     );
 
-    while (deleteCorpusObjectMock.mock.calls.length < 3) {
-      await Bun.sleep(1);
-    }
+    await waitForCallCount(() => deleteCorpusObjectMock.mock.calls.length, 3);
     const signals = deleteCorpusObjectMock.mock.calls.map((call) => call[1]);
     controller.abort();
 
     const rejection = await pending;
 
     expect(rejection).toMatchObject({ name: "AbortError" });
-    expect(signals.every((signal) => signal?.aborted)).toBe(true);
+    expect(signals.every((signal) => signal.aborted)).toBe(true);
   });
 });

@@ -14,6 +14,7 @@ export type SafeIdType =
   | "caseLawCoverageSlice"
   | "caseLawCourtWeight"
   | "caseLawDecision"
+  | "caseLawCorpusUploadIntent"
   | "caseLawIndexJob"
   | "caseLawIngestionEvent"
   | "caseLawIngestionFailure"

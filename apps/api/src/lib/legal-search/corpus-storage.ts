@@ -156,6 +156,44 @@ type WriteCorpusInput = CorpusPayload & {
 
 type CorpusIoOptions = { signal?: AbortSignal };
 
+type StartedCorpusIo<T> = {
+  result: Promise<T>;
+  settle: () => Promise<void>;
+};
+
+/**
+ * Keep a handle to the real cancellable operation as well as its bounded
+ * result. `withTimeout` must return promptly when a deadline fires, but a
+ * caller that will hand the keys to cleanup must first wait for the aborted
+ * S3 request to settle: otherwise a late PUT could recreate an object after
+ * cleanup deleted it.
+ */
+const startCancellableCorpusIo = <T>(
+  label: string,
+  operation: (signal: AbortSignal) => Promise<T>,
+  options: CorpusIoOptions,
+): StartedCorpusIo<T> => {
+  let actual: Promise<T> | undefined;
+  const result = boundedCorpusIo(
+    label,
+    (operationSignal) => {
+      const operationPromise = operation(operationSignal);
+      actual = operationPromise;
+      return operationPromise;
+    },
+    options,
+  );
+
+  return {
+    result,
+    settle: async () => {
+      if (actual !== undefined) {
+        await Promise.allSettled([actual]);
+      }
+    },
+  };
+};
+
 export type WriteCorpusResult = CorpusKeys & { contentHash: string };
 
 type CorpusMirrorState =
@@ -219,9 +257,15 @@ export const writeCorpusDocument = async (
 ): Promise<WriteCorpusResult> => {
   const contentHash = corpusContentHash({ text, sections, ast });
   const keys = corpusKeys({ documentId, jurisdiction, contentHash });
+  const writeController = new AbortController();
+  const writeSignal =
+    signal === undefined
+      ? writeController.signal
+      : AbortSignal.any([writeController.signal, signal]);
+  const writeOptions = { signal: writeSignal };
 
-  await Promise.all([
-    boundedCorpusIo(
+  const writes = [
+    startCancellableCorpusIo(
       "corpus-write-text",
       async (writeSignal) =>
         await putCorpusS3ObjectWithSignal(
@@ -230,9 +274,9 @@ export const writeCorpusDocument = async (
           CONTENT_TYPE,
           writeSignal,
         ),
-      { signal },
+      writeOptions,
     ),
-    boundedCorpusIo(
+    startCancellableCorpusIo(
       "corpus-write-sections",
       async (writeSignal) =>
         await putCorpusS3ObjectWithSignal(
@@ -241,9 +285,9 @@ export const writeCorpusDocument = async (
           CONTENT_TYPE,
           writeSignal,
         ),
-      { signal },
+      writeOptions,
     ),
-    boundedCorpusIo(
+    startCancellableCorpusIo(
       "corpus-write-ast",
       async (writeSignal) =>
         await putCorpusS3ObjectWithSignal(
@@ -252,9 +296,17 @@ export const writeCorpusDocument = async (
           CONTENT_TYPE,
           writeSignal,
         ),
-      { signal },
+      writeOptions,
     ),
-  ]);
+  ];
+
+  try {
+    await Promise.all(writes.map(({ result }) => result));
+  } catch (error) {
+    writeController.abort(error);
+    await Promise.allSettled(writes.map(({ settle }) => settle()));
+    throw error;
+  }
 
   return { ...keys, contentHash };
 };
@@ -372,6 +424,7 @@ export const deleteCorpusDocument = async (
   const present = [keys.textKey, keys.sectionsKey, keys.astKey].filter(
     (key): key is string => key !== null,
   );
+  const options = signal === undefined ? {} : { signal };
   await Promise.all(
     present.map(
       async (key) =>
@@ -379,7 +432,7 @@ export const deleteCorpusDocument = async (
           "corpus-delete",
           async (deleteSignal) =>
             await deleteCorpusS3ObjectWithSignal(key, deleteSignal),
-          { signal },
+          options,
         ),
     ),
   );

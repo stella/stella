@@ -364,6 +364,7 @@ export const caseLawCorpusUploadIntents = p.pgTable(
       })
       .default(CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.ACTIVE)
       .notNull(),
+    leaseExpiresAt: timestamptz("lease_expires_at").notNull(),
     cleanupAttemptCount: p
       .integer("cleanup_attempt_count")
       .default(0)
@@ -380,6 +381,10 @@ export const caseLawCorpusUploadIntents = p.pgTable(
       .index("case_law_corpus_upload_intents_cleanup_due_idx")
       .on(t.nextCleanupAt, t.id)
       .where(eq(t.status, CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.CLEANUP)),
+    p
+      .index("case_law_corpus_upload_intents_active_lease_idx")
+      .on(t.leaseExpiresAt, t.id)
+      .where(eq(t.status, CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.ACTIVE)),
     p.check(
       "case_law_corpus_upload_intents_status_values",
       sql`${t.status} IN ('active', 'cleanup')`,
@@ -732,6 +737,10 @@ export const caseLawIndexJobs = p.pgTable(
   (t) => [
     p.index("case_law_index_jobs_decision_idx").on(t.decisionId),
     p.index("case_law_index_jobs_created_idx").on(t.createdAt),
+    p
+      .index("case_law_index_jobs_redaction_decision_idx")
+      .on(t.decisionId, t.createdAt.desc())
+      .where(sql`${t.operation} = 'redact' AND ${t.decisionId} IS NOT NULL`),
     p.check(
       "case_law_index_jobs_operation_values",
       sql`${t.operation} IN ('index','delete','redact','rebuild')`,

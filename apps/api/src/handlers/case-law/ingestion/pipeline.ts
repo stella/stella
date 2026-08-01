@@ -1221,8 +1221,8 @@ const processDecisionAttempt = async ({
             ).at(0),
           ),
         scopedDb,
-        write: async ({ signal }) =>
-          await writeCorpusDocument(corpusPayload, { signal }),
+        write: async ({ signal: uploadSignal }) =>
+          await writeCorpusDocument(corpusPayload, { signal: uploadSignal }),
       });
       if (upload.type === "cancelled") {
         return {
