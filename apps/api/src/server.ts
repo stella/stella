@@ -85,6 +85,8 @@ import { viewsRoute } from "@/api/handlers/views/routes";
 import { wellKnownRoute } from "@/api/handlers/well-known/routes";
 import { workspaceEventsRoute } from "@/api/handlers/workspaces/events";
 import { workspacesRoute } from "@/api/handlers/workspaces/routes";
+import { workObligationsRoute } from "@/api/handlers/work-obligations/routes";
+import { myWorkRoute } from "@/api/handlers/work-obligations/my-work-route";
 import { initAccountDeletionCleanupWorker } from "@/api/lib/account-deletion-cleanup-queue";
 import { captureRequestError } from "@/api/lib/analytics/capture";
 import { getAnalytics } from "@/api/lib/analytics/client";
@@ -585,6 +587,8 @@ const api = new Elysia()
       .use(viewTemplatesRoute)
       .use(viewsRoute)
       .use(tasksRoute)
+      .use(workObligationsRoute)
+      .use(myWorkRoute)
       .use(myTasksRoute)
       .use(meRoute)
       .use(devRoute)

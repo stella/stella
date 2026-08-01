@@ -2868,6 +2868,22 @@
     "workspaceDuplicatedSuccessfully": "Byla sėkmingai dubliuota"
   },
   "tasks": {
+    "acknowledge": "Patvirtinti prisiėmimą",
+    "acknowledgementRequired": "Patvirtinkite, kad prisiėmėte atsakomybę už šį darbą.",
+    "activity": "Veikla",
+    "activityTypes": {
+      "acknowledged": "Atsakomybė patvirtinta",
+      "cancelled": "Darbas atšauktas",
+      "completed": "Darbas užbaigtas",
+      "created": "Darbas sukurtas",
+      "delegated": "Atsakomybė perduota",
+      "hardDeadlineChanged": "Galutinis terminas pakeistas",
+      "ownerAssigned": "Atsakingas asmuo paskirtas",
+      "provenanceChanged": "Šaltinis pakeistas",
+      "reopened": "Darbas atnaujintas",
+      "typeChanged": "Darbo tipas pakeistas",
+      "workingTargetChanged": "Darbinis terminas pakeistas"
+    },
     "addAssignee": "Priskirti asmenį",
     "addSubtask": "Pridėti použduotį",
     "assigneeRoles": {
@@ -2875,19 +2891,30 @@
       "reviewer": "Peržiūrėtojas"
     },
     "assignees": "Priskirti",
+    "cancelledFromStatusControl": "Atšaukta užduoties būsenos valdiklyje",
     "clearDate": "Išvalyti datą",
+    "completeWork": "Užbaigti darbą",
+    "deadlineChangedFromTask": "Galutinis terminas pakeistas užduoties informacijoje",
+    "delegationReason": "Perskyrimo priežastis",
     "deletedAccount": "Ištrinta paskyra",
     "dueDate": "Terminas",
+    "hardDeadline": "Galutinis terminas",
+    "hardDeadlineOverdue": "Galutinis terminas praleistas",
     "linkEntity": "Susieti įrašą",
     "linkedEntities": "Susiję įrašai",
     "myTasksTitle": "Mano užduotys",
+    "myWorkTitle": "Mano darbai",
     "newTask": "Nauja užduotis",
+    "noActivity": "Veiklos dar nėra",
     "noAssignees": "Nėra priskirtų",
     "noLinks": "Nėra susietų įrašų",
+    "noOwner": "Nėra atsakingo asmens",
     "noSubtasks": "Nėra použduočių",
     "noTasksAssigned": "Jums nėra priskirtų užduočių",
+    "noWorkInQueue": "Šioje eilėje darbų nėra",
     "notFound": "Užduotis nerasta",
     "overdue": "Vėluojama",
+    "owner": "Atsakingas asmuo",
     "priority": "Prioritetas",
     "priorityValues": {
       "high": "Aukštas",
@@ -2895,6 +2922,21 @@
       "medium": "Vidutinis",
       "none": "Nėra",
       "urgent": "Skubu"
+    },
+    "queue": {
+      "atRisk": "Rizikingi",
+      "completed": "Užbaigti",
+      "inbox": "Gauta",
+      "upcoming": "Artėjantys"
+    },
+    "reopenWork": "Atnaujinti darbą",
+    "sourceTypeValues": {
+      "api": "API",
+      "calendar": "Kalendorius",
+      "document": "Dokumentas",
+      "email": "El. paštas",
+      "import": "Importas",
+      "manual": "Rankinis"
     },
     "status": "Būsena",
     "statusValues": {
@@ -2906,7 +2948,11 @@
     },
     "subtasks": "Použduočiai",
     "title": "Užduotys",
-    "untitled": "Užduotis be pavadinimo"
+    "untitled": "Užduotis be pavadinimo",
+    "workTypeValues": {
+      "deadline": "Terminas",
+      "task": "Užduotis"
+    }
   },
   "templates": {
     "addItem": "Pridėti elementą",

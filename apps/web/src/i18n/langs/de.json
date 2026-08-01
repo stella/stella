@@ -2868,6 +2868,22 @@
     "workspaceDuplicatedSuccessfully": "Akte erfolgreich dupliziert"
   },
   "tasks": {
+    "acknowledge": "Übernahme bestätigen",
+    "acknowledgementRequired": "Bestätigen Sie, dass Sie die Verantwortung für diese Arbeit übernommen haben.",
+    "activity": "Aktivität",
+    "activityTypes": {
+      "acknowledged": "Verantwortung bestätigt",
+      "cancelled": "Arbeit abgebrochen",
+      "completed": "Arbeit abgeschlossen",
+      "created": "Arbeit erstellt",
+      "delegated": "Verantwortung übertragen",
+      "hardDeadlineChanged": "Verbindliche Frist geändert",
+      "ownerAssigned": "Verantwortliche Person zugewiesen",
+      "provenanceChanged": "Quelle geändert",
+      "reopened": "Arbeit wieder geöffnet",
+      "typeChanged": "Arbeitsart geändert",
+      "workingTargetChanged": "Arbeitsziel geändert"
+    },
     "addAssignee": "Person zuweisen",
     "addSubtask": "Unteraufgabe hinzufügen",
     "assigneeRoles": {
@@ -2875,19 +2891,30 @@
       "reviewer": "Prüfer"
     },
     "assignees": "Zugewiesene",
+    "cancelledFromStatusControl": "Über die Aufgabenstatussteuerung abgebrochen",
     "clearDate": "Datum löschen",
+    "completeWork": "Arbeit abschließen",
+    "deadlineChangedFromTask": "Verbindliche Frist in den Aufgabendetails geändert",
+    "delegationReason": "Grund für die Neuzuweisung",
     "deletedAccount": "Gelöschtes Konto",
     "dueDate": "Fälligkeitsdatum",
+    "hardDeadline": "Verbindliche Frist",
+    "hardDeadlineOverdue": "Verbindliche Frist überschritten",
     "linkEntity": "Eintrag verknüpfen",
     "linkedEntities": "Verknüpfte Einträge",
     "myTasksTitle": "Meine Aufgaben",
+    "myWorkTitle": "Meine Arbeit",
     "newTask": "Neue Aufgabe",
+    "noActivity": "Noch keine Aktivität",
     "noAssignees": "Keine Zuweisungen",
     "noLinks": "Keine verknüpften Einträge",
+    "noOwner": "Keine verantwortliche Person",
     "noSubtasks": "Keine Unteraufgaben",
     "noTasksAssigned": "Keine Aufgaben zugewiesen",
+    "noWorkInQueue": "Keine Arbeit in dieser Warteschlange",
     "notFound": "Aufgabe nicht gefunden",
     "overdue": "Überfällig",
+    "owner": "Verantwortlich",
     "priority": "Priorität",
     "priorityValues": {
       "high": "Hoch",
@@ -2895,6 +2922,21 @@
       "medium": "Mittel",
       "none": "Keine",
       "urgent": "Dringend"
+    },
+    "queue": {
+      "atRisk": "Gefährdet",
+      "completed": "Abgeschlossen",
+      "inbox": "Eingang",
+      "upcoming": "Anstehend"
+    },
+    "reopenWork": "Arbeit wieder öffnen",
+    "sourceTypeValues": {
+      "api": "API",
+      "calendar": "Kalender",
+      "document": "Dokument",
+      "email": "E-Mail",
+      "import": "Import",
+      "manual": "Manuell"
     },
     "status": "Status",
     "statusValues": {
@@ -2906,7 +2948,11 @@
     },
     "subtasks": "Unteraufgaben",
     "title": "Aufgaben",
-    "untitled": "Aufgabe ohne Titel"
+    "untitled": "Aufgabe ohne Titel",
+    "workTypeValues": {
+      "deadline": "Frist",
+      "task": "Aufgabe"
+    }
   },
   "templates": {
     "addItem": "Element hinzufügen",

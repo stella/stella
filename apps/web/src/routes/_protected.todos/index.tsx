@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import {
   createFileRoute,
   getRouteApi,
@@ -11,13 +11,15 @@ import {
   ArrowDownIcon,
   ArrowUpIcon,
   CalendarIcon,
+  CheckCircle2Icon,
+  InboxIcon,
+  ListTodoIcon,
   MinusIcon,
   PlusIcon,
+  ShieldAlertIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { isEntityPriority, isTaskStatus } from "@stll/api-contract";
-import type { EntityPriority, TaskStatus } from "@stll/api-contract";
 import { Button } from "@stll/ui/components/button";
 import {
   Menu,
@@ -26,26 +28,28 @@ import {
   MenuTrigger,
 } from "@stll/ui/components/menu";
 import { Skeleton } from "@stll/ui/components/skeleton";
+import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MatterRefLink } from "@/components/matter-ref-link";
-import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
+import { useAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { pageTitle } from "@/lib/page-title";
-import { captureInvalidTaskOption } from "@/lib/task-option-telemetry";
 import { workspacesOptions } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
-import type { TaskItem } from "@/routes/_protected.todos/-queries";
-import { myTasksOptions } from "@/routes/_protected.todos/-queries";
+import type {
+  MyWorkItem,
+  MyWorkQueue,
+} from "@/routes/_protected.todos/-queries";
+import { myWorkOptions } from "@/routes/_protected.todos/-queries";
 
 const protectedRouteApi = getRouteApi("/_protected");
-
-type TaskFilter = "all" | "open" | "in_progress" | "done";
 
 export const Route = createFileRoute("/_protected/todos/")({
   head: () => ({
@@ -54,29 +58,29 @@ export const Route = createFileRoute("/_protected/todos/")({
   component: MyTodosPage,
 });
 
-const STATUS_COLORS = {
-  open: "bg-muted-foreground",
-  in_progress: "bg-foreground-strong-muted dark:bg-foreground-strong-muted",
-  in_review: "bg-warning",
-  done: "bg-success dark:bg-success",
+const STATUS_COLORS: Record<string, string> = {
+  unassigned: "bg-muted-foreground",
+  awaiting_acknowledgement: "bg-warning",
+  active: "bg-foreground-strong-muted dark:bg-foreground-strong-muted",
+  completed: "bg-success dark:bg-success",
   cancelled: "bg-destructive dark:bg-destructive",
-} as const satisfies Record<TaskStatus, string>;
+};
 
-const PRIORITY_ICONS = {
+const PRIORITY_ICONS: Record<string, typeof MinusIcon> = {
   none: MinusIcon,
   urgent: AlertCircleIcon,
   high: ArrowUpIcon,
   medium: MinusIcon,
   low: ArrowDownIcon,
-} as const satisfies Record<EntityPriority, typeof MinusIcon>;
+};
 
-const PRIORITY_COLORS = {
+const PRIORITY_COLORS: Record<string, string> = {
   none: "text-muted-foreground",
   urgent: "text-destructive",
   high: "text-warning",
   medium: "text-warning",
   low: "text-foreground-muted dark:text-foreground",
-} as const satisfies Record<EntityPriority, string>;
+};
 
 const SKELETON_GROUP_KEYS = ["alpha", "beta", "gamma"];
 const SKELETON_ROW_KEYS = ["one", "two", "three"];
@@ -88,25 +92,21 @@ const SKELETON_ROW_NAME_WIDTHS: Record<string, string> = {
   three: "w-40",
 };
 
-type ValidTask = TaskItem & {
-  workspace: NonNullable<TaskItem["workspace"]>;
-};
-
 type GroupedTasks = {
   workspace: { id: string; name: string };
-  tasks: ValidTask[];
+  tasks: MyWorkItem[];
 };
 
-const groupByWorkspace = (tasks: readonly ValidTask[]): GroupedTasks[] => {
+const groupByWorkspace = (tasks: readonly MyWorkItem[]): GroupedTasks[] => {
   const map = new Map<string, GroupedTasks>();
 
   for (const task of tasks) {
-    const existing = map.get(task.workspace.id);
+    const existing = map.get(task.workspaceId);
     if (existing) {
       existing.tasks.push(task);
     } else {
-      map.set(task.workspace.id, {
-        workspace: task.workspace,
+      map.set(task.workspaceId, {
+        workspace: { id: task.workspaceId, name: task.workspaceName },
         tasks: [task],
       });
     }
@@ -115,34 +115,47 @@ const groupByWorkspace = (tasks: readonly ValidTask[]): GroupedTasks[] => {
   return Array.from(map.values());
 };
 
+const localISODate = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
 function MyTodosPage() {
   const t = useTranslations();
   const navigate = useNavigate();
+  const analytics = useAnalytics();
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
-  const [filter, setFilter] = useState<TaskFilter>("all");
-  const { data: tasks, isLoading } = useQuery(myTasksOptions);
+  const [queue, setQueue] = useState<MyWorkQueue>("upcoming");
+  const asOf = localISODate();
+  const {
+    data,
+    error,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading,
+  } = useInfiniteQuery(myWorkOptions(queue, asOf));
   const { data: workspaces } = useQuery(
     workspacesOptions(activeOrganizationId),
   );
 
-  const filtered = (() => {
-    if (!tasks) {
-      return [];
-    }
+  const tasks = data?.pages.flatMap((page) => page.items) ?? [];
+  const groups = groupByWorkspace(tasks);
 
-    const valid = tasks.filter(
-      (task): task is ValidTask => task.workspace !== null,
+  useExternalSyncEffect(() => {
+    if (!error) {
+      return;
+    }
+    analytics.captureError(error);
+    stellaToast.error(
+      userErrorFromThrown(error, t("common.unexpectedError")),
     );
-
-    if (filter === "all") {
-      return valid;
-    }
-    return valid.filter((task) => task.status === filter);
-  })();
-
-  const groups = groupByWorkspace(filtered);
+  }, [analytics, error, t]);
 
   const handleCreateTask = async (wsId: string) => {
     const response = await api.tasks({ workspaceId: wsId }).put({
@@ -165,7 +178,7 @@ function MyTodosPage() {
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto border-t p-4">
       <div className="flex items-center gap-2">
         <h1 className="me-auto text-lg font-semibold">
-          {t("tasks.myTasksTitle")}
+          {t("tasks.myWorkTitle")}
         </h1>
         {workspaces?.workspaces && workspaces.workspaces.length > 0 && (
           <Menu>
@@ -192,26 +205,26 @@ function MyTodosPage() {
             </MenuPopup>
           </Menu>
         )}
-        <div className="flex gap-1">
+        <div className="flex flex-wrap gap-1">
           <FilterButton
-            active={filter === "all"}
-            label={t("common.all")}
-            onClick={() => setFilter("all")}
+            active={queue === "inbox"}
+            label={t("tasks.queue.inbox")}
+            onClick={() => setQueue("inbox")}
           />
           <FilterButton
-            active={filter === "open"}
-            label={t("tasks.statusValues.open")}
-            onClick={() => setFilter("open")}
+            active={queue === "upcoming"}
+            label={t("tasks.queue.upcoming")}
+            onClick={() => setQueue("upcoming")}
           />
           <FilterButton
-            active={filter === "in_progress"}
-            label={t("tasks.statusValues.in_progress")}
-            onClick={() => setFilter("in_progress")}
+            active={queue === "at_risk"}
+            label={t("tasks.queue.atRisk")}
+            onClick={() => setQueue("at_risk")}
           />
           <FilterButton
-            active={filter === "done"}
-            label={t("tasks.statusValues.done")}
-            onClick={() => setFilter("done")}
+            active={queue === "completed"}
+            label={t("tasks.queue.completed")}
+            onClick={() => setQueue("completed")}
           />
         </div>
       </div>
@@ -220,8 +233,8 @@ function MyTodosPage() {
 
       {!isLoading && groups.length === 0 && (
         <div className="text-muted-foreground flex flex-col items-center justify-center gap-3 py-16">
-          <EntityKindIcon className="size-10 opacity-40" kind="task" />
-          <p className="text-sm">{t("tasks.noTasksAssigned")}</p>
+          <ListTodoIcon className="size-10 opacity-40" />
+          <p className="text-sm">{t("tasks.noWorkInQueue")}</p>
           {workspaces?.workspaces && workspaces.workspaces.length > 0 && (
             <Menu>
               <MenuTrigger
@@ -261,11 +274,25 @@ function MyTodosPage() {
           </h2>
           <div className="flex flex-col">
             {group.tasks.map((task) => (
-              <TaskRow key={task.id} task={task} />
+              <TaskRow key={task.entityId} task={task} />
             ))}
           </div>
         </div>
       ))}
+
+      {hasNextPage && (
+        <Button
+          className="self-center"
+          disabled={isFetchingNextPage}
+          onClick={() => {
+            detached(fetchNextPage(), "MyTodosPage");
+          }}
+          size="sm"
+          variant="outline"
+        >
+          {isFetchingNextPage ? t("common.loading") : t("common.loadMore")}
+        </Button>
+      )}
     </div>
   );
 }
@@ -282,37 +309,38 @@ const FilterButton = ({ label, active, onClick }: FilterButtonProps) => (
   </Button>
 );
 
-const TaskRow = ({ task }: { task: ValidTask }) => {
-  const status = isTaskStatus(task.status) ? task.status : null;
-  const priority = isEntityPriority(task.priority) ? task.priority : null;
-
-  useExternalSyncEffect(() => {
-    if (status === null) {
-      captureInvalidTaskOption("status");
-    }
-    if (priority === null) {
-      captureInvalidTaskOption("priority");
-    }
-  }, [priority, status]);
-
+const TaskRow = ({ task }: { task: MyWorkItem }) => {
   const statusColor =
-    status === null ? STATUS_COLORS.open : STATUS_COLORS[status];
+    STATUS_COLORS[task.workflowStatus] ?? "bg-muted-foreground";
 
-  const PriorityIcon = priority === null ? null : PRIORITY_ICONS[priority];
-  const priorityColor = priority === null ? null : PRIORITY_COLORS[priority];
+  const PriorityIcon = task.priority
+    ? (PRIORITY_ICONS[task.priority] ?? MinusIcon)
+    : null;
+  const priorityColor = task.priority
+    ? (PRIORITY_COLORS[task.priority] ?? "text-muted-foreground")
+    : null;
 
-  const isOverdue =
-    task.dueDate !== null &&
-    task.status !== "done" &&
-    task.status !== "cancelled" &&
-    task.dueDate < new Date().toISOString().slice(0, 10);
+  const displayedDate = task.hardDeadlineDate ?? task.workingTargetDate;
+  const isAtRisk = task.attention !== "none";
+  const AttentionIcon = (() => {
+    if (task.attention === "acknowledgement_required") {
+      return InboxIcon;
+    }
+    if (task.attention === "hard_deadline_due") {
+      return ShieldAlertIcon;
+    }
+    if (task.workflowStatus === "completed") {
+      return CheckCircle2Icon;
+    }
+    return null;
+  })();
 
   return (
     <MatterRefLink
       className="group hover:bg-muted/50 flex items-center gap-3 rounded-md px-2 py-1.5 text-sm transition-colors"
       onClick={() => {
         useInspectorTabsStore.getState().openTask({
-          taskId: task.id,
+          taskId: task.entityId,
           workspaceId: task.workspaceId,
           label: task.name,
         });
@@ -324,16 +352,24 @@ const TaskRow = ({ task }: { task: ValidTask }) => {
       {PriorityIcon && priorityColor && (
         <PriorityIcon className={cn("size-3.5 shrink-0", priorityColor)} />
       )}
-      {task.dueDate && (
+      {AttentionIcon && (
+        <AttentionIcon
+          className={cn(
+            "size-3.5 shrink-0",
+            isAtRisk ? "text-destructive" : "text-success",
+          )}
+        />
+      )}
+      {displayedDate && (
         <span
           className={cn(
             "flex shrink-0 items-center gap-1",
             "text-muted-foreground text-xs",
-            isOverdue && "text-destructive",
+            isAtRisk && "text-destructive",
           )}
         >
           <CalendarIcon className="size-3" />
-          {new Date(task.dueDate).toLocaleDateString(getFormattingLocale(), {
+          {new Date(displayedDate).toLocaleDateString(getFormattingLocale(), {
             month: "short",
             day: "numeric",
             timeZone: "UTC",

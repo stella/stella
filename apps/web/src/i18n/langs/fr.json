@@ -2868,6 +2868,22 @@
     "workspaceDuplicatedSuccessfully": "Dossier dupliqué avec succès"
   },
   "tasks": {
+    "acknowledge": "Confirmer la prise en charge",
+    "acknowledgementRequired": "Confirmez que vous avez accepté la responsabilité de ce travail.",
+    "activity": "Activité",
+    "activityTypes": {
+      "acknowledged": "Responsabilité acceptée",
+      "cancelled": "Travail annulé",
+      "completed": "Travail terminé",
+      "created": "Travail créé",
+      "delegated": "Responsabilité déléguée",
+      "hardDeadlineChanged": "Échéance ferme modifiée",
+      "ownerAssigned": "Responsable désigné",
+      "provenanceChanged": "Source modifiée",
+      "reopened": "Travail rouvert",
+      "typeChanged": "Type de travail modifié",
+      "workingTargetChanged": "Objectif de travail modifié"
+    },
     "addAssignee": "Ajouter un assigné",
     "addSubtask": "Ajouter une sous-tâche",
     "assigneeRoles": {
@@ -2875,19 +2891,30 @@
       "reviewer": "Réviseur"
     },
     "assignees": "Assignés",
+    "cancelledFromStatusControl": "Annulé depuis le contrôle d’état de la tâche",
     "clearDate": "Effacer la date",
+    "completeWork": "Terminer le travail",
+    "deadlineChangedFromTask": "Échéance ferme révisée dans les détails de la tâche",
+    "delegationReason": "Motif de la réaffectation",
     "deletedAccount": "Compte supprimé",
     "dueDate": "Échéance",
+    "hardDeadline": "Échéance ferme",
+    "hardDeadlineOverdue": "Échéance ferme dépassée",
     "linkEntity": "Lier un élément",
     "linkedEntities": "Éléments liés",
     "myTasksTitle": "Mes tâches",
+    "myWorkTitle": "Mon travail",
     "newTask": "Nouvelle tâche",
+    "noActivity": "Aucune activité pour le moment",
     "noAssignees": "Aucun assigné",
     "noLinks": "Aucun élément lié",
+    "noOwner": "Aucun responsable",
     "noSubtasks": "Aucune sous-tâche",
     "noTasksAssigned": "Aucune tâche ne vous est assignée",
+    "noWorkInQueue": "Aucun travail dans cette file",
     "notFound": "Tâche introuvable",
     "overdue": "En retard",
+    "owner": "Responsable",
     "priority": "Priorité",
     "priorityValues": {
       "high": "Haute",
@@ -2895,6 +2922,21 @@
       "medium": "Moyenne",
       "none": "Aucune",
       "urgent": "Urgent"
+    },
+    "queue": {
+      "atRisk": "À risque",
+      "completed": "Terminé",
+      "inbox": "Boîte de réception",
+      "upcoming": "À venir"
+    },
+    "reopenWork": "Rouvrir le travail",
+    "sourceTypeValues": {
+      "api": "API",
+      "calendar": "Calendrier",
+      "document": "Document",
+      "email": "E-mail",
+      "import": "Import",
+      "manual": "Manuel"
     },
     "status": "Statut",
     "statusValues": {
@@ -2906,7 +2948,11 @@
     },
     "subtasks": "Sous-tâches",
     "title": "Tâches",
-    "untitled": "Tâche sans titre"
+    "untitled": "Tâche sans titre",
+    "workTypeValues": {
+      "deadline": "Échéance",
+      "task": "Tâche"
+    }
   },
   "templates": {
     "addItem": "Ajouter un élément",

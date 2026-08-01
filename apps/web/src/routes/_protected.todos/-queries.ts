@@ -1,23 +1,43 @@
-import { queryOptions } from "@tanstack/react-query";
+import { infiniteQueryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 
-const myTasksKeys = {
-  all: ["my-tasks"],
+export const MY_WORK_QUEUES = [
+  "inbox",
+  "upcoming",
+  "at_risk",
+  "completed",
+] as const;
+export type MyWorkQueue = (typeof MY_WORK_QUEUES)[number];
+
+const myWorkKeys = {
+  all: ["my-work"] as const,
+  queue: (queue: MyWorkQueue, asOf: string) =>
+    [...myWorkKeys.all, queue, asOf] as const,
 };
 
-export const myTasksOptions = queryOptions({
-  queryKey: myTasksKeys.all,
-  queryFn: async ({ signal }) => {
-    const response = await api["my-tasks"].get({
-      fetch: { signal },
-    });
+export const myWorkOptions = (queue: MyWorkQueue, asOf: string) =>
+  infiniteQueryOptions({
+    queryKey: myWorkKeys.queue(queue, asOf),
+    initialPageParam: undefined as string | undefined,
+    queryFn: async ({ signal, pageParam }) => {
+      const response = await api["my-work"].get({
+        query: {
+          queue,
+          asOf,
+          limit: 50,
+          ...(pageParam ? { cursor: pageParam } : {}),
+        },
+        fetch: { signal },
+      });
 
-    return unwrapEden(response);
-  },
-});
+      return unwrapEden(response);
+    },
+    getNextPageParam: ({ nextCursor }) => nextCursor ?? undefined,
+  });
 
 /** Derived from the Eden response type. */
-type QueryFn = NonNullable<(typeof myTasksOptions)["queryFn"]>;
-export type TaskItem = NonNullable<Awaited<ReturnType<QueryFn>>>[number];
+type QueryFn = NonNullable<ReturnType<typeof myWorkOptions>["queryFn"]>;
+type MyWorkPage = NonNullable<Awaited<ReturnType<QueryFn>>>;
+export type MyWorkItem = MyWorkPage["items"][number];

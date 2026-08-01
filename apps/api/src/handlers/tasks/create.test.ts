@@ -103,6 +103,27 @@ describe("createTaskHandler validation", () => {
     });
   });
 
+  test("rejects a working target after the hard deadline before DB access", async () => {
+    const scopedDb = throwingScopedDb();
+
+    const result = await createTaskHandler(
+      createHandlerContext({
+        body: {
+          name: "File response",
+          workingTargetDate: "2026-09-11",
+          hardDeadlineDate: "2026-09-10",
+        },
+        safeDb: toSafeDbMock(scopedDb),
+        scopedDb,
+      }),
+    );
+
+    expect(result).toEqual({
+      code: 400,
+      response: { message: "Working target cannot be after the hard deadline" },
+    });
+  });
+
   test("valid status and priority proceeds to DB call", async () => {
     const scopedDb = resolvingScopedDb();
 

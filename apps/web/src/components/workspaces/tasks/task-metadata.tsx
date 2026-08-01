@@ -1,8 +1,11 @@
+import { useState } from "react";
+
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PlusIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
+import { Input } from "@stll/ui/components/input";
 import {
   Popover,
   PopoverPopup,
@@ -37,6 +40,10 @@ import { taskKeys } from "@/lib/workspaces/queries/tasks";
 import { workspaceMembersOptions } from "@/lib/workspaces/queries/workspace-members";
 
 import type { TaskPriority, TaskStatus } from "./task-detail-constants";
+
+const WORK_TYPES = ["task", "deadline"] as const;
+
+export type WorkType = (typeof WORK_TYPES)[number];
 
 // -- Layout helper --
 
@@ -129,6 +136,35 @@ export const PrioritySelect = ({ value, onChange }: PrioritySelectProps) => {
   );
 };
 
+// -- Work type select --
+
+type WorkTypeSelectProps = {
+  value: WorkType;
+  onChange: (value: WorkType | null) => void;
+};
+
+export const WorkTypeSelect = ({ value, onChange }: WorkTypeSelectProps) => {
+  const t = useTranslations("tasks");
+
+  return (
+    <Select onValueChange={onChange} value={value}>
+      <SelectTrigger
+        className="h-7 min-h-7 min-w-0 gap-1 border-none bg-transparent px-1.5 shadow-none"
+        size="sm"
+      >
+        <span className="truncate">{t(`workTypeValues.${value}`)}</span>
+      </SelectTrigger>
+      <SelectPopup>
+        {WORK_TYPES.map((type) => (
+          <SelectItem key={type} value={type}>
+            {t(`workTypeValues.${type}`)}
+          </SelectItem>
+        ))}
+      </SelectPopup>
+    </Select>
+  );
+};
+
 // -- Date picker --
 
 type DatePickerPopoverProps = Omit<
@@ -151,6 +187,106 @@ export const DatePickerPopover = (props: DatePickerPopoverProps) => {
       locale={locale}
       overdueLabel={t("overdue")}
     />
+  );
+};
+
+// -- Accountable owner picker --
+
+type OwnerPickerProps = {
+  workspaceId: string;
+  owner: {
+    id: string;
+    name: string | null;
+    image: string | null;
+    deletedAt?: Date | string | null;
+  } | null;
+  disabled?: boolean;
+  onChange: (userId: string, reason: string | undefined) => void;
+};
+
+export const OwnerPicker = ({
+  workspaceId,
+  owner,
+  disabled,
+  onChange,
+}: OwnerPickerProps) => {
+  const t = useTranslations("tasks");
+  const { data: members } = useQuery(workspaceMembersOptions(workspaceId));
+  const [reason, setReason] = useState("");
+  const selectableMembers = members?.filter(
+    (member) => member.user && member.user.id !== owner?.id,
+  );
+
+  return (
+    <Popover>
+      <PopoverTrigger
+        render={
+          <button
+            className="hover:bg-muted flex h-7 w-full items-center gap-1.5 rounded-md px-1.5 text-sm transition-colors"
+            disabled={disabled}
+            type="button"
+          />
+        }
+      >
+        {owner ? (
+          <>
+            <UserAvatar
+              className="size-4 text-[10px]"
+              deleted={hasDeletedAccount(owner.deletedAt)}
+              image={owner.image}
+              name={owner.name}
+            />
+            <span className="truncate">{owner.name ?? t("deletedAccount")}</span>
+          </>
+        ) : (
+          <span className="text-muted-foreground">{t("noOwner")}</span>
+        )}
+      </PopoverTrigger>
+      <PopoverPopup className="w-64 p-2" side="bottom">
+        <div className="flex flex-col gap-2">
+          {owner && (
+            <Input
+              onChange={(event) => setReason(event.target.value)}
+              placeholder={t("delegationReason")}
+              value={reason}
+            />
+          )}
+          <div className="flex max-h-56 flex-col overflow-y-auto">
+            {selectableMembers?.map((member) => {
+              const candidate = member.user;
+              if (!candidate) {
+                return null;
+              }
+              return (
+                <button
+                  className="hover:bg-muted flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors disabled:opacity-50"
+                  disabled={owner !== null && reason.trim().length === 0}
+                  key={candidate.id}
+                  onClick={() => {
+                    onChange(
+                      candidate.id,
+                      owner ? reason.trim() || undefined : undefined,
+                    );
+                    setReason("");
+                  }}
+                  type="button"
+                >
+                  <UserAvatar
+                    className="size-5 text-[10px]"
+                    deleted={hasDeletedAccount(candidate.deletedAt)}
+                    image={candidate.image}
+                    name={candidate.name}
+                  />
+                  <span className="truncate">
+                    {candidate.name ?? t("deletedAccount")}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </PopoverPopup>
+    </Popover>
   );
 };
 

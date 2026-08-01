@@ -1,0 +1,294 @@
+import {
+  isNotNull,
+  jsonb,
+  p,
+  pUuid,
+  safeUuid,
+  safeWorkspaceId,
+  sql,
+  stella,
+  timestamptz,
+  user,
+  workspaceCheck,
+  wsPolicies,
+} from "./common";
+import { workspaces } from "./contacts";
+import { entities } from "./entities";
+
+export const WORK_OBLIGATION_TYPE = {
+  TASK: "task",
+  DEADLINE: "deadline",
+} as const;
+
+export const WORK_OBLIGATION_TYPES = [
+  WORK_OBLIGATION_TYPE.TASK,
+  WORK_OBLIGATION_TYPE.DEADLINE,
+] as const;
+export type WorkObligationType = (typeof WORK_OBLIGATION_TYPES)[number];
+
+export const WORK_OBLIGATION_STATUS = {
+  UNASSIGNED: "unassigned",
+  AWAITING_ACKNOWLEDGEMENT: "awaiting_acknowledgement",
+  ACTIVE: "active",
+  COMPLETED: "completed",
+  CANCELLED: "cancelled",
+} as const;
+
+export const WORK_OBLIGATION_STATUSES = [
+  WORK_OBLIGATION_STATUS.UNASSIGNED,
+  WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
+  WORK_OBLIGATION_STATUS.ACTIVE,
+  WORK_OBLIGATION_STATUS.COMPLETED,
+  WORK_OBLIGATION_STATUS.CANCELLED,
+] as const;
+export type WorkObligationStatus =
+  (typeof WORK_OBLIGATION_STATUSES)[number];
+
+export const WORK_OBLIGATION_SOURCE = {
+  MANUAL: "manual",
+  CALENDAR: "calendar",
+  EMAIL: "email",
+  DOCUMENT: "document",
+  IMPORT: "import",
+  API: "api",
+} as const;
+
+export const WORK_OBLIGATION_SOURCES = [
+  WORK_OBLIGATION_SOURCE.MANUAL,
+  WORK_OBLIGATION_SOURCE.CALENDAR,
+  WORK_OBLIGATION_SOURCE.EMAIL,
+  WORK_OBLIGATION_SOURCE.DOCUMENT,
+  WORK_OBLIGATION_SOURCE.IMPORT,
+  WORK_OBLIGATION_SOURCE.API,
+] as const;
+export type WorkObligationSource =
+  (typeof WORK_OBLIGATION_SOURCES)[number];
+
+export const WORK_OBLIGATION_EVENT_TYPE = {
+  CREATED: "created",
+  OWNER_ASSIGNED: "owner_assigned",
+  ACKNOWLEDGED: "acknowledged",
+  DELEGATED: "delegated",
+  WORKING_TARGET_CHANGED: "working_target_changed",
+  HARD_DEADLINE_CHANGED: "hard_deadline_changed",
+  TYPE_CHANGED: "type_changed",
+  PROVENANCE_CHANGED: "provenance_changed",
+  COMPLETED: "completed",
+  REOPENED: "reopened",
+  CANCELLED: "cancelled",
+} as const;
+
+export const WORK_OBLIGATION_EVENT_TYPES = [
+  WORK_OBLIGATION_EVENT_TYPE.CREATED,
+  WORK_OBLIGATION_EVENT_TYPE.OWNER_ASSIGNED,
+  WORK_OBLIGATION_EVENT_TYPE.ACKNOWLEDGED,
+  WORK_OBLIGATION_EVENT_TYPE.DELEGATED,
+  WORK_OBLIGATION_EVENT_TYPE.WORKING_TARGET_CHANGED,
+  WORK_OBLIGATION_EVENT_TYPE.HARD_DEADLINE_CHANGED,
+  WORK_OBLIGATION_EVENT_TYPE.TYPE_CHANGED,
+  WORK_OBLIGATION_EVENT_TYPE.PROVENANCE_CHANGED,
+  WORK_OBLIGATION_EVENT_TYPE.COMPLETED,
+  WORK_OBLIGATION_EVENT_TYPE.REOPENED,
+  WORK_OBLIGATION_EVENT_TYPE.CANCELLED,
+] as const;
+export type WorkObligationEventType =
+  (typeof WORK_OBLIGATION_EVENT_TYPES)[number];
+
+export type WorkObligationEventDetails =
+  | { type: "created" }
+  | {
+      type: "ownership_changed";
+      previousOwnerUserId: string | null;
+      nextOwnerUserId: string | null;
+      cause?: "owner_removed_from_workspace";
+    }
+  | { type: "acknowledged" }
+  | {
+      type: "date_changed";
+      field: "working_target_date" | "hard_deadline_date";
+      previousDate: string | null;
+      nextDate: string | null;
+    }
+  | {
+      type: "obligation_type_changed";
+      previousType: WorkObligationType;
+      nextType: WorkObligationType;
+    }
+  | {
+      type: "provenance_changed";
+      previousSourceType: WorkObligationSource;
+      nextSourceType: WorkObligationSource;
+      previousSourceEntityId: string | null;
+      nextSourceEntityId: string | null;
+    }
+  | {
+      type: "status_changed";
+      previousStatus: WorkObligationStatus;
+      nextStatus: WorkObligationStatus;
+    };
+
+/**
+ * Governed operational state for a task entity. The entity remains the public
+ * task record; this one-to-one row adds accountability and deadline semantics
+ * without creating a competing task store.
+ */
+export const workObligations = p.pgTable(
+  "work_obligations",
+  {
+    entityId: safeUuid<"entity">("entity_id").primaryKey(),
+    workspaceId: safeWorkspaceId("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    type: p
+      .text("type", { enum: WORK_OBLIGATION_TYPES })
+      .notNull()
+      .default(WORK_OBLIGATION_TYPE.TASK),
+    status: p
+      .text("status", { enum: WORK_OBLIGATION_STATUSES })
+      .notNull()
+      .default(WORK_OBLIGATION_STATUS.UNASSIGNED),
+    ownerUserId: p
+      .text("owner_user_id")
+      .references(() => user.id, { onDelete: "set null" }),
+    acknowledgedAt: timestamptz("acknowledged_at"),
+    acknowledgedByUserId: p
+      .text("acknowledged_by_user_id")
+      .references(() => user.id, { onDelete: "set null" }),
+    workingTargetDate: p.date("working_target_date", { mode: "string" }),
+    hardDeadlineDate: p.date("hard_deadline_date", { mode: "string" }),
+    sourceType: p
+      .text("source_type", { enum: WORK_OBLIGATION_SOURCES })
+      .notNull()
+      .default(WORK_OBLIGATION_SOURCE.MANUAL),
+    sourceEntityId: safeUuid<"entity">("source_entity_id").references(
+      () => entities.id,
+      { onDelete: "set null" },
+    ),
+    sourceDescription: p.varchar("source_description", { length: 1000 }),
+    createdByUserId: p
+      .text("created_by_user_id")
+      .references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    p.unique("work_obligations_entity_ws_unq").on(
+      table.entityId,
+      table.workspaceId,
+    ),
+    p
+      .foreignKey({
+        columns: [table.entityId, table.workspaceId],
+        foreignColumns: [entities.id, entities.workspaceId],
+      })
+      .onDelete("cascade"),
+    p.check(
+      "work_obligations_type_check",
+      sql`${table.type} IN ('task', 'deadline')`,
+    ),
+    p.check(
+      "work_obligations_status_check",
+      sql`${table.status} IN ('unassigned', 'awaiting_acknowledgement', 'active', 'completed', 'cancelled')`,
+    ),
+    p.check(
+      "work_obligations_source_type_check",
+      sql`${table.sourceType} IN ('manual', 'calendar', 'email', 'document', 'import', 'api')`,
+    ),
+    p.check(
+      "work_obligations_target_before_deadline_check",
+      sql`${table.workingTargetDate} IS NULL OR ${table.hardDeadlineDate} IS NULL OR ${table.workingTargetDate} <= ${table.hardDeadlineDate}`,
+    ),
+    p
+      .index("work_obligations_ws_owner_status_target_entity_idx")
+      .on(
+        table.workspaceId,
+        table.ownerUserId,
+        table.status,
+        table.workingTargetDate,
+        table.entityId,
+      ),
+    p
+      .index("work_obligations_owner_status_target_entity_ws_idx")
+      .on(
+        table.ownerUserId,
+        table.status,
+        table.workingTargetDate,
+        table.entityId,
+        table.workspaceId,
+      ),
+    p
+      .index("work_obligations_ws_status_deadline_entity_idx")
+      .on(
+        table.workspaceId,
+        table.status,
+        table.hardDeadlineDate,
+        table.entityId,
+      )
+      .where(isNotNull(table.hardDeadlineDate)),
+    ...wsPolicies(),
+  ],
+);
+
+/** Human-readable, immutable operational history. */
+export const workObligationEvents = p.pgTable(
+  "work_obligation_events",
+  {
+    id: pUuid<"workObligationEvent">().primaryKey(),
+    workspaceId: safeWorkspaceId("workspace_id").notNull(),
+    obligationEntityId: safeUuid<"entity">("obligation_entity_id").notNull(),
+    actorUserId: p
+      .text("actor_user_id")
+      .references(() => user.id, { onDelete: "set null" }),
+    type: p
+      .text("type", { enum: WORK_OBLIGATION_EVENT_TYPES })
+      .notNull(),
+    details: jsonb("details").$type<WorkObligationEventDetails>().notNull(),
+    reason: p.varchar("reason", { length: 1000 }),
+    occurredAt: timestamptz("occurred_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p
+      .foreignKey({
+        columns: [table.obligationEntityId, table.workspaceId],
+        foreignColumns: [workObligations.entityId, workObligations.workspaceId],
+      })
+      .onDelete("cascade"),
+    p.check(
+      "work_obligation_events_type_check",
+      sql`${table.type} IN ('created', 'owner_assigned', 'acknowledged', 'delegated', 'working_target_changed', 'hard_deadline_changed', 'type_changed', 'provenance_changed', 'completed', 'reopened', 'cancelled')`,
+    ),
+    p
+      .index("work_obligation_events_ws_obligation_occurred_id_idx")
+      .on(
+        table.workspaceId,
+        table.obligationEntityId,
+        table.occurredAt,
+        table.id,
+      ),
+    p.pgPolicy("work_obligation_events_select", {
+      for: "select",
+      to: stella,
+      using: workspaceCheck,
+    }),
+    p.pgPolicy("work_obligation_events_insert", {
+      for: "insert",
+      to: stella,
+      withCheck: workspaceCheck,
+    }),
+    p.pgPolicy("work_obligation_events_no_update", {
+      as: "restrictive",
+      for: "update",
+      to: stella,
+      using: sql`false`,
+    }),
+    p.pgPolicy("work_obligation_events_no_delete", {
+      as: "restrictive",
+      for: "delete",
+      to: stella,
+      using: sql`false`,
+    }),
+  ],
+);

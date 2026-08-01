@@ -2868,6 +2868,22 @@
     "workspaceDuplicatedSuccessfully": "تم تكرار الملف القانوني بنجاح"
   },
   "tasks": {
+    "acknowledge": "تأكيد الاستلام",
+    "acknowledgementRequired": "أكّد أنك قبلت مسؤولية هذا العمل.",
+    "activity": "النشاط",
+    "activityTypes": {
+      "acknowledged": "تم تأكيد المسؤولية",
+      "cancelled": "تم إلغاء العمل",
+      "completed": "تم إنجاز العمل",
+      "created": "تم إنشاء العمل",
+      "delegated": "تم تفويض المسؤولية",
+      "hardDeadlineChanged": "تم تغيير الموعد النهائي الملزم",
+      "ownerAssigned": "تم تعيين المسؤول",
+      "provenanceChanged": "تم تغيير المصدر",
+      "reopened": "أُعيد فتح العمل",
+      "typeChanged": "تم تغيير نوع العمل",
+      "workingTargetChanged": "تم تغيير الموعد المستهدف"
+    },
     "addAssignee": "إضافة مُكلَّف",
     "addSubtask": "إضافة مهمة فرعية",
     "assigneeRoles": {
@@ -2875,19 +2891,30 @@
       "reviewer": "المراجِع"
     },
     "assignees": "المُكلَّفون",
+    "cancelledFromStatusControl": "أُلغي من خلال التحكم في حالة المهمة",
     "clearDate": "مسح التاريخ",
+    "completeWork": "إكمال العمل",
+    "deadlineChangedFromTask": "عُدّل الموعد النهائي الملزم في تفاصيل المهمة",
+    "delegationReason": "سبب إعادة التعيين",
     "deletedAccount": "حساب محذوف",
     "dueDate": "تاريخ الاستحقاق",
+    "hardDeadline": "الموعد النهائي الملزم",
+    "hardDeadlineOverdue": "تجاوز الموعد النهائي الملزم",
     "linkEntity": "ربط كيان",
     "linkedEntities": "الكيانات المرتبطة",
     "myTasksTitle": "مهامي",
+    "myWorkTitle": "عملي",
     "newTask": "مهمة جديدة",
+    "noActivity": "لا يوجد نشاط بعد",
     "noAssignees": "لا يوجد مُكلَّفون",
     "noLinks": "لا توجد كيانات مرتبطة",
+    "noOwner": "لا يوجد مسؤول",
     "noSubtasks": "لا توجد مهام فرعية",
     "noTasksAssigned": "لا توجد مهام مُكلَّفة إليك",
+    "noWorkInQueue": "لا يوجد عمل في هذه القائمة",
     "notFound": "لم يُعثر على المهمة",
     "overdue": "متأخرة",
+    "owner": "المسؤول",
     "priority": "الأولوية",
     "priorityValues": {
       "high": "عالية",
@@ -2895,6 +2922,21 @@
       "medium": "متوسطة",
       "none": "لا شيء",
       "urgent": "عاجلة"
+    },
+    "queue": {
+      "atRisk": "معرّض للخطر",
+      "completed": "مكتمل",
+      "inbox": "الوارد",
+      "upcoming": "قادم"
+    },
+    "reopenWork": "إعادة فتح العمل",
+    "sourceTypeValues": {
+      "api": "واجهة برمجة التطبيقات",
+      "calendar": "التقويم",
+      "document": "مستند",
+      "email": "البريد الإلكتروني",
+      "import": "استيراد",
+      "manual": "يدوي"
     },
     "status": "الحالة",
     "statusValues": {
@@ -2906,7 +2948,11 @@
     },
     "subtasks": "المهام الفرعية",
     "title": "المهام",
-    "untitled": "مهمة بلا عنوان"
+    "untitled": "مهمة بلا عنوان",
+    "workTypeValues": {
+      "deadline": "موعد نهائي",
+      "task": "مهمة"
+    }
   },
   "templates": {
     "addItem": "إضافة عنصر",

@@ -2,7 +2,15 @@ import { useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
-import { ArrowLeftIcon, XIcon } from "lucide-react";
+import {
+  ArrowLeftIcon,
+  CheckCircle2Icon,
+  HistoryIcon,
+  InboxIcon,
+  RotateCcwIcon,
+  ShieldAlertIcon,
+  XIcon,
+} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
@@ -10,6 +18,7 @@ import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Input } from "@stll/ui/components/input";
 import { ScrollArea } from "@stll/ui/components/scroll-area";
 import { Skeleton } from "@stll/ui/components/skeleton";
+import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import {
@@ -26,16 +35,20 @@ import {
   AssigneePicker,
   DatePickerPopover,
   MetadataRow,
+  OwnerPicker,
   PrioritySelect,
   StatusSelect,
+  WorkTypeSelect,
 } from "@/components/workspaces/tasks/task-metadata";
 import { SubtasksSection } from "@/components/workspaces/tasks/task-subtasks";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { getFormattingLocale } from "@/i18n/i18n-store";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { APIError, toAPIError, unwrapEden } from "@/lib/errors/api";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import { workspacesKeys } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
@@ -119,6 +132,91 @@ export const TaskDetailPanel = ({
           queryKey: workspacesKeys.overview(workspaceId),
         }),
       ]);
+    },
+    onError: (error) => {
+      analytics.captureError(error);
+      stellaToast.error(
+        userErrorFromThrown(error, tCommon("unexpectedError")),
+      );
+    },
+  });
+
+  const invalidateWorkflow = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: taskKeys.detail(workspaceId, taskId),
+      }),
+      queryClient.invalidateQueries({ queryKey: ["my-work"] }),
+      queryClient.invalidateQueries({
+        queryKey: entitiesKeys.all(workspaceId),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: workspacesKeys.overview(workspaceId),
+      }),
+    ]);
+  };
+
+  const workflowMutation = useMutation({
+    mutationFn: async (body: {
+      ownerUserId?: string | null;
+      workingTargetDate?: string | null;
+      hardDeadlineDate?: string | null;
+      type?: "task" | "deadline";
+      reason?: string;
+    }) => {
+      const response = await api["work-obligations"]({
+        workspaceId: toSafeId<"workspace">(workspaceId),
+      })({ entityId: toSafeId<"entity">(taskId) }).patch({
+        ...body,
+        ...(body.ownerUserId === undefined
+          ? {}
+          : {
+              ownerUserId:
+                body.ownerUserId === null
+                  ? null
+                  : toSafeId<"user">(body.ownerUserId),
+            }),
+      });
+      return unwrapEden(response);
+    },
+    onSuccess: invalidateWorkflow,
+    onError: (error) => {
+      analytics.captureError(error);
+      stellaToast.error(
+        userErrorFromThrown(error, tCommon("unexpectedError")),
+      );
+    },
+  });
+
+  const workflowActionMutation = useMutation({
+    mutationFn: async (
+      action:
+        | { type: "acknowledge" }
+        | {
+            type: "transition";
+            action: "complete" | "cancel" | "reopen";
+            reason?: string;
+          },
+    ) => {
+      const endpoint = api["work-obligations"]({
+        workspaceId: toSafeId<"workspace">(workspaceId),
+      })({ entityId: toSafeId<"entity">(taskId) });
+      if (action.type === "acknowledge") {
+        return unwrapEden(await endpoint.acknowledge.post());
+      }
+      return unwrapEden(
+        await endpoint.transition.post({
+          action: action.action,
+          ...(action.reason ? { reason: action.reason } : {}),
+        }),
+      );
+    },
+    onSuccess: invalidateWorkflow,
+    onError: (error) => {
+      analytics.captureError(error);
+      stellaToast.error(
+        userErrorFromThrown(error, tCommon("unexpectedError")),
+      );
     },
   });
 
@@ -206,6 +304,23 @@ export const TaskDetailPanel = ({
     if (!value) {
       return;
     }
+    const workflowStatus = task?.workObligation?.status;
+    if (value === "done") {
+      workflowActionMutation.mutate({ type: "transition", action: "complete" });
+      return;
+    }
+    if (value === "cancelled") {
+      workflowActionMutation.mutate({
+        type: "transition",
+        action: "cancel",
+        reason: t("cancelledFromStatusControl"),
+      });
+      return;
+    }
+    if (workflowStatus === "completed" || workflowStatus === "cancelled") {
+      workflowActionMutation.mutate({ type: "transition", action: "reopen" });
+      return;
+    }
     updateMutation.mutate({ taskId, status: value });
   };
 
@@ -217,7 +332,7 @@ export const TaskDetailPanel = ({
   };
 
   const handleDueDateChange = (value: string | null) => {
-    updateMutation.mutate({ taskId, dueDate: value });
+    workflowMutation.mutate({ workingTargetDate: value });
   };
 
   const handleSubtaskToggle = (
@@ -350,6 +465,39 @@ export const TaskDetailPanel = ({
       sourceEntity: NonNullable<typeof link.sourceEntity>;
     } => link.sourceEntity !== null,
   );
+  const workflow = task.workObligation;
+  const hardDeadlineDate = toISODate(workflow?.hardDeadlineDate);
+  const hardDeadlineOverdue =
+    hardDeadlineDate.length > 0 &&
+    workflow?.status !== "completed" &&
+    workflow?.status !== "cancelled" &&
+    hardDeadlineDate < new Date().toISOString().slice(0, 10);
+  const sourceLabel = (() => {
+    if (!workflow) {
+      return "";
+    }
+    if (workflow.sourceDescription) {
+      return workflow.sourceDescription;
+    }
+    switch (workflow.sourceType) {
+      case "manual":
+        return t("sourceTypeValues.manual");
+      case "calendar":
+        return t("sourceTypeValues.calendar");
+      case "email":
+        return t("sourceTypeValues.email");
+      case "document":
+        return t("sourceTypeValues.document");
+      case "import":
+        return t("sourceTypeValues.import");
+      case "api":
+        return t("sourceTypeValues.api");
+      default: {
+        const exhaustive: never = workflow.sourceType;
+        return exhaustive;
+      }
+    }
+  })();
 
   return (
     <div className="bg-background flex h-full min-w-0 flex-1 flex-col">
@@ -438,6 +586,53 @@ export const TaskDetailPanel = ({
             />
           </MetadataRow>
 
+          {workflow && (
+            <>
+              <MetadataRow label={tCommon("type")}>
+                <WorkTypeSelect
+                  onChange={(type) => {
+                    if (type) {
+                      workflowMutation.mutate({ type });
+                    }
+                  }}
+                  value={workflow.type}
+                />
+              </MetadataRow>
+
+              <MetadataRow label={t("owner")}>
+                <OwnerPicker
+                  disabled={workflowMutation.isPending}
+                  onChange={(ownerUserId, reason) =>
+                    workflowMutation.mutate({ ownerUserId, reason })
+                  }
+                  owner={workflow.owner}
+                  workspaceId={workspaceId}
+                />
+              </MetadataRow>
+
+              <MetadataRow label={t("hardDeadline")}>
+                <DatePickerPopover
+                  isOverdue={hardDeadlineOverdue}
+                  onChange={(hardDeadline) =>
+                    workflowMutation.mutate({
+                      hardDeadlineDate: hardDeadline,
+                      ...(workflow.hardDeadlineDate
+                        ? { reason: t("deadlineChangedFromTask") }
+                        : {}),
+                    })
+                  }
+                  value={workflow.hardDeadlineDate}
+                />
+              </MetadataRow>
+
+              <MetadataRow label={tCommon("source")}>
+                <span className="text-muted-foreground px-1.5 text-sm">
+                  {sourceLabel}
+                </span>
+              </MetadataRow>
+            </>
+          )}
+
           <MetadataRow label={t("assignees")}>
             <AssigneePicker
               assignees={assignees}
@@ -446,6 +641,141 @@ export const TaskDetailPanel = ({
             />
           </MetadataRow>
         </div>
+
+        {workflow && (
+          <div className="border-t px-4 py-3">
+            {workflow.status === "awaiting_acknowledgement" &&
+              workflow.ownerUserId === userId && (
+                <div className="bg-warning/10 mb-3 flex items-center gap-2 rounded-md p-2 text-sm">
+                  <InboxIcon className="text-warning size-4 shrink-0" />
+                  <span className="min-w-0 flex-1">
+                    {t("acknowledgementRequired")}
+                  </span>
+                  <Button
+                    disabled={workflowActionMutation.isPending}
+                    onClick={() =>
+                      workflowActionMutation.mutate({ type: "acknowledge" })
+                    }
+                    size="sm"
+                  >
+                    {t("acknowledge")}
+                  </Button>
+                </div>
+              )}
+
+            <div className="flex flex-wrap gap-2">
+              {workflow.status === "active" &&
+                workflow.ownerUserId === userId && (
+                  <Button
+                    disabled={workflowActionMutation.isPending}
+                    onClick={() =>
+                      workflowActionMutation.mutate({
+                        type: "transition",
+                        action: "complete",
+                      })
+                    }
+                    size="sm"
+                  >
+                    <CheckCircle2Icon />
+                    {t("completeWork")}
+                  </Button>
+                )}
+              {(workflow.status === "completed" ||
+                workflow.status === "cancelled") && (
+                <Button
+                  disabled={workflowActionMutation.isPending}
+                  onClick={() =>
+                    workflowActionMutation.mutate({
+                      type: "transition",
+                      action: "reopen",
+                    })
+                  }
+                  size="sm"
+                  variant="outline"
+                >
+                  <RotateCcwIcon />
+                  {t("reopenWork")}
+                </Button>
+              )}
+              {hardDeadlineOverdue && (
+                <span className="text-destructive flex items-center gap-1 text-xs">
+                  <ShieldAlertIcon className="size-3.5" />
+                  {t("hardDeadlineOverdue")}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
+        {workflow && (
+          <div className="border-t px-4 py-3">
+            <h3 className="mb-2 flex items-center gap-1.5 text-xs font-medium">
+              <HistoryIcon className="size-3.5" />
+              {t("activity")}
+            </h3>
+            <div className="flex flex-col gap-2">
+              {workflow.events.length === 0 && (
+                <p className="text-muted-foreground text-xs">
+                  {t("noActivity")}
+                </p>
+              )}
+              {workflow.events.slice(0, 10).map((event) => {
+                const eventLabel = (() => {
+                  switch (event.type) {
+                    case "created":
+                      return t("activityTypes.created");
+                    case "owner_assigned":
+                      return t("activityTypes.ownerAssigned");
+                    case "acknowledged":
+                      return t("activityTypes.acknowledged");
+                    case "delegated":
+                      return t("activityTypes.delegated");
+                    case "working_target_changed":
+                      return t("activityTypes.workingTargetChanged");
+                    case "hard_deadline_changed":
+                      return t("activityTypes.hardDeadlineChanged");
+                    case "type_changed":
+                      return t("activityTypes.typeChanged");
+                    case "provenance_changed":
+                      return t("activityTypes.provenanceChanged");
+                    case "completed":
+                      return t("activityTypes.completed");
+                    case "reopened":
+                      return t("activityTypes.reopened");
+                    case "cancelled":
+                      return t("activityTypes.cancelled");
+                    default: {
+                      const exhaustive: never = event.type;
+                      return exhaustive;
+                    }
+                  }
+                })();
+                return (
+                  <div className="flex gap-2 text-xs" key={event.id}>
+                    <span className="bg-muted mt-1 size-1.5 shrink-0 rounded-full" />
+                    <div className="min-w-0 flex-1">
+                      <p>
+                        {eventLabel}
+                        {event.actor?.name ? ` · ${event.actor.name}` : ""}
+                      </p>
+                      {event.reason && (
+                        <p className="text-muted-foreground break-words">
+                          {event.reason}
+                        </p>
+                      )}
+                    </div>
+                    <time className="text-muted-foreground shrink-0">
+                      {new Date(event.occurredAt).toLocaleDateString(
+                        getFormattingLocale(),
+                        { day: "numeric", month: "short" },
+                      )}
+                    </time>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Subtasks */}
         <SubtasksSection

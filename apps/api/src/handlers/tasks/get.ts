@@ -35,6 +35,40 @@ const readTaskById = createSafeHandler(
                 },
               },
             },
+            workObligation: {
+              with: {
+                owner: {
+                  columns: {
+                    id: true,
+                    name: true,
+                    image: true,
+                    deletedAt: true,
+                  },
+                },
+                acknowledgedBy: {
+                  columns: {
+                    id: true,
+                    name: true,
+                    image: true,
+                    deletedAt: true,
+                  },
+                },
+                events: {
+                  orderBy: { occurredAt: "desc", id: "desc" },
+                  limit: 100,
+                  with: {
+                    actor: {
+                      columns: {
+                        id: true,
+                        name: true,
+                        image: true,
+                        deletedAt: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
             children: {
               where: { kind: { eq: "task" } },
               columns: {

@@ -2868,6 +2868,22 @@
     "workspaceDuplicatedSuccessfully": "Caso duplicado com sucesso"
   },
   "tasks": {
+    "acknowledge": "Confirmar responsabilidade",
+    "acknowledgementRequired": "Confirme que você aceitou a responsabilidade por este trabalho.",
+    "activity": "Atividade",
+    "activityTypes": {
+      "acknowledged": "Responsabilidade confirmada",
+      "cancelled": "Trabalho cancelado",
+      "completed": "Trabalho concluído",
+      "created": "Trabalho criado",
+      "delegated": "Responsabilidade delegada",
+      "hardDeadlineChanged": "Prazo final alterado",
+      "ownerAssigned": "Responsável atribuído",
+      "provenanceChanged": "Fonte alterada",
+      "reopened": "Trabalho reaberto",
+      "typeChanged": "Tipo de trabalho alterado",
+      "workingTargetChanged": "Meta de trabalho alterada"
+    },
     "addAssignee": "Adicionar responsável",
     "addSubtask": "Adicionar subtarefa",
     "assigneeRoles": {
@@ -2875,19 +2891,30 @@
       "reviewer": "Revisor"
     },
     "assignees": "Responsáveis",
+    "cancelledFromStatusControl": "Cancelado pelo controle de status da tarefa",
     "clearDate": "Limpar data",
+    "completeWork": "Concluir trabalho",
+    "deadlineChangedFromTask": "Prazo final revisado nos detalhes da tarefa",
+    "delegationReason": "Motivo da reatribuição",
     "deletedAccount": "Conta excluída",
     "dueDate": "Data de vencimento",
+    "hardDeadline": "Prazo final",
+    "hardDeadlineOverdue": "Prazo final vencido",
     "linkEntity": "Vincular entidade",
     "linkedEntities": "Entidades vinculadas",
     "myTasksTitle": "Minhas tarefas",
+    "myWorkTitle": "Meu trabalho",
     "newTask": "Nova tarefa",
+    "noActivity": "Ainda não há atividade",
     "noAssignees": "Nenhum responsável",
     "noLinks": "Nenhuma entidade vinculada",
+    "noOwner": "Sem responsável",
     "noSubtasks": "Sem subtarefas",
     "noTasksAssigned": "Nenhuma tarefa atribuída a você",
+    "noWorkInQueue": "Não há trabalho nesta fila",
     "notFound": "Tarefa não encontrada",
     "overdue": "Atrasado",
+    "owner": "Responsável",
     "priority": "Prioridade",
     "priorityValues": {
       "high": "Alto",
@@ -2895,6 +2922,21 @@
       "medium": "Médio",
       "none": "Nenhum",
       "urgent": "Urgente"
+    },
+    "queue": {
+      "atRisk": "Em risco",
+      "completed": "Concluído",
+      "inbox": "Caixa de entrada",
+      "upcoming": "Próximo"
+    },
+    "reopenWork": "Reabrir trabalho",
+    "sourceTypeValues": {
+      "api": "API",
+      "calendar": "Calendário",
+      "document": "Documento",
+      "email": "E-mail",
+      "import": "Importação",
+      "manual": "Manual"
     },
     "status": "Status",
     "statusValues": {
@@ -2906,7 +2948,11 @@
     },
     "subtasks": "Subtarefas",
     "title": "Tarefas",
-    "untitled": "Tarefa sem título"
+    "untitled": "Tarefa sem título",
+    "workTypeValues": {
+      "deadline": "Prazo",
+      "task": "Tarefa"
+    }
   },
   "templates": {
     "addItem": "Adicionar item",

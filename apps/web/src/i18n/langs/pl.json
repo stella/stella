@@ -2868,6 +2868,22 @@
     "workspaceDuplicatedSuccessfully": "Sprawa została pomyślnie zduplikowana"
   },
   "tasks": {
+    "acknowledge": "Potwierdź przyjęcie",
+    "acknowledgementRequired": "Potwierdź, że przyjmujesz odpowiedzialność za tę pracę.",
+    "activity": "Aktywność",
+    "activityTypes": {
+      "acknowledged": "Odpowiedzialność przyjęta",
+      "cancelled": "Praca anulowana",
+      "completed": "Praca ukończona",
+      "created": "Praca utworzona",
+      "delegated": "Odpowiedzialność przekazana",
+      "hardDeadlineChanged": "Nieprzekraczalny termin zmieniony",
+      "ownerAssigned": "Osoba odpowiedzialna przypisana",
+      "provenanceChanged": "Źródło zmienione",
+      "reopened": "Praca ponownie otwarta",
+      "typeChanged": "Typ pracy zmieniony",
+      "workingTargetChanged": "Termin roboczy zmieniony"
+    },
     "addAssignee": "Przypisz osobę",
     "addSubtask": "Dodaj podzadanie",
     "assigneeRoles": {
@@ -2875,19 +2891,30 @@
       "reviewer": "Recenzent"
     },
     "assignees": "Przypisani",
+    "cancelledFromStatusControl": "Anulowano za pomocą ustawienia stanu zadania",
     "clearDate": "Wyczyść datę",
+    "completeWork": "Ukończ pracę",
+    "deadlineChangedFromTask": "Nieprzekraczalny termin zmieniony w szczegółach zadania",
+    "delegationReason": "Powód ponownego przypisania",
     "deletedAccount": "Usunięte konto",
     "dueDate": "Termin",
+    "hardDeadline": "Nieprzekraczalny termin",
+    "hardDeadlineOverdue": "Nieprzekraczalny termin minął",
     "linkEntity": "Powiąż element",
     "linkedEntities": "Powiązane elementy",
     "myTasksTitle": "Moje zadania",
+    "myWorkTitle": "Moja praca",
     "newTask": "Nowe zadanie",
+    "noActivity": "Brak aktywności",
     "noAssignees": "Brak przypisanych",
     "noLinks": "Brak powiązanych elementów",
+    "noOwner": "Brak osoby odpowiedzialnej",
     "noSubtasks": "Brak podzadań",
     "noTasksAssigned": "Nie masz przypisanych zadań",
+    "noWorkInQueue": "Brak pracy w tej kolejce",
     "notFound": "Nie znaleziono zadania",
     "overdue": "Po terminie",
+    "owner": "Osoba odpowiedzialna",
     "priority": "Priorytet",
     "priorityValues": {
       "high": "Wysoki",
@@ -2895,6 +2922,21 @@
       "medium": "Średni",
       "none": "Brak",
       "urgent": "Pilne"
+    },
+    "queue": {
+      "atRisk": "Zagrożone",
+      "completed": "Ukończone",
+      "inbox": "Odebrane",
+      "upcoming": "Nadchodzące"
+    },
+    "reopenWork": "Otwórz ponownie",
+    "sourceTypeValues": {
+      "api": "API",
+      "calendar": "Kalendarz",
+      "document": "Dokument",
+      "email": "E-mail",
+      "import": "Import",
+      "manual": "Ręcznie"
     },
     "status": "Status",
     "statusValues": {
@@ -2906,7 +2948,11 @@
     },
     "subtasks": "Podzadania",
     "title": "Zadania",
-    "untitled": "Zadanie bez tytułu"
+    "untitled": "Zadanie bez tytułu",
+    "workTypeValues": {
+      "deadline": "Termin",
+      "task": "Zadanie"
+    }
   },
   "templates": {
     "addItem": "Dodaj element",

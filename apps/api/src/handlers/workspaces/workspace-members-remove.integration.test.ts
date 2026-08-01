@@ -130,6 +130,7 @@ describe("removeWorkspaceMemberHandler RLS integration", () => {
             safeDb: context.safeDb,
             workspaceId,
             userId: ids.userA1,
+            actorUserId: ids.userA1,
             recordAuditEvent,
           }),
         );

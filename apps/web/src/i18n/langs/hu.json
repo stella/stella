@@ -2868,6 +2868,22 @@
     "workspaceDuplicatedSuccessfully": "Ügy sikeresen másolva"
   },
   "tasks": {
+    "acknowledge": "Átvétel megerősítése",
+    "acknowledgementRequired": "Erősítse meg, hogy vállalta a felelősséget ezért a munkáért.",
+    "activity": "Tevékenység",
+    "activityTypes": {
+      "acknowledged": "Felelősség megerősítve",
+      "cancelled": "Munka törölve",
+      "completed": "Munka befejezve",
+      "created": "Munka létrehozva",
+      "delegated": "Felelősség átruházva",
+      "hardDeadlineChanged": "Kötelező határidő módosítva",
+      "ownerAssigned": "Felelős kijelölve",
+      "provenanceChanged": "Forrás módosítva",
+      "reopened": "Munka újranyitva",
+      "typeChanged": "Munka típusa módosítva",
+      "workingTargetChanged": "Munkacél módosítva"
+    },
     "addAssignee": "Felelős hozzáadása",
     "addSubtask": "Alfeladat hozzáadása",
     "assigneeRoles": {
@@ -2875,19 +2891,30 @@
       "reviewer": "Ellenőr"
     },
     "assignees": "Felelősök",
+    "cancelledFromStatusControl": "Törölve a feladat állapotvezérlőjéből",
     "clearDate": "Dátum törlése",
+    "completeWork": "Munka befejezése",
+    "deadlineChangedFromTask": "Kötelező határidő módosítva a feladat részleteiben",
+    "delegationReason": "Újrakiosztás oka",
     "deletedAccount": "Törölt fiók",
     "dueDate": "Határidő",
+    "hardDeadline": "Kötelező határidő",
+    "hardDeadlineOverdue": "Kötelező határidő lejárt",
     "linkEntity": "Elem kapcsolása",
     "linkedEntities": "Kapcsolt elemek",
     "myTasksTitle": "Feladataim",
+    "myWorkTitle": "Saját munkám",
     "newTask": "Új feladat",
+    "noActivity": "Még nincs tevékenység",
     "noAssignees": "Nincs felelős",
     "noLinks": "Nincsenek kapcsolt elemek",
+    "noOwner": "Nincs felelős",
     "noSubtasks": "Nincsenek alfeladatok",
     "noTasksAssigned": "Nincsenek hozzárendelt feladatok",
+    "noWorkInQueue": "Nincs munka ebben a sorban",
     "notFound": "A feladat nem található",
     "overdue": "Lejárt",
+    "owner": "Felelős",
     "priority": "Prioritás",
     "priorityValues": {
       "high": "Magas",
@@ -2895,6 +2922,21 @@
       "medium": "Közepes",
       "none": "Nincs",
       "urgent": "Sürgős"
+    },
+    "queue": {
+      "atRisk": "Veszélyben",
+      "completed": "Befejezett",
+      "inbox": "Beérkezett",
+      "upcoming": "Közelgő"
+    },
+    "reopenWork": "Munka újranyitása",
+    "sourceTypeValues": {
+      "api": "API",
+      "calendar": "Naptár",
+      "document": "Dokumentum",
+      "email": "E-mail",
+      "import": "Importálás",
+      "manual": "Kézi"
     },
     "status": "Állapot",
     "statusValues": {
@@ -2906,7 +2948,11 @@
     },
     "subtasks": "Alfeladatok",
     "title": "Feladatok",
-    "untitled": "Névtelen feladat"
+    "untitled": "Névtelen feladat",
+    "workTypeValues": {
+      "deadline": "Határidő",
+      "task": "Feladat"
+    }
   },
   "templates": {
     "addItem": "Elem hozzáadása",

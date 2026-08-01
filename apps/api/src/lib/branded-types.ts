@@ -102,6 +102,7 @@ export type SafeIdType =
   | "workspaceMember"
   | "workspaceView"
   | "workspaceViewTemplate"
+  | "workObligationEvent"
   | "entityLink";
 
 export type SafeId<T extends SafeIdType> = v.InferOutput<

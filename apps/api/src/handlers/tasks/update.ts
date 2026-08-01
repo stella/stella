@@ -1,13 +1,22 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { entities } from "@/api/db/schema";
+import {
+  entities,
+  WORK_OBLIGATION_EVENT_TYPE,
+  WORK_OBLIGATION_STATUS,
+  WORK_OBLIGATION_TYPE,
+  workObligationEvents,
+  workObligations,
+} from "@/api/db/schema";
+import { lockWorkObligation } from "@/api/handlers/work-obligations/lock-work-obligation";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import type { AuditRecorder } from "@/api/lib/audit-log";
+import type { AuditRecorder, FieldDiffs } from "@/api/lib/audit-log";
+import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import type { AgendaItemKind } from "@/api/lib/entity-constants";
@@ -66,6 +75,7 @@ const updateTaskBodySchema = t.Object({
   ),
   recurrence: t.Optional(t.Nullable(agendaRecurrenceSchema)),
   sortOrder: t.Optional(t.Nullable(t.String({ maxLength: 64 }))),
+  workflowReason: t.Optional(t.String({ minLength: 1, maxLength: 1000 })),
 });
 
 const toDateOrNull = (value: string | null | undefined): Date | null =>
@@ -96,6 +106,7 @@ const validateAgendaKind = (
 export type UpdateTaskHandlerProps = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
+  userId: SafeId<"user">;
   recordAuditEvent: AuditRecorder;
   body: Static<typeof updateTaskBodySchema>;
 };
@@ -105,6 +116,7 @@ export type UpdateTaskHandlerProps = {
 export const updateTaskHandler = async function* ({
   safeDb,
   workspaceId,
+  userId,
   recordAuditEvent,
   body,
 }: UpdateTaskHandlerProps) {
@@ -135,8 +147,171 @@ export const updateTaskHandler = async function* ({
     return Result.err(agendaFields.error);
   }
 
-  const updated = yield* Result.await(
+  const txResult = yield* Result.await(
     safeDb(async (tx) => {
+      const workflowRelevant =
+        body.status !== undefined ||
+        body.dueDate !== undefined ||
+        agendaKind === "task" ||
+        agendaKind === "deadline";
+      const workflow = workflowRelevant
+        ? await lockWorkObligation(tx, {
+            entityId: body.taskId,
+            workspaceId,
+          })
+        : undefined;
+      if (workflowRelevant && !workflow) {
+        return {
+          status: "workflow_error" as const,
+          code: 409 as const,
+          message: "Task workflow is not initialized",
+        };
+      }
+
+      const workflowSet: Partial<typeof workObligations.$inferInsert> = {};
+      const workflowEvents: (typeof workObligationEvents.$inferInsert)[] = [];
+      const workflowChanges: FieldDiffs = {};
+      const now = new Date();
+
+      if (workflow) {
+        let nextWorkflowStatus = workflow.status;
+        let workflowEventType:
+          | "completed"
+          | "cancelled"
+          | "reopened"
+          | undefined;
+
+        if (body.status === "done" && workflow.status !== "completed") {
+          if (
+            workflow.status !== WORK_OBLIGATION_STATUS.ACTIVE ||
+            workflow.ownerUserId !== userId
+          ) {
+            return {
+              status: "workflow_error" as const,
+              code: 409 as const,
+              message:
+                "Only the acknowledged accountable owner can complete this work",
+            };
+          }
+          nextWorkflowStatus = WORK_OBLIGATION_STATUS.COMPLETED;
+          workflowEventType = WORK_OBLIGATION_EVENT_TYPE.COMPLETED;
+        } else if (
+          body.status === "cancelled" &&
+          workflow.status !== WORK_OBLIGATION_STATUS.CANCELLED
+        ) {
+          if (
+            workflow.status !== WORK_OBLIGATION_STATUS.UNASSIGNED &&
+            !body.workflowReason
+          ) {
+            return {
+              status: "workflow_error" as const,
+              code: 400 as const,
+              message: "A reason is required when cancelling assigned work",
+            };
+          }
+          nextWorkflowStatus = WORK_OBLIGATION_STATUS.CANCELLED;
+          workflowEventType = WORK_OBLIGATION_EVENT_TYPE.CANCELLED;
+        } else if (
+          body.status !== undefined &&
+          body.status !== "done" &&
+          body.status !== "cancelled" &&
+          (workflow.status === WORK_OBLIGATION_STATUS.COMPLETED ||
+            workflow.status === WORK_OBLIGATION_STATUS.CANCELLED)
+        ) {
+          nextWorkflowStatus =
+            workflow.ownerUserId === null
+              ? WORK_OBLIGATION_STATUS.UNASSIGNED
+              : workflow.acknowledgedAt === null
+                ? WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT
+                : WORK_OBLIGATION_STATUS.ACTIVE;
+          workflowEventType = WORK_OBLIGATION_EVENT_TYPE.REOPENED;
+        }
+
+        if (nextWorkflowStatus !== workflow.status && workflowEventType) {
+          workflowSet.status = nextWorkflowStatus;
+          workflowChanges.status = {
+            old: workflow.status,
+            new: nextWorkflowStatus,
+          };
+          workflowEvents.push({
+            id: createSafeId<"workObligationEvent">(),
+            workspaceId,
+            obligationEntityId: body.taskId,
+            actorUserId: userId,
+            type: workflowEventType,
+            details: {
+              type: "status_changed",
+              previousStatus: workflow.status,
+              nextStatus: nextWorkflowStatus,
+            },
+            reason: body.workflowReason ?? null,
+            occurredAt: now,
+          });
+        }
+
+        if (
+          body.dueDate !== undefined &&
+          body.dueDate !== workflow.workingTargetDate
+        ) {
+          if (
+            body.dueDate !== null &&
+            workflow.hardDeadlineDate !== null &&
+            body.dueDate > workflow.hardDeadlineDate
+          ) {
+            return {
+              status: "workflow_error" as const,
+              code: 400 as const,
+              message: "Working target cannot be after the hard deadline",
+            };
+          }
+          workflowSet.workingTargetDate = body.dueDate;
+          workflowChanges.workingTargetDate = {
+            old: workflow.workingTargetDate,
+            new: body.dueDate,
+          };
+          workflowEvents.push({
+            id: createSafeId<"workObligationEvent">(),
+            workspaceId,
+            obligationEntityId: body.taskId,
+            actorUserId: userId,
+            type: WORK_OBLIGATION_EVENT_TYPE.WORKING_TARGET_CHANGED,
+            details: {
+              type: "date_changed",
+              field: "working_target_date",
+              previousDate: workflow.workingTargetDate,
+              nextDate: body.dueDate,
+            },
+            reason: body.workflowReason ?? null,
+            occurredAt: now,
+          });
+        }
+
+        const nextType =
+          agendaKind === "deadline"
+            ? WORK_OBLIGATION_TYPE.DEADLINE
+            : agendaKind === "task"
+              ? WORK_OBLIGATION_TYPE.TASK
+              : undefined;
+        if (nextType !== undefined && nextType !== workflow.type) {
+          workflowSet.type = nextType;
+          workflowChanges.type = { old: workflow.type, new: nextType };
+          workflowEvents.push({
+            id: createSafeId<"workObligationEvent">(),
+            workspaceId,
+            obligationEntityId: body.taskId,
+            actorUserId: userId,
+            type: WORK_OBLIGATION_EVENT_TYPE.TYPE_CHANGED,
+            details: {
+              type: "obligation_type_changed",
+              previousType: workflow.type,
+              nextType,
+            },
+            reason: body.workflowReason ?? null,
+            occurredAt: now,
+          });
+        }
+      }
+
       const rows = await tx
         .update(entities)
         .set({
@@ -195,7 +370,7 @@ export const updateTaskHandler = async function* ({
           ...(body.sortOrder !== undefined && {
             sortOrder: body.sortOrder,
           }),
-          updatedAt: new Date(),
+          updatedAt: now,
         })
         .where(
           and(
@@ -208,6 +383,32 @@ export const updateTaskHandler = async function* ({
         .returning({ id: entities.id });
 
       if (rows.length > 0) {
+        if (workflow && workflowEvents.length > 0) {
+          const workflowRows = await tx
+            .update(workObligations)
+            .set({ ...workflowSet, updatedAt: now })
+            .where(
+              and(
+                eq(workObligations.entityId, body.taskId),
+                eq(workObligations.workspaceId, workspaceId),
+                eq(workObligations.status, workflow.status),
+              ),
+            )
+            .returning({ entityId: workObligations.entityId });
+          if (!workflowRows.at(0)) {
+            panic("Locked work obligation changed before compatibility update");
+          }
+          await tx.insert(workObligationEvents).values(workflowEvents);
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.WORK_OBLIGATION,
+            resourceId: body.taskId,
+            changes: workflowChanges,
+            metadata: body.workflowReason
+              ? { reason: body.workflowReason }
+              : undefined,
+          });
+        }
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.UPDATE,
           resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
@@ -216,9 +417,20 @@ export const updateTaskHandler = async function* ({
         });
       }
 
-      return rows;
+      return { status: "updated" as const, rows };
     }),
   );
+
+  if (txResult.status === "workflow_error") {
+    return Result.err(
+      new HandlerError({
+        status: txResult.code,
+        message: txResult.message,
+      }),
+    );
+  }
+
+  const { rows: updated } = txResult;
 
   if (updated.length === 0) {
     const [task] = yield* Result.await(
@@ -257,10 +469,11 @@ const updateTask = createSafeHandler(
     mcp: { type: "covered", by: "save_task" },
     body: updateTaskBodySchema,
   },
-  async function* ({ workspaceId, body, safeDb, recordAuditEvent }) {
+  async function* ({ workspaceId, user, body, safeDb, recordAuditEvent }) {
     return yield* updateTaskHandler({
       safeDb,
       workspaceId,
+      userId: user.id,
       recordAuditEvent,
       body,
     });
