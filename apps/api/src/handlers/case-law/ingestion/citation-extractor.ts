@@ -293,6 +293,18 @@ const CITATION_PATTERNS: RegExp[] = [
   // letter-first fallback above.
   /[čc]\.\s*j\.:?\s*(?<caseNumber>\p{L}{1,6}\s+\d{1,6}\/\d{2,4})(?!\d)/gu,
 
+  // Insolvency filings cite another court's case with that court's own
+  // registry code before the docket: "č. j. KSCB 26 INS 8270/2018"
+  // (Krajský soud v Českých Budějovicích), "č. j. KSHK 33 INS
+  // 21809/2019" (Krajský soud v Hradci Králové). The code stays inside
+  // the caseNumber capture rather than being a stripped label, because
+  // insolvency docket numbers are unique only within the issuing court:
+  // dropping the code would fold two different courts' cases into one
+  // dedup key whenever they happen to share a senate/registry/docket/
+  // year. The code is a bounded 2-5 letter uppercase run so it cannot
+  // swallow ordinary prose before an unprefixed case number.
+  /[čc]\.\s*j\.:?\s*(?<caseNumber>[A-Z]{2,5}\s{1,3}\d{1,3}\s{0,3}\p{L}{1,6}[\s/]{1,3}\d{1,6}(?:[,/]\s{0,3}\d{1,6})?\/\d{2,4})(?!\d)/gu,
+
   // Slovak file number: "č. k. 4 Obo 48/02" (číslo konania), the Slovak
   // counterpart to the Czech č. j. above. Lower-court Slovak decisions are
   // sometimes cited only by this file number, with no accompanying sp.
@@ -352,6 +364,43 @@ const SEPARATOR_NORMALIZE_RE =
  */
 const CONSOLIDATED_DOCKET_NORMALIZE_RE =
   /^(?<number>\d{1,3})\s?(?<registry>\p{L}{1,6})[\s/](?<docket1>\d{1,6})[,/](?<docket2>\d{1,6})\/(?<year>\d{2,4})$/u;
+
+/**
+ * Matches a court-code-prefixed Czech numeric-first case number (the
+ * insolvency "KSCB 26 INS 8270/2018" shape) after whitespace and dot
+ * normalization, splitting off the issuing court's registry code so the
+ * dedup key can rebuild the numeric body with one canonical separator
+ * while keeping the code itself: it is what makes the docket unique to
+ * begin with (rule 17), not a label to strip. "KSCB 26 INS 8270/2018"
+ * and "KSCB 26INS/8270/2018" must resolve to the same key. Case-
+ * insensitive: this normalizer also runs on a decision's own stored
+ * `caseNumber` (via `isSelfCitation`), which is publisher text, not
+ * extractor output, so it is never guaranteed to carry the extractor's
+ * all-uppercase code spelling ("Msph" vs "MSPH"). The final
+ * `.toLowerCase()` on the assembled key already folds the casing, so
+ * matching case-insensitively here is enough -- no need to normalize
+ * the captured code itself. The registry-to-docket gap accepts a 1-3
+ * character run of the extraction pattern's own `[\s/]{1,3}` class, not
+ * a single character: the generic whitespace-around-a-slash cleanup
+ * above strips space adjacent to each slash but never merges adjacent
+ * slashes themselves, so a repeated-slash OCR artifact ("INS//8270")
+ * survives as literal "//" into this regex.
+ */
+const COURT_CODE_NORMALIZE_RE =
+  /^(?<code>[A-Z]{2,5})\s(?<number>\d{1,3})\s?(?<registry>\p{L}{1,6})[\s/]{1,3}(?<docket>\d{1,6}\/\d{2,4})$/iu;
+
+/**
+ * Matches a court-code-prefixed case number whose docket joins a second
+ * consolidated docket, comma- or slash-separated, sharing the trailing
+ * year -- the same join the court-code-prefixed extraction pattern
+ * accepts (mirroring CASE_NUMBER_BODY_COMMA), now with the issuing
+ * court's registry code in front: "KSCB 26 INS 8270,8271/2018" and
+ * "KSCB 26 INS 8270/8271/2018" resolve to one key. Same 1-3 character
+ * registry-to-docket gap as `COURT_CODE_NORMALIZE_RE`, for the same
+ * repeated-slash reason.
+ */
+const COURT_CODE_CONSOLIDATED_NORMALIZE_RE =
+  /^(?<code>[A-Z]{2,5})\s(?<number>\d{1,3})\s?(?<registry>\p{L}{1,6})[\s/]{1,3}(?<docket1>\d{1,6})[,/](?<docket2>\d{1,6})\/(?<year>\d{2,4})$/iu;
 
 /**
  * Matches a Czech/Slovak Constitutional Court case number (chamber,
@@ -431,7 +480,11 @@ const POLISH_LETTERS_DOCKET_RE =
  *  - the separator between a case's registry code and its docket number,
  *    which filings write as a space or a slash interchangeably ("5 Cdo
  *    260/2008" vs "5Cdo/260/2008", "10C 84/97" vs "10C/84/97", "6CoE
- *    14/2007" vs "6 CoE 14/2007" vs "6CoE/14/2007");
+ *    14/2007" vs "6 CoE 14/2007" vs "6CoE/14/2007"), including when a
+ *    court registry code leads the number ("KSCB 26 INS 8270/2018" vs
+ *    "KSCB 26INS/8270/2018"), including a court-code-prefixed
+ *    consolidated docket join ("KSCB 26 INS 8270,8271/2018" vs "KSCB 26
+ *    INS 8270/8271/2018");
  *  - the boundary between a Polish roman-numeral chamber and its division
  *    code, glued or spaced ("IC 1523/96" vs "I C 1523/96"), including a
  *    two-token division code ("III A Ua 2389/02" vs "III AUa 2389/02") and
@@ -462,6 +515,19 @@ const canonicalizeDedupKey = (text: string): string => {
   const consolidated = CONSOLIDATED_DOCKET_NORMALIZE_RE.exec(cleaned);
   if (consolidated?.groups) {
     const canonical = `${consolidated.groups["number"]}${consolidated.groups["registry"]}/${consolidated.groups["docket1"]},${consolidated.groups["docket2"]}/${consolidated.groups["year"]}`;
+    return canonical.toLowerCase();
+  }
+
+  const courtCode = COURT_CODE_NORMALIZE_RE.exec(cleaned);
+  if (courtCode?.groups) {
+    const canonical = `${courtCode.groups["code"]} ${courtCode.groups["number"]}${courtCode.groups["registry"]}/${courtCode.groups["docket"]}`;
+    return canonical.toLowerCase();
+  }
+
+  const courtCodeConsolidated =
+    COURT_CODE_CONSOLIDATED_NORMALIZE_RE.exec(cleaned);
+  if (courtCodeConsolidated?.groups) {
+    const canonical = `${courtCodeConsolidated.groups["code"]} ${courtCodeConsolidated.groups["number"]}${courtCodeConsolidated.groups["registry"]}/${courtCodeConsolidated.groups["docket1"]},${courtCodeConsolidated.groups["docket2"]}/${courtCodeConsolidated.groups["year"]}`;
     return canonical.toLowerCase();
   }
 
@@ -499,30 +565,37 @@ const canonicalizeDedupKey = (text: string): string => {
   return canonical.toLowerCase();
 };
 
-/** Strip known prefixes to get the bare case number. */
+/**
+ * Strip known prefixes to get the bare case number. `citationText` is
+ * stored verbatim, including an embedded line-wrap newline the extraction
+ * patterns above deliberately match through (a CRLF landing in a `\s`
+ * gap); every capture below needs the dotAll flag or `.+` stops at that
+ * newline and truncates the case number instead of spanning it, silently
+ * dropping everything after the line break from the persisted key.
+ */
 const stripPrefix = (text: string): string => {
   const trimmed = text.trim();
 
   // Czech/Slovak: "sp. zn. 21 Cdo 1234/2020", "sp.zn.: 38Csp/281/2025"
-  const spZn = /^sp\.\s*zn\.?:?\s*(?<caseNumber>.+)/iu.exec(trimmed);
+  const spZn = /^sp\.\s*zn\.?:?\s*(?<caseNumber>.+)/isu.exec(trimmed);
   if (spZn?.groups?.["caseNumber"]) {
     return spZn.groups["caseNumber"].trim();
   }
 
   // Czech: "č. j. 5 As 123/2020", "č.j. 5 As 123/2020", "č. j.: 5 As 123/2020"
-  const cj = /^[čc]\.\s*j\.:?\s*(?<caseNumber>.+)/iu.exec(trimmed);
+  const cj = /^[čc]\.\s*j\.:?\s*(?<caseNumber>.+)/isu.exec(trimmed);
   if (cj?.groups?.["caseNumber"]) {
     return cj.groups["caseNumber"].trim();
   }
 
   // Slovak: "č. k. 4 Obo 48/02", "č.k. 4 Obo 48/02" (číslo konania)
-  const ck = /^[čc]\.\s*k\.:?\s*(?<caseNumber>.+)/iu.exec(trimmed);
+  const ck = /^[čc]\.\s*k\.:?\s*(?<caseNumber>.+)/isu.exec(trimmed);
   if (ck?.groups?.["caseNumber"]) {
     return ck.groups["caseNumber"].trim();
   }
 
   // Czech senate file number: "sen. zn. 29 NSČR 55/2013"
-  const senZn = /^sen\.\s*zn\.:?\s*(?<caseNumber>.+)/iu.exec(trimmed);
+  const senZn = /^sen\.\s*zn\.:?\s*(?<caseNumber>.+)/isu.exec(trimmed);
   if (senZn?.groups?.["caseNumber"]) {
     return senZn.groups["caseNumber"].trim();
   }
@@ -530,7 +603,7 @@ const stripPrefix = (text: string): string => {
   // Polish: "sygn. akt II CSK 123/20", "sygn. akt. I CK 363/02", "sygn.
   // akt: I FSK 1261/07" (already case-insensitive via the /i flag,
   // covering the title-case "Sygn. akt" document-header spelling too)
-  const sygn = /^sygn\.\s*(?::\s*)?(?:akt\.?:?\s*)?(?<caseNumber>.+)/iu.exec(
+  const sygn = /^sygn\.\s*(?::\s*)?(?:akt\.?:?\s*)?(?<caseNumber>.+)/isu.exec(
     trimmed,
   );
   if (sygn?.groups?.["caseNumber"]) {
