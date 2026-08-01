@@ -305,7 +305,7 @@ const UnexpectedRouteError = ({
           <Button loading={isPending} onClick={retry}>
             <RefreshCcwIcon /> {t("common.tryAgain")}
           </Button>
-          <Button render={<Link to="/workspaces" />} variant="outline">
+          <Button render={<Link from="/" to="/workspaces" />} variant="outline">
             <FolderOpenIcon /> {t("routeError.backToMatters")}
           </Button>
           {reportHref ? (
