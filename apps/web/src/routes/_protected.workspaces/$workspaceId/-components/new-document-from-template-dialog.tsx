@@ -276,7 +276,7 @@ const FillStep = ({
               );
               return;
             default:
-              return created satisfies never;
+              created satisfies never;
           }
         },
       }}

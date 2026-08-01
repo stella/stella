@@ -10,13 +10,13 @@ type ResolveCanonicalDocumentDestinationQueryOptions = {
   workspaceId: string;
 };
 
-export const resolveCanonicalDocumentDestinationQuery = ({
+export const resolveCanonicalDocumentDestinationQuery = async ({
   entityId,
   fieldId,
   queryClient,
   workspaceId,
 }: ResolveCanonicalDocumentDestinationQueryOptions) =>
-  resolveCanonicalDocumentDestination({
+  await resolveCanonicalDocumentDestination({
     entityId,
     fieldId,
     loadCurrentFields: async ({

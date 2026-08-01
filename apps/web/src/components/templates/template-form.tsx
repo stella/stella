@@ -2668,7 +2668,7 @@ export const useFillToMatterSaveTarget = (
           );
           return;
         default:
-          return created satisfies never;
+          created satisfies never;
       }
     },
   };

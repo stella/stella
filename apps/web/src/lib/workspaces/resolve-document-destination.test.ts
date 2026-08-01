@@ -6,13 +6,20 @@ const workspaceId = "workspace";
 const entityId = "entity";
 
 const loadCurrentFields =
-  (fields: { id: string; content: { type: string } }[]) => async () =>
+  (
+    fields: {
+      id: string;
+      content: { type: string };
+    }[],
+  ) =>
+  async () =>
     fields;
 
 describe("canonical document destination resolution", () => {
   test("keeps a complete API destination without reading the entity", async () => {
-    const loadForbidden = () =>
-      Promise.reject(new Error("entity query must stay lazy"));
+    const loadForbidden = async () => {
+      throw new Error("entity query must stay lazy");
+    };
 
     expect(
       await resolveCanonicalDocumentDestination({
@@ -44,14 +51,15 @@ describe("canonical document destination resolution", () => {
 
     expect(
       await Promise.all(
-        unknownIds.map((unknownId) =>
-          resolveCanonicalDocumentDestination({
+        unknownIds.map(async (unknownId) => {
+          const destination = await resolveCanonicalDocumentDestination({
             entityId: unknownId,
             fieldId: unknownId,
             loadCurrentFields: loadNoFields,
             workspaceId,
-          }),
-        ),
+          });
+          return destination;
+        }),
       ),
     ).toEqual(unknownIds.map(() => null));
     expect(
