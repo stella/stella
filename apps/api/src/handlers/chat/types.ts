@@ -109,7 +109,7 @@ export type ChatMessage = UIMessage<ChatClientTools> & {
 };
 
 export type PersistableChatMessageCandidate = {
-  createdAt?: ChatMessage["createdAt"];
+  createdAt?: NonNullable<ChatMessage["createdAt"]>;
   id: SafeId<"chatMessage">;
   metadata?: ChatMessageMetadata | undefined;
   parts: ChatMessage["parts"];
@@ -119,7 +119,7 @@ export type PersistableChatMessageCandidate = {
 /** Opaque proof assigned only after every part passes the persistence policy. */
 declare const persistableChatMessageProof: unique symbol;
 export type PersistableChatMessage = {
-  createdAt?: ChatMessage["createdAt"];
+  createdAt?: NonNullable<ChatMessage["createdAt"]>;
   id: SafeId<"chatMessage">;
   metadata?: ChatMessageMetadata | undefined;
   parts: ChatMessage["parts"];
