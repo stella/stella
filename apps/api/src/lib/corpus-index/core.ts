@@ -990,15 +990,18 @@ export const createCorpusIndexer = <
           // before its database mark commits. Delete its deterministic target
           // copies first, so a retry converges instead of appending duplicates.
           const previousIndexes = new Set<string>();
-          if (options.type !== "incremental") {
+          if (reservedTargets !== null) {
             previousIndexes.add(indexId);
             for (const projectionIndexId of adapter.generationProjectionIndexIds(
               row,
             )) {
               previousIndexes.add(projectionIndexId);
             }
-            for (const reservedIndexId of reservedTargets?.get(row.id) ?? []) {
-              previousIndexes.add(reservedIndexId);
+            const durableTargets = reservedTargets.get(row.id);
+            if (durableTargets !== undefined) {
+              for (const reservedIndexId of durableTargets) {
+                previousIndexes.add(reservedIndexId);
+              }
             }
           }
           if (
