@@ -223,6 +223,87 @@ describe("idempotent corpus removals", () => {
   });
 });
 
+describe("fenced serving-generation appends", () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  test("never crosses the external boundary before every target is reserved", async () => {
+    const row = {
+      id: toSafeId<"caseLawDecision">("reserved-serving-row"),
+      country: "CZ",
+      textS3Key: null,
+      astS3Key: null,
+      contentHash: "current",
+      indexedHash: null,
+      indexedGeneration: null,
+      // SAFETY: the test adapter does not inspect the fabricated token.
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion
+      updatedAtToken: "2026-01-01 00:00:00" as TimestampCasToken,
+    };
+    const events: string[] = [];
+    globalThis.fetch = Object.assign(
+      async (input: Parameters<typeof fetch>[0]) => {
+        const url = input instanceof Request ? input.url : String(input);
+        events.push(url.includes("/ingest") ? "ingest" : "remote");
+        return new Response(
+          url.includes("/ingest")
+            ? JSON.stringify({ num_docs_for_processing: 1 })
+            : JSON.stringify({}),
+          { status: 200 },
+        );
+      },
+      { preconnect: originalFetch.preconnect },
+    );
+    const scopedDb: ScopedDb = async (callback) =>
+      // SAFETY: this adapter's database callbacks only observe that the
+      // reservation/mark boundaries occurred; they never query the fake tx.
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion -- inert transaction boundary for ordering test
+      await callback({} as Transaction);
+    const indexer = createCorpusIndexer<"caseLawDecision", typeof row>({
+      family: "case_law",
+      captureStep: "test",
+      granularity: "document",
+      generationProjectionIndexIds: () => [],
+      buildDocs: (selected) => [{ document_id: selected.id, text: "body" }],
+      readCorpusText: async () => "body",
+      selectMissing: async () => [row],
+      selectStale: async () => [],
+      fetchFulltext: async () => "body",
+      markIndexedBatch: async (_tx, { rows }) =>
+        new Set(rows.map((selected) => selected.id)),
+      insertSucceededJobs: async () => undefined,
+      recordJobs: async () => undefined,
+    });
+
+    expect(
+      await indexer.backfillFenced(scopedDb, 1, "case_law_v1", {
+        beforeDatabaseMark: async () => {
+          events.push("mark-guard");
+        },
+        beforeRemoteEffect: async (effect) => {
+          events.push("remote-guard");
+          return await effect();
+        },
+        reserveExternalAppend: async (_tx, { generation, rows }) => {
+          events.push("reserved");
+          expect(generation).toBe("case_law_v1");
+          expect(rows).toEqual([row]);
+          return new Set(rows.map((selected) => selected.id));
+        },
+      }),
+    ).toBe(1);
+
+    const reservation = events.indexOf("reserved");
+    const firstRemote = events.indexOf("remote-guard");
+    expect(reservation).toBeGreaterThanOrEqual(0);
+    expect(firstRemote).toBeGreaterThan(reservation);
+    expect(events).toContain("ingest");
+  });
+});
+
 /**
  * The indexer's audit trail is the only record of a row it could not place: a
  * row that is neither marked indexed nor recorded failed is invisible to an
@@ -401,6 +482,8 @@ describe("failed index jobs always reach the audit trail", () => {
         guardedEffects += 1;
         return await effect();
       },
+      reserveExternalAppend: async (_tx, { rows }) =>
+        new Set(rows.map((selected) => selected.id)),
     });
 
     expect(indexed).toBe(1);
@@ -421,8 +504,8 @@ describe("failed index jobs always reach the audit trail", () => {
       JSON.stringify({ query: 'document_id:"dec-replay"' }),
     ]);
     expect(guardedEffects).toBe(calls.length);
-    expect(guardedMarks).toBe(1);
-    expect(commitEvents).toEqual(["guard", "mark"]);
+    expect(guardedMarks).toBe(2);
+    expect(commitEvents).toEqual(["guard", "guard", "mark"]);
 
     calls.length = 0;
     commitEvents.length = 0;
@@ -443,13 +526,15 @@ describe("failed index jobs always reach the audit trail", () => {
           guardedEffects += 1;
           return await effect();
         },
+        reserveExternalAppend: async (_tx, { rows }) =>
+          new Set(rows.map((selected) => selected.id)),
       }),
     ).toBe(1);
     expect(
       calls.filter(({ url }) => url.includes("/delete-tasks")),
     ).toHaveLength(1);
     expect(guardedEffects).toBe(calls.length);
-    expect(guardedMarks).toBe(1);
-    expect(commitEvents).toEqual(["guard", "mark"]);
+    expect(guardedMarks).toBe(2);
+    expect(commitEvents).toEqual(["guard", "guard", "mark"]);
   });
 });

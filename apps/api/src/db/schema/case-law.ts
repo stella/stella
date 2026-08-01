@@ -681,6 +681,9 @@ export const caseLawCorpusIndexBackfills = p.pgTable(
       "case_law_corpus_index_backfills_lease_pair",
       sql`(${t.leaseToken} IS NULL) = (${t.leaseExpiresAt} IS NULL)`,
     ),
+    p
+      .index("case_law_corpus_index_backfills_snapshot_generation_idx")
+      .on(t.snapshotAt, t.generation),
     ...globalCaseLawPolicies(),
   ],
 );

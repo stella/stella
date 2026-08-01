@@ -625,6 +625,22 @@ const completeRemoteEffect = async (): Promise<void> => {
   await Promise.resolve();
 };
 
+const createRemoteEffectGuard =
+  (
+    scopedDb: Parameters<typeof indexer.backfill>[0],
+    beforeDatabaseMark: GenerationProjectionGuards["beforeDatabaseMark"],
+  ): GenerationProjectionGuards["beforeRemoteEffect"] =>
+  async (effect) => {
+    // The durable lease row serializes writers across the remote operation.
+    // Renew it in a short transaction, release the connection, then start
+    // HTTP/S3 work. Every generation lease uses this boundary so remote I/O
+    // cannot accidentally move back inside a database callback.
+    await scopedDb(async (tx) => {
+      await beforeDatabaseMark(tx);
+    });
+    return await effect();
+  };
+
 export type CaseLawCorpusGenerationLease = GenerationProjectionGuards & {
   release: () => Promise<void>;
 };
@@ -695,11 +711,7 @@ export const acquireCaseLawCorpusGenerationLease = async ({
 
   return {
     beforeDatabaseMark,
-    beforeRemoteEffect: async (effect) =>
-      await scopedDb(async (tx) => {
-        await beforeDatabaseMark(tx);
-        return await effect();
-      }),
+    beforeRemoteEffect: createRemoteEffectGuard(scopedDb, beforeDatabaseMark),
     release: async () => {
       await scopedDb(async (tx) => {
         // audit: skip — release only the caller's writer lease
@@ -748,6 +760,7 @@ const backfillIncrementalCorpusIndex = async (
       {
         beforeDatabaseMark: lease.beforeDatabaseMark,
         beforeRemoteEffect: lease.beforeRemoteEffect,
+        reserveExternalAppend: reserveGenerationProjectionTargets,
         ...options,
       },
     );
@@ -804,19 +817,11 @@ type GenerationBackfillDependencies = {
 };
 
 const backfillGenerationRows: GenerationBackfillDependencies["backfillRows"] =
-  async (scopedDb, rows, generation, options) => {
-    const reserved = await scopedDb(async (tx) => {
-      await options.beforeDatabaseMark(tx);
-      return await reserveGenerationProjectionTargets(tx, {
-        generation,
-        rows,
-      });
+  async (scopedDb, rows, generation, options) =>
+    await indexer.backfillRows(scopedDb, [...rows], generation, {
+      ...options,
+      reserveExternalAppend: reserveGenerationProjectionTargets,
     });
-    if (reserved.size !== rows.length) {
-      return 0;
-    }
-    return await indexer.backfillRows(scopedDb, [...rows], generation, options);
-  };
 
 const removeGenerationProjection: GenerationBackfillDependencies["removeProjection"] =
   async (scopedDb, { generation, options, row }) => {
@@ -1028,6 +1033,22 @@ const hasPendingGenerationProjection = async (
     ),
   );
 
+const hasGenerationCheckpoint = async (
+  scopedDb: Parameters<typeof backfillIncrementalCorpusIndex>[0],
+  generation: string,
+): Promise<boolean> =>
+  await scopedDb(async (tx) =>
+    Boolean(
+      (
+        await tx
+          .select({ generation: caseLawCorpusIndexBackfills.generation })
+          .from(caseLawCorpusIndexBackfills)
+          .where(eq(caseLawCorpusIndexBackfills.generation, generation))
+          .limit(1)
+      ).at(0),
+    ),
+  );
+
 const validateGenerationBoundary = (generation: string): void => {
   if (!isCorpusIndexGeneration(generation)) {
     throw new CorpusIndexError({
@@ -1172,13 +1193,10 @@ export const createCaseLawGenerationBackfill =
             });
           }
         };
-        const beforeRemoteEffect = async <T>(
-          effect: () => Promise<T>,
-        ): Promise<T> =>
-          await scopedDb(async (tx) => {
-            await beforeDatabaseMark(tx);
-            return await effect();
-          });
+        const beforeRemoteEffect = createRemoteEffectGuard(
+          scopedDb,
+          beforeDatabaseMark,
+        );
         return { beforeDatabaseMark, beforeRemoteEffect };
       };
 
@@ -1596,11 +1614,17 @@ export const backfillCorpusIndex = async (
   options: { readConcurrency?: number } = {},
 ): Promise<CorpusIndexBackfillResult> => {
   validateGenerationBoundary(generation);
-  const [sourceReconciliation, pendingProjection] = await Promise.all([
-    selectSourceReconciliationCheckpoint(scopedDb, generation),
-    hasPendingGenerationProjection(scopedDb, generation),
-  ]);
-  if (sourceReconciliation || pendingProjection) {
+  const [sourceReconciliation, pendingProjection, checkpoint] =
+    await Promise.all([
+      selectSourceReconciliationCheckpoint(scopedDb, generation),
+      hasPendingGenerationProjection(scopedDb, generation),
+      hasGenerationCheckpoint(scopedDb, generation),
+    ]);
+  // A serving generation without a checkpoint has no durable projection
+  // targets yet. Start its bounded snapshot first; inventing a synthetic
+  // completed checkpoint would suppress that replay and leave future appends
+  // without a crash-recoverable target record.
+  if (!checkpoint || sourceReconciliation || pendingProjection) {
     const result = await backfillCorpusIndexGenerationPage(
       scopedDb,
       batchSize,

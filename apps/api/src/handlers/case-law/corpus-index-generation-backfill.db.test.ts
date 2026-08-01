@@ -262,6 +262,38 @@ test(
   { timeout: 30_000 },
 );
 
+test("generation lease releases its transaction before a remote effect", async () => {
+  let databaseCallbackActive = false;
+  const trackedScopedDb = async <T>(
+    callback: (tx: Transaction) => Promise<T>,
+  ) =>
+    await scopedDb(async (tx) => {
+      databaseCallbackActive = true;
+      try {
+        return await callback(tx);
+      } finally {
+        databaseCallbackActive = false;
+      }
+    });
+  const lease = await acquireCaseLawCorpusGenerationLease({
+    generation: "case_law_remote_effect_boundary",
+    scopedDb: trackedScopedDb,
+  });
+  expect(lease).not.toBeNull();
+  if (lease === null) return;
+
+  await lease.beforeRemoteEffect(async () => {
+    expect(databaseCallbackActive).toBe(false);
+    const contender = await acquireCaseLawCorpusGenerationLease({
+      generation: "case_law_remote_effect_boundary",
+      scopedDb,
+    });
+    expect(contender).toBeNull();
+  });
+
+  await lease.release();
+});
+
 test("rejects an invalid generation before creating durable state", async () => {
   const generation = "invalid generation";
   const backfill = createCaseLawGenerationBackfill({

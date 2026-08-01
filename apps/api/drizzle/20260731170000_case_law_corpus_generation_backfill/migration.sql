@@ -23,6 +23,8 @@ CREATE TABLE IF NOT EXISTS "case_law_corpus_index_backfills" (
   CONSTRAINT "case_law_corpus_index_backfills_cursor_pair" CHECK (("cursor_created_at" IS NULL) = ("cursor_id" IS NULL)),
   CONSTRAINT "case_law_corpus_index_backfills_lease_pair" CHECK (("lease_token" IS NULL) = ("lease_expires_at" IS NULL))
 );--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "case_law_corpus_index_backfills_snapshot_generation_idx"
+  ON "case_law_corpus_index_backfills" ("snapshot_at", "generation");--> statement-breakpoint
 ALTER TABLE "case_law_corpus_index_backfills" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 DO $policy$
 BEGIN

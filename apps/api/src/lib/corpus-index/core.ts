@@ -215,8 +215,18 @@ type SelectBatchArgs = { generation: string; limit: number };
 
 type GuardRemoteEffect = <T>(effect: () => Promise<T>) => Promise<T>;
 type BeforeDatabaseMark = (tx: Transaction) => Promise<void>;
+type ReserveExternalAppend<
+  TBrand extends SafeIdType,
+  TRow extends CorpusIndexRow<TBrand>,
+> = (
+  tx: Transaction,
+  args: { generation: string; rows: readonly TRow[] },
+) => Promise<Set<SafeId<TBrand>>>;
 
-type BackfillSelectedRowsOptions =
+type BackfillSelectedRowsOptions<
+  TBrand extends SafeIdType,
+  TRow extends CorpusIndexRow<TBrand>,
+> =
   | {
       type: "incremental";
       readConcurrency?: number;
@@ -225,22 +235,31 @@ type BackfillSelectedRowsOptions =
       type: "fenced-incremental";
       beforeDatabaseMark: BeforeDatabaseMark;
       beforeRemoteEffect: GuardRemoteEffect;
+      reserveExternalAppend: ReserveExternalAppend<TBrand, TRow>;
       readConcurrency?: number;
     }
   | {
       type: "generation-rebuild";
       beforeDatabaseMark: BeforeDatabaseMark;
       beforeRemoteEffect: GuardRemoteEffect;
+      reserveExternalAppend: ReserveExternalAppend<TBrand, TRow>;
       readConcurrency?: number;
     };
 
-type GenerationBackfillRowsOptions = {
+type GenerationBackfillRowsOptions<
+  TBrand extends SafeIdType,
+  TRow extends CorpusIndexRow<TBrand>,
+> = {
   beforeDatabaseMark: BeforeDatabaseMark;
   beforeRemoteEffect: GuardRemoteEffect;
+  reserveExternalAppend: ReserveExternalAppend<TBrand, TRow>;
   readConcurrency?: number;
 };
 
-type FencedIncrementalBackfillOptions = GenerationBackfillRowsOptions;
+type FencedIncrementalBackfillOptions<
+  TBrand extends SafeIdType,
+  TRow extends CorpusIndexRow<TBrand>,
+> = GenerationBackfillRowsOptions<TBrand, TRow>;
 
 type CorpusIndexMarkMode =
   | { type: "incremental" }
@@ -679,7 +698,7 @@ export const createCorpusIndexer = <
     scopedDb: ScopedDb,
     batchSize: number,
     generation: string,
-    options: BackfillSelectedRowsOptions,
+    options: BackfillSelectedRowsOptions<TBrand, TRow>,
   ): Promise<number> => {
     const staleReserved = Math.max(1, Math.floor(batchSize / 4));
     // A due duty batch cedes one missing slot up front so granting the
@@ -754,7 +773,7 @@ export const createCorpusIndexer = <
     scopedDb: ScopedDb,
     batchSize: number,
     generation: string,
-    options: FencedIncrementalBackfillOptions,
+    options: FencedIncrementalBackfillOptions<TBrand, TRow>,
   ): Promise<number> =>
     await backfillWithOptions(scopedDb, batchSize, generation, {
       ...options,
@@ -765,7 +784,7 @@ export const createCorpusIndexer = <
     scopedDb: ScopedDb,
     rows: TRow[],
     generation: string,
-    options: BackfillSelectedRowsOptions,
+    options: BackfillSelectedRowsOptions<TBrand, TRow>,
   ): Promise<number> => {
     if (rows.length === 0) {
       return 0;
@@ -818,6 +837,26 @@ export const createCorpusIndexer = <
       // keying.
       const groupFailures: CorpusJobInput<TBrand>[] = [];
       try {
+        const reservedIds =
+          options.type === "incremental"
+            ? null
+            : await scopedDb(async (tx) => {
+                await options.beforeDatabaseMark(tx);
+                return await options.reserveExternalAppend(tx, {
+                  generation,
+                  rows: group.map(({ row }) => row),
+                });
+              });
+        // A reservation CAS miss means a concurrent refresh moved the row
+        // after the batch read. Do not let an old payload cross the external
+        // append boundary; the newer row remains in the durable pending set.
+        const reservedGroup =
+          reservedIds === null
+            ? group
+            : group.filter(({ row }) => reservedIds.has(row.id));
+        if (reservedGroup.length === 0) {
+          continue;
+        }
         // A new generation may not have an index for this jurisdiction yet.
         // Create it before replay cleanup so an expected empty target does not
         // turn the delete into a terminal 404.
@@ -830,7 +869,7 @@ export const createCorpusIndexer = <
         });
         if (ensured.isErr()) {
           firstError ??= ensured.error;
-          groupFailures.push(...failedIndexJobs(group, ensured.error));
+          groupFailures.push(...failedIndexJobs(reservedGroup, ensured.error));
           continue;
         }
 
@@ -843,7 +882,7 @@ export const createCorpusIndexer = <
         // generation rebuilds replace whole indexes. Engine delete tasks only
         // affect splits that already exist, so the copies ingested below are not
         // at risk.
-        const moved = group.flatMap(({ row }) => {
+        const moved = reservedGroup.flatMap(({ row }) => {
           // A generation page can be replayed after the external append but
           // before its database mark commits. Delete its deterministic target
           // copies first, so a retry converges instead of appending duplicates.
@@ -896,7 +935,7 @@ export const createCorpusIndexer = <
         // index and re-ingesting them next cycle would append a second copy that
         // nothing points at.
         for (const { entries, ndjson } of splitIngestRequests(
-          group,
+          reservedGroup,
           LIMITS.corpusIndexIngestMaxBytes,
         )) {
           // oxlint-disable-next-line no-await-in-loop -- sequential ingest paces NDJSON pushes to the search backend
@@ -1000,7 +1039,7 @@ export const createCorpusIndexer = <
     scopedDb: ScopedDb,
     rows: readonly TRow[],
     generation: string,
-    options: GenerationBackfillRowsOptions,
+    options: GenerationBackfillRowsOptions<TBrand, TRow>,
   ): Promise<number> =>
     await backfillSelectedRows(scopedDb, [...rows], generation, {
       ...options,
