@@ -438,21 +438,31 @@ const countRawUseEffectSuppressions = (content: string): number => {
 // keeps its own burn-down, this one freezes TOTAL suppression pressure so an
 // improvement on one rule cannot silently fund new suppressions elsewhere.
 const LINT_DISABLE_DIRECTIVE =
-  /(?:\/\/|\/\*)\s*(?:eslint|oxlint)-disable(?:-next-line|-line)?\b/u;
+  /^(?:\/\/|\/\*)\s*(?:eslint|oxlint)-disable(?:-next-line|-line)?\b/u;
 
 const lintDisableDirectives = (content: string): string[] => {
   const directives: string[] = [];
   let literalState = NO_OPEN_TEMPLATE;
   let pendingBlockDirective: string | null = null;
+  let inOrdinaryBlockComment = false;
 
   for (const raw of content.split("\n")) {
     const { code, state } = stripStringLiterals(raw, literalState);
     literalState = state;
     let remainder = code;
 
+    if (inOrdinaryBlockComment) {
+      const closeIndex = remainder.indexOf("*/");
+      if (closeIndex === -1) {
+        continue;
+      }
+      inOrdinaryBlockComment = false;
+      remainder = remainder.slice(closeIndex + 2);
+    }
+
     if (pendingBlockDirective !== null) {
       const closeIndex = remainder.indexOf("*/");
-      if (closeIndex < 0) {
+      if (closeIndex === -1) {
         pendingBlockDirective += `\n${remainder}`;
         continue;
       }
@@ -463,23 +473,40 @@ const lintDisableDirectives = (content: string): string[] => {
     }
 
     while (remainder.length > 0) {
-      const match = LINT_DISABLE_DIRECTIVE.exec(remainder);
-      if (!match || match.index === undefined) {
-        break;
-      }
-      const directive = remainder.slice(match.index);
-      if (directive.startsWith("//")) {
-        directives.push(directive);
+      const lineCommentIndex = remainder.indexOf("//");
+      const blockCommentIndex = remainder.indexOf("/*");
+      const commentIndices = [lineCommentIndex, blockCommentIndex].filter(
+        (index) => index >= 0,
+      );
+      if (commentIndices.length === 0) {
         break;
       }
 
-      const closeIndex = directive.indexOf("*/");
-      if (closeIndex < 0) {
-        pendingBlockDirective = directive;
+      const commentIndex = Math.min(...commentIndices);
+      const comment = remainder.slice(commentIndex);
+      if (comment.startsWith("//")) {
+        if (LINT_DISABLE_DIRECTIVE.test(comment)) {
+          directives.push(comment);
+        }
         break;
       }
-      directives.push(directive.slice(0, closeIndex + 2));
-      remainder = directive.slice(closeIndex + 2);
+
+      const closeIndex = comment.indexOf("*/");
+      if (!LINT_DISABLE_DIRECTIVE.test(comment)) {
+        if (closeIndex === -1) {
+          inOrdinaryBlockComment = true;
+          break;
+        }
+        remainder = comment.slice(closeIndex + 2);
+        continue;
+      }
+
+      if (closeIndex === -1) {
+        pendingBlockDirective = comment;
+        break;
+      }
+      directives.push(comment.slice(0, closeIndex + 2));
+      remainder = comment.slice(closeIndex + 2);
     }
   }
   return directives;
@@ -1439,12 +1466,17 @@ const LINT_SUPPRESSION_FIXTURE_LINES = [
   "/* eslint-disable no-console */",
   "// oxlint-disable",
   'const doc = "// eslint-disable-next-line fake"; // directive in a string must not count',
+  "/* example: // eslint-disable-next-line fake */",
+  "/* example across lines:",
+  "// oxlint-disable-next-line fake",
+  "*/",
   "// eslint disables discussed in prose (no hyphenated directive) must not count",
 ];
 const SELF_TEST_LINT_SUPPRESSIONS = `${LINT_SUPPRESSION_FIXTURE_LINES.join("\n")}\n`;
 // Expected from THIS fixture: both linters' -next-line forms, the block-
 // comment form, and the bare `oxlint-disable` = 4. The string copy and the
-// prose comment are excluded. The raw-use-effect fixture contributes 3 more
+// ordinary block-comment examples, and prose comment are excluded. The
+// raw-use-effect fixture contributes 3 more
 // directives, while the query-limit fixtures below contribute 9, so the
 // whole-repo expectation is 4 + 3 + 9.
 const EXPECTED_LINT_SUPPRESSIONS_OWN_FILE = 4;

@@ -45,7 +45,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 570,
+    "count": 563,
     "files": {
       "apps/api/src/db/migrate.ts": 2,
       "apps/api/src/db/schema.ts": 1,
@@ -188,7 +188,6 @@
       "apps/api/src/lib/search/extraction-worker.ts": 1,
       "apps/api/src/lib/search/index-chat.ts": 4,
       "apps/api/src/lib/search/index-entity.ts": 1,
-      "apps/api/src/lib/search/index-global.ts": 5,
       "apps/api/src/lib/search/pg-fts-provider.ts": 2,
       "apps/api/src/lib/skills/skill-package.ts": 6,
       "apps/api/src/lib/tanstack-ai-models.ts": 8,
@@ -261,7 +260,6 @@
       "apps/web/src/features/case-law/components/case-viewer/decision-text.tsx": 1,
       "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx": 1,
       "apps/web/src/features/chat/hooks/use-chat-session.ts": 4,
-      "apps/web/src/features/chat/queries.ts": 1,
       "apps/web/src/hooks/external-file-drop.logic.ts": 5,
       "apps/web/src/hooks/use-effect.ts": 2,
       "apps/web/src/lib/analytics/posthog.ts": 1,
@@ -295,7 +293,6 @@
       "apps/web/src/routes/_protected.knowledge/clauses.tsx": 1,
       "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx": 1,
       "apps/web/src/routes/_protected.tsx": 1,
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.route.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/timesheet-week-view.logic.ts": 1,
