@@ -19,7 +19,7 @@ RUN mkdir -p /json && \
 # Prune the monorepo for the API
 FROM base AS pruner
 # Keep in sync with the turbo version in the root package.json.
-RUN bun install -g turbo@2.10.6
+RUN bun install -g turbo@2.10.7
 COPY . .
 RUN turbo prune @stll/api @stll/legal-atlas-runner --docker
 
