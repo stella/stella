@@ -1,3 +1,5 @@
+import { env, file, serve } from "bun";
+
 import handler from "./dist/server/server.js";
 
 const DEFAULT_PORT = 3002;
@@ -9,8 +11,8 @@ const CROSS_ORIGIN_ISOLATION_HEADERS = {
   "Cross-Origin-Embedder-Policy": "credentialless",
 };
 
-const port = Number.parseInt(Bun.env.PORT ?? String(DEFAULT_PORT), 10);
-const hostname = Bun.env.HOST ?? DEFAULT_HOST;
+const port = Number.parseInt(env["PORT"] ?? String(DEFAULT_PORT), 10);
+const hostname = env["HOST"] ?? DEFAULT_HOST;
 
 /** @typedef {{ fetch(request: Request): Response | Promise<Response> }} StartHandler */
 
@@ -103,14 +105,14 @@ const serveClientAsset = async (request) => {
     return null;
   }
 
-  const file = Bun.file(assetUrl);
-  if (!(await file.exists())) {
+  const assetFile = file(assetUrl);
+  if (!(await assetFile.exists())) {
     return null;
   }
 
   const headers = new Headers();
-  if (file.type) {
-    headers.set("content-type", file.type);
+  if (assetFile.type) {
+    headers.set("content-type", assetFile.type);
   }
   headers.set(
     "cache-control",
@@ -119,10 +121,12 @@ const serveClientAsset = async (request) => {
       : "public, max-age=300",
   );
 
-  return new Response(request.method === "HEAD" ? null : file, { headers });
+  return new Response(request.method === "HEAD" ? null : assetFile, {
+    headers,
+  });
 };
 
-Bun.serve({
+serve({
   hostname,
   port,
   async fetch(request) {

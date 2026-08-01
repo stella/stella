@@ -30,6 +30,12 @@
     }
   },
 
-  "include": ["src", "vite.config.ts", "vite.config.test.ts", "../../types"],
+  "include": [
+    "src",
+    "start-runtime.js",
+    "vite.config.ts",
+    "vite.config.test.ts",
+    "../../types"
+  ],
   "exclude": ["node_modules"]
 }

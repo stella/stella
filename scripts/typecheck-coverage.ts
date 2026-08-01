@@ -25,10 +25,8 @@ const WORKSPACE_PARENTS = ["apps", "packages"] as const;
 const EXEMPT_PREFIXES = [".oxlint-plugins/__fixtures__/"] as const;
 const CONVENTIONAL_TSCONFIG = "tsconfig.json";
 const ROOT_TSCONFIG = "tsconfig.json";
-// start-runtime imports a generated dist file that does not exist before the web
-// build. apps/web/public contains intentionally untyped static browser assets;
-// both are outside the combined Oxc target.
-const OXC_DISCOVERY_EXEMPT_FILES = new Set(["apps/web/start-runtime.js"]);
+// apps/web/public contains intentionally untyped static browser assets outside
+// the combined Oxc target.
 const OXC_DISCOVERY_EXEMPT_PREFIXES = ["apps/web/public/"] as const;
 const PROJECT_ARGUMENT =
   /(?:^|\s)(?:-p|--project)(?:\s+|=)(["']?)([^\s"';&]+)\1/gu;
@@ -101,7 +99,6 @@ const isOxcSourceFile = (file: string): boolean =>
   /\.(?:tsx?|jsx?)$/u.test(file);
 
 const isOxcDiscoveryExempt = (file: string): boolean =>
-  OXC_DISCOVERY_EXEMPT_FILES.has(file) ||
   OXC_DISCOVERY_EXEMPT_PREFIXES.some((prefix) => file.startsWith(prefix));
 
 const isConventionalProject = (project: string): boolean =>
@@ -593,7 +590,6 @@ const selfTest = (): void => {
       "apps/web/covered.js",
       "apps/web/missing.jsx",
       "apps/web/public/dark-mode-init.js",
-      "apps/web/start-runtime.js",
     ]),
     new Set(["apps/web/covered.js"]),
   );
