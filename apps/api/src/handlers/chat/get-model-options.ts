@@ -18,8 +18,9 @@ const config = {
 
 const getModelOptions = createSafeRootHandler(
   config,
-  ({ orgAIConfig, session }) =>
-    Result.ok({
+  // eslint-disable-next-line require-yield, typescript/require-await -- safe handlers must remain async generators for Result.gen error capture.
+  async function* ({ orgAIConfig, session }) {
+    return Result.ok({
       options: getConfiguredChatModelOptions(orgAIConfig),
       defaultValue: getDefaultChatModelValue({
         orgAIConfig,
@@ -37,7 +38,8 @@ const getModelOptions = createSafeRootHandler(
           role: "fast",
         }),
       },
-    }),
+    });
+  },
 );
 
 export default getModelOptions;

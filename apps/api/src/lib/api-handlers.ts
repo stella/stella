@@ -1,8 +1,4 @@
-import type {
-  Err,
-  Result as ResultType,
-  UnhandledException,
-} from "better-result";
+import type { Err, UnhandledException } from "better-result";
 import { Result } from "better-result";
 import type {
   Context,
@@ -448,20 +444,9 @@ export type SafeHandlerGenerator<TResult> = AsyncGenerator<
   unknown
 >;
 
-type SyncSafeHandlerGenerator<TResult> = Generator<
-  Err<never, SafeHandlerError>,
-  Result<TResult, SafeHandlerError>,
-  unknown
->;
-
-type SafeHandlerExecution<TResult> =
-  | ResultType<TResult, SafeHandlerError>
-  | SyncSafeHandlerGenerator<TResult>
-  | SafeHandlerGenerator<TResult>;
-
 type SafeHandlerFn<TContext, TResult extends SafeHandlerPayload> = (
   ctx: TContext,
-) => SafeHandlerExecution<TResult>;
+) => SafeHandlerGenerator<TResult>;
 
 type SafeHandlerDefinition<
   TConfig extends InputSchema = InputSchema,
@@ -510,15 +495,7 @@ const runSafeHandler = async <
   handler: SafeHandlerFn<TContext, TResult>,
 ): Promise<SafeHandlerResult<TResult>> => {
   try {
-    const execution = handler(ctx);
-    let result: ResultType<TResult, SafeHandlerError>;
-    if ("status" in execution) {
-      result = execution;
-    } else if (Symbol.asyncIterator in execution) {
-      result = await Result.gen(() => execution);
-    } else {
-      result = Result.gen(() => execution);
-    }
+    const result = await Result.gen(() => handler(ctx));
 
     if (Result.isOk(result)) {
       return result.value;

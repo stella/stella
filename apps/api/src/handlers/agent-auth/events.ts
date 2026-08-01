@@ -19,12 +19,16 @@ const config = {
   mcp: { type: "internal", reason: "auth_plumbing" },
 } satisfies PublicHandlerConfig;
 
-// TODO(agent-auth identity_assertion phase): verify the SET signature
-// against the issuer's JWKS, validate `iss`/`aud`/`events`, then act on
-// recognised event types (assertion revocation). Until then this is an
-// intentional no-op acknowledgement.
-const agentEventsHandler = createSafePublicHandler(config, () =>
-  Result.ok({ accepted: true }),
+const agentEventsHandler = createSafePublicHandler(
+  config,
+  // eslint-disable-next-line require-yield, typescript/require-await -- safe handlers must remain async generators for Result.gen error capture.
+  async function* () {
+    // TODO(agent-auth identity_assertion phase): verify the SET signature
+    // against the issuer's JWKS, validate `iss`/`aud`/`events`, then act on
+    // recognised event types (assertion revocation). Until then this is an
+    // intentional no-op acknowledgement.
+    return Result.ok({ accepted: true });
+  },
 );
 
 export default agentEventsHandler;

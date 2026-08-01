@@ -15,18 +15,22 @@ const config = {
   access: "read",
 } satisfies HandlerConfig;
 
-const readAIAvailability = createSafeRootHandler(config, ({ orgAIConfig }) => {
-  const instanceProvisioned = hasTanStackInstanceProvider();
-  const orgConfigured = orgAIConfig !== null;
-  return Result.ok({
-    instanceProvisioned,
-    orgConfigured,
-    available: instanceProvisioned || orgConfigured,
-    deferredServiceTierAvailable: isDeferredServiceTierAvailableForRole(
-      "pdf",
-      orgAIConfig,
-    ),
-  });
-});
+const readAIAvailability = createSafeRootHandler(
+  config,
+  // eslint-disable-next-line require-yield, typescript/require-await -- safe handlers must remain async generators for Result.gen error capture.
+  async function* ({ orgAIConfig }) {
+    const instanceProvisioned = hasTanStackInstanceProvider();
+    const orgConfigured = orgAIConfig !== null;
+    return Result.ok({
+      instanceProvisioned,
+      orgConfigured,
+      available: instanceProvisioned || orgConfigured,
+      deferredServiceTierAvailable: isDeferredServiceTierAvailableForRole(
+        "pdf",
+        orgAIConfig,
+      ),
+    });
+  },
+);
 
 export default readAIAvailability;

@@ -61,7 +61,14 @@ const buildUserPrompt = (input: {
 
 const autocompleteStream = createSafeRootHandler(
   config,
-  function* ({ body, orgAIConfig, promptCachingEnabled, session, request }) {
+  // eslint-disable-next-line typescript/require-await -- safe handlers must remain async generators for Result.gen error capture.
+  async function* ({
+    body,
+    orgAIConfig,
+    promptCachingEnabled,
+    session,
+    request,
+  }) {
     const stream = yield* Result.try({
       try: () =>
         streamTanStackTextForRole({

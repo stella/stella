@@ -10,7 +10,6 @@ import {
   errorCauseChainAttributes,
   resolveMeteringContext,
 } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -255,36 +254,6 @@ const createContext = (
     recordAuditEvent: noopAuditRecorder,
     createAuditRecorder: () => noopAuditRecorder,
   }) as unknown as Parameters<typeof endpoint.handler>[0];
-
-describe("createSafeRootHandler execution shapes", () => {
-  const safeDb: SafeDb = async <T>() =>
-    Result.err<T, SafeDbError>(new DatabaseError({ message: "unused" }));
-  const config = {
-    permissions: { workspace: ["read"] },
-    mcp: { type: "internal", reason: "health_infra" },
-  } satisfies HandlerConfig;
-
-  test("runs a handler that returns a Result directly", async () => {
-    const endpoint = createSafeRootHandler(config, () =>
-      Result.ok({ execution: "direct" }),
-    );
-
-    const result = await endpoint.handler(createContext(endpoint, safeDb));
-
-    expect(result).toEqual({ execution: "direct" });
-  });
-
-  test("runs a synchronous Result generator", async () => {
-    const endpoint = createSafeRootHandler(config, function* () {
-      const execution = yield* Result.ok("generator");
-      return Result.ok({ execution });
-    });
-
-    const result = await endpoint.handler(createContext(endpoint, safeDb));
-
-    expect(result).toEqual({ execution: "generator" });
-  });
-});
 
 const createOrgAIConfig = (): OrgAIConfig => ({
   providers: [{ provider: "openai", apiKey: "test-api-key" }],

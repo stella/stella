@@ -12,16 +12,20 @@ const config = {
 
 // Minimal metadata only (no positions/tiers): the gallery just needs enough
 // to render a card and let the user pick one to instantiate.
-const listStarterPlaybooks = createSafeRootHandler(config, () =>
-  Result.ok({
-    items: STARTER_PLAYBOOKS.map((starter) => ({
-      starterId: starter.starterId,
-      name: starter.name,
-      description: starter.description,
-      documentTypeKey: starter.documentTypeKey,
-      positionCount: starter.positions.items.length,
-    })),
-  }),
+const listStarterPlaybooks = createSafeRootHandler(
+  config,
+  // eslint-disable-next-line require-yield, typescript/require-await -- safe handlers must remain async generators for Result.gen error capture.
+  async function* () {
+    return Result.ok({
+      items: STARTER_PLAYBOOKS.map((starter) => ({
+        starterId: starter.starterId,
+        name: starter.name,
+        description: starter.description,
+        documentTypeKey: starter.documentTypeKey,
+        positionCount: starter.positions.items.length,
+      })),
+    });
+  },
 );
 
 export default listStarterPlaybooks;
