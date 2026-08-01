@@ -388,6 +388,20 @@ describe("extractCitations", () => {
     expect(citations).toHaveLength(1);
   });
 
+  test("extracts a repeated-slash OCR artifact in the insolvency registry-to-docket gap on its own", () => {
+    const text = "č. j. KSCB 26 INS//8270/2018-A-14";
+    const citations = extractCitations([{ index: 0, text }]);
+    expect(citations).toHaveLength(1);
+    expect(citations[0]?.citationText).toBe("č. j. KSCB 26 INS//8270/2018");
+  });
+
+  test("dedupes an insolvency case number against a repeated-slash OCR artifact of the same docket", () => {
+    const text =
+      "č. j. KSCB 26 INS 8270/2018-A-12 a dále č. j. KSCB 26 INS//8270/2018-A-14";
+    const citations = extractCitations([{ index: 0, text }]);
+    expect(citations).toHaveLength(1);
+  });
+
   test("keeps the full case number when a line wrap lands inside the prefix body", () => {
     // stripPrefix's capture must span the newline (dotAll), or "sp. zn.
     // 21\nCdo 1234/2020" truncates to just "21" and the persisted

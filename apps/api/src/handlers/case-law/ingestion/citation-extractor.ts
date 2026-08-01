@@ -379,10 +379,15 @@ const CONSOLIDATED_DOCKET_NORMALIZE_RE =
  * all-uppercase code spelling ("Msph" vs "MSPH"). The final
  * `.toLowerCase()` on the assembled key already folds the casing, so
  * matching case-insensitively here is enough -- no need to normalize
- * the captured code itself.
+ * the captured code itself. The registry-to-docket gap accepts a 1-3
+ * character run of the extraction pattern's own `[\s/]{1,3}` class, not
+ * a single character: the generic whitespace-around-a-slash cleanup
+ * above strips space adjacent to each slash but never merges adjacent
+ * slashes themselves, so a repeated-slash OCR artifact ("INS//8270")
+ * survives as literal "//" into this regex.
  */
 const COURT_CODE_NORMALIZE_RE =
-  /^(?<code>[A-Z]{2,5})\s(?<number>\d{1,3})\s?(?<registry>\p{L}{1,6})[\s/](?<docket>\d{1,6}\/\d{2,4})$/iu;
+  /^(?<code>[A-Z]{2,5})\s(?<number>\d{1,3})\s?(?<registry>\p{L}{1,6})[\s/]{1,3}(?<docket>\d{1,6}\/\d{2,4})$/iu;
 
 /**
  * Matches a court-code-prefixed case number whose docket joins a second
@@ -390,10 +395,12 @@ const COURT_CODE_NORMALIZE_RE =
  * year -- the same join the court-code-prefixed extraction pattern
  * accepts (mirroring CASE_NUMBER_BODY_COMMA), now with the issuing
  * court's registry code in front: "KSCB 26 INS 8270,8271/2018" and
- * "KSCB 26 INS 8270/8271/2018" resolve to one key.
+ * "KSCB 26 INS 8270/8271/2018" resolve to one key. Same 1-3 character
+ * registry-to-docket gap as `COURT_CODE_NORMALIZE_RE`, for the same
+ * repeated-slash reason.
  */
 const COURT_CODE_CONSOLIDATED_NORMALIZE_RE =
-  /^(?<code>[A-Z]{2,5})\s(?<number>\d{1,3})\s?(?<registry>\p{L}{1,6})[\s/](?<docket1>\d{1,6})[,/](?<docket2>\d{1,6})\/(?<year>\d{2,4})$/iu;
+  /^(?<code>[A-Z]{2,5})\s(?<number>\d{1,3})\s?(?<registry>\p{L}{1,6})[\s/]{1,3}(?<docket1>\d{1,6})[,/](?<docket2>\d{1,6})\/(?<year>\d{2,4})$/iu;
 
 /**
  * Matches a Czech/Slovak Constitutional Court case number (chamber,
