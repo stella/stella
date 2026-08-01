@@ -329,6 +329,7 @@ describe("runIngestionPipeline — canonical corpus write failure", () => {
       syncCursor: "cursor-1",
       lastSyncAt: null,
       observationOrder: 0n,
+      checkpointObservationOrder: 0n,
       config: {},
       descriptor: null,
       createdAt: new Date("2026-01-01T00:00:00.000Z"),

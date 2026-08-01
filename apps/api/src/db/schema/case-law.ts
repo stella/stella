@@ -22,6 +22,11 @@ import type {
 } from "./common";
 import { workspaces } from "./contacts";
 
+export const CASE_LAW_CORPUS_MIRROR_STATUS = {
+  PENDING: "pending",
+  SETTLED: "settled",
+} as const;
+
 export const caseLawSources = p.pgTable(
   "case_law_sources",
   {
@@ -33,6 +38,10 @@ export const caseLawSources = p.pgTable(
     lastSyncAt: timestamptz("last_sync_at"),
     observationOrder: p
       .bigint("observation_order", { mode: "bigint" })
+      .default(0n)
+      .notNull(),
+    checkpointObservationOrder: p
+      .bigint("checkpoint_observation_order", { mode: "bigint" })
       .default(0n)
       .notNull(),
     config: jsonb().$type<Record<string, unknown>>().default({}),
@@ -48,6 +57,10 @@ export const caseLawSources = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (t) => [
+    p.check(
+      "case_law_sources_checkpoint_observation_order_monotonic",
+      sql`${t.checkpointObservationOrder} <= ${t.observationOrder}`,
+    ),
     p.uniqueIndex("case_law_sources_adapter_key_idx").on(t.adapterKey),
     ...globalCaseLawPolicies(),
   ],
@@ -159,6 +172,16 @@ export const caseLawDecisions = p.pgTable(
       mode: "bigint",
     }),
     sourceObservationHash: p.varchar("source_observation_hash", { length: 64 }),
+    corpusMirrorStatus: p
+      .varchar("corpus_mirror_status", {
+        length: 16,
+        enum: [
+          CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+          CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
+        ],
+      })
+      .default(CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED)
+      .notNull(),
     /**
      * Materialized citation-authority ranking signal: the
      * ln(1 + weighted-citation-density) value that `citationScore()`
@@ -205,6 +228,14 @@ export const caseLawDecisions = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (t) => [
+    p.check(
+      "case_law_decisions_corpus_mirror_status_values",
+      sql`${t.corpusMirrorStatus} IN ('settled', 'pending')`,
+    ),
+    p.check(
+      "case_law_decisions_pending_corpus_mirror_has_no_pointers",
+      sql`${t.corpusMirrorStatus} = 'settled' OR (${t.textS3Key} IS NULL AND ${t.normalizedS3Key} IS NULL AND ${t.astS3Key} IS NULL AND ${t.contentHash} IS NULL)`,
+    ),
     // Identity, in two halves that together cover every row exactly once.
     // Where the publisher states an id, that is the key. Where it does not,
     // the case number still serves, because such a source holds one court

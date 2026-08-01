@@ -3,6 +3,7 @@ import { and, eq, isNull, lt, notInArray, or, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
+  CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawCitations,
   caseLawDecisions,
   caseLawIngestionFailures,
@@ -51,7 +52,10 @@ import {
   TimeoutError,
 } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
-import type { WriteCorpusResult } from "@/api/lib/legal-search/corpus-storage";
+import type {
+  CorpusPayload,
+  WriteCorpusResult,
+} from "@/api/lib/legal-search/corpus-storage";
 import {
   corpusContentHash,
   corpusKeys,
@@ -244,70 +248,6 @@ const citationRow = (
   };
 };
 
-type PreserveCorpusWriteRetryInput = {
-  decisionId: SafeId<"caseLawDecision">;
-  sourceId: SafeId<"caseLawSource">;
-  previousSourceHash: string | null;
-  /** The sourceHash this run persisted; the reset only applies while the row still carries it. */
-  expectedSourceHash: string | null;
-  failedObservationOrder: bigint;
-  scopedDb: ScopedDb;
-};
-
-const preserveCorpusWriteRetry = async ({
-  decisionId,
-  sourceId,
-  previousSourceHash,
-  expectedSourceHash,
-  failedObservationOrder,
-  scopedDb,
-}: PreserveCorpusWriteRetryInput): Promise<void> => {
-  // If the corpus write fails after the DB text update, do not leave the
-  // source hash at the incoming value. A matching source hash would make the
-  // next ingestion pass skip this decision before it can retry object storage.
-  // Clear corpus keys too so reads fall back to the fresh Postgres columns
-  // instead of serving an older object payload.
-  await scopedDb(async (tx) => {
-    // audit: skip — background corpus storage retry bookkeeping; derived state
-    const compensationOrder = (
-      await tx
-        .update(caseLawSources)
-        .set({
-          observationOrder: sql`greatest(${caseLawSources.observationOrder}, ${failedObservationOrder}) + 1`,
-          updatedAt: sql`${caseLawSources.updatedAt}`,
-        })
-        .where(eq(caseLawSources.id, sourceId))
-        .returning({ order: caseLawSources.observationOrder })
-    ).at(0)?.order;
-    if (compensationOrder === undefined) {
-      panic("Case-law source disappeared during corpus-write compensation");
-    }
-    await tx
-      .update(caseLawDecisions)
-      .set({
-        sourceHash: previousSourceHash,
-        sourceObservationOrder: compensationOrder,
-        sourceObservationHash: expectedSourceHash,
-        textS3Key: null,
-        normalizedS3Key: null,
-        astS3Key: null,
-        contentHash: null,
-        indexedHash: null,
-        indexedGeneration: null,
-        indexedAt: null,
-      })
-      // Only undo this run's own write: a concurrent newer refresh owns
-      // the row once it has advanced either the hash or observation order.
-      .where(
-        and(
-          eq(caseLawDecisions.id, decisionId),
-          sql`${caseLawDecisions.sourceHash} IS NOT DISTINCT FROM ${expectedSourceHash}`,
-          eq(caseLawDecisions.sourceObservationOrder, failedObservationOrder),
-        ),
-      );
-  });
-};
-
 /**
  * Where this decision's canonical payload ends up.
  *
@@ -327,12 +267,9 @@ type CorpusWritePlan =
   | { type: "preserve-stored" }
   | { type: "write-failed" };
 
-type CorpusWritePayload = {
+type CorpusWritePayload = CorpusPayload & {
   documentId: SafeId<"caseLawDecision">;
   jurisdiction: string;
-  text: string | null;
-  sections: DecisionSection[] | null;
-  ast: IngestionResult["documentAst"];
 };
 
 type PlanCorpusWriteInput = CorpusWritePayload & {
@@ -350,7 +287,7 @@ type PlanCorpusWriteInput = CorpusWritePayload & {
  * write having returned.
  *
  * New decisions only, for the same reason `canDiscardCorpusObjects` scopes
- * the post-transaction compensation: a refresh derives these keys from the
+ * post-transaction cleanup: a refresh derives these keys from the
  * existing id and the payload hash, so whenever the text, sections, and AST
  * are unchanged (only metadata or the raw source moved) they are the very
  * objects the live row already references — and under canonical storage
@@ -418,6 +355,35 @@ const hasStoredDocument = async (
   );
 
   return row?.holdsDocument === true;
+};
+
+type PendingMirrorPayload = Pick<
+  CorpusWritePayload,
+  "ast" | "sections" | "text"
+>;
+
+const loadPendingMirrorPayload = async (
+  decisionId: SafeId<"caseLawDecision">,
+  scopedDb: ScopedDb,
+): Promise<PendingMirrorPayload> => {
+  const row = await scopedDb((tx) =>
+    tx.query.caseLawDecisions.findFirst({
+      where: { id: { eq: decisionId } },
+      columns: {
+        documentAst: true,
+        fulltext: true,
+        sections: true,
+      },
+    }),
+  );
+  if (!row) {
+    panic("Pending case-law corpus mirror disappeared");
+  }
+  return {
+    ast: row.documentAst,
+    sections: row.sections,
+    text: row.fulltext,
+  };
 };
 
 const planCorpusWrite = async ({
@@ -549,6 +515,7 @@ const processDecisionAttempt = async ({
         sourceHash: true,
         sourceObservedAt: true,
         sourceObservationHash: true,
+        corpusMirrorStatus: true,
         sourceRawS3Key: true,
         sourceRawContentType: true,
       },
@@ -557,6 +524,7 @@ const processDecisionAttempt = async ({
 
   if (
     existing &&
+    existing.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED &&
     shouldSkipRefresh({
       existingMetadata: existing.metadata,
       existingSourceHash: existing.sourceHash,
@@ -694,6 +662,11 @@ const processDecisionAttempt = async ({
     existing !== undefined &&
     !incomingCarriesDocument &&
     (await hasStoredDocument(existing.id, scopedDb));
+  const pendingMirrorPayload =
+    existing?.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.PENDING &&
+    !incomingCarriesDocument
+      ? await loadPendingMirrorPayload(existing.id, scopedDb)
+      : null;
 
   // Parsers report their own quality through `validateAndLog`, but a
   // source whose parser never runs reports nothing at all. Emit the
@@ -786,17 +759,32 @@ const processDecisionAttempt = async ({
   // default (`pUuid`) would do at insert time anyway.
   const decisionId = existing?.id ?? createSafeId<"caseLawDecision">();
 
-  const corpusPlan: CorpusWritePlan = preserveStoredDocument
-    ? { type: "preserve-stored" }
-    : await planCorpusWrite({
-        mode: corpusStorageMode,
-        hadExistingRow: Boolean(existing),
-        documentId: decisionId,
-        jurisdiction: result.country,
-        text: result.fulltext ?? null,
-        sections: sections.length > 0 ? sections : null,
-        ast: result.documentAst,
-      });
+  const corpusPayload: CorpusWritePayload =
+    pendingMirrorPayload === null
+      ? {
+          documentId: decisionId,
+          jurisdiction: result.country,
+          text: result.fulltext ?? null,
+          sections: sections.length > 0 ? sections : null,
+          ast: result.documentAst,
+        }
+      : {
+          documentId: decisionId,
+          jurisdiction: result.country,
+          ...pendingMirrorPayload,
+        };
+  const mirrorCarriesDocument = Boolean(
+    corpusPayload.text || hasUsableAst(corpusPayload.ast),
+  );
+
+  const corpusPlan: CorpusWritePlan =
+    preserveStoredDocument && pendingMirrorPayload === null
+      ? { type: "preserve-stored" }
+      : await planCorpusWrite({
+          mode: corpusStorageMode,
+          hadExistingRow: Boolean(existing),
+          ...corpusPayload,
+        });
 
   if (corpusPlan.type === "write-failed") {
     // Persist nothing: a row would advance sourceHash and the next cycle
@@ -806,9 +794,9 @@ const processDecisionAttempt = async ({
   }
 
   const postgresPayload = {
-    fulltext: result.fulltext,
-    sections: sections.length > 0 ? sections : null,
-    documentAst: result.documentAst,
+    fulltext: corpusPayload.text,
+    sections: corpusPayload.sections,
+    documentAst: corpusPayload.ast,
   };
 
   const payloadColumns = (() => {
@@ -824,10 +812,20 @@ const processDecisionAttempt = async ({
           normalizedS3Key: null,
           astS3Key: null,
           contentHash: null,
+          corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
         };
       case "postgres-mirrored":
-        // The post-commit write refreshes the pointers under a CAS.
-        return postgresPayload;
+        // Persist retry intent with the Postgres payload. Clearing every old
+        // pointer makes the pending branch structurally unable to serve a
+        // stale mirror while an unchanged replay repairs it.
+        return {
+          ...postgresPayload,
+          textS3Key: null,
+          normalizedS3Key: null,
+          astS3Key: null,
+          contentHash: null,
+          corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
+        };
       case "preserve-stored":
         // Every payload column, and every pointer into object storage,
         // stays exactly as stored. Leaving them out of the update is
@@ -842,6 +840,7 @@ const processDecisionAttempt = async ({
           normalizedS3Key: corpusPlan.written.sectionsKey,
           astS3Key: corpusPlan.written.astKey,
           contentHash: corpusPlan.written.contentHash,
+          corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
         };
       default: {
         const unhandled: never = corpusPlan;
@@ -864,7 +863,9 @@ const processDecisionAttempt = async ({
         // declines to touch the payload still lands and still advances
         // the source hash.
         const payloadNeedsGuard =
-          !incomingCarriesDocument && Object.keys(payloadColumns).length > 0;
+          !incomingCarriesDocument &&
+          pendingMirrorPayload === null &&
+          Object.keys(payloadColumns).length > 0;
 
         const updated = await tx
           .update(caseLawDecisions)
@@ -1087,12 +1088,13 @@ const processDecisionAttempt = async ({
 
   // Mirror text/sections/AST to object storage, then record the keys +
   // content hash. Done outside the DB transaction (S3 I/O must not hold a
-  // transaction open). A failure leaves the row fully readable from its
-  // Postgres columns and preserves the source-hash mismatch so normal
-  // ingestion can retry the corpus write. `canonical` has already written
-  // its objects above, before the row. Keyed off the plan rather than the
-  // mode, so a refresh preserving a stored document does not mirror the
-  // nothing it arrived with over the objects that hold it.
+  // transaction open). The row enters `pending` with no object pointers in
+  // the same transaction as its Postgres payload; a failure therefore stays
+  // readable and an unchanged replay cannot deduplicate before repairing the
+  // mirror. `canonical` has already written its objects above, before the
+  // row. Keyed off the plan rather than the mode, so a refresh preserving a
+  // stored document does not mirror the nothing it arrived with over the
+  // objects that hold it.
   if (corpusPlan.type === "postgres-mirrored") {
     // The sourceHash this call just persisted: corpus-key and retry
     // updates below only apply while the row still carries it, so a
@@ -1101,13 +1103,7 @@ const processDecisionAttempt = async ({
       ? (existing?.sourceHash ?? null)
       : result.rawHash;
     try {
-      const written = await writeCorpusDocument({
-        documentId: decisionId,
-        jurisdiction: result.country,
-        text: result.fulltext ?? null,
-        sections: sections.length > 0 ? sections : null,
-        ast: result.documentAst,
-      });
+      const written = await writeCorpusDocument(corpusPayload);
       // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
       await scopedDb((tx) => {
         // audit: skip — background corpus storage; derived state, not user actions
@@ -1118,17 +1114,19 @@ const processDecisionAttempt = async ({
             normalizedS3Key: written.sectionsKey,
             astS3Key: written.astKey,
             contentHash: written.contentHash,
+            corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
           })
           .where(
             and(
               eq(caseLawDecisions.id, decisionId),
               sql`${caseLawDecisions.sourceHash} IS NOT DISTINCT FROM ${persistedSourceHash}`,
+              eq(caseLawDecisions.sourceObservationOrder, observationOrder),
               // An empty mirror must not re-point the keys over a row that
               // gained a document between the stored-document check and this
               // update: hydration does not advance the source hash, so the
               // CAS above cannot see it. A mirror that carries the document
               // is exempt — it is the newer payload by definition.
-              incomingCarriesDocument
+              mirrorCarriesDocument
                 ? undefined
                 : sql`NOT ${pgPayloadCarriesDocument}`,
             ),
@@ -1146,14 +1144,6 @@ const processDecisionAttempt = async ({
         "error.detail": corpusWriteErrorDetail(error),
       });
       captureError(error, { decisionId, step: "processDecision.corpusWrite" });
-      await preserveCorpusWriteRetry({
-        decisionId,
-        sourceId,
-        previousSourceHash: existing?.sourceHash ?? null,
-        expectedSourceHash: persistedSourceHash,
-        failedObservationOrder: observationOrder,
-        scopedDb,
-      });
     }
   }
 
@@ -1210,6 +1200,7 @@ export const runIngestionPipeline = async ({
   let consecutiveFailures = 0;
   const MAX_CONSECUTIVE_FAILURES = 10;
   let haltReason: string | null = null;
+  let checkpointObservationOrder = source.checkpointObservationOrder;
 
   const maxPages = maxPagesOverride ?? adapter.maxSyncPages ?? MAX_SYNC_PAGES;
 
@@ -1241,6 +1232,7 @@ export const runIngestionPipeline = async ({
         source.id,
         scopedDb,
       );
+      checkpointObservationOrder = observationOrder;
     } catch (error) {
       if (error instanceof TimeoutError) {
         haltReason = databaseTimeoutHaltReason(error);
@@ -1465,7 +1457,11 @@ export const runIngestionPipeline = async ({
     expectedCursor: source.syncCursor,
     nextCursor: cursor,
     scopedDb,
-    source: { id: source.id, type: CORPUS_SOURCE_TYPE.CASE_LAW },
+    source: {
+      id: source.id,
+      observationOrder: checkpointObservationOrder,
+      type: CORPUS_SOURCE_TYPE.CASE_LAW,
+    },
   });
   if (checkpoint.status === INGESTION_CHECKPOINT_STATUS.MISSING) {
     return panic("Case-law ingestion source disappeared before checkpoint");

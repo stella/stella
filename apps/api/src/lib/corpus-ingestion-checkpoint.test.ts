@@ -72,7 +72,11 @@ beforeAll(
 beforeEach(async () => {
   await db
     .update(caseLawSources)
-    .set({ syncCursor: null })
+    .set({
+      syncCursor: null,
+      observationOrder: 1n,
+      checkpointObservationOrder: 0n,
+    })
     .where(eq(caseLawSources.id, caseLawSourceId));
   await db
     .update(legislationSources)
@@ -94,6 +98,7 @@ describe("advanceCorpusIngestionCheckpoint", () => {
       scopedDb,
       source: {
         id: caseLawSourceId,
+        observationOrder: 1n,
         type: CORPUS_SOURCE_TYPE.CASE_LAW,
       },
     });
@@ -111,6 +116,17 @@ describe("advanceCorpusIngestionCheckpoint", () => {
       cursor: "case-page-2",
       status: INGESTION_CHECKPOINT_STATUS.ADVANCED,
     });
+    expect(
+      (
+        await db
+          .select({
+            order: caseLawSources.checkpointObservationOrder,
+          })
+          .from(caseLawSources)
+          .where(eq(caseLawSources.id, caseLawSourceId))
+          .limit(1)
+      ).at(0)?.order,
+    ).toBe(1n);
     expect(legislation).toEqual({
       cursor: "legislation-page-2",
       status: INGESTION_CHECKPOINT_STATUS.ADVANCED,
@@ -124,6 +140,7 @@ describe("advanceCorpusIngestionCheckpoint", () => {
       scopedDb,
       source: {
         id: caseLawSourceId,
+        observationOrder: 1n,
         type: CORPUS_SOURCE_TYPE.CASE_LAW,
       },
     };
@@ -145,6 +162,7 @@ describe("advanceCorpusIngestionCheckpoint", () => {
         scopedDb,
         source: {
           id: caseLawSourceId,
+          observationOrder: 1n,
           type: CORPUS_SOURCE_TYPE.CASE_LAW,
         },
       }),
@@ -154,6 +172,7 @@ describe("advanceCorpusIngestionCheckpoint", () => {
         scopedDb,
         source: {
           id: caseLawSourceId,
+          observationOrder: 1n,
           type: CORPUS_SOURCE_TYPE.CASE_LAW,
         },
       }),
@@ -186,6 +205,7 @@ describe("advanceCorpusIngestionCheckpoint", () => {
       scopedDb,
       source: {
         id: caseLawSourceId,
+        observationOrder: 1n,
         type: CORPUS_SOURCE_TYPE.CASE_LAW,
       },
     });
@@ -196,6 +216,7 @@ describe("advanceCorpusIngestionCheckpoint", () => {
       scopedDb,
       source: {
         id: caseLawSourceId,
+        observationOrder: 1n,
         type: CORPUS_SOURCE_TYPE.CASE_LAW,
       },
     });
@@ -213,6 +234,7 @@ describe("advanceCorpusIngestionCheckpoint", () => {
       scopedDb,
       source: {
         id: createSafeId<"caseLawSource">(),
+        observationOrder: 1n,
         type: CORPUS_SOURCE_TYPE.CASE_LAW,
       },
     });
