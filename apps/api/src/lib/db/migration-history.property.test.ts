@@ -131,13 +131,19 @@ describe("migration history invariant", () => {
   });
 
   test("reports the intended error when the migrations directory is absent", async () => {
-    await expect(
-      assertMigrationHistory({
-        context: "migrate",
-        migrationsDir: nodePath.join(import.meta.dir, "missing-migrations"),
-        queryAppliedHashes: async () => new Set(),
-        remedy: "No remedy.",
-      }),
-    ).rejects.toThrow("No migration files");
+    const rejection: unknown = await assertMigrationHistory({
+      context: "migrate",
+      migrationsDir: nodePath.join(import.meta.dir, "missing-migrations"),
+      queryAppliedHashes: async () => new Set(),
+      remedy: "No remedy.",
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toBeInstanceOf(Error);
+    expect(rejection).toMatchObject({
+      message: expect.stringContaining("No migration files"),
+    });
   });
 });
