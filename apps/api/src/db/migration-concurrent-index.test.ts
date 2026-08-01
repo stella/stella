@@ -7,8 +7,6 @@ const MIGRATIONS_DIR = nodePath.resolve(import.meta.dir, "../../drizzle");
 const SAFETY_TOKEN =
   /\bSET\s+(?:LOCAL\s+)?statement_timeout\s*=\s*(?:'[^']*'|[^\s;]+)|\b(?:CREATE\s+(?:UNIQUE\s+)?|DROP\s+)INDEX\s+CONCURRENTLY\b/giu;
 const ZERO_DURATION = /^'?0\s*(?:us|ms|s|min|h|d)?'?$/iu;
-const TIMEOUT_SETTING =
-  /^SET\s+(?:LOCAL\s+)?(?<name>statement|lock)_timeout\s*=\s*(?<value>.+)$/iu;
 const UNBOUNDED_TIMEOUT =
   /^SET\s+(?:LOCAL\s+)?statement_timeout\s*=\s*'?0\s*(?:us|ms|s|min|h|d)?'?$/iu;
 const CONCURRENT_IF_NOT_EXISTS =
@@ -18,22 +16,28 @@ const CONCURRENT_UNIQUE_CREATE =
 const CONCURRENT_DROP =
   /\bDROP\s+INDEX\s+CONCURRENTLY\s+IF\s+EXISTS\s+"([^"]+)"/giu;
 const TYPE_CHANGE =
-  /\bALTER\s+TABLE\b[^;]*?\bALTER\s+COLUMN\b[^;]*?\b(?:SET\s+DATA\s+)?TYPE\b[^;]*(?:;|$)/iu;
-const TYPE_CHANGE_SAFETY_TOKEN = new RegExp(
-  String.raw`\bSET\s+(?:LOCAL\s+)?(?:statement|lock)_timeout\s*=\s*(?:'[^']*'|[^\s;]+)\s*;?|${TYPE_CHANGE.source}`,
-  "giu",
-);
+  /^ALTER\s+TABLE\b[^;]*?\bALTER\s+(?:COLUMN\s+)?(?:"[^"]+"|[A-Z_][A-Z0-9_$]*)\s+(?:SET\s+DATA\s+)?TYPE\b/iu;
 const TYPE_CHANGE_POLICY = {
   boundedRewrite: "stella-migration-safety: bounded-type-rewrite",
   metadataOnly: "stella-migration-safety: metadata-only-type-change",
 } as const;
 const CUSTOM_BOUNDED_TYPE_CHANGE_MIGRATIONS = new Set([
   // This conversion derives a 20-minute execution budget from pg_settings in
-  // a DO block, which the token scanner deliberately does not interpret.
+  // a DO block, which the statement scanner deliberately does not interpret.
   "20260729150000_timestamptz_everywhere/migration.sql",
 ]);
 
 type TimeoutState = "bounded" | "unbounded" | "unset";
+type TimeoutUpdate =
+  | {
+      type: "set";
+      name: "lock" | "statement";
+      state: TimeoutState;
+    }
+  | {
+      type: "reset";
+      name: "all" | "lock" | "statement";
+    };
 
 const classifyTimeout = (value: string): TimeoutState => {
   if (ZERO_DURATION.test(value)) {
@@ -45,12 +49,208 @@ const classifyTimeout = (value: string): TimeoutState => {
   return "unset";
 };
 
-const stripMigrationComments = (source: string) =>
-  source
-    .split("\n")
-    .filter((line) => !line.trimStart().startsWith("--"))
-    .join("\n")
-    .replaceAll(/-->\s*statement-breakpoint/giu, "");
+const dollarQuoteDelimiterAt = (source: string, index: number) =>
+  /^\$(?:[A-Z_][A-Z0-9_]*)?\$/iu.exec(source.slice(index))?.at(0);
+
+const stripSqlComments = (source: string) => {
+  let result = "";
+  let index = 0;
+  let blockCommentDepth = 0;
+  let dollarQuoteDelimiter: string | undefined;
+  let quote: '"' | "'" | undefined;
+
+  while (index < source.length) {
+    const character = source[index] ?? "";
+    const nextCharacter = source[index + 1] ?? "";
+
+    if (blockCommentDepth > 0) {
+      if (character === "/" && nextCharacter === "*") {
+        blockCommentDepth += 1;
+        index += 2;
+      } else if (character === "*" && nextCharacter === "/") {
+        blockCommentDepth -= 1;
+        index += 2;
+      } else {
+        if (character === "\n") {
+          result += "\n";
+        }
+        index += 1;
+      }
+      continue;
+    }
+
+    if (dollarQuoteDelimiter) {
+      if (source.startsWith(dollarQuoteDelimiter, index)) {
+        result += dollarQuoteDelimiter;
+        index += dollarQuoteDelimiter.length;
+        dollarQuoteDelimiter = undefined;
+      } else {
+        result += character;
+        index += 1;
+      }
+      continue;
+    }
+
+    if (quote) {
+      result += character;
+      if (character === "\\" && nextCharacter) {
+        result += nextCharacter;
+        index += 2;
+      } else if (character === quote && nextCharacter === quote) {
+        result += nextCharacter;
+        index += 2;
+      } else {
+        if (character === quote) {
+          quote = undefined;
+        }
+        index += 1;
+      }
+      continue;
+    }
+
+    if (character === "-" && nextCharacter === "-") {
+      const newlineIndex = source.indexOf("\n", index + 2);
+      if (newlineIndex === -1) {
+        break;
+      }
+      result += "\n";
+      index = newlineIndex + 1;
+      continue;
+    }
+    if (character === "/" && nextCharacter === "*") {
+      result += " ";
+      blockCommentDepth = 1;
+      index += 2;
+      continue;
+    }
+    if (character === "'" || character === '"') {
+      quote = character;
+      result += character;
+      index += 1;
+      continue;
+    }
+    if (character === "$") {
+      const delimiter = dollarQuoteDelimiterAt(source, index);
+      if (delimiter) {
+        dollarQuoteDelimiter = delimiter;
+        result += delimiter;
+        index += delimiter.length;
+        continue;
+      }
+    }
+
+    result += character;
+    index += 1;
+  }
+
+  return result;
+};
+
+const splitSqlStatements = (source: string) => {
+  const statements = [];
+  const sql = stripSqlComments(source);
+  let current = "";
+  let index = 0;
+  let dollarQuoteDelimiter: string | undefined;
+  let quote: '"' | "'" | undefined;
+
+  while (index < sql.length) {
+    const character = sql[index] ?? "";
+    const nextCharacter = sql[index + 1] ?? "";
+
+    if (dollarQuoteDelimiter) {
+      if (sql.startsWith(dollarQuoteDelimiter, index)) {
+        current += dollarQuoteDelimiter;
+        index += dollarQuoteDelimiter.length;
+        dollarQuoteDelimiter = undefined;
+      } else {
+        current += character;
+        index += 1;
+      }
+      continue;
+    }
+
+    if (quote) {
+      current += character;
+      if (character === "\\" && nextCharacter) {
+        current += nextCharacter;
+        index += 2;
+      } else if (character === quote && nextCharacter === quote) {
+        current += nextCharacter;
+        index += 2;
+      } else {
+        if (character === quote) {
+          quote = undefined;
+        }
+        index += 1;
+      }
+      continue;
+    }
+
+    if (character === "'" || character === '"') {
+      quote = character;
+      current += character;
+      index += 1;
+      continue;
+    }
+    if (character === "$") {
+      const delimiter = dollarQuoteDelimiterAt(sql, index);
+      if (delimiter) {
+        dollarQuoteDelimiter = delimiter;
+        current += delimiter;
+        index += delimiter.length;
+        continue;
+      }
+    }
+    if (character === ";") {
+      if (current.trim()) {
+        statements.push(current.trim());
+      }
+      current = "";
+      index += 1;
+      continue;
+    }
+
+    current += character;
+    index += 1;
+  }
+
+  if (current.trim()) {
+    statements.push(current.trim());
+  }
+
+  return statements;
+};
+
+const parseTimeoutUpdate = (statement: string): TimeoutUpdate | undefined => {
+  const setGroups =
+    /^SET\s+(?:(?:SESSION|LOCAL)\s+)?(?<name>statement|lock)_timeout\s*(?:(?:=|TO)\s*(?<value>.+)|FROM\s+CURRENT)$/iu.exec(
+      statement,
+    )?.groups;
+  const setName = setGroups?.["name"];
+  if (setName === "lock" || setName === "statement") {
+    return {
+      type: "set",
+      name: setName,
+      state: classifyTimeout(setGroups?.["value"] ?? ""),
+    };
+  }
+
+  const resetName =
+    /^RESET\s+(?<name>ALL|statement_timeout|lock_timeout)$/iu.exec(statement)
+      ?.groups?.["name"];
+  if (resetName?.toLowerCase() === "all") {
+    return { type: "reset", name: "all" };
+  }
+  if (resetName?.toLowerCase() === "lock_timeout") {
+    return { type: "reset", name: "lock" };
+  }
+  if (resetName?.toLowerCase() === "statement_timeout") {
+    return { type: "reset", name: "statement" };
+  }
+
+  return undefined;
+};
 
 const collectUnsafeConcurrentIndexes = async (): Promise<string[]> => {
   const violations: string[] = [];
@@ -62,7 +262,7 @@ const collectUnsafeConcurrentIndexes = async (): Promise<string[]> => {
     const source = await Bun.file(
       nodePath.join(MIGRATIONS_DIR, relativePath),
     ).text();
-    const sqlWithoutLineComments = stripMigrationComments(source);
+    const sqlWithoutLineComments = stripSqlComments(source);
     for (const match of sqlWithoutLineComments.matchAll(
       CONCURRENT_IF_NOT_EXISTS,
     )) {
@@ -143,7 +343,6 @@ const collectUnsafeTypeChangesInMigration = (
   source: string,
 ) => {
   const violations = [];
-  const sqlWithoutLineComments = stripMigrationComments(source);
   const isCustomBoundedMigration =
     CUSTOM_BOUNDED_TYPE_CHANGE_MIGRATIONS.has(relativePath);
   const hasMetadataOnlyPolicy = source.includes(
@@ -159,40 +358,45 @@ const collectUnsafeTypeChangesInMigration = (
   let lockTimeout: TimeoutState = "unset";
   let statementTimeout: TimeoutState = "unset";
   let sawTypeChange = false;
-  let metadataOnlyBlockEnd: number | undefined;
+  let metadataOnlyBlockOpen = false;
 
-  for (const match of sqlWithoutLineComments.matchAll(
-    TYPE_CHANGE_SAFETY_TOKEN,
-  )) {
-    const token = match[0].replaceAll(/\s+/gu, " ").trim();
-    const setting = /^SET\s/iu.test(token)
-      ? TIMEOUT_SETTING.exec(token.replace(/;$/u, ""))?.groups
-      : undefined;
-    const isTypeChange = TYPE_CHANGE.test(token);
+  for (const statement of splitSqlStatements(source)) {
+    const timeoutUpdate = parseTimeoutUpdate(statement);
+    const isTypeChange = TYPE_CHANGE.test(statement);
     const isImmediateRestore =
-      setting?.["name"] === "statement" &&
-      classifyTimeout(setting["value"] ?? "") === "bounded";
+      timeoutUpdate?.type === "set" &&
+      timeoutUpdate.name === "statement" &&
+      timeoutUpdate.state === "bounded";
 
-    if (metadataOnlyBlockEnd !== undefined) {
-      const gap = sqlWithoutLineComments
-        .slice(metadataOnlyBlockEnd, match.index)
-        .trim();
-      if (gap || (!isTypeChange && !isImmediateRestore)) {
+    if (metadataOnlyBlockOpen) {
+      if (!isTypeChange && !isImmediateRestore) {
         violations.push(
           `${relativePath}: statement timeout is not restored immediately after metadata-only type changes`,
         );
-        metadataOnlyBlockEnd = undefined;
+        metadataOnlyBlockOpen = false;
       } else if (isImmediateRestore) {
-        metadataOnlyBlockEnd = undefined;
+        metadataOnlyBlockOpen = false;
       }
     }
 
-    if (setting) {
-      if (setting["name"] === "lock") {
-        lockTimeout = classifyTimeout(setting["value"] ?? "");
-      } else if (setting["name"] === "statement") {
-        statementTimeout = classifyTimeout(setting["value"] ?? "");
+    if (timeoutUpdate?.type === "set") {
+      if (timeoutUpdate.name === "lock") {
+        lockTimeout = timeoutUpdate.state;
+      } else {
+        statementTimeout = timeoutUpdate.state;
       }
+      continue;
+    }
+    if (timeoutUpdate?.type === "reset") {
+      if (timeoutUpdate.name === "all" || timeoutUpdate.name === "lock") {
+        lockTimeout = "unset";
+      }
+      if (timeoutUpdate.name === "all" || timeoutUpdate.name === "statement") {
+        statementTimeout = "unset";
+      }
+      continue;
+    }
+    if (!isTypeChange) {
       continue;
     }
 
@@ -221,7 +425,7 @@ const collectUnsafeTypeChangesInMigration = (
       );
     }
     if (hasMetadataOnlyPolicy) {
-      metadataOnlyBlockEnd = match.index + match[0].length;
+      metadataOnlyBlockOpen = true;
     }
     if (hasBoundedRewritePolicy && statementTimeout !== "bounded") {
       violations.push(
@@ -288,6 +492,9 @@ describe("lock-sensitive migration DDL", () => {
         'ALTER TABLE "example" ALTER COLUMN "value" SET DATA TYPE varchar(64)',
       ),
     ).toBe(true);
+    expect(
+      TYPE_CHANGE.test('ALTER TABLE "example" ALTER "value" TYPE timestamptz'),
+    ).toBe(true);
   });
 
   test("requires immediate timeout restoration after metadata-only blocks", () => {
@@ -315,12 +522,47 @@ ALTER TABLE "example" ALTER COLUMN "value" TYPE varchar(64);`;
 
   test("keeps lock waits bounded for custom execution budgets", () => {
     const relativePath = "20260729150000_timestamptz_everywhere/migration.sql";
+    for (const timeoutSetup of [
+      "SET lock_timeout = 0",
+      "SET lock_timeout = '1s'; RESET lock_timeout",
+      "SET lock_timeout = '1s'; SET lock_timeout TO 0ms",
+      "SET lock_timeout = '1s'; RESET ALL",
+    ]) {
+      expect(
+        collectUnsafeTypeChangesInMigration(
+          relativePath,
+          `${timeoutSetup}; ALTER TABLE example ALTER COLUMN value TYPE timestamptz;`,
+        ),
+      ).toContain(`${relativePath}: type change has an unbounded lock wait`);
+    }
     expect(
       collectUnsafeTypeChangesInMigration(
         relativePath,
-        "SET lock_timeout = 0; ALTER TABLE example ALTER COLUMN value TYPE timestamptz;",
+        "SET SESSION lock_timeout TO '1s'; ALTER TABLE example ALTER COLUMN value TYPE timestamptz;",
+      ),
+    ).toEqual([]);
+  });
+
+  test("ignores timeout text in SQL comments and quoted bodies", () => {
+    const relativePath = "20260729150000_timestamptz_everywhere/migration.sql";
+    expect(
+      collectUnsafeTypeChangesInMigration(
+        relativePath,
+        `SELECT 1; -- SET lock_timeout = '1s';
+        /* SET lock_timeout = '1s'; */
+        ALTER TABLE example ALTER COLUMN value TYPE timestamptz;`,
       ),
     ).toContain(`${relativePath}: type change has an unbounded lock wait`);
+    expect(
+      collectUnsafeTypeChangesInMigration(
+        relativePath,
+        `SET lock_timeout = '1s';
+        SELECT '-- RESET lock_timeout';
+        DO $body$ BEGIN PERFORM '/* RESET ALL */'; END $body$;
+        /* RESET lock_timeout; */
+        ALTER TABLE example ALTER COLUMN value TYPE timestamptz;`,
+      ),
+    ).toEqual([]);
   });
 
   test("bounds lock waits without interrupting acquired type changes", async () => {
