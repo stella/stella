@@ -1372,10 +1372,11 @@ export const runIngestionPipeline = async ({
       ? AbortSignal.any([signal, AbortSignal.timeout(pageTimeout)])
       : AbortSignal.timeout(pageTimeout);
     recentCursors.add(cursor);
+    const fetchCursor = cursor;
     // oxlint-disable-next-line no-await-in-loop -- sequential paginated crawl (each page's cursor depends on the previous page)
     const pageResult = await sourceLease.beforeRemoteEffect(
       async () =>
-        await adapter.fetchPage(cursor, source.config ?? {}, pageSignal),
+        await adapter.fetchPage(fetchCursor, source.config ?? {}, pageSignal),
     );
 
     if (Result.isError(pageResult)) {

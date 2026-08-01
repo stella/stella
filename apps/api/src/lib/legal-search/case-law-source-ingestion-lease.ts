@@ -71,6 +71,7 @@ export const acquireCaseLawSourceIngestionLease = async ({
   }
 
   const beforeDatabaseMark = async (): Promise<void> => {
+    // eslint-disable-next-line arrow-body-style -- block body keeps the audit directive inside the mutation callback
     const renewed = await scopedDb(async (tx) => {
       // audit: skip — renews ephemeral ownership without domain mutation
       return (
