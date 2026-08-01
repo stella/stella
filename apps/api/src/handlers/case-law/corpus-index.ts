@@ -1236,7 +1236,7 @@ export const createCaseLawGenerationBackfill =
             (row) =>
               !isCorpusEligible(row) &&
               (row.generationIndexId !== null ||
-                (row.generationPendingIndexIds?.length ?? 0) > 0),
+                row.generationPendingIndexIds.length > 0),
           );
           await Promise.all(
             removals.map(async (row) => {
@@ -1303,14 +1303,14 @@ export const createCaseLawGenerationBackfill =
             (row) =>
               !isCorpusEligible(row) &&
               row.generationIndexId === null &&
-              (row.generationPendingIndexIds?.length ?? 0) === 0,
+              row.generationPendingIndexIds.length === 0,
           )
           .map(withoutSourceDescriptor);
         const terminalDeletes = pendingIndexRows.filter(
           (row) =>
             !isCorpusEligible(row) &&
             (row.generationIndexId !== null ||
-              (row.generationPendingIndexIds?.length ?? 0) > 0),
+              row.generationPendingIndexIds.length > 0),
         );
         const indexed =
           eligible.length === 0

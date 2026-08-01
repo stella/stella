@@ -760,8 +760,8 @@ export const caseLawCorpusIndexProjections = p.pgTable(
     pendingIndexIds: p
       .varchar("pending_index_ids", { length: 64 })
       .array()
-      .default(sql`'{}'::varchar(64)[]`)
-      .notNull(),
+      .notNull()
+      .default(sql`'{}'::varchar(64)[]`),
     updatedAt: timestamptz("updated_at").defaultNow().notNull(),
   },
   (t) => [

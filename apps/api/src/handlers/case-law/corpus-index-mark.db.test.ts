@@ -136,6 +136,7 @@ const loadRow = async (id: SafeId<"caseLawDecision">) => {
       indexedGeneration: caseLawDecisions.indexedGeneration,
       generationIndexId: sql<string | null>`null`,
       generationPendingAction: sql<"delete" | "index" | null>`null`,
+      generationPendingIndexIds: sql<string[]>`'{}'::varchar(64)[]`,
       updatedAtToken: timestampCasToken(caseLawDecisions.updatedAt),
     })
     .from(caseLawDecisions)
