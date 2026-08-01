@@ -51,6 +51,19 @@ const templateQuasiText = (template: AstNode, index: number): string | null => {
 
 type RoutePart = string | null;
 
+const EXPRESSION_WRAPPER_TYPES = new Set([
+  "ChainExpression",
+  "ParenthesizedExpression",
+  "TSAsExpression",
+  "TSInstantiationExpression",
+  "TSNonNullExpression",
+  "TSSatisfiesExpression",
+  "TSTypeAssertion",
+]);
+
+const isExpressionWrapper = (node: AstNode): boolean =>
+  EXPRESSION_WRAPPER_TYPES.has(node.type) && isAstNode(node.expression);
+
 const isConcatCall = (node: AstNode): boolean => {
   if (node.type !== "CallExpression" || !isAstNode(node.callee)) {
     return false;
@@ -75,6 +88,9 @@ const routeParts = (node: unknown): RoutePart[] => {
   }
   if (!isAstNode(node)) {
     return [null];
+  }
+  if (isExpressionWrapper(node)) {
+    return routeParts(node.expression);
   }
   if (node.type === "BinaryExpression" && node.operator === "+") {
     return routeParts(node.left).concat(routeParts(node.right));
@@ -114,6 +130,9 @@ const hasRouteConstructionParent = (node: AstNode): boolean => {
     return false;
   }
   const parent = node.parent;
+  if (isExpressionWrapper(parent) && parent.expression === node) {
+    return hasRouteConstructionParent(parent);
+  }
   if (parent.type === "BinaryExpression" && parent.operator === "+") {
     return true;
   }

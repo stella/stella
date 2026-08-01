@@ -66,6 +66,11 @@ export const methodConcatenatedLegacyRoute = "/workspaces/".concat(
   entityId,
 );
 
+export const satisfiesWrappedLegacyRoute =
+  // oxlint-disable-next-line no-legacy-entity-route/no-legacy-entity-route -- regression case
+  (`/workspaces/${workspaceId}` satisfies `/workspaces/${string}`) +
+  `/entities/${entityId}`;
+
 export const currentDocumentRoute = "/workspaces/$workspaceId/$viewId/document";
 export const similarlyStructuredPrivatePath =
   "/_protected/workspaces/$workspaceId/entities/$entityId";
