@@ -47,6 +47,75 @@ jobs:
         env:
           TURBO_FORCE: "true"
 
+  # The production client build is the remaining browser-CI setup hotspot.
+  # Profile it nightly rather than taxing every PR; retain TanStack Start's
+  # import-protection boundary and collect evidence for upgrades or upstream
+  # performance fixes.
+  web-build-profile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        run: bash scripts/bun-ci-retry.sh --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Prepare environment
+        run: cp apps/web/.env.example apps/web/.env
+
+      - name: Profile production web build
+        env:
+          TSR_IMPORT_PROTECTION_PERF: "1"
+          TSR_IMPORT_PROTECTION_PERF_FILE: ${{ github.workspace }}/web-build-profile/import-protection.json
+        run: |
+          set -o pipefail
+          profile_dir=web-build-profile
+          mkdir -p "$profile_dir"
+          started_at=$SECONDS
+          set +e
+          bun --filter @stll/web build 2>&1 | tee "$profile_dir/vite.log"
+          build_status=${PIPESTATUS[0]}
+          set -e
+          build_seconds=$((SECONDS - started_at))
+          {
+            echo "## Nightly web build profile"
+            echo
+            echo "| Metric | Value |"
+            echo "| --- | ---: |"
+            echo "| Build wall time | ${build_seconds}s |"
+            if [[ -f "$profile_dir/import-protection.json" ]]; then
+              jq -r '
+                "| Import-protection resolve calls | \(.counters["resolveId.calls"] // 0) |",
+                "| Import-protection transforms | \(.counters["transform.calls"] // 0) |",
+                "| Internal resolver calls | \(.counters["thisResolve.calls"] // 0) |",
+                "| Slowest internal resolve | \(.timings.thisResolve.maxMs // 0)ms |"
+              ' "$profile_dir/import-protection.json"
+            fi
+          } | tee "$profile_dir/summary.md" >> "$GITHUB_STEP_SUMMARY"
+          exit "$build_status"
+
+      - name: Upload build profile
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: nightly-web-build-profile
+          path: web-build-profile/
+          if-no-files-found: error
+          retention-days: 30
+
   # Marketing captures are intentionally nightly, not part of the PR critical
   # path. They exercise seeded product scenes against the complete default-
   # branch runtime, so dependency changes need no fragile per-file allowlist.

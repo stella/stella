@@ -1,7 +1,25 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 
 const script = path.join(import.meta.dirname, "detect-e2e-changes.sh");
+const workflow = readFileSync(
+  path.join(import.meta.dirname, "../.github/workflows/ci.yml"),
+  "utf-8",
+);
+
+const workflowJob = (jobId: string): string => {
+  const marker = `\n  ${jobId}:\n`;
+  const start = workflow.indexOf(marker);
+  if (start === -1) {
+    throw new Error(`CI workflow is missing ${jobId}`);
+  }
+  const bodyStart = start + marker.length;
+  const nextJob = workflow.slice(bodyStart).search(/\n {2}[a-z][\w-]*:\n/u);
+  return nextJob === -1
+    ? workflow.slice(bodyStart)
+    : workflow.slice(bodyStart, bodyStart + nextJob);
+};
 
 const detects = (scope: "core" | "landing", files: string[]) =>
   Bun.spawnSync(["bash", script, scope, ...files], {
@@ -54,5 +72,28 @@ describe("detect-e2e-changes", () => {
     const files = [".github/workflows/ci.yml"];
     expect(detects("core", files)).toBe("true");
     expect(detects("landing", files)).toBe("true");
+  });
+
+  test("keeps production, Vite canary, and landing work parallel", () => {
+    const production = workflowJob("e2e-production-shard");
+    expect(production).not.toContain("Run Vite dependency canary");
+    expect(production).not.toContain("Check landing islands");
+
+    const canary = workflowJob("e2e-vite-canary");
+    expect(canary).not.toContain("Build web for route checks");
+    expect(canary).not.toContain("Run Playwright shard");
+
+    const landing = workflowJob("e2e-landing");
+    expect(landing).not.toContain("Start docker stack");
+    expect(landing).not.toContain("Start API server");
+
+    const aggregate = workflowJob("e2e");
+    for (const requiredJob of [
+      "e2e-production-shard",
+      "e2e-vite-canary",
+      "e2e-landing",
+    ]) {
+      expect(aggregate).toContain(requiredJob);
+    }
   });
 });

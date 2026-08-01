@@ -32,9 +32,9 @@ pre-push:
   parallel: false
   commands:
     code-check:
-      # One Oxc type-aware pass covers every workspace, while the root native
-      # projects remain checked explicitly by the combined command.
-      run: bun run code-check
+      # One Oxc type-aware pass covers changed workspaces plus reverse
+      # dependants. Global compiler/lint inputs fall back to the full repo.
+      run: bun run code-check:affected -- --base origin/main
     format:
       run: bun run format --concurrency=2 -- --check
     i18n:
