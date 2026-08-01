@@ -98,7 +98,7 @@
     "domhandler": "^6.0.1",
     "drizzle-orm": "catalog:",
     "elysia": "catalog:",
-    "elysia-rate-limit": "^4.6.2",
+    "elysia-rate-limit": "^5.1.0",
     "jose": "^6.2.4",
     "jszip": "catalog:",
     "nodemailer": "^9.0.3",
