@@ -3,7 +3,7 @@ import nodePath from "node:path";
 
 const MIGRATIONS_DIR = nodePath.resolve(import.meta.dir, "../../drizzle");
 const SAFETY_TOKEN =
-  /\bSET\s+(?:LOCAL\s+)?statement_timeout\s*=\s*(?:'[^']*'|[^\s;]+)|\bCREATE\s+(?:UNIQUE\s+)?INDEX\s+CONCURRENTLY\b/giu;
+  /\bSET\s+(?:LOCAL\s+)?statement_timeout\s*=\s*(?:'[^']*'|[^\s;]+)|\b(?:CREATE\s+(?:UNIQUE\s+)?|DROP\s+)INDEX\s+CONCURRENTLY\b/giu;
 const UNBOUNDED_TIMEOUT = /^SET\s+statement_timeout\s*=\s*(?:'0'|0)$/iu;
 
 const collectUnsafeConcurrentIndexes = async (): Promise<string[]> => {
@@ -30,7 +30,9 @@ const collectUnsafeConcurrentIndexes = async (): Promise<string[]> => {
         continue;
       }
       if (!hasUnboundedTimeout) {
-        violations.push(`${relativePath}: concurrent index has a timeout`);
+        violations.push(
+          `${relativePath}: concurrent index operation has a timeout`,
+        );
       }
       sawConcurrentIndex = true;
     }
@@ -44,7 +46,7 @@ const collectUnsafeConcurrentIndexes = async (): Promise<string[]> => {
 };
 
 describe("concurrent index migration safety", () => {
-  test("disables statement timeout before every concurrent index build", async () => {
+  test("disables statement timeout around every concurrent index operation", async () => {
     expect(await collectUnsafeConcurrentIndexes()).toEqual([]);
   });
 });
