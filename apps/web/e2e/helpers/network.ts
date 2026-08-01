@@ -57,9 +57,59 @@ export type NetworkCapture = {
 
 export type NetworkCollector = {
   trackPage: (page: Page) => () => void;
+  // Waits until tracked API activity has been quiet for the requested window.
+  // Long-lived SSE streams do not block this: only their request/response
+  // events count as activity, not the open connection itself.
+  waitForQuiet: (options: NetworkQuietOptions) => Promise<"idle" | "timeout">;
   // Async: waits for in-flight response-body reads so response sizes are
   // populated before the caller summarizes the capture.
   capture: () => Promise<NetworkCapture>;
+};
+
+export type NetworkQuietOptions = {
+  idleMs: number;
+  minimumObservationMs: number;
+  timeoutMs: number;
+};
+
+type WaitForQuietPeriodOptions = NetworkQuietOptions & {
+  getLastActivityAt: () => number;
+  now?: () => number;
+  sleep?: (durationMs: number) => Promise<void>;
+};
+
+// Kept independent of Playwright so the timing state machine can be exercised
+// deterministically with a fake clock. The timeout is a cap, matching the old
+// settle window; reaching it allows capture instead of hanging on polling.
+export const waitForQuietPeriod = async ({
+  getLastActivityAt,
+  idleMs,
+  minimumObservationMs,
+  timeoutMs,
+  now = Date.now,
+  sleep = async (durationMs) =>
+    new Promise((resolve) => {
+      setTimeout(resolve, durationMs);
+    }),
+}: WaitForQuietPeriodOptions): Promise<"idle" | "timeout"> => {
+  const startedAt = now();
+  const timeoutAt = startedAt + timeoutMs;
+
+  while (true) {
+    const current = now();
+    const idleAt = Math.max(
+      startedAt + minimumObservationMs,
+      Math.max(startedAt, getLastActivityAt()) + idleMs,
+    );
+    if (current >= idleAt) {
+      return "idle";
+    }
+    if (current >= timeoutAt) {
+      return "timeout";
+    }
+    // eslint-disable-next-line no-await-in-loop -- each wait observes activity that may have arrived during the preceding wait; parallel sleeps cannot model a quiet period
+    await sleep(Math.min(idleAt, timeoutAt) - current);
+  }
 };
 
 type NetworkCollectorOptions = {
@@ -112,14 +162,20 @@ const readResponseBytes = async (
 };
 
 export const createNetworkCollector = (
-  options: NetworkCollectorOptions = {},
+  collectorOptions: NetworkCollectorOptions = {},
 ): NetworkCollector => {
-  const apiOrigin = options.apiOrigin ?? new URL(DEFAULT_API_URL).origin;
+  const apiOrigin =
+    collectorOptions.apiOrigin ?? new URL(DEFAULT_API_URL).origin;
   const records: NetworkRecord[] = [];
   const byRequest = new Map<Request, NetworkRecord>();
   // Body reads are async (Playwright must finish downloading the response),
   // so capture() awaits these before reading responseBytes off the records.
   const pendingBodyReads: Promise<void>[] = [];
+  let lastActivityAt = Date.now();
+
+  const markActivity = () => {
+    lastActivityAt = Date.now();
+  };
 
   return {
     trackPage: (page) => {
@@ -139,12 +195,14 @@ export const createNetworkCollector = (
         };
         records.push(record);
         byRequest.set(request, record);
+        markActivity();
       };
 
       const onSettled = (request: Request) => {
         const record = byRequest.get(request);
         if (record) {
           record.end = Date.now();
+          markActivity();
         }
       };
 
@@ -153,6 +211,7 @@ export const createNetworkCollector = (
         if (!record) {
           return;
         }
+        markActivity();
         const header = response.headers()[DB_QUERIES_HEADER];
         if (header !== undefined) {
           record.dbQueries = Number(header);
@@ -178,6 +237,12 @@ export const createNetworkCollector = (
         page.off("requestfailed", onSettled);
       };
     },
+
+    waitForQuiet: async (quietOptions) =>
+      waitForQuietPeriod({
+        ...quietOptions,
+        getLastActivityAt: () => lastActivityAt,
+      }),
 
     capture: async () => {
       await Promise.all(pendingBodyReads);
@@ -360,6 +425,10 @@ export const summarizeCapture = (
 export type NetworkBaselineDiff = {
   problems: string[];
   notices: string[];
+};
+
+type DiffNetworkBaselineOptions = {
+  requireAllRoutes?: boolean;
 };
 
 const pushNewRequestProblems = ({
@@ -600,6 +669,7 @@ const requestCountBudget = (
 export const diffNetworkBaseline = (
   baseline: NetworkBaseline | null,
   results: Map<string, RouteNetworkMetrics>,
+  { requireAllRoutes = true }: DiffNetworkBaselineOptions = {},
 ): NetworkBaselineDiff => {
   const problems: string[] = [];
   const notices: string[] = [];
@@ -636,13 +706,15 @@ export const diffNetworkBaseline = (
     pushImprovementNotices({ route, entry, metrics, notices });
   }
 
-  for (const route of Object.keys(baseline)) {
-    if (!results.has(route)) {
-      problems.push(
-        `Stale network baseline entry (route not visited this run): ${route}\n` +
-          `  The smoke route set is deterministic, so a baseline route that never\n` +
-          `  ran means the route was renamed or removed — prune it: ${WRITE_HINT}.`,
-      );
+  if (requireAllRoutes) {
+    for (const route of Object.keys(baseline)) {
+      if (!results.has(route)) {
+        problems.push(
+          `Stale network baseline entry (route not visited this run): ${route}\n` +
+            `  The smoke route set is deterministic, so a baseline route that never\n` +
+            `  ran means the route was renamed or removed — prune it: ${WRITE_HINT}.`,
+        );
+      }
     }
   }
 
@@ -767,6 +839,7 @@ const writeNetworkBaseline = (baseline: NetworkBaseline) => {
 
 export const assertNetworkBaseline = (
   results: Map<string, RouteNetworkMetrics>,
+  options: DiffNetworkBaselineOptions = {},
 ) => {
   const mode = process.env["E2E_NETWORK_BASELINE"];
 
@@ -790,6 +863,7 @@ export const assertNetworkBaseline = (
   const { problems, notices } = diffNetworkBaseline(
     readNetworkBaseline(),
     results,
+    options,
   );
 
   for (const notice of notices) {
@@ -802,4 +876,12 @@ export const assertNetworkBaseline = (
       ? "network baseline"
       : `Network baseline check failed:\n\n${problems.join("\n\n")}`,
   ).toEqual([]);
+};
+
+export const assertNetworkBaselineCoverage = (expectedRoutes: string[]) => {
+  const baseline = readNetworkBaseline();
+  expect(
+    baseline === null ? [] : Object.keys(baseline).sort(),
+    `network baseline route keys in ${BASELINE_RELATIVE}`,
+  ).toEqual(expectedRoutes.toSorted());
 };

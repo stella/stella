@@ -13,23 +13,21 @@ import { apiDelete, apiGet, apiPut, apiUploadDocx } from "../helpers/api";
 import {
   type RouteNetworkMetrics,
   assertNetworkBaseline,
+  assertNetworkBaselineCoverage,
   createNetworkCollector,
   summarizeCapture,
 } from "../helpers/network";
-import {
-  type BrowserErrorCollector,
-  createBrowserErrorCollector,
-} from "../helpers/test";
+import { createBrowserErrorCollector } from "../helpers/test";
 import {
   type TestWorkspace,
   createTestWorkspace,
   deleteTestWorkspace,
 } from "../helpers/workspace";
 
-// Long enough that idle warmup requests (tool connectors, skills, usage
-// entitlement on chat routes) land inside the window deterministically; the
-// network baseline records them as part of the route's manifest instead of
-// racing them.
+// Every route retains the former one-second observation floor so delayed
+// warmups remain visible. After that floor, tracked API activity may finish
+// the longer document-route windows early once it stays quiet.
+const NETWORK_QUIET_MS = 500;
 const DEFAULT_SETTLE_MS = 1000;
 
 // Repo-root .playwright/storage-state.json — mirrors apps/web/e2e/playwright.config.ts
@@ -237,103 +235,139 @@ const INTENTIONALLY_NOT_SMOKED = new Set([
   "/workspaces/$workspaceId/reports/$exportId",
 ]);
 
-// One serial group so the expensive workspace/contact/document setup runs once
-// and is shared across every route case. Each route is its own `test()` with
-// the config's per-test timeout: a single slow route (cold compile) or a
-// dev-server sub-resource stall now fails and is attributed to that one route
-// instead of consuming a single 300s budget shared by all ~45 routes.
-test.describe
-  .serial("authenticated routes render without browser errors", () => {
-  let apiRequest: APIRequestContext;
-  let context: BrowserContext;
-  let world: SmokeWorld | null = null;
-  // Recorded the moment each fixture is created (not only after the whole
-  // setup succeeds), so a failure mid-setup still tears down what exists.
-  let createdWorkspace: SmokeWorld["workspace"] | null = null;
-  let createdContactId: string | null = null;
-  const networkResults = new Map<string, RouteNetworkMetrics>();
+const declareRouteSmokeGroup = ({
+  defs,
+  name,
+  requireAllRoutes,
+}: {
+  defs: readonly SmokeRouteDef[];
+  name: string;
+  requireAllRoutes: boolean;
+}) => {
+  // Serial within one fixture-owning group; separate groups are independent
+  // Playwright scheduling units and can run on different workers or CI shards.
+  test.describe.serial(name, () => {
+    let apiRequest: APIRequestContext;
+    let context: BrowserContext;
+    let world: SmokeWorld | null = null;
+    // Recorded the moment each fixture is created (not only after the whole
+    // setup succeeds), so a failure mid-setup still tears down what exists.
+    let createdWorkspace: SmokeWorld["workspace"] | null = null;
+    let createdContactId: string | null = null;
+    const networkResults = new Map<string, RouteNetworkMetrics>();
 
-  test.beforeAll(async ({ browser }) => {
-    apiRequest = await apiRequestFactory.newContext({
-      storageState: STORAGE_STATE,
-    });
-    context = await browser.newContext({ storageState: STORAGE_STATE });
-
-    const workspace = await createTestWorkspace(apiRequest, "route-smoke");
-    createdWorkspace = workspace;
-    const contactId = await createContact(apiRequest);
-    createdContactId = contactId;
-    const documentRoute = await createDocumentRoute(apiRequest, workspace);
-    world = { workspace, contactId, documentRoute };
-  });
-
-  test.afterAll(async () => {
-    // Best-effort but total: attempt every teardown step even if one throws,
-    // so a single failure cannot strand the other fixture or leak the browser
-    // context / request context. Runs on the beforeAll-owned request context
-    // (not a per-test fixture), so it cannot race a timing-out test body into
-    // the "context closed" masking error.
-    const failures: unknown[] = [];
-    if (createdContactId !== null) {
-      try {
-        await apiDelete(apiRequest, `/contacts/${createdContactId}`);
-      } catch (error) {
-        failures.push(error);
-      }
-    }
-    if (createdWorkspace !== null) {
-      try {
-        await deleteTestWorkspace(apiRequest, createdWorkspace.id);
-      } catch (error) {
-        failures.push(error);
-      }
-    }
-    try {
-      await context.close();
-    } catch (error) {
-      failures.push(error);
-    }
-    try {
-      await apiRequest.dispose();
-    } catch (error) {
-      failures.push(error);
-    }
-    if (failures.length > 0) {
-      throw new AggregateError(
-        failures,
-        "route-smoke teardown failed to release one or more fixtures",
-      );
-    }
-  });
-
-  test("route coverage matches the authenticated route tree", async () => {
-    await expectAuthenticatedRouteCoverage(SMOKE_ROUTE_DEFS);
-  });
-
-  // Declared via a helper (not a closure literal inside the loop) so each
-  // parametrized `test()` is a plain call in the loop body. The shared
-  // context/world/results it closes over are group-scoped and assigned once in
-  // beforeAll.
-  const declareRouteTest = (def: SmokeRouteDef) => {
-    test(def.template, async () => {
-      if (world === null) {
-        throw new Error("route-smoke world was not initialized in beforeAll");
-      }
-      await smokeRoute({
-        context,
-        results: networkResults,
-        route: resolveRoute(def, world),
+    test.beforeAll(async ({ browser }) => {
+      apiRequest = await apiRequestFactory.newContext({
+        storageState: STORAGE_STATE,
       });
-    });
-  };
-  for (const def of SMOKE_ROUTE_DEFS) {
-    declareRouteTest(def);
-  }
+      context = await browser.newContext({ storageState: STORAGE_STATE });
 
-  test("network manifest matches the committed baseline", () => {
-    assertNetworkBaseline(networkResults);
+      const workspace = await createTestWorkspace(apiRequest, "route-smoke");
+      createdWorkspace = workspace;
+      const contactId = await createContact(apiRequest);
+      createdContactId = contactId;
+      const documentRoute = await createDocumentRoute(apiRequest, workspace);
+      world = { workspace, contactId, documentRoute };
+    });
+
+    test.afterAll(async () => {
+      // Best-effort but total: attempt every teardown step even if one throws,
+      // so a single failure cannot strand the other fixture or leak the browser
+      // context / request context. Runs on the beforeAll-owned request context
+      // (not a per-test fixture), so it cannot race a timing-out test body into
+      // the "context closed" masking error.
+      const failures: unknown[] = [];
+      if (createdContactId !== null) {
+        try {
+          await apiDelete(apiRequest, `/contacts/${createdContactId}`);
+        } catch (error) {
+          failures.push(error);
+        }
+      }
+      if (createdWorkspace !== null) {
+        try {
+          await deleteTestWorkspace(apiRequest, createdWorkspace.id);
+        } catch (error) {
+          failures.push(error);
+        }
+      }
+      try {
+        await context.close();
+      } catch (error) {
+        failures.push(error);
+      }
+      try {
+        await apiRequest.dispose();
+      } catch (error) {
+        failures.push(error);
+      }
+      if (failures.length > 0) {
+        throw new AggregateError(
+          failures,
+          "route-smoke teardown failed to release one or more fixtures",
+        );
+      }
+    });
+
+    // Declared via a helper (not a closure literal inside the loop) so each
+    // parametrized `test()` is a plain call in the loop body. The shared
+    // context/world/results it closes over are group-scoped and assigned once in
+    // beforeAll.
+    const declareRouteTest = (def: SmokeRouteDef) => {
+      test(def.template, async () => {
+        if (world === null) {
+          throw new Error("route-smoke world was not initialized in beforeAll");
+        }
+        await smokeRoute({
+          context,
+          results: networkResults,
+          route: resolveRoute(def, world),
+        });
+      });
+    };
+    for (const def of defs) {
+      declareRouteTest(def);
+    }
+
+    test("network manifest matches the committed baseline", () => {
+      assertNetworkBaseline(networkResults, { requireAllRoutes });
+    });
   });
+};
+
+test("route coverage matches the authenticated route tree", async () => {
+  await expectAuthenticatedRouteCoverage(SMOKE_ROUTE_DEFS);
+  assertNetworkBaselineCoverage(
+    SMOKE_ROUTE_DEFS.map((def) =>
+      def.expectation?.kind === "redirectsTo"
+        ? `${def.template} target`
+        : def.template,
+    ),
+  );
 });
+
+const baselineMode = process.env["E2E_NETWORK_BASELINE"];
+if (baselineMode === "write" || baselineMode === "rewrite") {
+  // Baseline writes need one complete result set and one writer. Normal checks
+  // use two groups below because each independently compares its observed
+  // routes against the same committed per-route budgets.
+  declareRouteSmokeGroup({
+    defs: SMOKE_ROUTE_DEFS,
+    name: "authenticated routes render without browser errors",
+    requireAllRoutes: true,
+  });
+} else {
+  const groups = [0, 1].map((groupIndex) =>
+    SMOKE_ROUTE_DEFS.filter((_, index) => index % 2 === groupIndex),
+  );
+  for (const [groupIndex, defs] of groups.entries()) {
+    declareRouteSmokeGroup({
+      defs,
+      name: `authenticated routes render without browser errors ${groupIndex + 1}/${groups.length}`,
+      requireAllRoutes: false,
+    });
+  }
+}
 
 const createContact = async (request: APIRequestContext): Promise<string> => {
   const contactId = randomUUID();
@@ -441,11 +475,18 @@ const smokeRouteTarget = async ({
   const detachNetwork = network.trackPage(page);
 
   try {
-    await renderSmokeRoute({ browserErrors, page, route });
-    // Captured right after the settle + assertions in renderSmokeRoute (its
-    // last step is browserErrors.assertEmpty), so the manifest reflects the
-    // fully-rendered route. Stored under the template it received; redirect
-    // targets already arrive as "<template> target".
+    await renderSmokeRoute({ page, route });
+    await network.waitForQuiet({
+      idleMs: NETWORK_QUIET_MS,
+      minimumObservationMs: DEFAULT_SETTLE_MS,
+      timeoutMs: route.settleMs ?? DEFAULT_SETTLE_MS,
+    });
+    await assertNoRouteBoundary(page, route.template);
+    assertFinalDestination(page, route);
+    browserErrors.assertEmpty(`unexpected browser errors on ${route.template}`);
+    // Captured after the route shell and tracked API work are ready, so the
+    // manifest reflects the fully-rendered route. Stored under the template
+    // it received; redirect targets arrive as "<template> target".
     results.set(route.template, summarizeCapture(await network.capture()));
   } finally {
     detachNetwork();
@@ -477,11 +518,9 @@ const assertRedirectRoute = async ({
 };
 
 const renderSmokeRoute = async ({
-  browserErrors,
   page,
   route,
 }: {
-  browserErrors: Pick<BrowserErrorCollector, "assertEmpty">;
   page: Page;
   route: SmokeRoute;
 }) => {
@@ -494,12 +533,6 @@ const renderSmokeRoute = async ({
   await expect(page.locator("main").first(), route.template).toBeVisible({
     timeout: 30_000,
   });
-
-  await page.waitForTimeout(route.settleMs ?? DEFAULT_SETTLE_MS);
-
-  await assertNoRouteBoundary(page, route.template);
-  assertFinalDestination(page, route);
-  browserErrors.assertEmpty(`unexpected browser errors on ${route.template}`);
 };
 
 // `goto` waits for DOMContentLoaded, which a render-blocking `<head>`

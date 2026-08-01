@@ -11,18 +11,20 @@ const IS_CI = process.env["CI"] !== undefined;
 
 export default defineConfig({
   testDir: "./specs",
-  // Each spec creates and tears down its own workspace, so parallelism
-  // is safe. Capped at 4 locally to keep Postgres/MinIO contention
-  // modest; serial in CI because two specs cold-compiling heavy route
-  // chunks (folio, chat) on a 2-core runner starve each other past
-  // their expect timeouts.
+  // Each spec creates and tears down its own workspace, so parallelism is
+  // safe. CI parallelizes across isolated two-way shards; each runner keeps a
+  // single worker so Postgres, MinIO, and Chromium do not contend for 2 cores.
   fullyParallel: true,
   workers: IS_CI ? 1 : 4,
   // CI failures are almost always real (server logs, traces tell the story).
   // Retries hide flakes; fix them in code instead.
   retries: 0,
   reporter: IS_CI
-    ? [["github"], ["html", { open: "never" }], ["list"]]
+    ? [
+        ["blob", { outputDir: "test-results/blob-report" }],
+        ["github"],
+        ["list"],
+      ]
     : [["list"], ["html", { open: "never" }]],
   // Cold Vite + folio editor compile on a fresh CI runner can use 25-30s
   // before the first locator runs, leaving no headroom for in-spec

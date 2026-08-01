@@ -73,104 +73,109 @@ test.describe("DOCX upload + inspector", () => {
     workspace = null;
   });
 
-  test("uploaded DOCX opens from the matter with its AI overlay", async ({
-    browserErrors,
-    page,
-    request,
-  }) => {
-    const testWorkspace = workspace;
-    if (testWorkspace === null) {
-      throw new Error("Test workspace was not created");
-    }
-
-    const docxBuffer = await readFile(DOCX_PATH);
-
-    const uploaded = await apiUploadDocx(
-      request,
-      testWorkspace.id,
-      testWorkspace.filePropertyId,
-      {
-        name: "stella-e2e.docx",
-        mimeType: DOCX_MIME,
-        buffer: docxBuffer,
-      },
-    );
-    expect(uploaded.entityId).toBeTruthy();
-
-    const { cookies } = await request.storageState();
-    await page.context().addCookies(cookies);
-
-    await expect
-      .poll(
-        async () =>
-          await apiStatus(page.request, `/workspaces/${testWorkspace.id}`),
-        {
-          message: "browser context can read the created workspace",
-          timeout: 10_000,
-        },
-      )
-      .toBe(200);
-
-    // Exercise the user path that originally exposed the route-context race:
-    // enter the matter first, then mount the cold lazy file-chat overlay by
-    // opening the file from the table. A direct document URL does not cover
-    // this client-side transition.
-    await page.goto(`/workspaces/${testWorkspace.id}/${testWorkspace.viewId}`, {
-      waitUntil: "domcontentloaded",
-    });
-
-    // New matters land on their Overview view. Move through the visible Table
-    // tab before opening the uploaded file so this remains a client-side user
-    // transition instead of falling back to a direct document URL.
-    const tableTab = page.getByRole("tab", { exact: true, name: "Table" });
-    await expect(tableTab).toBeVisible({ timeout: 30_000 });
-    await tableTab.click();
-
-    const fileButton = page.getByRole("button", {
-      exact: true,
-      name: "stella-e2e.docx",
-    });
-    await expect(fileButton).toBeVisible({ timeout: 30_000 });
-    await fileButton.click();
-
-    // Prove the optional overlay itself mounted; asserting only document text
-    // would pass if its local error boundary had silently removed the overlay.
-    await expect(
-      page.getByRole("toolbar", { name: "AI message composer" }),
-    ).toBeVisible({ timeout: 45_000 });
-
-    // Positive proof the viewer actually rendered: the fixture's first
-    // paragraph appears in the painted layout. This catches render crashes
-    // (an error boundary fallback wouldn't contain this string) without an
-    // arbitrary sleep. Generous timeout because in CI the Folio chunk
-    // compiles + loads cold AND the DOCX file is fetched from the API +
-    // parsed.
-    //
-    // Scope to `.layout-run-text` (emitted by the layout painter in
-    // packages/folio/src/core/layout-painter/renderParagraph.ts) rather
-    // than getByText so the assertion targets the *visible* painted span
-    // only. The hidden ProseMirror at left:-9999px also contains the same
-    // text inside a <p> under aria-label="Document content" — a bare
-    // getByText hits both elements and trips Playwright strict mode.
-    const docxText = page.locator(".layout-run-text", {
-      hasText: "Stella E2E test document.",
-    });
-    try {
-      await expect(docxText).toBeVisible({ timeout: 45_000 });
-    } catch (error) {
-      // Surface any errors collected so far — they're usually the real cause
-      // of the viewer never mounting (network failure, render crash caught
-      // by an error boundary, etc.).
-      const errors = browserErrors.entries();
-      if (errors.length > 0) {
-        throw new Error(
-          `viewer text never appeared; collected errors:\n${errors.join("\n\n")}`,
-          { cause: error },
-        );
+  test(
+    "uploaded DOCX opens from the matter with its AI overlay",
+    {
+      tag: "@dev-canary",
+    },
+    async ({ browserErrors, page, request }) => {
+      const testWorkspace = workspace;
+      if (testWorkspace === null) {
+        throw new Error("Test workspace was not created");
       }
-      throw error;
-    }
-  });
+
+      const docxBuffer = await readFile(DOCX_PATH);
+
+      const uploaded = await apiUploadDocx(
+        request,
+        testWorkspace.id,
+        testWorkspace.filePropertyId,
+        {
+          name: "stella-e2e.docx",
+          mimeType: DOCX_MIME,
+          buffer: docxBuffer,
+        },
+      );
+      expect(uploaded.entityId).toBeTruthy();
+
+      const { cookies } = await request.storageState();
+      await page.context().addCookies(cookies);
+
+      await expect
+        .poll(
+          async () =>
+            await apiStatus(page.request, `/workspaces/${testWorkspace.id}`),
+          {
+            message: "browser context can read the created workspace",
+            timeout: 10_000,
+          },
+        )
+        .toBe(200);
+
+      // Exercise the user path that originally exposed the route-context race:
+      // enter the matter first, then mount the cold lazy file-chat overlay by
+      // opening the file from the table. A direct document URL does not cover
+      // this client-side transition.
+      await page.goto(
+        `/workspaces/${testWorkspace.id}/${testWorkspace.viewId}`,
+        {
+          waitUntil: "domcontentloaded",
+        },
+      );
+
+      // New matters land on their Overview view. Move through the visible Table
+      // tab before opening the uploaded file so this remains a client-side user
+      // transition instead of falling back to a direct document URL.
+      const tableTab = page.getByRole("tab", { exact: true, name: "Table" });
+      await expect(tableTab).toBeVisible({ timeout: 30_000 });
+      await tableTab.click();
+
+      const fileButton = page.getByRole("button", {
+        exact: true,
+        name: "stella-e2e.docx",
+      });
+      await expect(fileButton).toBeVisible({ timeout: 30_000 });
+      await fileButton.click();
+
+      // Prove the optional overlay itself mounted; asserting only document text
+      // would pass if its local error boundary had silently removed the overlay.
+      await expect(
+        page.getByRole("toolbar", { name: "AI message composer" }),
+      ).toBeVisible({ timeout: 45_000 });
+
+      // Positive proof the viewer actually rendered: the fixture's first
+      // paragraph appears in the painted layout. This catches render crashes
+      // (an error boundary fallback wouldn't contain this string) without an
+      // arbitrary sleep. Generous timeout because in CI the Folio chunk
+      // compiles + loads cold AND the DOCX file is fetched from the API +
+      // parsed.
+      //
+      // Scope to `.layout-run-text` (emitted by the layout painter in
+      // packages/folio/src/core/layout-painter/renderParagraph.ts) rather
+      // than getByText so the assertion targets the *visible* painted span
+      // only. The hidden ProseMirror at left:-9999px also contains the same
+      // text inside a <p> under aria-label="Document content" — a bare
+      // getByText hits both elements and trips Playwright strict mode.
+      const docxText = page.locator(".layout-run-text", {
+        hasText: "Stella E2E test document.",
+      });
+      try {
+        await expect(docxText).toBeVisible({ timeout: 45_000 });
+      } catch (error) {
+        // Surface any errors collected so far — they're usually the real cause
+        // of the viewer never mounting (network failure, render crash caught
+        // by an error boundary, etc.).
+        const errors = browserErrors.entries();
+        if (errors.length > 0) {
+          throw new Error(
+            `viewer text never appeared; collected errors:\n${errors.join("\n\n")}`,
+            { cause: error },
+          );
+        }
+        throw error;
+      }
+    },
+  );
 
   test("browser edit save creates a persisted DOCX version with the typed text", async ({
     page,

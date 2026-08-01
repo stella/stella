@@ -47,6 +47,157 @@ jobs:
         env:
           TURBO_FORCE: "true"
 
+  # Marketing captures are intentionally nightly, not part of the PR critical
+  # path. They exercise seeded product scenes against the complete default-
+  # branch runtime, so dependency changes need no fragile per-file allowlist.
+  marketing-screenshots:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: true
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        run: bash scripts/bun-ci-retry.sh --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Prepare environment
+        run: |
+          cd ./apps/api
+          cp .env.example .env
+          cd ../web
+          cp .env.example .env
+
+      - name: Check Docker Hub credentials
+        id: dockerhub
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          if [[ -n "$DOCKERHUB_USERNAME" && -n "$DOCKERHUB_TOKEN" ]]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "available=false" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to Docker Hub
+        if: steps.dockerhub.outputs.available == 'true'
+        uses: docker/login-action@371161bbe7024a29a25c5e19bfcbc0804fe9ad2c # v4.5.2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Start docker stack
+        run: |
+          for attempt in 1 2 3; do
+            if docker compose --profile dev up -d --wait postgres minio valkey gotenberg \
+              && docker compose --profile dev run --rm --no-deps minio-setup; then
+              exit 0
+            fi
+            echo "::warning::docker stack start failed (attempt ${attempt}/3); tearing down and retrying"
+            docker compose --profile dev down --volumes --remove-orphans || true
+            sleep "$((attempt * 20))"
+          done
+          echo "::error::docker stack failed to start after 3 attempts"
+          exit 1
+
+      - name: Log out of Docker Hub
+        if: always() && steps.dockerhub.outputs.available == 'true'
+        run: docker logout
+
+      - name: Run database migrations
+        run: bun --filter @stll/api db:migrate
+
+      - name: Seed test user
+        run: bun --filter @stll/api db:seed-test-user
+
+      - name: Start API server
+        run: |
+          cd apps/api
+          NODE_ENV=development E2E_DISABLE_AUTH_RATE_LIMIT=true nohup bun --port 3001 --preload ./src/dev/register-mock-ai.ts src/server.ts > /tmp/api.log 2>&1 &
+          echo $! > /tmp/api.pid
+
+      - name: Wait for API
+        run: |
+          for i in {1..60}; do
+            if curl --connect-timeout 2 --max-time 5 -sf http://localhost:3001/health > /dev/null 2>&1; then
+              echo "API up after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::API never came up"
+          tail -200 /tmp/api.log || true
+          exit 1
+
+      - name: Start web dev server
+        run: |
+          cd apps/web
+          nohup bun --bun vite --port 3000 > /tmp/web.log 2>&1 &
+          echo $! > /tmp/web.pid
+
+      - name: Wait for web dev server
+        run: |
+          for i in {1..60}; do
+            if curl --connect-timeout 2 --max-time 5 -sf http://localhost:3000 > /dev/null 2>&1; then
+              echo "Web up after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::Web never came up"
+          tail -200 /tmp/web.log || true
+          exit 1
+
+      - name: Install Playwright browsers
+        run: cd apps/web && bunx playwright install --with-deps chromium
+
+      - name: Seed deterministic marketing content
+        run: bun --filter @stll/api db:seed-dev
+
+      - name: Check marketing screenshots
+        run: bun --filter @stll/web test:e2e:marketing
+
+      - name: Guard against mid-test Vite re-optimize
+        if: always()
+        run: |
+          if grep -q "optimized dependencies changed. reloading" /tmp/web.log; then
+            echo "::error::Vite re-optimized dependencies mid-session and forced a reload. Add the lazy/runtime dependency named below to optimizeDeps.include in apps/web/vite.config.ts."
+            grep -nE "new dependencies optimized|optimized dependencies changed" /tmp/web.log || true
+            exit 1
+          fi
+          echo "No mid-session dep re-optimize detected."
+
+      - name: Stop web dev server
+        if: always()
+        run: |
+          kill "$(cat /tmp/web.pid)" || true
+          rm -f /tmp/web.pid
+
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: nightly-marketing-screenshot-diagnostics
+          path: |
+            /tmp/api.log
+            /tmp/web.log
+            apps/web/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
   # Postgres-backed API suites that gate on STELLA_RUN_POSTGRES_TESTS=true and a
   # real DATABASE_URL. The plain `bun run test` above skips them (they no-op in
   # the skip branch), so they only ever execute here against a service Postgres
