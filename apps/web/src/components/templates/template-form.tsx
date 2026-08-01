@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import {
   AlertTriangleIcon,
   ChevronDownIcon,
@@ -77,6 +77,7 @@ import { detached } from "@/lib/detached";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
+import { resolveCanonicalDocumentDestinationQuery } from "@/lib/workspaces/resolve-document-destination-query";
 
 import { FillClausesSection } from "./fill-clauses-section";
 import { TemplatePrefillPanel } from "./template-prefill-panel";
@@ -307,20 +308,29 @@ type ServerFillProps = TemplateFormBaseProps & {
 /** Where the filled document can land (server-side fill only): a fixed
  *  matter (the form was opened from one) or a matter the user picks at the
  *  end. Without it the form offers the existing downloads only. */
+type CreatedDocumentDestination =
+  | { type: "document"; entityId: string; fieldId: string }
+  | { type: "workspace"; entityId: string };
+
+type ChosenDocumentDestination =
+  | {
+      type: "document";
+      workspaceId: string;
+      entityId: string;
+      fieldId: string;
+    }
+  | { type: "workspace"; workspaceId: string; entityId: string };
+
 type SaveTarget =
   | {
       kind: "matter";
       workspaceId: string;
       parentId?: string | null | undefined;
-      onCreated: (created: { entityId: string; fieldId: string }) => void;
+      onCreated: (created: CreatedDocumentDestination) => void;
     }
   | {
       kind: "chooseMatter";
-      onCreated: (created: {
-        workspaceId: string;
-        entityId: string;
-        fieldId: string;
-      }) => void;
+      onCreated: (created: ChosenDocumentDestination) => void;
     };
 
 type TemplateFormProps = (TransientFillProps | ServerFillProps) & {
@@ -1548,6 +1558,7 @@ export const TemplateForm = ({
   initialValues,
 }: TemplateFormProps) => {
   const t = useTranslations();
+  const queryClient = useQueryClient();
   // Formula fields are derived server-side at fill time, never user-entered:
   // the form renders no input for them and submits no value.
   // Derived fields never render as inputs: formulas compute from other
@@ -2180,17 +2191,41 @@ export const TemplateForm = ({
     }
 
     setMatterDialogOpen(false);
-    if (saveTarget.kind === "matter") {
-      saveTarget.onCreated({
+    const destinationResult = await Result.tryPromise(async () =>
+      resolveCanonicalDocumentDestinationQuery({
         entityId: created.entityId,
         fieldId: created.fieldId,
-      });
-    } else {
-      saveTarget.onCreated({
+        queryClient,
         workspaceId,
-        entityId: created.entityId,
-        fieldId: created.fieldId,
-      });
+      }),
+    );
+    if (Result.isError(destinationResult)) {
+      getAnalytics().captureError(destinationResult.error);
+    }
+    const destination = Result.isError(destinationResult)
+      ? null
+      : destinationResult.value;
+    if (saveTarget.kind === "matter") {
+      saveTarget.onCreated(
+        destination === null
+          ? { type: "workspace", entityId: created.entityId }
+          : {
+              type: "document",
+              entityId: destination.entityId,
+              fieldId: destination.fieldId,
+            },
+      );
+    } else {
+      saveTarget.onCreated(
+        destination === null
+          ? { type: "workspace", workspaceId, entityId: created.entityId }
+          : {
+              type: "document",
+              workspaceId,
+              entityId: destination.entityId,
+              fieldId: destination.fieldId,
+            },
+      );
     }
     onDone(created.fileName);
   };
@@ -2603,7 +2638,8 @@ export const useFillToMatterSaveTarget = (
   const navigate = useNavigate();
   return {
     kind: "chooseMatter",
-    onCreated: ({ workspaceId, entityId, fieldId }) => {
+    onCreated: (created) => {
+      const { workspaceId, entityId } = created;
       detached(
         queryClient.invalidateQueries({
           queryKey: entitiesKeys.all(workspaceId),
@@ -2611,14 +2647,29 @@ export const useFillToMatterSaveTarget = (
         "TemplateForm.invalidateCreatedDocument",
       );
       onDone?.();
-      detached(
-        navigate({
-          to: "/workspaces/$workspaceId/$viewId/document",
-          params: { workspaceId, viewId: "all" },
-          search: { entity: entityId, field: fieldId },
-        }),
-        "TemplateForm.openCreatedDocument",
-      );
+      switch (created.type) {
+        case "document":
+          detached(
+            navigate({
+              to: "/workspaces/$workspaceId/$viewId/document",
+              params: { workspaceId, viewId: "all" },
+              search: { entity: entityId, field: created.fieldId },
+            }),
+            "TemplateForm.openCreatedDocument",
+          );
+          return;
+        case "workspace":
+          detached(
+            navigate({
+              to: "/workspaces/$workspaceId/$viewId",
+              params: { workspaceId, viewId: "all" },
+            }),
+            "TemplateForm.openCreatedWorkspace",
+          );
+          return;
+        default:
+          return created satisfies never;
+      }
     },
   };
 };

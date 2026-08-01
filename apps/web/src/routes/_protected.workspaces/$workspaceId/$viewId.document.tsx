@@ -131,8 +131,8 @@ export const Route = createFileRoute(
 
     // Versions power the inspector and field switching. Start the request at
     // navigation time alongside the entity read so direct document links do
-    // not add a component-mount waterfall. A fresh compatibility-route read
-    // is reused through the shared query key and route stale time.
+    // not add a component-mount waterfall. A fresh entity-version read is
+    // reused through the shared query key and route stale time.
     detached(
       prefetchRouteQuery(
         context.queryClient,

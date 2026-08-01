@@ -14,6 +14,7 @@ import {
   reportExportDetailOptions,
   reportExportsKeys,
 } from "@/lib/workspaces/queries/report-exports";
+import { resolveCanonicalDocumentDestinationQuery } from "@/lib/workspaces/resolve-document-destination-query";
 
 import { downloadReportExport } from "./report-export-actions";
 import {
@@ -148,31 +149,41 @@ export const ReportExportTracker = ({
       return;
     }
 
-    if (
-      settledDetail.resultEntityId !== null &&
-      settledDetail.resultFieldId !== null
-    ) {
+    if (typeof settledDetail.resultEntityId === "string") {
       const resultEntityId = settledDetail.resultEntityId;
-      const resultFieldId = settledDetail.resultFieldId;
       queryClient
         .invalidateQueries({
           queryKey: entitiesKeys.all(settledExport.workspaceId),
         })
         .catch((error: unknown) => analytics.captureError(error));
       const handleOpen = async () => {
-        const result = await Result.tryPromise(
-          async () =>
-            await navigate({
-              to: "/workspaces/$workspaceId/$viewId/document",
-              params: {
-                workspaceId: settledExport.workspaceId,
-                viewId: "all",
-              },
-              search: { entity: resultEntityId, field: resultFieldId },
-            }),
-        );
-        if (Result.isError(result)) {
-          analytics.captureError(result.error);
+        const result = await Result.tryPromise(async () => {
+          const destination = await resolveCanonicalDocumentDestinationQuery({
+            entityId: resultEntityId,
+            fieldId: settledDetail.resultFieldId,
+            queryClient,
+            workspaceId: settledExport.workspaceId,
+          });
+          if (destination === null) {
+            return null;
+          }
+          await navigate({
+            to: "/workspaces/$workspaceId/$viewId/document",
+            params: {
+              workspaceId: settledExport.workspaceId,
+              viewId: "all",
+            },
+            search: {
+              entity: destination.entityId,
+              field: destination.fieldId,
+            },
+          });
+          return destination;
+        });
+        if (Result.isError(result) || result.value === null) {
+          if (Result.isError(result)) {
+            analytics.captureError(result.error);
+          }
           stellaToast.add({
             type: "error",
             title: t("common.unexpectedError"),
@@ -190,19 +201,6 @@ export const ReportExportTracker = ({
             );
           },
         },
-      };
-      if (toastId === undefined) {
-        stellaToast.add(toast);
-      } else {
-        stellaToast.update(toastId, toast);
-      }
-      return;
-    }
-
-    if (settledDetail.resultEntityId !== null) {
-      const toast = {
-        type: "success" as const,
-        title: t("workspaces.views.reportExport.completed"),
       };
       if (toastId === undefined) {
         stellaToast.add(toast);

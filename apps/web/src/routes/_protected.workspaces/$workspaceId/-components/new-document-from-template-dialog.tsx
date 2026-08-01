@@ -245,7 +245,8 @@ const FillStep = ({
         kind: "matter",
         workspaceId,
         parentId,
-        onCreated: ({ entityId, fieldId }) => {
+        onCreated: (created) => {
+          const { entityId } = created;
           detached(
             queryClient.invalidateQueries({
               queryKey: entitiesKeys.all(workspaceId),
@@ -253,15 +254,30 @@ const FillStep = ({
             "NewDocumentFromTemplate.invalidateCreatedDocument",
           );
           onCreated();
-          // Open the just-created document in the editable Folio editor.
-          detached(
-            navigate({
-              to: "/workspaces/$workspaceId/$viewId/document",
-              params: { workspaceId, viewId: "all" },
-              search: { entity: entityId, field: fieldId },
-            }),
-            "NewDocumentFromTemplate.openCreatedDocument",
-          );
+          switch (created.type) {
+            case "document":
+              // Open the just-created document in the editable Folio editor.
+              detached(
+                navigate({
+                  to: "/workspaces/$workspaceId/$viewId/document",
+                  params: { workspaceId, viewId: "all" },
+                  search: { entity: entityId, field: created.fieldId },
+                }),
+                "NewDocumentFromTemplate.openCreatedDocument",
+              );
+              return;
+            case "workspace":
+              detached(
+                navigate({
+                  to: "/workspaces/$workspaceId/$viewId",
+                  params: { workspaceId, viewId: "all" },
+                }),
+                "NewDocumentFromTemplate.openCreatedWorkspace",
+              );
+              return;
+            default:
+              return created satisfies never;
+          }
         },
       }}
       structureErrors={fill.schema.structureErrors}
