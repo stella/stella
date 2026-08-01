@@ -15,10 +15,6 @@ import {
   caseLawIndexJobs,
   caseLawSources,
 } from "@/api/db/schema";
-import {
-  isRedistributable,
-  type CorpusSourceDescriptor,
-} from "@/api/handlers/case-law/corpus-source";
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
 import type { SafeId } from "@/api/lib/branded-types";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
@@ -42,6 +38,10 @@ import {
 } from "@/api/lib/db/timestamp-cas";
 import { ConcurrentModificationError } from "@/api/lib/errors/tagged-errors";
 import { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
+import {
+  isRedistributable,
+  type CorpusSourceDescriptor,
+} from "@/api/lib/legal-search/corpus-source";
 import {
   readCorpusAst,
   readCorpusText,
