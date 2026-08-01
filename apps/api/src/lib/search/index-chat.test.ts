@@ -77,6 +77,27 @@ const findExecutedQuery = (needle: string): string | undefined => {
 };
 
 describe("chat search indexing", () => {
+  test("normalizes legacy text and source-document parts for search", async () => {
+    const { extractMessageSearchText } = await import("./index-chat");
+
+    expect(
+      extractMessageSearchText({
+        version: 1,
+        data: [
+          { type: "text", text: "Review the termination clause." },
+          {
+            type: "data-stella-source-document",
+            data: {
+              kind: "document",
+              mention: "@agreement",
+              title: "Agreement.pdf",
+            },
+          },
+        ],
+      }),
+    ).toBe("Review the termination clause. Agreement.pdf @agreement document");
+  });
+
   test("indexes only source-document metadata that previews can display", async () => {
     const { extractMessageSearchText } = await import("./index-chat");
 

@@ -3,15 +3,15 @@ import { and, eq, isNull, or } from "drizzle-orm";
 import { t } from "elysia";
 
 import { mcpConnectors, mcpUserConnections } from "@/api/db/schema";
-import { encryptMcpSecret } from "@/api/handlers/mcp-connectors/crypto";
-import {
-  clientRegistrationMode,
-  discoverOAuthMetadata,
-} from "@/api/handlers/mcp-connectors/oauth";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { refreshCachedMcpToolsForConnection } from "@/api/lib/mcp-upstream/connections";
+import { encryptMcpSecret } from "@/api/lib/mcp-upstream/crypto";
+import {
+  clientRegistrationMode,
+  discoverOAuthMetadata,
+} from "@/api/lib/mcp-upstream/oauth";
 
 const requestBody = t.Object({
   connectorSlug: t.String({ minLength: 1, maxLength: 80 }),

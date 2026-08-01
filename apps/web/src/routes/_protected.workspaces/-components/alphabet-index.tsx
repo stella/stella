@@ -12,7 +12,7 @@ import type { RefObject } from "react";
 import { cn } from "@stll/ui/lib/utils";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import type { WorkspaceGroup } from "@/routes/_protected.workspaces/-types";
+import type { WorkspaceGroup } from "@/lib/workspaces/types";
 
 type AlphabetIndexProps = {
   groups: WorkspaceGroup[];

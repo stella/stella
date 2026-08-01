@@ -30,7 +30,7 @@ const fetchConnectedApps = async ({
 
 // No parameters (the list is always the session user's own), so this stays
 // a flat `queryOptions` value rather than a keyed factory — see
-// `sessionsOptions` in `_protected.account/-queries.ts` for the same shape.
+// `sessionsOptions` in `apps/web/src/lib/account/queries.ts` for the same shape.
 export const connectedAppsOptions = queryOptions({
   queryKey: connectedAppsKeys.all,
   staleTime: ROUTE_QUERY_STALE_TIME_MS,

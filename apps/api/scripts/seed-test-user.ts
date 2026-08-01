@@ -26,8 +26,8 @@ import path from "node:path";
 import { member, organization, session, user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
-import { ensureDefaultDocumentTypes } from "@/api/handlers/document-types/defaults";
 import { toSafeId } from "@/api/lib/branded-types";
+import { ensureDefaultDocumentTypes } from "@/api/lib/document-types/defaults";
 
 import {
   ALL_TEST_USER_IDS,

@@ -67,7 +67,7 @@ import type {
 import {
   COLUMN_DRAG_TYPE,
   ENTITY_DRAG_TYPE,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
+} from "@/lib/workspaces/drag-constants";
 import { KanbanCard } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card";
 
 const KANBAN_CARD_ESTIMATE_PX = 128;

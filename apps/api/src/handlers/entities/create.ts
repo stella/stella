@@ -6,7 +6,6 @@ import type { Static } from "elysia";
 import type { SafeDb } from "@/api/db/safe-db";
 import { entities, entityVersions, workspaces } from "@/api/db/schema";
 import { entityKindSchema } from "@/api/db/schema-validators";
-import { checkEntityCreateCapacityForInsert } from "@/api/handlers/uploads/entity-create";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -19,6 +18,7 @@ import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { validateParentId } from "@/api/lib/entities/validate-parent-id";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getSearchProvider } from "@/api/lib/search/provider";
+import { checkEntityCreateCapacityForInsert } from "@/api/lib/uploads/entity-create";
 
 const createEntityBodySchema = t.Object({
   kind: t.Optional(

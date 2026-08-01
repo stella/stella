@@ -5,6 +5,16 @@ import type { AGENT_SKILL_SCOPES } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { LIMITS } from "@/api/lib/limits";
+import {
+  authorizeSkillInstallScope,
+  installSkill,
+  SKILL_INSTALL_ERROR_CODE,
+} from "@/api/lib/skills/install";
+import {
+  createSkillPackageFetchContext,
+  fetchSkillPackageFromUrl,
+  verifySkillPackageIntegrity,
+} from "@/api/lib/skills/skill-package";
 
 import {
   deduplicateSkillImportItems,
@@ -12,16 +22,6 @@ import {
   skillImportRequestBudget,
 } from "./import-urls.logic";
 import type { SkillImportFailureCode } from "./import-urls.logic";
-import {
-  authorizeSkillInstallScope,
-  installSkill,
-  SKILL_INSTALL_ERROR_CODE,
-} from "./install";
-import {
-  createSkillPackageFetchContext,
-  fetchSkillPackageFromUrl,
-  verifySkillPackageIntegrity,
-} from "./skill-package";
 
 const MAX_SKILL_IMPORTS = 20;
 const SKILL_IMPORT_TIMEOUT_MS = 30_000;

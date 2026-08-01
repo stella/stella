@@ -1,14 +1,6 @@
 import { sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
-import {
-  isChatPart,
-  normalizePersistedChatMessageContent,
-} from "@/api/handlers/chat/chat-message-parts";
-import type {
-  ChatMessageRole,
-  PersistedChatMessageContent,
-} from "@/api/handlers/chat/types";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
@@ -21,12 +13,45 @@ const ZERO_UUID = "00000000-0000-0000-0000-000000000000";
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+type SearchablePersistedChatMessageContent = {
+  data: unknown[];
+  metadata?: unknown;
+  version: 1 | 2;
+};
+
 const isPersistedChatMessageContent = (
   value: unknown,
-): value is PersistedChatMessageContent =>
+): value is SearchablePersistedChatMessageContent =>
   isRecord(value) &&
   (value["version"] === 1 || value["version"] === 2) &&
   Array.isArray(value["data"]);
+
+type SearchableChatTextPart = {
+  content: string;
+  type: "text";
+};
+
+type SearchableChatMessageMetadata = Record<string, unknown> & {
+  sourceDocuments?: SearchableChatSourceDocument[] | undefined;
+};
+
+type NormalizedSearchableChatMessageContent = {
+  metadata: SearchableChatMessageMetadata;
+  parts: SearchableChatTextPart[];
+};
+
+const toSearchableTextPart = (part: unknown): SearchableChatTextPart | null => {
+  if (!isRecord(part) || part["type"] !== "text") {
+    return null;
+  }
+  if (typeof part["content"] === "string") {
+    return { type: "text", content: part["content"] };
+  }
+  if (typeof part["text"] === "string") {
+    return { type: "text", content: part["text"] };
+  }
+  return null;
+};
 
 type SearchableChatSourceDocument = {
   entityId?: string;
@@ -78,29 +103,48 @@ export const normalizeSearchableChatMessageContent = (content: unknown) => {
   if (!isPersistedChatMessageContent(content)) {
     return null;
   }
-  const normalized = normalizePersistedChatMessageContent(content);
-  const sourceDocuments: unknown = normalized.metadata.sourceDocuments;
-  const metadata =
-    sourceDocuments === undefined
-      ? normalized.metadata
+
+  const parts = content.data.flatMap((part) => {
+    const searchable = toSearchableTextPart(part);
+    return searchable ? [searchable] : [];
+  });
+  const rawMetadata =
+    content.version === 2 && isRecord(content.metadata) ? content.metadata : {};
+  const version2SourceDocuments = rawMetadata["sourceDocuments"];
+  const legacySourceDocuments =
+    content.version === 1
+      ? content.data.flatMap((part) =>
+          isRecord(part) &&
+          part["type"] === "data-stella-source-document" &&
+          isRecord(part["data"])
+            ? [part["data"]]
+            : [],
+        )
+      : [];
+  let rawSourceDocuments = version2SourceDocuments;
+  if (rawSourceDocuments === undefined && legacySourceDocuments.length > 0) {
+    rawSourceDocuments = legacySourceDocuments;
+  }
+  const metadata: SearchableChatMessageMetadata = {
+    ...rawMetadata,
+    ...(rawSourceDocuments === undefined
+      ? {}
       : {
-          ...normalized.metadata,
-          sourceDocuments: Array.isArray(sourceDocuments)
-            ? sourceDocuments.flatMap((sourceDocument) => {
+          sourceDocuments: Array.isArray(rawSourceDocuments)
+            ? rawSourceDocuments.flatMap((sourceDocument) => {
                 const searchable =
                   toSearchableChatSourceDocument(sourceDocument);
                 return searchable ? [searchable] : [];
               })
             : [],
-        };
-  return {
-    metadata,
-    parts: normalized.parts.filter(isChatPart),
+        }),
   };
+
+  return { metadata, parts } satisfies NormalizedSearchableChatMessageContent;
 };
 
 export const extractMessageSearchText = (
-  content: PersistedChatMessageContent,
+  content: SearchablePersistedChatMessageContent,
 ): string => {
   const parts: string[] = [];
   const message = normalizeSearchableChatMessageContent(content);
@@ -141,10 +185,10 @@ export const extractMessageSearchText = (
 };
 
 type ChatSearchMessageRow = {
-  content: PersistedChatMessageContent;
+  content: SearchablePersistedChatMessageContent;
   createdAt: Date;
   id: SafeId<"chatMessage">;
-  role: ChatMessageRole;
+  role: "assistant" | "system" | "user";
 };
 
 /** Recompute the search document for one thread (title + rolled-up

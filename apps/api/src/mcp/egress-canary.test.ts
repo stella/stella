@@ -98,7 +98,7 @@ const realAnonymizationBlacklist =
   await import("@/api/lib/anonymization-blacklist");
 const realContentEncryption = await import("@/api/lib/content-encryption");
 const realTemplateFillService =
-  await import("@/api/handlers/templates/template-fill-service");
+  await import("@/api/lib/templates/template-fill-service");
 
 void mock.module("@/api/mcp/anonymization", () => ({
   anonymizeTextFields: anonymizeTextFieldsMock,
@@ -134,7 +134,7 @@ void mock.module("@/api/handlers/workspaces/workspace-members-read", () => ({
   readWorkspaceMembersHandler: readWorkspaceMembersHandlerMock,
 }));
 
-void mock.module("@/api/handlers/templates/template-fill-service", () => ({
+void mock.module("@/api/lib/templates/template-fill-service", () => ({
   ...realTemplateFillService,
   describeStoredTemplate: describeStoredTemplateMock,
 }));

@@ -47,6 +47,8 @@ import { usePdfTabZoom } from "@/components/inspector/use-pdf-tab-zoom";
 import { useTabContextMenu } from "@/components/inspector/use-tab-context-menu";
 import { useSelectedFileVersionMissing } from "@/components/inspector/versions-facet";
 import { getInspectorView } from "@/components/inspector/view-registry";
+import { MatterMetadataPanel } from "@/components/workspaces/matter-metadata-sheet";
+import { TaskDetailPanel } from "@/components/workspaces/tasks/task-detail-panel";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import { getAnalytics } from "@/lib/analytics/provider";
@@ -58,8 +60,6 @@ import { getCachedAnonymization } from "@/lib/pdf/anonymization-cache";
 import { workspacesKeys } from "@/lib/workspaces/queries.logic";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
-import { MatterMetadataPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/matter-metadata-sheet";
-import { TaskDetailPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-panel";
 
 type InspectorPanelProps = {
   /**

@@ -8,17 +8,17 @@ import {
 } from "@stll/ui/components/popover";
 import { cn } from "@stll/ui/lib/utils";
 
-import { ClientFilterPopover } from "@/routes/_protected.workspaces/-filters/client-filter-popover";
-import { DateFilterPopover } from "@/routes/_protected.workspaces/-filters/date-filter-popover";
-import { ItemsFilterPopover } from "@/routes/_protected.workspaces/-filters/items-filter-popover";
-import { TeamFilterPopover } from "@/routes/_protected.workspaces/-filters/team-filter-popover";
 import type {
   DateFilter,
   FilterableColumnId,
   LeadFilter,
   NumericFilter,
   Workspace,
-} from "@/routes/_protected.workspaces/-types";
+} from "@/lib/workspaces/types";
+import { ClientFilterPopover } from "@/routes/_protected.workspaces/-filters/client-filter-popover";
+import { DateFilterPopover } from "@/routes/_protected.workspaces/-filters/date-filter-popover";
+import { ItemsFilterPopover } from "@/routes/_protected.workspaces/-filters/items-filter-popover";
+import { TeamFilterPopover } from "@/routes/_protected.workspaces/-filters/team-filter-popover";
 import { useConfigStore } from "@/stores/config-store";
 
 type ColumnFilterButtonProps = {

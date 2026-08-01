@@ -3,13 +3,13 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import { markdownToStellaDocx } from "@/api/handlers/chat/tools/markdown-to-stella-docx";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { buildCreatedDocumentToolOutput } from "@/api/handlers/chat/tools/workspace-tools";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { ChatToolError, unreachable } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";

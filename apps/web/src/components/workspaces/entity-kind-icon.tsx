@@ -1,0 +1,60 @@
+import { FileIcon, FolderIcon, LinkIcon, MailIcon } from "lucide-react";
+
+import { cn } from "@stll/ui/lib/utils";
+
+import { DocumentIcon } from "@/components/document-icon";
+import {
+  STATUS_COLORS,
+  STATUS_ICONS,
+  isTaskStatus,
+} from "@/components/workspaces/tasks/task-detail-constants";
+import type { EntityKind } from "@/lib/types";
+
+type EntityKindIconProps = {
+  kind: EntityKind;
+  className?: string | undefined;
+  fileName?: string | null | undefined;
+  mimeType?: string | null | undefined;
+  status?: string | null | undefined;
+};
+
+export const EntityKindIcon = ({
+  kind,
+  className,
+  fileName,
+  mimeType,
+  status,
+}: EntityKindIconProps) => {
+  if (kind === "task") {
+    const statusKey = status ?? null;
+    const resolved = isTaskStatus(statusKey) ? statusKey : "open";
+    const Icon = STATUS_ICONS[resolved];
+    const color = STATUS_COLORS[resolved];
+    return <Icon className={cn(color, className)} />;
+  }
+
+  if (kind === "folder") {
+    return <FolderIcon className={className} />;
+  }
+
+  if (kind === "message") {
+    return <MailIcon className={className} />;
+  }
+
+  if (kind === "link") {
+    return <LinkIcon className={className} />;
+  }
+
+  // document / file
+  if (mimeType) {
+    return (
+      <DocumentIcon
+        className={className}
+        fileName={fileName}
+        mimeType={mimeType}
+      />
+    );
+  }
+
+  return <FileIcon className={className} />;
+};

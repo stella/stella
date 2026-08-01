@@ -41,7 +41,6 @@ import {
   buildChatCodeModeTools,
   type ChatCodeModeToolMap,
 } from "@/api/handlers/chat/tools/execute/chat-code-mode";
-import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import {
   ADD_COMMENT_TOOL_NAME,
   createFolioAgentDocTools,
@@ -94,6 +93,7 @@ import type {
   ChatToolMap,
   ChatUIToolsFor,
 } from "@/api/lib/chat/chat-tool-types";
+import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import type { ResolvedWebSearchProviders } from "@/api/lib/web-search/select-provider";
 
 export const WEB_SEARCH_NATIVE_TOOL_SLUG = "web-search";

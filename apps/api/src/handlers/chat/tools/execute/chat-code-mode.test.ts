@@ -2,9 +2,9 @@ import { describe, expect, mock, test } from "bun:test";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
-import { createChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import { registerSandboxTestHygiene } from "@/api/handlers/chat/tools/execute/sandbox/sandbox-test-hygiene";
 import { toSafeId } from "@/api/lib/branded-types";
+import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 

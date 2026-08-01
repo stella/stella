@@ -24,10 +24,10 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions, caseLawSources, relations } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
-import { storeBackfilledDocument } from "@/api/handlers/case-law/ingestion/sk-document-backfill";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { WriteCorpusResult } from "@/api/lib/legal-search/corpus-storage";
 import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";
+import { storeBackfilledDocument } from "@/api/lib/legal-search/sk-document-backfill";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";

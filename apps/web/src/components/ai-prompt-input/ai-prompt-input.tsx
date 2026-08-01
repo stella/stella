@@ -11,7 +11,7 @@ import { useEditor } from "@tiptap/react";
 import type { Editor } from "@tiptap/react";
 import { Loader2Icon, WandSparklesIcon } from "lucide-react";
 
-import "@/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/tiptap.css";
+import "@/components/workspaces/properties/property-input/tiptap.css";
 import { Button } from "@stll/ui/components/button";
 import { ScrollArea } from "@stll/ui/components/scroll-area";
 import { cn } from "@stll/ui/lib/utils";

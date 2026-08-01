@@ -19,8 +19,8 @@ import { Input } from "@stll/ui/components/input";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { authClient } from "@/lib/auth";
+import { sessionOptions } from "@/lib/auth-queries";
 import { toAuthClientError } from "@/lib/errors/auth";
-import { sessionOptions } from "@/routes/-queries";
 
 const PREFERRED_NAME_MAX_LENGTH = 120;
 

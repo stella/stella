@@ -5,6 +5,8 @@ import { useTranslations } from "use-intl";
 import type { DocxCompatibility } from "@stll/folio-react";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import type { DocxBrowserEditorActions } from "@/components/docx/docx-browser-editor";
+import { getDocxEditBlockReason } from "@/components/docx/docx-browser-editor.logic";
 import { useInspectorStore } from "@/components/inspector/inspector-store";
 import type {
   FileTab,
@@ -13,8 +15,6 @@ import type {
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
-import type { DocxBrowserEditorActions } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor";
-import { getDocxEditBlockReason } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.logic";
 
 type UseDocxTabEditSessionOptions = {
   tabs: readonly InspectorTab[];

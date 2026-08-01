@@ -1,10 +1,10 @@
+import type { TableColumnDef } from "@/components/workspaces/table/types";
 import type { ConditionNode, WorkspaceProperty } from "@/lib/types";
 import { PropertyPopover } from "@/routes/_protected.workspaces/$workspaceId/-components/property-popover";
 import {
   PropertyCell,
   VerdictBadge,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table-column-cells";
-import type { TableColumnDef } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 
 type PropertyColumnOptions = {
   filters: ConditionNode[];

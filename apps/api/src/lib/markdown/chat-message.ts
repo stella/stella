@@ -5,11 +5,11 @@ import type {
   ChatMentionCategory,
   ChatMentionHref,
   ChatReferenceCategory,
-} from "@/api/handlers/chat/types";
+} from "@/api/lib/chat/references";
 import {
   CHAT_MENTION_HREF_PREFIXES,
   CHAT_REFERENCE_HREF_PREFIXES,
-} from "@/api/handlers/chat/types";
+} from "@/api/lib/chat/references";
 import { htmlToMarkdown } from "@/api/lib/markdown/html-to-markdown";
 
 const ALLOWED_TAGS = new Set([

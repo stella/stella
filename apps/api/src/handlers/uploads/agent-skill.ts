@@ -16,16 +16,15 @@ import {
   pendingUploads,
   type PendingUploadFinalizedResult,
 } from "@/api/db/schema";
-import {
-  authorizeSkillInstallScope,
-  installSkill,
-} from "@/api/handlers/skills/install";
-import { parseUploadedSkillPackage } from "@/api/handlers/skills/skill-package";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-
-import { finalizeErr, finalizeOk } from "./lib";
+import {
+  authorizeSkillInstallScope,
+  installSkill,
+} from "@/api/lib/skills/install";
+import { parseUploadedSkillPackage } from "@/api/lib/skills/skill-package";
+import { finalizeErr, finalizeOk } from "@/api/lib/uploads/runtime";
 
 export type ValidateAgentSkillProps = {
   memberRole: { role: string };

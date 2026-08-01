@@ -5,7 +5,7 @@ import type {
   ColumnVisibilityState,
 } from "@tanstack/react-table";
 
-import { getInternalColId } from "@/routes/_protected.workspaces/$workspaceId/-utils";
+import { getInternalColId } from "@/components/workspaces/entity-utils";
 
 const selectColId = getInternalColId("select");
 const addPropertyColId = getInternalColId("add-property");

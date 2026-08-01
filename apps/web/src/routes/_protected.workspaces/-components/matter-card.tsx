@@ -17,13 +17,13 @@ import { cn } from "@stll/ui/lib/utils";
 import { DocumentIcon } from "@/components/document-icon";
 import { InlineEdit } from "@/components/inline-edit";
 import Tooltip from "@/components/tooltip";
+import { MatterContextMenu } from "@/components/workspaces/matter-context-menu";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { getMatterColor } from "@/lib/matter-colors";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import { overviewOptions } from "@/lib/workspaces/queries";
-import { MatterContextMenu } from "@/routes/_protected.workspaces/-components/matter-context-menu";
+import type { Workspace } from "@/lib/workspaces/types";
 import { TeamAvatars } from "@/routes/_protected.workspaces/-components/team-avatars";
-import type { Workspace } from "@/routes/_protected.workspaces/-types";
 
 type OverviewData = NonNullable<
   Awaited<

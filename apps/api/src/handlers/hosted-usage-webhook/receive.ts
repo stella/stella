@@ -34,15 +34,15 @@ import {
   handleHostedEntitlementUpsert,
 } from "@/api/handlers/hosted-usage-webhook/dispatch";
 import type { DispatchOutcome } from "@/api/handlers/hosted-usage-webhook/dispatch";
-import {
-  hostedUsageUnknownEventEnvelopeSchema,
-  hostedUsageWebhookEventSchema,
-} from "@/api/handlers/hosted-usage-webhook/event-schemas";
 import { captureError } from "@/api/lib/analytics/capture";
 import {
   getHostedUsageProviderKind,
   getWebhookSecret,
 } from "@/api/lib/hosted-usage-provider/config";
+import {
+  hostedUsageUnknownEventEnvelopeSchema,
+  hostedUsageWebhookEventSchema,
+} from "@/api/lib/hosted-usage-provider/event-schemas";
 import { normalizeProviderEvent } from "@/api/lib/hosted-usage-provider/provider-event-normalizer";
 import { verifyWebhookSignature } from "@/api/lib/hosted-usage-provider/verify-signature";
 import {

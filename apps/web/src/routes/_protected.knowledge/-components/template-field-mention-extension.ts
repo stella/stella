@@ -4,11 +4,11 @@ import MentionExtension from "@tiptap/extension-mention";
 import { mergeAttributes, ReactNodeViewRenderer } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/react";
 
-import { TemplateFieldMentionNode } from "@/routes/_protected.knowledge/-components/template-field-mention";
 import {
   createSuggestion,
   type MentionOption,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/custom-mention";
+} from "@/components/workspaces/properties/property-input/custom-mention";
+import { TemplateFieldMentionNode } from "@/routes/_protected.knowledge/-components/template-field-mention";
 
 export type TemplateFieldMentionOption = MentionOption;
 

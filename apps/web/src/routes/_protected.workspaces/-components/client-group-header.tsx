@@ -7,7 +7,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
-import type { WorkspaceGroup } from "@/routes/_protected.workspaces/-types";
+import type { WorkspaceGroup } from "@/lib/workspaces/types";
 
 type ClientGroupHeaderProps = {
   group: WorkspaceGroup;

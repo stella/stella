@@ -29,12 +29,12 @@ import { useFormatter } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import type { PlaybookVersionItem } from "@/lib/knowledge/playbook-types";
 import {
   knowledgeKeys,
   playbookVersionsOptions,
 } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
-import type { PlaybookVersionItem } from "@/routes/_protected.knowledge/-components/playbook-types";
 
 type PlaybookVersionHistorySheetProps = {
   onOpenChange: (open: boolean) => void;

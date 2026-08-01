@@ -23,10 +23,6 @@ import type { ReportTemplateRef } from "@/api/db/schema";
 import { buildReportData } from "@/api/handlers/reports/build-report-data";
 import { getBuiltinReportTemplate } from "@/api/handlers/reports/builtin-templates";
 import { notifyReportExportStatus } from "@/api/handlers/reports/report-export-notification";
-import {
-  fillStoredTemplateDocx,
-  fillTemplateDocx,
-} from "@/api/handlers/templates/template-fill-service";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -56,6 +52,10 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
+import {
+  fillStoredTemplateDocx,
+  fillTemplateDocx,
+} from "@/api/lib/templates/template-fill-service";
 import { parseViewLayout } from "@/api/lib/views-schema";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 

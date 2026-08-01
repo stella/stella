@@ -6,11 +6,11 @@ import * as v from "valibot";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { entities, fields } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
-import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
-import { CHAT_ENTITY_REF_PREFIX } from "@/api/handlers/chat/tools/execute/ref-registry";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { CHAT_ENTITY_REF_PREFIX } from "@/api/lib/chat/ref-registry";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import {
   brandPersistedEntityId,

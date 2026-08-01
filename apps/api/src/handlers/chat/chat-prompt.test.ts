@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
 import { createChatAttachmentPart } from "@/api/handlers/chat/chat-message-parts";
-import { createChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import {
   ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS,
   type ActiveChatSkillContext,
 } from "@/api/lib/agent-skills/skills";
 import { toSafeId } from "@/api/lib/branded-types";
+import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { DOCX_REVIEW_MARKUP_EXAMPLES } from "@/api/lib/docx-review-markup";
 
 import {

@@ -33,7 +33,7 @@ const pushSessionEventMock = mock(() => undefined);
 const closeSessionConnectionsMock = mock(() => undefined);
 const broadcastMock = mock(() => undefined);
 
-void mock.module("@/api/handlers/entities/desktop-edit-session-events", () => ({
+void mock.module("@/api/lib/desktop-edit-session-notifications", () => ({
   closeSessionConnections: closeSessionConnectionsMock,
   pushSessionEvent: pushSessionEventMock,
 }));

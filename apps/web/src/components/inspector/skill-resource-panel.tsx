@@ -10,16 +10,16 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { MarkdownPreview } from "@/components/markdown-preview";
 import { MarkdownFolioEditor } from "@/components/markdown/markdown-folio-editor";
+import {
+  toEditorMarkdown,
+  toStoredMarkdown,
+} from "@/components/skill-body-markdown";
 import Tooltip from "@/components/tooltip";
 import { api } from "@/lib/api";
 import { PDF_MIME, isMarkdownFile } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
-import {
-  toEditorMarkdown,
-  toStoredMarkdown,
-} from "@/routes/_protected.knowledge/-components/skill-body-markdown";
 
 import type { SkillResourceTab } from "./inspector-store";
 import { useInspectorStore } from "./inspector-store";

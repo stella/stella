@@ -1,7 +1,7 @@
 import { useTranslations } from "use-intl";
 
 import { DetailBreadcrumb } from "@/components/breadcrumbs/detail-breadcrumb";
-import { useClauseNavStore } from "@/routes/_protected.knowledge/-components/clause-nav-store";
+import { useClauseNavStore } from "@/stores/knowledge/clause-nav-store";
 
 export const ClausesBreadcrumb = () => {
   const t = useTranslations();

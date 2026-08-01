@@ -3,14 +3,14 @@ import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { desktopEditSessions } from "@/api/db/schema";
-import {
-  closeSessionConnections,
-  pushSessionEvent,
-} from "@/api/handlers/entities/desktop-edit-session-events";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
+import {
+  closeSessionConnections,
+  pushSessionEvent,
+} from "@/api/lib/desktop-edit-session-notifications";
 import { liveOwnDesktopEditSessionTargetPredicates } from "@/api/lib/desktop-edit-session-predicates";
 import { broadcast } from "@/api/lib/sse";
 

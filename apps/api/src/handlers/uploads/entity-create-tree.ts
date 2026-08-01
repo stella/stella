@@ -12,18 +12,6 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import {
-  checkEntityCreateCapacityForInsert,
-  checkEntityCreateParentForInsert,
-  checkEntityCreateTargetForInsert,
-  entityCreateWriteErrorMessage,
-  type EntityCreateWriteFailureStatus,
-} from "@/api/handlers/uploads/entity-create";
-import {
-  PRESIGN_URL_EXPIRY_SECONDS,
-  sha256HexToBase64,
-  tmpUploadKey,
-} from "@/api/handlers/uploads/lib";
-import {
   authorizeUploadPurpose,
   uploadRoutePermission,
 } from "@/api/handlers/uploads/permissions";
@@ -41,6 +29,18 @@ import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { presignUploadUrl } from "@/api/lib/s3-presign";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { getSearchProvider } from "@/api/lib/search/provider";
+import {
+  checkEntityCreateCapacityForInsert,
+  checkEntityCreateParentForInsert,
+  checkEntityCreateTargetForInsert,
+  entityCreateWriteErrorMessage,
+  type EntityCreateWriteFailureStatus,
+} from "@/api/lib/uploads/entity-create";
+import {
+  PRESIGN_URL_EXPIRY_SECONDS,
+  sha256HexToBase64,
+  tmpUploadKey,
+} from "@/api/lib/uploads/runtime";
 
 const TREE_KEY_MAX_LENGTH = 512;
 

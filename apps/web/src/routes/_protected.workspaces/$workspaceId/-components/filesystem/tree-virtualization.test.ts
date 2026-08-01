@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
+import type { TableTreeNode } from "@/components/workspaces/table/types";
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceEntity } from "@/lib/types";
-import type { TableTreeNode } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 
 import { flattenFilesystemRows } from "./tree-virtualization";
 

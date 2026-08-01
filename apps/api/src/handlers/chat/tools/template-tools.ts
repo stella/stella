@@ -3,12 +3,6 @@ import * as v from "valibot";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
-import { recordTemplateFill } from "@/api/handlers/templates/record-use";
-import { suggestTemplateFields } from "@/api/handlers/templates/suggest-template-fields";
-import {
-  describeStoredTemplate,
-  fillStoredTemplate,
-} from "@/api/handlers/templates/template-fill-service";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
@@ -22,6 +16,12 @@ import {
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedTemplateId } from "@/api/lib/safe-id-boundaries";
+import { recordTemplateFill } from "@/api/lib/templates/record-use";
+import { suggestTemplateFields } from "@/api/lib/templates/suggest-template-fields";
+import {
+  describeStoredTemplate,
+  fillStoredTemplate,
+} from "@/api/lib/templates/template-fill-service";
 
 const LIST_TEMPLATES_TOOL_NAME = "list_templates" as const;
 const DESCRIBE_TEMPLATE_TOOL_NAME = "describe_template" as const;

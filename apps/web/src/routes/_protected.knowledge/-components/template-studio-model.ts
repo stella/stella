@@ -5,13 +5,13 @@ import type { ConditionNode } from "@stll/conditions";
 import { conditionNodeSchema } from "@stll/conditions";
 import { isFieldPath } from "@stll/template-conditions";
 
-import { optionalArray } from "@/lib/arrays";
-import { includesValue } from "@/lib/utils";
-import { DATE_FORMAT_STYLES } from "@/routes/_protected.knowledge/-components/template-date-format";
+import { DATE_FORMAT_STYLES } from "@/components/templates/template-date-format";
 import {
   defaultCompositeFormat,
   isLookupRegistry,
-} from "@/routes/_protected.knowledge/-components/template-field-manifest";
+} from "@/components/templates/template-field-manifest";
+import { optionalArray } from "@/lib/arrays";
+import { includesValue } from "@/lib/utils";
 import {
   defaultStudioField,
   type OutlineNode,

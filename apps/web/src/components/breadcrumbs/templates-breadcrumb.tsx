@@ -1,7 +1,7 @@
 import { useTranslations } from "use-intl";
 
 import { DetailBreadcrumb } from "@/components/breadcrumbs/detail-breadcrumb";
-import { useTemplateNavStore } from "@/routes/_protected.knowledge/-components/template-nav-store";
+import { useTemplateNavStore } from "@/stores/knowledge/template-nav-store";
 
 export const TemplatesBreadcrumb = () => {
   const t = useTranslations();

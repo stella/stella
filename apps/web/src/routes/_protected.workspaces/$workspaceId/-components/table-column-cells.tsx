@@ -15,6 +15,12 @@ import { Button } from "@stll/ui/components/button";
 
 import { useInspectorStore } from "@/components/inspector/inspector-store";
 import Tooltip from "@/components/tooltip";
+import { EditableField } from "@/components/workspaces/editable-field";
+import {
+  type ColorVariants,
+  emptyColor,
+  resolveOptionColor,
+} from "@/components/workspaces/property-utils";
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
 import type {
@@ -32,18 +38,12 @@ import {
   CellMetadataFlags,
   useCellMetadataFlags,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags";
-import { EditableField } from "@/routes/_protected.workspaces/$workspaceId/-components/editable-field";
 import {
   isAIExtractionProperty,
   resolveAiCellTargets,
   type AIExtractionTarget,
   type SourceFileTarget,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table-column.logic";
-import {
-  type ColorVariants,
-  emptyColor,
-  resolveOptionColor,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 import { useRetryCell } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-retry-cell";
 
 export const PropertyCell = ({

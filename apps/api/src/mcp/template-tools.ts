@@ -8,23 +8,6 @@ import type { Transaction } from "@/api/db/root";
 import { entities, templates } from "@/api/db/schema";
 import type { TemplatePersistenceResult } from "@/api/db/schema";
 import { configureTemplateFields } from "@/api/handlers/templates/configure-template-fields-service";
-import { containsNull } from "@/api/handlers/templates/fill";
-import {
-  recordTemplateFill,
-  recordTemplateUse,
-} from "@/api/handlers/templates/record-use";
-import {
-  decideTemplateFillCompletion,
-  DEFAULT_TEMPLATE_FILL_COMPLETION_MODE,
-  TEMPLATE_FILL_COMPLETION_MODES,
-} from "@/api/handlers/templates/template-fill-completion";
-import type { DescribeTemplateResult } from "@/api/handlers/templates/template-fill-service";
-import {
-  describeStoredTemplate,
-  fillStoredTemplateDocx,
-  fillStoredTemplateWithText,
-  fillStoredTemplateWithTextStrict,
-} from "@/api/handlers/templates/template-fill-service";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
@@ -51,6 +34,23 @@ import {
 import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
 import { createStoredTemplate } from "@/api/lib/templates/create-template";
+import {
+  recordTemplateFill,
+  recordTemplateUse,
+} from "@/api/lib/templates/record-use";
+import { containsNull } from "@/api/lib/templates/template-data";
+import {
+  decideTemplateFillCompletion,
+  DEFAULT_TEMPLATE_FILL_COMPLETION_MODE,
+  TEMPLATE_FILL_COMPLETION_MODES,
+} from "@/api/lib/templates/template-fill-completion";
+import type { DescribeTemplateResult } from "@/api/lib/templates/template-fill-service";
+import {
+  describeStoredTemplate,
+  fillStoredTemplateDocx,
+  fillStoredTemplateWithText,
+  fillStoredTemplateWithTextStrict,
+} from "@/api/lib/templates/template-fill-service";
 import { withTimeout } from "@/api/lib/with-timeout";
 import type { McpRequestContext } from "@/api/mcp/context";
 import {

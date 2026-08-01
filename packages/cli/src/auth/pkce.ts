@@ -1,7 +1,7 @@
 // PKCE (RFC 7636) helpers for the loopback authorization-code flow.
 //
 // Mirrors the existing repo convention for PKCE generation
-// (`apps/api/src/handlers/mcp-connectors/oauth.ts`'s `createPkce`): random
+// (`apps/api/src/lib/mcp-upstream/oauth.ts`'s `createPkce`): random
 // bytes via Web Crypto, S256 challenge via `node:crypto` `createHash` so the
 // published CLI runs under plain Node (Bun executes `node:*` natively).
 

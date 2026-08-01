@@ -1,4 +1,4 @@
-import type { MattersFilters } from "@/routes/_protected.workspaces/-types";
+import type { MattersFilters } from "@/lib/workspaces/types";
 
 type MatterOrganizationResetPatch = {
   collapsedGroups: string[];

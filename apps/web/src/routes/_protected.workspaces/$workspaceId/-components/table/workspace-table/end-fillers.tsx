@@ -5,7 +5,7 @@ import { cn } from "@stll/ui/lib/utils";
 import type {
   TableCell,
   TableColumn,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
+} from "@/components/workspaces/table/types";
 import {
   WorkspaceGridCell,
   WorkspaceGridRow,

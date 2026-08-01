@@ -39,6 +39,7 @@ import { MatterIcon } from "@/components/matter-icon";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { StellaMark } from "@/components/stella-mark";
 import Tooltip from "@/components/tooltip";
+import { MatterContextMenu } from "@/components/workspaces/matter-context-menu";
 import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
 import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
 import {
@@ -76,7 +77,6 @@ import { toSafeId } from "@/lib/safe-id";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet";
-import { MatterContextMenu } from "@/routes/_protected.workspaces/-components/matter-context-menu";
 
 export const Route = createFileRoute("/_protected/chat/")({
   component: ChatIndex,

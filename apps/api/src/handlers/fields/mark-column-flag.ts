@@ -17,10 +17,6 @@ import type { ConditionNode } from "@stll/conditions";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { cellMetadata, entities, properties } from "@/api/db/schema";
 import type { EntityKind } from "@/api/db/schema-validators";
-import {
-  buildKanbanGroupCondition,
-  tGroupByPropertyId,
-} from "@/api/handlers/entities/kanban-group-condition";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -28,6 +24,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { acquireCellLock } from "@/api/lib/cell-lock";
 import { tConditionNode } from "@/api/lib/conditions/contract";
 import { tSafeId } from "@/api/lib/custom-schema";
+import {
+  buildKanbanGroupCondition,
+  tGroupByPropertyId,
+} from "@/api/lib/entities/kanban-group-condition";
 import { buildFilterConditions } from "@/api/lib/entity-filters";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 

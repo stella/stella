@@ -28,10 +28,9 @@ import { deleteS3ObjectWithSignal } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { processExtraction } from "@/api/lib/search/process-extraction";
 import { broadcast } from "@/api/lib/sse";
+import { finalizeErr, finalizeOk } from "@/api/lib/uploads/runtime";
+import type { UploadFinalizeError } from "@/api/lib/uploads/runtime";
 import { withTimeout } from "@/api/lib/with-timeout";
-
-import { finalizeErr, finalizeOk } from "./lib";
-import type { UploadFinalizeError } from "./lib";
 
 export type ValidateEntityVersionProps = {
   safeDb: SafeDb;

@@ -20,12 +20,12 @@ import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { usagePolicies, usageEntitlements } from "@/api/db/schema";
 import type { UsageEntitlementStatus, UsagePolicyKind } from "@/api/db/schema";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { SafeId } from "@/api/lib/branded-types";
 import type {
   HostedUsageAllocationPayload,
   HostedUsageEntitlementPayload,
-} from "@/api/handlers/hosted-usage-webhook/event-schemas";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import type { SafeId } from "@/api/lib/branded-types";
+} from "@/api/lib/hosted-usage-provider/event-schemas";
 import { recordWebhookAuditEvent } from "@/api/lib/hosted-usage-provider/webhook-store";
 import { parseExternalOrganizationId } from "@/api/lib/safe-id-boundaries";
 import { allocateUsage } from "@/api/lib/usage/usage-ledger";

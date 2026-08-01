@@ -32,6 +32,7 @@ import { useTabContextMenu } from "@/components/inspector/use-tab-context-menu";
 import { getInspectorView } from "@/components/inspector/view-registry";
 import { MatterIcon } from "@/components/matter-icon";
 import Tooltip from "@/components/tooltip";
+import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import {
@@ -41,7 +42,6 @@ import {
 } from "@/lib/consts";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { catalogueOptions } from "@/lib/knowledge/queries/catalogue";
-import { EntityKindIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-kind-icon";
 
 type InspectorRailProps = {
   activeId: string | null;

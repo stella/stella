@@ -8,6 +8,7 @@ import { useTranslations } from "use-intl";
 
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { useStartWorkflow } from "@/components/workspaces/hooks/use-start-workflow";
 import { MAX_PARALLEL_FILE_UPLOADS } from "@/consts";
 import type { DroppedFileTree } from "@/hooks/external-file-drop.logic";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -32,7 +33,6 @@ import {
   buildEntityCreatePresignPayload,
   entityCreateLocalInvalidationKeys,
 } from "@/routes/_protected.workspaces/$workspaceId/-hooks/create-file-upload-payload.logic";
-import { useStartWorkflow } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-start-workflow";
 
 const MAX_DISPLAYED_FAILURES = 5;
 // Matches the versions-sidebar PUT-to-S3 upload budget (same flow, uploaded

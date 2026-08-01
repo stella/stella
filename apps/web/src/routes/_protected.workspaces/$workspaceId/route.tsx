@@ -14,6 +14,8 @@ import { useDebouncedCallback } from "use-debounce";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { useInspectorStore } from "@/components/inspector/inspector-store";
+import { WorkflowServiceTierPromptProvider } from "@/components/workspaces/workflow-service-tier-prompt";
+import { WorkflowStartConfirmationPromptProvider } from "@/components/workspaces/workflow-start-confirmation-prompt";
 import { useWorkspaceChatMentionRegistration } from "@/features/chat/hooks/use-workspace-chat-mention-registration";
 import { useMountEffect } from "@/hooks/use-effect";
 import { getTranslator } from "@/i18n/i18n-store";
@@ -32,8 +34,6 @@ import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { workflowOptions } from "@/lib/workspaces/queries/workspace";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
 import { ReportExportTracker } from "@/routes/_protected.workspaces/$workspaceId/-components/view/report-export-tracker";
-import { WorkflowServiceTierPromptProvider } from "@/routes/_protected.workspaces/$workspaceId/-components/workflow-service-tier-prompt";
-import { WorkflowStartConfirmationPromptProvider } from "@/routes/_protected.workspaces/$workspaceId/-components/workflow-start-confirmation-prompt";
 import { WorkspaceDropZone } from "@/routes/_protected.workspaces/$workspaceId/-components/workspace-drop-zone";
 
 const EXTRACTION_PREVIEW_EVENT_TYPE = "workflow-extraction-preview";

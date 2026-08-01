@@ -11,11 +11,11 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { playbooksRouteAvailable } from "@/hooks/use-playbooks-preview";
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
+import type { PlaybookListItem } from "@/lib/knowledge/playbook-types";
 import { knowledgeKeys, playbooksOptions } from "@/lib/knowledge/queries";
 import { PlaybookEditor } from "@/routes/_protected.knowledge/-components/playbook-editor";
 import { PlaybookList } from "@/routes/_protected.knowledge/-components/playbook-list";
 import { PlaybookStarterGallerySheet } from "@/routes/_protected.knowledge/-components/playbook-starter-gallery-sheet";
-import type { PlaybookListItem } from "@/routes/_protected.knowledge/-components/playbook-types";
 
 // ── View discriminated union ─────────────────────────
 

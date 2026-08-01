@@ -55,6 +55,16 @@ import { EMPTY_SCREEN_MATTERS_VIDEO } from "@/components/empty-screen-media";
 import { isTerminalFlowRunStatus } from "@/components/flows/flow-meta";
 import { useInspectorStore } from "@/components/inspector/inspector-store";
 import { PersonMentionLabel } from "@/components/person-mention-label";
+import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
+import { getWeekStart, toISODate } from "@/components/workspaces/entity-utils";
+import { AddMemberDialog } from "@/components/workspaces/members-section";
+import type { TaskStatus } from "@/components/workspaces/tasks/task-detail-constants";
+import {
+  isTaskStatus,
+  STATUS_COLORS,
+  STATUS_ICONS,
+  TASK_STATUSES,
+} from "@/components/workspaces/tasks/task-detail-constants";
 import { useMountEffect } from "@/hooks/use-effect";
 import { useWorkflowsPreviewEnabled } from "@/hooks/use-workflows-preview";
 import { useLocale } from "@/i18n/formatting-context";
@@ -78,20 +88,7 @@ import { timeEntriesOptions } from "@/lib/workspaces/queries/time-entries";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { workspaceMembersOptions } from "@/lib/workspaces/queries/workspace-members";
 import { ActivityPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel";
-import { EntityKindIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-kind-icon";
-import { AddMemberDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/members-section";
-import type { TaskStatus } from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-constants";
-import {
-  isTaskStatus,
-  STATUS_COLORS,
-  STATUS_ICONS,
-  TASK_STATUSES,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-constants";
 import { useCreateFileEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities";
-import {
-  getWeekStart,
-  toISODate,
-} from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 type OverviewViewProps = {
   workspaceId: string;

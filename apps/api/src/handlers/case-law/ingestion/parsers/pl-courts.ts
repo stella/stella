@@ -24,7 +24,7 @@ import { stripHtml } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import {
   buildValidationHtml,
   validateAndLog,
-} from "@/api/handlers/case-law/ingestion/parsers/validate-ast";
+} from "@/api/lib/legal-search/parsers/validate-ast";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 import { includes } from "@/api/lib/type-guards";
 

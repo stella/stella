@@ -1,9 +1,8 @@
 import { unreachable } from "@/api/lib/errors/tagged-errors";
-
 import {
   canonicalizeGithubCommitSkillUrl,
   type SkillSourceIntegrity,
-} from "./skill-package";
+} from "@/api/lib/skills/skill-package";
 
 type SkillImportItem = {
   integrity: SkillSourceIntegrity;

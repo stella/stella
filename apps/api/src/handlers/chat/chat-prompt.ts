@@ -15,8 +15,6 @@ import type { SkillMetadata } from "@stll/skills";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { caseLawDecisions, entities, workspaces } from "@/api/db/schema";
 import type { PracticeJurisdiction } from "@/api/db/schema";
-import { formatDecisionForPrompt } from "@/api/handlers/case-law/analysis/prompts/base";
-import { parseDocumentAst } from "@/api/handlers/case-law/document-ast";
 import { CHAT_EDIT_APPLY_MODE } from "@/api/handlers/chat/chat-schema";
 import type {
   ChatEditApplyMode,
@@ -30,7 +28,6 @@ import type {
 import { estimateTextTokens } from "@/api/handlers/chat/compaction";
 import { CHAT_THREAD_PLACEHOLDER_TITLE } from "@/api/handlers/chat/thread-title";
 import { CHAT_CODE_MODE_SYSTEM_PROMPT } from "@/api/handlers/chat/tools/execute/chat-code-mode";
-import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import { CHAT_REFERENCE_HREF_PREFIXES } from "@/api/handlers/chat/types";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import {
@@ -41,6 +38,9 @@ import {
   resolveActiveChatSkillContext,
 } from "@/api/lib/agent-skills/skills";
 import type { SafeId } from "@/api/lib/branded-types";
+import { formatDecisionForPrompt } from "@/api/lib/case-law/analysis-prompt";
+import { parseDocumentAst } from "@/api/lib/case-law/document-ast";
+import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { formatDateInTimeZone } from "@/api/lib/date-format";
 import { DOCX_REVIEW_MARKUP_EXAMPLES } from "@/api/lib/docx-review-markup";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";

@@ -42,10 +42,10 @@ import {
   HTTP_TOO_MANY_REQUESTS,
   isTwoFactorEnabledUser,
 } from "@/lib/auth";
+import { sessionOptions } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
-import { sessionOptions } from "@/routes/-queries";
 
 const TOTP_LENGTH = 6;
 const HTTP_BAD_REQUEST = 400;

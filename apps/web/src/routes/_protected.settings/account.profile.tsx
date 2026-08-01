@@ -53,6 +53,7 @@ import {
 } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth";
+import { sessionOptions } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
@@ -61,7 +62,6 @@ import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
 import { COMMON_TIMEZONES } from "@/lib/timezones";
 import type { CommonTimezone } from "@/lib/timezones";
-import { sessionOptions } from "@/routes/-queries";
 import { SessionsCard } from "@/routes/_protected.settings/-components/account/sessions-card";
 import { TwoFactorCard } from "@/routes/_protected.settings/-components/account/two-factor-card";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";

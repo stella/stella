@@ -37,6 +37,26 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { contentDir } from "@stll/ui/hooks/use-content-dir";
 import { cn } from "@stll/ui/lib/utils";
 
+import {
+  LOOKUP_REGISTRY_OPTIONS,
+  type LookupRegistryOption,
+} from "@/components/templates/registry-options";
+import {
+  DATE_FORMAT_STYLES,
+  formatDateExample,
+  type TemplateDateFormat,
+} from "@/components/templates/template-date-format";
+import type {
+  NamedCondition,
+  ResolvedField,
+  StructureError,
+} from "@/components/templates/template-discover-types";
+import {
+  defaultCompositeFormat,
+  isInputType,
+  type InputType,
+  type LookupRegistry,
+} from "@/components/templates/template-field-manifest";
 import Tooltip from "@/components/tooltip";
 import { useLocale } from "@/i18n/formatting-context";
 import { LANG_ENDONYMS } from "@/i18n/i18n-store";
@@ -46,27 +66,6 @@ import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { bindingCatalogOptions } from "@/lib/knowledge/queries/binding-catalog";
 import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
-
-import {
-  LOOKUP_REGISTRY_OPTIONS,
-  type LookupRegistryOption,
-} from "./registry-options";
-import {
-  DATE_FORMAT_STYLES,
-  formatDateExample,
-  type TemplateDateFormat,
-} from "./template-date-format";
-import type {
-  NamedCondition,
-  ResolvedField,
-  StructureError,
-} from "./template-discover-types";
-import {
-  defaultCompositeFormat,
-  isInputType,
-  type InputType,
-  type LookupRegistry,
-} from "./template-field-manifest";
 
 const DOCX_EXTENSION_RE = /\.docx$/iu;
 const REQUIRED_MARKER = "*";

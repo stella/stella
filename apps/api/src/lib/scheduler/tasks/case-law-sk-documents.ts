@@ -19,15 +19,15 @@
 import { rlsDb } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { createIngestionDb } from "@/api/db/scoped";
+import { errorTag } from "@/api/lib/errors/utils";
 import type {
   DecisionDocumentOutcome,
   PendingDocument,
-} from "@/api/handlers/case-law/ingestion/sk-document-backfill";
+} from "@/api/lib/legal-search/sk-document-backfill";
 import {
   fetchDecisionDocument,
   loadPendingDocuments,
-} from "@/api/handlers/case-law/ingestion/sk-document-backfill";
-import { errorTag } from "@/api/lib/errors/utils";
+} from "@/api/lib/legal-search/sk-document-backfill";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 
 export const BACKFILL_SK_DOCUMENTS_TASK =

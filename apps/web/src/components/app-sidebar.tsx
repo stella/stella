@@ -80,6 +80,14 @@ import {
   getWorkspacePrimaryNavItems,
   type WorkspacePrimaryNavId,
 } from "@/components/workspace-primary-nav";
+import { CopyToMatterDialog } from "@/components/workspaces/copy-to-matter-dialog";
+import type { CopyToMatterEntity } from "@/components/workspaces/copy-to-matter-dialog.logic";
+import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
+import {
+  MatterMenuHeader,
+  MatterMenuItems,
+  useMatterActions,
+} from "@/components/workspaces/matter-context-menu";
 import {
   groupedChatThreadsOptions,
   mergeGroupedChatThreadPages,
@@ -96,26 +104,18 @@ import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { SIDE_RAIL_ICON_BUTTON_SIZE } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { HOTKEYS, NAV_KEY } from "@/lib/hotkeys";
+import { knowledgeSections } from "@/lib/knowledge/navigation";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import type { EntityKind } from "@/lib/types";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
+import { ENTITY_DRAG_TYPE } from "@/lib/workspaces/drag-constants";
+import { useUpdateWorkspace } from "@/lib/workspaces/mutations";
 import {
   workspaceActivityOptions,
   workspacesNavigationOptions,
 } from "@/lib/workspaces/queries";
-import { knowledgeSections } from "@/routes/_protected.knowledge/index";
-import { CopyToMatterDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog";
-import type { CopyToMatterEntity } from "@/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog.logic";
-import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
-import { EntityKindIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-kind-icon";
-import {
-  MatterMenuHeader,
-  MatterMenuItems,
-  useMatterActions,
-} from "@/routes/_protected.workspaces/-components/matter-context-menu";
-import { useUpdateWorkspace } from "@/routes/_protected.workspaces/-mutations";
 
 // Scrollable group body. Hide the scrollbar in the collapsed icon rail (matches
 // SidebarContent); a thin track over the narrow icon strip reads as a bright

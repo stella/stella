@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { getInternalPropertyId } from "@/components/workspaces/entity-utils";
 import { toSafeId } from "@/lib/safe-id";
-import { getInternalPropertyId } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 import {
   getKanbanCardMetadataVisibility,

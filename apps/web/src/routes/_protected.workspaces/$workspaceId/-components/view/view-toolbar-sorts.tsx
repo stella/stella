@@ -14,8 +14,8 @@ import {
   MenuTrigger,
 } from "@stll/ui/components/menu";
 
+import { PropertyIcon } from "@/components/workspaces/property-helpers";
 import type { ViewLayout, WorkspaceProperty } from "@/lib/types";
-import { PropertyIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/property-helpers";
 
 type SortChipsProps = {
   sorts: ViewLayout["sorts"];

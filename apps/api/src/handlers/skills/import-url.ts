@@ -4,9 +4,11 @@ import { t } from "elysia";
 import { AGENT_SKILL_SCOPES } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-
-import { authorizeSkillInstallScope, installSkill } from "./install";
-import { fetchSkillPackageFromUrl } from "./skill-package";
+import {
+  authorizeSkillInstallScope,
+  installSkill,
+} from "@/api/lib/skills/install";
+import { fetchSkillPackageFromUrl } from "@/api/lib/skills/skill-package";
 
 const importSkillBodySchema = t.Object({
   scope: t.UnionEnum(AGENT_SKILL_SCOPES),

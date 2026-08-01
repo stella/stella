@@ -31,7 +31,7 @@ import type {
   DocumentAst,
   Inline,
 } from "@/api/handlers/case-law/document-ast";
-import { validateAndLog } from "@/api/handlers/case-law/ingestion/parsers/validate-ast";
+import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
 
 import {
   CZ_CLOSING_RE as CLOSING_RE,

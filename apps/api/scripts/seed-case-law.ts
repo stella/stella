@@ -29,7 +29,7 @@ import { rootDb, rlsDb } from "@/api/db/root";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { createIngestionDb } from "@/api/db/scoped";
 import { backfillCaseLawSlugs } from "@/api/handlers/case-law/decisions/slug-backfill";
-import { indexDecision } from "@/api/handlers/case-law/search-index";
+import { indexDecision } from "@/api/lib/legal-search/case-law-search-index";
 import type {
   DecisionSection,
   EmptyAst,

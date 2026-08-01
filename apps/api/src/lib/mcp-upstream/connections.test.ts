@@ -54,7 +54,7 @@ void mock.module("@tanstack/ai-mcp", () => ({
   },
 }));
 
-void mock.module("@/api/handlers/mcp-connectors/oauth", () => ({
+void mock.module("@/api/lib/mcp-upstream/oauth", () => ({
   refreshOAuthToken: async () => {
     state.refreshCalls += 1;
     return state.refresh();
@@ -63,7 +63,7 @@ void mock.module("@/api/handlers/mcp-connectors/oauth", () => ({
   tokenExpiresAt: () => new Date(Date.now() + 3_600_000),
 }));
 
-void mock.module("@/api/handlers/mcp-connectors/crypto", () => ({
+void mock.module("@/api/lib/mcp-upstream/crypto", () => ({
   decryptMcpSecret: async ({ purpose }: { purpose: string }) =>
     `decrypted-${purpose}`,
   encryptMcpSecret: async () => {

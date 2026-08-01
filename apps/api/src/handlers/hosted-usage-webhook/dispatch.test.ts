@@ -16,12 +16,12 @@ import {
   handleUsageEntitlementStatusChange,
   handleHostedEntitlementUpsert,
 } from "@/api/handlers/hosted-usage-webhook/dispatch";
+import { toSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import type {
   HostedUsageAllocationPayload,
   HostedUsageEntitlementPayload,
-} from "@/api/handlers/hosted-usage-webhook/event-schemas";
-import { toSafeId } from "@/api/lib/branded-types";
-import type { SafeId } from "@/api/lib/branded-types";
+} from "@/api/lib/hosted-usage-provider/event-schemas";
 import { getRemainingUsageUnits } from "@/api/lib/usage/usage-ledger";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";

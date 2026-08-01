@@ -24,7 +24,7 @@ const suggestTemplateFieldsMock = mock(async () => {
 });
 const captureErrorMock = mock();
 
-void mock.module("@/api/handlers/templates/suggest-template-fields", () => ({
+void mock.module("@/api/lib/templates/suggest-template-fields", () => ({
   suggestTemplateFields: suggestTemplateFieldsMock,
 }));
 

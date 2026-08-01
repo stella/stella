@@ -10,7 +10,7 @@ import { Button } from "@stll/ui/components/button";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
-import type { PlaybookListItem } from "@/routes/_protected.knowledge/-components/playbook-types";
+import type { PlaybookListItem } from "@/lib/knowledge/playbook-types";
 
 type PlaybookListProps = {
   playbooks: PlaybookListItem[];

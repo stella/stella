@@ -10,7 +10,6 @@ import {
   fields,
   workspaces,
 } from "@/api/db/schema";
-import { closeSessionConnections } from "@/api/handlers/entities/desktop-edit-session-events";
 import { captureError } from "@/api/lib/analytics/capture";
 import {
   AUDIT_ACTION,
@@ -20,6 +19,7 @@ import {
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { closeSessionConnections } from "@/api/lib/desktop-edit-session-notifications";
 import {
   authorizeDesktopEditSession,
   DESKTOP_EDIT_SESSION_TAKEN_OVER_CODE,

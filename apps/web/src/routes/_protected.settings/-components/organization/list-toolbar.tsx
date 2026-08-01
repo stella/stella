@@ -12,9 +12,9 @@ import {
   InputGroupInput,
 } from "@stll/ui/components/input-group";
 
+import { InviteMemberDialog } from "@/components/organization/invite-member-dialog";
 import { detached } from "@/lib/detached";
 import { optionalSearchStringSchema } from "@/lib/schema";
-import { InviteMemberDialog } from "@/routes/_protected.organization/-components/invite-member-dialog";
 
 const settingsOrgParentRoute = getRouteApi("/_protected/settings/organization");
 const membersRoute = getRouteApi("/_protected/settings/organization/members");

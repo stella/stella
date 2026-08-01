@@ -1,0 +1,95 @@
+import { Trash2Icon } from "lucide-react";
+import { useTranslations } from "use-intl";
+
+import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@stll/ui/components/alert-dialog";
+import { Button } from "@stll/ui/components/button";
+import { stellaToast } from "@stll/ui/components/toast";
+
+import type { WorkspaceProperty } from "@/lib/types";
+import { useDeleteProperty } from "@/lib/workspaces/mutations/properties";
+import { useIsWorkflowRunning } from "@/lib/workspaces/queries/workspace";
+
+type DeletePropertyProps = {
+  workspaceId: string;
+  property: WorkspaceProperty;
+};
+export const DeleteProperty = ({
+  workspaceId,
+  property,
+}: DeletePropertyProps) => {
+  const t = useTranslations();
+  const isWorkflowRunning = useIsWorkflowRunning(workspaceId);
+  const deleteProperty = useDeleteProperty();
+  const canDelete = property.content.type !== "file";
+
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger
+        nativeButton
+        render={
+          <Button
+            className="text-destructive-foreground justify-start font-normal"
+            disabled={
+              isWorkflowRunning || !canDelete || deleteProperty.isPending
+            }
+            size="sm"
+            variant="ghost"
+          />
+        }
+      >
+        <Trash2Icon /> {t("workspaces.properties.deleteProperty")}
+      </AlertDialogTrigger>
+      <AlertDialogPopup>
+        <AlertDialogHeader>
+          <AlertDialogTitle>
+            {t("workspaces.properties.deleteProperty")}
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            {t("workspaces.properties.deletePropertyConfirmDescription", {
+              propertyName: property.name,
+            })}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogClose render={<Button variant="ghost" />}>
+            {t("common.cancel")}
+          </AlertDialogClose>
+          <AlertDialogClose
+            render={
+              <Button
+                onClick={() => {
+                  deleteProperty.mutate(
+                    {
+                      workspaceId,
+                      propertyId: property.id,
+                    },
+                    {
+                      onError: () => {
+                        stellaToast.add({
+                          title: t("errors.actionFailed"),
+                          type: "error",
+                        });
+                      },
+                    },
+                  );
+                }}
+                variant="destructive"
+              />
+            }
+          >
+            {t("common.delete")}
+          </AlertDialogClose>
+        </AlertDialogFooter>
+      </AlertDialogPopup>
+    </AlertDialog>
+  );
+};

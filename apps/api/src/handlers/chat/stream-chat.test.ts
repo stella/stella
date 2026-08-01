@@ -9,12 +9,12 @@ import { createPipelineContext } from "@stll/anonymize-wasm";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { createChatAttachmentPart } from "@/api/handlers/chat/chat-message-parts";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
-import { createChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import type {
   ChatAnonRestoration,
   ChatMessage,
 } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import {
   ChatEmptyCompletionError,
   ChatLoopDetectedError,

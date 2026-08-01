@@ -45,9 +45,13 @@ import {
   useDocxFitZoom,
   useDocxWheelZoom,
 } from "@/components/docx-preview-zoom";
+import { shouldUseDocxBrowserEditor } from "@/components/docx/docx-browser-editor.logic";
+import { DocxLoadingShell } from "@/components/docx/docx-loading-shell";
 import { useInspectorStore } from "@/components/inspector/inspector-store";
+import PdfViewer, { PDFSuspenseFallback } from "@/components/pdf/pdf-viewer";
 import Tooltip from "@/components/tooltip";
 import { TranslateDocumentDialog } from "@/components/translate-document-dialog";
+import { useSyncJustifications } from "@/components/workspaces/hooks/use-sync-justifications";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
@@ -75,13 +79,7 @@ import {
 } from "@/lib/workspaces/queries/entity-versions";
 import { justificationsOptions } from "@/lib/workspaces/queries/workspace";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
-import { shouldUseDocxBrowserEditor } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.logic";
-import { DocxLoadingShell } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-loading-shell";
-import PdfViewer, {
-  PDFSuspenseFallback,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/pdf-viewer";
-import { useSyncJustifications } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-justifications";
-import "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-docx.css";
+import "@/components/pdf/peek/peek-docx.css";
 import { PdfViewerControls } from "@/routes/_protected.workspaces/-components/pdf-viewer-controls";
 
 const ReadOnlyDocxViewer = lazy(async () => {
@@ -95,8 +93,7 @@ const ReadOnlyDocxViewer = lazy(async () => {
 // import below pulled the whole vendor-folio chunk (~490 KB gz)
 // into every page load via the route tree.
 const DocxBrowserEditor = lazy(async () => {
-  const m =
-    await import("@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor");
+  const m = await import("@/components/docx/docx-browser-editor");
   return { default: m.DocxBrowserEditor };
 });
 

@@ -37,18 +37,15 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
+import { sessionsKeys, sessionsOptions } from "@/lib/account/queries";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient, revokeAuthSession } from "@/lib/auth";
 import type { SessionRevocationToken } from "@/lib/auth";
+import { sessionOptions } from "@/lib/auth-queries";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { parseUserAgent } from "@/lib/parse-user-agent";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
-import { sessionOptions } from "@/routes/-queries";
-import {
-  sessionsKeys,
-  sessionsOptions,
-} from "@/routes/_protected.account/-queries";
 
 const MISSING_VALUE = "-";
 

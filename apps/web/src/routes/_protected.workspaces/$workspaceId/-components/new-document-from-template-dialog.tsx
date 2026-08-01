@@ -17,12 +17,12 @@ import {
 import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Input } from "@stll/ui/components/input";
 
+import { TemplateForm } from "@/components/templates/template-form";
+import { useTemplateFillSchema } from "@/components/templates/use-template-fill-schema";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 import { templatesOptions } from "@/lib/knowledge/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
-import { TemplateForm } from "@/routes/_protected.knowledge/-components/template-form";
-import { useTemplateFillSchema } from "@/routes/_protected.knowledge/-components/use-template-fill-schema";
 
 /**
  * "New document from template" inside a matter: pick a saved template

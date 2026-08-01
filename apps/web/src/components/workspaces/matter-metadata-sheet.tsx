@@ -1,0 +1,453 @@
+import { useRef, useState } from "react";
+
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
+import { CopyIcon, CopyPlusIcon, TrashIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/components/button";
+import { DestructiveConfirmDialog } from "@stll/ui/components/destructive-confirm-dialog";
+import {
+  Dialog,
+  DialogClose,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogPopup,
+  DialogTitle,
+} from "@stll/ui/components/dialog";
+import { Input } from "@stll/ui/components/input";
+import { Separator } from "@stll/ui/components/separator";
+import { stellaToast } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
+
+import { MatterNumberHint } from "@/components/matter-number-hint";
+import { LeadSection } from "@/components/workspaces/lead-section";
+import { MATTER_INFO_ICON_SLOT_CLASS } from "@/components/workspaces/matter-info-layout";
+import { MembersSection } from "@/components/workspaces/members-section";
+import { PartiesSection } from "@/components/workspaces/parties-section";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { usePermissions } from "@/hooks/use-permissions";
+import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import { detached } from "@/lib/detached";
+import { APIError } from "@/lib/errors/api";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import {
+  useDeleteWorkspace,
+  useDuplicateWorkspace,
+  useUpdateWorkspace,
+} from "@/lib/workspaces/mutations";
+import { workspaceOptions, workspacesKeys } from "@/lib/workspaces/queries";
+
+type MatterMetadataPanelProps = {
+  workspaceId: string;
+  onDeleted?: () => void;
+};
+
+type DuplicateMode = "metadata" | "content";
+
+export const MatterMetadataPanel = ({
+  workspaceId,
+  onDeleted,
+}: MatterMetadataPanelProps) => {
+  const t = useTranslations();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [duplicateMode, setDuplicateMode] = useState<DuplicateMode | null>(
+    null,
+  );
+  const [nameValue, setNameValue] = useState("");
+  const [nameDirty, setNameDirty] = useState(false);
+  const escapedNameRef = useRef(false);
+  const [referenceValue, setReferenceValue] = useState("");
+  const [referenceDirty, setReferenceDirty] = useState(false);
+  const [referenceError, setReferenceError] = useState("");
+  const seededWorkspaceIdRef = useRef<string | null>(null);
+
+  const workspaceQuery = useQuery(workspaceOptions(workspaceId));
+  const workspace = workspaceQuery.data;
+  const deleteWorkspace = useDeleteWorkspace();
+  const duplicateWorkspace = useDuplicateWorkspace();
+  const canCreateWorkspace = usePermissions({ workspace: ["create"] });
+  const canDeleteWorkspace = usePermissions({ workspace: ["delete"] });
+  const updateWorkspace = useUpdateWorkspace();
+
+  useExternalSyncEffect(() => {
+    if (!workspace) {
+      return;
+    }
+    if (seededWorkspaceIdRef.current !== workspaceId) {
+      seededWorkspaceIdRef.current = workspaceId;
+      escapedNameRef.current = false;
+      setNameDirty(false);
+      setReferenceDirty(false);
+      setNameValue(workspace.name);
+      setReferenceValue(workspace.reference);
+      setReferenceError("");
+      return;
+    }
+
+    if (!nameDirty) {
+      setNameValue(workspace.name);
+    }
+    if (!referenceDirty) {
+      setReferenceValue(workspace.reference);
+      setReferenceError("");
+    }
+  }, [nameDirty, referenceDirty, workspace, workspaceId]);
+  const handleSaveName = () => {
+    if (!workspace) {
+      return;
+    }
+    if (escapedNameRef.current) {
+      escapedNameRef.current = false;
+      setNameValue(workspace.name);
+      setNameDirty(false);
+      return;
+    }
+
+    const trimmed = nameValue.trim();
+    if (!trimmed || trimmed === workspace.name) {
+      setNameValue(workspace.name);
+      setNameDirty(false);
+      return;
+    }
+
+    const fallbackName = workspace.name;
+    updateWorkspace.mutate(
+      {
+        workspaceId,
+        name: trimmed,
+      },
+      {
+        onSuccess: () => {
+          setNameDirty(false);
+        },
+        onError: (error) => {
+          const message = userErrorFromThrown(error, t("errors.actionFailed"));
+          stellaToast.add({ title: message, type: "error" });
+          setNameValue(fallbackName);
+          setNameDirty(false);
+        },
+      },
+    );
+  };
+
+  const handleSaveReference = () => {
+    if (!workspace) {
+      return;
+    }
+    const trimmed = referenceValue.trim();
+    if (!trimmed || trimmed === workspace.reference) {
+      setReferenceValue(workspace.reference);
+      setReferenceDirty(false);
+      return;
+    }
+
+    setReferenceError("");
+
+    updateWorkspace.mutate(
+      {
+        workspaceId,
+        reference: trimmed,
+      },
+      {
+        onSuccess: () => {
+          setReferenceDirty(false);
+          detached(
+            queryClient.invalidateQueries({
+              queryKey: workspacesKeys.byId(workspaceId),
+            }),
+            "onSuccess",
+          );
+        },
+        onError: (error) => {
+          if (APIError.is(error) && error.status === 409) {
+            setReferenceError(t("workspaces.referenceTaken"));
+            return;
+          }
+
+          const message = userErrorFromThrown(error, t("errors.actionFailed"));
+          stellaToast.add({ title: message, type: "error" });
+          setReferenceDirty(false);
+        },
+      },
+    );
+  };
+
+  const handleDeleteWorkspace = async () => {
+    if (deleteWorkspace.isPending) {
+      return;
+    }
+
+    const toastId = stellaToast.add({
+      title: t("workspaces.deletingWorkspace"),
+      type: "loading",
+      timeout: Number.POSITIVE_INFINITY,
+    });
+
+    await deleteWorkspace.mutateAsync(
+      { workspaceId },
+      {
+        onError: () => {
+          stellaToast.update(toastId, {
+            title: t("errors.actionFailed"),
+            type: "error",
+          });
+        },
+        onSuccess: () => {
+          detached(
+            (async () => {
+              stellaToast.update(toastId, {
+                title: t("success.workspaceDeletedSuccessfully"),
+                type: "success",
+              });
+              onDeleted?.();
+              await navigate({ to: "/workspaces" });
+            })(),
+            "onSuccess",
+          );
+        },
+      },
+    );
+  };
+
+  const handleDuplicateWorkspace = () => {
+    if (
+      !canCreateWorkspace ||
+      duplicateMode === null ||
+      duplicateWorkspace.isPending
+    ) {
+      return;
+    }
+
+    const toastId = stellaToast.add({
+      title: t("workspaces.duplicatingWorkspace"),
+      type: "loading",
+      timeout: Number.POSITIVE_INFINITY,
+    });
+
+    duplicateWorkspace.mutate(
+      {
+        workspaceId,
+        includeContent: duplicateMode === "content",
+      },
+      {
+        onError: () => {
+          stellaToast.update(toastId, {
+            title: t("errors.actionFailed"),
+            type: "error",
+          });
+        },
+        onSuccess: (data) => {
+          stellaToast.update(toastId, {
+            title: t("success.workspaceDuplicatedSuccessfully"),
+            type: "success",
+          });
+          setDuplicateMode(null);
+          detached(
+            navigate({
+              to: "/workspaces/$workspaceId",
+              params: { workspaceId: data.workspaceId },
+            }),
+            "onSuccess",
+          );
+        },
+      },
+    );
+  };
+
+  if (workspaceQuery.isError || !workspace) {
+    return null;
+  }
+
+  return (
+    <>
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        {/* Name */}
+        <section
+          className={cn(
+            "grid shrink-0 grid-cols-[8rem_minmax(0,1fr)] items-center gap-3 border-b px-3",
+            TOOLBAR_ROW_HEIGHT,
+          )}
+        >
+          <span className="text-muted-foreground truncate text-sm font-medium">
+            {t("common.name")}
+          </span>
+          <Input
+            className="rounded-md shadow-none"
+            disabled={updateWorkspace.isPending}
+            onBlur={handleSaveName}
+            onChange={(e) => {
+              setNameDirty(true);
+              setNameValue(e.target.value);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.currentTarget.blur();
+              }
+              if (e.key === "Escape") {
+                escapedNameRef.current = true;
+                e.currentTarget.blur();
+              }
+            }}
+            size="sm"
+            value={nameValue}
+          />
+        </section>
+
+        {/* Reference */}
+        <section
+          className={cn(
+            "grid shrink-0 grid-cols-[8rem_minmax(0,1fr)] items-center gap-3 border-b px-3",
+            TOOLBAR_ROW_HEIGHT,
+          )}
+        >
+          <span className="text-muted-foreground truncate text-sm font-medium">
+            {t("workspaces.reference")}
+          </span>
+          <div className="flex min-w-0 items-center gap-2">
+            <Input
+              className="w-36 shrink-0 rounded-md shadow-none"
+              onBlur={handleSaveReference}
+              onChange={(e) => {
+                setReferenceDirty(true);
+                setReferenceValue(e.target.value);
+                setReferenceError("");
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.currentTarget.blur();
+                }
+              }}
+              placeholder={t("workspaces.referencePlaceholder")}
+              size="sm"
+              value={referenceValue}
+            />
+            <MatterNumberHint
+              className="mt-0 min-w-0 flex-1"
+              error={referenceError}
+              value={referenceValue}
+              variant="inline"
+            />
+          </div>
+        </section>
+
+        {/* InfoSoud */}
+        {/* Add with proper localization support for CS-only customers.
+                The component is wired and works, but the surface (CZ court
+                IDs, sp. zn. labels, etc.) is Czech-only by design — we hide it
+                from the UX until we have a locale gate that only shows it to CS
+                users or surfaces an EN explainer for non-CS users. */}
+        {/* <InfoSoudSection active workspaceId={workspaceId} /> */}
+        {/* <Separator /> */}
+
+        {/* Lead */}
+        <LeadSection workspaceId={workspaceId} />
+
+        {/* Members */}
+        <MembersSection workspaceId={workspaceId} />
+
+        <Separator />
+
+        {/* Parties */}
+        <PartiesSection workspaceId={workspaceId} />
+
+        <div className="mt-auto">
+          {/* Actions */}
+          {canCreateWorkspace && (
+            <div className="flex flex-col">
+              <Button
+                className={cn(
+                  "w-full justify-start rounded-none px-3",
+                  TOOLBAR_ROW_HEIGHT,
+                )}
+                onClick={() => setDuplicateMode("metadata")}
+                variant="ghost"
+              >
+                <span className={MATTER_INFO_ICON_SLOT_CLASS}>
+                  <CopyIcon className="size-4" />
+                </span>
+                {t("common.duplicate")}
+              </Button>
+              <Button
+                className={cn(
+                  "w-full justify-start rounded-none px-3",
+                  TOOLBAR_ROW_HEIGHT,
+                )}
+                onClick={() => setDuplicateMode("content")}
+                variant="ghost"
+              >
+                <span className={MATTER_INFO_ICON_SLOT_CLASS}>
+                  <CopyPlusIcon className="size-4" />
+                </span>
+                {t("workspaces.duplicateWithContent")}
+              </Button>
+            </div>
+          )}
+
+          {/* Danger zone */}
+          {canDeleteWorkspace && (
+            <button
+              className={cn(
+                "text-destructive hover:bg-accent flex w-full shrink-0 items-center gap-2 border-t px-3 text-sm font-medium transition-colors",
+                TOOLBAR_ROW_HEIGHT,
+              )}
+              disabled={deleteWorkspace.isPending}
+              onClick={() => setDeleteDialogOpen(true)}
+              type="button"
+            >
+              <span className={MATTER_INFO_ICON_SLOT_CLASS}>
+                <TrashIcon className="size-4" />
+              </span>
+              {t("workspaces.deleteWorkspace")}
+            </button>
+          )}
+        </div>
+      </div>
+      <Dialog
+        onOpenChange={(open) => {
+          if (!open) {
+            setDuplicateMode(null);
+          }
+        }}
+        open={duplicateMode !== null}
+      >
+        <DialogPopup>
+          <DialogHeader>
+            <DialogTitle>{t("workspaces.duplicateMatter")}</DialogTitle>
+            <DialogDescription>
+              {duplicateMode === "content"
+                ? t("workspaces.duplicateMatterWithContentDescription")
+                : t("workspaces.duplicateMatterDescription")}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" />}>
+              {t("common.cancel")}
+            </DialogClose>
+            <Button
+              loading={duplicateWorkspace.isPending}
+              onClick={handleDuplicateWorkspace}
+            >
+              {t("common.duplicate")}
+            </Button>
+          </DialogFooter>
+        </DialogPopup>
+      </Dialog>
+      <DestructiveConfirmDialog
+        cancelLabel={t("common.cancel")}
+        confirmLabel={t("common.delete")}
+        confirmation={workspace.name}
+        description={t("workspaces.deleteWorkspaceConfirmDescription")}
+        inputLabel={t("common.typeNameToConfirm")}
+        loading={deleteWorkspace.isPending}
+        onConfirm={handleDeleteWorkspace}
+        onOpenChange={setDeleteDialogOpen}
+        open={deleteDialogOpen}
+        title={t("workspaces.deleteWorkspace")}
+      />
+    </>
+  );
+};

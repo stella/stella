@@ -13,7 +13,7 @@ import {
   storedDecisionSignal,
   validateAst,
   validationSignal,
-} from "@/api/handlers/case-law/ingestion/parsers/validate-ast";
+} from "@/api/lib/legal-search/parsers/validate-ast";
 
 // ── Helpers ─────────────────────────────────────────────────
 

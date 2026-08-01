@@ -55,7 +55,6 @@ import {
   prepareTextForThirdParty,
   prepareToolsForThirdParty,
 } from "@/api/handlers/chat/third-party-boundary";
-import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import type { StellaMcpToolSource } from "@/api/handlers/chat/tools/external-mcp-tools";
 import type {
   ChatAnonRestoration,
@@ -78,6 +77,8 @@ import {
   chatToolMapToArray,
   type ChatToolMap,
 } from "@/api/lib/chat/chat-tool-types";
+import { projectChatToolSchemasForProvider } from "@/api/lib/chat/provider-tool-projection";
+import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import {
   ChatEmptyCompletionError,
   ChatLoopDetectedError,
@@ -402,41 +403,6 @@ const chatAttemptTerminalError = (
   state: ChatAttemptState,
 ): ChatLoopDetectedError | ChatEmptyCompletionError | null =>
   state.finalLoopDetection ?? state.emptyCompletion;
-
-export const projectChatToolSchemasForProvider = ({
-  modelTools,
-  provider,
-}: {
-  modelTools: ReturnType<typeof chatToolMapToArray>;
-  provider: string;
-}): ReturnType<typeof chatToolMapToArray> => {
-  const projectionOptions =
-    providerSafeJsonSchemaOptionsForTanStackProvider(provider);
-  const projectedTools: ReturnType<typeof chatToolMapToArray> = [];
-  for (const tool of modelTools) {
-    const projectedTool = { ...tool };
-    if (tool.inputSchema !== undefined) {
-      const inputSchema = projectSchemaInputJsonSchema(
-        tool.inputSchema,
-        projectionOptions,
-      );
-      if (inputSchema !== undefined) {
-        projectedTool.inputSchema = inputSchema;
-      }
-    }
-    if (tool.outputSchema !== undefined) {
-      const outputSchema = projectSchemaInputJsonSchema(
-        tool.outputSchema,
-        projectionOptions,
-      );
-      if (outputSchema !== undefined) {
-        projectedTool.outputSchema = outputSchema;
-      }
-    }
-    projectedTools.push(projectedTool);
-  }
-  return projectedTools;
-};
 
 const projectServerToolsForProvider = ({
   provider,

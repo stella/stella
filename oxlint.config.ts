@@ -613,7 +613,7 @@ export default defineConfig({
         "apps/api/src/db/auth-schema.ts",
         "apps/api/src/handlers/case-law/ingestion/adapters/utils.ts",
         "apps/api/src/lib/markdown/html-to-markdown.ts",
-        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/create-property.tsx",
+        "apps/web/src/components/workspaces/create-property.tsx",
       ],
       rules: { "require-unicode-regexp": "off" },
     },
@@ -889,7 +889,7 @@ export default defineConfig({
                   "Older-message paging updates the seeded Chat identity during render so stale in-flight page responses are discarded across thread switches and same-thread refetches.",
               },
               {
-                path: "apps/web/src/routes/_protected.knowledge/-components/template-form.tsx",
+                path: "apps/web/src/components/templates/template-form.tsx",
                 reason:
                   "Form refs bridge synchronous onChange/onBlur ordering before React commits, so validation reads the latest field values and touched state inside ordinary event handlers.",
               },
@@ -904,7 +904,7 @@ export default defineConfig({
                   "Rapid dependency edits compose against latest optimistic state during event handlers and transitions; this is mutable optimistic state, not stale effect callback plumbing.",
               },
               {
-                path: "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-create-b-boxes.ts",
+                path: "apps/web/src/components/workspaces/hooks/use-create-b-boxes.ts",
                 reason:
                   "Returned callback identity must stay stable for downstream effect deps while reading latest pending mutation count; callers invoke it directly, not from an effect-installed callback.",
               },
@@ -971,6 +971,7 @@ export default defineConfig({
     {
       files: [
         "apps/web/src/routes/dev/**/*.{ts,tsx}",
+        "apps/web/src/components/dev/**/*.{ts,tsx}",
         "apps/web/src/components/dev-sidebar-group.tsx",
       ],
       rules: {
@@ -1263,7 +1264,7 @@ export default defineConfig({
     },
     {
       files: [
-        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/pdf/**",
+        "apps/web/src/components/pdf/**",
       ],
       rules: {
         "unicorn/prefer-dom-node-remove": "off",
@@ -1294,7 +1295,7 @@ export default defineConfig({
         "apps/web/src/components/chat-editor-provider.tsx",
         "apps/web/src/components/api-version-mismatch-banner.tsx",
         "apps/web/src/components/selfhost-update-banner.tsx",
-        "apps/web/src/routes/_protected.workspaces/-components/create-matter-dialog.tsx",
+        "apps/web/src/components/workspaces/create-matter-dialog.tsx",
       ],
       rules: {
         "no-bare-chrome-query/no-bare-chrome-query": "error",
@@ -1317,7 +1318,7 @@ export default defineConfig({
     },
     {
       files: [
-        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/field-value.tsx",
+        "apps/web/src/components/workspaces/field-value.tsx",
         ".oxlint-plugins/__fixtures__/no-workspace-field-value-drift.fixture.tsx",
       ],
       rules: {

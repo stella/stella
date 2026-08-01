@@ -10,10 +10,10 @@ import {
 } from "@stll/ui/components/popover";
 import { Separator } from "@stll/ui/components/separator";
 
-import { PinProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/pin-property";
-import { SortProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/sort-property";
-import type { SortHint } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/sort-property";
-import type { TableColumn } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
+import { PinProperty } from "@/components/workspaces/properties/pin-property";
+import { SortProperty } from "@/components/workspaces/properties/sort-property";
+import type { SortHint } from "@/components/workspaces/properties/sort-property";
+import type { TableColumn } from "@/components/workspaces/table/types";
 
 type MetadataPopoverProps = {
   column: TableColumn;

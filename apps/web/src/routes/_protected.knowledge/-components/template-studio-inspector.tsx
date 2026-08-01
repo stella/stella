@@ -57,6 +57,11 @@ import type {
   InspectorViewRenderProps,
 } from "@/components/inspector/view-registry";
 import { registerInspectorView } from "@/components/inspector/view-registry";
+import {
+  ARRAY_INDEX_KEY_PREFIX,
+  TemplateForm,
+  useFillToMatterSaveTarget,
+} from "@/components/templates/template-form";
 import Tooltip from "@/components/tooltip";
 import { useMountEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -83,12 +88,6 @@ import { parseArrayItemKey } from "@/routes/_protected.knowledge/-components/tem
 import { TemplateCheckDialog } from "@/routes/_protected.knowledge/-components/template-check-dialog";
 import type { LinkedClause } from "@/routes/_protected.knowledge/-components/template-clauses-tab";
 import {
-  ARRAY_INDEX_KEY_PREFIX,
-  TemplateForm,
-  useFillToMatterSaveTarget,
-} from "@/routes/_protected.knowledge/-components/template-form";
-import { useTemplateNavStore } from "@/routes/_protected.knowledge/-components/template-nav-store";
-import {
   ConditionFace,
   LoopFace,
 } from "@/routes/_protected.knowledge/-components/template-studio-conditions";
@@ -111,6 +110,7 @@ import {
   type StudioField,
 } from "@/routes/_protected.knowledge/-components/template-studio-store";
 import { TemplateVersionsTab } from "@/routes/_protected.knowledge/-components/template-versions-tab";
+import { useTemplateNavStore } from "@/stores/knowledge/template-nav-store";
 
 type StudioFacet = "fields" | "guidance" | "history" | "fill";
 type TemplateStudioPayload = { templateId: string };

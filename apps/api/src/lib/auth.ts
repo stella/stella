@@ -32,7 +32,6 @@ import {
   createMembershipScopedDb,
 } from "@/api/db/scoped";
 import { env } from "@/api/env";
-import { ensureDefaultDocumentTypes } from "@/api/handlers/document-types/defaults";
 import { loadOrgSettingsForAuth } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createAuditRecorder } from "@/api/lib/audit-log";
@@ -45,6 +44,7 @@ import { isUuid, tUuid } from "@/api/lib/custom-schema";
 import { detectedCountryFromRequestContext } from "@/api/lib/detected-country";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
 import { stashDevOtp } from "@/api/lib/dev-otp-store";
+import { ensureDefaultDocumentTypes } from "@/api/lib/document-types/defaults";
 import {
   isTransactionalEmailConfigured,
   sendNewDeviceLoginEmail,

@@ -1,0 +1,799 @@
+/**
+ * `entity_create` purpose: a presigned-upload flow that ends in a
+ * new `entities` row + first `entityVersions` + first `fields`
+ * record, exactly like the legacy multipart endpoint at
+ * `apps/api/src/handlers/entities/upload.ts`.
+ *
+ * Splits into two callbacks consumed by the generic presign /
+ * finalize dispatchers:
+ *
+ * - `validateEntityCreate`: cheap up-front checks (workspace
+ *   entity-count limit, property existence + type) so the API
+ *   can refuse to issue a URL the user couldn't redeem anyway.
+ *
+ * - `finalizeEntityCreate`: the transactional domain step.
+ *   Reuses `resolveFileName` (filename de-duplication) and
+ *   `allocateEntityStamp` (workspace doc-sequence) from the
+ *   existing slice. Mirrors the original handler's audit log,
+ *   workspace `lastActivityAt` bump, and post-promote PDF-derivative
+ *   + extraction enqueues.
+ */
+import { Result, panic } from "better-result";
+import { and, count, eq, isNull, like, ne, or, sql } from "drizzle-orm";
+
+import { jsonField } from "@/api/db/json-utils";
+import type { Transaction } from "@/api/db/root";
+import type { SafeDb } from "@/api/db/safe-db";
+import type {
+  PendingUploadFinalizedResult,
+  PendingUploadPurposeData,
+} from "@/api/db/schema";
+import {
+  entities,
+  entityVersions,
+  fields,
+  pendingUploads,
+  properties,
+  workspaces,
+} from "@/api/db/schema";
+import { captureError } from "@/api/lib/analytics/capture";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { AuditRecorder } from "@/api/lib/audit-log";
+import { createSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
+import { allocateEntityStamp } from "@/api/lib/document-counter";
+import { UPLOAD_DOCUMENT_SOURCE } from "@/api/lib/document-source";
+import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { escapeLike } from "@/api/lib/escape-like";
+import {
+  enqueueImageThumbnailOrMarkFailed,
+  enqueuePdfDerivativeOrMarkFailed,
+} from "@/api/lib/file-derivative-queue";
+import {
+  allocateFileObject,
+  fileContentWithMintedObject,
+} from "@/api/lib/files/file-object-ids";
+import { pdfDerivativeStateForFile } from "@/api/lib/files/gotenberg";
+import { thumbnailDerivativeStateForFile } from "@/api/lib/files/image-derivative";
+import { isEncryptedPdf } from "@/api/lib/files/pdf-utils";
+import { createFileKey } from "@/api/lib/files/utils";
+import { maybeStartUploadTriggeredFlows } from "@/api/lib/flows/maybe-start-upload-triggered-flows";
+import { LIMITS } from "@/api/lib/limits";
+import { getS3 } from "@/api/lib/s3";
+import type { SanitizedFileName } from "@/api/lib/sanitize-filename";
+import { sanitizeFilename } from "@/api/lib/sanitize-filename";
+import { processExtraction } from "@/api/lib/search/process-extraction";
+import {
+  FINALIZE_CLAIM_TIMEOUT_MS,
+  UploadFinalizeError,
+  finalizeErr,
+  finalizeOk,
+} from "@/api/lib/uploads/runtime";
+import { PDF_MIME_TYPE } from "@/api/mime-types";
+
+const MAX_FILENAME_LENGTH = 255;
+
+type ResolveFileNameProps = {
+  tx: Transaction;
+  workspaceId: SafeId<"workspace">;
+  propertyId: SafeId<"property">;
+  parentId: SafeId<"entity"> | null;
+  name: SanitizedFileName;
+};
+
+export const resolveEntityCreateFileName = async ({
+  tx,
+  workspaceId,
+  propertyId,
+  parentId,
+  name,
+}: ResolveFileNameProps) => {
+  const lastDot = name.lastIndexOf(".");
+  const base = lastDot === -1 ? name : name.slice(0, lastDot);
+  const ext = lastDot === -1 ? "" : name.slice(lastDot);
+  const pattern = `${escapeLike(base)}%${escapeLike(ext)}`;
+
+  const siblingParentFilter =
+    parentId === null
+      ? isNull(entities.parentId)
+      : eq(entities.parentId, parentId);
+
+  const countRows = await tx
+    .select({ total: count() })
+    .from(fields)
+    .innerJoin(entityVersions, eq(fields.entityVersionId, entityVersions.id))
+    .innerJoin(
+      entities,
+      and(
+        eq(entityVersions.entityId, entities.id),
+        eq(entities.currentVersionId, entityVersions.id),
+      ),
+    )
+    .where(
+      and(
+        eq(fields.workspaceId, workspaceId),
+        eq(fields.propertyId, propertyId),
+        eq(entities.workspaceId, workspaceId),
+        siblingParentFilter,
+        like(jsonField(fields.content, "v1")("fileName"), pattern),
+      ),
+    );
+  const fieldsCount = countRows.at(0)?.total ?? 0;
+
+  if (fieldsCount === 0) {
+    return { renamed: false as const, value: name };
+  }
+
+  const suffix = `_${fieldsCount}`;
+  const maxBase = MAX_FILENAME_LENGTH - suffix.length - ext.length;
+  const truncatedBase = maxBase > 0 ? base.slice(0, maxBase) : base;
+
+  // SAFETY: name is already sanitized; the suffix is digits and underscore only
+  return {
+    renamed: true as const,
+    value: sanitizeFilename(`${truncatedBase}${suffix}${ext}`),
+  };
+};
+
+export type ValidateEntityCreateProps = {
+  safeDb: SafeDb;
+  workspaceId: SafeId<"workspace">;
+  propertyId: SafeId<"property">;
+  parentId: SafeId<"entity"> | null;
+};
+
+export type ValidateEntityCreateCapacityProps = {
+  safeDb: SafeDb;
+  workspaceId: SafeId<"workspace">;
+  propertyId?: SafeId<"property"> | null;
+  parentId: SafeId<"entity"> | null;
+  entityCount: number;
+};
+
+type EntityCreateReservationFilterProps = {
+  workspaceId: SafeId<"workspace">;
+  excludeUploadId?: SafeId<"pendingUpload"> | undefined;
+};
+
+const activeEntityCreateReservationFilter = ({
+  workspaceId,
+  excludeUploadId,
+}: EntityCreateReservationFilterProps) => {
+  const timeoutSec = Math.floor(FINALIZE_CLAIM_TIMEOUT_MS / 1000);
+  const baseFilter = and(
+    eq(pendingUploads.workspaceId, workspaceId),
+    eq(pendingUploads.purpose, "entity_create"),
+    or(
+      and(
+        or(
+          eq(pendingUploads.status, "pending"),
+          eq(pendingUploads.status, "failed"),
+        ),
+        sql`${pendingUploads.expiresAt} > NOW()`,
+      ),
+      and(
+        eq(pendingUploads.status, "scanning"),
+        or(
+          sql`${pendingUploads.expiresAt} > NOW()`,
+          sql`${pendingUploads.claimedAt} >= NOW() - ${timeoutSec} * interval '1 second'`,
+        ),
+      ),
+    ),
+  );
+
+  if (!excludeUploadId) {
+    return baseFilter;
+  }
+
+  return and(baseFilter, ne(pendingUploads.id, excludeUploadId));
+};
+
+type CountActiveEntityCreateReservationsProps = {
+  tx: Transaction;
+  workspaceId: SafeId<"workspace">;
+  excludeUploadId?: SafeId<"pendingUpload"> | undefined;
+};
+
+export const countActiveEntityCreateReservations = async ({
+  tx,
+  workspaceId,
+  excludeUploadId,
+}: CountActiveEntityCreateReservationsProps): Promise<number> =>
+  await tx.$count(
+    pendingUploads,
+    activeEntityCreateReservationFilter({ workspaceId, excludeUploadId }),
+  );
+
+export type EntityCreateWriteFailureStatus =
+  | "property-not-found"
+  | "property-type-mismatch"
+  | "parent-not-found"
+  | "parent-type-mismatch"
+  | "entities-limit-reached";
+
+export const entityCreateWriteErrorMessage = (
+  status: EntityCreateWriteFailureStatus,
+): string => {
+  if (status === "property-not-found") {
+    return "Property not found in workspace";
+  }
+  if (status === "property-type-mismatch") {
+    return "Property isn't of type file";
+  }
+  if (status === "parent-not-found") {
+    return "Parent entity not found in this workspace";
+  }
+  if (status === "entities-limit-reached") {
+    return "Entities limit reached";
+  }
+  return "Parent entity must be a folder";
+};
+
+type CheckEntityCreateParentForInsertProps = {
+  tx: Transaction;
+  workspaceId: SafeId<"workspace">;
+  parentId: SafeId<"entity"> | null;
+};
+
+export const checkEntityCreateParentForInsert = async ({
+  tx,
+  workspaceId,
+  parentId,
+}: CheckEntityCreateParentForInsertProps): Promise<
+  Result<void, "parent-not-found" | "parent-type-mismatch">
+> => {
+  if (!parentId) {
+    return Result.ok(undefined);
+  }
+
+  const parentRows = await tx
+    .select({ id: entities.id, kind: entities.kind })
+    .from(entities)
+    .where(
+      and(eq(entities.id, parentId), eq(entities.workspaceId, workspaceId)),
+    )
+    .limit(1)
+    .for("update");
+  const parent = parentRows.at(0);
+
+  if (!parent) {
+    return Result.err("parent-not-found");
+  }
+  if (parent.kind !== "folder") {
+    return Result.err("parent-type-mismatch");
+  }
+
+  return Result.ok(undefined);
+};
+
+type CheckEntityCreateTargetForInsertProps = {
+  tx: Transaction;
+  workspaceId: SafeId<"workspace">;
+  propertyId: SafeId<"property">;
+  parentId: SafeId<"entity"> | null;
+};
+
+export const checkEntityCreateTargetForInsert = async ({
+  tx,
+  workspaceId,
+  propertyId,
+  parentId,
+}: CheckEntityCreateTargetForInsertProps): Promise<
+  Result<
+    { propertyId: SafeId<"property"> },
+    Exclude<EntityCreateWriteFailureStatus, "entities-limit-reached">
+  >
+> => {
+  const propertyRows = await tx
+    .select({ id: properties.id, content: properties.content })
+    .from(properties)
+    .where(
+      and(
+        eq(properties.id, propertyId),
+        eq(properties.workspaceId, workspaceId),
+      ),
+    )
+    .limit(1)
+    .for("update");
+  const property = propertyRows.at(0);
+
+  if (!property) {
+    return Result.err("property-not-found");
+  }
+  if (property.content.type !== "file") {
+    return Result.err("property-type-mismatch");
+  }
+
+  const parentResult = await checkEntityCreateParentForInsert({
+    tx,
+    workspaceId,
+    parentId,
+  });
+  if (Result.isError(parentResult)) {
+    return Result.err(parentResult.error);
+  }
+
+  return Result.ok({ propertyId: property.id });
+};
+
+/**
+ * Cheap pre-flight: entity-count capacity + optional property
+ * existence/type + parent existence/type. Recursive folder uploads
+ * use `entityCount` to validate the whole planned tree before any
+ * folders are committed.
+ *
+ * @yields safeDb errors out to the parent safe-handler.
+ */
+export const validateEntityCreateCapacity = async function* ({
+  safeDb,
+  workspaceId,
+  propertyId,
+  parentId,
+  entityCount,
+}: ValidateEntityCreateCapacityProps) {
+  if (!Number.isInteger(entityCount) || entityCount < 1) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Entity create count must be a positive integer",
+      }),
+    );
+  }
+
+  const parentResult = parentId
+    ? safeDb((tx) =>
+        tx.query.entities.findFirst({
+          columns: { id: true, kind: true },
+          where: { id: { eq: parentId }, workspaceId: { eq: workspaceId } },
+        }),
+      )
+    : Promise.resolve(Result.ok(null));
+  const propertyResult = propertyId
+    ? safeDb((tx) =>
+        tx.query.properties.findFirst({
+          columns: { id: true, content: true },
+          where: { id: { eq: propertyId }, workspaceId: { eq: workspaceId } },
+        }),
+      )
+    : Promise.resolve(Result.ok(null));
+
+  const [
+    existingEntityCountResult,
+    reservedEntityCountResult,
+    resolvedPropertyResult,
+    parentResultValue,
+  ] = await Promise.all([
+    safeDb((tx) => tx.$count(entities, eq(entities.workspaceId, workspaceId))),
+    safeDb(
+      async (tx) =>
+        await countActiveEntityCreateReservations({
+          tx,
+          workspaceId,
+        }),
+    ),
+    propertyResult,
+    parentResult,
+  ]);
+
+  const existingEntityCount = yield* existingEntityCountResult;
+  const reservedEntityCount = yield* reservedEntityCountResult;
+  const property = yield* resolvedPropertyResult;
+  const parent = yield* parentResultValue;
+
+  if (
+    existingEntityCount + reservedEntityCount + entityCount >
+    LIMITS.entitiesCount
+  ) {
+    return Result.err(
+      new HandlerError({ status: 400, message: "Entities limit reached" }),
+    );
+  }
+  if (propertyId && !property) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Property not found in workspace",
+      }),
+    );
+  }
+  if (property && property.content.type !== "file") {
+    return Result.err(
+      new HandlerError({ status: 400, message: "Property isn't of type file" }),
+    );
+  }
+  if (parentId && !parent) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Parent entity not found in this workspace",
+      }),
+    );
+  }
+  if (parent && parent.kind !== "folder") {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Parent entity must be a folder",
+      }),
+    );
+  }
+
+  return Result.ok(undefined);
+};
+
+export const validateEntityCreate = async function* (
+  props: ValidateEntityCreateProps,
+) {
+  return yield* validateEntityCreateCapacity({
+    ...props,
+    entityCount: 1,
+  });
+};
+
+type CheckEntityCreateCapacityForInsertProps = {
+  tx: Transaction;
+  workspaceId: SafeId<"workspace">;
+  entityCount: number;
+  excludeUploadId?: SafeId<"pendingUpload"> | undefined;
+};
+
+export const checkEntityCreateCapacityForInsert = async ({
+  tx,
+  workspaceId,
+  entityCount,
+  excludeUploadId,
+}: CheckEntityCreateCapacityForInsertProps): Promise<
+  Result<void, "entities-limit-reached">
+> => {
+  if (!Number.isInteger(entityCount) || entityCount < 1) {
+    panic("Entity create insert count must be a positive integer");
+  }
+
+  // See `lockWorkspacesForEntityCap` for the canonical lock order
+  // every entity-creating path follows (issue #1139).
+
+  await lockWorkspacesForEntityCap(tx, [workspaceId]);
+
+  const existingEntityCount = await tx.$count(
+    entities,
+    eq(entities.workspaceId, workspaceId),
+  );
+
+  const reservedEntityCount = await countActiveEntityCreateReservations({
+    tx,
+    workspaceId,
+    excludeUploadId,
+  });
+
+  if (
+    existingEntityCount + reservedEntityCount + entityCount >
+    LIMITS.entitiesCount
+  ) {
+    return Result.err("entities-limit-reached");
+  }
+
+  return Result.ok(undefined);
+};
+
+export type FinalizeEntityCreateProps = {
+  safeDb: SafeDb;
+  recordAuditEvent: AuditRecorder;
+  organizationId: SafeId<"organization">;
+  workspaceId: SafeId<"workspace">;
+  userId: SafeId<"user">;
+  /** The bytes already downloaded from `tmp/{uploadId}` for scanning. */
+  fileBuffer: ArrayBuffer;
+  declaredName: string;
+  declaredMime: string;
+  declaredSize: number;
+  declaredSha256Hex: string;
+  purposeData: EntityCreatePurposeData;
+  scanWarnings: string[] | undefined;
+  uploadId: SafeId<"pendingUpload">;
+  claimRequestId: string;
+  promoteTmpObject: (
+    finalKey: string,
+  ) => Promise<Result<void, UploadFinalizeError>>;
+};
+
+type EntityCreatePurposeData = Extract<
+  PendingUploadPurposeData,
+  { type: "entity_create" }
+> & {
+  /**
+   * Optional for compatibility with pending rows created before
+   * folder-aware presigned uploads. New presigns always write an
+   * explicit `null` for root uploads.
+   */
+  parentId?: SafeId<"entity"> | null;
+};
+
+/**
+ * Domain transaction for `entity_create`. Called by the generic
+ * finalize runtime after scan-pass. It promotes the staged object
+ * before committing DB rows that point at the final key. Returns the
+ * same response shape as the legacy multipart handler so the web UI
+ * doesn't need a discriminated response type.
+ *
+ * @yields safeDb errors out to the parent safe-handler.
+ */
+export const finalizeEntityCreate = async function* ({
+  safeDb,
+  recordAuditEvent,
+  organizationId,
+  workspaceId,
+  userId,
+  fileBuffer,
+  declaredName,
+  declaredMime,
+  declaredSize,
+  declaredSha256Hex,
+  purposeData,
+  scanWarnings,
+  uploadId,
+  claimRequestId,
+  promoteTmpObject,
+}: FinalizeEntityCreateProps) {
+  const sanitizedName = sanitizeFilename(declaredName);
+
+  // PDF encryption check matches the legacy handler — we still
+  // need to know whether to enqueue a PDF derivative or mark it
+  // failed up front. The byte buffer is in memory anyway because
+  // the finalize runtime had to download it for scanning.
+  let encrypted = false;
+  if (declaredMime === PDF_MIME_TYPE) {
+    const encryptedResult = await isEncryptedPdf(fileBuffer);
+    if (Result.isError(encryptedResult)) {
+      captureError(encryptedResult.error, {
+        mimeType: PDF_MIME_TYPE,
+        sizeBytes: String(declaredSize),
+      });
+      return finalizeErr({
+        status: 422,
+        message: "Failed to open PDF: file appears corrupted",
+        rejectReason: "pdf-open-failed",
+      });
+    }
+    encrypted = encryptedResult.value;
+  }
+
+  const fileId = allocateFileObject();
+  const entityId = createSafeId<"entity">();
+  const entityVersionId = createSafeId<"entityVersion">();
+  const fieldId = createSafeId<"field">();
+  const finalKey = createFileKey({
+    organizationId,
+    workspaceId,
+    fileId,
+    mimeType: declaredMime,
+  });
+
+  const promoteResult = await promoteTmpObject(finalKey);
+  if (Result.isError(promoteResult)) {
+    return promoteResult;
+  }
+
+  type WriteResult =
+    | {
+        status: "ok";
+        finalized: Extract<
+          PendingUploadFinalizedResult,
+          { type: "entity_create" }
+        >;
+      }
+    | { status: EntityCreateWriteFailureStatus };
+
+  const cleanupFinalObject = async (stage: string) => {
+    await getS3()
+      .delete(finalKey)
+      .catch((deleteError: unknown) =>
+        captureError(deleteError, {
+          entityId,
+          fieldId,
+          stage,
+        }),
+      );
+  };
+
+  const parentId = purposeData.parentId ?? null;
+
+  const writeResultResult = await safeDb(async (tx): Promise<WriteResult> => {
+    const capacityResult = await checkEntityCreateCapacityForInsert({
+      tx,
+      workspaceId,
+      entityCount: 1,
+      excludeUploadId: uploadId,
+    });
+    if (Result.isError(capacityResult)) {
+      return { status: capacityResult.error };
+    }
+
+    const targetResult = await checkEntityCreateTargetForInsert({
+      tx,
+      workspaceId,
+      propertyId: purposeData.propertyId,
+      parentId,
+    });
+    if (Result.isError(targetResult)) {
+      return { status: targetResult.error };
+    }
+
+    const renamed = await resolveEntityCreateFileName({
+      tx,
+      workspaceId,
+      propertyId: targetResult.value.propertyId,
+      parentId,
+      name: sanitizedName,
+    });
+
+    const entityStamp = await allocateEntityStamp(tx, workspaceId);
+
+    await tx.insert(entities).values({
+      id: entityId,
+      workspaceId,
+      parentId,
+      name: renamed.value,
+      createdBy: userId,
+      docSequence: entityStamp.docSequence,
+    });
+    await tx.insert(entityVersions).values({
+      id: entityVersionId,
+      workspaceId,
+      entityId,
+      versionNumber: 1,
+      source: UPLOAD_DOCUMENT_SOURCE,
+      stamp: entityStamp.stamp,
+      verificationCode: entityStamp.verificationCode,
+    });
+    await tx
+      .update(entities)
+      .set({ currentVersionId: entityVersionId })
+      .where(eq(entities.id, entityId));
+    await tx.insert(fields).values({
+      id: fieldId,
+      workspaceId,
+      propertyId: targetResult.value.propertyId,
+      entityVersionId,
+      content: fileContentWithMintedObject({
+        type: "file",
+        version: 1,
+        id: fileId,
+        fileName: renamed.value,
+        mimeType: declaredMime,
+        sizeBytes: declaredSize,
+        encrypted,
+        sha256Hex: declaredSha256Hex,
+        pdfFileId: null,
+        pdfDerivative: pdfDerivativeStateForFile({
+          encrypted,
+          mimeType: declaredMime,
+        }),
+        thumbnailFileId: null,
+        thumbnailDerivative: thumbnailDerivativeStateForFile({
+          encrypted,
+          mimeType: declaredMime,
+        }),
+        ...(scanWarnings !== undefined && { scanWarnings }),
+      }),
+    });
+    await tx
+      .update(workspaces)
+      .set({ lastActivityAt: new Date() })
+      .where(eq(workspaces.id, workspaceId));
+
+    await recordAuditEvent(tx, {
+      action: AUDIT_ACTION.CREATE,
+      resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+      resourceId: entityId,
+      changes: {
+        created: {
+          old: null,
+          new: {
+            kind: "document",
+            fileName: renamed.value,
+            mimeType: declaredMime,
+            sizeBytes: declaredSize,
+            propertyId: targetResult.value.propertyId,
+            parentId,
+          },
+        },
+      },
+    });
+
+    const finalized: Extract<
+      PendingUploadFinalizedResult,
+      { type: "entity_create" }
+    > = {
+      type: "entity_create",
+      entityId,
+      fileId,
+      fileName: renamed.value,
+      renamed: renamed.renamed,
+    };
+
+    // audit: skip — final FSM transition on pending_uploads;
+    // the entity-level audit row landed above in this same transaction.
+    const finalizedRows = await tx
+      .update(pendingUploads)
+      .set({
+        status: "finalized",
+        finalizedResult: finalized,
+        finalizedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(pendingUploads.id, uploadId),
+          eq(pendingUploads.userId, userId),
+          eq(pendingUploads.workspaceId, workspaceId),
+          eq(pendingUploads.status, "scanning"),
+          eq(pendingUploads.claimedByRequestId, claimRequestId),
+        ),
+      )
+      .returning({ id: pendingUploads.id });
+    if (!finalizedRows.at(0)) {
+      panic("Pending upload finalize marker update returned no rows");
+    }
+
+    return { status: "ok", finalized };
+  });
+  if (Result.isError(writeResultResult)) {
+    await cleanupFinalObject("final-cleanup-after-db-error");
+  }
+  const writeResult = yield* writeResultResult;
+  if (writeResult.status !== "ok") {
+    await cleanupFinalObject("final-cleanup-after-business-error");
+    return finalizeErr({
+      status: 400,
+      message: entityCreateWriteErrorMessage(writeResult.status),
+      rejectReason: writeResult.status,
+    });
+  }
+  const { finalized } = writeResult;
+
+  const afterPromote = () => {
+    // Async kickoffs mirror the legacy handler. They run only after
+    // both promotion and the DB transaction have succeeded, so
+    // consumers never read a final key before it exists.
+    processExtraction(entityId).catch((error: unknown) => {
+      captureError(error, { entityId, mimeType: declaredMime });
+    });
+    // File-upload flow trigger. Fire-and-forget on the USER upload path only;
+    // flow-created documents (create-document step) never reach this call site.
+    maybeStartUploadTriggeredFlows({
+      entityId,
+      workspaceId,
+      organizationId,
+      fileName: finalized.fileName,
+    }).catch((error: unknown) => {
+      captureError(error, { entityId, workspaceId });
+    });
+    enqueuePdfDerivativeOrMarkFailed({
+      encrypted,
+      entityId,
+      fieldId,
+      mimeType: declaredMime,
+      organizationId,
+      userId,
+      workspaceId,
+    }).catch((error: unknown) => {
+      captureError(error, { entityId, fieldId, mimeType: declaredMime });
+    });
+    enqueueImageThumbnailOrMarkFailed({
+      encrypted,
+      entityId,
+      fieldId,
+      mimeType: declaredMime,
+      organizationId,
+      userId,
+      workspaceId,
+    }).catch((error: unknown) => {
+      captureError(error, { entityId, fieldId, mimeType: declaredMime });
+    });
+  };
+
+  return finalizeOk({ finalizedResult: finalized, finalKey, afterPromote });
+};
+
+/** Local re-export so the generic dispatcher can narrow on it. */
+export { UploadFinalizeError };

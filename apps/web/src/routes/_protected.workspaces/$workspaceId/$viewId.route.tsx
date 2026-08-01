@@ -11,6 +11,12 @@ import * as v from "valibot";
 import { Skeleton } from "@stll/ui/components/skeleton";
 import { cn } from "@stll/ui/lib/utils";
 
+import {
+  getWeekStart,
+  isWorkspaceDocumentRoutePath,
+  resolveKanbanGroupBy,
+  toISODate,
+} from "@/components/workspaces/entity-utils";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
@@ -36,12 +42,6 @@ import { workspaceMembersOptions } from "@/lib/workspaces/queries/workspace-memb
 import { DocumentOcrAvailabilityProvider } from "@/routes/_protected.workspaces/$workspaceId/-components/document-ocr-availability";
 import { ViewSwitcher } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher";
 import { ViewToolbar } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar";
-import {
-  getWeekStart,
-  isWorkspaceDocumentRoutePath,
-  resolveKanbanGroupBy,
-  toISODate,
-} from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 const protectedRouteApi = getRouteApi("/_protected");
 

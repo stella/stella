@@ -64,6 +64,7 @@ import type {
   UnresolvedActiveDocxEditToolCallPart,
 } from "@/components/chat/chat-ui-tools";
 import { useAIKeyGate } from "@/components/require-ai-key";
+import { isInputType } from "@/components/templates/template-field-manifest";
 import { useChatSession } from "@/features/chat/hooks/use-chat-session";
 import { useChatThreadRuntime } from "@/features/chat/hooks/use-chat-thread-runtime";
 import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
@@ -96,7 +97,6 @@ import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import { inputTypeValueKind } from "@/lib/value-types";
-import { isInputType } from "@/routes/_protected.knowledge/-components/template-field-manifest";
 import { useTemplateStudioStore } from "@/routes/_protected.knowledge/-components/template-studio-store";
 import {
   buildOperationSpecs,

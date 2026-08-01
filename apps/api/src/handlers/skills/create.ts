@@ -14,10 +14,10 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { PG_ERROR } from "@/api/lib/pg-error";
+import { authorizeSkillInstallScope } from "@/api/lib/skills/install";
 import { includes } from "@/api/lib/type-guards";
 
 import { hashAuthoredSkillContent } from "./authored-content-hash";
-import { authorizeSkillInstallScope } from "./install";
 import { uniqueSlug } from "./slug";
 
 const createSkillBodySchema = t.Object({

@@ -4,15 +4,15 @@ import { describe, expect, mock, test } from "bun:test";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
+import type {
+  RunSubagentOptions,
+  RunSubagentResult,
+} from "@/api/handlers/chat/subagent-runner";
+import * as realTanStackAiAgent from "@/api/handlers/chat/subagent-runner";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import { UsageLimitExceededError } from "@/api/lib/errors/tagged-errors";
-import type {
-  RunSubagentOptions,
-  RunSubagentResult,
-} from "@/api/lib/tanstack-ai-agent";
-import * as realTanStackAiAgent from "@/api/lib/tanstack-ai-agent";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 // `spawn-subagents-tool.ts` calls `runSubagent` (a real provider/model call
@@ -32,7 +32,7 @@ let runSubagentImpl: (
   usage: undefined,
 });
 
-void mock.module("@/api/lib/tanstack-ai-agent", () => ({
+void mock.module("@/api/handlers/chat/subagent-runner", () => ({
   ...realTanStackAiAgent,
   runSubagent: async (options: RunSubagentOptions) => {
     runSubagentCalls.push(options);
@@ -316,7 +316,7 @@ describe("createSpawnSubagentsTool — abort propagation", () => {
 
     // One subagent finishes normally, the other observes the parent abort
     // and throws AbortError — mirrors `runSubagent` in
-    // `tanstack-ai-agent.ts`, which throws AbortError once
+    // `subagent-runner.ts`, which throws AbortError once
     // `abortController.signal.aborted` is true.
     runSubagentImpl = async (options) => {
       if (options.messages[0]?.parts[0]?.type === "text") {

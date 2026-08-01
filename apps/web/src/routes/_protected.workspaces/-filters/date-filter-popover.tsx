@@ -6,11 +6,8 @@ import { Separator } from "@stll/ui/components/separator";
 import { cn } from "@stll/ui/lib/utils";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
-import type {
-  DateFilter,
-  DateFilterPreset,
-} from "@/routes/_protected.workspaces/-types";
-import { DATE_FILTER_PRESETS } from "@/routes/_protected.workspaces/-types";
+import type { DateFilter, DateFilterPreset } from "@/lib/workspaces/types";
+import { DATE_FILTER_PRESETS } from "@/lib/workspaces/types";
 
 type DateFilterPopoverProps = {
   value: DateFilter | undefined;

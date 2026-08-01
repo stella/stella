@@ -19,6 +19,9 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { useReviewStore } from "@/components/ai-suggestions/review-store";
+import { DocxBrowserEditor } from "@/components/docx/docx-browser-editor";
+import type { DocxBrowserEditorActions } from "@/components/docx/docx-browser-editor";
+import { getDocxEditBlockReason } from "@/components/docx/docx-browser-editor.logic";
 import { AnonymizationFacet } from "@/components/inspector/anonymization-facet";
 import { DocumentAiSourceBar } from "@/components/inspector/document-ai-source-bar";
 import { DocxDesktopOpenButton } from "@/components/inspector/docx-desktop-open-button";
@@ -48,6 +51,11 @@ import { PlaybookFacet } from "@/components/inspector/playbook-facet";
 import { SuggestionsFacet } from "@/components/inspector/suggestions-facet";
 import { VersionsFacet } from "@/components/inspector/versions-facet";
 import { MarkdownFolioEditor } from "@/components/markdown/markdown-folio-editor";
+import {
+  PeekPdfControls,
+  PeekPdfViewer,
+  PeekSuspenseFallback,
+} from "@/components/pdf/peek/peek-pdf-viewer";
 import Tooltip from "@/components/tooltip";
 import { usePlaybooksPreviewEnabled } from "@/hooks/use-playbooks-preview";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -59,14 +67,6 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { filesKeys, textFileOptions } from "@/lib/files/queries";
 import { toSafeId } from "@/lib/safe-id";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
-import { DocxBrowserEditor } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor";
-import type { DocxBrowserEditorActions } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor";
-import { getDocxEditBlockReason } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.logic";
-import {
-  PeekPdfControls,
-  PeekPdfViewer,
-  PeekSuspenseFallback,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer";
 
 type MatterOrigin = {
   color: string | null;

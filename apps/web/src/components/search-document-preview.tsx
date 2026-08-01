@@ -3,6 +3,10 @@ import type { ReactNode } from "react";
 
 import { MeasuredPdfProvider } from "@/components/inspector/measured-pdf-provider";
 import { usePdfTabZoom } from "@/components/inspector/use-pdf-tab-zoom";
+import {
+  PeekPdfControls,
+  PeekPdfViewer,
+} from "@/components/pdf/peek/peek-pdf-viewer";
 import { SearchMatchControls } from "@/components/search-match-controls";
 import {
   getAdjacentSearchMatchIndex,
@@ -14,10 +18,6 @@ import type {
   NativeSearchStatus,
 } from "@/lib/search.logic";
 import { shouldShowNativeSearchFallback } from "@/lib/search.logic";
-import {
-  PeekPdfControls,
-  PeekPdfViewer,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer";
 
 type SearchDocumentPreviewProps = {
   fallback: ReactNode;

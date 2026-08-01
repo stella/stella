@@ -16,6 +16,11 @@ import { Button } from "@stll/ui/components/button";
 import { Separator } from "@stll/ui/components/separator";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import {
+  fetchPrintPdf,
+  printPdfBuffer,
+} from "@/components/pdf/peek/peek-pdf-print";
+import { PeekPdfControls } from "@/components/pdf/peek/peek-pdf-viewer";
 import Tooltip from "@/components/tooltip";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -28,11 +33,6 @@ import { fetchWithTimeout } from "@/lib/fetch";
 import { fileMetadataOptions } from "@/lib/files/file-metadata-query";
 import { downloadFile } from "@/lib/utils";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
-import {
-  fetchPrintPdf,
-  printPdfBuffer,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-print";
-import { PeekPdfControls } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer";
 
 const SCALE_OFFSET_STEP = 0.2;
 

@@ -9,8 +9,8 @@
  * verification and before strict schema validation in `receive.ts`.
  */
 
-import { isHostedUsageHandledEventType } from "@/api/handlers/hosted-usage-webhook/event-schemas";
 import type { HostedUsageProviderKind } from "@/api/lib/hosted-usage-provider/config";
+import { isHostedUsageHandledEventType } from "@/api/lib/hosted-usage-provider/event-schemas";
 import { normalizePolarEvent } from "@/api/lib/hosted-usage-provider/polar/events";
 
 export type NormalizedProviderEvent = {

@@ -14,12 +14,12 @@ import {
 } from "@/api/handlers/case-law/decisions/document-on-demand";
 import type { OnDemandDocumentDeps } from "@/api/handlers/case-law/decisions/document-on-demand";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
+import { createSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import type {
   BackfilledDocument,
   PendingDocument,
-} from "@/api/handlers/case-law/ingestion/sk-document-backfill";
-import { createSafeId } from "@/api/lib/branded-types";
-import type { SafeId } from "@/api/lib/branded-types";
+} from "@/api/lib/legal-search/sk-document-backfill";
 
 const pending = (): PendingDocument => ({
   id: createSafeId<"caseLawDecision">(),

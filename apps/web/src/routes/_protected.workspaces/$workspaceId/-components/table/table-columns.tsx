@@ -4,6 +4,16 @@ import { ClockIcon, HashIcon, UserIcon } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import {
+  getInternalColId,
+  getInternalPropertyId,
+} from "@/components/workspaces/entity-utils";
+import type { SortHint } from "@/components/workspaces/properties/sort-property";
+import type {
+  TableCellContext,
+  TableColumnDef,
+  TableHeaderContext,
+} from "@/components/workspaces/table/types";
 import type { WorkspaceProperty, WorkspaceView } from "@/lib/types";
 import {
   AuthorCell,
@@ -11,17 +21,7 @@ import {
   VersionCell,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/metadata-cells";
 import { MetadataPopover } from "@/routes/_protected.workspaces/$workspaceId/-components/metadata-popover";
-import type { SortHint } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/sort-property";
 import { getPropertyColumn } from "@/routes/_protected.workspaces/$workspaceId/-components/table-column";
-import type {
-  TableCellContext,
-  TableColumnDef,
-  TableHeaderContext,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
-import {
-  getInternalColId,
-  getInternalPropertyId,
-} from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 const selectColId = getInternalColId("select");
 const addPropertyColId = getInternalColId("add-property");

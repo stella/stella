@@ -18,8 +18,8 @@ import { renderDragPreview } from "@/components/drag-preview";
 import { useInspectorStore } from "@/components/inspector/inspector-store";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLocale } from "@/i18n/formatting-context";
+import { ENTITY_DRAG_TYPE } from "@/lib/workspaces/drag-constants";
 import type { CalendarTask } from "@/lib/workspaces/queries/calendar-tasks";
-import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
 import { useInspectorFlash } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash";
 
 const TASK_STATUS_BORDER_COLORS: Record<string, string> = {

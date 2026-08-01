@@ -6,7 +6,7 @@ import type {
   MattersFilters,
   NumericFilter,
   Workspace,
-} from "@/routes/_protected.workspaces/-types";
+} from "@/lib/workspaces/types";
 
 export const parseLocalISODateMs = (value: string): number => {
   const match = /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})$/u.exec(value);

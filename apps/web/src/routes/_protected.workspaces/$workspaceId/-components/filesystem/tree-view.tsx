@@ -57,6 +57,17 @@ import { InlineEdit } from "@/components/inline-edit";
 import { useInspectorStore } from "@/components/inspector/inspector-store";
 import type { FileTab } from "@/components/inspector/inspector-store";
 import Tooltip from "@/components/tooltip";
+import { resolveAncestorIds } from "@/components/workspaces/copy-to-matter-dialog.logic";
+import {
+  buildTree,
+  findNode,
+  getEntityName,
+  getFieldValue,
+  getFirstFile,
+  getInternalPropertyId,
+} from "@/components/workspaces/entity-utils";
+import type { InternalPropertyId } from "@/components/workspaces/entity-utils";
+import type { TableTreeNode } from "@/components/workspaces/table/types";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useLocale } from "@/i18n/formatting-context";
@@ -71,6 +82,11 @@ import type {
   WorkspaceProperty,
   WorkspaceView,
 } from "@/lib/types";
+import { ENTITY_DRAG_TYPE } from "@/lib/workspaces/drag-constants";
+import {
+  useMoveEntity,
+  useRenameEntity,
+} from "@/lib/workspaces/mutations/entities";
 import {
   filesystemEntitiesOptions,
   visibleEntityFieldIds,
@@ -79,8 +95,6 @@ import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
 import { ActiveEditBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/active-edit-badge";
 import { AddEntityMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu";
-import { resolveAncestorIds } from "@/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog.logic";
-import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
 import { getFolderClickIntent } from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view-selection.logic";
 import { flattenFilesystemRows } from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-virtualization";
@@ -90,24 +104,10 @@ import {
   VersionCell,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/metadata-cells";
 import { RowActions } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
-import type { TableTreeNode } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 import { VersionOrNewFileDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/version-or-new-file-dialog";
 import { useInspectorFlash } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash";
 import { useVersionOrNewFileDrop } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-version-or-new-file-drop";
-import {
-  useMoveEntity,
-  useRenameEntity,
-} from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities";
 import { useUpdateView } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
-import {
-  buildTree,
-  findNode,
-  getEntityName,
-  getFieldValue,
-  getFirstFile,
-  getInternalPropertyId,
-} from "@/routes/_protected.workspaces/$workspaceId/-utils";
-import type { InternalPropertyId } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 const FILESYSTEM_ROW_HEIGHT_PX = 36;
 const FILESYSTEM_ROW_OVERSCAN = 16;

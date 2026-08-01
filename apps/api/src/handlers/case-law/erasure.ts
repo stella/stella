@@ -4,7 +4,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions, caseLawIndexJobs } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
 import { removeDecisionFromCorpusIndex } from "@/api/handlers/case-law/corpus-index";
-import { removeDecisionFromIndex } from "@/api/handlers/case-law/search-index";
+import { removeDecisionFromIndex } from "@/api/lib/legal-search/case-law-search-index";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
