@@ -76,6 +76,10 @@ beforeAll(async () => {
       exportId,
       mode: index === 0 ? "download" : "workspace",
       requestedBy: ids.userA1,
+      ...(index === 1 && {
+        resultEntityId: ids.entityA1,
+        resultFieldId: ids.fieldA1,
+      }),
       resultS3Key:
         index === 0 ? `exports/${ids.orgA}/${ids.wsA1}/${exportId}.docx` : null,
       timestamp,
@@ -188,12 +192,37 @@ describe("report export history", () => {
         .every(({ downloadAvailable }) => !downloadAvailable),
     ).toBe(true);
   });
+
+  test("returns the persisted workspace result field for direct document links", async () => {
+    const result = await Result.gen(() =>
+      readReportExportHistory({
+        cursor: undefined,
+        limit: 100,
+        requestedBy: ids.userA1,
+        safeDb,
+        workspaceId: ids.wsA1,
+      }),
+    );
+
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    const workspaceExport = result.value.items.find(
+      ({ id }) => id === requesterExports.at(1)?.id,
+    );
+    expect(workspaceExport).toMatchObject({
+      resultEntityId: ids.entityA1,
+      resultFieldId: ids.fieldA1,
+    });
+  });
 });
 
 const seedExport = async ({
   exportId,
   mode = "workspace",
   requestedBy,
+  resultEntityId = null,
+  resultFieldId = null,
   resultS3Key = null,
   timestamp,
   workspaceId,
@@ -201,6 +230,8 @@ const seedExport = async ({
   exportId: SafeId<"reportExport">;
   mode?: "download" | "workspace";
   requestedBy: SafeId<"user">;
+  resultEntityId?: SafeId<"entity"> | null;
+  resultFieldId?: SafeId<"field"> | null;
   resultS3Key?: string | null;
   timestamp: string;
   workspaceId: SafeId<"workspace">;
@@ -214,6 +245,8 @@ const seedExport = async ({
       layout,
       status,
       mode,
+      result_entity_id,
+      result_field_id,
       result_s3_key,
       created_at,
       updated_at
@@ -225,6 +258,8 @@ const seedExport = async ({
       ${JSON.stringify(tableLayout)}::jsonb,
       'completed',
       ${mode},
+      ${resultEntityId},
+      ${resultFieldId},
       ${resultS3Key},
       ${timestamp}::timestamptz,
       ${timestamp}::timestamptz

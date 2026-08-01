@@ -88,7 +88,7 @@ export const selectRecentWorkspaces = <TWorkspace extends RecentWorkspace>({
 
 export type EntityActivityDestination =
   | { type: "document" }
-  | { type: "entity-route" }
+  | { type: "all-view" }
   | { type: "folder" }
   | { type: "task" };
 
@@ -104,7 +104,7 @@ export const resolveEntityActivityDestination = (
       return { type: "document" };
     case "message":
     case "link":
-      return { type: "entity-route" };
+      return { type: "all-view" };
     default:
       kind satisfies never;
       return panic("Unsupported entity kind");

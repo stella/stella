@@ -104,23 +104,29 @@ function ReportExportRecoveryPage() {
             </Button>
           )}
 
-          {data.status === "completed" && data.resultEntityId && (
-            <Button
-              render={
-                <Link
-                  from="/workspaces/$workspaceId/reports/$exportId"
-                  params={{ entityId: data.resultEntityId, workspaceId }}
-                  to="/workspaces/$workspaceId/entities/$entityId"
-                />
-              }
-            >
-              {t("workspaces.views.reportExport.openReport")}
-            </Button>
-          )}
+          {data.status === "completed" &&
+            data.resultEntityId &&
+            data.resultFieldId && (
+              <Button
+                render={
+                  <Link
+                    from="/workspaces/$workspaceId/reports/$exportId"
+                    params={{ viewId: "all", workspaceId }}
+                    search={{
+                      entity: data.resultEntityId,
+                      field: data.resultFieldId,
+                    }}
+                    to="/workspaces/$workspaceId/$viewId/document"
+                  />
+                }
+              >
+                {t("workspaces.views.reportExport.openReport")}
+              </Button>
+            )}
 
           {data.status === "completed" &&
             !data.downloadUrl &&
-            !data.resultEntityId && (
+            !(data.resultEntityId && data.resultFieldId) && (
               <p className="text-muted-foreground text-sm">
                 {t("common.unexpectedError")}
               </p>

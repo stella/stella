@@ -52,6 +52,7 @@ const readReportExport = createSafeHandler(
             error: true,
             mode: true,
             resultEntityId: true,
+            resultFieldId: true,
             resultS3Key: true,
           },
         }),
@@ -128,6 +129,7 @@ const readReportExport = createSafeHandler(
       status: row.status,
       error: row.error,
       resultEntityId: row.resultEntityId,
+      resultFieldId: row.resultFieldId,
       downloadUrl,
     });
   },

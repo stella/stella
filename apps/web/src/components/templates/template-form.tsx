@@ -312,11 +312,15 @@ type SaveTarget =
       kind: "matter";
       workspaceId: string;
       parentId?: string | null | undefined;
-      onCreated: (entityId: string) => void;
+      onCreated: (created: { entityId: string; fieldId: string }) => void;
     }
   | {
       kind: "chooseMatter";
-      onCreated: (created: { workspaceId: string; entityId: string }) => void;
+      onCreated: (created: {
+        workspaceId: string;
+        entityId: string;
+        fieldId: string;
+      }) => void;
     };
 
 type TemplateFormProps = (TransientFillProps | ServerFillProps) & {
@@ -2177,9 +2181,16 @@ export const TemplateForm = ({
 
     setMatterDialogOpen(false);
     if (saveTarget.kind === "matter") {
-      saveTarget.onCreated(created.entityId);
+      saveTarget.onCreated({
+        entityId: created.entityId,
+        fieldId: created.fieldId,
+      });
     } else {
-      saveTarget.onCreated({ workspaceId, entityId: created.entityId });
+      saveTarget.onCreated({
+        workspaceId,
+        entityId: created.entityId,
+        fieldId: created.fieldId,
+      });
     }
     onDone(created.fileName);
   };
@@ -2577,10 +2588,10 @@ const normalizeBinaryResponse = async (
 /**
  * A `chooseMatter` {@link SaveTarget} whose `onCreated` opens the filled DOCX
  * in the editable Folio editor: it invalidates the destination matter's entity
- * list, then navigates to the entities route, which resolves the document's
- * file field and redirects into the document view. Reused by every "fill into
- * a matter the user picks" surface (the Knowledge "Use template" dialog and the
- * Template Studio Fill facet) so the post-fill behaviour stays identical.
+ * list, then opens the created file directly in the document view. Reused by
+ * every "fill into a matter the user picks" surface (the Knowledge "Use
+ * template" dialog and the Template Studio Fill facet) so the post-fill
+ * behaviour stays identical.
  *
  * `onDone` runs after the entity is created and navigation is kicked off (the
  * Studio facet has no use for it; the dialog uses it to close itself).
@@ -2592,7 +2603,7 @@ export const useFillToMatterSaveTarget = (
   const navigate = useNavigate();
   return {
     kind: "chooseMatter",
-    onCreated: ({ workspaceId, entityId }) => {
+    onCreated: ({ workspaceId, entityId, fieldId }) => {
       queryClient
         .invalidateQueries({ queryKey: entitiesKeys.all(workspaceId) })
         .catch(() => {
@@ -2600,8 +2611,9 @@ export const useFillToMatterSaveTarget = (
         });
       onDone?.();
       navigate({
-        to: "/workspaces/$workspaceId/entities/$entityId",
-        params: { workspaceId, entityId },
+        to: "/workspaces/$workspaceId/$viewId/document",
+        params: { workspaceId, viewId: "all" },
+        search: { entity: entityId, field: fieldId },
       }).catch(() => {
         /* navigation is best-effort; the document is already saved */
       });

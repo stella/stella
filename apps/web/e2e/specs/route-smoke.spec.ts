@@ -185,13 +185,6 @@ const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
     path: (world) => `/contacts/${world.contactId}`,
   },
   {
-    template: "/workspaces/$workspaceId/entities/$entityId",
-    path: (world) =>
-      `/workspaces/${world.workspace.id}/entities/${world.documentRoute.entityId}`,
-    settleMs: 1500,
-    expectation: { kind: "settles" },
-  },
-  {
     template: "/workspaces/$workspaceId/$viewId/document",
     path: (world) => world.documentRoute.path,
     settleMs: 2000,

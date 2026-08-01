@@ -148,8 +148,12 @@ export const ReportExportTracker = ({
       return;
     }
 
-    if (settledDetail.resultEntityId !== null) {
+    if (
+      settledDetail.resultEntityId !== null &&
+      settledDetail.resultFieldId !== null
+    ) {
       const resultEntityId = settledDetail.resultEntityId;
+      const resultFieldId = settledDetail.resultFieldId;
       queryClient
         .invalidateQueries({
           queryKey: entitiesKeys.all(settledExport.workspaceId),
@@ -159,11 +163,12 @@ export const ReportExportTracker = ({
         const result = await Result.tryPromise(
           async () =>
             await navigate({
-              to: "/workspaces/$workspaceId/entities/$entityId",
+              to: "/workspaces/$workspaceId/$viewId/document",
               params: {
                 workspaceId: settledExport.workspaceId,
-                entityId: resultEntityId,
+                viewId: "all",
               },
+              search: { entity: resultEntityId, field: resultFieldId },
             }),
         );
         if (Result.isError(result)) {
@@ -185,6 +190,19 @@ export const ReportExportTracker = ({
             );
           },
         },
+      };
+      if (toastId === undefined) {
+        stellaToast.add(toast);
+      } else {
+        stellaToast.update(toastId, toast);
+      }
+      return;
+    }
+
+    if (settledDetail.resultEntityId !== null) {
+      const toast = {
+        type: "success" as const,
+        title: t("workspaces.views.reportExport.completed"),
       };
       if (toastId === undefined) {
         stellaToast.add(toast);

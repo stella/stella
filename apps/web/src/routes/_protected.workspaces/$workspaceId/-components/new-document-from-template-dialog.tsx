@@ -245,19 +245,18 @@ const FillStep = ({
         kind: "matter",
         workspaceId,
         parentId,
-        onCreated: (entityId) => {
+        onCreated: ({ entityId, fieldId }) => {
           queryClient
             .invalidateQueries({ queryKey: entitiesKeys.all(workspaceId) })
             .catch(() => {
               /* fire-and-forget */
             });
           onCreated();
-          // Open the just-created document in the editable Folio editor (the
-          // entities route resolves the file field and redirects into the
-          // document view) so the user can hand-edit it right away.
+          // Open the just-created document in the editable Folio editor.
           navigate({
-            to: "/workspaces/$workspaceId/entities/$entityId",
-            params: { workspaceId, entityId },
+            to: "/workspaces/$workspaceId/$viewId/document",
+            params: { workspaceId, viewId: "all" },
+            search: { entity: entityId, field: fieldId },
           }).catch(() => {
             /* navigation is best-effort; the document is already saved */
           });

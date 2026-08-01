@@ -63,7 +63,9 @@ import {
 } from "@/components/saved-searches.logic";
 import {
   createDialogCloseActionQueue,
+  getEntityDocumentRoute,
   getChatHitRoute,
+  getRecentFileRoute,
   getRecentFilePreviewDateVisibility,
   getRecentFilePreviewHit,
 } from "@/components/search-dialog.logic";
@@ -750,10 +752,7 @@ export const SearchDialog = ({
   const openRecentFile = (file: RecentFile) => {
     setRecentFiles(recordRecentFile(file, searchRecentsScope));
     navigateAfterClose(async () => {
-      await navigate({
-        to: "/workspaces/$workspaceId/entities/$entityId",
-        params: { workspaceId: file.workspaceId, entityId: file.entityId },
-      });
+      await navigate(getRecentFileRoute(file));
     });
   };
 
@@ -882,10 +881,7 @@ export const SearchDialog = ({
     }
 
     navigateAfterClose(async () => {
-      await navigate({
-        to: "/workspaces/$workspaceId/entities/$entityId",
-        params: { workspaceId: hit.workspaceId, entityId: hit.entityId },
-      });
+      await navigate(getEntityDocumentRoute(hit));
     });
   };
 

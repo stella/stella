@@ -515,7 +515,9 @@ const runExport = async ({
       return;
     }
     await completeExport(actor, {
-      resultEntityId: created.value.entityId,
+      type: "workspace",
+      entityId: created.value.entityId,
+      fieldId: created.value.fieldId,
     });
     return;
   }
@@ -527,7 +529,7 @@ const runExport = async ({
   // to name the download, so no format column is needed on the export row.
   const key = `exports/${actor.organizationId}/${actor.workspaceId}/${actor.exportId}.${delivery.ext}`;
   await getS3().write(key, delivery.buffer);
-  await completeExport(actor, { resultS3Key: key });
+  await completeExport(actor, { type: "download", s3Key: key });
 };
 
 type FillReportResult =
@@ -693,9 +695,36 @@ const setExportStatus = async (
   });
 };
 
+type CompletedExportResult =
+  | {
+      type: "workspace";
+      entityId: SafeId<"entity">;
+      fieldId: SafeId<"field">;
+    }
+  | { type: "download"; s3Key: string };
+
+const completedExportValues = (result: CompletedExportResult) => {
+  switch (result.type) {
+    case "workspace":
+      return {
+        resultEntityId: result.entityId,
+        resultFieldId: result.fieldId,
+        resultS3Key: null,
+      };
+    case "download":
+      return {
+        resultEntityId: null,
+        resultFieldId: null,
+        resultS3Key: result.s3Key,
+      };
+    default:
+      return result satisfies never;
+  }
+};
+
 const completeExport = async (
   actor: ExportActor,
-  result: { resultEntityId?: SafeId<"entity">; resultS3Key?: string },
+  result: CompletedExportResult,
 ): Promise<void> => {
   await actor.scopedDb(async (tx) => {
     // audit: skip — terminal bookkeeping on the already-audited export row (the
@@ -705,8 +734,7 @@ const completeExport = async (
       .set({
         status: "completed",
         error: null,
-        resultEntityId: result.resultEntityId ?? null,
-        resultS3Key: result.resultS3Key ?? null,
+        ...completedExportValues(result),
       })
       .where(
         and(

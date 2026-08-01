@@ -78,7 +78,6 @@ import { Route as SitemapsLawCasesCountryYearChar123monthChar125DotxmlRouteImpor
 import { Route as LawCountryCasesCourtSlugRouteImport } from './routes/law/$country/cases/$court/$slug'
 import { Route as ProtectedWorkspacesWorkspaceIdReportsExportIdRouteImport } from './routes/_protected.workspaces/$workspaceId/reports/$exportId'
 import { Route as ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRouteImport } from './routes/_protected.workspaces/$workspaceId/invoices/$invoiceId'
-import { Route as ProtectedWorkspacesWorkspaceIdEntitiesEntityIdRouteImport } from './routes/_protected.workspaces/$workspaceId/entities/$entityId'
 import { Route as ProtectedWorkspacesWorkspaceIdViewIdDocumentRouteImport } from './routes/_protected.workspaces/$workspaceId/$viewId.document'
 import { Route as ProtectedChatWorkspacesWorkspaceIdNewRouteImport } from './routes/_protected.chat/workspaces/$workspaceId/new'
 import { Route as ProtectedChatWorkspacesWorkspaceIdThreadIdRouteImport } from './routes/_protected.chat/workspaces/$workspaceId/$threadId'
@@ -467,12 +466,6 @@ const ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRoute =
     path: '/$invoiceId',
     getParentRoute: () => ProtectedWorkspacesWorkspaceIdInvoicesRoute,
   } as any)
-const ProtectedWorkspacesWorkspaceIdEntitiesEntityIdRoute =
-  ProtectedWorkspacesWorkspaceIdEntitiesEntityIdRouteImport.update({
-    id: '/entities/$entityId',
-    path: '/entities/$entityId',
-    getParentRoute: () => ProtectedWorkspacesWorkspaceIdRouteRoute,
-  } as any)
 const ProtectedWorkspacesWorkspaceIdViewIdDocumentRoute =
   ProtectedWorkspacesWorkspaceIdViewIdDocumentRouteImport.update({
     id: '/document',
@@ -571,7 +564,6 @@ export interface FileRoutesByFullPath {
   '/chat/workspaces/$workspaceId/$threadId': typeof ProtectedChatWorkspacesWorkspaceIdThreadIdRoute
   '/chat/workspaces/$workspaceId/new': typeof ProtectedChatWorkspacesWorkspaceIdNewRoute
   '/workspaces/$workspaceId/$viewId/document': typeof ProtectedWorkspacesWorkspaceIdViewIdDocumentRoute
-  '/workspaces/$workspaceId/entities/$entityId': typeof ProtectedWorkspacesWorkspaceIdEntitiesEntityIdRoute
   '/workspaces/$workspaceId/invoices/$invoiceId': typeof ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRoute
   '/workspaces/$workspaceId/reports/$exportId': typeof ProtectedWorkspacesWorkspaceIdReportsExportIdRoute
   '/law/$country/cases/$court/$slug': typeof LawCountryCasesCourtSlugRoute
@@ -639,7 +631,6 @@ export interface FileRoutesByTo {
   '/chat/workspaces/$workspaceId/$threadId': typeof ProtectedChatWorkspacesWorkspaceIdThreadIdRoute
   '/chat/workspaces/$workspaceId/new': typeof ProtectedChatWorkspacesWorkspaceIdNewRoute
   '/workspaces/$workspaceId/$viewId/document': typeof ProtectedWorkspacesWorkspaceIdViewIdDocumentRoute
-  '/workspaces/$workspaceId/entities/$entityId': typeof ProtectedWorkspacesWorkspaceIdEntitiesEntityIdRoute
   '/workspaces/$workspaceId/invoices/$invoiceId': typeof ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRoute
   '/workspaces/$workspaceId/reports/$exportId': typeof ProtectedWorkspacesWorkspaceIdReportsExportIdRoute
   '/law/$country/cases/$court/$slug': typeof LawCountryCasesCourtSlugRoute
@@ -717,7 +708,6 @@ export interface FileRoutesById {
   '/_protected/chat/workspaces/$workspaceId/$threadId': typeof ProtectedChatWorkspacesWorkspaceIdThreadIdRoute
   '/_protected/chat/workspaces/$workspaceId/new': typeof ProtectedChatWorkspacesWorkspaceIdNewRoute
   '/_protected/workspaces/$workspaceId/$viewId/document': typeof ProtectedWorkspacesWorkspaceIdViewIdDocumentRoute
-  '/_protected/workspaces/$workspaceId/entities/$entityId': typeof ProtectedWorkspacesWorkspaceIdEntitiesEntityIdRoute
   '/_protected/workspaces/$workspaceId/invoices/$invoiceId': typeof ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRoute
   '/_protected/workspaces/$workspaceId/reports/$exportId': typeof ProtectedWorkspacesWorkspaceIdReportsExportIdRoute
   '/law/$country/cases/$court/$slug': typeof LawCountryCasesCourtSlugRoute
@@ -795,7 +785,6 @@ export interface FileRouteTypes {
     | '/chat/workspaces/$workspaceId/$threadId'
     | '/chat/workspaces/$workspaceId/new'
     | '/workspaces/$workspaceId/$viewId/document'
-    | '/workspaces/$workspaceId/entities/$entityId'
     | '/workspaces/$workspaceId/invoices/$invoiceId'
     | '/workspaces/$workspaceId/reports/$exportId'
     | '/law/$country/cases/$court/$slug'
@@ -863,7 +852,6 @@ export interface FileRouteTypes {
     | '/chat/workspaces/$workspaceId/$threadId'
     | '/chat/workspaces/$workspaceId/new'
     | '/workspaces/$workspaceId/$viewId/document'
-    | '/workspaces/$workspaceId/entities/$entityId'
     | '/workspaces/$workspaceId/invoices/$invoiceId'
     | '/workspaces/$workspaceId/reports/$exportId'
     | '/law/$country/cases/$court/$slug'
@@ -940,7 +928,6 @@ export interface FileRouteTypes {
     | '/_protected/chat/workspaces/$workspaceId/$threadId'
     | '/_protected/chat/workspaces/$workspaceId/new'
     | '/_protected/workspaces/$workspaceId/$viewId/document'
-    | '/_protected/workspaces/$workspaceId/entities/$entityId'
     | '/_protected/workspaces/$workspaceId/invoices/$invoiceId'
     | '/_protected/workspaces/$workspaceId/reports/$exportId'
     | '/law/$country/cases/$court/$slug'
@@ -1452,13 +1439,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRouteImport
       parentRoute: typeof ProtectedWorkspacesWorkspaceIdInvoicesRoute
     }
-    '/_protected/workspaces/$workspaceId/entities/$entityId': {
-      id: '/_protected/workspaces/$workspaceId/entities/$entityId'
-      path: '/entities/$entityId'
-      fullPath: '/workspaces/$workspaceId/entities/$entityId'
-      preLoaderRoute: typeof ProtectedWorkspacesWorkspaceIdEntitiesEntityIdRouteImport
-      parentRoute: typeof ProtectedWorkspacesWorkspaceIdRouteRoute
-    }
     '/_protected/workspaces/$workspaceId/$viewId/document': {
       id: '/_protected/workspaces/$workspaceId/$viewId/document'
       path: '/document'
@@ -1694,7 +1674,6 @@ interface ProtectedWorkspacesWorkspaceIdRouteRouteChildren {
   ProtectedWorkspacesWorkspaceIdTimesheetsRoute: typeof ProtectedWorkspacesWorkspaceIdTimesheetsRoute
   ProtectedWorkspacesWorkspaceIdWorkflowsRoute: typeof ProtectedWorkspacesWorkspaceIdWorkflowsRoute
   ProtectedWorkspacesWorkspaceIdIndexRoute: typeof ProtectedWorkspacesWorkspaceIdIndexRoute
-  ProtectedWorkspacesWorkspaceIdEntitiesEntityIdRoute: typeof ProtectedWorkspacesWorkspaceIdEntitiesEntityIdRoute
   ProtectedWorkspacesWorkspaceIdReportsExportIdRoute: typeof ProtectedWorkspacesWorkspaceIdReportsExportIdRoute
 }
 
@@ -1712,8 +1691,6 @@ const ProtectedWorkspacesWorkspaceIdRouteRouteChildren: ProtectedWorkspacesWorks
       ProtectedWorkspacesWorkspaceIdWorkflowsRoute,
     ProtectedWorkspacesWorkspaceIdIndexRoute:
       ProtectedWorkspacesWorkspaceIdIndexRoute,
-    ProtectedWorkspacesWorkspaceIdEntitiesEntityIdRoute:
-      ProtectedWorkspacesWorkspaceIdEntitiesEntityIdRoute,
     ProtectedWorkspacesWorkspaceIdReportsExportIdRoute:
       ProtectedWorkspacesWorkspaceIdReportsExportIdRoute,
   }

@@ -4,7 +4,9 @@ import type { GlobalSearchHit } from "@stll/api/types";
 
 import {
   createDialogCloseActionQueue,
+  getEntityDocumentRoute,
   getChatHitRoute,
+  getRecentFileRoute,
   getRecentFilePreviewDateVisibility,
   getRecentFilePreviewHit,
 } from "./search-dialog.logic";
@@ -75,6 +77,61 @@ describe("search dialog close actions", () => {
     queue.complete(false);
 
     expect(runCount).toBe(0);
+  });
+});
+
+describe("document routes", () => {
+  test("opens a server-resolved search file directly in the all view", () => {
+    expect(
+      getEntityDocumentRoute({
+        entityId: "entity-1",
+        fileFieldId: "field-1",
+        workspaceId: "workspace-1",
+      }),
+    ).toEqual({
+      to: "/workspaces/$workspaceId/$viewId/document",
+      params: { workspaceId: "workspace-1", viewId: "all" },
+      search: { entity: "entity-1", field: "field-1" },
+    });
+  });
+
+  test("opens the all view when a search result has no file field", () => {
+    expect(
+      getEntityDocumentRoute({
+        entityId: "entity-1",
+        fileFieldId: null,
+        workspaceId: "workspace-1",
+      }),
+    ).toEqual({
+      to: "/workspaces/$workspaceId/$viewId",
+      params: { workspaceId: "workspace-1", viewId: "all" },
+    });
+  });
+
+  test("opens a recent file directly when its field id was persisted", () => {
+    expect(
+      getRecentFileRoute({
+        entityId: "entity-1",
+        fileFieldId: "field-1",
+        workspaceId: "workspace-1",
+      }),
+    ).toEqual({
+      to: "/workspaces/$workspaceId/$viewId/document",
+      params: { workspaceId: "workspace-1", viewId: "all" },
+      search: { entity: "entity-1", field: "field-1" },
+    });
+  });
+
+  test("opens the all view for a recent file without a field id", () => {
+    expect(
+      getRecentFileRoute({
+        entityId: "entity-1",
+        workspaceId: "workspace-1",
+      }),
+    ).toEqual({
+      to: "/workspaces/$workspaceId/$viewId",
+      params: { workspaceId: "workspace-1", viewId: "all" },
+    });
   });
 });
 

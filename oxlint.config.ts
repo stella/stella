@@ -359,6 +359,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-facade-imports.ts",
     "./.oxlint-plugins/no-secret-in-log-sink.ts",
     "./.oxlint-plugins/no-raw-api-url.ts",
+    "./.oxlint-plugins/no-legacy-entity-route.ts",
     "./.oxlint-plugins/require-eden-error-check.ts",
     "./.oxlint-plugins/require-function-replacer.ts",
     "./.oxlint-plugins/require-fetch-timeout.ts",
@@ -466,6 +467,14 @@ export default defineConfig({
     {
       files: [".oxlint-plugins/__fixtures__/no-ref-mirror.fixture.tsx"],
       rules: { "no-ref-mirror/no-ref-mirror": "error" },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/no-legacy-entity-route.fixture.tsx",
+      ],
+      rules: {
+        "no-legacy-entity-route/no-legacy-entity-route": "error",
+      },
     },
     {
       files: [".oxlint-plugins/__fixtures__/require-use-shallow.fixture.tsx"],
@@ -731,6 +740,14 @@ export default defineConfig({
       excludeFiles: ["apps/web/src/**/*.test.{ts,tsx}"],
       rules: {
         "require-eden-error-check/require-eden-error-check": "error",
+      },
+    },
+    {
+      // The entity detail redirect route was removed. Keep its old public URL
+      // out of source so every caller supplies a canonical destination.
+      files: ["apps/web/src/**/*.{ts,tsx}"],
+      rules: {
+        "no-legacy-entity-route/no-legacy-entity-route": "error",
       },
     },
     {

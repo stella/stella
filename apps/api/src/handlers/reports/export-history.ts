@@ -22,7 +22,7 @@ import { brandPersistedReportExportId } from "@/api/lib/safe-id-boundaries";
 
 type ReportExportHistoryItem = Pick<
   typeof reportExports.$inferSelect,
-  "id" | "mode" | "resultEntityId" | "status"
+  "id" | "mode" | "resultEntityId" | "resultFieldId" | "status"
 > & {
   createdAt: string;
   downloadAvailable: boolean;
@@ -102,6 +102,7 @@ export const readReportExportHistory = async function* ({
         status: reportExports.status,
         mode: reportExports.mode,
         resultEntityId: reportExports.resultEntityId,
+        resultFieldId: reportExports.resultFieldId,
         resultS3Key: reportExports.resultS3Key,
         createdAt: reportExports.createdAt,
         createdAtCursor: reportExportCreatedAtCursor.as("created_at_cursor"),
@@ -128,11 +129,20 @@ export const readReportExportHistory = async function* ({
   return Result.ok({
     ...page,
     items: page.items.map(
-      ({ id, status, mode, resultEntityId, resultS3Key, createdAt }) => ({
+      ({
         id,
         status,
         mode,
         resultEntityId,
+        resultFieldId,
+        resultS3Key,
+        createdAt,
+      }) => ({
+        id,
+        status,
+        mode,
+        resultEntityId,
+        resultFieldId,
         createdAt: createdAt.toISOString(),
         downloadAvailable:
           status === "completed" && mode === "download" && resultS3Key !== null,

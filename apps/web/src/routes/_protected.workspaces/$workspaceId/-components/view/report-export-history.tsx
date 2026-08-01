@@ -63,13 +63,20 @@ export const ReportExportHistory = ({
     }
   };
 
-  const handleOpen = async (entityId: string) => {
+  const handleOpen = async ({
+    entityId,
+    fieldId,
+  }: {
+    entityId: string;
+    fieldId: string;
+  }) => {
     setActiveActionId(entityId);
     const result = await Result.tryPromise(
       async () =>
         await navigate({
-          to: "/workspaces/$workspaceId/entities/$entityId",
-          params: { workspaceId, entityId },
+          to: "/workspaces/$workspaceId/$viewId/document",
+          params: { workspaceId, viewId: "all" },
+          search: { entity: entityId, field: fieldId },
         }),
     );
     setActiveActionId(null);
@@ -88,8 +95,8 @@ export const ReportExportHistory = ({
     );
   };
 
-  const handleOpenClick = (entityId: string) => {
-    handleOpen(entityId).catch((error: unknown) =>
+  const handleOpenClick = (entityId: string, fieldId: string) => {
+    handleOpen({ entityId, fieldId }).catch((error: unknown) =>
       analytics.captureError(error),
     );
   };
@@ -187,12 +194,13 @@ const REPORT_EXPORT_MODE_KEYS = {
 type ReportExportHistoryActionProps = {
   activeActionId: string | null;
   onDownload: (exportId: string) => void;
-  onOpen: (entityId: string) => void;
+  onOpen: (entityId: string, fieldId: string) => void;
   reportExport: {
     downloadAvailable: boolean;
     id: string;
     mode: ReportExportDeliveryMode;
     resultEntityId: string | null;
+    resultFieldId: string | null;
     status: ReportExportStatus;
   };
 };
@@ -224,16 +232,20 @@ const ReportExportHistoryAction = ({
     );
   }
 
-  if (reportExport.resultEntityId === null) {
+  if (
+    reportExport.resultEntityId === null ||
+    reportExport.resultFieldId === null
+  ) {
     return null;
   }
   const resultEntityId = reportExport.resultEntityId;
+  const resultFieldId = reportExport.resultFieldId;
 
   return (
     <Button
       disabled={activeActionId === resultEntityId}
       onClick={() => {
-        onOpen(resultEntityId);
+        onOpen(resultEntityId, resultFieldId);
       }}
       size="sm"
       type="button"
