@@ -7,17 +7,19 @@ import {
   workObligationEvents,
   workObligations,
 } from "@/api/db/schema";
-import { lockWorkObligation } from "@/api/handlers/work-obligations/lock-work-obligation";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { lockWorkObligation } from "@/api/lib/work-obligations/lock-work-obligation";
 
 const acknowledgeParams = workspaceParams({ entityId: tSafeId("entity") });
 
 const acknowledgeWorkObligation = createSafeHandler(
   {
+    description:
+      "Acknowledge ownership of governed work assigned to the signed-in user.",
     permissions: { entity: ["update"] },
     mcp: { type: "capability", reason: "workflow_orchestration" },
     params: acknowledgeParams,

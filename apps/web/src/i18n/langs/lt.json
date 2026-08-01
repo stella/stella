@@ -300,7 +300,6 @@
       "legalSentence": "Teisinė tezė",
       "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "popularName": "Populiarus pavadinimas",
-      "source": "Šaltinis",
       "sourceFields": {
         "decisionCategory": "Sprendimo kategorija",
         "publishedOnWeb": "Paskelbta internete"
@@ -1001,6 +1000,7 @@
     "signOut": "Atsijungti",
     "somethingWentWrong": "Kažkas nepavyko",
     "sort": "Rūšiuoti",
+    "source": "Šaltinis",
     "status": "Būsena",
     "stepCount": "{count, plural, one {# žingsnis} few {# žingsniai} other {# žingsnių}}",
     "stepProgress": "{current} iš {total}",
@@ -2891,11 +2891,9 @@
       "reviewer": "Peržiūrėtojas"
     },
     "assignees": "Priskirti",
-    "cancelledFromStatusControl": "Atšaukta užduoties būsenos valdiklyje",
     "clearDate": "Išvalyti datą",
     "completeWork": "Užbaigti darbą",
-    "deadlineChangedFromTask": "Galutinis terminas pakeistas užduoties informacijoje",
-    "delegationReason": "Perskyrimo priežastis",
+    "delegationReason": "Pakeitimo priežastis",
     "deletedAccount": "Ištrinta paskyra",
     "dueDate": "Terminas",
     "hardDeadline": "Galutinis terminas",

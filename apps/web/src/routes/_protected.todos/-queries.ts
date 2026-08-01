@@ -2,6 +2,7 @@ import { infiniteQueryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
+import { stringCursorSeed } from "@/lib/infinite-query";
 
 export const MY_WORK_QUEUES = [
   "inbox",
@@ -20,7 +21,7 @@ const myWorkKeys = {
 export const myWorkOptions = (queue: MyWorkQueue, asOf: string) =>
   infiniteQueryOptions({
     queryKey: myWorkKeys.queue(queue, asOf),
-    initialPageParam: undefined as string | undefined,
+    initialPageParam: stringCursorSeed(),
     queryFn: async ({ signal, pageParam }) => {
       const response = await api["my-work"].get({
         query: {

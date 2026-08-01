@@ -300,7 +300,6 @@
       "legalSentence": "Tese jurídica",
       "nalusDisclaimer": "Fonte: NALUS, Tribunal Constitucional da República Checa. Gratuito. Esta versão eletrônica não é autêntica; somente os originais com o emblema do estado e assinatura da pessoa autorizada são autênticos.",
       "popularName": "Nome popular",
-      "source": "Fonte",
       "sourceFields": {
         "decisionCategory": "Categoria da decisão",
         "publishedOnWeb": "Publicado na web"
@@ -1001,6 +1000,7 @@
     "signOut": "Sair",
     "somethingWentWrong": "Algo deu errado",
     "sort": "Classificar",
+    "source": "Fonte",
     "status": "Status",
     "stepCount": "{count, plural, one {# etapa} other {# etapas}}",
     "stepProgress": "{current} de {total}",
@@ -2891,11 +2891,9 @@
       "reviewer": "Revisor"
     },
     "assignees": "Responsáveis",
-    "cancelledFromStatusControl": "Cancelado pelo controle de status da tarefa",
     "clearDate": "Limpar data",
     "completeWork": "Concluir trabalho",
-    "deadlineChangedFromTask": "Prazo final revisado nos detalhes da tarefa",
-    "delegationReason": "Motivo da reatribuição",
+    "delegationReason": "Motivo da alteração",
     "deletedAccount": "Conta excluída",
     "dueDate": "Data de vencimento",
     "hardDeadline": "Prazo final",

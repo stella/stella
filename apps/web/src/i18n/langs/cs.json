@@ -300,7 +300,6 @@
       "legalSentence": "Právní věta",
       "nalusDisclaimer": "Zdroj: NALUS, Ústavní soud ČR. Bezplatné. Elektronická verze není autentická; autentické jsou pouze originály a stejnopisy se státním znakem a podpisem příslušné úřední osoby.",
       "popularName": "Populární název",
-      "source": "Zdroj",
       "sourceFields": {
         "decisionCategory": "Kategorie rozhodnutí",
         "publishedOnWeb": "Zveřejněno na webu"
@@ -1001,6 +1000,7 @@
     "signOut": "Odhlásit se",
     "somethingWentWrong": "Něco se pokazilo",
     "sort": "Řadit",
+    "source": "Zdroj",
     "status": "Stav",
     "stepCount": "{count, plural, one {# krok} few {# kroky} many {# kroku} other {# kroků}}",
     "stepProgress": "{current} z {total}",
@@ -2891,11 +2891,9 @@
       "reviewer": "Revident"
     },
     "assignees": "Přiřazení",
-    "cancelledFromStatusControl": "Zrušeno pomocí ovládání stavu úkolu",
     "clearDate": "Vymazat datum",
     "completeWork": "Dokončit práci",
-    "deadlineChangedFromTask": "Pevná lhůta upravena v detailu úkolu",
-    "delegationReason": "Důvod předání",
+    "delegationReason": "Důvod změny",
     "deletedAccount": "Smazaný účet",
     "dueDate": "Termín",
     "hardDeadline": "Pevná lhůta",

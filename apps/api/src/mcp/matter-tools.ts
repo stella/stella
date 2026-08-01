@@ -1445,7 +1445,7 @@ const saveTaskArgsSchema = v.pipe(
     priority: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(16))),
     due_date: v.optional(v.nullable(v.pipe(v.string(), v.regex(ISO_DATE)))),
     workflow_reason: v.optional(
-      v.pipe(v.string(), v.minLength(1), v.maxLength(1000)),
+      v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(1000)),
     ),
     add_assignee_user_id: v.optional(v.pipe(v.string(), v.minLength(1))),
     remove_assignee_user_id: v.optional(v.pipe(v.string(), v.minLength(1))),
@@ -1487,6 +1487,14 @@ const saveTaskArgsSchema = v.pipe(
         i.link_entity_id === undefined &&
         i.unlink_link_id === undefined),
     "assignee and link changes require task_id (they apply to an existing task)",
+  ),
+  v.partialCheck(
+    [["task_id"], ["status"], ["due_date"], ["workflow_reason"]],
+    (i) =>
+      i.workflow_reason === undefined ||
+      (i.task_id !== undefined &&
+        (i.status !== undefined || i.due_date !== undefined)),
+    "workflow_reason only applies to status or due_date updates",
   ),
   // An update must request at least one action.
   v.partialCheck(

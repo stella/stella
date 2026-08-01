@@ -300,7 +300,6 @@
       "legalSentence": "الجملة القانونية",
       "nalusDisclaimer": "المصدر: NALUS، المحكمة الدستورية للجمهورية التشيكية. مجانًا. هذه النسخة الإلكترونية غير رسمية؛ النسخ الأصلية المحمَّلة بشعار الدولة وتوقيع الشخص المخوَّل هي وحدها الرسمية.",
       "popularName": "الاسم الشائع",
-      "source": "المصدر",
       "sourceFields": {
         "decisionCategory": "فئة القرار",
         "publishedOnWeb": "منشور على الويب"
@@ -1001,6 +1000,7 @@
     "signOut": "تسجيل الخروج",
     "somethingWentWrong": "حدث خطأ ما",
     "sort": "فرز",
+    "source": "المصدر",
     "status": "الحالة",
     "stepCount": "{count, plural, zero {# خطوة} one {# خطوة} two {# خطوتان} few {# خطوات} many {# خطوة} other {# خطوة}}",
     "stepProgress": "{current} من {total}",
@@ -2891,11 +2891,9 @@
       "reviewer": "المراجِع"
     },
     "assignees": "المُكلَّفون",
-    "cancelledFromStatusControl": "أُلغي من خلال التحكم في حالة المهمة",
     "clearDate": "مسح التاريخ",
     "completeWork": "إكمال العمل",
-    "deadlineChangedFromTask": "عُدّل الموعد النهائي الملزم في تفاصيل المهمة",
-    "delegationReason": "سبب إعادة التعيين",
+    "delegationReason": "سبب التغيير",
     "deletedAccount": "حساب محذوف",
     "dueDate": "تاريخ الاستحقاق",
     "hardDeadline": "الموعد النهائي الملزم",

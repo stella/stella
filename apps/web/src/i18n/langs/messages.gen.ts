@@ -303,7 +303,6 @@ type Messages = {
       "legalSentence": "Legal sentence";
       "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic; only originals with the state emblem and signature of the authorized person are authentic.";
       "popularName": "Popular name";
-      "source": "Source";
       "sourceFields": {
         "decisionCategory": "Decision category";
         "publishedOnWeb": "Published on web";
@@ -1004,6 +1003,7 @@ type Messages = {
     "signOut": "Sign out";
     "somethingWentWrong": "Something went wrong";
     "sort": "Sort";
+    "source": "Source";
     "status": "Status";
     "stepCount": "{count, plural, one {# step} other {# steps}}";
     "stepProgress": "{current} of {total}";
@@ -2894,11 +2894,9 @@ type Messages = {
       "reviewer": "Reviewer";
     };
     "assignees": "Assignees";
-    "cancelledFromStatusControl": "Cancelled from the task status control";
     "clearDate": "Clear date";
     "completeWork": "Complete work";
-    "deadlineChangedFromTask": "Hard deadline revised in the task details";
-    "delegationReason": "Reason for reassignment";
+    "delegationReason": "Reason for change";
     "deletedAccount": "Deleted account";
     "dueDate": "Due date";
     "hardDeadline": "Hard deadline";

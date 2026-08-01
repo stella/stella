@@ -28,6 +28,7 @@ import {
 import {
   isTaskPriority,
   isTaskStatus,
+  localISODate,
   toISODate,
 } from "@/components/workspaces/tasks/task-detail-constants";
 import { LinksSection } from "@/components/workspaces/tasks/task-links";
@@ -99,6 +100,7 @@ export const TaskDetailPanel = ({
 
   const [isEditingName, setIsEditingName] = useState(false);
   const [editNameValue, setEditNameValue] = useState("");
+  const [workflowReason, setWorkflowReason] = useState("");
   const nameInputRef = useRef<HTMLInputElement>(null);
 
   const name = task?.name ?? t("untitled");
@@ -131,6 +133,7 @@ export const TaskDetailPanel = ({
         queryClient.invalidateQueries({
           queryKey: workspacesKeys.overview(workspaceId),
         }),
+        queryClient.invalidateQueries({ queryKey: ["my-work"] }),
       ]);
     },
     onError: (error) => {
@@ -162,22 +165,27 @@ export const TaskDetailPanel = ({
       type?: "task" | "deadline";
       reason?: string;
     }) => {
+      const { ownerUserId, ...workflowBody } = body;
       const response = await api["work-obligations"]({
         workspaceId: toSafeId<"workspace">(workspaceId),
       })({ entityId: toSafeId<"entity">(taskId) }).patch({
-        ...body,
-        ...(body.ownerUserId === undefined
+        ...workflowBody,
+        queryKey: entitiesKeys.all(workspaceId),
+        ...(ownerUserId === undefined
           ? {}
           : {
               ownerUserId:
-                body.ownerUserId === null
-                  ? null
-                  : toSafeId<"user">(body.ownerUserId),
+                ownerUserId === null ? null : toSafeId<"user">(ownerUserId),
             }),
       });
       return unwrapEden(response);
     },
-    onSuccess: invalidateWorkflow,
+    onSuccess: async (_data, variables) => {
+      if (variables.reason) {
+        setWorkflowReason("");
+      }
+      await invalidateWorkflow();
+    },
     onError: (error) => {
       analytics.captureError(error);
       stellaToast.error(userErrorFromThrown(error, tCommon("unexpectedError")));
@@ -198,16 +206,26 @@ export const TaskDetailPanel = ({
         workspaceId: toSafeId<"workspace">(workspaceId),
       })({ entityId: toSafeId<"entity">(taskId) });
       if (action.type === "acknowledge") {
-        return unwrapEden(await endpoint.acknowledge.post());
+        return unwrapEden(
+          await endpoint.acknowledge.post({
+            queryKey: entitiesKeys.all(workspaceId),
+          }),
+        );
       }
       return unwrapEden(
         await endpoint.transition.post({
           action: action.action,
+          queryKey: entitiesKeys.all(workspaceId),
           ...(action.reason ? { reason: action.reason } : {}),
         }),
       );
     },
-    onSuccess: invalidateWorkflow,
+    onSuccess: async (_data, variables) => {
+      if (variables.type === "transition" && variables.reason) {
+        setWorkflowReason("");
+      }
+      await invalidateWorkflow();
+    },
     onError: (error) => {
       analytics.captureError(error);
       stellaToast.error(userErrorFromThrown(error, tCommon("unexpectedError")));
@@ -304,10 +322,11 @@ export const TaskDetailPanel = ({
       return;
     }
     if (value === "cancelled") {
+      const reason = workflowReason.trim();
       workflowActionMutation.mutate({
         type: "transition",
         action: "cancel",
-        reason: t("cancelledFromStatusControl"),
+        ...(reason ? { reason } : {}),
       });
       return;
     }
@@ -437,7 +456,7 @@ export const TaskDetailPanel = ({
     dueDateISO &&
     currentStatus !== "done" &&
     currentStatus !== "cancelled" &&
-    dueDateISO < new Date().toISOString().slice(0, 10);
+    dueDateISO < localISODate();
 
   // Drop assignees/links whose related record is null (e.g. a deleted user or
   // entity) so downstream components can rely on a non-null relation.
@@ -465,7 +484,7 @@ export const TaskDetailPanel = ({
     hardDeadlineDate.length > 0 &&
     workflow?.status !== "completed" &&
     workflow?.status !== "cancelled" &&
-    hardDeadlineDate < new Date().toISOString().slice(0, 10);
+    hardDeadlineDate < localISODate();
   const sourceLabel = (() => {
     if (!workflow) {
       return "";
@@ -596,10 +615,15 @@ export const TaskDetailPanel = ({
               <MetadataRow label={t("owner")}>
                 <OwnerPicker
                   disabled={workflowMutation.isPending}
-                  onChange={(ownerUserId, reason) =>
-                    workflowMutation.mutate({ ownerUserId, reason })
-                  }
+                  onChange={(ownerUserId) => {
+                    const reason = workflowReason.trim();
+                    workflowMutation.mutate({
+                      ownerUserId,
+                      ...(reason ? { reason } : {}),
+                    });
+                  }}
                   owner={workflow.owner}
+                  reason={workflowReason}
                   workspaceId={workspaceId}
                 />
               </MetadataRow>
@@ -607,22 +631,34 @@ export const TaskDetailPanel = ({
               <MetadataRow label={t("hardDeadline")}>
                 <DatePickerPopover
                   isOverdue={hardDeadlineOverdue}
-                  onChange={(hardDeadline) =>
+                  onChange={(hardDeadline) => {
+                    const reason = workflowReason.trim();
                     workflowMutation.mutate({
                       hardDeadlineDate: hardDeadline,
-                      ...(workflow.hardDeadlineDate
-                        ? { reason: t("deadlineChangedFromTask") }
+                      ...(workflow.hardDeadlineDate && reason
+                        ? { reason }
                         : {}),
-                    })
-                  }
+                    });
+                  }}
                   value={workflow.hardDeadlineDate}
                 />
               </MetadataRow>
 
               <MetadataRow label={tCommon("source")}>
                 <span className="text-muted-foreground px-1.5 text-sm">
-                  {sourceLabel}
+                  <span dir="auto">{sourceLabel}</span>
                 </span>
+              </MetadataRow>
+
+              <MetadataRow label={t("delegationReason")}>
+                <Input
+                  aria-label={t("delegationReason")}
+                  className="min-h-11"
+                  maxLength={1000}
+                  onChange={(event) => setWorkflowReason(event.target.value)}
+                  placeholder={t("delegationReason")}
+                  value={workflowReason}
+                />
               </MetadataRow>
             </>
           )}
@@ -750,10 +786,18 @@ export const TaskDetailPanel = ({
                     <div className="min-w-0 flex-1">
                       <p>
                         {eventLabel}
-                        {event.actor?.name ? ` · ${event.actor.name}` : ""}
+                        {event.actor?.name && (
+                          <>
+                            {" · "}
+                            <bdi>{event.actor.name}</bdi>
+                          </>
+                        )}
                       </p>
                       {event.reason && (
-                        <p className="text-muted-foreground break-words">
+                        <p
+                          className="text-muted-foreground break-words"
+                          dir="auto"
+                        >
                           {event.reason}
                         </p>
                       )}

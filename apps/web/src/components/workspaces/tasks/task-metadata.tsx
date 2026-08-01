@@ -1,11 +1,8 @@
-import { useState } from "react";
-
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PlusIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
-import { Input } from "@stll/ui/components/input";
 import {
   Popover,
   PopoverPopup,
@@ -84,7 +81,7 @@ export const StatusSelect = ({ value, onChange }: StatusSelectProps) => {
   return (
     <Select onValueChange={onChange} value={value}>
       <SelectTrigger
-        className="h-7 min-h-7 min-w-0 gap-1 border-none bg-transparent px-1.5 shadow-none"
+        className="min-h-11 min-w-0 gap-1 border-none bg-transparent px-1.5 shadow-none"
         size="sm"
       >
         <StatusIcon status={value} />
@@ -200,19 +197,20 @@ type OwnerPickerProps = {
     image: string | null;
     deletedAt?: Date | string | null;
   } | null;
+  reason: string;
   disabled?: boolean;
-  onChange: (userId: string, reason: string | undefined) => void;
+  onChange: (userId: string) => void;
 };
 
 export const OwnerPicker = ({
   workspaceId,
   owner,
+  reason,
   disabled,
   onChange,
 }: OwnerPickerProps) => {
   const t = useTranslations("tasks");
   const { data: members } = useQuery(workspaceMembersOptions(workspaceId));
-  const [reason, setReason] = useState("");
   const selectableMembers = members?.filter(
     (member) => member.user && member.user.id !== owner?.id,
   );
@@ -222,7 +220,7 @@ export const OwnerPicker = ({
       <PopoverTrigger
         render={
           <button
-            className="hover:bg-muted flex h-7 w-full items-center gap-1.5 rounded-md px-1.5 text-sm transition-colors"
+            className="hover:bg-muted flex min-h-11 w-full items-center gap-1.5 rounded-md px-1.5 text-sm transition-colors"
             disabled={disabled}
             type="button"
           />
@@ -246,13 +244,6 @@ export const OwnerPicker = ({
       </PopoverTrigger>
       <PopoverPopup className="w-64 p-2" side="bottom">
         <div className="flex flex-col gap-2">
-          {owner && (
-            <Input
-              onChange={(event) => setReason(event.target.value)}
-              placeholder={t("delegationReason")}
-              value={reason}
-            />
-          )}
           <div className="flex max-h-56 flex-col overflow-y-auto">
             {selectableMembers?.map((member) => {
               const candidate = member.user;
@@ -261,27 +252,20 @@ export const OwnerPicker = ({
               }
               return (
                 <button
-                  className="hover:bg-muted flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors disabled:opacity-50"
+                  className="hover:bg-muted flex min-h-11 items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors disabled:opacity-50"
                   disabled={owner !== null && reason.trim().length === 0}
                   key={candidate.id}
                   onClick={() => {
-                    onChange(
-                      candidate.id,
-                      owner ? reason.trim() || undefined : undefined,
-                    );
-                    setReason("");
+                    onChange(candidate.id);
                   }}
                   type="button"
                 >
                   <UserAvatar
                     className="size-5 text-[10px]"
-                    deleted={hasDeletedAccount(candidate.deletedAt)}
                     image={candidate.image}
                     name={candidate.name}
                   />
-                  <span className="truncate">
-                    {candidate.name ?? t("deletedAccount")}
-                  </span>
+                  <span className="truncate">{candidate.name}</span>
                 </button>
               );
             })}

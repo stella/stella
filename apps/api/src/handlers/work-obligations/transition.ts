@@ -10,13 +10,13 @@ import {
   workObligations,
 } from "@/api/db/schema";
 import type { WorkObligationStatus } from "@/api/db/schema";
-import { lockWorkObligation } from "@/api/handlers/work-obligations/lock-work-obligation";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { TASK_STATUS } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { lockWorkObligation } from "@/api/lib/work-obligations/lock-work-obligation";
 
 const TRANSITION_ACTION = {
   COMPLETE: "complete",
@@ -71,6 +71,8 @@ const TRANSITIONS = {
 
 const transitionWorkObligation = createSafeHandler(
   {
+    description:
+      "Complete, cancel, or reopen governed work while preserving its lifecycle history.",
     permissions: { entity: ["update"] },
     mcp: { type: "capability", reason: "workflow_orchestration" },
     params: transitionParams,
@@ -85,6 +87,7 @@ const transitionWorkObligation = createSafeHandler(
     recordAuditEvent,
   }) {
     const transition = TRANSITIONS[body.action];
+    const reason = body.reason?.trim();
     const result = yield* Result.await(
       safeDb(async (tx) => {
         const existing = await lockWorkObligation(tx, {
@@ -106,25 +109,31 @@ const transitionWorkObligation = createSafeHandler(
         if (
           body.action === TRANSITION_ACTION.CANCEL &&
           existing.status !== WORK_OBLIGATION_STATUS.UNASSIGNED &&
-          !body.reason
+          !reason
         ) {
           return { status: "reason_required" as const };
         }
 
         const now = new Date();
-        const reopenedStatus =
-          existing.ownerUserId === null
-            ? WORK_OBLIGATION_STATUS.UNASSIGNED
-            : existing.acknowledgedAt === null
-              ? WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT
-              : WORK_OBLIGATION_STATUS.ACTIVE;
+        let reopenedStatus: WorkObligationStatus;
+        if (existing.ownerUserId === null) {
+          reopenedStatus = WORK_OBLIGATION_STATUS.UNASSIGNED;
+        } else if (existing.acknowledgedAt === null) {
+          reopenedStatus = WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT;
+        } else {
+          reopenedStatus = WORK_OBLIGATION_STATUS.ACTIVE;
+        }
         const nextStatus =
           body.action === TRANSITION_ACTION.REOPEN
             ? reopenedStatus
             : transition.to;
+        const acknowledgementReset =
+          nextStatus === WORK_OBLIGATION_STATUS.UNASSIGNED
+            ? { acknowledgedAt: null, acknowledgedByUserId: null }
+            : {};
         const updated = await tx
           .update(workObligations)
-          .set({ status: nextStatus, updatedAt: now })
+          .set({ status: nextStatus, ...acknowledgementReset, updatedAt: now })
           .where(
             and(
               eq(workObligations.entityId, params.entityId),
@@ -159,7 +168,7 @@ const transitionWorkObligation = createSafeHandler(
             previousStatus: existing.status,
             nextStatus,
           },
-          reason: body.reason ?? null,
+          reason: reason ?? null,
           occurredAt: now,
         });
         await recordAuditEvent(tx, {
@@ -172,7 +181,7 @@ const transitionWorkObligation = createSafeHandler(
           changes: {
             status: { old: existing.status, new: nextStatus },
           },
-          ...(body.reason ? { metadata: { reason: body.reason } } : {}),
+          ...(reason ? { metadata: { reason } } : {}),
         });
 
         return { status: "transitioned" as const };

@@ -5,20 +5,20 @@ import { t } from "elysia";
 import {
   entities,
   WORK_OBLIGATION_EVENT_TYPE,
-  WORK_OBLIGATION_SOURCES,
+  WORK_OBLIGATION_SOURCE,
   WORK_OBLIGATION_STATUS,
-  WORK_OBLIGATION_TYPES,
+  WORK_OBLIGATION_TYPE,
   workObligationEvents,
   workObligations,
 } from "@/api/db/schema";
 import type { WorkObligationSource } from "@/api/db/schema";
-import { lockWorkObligation } from "@/api/handlers/work-obligations/lock-work-obligation";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { FieldDiffs } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { lockWorkObligation } from "@/api/lib/work-obligations/lock-work-obligation";
 
 const updateWorkObligationParams = workspaceParams({
   entityId: tSafeId("entity"),
@@ -26,10 +26,24 @@ const updateWorkObligationParams = workspaceParams({
 
 const updateWorkObligationBody = t.Object({
   ownerUserId: t.Optional(t.Nullable(tSafeId("user"))),
-  type: t.Optional(t.UnionEnum(WORK_OBLIGATION_TYPES)),
+  type: t.Optional(
+    t.Union([
+      t.Literal(WORK_OBLIGATION_TYPE.TASK),
+      t.Literal(WORK_OBLIGATION_TYPE.DEADLINE),
+    ]),
+  ),
   workingTargetDate: t.Optional(t.Nullable(t.String({ format: "date" }))),
   hardDeadlineDate: t.Optional(t.Nullable(t.String({ format: "date" }))),
-  sourceType: t.Optional(t.UnionEnum(WORK_OBLIGATION_SOURCES)),
+  sourceType: t.Optional(
+    t.Union([
+      t.Literal(WORK_OBLIGATION_SOURCE.MANUAL),
+      t.Literal(WORK_OBLIGATION_SOURCE.CALENDAR),
+      t.Literal(WORK_OBLIGATION_SOURCE.EMAIL),
+      t.Literal(WORK_OBLIGATION_SOURCE.DOCUMENT),
+      t.Literal(WORK_OBLIGATION_SOURCE.IMPORT),
+      t.Literal(WORK_OBLIGATION_SOURCE.API),
+    ]),
+  ),
   sourceEntityId: t.Optional(t.Nullable(tSafeId("entity"))),
   sourceDescription: t.Optional(t.Nullable(t.String({ maxLength: 1000 }))),
   reason: t.Optional(t.String({ minLength: 1, maxLength: 1000 })),
@@ -37,6 +51,8 @@ const updateWorkObligationBody = t.Object({
 
 const updateWorkObligation = createSafeHandler(
   {
+    description:
+      "Update accountable ownership, dates, type, or provenance for a governed task or deadline.",
     permissions: { entity: ["update"] },
     mcp: { type: "capability", reason: "workflow_orchestration" },
     params: updateWorkObligationParams,
@@ -50,6 +66,7 @@ const updateWorkObligation = createSafeHandler(
     body,
     recordAuditEvent,
   }) {
+    const reason = body.reason?.trim();
     const hasChange =
       body.ownerUserId !== undefined ||
       body.type !== undefined ||
@@ -142,7 +159,7 @@ const updateWorkObligation = createSafeHandler(
           body.ownerUserId !== undefined &&
           existing.ownerUserId !== null &&
           body.ownerUserId !== existing.ownerUserId &&
-          !body.reason
+          !reason
         ) {
           return { status: "delegation_reason_required" as const };
         }
@@ -151,7 +168,7 @@ const updateWorkObligation = createSafeHandler(
           body.hardDeadlineDate !== undefined &&
           existing.hardDeadlineDate !== null &&
           body.hardDeadlineDate !== existing.hardDeadlineDate &&
-          !body.reason
+          !reason
         ) {
           return { status: "deadline_reason_required" as const };
         }
@@ -174,12 +191,14 @@ const updateWorkObligation = createSafeHandler(
           obligationUpdate.acknowledgedByUserId = isSelfAssigned
             ? user.id
             : null;
-          obligationUpdate.status =
-            nextOwnerUserId === null
-              ? WORK_OBLIGATION_STATUS.UNASSIGNED
-              : isSelfAssigned
-                ? WORK_OBLIGATION_STATUS.ACTIVE
-                : WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT;
+          if (nextOwnerUserId === null) {
+            obligationUpdate.status = WORK_OBLIGATION_STATUS.UNASSIGNED;
+          } else if (isSelfAssigned) {
+            obligationUpdate.status = WORK_OBLIGATION_STATUS.ACTIVE;
+          } else {
+            obligationUpdate.status =
+              WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT;
+          }
           changes["ownerUserId"] = {
             old: existing.ownerUserId,
             new: nextOwnerUserId,
@@ -198,7 +217,7 @@ const updateWorkObligation = createSafeHandler(
               previousOwnerUserId: existing.ownerUserId,
               nextOwnerUserId,
             },
-            reason: body.reason ?? null,
+            reason: reason ?? null,
             occurredAt: now,
           });
           if (isSelfAssigned) {
@@ -228,7 +247,7 @@ const updateWorkObligation = createSafeHandler(
               previousType: existing.type,
               nextType: body.type,
             },
-            reason: body.reason ?? null,
+            reason: reason ?? null,
             occurredAt: now,
           });
         }
@@ -254,7 +273,7 @@ const updateWorkObligation = createSafeHandler(
               previousDate: existing.workingTargetDate,
               nextDate: body.workingTargetDate,
             },
-            reason: body.reason ?? null,
+            reason: reason ?? null,
             occurredAt: now,
           });
         }
@@ -280,7 +299,7 @@ const updateWorkObligation = createSafeHandler(
               previousDate: existing.hardDeadlineDate,
               nextDate: body.hardDeadlineDate,
             },
-            reason: body.reason ?? null,
+            reason: reason ?? null,
             occurredAt: now,
           });
         }
@@ -330,7 +349,7 @@ const updateWorkObligation = createSafeHandler(
               previousSourceEntityId: existing.sourceEntityId,
               nextSourceEntityId,
             },
-            reason: body.reason ?? null,
+            reason: reason ?? null,
             occurredAt: now,
           });
         }
@@ -382,7 +401,7 @@ const updateWorkObligation = createSafeHandler(
           resourceType: AUDIT_RESOURCE_TYPE.WORK_OBLIGATION,
           resourceId: params.entityId,
           changes,
-          ...(body.reason ? { metadata: { reason: body.reason } } : {}),
+          ...(reason ? { metadata: { reason } } : {}),
         });
 
         return { status: "updated" as const };

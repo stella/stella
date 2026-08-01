@@ -23,6 +23,7 @@ import {
   pushSessionEvent,
 } from "@/api/lib/desktop-edit-session-notifications";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { broadcast } from "@/api/lib/sse";
 
@@ -99,7 +100,12 @@ export const removeWorkspaceMemberHandler = async function* ({
             eq(workObligations.ownerUserId, userId),
           ),
         )
+        .limit(LIMITS.workspaceMemberRemovalWorkObligationsMax + 1)
         .for("update");
+
+      if (ownedWork.length > LIMITS.workspaceMemberRemovalWorkObligationsMax) {
+        return { ok: false as const, reason: "owned-work-limit" as const };
+      }
 
       const deleteResult = await tx
         .delete(workspaceMembers)
@@ -266,6 +272,14 @@ export const removeWorkspaceMemberHandler = async function* ({
   );
 
   if (!txResult.ok) {
+    if (txResult.reason === "owned-work-limit") {
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          message: `Cannot remove a member with more than ${LIMITS.workspaceMemberRemovalWorkObligationsMax} owned work obligations. Reassign their work first.`,
+        }),
+      );
+    }
     if (txResult.reason === "last-member") {
       return Result.err(
         new HandlerError({

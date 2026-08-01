@@ -42,6 +42,9 @@ export const createWorkObligation = async ({
 }: CreateWorkObligationOptions) => {
   const now = new Date();
   const isSelfAssigned = actorUserId === ownerUserId;
+  const assignedStatus = isSelfAssigned
+    ? WORK_OBLIGATION_STATUS.ACTIVE
+    : WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT;
   const status = (() => {
     if (taskStatus === TASK_STATUS.DONE) {
       return WORK_OBLIGATION_STATUS.COMPLETED;
@@ -49,9 +52,7 @@ export const createWorkObligation = async ({
     if (taskStatus === TASK_STATUS.CANCELLED) {
       return WORK_OBLIGATION_STATUS.CANCELLED;
     }
-    return isSelfAssigned
-      ? WORK_OBLIGATION_STATUS.ACTIVE
-      : WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT;
+    return assignedStatus;
   })();
 
   await tx.insert(workObligations).values({
@@ -72,7 +73,7 @@ export const createWorkObligation = async ({
     createdByUserId: actorUserId,
   });
 
-  await tx.insert(workObligationEvents).values([
+  const events: (typeof workObligationEvents.$inferInsert)[] = [
     {
       id: createSafeId<"workObligationEvent">(),
       workspaceId,
@@ -95,18 +96,47 @@ export const createWorkObligation = async ({
       },
       occurredAt: now,
     },
-    ...(isSelfAssigned
-      ? [
-          {
-            id: createSafeId<"workObligationEvent">(),
-            workspaceId,
-            obligationEntityId: entityId,
-            actorUserId,
-            type: WORK_OBLIGATION_EVENT_TYPE.ACKNOWLEDGED,
-            details: { type: "acknowledged" as const },
-            occurredAt: now,
-          },
-        ]
-      : []),
-  ]);
+  ];
+  if (isSelfAssigned) {
+    events.push({
+      id: createSafeId<"workObligationEvent">(),
+      workspaceId,
+      obligationEntityId: entityId,
+      actorUserId,
+      type: WORK_OBLIGATION_EVENT_TYPE.ACKNOWLEDGED,
+      details: { type: "acknowledged" },
+      occurredAt: now,
+    });
+  }
+  if (status === WORK_OBLIGATION_STATUS.COMPLETED) {
+    events.push({
+      id: createSafeId<"workObligationEvent">(),
+      workspaceId,
+      obligationEntityId: entityId,
+      actorUserId,
+      type: WORK_OBLIGATION_EVENT_TYPE.COMPLETED,
+      details: {
+        type: "status_changed",
+        previousStatus: assignedStatus,
+        nextStatus: status,
+      },
+      occurredAt: now,
+    });
+  }
+  if (status === WORK_OBLIGATION_STATUS.CANCELLED) {
+    events.push({
+      id: createSafeId<"workObligationEvent">(),
+      workspaceId,
+      obligationEntityId: entityId,
+      actorUserId,
+      type: WORK_OBLIGATION_EVENT_TYPE.CANCELLED,
+      details: {
+        type: "status_changed",
+        previousStatus: assignedStatus,
+        nextStatus: status,
+      },
+      occurredAt: now,
+    });
+  }
+  await tx.insert(workObligationEvents).values(events);
 };

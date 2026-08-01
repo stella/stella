@@ -200,6 +200,8 @@ export const LIMITS = {
   /** Better Auth organization member cap and full-org read bound. */
   organizationMembersCount: 500,
   workspaceMembersCount: 500,
+  /** Max governed obligations synchronously unassigned during member removal. */
+  workspaceMemberRemovalWorkObligationsMax: 500,
   practiceJurisdictionsPerOrganization: 12,
   entityNameMaxLength: 255,
   workspaceContributors: 5,

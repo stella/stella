@@ -158,10 +158,7 @@ export const workObligations = p.pgTable(
       .text("source_type", { enum: WORK_OBLIGATION_SOURCES })
       .notNull()
       .default(WORK_OBLIGATION_SOURCE.MANUAL),
-    sourceEntityId: safeUuid<"entity">("source_entity_id").references(
-      () => entities.id,
-      { onDelete: "set null" },
-    ),
+    sourceEntityId: safeUuid<"entity">("source_entity_id"),
     sourceDescription: p.varchar("source_description", { length: 1000 }),
     createdByUserId: p
       .text("created_by_user_id")
@@ -203,6 +200,14 @@ export const workObligations = p.pgTable(
       "work_obligations_target_before_deadline_check",
       sql`${table.workingTargetDate} IS NULL OR ${table.hardDeadlineDate} IS NULL OR ${table.workingTargetDate} <= ${table.hardDeadlineDate}`,
     ),
+    p.check(
+      "work_obligations_acknowledgement_pair_check",
+      sql`(${table.acknowledgedAt} IS NULL) = (${table.acknowledgedByUserId} IS NULL)`,
+    ),
+    p.check(
+      "work_obligations_state_coherence_check",
+      sql`(${table.status} = 'unassigned' AND ${table.ownerUserId} IS NULL AND ${table.acknowledgedAt} IS NULL) OR (${table.status} = 'awaiting_acknowledgement' AND ${table.ownerUserId} IS NOT NULL AND ${table.acknowledgedAt} IS NULL) OR (${table.status} = 'active' AND ${table.ownerUserId} IS NOT NULL AND ${table.acknowledgedAt} IS NOT NULL AND ${table.acknowledgedByUserId} = ${table.ownerUserId}) OR ${table.status} IN ('completed', 'cancelled')`,
+    ),
     p
       .index("work_obligations_ws_owner_status_target_entity_idx")
       .on(
@@ -213,11 +218,11 @@ export const workObligations = p.pgTable(
         table.entityId,
       ),
     p
-      .index("work_obligations_owner_status_target_entity_ws_idx")
+      .index("work_obligations_owner_status_due_entity_ws_idx")
       .on(
         table.ownerUserId,
         table.status,
-        table.workingTargetDate,
+        sql`COALESCE(${table.hardDeadlineDate}, ${table.workingTargetDate}, '9999-12-31'::date)`,
         table.entityId,
         table.workspaceId,
       ),

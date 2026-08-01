@@ -21,7 +21,9 @@ CREATE TABLE "work_obligations" (
   CONSTRAINT "work_obligations_type_check" CHECK ("type" IN ('task', 'deadline')),
   CONSTRAINT "work_obligations_status_check" CHECK ("status" IN ('unassigned', 'awaiting_acknowledgement', 'active', 'completed', 'cancelled')),
   CONSTRAINT "work_obligations_source_type_check" CHECK ("source_type" IN ('manual', 'calendar', 'email', 'document', 'import', 'api')),
-  CONSTRAINT "work_obligations_target_before_deadline_check" CHECK ("working_target_date" IS NULL OR "hard_deadline_date" IS NULL OR "working_target_date" <= "hard_deadline_date")
+  CONSTRAINT "work_obligations_target_before_deadline_check" CHECK ("working_target_date" IS NULL OR "hard_deadline_date" IS NULL OR "working_target_date" <= "hard_deadline_date"),
+  CONSTRAINT "work_obligations_acknowledgement_pair_check" CHECK (("acknowledged_at" IS NULL) = ("acknowledged_by_user_id" IS NULL)),
+  CONSTRAINT "work_obligations_state_coherence_check" CHECK (("status" = 'unassigned' AND "owner_user_id" IS NULL AND "acknowledged_at" IS NULL) OR ("status" = 'awaiting_acknowledgement' AND "owner_user_id" IS NOT NULL AND "acknowledged_at" IS NULL) OR ("status" = 'active' AND "owner_user_id" IS NOT NULL AND "acknowledged_at" IS NOT NULL AND "acknowledged_by_user_id" = "owner_user_id") OR "status" IN ('completed', 'cancelled'))
 );
 --> statement-breakpoint
 CREATE TABLE "work_obligation_events" (
@@ -45,52 +47,14 @@ ALTER TABLE "work_obligations" ADD CONSTRAINT "work_obligations_entity_workspace
 ALTER TABLE "work_obligations" ADD CONSTRAINT "work_obligations_source_entity_workspace_fk" FOREIGN KEY ("source_entity_id", "workspace_id") REFERENCES "entities"("id", "workspace_id") ON DELETE NO ACTION ON UPDATE NO ACTION;--> statement-breakpoint
 ALTER TABLE "work_obligations" ADD CONSTRAINT "work_obligations_owner_user_id_user_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE NO ACTION;--> statement-breakpoint
 ALTER TABLE "work_obligations" ADD CONSTRAINT "work_obligations_acknowledged_by_user_id_user_id_fk" FOREIGN KEY ("acknowledged_by_user_id") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE NO ACTION;--> statement-breakpoint
-ALTER TABLE "work_obligations" ADD CONSTRAINT "work_obligations_source_entity_id_entities_id_fk" FOREIGN KEY ("source_entity_id") REFERENCES "entities"("id") ON DELETE SET NULL ON UPDATE NO ACTION;--> statement-breakpoint
 ALTER TABLE "work_obligations" ADD CONSTRAINT "work_obligations_created_by_user_id_user_id_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE NO ACTION;--> statement-breakpoint
 ALTER TABLE "work_obligation_events" ADD CONSTRAINT "work_obligation_events_obligation_workspace_fk" FOREIGN KEY ("obligation_entity_id", "workspace_id") REFERENCES "work_obligations"("entity_id", "workspace_id") ON DELETE CASCADE ON UPDATE NO ACTION;--> statement-breakpoint
 ALTER TABLE "work_obligation_events" ADD CONSTRAINT "work_obligation_events_actor_user_id_user_id_fk" FOREIGN KEY ("actor_user_id") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE NO ACTION;--> statement-breakpoint
 
 CREATE INDEX "work_obligations_ws_owner_status_target_entity_idx" ON "work_obligations" ("workspace_id", "owner_user_id", "status", "working_target_date", "entity_id");--> statement-breakpoint
-CREATE INDEX "work_obligations_owner_status_target_entity_ws_idx" ON "work_obligations" ("owner_user_id", "status", "working_target_date", "entity_id", "workspace_id");--> statement-breakpoint
+CREATE INDEX "work_obligations_owner_status_due_entity_ws_idx" ON "work_obligations" ("owner_user_id", "status", COALESCE("hard_deadline_date", "working_target_date", '9999-12-31'::date), "entity_id", "workspace_id");--> statement-breakpoint
 CREATE INDEX "work_obligations_ws_status_deadline_entity_idx" ON "work_obligations" ("workspace_id", "status", "hard_deadline_date", "entity_id") WHERE "hard_deadline_date" IS NOT NULL;--> statement-breakpoint
 CREATE INDEX "work_obligation_events_ws_obligation_occurred_id_idx" ON "work_obligation_events" ("workspace_id", "obligation_entity_id", "occurred_at", "id");--> statement-breakpoint
-
--- Preserve every existing task without inventing an accountable owner. Legacy
--- assignees remain collaborators until a user deliberately accepts or assigns
--- ownership in the governed workflow.
-INSERT INTO "work_obligations" (
-  "entity_id",
-  "workspace_id",
-  "type",
-  "status",
-  "working_target_date",
-  "hard_deadline_date",
-  "source_type",
-  "created_by_user_id",
-  "created_at",
-  "updated_at"
-)
-SELECT
-  "id",
-  "workspace_id",
-  CASE WHEN "agenda_kind" = 'deadline' THEN 'deadline' ELSE 'task' END,
-  CASE
-    WHEN "status" = 'done' THEN 'completed'
-    WHEN "status" = 'cancelled' THEN 'cancelled'
-    ELSE 'unassigned'
-  END,
-  "due_date",
-  CASE WHEN "agenda_kind" = 'deadline' THEN "due_date" ELSE NULL END,
-  CASE
-    WHEN "agenda_source" IN ('calendar', 'email', 'import', 'api') THEN "agenda_source"
-    ELSE 'manual'
-  END,
-  "created_by",
-  "created_at",
-  COALESCE("updated_at", "created_at")
-FROM "entities"
-WHERE "kind" = 'task'
-ON CONFLICT ("entity_id") DO NOTHING;--> statement-breakpoint
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "work_obligations" TO stella;--> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "work_obligation_events" TO stella;--> statement-breakpoint

@@ -300,7 +300,6 @@
       "legalSentence": "Attendu",
       "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "popularName": "Nom courant",
-      "source": "Source",
       "sourceFields": {
         "decisionCategory": "Catégorie de décision",
         "publishedOnWeb": "Publié sur le web"
@@ -1001,6 +1000,7 @@
     "signOut": "Se déconnecter",
     "somethingWentWrong": "Une erreur est survenue",
     "sort": "Trier",
+    "source": "Source",
     "status": "Statut",
     "stepCount": "{count, plural, one {# étape} other {# étapes}}",
     "stepProgress": "{current} sur {total}",
@@ -2891,11 +2891,9 @@
       "reviewer": "Réviseur"
     },
     "assignees": "Assignés",
-    "cancelledFromStatusControl": "Annulé depuis le contrôle d’état de la tâche",
     "clearDate": "Effacer la date",
     "completeWork": "Terminer le travail",
-    "deadlineChangedFromTask": "Échéance ferme révisée dans les détails de la tâche",
-    "delegationReason": "Motif de la réaffectation",
+    "delegationReason": "Motif de la modification",
     "deletedAccount": "Compte supprimé",
     "dueDate": "Échéance",
     "hardDeadline": "Échéance ferme",

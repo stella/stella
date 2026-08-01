@@ -31,15 +31,15 @@ const MY_WORK_QUEUE = {
   COMPLETED: "completed",
 } as const;
 
-const MY_WORK_QUEUES = [
-  MY_WORK_QUEUE.INBOX,
-  MY_WORK_QUEUE.UPCOMING,
-  MY_WORK_QUEUE.AT_RISK,
-  MY_WORK_QUEUE.COMPLETED,
-] as const;
-
 const myWorkQuery = t.Object({
-  queue: t.Optional(t.UnionEnum(MY_WORK_QUEUES)),
+  queue: t.Optional(
+    t.Union([
+      t.Literal(MY_WORK_QUEUE.INBOX),
+      t.Literal(MY_WORK_QUEUE.UPCOMING),
+      t.Literal(MY_WORK_QUEUE.AT_RISK),
+      t.Literal(MY_WORK_QUEUE.COMPLETED),
+    ]),
+  ),
   asOf: t.Optional(t.String({ format: "date" })),
   limit: t.Optional(
     t.Integer({ minimum: 1, maximum: WORK_QUEUE_PAGE_SIZE_MAX }),
@@ -48,6 +48,8 @@ const myWorkQuery = t.Object({
 });
 
 const config = {
+  description:
+    "List the signed-in user's governed work in inbox, upcoming, at-risk, or completed queues with cursor pagination.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "workflow_orchestration" },
   access: "read",
@@ -55,6 +57,28 @@ const config = {
 } satisfies HandlerConfig;
 
 const sortDate = sql<string>`COALESCE(${workObligations.hardDeadlineDate}, ${workObligations.workingTargetDate}, ${LAST_SORT_DATE}::date)`;
+
+type QueueRow = {
+  workflowStatus: string;
+  hardDeadlineDate: string | null;
+  workingTargetDate: string | null;
+};
+
+const getAttention = (
+  { workflowStatus, hardDeadlineDate, workingTargetDate }: QueueRow,
+  asOf: string,
+) => {
+  if (workflowStatus === WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT) {
+    return "acknowledgement_required" as const;
+  }
+  if (hardDeadlineDate !== null && hardDeadlineDate <= asOf) {
+    return "hard_deadline_due" as const;
+  }
+  if (workingTargetDate !== null && workingTargetDate <= asOf) {
+    return "working_target_due" as const;
+  }
+  return "none" as const;
+};
 
 const myWork = createSafeRootHandler(
   config,
@@ -179,19 +203,21 @@ const myWork = createSafeRootHandler(
 
     return Result.ok({
       ...page,
-      items: page.items.map(({ sortDate: _sortDate, ...item }) => ({
-        ...item,
+      items: page.items.map((item) => ({
+        entityId: item.entityId,
+        workspaceId: item.workspaceId,
+        workspaceName: item.workspaceName,
+        type: item.type,
+        workflowStatus: item.workflowStatus,
         acknowledgedAt: item.acknowledgedAt?.toISOString() ?? null,
-        attention:
-          item.workflowStatus ===
-          WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT
-            ? "acknowledgement_required"
-            : item.hardDeadlineDate !== null && item.hardDeadlineDate <= asOf
-              ? "hard_deadline_due"
-              : item.workingTargetDate !== null &&
-                  item.workingTargetDate <= asOf
-                ? "working_target_due"
-                : "none",
+        workingTargetDate: item.workingTargetDate,
+        hardDeadlineDate: item.hardDeadlineDate,
+        sourceType: item.sourceType,
+        sourceDescription: item.sourceDescription,
+        name: item.name,
+        taskStatus: item.taskStatus,
+        priority: item.priority,
+        attention: getAttention(item, asOf),
       })),
     });
   },

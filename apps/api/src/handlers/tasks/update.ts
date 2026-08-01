@@ -12,7 +12,6 @@ import {
   workObligationEvents,
   workObligations,
 } from "@/api/db/schema";
-import { lockWorkObligation } from "@/api/handlers/work-obligations/lock-work-obligation";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder, FieldDiffs } from "@/api/lib/audit-log";
@@ -28,6 +27,8 @@ import {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { includes } from "@/api/lib/type-guards";
+import { ensureLegacyWorkObligation } from "@/api/lib/work-obligations/legacy-work-obligation";
+import { lockWorkObligation } from "@/api/lib/work-obligations/lock-work-obligation";
 
 import { validateAgendaFields } from "./agenda-fields";
 
@@ -120,6 +121,7 @@ export const updateTaskHandler = async function* ({
   recordAuditEvent,
   body,
 }: UpdateTaskHandlerProps) {
+  const workflowReason = body.workflowReason?.trim();
   const agendaKindResult = validateAgendaKind(body.agendaKind);
   if (agendaKindResult.status === "error") {
     return Result.err(agendaKindResult.error);
@@ -154,12 +156,23 @@ export const updateTaskHandler = async function* ({
         body.dueDate !== undefined ||
         agendaKind === "task" ||
         agendaKind === "deadline";
-      const workflow = workflowRelevant
+      let workflow = workflowRelevant
         ? await lockWorkObligation(tx, {
             entityId: body.taskId,
             workspaceId,
           })
         : undefined;
+      if (workflowRelevant && !workflow) {
+        await ensureLegacyWorkObligation({
+          tx,
+          entityId: body.taskId,
+          workspaceId,
+        });
+        workflow = await lockWorkObligation(tx, {
+          entityId: body.taskId,
+          workspaceId,
+        });
+      }
       if (workflowRelevant && !workflow) {
         return {
           status: "workflow_error" as const,
@@ -201,7 +214,7 @@ export const updateTaskHandler = async function* ({
         ) {
           if (
             workflow.status !== WORK_OBLIGATION_STATUS.UNASSIGNED &&
-            !body.workflowReason
+            !workflowReason
           ) {
             return {
               status: "workflow_error" as const,
@@ -218,17 +231,23 @@ export const updateTaskHandler = async function* ({
           (workflow.status === WORK_OBLIGATION_STATUS.COMPLETED ||
             workflow.status === WORK_OBLIGATION_STATUS.CANCELLED)
         ) {
-          nextWorkflowStatus =
-            workflow.ownerUserId === null
-              ? WORK_OBLIGATION_STATUS.UNASSIGNED
-              : workflow.acknowledgedAt === null
-                ? WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT
-                : WORK_OBLIGATION_STATUS.ACTIVE;
+          if (workflow.ownerUserId === null) {
+            nextWorkflowStatus = WORK_OBLIGATION_STATUS.UNASSIGNED;
+          } else if (workflow.acknowledgedAt === null) {
+            nextWorkflowStatus =
+              WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT;
+          } else {
+            nextWorkflowStatus = WORK_OBLIGATION_STATUS.ACTIVE;
+          }
           workflowEventType = WORK_OBLIGATION_EVENT_TYPE.REOPENED;
         }
 
         if (nextWorkflowStatus !== workflow.status && workflowEventType) {
           workflowSet.status = nextWorkflowStatus;
+          if (nextWorkflowStatus === WORK_OBLIGATION_STATUS.UNASSIGNED) {
+            workflowSet.acknowledgedAt = null;
+            workflowSet.acknowledgedByUserId = null;
+          }
           workflowChanges["status"] = {
             old: workflow.status,
             new: nextWorkflowStatus,
@@ -244,7 +263,7 @@ export const updateTaskHandler = async function* ({
               previousStatus: workflow.status,
               nextStatus: nextWorkflowStatus,
             },
-            reason: body.workflowReason ?? null,
+            reason: workflowReason ?? null,
             occurredAt: now,
           });
         }
@@ -281,17 +300,17 @@ export const updateTaskHandler = async function* ({
               previousDate: workflow.workingTargetDate,
               nextDate: body.dueDate,
             },
-            reason: body.workflowReason ?? null,
+            reason: workflowReason ?? null,
             occurredAt: now,
           });
         }
 
-        const nextType =
-          agendaKind === "deadline"
-            ? WORK_OBLIGATION_TYPE.DEADLINE
-            : agendaKind === "task"
-              ? WORK_OBLIGATION_TYPE.TASK
-              : undefined;
+        let nextType: "task" | "deadline" | undefined;
+        if (agendaKind === "deadline") {
+          nextType = WORK_OBLIGATION_TYPE.DEADLINE;
+        } else if (agendaKind === "task") {
+          nextType = WORK_OBLIGATION_TYPE.TASK;
+        }
         if (nextType !== undefined && nextType !== workflow.type) {
           workflowSet.type = nextType;
           workflowChanges["type"] = { old: workflow.type, new: nextType };
@@ -306,7 +325,7 @@ export const updateTaskHandler = async function* ({
               previousType: workflow.type,
               nextType,
             },
-            reason: body.workflowReason ?? null,
+            reason: workflowReason ?? null,
             occurredAt: now,
           });
         }
@@ -404,9 +423,7 @@ export const updateTaskHandler = async function* ({
             resourceType: AUDIT_RESOURCE_TYPE.WORK_OBLIGATION,
             resourceId: body.taskId,
             changes: workflowChanges,
-            ...(body.workflowReason
-              ? { metadata: { reason: body.workflowReason } }
-              : {}),
+            ...(workflowReason ? { metadata: { reason: workflowReason } } : {}),
           });
         }
         await recordAuditEvent(tx, {

@@ -10,7 +10,6 @@ import {
   taskAssignees,
   workspaces,
 } from "@/api/db/schema";
-import { createWorkObligation } from "@/api/handlers/work-obligations/create-work-obligation";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -27,8 +26,10 @@ import {
 } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { getSearchProvider } from "@/api/lib/search/provider";
 import { includes } from "@/api/lib/type-guards";
+import { createWorkObligation } from "@/api/lib/work-obligations/create-work-obligation";
 
 import { validateAgendaFields } from "./agenda-fields";
 
@@ -99,7 +100,7 @@ const createTaskBodySchema = t.Object({
   ),
   recurrence: t.Optional(t.Nullable(agendaRecurrenceSchema)),
   assigneeIds: t.Optional(
-    t.Array(t.String(), {
+    t.Array(tSafeId("user"), {
       maxItems: LIMITS.workspaceMembersCount,
     }),
   ),
@@ -218,10 +219,10 @@ export const createTaskEntityHandler = async function* ({
 
       const entityId = createSafeId<"entity">();
       const ownerUserId = body.ownerUserId ?? userId;
-      const memberIdsToValidate = [
-        ownerUserId,
-        ...new Set(body.assigneeIds ?? []),
-      ];
+      const memberIdsToValidate = [ownerUserId];
+      if (body.assigneeIds) {
+        memberIdsToValidate.push(...new Set(body.assigneeIds));
+      }
       const members = await tx.query.workspaceMembers.findMany({
         where: {
           workspaceId: { eq: workspaceId },
@@ -230,7 +231,9 @@ export const createTaskEntityHandler = async function* ({
         columns: { userId: true },
         limit: LIMITS.workspaceMembersCount,
       });
-      const workspaceMemberIds = new Set(members.map(({ userId: id }) => id));
+      const workspaceMemberIds = new Set(
+        members.map((member) => brandPersistedUserId(member.userId)),
+      );
       if (memberIdsToValidate.some((id) => !workspaceMemberIds.has(id))) {
         return {
           ok: false as const,
