@@ -30,13 +30,13 @@ CREATE INDEX CONCURRENTLY "case_law_decisions_updated_id_idx_replacement"
 -- migration's previous index after its successor has finished building.
 DROP INDEX CONCURRENTLY IF EXISTS "case_law_decisions_updated_id_idx";
 --> statement-breakpoint
+SET lock_timeout = '1s';
+--> statement-breakpoint
+SET statement_timeout = '5s';
+--> statement-breakpoint
 ALTER INDEX "case_law_decisions_updated_id_idx_replacement"
   RENAME TO "case_law_decisions_updated_id_idx";
 --> statement-breakpoint
 
-SET statement_timeout = '5s';
---> statement-breakpoint
-SET lock_timeout = '1s';
---> statement-breakpoint
 -- squawk-ignore transaction-nesting, ban-uncommitted-transaction
 BEGIN;

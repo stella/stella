@@ -222,6 +222,26 @@ const rewrittenMigrationHistories = {
       },
     ],
   },
+  // The schema effect is unchanged; the current file restores bounded
+  // timeouts before the final metadata operation.
+  "20260729120000_case_law_filter_search_index": {
+    currentHash:
+      "d5694708690bf58d1eb66f4e7b809e3e9a84be5978d7bea7a5f011a692993e53",
+    priorHashes: [
+      "6b0f5b13272eb84bb333ed0ae2a5e0f74c2459566938e2938b66667d4f0de433",
+    ],
+    requiredIndexes: [],
+  },
+  // The schema effect is unchanged; the current file gives the conversion a
+  // finite execution budget when the session starts at PostgreSQL's default.
+  "20260729150000_timestamptz_everywhere": {
+    currentHash:
+      "ecd84e833a249b738353900445cf4f8ef2dac475492ccec8fbd5cbba875863c3",
+    priorHashes: [
+      "3c60d3d8fe57b06efd452dc6f9580c5bbfb85e9b606cbf7cc6d3437cd2b1dda1",
+    ],
+    requiredIndexes: [],
+  },
   "20260731130000_decision_source_document_id": {
     currentHash:
       "479cd1cd88870fb947ea7da61411f76d96a18f07bf7cc308465ce8d62dc8c40e",

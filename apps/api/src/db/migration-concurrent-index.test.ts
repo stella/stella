@@ -4,11 +4,9 @@ import nodePath from "node:path";
 import { ONLINE_VALIDATED_INDEX_NAMES } from "./online-migrations";
 
 const MIGRATIONS_DIR = nodePath.resolve(import.meta.dir, "../../drizzle");
-const SAFETY_TOKEN =
-  /\bSET\s+(?:(?:SESSION|LOCAL)\s+)?statement_timeout\s*=\s*(?:'[^']*'|[^\s;]+)|\b(?:CREATE\s+(?:UNIQUE\s+)?|DROP\s+)INDEX\s+CONCURRENTLY\b/giu;
 const ZERO_DURATION = /^'?0\s*(?:us|ms|s|min|h|d)?'?$/iu;
-const UNBOUNDED_TIMEOUT =
-  /^SET\s+(?:SESSION\s+)?statement_timeout\s*=\s*'?0\s*(?:us|ms|s|min|h|d)?'?$/iu;
+const CONCURRENT_INDEX_OPERATION =
+  /^(?:CREATE\s+(?:UNIQUE\s+)?|DROP\s+)INDEX\s+CONCURRENTLY\b/iu;
 const CONCURRENT_IF_NOT_EXISTS =
   /\bCREATE\s+(?:UNIQUE\s+)?INDEX\s+CONCURRENTLY\s+IF\s+NOT\s+EXISTS\s+"([^"]+)"/giu;
 const CONCURRENT_UNIQUE_CREATE =
@@ -290,9 +288,74 @@ const parseTypeChangePolicy = (
 };
 
 const isCustomStatementBudget = (statement: string) =>
-  /^DO\s+\$\$[\s\S]*SELECT\s+setting::integer\s+INTO\s+current_ms\s+FROM\s+pg_settings\s+WHERE\s+name\s*=\s*'statement_timeout';[\s\S]*IF\s+current_ms\s*<>\s*0\s+AND\s+current_ms\s*<\s*1200000\s+THEN[\s\S]*PERFORM\s+set_config\(\s*'statement_timeout'\s*,\s*'20min'\s*,\s*false\s*\);[\s\S]*END[\s\S]*\$\$$/iu.test(
+  /^DO\s+\$\$[\s\S]*SELECT\s+setting::integer\s+INTO\s+current_ms\s+FROM\s+pg_settings\s+WHERE\s+name\s*=\s*'statement_timeout';[\s\S]*IF\s+current_ms\s*=\s*0\s+OR\s+current_ms\s*<\s*1200000\s+THEN[\s\S]*PERFORM\s+set_config\(\s*'statement_timeout'\s*,\s*'20min'\s*,\s*false\s*\);[\s\S]*END[\s\S]*\$\$$/iu.test(
     statement,
   );
+
+const collectUnsafeConcurrentTimeouts = (
+  relativePath: string,
+  source: string,
+) => {
+  const violations = [];
+  let statementTimeout: TimeoutState = "unset";
+  let concurrentBlockOpen = false;
+
+  for (const statement of splitSqlStatements(source)) {
+    const timeoutUpdate = parseTimeoutUpdate(statement);
+    const isConcurrentOperation = CONCURRENT_INDEX_OPERATION.test(statement);
+    const isStatementRestore =
+      (timeoutUpdate?.type === "set" &&
+        timeoutUpdate.name === "statement" &&
+        timeoutUpdate.scope === "session" &&
+        timeoutUpdate.state !== "unbounded") ||
+      (timeoutUpdate?.type === "reset" &&
+        (timeoutUpdate.name === "all" || timeoutUpdate.name === "statement"));
+    const isProtocolBridge =
+      (timeoutUpdate?.type === "set" && timeoutUpdate.name === "lock") ||
+      /^(?:BEGIN|COMMIT)$/iu.test(statement);
+
+    if (concurrentBlockOpen) {
+      if (!isConcurrentOperation && !isStatementRestore && !isProtocolBridge) {
+        violations.push(
+          `${relativePath}: statement timeout is not restored immediately after concurrent index operations`,
+        );
+        concurrentBlockOpen = false;
+      } else if (isStatementRestore) {
+        concurrentBlockOpen = false;
+      }
+    }
+
+    if (timeoutUpdate?.type === "set") {
+      if (timeoutUpdate.name === "statement") {
+        statementTimeout =
+          timeoutUpdate.scope === "session" ? timeoutUpdate.state : "unset";
+      }
+      continue;
+    }
+    if (timeoutUpdate?.type === "reset") {
+      if (timeoutUpdate.name === "all" || timeoutUpdate.name === "statement") {
+        statementTimeout = "unset";
+      }
+      continue;
+    }
+    if (!isConcurrentOperation) {
+      continue;
+    }
+
+    if (statementTimeout !== "unbounded") {
+      violations.push(
+        `${relativePath}: concurrent index operation has a timeout`,
+      );
+    }
+    concurrentBlockOpen = true;
+  }
+
+  if (concurrentBlockOpen || statementTimeout === "unbounded") {
+    violations.push(`${relativePath}: statement timeout is not restored`);
+  }
+
+  return violations;
+};
 
 const collectUnsafeConcurrentIndexes = async (): Promise<string[]> => {
   const violations: string[] = [];
@@ -355,26 +418,7 @@ const collectUnsafeConcurrentIndexes = async (): Promise<string[]> => {
         );
       }
     }
-    let hasUnboundedTimeout = false;
-    let sawConcurrentIndex = false;
-
-    for (const match of sqlWithoutLineComments.matchAll(SAFETY_TOKEN)) {
-      const token = match[0].replaceAll(/\s+/gu, " ").trim();
-      if (/^SET\s/iu.test(token)) {
-        hasUnboundedTimeout = UNBOUNDED_TIMEOUT.test(token);
-        continue;
-      }
-      if (!hasUnboundedTimeout) {
-        violations.push(
-          `${relativePath}: concurrent index operation has a timeout`,
-        );
-      }
-      sawConcurrentIndex = true;
-    }
-
-    if (sawConcurrentIndex && hasUnboundedTimeout) {
-      violations.push(`${relativePath}: statement timeout is not restored`);
-    }
+    violations.push(...collectUnsafeConcurrentTimeouts(relativePath, source));
   }
 
   return violations.sort();
@@ -547,7 +591,7 @@ DECLARE current_ms integer;
 BEGIN
   SELECT setting::integer INTO current_ms
   FROM pg_settings WHERE name = 'statement_timeout';
-  IF current_ms <> 0 AND current_ms < 1200000 THEN
+  IF current_ms = 0 OR current_ms < 1200000 THEN
     PERFORM set_config('statement_timeout', '20min', false);
   END IF;
 END
@@ -626,12 +670,12 @@ SELECT 1;`;
 
   test("rejects transaction-local timeout protocols", () => {
     const relativePath = "20260729150000_timestamptz_everywhere/migration.sql";
-    expect(UNBOUNDED_TIMEOUT.test("SET LOCAL statement_timeout = 0")).toBe(
-      false,
-    );
-    expect(UNBOUNDED_TIMEOUT.test("SET SESSION statement_timeout = 0")).toBe(
-      true,
-    );
+    expect(parseTimeoutUpdate("SET LOCAL statement_timeout = 0")).toEqual({
+      type: "set",
+      name: "statement",
+      scope: "local",
+      state: "unbounded",
+    });
     expect(
       collectUnsafeTypeChangesInMigration(
         relativePath,
@@ -642,6 +686,34 @@ SELECT 1;`;
         ALTER TABLE example ALTER COLUMN value TYPE timestamptz;`,
       ),
     ).toContain(`${relativePath}: type change has an unbounded lock wait`);
+  });
+
+  test("tracks every timeout form around concurrent index operations", () => {
+    const unsafePrefix = "SET statement_timeout = 0; RESET statement_timeout;";
+    expect(
+      collectUnsafeConcurrentTimeouts(
+        "reset/migration.sql",
+        `${unsafePrefix} CREATE INDEX CONCURRENTLY example_idx ON example (id);`,
+      ),
+    ).toContain(
+      "reset/migration.sql: concurrent index operation has a timeout",
+    );
+    expect(
+      collectUnsafeConcurrentTimeouts(
+        "to/migration.sql",
+        `SET statement_timeout = 0;
+        SET statement_timeout TO '5s';
+        CREATE INDEX CONCURRENTLY example_idx ON example (id);`,
+      ),
+    ).toContain("to/migration.sql: concurrent index operation has a timeout");
+    expect(
+      collectUnsafeConcurrentTimeouts(
+        "safe/migration.sql",
+        `SET SESSION statement_timeout TO 0;
+        CREATE INDEX CONCURRENTLY example_idx ON example (id);
+        SET statement_timeout = '5s';`,
+      ),
+    ).toEqual([]);
   });
 
   test("keeps lock waits bounded for custom execution budgets", () => {
