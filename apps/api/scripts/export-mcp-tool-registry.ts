@@ -33,9 +33,7 @@ for (const tool of DEFAULT_MCP_TOOL_DEFINITIONS) {
     name: tool.name,
     description: tool.description,
     inputSchema: tool.inputSchema,
-    ...(tool.annotations === undefined
-      ? {}
-      : { annotations: tool.annotations }),
+    annotations: tool.annotations,
   });
 }
 
