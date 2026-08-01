@@ -357,7 +357,7 @@ const PlaybookEditorForm = ({
       return;
     }
     const position = positions.find((p) => p.sourceId === convertConfirmId);
-    if (position && position.mode === "graded") {
+    if (position?.mode === "graded") {
       updatePosition(convertConfirmId, gradedToExtract(position));
     }
     setConvertConfirmId(null);

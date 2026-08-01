@@ -286,10 +286,9 @@ const ExportReportDialogBody = ({
 
   // "Customize" is offered only for a built-in: cloning it into the org's
   // templates is the one way to see and edit the layout in Template Studio.
-  const selectedBuiltinKey =
-    resolvedValue && resolvedValue.startsWith(BUILTIN_PREFIX)
-      ? resolvedValue.slice(BUILTIN_PREFIX.length)
-      : null;
+  const selectedBuiltinKey = resolvedValue?.startsWith(BUILTIN_PREFIX)
+    ? resolvedValue.slice(BUILTIN_PREFIX.length)
+    : null;
 
   const handleCustomize = async () => {
     if (selectedBuiltinKey === null) {

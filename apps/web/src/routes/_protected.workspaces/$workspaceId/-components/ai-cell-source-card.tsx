@@ -361,7 +361,7 @@ const resolveSourceFiles = (
   const files: SourceFile[] = [];
   for (const fileFieldId of justification.fileFieldIds) {
     const field = Object.values(entity.fields).find(
-      (f): f is WorkspaceField => f !== undefined && f.id === fileFieldId,
+      (f): f is WorkspaceField => f?.id === fileFieldId,
     );
     if (field?.content.type === "file") {
       files.push({
