@@ -176,6 +176,13 @@ describe("reconciliation fault isolation", () => {
     const counts = await runDocumentProcessingReconciliationPhases({
       phases: [
         {
+          name: "delivery",
+          run: async () => {
+            calls.push("delivery");
+            return 5;
+          },
+        },
+        {
           name: "repair",
           run: async () => {
             calls.push("repair");
@@ -209,9 +216,16 @@ describe("reconciliation fault isolation", () => {
       },
     });
 
-    expect(calls).toEqual(["repair", "reindex", "retry", "stale-lease"]);
+    expect(calls).toEqual([
+      "delivery",
+      "repair",
+      "reindex",
+      "retry",
+      "stale-lease",
+    ]);
     expect(failures).toEqual([{ error: repairError, phase: "repair" }]);
     expect(counts).toEqual({
+      delivery: 5,
       reindex: 2,
       repair: 0,
       retry: 3,

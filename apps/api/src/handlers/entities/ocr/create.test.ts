@@ -18,7 +18,7 @@ void mock.module("@/api/db/root", () => ({
 }));
 const { requestManualOcrHandler } =
   await import("@/api/handlers/entities/ocr/create");
-const { persistManualOcrRun } =
+const { classifyManualOcrCollision, persistManualOcrRun } =
   await import("@/api/lib/document-processing-request");
 
 const entityId = toSafeId<"entity">("entity_test");
@@ -57,6 +57,38 @@ const createSafeDb =
     });
     return Result.ok(await callback(tx));
   };
+
+test("manual OCR collisions preserve owners and restart post-projection promotions", () => {
+  for (const status of ["queued", "running"] as const) {
+    expect(
+      classifyManualOcrCollision({
+        errorCode: null,
+        projectionState: "absent",
+        requestSource: "manual",
+        status,
+      }),
+    ).toBe("reuse");
+  }
+
+  expect(
+    classifyManualOcrCollision({
+      errorCode: null,
+      projectionState: "different",
+      requestSource: "upload",
+      status: "running",
+    }),
+  ).toBe("retry");
+  for (const projectionState of ["absent", "matching"] as const) {
+    expect(
+      classifyManualOcrCollision({
+        errorCode: null,
+        projectionState,
+        requestSource: "upload",
+        status: "running",
+      }),
+    ).toBe("promote");
+  }
+});
 
 describe("requestManualOcrHandler", () => {
   test("queues a durable run for the current unencrypted PDF field", async () => {
@@ -303,20 +335,27 @@ describe("requestManualOcrHandler", () => {
               }),
             };
           }
-          return {
-            from: () => ({
-              where: () => ({
-                limit: () => ({
-                  for: async () => [
-                    {
-                      errorCode: null,
-                      id: runId,
-                      requestSource,
-                      status,
-                    },
-                  ],
+          if (selectCount === 4) {
+            return {
+              from: () => ({
+                where: () => ({
+                  limit: () => ({
+                    for: async () => [
+                      {
+                        errorCode: null,
+                        id: runId,
+                        requestSource,
+                        status,
+                      },
+                    ],
+                  }),
                 }),
               }),
+            };
+          }
+          return {
+            from: () => ({
+              where: () => ({ limit: async () => [] }),
             }),
           };
         },
@@ -431,7 +470,17 @@ describe("requestManualOcrHandler", () => {
           return {
             from: () => ({
               where: () => ({
-                limit: async () => (hasProjection ? [{ entityId }] : []),
+                limit: async () =>
+                  hasProjection
+                    ? [
+                        {
+                          sourceEntityVersionId: entityVersionId,
+                          sourceFieldId: fieldId,
+                          sourceFileId: "00000000-0000-4000-8000-000000000001",
+                          sourceSha256Hex: "a".repeat(64),
+                        },
+                      ]
+                    : [],
               }),
             }),
           };

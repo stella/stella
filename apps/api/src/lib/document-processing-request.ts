@@ -22,6 +22,55 @@ const RETRYABLE_MANUAL_OCR_CANCELLATION_CODES = [
 ] as const;
 const MANUAL_SELECTION_SUPERSEDED_CODE =
   RETRYABLE_MANUAL_OCR_CANCELLATION_CODES[1];
+const MANUAL_OCR_COLLISION_ACTION = {
+  PROMOTE: "promote",
+  RETRY: "retry",
+  REUSE: "reuse",
+} as const;
+
+type ManualOcrProjectionState = "absent" | "different" | "matching";
+
+export const classifyManualOcrCollision = ({
+  errorCode,
+  projectionState,
+  requestSource,
+  status,
+}: {
+  errorCode: string | null;
+  projectionState: ManualOcrProjectionState;
+  requestSource: (typeof documentProcessingRuns.$inferSelect)["requestSource"];
+  status: (typeof documentProcessingRuns.$inferSelect)["status"];
+}): (typeof MANUAL_OCR_COLLISION_ACTION)[keyof typeof MANUAL_OCR_COLLISION_ACTION] => {
+  if (status === "queued") {
+    return requestSource === "manual"
+      ? MANUAL_OCR_COLLISION_ACTION.REUSE
+      : MANUAL_OCR_COLLISION_ACTION.PROMOTE;
+  }
+  if (status === "running") {
+    if (requestSource === "manual") {
+      return MANUAL_OCR_COLLISION_ACTION.REUSE;
+    }
+    return projectionState === "different"
+      ? MANUAL_OCR_COLLISION_ACTION.RETRY
+      : MANUAL_OCR_COLLISION_ACTION.PROMOTE;
+  }
+  if (status === "failed") {
+    return MANUAL_OCR_COLLISION_ACTION.RETRY;
+  }
+  if (status === "succeeded") {
+    return projectionState === "matching"
+      ? MANUAL_OCR_COLLISION_ACTION.REUSE
+      : MANUAL_OCR_COLLISION_ACTION.RETRY;
+  }
+  if (
+    RETRYABLE_MANUAL_OCR_CANCELLATION_CODES.some(
+      (retryableCode) => retryableCode === errorCode,
+    )
+  ) {
+    return MANUAL_OCR_COLLISION_ACTION.RETRY;
+  }
+  return MANUAL_OCR_COLLISION_ACTION.REUSE;
+};
 
 export type ManualOcrSource = {
   entityId: SafeId<"entity">;
@@ -143,6 +192,7 @@ export const persistManualOcrRun = async ({
         .select({
           errorCode: documentProcessingRuns.errorCode,
           id: documentProcessingRuns.id,
+          requestSource: documentProcessingRuns.requestSource,
           status: documentProcessingRuns.status,
         })
         .from(documentProcessingRuns)
@@ -162,41 +212,49 @@ export const persistManualOcrRun = async ({
         .limit(1)
         .for("update");
       const existing = existingRows.at(0);
-      const matchingProjection =
-        existing?.status === "succeeded"
+      const projectionRows =
+        existing?.status === "running" || existing?.status === "succeeded"
           ? await tx
-              .select({ entityId: extractedContent.entityId })
+              .select({
+                sourceEntityVersionId: extractedContent.sourceEntityVersionId,
+                sourceFieldId: extractedContent.sourceFieldId,
+                sourceFileId: extractedContent.sourceFileId,
+                sourceSha256Hex: extractedContent.sourceSha256Hex,
+              })
               .from(extractedContent)
               .where(
                 and(
                   eq(extractedContent.organizationId, organizationId),
                   eq(extractedContent.workspaceId, workspaceId),
                   eq(extractedContent.entityId, source.entityId),
-                  eq(
-                    extractedContent.sourceEntityVersionId,
-                    source.entityVersionId,
-                  ),
-                  eq(extractedContent.sourceFieldId, source.fieldId),
-                  eq(extractedContent.sourceFileId, source.sourceFileId),
-                  eq(extractedContent.sourceSha256Hex, source.sourceSha256Hex),
                 ),
               )
               .limit(1)
           : [];
-      const needsProjectionRestore =
-        existing?.status === "succeeded" && !matchingProjection.at(0);
-      const canPromote =
-        existing?.status === "queued" || existing?.status === "running";
-      const canRetry =
-        existing?.status === "failed" ||
-        needsProjectionRestore ||
-        (existing?.status === "cancelled" &&
-          RETRYABLE_MANUAL_OCR_CANCELLATION_CODES.some(
-            (errorCode) => errorCode === existing.errorCode,
-          ));
+      const projection = projectionRows.at(0);
+      const hasMatchingProjection =
+        projection?.sourceEntityVersionId === source.entityVersionId &&
+        projection.sourceFieldId === source.fieldId &&
+        projection.sourceFileId === source.sourceFileId &&
+        projection.sourceSha256Hex === source.sourceSha256Hex;
+      let projectionState: ManualOcrProjectionState = "absent";
+      if (projection) {
+        projectionState = "different";
+      }
+      if (hasMatchingProjection) {
+        projectionState = "matching";
+      }
+      const collisionAction = existing
+        ? classifyManualOcrCollision({
+            errorCode: existing.errorCode,
+            projectionState,
+            requestSource: existing.requestSource,
+            status: existing.status,
+          })
+        : MANUAL_OCR_COLLISION_ACTION.REUSE;
       if (!existing) {
         run = null;
-      } else if (canPromote) {
+      } else if (collisionAction === MANUAL_OCR_COLLISION_ACTION.PROMOTE) {
         const promoted = await tx
           .update(documentProcessingRuns)
           .set({
@@ -215,7 +273,7 @@ export const persistManualOcrRun = async ({
             status: documentProcessingRuns.status,
           });
         run = promoted.at(0) ?? existing;
-      } else if (!canRetry) {
+      } else if (collisionAction === MANUAL_OCR_COLLISION_ACTION.REUSE) {
         run = existing;
       } else {
         const retried = await tx
@@ -241,6 +299,10 @@ export const persistManualOcrRun = async ({
               or(
                 eq(documentProcessingRuns.status, "failed"),
                 eq(documentProcessingRuns.status, "succeeded"),
+                and(
+                  eq(documentProcessingRuns.status, "running"),
+                  ne(documentProcessingRuns.requestSource, "manual"),
+                ),
                 and(
                   eq(documentProcessingRuns.status, "cancelled"),
                   inArray(

@@ -7,6 +7,7 @@ import {
   gte,
   gt,
   inArray,
+  isNotNull,
   isNull,
   lt,
   lte,
@@ -65,6 +66,10 @@ const DORMANT_WORKER_KEEP_ALIVE_MS = 60 * 60_000;
 const RECONCILE_BATCH_SIZE = 100;
 const ENQUEUE_VISIBILITY_TIMEOUT_MS = 5 * 60 * 1000;
 const ENQUEUE_FAILURE_RETRY_MS = 30_000;
+const QUEUED_OCR_SELECTION = {
+  ALL_DUE: "all-due",
+  SCHEDULED_RETRIES: "scheduled-retries",
+} as const;
 const WORKER_LEASE_TIMEOUT_MS = 40 * 60 * 1000;
 const WORKER_LEASE_HEARTBEAT_MS = 5 * 60 * 1000;
 const WORKER_LEASE_HEARTBEAT_TIMEOUT_MS = 30_000;
@@ -1200,7 +1205,7 @@ const returnInterruptedRunToQueue = async ({
       errorAt: null,
       errorCode: null,
       finishedAt: null,
-      nextAttemptAt: null,
+      nextAttemptAt: new Date(),
       progressCompleted: 0,
       progressTotal: null,
       startedAt: null,
@@ -1664,8 +1669,12 @@ const updateQueuedRunSchedule = async ({
 
 export const dispatchQueuedDocumentProcessingRuns = async ({
   limit = RECONCILE_BATCH_SIZE,
+  selection = QUEUED_OCR_SELECTION.ALL_DUE,
 }: {
   limit?: number;
+  selection?:
+    | typeof QUEUED_OCR_SELECTION.ALL_DUE
+    | typeof QUEUED_OCR_SELECTION.SCHEDULED_RETRIES;
 } = {}): Promise<{ attempted: number; retryAt: Date | null }> => {
   const now = new Date();
   const runs = await rootDb
@@ -1675,6 +1684,9 @@ export const dispatchQueuedDocumentProcessingRuns = async ({
       and(
         eq(documentProcessingRuns.kind, "ocr"),
         eq(documentProcessingRuns.status, "queued"),
+        selection === QUEUED_OCR_SELECTION.SCHEDULED_RETRIES
+          ? isNotNull(documentProcessingRuns.nextAttemptAt)
+          : undefined,
         or(
           isNull(documentProcessingRuns.nextAttemptAt),
           lte(documentProcessingRuns.nextAttemptAt, now),
@@ -1728,6 +1740,13 @@ export const dispatchQueuedDocumentProcessingRuns = async ({
   };
 };
 
+const dispatchScheduledDocumentProcessingRetries = async (): Promise<number> =>
+  (
+    await dispatchQueuedDocumentProcessingRuns({
+      selection: QUEUED_OCR_SELECTION.SCHEDULED_RETRIES,
+    })
+  ).attempted;
+
 const recoverRetryableAutomaticOcrFailures = async (): Promise<number> => {
   const now = new Date();
   const retryableRuns = await rootDb
@@ -1780,7 +1799,7 @@ const recoverRetryableAutomaticOcrFailures = async (): Promise<number> => {
   const recovered = await rootDb
     .update(documentProcessingRuns)
     .set({
-      nextAttemptAt: null,
+      nextAttemptAt: now,
       status: "queued",
       updatedAt: new Date(),
     })
@@ -2092,6 +2111,7 @@ const recoverFailedOcrSearchIndexes = async (): Promise<number> => {
 
 const recoverStaleDocumentProcessingRuns = async (): Promise<number> => {
   const staleBefore = new Date(Date.now() - WORKER_LEASE_TIMEOUT_MS);
+  const recoveredAt = new Date();
   const staleRuns = await rootDb
     .select({
       attemptCount: documentProcessingRuns.attemptCount,
@@ -2184,7 +2204,7 @@ const recoverStaleDocumentProcessingRuns = async (): Promise<number> => {
       claimedBy: null,
       errorAt: new Date(),
       errorCode: "worker_lease_expired",
-      nextAttemptAt: null,
+      nextAttemptAt: recoveredAt,
       status: "queued",
       updatedAt: new Date(),
     })
@@ -2215,6 +2235,7 @@ const handleDocumentProcessingFailure = ({
 };
 
 const RECONCILIATION_PHASE = {
+  DELIVERY: "delivery",
   REINDEX: "reindex",
   REPAIR: "repair",
   RETRY: "retry",
@@ -2239,6 +2260,7 @@ export const runDocumentProcessingReconciliationPhases = async ({
   phases: readonly ReconciliationPhase[];
 }): Promise<ReconciliationCounts> => {
   const counts: ReconciliationCounts = {
+    [RECONCILIATION_PHASE.DELIVERY]: 0,
     [RECONCILIATION_PHASE.REINDEX]: 0,
     [RECONCILIATION_PHASE.REPAIR]: 0,
     [RECONCILIATION_PHASE.RETRY]: 0,
@@ -2283,6 +2305,10 @@ const reconcileDocumentProcessing = async ({
           name: RECONCILIATION_PHASE.STALE_LEASE,
           run: recoverStaleDocumentProcessingRuns,
         },
+        {
+          name: RECONCILIATION_PHASE.DELIVERY,
+          run: dispatchScheduledDocumentProcessingRetries,
+        },
       ],
       onPhaseError: (error, phase) => {
         captureError(error, { phase });
@@ -2293,12 +2319,14 @@ const reconcileDocumentProcessing = async ({
       },
     });
     if (
+      counts[RECONCILIATION_PHASE.DELIVERY] > 0 ||
       counts[RECONCILIATION_PHASE.REPAIR] > 0 ||
       counts[RECONCILIATION_PHASE.REINDEX] > 0 ||
       counts[RECONCILIATION_PHASE.RETRY] > 0 ||
       counts[RECONCILIATION_PHASE.STALE_LEASE] > 0
     ) {
       logger.info("document_processing.reconciled", {
+        deliveredCount: String(counts[RECONCILIATION_PHASE.DELIVERY]),
         recoveredCount: String(counts[RECONCILIATION_PHASE.STALE_LEASE]),
         reindexedCount: String(counts[RECONCILIATION_PHASE.REINDEX]),
         repairedCount: String(counts[RECONCILIATION_PHASE.REPAIR]),
