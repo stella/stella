@@ -1,5 +1,12 @@
 import type { TranslationKey } from "../i18n/utils";
 
+type SceneWindowLabelKey = Extract<
+  TranslationKey,
+  | "story.bringEditorToFront"
+  | "story.bringTerminalToFront"
+  | "story.bringWorkspaceToFront"
+>;
+
 export const productStorySceneIds = [
   "workspace",
   "review",
@@ -52,7 +59,9 @@ export type SceneWindowId = "workspace" | "source" | "terminal";
  * window for the same reason `resolveProductEyebrows` is: `satisfies` here
  * turns a new scene window into a typecheck error, not a silent English label.
  */
-export const resolveSceneWindowLabels = (t: (key: TranslationKey) => string) =>
+export const resolveSceneWindowLabels = (
+  t: (key: SceneWindowLabelKey) => string,
+) =>
   ({
     workspace: t("story.bringWorkspaceToFront"),
     source: t("story.bringEditorToFront"),

@@ -10,6 +10,7 @@ import type { useTranslations as useAliasedTranslations } from "use-intl";
 type TranslationKey = "feature.title" | "feature.description";
 type FeatureKey = "feature.title";
 type AppKey = TranslationKey;
+export type ExportedAppKey = TranslationKey;
 
 declare const getTranslator: () => unknown;
 // oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- The generic namespace syntax is the allowed use-intl shape under test.
@@ -25,6 +26,10 @@ export type BroadCallable = (key: TranslationKey) => string;
 // MUST flag: renaming the full key union must not bypass the invariant.
 // oxlint-disable-next-line no-broad-translation-callable/no-broad-translation-callable
 export type AliasedBroadCallable = (key: AppKey) => string;
+
+// MUST flag: exported aliases retain the same broad key set.
+// oxlint-disable-next-line no-broad-translation-callable/no-broad-translation-callable
+export type ExportedAliasedBroadCallable = (key: ExportedAppKey) => string;
 
 // MUST flag: the full server translator type is retained in a helper alias.
 // oxlint-disable-next-line no-broad-translation-callable/no-broad-translation-callable
@@ -47,6 +52,12 @@ export type NamespacedTranslator = ReturnType<
 export type BroadCallSignature = {
   // oxlint-disable-next-line no-broad-translation-callable/no-broad-translation-callable, typescript/prefer-function-type -- The call-signature spelling is the syntax under test.
   (key: TranslationKey): string;
+};
+
+// MUST flag: method signatures are another spelling of the broad callable.
+export type BroadMethodSignature = {
+  // oxlint-disable-next-line no-broad-translation-callable/no-broad-translation-callable, typescript/method-signature-style -- The method-signature spelling is the syntax under test.
+  translate(key: TranslationKey): string;
 };
 
 // Allowed: a narrow feature-specific key union keeps assignability bounded.

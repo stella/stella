@@ -26,6 +26,9 @@ const isBroadTranslatorName = (node): boolean =>
 const unwrapTypeAnnotation = (node) =>
   node?.type === "TSTypeAnnotation" ? node.typeAnnotation : node;
 
+const unwrapExportedDeclaration = (node) =>
+  node?.type === "ExportNamedDeclaration" ? node.declaration : node;
+
 const hasTranslationKeyParameter = (
   node,
   broadKeyTypeNames: Set<string>,
@@ -110,26 +113,28 @@ export default {
             while (foundAlias) {
               foundAlias = false;
               for (const statement of node.body ?? []) {
-                if (statement.type !== "TSTypeAliasDeclaration") {
+                const declaration = unwrapExportedDeclaration(statement);
+                if (declaration?.type !== "TSTypeAliasDeclaration") {
                   continue;
                 }
-                const annotation = statement.typeAnnotation;
+                const annotation = declaration.typeAnnotation;
                 if (
-                  statement.id?.type !== "Identifier" ||
-                  broadKeyTypeNames.has(statement.id.name) ||
+                  declaration.id?.type !== "Identifier" ||
+                  broadKeyTypeNames.has(declaration.id.name) ||
                   annotation?.type !== "TSTypeReference" ||
                   annotation.typeName?.type !== "Identifier" ||
                   !broadKeyTypeNames.has(annotation.typeName.name)
                 ) {
                   continue;
                 }
-                broadKeyTypeNames.add(statement.id.name);
+                broadKeyTypeNames.add(declaration.id.name);
                 foundAlias = true;
               }
             }
           },
           TSCallSignatureDeclaration: reportBroadParameters,
           TSFunctionType: reportBroadParameters,
+          TSMethodSignature: reportBroadParameters,
           TSTypeReference(node) {
             if (isBroadTranslatorReturnType(node, broadTranslatorTypeNames)) {
               context.report({ messageId: "broadCallable", node });

@@ -702,6 +702,7 @@ export default defineConfig({
       // turn one assignability check into minutes of compiler work.
       files: [
         "apps/web/src/**/*.{ts,tsx}",
+        "apps/landing/src/**/*.{ts,tsx}",
         ".oxlint-plugins/__fixtures__/no-broad-translation-callable.fixture.ts",
       ],
       excludeFiles: ["apps/web/src/i18n/types.ts"],
