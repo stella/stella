@@ -66,6 +66,7 @@ import type {
   StructureError,
 } from "@/components/templates/template-discover-types";
 import type { LookupRegistry } from "@/components/templates/template-field-manifest";
+import { runLeadingSingleFlight } from "@/components/templates/template-form.logic";
 import Tooltip from "@/components/tooltip";
 import { useMountEffect } from "@/hooks/use-effect";
 import { useLocale } from "@/i18n/formatting-context";
@@ -1614,6 +1615,7 @@ export const TemplateForm = ({
     Record<string, ClauseBody>
   >({});
   const [loading, setLoading] = useState(false);
+  const fillToMatterFlight = useRef<Promise<void> | null>(null);
   const [touched, setTouched] = useState<TouchedFields>({});
   const [errors, setErrors] = useState<FieldErrors>({});
   // Source snippets for AI-prefilled fields, keyed by field path. Presence
@@ -2140,7 +2142,10 @@ export const TemplateForm = ({
 
   /** Fill server-side and persist the result as a document entity in the
    *  given matter (the fill-to endpoint). Validates like a download. */
-  const fillToMatter = async (workspaceId: string, parentId: string | null) => {
+  const performFillToMatter = async (
+    workspaceId: string,
+    parentId: string | null,
+  ) => {
     if (!templateId || !saveTarget) {
       return;
     }
@@ -2153,81 +2158,92 @@ export const TemplateForm = ({
     }
 
     setLoading(true);
-    const submitValues = buildSubmitValues(values, fields, conditions);
-    const response = await api
-      .templates({ templateId })
-      ["fill-to"]({ workspaceId })
-      .post({
-        values: JSON.stringify(submitValues),
-        clauseOverrides,
-        ...(parentId !== null && { parentId: toSafeId<"entity">(parentId) }),
-      });
-    setLoading(false);
+    try {
+      const submitValues = buildSubmitValues(values, fields, conditions);
+      const response = await api
+        .templates({ templateId })
+        ["fill-to"]({ workspaceId })
+        .post({
+          values: JSON.stringify(submitValues),
+          clauseOverrides,
+          ...(parentId !== null && {
+            parentId: toSafeId<"entity">(parentId),
+          }),
+        });
 
-    if (response.error) {
-      stellaToast.add({
-        type: "error",
-        title: t("templates.fillFailed"),
-        description: userErrorMessage(
-          response.error,
-          t("common.unexpectedError"),
-        ),
-      });
-      return;
-    }
+      if (response.error) {
+        stellaToast.add({
+          type: "error",
+          title: t("templates.fillFailed"),
+          description: userErrorMessage(
+            response.error,
+            t("common.unexpectedError"),
+          ),
+        });
+        return;
+      }
 
-    const created = response.data;
-    stellaToast.add({
-      type: "success",
-      title: t("success.documentCreated"),
-    });
-    if (created.unmatchedPlaceholders.length > 0) {
+      const created = response.data;
       stellaToast.add({
-        type: "warning",
-        title: t("templates.unmatchedPlaceholders", {
-          list: created.unmatchedPlaceholders.join(", "),
+        type: "success",
+        title: t("success.documentCreated"),
+      });
+      if (created.unmatchedPlaceholders.length > 0) {
+        stellaToast.add({
+          type: "warning",
+          title: t("templates.unmatchedPlaceholders", {
+            list: created.unmatchedPlaceholders.join(", "),
+          }),
+        });
+      }
+
+      setMatterDialogOpen(false);
+      const destinationResult = await Result.tryPromise(async () =>
+        resolveCanonicalDocumentDestinationQuery({
+          entityId: created.entityId,
+          fieldId: created.fieldId,
+          queryClient,
+          workspaceId,
         }),
-      });
+      );
+      if (Result.isError(destinationResult)) {
+        getAnalytics().captureError(destinationResult.error);
+      }
+      const destination = Result.isError(destinationResult)
+        ? null
+        : destinationResult.value;
+      if (saveTarget.kind === "matter") {
+        saveTarget.onCreated(
+          destination === null
+            ? { type: "workspace", entityId: created.entityId }
+            : {
+                type: "document",
+                entityId: destination.entityId,
+                fieldId: destination.fieldId,
+              },
+        );
+      } else {
+        saveTarget.onCreated(
+          destination === null
+            ? { type: "workspace", workspaceId, entityId: created.entityId }
+            : {
+                type: "document",
+                workspaceId,
+                entityId: destination.entityId,
+                fieldId: destination.fieldId,
+              },
+        );
+      }
+      onDone(created.fileName);
+    } finally {
+      setLoading(false);
     }
+  };
 
-    setMatterDialogOpen(false);
-    const destinationResult = await Result.tryPromise(async () =>
-      resolveCanonicalDocumentDestinationQuery({
-        entityId: created.entityId,
-        fieldId: created.fieldId,
-        queryClient,
-        workspaceId,
-      }),
-    );
-    if (Result.isError(destinationResult)) {
-      getAnalytics().captureError(destinationResult.error);
-    }
-    const destination = Result.isError(destinationResult)
-      ? null
-      : destinationResult.value;
-    if (saveTarget.kind === "matter") {
-      saveTarget.onCreated(
-        destination === null
-          ? { type: "workspace", entityId: created.entityId }
-          : {
-              type: "document",
-              entityId: destination.entityId,
-              fieldId: destination.fieldId,
-            },
-      );
-    } else {
-      saveTarget.onCreated(
-        destination === null
-          ? { type: "workspace", workspaceId, entityId: created.entityId }
-          : {
-              type: "document",
-              workspaceId,
-              entityId: destination.entityId,
-              fieldId: destination.fieldId,
-            },
-      );
-    }
-    onDone(created.fileName);
+  const fillToMatter = async (workspaceId: string, parentId: string | null) => {
+    await runLeadingSingleFlight(fillToMatterFlight, async () => {
+      await performFillToMatter(workspaceId, parentId);
+    });
   };
 
   /** "Move to matter": validate first so the picker only opens over a
