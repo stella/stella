@@ -2,10 +2,11 @@ import { describe, expect, test } from "bun:test";
 
 import {
   chatMessageFromPersisted,
+  classifyChatPartForPersistence,
   isChatAttachmentPart,
   isChatPart,
+  toChatMessageContent,
 } from "@/api/handlers/chat/chat-message-parts";
-import type { ChatMessageContent } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 
 describe("persisted chat message parts", () => {
@@ -13,13 +14,13 @@ describe("persisted chat message parts", () => {
     const message = chatMessageFromPersisted({
       id: toSafeId<"chatMessage">("019eb9fa-c91f-7000-9b9c-9365977dda78"),
       role: "assistant",
-      content: {
+      content: toChatMessageContent({
         version: 2,
         data: [{ type: "text", content: "Summary" }],
         metadata: {
           serverProvenance: { type: "search-summary", version: 1 },
         },
-      } satisfies ChatMessageContent,
+      }),
     });
 
     expect(message.metadata).toEqual({
@@ -31,7 +32,7 @@ describe("persisted chat message parts", () => {
     const message = chatMessageFromPersisted({
       id: toSafeId<"chatMessage">("019eb9fa-c91f-7000-9b9c-9365977dda79"),
       role: "assistant",
-      content: {
+      content: toChatMessageContent({
         version: 2,
         data: [{ type: "text", content: "Ahoj" }],
         metadata: {
@@ -42,7 +43,7 @@ describe("persisted chat message parts", () => {
             totalTokens: 30,
           },
         },
-      } satisfies ChatMessageContent,
+      }),
     });
 
     expect(message.metadata).toEqual({
@@ -70,5 +71,11 @@ describe("chat attachment parts", () => {
 
     expect(isChatPart({ type: "audio", source })).toBe(false);
     expect(isChatPart({ type: "video", source })).toBe(false);
+  });
+
+  test("fails loudly for malformed parts whose type must be persisted", () => {
+    expect(() =>
+      classifyChatPartForPersistence({ type: "tool-call", state: "new-state" }),
+    ).toThrow("Cannot persist malformed chat part type: tool-call");
   });
 });

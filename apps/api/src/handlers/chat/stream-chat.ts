@@ -27,11 +27,12 @@ import type { ChatSendMode } from "@stll/anonymize-chat";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { modelAcceptsDocumentAttachment } from "@/api/handlers/chat/attachment-modality";
 import {
+  classifyChatPartForPersistence,
   getChatAttachmentMimeType,
   getUserFileIdFromAttachmentPart,
-  isChatPart,
   isChatAttachmentPart,
   isChatDocumentPart,
+  toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
 import type {
   ChatSafePrompt,
@@ -60,7 +61,7 @@ import type {
   ChatAnonRestoration,
   ChatMessage,
   ChatMessageUsage,
-  PersistableChatPart,
+  ChatPart,
   PersistableChatMessage,
 } from "@/api/handlers/chat/types";
 import { hydrateFilePart } from "@/api/handlers/chat/upload-files";
@@ -1175,7 +1176,7 @@ export const normalizeFinalAssistantMessageId = ({
   message: ChatMessage;
 }): PersistableChatMessage => {
   const id = mapMessageId(message.id);
-  return { ...message, id };
+  return toPersistableChatMessage({ ...message, id });
 };
 
 type RemapOutgoingMessageIdsProps = {
@@ -1987,17 +1988,18 @@ export const toChatMessage = (message: UIMessage): ChatMessage | null => {
 // outcome before a blank assistant turn can reach persistence.
 const toChatParts = (
   parts: readonly UIMessage["parts"][number][],
-): PersistableChatPart[] => {
-  const chatParts: PersistableChatPart[] = [];
+): ChatPart[] => {
+  const chatParts: ChatPart[] = [];
   for (const part of parts) {
-    if (isChatPart(part)) {
-      chatParts.push(part);
+    const decision = classifyChatPartForPersistence(part);
+    if (decision.type === "persist") {
+      chatParts.push(decision.part);
       continue;
     }
     // Telemetry only: the discriminator alone. A part's content can carry
     // document text, so it is never logged.
     logger.warn("Dropped an unsupported part from a streamed chat message", {
-      "chat.part_type": part.type,
+      "chat.part_type": decision.partType,
     });
   }
   return chatParts;

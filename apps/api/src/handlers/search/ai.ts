@@ -27,6 +27,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import { proveTextOnlyPersistedChatMessageContent } from "@/api/lib/chat/persisted-message-content";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -54,6 +55,10 @@ const SEARCH_CONTEXT_CHARS_PER_RESULT = 3000;
 const SEARCH_CONTEXT_TOTAL_CHARS = 14_000;
 const SEARCH_REFINE_MAX_ATTEMPTS = 3;
 const SEARCH_SUMMARY_CITATION_LIMIT = 5;
+const SEARCH_SUMMARY_PROVENANCE = {
+  type: "search-summary",
+  version: 1,
+} as const;
 const CITABLE_SEARCH_RESULT_TYPES = [
   "matter",
   "contact",
@@ -672,14 +677,14 @@ export const createSearchSummaryChatThread = async ({
         workspaceId: null,
         userId,
         role: "assistant",
-        content: {
+        content: proveTextOnlyPersistedChatMessageContent({
           version: 2,
           data: [{ type: "text", content: assistantText }],
           metadata: {
-            serverProvenance: { type: "search-summary", version: 1 },
+            serverProvenance: SEARCH_SUMMARY_PROVENANCE,
             sourceDocuments: citedContexts.flatMap(toChatSourceDocuments),
           },
-        },
+        }),
         createdAt: new Date(now.getTime() + 1),
       },
     ]);

@@ -1,5 +1,6 @@
-/** Every `MessagePart` variant excluded from `PersistableChatPart`. Shared so a
- *  new non-persistable type is added in one place, not per test file. */
+/** Every `MessagePart` variant explicitly dropped by the persistence policy.
+ * Shared so a future TanStack union change cannot update one stream-path test
+ * in isolation. */
 export const nonPersistableChatParts = [
   {
     type: "audio",

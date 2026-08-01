@@ -7,7 +7,10 @@ import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { createPipelineContext } from "@stll/anonymize-wasm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import { createChatAttachmentPart } from "@/api/handlers/chat/chat-message-parts";
+import {
+  createChatAttachmentPart,
+  toPersistableChatMessage,
+} from "@/api/handlers/chat/chat-message-parts";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import type {
   ChatAnonRestoration,
@@ -203,23 +206,25 @@ describe("outgoing chat stream message ids", () => {
           ],
         },
       }),
-    ).toEqual({
-      id: messageId,
-      role: "assistant",
-      parts: [
-        {
-          content: "Checking source law.",
-          type: "thinking",
-        },
-        {
-          arguments: "{}",
-          id: "tool-1",
-          name: "ask-user",
-          state: "input-complete",
-          type: "tool-call",
-        },
-      ],
-    });
+    ).toEqual(
+      toPersistableChatMessage({
+        id: messageId,
+        role: "assistant",
+        parts: [
+          {
+            content: "Checking source law.",
+            type: "thinking",
+          },
+          {
+            arguments: "{}",
+            id: "tool-1",
+            name: "ask-user",
+            state: "input-complete",
+            type: "tool-call",
+          },
+        ],
+      }),
+    );
   });
 
   test("seeds tanstack message state before reasoning-only chunks", async () => {

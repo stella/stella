@@ -12,6 +12,7 @@ import type {
   ChatClientToolsFor,
   ChatUIToolsFor,
 } from "@/api/lib/chat/chat-tool-types";
+import type { persistedChatMessageContentProof } from "@/api/lib/chat/persisted-message-content";
 import type { ChatMentionsData } from "@/api/lib/chat/references";
 import type { UserFileUrl } from "@/api/lib/user-files/types";
 
@@ -58,12 +59,15 @@ export type ChatAttachmentPart =
   | DocumentPart<ChatAttachmentMetadata>;
 
 export type ChatTanStackPart = MessagePart<ChatClientTools>;
-type NonPersistableChatPartType = "audio" | "video" | "ui-resource";
 export type ChatPart = ChatTanStackPart;
-export type PersistableChatPart = Exclude<
-  ChatTanStackPart,
-  { type: NonPersistableChatPartType }
->;
+export type PersistableChatPartType =
+  | "document"
+  | "image"
+  | "structured-output"
+  | "text"
+  | "thinking"
+  | "tool-call"
+  | "tool-result";
 
 export type ChatMessageUsage = Pick<
   TokenUsage,
@@ -104,8 +108,14 @@ export type ChatMessage = UIMessage<ChatClientTools> & {
   metadata?: ChatMessageMetadata | undefined;
 };
 
-export type PersistableChatMessage = ChatMessage & {
+export type PersistableChatMessageCandidate = ChatMessage & {
   id: SafeId<"chatMessage">;
+};
+
+/** Opaque proof assigned only after every part passes the persistence policy. */
+declare const persistableChatMessageProof: unique symbol;
+export type PersistableChatMessage = PersistableChatMessageCandidate & {
+  readonly [persistableChatMessageProof]: true;
 };
 
 export type ChatMessageRole = UIMessage["role"];
@@ -136,9 +146,16 @@ export type LegacyChatMessageContent = {
   data: unknown[];
 };
 
+export type ChatMessageContentCandidate = {
+  data: ChatMessage["parts"];
+  metadata?: ChatMessageMetadata | undefined;
+  version: 2;
+};
+
 export type ChatMessageContent = {
   data: ChatMessage["parts"];
   metadata?: ChatMessageMetadata | undefined;
+  readonly [persistedChatMessageContentProof]: true;
   version: 2;
 };
 

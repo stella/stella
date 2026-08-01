@@ -19,6 +19,7 @@ import {
 import {
   isChatPart,
   isChatTextPart,
+  toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
 import { CHAT_TOOL_SCOPE } from "@/api/handlers/chat/tools/tool-scope";
 import type {
@@ -276,14 +277,14 @@ export const validateMessage = async ({
       return Result.err(metadataResult.error);
     }
 
-    const validatedMessage: PersistableChatMessage = {
+    const validatedMessage = toPersistableChatMessage({
       id: message.id,
       role: message.role,
       parts: partsResult.value,
       ...(metadataResult.value === undefined
         ? {}
         : { metadata: metadataResult.value }),
-    };
+    });
     const toolValidationResult = validateToolCallParts({
       message: validatedMessage,
       tools,
@@ -877,7 +878,7 @@ export const parseMessage = ({
     };
   }
 
-  const normalizedParts: ChatMessage["parts"] = [];
+  const normalizedParts: ChatPart[] = [];
   const mentions: ChatMention[] = [];
 
   for (const part of message.parts) {
