@@ -1,6 +1,6 @@
 // Pure-logic tests for the network baseline metrics. These never open a page,
 // so they launch no browser and need no dev server or storageState.
-import { expect, test } from "@playwright/test";
+import { describe, expect, test } from "bun:test";
 
 import {
   type NetworkBaseline,
@@ -9,13 +9,14 @@ import {
   mergeNetworkBaseline,
   normalizeApiPath,
   responseSizeAllowance,
+  waitForQuietPeriod,
   waterfallDepth,
 } from "../helpers/network";
 
 const UUID = "11111111-2222-4333-8444-555555555555";
 const UUID_UPPER = "AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEEE";
 
-test.describe("normalizeApiPath", () => {
+describe("normalizeApiPath", () => {
   test("leaves a plain path untouched", () => {
     expect(normalizeApiPath("/v1/contacts")).toBe("/v1/contacts");
   });
@@ -35,7 +36,7 @@ test.describe("normalizeApiPath", () => {
   });
 });
 
-test.describe("waterfallDepth", () => {
+describe("waterfallDepth", () => {
   test("empty input is 0", () => {
     expect(waterfallDepth([])).toBe(0);
   });
@@ -94,6 +95,62 @@ test.describe("waterfallDepth", () => {
   });
 });
 
+describe("waitForQuietPeriod", () => {
+  test("returns after one idle window when no activity arrives", async () => {
+    let current = 100;
+    const result = await waitForQuietPeriod({
+      getLastActivityAt: () => 0,
+      idleMs: 500,
+      timeoutMs: 1000,
+      now: () => current,
+      sleep: async (durationMs) => {
+        current += durationMs;
+      },
+    });
+
+    expect(result).toBe("idle");
+    expect(current).toBe(600);
+  });
+
+  test("restarts the idle window when new activity arrives", async () => {
+    let current = 0;
+    let lastActivityAt = 0;
+    const result = await waitForQuietPeriod({
+      getLastActivityAt: () => lastActivityAt,
+      idleMs: 500,
+      timeoutMs: 2000,
+      now: () => current,
+      sleep: async (durationMs) => {
+        current += durationMs;
+        if (current === 500) {
+          lastActivityAt = 400;
+        }
+      },
+    });
+
+    expect(result).toBe("idle");
+    expect(current).toBe(900);
+  });
+
+  test("caps a route that never becomes quiet", async () => {
+    let current = 0;
+    let lastActivityAt = 0;
+    const result = await waitForQuietPeriod({
+      getLastActivityAt: () => lastActivityAt,
+      idleMs: 500,
+      timeoutMs: 1000,
+      now: () => current,
+      sleep: async (durationMs) => {
+        current += durationMs;
+        lastActivityAt = current;
+      },
+    });
+
+    expect(result).toBe("timeout");
+    expect(current).toBe(1000);
+  });
+});
+
 const metrics = (
   requests: string[],
   depth: number,
@@ -114,7 +171,7 @@ const metrics = (
   missingResponseSizeCounts,
 });
 
-test.describe("diffNetworkBaseline", () => {
+describe("diffNetworkBaseline", () => {
   const baseline: NetworkBaseline = {
     "/contacts": { depth: 2, requests: ["GET /v1/contacts"] },
   };
@@ -215,6 +272,13 @@ test.describe("diffNetworkBaseline", () => {
   test("a stale baseline entry is a problem", () => {
     const { problems } = diffNetworkBaseline(baseline, new Map());
     expect(problems.some((p) => p.includes("Stale"))).toBe(true);
+  });
+
+  test("a shard checks only the routes it observed", () => {
+    const { problems } = diffNetworkBaseline(baseline, new Map(), {
+      requireAllRoutes: false,
+    });
+    expect(problems).toEqual([]);
   });
 
   test("a missing request is a notice, not a problem", () => {
@@ -438,7 +502,7 @@ test.describe("diffNetworkBaseline", () => {
   });
 });
 
-test.describe("mergeNetworkBaseline", () => {
+describe("mergeNetworkBaseline", () => {
   test("no existing baseline yields a snapshot", () => {
     const merged = mergeNetworkBaseline(
       null,

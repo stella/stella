@@ -17,7 +17,7 @@
     "format": "oxfmt -c ../../.oxfmtrc.json .",
     "i18n:check": "bun ../../packages/scripts/src/i18n-typegen.ts src/i18n/langs --check && bun ../../packages/scripts/src/i18n-check.ts src/i18n/langs && bun ../../packages/scripts/src/glossary-gen.ts src/i18n --check && bun ../../packages/scripts/src/i18n-lint.ts src/i18n/langs",
     "i18n:sync": "bun ../../packages/scripts/src/i18n-check.ts src/i18n/langs --sync && bun ../../packages/scripts/src/i18n-typegen.ts src/i18n/langs && bun ../../packages/scripts/src/glossary-gen.ts src/i18n",
-    "test": "bun test --path-ignore-patterns='e2e/**'",
+    "test": "bun test --path-ignore-patterns='e2e/**' && bun test e2e/unit",
     "test:e2e": "playwright test --config e2e/playwright.config.ts",
     "test:e2e:marketing": "playwright test --config e2e/playwright.marketing.config.ts --project app",
     "test:e2e:marketing:update": "playwright test --config e2e/playwright.marketing.config.ts --project app --update-snapshots",
