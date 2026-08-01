@@ -26,6 +26,7 @@ export const resolvedReportResultFieldId = sql<SafeId<"field"> | null>`
       WHERE stored_field.id = ${reportExports}.${reportExports.resultFieldId}
         AND stored_field.workspace_id = ${reportExports}.${reportExports.workspaceId}
         AND stored_version.entity_id = ${reportExports}.${reportExports.resultEntityId}
+        AND stored_version.deleted_at IS NULL
       LIMIT 1
     ),
     (

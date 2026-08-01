@@ -454,23 +454,37 @@ describe("custom oxlint guardrails", () => {
   });
 
   test("deleted legacy entity route stays deleted and lint-guarded", () => {
-    const legacyRouteDirectory = path.join(
+    const routesDirectory = path.join(
       import.meta.dir,
       "../../../../..",
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/entities",
+      "apps/web/src/routes",
     );
     const oxlintConfig = readRootFixture("oxlint.config.ts");
+    const legacyEntityRouteFile =
+      /(?:^|\/)_protected\.workspaces(?:\/|\.)\$workspaceId(?:\/|\.)entities(?:\/|\.)\$entityId(?:[./]|$)/u;
+    const routeSourceFile = /\.[cm]?[jt]sx?$/u;
 
-    const legacyRouteSourceFiles = existsSync(legacyRouteDirectory)
-      ? readdirSync(legacyRouteDirectory, { recursive: true }).filter(
+    const legacyRouteSourceFiles = existsSync(routesDirectory)
+      ? readdirSync(routesDirectory, { recursive: true }).filter(
           (entry) =>
             typeof entry === "string" &&
-            (entry.startsWith("$entityId.") ||
-              entry.startsWith("$entityId/")) &&
-            /\.[cm]?[jt]sx?$/u.test(entry),
+            legacyEntityRouteFile.test(entry) &&
+            routeSourceFile.test(entry),
         )
       : [];
 
+    expect(
+      [
+        "_protected.workspaces/$workspaceId/entities/$entityId.tsx",
+        "_protected.workspaces/$workspaceId/entities/$entityId/route.tsx",
+        "_protected.workspaces.$workspaceId.entities.$entityId.tsx",
+        "_protected.workspaces.$workspaceId.entities.$entityId.lazy.tsx",
+      ].every(
+        (candidate) =>
+          legacyEntityRouteFile.test(candidate) &&
+          routeSourceFile.test(candidate),
+      ),
+    ).toBe(true);
     expect(legacyRouteSourceFiles).toEqual([]);
     expect(oxlintConfig).toContain(`
       files: ["apps/web/src/**/*.{ts,tsx}"],

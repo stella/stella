@@ -59,6 +59,13 @@ export const nestedTemplateConcatenation =
   // oxlint-disable-next-line no-legacy-entity-route/no-legacy-entity-route, no-useless-concat -- regression case
   `/workspaces/${workspaceId}` + `/entities/${entityId}`;
 
+// oxlint-disable-next-line no-legacy-entity-route/no-legacy-entity-route -- regression case
+export const methodConcatenatedLegacyRoute = "/workspaces/".concat(
+  workspaceId,
+  "/entities/",
+  entityId,
+);
+
 export const currentDocumentRoute = "/workspaces/$workspaceId/$viewId/document";
 export const similarlyStructuredPrivatePath =
   "/_protected/workspaces/$workspaceId/entities/$entityId";

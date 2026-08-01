@@ -13,9 +13,9 @@
 
 import { isStringLiteral } from "./utils.ts";
 
-const DYNAMIC_PART = "\u0000";
+const DYNAMIC_PART = "\u{E000}";
 const LEGACY_ENTITY_ROUTE =
-  /^\/workspaces\/(?:[^/?#\0]|\0)+\/entities\/(?:[^/?#\0]|\0)+(?=[/?#]|$)/u;
+  /^\/workspaces\/(?:[^/?#\u{E000}]|\u{E000})+\/entities\/(?:[^/?#\u{E000}]|\u{E000})+(?=[/?#]|$)/u;
 
 type AstNode = Record<string, unknown> & { type: string };
 
@@ -51,6 +51,24 @@ const templateQuasiText = (template: AstNode, index: number): string | null => {
 
 type RoutePart = string | null;
 
+const isConcatCall = (node: AstNode): boolean => {
+  if (node.type !== "CallExpression" || !isAstNode(node.callee)) {
+    return false;
+  }
+  const callee = node.callee;
+  if (callee.type !== "MemberExpression" || !isAstNode(callee.property)) {
+    return false;
+  }
+  if (callee.computed === true) {
+    return (
+      isStringLiteral(callee.property) && callee.property.value === "concat"
+    );
+  }
+  return (
+    callee.property.type === "Identifier" && callee.property.name === "concat"
+  );
+};
+
 const routeParts = (node: unknown): RoutePart[] => {
   if (isStringLiteral(node)) {
     return [node.value];
@@ -60,6 +78,13 @@ const routeParts = (node: unknown): RoutePart[] => {
   }
   if (node.type === "BinaryExpression" && node.operator === "+") {
     return routeParts(node.left).concat(routeParts(node.right));
+  }
+  if (isConcatCall(node) && isAstNode(node.callee)) {
+    const callee = node.callee;
+    if (!isAstNode(callee.object) || !Array.isArray(node.arguments)) {
+      return [null];
+    }
+    return [callee.object, ...node.arguments].flatMap(routeParts);
   }
   if (node.type !== "TemplateLiteral" || !Array.isArray(node.quasis)) {
     return [null];
@@ -84,16 +109,25 @@ const routeParts = (node: unknown): RoutePart[] => {
   return parts;
 };
 
-const hasConcatenationParent = (node: AstNode): boolean =>
-  isAstNode(node.parent) &&
-  node.parent.type === "BinaryExpression" &&
-  node.parent.operator === "+";
+const hasRouteConstructionParent = (node: AstNode): boolean => {
+  if (!isAstNode(node.parent)) {
+    return false;
+  }
+  const parent = node.parent;
+  if (parent.type === "BinaryExpression" && parent.operator === "+") {
+    return true;
+  }
+  if (parent.type !== "MemberExpression" || parent.object !== node) {
+    return false;
+  }
+  return isAstNode(parent.parent) && isConcatCall(parent.parent);
+};
 
 const isLegacyEntityRouteConstruction = (node: unknown): boolean => {
   if (!isAstNode(node)) {
     return false;
   }
-  if (hasConcatenationParent(node)) {
+  if (hasRouteConstructionParent(node)) {
     return false;
   }
   return LEGACY_ENTITY_ROUTE.test(routeParts(node).join(DYNAMIC_PART));
@@ -120,6 +154,7 @@ export default {
 
         return {
           BinaryExpression: check,
+          CallExpression: check,
           Literal: check,
           TemplateLiteral: check,
         };

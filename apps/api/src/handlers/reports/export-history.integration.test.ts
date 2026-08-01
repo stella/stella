@@ -10,7 +10,12 @@ import {
 import { eq, inArray, sql } from "drizzle-orm";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import { fields, properties, reportExports } from "@/api/db/schema";
+import {
+  entityVersions,
+  fields,
+  properties,
+  reportExports,
+} from "@/api/db/schema";
 import type { ViewLayout } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { readReportExportHistory } from "@/api/handlers/reports/export-history";
@@ -47,6 +52,8 @@ const requesterExports: {
 }[] = [];
 const fallbackPropertyId = toSafeId<"property">(Bun.randomUUIDv7());
 const fallbackFieldId = toSafeId<"field">(Bun.randomUUIDv7());
+const tombstonedVersionId = toSafeId<"entityVersion">(Bun.randomUUIDv7());
+const tombstonedFieldId = toSafeId<"field">(Bun.randomUUIDv7());
 
 const readRequesterExportPage = async (cursor: string | undefined) =>
   await Result.gen(() =>
@@ -74,24 +81,51 @@ beforeAll(async () => {
     content: { version: 1, type: "file" },
     tool: { version: 1, type: "manual-input" },
   });
-  await testDb.insert(fields).values({
-    id: fallbackFieldId,
+  await testDb.insert(entityVersions).values({
+    id: tombstonedVersionId,
     workspaceId: ids.wsA1,
-    propertyId: fallbackPropertyId,
-    entityVersionId: ids.entityVersionA1,
-    content: {
-      version: 1,
-      type: "file",
-      id: Bun.randomUUIDv7(),
-      fileName: "historical-report.docx",
-      mimeType:
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      sizeBytes: 1024,
-      encrypted: false,
-      sha256Hex: "a".repeat(64),
-      pdfFileId: null,
-    },
+    entityId: ids.entityA1,
+    deletedAt: new Date("2026-07-17T09:00:00.000Z"),
+    deletedBy: ids.userA1,
   });
+  await testDb.insert(fields).values([
+    {
+      id: fallbackFieldId,
+      workspaceId: ids.wsA1,
+      propertyId: fallbackPropertyId,
+      entityVersionId: ids.entityVersionA1,
+      content: {
+        version: 1,
+        type: "file",
+        id: Bun.randomUUIDv7(),
+        fileName: "historical-report.docx",
+        mimeType:
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        sizeBytes: 1024,
+        encrypted: false,
+        sha256Hex: "a".repeat(64),
+        pdfFileId: null,
+      },
+    },
+    {
+      id: tombstonedFieldId,
+      workspaceId: ids.wsA1,
+      propertyId: fallbackPropertyId,
+      entityVersionId: tombstonedVersionId,
+      content: {
+        version: 1,
+        type: "file",
+        id: Bun.randomUUIDv7(),
+        fileName: "withdrawn-report.docx",
+        mimeType:
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        sizeBytes: 1024,
+        encrypted: false,
+        sha256Hex: "b".repeat(64),
+        pdfFileId: null,
+      },
+    },
+  ]);
 
   for (let index = 0; index < 7; index++) {
     const exportId = toSafeId<"reportExport">(Bun.randomUUIDv7());
@@ -113,6 +147,10 @@ beforeAll(async () => {
       ...(index === 3 && {
         resultEntityId: ids.entityA1,
         resultFieldId: ids.fieldB1,
+      }),
+      ...(index === 4 && {
+        resultEntityId: ids.entityA1,
+        resultFieldId: tombstonedFieldId,
       }),
       resultS3Key:
         index === 0 ? `exports/${ids.orgA}/${ids.wsA1}/${exportId}.docx` : null,
@@ -145,7 +183,12 @@ afterAll(async () => {
         .delete(reportExports)
         .where(inArray(reportExports.id, seededExportIds));
     }
-    await testDb.delete(fields).where(eq(fields.id, fallbackFieldId));
+    await testDb
+      .delete(fields)
+      .where(inArray(fields.id, [fallbackFieldId, tombstonedFieldId]));
+    await testDb
+      .delete(entityVersions)
+      .where(eq(entityVersions.id, tombstonedVersionId));
     await testDb
       .delete(properties)
       .where(eq(properties.id, fallbackPropertyId));
@@ -254,7 +297,7 @@ describe("report export history", () => {
     });
   });
 
-  test("resolves current file provenance for historical and invalid receipts", async () => {
+  test("resolves current file provenance for historical, invalid, and tombstoned receipts", async () => {
     const result = await Result.gen(() =>
       readReportExportHistory({
         cursor: undefined,
@@ -274,11 +317,18 @@ describe("report export history", () => {
     const foreignFieldExport = result.value.items.find(
       ({ id }) => id === requesterExports.at(3)?.id,
     );
+    const tombstonedFieldExport = result.value.items.find(
+      ({ id }) => id === requesterExports.at(4)?.id,
+    );
     expect(historicalExport).toMatchObject({
       resultEntityId: ids.entityA1,
       resultFieldId: fallbackFieldId,
     });
     expect(foreignFieldExport).toMatchObject({
+      resultEntityId: ids.entityA1,
+      resultFieldId: fallbackFieldId,
+    });
+    expect(tombstonedFieldExport).toMatchObject({
       resultEntityId: ids.entityA1,
       resultFieldId: fallbackFieldId,
     });
