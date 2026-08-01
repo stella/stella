@@ -96,11 +96,12 @@ describe("waterfallDepth", () => {
 });
 
 describe("waitForQuietPeriod", () => {
-  test("returns after one idle window when no activity arrives", async () => {
+  test("observes the minimum window before returning idle", async () => {
     let current = 100;
     const result = await waitForQuietPeriod({
       getLastActivityAt: () => 0,
       idleMs: 500,
+      minimumObservationMs: 1000,
       timeoutMs: 1000,
       now: () => current,
       sleep: async (durationMs) => {
@@ -109,7 +110,7 @@ describe("waitForQuietPeriod", () => {
     });
 
     expect(result).toBe("idle");
-    expect(current).toBe(600);
+    expect(current).toBe(1100);
   });
 
   test("restarts the idle window when new activity arrives", async () => {
@@ -118,18 +119,19 @@ describe("waitForQuietPeriod", () => {
     const result = await waitForQuietPeriod({
       getLastActivityAt: () => lastActivityAt,
       idleMs: 500,
+      minimumObservationMs: 1000,
       timeoutMs: 2000,
       now: () => current,
       sleep: async (durationMs) => {
         current += durationMs;
-        if (current === 500) {
-          lastActivityAt = 400;
+        if (current === 1000) {
+          lastActivityAt = 800;
         }
       },
     });
 
     expect(result).toBe("idle");
-    expect(current).toBe(900);
+    expect(current).toBe(1300);
   });
 
   test("caps a route that never becomes quiet", async () => {
@@ -138,6 +140,7 @@ describe("waitForQuietPeriod", () => {
     const result = await waitForQuietPeriod({
       getLastActivityAt: () => lastActivityAt,
       idleMs: 500,
+      minimumObservationMs: 1000,
       timeoutMs: 1000,
       now: () => current,
       sleep: async (durationMs) => {

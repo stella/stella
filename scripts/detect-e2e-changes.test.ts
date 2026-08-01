@@ -55,9 +55,20 @@ describe("detect-e2e-changes", () => {
   });
 
   test("keeps a landing-only change out of app E2E", () => {
-    const files = ["apps/landing/src/pages/index.astro"];
+    for (const file of [
+      "apps/landing/src/pages/index.astro",
+      "apps/web/e2e/marketing/landing-navigation.spec.ts",
+    ]) {
+      expect(detects("core", [file])).toBe("false");
+      expect(detects("marketing", [file])).toBe("false");
+      expect(detects("landing", [file])).toBe("true");
+    }
+  });
+
+  test("the shared marketing config exercises both projects", () => {
+    const files = ["apps/web/e2e/playwright.marketing.config.ts"];
     expect(detects("core", files)).toBe("false");
-    expect(detects("marketing", files)).toBe("false");
+    expect(detects("marketing", files)).toBe("true");
     expect(detects("landing", files)).toBe("true");
   });
 

@@ -68,6 +68,7 @@ export type NetworkCollector = {
 
 export type NetworkQuietOptions = {
   idleMs: number;
+  minimumObservationMs: number;
   timeoutMs: number;
 };
 
@@ -83,6 +84,7 @@ type WaitForQuietPeriodOptions = NetworkQuietOptions & {
 export const waitForQuietPeriod = async ({
   getLastActivityAt,
   idleMs,
+  minimumObservationMs,
   timeoutMs,
   now = Date.now,
   sleep = async (durationMs) =>
@@ -95,7 +97,10 @@ export const waitForQuietPeriod = async ({
 
   while (true) {
     const current = now();
-    const idleAt = Math.max(startedAt, getLastActivityAt()) + idleMs;
+    const idleAt = Math.max(
+      startedAt + minimumObservationMs,
+      Math.max(startedAt, getLastActivityAt()) + idleMs,
+    );
     if (current >= idleAt) {
       return "idle";
     }

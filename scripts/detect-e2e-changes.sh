@@ -22,6 +22,8 @@ for file in "$@"; do
       ;;
     marketing:apps/api/src/*.test.*|marketing:apps/api/src/*.spec.*|marketing:apps/web/src/*.test.*|marketing:apps/web/src/*.spec.*|marketing:packages/*.test.*|marketing:packages/*.spec.*)
       ;;
+    marketing:apps/web/e2e/marketing/landing-*.spec.ts)
+      ;;
     core:apps/api/*|core:apps/web/*|core:packages/*|core:docker-compose.yml)
       echo true
       exit 0
@@ -30,7 +32,7 @@ for file in "$@"; do
       echo true
       exit 0
       ;;
-    landing:apps/landing/*|landing:packages/ui/*|landing:packages/anonymize-*|landing:packages/locales/*)
+    landing:apps/landing/*|landing:apps/web/e2e/marketing/landing-*.spec.ts|landing:apps/web/e2e/playwright.marketing.config.ts|landing:packages/ui/*|landing:packages/anonymize-*|landing:packages/locales/*)
       echo true
       exit 0
       ;;

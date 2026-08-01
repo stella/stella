@@ -24,10 +24,9 @@ import {
   deleteTestWorkspace,
 } from "../helpers/workspace";
 
-// A route is ready when tracked API activity stays quiet for this window.
-// This still captures delayed warmups while avoiding a fixed one-second tax
-// after routes that became idle immediately. Per-route settleMs remains the
-// maximum wait for unusually heavy document surfaces.
+// Every route retains the former one-second observation floor so delayed
+// warmups remain visible. After that floor, tracked API activity may finish
+// the longer document-route windows early once it stays quiet.
 const NETWORK_QUIET_MS = 500;
 const DEFAULT_SETTLE_MS = 1000;
 
@@ -479,6 +478,7 @@ const smokeRouteTarget = async ({
     await renderSmokeRoute({ page, route });
     await network.waitForQuiet({
       idleMs: NETWORK_QUIET_MS,
+      minimumObservationMs: DEFAULT_SETTLE_MS,
       timeoutMs: route.settleMs ?? DEFAULT_SETTLE_MS,
     });
     await assertNoRouteBoundary(page, route.template);
