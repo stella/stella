@@ -6,6 +6,8 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { CorpusJobInput } from "@/api/lib/corpus-index/core";
 import {
   createCorpusIndexer,
+  settleAll,
+  settleAllCleanup,
   settleBoth,
   splitIngestRequests,
 } from "@/api/lib/corpus-index/core";
@@ -162,6 +164,60 @@ describe("settleBoth", () => {
     expect(
       await settleBoth(Promise.resolve("text"), Promise.resolve(null)),
     ).toEqual(["text", null]);
+  });
+});
+
+describe("settleAll", () => {
+  test("waits for every sibling before exposing the first rejection", async () => {
+    let siblingSettled = false;
+    const outcome = await settleAll([
+      Promise.reject(new Error("first")),
+      new Promise<string>((resolve) => {
+        setTimeout(() => {
+          siblingSettled = true;
+          resolve("second");
+        }, 25);
+      }),
+    ]).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(siblingSettled).toBe(true);
+    expect(outcome instanceof Error ? outcome.message : null).toBe("first");
+  });
+
+  test("preserves input order when every sibling succeeds", async () => {
+    expect(
+      await settleAll([Promise.resolve("first"), Promise.resolve("second")]),
+    ).toEqual(["first", "second"]);
+  });
+});
+
+describe("settleAllCleanup", () => {
+  test("waits for every sibling and reports every rejection without throwing", async () => {
+    let siblingSettled = false;
+    const reported: unknown[] = [];
+
+    await settleAllCleanup(
+      [
+        Promise.reject(new Error("first")),
+        new Promise<string>((_resolve, reject) => {
+          setTimeout(() => {
+            siblingSettled = true;
+            reject(new Error("second"));
+          }, 25);
+        }),
+      ],
+      (error) => {
+        reported.push(error);
+      },
+    );
+
+    expect(siblingSettled).toBe(true);
+    expect(
+      reported.map((error) => (error instanceof Error ? error.message : null)),
+    ).toEqual(["first", "second"]);
   });
 });
 
@@ -357,18 +413,40 @@ describe("fenced serving-generation appends", () => {
           return new Map(
             rows.map((selected) => [
               selected.id,
-              [corpusIndexId(generation, selected.country)],
+              {
+                indexIds: [corpusIndexId(generation, selected.country)],
+                revision: 1,
+              },
             ]),
           );
         },
       }),
-    ).toBe(1);
+    ).toEqual({ indexed: 1, status: "advanced" });
 
     const reservation = events.indexOf("reserved");
     const firstRemote = events.indexOf("remote-guard");
     expect(reservation).toBeGreaterThanOrEqual(0);
     expect(firstRemote).toBeGreaterThan(reservation);
     expect(events).toContain("ingest");
+
+    events.length = 0;
+    expect(
+      await indexer.backfillFenced(scopedDb, 1, "case_law_v1", {
+        beforeDatabaseMark: async () => {
+          events.push("mark-guard");
+        },
+        beforeRemoteEffect: async ({ effect }) => {
+          events.push("remote-guard");
+          return await effect();
+        },
+        recoverRemoteEffectLeaseLoss: async () => await Promise.resolve(),
+        reserveExternalAppend: async () => {
+          events.push("reservation-missed");
+          return new Map();
+        },
+      }),
+    ).toEqual({ indexed: 0, status: "retry" });
+    expect(events).toEqual(["mark-guard", "reservation-missed"]);
   });
 });
 
@@ -480,6 +558,99 @@ describe("failed index jobs always reach the audit trail", () => {
     expect(czJobs.at(0)?.jobs.at(0)?.operation).toBe("index");
   });
 
+  test("a lease-lost ingest is converted into a failed audit job", async () => {
+    const row = makeRow("dec-lease-lost", "SK");
+    const recorded: CorpusJobInput<"caseLawDecision">[] = [];
+    let lastUrl = "";
+    let recoveries = 0;
+    const stub = async (input: Parameters<typeof fetch>[0]) => {
+      if (typeof input === "string") {
+        lastUrl = input;
+      } else if (input instanceof URL) {
+        lastUrl = input.href;
+      } else {
+        lastUrl = input.url;
+      }
+      if (lastUrl.includes("/ingest")) {
+        return new Response(JSON.stringify({ num_docs_for_processing: 1 }), {
+          status: 200,
+        });
+      }
+      return new Response(JSON.stringify({}), { status: 200 });
+    };
+    globalThis.fetch = Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    });
+    const scopedDb: ScopedDb = async (callback) =>
+      // SAFETY: this invariant observes transaction boundaries only.
+      // oxlint-disable-next-line node/callback-return, typescript/no-unsafe-type-assertion -- deliberately inert transaction
+      await callback({} as Transaction);
+    const indexer = createCorpusIndexer<"caseLawDecision", typeof row>({
+      family: "case_law",
+      captureStep: "test",
+      granularity: "document",
+      generationProjectionIndexIds: () => [],
+      buildDocs: (selected) => [{ document_id: selected.id, text: "body" }],
+      readCorpusText: async () => "body",
+      selectMissing: async () => [row],
+      selectStale: async () => [],
+      fetchFulltext: async () => "body",
+      markIndexedBatch: async () => new Set(),
+      insertSucceededJobs: async () => undefined,
+      recordJobs: async (_db, jobs) => {
+        recorded.push(...jobs);
+      },
+    });
+
+    const outcome: unknown = await indexer
+      .backfillFenced(scopedDb, 1, GENERATION, {
+        beforeDatabaseMark: async () => await Promise.resolve(),
+        beforeRemoteEffect: async ({ effect, onLeaseLost }) => {
+          lastUrl = "";
+          const result = await effect();
+          if (lastUrl.includes("/ingest")) {
+            await onLeaseLost();
+            throw new Error("writer lease expired after ingest");
+          }
+          return result;
+        },
+        recoverRemoteEffectLeaseLoss: async () => {
+          recoveries += 1;
+        },
+        reserveExternalAppend: async (_tx, { generation, rows }) =>
+          new Map(
+            rows.map((selected) => [
+              selected.id,
+              {
+                indexIds: [corpusIndexId(generation, selected.country)],
+                revision: 1,
+              },
+            ]),
+          ),
+      })
+      .then(
+        () => null,
+        (error: unknown) => error,
+      );
+
+    expect(outcome instanceof Error ? outcome.message : null).toContain(
+      "writer lease expired after ingest",
+    );
+    expect(recoveries).toBe(1);
+    const failedIngests = recorded.filter(
+      ({ operation, status }) => operation === "index" && status === "failed",
+    );
+    expect(failedIngests).toHaveLength(1);
+    expect(failedIngests.at(0)).toMatchObject({
+      entityId: row.id,
+      operation: "index",
+      status: "failed",
+    });
+    expect(failedIngests.at(0)?.errorMessage).toContain(
+      "writer lease expired after ingest",
+    );
+  });
+
   test("reserved replays delete every durable target in rebuild and serving modes", async () => {
     const calls: { method: string; url: string; body?: string }[] = [];
     const stub = async (
@@ -555,10 +726,13 @@ describe("failed index jobs always reach the audit trail", () => {
         new Map(
           rows.map((selected) => [
             selected.id,
-            [
-              corpusIndexId(generation, selected.country),
-              selected.projectionIndexId,
-            ],
+            {
+              indexIds: [
+                corpusIndexId(generation, selected.country),
+                selected.projectionIndexId,
+              ],
+              revision: 1,
+            },
           ]),
         ),
     });
@@ -608,10 +782,13 @@ describe("failed index jobs always reach the audit trail", () => {
           new Map(
             rows.map((selected) => [
               selected.id,
-              [
-                corpusIndexId(generation, selected.country),
-                selected.projectionIndexId,
-              ],
+              {
+                indexIds: [
+                  corpusIndexId(generation, selected.country),
+                  selected.projectionIndexId,
+                ],
+                revision: 1,
+              },
             ]),
           ),
       }),
@@ -643,15 +820,18 @@ describe("failed index jobs always reach the audit trail", () => {
           new Map(
             rows.map((selected) => [
               selected.id,
-              [
-                corpusIndexId(generation, selected.country),
-                selected.projectionIndexId,
-                lateReservedIndexId,
-              ],
+              {
+                indexIds: [
+                  corpusIndexId(generation, selected.country),
+                  selected.projectionIndexId,
+                  lateReservedIndexId,
+                ],
+                revision: 1,
+              },
             ]),
           ),
       }),
-    ).toBe(1);
+    ).toEqual({ indexed: 1, status: "advanced" });
     expect(
       calls
         .filter(({ url }) => url.includes("/delete-tasks"))

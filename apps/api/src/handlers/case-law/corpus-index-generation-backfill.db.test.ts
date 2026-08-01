@@ -22,6 +22,7 @@ import {
   clearIneligibleGenerationProjection,
   createCaseLawGenerationBackfill,
   generationProjectionTargetIds,
+  reserveGenerationProjectionTargets,
 } from "@/api/handlers/case-law/corpus-index";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -38,10 +39,26 @@ import {
 } from "@/api/tests/pglite-schema";
 
 const allSchema = { ...schema, ...authSchema, ...rlsExports };
+const generationMigrationSource = new URL(
+  "../../../drizzle/20260731170000_case_law_corpus_generation_backfill/migration.sql",
+  import.meta.url,
+);
 const CREATED_AT = new Date("2026-07-30T12:00:00.000Z");
 const GENERATION = "case_law_v2";
 const noRemoteEffectCompensation = async (): Promise<void> => {
   await Promise.resolve();
+};
+const expectConstraintViolation = (
+  error: unknown,
+  constraintName: string,
+): void => {
+  const messages: string[] = [];
+  let cause = error;
+  while (cause instanceof Error) {
+    messages.push(cause.message);
+    cause = cause.cause;
+  }
+  expect(messages.join("\n")).toContain(constraintName);
 };
 
 const publicSourceId = toSafeId<"caseLawSource">(
@@ -322,8 +339,25 @@ test("generation lease releases its transaction before a remote effect", async (
   await lease.release();
 });
 
+test("writer leases fence valid historical generation prefixes", async () => {
+  const generation = "legal_v2";
+  const first = await acquireCaseLawCorpusGenerationLease({
+    generation,
+    scopedDb,
+  });
+  expect(first).not.toBeNull();
+
+  const contender = await acquireCaseLawCorpusGenerationLease({
+    generation,
+    scopedDb,
+  });
+  expect(contender).toBeNull();
+
+  await first?.release();
+});
+
 test(
-  "generation precedence is immutable when a serving checkpoint is created late",
+  "every generation completes its snapshot despite immutable precedence",
   async () => {
     const rebuildGeneration = "case_law_v23";
     const servingGeneration = "case_law_v22";
@@ -356,7 +390,11 @@ test(
         indexed: 1,
         status: "advanced",
       });
-      expect(writes).toBe(1);
+      expect(await backfill(scopedDb, 1, servingGeneration)).toEqual({
+        indexed: 1,
+        status: "advanced",
+      });
+      expect(writes).toBe(2);
     } finally {
       await db
         .delete(caseLawCorpusIndexBackfills)
@@ -394,6 +432,170 @@ test("rejects an invalid generation before creating durable state", async () => 
       .from(caseLawCorpusIndexBackfills)
       .where(eq(caseLawCorpusIndexBackfills.generation, generation)),
   ).toHaveLength(0);
+});
+
+test("country guard rejects new malformed values without blocking legacy repairs", async () => {
+  const rejectedDecisionId = toSafeId<"caseLawDecision">(
+    "00000000-0000-4000-8000-000000000063",
+  );
+  const legacyDecisionId = toSafeId<"caseLawDecision">(
+    "00000000-0000-4000-8000-000000000064",
+  );
+  await db.insert(caseLawDecisions).values({
+    caseNumber: "legacy malformed jurisdiction",
+    country: "CZ1",
+    court: "Legacy court",
+    id: legacyDecisionId,
+    language: "cs",
+    languageGroupKey: "legacy-malformed-jurisdiction",
+    slug: "legacy-malformed-jurisdiction",
+    sourceId: publicSourceId,
+  });
+
+  try {
+    const migration = await Bun.file(generationMigrationSource).text();
+    const countryGuardStatements = migration
+      .split("--> statement-breakpoint")
+      .map((statement) => statement.trim())
+      .filter((statement) =>
+        statement.includes("case_law_decisions_corpus_country_shape"),
+      );
+    expect(countryGuardStatements).toHaveLength(3);
+    for (const statement of countryGuardStatements) {
+      // oxlint-disable-next-line no-await-in-loop -- function, replacement drop, and trigger creation are order-dependent DDL
+      await db.execute(sql.raw(statement));
+    }
+
+    await db
+      .update(caseLawDecisions)
+      .set({ caseNumber: "legacy repair remains possible" })
+      .where(eq(caseLawDecisions.id, legacyDecisionId));
+    expect(
+      await db
+        .select({ country: caseLawDecisions.country })
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, legacyDecisionId)),
+    ).toEqual([{ country: "CZ1" }]);
+
+    const insertRejection: unknown = await db
+      .insert(caseLawDecisions)
+      .values({
+        caseNumber: "invalid jurisdiction",
+        country: "CZ1",
+        court: "Invalid court",
+        id: rejectedDecisionId,
+        language: "cs",
+        languageGroupKey: "invalid-jurisdiction",
+        slug: "invalid-jurisdiction",
+        sourceId: publicSourceId,
+      })
+      .then(
+        () => null,
+        (error: unknown) => error,
+      );
+    expectConstraintViolation(
+      insertRejection,
+      "case_law_decisions_corpus_country_shape",
+    );
+
+    const updateRejection: unknown = await db
+      .update(caseLawDecisions)
+      .set({ country: "CZ1" })
+      .where(eq(caseLawDecisions.id, publicFirstId))
+      .then(
+        () => null,
+        (error: unknown) => error,
+      );
+    expectConstraintViolation(
+      updateRejection,
+      "case_law_decisions_corpus_country_shape",
+    );
+    expect(
+      await db
+        .select({ country: caseLawDecisions.country })
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, publicFirstId)),
+    ).toEqual([{ country: "CZE" }]);
+    expect(
+      await db
+        .select({ id: caseLawDecisions.id })
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, rejectedDecisionId)),
+    ).toHaveLength(0);
+  } finally {
+    await db
+      .delete(caseLawDecisions)
+      .where(eq(caseLawDecisions.id, legacyDecisionId));
+  }
+});
+
+test("contentless inserts never create deletion projection work", async () => {
+  const generation = "case_law_v63";
+  const decisionId = toSafeId<"caseLawDecision">(
+    "00000000-0000-4000-8000-000000000163",
+  );
+  await db.insert(caseLawCorpusIndexBackfills).values({
+    generation,
+    snapshotAt: await nextBackfillSnapshotAt(),
+    status: "complete",
+  });
+
+  try {
+    const migration = await Bun.file(generationMigrationSource).text();
+    const triggerStart = migration.indexOf(
+      "CREATE OR REPLACE FUNCTION enqueue_case_law_corpus_index_projection()",
+    );
+    const triggerEnd = migration.indexOf(
+      "CREATE OR REPLACE FUNCTION enqueue_case_law_corpus_source_reconciliation()",
+    );
+    expect(triggerStart).toBeGreaterThanOrEqual(0);
+    expect(triggerEnd).toBeGreaterThan(triggerStart);
+    const triggerStatements = migration
+      .slice(triggerStart, triggerEnd)
+      .split("--> statement-breakpoint")
+      .map((statement) => statement.trim())
+      .filter((statement) => statement.length > 0);
+    expect(triggerStatements).toHaveLength(3);
+    for (const statement of triggerStatements) {
+      // oxlint-disable-next-line no-await-in-loop -- function, replacement drop, and trigger creation are order-dependent DDL
+      await db.execute(sql.raw(statement));
+    }
+
+    await db.insert(caseLawDecisions).values({
+      caseNumber: "63 T 63/2026",
+      country: "CZE",
+      court: "Insert trigger court",
+      createdAt: CREATED_AT,
+      id: decisionId,
+      language: "cs",
+      languageGroupKey: "insert-trigger",
+      slug: "insert-trigger",
+      sourceId: publicSourceId,
+    });
+
+    expect(
+      await db
+        .select()
+        .from(caseLawCorpusIndexProjections)
+        .where(eq(caseLawCorpusIndexProjections.decisionId, decisionId)),
+    ).toHaveLength(0);
+  } finally {
+    await db.execute(
+      sql.raw(`DROP TRIGGER IF EXISTS case_law_decisions_enqueue_corpus_index_projection
+        ON case_law_decisions`),
+    );
+    await db.execute(
+      sql.raw(
+        "DROP FUNCTION IF EXISTS enqueue_case_law_corpus_index_projection()",
+      ),
+    );
+    await db
+      .delete(caseLawDecisions)
+      .where(eq(caseLawDecisions.id, decisionId));
+    await db
+      .delete(caseLawCorpusIndexBackfills)
+      .where(eq(caseLawCorpusIndexBackfills.generation, generation));
+  }
 });
 
 test(
@@ -586,6 +788,15 @@ test(
                 indexId: corpusIndexId(rebuildGeneration, row.country),
                 mode: {
                   generation: rebuildGeneration,
+                  reservations: new Map(
+                    rows.map((selected) => [
+                      selected.id,
+                      {
+                        indexIds: selected.generationPendingIndexIds,
+                        revision: selected.generationPendingRevision,
+                      },
+                    ]),
+                  ),
                   type: "generation-rebuild",
                 },
                 now: new Date("2026-07-31T13:00:00.000Z"),
@@ -680,6 +891,208 @@ test(
       await db
         .delete(caseLawCorpusIndexBackfills)
         .where(eq(caseLawCorpusIndexBackfills.generation, newerGeneration));
+    }
+  },
+  { timeout: 30_000 },
+);
+
+test(
+  "a finalizer settles only the reservation epoch it cleaned",
+  async () => {
+    const generation = "case_law_v61";
+    const decisionId = toSafeId<"caseLawDecision">(
+      "00000000-0000-4000-8000-000000000061",
+    );
+    const target = corpusIndexId(generation, "CZE");
+    await db.insert(caseLawCorpusIndexBackfills).values({
+      generation,
+      snapshotAt: await nextBackfillSnapshotAt(),
+      status: "complete",
+    });
+    await db.insert(caseLawDecisions).values({
+      caseNumber: "61 T 61/2026",
+      contentHash: "revision-fence",
+      country: "CZE",
+      court: "Revision court",
+      createdAt: CREATED_AT,
+      fulltext: "revision fence",
+      id: decisionId,
+      language: "cs",
+      languageGroupKey: "revision-fence",
+      slug: "revision-fence",
+      sourceId: publicSourceId,
+    });
+    await db.insert(caseLawCorpusIndexProjections).values({
+      decisionId,
+      generation,
+      pendingAction: "index",
+      pendingHash: "revision-fence",
+      pendingIndexIds: [target],
+      pendingRevision: 2,
+    });
+
+    try {
+      const rows = await caseLawCorpusIndexAdapter.selectMissing(scopedDb, {
+        generation,
+        limit: 100,
+      });
+      const row = rows.find(({ id }) => id === decisionId);
+      expect(row).toBeDefined();
+      if (!row) {
+        return;
+      }
+      const mark = async (revision: number) =>
+        await scopedDb(
+          async (tx) =>
+            await caseLawCorpusIndexAdapter.markIndexedBatch(tx, {
+              indexId: target,
+              mode: {
+                generation,
+                reservations: new Map([
+                  [row.id, { indexIds: [target], revision }],
+                ]),
+                type: "generation-rebuild",
+              },
+              now: new Date("2026-07-31T13:00:00.000Z"),
+              rows: [row],
+            }),
+        );
+
+      expect((await mark(1)).has(decisionId)).toBe(true);
+      expect(
+        (
+          await db
+            .select()
+            .from(caseLawCorpusIndexProjections)
+            .where(
+              and(
+                eq(caseLawCorpusIndexProjections.generation, generation),
+                eq(caseLawCorpusIndexProjections.decisionId, decisionId),
+              ),
+            )
+        ).at(0),
+      ).toMatchObject({
+        pendingAction: "index",
+        pendingHash: "revision-fence",
+        pendingIndexIds: [target],
+        pendingRevision: 2,
+      });
+
+      expect((await mark(2)).has(decisionId)).toBe(true);
+      expect(
+        (
+          await db
+            .select()
+            .from(caseLawCorpusIndexProjections)
+            .where(
+              and(
+                eq(caseLawCorpusIndexProjections.generation, generation),
+                eq(caseLawCorpusIndexProjections.decisionId, decisionId),
+              ),
+            )
+        ).at(0),
+      ).toMatchObject({
+        pendingAction: null,
+        pendingHash: null,
+        pendingIndexIds: [],
+        pendingRevision: 2,
+      });
+    } finally {
+      await db
+        .delete(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, decisionId));
+      await db
+        .delete(caseLawCorpusIndexBackfills)
+        .where(eq(caseLawCorpusIndexBackfills.generation, generation));
+    }
+  },
+  { timeout: 30_000 },
+);
+
+test(
+  "append reservation rechecks source policy under the database lock",
+  async () => {
+    const generation = "case_law_v62";
+    const sourceId = toSafeId<"caseLawSource">(
+      "00000000-0000-4000-8000-000000000062",
+    );
+    const decisionId = toSafeId<"caseLawDecision">(
+      "00000000-0000-4000-8000-000000000162",
+    );
+    await db.insert(caseLawSources).values({
+      adapterKey: "reservation-policy",
+      id: sourceId,
+      name: "reservation policy",
+    });
+    await db.insert(caseLawDecisions).values({
+      caseNumber: "62 T 62/2026",
+      contentHash: "reservation-policy",
+      country: "CZE",
+      court: "Reservation court",
+      createdAt: CREATED_AT,
+      fulltext: "reservation policy",
+      id: decisionId,
+      language: "cs",
+      languageGroupKey: "reservation-policy",
+      slug: "reservation-policy",
+      sourceId,
+    });
+    await db.insert(caseLawCorpusIndexBackfills).values({
+      generation,
+      snapshotAt: await nextBackfillSnapshotAt(),
+      status: "complete",
+    });
+
+    try {
+      const selected = await caseLawCorpusIndexAdapter.selectMissing(scopedDb, {
+        generation,
+        limit: 100,
+      });
+      const staleRow = selected.find(({ id }) => id === decisionId);
+      expect(staleRow).toBeDefined();
+      if (!staleRow) {
+        return;
+      }
+
+      await db
+        .update(caseLawSources)
+        .set({
+          descriptor: {
+            allowsDerivedAi: false,
+            allowsRedistribution: false,
+            attribution: null,
+            license: "restricted",
+          },
+        })
+        .where(eq(caseLawSources.id, sourceId));
+
+      const reservations = await scopedDb(
+        async (tx) =>
+          await reserveGenerationProjectionTargets(tx, {
+            generation,
+            rows: [staleRow],
+          }),
+      );
+      expect(reservations.has(decisionId)).toBe(false);
+      expect(
+        await db
+          .select()
+          .from(caseLawCorpusIndexProjections)
+          .where(
+            and(
+              eq(caseLawCorpusIndexProjections.generation, generation),
+              eq(caseLawCorpusIndexProjections.decisionId, decisionId),
+            ),
+          ),
+      ).toHaveLength(0);
+    } finally {
+      await db
+        .delete(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, decisionId));
+      await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
+      await db
+        .delete(caseLawCorpusIndexBackfills)
+        .where(eq(caseLawCorpusIndexBackfills.generation, generation));
     }
   },
   { timeout: 30_000 },
@@ -1157,50 +1570,53 @@ test(
       removeProjection: ignoreProjectionRemoval,
     });
 
-    const rejection: unknown = await stale(scopedDb, 1, generation).then(
-      () => null,
-      (error: unknown) => error,
-    );
+    try {
+      const rejection: unknown = await stale(scopedDb, 1, generation).then(
+        () => null,
+        (error: unknown) => error,
+      );
 
-    expect(rejection).toBeInstanceOf(ConcurrentModificationError);
-    expect(winnerResult).toMatchObject({ indexed: 1, status: "advanced" });
-    expect(winningRemoteEffects).toBe(1);
-    expect(staleRemoteEffects).toBe(1);
-    expect(staleDatabaseMarks).toBe(0);
-    const recoveredProjection = (
+      expect(rejection).toBeInstanceOf(ConcurrentModificationError);
+      expect(winnerResult).toMatchObject({ indexed: 1, status: "advanced" });
+      expect(winningRemoteEffects).toBe(1);
+      expect(staleRemoteEffects).toBe(1);
+      expect(staleDatabaseMarks).toBe(0);
+      const recoveredProjection = (
+        await db
+          .select({
+            indexId: caseLawCorpusIndexProjections.indexId,
+            pendingAction: caseLawCorpusIndexProjections.pendingAction,
+            pendingHash: caseLawCorpusIndexProjections.pendingHash,
+            pendingIndexIds: caseLawCorpusIndexProjections.pendingIndexIds,
+          })
+          .from(caseLawCorpusIndexProjections)
+          .where(
+            and(
+              eq(caseLawCorpusIndexProjections.generation, generation),
+              eq(caseLawCorpusIndexProjections.decisionId, staleDecisionId),
+            ),
+          )
+      ).at(0);
+      expect(recoveredProjection).toMatchObject({
+        indexId: successorIndexId,
+        pendingAction: "index",
+        pendingHash: "stale",
+      });
+      expect(recoveredProjection?.pendingIndexIds).toEqual(
+        expect.arrayContaining([staleIndexId, successorIndexId]),
+      );
+      expect(await readCheckpoint(generation)).toMatchObject({
+        cursorCreatedAt: CREATED_AT,
+        cursorId: staleDecisionId,
+        leaseExpiresAt: null,
+        leaseToken: null,
+        status: "running",
+      });
+    } finally {
       await db
-        .select({
-          indexId: caseLawCorpusIndexProjections.indexId,
-          pendingAction: caseLawCorpusIndexProjections.pendingAction,
-          pendingHash: caseLawCorpusIndexProjections.pendingHash,
-          pendingIndexIds: caseLawCorpusIndexProjections.pendingIndexIds,
-        })
-        .from(caseLawCorpusIndexProjections)
-        .where(
-          and(
-            eq(caseLawCorpusIndexProjections.generation, generation),
-            eq(caseLawCorpusIndexProjections.decisionId, staleDecisionId),
-          ),
-        )
-    ).at(0);
-    expect(recoveredProjection).toMatchObject({
-      indexId: successorIndexId,
-      pendingAction: "index",
-      pendingHash: "stale",
-    });
-    expect(recoveredProjection?.pendingIndexIds).toEqual(
-      expect.arrayContaining([staleIndexId, successorIndexId]),
-    );
-    expect(await readCheckpoint(generation)).toMatchObject({
-      cursorCreatedAt: CREATED_AT,
-      cursorId: staleDecisionId,
-      leaseExpiresAt: null,
-      leaseToken: null,
-      status: "running",
-    });
-    await db
-      .delete(caseLawDecisions)
-      .where(eq(caseLawDecisions.id, staleDecisionId));
+        .delete(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, staleDecisionId));
+    }
   },
   { timeout: 30_000 },
 );
@@ -1261,6 +1677,30 @@ test(
 );
 
 test("the database rejects every malformed corpus source descriptor shape", async () => {
+  const legacySourceId = toSafeId<"caseLawSource">(
+    "00000000-0000-4000-8000-000000000006",
+  );
+  const rejectedSourceId = toSafeId<"caseLawSource">(
+    "00000000-0000-4000-8000-000000000007",
+  );
+  await db.execute(
+    sql`INSERT INTO ${caseLawSources} (id, adapter_key, name, descriptor)
+        VALUES (${legacySourceId}, 'legacy-malformed', 'legacy malformed', '{}'::jsonb)`,
+  );
+
+  const migration = await Bun.file(generationMigrationSource).text();
+  const descriptorGuardStatements = migration
+    .split("--> statement-breakpoint")
+    .map((statement) => statement.trim())
+    .filter((statement) =>
+      statement.includes("case_law_sources_descriptor_shape"),
+    );
+  expect(descriptorGuardStatements).toHaveLength(3);
+  for (const statement of descriptorGuardStatements) {
+    // oxlint-disable-next-line no-await-in-loop -- function, replacement drop, and trigger creation are order-dependent DDL
+    await db.execute(sql.raw(statement));
+  }
+
   const malformedDescriptors = [
     {},
     null,
@@ -1293,11 +1733,45 @@ test("the database rejects every malformed corpus source descriptor shape", asyn
         () => null,
         (error: unknown) => error,
       );
-    expect(rejection).toBeInstanceOf(Error);
+    expectConstraintViolation(rejection, "case_law_sources_descriptor_shape");
     await assertRejected(index + 1);
   };
 
-  await assertRejected();
+  try {
+    await db
+      .update(caseLawSources)
+      .set({ syncCursor: "repair-safe-checkpoint" })
+      .where(eq(caseLawSources.id, legacySourceId));
+    expect(
+      await db
+        .select({ syncCursor: caseLawSources.syncCursor })
+        .from(caseLawSources)
+        .where(eq(caseLawSources.id, legacySourceId)),
+    ).toEqual([{ syncCursor: "repair-safe-checkpoint" }]);
+
+    await assertRejected();
+
+    const insertRejection: unknown = await db
+      .execute(
+        sql`INSERT INTO ${caseLawSources} (id, adapter_key, name, descriptor)
+            VALUES (${rejectedSourceId}, 'rejected-malformed', 'rejected malformed', '{}'::jsonb)`,
+      )
+      .then(
+        () => null,
+        (error: unknown) => error,
+      );
+    expectConstraintViolation(
+      insertRejection,
+      "case_law_sources_descriptor_shape",
+    );
+  } finally {
+    await db
+      .delete(caseLawSources)
+      .where(eq(caseLawSources.id, rejectedSourceId));
+    await db
+      .delete(caseLawSources)
+      .where(eq(caseLawSources.id, legacySourceId));
+  }
 });
 
 test(
@@ -1596,6 +2070,15 @@ test(
             indexId: corpusIndexId(rebuildGeneration, row.country),
             mode: {
               generation: rebuildGeneration,
+              reservations: new Map(
+                rows.map((selected) => [
+                  selected.id,
+                  {
+                    indexIds: selected.generationPendingIndexIds,
+                    revision: selected.generationPendingRevision,
+                  },
+                ]),
+              ),
               type: "generation-rebuild",
             },
             now: new Date("2026-07-31T13:00:00.000Z"),
@@ -1847,7 +2330,10 @@ test("rejects a pending hash without a pending action", async () => {
       () => null,
       (error: unknown) => error,
     );
-  expect(rejection).toBeInstanceOf(Error);
+  expectConstraintViolation(
+    rejection,
+    "case_law_corpus_index_projections_pending_shape",
+  );
 
   const missingTarget: unknown = await db
     .insert(caseLawCorpusIndexProjections)
@@ -1861,5 +2347,24 @@ test("rejects a pending hash without a pending action", async () => {
       () => null,
       (error: unknown) => error,
     );
-  expect(missingTarget).toBeInstanceOf(Error);
+  expectConstraintViolation(
+    missingTarget,
+    "case_law_corpus_index_projections_pending_shape",
+  );
+
+  const negativeRevision: unknown = await db
+    .insert(caseLawCorpusIndexProjections)
+    .values({
+      decisionId: publicFirstId,
+      generation,
+      pendingRevision: -1,
+    })
+    .then(
+      () => null,
+      (error: unknown) => error,
+    );
+  expectConstraintViolation(
+    negativeRevision,
+    "case_law_corpus_index_projections_pending_revision_nonnegative",
+  );
 });

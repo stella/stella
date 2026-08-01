@@ -47,16 +47,48 @@ test("a restore racing erasure is durably requeued", async () => {
   const firstIrreversibleMutation = source.indexOf(
     "await removeDecisionFromIndex(decisionId, scopedDb);",
   );
+  const storedTargetValidation = source.indexOf(
+    "const storedIndexTarget = (() => {",
+  );
   const branchStart = source.indexOf("if (!stillErased) {");
   const branchEnd = source.indexOf("return;", branchStart);
 
   expect(generationValidation).toBeGreaterThanOrEqual(0);
+  expect(storedTargetValidation).toBeGreaterThan(generationValidation);
   expect(firstIrreversibleMutation).toBeGreaterThan(generationValidation);
+  expect(firstIrreversibleMutation).toBeGreaterThan(storedTargetValidation);
   expect(branchStart).toBeGreaterThanOrEqual(0);
   expect(branchEnd).toBeGreaterThan(branchStart);
   expect(source.slice(branchStart, branchEnd)).toContain(
     ".set({ indexedAt: null, indexedHash: null })",
   );
+  expect(source).toContain("auditedViaCorpusIndex = targets.size > 0");
+  expect(source).toContain(
+    "pendingRevision: caseLawCorpusIndexProjections.pendingRevision",
+  );
+  expect(source).toContain(
+    "eq(\n                        caseLawCorpusIndexProjections.pendingRevision,\n                        projection.pendingRevision,",
+  );
+});
+
+test("lease acquisition failures are audited after local redaction", async () => {
+  const source = await Bun.file(caseLawErasureSource).text();
+  const firstIrreversibleMutation = source.indexOf(
+    "await removeDecisionFromIndex(decisionId, scopedDb);",
+  );
+  const rejectedClaim = source.indexOf("if (claimRejected) {");
+  const rejectedClaimAudit = source.indexOf(
+    "await recordFailedRedactionAudit({",
+    rejectedClaim,
+  );
+  const rejectedClaimThrow = source.indexOf(
+    "throw firstClaimError;",
+    rejectedClaim,
+  );
+
+  expect(rejectedClaim).toBeGreaterThan(firstIrreversibleMutation);
+  expect(rejectedClaimAudit).toBeGreaterThan(rejectedClaim);
+  expect(rejectedClaimThrow).toBeGreaterThan(rejectedClaimAudit);
 });
 
 test("generation checkpoint migration preserves replay and role invariants", async () => {
@@ -115,19 +147,18 @@ test("generation checkpoint migration preserves replay and role invariants", asy
     '"case_law_source_reconciliations_cursor_upper"',
   );
   expect(source).toContain(
-    'ADD CONSTRAINT "case_law_sources_descriptor_shape"',
+    "CREATE OR REPLACE FUNCTION enforce_case_law_sources_descriptor_shape()",
   );
-  expect(source).toContain("SELECT 1 FROM pg_constraint");
-  expect(source).toContain("conname = 'case_law_sources_descriptor_shape'");
-  expect(source).toContain("conrelid = 'case_law_sources'::regclass");
+  expect(source).toContain("BEFORE INSERT OR UPDATE OF descriptor");
+  expect(source).toContain("NEW.descriptor IS DISTINCT FROM OLD.descriptor");
   expect(source).toContain(
-    "jsonb_typeof(\"descriptor\" -> 'allowsRedistribution') = 'boolean'",
+    "jsonb_typeof(NEW.descriptor -> 'allowsRedistribution') = 'boolean'",
   );
-  expect(schemaSource).toContain('"case_law_sources_descriptor_shape"');
+  expect(source).toContain("CONSTRAINT = 'case_law_sources_descriptor_shape'");
+  expect(schemaSource).not.toContain('"case_law_sources_descriptor_shape"');
   for (const license of CORPUS_LICENSES) {
     expect(source).toContain(`'${license}'`);
   }
-  expect(schemaSource).toContain("CORPUS_LICENSES.map");
   expect(source).toContain(
     "AFTER INSERT OR UPDATE OF content_hash, indexed_hash, country",
   );
@@ -159,16 +190,37 @@ test("generation checkpoint migration preserves replay and role invariants", asy
   expect(source).toContain(
     "\"pending_index_ids\" varchar(64)[] DEFAULT '{}'::varchar(64)[] NOT NULL",
   );
+  expect(source).toContain('"pending_revision" integer DEFAULT 0 NOT NULL');
+  expect(source).toContain(
+    'ADD COLUMN IF NOT EXISTS "pending_revision" integer DEFAULT 0 NOT NULL',
+  );
+  expect(source).toContain(
+    'CONSTRAINT "case_law_corpus_index_projections_pending_revision_nonnegative"',
+  );
+  expect(source).toContain(
+    "conname = 'case_law_corpus_index_projections_pending_revision_nonnegative'",
+  );
+  expect(source).toContain(
+    "conrelid = 'case_law_corpus_index_projections'::regclass",
+  );
+  expect(schemaSource).toContain(
+    '"case_law_corpus_index_projections_pending_revision_nonnegative"',
+  );
   expect(source).toContain("pending_index_ids = ARRAY(");
   expect(source).toContain(
     "case_law_corpus_index_projections.pending_index_ids",
   );
   expect(source).toContain("pending_action = EXCLUDED.pending_action");
-  expect(source).toContain("'delete', null, '{}', clock_timestamp()");
+  expect(source).toContain("'delete', null, '{}', 1, clock_timestamp()");
+  expect(
+    source.match(
+      /pending_revision = case_law_corpus_index_projections\.pending_revision \+ 1/gu,
+    ),
+  ).toHaveLength(2);
   expect(source.match(/existing\.decision_id = NEW\.id/gu)).toHaveLength(2);
   expect(source).toContain("existing_decision.source_id = NEW.id");
   expect(source).toContain(
-    "NEW.indexed_generation =\n        (projection.generation || '_' || lower(NEW.country))",
+    "NEW.indexed_generation =\n          (projection.generation || '_' || lower(NEW.country))",
   );
   for (const action of CASE_LAW_CORPUS_INDEX_PROJECTION_ACTIONS) {
     expect(source).toContain(`"pending_action" = '${action}'`);
@@ -212,6 +264,18 @@ test("generation checkpoint migration preserves replay and role invariants", asy
   );
   expect(source).toContain(
     'ALTER COLUMN "created_at" SET DEFAULT clock_timestamp()',
+  );
+  expect(source).toContain(
+    "CREATE OR REPLACE FUNCTION enforce_case_law_decisions_corpus_country_shape()",
+  );
+  expect(source).toContain("BEFORE INSERT OR UPDATE OF country");
+  expect(source).toContain("NEW.country IS DISTINCT FROM OLD.country");
+  expect(source).toContain("NEW.country !~ '^[A-Za-z]{2,8}$'");
+  expect(source).toContain(
+    "CONSTRAINT = 'case_law_decisions_corpus_country_shape'",
+  );
+  expect(schemaSource).not.toContain(
+    '"case_law_decisions_corpus_country_shape"',
   );
 });
 

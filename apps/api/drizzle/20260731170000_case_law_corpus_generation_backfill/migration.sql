@@ -10,33 +10,66 @@ ALTER TABLE "legislation_documents" ALTER COLUMN "indexed_generation" SET DATA T
 -- stella-migration-safety: reviewed destructive-change - widening varchar(32) -> varchar(64) is a metadata-only catalog change with no table rewrite or data loss; it aligns every physical corpus-index identifier column with the maximum constructed identifier length.
 ALTER TABLE "legislation_index_jobs" ALTER COLUMN "generation" SET DATA TYPE varchar(64);--> statement-breakpoint
 
--- stella-migration-safety: reviewed destructive-change - NOT VALID enforces the typed descriptor boundary on new writes without scanning or rewriting legacy rows.
-DO $constraint$
+CREATE OR REPLACE FUNCTION enforce_case_law_decisions_corpus_country_shape()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $function$
 BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint
-    WHERE conname = 'case_law_sources_descriptor_shape'
-      AND conrelid = 'case_law_sources'::regclass
-  ) THEN
-    ALTER TABLE "case_law_sources"
-      ADD CONSTRAINT "case_law_sources_descriptor_shape"
-      CHECK ((
-          "descriptor" IS NULL OR (
-            jsonb_typeof("descriptor") = 'object'
-            AND "descriptor" ?& ARRAY['license', 'attribution', 'allowsRedistribution', 'allowsDerivedAi']
-            AND jsonb_typeof("descriptor" -> 'license') = 'string'
-            AND "descriptor" ->> 'license' IN ('public-domain', 'official-open-data', 'cc-by', 'cc-by-sa', 'permitted-redistribution', 'restricted')
-            AND (
-              "descriptor" -> 'attribution' = 'null'::jsonb
-              OR jsonb_typeof("descriptor" -> 'attribution') = 'string'
-            )
-            AND jsonb_typeof("descriptor" -> 'allowsRedistribution') = 'boolean'
-            AND jsonb_typeof("descriptor" -> 'allowsDerivedAi') = 'boolean'
-          )
-        ) IS TRUE) NOT VALID;
+  IF (TG_OP = 'INSERT' OR NEW.country IS DISTINCT FROM OLD.country)
+    AND NEW.country !~ '^[A-Za-z]{2,8}$'
+  THEN
+    RAISE EXCEPTION 'case_law_decisions_corpus_country_shape: country must contain 2-8 ASCII letters'
+      USING ERRCODE = '23514',
+            CONSTRAINT = 'case_law_decisions_corpus_country_shape';
   END IF;
+  RETURN NEW;
 END
-$constraint$;--> statement-breakpoint
+$function$;--> statement-breakpoint
+-- stella-migration-safety: reviewed destructive-change - retry cleanup replaces only this migration's jurisdiction guard; table data is unchanged.
+DROP TRIGGER IF EXISTS case_law_decisions_corpus_country_shape
+  ON "case_law_decisions";--> statement-breakpoint
+CREATE TRIGGER case_law_decisions_corpus_country_shape
+BEFORE INSERT OR UPDATE OF country
+ON "case_law_decisions"
+FOR EACH ROW
+EXECUTE FUNCTION enforce_case_law_decisions_corpus_country_shape();--> statement-breakpoint
+
+CREATE OR REPLACE FUNCTION enforce_case_law_sources_descriptor_shape()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $function$
+BEGIN
+  IF (TG_OP = 'INSERT' OR NEW.descriptor IS DISTINCT FROM OLD.descriptor)
+    AND NOT ((
+      NEW.descriptor IS NULL OR (
+        jsonb_typeof(NEW.descriptor) = 'object'
+        AND NEW.descriptor ?& ARRAY['license', 'attribution', 'allowsRedistribution', 'allowsDerivedAi']
+        AND jsonb_typeof(NEW.descriptor -> 'license') = 'string'
+        AND NEW.descriptor ->> 'license' IN ('public-domain', 'official-open-data', 'cc-by', 'cc-by-sa', 'permitted-redistribution', 'restricted')
+        AND (
+          NEW.descriptor -> 'attribution' = 'null'::jsonb
+          OR jsonb_typeof(NEW.descriptor -> 'attribution') = 'string'
+        )
+        AND jsonb_typeof(NEW.descriptor -> 'allowsRedistribution') = 'boolean'
+        AND jsonb_typeof(NEW.descriptor -> 'allowsDerivedAi') = 'boolean'
+      )
+    ) IS TRUE)
+  THEN
+    RAISE EXCEPTION 'case_law_sources_descriptor_shape: descriptor is malformed'
+      USING ERRCODE = '23514',
+            CONSTRAINT = 'case_law_sources_descriptor_shape';
+  END IF;
+  RETURN NEW;
+END
+$function$;--> statement-breakpoint
+-- stella-migration-safety: reviewed destructive-change - retry cleanup replaces only this migration's descriptor guard; table data is unchanged.
+DROP TRIGGER IF EXISTS case_law_sources_descriptor_shape
+  ON "case_law_sources";--> statement-breakpoint
+CREATE TRIGGER case_law_sources_descriptor_shape
+BEFORE INSERT OR UPDATE OF descriptor
+ON "case_law_sources"
+FOR EACH ROW
+EXECUTE FUNCTION enforce_case_law_sources_descriptor_shape();--> statement-breakpoint
 
 CREATE TABLE IF NOT EXISTS "case_law_corpus_index_backfills" (
   "generation" varchar(32) PRIMARY KEY NOT NULL,
@@ -205,6 +238,7 @@ CREATE TABLE IF NOT EXISTS "case_law_corpus_index_projections" (
   "pending_action" text,
   "pending_hash" varchar(64),
   "pending_index_ids" varchar(64)[] DEFAULT '{}'::varchar(64)[] NOT NULL,
+  "pending_revision" integer DEFAULT 0 NOT NULL,
   "updated_at" timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT "case_law_corpus_index_projections_pk" PRIMARY KEY ("generation", "decision_id"),
   CONSTRAINT "case_law_corpus_index_projections_generation_fk"
@@ -220,8 +254,25 @@ CREATE TABLE IF NOT EXISTS "case_law_corpus_index_projections" (
         OR ("pending_action" = 'index' AND "pending_hash" IS NOT NULL AND cardinality("pending_index_ids") > 0)
         OR ("pending_action" = 'delete' AND "pending_hash" IS NULL)
       ) IS TRUE
-    )
+    ),
+  CONSTRAINT "case_law_corpus_index_projections_pending_revision_nonnegative"
+    CHECK ("pending_revision" >= 0)
 );--> statement-breakpoint
+ALTER TABLE "case_law_corpus_index_projections"
+  ADD COLUMN IF NOT EXISTS "pending_revision" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'case_law_corpus_index_projections_pending_revision_nonnegative'
+      AND conrelid = 'case_law_corpus_index_projections'::regclass
+  ) THEN
+    ALTER TABLE "case_law_corpus_index_projections"
+      ADD CONSTRAINT "case_law_corpus_index_projections_pending_revision_nonnegative"
+      CHECK ("pending_revision" >= 0);
+  END IF;
+END
+$$;--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "case_law_corpus_index_projections_pending_idx"
   ON "case_law_corpus_index_projections" ("generation", "decision_id")
   WHERE "pending_action" IS NOT NULL;--> statement-breakpoint
@@ -267,63 +318,67 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $function$
 BEGIN
-  IF NEW.content_hash IS NULL THEN
-    INSERT INTO case_law_corpus_index_projections (
-      generation,
-      decision_id,
-      pending_action,
-      pending_hash,
-      pending_index_ids,
-      updated_at
-    )
-    SELECT checkpoint.generation, NEW.id, 'delete', null, '{}', clock_timestamp()
-    FROM case_law_corpus_index_backfills AS checkpoint
-    WHERE EXISTS (
-      SELECT 1
-      FROM case_law_corpus_index_projections AS existing
-      WHERE existing.generation = checkpoint.generation
-        AND existing.decision_id = NEW.id
-    ) OR NOT EXISTS (
+  IF TG_OP = 'UPDATE' THEN
+    IF NEW.content_hash IS NULL THEN
+      INSERT INTO case_law_corpus_index_projections (
+        generation,
+        decision_id,
+        pending_action,
+        pending_hash,
+        pending_index_ids,
+        pending_revision,
+        updated_at
+      )
+      SELECT checkpoint.generation, NEW.id, 'delete', null, '{}', 1, clock_timestamp()
+      FROM case_law_corpus_index_backfills AS checkpoint
+      WHERE EXISTS (
+        SELECT 1
+        FROM case_law_corpus_index_projections AS existing
+        WHERE existing.generation = checkpoint.generation
+          AND existing.decision_id = NEW.id
+      ) OR NOT EXISTS (
         SELECT 1
         FROM case_law_corpus_index_backfills AS newer
         WHERE (newer.generation_order, newer.generation) >
           (checkpoint.generation_order, checkpoint.generation)
       )
-    ON CONFLICT ON CONSTRAINT case_law_corpus_index_projections_pk DO UPDATE
-    SET pending_action = EXCLUDED.pending_action,
-        pending_hash = EXCLUDED.pending_hash,
-        pending_index_ids = ARRAY(
-          SELECT DISTINCT target
-          FROM unnest(
-            case_law_corpus_index_projections.pending_index_ids || CASE
-              WHEN case_law_corpus_index_projections.index_id IS NULL THEN '{}'
-              ELSE ARRAY[case_law_corpus_index_projections.index_id]
-            END
-          ) AS target
-        ),
-        updated_at = EXCLUDED.updated_at;
-    RETURN NEW;
+      ON CONFLICT ON CONSTRAINT case_law_corpus_index_projections_pk DO UPDATE
+      SET pending_action = EXCLUDED.pending_action,
+          pending_hash = EXCLUDED.pending_hash,
+          pending_index_ids = ARRAY(
+            SELECT DISTINCT target
+            FROM unnest(
+              case_law_corpus_index_projections.pending_index_ids || CASE
+                WHEN case_law_corpus_index_projections.index_id IS NULL THEN '{}'
+                ELSE ARRAY[case_law_corpus_index_projections.index_id]
+              END
+            ) AS target
+          ),
+          pending_revision = case_law_corpus_index_projections.pending_revision + 1,
+          updated_at = EXCLUDED.updated_at;
+      RETURN NEW;
+    END IF;
+
+    IF NEW.indexed_hash IS NOT NULL
+      AND NEW.content_hash IS NOT DISTINCT FROM OLD.content_hash
+      AND NEW.country IS NOT DISTINCT FROM OLD.country
+    THEN
+      -- The ordinary incremental writer owns the serving generation while a
+      -- newer generation may be rebuilding. Its successful database mark is
+      -- also the authoritative projection commit for that serving generation;
+      -- the newer generation's independently queued action remains untouched.
+      UPDATE case_law_corpus_index_projections AS projection
+      SET index_id = NEW.indexed_generation,
+          indexed_hash = NEW.indexed_hash,
+          updated_at = clock_timestamp()
+      WHERE projection.decision_id = NEW.id
+        AND NEW.indexed_generation =
+          (projection.generation || '_' || lower(NEW.country));
+      RETURN NEW;
+    END IF;
   END IF;
 
-  IF TG_OP = 'UPDATE'
-    AND NEW.indexed_hash IS NOT NULL
-    AND NEW.content_hash IS NOT DISTINCT FROM OLD.content_hash
-    AND NEW.country IS NOT DISTINCT FROM OLD.country
-  THEN
-    -- The ordinary incremental writer owns the serving generation while a
-    -- newer generation may be rebuilding. Its successful database mark is
-    -- also the authoritative projection commit for that serving generation;
-    -- the newer generation's independently queued action remains untouched.
-    UPDATE case_law_corpus_index_projections AS projection
-    SET index_id = NEW.indexed_generation,
-        indexed_hash = NEW.indexed_hash,
-        pending_action = null,
-        pending_hash = null,
-        pending_index_ids = '{}',
-        updated_at = clock_timestamp()
-    WHERE projection.decision_id = NEW.id
-      AND NEW.indexed_generation =
-        (projection.generation || '_' || lower(NEW.country));
+  IF NEW.content_hash IS NULL THEN
     RETURN NEW;
   END IF;
 
@@ -333,6 +388,7 @@ BEGIN
     pending_action,
     pending_hash,
     pending_index_ids,
+    pending_revision,
     updated_at
   )
   SELECT checkpoint.generation,
@@ -340,6 +396,7 @@ BEGIN
          'index',
          NEW.content_hash,
          ARRAY[checkpoint.generation || '_' || lower(NEW.country)],
+         1,
          clock_timestamp()
   FROM case_law_corpus_index_backfills AS checkpoint
   WHERE EXISTS (
@@ -362,6 +419,7 @@ BEGIN
           case_law_corpus_index_projections.pending_index_ids || EXCLUDED.pending_index_ids
         ) AS target
       ),
+      pending_revision = case_law_corpus_index_projections.pending_revision + 1,
       updated_at = EXCLUDED.updated_at;
 
   RETURN NEW;

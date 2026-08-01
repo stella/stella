@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { Buffer } from "node:buffer";
 
 import type { Transaction } from "@/api/db/root";
@@ -33,6 +33,24 @@ const INDEX_CONCURRENCY = 4;
 /** Run the stale scan at least once per this many batches under a full
  *  missing backlog (see the duty-cycle note in `backfill`). */
 const STALE_SCAN_DUTY_CYCLE = 20;
+
+export const FENCED_BACKFILL_BATCH_STATUS = {
+  ADVANCED: "advanced",
+  COMPLETE: "complete",
+  RETRY: "retry",
+} as const;
+
+export type FencedBackfillBatchResult =
+  | {
+      indexed: number;
+      status: typeof FENCED_BACKFILL_BATCH_STATUS.ADVANCED;
+    }
+  | {
+      indexed: 0;
+      status:
+        | typeof FENCED_BACKFILL_BATCH_STATUS.COMPLETE
+        | typeof FENCED_BACKFILL_BATCH_STATUS.RETRY;
+    };
 
 const corpusIndexErrorFromThrown = (error: unknown): CorpusIndexError =>
   error instanceof CorpusIndexError
@@ -172,7 +190,7 @@ export const resolveMarkedRowIds = <TBrand extends SafeIdType>(
 export const resolveReservedAppendTargets = <TBrand extends SafeIdType>(
   reserved: unknown,
   rows: readonly CorpusIndexRow<TBrand>[],
-): Map<SafeId<TBrand>, readonly string[]> => {
+): Map<SafeId<TBrand>, ReservedAppendTargets> => {
   let returned: unknown[] = [];
   if (Array.isArray(reserved)) {
     returned = reserved;
@@ -182,7 +200,7 @@ export const resolveReservedAppendTargets = <TBrand extends SafeIdType>(
   const byId = new Map<string, SafeId<TBrand>>(
     rows.map((row) => [row.id, row.id]),
   );
-  const targets = new Map<SafeId<TBrand>, readonly string[]>();
+  const targets = new Map<SafeId<TBrand>, ReservedAppendTargets>();
   for (const entry of returned) {
     if (
       !isRecord(entry) ||
@@ -190,13 +208,19 @@ export const resolveReservedAppendTargets = <TBrand extends SafeIdType>(
       !Array.isArray(entry["pendingIndexIds"]) ||
       !entry["pendingIndexIds"].every(
         (pendingIndexId) => typeof pendingIndexId === "string",
-      )
+      ) ||
+      typeof entry["pendingRevision"] !== "number" ||
+      !Number.isInteger(entry["pendingRevision"]) ||
+      entry["pendingRevision"] < 0
     ) {
       continue;
     }
     const id = byId.get(entry["id"]);
     if (id !== undefined) {
-      targets.set(id, entry["pendingIndexIds"]);
+      targets.set(id, {
+        indexIds: entry["pendingIndexIds"],
+        revision: entry["pendingRevision"],
+      });
     }
   }
   return targets;
@@ -276,7 +300,7 @@ type ReserveExternalAppend<
 > = (
   tx: Transaction,
   args: { generation: string; rows: readonly TRow[] },
-) => Promise<Map<SafeId<TBrand>, readonly string[]>>;
+) => Promise<Map<SafeId<TBrand>, ReservedAppendTargets>>;
 type RecoverRemoteEffectLeaseLoss<TBrand extends SafeIdType> = (args: {
   entityIds: readonly SafeId<TBrand>[];
   indexId: string;
@@ -323,9 +347,18 @@ type FencedIncrementalBackfillOptions<
   TRow extends CorpusIndexRow<TBrand>,
 > = GenerationBackfillRowsOptions<TBrand, TRow>;
 
-type CorpusIndexMarkMode =
+export type ReservedAppendTargets = {
+  indexIds: readonly string[];
+  revision: number;
+};
+
+type CorpusIndexMarkMode<TBrand extends SafeIdType> =
   | { type: "incremental" }
-  | { generation: string; type: "generation-rebuild" };
+  | {
+      generation: string;
+      reservations: ReadonlyMap<SafeId<TBrand>, ReservedAppendTargets>;
+      type: "fenced-incremental" | "generation-rebuild";
+    };
 
 type IngestBatchWithGuardArgs = {
   indexId: string;
@@ -352,7 +385,11 @@ const ingestBatchWithGuard = async ({
   if (beforeRemoteEffect === undefined) {
     return await effect();
   }
-  return await beforeRemoteEffect({ effect, onLeaseLost });
+  const guarded = await Result.tryPromise({
+    try: async () => await beforeRemoteEffect({ effect, onLeaseLost }),
+    catch: corpusIndexErrorFromThrown,
+  });
+  return guarded.isErr() ? Result.err(guarded.error) : guarded.value;
 };
 
 /**
@@ -416,7 +453,7 @@ export type CorpusIndexAdapter<
     args: {
       rows: readonly TRow[];
       indexId: string;
-      mode: CorpusIndexMarkMode;
+      mode: CorpusIndexMarkMode<TBrand>;
       now: Date;
     },
   ) => Promise<Set<SafeId<TBrand>>>;
@@ -501,6 +538,43 @@ export const settleBoth = async <TFirst, TSecond>(
     throw secondOutcome.reason;
   }
   return [firstOutcome.value, secondOutcome.value];
+};
+
+/** Waits for every sibling before exposing the first rejection in input order. */
+export const settleAll = async <T>(
+  promises: readonly Promise<T>[],
+): Promise<T[]> => {
+  const outcomes = await Promise.allSettled(promises);
+  const values: T[] = [];
+  let firstError: unknown;
+  let rejected = false;
+  for (const outcome of outcomes) {
+    if (outcome.status === "fulfilled") {
+      values.push(outcome.value);
+      continue;
+    }
+    if (!rejected) {
+      firstError = outcome.reason;
+      rejected = true;
+    }
+  }
+  if (rejected) {
+    throw firstError;
+  }
+  return values;
+};
+
+/** Waits for best-effort cleanup and reports every failure without throwing. */
+export const settleAllCleanup = async (
+  promises: readonly Promise<unknown>[],
+  reportError: (error: unknown) => void,
+): Promise<void> => {
+  const outcomes = await Promise.allSettled(promises);
+  for (const outcome of outcomes) {
+    if (outcome.status === "rejected") {
+      reportError(outcome.reason);
+    }
+  }
 };
 
 const loadText = async <TBrand extends SafeIdType>(
@@ -806,7 +880,7 @@ export const createCorpusIndexer = <
     batchSize: number,
     generation: string,
     options: BackfillSelectedRowsOptions<TBrand, TRow>,
-  ): Promise<number> => {
+  ): Promise<FencedBackfillBatchResult> => {
     const staleReserved = Math.max(1, Math.floor(batchSize / 4));
     // A due duty batch cedes one missing slot up front so granting the
     // stale scan capacity below cannot push the batch past its requested
@@ -859,10 +933,18 @@ export const createCorpusIndexer = <
       });
     }
     if (rows.length === 0) {
-      return 0;
+      return { indexed: 0, status: FENCED_BACKFILL_BATCH_STATUS.COMPLETE };
     }
 
-    return await backfillSelectedRows(scopedDb, rows, generation, options);
+    const indexed = await backfillSelectedRows(
+      scopedDb,
+      rows,
+      generation,
+      options,
+    );
+    return indexed > 0
+      ? { indexed, status: FENCED_BACKFILL_BATCH_STATUS.ADVANCED }
+      : { indexed: 0, status: FENCED_BACKFILL_BATCH_STATUS.RETRY };
   };
 
   const backfill = async (
@@ -870,18 +952,20 @@ export const createCorpusIndexer = <
     batchSize: number,
     generation: string,
     options: { readConcurrency?: number } = {},
-  ): Promise<number> =>
-    await backfillWithOptions(scopedDb, batchSize, generation, {
+  ): Promise<number> => {
+    const result = await backfillWithOptions(scopedDb, batchSize, generation, {
       ...options,
       type: "incremental",
     });
+    return result.indexed;
+  };
 
   const backfillFenced = async (
     scopedDb: ScopedDb,
     batchSize: number,
     generation: string,
     options: FencedIncrementalBackfillOptions<TBrand, TRow>,
-  ): Promise<number> =>
+  ): Promise<FencedBackfillBatchResult> =>
     await backfillWithOptions(scopedDb, batchSize, generation, {
       ...options,
       type: "fenced-incremental",
@@ -1015,7 +1099,7 @@ export const createCorpusIndexer = <
             }
             const durableTargets = reservedTargets.get(row.id);
             if (durableTargets !== undefined) {
-              for (const reservedIndexId of durableTargets) {
+              for (const reservedIndexId of durableTargets.indexIds) {
                 previousIndexes.add(reservedIndexId);
               }
             }
@@ -1108,13 +1192,30 @@ export const createCorpusIndexer = <
             // unconditional write would mask that refresh so the stale index
             // document would never be retried. All rows go in one statement;
             // per-row round-trips dominated bulk-build batch cost.
+            let mode: CorpusIndexMarkMode<TBrand>;
+            if (options.type === "incremental") {
+              mode = { type: "incremental" };
+            } else {
+              if (reservedTargets === null) {
+                panic("fenced corpus append reached mark without reservations");
+              }
+              const reservations = new Map<
+                SafeId<TBrand>,
+                ReservedAppendTargets
+              >();
+              for (const { row } of entries) {
+                const rowReservation = reservedTargets.get(row.id);
+                if (rowReservation === undefined) {
+                  panic("reserved corpus row reached mark without its epoch");
+                }
+                reservations.set(row.id, rowReservation);
+              }
+              mode = { generation, reservations, type: options.type };
+            }
             const marked = await adapter.markIndexedBatch(tx, {
               rows: entries.map(({ row }) => row),
               indexId,
-              mode:
-                options.type === "generation-rebuild"
-                  ? { generation, type: "generation-rebuild" }
-                  : { type: "incremental" },
+              mode,
               now,
             });
             for (const { row } of entries) {

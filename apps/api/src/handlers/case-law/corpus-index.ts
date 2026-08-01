@@ -17,7 +17,10 @@ import {
 } from "@/api/db/schema";
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
 import type { SafeId } from "@/api/lib/branded-types";
-import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
+import {
+  redistributableCaseLawSource,
+  redistributableCaseLawSourceSqlFor,
+} from "@/api/lib/case-law/redistribution";
 import type { CorpusChunk } from "@/api/lib/corpus-index/chunking";
 import {
   chunkDocument,
@@ -27,11 +30,14 @@ import type {
   CorpusDocumentPayload,
   CorpusIndexAdapter,
   FencedRemoteEffect,
+  ReservedAppendTargets,
 } from "@/api/lib/corpus-index/core";
 import {
   createCorpusIndexer,
+  FENCED_BACKFILL_BATCH_STATUS,
   resolveMarkedRowIds,
   resolveReservedAppendTargets,
+  settleAll,
 } from "@/api/lib/corpus-index/core";
 import {
   timestampCasToken,
@@ -50,6 +56,8 @@ import {
 import {
   corpusIndexId,
   isCaseLawCorpusGeneration,
+  isCorpusIndexGeneration,
+  isCorpusIndexJurisdiction,
   tryCorpusIndexGeneration,
 } from "@/api/lib/legal-search/index-naming";
 
@@ -89,6 +97,7 @@ type IndexableRow = {
   generationIndexId: string | null;
   generationPendingAction: CaseLawCorpusIndexProjectionAction | null;
   generationPendingIndexIds: string[];
+  generationPendingRevision: number;
   updatedAtToken: TimestampCasToken;
 };
 
@@ -116,6 +125,7 @@ const SELECT_COLUMNS = {
   generationIndexId: sql<string | null>`null`,
   generationPendingAction: sql<CaseLawCorpusIndexProjectionAction | null>`null`,
   generationPendingIndexIds: sql<string[]>`'{}'::varchar(64)[]`,
+  generationPendingRevision: sql<number>`0`,
   createdAt: caseLawDecisions.createdAt,
   updatedAtToken: timestampCasToken(caseLawDecisions.updatedAt),
 };
@@ -128,6 +138,7 @@ const GENERATION_PAGE_SELECT_COLUMNS = {
   generationPendingIndexIds: sql<
     string[]
   >`coalesce(${caseLawCorpusIndexProjections.pendingIndexIds}, '{}'::varchar(64)[])`,
+  generationPendingRevision: sql<number>`coalesce(${caseLawCorpusIndexProjections.pendingRevision}, 0)`,
   sourceDescriptor: caseLawSources.descriptor,
 };
 
@@ -138,20 +149,73 @@ const INCREMENTAL_SELECT_COLUMNS = {
   generationPendingIndexIds: sql<
     string[]
   >`coalesce(${caseLawCorpusIndexProjections.pendingIndexIds}, '{}'::varchar(64)[])`,
+  generationPendingRevision: sql<number>`coalesce(${caseLawCorpusIndexProjections.pendingRevision}, 0)`,
 };
 
 // A row is indexable once its canonical payload is in object storage.
 const hasContent = sql`${caseLawDecisions.contentHash} IS NOT NULL`;
+const hasCorpusJurisdiction = sql`${caseLawDecisions.country} ~ '^[A-Za-z]{2,8}$'`;
+
+const settleReservedGenerationProjections = async (
+  tx: Transaction,
+  {
+    generation,
+    marked,
+    reservations,
+    rows,
+  }: {
+    generation: string;
+    marked: ReadonlySet<SafeId<"caseLawDecision">>;
+    reservations: ReadonlyMap<SafeId<"caseLawDecision">, ReservedAppendTargets>;
+    rows: readonly IndexableRow[];
+  },
+): Promise<void> => {
+  const markedRows = rows.filter(({ id }) => marked.has(id));
+  if (markedRows.length === 0) {
+    return;
+  }
+  const tuples = sql.join(
+    markedRows.map((row) => {
+      const reservation = reservations.get(row.id);
+      if (reservation === undefined) {
+        panic("marked corpus row has no reservation epoch");
+      }
+      return sql`(${row.id}::uuid, ${row.contentHash}::text, ${reservation.revision}::integer)`;
+    }),
+    sql`, `,
+  );
+  // Only the exact reservation epoch whose targets were deleted may settle.
+  // A lease-loss compensation or refresh increments the revision, preserving
+  // every target it adds after this operation's cleanup snapshot.
+  // audit: skip — search index maintenance; rebuilds derived state
+  await tx.execute(sql`
+    WITH settled(decision_id, content_hash, pending_revision) AS (
+      VALUES ${tuples}
+    )
+    UPDATE ${caseLawCorpusIndexProjections} AS projection
+    SET pending_action = null,
+        pending_hash = null,
+        pending_index_ids = '{}',
+        updated_at = now()
+    FROM settled
+    WHERE projection.generation = ${generation}
+      AND projection.decision_id = settled.decision_id
+      AND projection.pending_hash IS NOT DISTINCT FROM settled.content_hash
+      AND projection.pending_revision = settled.pending_revision
+  `);
+};
 
 const commitCurrentGenerationProjection = async (
   tx: Transaction,
   {
     generation,
     indexId,
+    reservations,
     rows,
   }: {
     generation: string;
     indexId: string;
+    reservations: ReadonlyMap<SafeId<"caseLawDecision">, ReservedAppendTargets>;
     rows: readonly IndexableRow[];
   },
 ): Promise<Set<SafeId<"caseLawDecision">>> => {
@@ -159,10 +223,13 @@ const commitCurrentGenerationProjection = async (
     return new Set();
   }
   const tuples = sql.join(
-    rows.map(
-      (row) =>
-        sql`(${row.id}::uuid, ${row.contentHash}::text, ${row.updatedAtToken}::timestamptz)`,
-    ),
+    rows.map((row) => {
+      const reservation = reservations.get(row.id);
+      if (reservation === undefined) {
+        panic("generation commit has no reservation epoch");
+      }
+      return sql`(${row.id}::uuid, ${row.contentHash}::text, ${reservation.revision}::integer, ${row.updatedAtToken}::timestamptz)`;
+    }),
     sql`, `,
   );
   // The generation queue is the commit marker for a rebuild. Locking the
@@ -171,10 +238,10 @@ const commitCurrentGenerationProjection = async (
   // newer hash after the transaction releases the row lock.
   // audit: skip — search index maintenance; rebuilds derived state
   const marked: unknown = await tx.execute(sql`
-    WITH expected(id, content_hash, expected_updated) AS (
+    WITH expected(id, content_hash, pending_revision, expected_updated) AS (
       VALUES ${tuples}
     ), live AS MATERIALIZED (
-      SELECT d.id, d.content_hash
+      SELECT d.id, d.content_hash, v.pending_revision
       FROM ${caseLawDecisions} AS d
       INNER JOIN expected AS v ON v.id = d.id
       WHERE d.content_hash IS NOT DISTINCT FROM v.content_hash
@@ -189,40 +256,33 @@ const commitCurrentGenerationProjection = async (
         pending_action,
         pending_hash,
         pending_index_ids,
+        pending_revision,
         updated_at
       )
-      SELECT ${generation}, live.id, ${indexId}, live.content_hash, null, null, '{}', now()
+      SELECT ${generation}, live.id, ${indexId}, live.content_hash, null, null, '{}', live.pending_revision, now()
       FROM live
       ON CONFLICT (generation, decision_id) DO UPDATE
       SET index_id = EXCLUDED.index_id,
           indexed_hash = EXCLUDED.indexed_hash,
-          pending_action = CASE
-            WHEN projection.pending_hash IS NOT DISTINCT FROM EXCLUDED.indexed_hash
-              THEN null
-            ELSE projection.pending_action
-          END,
-          pending_hash = CASE
-            WHEN projection.pending_hash IS NOT DISTINCT FROM EXCLUDED.indexed_hash
-              THEN null
-            ELSE projection.pending_hash
-          END,
-          pending_index_ids = CASE
-            WHEN projection.pending_hash IS NOT DISTINCT FROM EXCLUDED.indexed_hash
-              THEN '{}'
-            ELSE projection.pending_index_ids
-          END,
           updated_at = EXCLUDED.updated_at
       RETURNING decision_id
     )
     SELECT live.id FROM live
   `);
-  return resolveMarkedRowIds(marked, rows);
+  const markedIds = resolveMarkedRowIds(marked, rows);
+  await settleReservedGenerationProjections(tx, {
+    generation,
+    marked: markedIds,
+    reservations,
+    rows,
+  });
+  return markedIds;
 };
 
-const reserveGenerationProjectionTargets = async (
+export const reserveGenerationProjectionTargets = async (
   tx: Transaction,
   { generation, rows }: { generation: string; rows: readonly IndexableRow[] },
-): Promise<Map<SafeId<"caseLawDecision">, readonly string[]>> => {
+): Promise<Map<SafeId<"caseLawDecision">, ReservedAppendTargets>> => {
   if (rows.length === 0) {
     return new Map();
   }
@@ -243,11 +303,14 @@ const reserveGenerationProjectionTargets = async (
       SELECT d.id, d.content_hash, v.index_id
       FROM ${caseLawDecisions} AS d
       INNER JOIN expected AS v ON v.id = d.id
+      INNER JOIN ${caseLawSources} AS source ON source.id = d.source_id
       WHERE d.content_hash IS NOT DISTINCT FROM v.content_hash
         AND d.country = v.country
         AND d.updated_at IS NOT DISTINCT FROM v.expected_updated
         AND d.content_hash IS NOT NULL
-      FOR UPDATE OF d
+        AND d.country ~ '^[A-Za-z]{2,8}$'
+        AND ${sql.raw(redistributableCaseLawSourceSqlFor("source"))}
+      FOR UPDATE OF d, source
     ), queued AS (
       INSERT INTO ${caseLawCorpusIndexProjections} AS projection (
         generation,
@@ -255,9 +318,10 @@ const reserveGenerationProjectionTargets = async (
         pending_action,
         pending_hash,
         pending_index_ids,
+        pending_revision,
         updated_at
       )
-      SELECT ${generation}, live.id, 'index', live.content_hash, ARRAY[live.index_id], now()
+      SELECT ${generation}, live.id, 'index', live.content_hash, ARRAY[live.index_id], 1, now()
       FROM live
       ON CONFLICT (generation, decision_id) DO UPDATE
       SET pending_action = EXCLUDED.pending_action,
@@ -268,11 +332,13 @@ const reserveGenerationProjectionTargets = async (
               projection.pending_index_ids || EXCLUDED.pending_index_ids
             ) AS target
           ),
+          pending_revision = projection.pending_revision + 1,
           updated_at = EXCLUDED.updated_at
-      RETURNING decision_id, pending_index_ids
+      RETURNING decision_id, pending_index_ids, pending_revision
     )
     SELECT decision_id AS id,
-           pending_index_ids AS "pendingIndexIds"
+           pending_index_ids AS "pendingIndexIds",
+           pending_revision AS "pendingRevision"
     FROM queued
   `);
   return resolveReservedAppendTargets(reserved, rows);
@@ -309,6 +375,7 @@ const recoverLostGenerationProjectionEffect = async (
         pending_action,
         pending_hash,
         pending_index_ids,
+        pending_revision,
         updated_at
       )
       SELECT ${generation}, decision.id,
@@ -318,9 +385,9 @@ const recoverLostGenerationProjectionEffect = async (
                SELECT DISTINCT target
                FROM unnest(ARRAY[
                  ${indexId},
-                 ${generation} || '_' || lower(decision.country)
+               ${generation} || '_' || lower(decision.country)
                ]) AS target
-             ), now()
+             ), 1, now()
       FROM ${caseLawDecisions} AS decision
       WHERE decision.id IN (${ids})
       ON CONFLICT (generation, decision_id) DO UPDATE
@@ -332,6 +399,7 @@ const recoverLostGenerationProjectionEffect = async (
               projection.pending_index_ids || EXCLUDED.pending_index_ids
             ) AS target
           ),
+          pending_revision = projection.pending_revision + 1,
           updated_at = EXCLUDED.updated_at
     `);
   });
@@ -347,13 +415,13 @@ const clearTerminalGenerationPending = async (
   const tuples = sql.join(
     rows.map(
       (row) =>
-        sql`(${row.id}::uuid, ${row.contentHash}::text, ${row.updatedAtToken}::timestamptz)`,
+        sql`(${row.id}::uuid, ${row.contentHash}::text, ${row.generationPendingRevision}::integer, ${row.updatedAtToken}::timestamptz)`,
     ),
     sql`, `,
   );
   // audit: skip — terminal projection state is derived rebuild bookkeeping
   const cleared: unknown = await tx.execute(sql`
-    WITH expected(id, content_hash, expected_updated) AS (
+    WITH expected(id, content_hash, pending_revision, expected_updated) AS (
       VALUES ${tuples}
     ), live AS MATERIALIZED (
       SELECT d.id, d.content_hash
@@ -371,6 +439,11 @@ const clearTerminalGenerationPending = async (
     FROM live
     WHERE projection.generation = ${generation}
       AND projection.decision_id = live.id
+      AND projection.pending_revision = (
+        SELECT expected.pending_revision
+        FROM expected
+        WHERE expected.id = live.id
+      )
       AND (
         live.content_hash IS NULL
         OR projection.pending_hash IS NOT DISTINCT FROM live.content_hash
@@ -398,6 +471,7 @@ const clearDeletedGenerationProjection = async (
     USING live
     WHERE projection.generation = ${generation}
       AND projection.decision_id = live.id
+      AND projection.pending_revision = ${row.generationPendingRevision}
       AND projection.pending_action IN ('index', 'delete')
   `);
 };
@@ -413,6 +487,7 @@ export const clearIneligibleGenerationProjection = async (
     row: {
       id: SafeId<"caseLawDecision">;
       contentHash: string | null;
+      generationPendingRevision: number;
       updatedAtToken: TimestampCasToken;
     };
   },
@@ -443,6 +518,7 @@ export const clearIneligibleGenerationProjection = async (
     FROM live
     WHERE projection.generation = ${generation}
       AND projection.decision_id = live.id
+      AND projection.pending_revision = ${row.generationPendingRevision}
   `);
 };
 
@@ -581,6 +657,7 @@ export const caseLawCorpusIndexAdapter = {
         .where(
           and(
             hasContent,
+            hasCorpusJurisdiction,
             redistributableCaseLawSource,
             isNull(caseLawDecisions.indexedHash),
           ),
@@ -615,6 +692,7 @@ export const caseLawCorpusIndexAdapter = {
         .where(
           and(
             hasContent,
+            hasCorpusJurisdiction,
             redistributableCaseLawSource,
             isNotNull(caseLawDecisions.indexedHash),
             sql`${caseLawDecisions.indexedGeneration} = (${generation} || '_' || lower(${caseLawDecisions.country}))`,
@@ -647,6 +725,7 @@ export const caseLawCorpusIndexAdapter = {
       return await commitCurrentGenerationProjection(tx, {
         generation: mode.generation,
         indexId,
+        reservations: mode.reservations,
         rows,
       });
     }
@@ -677,7 +756,16 @@ export const caseLawCorpusIndexAdapter = {
         AND d.updated_at IS NOT DISTINCT FROM v.expected_updated
       RETURNING d.id
     `);
-    return resolveMarkedRowIds(marked, rows);
+    const markedIds = resolveMarkedRowIds(marked, rows);
+    if (mode.type === "fenced-incremental") {
+      await settleReservedGenerationProjections(tx, {
+        generation: mode.generation,
+        marked: markedIds,
+        reservations: mode.reservations,
+        rows,
+      });
+    }
+    return markedIds;
   },
   insertSucceededJobs: async (tx, { rows, indexId }) => {
     // audit: skip — append-only index-job rows ARE the indexing audit trail
@@ -787,7 +875,11 @@ export const acquireCaseLawCorpusGenerationLease = async ({
   newLeaseToken = () => Bun.randomUUIDv7(),
   scopedDb,
 }: AcquireGenerationLeaseOptions): Promise<CaseLawCorpusGenerationLease | null> => {
-  validateGenerationBoundary(generation);
+  if (!isCorpusIndexGeneration(generation)) {
+    throw new CorpusIndexError({
+      message: "Invalid corpus index generation",
+    });
+  }
   const leaseToken = newLeaseToken();
   const claimed = await scopedDb(async (tx) => {
     // audit: skip — this row is ephemeral mutual-exclusion state
@@ -839,11 +931,13 @@ export const acquireCaseLawCorpusGenerationLease = async ({
   return {
     beforeDatabaseMark,
     beforeRemoteEffect: createRemoteEffectGuard(scopedDb, beforeDatabaseMark),
-    recoverRemoteEffectLeaseLoss: async ({ entityIds, indexId }) =>
-      await recoverLostGenerationProjectionEffect(scopedDb, generation, {
-        decisionIds: entityIds,
-        indexId,
-      }),
+    recoverRemoteEffectLeaseLoss: isCaseLawCorpusGeneration(generation)
+      ? async ({ entityIds, indexId }) =>
+          await recoverLostGenerationProjectionEffect(scopedDb, generation, {
+            decisionIds: entityIds,
+            indexId,
+          })
+      : completeRemoteEffect,
     release: async () => {
       await scopedDb(async (tx) => {
         // audit: skip — release only the caller's writer lease
@@ -889,7 +983,7 @@ const backfillIncrementalCorpusIndex = async (
     return { indexed: 0, status: BACKFILL_STATUS.BUSY };
   }
   try {
-    const indexed = await indexer.backfillFenced(
+    const result = await indexer.backfillFenced(
       scopedDb,
       batchSize,
       generation,
@@ -901,9 +995,16 @@ const backfillIncrementalCorpusIndex = async (
         ...options,
       },
     );
-    return indexed > 0
-      ? { indexed, status: BACKFILL_STATUS.ADVANCED }
-      : { indexed: 0, status: BACKFILL_STATUS.COMPLETE };
+    switch (result.status) {
+      case FENCED_BACKFILL_BATCH_STATUS.ADVANCED:
+        return { indexed: result.indexed, status: BACKFILL_STATUS.ADVANCED };
+      case FENCED_BACKFILL_BATCH_STATUS.RETRY:
+        return { indexed: 0, status: BACKFILL_STATUS.BUSY };
+      case FENCED_BACKFILL_BATCH_STATUS.COMPLETE:
+        return { indexed: 0, status: BACKFILL_STATUS.COMPLETE };
+      default:
+        return result satisfies never;
+    }
   } finally {
     await lease.release();
   }
@@ -1008,7 +1109,7 @@ export const hasGenerationProjectionTargets = ({
 const removeGenerationProjection: GenerationBackfillDependencies["removeProjection"] =
   async (scopedDb, { generation, options, row }) => {
     const targetIndexIds = generationProjectionTargetIds({ generation, row });
-    const removals = await Promise.all(
+    const removals = await settleAll(
       [...targetIndexIds].map(
         async (targetIndexId) =>
           await indexer.removeFenced({
@@ -1050,15 +1151,6 @@ const sameCursor = ({
 const nextLeaseExpiry = () =>
   sql<Date>`now() + (${BACKFILL_LEASE_MS} * interval '1 millisecond')`;
 
-const hasNoNewerRebuild = ({
-  checkpoint,
-}: {
-  checkpoint: GenerationBackfillCheckpoint;
-}) => sql`NOT EXISTS (
-  SELECT 1 FROM ${caseLawCorpusIndexBackfills} AS newer
-  WHERE (newer.generation_order, newer.generation) > (${checkpoint.generationOrder}, ${checkpoint.generation})
-)`;
-
 const ownsUnexpiredLease = ({
   checkpoint,
   leaseToken,
@@ -1071,9 +1163,6 @@ const ownsUnexpiredLease = ({
   and(
     eq(caseLawCorpusIndexBackfills.status, status),
     sameCursor({ checkpoint }),
-    status === CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.RUNNING
-      ? hasNoNewerRebuild({ checkpoint })
-      : sql`true`,
     eq(caseLawCorpusIndexBackfills.leaseToken, leaseToken),
     sql`${caseLawCorpusIndexBackfills.leaseExpiresAt} > now()`,
   );
@@ -1262,7 +1351,9 @@ const sameSourceReconciliation = (checkpoint: SourceReconciliationCheckpoint) =>
   );
 
 const isCorpusEligible = (row: GenerationBackfillRow): boolean =>
-  row.contentHash !== null && isRedistributable(row.sourceDescriptor);
+  row.contentHash !== null &&
+  isCorpusIndexJurisdiction(row.country) &&
+  isRedistributable(row.sourceDescriptor);
 
 const isEligibleForGeneration = (
   row: GenerationBackfillRow,
@@ -1479,7 +1570,7 @@ export const createCaseLawGenerationBackfill =
               !isCorpusEligible(row) &&
               hasGenerationProjectionTargets({ generation, row }),
           );
-          await Promise.all(
+          await settleAll(
             removals.map(async (row) => {
               await removeProjection(scopedDb, {
                 generation,
@@ -1664,7 +1755,6 @@ export const createCaseLawGenerationBackfill =
                 CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.RUNNING,
               ),
               sameCursor({ checkpoint }),
-              hasNoNewerRebuild({ checkpoint }),
               or(
                 isNull(caseLawCorpusIndexBackfills.leaseExpiresAt),
                 lte(caseLawCorpusIndexBackfills.leaseExpiresAt, sql`now()`),
@@ -1760,7 +1850,7 @@ export const createCaseLawGenerationBackfill =
             message: "generation backfill page did not reach a fixed point",
           });
         }
-        await Promise.all(
+        await settleAll(
           removals.map(async (row) => {
             await removeProjection(scopedDb, {
               generation,

@@ -1,5 +1,3 @@
-import { CORPUS_LICENSES } from "@/api/lib/legal-search/corpus-source";
-
 import {
   globalCaseLawPolicies,
   isNotNull,
@@ -35,7 +33,9 @@ export const caseLawSources = p.pgTable(
     lastSyncAt: timestamptz("last_sync_at"),
     config: jsonb().$type<Record<string, unknown>>().default({}),
     // License / redistribution terms. null = legacy source (public
-    // court records, treated as redistributable); see corpus-source.ts.
+    // court records, treated as redistributable); see corpus-source.ts. A
+    // migration-owned trigger validates inserts and descriptor changes while
+    // permitting unrelated checkpoint updates on legacy malformed rows.
     descriptor: jsonb().$type<CorpusSourceDescriptor>(),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
     updatedAt: timestamptz("updated_at")
@@ -45,26 +45,6 @@ export const caseLawSources = p.pgTable(
   },
   (t) => [
     p.uniqueIndex("case_law_sources_adapter_key_idx").on(t.adapterKey),
-    p.check(
-      "case_law_sources_descriptor_shape",
-      sql`(
-        ${t.descriptor} IS NULL OR (
-          jsonb_typeof(${t.descriptor}) = 'object'
-          AND ${t.descriptor} ?& ARRAY['license', 'attribution', 'allowsRedistribution', 'allowsDerivedAi']
-          AND jsonb_typeof(${t.descriptor} -> 'license') = 'string'
-          AND ${t.descriptor} ->> 'license' IN (${sql.join(
-            CORPUS_LICENSES.map((license) => sql.raw(`'${license}'`)),
-            sql.raw(","),
-          )})
-          AND (
-            ${t.descriptor} -> 'attribution' = 'null'::jsonb
-            OR jsonb_typeof(${t.descriptor} -> 'attribution') = 'string'
-          )
-          AND jsonb_typeof(${t.descriptor} -> 'allowsRedistribution') = 'boolean'
-          AND jsonb_typeof(${t.descriptor} -> 'allowsDerivedAi') = 'boolean'
-        )
-      ) IS TRUE`,
-    ),
     ...globalCaseLawPolicies(),
   ],
 );
@@ -87,6 +67,8 @@ export const caseLawDecisions = p.pgTable(
     slug: p.varchar({ length: 256 }),
     ecli: p.varchar({ length: 256 }),
     court: p.varchar({ length: 512 }).notNull(),
+    // A migration-owned trigger validates inserts and actual country changes,
+    // while permitting unrelated updates that repair legacy malformed rows.
     country: p.varchar({ length: 3 }).notNull(),
     language: p.varchar({ length: 8 }).notNull(),
     languageGroupKey: p.varchar("language_group_key", {
@@ -198,8 +180,8 @@ export const caseLawDecisions = p.pgTable(
      * the sha256 of the canonical payload (what S3 is keyed on);
      * `indexedHash` is the last hash pushed to the search projection,
      * so `indexedHash IS DISTINCT FROM contentHash` marks a stale row.
-     * `indexedGeneration` is which generation (e.g. case_law_v1) the
-     * row was last written into.
+     * `indexedGeneration` is the physical index the row was last written
+     * into (e.g. case_law_v1_sk: generation plus jurisdiction).
      */
     contentHash: p.varchar("content_hash", { length: 64 }),
     indexedHash: p.varchar("indexed_hash", { length: 64 }),
@@ -816,6 +798,7 @@ export const caseLawCorpusIndexProjections = p.pgTable(
       .array()
       .notNull()
       .default(sql`'{}'::varchar(64)[]`),
+    pendingRevision: p.integer("pending_revision").default(0).notNull(),
     updatedAt: timestamptz("updated_at").defaultNow().notNull(),
   },
   (t) => [
@@ -846,6 +829,10 @@ export const caseLawCorpusIndexProjections = p.pgTable(
       sql`((${t.pendingAction} IS NULL AND ${t.pendingHash} IS NULL AND cardinality(${t.pendingIndexIds}) = 0)
         OR (${t.pendingAction} = 'index' AND ${t.pendingHash} IS NOT NULL AND cardinality(${t.pendingIndexIds}) > 0)
         OR (${t.pendingAction} = 'delete' AND ${t.pendingHash} IS NULL)) IS TRUE`,
+    ),
+    p.check(
+      "case_law_corpus_index_projections_pending_revision_nonnegative",
+      sql`${t.pendingRevision} >= 0`,
     ),
     p.index("case_law_corpus_index_projections_decision_idx").on(t.decisionId),
     p

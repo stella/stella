@@ -1,4 +1,4 @@
-import { and, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, or } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -14,6 +14,7 @@ import {
 } from "@/api/handlers/case-law/corpus-index";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { settleAll, settleAllCleanup } from "@/api/lib/corpus-index/core";
 import { ConcurrentModificationError } from "@/api/lib/errors/tagged-errors";
 import { removeDecisionFromIndex } from "@/api/lib/legal-search/case-law-search-index";
 import { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
@@ -21,6 +22,7 @@ import { deleteCorpusDocument } from "@/api/lib/legal-search/corpus-storage";
 import {
   corpusIndexId,
   isCaseLawCorpusGeneration,
+  isCorpusIndexJurisdiction,
   tryCorpusIndexGeneration,
 } from "@/api/lib/legal-search/index-naming";
 
@@ -44,6 +46,35 @@ type RedactInput = {
   decisionId: SafeId<"caseLawDecision">;
   scopedDb: ScopedDb;
   generation?: string;
+};
+
+type FailedRedactionAuditOptions = {
+  decisionId: SafeId<"caseLawDecision">;
+  error: unknown;
+  generation: string;
+  scopedDb: ScopedDb;
+};
+
+const recordFailedRedactionAudit = async ({
+  decisionId,
+  error,
+  generation,
+  scopedDb,
+}: FailedRedactionAuditOptions): Promise<void> => {
+  const errorMessage =
+    error instanceof Error ? error.message : "Unknown corpus redaction error";
+  // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
+  await scopedDb((tx) => {
+    // audit: skip — this insert IS the append-only failed erasure audit row
+    return tx.insert(caseLawIndexJobs).values({
+      decisionId,
+      generation,
+      operation: "redact",
+      status: "failed",
+      contentHash: null,
+      errorMessage: errorMessage.slice(0, 2048),
+    });
+  });
 };
 
 export const redactCaseLawDecision = async ({
@@ -78,6 +109,30 @@ export const redactCaseLawDecision = async ({
   if (!decision) {
     return false;
   }
+
+  const storedIndexTarget = (() => {
+    if (decision.indexedGeneration === null) {
+      return null;
+    }
+    const storedGeneration = tryCorpusIndexGeneration(
+      decision.indexedGeneration,
+    );
+    if (storedGeneration !== null) {
+      return {
+        generation: storedGeneration,
+        indexId: decision.indexedGeneration,
+      };
+    }
+    const error = new CorpusIndexError({
+      message: "Stored corpus index target is not a physical index id",
+    });
+    captureError(error, {
+      decisionId,
+      indexedGeneration: decision.indexedGeneration,
+      step: "redactCaseLawDecision.validateStoredIndexTarget",
+    });
+    throw error;
+  })();
 
   // 1. pg-fts projection.
   await removeDecisionFromIndex(decisionId, scopedDb);
@@ -154,6 +209,7 @@ export const redactCaseLawDecision = async ({
           generation: caseLawCorpusIndexProjections.generation,
           indexId: caseLawCorpusIndexProjections.indexId,
           pendingIndexIds: caseLawCorpusIndexProjections.pendingIndexIds,
+          pendingRevision: caseLawCorpusIndexProjections.pendingRevision,
         })
         .from(caseLawCorpusIndexProjections)
         .where(eq(caseLawCorpusIndexProjections.decisionId, decisionId)),
@@ -167,33 +223,21 @@ export const redactCaseLawDecision = async ({
         targets.set(targetGeneration, new Set([indexId]));
       }
     };
-    addTarget(generation, corpusIndexId(generation, decision.country));
-    if (decision.indexedGeneration !== null) {
-      const storedGeneration = tryCorpusIndexGeneration(
-        decision.indexedGeneration,
-      );
-      if (storedGeneration === null) {
-        captureError(
-          new CorpusIndexError({
-            message: "Stored corpus index target is not a physical index id",
-          }),
-          {
-            decisionId,
-            indexedGeneration: decision.indexedGeneration,
-            step: "redactCaseLawDecision.readStoredIndexTarget",
-          },
-        );
-      } else {
-        addTarget(storedGeneration, decision.indexedGeneration);
-      }
+    if (isCorpusIndexJurisdiction(decision.country)) {
+      addTarget(generation, corpusIndexId(generation, decision.country));
+    }
+    if (storedIndexTarget !== null) {
+      addTarget(storedIndexTarget.generation, storedIndexTarget.indexId);
     }
     for (const projection of projectionTargets) {
       // The deterministic target also covers an append that landed before its
       // projection CAS. Such an orphan has no persisted index_id to discover.
-      addTarget(
-        projection.generation,
-        corpusIndexId(projection.generation, decision.country),
-      );
+      if (isCorpusIndexJurisdiction(decision.country)) {
+        addTarget(
+          projection.generation,
+          corpusIndexId(projection.generation, decision.country),
+        );
+      }
       if (projection.indexId !== null) {
         addTarget(projection.generation, projection.indexId);
       }
@@ -204,7 +248,7 @@ export const redactCaseLawDecision = async ({
 
     const leases = new Map<string, CaseLawCorpusGenerationLease>();
     try {
-      const claims = await Promise.all(
+      const claimOutcomes = await Promise.allSettled(
         [...targets.keys()].sort().map(async (targetGeneration) => ({
           lease: await acquireCaseLawCorpusGenerationLease({
             generation: targetGeneration,
@@ -213,26 +257,39 @@ export const redactCaseLawDecision = async ({
           targetGeneration,
         })),
       );
-      for (const { lease, targetGeneration } of claims) {
+      let firstClaimError: unknown;
+      let claimRejected = false;
+      for (const outcome of claimOutcomes) {
+        if (outcome.status === "rejected") {
+          if (!claimRejected) {
+            firstClaimError = outcome.reason;
+            claimRejected = true;
+          }
+          continue;
+        }
+        const { lease, targetGeneration } = outcome.value;
         if (lease) {
           leases.set(targetGeneration, lease);
         }
+      }
+      if (claimRejected) {
+        await recordFailedRedactionAudit({
+          decisionId,
+          error: firstClaimError,
+          generation,
+          scopedDb,
+        });
+        throw firstClaimError;
       }
       if (leases.size !== targets.size) {
         const error = new ConcurrentModificationError({
           message: "Case-law corpus generation is being written",
         });
-        // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-        await scopedDb((tx) => {
-          // audit: skip — this insert IS the append-only failed erasure audit row
-          return tx.insert(caseLawIndexJobs).values({
-            decisionId,
-            generation,
-            operation: "redact",
-            status: "failed",
-            contentHash: null,
-            errorMessage: error.message,
-          });
+        await recordFailedRedactionAudit({
+          decisionId,
+          error,
+          generation,
+          scopedDb,
         });
         captureError(error, {
           decisionId,
@@ -245,7 +302,7 @@ export const redactCaseLawDecision = async ({
       // the others undeleted. Missing retired indexes are already successful
       // fixed points in the shared indexer.
       let firstError: CorpusIndexError | null = null;
-      const removals = await Promise.all(
+      const removals = await settleAll(
         [...targets].flatMap(([targetGeneration, indexes]) => {
           const lease = leases.get(targetGeneration);
           if (!lease) {
@@ -321,18 +378,45 @@ export const redactCaseLawDecision = async ({
           .update(caseLawDecisions)
           .set({ indexedGeneration: null })
           .where(eq(caseLawDecisions.id, decisionId));
-        await tx
-          .delete(caseLawCorpusIndexProjections)
-          .where(eq(caseLawCorpusIndexProjections.decisionId, decisionId));
+        if (projectionTargets.length > 0) {
+          await tx
+            .delete(caseLawCorpusIndexProjections)
+            .where(
+              and(
+                eq(caseLawCorpusIndexProjections.decisionId, decisionId),
+                or(
+                  ...projectionTargets.map((projection) =>
+                    and(
+                      eq(
+                        caseLawCorpusIndexProjections.generation,
+                        projection.generation,
+                      ),
+                      eq(
+                        caseLawCorpusIndexProjections.pendingRevision,
+                        projection.pendingRevision,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+        }
       });
     } finally {
-      await Promise.all(
+      await settleAllCleanup(
         [...leases.values()].toReversed().map(async (lease) => {
           await lease.release();
         }),
+        (error) =>
+          captureError(error, {
+            decisionId,
+            step: "redactCaseLawDecision.releaseGenerationLeases",
+          }),
       );
     }
-    auditedViaCorpusIndex = true;
+    // Every target removal writes its own durable index-job record. With no
+    // target, no corpus audit exists, so the fallback audit below must land.
+    auditedViaCorpusIndex = targets.size > 0;
   }
 
   // Ensure the erasure is auditable even when corpus index isn't configured.

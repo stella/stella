@@ -38,6 +38,7 @@ const makeRow = ({ id, contentHash, textS3Key }: MakeRowOptions) => ({
   generationIndexId: null,
   generationPendingAction: null,
   generationPendingIndexIds: [],
+  generationPendingRevision: 0,
   // SAFETY: tests fabricate the branded token the adapters normally
   // select as `updated_at::text`.
   // eslint-disable-next-line typescript/no-unsafe-type-assertion
