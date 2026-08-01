@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { createElement, lazy, Suspense } from "react";
 
 import { useTranslations } from "use-intl";
 
@@ -154,28 +154,26 @@ const MediaPart = ({ part }: { part: MediaChatPart }) => {
   }
   const mimeType = part.source.mimeType;
   if (part.type === "audio") {
-    return (
-      <audio
-        aria-label={t("chat.audioContent")}
-        className="w-full max-w-xl"
-        controls
-        preload="none"
-        src={source}
-      >
-        <track kind="captions" />
-      </audio>
-    );
+    return createElement("audio", {
+      "aria-label": t("chat.audioContent"),
+      className: "w-full max-w-xl",
+      controls: true,
+      preload: "none",
+      src: source,
+    });
   }
-  return (
-    <video
-      aria-label={t("chat.videoContent")}
-      className="bg-foreground aspect-video w-full max-w-2xl rounded-md"
-      controls
-      preload="none"
-    >
-      <source src={source} {...(mimeType ? { type: mimeType } : {})} />
-      <track kind="captions" />
-    </video>
+  return createElement(
+    "video",
+    {
+      "aria-label": t("chat.videoContent"),
+      className: "bg-foreground aspect-video w-full max-w-2xl rounded-md",
+      controls: true,
+      preload: "none",
+    },
+    createElement("source", {
+      src: source,
+      ...(mimeType ? { type: mimeType } : {}),
+    }),
   );
 };
 

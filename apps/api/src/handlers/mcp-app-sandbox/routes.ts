@@ -30,14 +30,16 @@ export const MCP_APP_SANDBOX_DOCUMENT = `<!doctype html>
     <script>
       const allowedHostOrigins = ${allowedHostOriginsJson};
       if (window.self === window.top) throw new Error("Sandbox must be framed");
-      if (!document.referrer) throw new Error("Sandbox requires a referrer");
-      const expectedHostOrigin = new URL(document.referrer).origin;
-      if (!allowedHostOrigins.includes(expectedHostOrigin)) {
+      const referrerOrigin = document.referrer
+        ? new URL(document.referrer).origin
+        : null;
+      if (referrerOrigin && !allowedHostOrigins.includes(referrerOrigin)) {
         throw new Error("Sandbox host is not allowed");
       }
-      if (window.location.origin === expectedHostOrigin) {
+      if (referrerOrigin && window.location.origin === referrerOrigin) {
         throw new Error("Sandbox and host must use different origins");
       }
+      let expectedHostOrigin = referrerOrigin;
 
       const inner = document.createElement("iframe");
       inner.setAttribute("sandbox", "allow-scripts allow-forms");
@@ -48,7 +50,10 @@ export const MCP_APP_SANDBOX_DOCUMENT = `<!doctype html>
 
       window.addEventListener("message", (event) => {
         if (event.source === window.parent) {
-          if (event.origin !== expectedHostOrigin) return;
+          if (!allowedHostOrigins.includes(event.origin)) return;
+          if (window.location.origin === event.origin) return;
+          if (expectedHostOrigin && event.origin !== expectedHostOrigin) return;
+          expectedHostOrigin ??= event.origin;
           if (event.data?.method === resourceReady) {
             const html = event.data.params?.html;
             if (typeof html === "string") inner.srcdoc = html;
@@ -58,15 +63,23 @@ export const MCP_APP_SANDBOX_DOCUMENT = `<!doctype html>
           return;
         }
         if (event.source === inner.contentWindow) {
-          window.parent.postMessage(event.data, expectedHostOrigin);
+          if (expectedHostOrigin) {
+            window.parent.postMessage(event.data, expectedHostOrigin);
+          }
         }
       });
 
-      window.parent.postMessage({
+      const readyMessage = {
         jsonrpc: "2.0",
         method: proxyReady,
         params: {}
-      }, expectedHostOrigin);
+      };
+      for (const hostOrigin of allowedHostOrigins) {
+        if (window.location.origin !== hostOrigin &&
+            (!expectedHostOrigin || hostOrigin === expectedHostOrigin)) {
+          window.parent.postMessage(readyMessage, hostOrigin);
+        }
+      }
     </script>
   </body>
 </html>`;

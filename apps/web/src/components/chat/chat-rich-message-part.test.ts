@@ -1,14 +1,38 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
+import { IntlProvider } from "use-intl";
 
 import { propertyConfig } from "@stll/property-testing";
+
+import type { RichChatPart } from "@/components/chat/chat-rich-message-part";
+import messages from "@/i18n/langs/en.json";
+import type Messages from "@/i18n/langs/messages.gen";
 
 process.env["VITE_API_URL"] ??= "https://api.example.test";
 
 const unsafeScriptUrl = ["java", "script:alert(1)"].join("");
 
-const { normalizeUiResourcePart, toRenderableMediaSource } =
-  await import("@/components/chat/chat-rich-message-part");
+const {
+  ChatRichMessagePart,
+  normalizeUiResourcePart,
+  toRenderableMediaSource,
+} = await import("@/components/chat/chat-rich-message-part");
+
+const renderMediaPart = (part: RichChatPart) =>
+  renderToStaticMarkup(
+    createElement(IntlProvider, {
+      children: createElement(ChatRichMessagePart, { part }),
+      locale: "en",
+      // SAFETY: this mirrors the app provider boundary; locale files are
+      // checked separately, while use-intl preserves English literal values.
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion
+      messages: messages as Messages,
+      timeZone: "UTC",
+    }),
+  );
 
 describe("rich chat message parts", () => {
   test("creates playable sources only for matching safe media", () => {
@@ -38,6 +62,30 @@ describe("rich chat message parts", () => {
         },
       }),
     ).toBeNull();
+  });
+
+  test("does not advertise a caption track when no captions were provided", () => {
+    const audio = renderMediaPart({
+      type: "audio",
+      source: {
+        type: "url",
+        value: "https://example.test/audio.mp3",
+        mimeType: "audio/mpeg",
+      },
+    });
+    const video = renderMediaPart({
+      type: "video",
+      source: {
+        type: "url",
+        value: "https://example.test/video.mp4",
+        mimeType: "video/mp4",
+      },
+    });
+
+    expect(audio).toContain("<audio");
+    expect(video).toContain("<video");
+    expect(audio).not.toContain("<track");
+    expect(video).not.toContain("<track");
   });
 
   test("normalizes base64 MCP App HTML without weakening its contract", () => {

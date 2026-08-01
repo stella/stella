@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
-import { chatMessages, chatThreads } from "@/api/db/schema";
+import { chatThreads } from "@/api/db/schema";
 import { loadWindowedThreadMessages } from "@/api/handlers/chat/history-window";
 import { shouldRefreshEmptyThreadTitle } from "@/api/handlers/chat/thread-title";
 import type {
@@ -43,34 +43,27 @@ export const readThreadValidationState = async ({
   Result<ThreadValidationState, HandlerError<400> | SafeDbError>
 > =>
   await Result.gen(async function* () {
-    const rows = yield* Result.await(
+    const thread = yield* Result.await(
       safeDb((tx) =>
-        tx
-          .select({
-            messageContent: chatMessages.content,
-            messageRole: chatMessages.role,
-            webSearchEnabled: chatThreads.webSearchEnabled,
-            workspaceId: chatThreads.workspaceId,
-          })
-          .from(chatThreads)
-          .leftJoin(
-            chatMessages,
-            and(
-              eq(chatMessages.id, messageId),
-              eq(chatMessages.threadId, chatThreads.id),
-            ),
-          )
-          .where(
-            and(
-              eq(chatThreads.id, threadId),
-              eq(chatThreads.organizationId, organizationId),
-              eq(chatThreads.userId, userId),
-            ),
-          )
-          .limit(1),
+        tx.query.chatThreads.findFirst({
+          where: {
+            id: { eq: threadId },
+            organizationId: { eq: organizationId },
+            userId: { eq: userId },
+          },
+          columns: {
+            workspaceId: true,
+            webSearchEnabled: true,
+          },
+          with: {
+            messages: {
+              where: { id: { eq: messageId } },
+              columns: { content: true, role: true },
+            },
+          },
+        }),
       ),
     );
-    const thread = rows.at(0);
 
     if (!thread) {
       return Result.ok({ persistedMessage: null, webSearchEnabled: false });
@@ -86,13 +79,14 @@ export const readThreadValidationState = async ({
       );
     }
 
+    const persistedMessage = thread.messages.at(0);
     return Result.ok({
       persistedMessage:
-        thread.messageContent === null || thread.messageRole === null
+        persistedMessage === undefined
           ? null
           : {
-              content: thread.messageContent,
-              role: thread.messageRole,
+              content: persistedMessage.content,
+              role: persistedMessage.role,
             },
       webSearchEnabled: thread.webSearchEnabled,
     });
