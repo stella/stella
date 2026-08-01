@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 const readRootFixture = (relativePath: string) =>
@@ -453,17 +453,18 @@ describe("custom oxlint guardrails", () => {
     );
   });
 
-  test("legacy entity redirects do not block protected shell commit", () => {
-    const entityRouteSource = readRootFixture(
+  test("deleted legacy entity route stays deleted and lint-guarded", () => {
+    const legacyRoutePath = path.join(
+      import.meta.dir,
+      "../../../../..",
       "apps/web/src/routes/_protected.workspaces/$workspaceId/entities/$entityId.tsx",
     );
+    const oxlintConfig = readRootFixture("oxlint.config.ts");
 
-    expect(entityRouteSource).toContain("component: LegacyEntityRedirect");
-    expect(entityRouteSource).toContain("useQuery");
-    expect(entityRouteSource).toContain("DocxLoadingShell");
-    expect(entityRouteSource).toContain("Navigate");
-    expect(entityRouteSource).not.toContain("beforeLoad");
-    expect(entityRouteSource).not.toContain("ensureRouteQueryData");
+    expect(existsSync(legacyRoutePath)).toBe(false);
+    expect(oxlintConfig).toContain(
+      '"no-legacy-entity-route/no-legacy-entity-route": "error"',
+    );
   });
 
   test("tools route keeps heavy catalogue UI behind Suspense", () => {

@@ -9,7 +9,12 @@ import {
 } from "react";
 
 import type { UseMutationResult } from "@tanstack/react-query";
-import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
@@ -331,6 +336,7 @@ export const SearchDialog = ({
   // formatting locale (which may carry a region and -u- extensions).
   const apiLocale = useI18nStore((s) => s.loadedLang);
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const user = useAuthenticatedUser();
   const isMobile = useIsMobile();
   const publicLawPreviewEnabled = usePublicLawPreviewEnabled();
@@ -750,9 +756,21 @@ export const SearchDialog = ({
   };
 
   const openRecentFile = (file: RecentFile) => {
-    setRecentFiles(recordRecentFile(file, searchRecentsScope));
     navigateAfterClose(async () => {
-      await navigate(getRecentFileRoute(file));
+      const fileFieldId = await queryClient.fetchQuery(
+        recentFilePreviewFieldOptions({
+          entityId: file.entityId,
+          fileFieldId: file.fileFieldId,
+          filePropertyId: file.filePropertyId,
+          mimeType: file.mimeType ?? null,
+          organizationId: searchRecentsScope.organizationId,
+          userId: searchRecentsScope.userId,
+          workspaceId: file.workspaceId,
+        }),
+      );
+      const resolvedFile = { ...file, fileFieldId };
+      setRecentFiles(recordRecentFile(resolvedFile, searchRecentsScope));
+      await navigate(getRecentFileRoute(resolvedFile));
     });
   };
 

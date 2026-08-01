@@ -126,6 +126,7 @@ describe("document routes", () => {
     expect(
       getRecentFileRoute({
         entityId: "entity-1",
+        fileFieldId: null,
         workspaceId: "workspace-1",
       }),
     ).toEqual({

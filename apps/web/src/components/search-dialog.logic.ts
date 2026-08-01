@@ -42,11 +42,10 @@ export const getRecentFileRoute = ({
   entityId,
   fileFieldId,
   workspaceId,
-}: Pick<
-  RecentFile,
-  "entityId" | "fileFieldId" | "workspaceId"
->): EntityNavigationRoute => {
-  if (fileFieldId === undefined || fileFieldId === null) {
+}: Pick<RecentFile, "entityId" | "workspaceId"> & {
+  fileFieldId: string | null;
+}): EntityNavigationRoute => {
+  if (fileFieldId === null) {
     return {
       to: "/workspaces/$workspaceId/$viewId",
       params: { workspaceId, viewId: "all" },
