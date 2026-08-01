@@ -44,6 +44,12 @@ describe("detect-e2e-changes", () => {
     expect(detects("landing", files)).toBe("true");
   });
 
+  test("the web package manifest exercises its core and landing commands", () => {
+    const files = ["apps/web/package.json"];
+    expect(detects("core", files)).toBe("true");
+    expect(detects("landing", files)).toBe("true");
+  });
+
   test("runs both PR scopes when their orchestration changes", () => {
     const files = [".github/workflows/ci.yml"];
     expect(detects("core", files)).toBe("true");

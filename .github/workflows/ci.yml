@@ -1142,12 +1142,14 @@ jobs:
 
       - name: Run Vite dependency canary
         if: matrix.shard == 1 && steps.changed.outputs.core == 'true'
+        env:
+          E2E_EXPECT_DEV_ROUTES: "true"
         run: >-
           bun --filter @stll/web test:e2e --
           --project chromium --grep @dev-canary
 
-      # Flake guard: the tiny dev pass covers the lazy chat and Folio imports
-      # that have historically escaped Vite's cold dependency scan.
+      # Flake guard: the tiny dev pass covers the lazy chat, Folio, and
+      # dev-autocomplete imports that can escape Vite's cold dependency scan.
       - name: Guard against mid-test Vite re-optimize
         if: >-
           always()
@@ -1202,6 +1204,7 @@ jobs:
       - name: Run Playwright shard
         if: steps.changed.outputs.core == 'true'
         env:
+          E2E_EXPECT_DEV_ROUTES: "false"
           PLAYWRIGHT_BLOB_OUTPUT_NAME: report-${{ matrix.shard }}.zip
         run: >-
           bun --filter @stll/web test:e2e --
