@@ -28,6 +28,10 @@ const CUSTOM_BOUNDED_TYPE_CHANGE_MIGRATIONS = new Set([
 
 type TimeoutState = "bounded" | "unbounded" | "unset";
 type TypeChangePolicy = "boundedRewrite" | "metadataOnly";
+type SqlQuote = {
+  backslashEscapes: boolean;
+  character: '"' | "'";
+};
 type TimeoutUpdate =
   | {
       type: "set";
@@ -53,6 +57,21 @@ const classifyTimeout = (value: string): TimeoutState => {
 const dollarQuoteDelimiterAt = (source: string, index: number) =>
   /^\$(?:[A-Z_][A-Z0-9_]*)?\$/iu.exec(source.slice(index))?.at(0);
 
+const sqlQuoteAt = (
+  source: string,
+  index: number,
+  character: '"' | "'",
+): SqlQuote => {
+  const prefix = source[index - 1] ?? "";
+  const beforePrefix = source[index - 2] ?? "";
+  const isEscapeString =
+    character === "'" &&
+    prefix.toLowerCase() === "e" &&
+    !/[A-Z0-9_$]/iu.test(beforePrefix);
+
+  return { backslashEscapes: isEscapeString, character };
+};
+
 const policyStatementForComment = (comment: string) => {
   if (comment.includes(TYPE_CHANGE_POLICY.metadataOnly)) {
     return `${TYPE_CHANGE_POLICY_STATEMENT} metadataOnly;`;
@@ -68,7 +87,7 @@ const stripSqlComments = (source: string) => {
   let index = 0;
   let blockCommentDepth = 0;
   let dollarQuoteDelimiter: string | undefined;
-  let quote: '"' | "'" | undefined;
+  let quote: SqlQuote | undefined;
 
   while (index < source.length) {
     const character = source[index] ?? "";
@@ -104,14 +123,17 @@ const stripSqlComments = (source: string) => {
 
     if (quote) {
       result += character;
-      if (character === "\\" && nextCharacter) {
+      if (quote.backslashEscapes && character === "\\" && nextCharacter) {
         result += nextCharacter;
         index += 2;
-      } else if (character === quote && nextCharacter === quote) {
+      } else if (
+        character === quote.character &&
+        nextCharacter === quote.character
+      ) {
         result += nextCharacter;
         index += 2;
       } else {
-        if (character === quote) {
+        if (character === quote.character) {
           quote = undefined;
         }
         index += 1;
@@ -142,7 +164,7 @@ const stripSqlComments = (source: string) => {
       continue;
     }
     if (character === "'" || character === '"') {
-      quote = character;
+      quote = sqlQuoteAt(source, index, character);
       result += character;
       index += 1;
       continue;
@@ -170,7 +192,7 @@ const splitSqlStatements = (source: string) => {
   let current = "";
   let index = 0;
   let dollarQuoteDelimiter: string | undefined;
-  let quote: '"' | "'" | undefined;
+  let quote: SqlQuote | undefined;
 
   while (index < sql.length) {
     const character = sql[index] ?? "";
@@ -190,14 +212,17 @@ const splitSqlStatements = (source: string) => {
 
     if (quote) {
       current += character;
-      if (character === "\\" && nextCharacter) {
+      if (quote.backslashEscapes && character === "\\" && nextCharacter) {
         current += nextCharacter;
         index += 2;
-      } else if (character === quote && nextCharacter === quote) {
+      } else if (
+        character === quote.character &&
+        nextCharacter === quote.character
+      ) {
         current += nextCharacter;
         index += 2;
       } else {
-        if (character === quote) {
+        if (character === quote.character) {
           quote = undefined;
         }
         index += 1;
@@ -206,7 +231,7 @@ const splitSqlStatements = (source: string) => {
     }
 
     if (character === "'" || character === '"') {
-      quote = character;
+      quote = sqlQuoteAt(sql, index, character);
       current += character;
       index += 1;
       continue;
@@ -253,6 +278,23 @@ const parseTimeoutUpdate = (statement: string): TimeoutUpdate | undefined => {
       scope:
         setGroups?.["scope"]?.toLowerCase() === "local" ? "local" : "session",
       state: classifyTimeout(setGroups?.["value"] ?? ""),
+    };
+  }
+
+  const setConfigGroups =
+    /^(?:SELECT|PERFORM)\s+(?:pg_catalog\.)?set_config\(\s*'(?<name>statement|lock)_timeout'\s*,\s*(?<value>'(?:''|[^'])*')\s*,\s*(?<local>true|false)\s*\)$/iu.exec(
+      statement,
+    )?.groups;
+  const setConfigName = setConfigGroups?.["name"];
+  if (setConfigName === "lock" || setConfigName === "statement") {
+    return {
+      type: "set",
+      name: setConfigName,
+      scope:
+        setConfigGroups?.["local"]?.toLowerCase() === "true"
+          ? "local"
+          : "session",
+      state: classifyTimeout(setConfigGroups?.["value"] ?? ""),
     };
   }
 
@@ -708,10 +750,28 @@ SELECT 1;`;
     ).toContain("to/migration.sql: concurrent index operation has a timeout");
     expect(
       collectUnsafeConcurrentTimeouts(
+        "set-config/migration.sql",
+        `SET statement_timeout = 0;
+        SELECT set_config('statement_timeout', '5s', false);
+        CREATE INDEX CONCURRENTLY example_idx ON example (id);`,
+      ),
+    ).toContain(
+      "set-config/migration.sql: concurrent index operation has a timeout",
+    );
+    expect(
+      collectUnsafeConcurrentTimeouts(
         "safe/migration.sql",
         `SET SESSION statement_timeout TO 0;
         CREATE INDEX CONCURRENTLY example_idx ON example (id);
         SET statement_timeout = '5s';`,
+      ),
+    ).toEqual([]);
+    expect(
+      collectUnsafeConcurrentTimeouts(
+        "safe-set-config/migration.sql",
+        `SELECT pg_catalog.set_config('statement_timeout', '0', false);
+        CREATE INDEX CONCURRENTLY example_idx ON example (id);
+        SELECT set_config('statement_timeout', '5s', false);`,
       ),
     ).toEqual([]);
   });
@@ -739,6 +799,15 @@ SELECT 1;`;
         ALTER TABLE example ALTER COLUMN value TYPE timestamptz;`,
       ),
     ).toEqual([]);
+    expect(
+      collectUnsafeTypeChangesInMigration(
+        relativePath,
+        `SELECT set_config('lock_timeout', '1s', false);
+        ${customStatementBudget}
+        SELECT set_config('lock_timeout', '0', false);
+        ALTER TABLE example ALTER COLUMN value TYPE timestamptz;`,
+      ),
+    ).toContain(`${relativePath}: type change has an unbounded lock wait`);
   });
 
   test("requires and preserves the custom statement budget", () => {
@@ -787,6 +856,24 @@ SELECT 1;`;
         ALTER TABLE example ALTER COLUMN value TYPE timestamptz;`,
       ),
     ).toEqual([]);
+  });
+
+  test("applies backslash escaping only to PostgreSQL escape strings", () => {
+    const ordinaryStringSource = String.raw`SELECT '\';
+      ALTER TABLE example ALTER COLUMN value TYPE varchar(64);`;
+    expect(splitSqlStatements(ordinaryStringSource)).toHaveLength(2);
+    expect(
+      collectUnsafeTypeChangesInMigration(
+        "ordinary-string/migration.sql",
+        ordinaryStringSource,
+      ),
+    ).toContain(
+      "ordinary-string/migration.sql: type change lacks an explicit execution policy",
+    );
+
+    expect(
+      splitSqlStatements(String.raw`SELECT E'it\'s; still quoted'; SELECT 1;`),
+    ).toHaveLength(2);
   });
 
   test("bounds lock waits without interrupting acquired type changes", async () => {
