@@ -260,7 +260,7 @@ describe("fenced serving-generation appends", () => {
     const scopedDb: ScopedDb = async (callback) =>
       // SAFETY: this adapter's database callbacks only observe that the
       // reservation/mark boundaries occurred; they never query the fake tx.
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion -- inert transaction boundary for ordering test
+      // eslint-disable-next-line node/callback-return, typescript/no-unsafe-type-assertion -- inert transaction boundary for ordering test
       await callback({} as Transaction);
     const indexer = createCorpusIndexer<"caseLawDecision", typeof row>({
       family: "case_law",

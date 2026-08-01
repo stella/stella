@@ -840,7 +840,8 @@ export const createCorpusIndexer = <
         const reservedIds =
           options.type === "incremental"
             ? null
-            : await scopedDb(async (tx) => {
+            : // oxlint-disable-next-line no-await-in-loop -- each jurisdiction reserves its durable targets immediately before its sequential remote writes
+              await scopedDb(async (tx) => {
                 await options.beforeDatabaseMark(tx);
                 return await options.reserveExternalAppend(tx, {
                   generation,

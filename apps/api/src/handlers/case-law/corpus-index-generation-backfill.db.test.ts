@@ -280,7 +280,9 @@ test("generation lease releases its transaction before a remote effect", async (
     scopedDb: trackedScopedDb,
   });
   expect(lease).not.toBeNull();
-  if (lease === null) return;
+  if (lease === null) {
+    return;
+  }
 
   await lease.beforeRemoteEffect(async () => {
     expect(databaseCallbackActive).toBe(false);
