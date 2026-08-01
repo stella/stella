@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -6,7 +7,6 @@ import {
   expect,
   test,
 } from "bun:test";
-import { Result } from "better-result";
 import { pushSchema } from "drizzle-kit/api-postgres";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
