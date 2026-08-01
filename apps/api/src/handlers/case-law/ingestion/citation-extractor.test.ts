@@ -374,6 +374,22 @@ describe("extractCitations", () => {
     expect(citations).toHaveLength(2);
   });
 
+  test("dedupes a č.j. insolvency case number cited with different accepted separators", () => {
+    const text =
+      "č. j. KSCB 26 INS 8270/2018-A-12 a dále č. j. KSCB 26INS/8270/2018-A-14";
+    const citations = extractCitations([{ index: 0, text }]);
+    expect(citations).toHaveLength(1);
+  });
+
+  test("recognizes a self-citation to an insolvency case number spelled with a different separator", () => {
+    expect(
+      isSelfCitation("č. j. KSCB 26INS/8270/2018", {
+        caseNumber: "KSCB 26 INS 8270/2018",
+        ecli: null,
+      }),
+    ).toBe(true);
+  });
+
   test("extracts č. j. with a colon", () => {
     const text = "vyrozumění soudního exekutora č. j.: 137 Ex 1850/23";
     const citations = extractCitations([{ index: 0, text }]);
