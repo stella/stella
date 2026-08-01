@@ -1519,7 +1519,7 @@ export const workspaceAccessMacro = new Elysia({
       const workspaceId = toSafeId<"workspace">(ctx.params.workspaceId);
       const ws = await ctx.getWorkspaceAccess(workspaceId);
 
-      if (!ws || ws.status !== "active") {
+      if (ws?.status !== "active") {
         return ctx.status(404);
       }
 

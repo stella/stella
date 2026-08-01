@@ -1204,10 +1204,7 @@ type DocxFieldContent = Extract<FieldContent, { type: "file" }>;
 const isDocxFileContent = (
   content: FieldContent | null | undefined,
 ): content is DocxFieldContent =>
-  content !== null &&
-  content !== undefined &&
-  content.type === "file" &&
-  content.mimeType === DOCX_MIME_TYPE;
+  content?.type === "file" && content.mimeType === DOCX_MIME_TYPE;
 
 type LoadCurrentVersionDocxMarkdownProps = {
   context: McpRequestContext;

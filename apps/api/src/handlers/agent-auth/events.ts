@@ -19,7 +19,7 @@ const config = {
   mcp: { type: "internal", reason: "auth_plumbing" },
 } satisfies PublicHandlerConfig;
 
-const agentEventsHandler = createSafePublicHandler(config, async function* () {
+const agentEventsHandler = createSafePublicHandler(config, () => {
   // TODO(agent-auth identity_assertion phase): verify the SET signature
   // against the issuer's JWKS, validate `iss`/`aud`/`events`, then act on
   // recognised event types (assertion revocation). Until then this is an

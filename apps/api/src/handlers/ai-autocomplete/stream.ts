@@ -61,13 +61,7 @@ const buildUserPrompt = (input: {
 
 const autocompleteStream = createSafeRootHandler(
   config,
-  async function* ({
-    body,
-    orgAIConfig,
-    promptCachingEnabled,
-    session,
-    request,
-  }) {
+  function* ({ body, orgAIConfig, promptCachingEnabled, session, request }) {
     const stream = yield* Result.try({
       try: () =>
         streamTanStackTextForRole({

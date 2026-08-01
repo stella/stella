@@ -18,8 +18,7 @@ const config = {
 
 const getModelOptions = createSafeRootHandler(
   config,
-  // eslint-disable-next-line require-yield -- pure read with no Result.await calls
-  async function* ({ orgAIConfig, session }) {
+  ({ orgAIConfig, session }) => {
     return Result.ok({
       options: getConfiguredChatModelOptions(orgAIConfig),
       defaultValue: getDefaultChatModelValue({

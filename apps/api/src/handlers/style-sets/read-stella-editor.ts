@@ -10,7 +10,7 @@ const config = {
   mcp: { type: "capability", reason: "template_authoring_ui" },
 } satisfies HandlerConfig;
 
-export default createSafeRootHandler(config, async function* () {
-  const editor = yield* Result.ok(createStellaStyleEditorPreset());
+export default createSafeRootHandler(config, () => {
+  const editor = createStellaStyleEditorPreset();
   return Result.ok({ settings: editor.settings });
 });

@@ -16,15 +16,8 @@ const config = {
  * from the binding-sources taxonomy), so no IO; the catalog is identical for
  * every workspace in the org.
  */
-const getBindingCatalog = createSafeRootHandler(
-  config,
-  // The catalog is static (built from the binding-sources taxonomy), so there
-  // is no failable IO; yielding the already-built catalog through `Result.ok`
-  // keeps the generator form consistent with every other endpoint handler.
-  async function* () {
-    const catalog = yield* Result.ok(buildBindingCatalog());
-    return Result.ok(catalog);
-  },
+const getBindingCatalog = createSafeRootHandler(config, () =>
+  Result.ok(buildBindingCatalog()),
 );
 
 export default getBindingCatalog;

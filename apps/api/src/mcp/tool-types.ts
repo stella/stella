@@ -269,7 +269,7 @@ export type McpToolHandler = ({
 }: {
   args: Record<string, unknown>;
   context: McpRequestContext;
-}) => Promise<McpToolResponse>;
+}) => McpToolResponse | Promise<McpToolResponse>;
 
 export type McpToolHandlerMap<
   TDefinitions extends readonly McpToolDefinition[],

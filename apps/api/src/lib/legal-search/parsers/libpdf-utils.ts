@@ -85,7 +85,7 @@ export const buildBoldRanges = (
 
     // Merge with previous range if same bold state
     const last = ranges.at(-1);
-    if (last && last.bold === bold) {
+    if (last?.bold === bold) {
       last.end = end;
     } else {
       // Fill gap between ranges with previous bold state

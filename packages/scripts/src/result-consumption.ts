@@ -148,8 +148,7 @@ const isUnwrapWithoutMessage = (
 ): boolean => {
   const signature = checker.getResolvedSignature(call);
   if (
-    signature === undefined ||
-    signature.declaration === undefined ||
+    signature?.declaration === undefined ||
     !isBetterResultDeclaration(signature.declaration)
   ) {
     return false;

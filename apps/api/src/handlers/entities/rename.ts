@@ -101,7 +101,7 @@ export const renameEntityHandler = async function* ({
           return cv.fields.find((f) => f.content.type === "file");
         });
 
-      if (fileField && fileField.content.type === "file") {
+      if (fileField?.content.type === "file") {
         await tx
           .update(fields)
           .set({

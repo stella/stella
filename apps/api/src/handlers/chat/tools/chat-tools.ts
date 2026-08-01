@@ -792,8 +792,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   const editWorkspaceDocumentTools =
     (registeredDocxEditMode === CHAT_EDIT_APPLY_MODE.auto ||
       automaticDocxEditAvailableForValidation) &&
-    activeFile !== undefined &&
-    activeFile.currentVersionId !== undefined &&
+    activeFile?.currentVersionId !== undefined &&
     activeFile.fileFieldId !== undefined &&
     requestWorkspaceId !== null &&
     recordAuditEvent !== undefined
