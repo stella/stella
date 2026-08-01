@@ -3406,14 +3406,14 @@
     "overview": {
       "activity": {
         "actorActions": {
-          "added": "أضاف",
-          "cancelled": "ألغى",
-          "created": "أنشأ",
-          "deleted": "حذف",
-          "executed": "شغّل",
-          "removed": "أزال",
-          "reviewed": "راجع",
-          "updated": "حدّث"
+          "added": "أضاف/أضافت",
+          "cancelled": "ألغى/ألغت",
+          "created": "أنشأ/أنشأت",
+          "deleted": "حذف/حذفت",
+          "executed": "شغّل/شغّلت",
+          "removed": "أزال/أزالت",
+          "reviewed": "راجع/راجعت",
+          "updated": "حدّث/حدّثت"
         },
         "approvals": {
           "approved": "تم منح الموافقة",
