@@ -21,7 +21,7 @@ const config = {
 
 const agentEventsHandler = createSafePublicHandler(
   config,
-  // eslint-disable-next-line require-yield, typescript/require-await -- safe handlers must remain async generators for Result.gen error capture.
+  // eslint-disable-next-line typescript/require-await -- safe handlers must remain async generators for Result.gen error capture.
   async function* () {
     // TODO(agent-auth identity_assertion phase): verify the SET signature
     // against the issuer's JWKS, validate `iss`/`aud`/`events`, then act on
