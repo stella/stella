@@ -30,7 +30,7 @@ describe("marketing recording freshness", () => {
           reason: "Reviewed for a maintenance release",
           watchedPathsHash,
         },
-        watchedPaths: [...definition.watchedPaths].reverse(),
+        watchedPaths: [...definition.watchedPaths].toReversed(),
       }),
     ).toBe(true);
     expect(
@@ -71,10 +71,7 @@ describe("marketing recording freshness", () => {
     ).toBe(false);
   });
 
-  test("accepts a matching explicit verification as the freshness basis", () => {
-    const recordedAtCommit = execFileSync("git", ["rev-parse", "HEAD"], {
-      encoding: "utf-8",
-    }).trim();
+  test("accepts matching explicit verification when the recording commit is unavailable", () => {
     const verdict = judgeEntry({
       captureId: definition.captureId,
       dpr: definition.dpr,
@@ -83,7 +80,7 @@ describe("marketing recording freshness", () => {
         reason: "Reviewed for a maintenance release",
         watchedPathsHash: watchedPathsHashAtHead(definition.watchedPaths),
       },
-      recordedAtCommit,
+      recordedAtCommit: "0".repeat(40),
       theme: "light",
       viewport: definition.viewport,
       watchedPaths: definition.watchedPaths,

@@ -241,7 +241,23 @@ export const judgeEntry = (
     }
   }
 
-  if (!isKnownCommit(entry.recordedAtCommit)) {
+  // Manual verification is bound directly to the current watched tree and media,
+  // so it remains valid when the original recording commit is no longer reachable.
+  const watchedPaths = definition?.watchedPaths ?? entry.watchedPaths;
+  if (
+    manualVerificationMatches({
+      captureId: entry.captureId,
+      theme: entry.theme,
+      verification: entry.manualVerification,
+      watchedPaths,
+    })
+  ) {
+    basis = "manual-verification";
+  } else if (entry.manualVerification) {
+    reasons.push(
+      "manual verification does not match the watched source tree or recording artifacts",
+    );
+  } else if (!isKnownCommit(entry.recordedAtCommit)) {
     reasons.push(
       `recorded-at commit ${entry.recordedAtCommit} is unknown here`,
     );
@@ -249,25 +265,11 @@ export const judgeEntry = (
     // The current matrix wins over the snapshot the entry was stamped with:
     // a watched path added to captures.ts after a recording must invalidate
     // that recording too, which a stored snapshot could never do.
-    const watchedPaths = definition?.watchedPaths ?? entry.watchedPaths;
     const changedPaths = changedWatchedPaths(
       entry.recordedAtCommit,
       watchedPaths,
     );
-    if (
-      manualVerificationMatches({
-        captureId: entry.captureId,
-        theme: entry.theme,
-        verification: entry.manualVerification,
-        watchedPaths,
-      })
-    ) {
-      basis = "manual-verification";
-    } else if (entry.manualVerification) {
-      reasons.push(
-        "manual verification does not match the watched source tree or recording artifacts",
-      );
-    } else if (changedPaths.length === 0) {
+    if (changedPaths.length === 0) {
       basis = "recording";
     } else {
       reasons.push(...changedPaths.map((path) => `changed: ${path}`));
