@@ -27,6 +27,9 @@ describe("detect-e2e-changes", () => {
   test("covers the complete screenshot runtime dependency surface", () => {
     for (const file of [
       "apps/api/src/handlers/case-law/decisions/get.ts",
+      "apps/api/scripts/seed-case-law.ts",
+      "apps/api/scripts/seed-utils.ts",
+      "apps/api/scripts/__fixtures__/case-law/cz-us.json",
       "apps/web/src/app-providers.tsx",
       "packages/workspace-ui/src/workspace.tsx",
     ]) {
@@ -38,6 +41,8 @@ describe("detect-e2e-changes", () => {
 
   test("test-only product files do not trigger marketing screenshots", () => {
     for (const file of [
+      "apps/api/scripts/seed-dev.test.ts",
+      "apps/api/scripts/__fixtures__/case-law/eu-ecj.test.ts",
       "apps/api/src/handlers/tasks/get.test.ts",
       "apps/web/src/features/tasks/task-list.spec.tsx",
     ]) {
