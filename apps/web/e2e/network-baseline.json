@@ -392,7 +392,9 @@
       "GET /api/auth/organization/list",
       "GET /health",
       "GET /v1/chat/threads",
+      "GET /v1/chat/threads/:id/messages",
       "GET /v1/organization-settings/ai-availability",
+      "GET /v1/skills",
       "GET /v1/workspaces/navigation"
     ],
     "requestCounts": {
@@ -401,7 +403,9 @@
       "GET /api/auth/organization/list": 1,
       "GET /health": 1,
       "GET /v1/chat/threads": 1,
+      "GET /v1/chat/threads/:id/messages": 1,
       "GET /v1/organization-settings/ai-availability": 1,
+      "GET /v1/skills": 1,
       "GET /v1/workspaces/navigation": 1
     },
     "dbQueries": {
@@ -410,7 +414,9 @@
       "GET /api/auth/organization/list": 6,
       "GET /health": 1,
       "GET /v1/chat/threads": 6,
+      "GET /v1/chat/threads/:id/messages": 7,
       "GET /v1/organization-settings/ai-availability": 4,
+      "GET /v1/skills": 6,
       "GET /v1/workspaces/navigation": 6
     },
     "responseSizes": {
@@ -419,7 +425,9 @@
       "GET /api/auth/organization/list": 1024,
       "GET /health": 1024,
       "GET /v1/chat/threads": 4096,
+      "GET /v1/chat/threads/:id/messages": 1024,
       "GET /v1/organization-settings/ai-availability": 1024,
+      "GET /v1/skills": 4096,
       "GET /v1/workspaces/navigation": 20480
     }
   },
@@ -936,6 +944,7 @@
     "depth": 3,
     "requests": [
       "GET /api/auth/get-session",
+      "GET /api/auth/list-sessions",
       "GET /api/auth/organization/get-active-member-role",
       "GET /api/auth/organization/list",
       "GET /health",
@@ -945,6 +954,7 @@
     ],
     "requestCounts": {
       "GET /api/auth/get-session": 1,
+      "GET /api/auth/list-sessions": 1,
       "GET /api/auth/organization/get-active-member-role": 1,
       "GET /api/auth/organization/list": 1,
       "GET /health": 1,
@@ -954,6 +964,7 @@
     },
     "dbQueries": {
       "GET /api/auth/get-session": 2,
+      "GET /api/auth/list-sessions": 3,
       "GET /api/auth/organization/get-active-member-role": 4,
       "GET /api/auth/organization/list": 6,
       "GET /health": 1,
@@ -963,6 +974,7 @@
     },
     "responseSizes": {
       "GET /api/auth/get-session": 1024,
+      "GET /api/auth/list-sessions": 3072,
       "GET /api/auth/organization/get-active-member-role": 1024,
       "GET /api/auth/organization/list": 1024,
       "GET /health": 1024,

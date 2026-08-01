@@ -17,21 +17,32 @@ describe("detect-e2e-changes", () => {
     expect(detects("landing", ["README.md"])).toBe("false");
   });
 
-  test("keeps an ordinary API change out of marketing and landing", () => {
+  test("runs product-code changes through core and marketing", () => {
     const files = ["apps/api/src/handlers/tasks/get.ts"];
     expect(detects("core", files)).toBe("true");
-    expect(detects("marketing", files)).toBe("false");
+    expect(detects("marketing", files)).toBe("true");
     expect(detects("landing", files)).toBe("false");
   });
 
-  test("runs marketing only for declared screenshot inputs", () => {
+  test("covers the complete screenshot runtime dependency surface", () => {
     for (const file of [
-      "apps/web/src/routes/_protected.chat/index.tsx",
-      "apps/web/src/features/case-law/components/case-viewer.tsx",
-      "apps/web/src/i18n/langs/fr.json",
+      "apps/api/src/handlers/case-law/decisions/get.ts",
+      "apps/web/src/app-providers.tsx",
+      "packages/workspace-ui/src/workspace.tsx",
     ]) {
       expect(detects("core", [file])).toBe("true");
       expect(detects("marketing", [file])).toBe("true");
+      expect(detects("landing", [file])).toBe("false");
+    }
+  });
+
+  test("test-only product files do not trigger marketing screenshots", () => {
+    for (const file of [
+      "apps/api/src/handlers/tasks/get.test.ts",
+      "apps/web/src/features/tasks/task-list.spec.tsx",
+    ]) {
+      expect(detects("core", [file])).toBe("true");
+      expect(detects("marketing", [file])).toBe("false");
       expect(detects("landing", [file])).toBe("false");
     }
   });
