@@ -3,7 +3,6 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import { Field, FieldDescription, FieldLabel } from "@stll/ui/components/field";
-import { Input } from "@stll/ui/components/input";
 import {
   Select,
   SelectItem,
@@ -24,6 +23,7 @@ import type {
   ProviderCredentialDraft,
   ProviderValue,
 } from "@/components/ai-config-role-models.logic";
+import { SecretInput } from "@/components/secret-input";
 
 const API_KEY_PLACEHOLDER = {
   google: "AIza...",
@@ -173,7 +173,7 @@ export const AIConfigProvidersEditor = ({
 
                 <div className="min-w-0">
                   {showKeyInput ? (
-                    <Input
+                    <SecretInput
                       aria-label={
                         hasSavedKey
                           ? t("aiConfig.newApiKey")
@@ -193,7 +193,6 @@ export const AIConfigProvidersEditor = ({
                           ? t("aiConfig.newApiKey")
                           : API_KEY_PLACEHOLDER[providerDraft.provider]
                       }
-                      type="password"
                       value={providerDraft.apiKey}
                     />
                   ) : (
@@ -352,7 +351,7 @@ export const AIConfigProvidersEditor = ({
                         ? t("aiConfig.newApiKey")
                         : t("aiConfig.apiKey")}
                     </FieldLabel>
-                    <Input
+                    <SecretInput
                       autoComplete="off"
                       disabled={disabled}
                       onChange={(event) =>
@@ -363,7 +362,6 @@ export const AIConfigProvidersEditor = ({
                         })
                       }
                       placeholder={API_KEY_PLACEHOLDER[providerDraft.provider]}
-                      type="password"
                       value={providerDraft.apiKey}
                     />
                     {hasSavedKey && (

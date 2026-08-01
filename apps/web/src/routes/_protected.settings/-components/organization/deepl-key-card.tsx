@@ -15,8 +15,8 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import { Frame, FramePanel } from "@stll/ui/components/frame";
-import { Input } from "@stll/ui/components/input";
 
+import { SecretInput } from "@/components/secret-input";
 import { api } from "@/lib/api";
 import { deepLConfigOptions, deepLKeys } from "@/lib/deepl/queries";
 import { unwrapEden } from "@/lib/errors/api";
@@ -99,13 +99,12 @@ export const DeepLKeyCard = () => {
             <label className="text-sm font-medium" htmlFor="deepl-api-key">
               {t("apiKeyLabel")}
             </label>
-            <Input
+            <SecretInput
               autoComplete="off"
               disabled={saveMutation.isPending}
               id="deepl-api-key"
               onChange={(e) => setApiKey(e.target.value)}
               placeholder={t("apiKeyPlaceholder")}
-              type="password"
               value={apiKey}
             />
           </div>

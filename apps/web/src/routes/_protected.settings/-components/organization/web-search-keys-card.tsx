@@ -18,8 +18,8 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import { Frame, FramePanel } from "@stll/ui/components/frame";
-import { Input } from "@stll/ui/components/input";
 
+import { SecretInput } from "@/components/secret-input";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import {
@@ -144,13 +144,12 @@ const WebSearchKeyField = ({ kind, state }: WebSearchKeyFieldProps) => {
             <label className="text-sm font-medium" htmlFor={fieldId}>
               {t("organization.aiConfig.apiKey")}
             </label>
-            <Input
+            <SecretInput
               autoComplete="off"
               disabled={saveMutation.isPending}
               id={fieldId}
               onChange={(e) => setApiKey(e.target.value)}
               placeholder={t("organization.aiConfig.apiKeyPlaceholder")}
-              type="password"
               value={apiKey}
             />
           </div>
