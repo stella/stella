@@ -8,6 +8,7 @@ import {
   caseLawCorpusUploadIntents,
   caseLawDecisions,
   caseLawIndexJobs,
+  caseLawSearchDocuments,
   schedulerJobs,
 } from "@/api/db/schema";
 import { isUuid } from "@/api/lib/custom-schema";
@@ -142,10 +143,16 @@ export const backfillCaseLawRedactionTombstones: SchedulerTask = async ({
     }
 
     // The audit is authoritative even if pre-fence ingestion restored a
-    // historical payload. Own every object key durably, then scrub the row in
-    // the same transaction so no restored content remains publicly readable.
+    // historical payload. Own every object key durably, remove projections
+    // for the full audit page (including rows repaired by v1), then scrub the
+    // row in the same transaction so no restored content remains readable.
     // audit: skip — bounded compatibility repair derived from append-only
     // redaction audit rows.
+    if (decisionIds.length > 0) {
+      await tx
+        .delete(caseLawSearchDocuments)
+        .where(inArray(caseLawSearchDocuments.decisionId, decisionIds));
+    }
     const repaired =
       repairIds.length === 0
         ? []

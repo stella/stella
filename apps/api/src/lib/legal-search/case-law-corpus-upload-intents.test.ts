@@ -29,6 +29,21 @@ const redactionIndexMigration = readFileSync(
   ),
   "utf-8",
 );
+const redactionProjectionFenceMigration = readFileSync(
+  new URL(
+    "../../../drizzle/20260801130000_case_law_redaction_projection_fence/migration.sql",
+    import.meta.url,
+  ),
+  "utf-8",
+);
+const searchIndexSource = readFileSync(
+  new URL("case-law-search-index.ts", import.meta.url),
+  "utf-8",
+);
+const schedulerJobsSource = readFileSync(
+  new URL("../scheduler/jobs.ts", import.meta.url),
+  "utf-8",
+);
 const redactionBackfillTask = readFileSync(
   new URL(
     "../scheduler/tasks/case-law-redaction-tombstone-backfill.ts",
@@ -129,6 +144,14 @@ describe("case-law corpus upload intents", () => {
     expect(redactionIndexMigration).toContain(
       'CREATE INDEX CONCURRENTLY "case_law_index_jobs_redaction_decision_idx"',
     );
+    expect(redactionProjectionFenceMigration).toContain("FOR SHARE");
+    expect(redactionProjectionFenceMigration).toContain(
+      "cannot write a search projection for a redacted case-law decision",
+    );
+    expect(searchIndexSource).toContain('.for("share")');
+    expect(schedulerJobsSource).toContain(
+      'id: "caseLaw.backfillRedactionTombstones.v2"',
+    );
     expect(redactionBackfillTask).toContain(".limit(BACKFILL_LIMIT)");
     expect(redactionBackfillTask).not.toContain(
       "isNull(caseLawDecisions.fulltext)",
@@ -138,8 +161,14 @@ describe("case-law corpus upload intents", () => {
     );
     expect(redactionBackfillTask).toContain("fulltext: null");
     expect(redactionBackfillTask).toContain("textS3Key: null");
+    expect(redactionBackfillTask).toContain(
+      "caseLawSearchDocuments.decisionId, decisionIds",
+    );
     const tombstoneUpdate = redactionBackfillTask.indexOf(
       ".update(caseLawDecisions)",
+    );
+    const searchProjectionDelete = redactionBackfillTask.indexOf(
+      ".delete(caseLawSearchDocuments)",
     );
     const cleanupOwnership = redactionBackfillTask.indexOf(
       ".insert(caseLawCorpusUploadIntents)",
@@ -148,8 +177,11 @@ describe("case-law corpus upload intents", () => {
       ".set({ payload: { cursor: lastDecisionId } })",
     );
     expect(tombstoneUpdate).toBeGreaterThan(-1);
+    expect(searchProjectionDelete).toBeGreaterThan(-1);
     expect(cleanupOwnership).toBeGreaterThan(-1);
+    expect(searchProjectionDelete).toBeGreaterThan(cleanupOwnership);
     expect(tombstoneUpdate).toBeGreaterThan(cleanupOwnership);
+    expect(tombstoneUpdate).toBeGreaterThan(searchProjectionDelete);
     expect(checkpoint).toBeGreaterThan(tombstoneUpdate);
   });
 
