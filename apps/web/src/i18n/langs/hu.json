@@ -3405,15 +3405,15 @@
     },
     "overview": {
       "activity": {
-        "actions": {
-          "added": "Hozzáadva",
-          "cancelled": "Megszakítva",
-          "created": "Létrehozva",
-          "deleted": "Törölve",
-          "executed": "Futtatva",
-          "removed": "Eltávolítva",
-          "reviewed": "Ellenőrizve",
-          "updated": "Frissítve"
+        "actorActions": {
+          "added": "Hozzáadta",
+          "cancelled": "Megszakította",
+          "created": "Létrehozta",
+          "deleted": "Törölte",
+          "executed": "Futtatta",
+          "removed": "Eltávolította",
+          "reviewed": "Ellenőrizte",
+          "updated": "Frissítette"
         },
         "approvals": {
           "approved": "Jóváhagyás megadva",

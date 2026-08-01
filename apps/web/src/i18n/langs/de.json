@@ -3405,15 +3405,15 @@
     },
     "overview": {
       "activity": {
-        "actions": {
-          "added": "Hinzugefügt",
-          "cancelled": "Wurde abgebrochen",
-          "created": "Erstellt",
-          "deleted": "Wurde gelöscht",
-          "executed": "Ausgeführt",
-          "removed": "Entfernt",
-          "reviewed": "Geprüft",
-          "updated": "Wurde aktualisiert"
+        "actorActions": {
+          "added": "Hat hinzugefügt",
+          "cancelled": "Hat abgebrochen",
+          "created": "Hat erstellt",
+          "deleted": "Hat gelöscht",
+          "executed": "Hat ausgeführt",
+          "removed": "Hat entfernt",
+          "reviewed": "Hat geprüft",
+          "updated": "Hat aktualisiert"
         },
         "approvals": {
           "approved": "Genehmigung erteilt",

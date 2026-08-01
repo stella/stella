@@ -3405,15 +3405,15 @@
     },
     "overview": {
       "activity": {
-        "actions": {
-          "added": "Přidáno",
-          "cancelled": "Bylo zrušeno",
-          "created": "Vytvořeno",
-          "deleted": "Bylo odstraněno",
-          "executed": "Spuštěno",
-          "removed": "Odebráno",
-          "reviewed": "Zkontrolováno",
-          "updated": "Bylo upraveno"
+        "actorActions": {
+          "added": "Přidal(a)",
+          "cancelled": "Zrušil(a)",
+          "created": "Vytvořil(a)",
+          "deleted": "Odstranil(a)",
+          "executed": "Spustil(a)",
+          "removed": "Odebral(a)",
+          "reviewed": "Zkontroloval(a)",
+          "updated": "Upravil(a)"
         },
         "approvals": {
           "approved": "Schválení uděleno",

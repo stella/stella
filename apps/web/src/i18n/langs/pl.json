@@ -3405,15 +3405,15 @@
     },
     "overview": {
       "activity": {
-        "actions": {
-          "added": "Dodano",
-          "cancelled": "Anulowano",
-          "created": "Utworzono",
-          "deleted": "Usunięto",
-          "executed": "Uruchomiono",
-          "removed": "Odłączono",
-          "reviewed": "Sprawdzono",
-          "updated": "Zaktualizowano"
+        "actorActions": {
+          "added": "Dodał(a)",
+          "cancelled": "Anulował(a)",
+          "created": "Utworzył(a)",
+          "deleted": "Usunął(-ęła)",
+          "executed": "Uruchomił(a)",
+          "removed": "Odłączył(a)",
+          "reviewed": "Sprawdził(a)",
+          "updated": "Zaktualizował(a)"
         },
         "approvals": {
           "approved": "Zatwierdzenie udzielone",

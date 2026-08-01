@@ -3405,15 +3405,15 @@
     },
     "overview": {
       "activity": {
-        "actions": {
-          "added": "Pievienots",
-          "cancelled": "Tika atcelts",
-          "created": "Izveidots",
-          "deleted": "Tika dzēsts",
-          "executed": "Palaists",
-          "removed": "Noņemts",
-          "reviewed": "Pārskatīts",
-          "updated": "Tika atjaunināts"
+        "actorActions": {
+          "added": "Pievienoja",
+          "cancelled": "Atcēla",
+          "created": "Izveidoja",
+          "deleted": "Izdzēsa",
+          "executed": "Palaida",
+          "removed": "Noņēma",
+          "reviewed": "Pārskatīja",
+          "updated": "Atjaunināja"
         },
         "approvals": {
           "approved": "Apstiprinājums piešķirts",

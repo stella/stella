@@ -3408,15 +3408,15 @@ type Messages = {
     };
     "overview": {
       "activity": {
-        "actions": {
+        "actorActions": {
           "added": "Added";
-          "cancelled": "Was cancelled";
+          "cancelled": "Cancelled";
           "created": "Created";
-          "deleted": "Was deleted";
+          "deleted": "Deleted";
           "executed": "Ran";
           "removed": "Removed";
           "reviewed": "Reviewed";
-          "updated": "Was updated";
+          "updated": "Updated";
         };
         "approvals": {
           "approved": "Approval granted";

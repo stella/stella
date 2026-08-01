@@ -1208,21 +1208,21 @@ const ActivityAction = ({ item }: { item: MatterActivityItem }) => {
   const t = useTranslations();
   switch (item.action) {
     case "add":
-      return t("workspaces.overview.activity.actions.added");
+      return t("workspaces.overview.activity.actorActions.added");
     case "create":
-      return t("workspaces.overview.activity.actions.created");
+      return t("workspaces.overview.activity.actorActions.created");
     case "update":
-      return t("workspaces.overview.activity.actions.updated");
+      return t("workspaces.overview.activity.actorActions.updated");
     case "delete":
-      return t("workspaces.overview.activity.actions.deleted");
+      return t("workspaces.overview.activity.actorActions.deleted");
     case "remove":
-      return t("workspaces.overview.activity.actions.removed");
+      return t("workspaces.overview.activity.actorActions.removed");
     case "execute":
-      return t("workspaces.overview.activity.actions.executed");
+      return t("workspaces.overview.activity.actorActions.executed");
     case "review":
-      return t("workspaces.overview.activity.actions.reviewed");
+      return t("workspaces.overview.activity.actorActions.reviewed");
     case "cancel":
-      return t("workspaces.overview.activity.actions.cancelled");
+      return t("workspaces.overview.activity.actorActions.cancelled");
     default:
       return item.action satisfies never;
   }
