@@ -4,6 +4,7 @@
  * job; skipped elsewhere.
  */
 
+import { panic } from "better-result";
 import { afterAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sql";
@@ -49,7 +50,7 @@ if (!databaseUrl || !runPostgresTests) {
         where: { id: { eq: schedulerJobId } },
       });
       if (!job) {
-        throw new Error("expected scheduler job");
+        return panic("expected scheduler job");
       }
       await backfillCaseLawRedactionTombstones({
         job,
@@ -77,7 +78,7 @@ if (!databaseUrl || !runPostgresTests) {
         })
         .returning({ id: caseLawSources.id });
       if (!source) {
-        throw new Error("expected source row");
+        return panic("expected source row");
       }
       sourceId = source.id;
 
@@ -93,7 +94,7 @@ if (!databaseUrl || !runPostgresTests) {
         })
         .returning({ id: caseLawDecisions.id });
       if (!decision) {
-        throw new Error("expected decision row");
+        return panic("expected decision row");
       }
 
       await db.insert(caseLawSearchDocuments).values({
