@@ -5,7 +5,10 @@
 // the unused disable fails CI. Allowed shapes have no disable, so false
 // positives fail the fixture too.
 
+import type * as intl from "use-intl";
 import type { useTranslations as useAliasedTranslations } from "use-intl";
+
+import type * as i18n from "../../apps/web/src/i18n/types";
 
 type TranslationKey = "feature.title" | "feature.description";
 type FeatureKey = "feature.title";
@@ -31,6 +34,11 @@ export type AliasedBroadCallable = (key: AppKey) => string;
 // oxlint-disable-next-line no-broad-translation-callable/no-broad-translation-callable
 export type ExportedAliasedBroadCallable = (key: ExportedAppKey) => string;
 
+// MUST flag: a namespace import of the app catalog cannot hide the broad key
+// union.
+// oxlint-disable-next-line no-broad-translation-callable/no-broad-translation-callable
+export type QualifiedBroadCallable = (key: i18n.TranslationKey) => string;
+
 // MUST flag: the full server translator type is retained in a helper alias.
 // oxlint-disable-next-line no-broad-translation-callable/no-broad-translation-callable
 export type ServerTranslator = ReturnType<typeof getTranslator>;
@@ -42,6 +50,10 @@ export type HookTranslator = ReturnType<typeof useTranslations>;
 // MUST flag: import aliases must not bypass the same full translator guard.
 // oxlint-disable-next-line no-broad-translation-callable/no-broad-translation-callable
 export type AliasedHookTranslator = ReturnType<typeof useAliasedTranslations>;
+
+// MUST flag: a namespace import of use-intl retains the full hook translator.
+// oxlint-disable-next-line no-broad-translation-callable/no-broad-translation-callable
+export type NamespacedHookTranslator = ReturnType<typeof intl.useTranslations>;
 
 // Allowed: a namespace argument bounds the translator to one feature subtree.
 export type NamespacedTranslator = ReturnType<

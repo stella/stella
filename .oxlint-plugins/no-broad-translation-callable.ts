@@ -23,28 +23,79 @@ const isBroadTranslatorName = (node): boolean =>
   isIdentifierNamed(node, "getTranslator") ||
   isIdentifierNamed(node, "useTranslations");
 
+const isTranslationTypeModule = (source: string): boolean =>
+  source.endsWith("/i18n/types") || source.endsWith("/i18n/utils");
+
+const translationKeyTypeNames = new Set(["TranslationKey"]);
+const broadTranslatorMemberNames = new Set([
+  "getTranslator",
+  "useTranslations",
+]);
+
 const unwrapTypeAnnotation = (node) =>
   node?.type === "TSTypeAnnotation" ? node.typeAnnotation : node;
 
 const unwrapExportedDeclaration = (node) =>
   node?.type === "ExportNamedDeclaration" ? node.declaration : node;
 
+const qualifiedNameRoot = (node): string | null => {
+  if (node?.type === "Identifier") {
+    return node.name;
+  }
+  if (node?.type === "TSQualifiedName") {
+    return qualifiedNameRoot(node.left);
+  }
+  return null;
+};
+
+const isQualifiedNamespaceMember = (
+  node,
+  namespaces: Set<string>,
+  memberNames: Set<string>,
+): boolean => {
+  const root = qualifiedNameRoot(node);
+  return (
+    node?.type === "TSQualifiedName" &&
+    node.right?.type === "Identifier" &&
+    memberNames.has(node.right.name) &&
+    root !== null &&
+    namespaces.has(root)
+  );
+};
+
+const isBroadKeyTypeReference = (
+  node,
+  broadKeyTypeNames: Set<string>,
+  broadKeyTypeNamespaces: Set<string>,
+): boolean =>
+  node?.type === "TSTypeReference" &&
+  (node.typeName?.type === "Identifier" &&
+  broadKeyTypeNames.has(node.typeName.name)
+    ? true
+    : isQualifiedNamespaceMember(
+        node.typeName,
+        broadKeyTypeNamespaces,
+        translationKeyTypeNames,
+      ));
+
 const hasTranslationKeyParameter = (
   node,
   broadKeyTypeNames: Set<string>,
+  broadKeyTypeNamespaces: Set<string>,
 ): boolean =>
   (node.params ?? []).some((parameter) => {
     const annotation = unwrapTypeAnnotation(parameter.typeAnnotation);
-    return (
-      annotation?.type === "TSTypeReference" &&
-      annotation.typeName?.type === "Identifier" &&
-      broadKeyTypeNames.has(annotation.typeName.name)
+    return isBroadKeyTypeReference(
+      annotation,
+      broadKeyTypeNames,
+      broadKeyTypeNamespaces,
     );
   });
 
 const isBroadTranslatorReturnType = (
   node,
   broadTranslatorTypeNames: Set<string>,
+  broadTranslatorNamespaces: Set<string>,
 ): boolean => {
   if (
     node.type !== "TSTypeReference" ||
@@ -56,8 +107,13 @@ const isBroadTranslatorReturnType = (
   return (
     queriedType?.type === "TSTypeQuery" &&
     (queriedType.typeArguments?.params?.length ?? 0) === 0 &&
-    queriedType.exprName?.type === "Identifier" &&
-    broadTranslatorTypeNames.has(queriedType.exprName.name)
+    ((queriedType.exprName?.type === "Identifier" &&
+      broadTranslatorTypeNames.has(queriedType.exprName.name)) ||
+      isQualifiedNamespaceMember(
+        queriedType.exprName,
+        broadTranslatorNamespaces,
+        broadTranslatorMemberNames,
+      ))
   );
 };
 
@@ -78,9 +134,17 @@ export default {
           "getTranslator",
           "useTranslations",
         ]);
+        const broadKeyTypeNamespaces = new Set<string>();
+        const broadTranslatorNamespaces = new Set<string>();
 
         const reportBroadParameters = (node) => {
-          if (hasTranslationKeyParameter(node, broadKeyTypeNames)) {
+          if (
+            hasTranslationKeyParameter(
+              node,
+              broadKeyTypeNames,
+              broadKeyTypeNamespaces,
+            )
+          ) {
             context.report({ messageId: "broadCallable", node });
           }
         };
@@ -91,7 +155,23 @@ export default {
               if (statement.type !== "ImportDeclaration") {
                 continue;
               }
+              const source = statement.source?.value;
               for (const specifier of statement.specifiers ?? []) {
+                if (
+                  specifier.type === "ImportNamespaceSpecifier" &&
+                  specifier.local?.type === "Identifier"
+                ) {
+                  if (
+                    typeof source === "string" &&
+                    isTranslationTypeModule(source)
+                  ) {
+                    broadKeyTypeNamespaces.add(specifier.local.name);
+                  }
+                  if (source === "use-intl") {
+                    broadTranslatorNamespaces.add(specifier.local.name);
+                  }
+                  continue;
+                }
                 if (
                   specifier.type === "ImportSpecifier" &&
                   isIdentifierNamed(specifier.imported, "TranslationKey") &&
@@ -121,9 +201,11 @@ export default {
                 if (
                   declaration.id?.type !== "Identifier" ||
                   broadKeyTypeNames.has(declaration.id.name) ||
-                  annotation?.type !== "TSTypeReference" ||
-                  annotation.typeName?.type !== "Identifier" ||
-                  !broadKeyTypeNames.has(annotation.typeName.name)
+                  !isBroadKeyTypeReference(
+                    annotation,
+                    broadKeyTypeNames,
+                    broadKeyTypeNamespaces,
+                  )
                 ) {
                   continue;
                 }
@@ -136,7 +218,13 @@ export default {
           TSFunctionType: reportBroadParameters,
           TSMethodSignature: reportBroadParameters,
           TSTypeReference(node) {
-            if (isBroadTranslatorReturnType(node, broadTranslatorTypeNames)) {
+            if (
+              isBroadTranslatorReturnType(
+                node,
+                broadTranslatorTypeNames,
+                broadTranslatorNamespaces,
+              )
+            ) {
               context.report({ messageId: "broadCallable", node });
             }
           },
