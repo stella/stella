@@ -1,5 +1,10 @@
 import { EventType, StreamProcessor } from "@tanstack/ai";
-import type { ModelMessage, StreamChunk, ToolCallPart } from "@tanstack/ai";
+import type {
+  ModelMessage,
+  StreamChunk,
+  ToolCallPart,
+  UIMessage,
+} from "@tanstack/ai";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
@@ -34,6 +39,7 @@ import {
   processServerChatStream,
   recordChatAttemptFinish,
   remapOutgoingMessageIds,
+  toChatMessage,
   transformOutgoingStream,
 } from "./stream-chat";
 
@@ -1004,6 +1010,46 @@ describe("chat message usage metadata", () => {
       totalTokens: 32,
     });
   });
+});
+
+describe("streamed chat message conversion", () => {
+  // Every `MessagePart` variant `isChatPart` rejects. Each is a part the SDK
+  // may legally stream, so none may cost the message the model finished.
+  const unsupportedParts: UIMessage["parts"] = [
+    {
+      type: "audio",
+      source: { type: "url", value: "https://example.test/a.mp3" },
+    },
+    {
+      type: "video",
+      source: { type: "url", value: "https://example.test/v.mp4" },
+    },
+    {
+      type: "ui-resource",
+      resource: { uri: "ui://widget", mimeType: "text/html" },
+      toolCallId: "call-1",
+      toolName: "widget",
+    },
+  ];
+
+  for (const unsupported of unsupportedParts) {
+    test(`keeps the surrounding parts when a ${unsupported.type} part arrives`, () => {
+      const message = toChatMessage({
+        id: "assistant-message",
+        role: "assistant",
+        parts: [
+          { content: "Dobrý den", type: "text" },
+          unsupported,
+          { content: "Na shledanou", type: "text" },
+        ],
+      });
+
+      expect(message.parts).toEqual([
+        { content: "Dobrý den", type: "text" },
+        { content: "Na shledanou", type: "text" },
+      ]);
+    });
+  }
 });
 
 describe("chat attempt terminal classification", () => {

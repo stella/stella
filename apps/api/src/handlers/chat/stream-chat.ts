@@ -1956,21 +1956,37 @@ export const chatMessageUsageFromTokenUsage = (
   };
 };
 
-const toChatMessage = (message: UIMessage): ChatMessage => ({
+export const toChatMessage = (message: UIMessage): ChatMessage => ({
   id: message.id,
   role: message.role,
   parts: toChatParts(message.parts),
 });
 
+// Which parts a message carries is decided by the model and the SDK, not by
+// this code: `isChatPart` rejects `audio` and `video`, and its `default` rejects
+// `ui-resource` and any part type a later SDK version adds, all of which
+// `MessagePart` permits. An unrecognized part is therefore ordinary external
+// input rather than the broken internal invariant `panic` is for.
+//
+// Skipping one also keeps the rest of a finished turn, which throwing does not.
+// This runs in the processor's `onStreamEnd`, inside `processServerChatStream`'s
+// `try`, where a throw sets `streamFailed`; that suppresses the `finally`
+// persist, so a single unsupported part would discard an assistant message the
+// model had already completed and the client had already been streamed.
 const toChatParts = (
   parts: readonly UIMessage["parts"][number][],
 ): ChatPart[] => {
   const chatParts: ChatPart[] = [];
   for (const part of parts) {
-    if (!isChatPart(part)) {
-      panic("TanStack stream emitted an unsupported chat part");
+    if (isChatPart(part)) {
+      chatParts.push(part);
+      continue;
     }
-    chatParts.push(part);
+    // Telemetry only: the discriminator alone. A part's content can carry
+    // document text, so it is never logged.
+    logger.warn("Dropped an unsupported part from a streamed chat message", {
+      "chat.part_type": part.type,
+    });
   }
   return chatParts;
 };
