@@ -9,6 +9,7 @@ import {
   findUnappliedMigrations,
 } from "./migration-history";
 
+const MIGRATIONS_DIR = nodePath.resolve(import.meta.dir, "../../../drizzle");
 const hexadecimalCharacter = fc.constantFrom(..."0123456789abcdef".split(""));
 const migrationHash = fc.string({
   unit: hexadecimalCharacter,
@@ -60,16 +61,16 @@ describe("migration history invariant", () => {
     );
   });
 
-  test("accepts every supported predecessor hash", () => {
+  test("accepts every supported predecessor only for its exact current file", async () => {
     const supportedHistories = [
       [
         "20260603120000_case_law_public_slugs",
-        "c1ba2ed2049dd11aeab770ae4681e6b47d924bdbbc2ea480d3d0035199e4ab28",
+        "6b7745706b35e0bba31829f9c5262794c7ed4f33455679f28fd998c37eb1718c",
         "4757efe9484615eff7bcba9c34687be4aa9b28e07a71137a3638a3072d8a6d3d",
       ],
       [
         "20260603120000_case_law_public_slugs",
-        "c1ba2ed2049dd11aeab770ae4681e6b47d924bdbbc2ea480d3d0035199e4ab28",
+        "6b7745706b35e0bba31829f9c5262794c7ed4f33455679f28fd998c37eb1718c",
         "0d7608766b5bbec1031a31e8a004fc093124596b0cbf4446bd4269ffc834a90b",
       ],
       [
@@ -89,13 +90,18 @@ describe("migration history invariant", () => {
       ],
       [
         "20260703233000_account_credential_singleton",
-        "1e3a3cd7ef1373e6a6c48ded10bd53dc32169066a79fb3a808552d52849fb9ff",
+        "9de5d6af3b0acd569ebffa1452e7e441939a1afafb9c6bc59bd461e87e1586bc",
         "ffd1598dc3a56f44095b549438313351e4bfb467b0fdb83c1def5a6d55f74583",
       ],
       [
         "20260707120000_property_role",
-        "8d47e05862c978c9c7176c2e406e00eb5fc3e73e5f80edda28e7a37320856d93",
+        "a3e5b0faa0bf5fc1249848c25707c589d00a5ef1a969efcd6fa313f483030c54",
         "033466ccb60b0baa4ad4bbd6b8b0f4e116531b4061353ca0b7069178aebfde02",
+      ],
+      [
+        "20260717110000_usage_event_idempotency",
+        "c769f5c5257528acb310673a276549138a2e44006eeed8dc10beb4153a54cddb",
+        "dd0acd610eb979875428ca7778d97cce4baf33b4332479434f66e68c729b2433",
       ],
       [
         "20260717170000_report_export_notifications",
@@ -114,12 +120,20 @@ describe("migration history invariant", () => {
       ],
       [
         "20260731130000_decision_source_document_id",
-        "85bdb5023fe1126f39e04aad8e7fd3969e2fce28b7d69096cad1a668b8dc45fc",
+        "15d92f17395b90ef96815823e22b7928cdeaa5ee39021428b7268ffcf0fe4b84",
         "f0dc5e37d764febdad8eba0bc36506c048d22f182f5e0423fd48ad6a26d29a48",
       ],
     ] as const;
 
     for (const [name, currentHash, priorHash] of supportedHistories) {
+      const actualHash = new Bun.CryptoHasher("sha256")
+        .update(
+          await Bun.file(
+            nodePath.join(MIGRATIONS_DIR, name, "migration.sql"),
+          ).bytes(),
+        )
+        .digest("hex");
+      expect(currentHash).toBe(actualHash);
       expect(
         findUnappliedMigrations({
           appliedHashes: new Set([priorHash]),

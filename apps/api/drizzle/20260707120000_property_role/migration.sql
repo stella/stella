@@ -8,16 +8,10 @@ SET statement_timeout = 0;
 --> statement-breakpoint
 SET lock_timeout = 0;
 --> statement-breakpoint
--- stella-migration-safety: reviewed destructive-change - this drops only this
--- migration's partial index by name before recreating it below; retries must not
--- record the migration without the unique classifier invariant in place.
--- A cancelled concurrent index build can leave an INVALID index with this name.
--- Drop any leftover index first, then recreate without IF NOT EXISTS so retries
--- cannot record the migration without enforcing the invariant.
-DROP INDEX CONCURRENTLY IF EXISTS "properties_ws_document_type_classifier_unq";
---> statement-breakpoint
--- squawk-ignore prefer-robust-stmts
-CREATE UNIQUE INDEX CONCURRENTLY "properties_ws_document_type_classifier_unq" ON "properties" USING btree ("workspace_id") WHERE "role" = 'document-type-classifier';
+-- The migration runner validates this index after the ledger update and
+-- concurrently repairs an interrupted INVALID build. IF NOT EXISTS preserves
+-- an already-valid uniqueness boundary across retries.
+CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "properties_ws_document_type_classifier_unq" ON "properties" USING btree ("workspace_id") WHERE "role" = 'document-type-classifier';
 --> statement-breakpoint
 SET lock_timeout = '1s';
 --> statement-breakpoint

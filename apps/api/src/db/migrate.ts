@@ -77,6 +77,17 @@ try {
   await client.unsafe(bootstrapRoleSql);
   const database = drizzle({ client });
   await migrate(database, { migrationsFolder });
+  await assertMigrationHistory({
+    context: "migrate",
+    migrationsDir: migrationsFolder,
+    queryAppliedHashes: async () => {
+      const rows = await database.execute<AppliedMigrationRow>(
+        sql`SELECT hash FROM drizzle.__drizzle_migrations`,
+      );
+      return new Set(rows.map(({ hash }) => hash));
+    },
+    remedy: "Migration completion requires every bundled migration hash.",
+  });
   await runOnlineMigrations({
     reserve: async () => {
       const connection = await client.reserve();
@@ -89,17 +100,6 @@ try {
         release: () => connection.release(),
       };
     },
-  });
-  await assertMigrationHistory({
-    context: "migrate",
-    migrationsDir: migrationsFolder,
-    queryAppliedHashes: async () => {
-      const rows = await database.execute<AppliedMigrationRow>(
-        sql`SELECT hash FROM drizzle.__drizzle_migrations`,
-      );
-      return new Set(rows.map(({ hash }) => hash));
-    },
-    remedy: "Migration completion requires every bundled migration hash.",
   });
   // eslint-disable-next-line no-console -- migrate CLI entrypoint; stdout is its interface (no app logger in this minimal-env task)
   console.info("[migrate] migrations applied");

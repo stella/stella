@@ -1,5 +1,3 @@
--- stella-migration-safety: reviewed destructive-change - retry cleanup only removes the same-name index before rebuilding it; no ledger rows or columns are removed
-
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 ALTER TABLE "usage_events" ADD COLUMN IF NOT EXISTS "idempotency_key" text;
@@ -16,10 +14,10 @@ SET statement_timeout = 0;
 --> statement-breakpoint
 SET lock_timeout = 0;
 --> statement-breakpoint
-DROP INDEX CONCURRENTLY IF EXISTS "usage_events_org_idempotency_key_uidx";
---> statement-breakpoint
--- squawk-ignore prefer-robust-stmts
-CREATE UNIQUE INDEX CONCURRENTLY "usage_events_org_idempotency_key_uidx"
+-- The migration runner validates this index after the ledger update and
+-- concurrently repairs an interrupted INVALID build. IF NOT EXISTS preserves
+-- an already-valid uniqueness boundary across retries.
+CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "usage_events_org_idempotency_key_uidx"
   ON "usage_events" ("organization_id", "idempotency_key")
   WHERE "idempotency_key" IS NOT NULL;
 --> statement-breakpoint
