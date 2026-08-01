@@ -306,7 +306,10 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $function$
 BEGIN
-  IF NEW.descriptor IS NOT DISTINCT FROM OLD.descriptor THEN
+  IF coalesce(NEW.descriptor ->> 'allowsRedistribution', 'true')
+    IS NOT DISTINCT FROM
+    coalesce(OLD.descriptor ->> 'allowsRedistribution', 'true')
+  THEN
     RETURN NEW;
   END IF;
 

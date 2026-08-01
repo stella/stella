@@ -1175,8 +1175,12 @@ export const createCaseLawGenerationBackfill =
               : { indexed: 0, status: BACKFILL_STATUS.BUSY };
           }
 
+          // The source revision is authoritative even when the projection
+          // still looks current: a prior ineligible delete may have removed
+          // the remote documents and then lost its database CAS to this
+          // revision. Replacing every eligible row makes that race converge.
           const eligible = sourcePage
-            .filter((row) => isEligibleForGeneration(row, generation))
+            .filter(isCorpusEligible)
             .map(withoutSourceDescriptor);
           const indexed =
             eligible.length === 0

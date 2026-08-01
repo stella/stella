@@ -402,6 +402,15 @@ test(
     });
 
     try {
+      // A prior eligibility delete can remove the remote copy, then lose its
+      // database CAS and leave this projection looking current. The new
+      // eligible revision must replace it anyway.
+      await db.insert(caseLawCorpusIndexProjections).values({
+        decisionId: restrictedId,
+        generation,
+        indexId: corpusIndexId(generation, "CZE"),
+        indexedHash: "restricted",
+      });
       await db
         .update(caseLawDecisions)
         .set({ country: "SVK" })
@@ -1087,12 +1096,6 @@ test(
         status: "advanced",
       });
 
-      await db.insert(caseLawCorpusIndexProjections).values({
-        decisionId: restrictedId,
-        generation,
-        indexId: corpusIndexId(generation, "CZE"),
-        indexedHash: "restricted",
-      });
       await db
         .update(caseLawSources)
         .set({
