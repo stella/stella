@@ -221,6 +221,68 @@ describe("idempotent corpus removals", () => {
       { entityId: row.id, operation: "delete", status: "succeeded" },
     ]);
   });
+
+  test("a fenced removal records guard failures after the remote effect", async () => {
+    const row = {
+      id: toSafeId<"caseLawDecision">("expired-removal-lease-row"),
+      country: "CZ",
+      textS3Key: null,
+      astS3Key: null,
+      contentHash: null,
+      indexedHash: null,
+      indexedGeneration: null,
+      // SAFETY: the removal path never reads the fabricated timestamp token.
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion
+      updatedAtToken: "2026-01-01 00:00:00" as TimestampCasToken,
+    };
+    const recorded: CorpusJobInput<"caseLawDecision">[] = [];
+    const indexer = createCorpusIndexer<"caseLawDecision", typeof row>({
+      family: "case_law",
+      captureStep: "test",
+      granularity: "document",
+      generationProjectionIndexIds: () => [],
+      buildDocs: () => [],
+      readCorpusText: async () => "unused",
+      selectMissing: async () => [],
+      selectStale: async () => [],
+      fetchFulltext: async () => null,
+      markIndexedBatch: async () => new Set(),
+      insertSucceededJobs: async () => undefined,
+      recordJobs: async (_db, jobs) => {
+        recorded.push(...jobs);
+      },
+    });
+    globalThis.fetch = Object.assign(
+      async () => new Response(JSON.stringify({}), { status: 200 }),
+      { preconnect: originalFetch.preconnect },
+    );
+    const scopedDb: ScopedDb = async () => {
+      throw new Error("removal should not open a database transaction");
+    };
+
+    const removed = await indexer.removeFenced({
+      beforeRemoteEffect: async ({ effect, onLeaseLost }) => {
+        await effect();
+        await onLeaseLost();
+        throw new Error("writer lease expired after delete");
+      },
+      entityId: row.id,
+      indexId: corpusIndexId("case_law_v1", "CZ"),
+      onLeaseLost: async () => await Promise.resolve(),
+      operation: "redact",
+      scopedDb,
+    });
+
+    expect(removed.isErr()).toBe(true);
+    expect(recorded).toMatchObject([
+      {
+        entityId: row.id,
+        errorMessage: "writer lease expired after delete",
+        operation: "redact",
+        status: "failed",
+      },
+    ]);
+  });
 });
 
 describe("fenced serving-generation appends", () => {

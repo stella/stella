@@ -8,8 +8,8 @@ import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-family";
 import {
+  CorpusIndexError,
   getCorpusIndexClient,
-  type CorpusIndexError,
 } from "@/api/lib/legal-search/corpus-index-client";
 import { corpusIndexConfig } from "@/api/lib/legal-search/corpus-index-config";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
@@ -33,6 +33,17 @@ const INDEX_CONCURRENCY = 4;
 /** Run the stale scan at least once per this many batches under a full
  *  missing backlog (see the duty-cycle note in `backfill`). */
 const STALE_SCAN_DUTY_CYCLE = 20;
+
+const corpusIndexErrorFromThrown = (error: unknown): CorpusIndexError =>
+  error instanceof CorpusIndexError
+    ? error
+    : new CorpusIndexError({
+        message:
+          error instanceof Error
+            ? error.message
+            : "corpus index operation failed",
+        cause: error,
+      });
 
 /**
  * Delete-task query selecting every search document a row projects to. Keyed
@@ -738,10 +749,15 @@ export const createCorpusIndexer = <
     if (beforeRemoteEffect === undefined) {
       deleted = await deleteByQuery();
     } else {
-      deleted = await beforeRemoteEffect({
-        effect: deleteByQuery,
-        onLeaseLost,
+      const guarded = await Result.tryPromise({
+        try: async () =>
+          await beforeRemoteEffect({
+            effect: deleteByQuery,
+            onLeaseLost,
+          }),
+        catch: corpusIndexErrorFromThrown,
       });
+      deleted = guarded.isErr() ? Result.err(guarded.error) : guarded.value;
     }
     // A retired generation is already at the requested fixed point. Treating
     // its missing index as a successful delete keeps cleanup idempotent and

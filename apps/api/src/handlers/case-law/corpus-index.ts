@@ -402,9 +402,20 @@ const clearDeletedGenerationProjection = async (
   `);
 };
 
-const clearIneligibleGenerationProjection = async (
+/** Exported for the database-backed eligibility lifecycle invariant. */
+export const clearIneligibleGenerationProjection = async (
   tx: Transaction,
-  { generation, row }: { generation: string; row: GenerationBackfillRow },
+  {
+    generation,
+    row,
+  }: {
+    generation: string;
+    row: {
+      id: SafeId<"caseLawDecision">;
+      contentHash: string | null;
+      updatedAtToken: TimestampCasToken;
+    };
+  },
 ): Promise<void> => {
   // The source revision joins the external delete to the exact eligibility
   // observation that caused it. A later descriptor change remains ahead of
@@ -422,8 +433,14 @@ const clearIneligibleGenerationProjection = async (
         AND (source.descriptor ->> 'allowsRedistribution') IS DISTINCT FROM 'true'
       FOR UPDATE OF d, source
     )
-    DELETE FROM ${caseLawCorpusIndexProjections} AS projection
-    USING live
+    UPDATE ${caseLawCorpusIndexProjections} AS projection
+    SET index_id = null,
+        indexed_hash = null,
+        pending_action = null,
+        pending_hash = null,
+        pending_index_ids = '{}',
+        updated_at = now()
+    FROM live
     WHERE projection.generation = ${generation}
       AND projection.decision_id = live.id
   `);

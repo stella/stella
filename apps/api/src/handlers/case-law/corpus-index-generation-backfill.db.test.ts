@@ -19,6 +19,7 @@ import {
   acquireCaseLawCorpusGenerationLease,
   backfillCorpusIndex,
   caseLawCorpusIndexAdapter,
+  clearIneligibleGenerationProjection,
   createCaseLawGenerationBackfill,
   generationProjectionTargetIds,
 } from "@/api/handlers/case-law/corpus-index";
@@ -1613,14 +1614,7 @@ test(
         removed.push(row.id);
         await runnerDb(async (tx) => {
           await options.beforeDatabaseMark(tx);
-          await tx
-            .delete(caseLawCorpusIndexProjections)
-            .where(
-              and(
-                eq(caseLawCorpusIndexProjections.generation, generation),
-                eq(caseLawCorpusIndexProjections.decisionId, row.id),
-              ),
-            );
+          await clearIneligibleGenerationProjection(tx, { generation, row });
         });
       },
     });
@@ -1668,17 +1662,55 @@ test(
         status: "advanced",
       });
       expect(removed).toEqual([restrictedId]);
+      const projectionWhere = and(
+        eq(caseLawCorpusIndexProjections.generation, generation),
+        eq(caseLawCorpusIndexProjections.decisionId, restrictedId),
+      );
       expect(
-        await db
-          .select()
-          .from(caseLawCorpusIndexProjections)
-          .where(
-            and(
-              eq(caseLawCorpusIndexProjections.generation, generation),
-              eq(caseLawCorpusIndexProjections.decisionId, restrictedId),
-            ),
-          ),
-      ).toHaveLength(0);
+        (
+          await db
+            .select()
+            .from(caseLawCorpusIndexProjections)
+            .where(projectionWhere)
+        ).at(0),
+      ).toMatchObject({
+        indexedHash: null,
+        indexId: null,
+        pendingAction: null,
+        pendingHash: null,
+        pendingIndexIds: [],
+      });
+
+      await db
+        .update(caseLawSources)
+        .set({
+          descriptor: {
+            allowsDerivedAi: true,
+            allowsRedistribution: true,
+            attribution: null,
+            license: "public-domain",
+          },
+        })
+        .where(eq(caseLawSources.id, restrictedSourceId));
+      await queueSourceReconciliation(generation, restrictedSourceId);
+
+      expect(await backfill(scopedDb, 10, generation)).toEqual({
+        indexed: 1,
+        status: "advanced",
+      });
+      expect(indexed).toEqual([restrictedId, restrictedId]);
+      expect(
+        (
+          await db
+            .select()
+            .from(caseLawCorpusIndexProjections)
+            .where(projectionWhere)
+        ).at(0),
+      ).toMatchObject({
+        indexedHash: "restricted",
+        indexId: corpusIndexId(generation, "CZE"),
+        pendingAction: null,
+      });
     } finally {
       await db
         .update(caseLawSources)
