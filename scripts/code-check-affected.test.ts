@@ -55,12 +55,14 @@ describe("affected code-check planning", () => {
     "package.json",
     "bun.lock",
     "bunfig.toml",
+    "scripts/lint-oxlint-fixtures.sh",
     "turbo.json",
     "oxlint.config.ts",
     "tsconfig.json",
     ".oxlint-plugins/no-raw-use-effect.ts",
     "packages/typescript-config/base.json",
     "patches/vite.patch",
+    "types/react-css-properties.d.ts",
   ])("falls back to the full repository for global input %s", (changedPath) => {
     expect(plan([changedPath], [])).toEqual({ type: "full", changedPath });
   });

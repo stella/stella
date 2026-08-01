@@ -22,6 +22,7 @@ const FULL_CHECK_FILES = new Set([
   "bunfig.toml",
   "oxlint.config.ts",
   "package.json",
+  "scripts/lint-oxlint-fixtures.sh",
   "turbo.json",
   "tsconfig.json",
   "tsconfig.oxlint-plugins.json",
@@ -33,6 +34,7 @@ const FULL_CHECK_PREFIXES = [
   ".oxlint-plugins/",
   "packages/typescript-config/",
   "patches/",
+  "types/",
 ] as const;
 
 type CheckPlan =
