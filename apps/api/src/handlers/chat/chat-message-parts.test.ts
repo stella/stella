@@ -122,7 +122,10 @@ describe("chat attachment parts", () => {
               unexpected: metadata,
               resource: { ...uiResource.resource, unexpected: meta },
             }),
-          ).toEqual({ type: "persist", part: uiResource });
+          ).toEqual({
+            type: "persist",
+            part: { ...uiResource, meta },
+          });
         },
       ),
       propertyConfig(),
@@ -240,6 +243,14 @@ describe("chat attachment parts", () => {
         },
         toolCallId: "call-1",
         toolName: "widget",
+      }),
+    ).toBe(false);
+    expect(
+      isChatPart({
+        ...richChatParts[2],
+        meta: {
+          oversized: "x".repeat(LIMITS.chatRichPartsTotalMaxBytes),
+        },
       }),
     ).toBe(false);
   });

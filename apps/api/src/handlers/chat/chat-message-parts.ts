@@ -1,5 +1,5 @@
 import type { ContentPartSource } from "@tanstack/ai";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { Buffer } from "node:buffer";
 
 import {
@@ -416,6 +416,18 @@ const isMediaPart = (
   );
 };
 
+const isBoundedJsonRecord = (
+  value: Record<string, unknown>,
+  maxBytes: number,
+): boolean => {
+  const serialized = Result.try((): unknown => JSON.stringify(value));
+  return (
+    Result.isOk(serialized) &&
+    typeof serialized.value === "string" &&
+    Buffer.byteLength(serialized.value, "utf-8") <= maxBytes
+  );
+};
+
 const isUiResourcePart = (part: Record<string, unknown>): boolean => {
   if (
     !isRecord(part["resource"]) ||
@@ -429,7 +441,10 @@ const isUiResourcePart = (part: Record<string, unknown>): boolean => {
       part["serverId"] !== undefined &&
       (typeof part["serverId"] !== "string" ||
         part["serverId"].length > LIMITS.chatRichPartIdentifierMaxChars)) ||
-    ("meta" in part && part["meta"] !== undefined && !isRecord(part["meta"]))
+    ("meta" in part &&
+      part["meta"] !== undefined &&
+      (!isRecord(part["meta"]) ||
+        !isBoundedJsonRecord(part["meta"], LIMITS.chatRichPartsTotalMaxBytes)))
   ) {
     return false;
   }
@@ -650,6 +665,7 @@ const normalizeChatPartForPersistence = (part: ChatPart): ChatPart => {
         toolCallId: part.toolCallId,
         toolName: part.toolName,
         ...(part.serverId === undefined ? {} : { serverId: part.serverId }),
+        ...(part.meta === undefined ? {} : { meta: part.meta }),
       };
     }
     case "document":

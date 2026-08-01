@@ -37,6 +37,7 @@ describe("MCP App sandbox", () => {
     expect(response.headers.get("Content-Type")).toBe(
       "text/html; charset=utf-8",
     );
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
     expect(csp).toContain("default-src 'none'");
     expect(csp).toContain("connect-src 'none'");
     expect(csp).toContain("form-action 'none'");

@@ -118,7 +118,7 @@ export const handleMcpAppSandboxRequest = (
   clearInheritedFrameDenial(set);
   return new Response(MCP_APP_SANDBOX_DOCUMENT, {
     headers: {
-      "Cache-Control": "public, max-age=86400",
+      "Cache-Control": "no-store",
       "Content-Security-Policy": SANDBOX_CONTENT_SECURITY_POLICY,
       "Content-Type": "text/html; charset=utf-8",
       "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
