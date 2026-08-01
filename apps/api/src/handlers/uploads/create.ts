@@ -180,7 +180,7 @@ const presignUpload = createSafeHandler(
         workspaceId,
         entityId: purposeBody.entityId,
       });
-      if (Result.isError(validation)) {
+      if (validation.status === "error") {
         return validation;
       }
     } else {
