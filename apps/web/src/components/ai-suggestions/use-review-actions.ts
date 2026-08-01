@@ -155,7 +155,7 @@ export const useReviewActions = ({
       claimStatus: ReviewSuggestionStatus,
     ): ReviewSuggestion | null => {
       const live = readLive(capturedId);
-      if (live === undefined || live.status !== "pending") {
+      if (live?.status !== "pending") {
         return null;
       }
       updateSuggestion(entityId, live.id, { status: claimStatus });
@@ -406,7 +406,7 @@ export const useReviewActions = ({
     // a reload would then re-arm it as actionable. Follow the row to its
     // current identity and operate on that instead.
     const live = readLive(item.id);
-    if (live === undefined || live.status !== "applying") {
+    if (live?.status !== "applying") {
       // Our claim was lost (a reconcile collapse dropped the row, or another
       // handler took it over). Nothing to apply.
       return;

@@ -706,10 +706,7 @@ export function PromptBar(props: PromptBarProps) {
       if (canSubmitNow !== undefined && !canSubmitNow()) {
         return;
       }
-      if (
-        presetScopeChooser !== undefined &&
-        presetScopeChooser.appliesTo(preset)
-      ) {
+      if (presetScopeChooser?.appliesTo(preset)) {
         if (presetScopeChooser.shouldAskForScope()) {
           setScopePromptPreset(preset);
           return;

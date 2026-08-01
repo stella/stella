@@ -138,9 +138,7 @@ function ConsentPage() {
     },
   });
   const showJurisdictionsNotice =
-    canManageOrganization &&
-    jurisdictionsQuery.data !== undefined &&
-    jurisdictionsQuery.data.length === 0;
+    canManageOrganization && jurisdictionsQuery.data?.length === 0;
 
   const scopes = scope ? scope.split(" ").filter(Boolean) : [];
   const clientName =
