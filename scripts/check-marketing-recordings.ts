@@ -161,9 +161,18 @@ export const manualVerificationMatches = ({
   if (!verification) {
     return false;
   }
+  let artifactsHash: string;
+  try {
+    artifactsHash = recordingArtifactsHash(captureId, theme);
+  } catch (error) {
+    if (isRecord(error) && error["code"] === "ENOENT") {
+      return false;
+    }
+    throw error;
+  }
   return (
     verification.watchedPathsHash === watchedPathsHashAtHead(watchedPaths) &&
-    verification.artifactsHash === recordingArtifactsHash(captureId, theme)
+    verification.artifactsHash === artifactsHash
   );
 };
 

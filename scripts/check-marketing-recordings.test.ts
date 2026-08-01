@@ -57,6 +57,18 @@ describe("marketing recording freshness", () => {
         watchedPaths: definition.watchedPaths,
       }),
     ).toBe(false);
+    expect(
+      manualVerificationMatches({
+        captureId: "missing-artifact-fixture",
+        theme: "light",
+        verification: {
+          artifactsHash: "0".repeat(64),
+          reason: "Reviewed for a maintenance release",
+          watchedPathsHash,
+        },
+        watchedPaths: definition.watchedPaths,
+      }),
+    ).toBe(false);
   });
 
   test("accepts a matching explicit verification as the freshness basis", () => {
