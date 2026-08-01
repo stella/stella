@@ -1166,7 +1166,7 @@ describe("chat tool schemas", () => {
           nullableNote: v.nullable(v.string()),
         }),
       ),
-      providerSafeJsonSchemaOptionsForTanStackProvider("mistral"),
+      providerSafeJsonSchemaOptionsForTanStackProvider("mistral", "tool"),
     );
     const inputSchema = convertSchemaToJsonSchema(projectedInputSchema);
     if (!inputSchema?.properties) {

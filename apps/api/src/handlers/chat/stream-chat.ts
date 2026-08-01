@@ -416,8 +416,10 @@ const projectServerToolsForProvider = ({
   provider: string;
   serverTools: readonly ServerTool[];
 }): ServerTool[] => {
-  const projectionOptions =
-    providerSafeJsonSchemaOptionsForTanStackProvider(provider);
+  const projectionOptions = providerSafeJsonSchemaOptionsForTanStackProvider(
+    provider,
+    "tool",
+  );
   const projectedTools: ServerTool[] = [];
   for (const tool of serverTools) {
     const projectedTool = { ...tool };

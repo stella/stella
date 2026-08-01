@@ -241,6 +241,32 @@ const CANARY_CACHING = {
 
 const structuredOutputSchema = v.strictObject({ ok: v.literal(true) });
 
+// Exercises the nested-array constraint shape that provider schema compilers
+// treat differently from a trivial object. The content is synthetic; this
+// canary exists to catch provider drift in the exact shared projection used by
+// production structured-output calls.
+const nestedStructuredOutputSchema = v.strictObject({
+  entries: v.pipe(
+    v.array(
+      v.strictObject({
+        heading: v.string(),
+        status: v.picklist(["accepted", "needs-work", "not-applicable"]),
+        explanation: v.string(),
+        primaryEvidence: v.pipe(
+          v.array(v.strictObject({ source: v.string(), locator: v.string() })),
+          v.maxLength(8),
+        ),
+        secondaryEvidence: v.pipe(
+          v.array(v.strictObject({ source: v.string(), locator: v.string() })),
+          v.maxLength(8),
+        ),
+        suggestedRevision: v.nullable(v.string()),
+      }),
+    ),
+    v.maxLength(200),
+  ),
+});
+
 const strictTool = toolDefinition({
   name: "canary_closed_tool",
   description: "Synthetic no-op tool with a closed input schema.",
@@ -325,7 +351,12 @@ type ModelRoleProbe = ProbeBase & {
   role: ModelRole;
 };
 
-type Probe = CapabilityProbe | ModelRoleProbe;
+type StructuredOutputModelRoleProbe = ProbeBase & {
+  type: "structured-output-role";
+  role: ModelRole;
+};
+
+type Probe = CapabilityProbe | ModelRoleProbe | StructuredOutputModelRoleProbe;
 
 type CanaryContext = {
   config: OrgAIConfig;
@@ -363,6 +394,18 @@ const modelRoleProbes = MODEL_ROLES.map(
         await runModelRoleProbe({ context, role, signal });
       },
     }) satisfies ModelRoleProbe,
+);
+
+const structuredOutputModelRoleProbes = MODEL_ROLES.map(
+  (role) =>
+    ({
+      type: "structured-output-role",
+      role,
+      timeoutMs: MODEL_ROLE_PROBE_TIMEOUT_MS,
+      run: async (context, signal) => {
+        await runStructuredOutputModelRoleProbe({ context, role, signal });
+      },
+    }) satisfies StructuredOutputModelRoleProbe,
 );
 
 const capabilityProbes = [
@@ -445,6 +488,7 @@ const capabilityProbes = [
 
 const probes = [
   ...modelRoleProbes,
+  ...structuredOutputModelRoleProbes,
   ...capabilityProbes,
 ] satisfies readonly Probe[];
 
@@ -503,6 +547,24 @@ const runModelRoleProbe = async ({
   requireExpectedRoleOutput(output, role);
 };
 
+const runStructuredOutputModelRoleProbe = async ({
+  context: { config },
+  role,
+  signal,
+}: RunModelRoleProbeOptions): Promise<void> => {
+  await generateTanStackObjectForRole({
+    abortSignal: signal,
+    caching: NO_CACHING,
+    maxOutputTokens: modelRoleMaxOutputTokens(role),
+    organizationId: null,
+    orgAIConfig: config,
+    outputSchema: nestedStructuredOutputSchema,
+    prompt: "Return an object with an empty entries array.",
+    role,
+    serviceTier: "standard",
+  });
+};
+
 type RunWeeklyModelRoleProbeOptions = {
   context: WeeklyCanaryContext;
   role: ModelRole;
@@ -536,6 +598,24 @@ const runWeeklyModelRoleProbe = async ({
     serviceTier: "standard",
   });
   requireExpectedRoleOutput(output, role);
+};
+
+const runWeeklyStructuredOutputModelRoleProbe = async ({
+  context: { rotatedConfig },
+  role,
+  signal,
+}: RunWeeklyModelRoleProbeOptions): Promise<void> => {
+  await generateTanStackObjectForRole({
+    abortSignal: signal,
+    caching: NO_CACHING,
+    maxOutputTokens: modelRoleMaxOutputTokens(role),
+    organizationId: null,
+    orgAIConfig: rotatedConfig,
+    outputSchema: nestedStructuredOutputSchema,
+    prompt: "Return an object with an empty entries array.",
+    role,
+    serviceTier: "standard",
+  });
 };
 
 type RunToolCallRoundTripProbeOptions = {
@@ -666,7 +746,7 @@ const runToolProbe = async ({
   });
   const inputSchema = projectSchemaInputJsonSchema(
     tool.inputSchema,
-    providerSafeJsonSchemaOptionsForTanStackProvider(provider),
+    providerSafeJsonSchemaOptionsForTanStackProvider(provider, "tool"),
   );
   const projectedTool = {
     ...tool,
@@ -860,10 +940,12 @@ const probeLabel = (context: CanaryContext, probe: Probe): string => {
   }
 
   const modelId =
-    probe.role === "pdf"
+    probe.type === "model-role" && probe.role === "pdf"
       ? pdfCanarySelection(context.provider)?.modelId
       : DEFAULT_MODELS[context.provider][probe.role];
-  return `role-${probe.role}:${modelId ?? "unsupported"}`;
+  const prefix =
+    probe.type === "structured-output-role" ? "structured-role" : "role";
+  return `${prefix}-${probe.role}:${modelId ?? "unsupported"}`;
 };
 
 const run = async (): Promise<void> => {
@@ -921,8 +1003,8 @@ const runProbes = async (
 
   const label = probeLabel(context, probe);
   if (
-    probe.type === "model-role" &&
-    (probe.role === "pdf"
+    probe.type !== "capability" &&
+    (probe.type === "model-role" && probe.role === "pdf"
       ? pdfCanarySelection(context.provider) === null
       : !isBYOKProviderRoleSupported({
           provider: context.provider,
@@ -964,6 +1046,23 @@ const runWeeklyCanaryProbes = async (
     } catch (error) {
       console.error(
         `[ai-canary] ${context.provider}/${label}: failed (${errorSummary(error, signal)})`,
+      );
+      totalFailures += 1;
+    }
+
+    const structuredLabel = `weekly-structured-role-${role}:${context.rotation.modelId}`;
+    const structuredSignal = AbortSignal.timeout(MODEL_ROLE_PROBE_TIMEOUT_MS);
+    try {
+      // oxlint-disable-next-line no-await-in-loop -- provider probes must stay sequential so rate limits and output remain deterministic.
+      await runWeeklyStructuredOutputModelRoleProbe({
+        context,
+        role,
+        signal: structuredSignal,
+      });
+      console.log(`[ai-canary] ${context.provider}/${structuredLabel}: passed`);
+    } catch (error) {
+      console.error(
+        `[ai-canary] ${context.provider}/${structuredLabel}: failed (${errorSummary(error, structuredSignal)})`,
       );
       totalFailures += 1;
     }

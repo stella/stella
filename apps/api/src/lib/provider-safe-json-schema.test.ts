@@ -11,7 +11,10 @@ import {
   projectToProviderSafeJsonSchema,
   PROVIDER_SAFE_JSON_SCHEMA_KEYWORDS,
 } from "@/api/lib/provider-safe-json-schema";
-import { projectSchemaInputJsonSchema } from "@/api/lib/tanstack-ai-schema";
+import {
+  projectSchemaInputJsonSchema,
+  toTanStackValibotSchema,
+} from "@/api/lib/tanstack-ai-schema";
 
 const PROVIDER_SAFE_KEYWORDS = new Set<string>(
   PROVIDER_SAFE_JSON_SCHEMA_KEYWORDS,
@@ -120,20 +123,91 @@ const schemaWithComposition = fc.oneof(
 
 describe("projectToProviderSafeJsonSchema", () => {
   test("selects explicit schema dialects for provider adapters", () => {
-    expect(providerSafeJsonSchemaOptionsForTanStackProvider("google")).toEqual({
+    expect(
+      providerSafeJsonSchemaOptionsForTanStackProvider(
+        "google",
+        "structured-output",
+      ),
+    ).toEqual({
+      arrayBoundStrategy: "omit",
       enumValueStrategy: "string-only",
       nullUnionStrategy: "openapi",
     });
     expect(
-      providerSafeJsonSchemaOptionsForTanStackProvider("openrouter"),
+      providerSafeJsonSchemaOptionsForTanStackProvider("google", "tool"),
     ).toEqual({
+      arrayBoundStrategy: "preserve",
+      enumValueStrategy: "string-only",
+      nullUnionStrategy: "openapi",
+    });
+    expect(
+      providerSafeJsonSchemaOptionsForTanStackProvider("openrouter", "tool"),
+    ).toEqual({
+      arrayBoundStrategy: "preserve",
       enumValueStrategy: "string-only",
       nullUnionStrategy: "json-schema",
     });
-    expect(providerSafeJsonSchemaOptionsForTanStackProvider("openai")).toEqual({
+    expect(
+      providerSafeJsonSchemaOptionsForTanStackProvider(
+        "openai",
+        "structured-output",
+      ),
+    ).toEqual({
+      arrayBoundStrategy: "preserve",
       enumValueStrategy: "json-schema",
       nullUnionStrategy: "json-schema",
     });
+  });
+
+  test("keeps Gemini structured-output array bounds local", () => {
+    const evidenceSchema = v.strictObject({
+      source: v.string(),
+      locator: v.string(),
+    });
+    const sourceSchema = v.strictObject({
+      entries: v.pipe(
+        v.array(
+          v.strictObject({
+            heading: v.string(),
+            status: v.picklist(["accepted", "needs-work", "not-applicable"]),
+            explanation: v.string(),
+            primaryEvidence: v.pipe(v.array(evidenceSchema), v.maxLength(8)),
+            secondaryEvidence: v.pipe(v.array(evidenceSchema), v.maxLength(8)),
+            suggestedRevision: v.nullable(v.string()),
+          }),
+        ),
+        v.minLength(1),
+        v.maxLength(200),
+      ),
+    });
+    const providerSchema = convertSchemaToJsonSchema(
+      toTanStackValibotSchema(
+        sourceSchema,
+        providerSafeJsonSchemaOptionsForTanStackProvider(
+          "google",
+          "structured-output",
+        ),
+      ),
+    );
+
+    expect(providerSchema).toBeDefined();
+    const providerKeywords = collectProjectedSchemaKeywords(providerSchema);
+    expect(providerKeywords.has("minItems")).toBe(false);
+    expect(providerKeywords.has("maxItems")).toBe(false);
+
+    expect(() => v.parse(sourceSchema, { entries: [] })).toThrow();
+
+    const tooManyEntries = {
+      entries: Array.from({ length: 201 }, (_, index) => ({
+        heading: `Section ${String(index + 1)}`,
+        status: "accepted",
+        explanation: "Synthetic review note.",
+        primaryEvidence: [],
+        secondaryEvidence: [],
+        suggestedRevision: null,
+      })),
+    };
+    expect(() => v.parse(sourceSchema, tooManyEntries)).toThrow();
   });
 
   test("drops propertyNames from the fill_template repro while keeping additionalProperties", () => {

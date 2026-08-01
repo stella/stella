@@ -69,15 +69,29 @@ export type ProviderSafeJsonSchemaProjection = {
 
 export type NullUnionStrategy = "json-schema" | "openapi";
 export type EnumValueStrategy = "json-schema" | "string-only";
+export type ArrayBoundStrategy = "preserve" | "omit";
+export type ProviderJsonSchemaPurpose = "structured-output" | "tool";
 
 export type ProviderSafeJsonSchemaProjectionOptions = {
+  arrayBoundStrategy?: ArrayBoundStrategy;
   enumValueStrategy?: EnumValueStrategy;
   nullUnionStrategy?: NullUnionStrategy;
 };
 
 export const providerSafeJsonSchemaOptionsForTanStackProvider = (
   provider: string,
+  purpose: ProviderJsonSchemaPurpose,
 ): ProviderSafeJsonSchemaProjectionOptions => ({
+  // Gemini counts array bounds against an undocumented structured-output
+  // schema complexity budget. A nested schema accepted without maxItems can
+  // be rejected with HTTP 400 as soon as the same bound is added. Bounds are
+  // validation constraints, not shape information, and the original Standard
+  // Schema still validates the returned value locally. Tool schemas use a
+  // separate profile because their bounds remain useful provider guidance.
+  arrayBoundStrategy:
+    provider === "google" && purpose === "structured-output"
+      ? "omit"
+      : "preserve",
   enumValueStrategy:
     provider === "google" || provider === "openrouter"
       ? "string-only"
@@ -118,6 +132,7 @@ const resolveLocalJsonPointer = (root: JsonObject, ref: string): unknown => {
 type ProjectionContext = {
   root: JsonObject;
   dropped: string[];
+  arrayBoundStrategy: ArrayBoundStrategy;
   enumValueStrategy: EnumValueStrategy;
   nullUnionStrategy: NullUnionStrategy;
 };
@@ -850,6 +865,13 @@ const filterProviderSafeKeywords = ({
 }): JsonObject => {
   const result: JsonObject = {};
   for (const [key, value] of Object.entries(node)) {
+    if (
+      context.arrayBoundStrategy === "omit" &&
+      (key === "minItems" || key === "maxItems")
+    ) {
+      context.dropped.push(joinPath(path, key));
+      continue;
+    }
     if (!ALLOWED_KEYWORDS.has(key)) {
       context.dropped.push(joinPath(path, key));
       continue;
@@ -915,6 +937,7 @@ export const projectToProviderSafeJsonSchema = (
   const context: ProjectionContext = {
     root: schema,
     dropped: [],
+    arrayBoundStrategy: options.arrayBoundStrategy ?? "preserve",
     enumValueStrategy:
       options.enumValueStrategy ??
       (nullUnionStrategy === "openapi" ? "string-only" : "json-schema"),

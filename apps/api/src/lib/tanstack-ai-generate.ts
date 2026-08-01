@@ -348,7 +348,10 @@ export const generateTanStackObjectForRole = async <
     : undefined;
   const tanStackOutputSchema = toTanStackValibotSchema(
     outputSchema,
-    providerSafeJsonSchemaOptionsForTanStackProvider(model.provider),
+    providerSafeJsonSchemaOptionsForTanStackProvider(
+      model.provider,
+      "structured-output",
+    ),
   );
 
   const output = await withStandardServiceTierFallback({
@@ -436,7 +439,10 @@ const streamTanStackStructuredOutput = async function* <
   let rawJson = "";
   const tanStackOutputSchema = toTanStackValibotSchema(
     outputSchema,
-    providerSafeJsonSchemaOptionsForTanStackProvider(model.provider),
+    providerSafeJsonSchemaOptionsForTanStackProvider(
+      model.provider,
+      "structured-output",
+    ),
   );
 
   const stream = iterateWithStandardServiceTierFallback({
