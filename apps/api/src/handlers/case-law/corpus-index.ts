@@ -685,9 +685,6 @@ const completeRemoteEffect = async (): Promise<void> => {
   await Promise.resolve();
 };
 
-/** A remote mutation completed, but its writer fence was lost before commit. */
-export class RemoteEffectLeaseLostError extends ConcurrentModificationError {}
-
 const createRemoteEffectGuard =
   (
     scopedDb: Parameters<typeof indexer.backfill>[0],
@@ -715,7 +712,7 @@ const createRemoteEffectGuard =
     } catch (error) {
       if (error instanceof ConcurrentModificationError) {
         await onLeaseLost();
-        throw new RemoteEffectLeaseLostError({
+        throw new ConcurrentModificationError({
           message:
             "Case-law corpus remote effect completed after its writer lease was lost",
         });

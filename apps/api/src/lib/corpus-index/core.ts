@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { Result } from "better-result";
 import { Buffer } from "node:buffer";
 
 import type { Transaction } from "@/api/db/root";
@@ -307,9 +307,6 @@ const ingestBatchWithGuard = async ({
     await getCorpusIndexClient().ingestBatch(indexId, ndjson);
   if (beforeRemoteEffect === undefined) {
     return await effect();
-  }
-  if (onLeaseLost === undefined) {
-    panic("fenced corpus ingest is missing lease-loss compensation");
   }
   return await beforeRemoteEffect({ effect, onLeaseLost });
 };
@@ -708,9 +705,6 @@ export const createCorpusIndexer = <
     if (beforeRemoteEffect === undefined) {
       deleted = await deleteByQuery();
     } else {
-      if (onLeaseLost === undefined) {
-        panic("fenced corpus delete is missing lease-loss compensation");
-      }
       deleted = await beforeRemoteEffect({
         effect: deleteByQuery,
         onLeaseLost,
