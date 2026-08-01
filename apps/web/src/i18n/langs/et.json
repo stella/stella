@@ -3405,15 +3405,15 @@
     },
     "overview": {
       "activity": {
-        "actions": {
-          "added": "Lisatud",
-          "cancelled": "Tühistati",
-          "created": "Loodud",
-          "deleted": "Kustutati",
-          "executed": "Käivitatud",
-          "removed": "Eemaldatud",
-          "reviewed": "Üle vaadatud",
-          "updated": "Uuendati"
+        "actorActions": {
+          "added": "Lisas",
+          "cancelled": "Tühistas",
+          "created": "Lõi",
+          "deleted": "Kustutas",
+          "executed": "Käivitas",
+          "removed": "Eemaldas",
+          "reviewed": "Vaatas üle",
+          "updated": "Uuendas"
         },
         "approvals": {
           "approved": "Kinnitus antud",

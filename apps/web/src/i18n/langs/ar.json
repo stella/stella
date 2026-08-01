@@ -3405,15 +3405,15 @@
     },
     "overview": {
       "activity": {
-        "actions": {
-          "added": "تمت الإضافة",
-          "cancelled": "تم الإلغاء",
-          "created": "تم الإنشاء",
-          "deleted": "تم الحذف",
-          "executed": "تم التشغيل",
-          "removed": "تمت الإزالة",
-          "reviewed": "تمت المراجعة",
-          "updated": "تم التحديث"
+        "actorActions": {
+          "added": "أضاف/أضافت",
+          "cancelled": "ألغى/ألغت",
+          "created": "أنشأ/أنشأت",
+          "deleted": "حذف/حذفت",
+          "executed": "شغّل/شغّلت",
+          "removed": "أزال/أزالت",
+          "reviewed": "راجع/راجعت",
+          "updated": "حدّث/حدّثت"
         },
         "approvals": {
           "approved": "تم منح الموافقة",

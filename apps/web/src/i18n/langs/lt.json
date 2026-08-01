@@ -3405,15 +3405,15 @@
     },
     "overview": {
       "activity": {
-        "actions": {
-          "added": "Pridėta",
-          "cancelled": "Atšaukta",
-          "created": "Sukurta",
-          "deleted": "Ištrinta",
-          "executed": "Paleista",
-          "removed": "Pašalinta",
-          "reviewed": "Peržiūrėta",
-          "updated": "Atnaujinta"
+        "actorActions": {
+          "added": "Pridėjo",
+          "cancelled": "Atšaukė",
+          "created": "Sukūrė",
+          "deleted": "Ištrynė",
+          "executed": "Paleido",
+          "removed": "Pašalino",
+          "reviewed": "Peržiūrėjo",
+          "updated": "Atnaujino"
         },
         "approvals": {
           "approved": "Patvirtinimas suteiktas",
