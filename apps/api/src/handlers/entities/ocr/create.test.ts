@@ -277,7 +277,7 @@ describe("requestManualOcrHandler", () => {
     ["upload", "running"],
     ["repair", "running"],
   ] as const)(
-    "keeps an existing %s run in %s state in the configured batch",
+    "promotes an existing %s run in %s state without leaving the configured batch",
     async (requestSource, status) => {
       let selectCount = 0;
       let updateSet: unknown;
@@ -338,9 +338,7 @@ describe("requestManualOcrHandler", () => {
                   updateWhere = condition;
                 }
                 return {
-                  returning: async () => [
-                    { id: runId, status: "queued" as const },
-                  ],
+                  returning: async () => [{ id: runId, status }],
                 };
               },
             };
@@ -367,8 +365,19 @@ describe("requestManualOcrHandler", () => {
       });
 
       expect(run).toEqual({ id: runId, status });
-      expect(updateSet).toBeUndefined();
-      expect(updateWhere).toBeUndefined();
+      expect(updateSet).toEqual(
+        expect.objectContaining({
+          requestSource: "manual",
+          requestedBy: userId,
+        }),
+      );
+      expect(updateWhere).toBeDefined();
+      if (updateWhere) {
+        const compiled = new PgDialect().sqlToQuery(updateWhere);
+        expect(compiled.params).toEqual(
+          expect.arrayContaining([runId, "queued", "running"]),
+        );
+      }
     },
   );
 

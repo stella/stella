@@ -185,6 +185,8 @@ export const persistManualOcrRun = async ({
           : [];
       const needsProjectionRestore =
         existing?.status === "succeeded" && !matchingProjection.at(0);
+      const canPromote =
+        existing?.status === "queued" || existing?.status === "running";
       const canRetry =
         existing?.status === "failed" ||
         needsProjectionRestore ||
@@ -192,8 +194,29 @@ export const persistManualOcrRun = async ({
           RETRYABLE_MANUAL_OCR_CANCELLATION_CODES.some(
             (errorCode) => errorCode === existing.errorCode,
           ));
-      if (!existing || !canRetry) {
-        run = existing ?? null;
+      if (!existing) {
+        run = null;
+      } else if (canPromote) {
+        const promoted = await tx
+          .update(documentProcessingRuns)
+          .set({
+            requestSource: "manual",
+            requestedBy: userId,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(documentProcessingRuns.id, existing.id),
+              inArray(documentProcessingRuns.status, ["queued", "running"]),
+            ),
+          )
+          .returning({
+            id: documentProcessingRuns.id,
+            status: documentProcessingRuns.status,
+          });
+        run = promoted.at(0) ?? existing;
+      } else if (!canRetry) {
+        run = existing;
       } else {
         const retried = await tx
           .update(documentProcessingRuns)

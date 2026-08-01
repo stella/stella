@@ -164,9 +164,10 @@ recommends treating it like a database: keep it behind your firewall. The
 self-host Compose file intentionally does not publish a `ports` entry for the
 Gotenberg service.
 
-The Compose file also starts the document-processing worker from the API image.
-The worker stays idle when no OCR work is queued. The scheduler releases queued
-requests every `DOCUMENT_OCR_BATCH_INTERVAL_MINUTES` (minimum 5, maximum 10080).
+The Compose file also starts the scheduler and document-processing worker from
+the API image. The worker stays idle when no OCR work is queued. The scheduler
+releases queued requests every `DOCUMENT_OCR_BATCH_INTERVAL_MINUTES` (minimum
+5, maximum 10080).
 To enable OCR, deploy a PaddleOCR-compatible service separately and set
 `OCR_SERVICE_URL`; non-loopback endpoints must use HTTPS because requests carry
 short-lived access credentials.

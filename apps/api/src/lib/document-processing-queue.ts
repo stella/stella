@@ -10,6 +10,7 @@ import {
   isNull,
   lt,
   lte,
+  ne,
   notExists,
   or,
   sql,
@@ -307,8 +308,8 @@ const markRunCancelled = async (
     | "policy_disabled"
     | "source_superseded"
     | "workspace_unavailable",
-): Promise<void> => {
-  await rootDb
+): Promise<boolean> => {
+  const cancelled = await rootDb
     .update(documentProcessingRuns)
     .set({
       claimedAt: null,
@@ -324,8 +325,13 @@ const markRunCancelled = async (
         eq(documentProcessingRuns.id, runId),
         eq(documentProcessingRuns.status, "running"),
         eq(documentProcessingRuns.claimedBy, claimToken),
+        cancellationCode === "policy_disabled"
+          ? ne(documentProcessingRuns.requestSource, "manual")
+          : undefined,
       ),
-    );
+    )
+    .returning({ id: documentProcessingRuns.id });
+  return Boolean(cancelled.at(0));
 };
 
 type DocumentProcessingLeaseHeartbeat = {
@@ -544,8 +550,12 @@ const persistOcrProjection = async ({
           eq(documentProcessingRuns.claimedBy, claimToken),
         ),
       )
-      .returning({ id: documentProcessingRuns.id });
-    if (!ownedClaims.at(0)) {
+      .returning({
+        id: documentProcessingRuns.id,
+        requestSource: documentProcessingRuns.requestSource,
+      });
+    const ownedClaim = ownedClaims.at(0);
+    if (!ownedClaim) {
       return false;
     }
 
@@ -581,7 +591,7 @@ const persistOcrProjection = async ({
     // projection. An automatic OCR run that lost that race must index the
     // selected current-version text, even when it came from another file
     // field; an explicit manual request intentionally selects a fresh source.
-    if (shouldPreserveCurrentProjection(run.requestSource)) {
+    if (shouldPreserveCurrentProjection(ownedClaim.requestSource)) {
       const projections = await tx
         .select({
           sourceEntityVersionId: extractedContent.sourceEntityVersionId,
@@ -911,12 +921,25 @@ export const processDocumentProcessingRun = async (
         where: { organizationId: { eq: run.organizationId } },
         columns: { documentProcessingMode: true },
       });
+      const currentRuns = await rootDb
+        .select({ requestSource: documentProcessingRuns.requestSource })
+        .from(documentProcessingRuns)
+        .where(eq(documentProcessingRuns.id, run.id))
+        .limit(1);
       if (
-        requiresOcrPolicy(run.requestSource) &&
+        requiresOcrPolicy(
+          currentRuns.at(0)?.requestSource ?? run.requestSource,
+        ) &&
         settings?.documentProcessingMode !== "searchable-text"
       ) {
-        await markRunCancelled(run.id, claimToken, "policy_disabled");
-        return;
+        const cancelled = await markRunCancelled(
+          run.id,
+          claimToken,
+          "policy_disabled",
+        );
+        if (cancelled) {
+          return;
+        }
       }
 
       const source = await readCurrentOcrSource({
@@ -1075,33 +1098,56 @@ const markRunFailed = async ({
   run: typeof documentProcessingRuns.$inferSelect;
 }): Promise<void> => {
   const failureCode = errorCode(error);
-  const retryable = isRetryableAutomaticOcrFailure({
-    attemptCount: run.attemptCount,
-    errorCode: failureCode,
-    requestSource: run.requestSource,
-  });
-  const retryableSearchIndex = isRetryableSearchIndexFailure(failureCode);
-  await rootDb
-    .update(documentProcessingRuns)
-    .set({
-      claimedAt: null,
-      claimedBy: null,
-      errorAt: new Date(),
+  await rootDb.transaction(async (tx) => {
+    const ownedRows = await tx
+      .select({
+        attemptCount: documentProcessingRuns.attemptCount,
+        requestSource: documentProcessingRuns.requestSource,
+      })
+      .from(documentProcessingRuns)
+      .where(
+        and(
+          eq(documentProcessingRuns.id, run.id),
+          eq(documentProcessingRuns.status, "running"),
+          eq(documentProcessingRuns.claimedBy, claimToken),
+        ),
+      )
+      .limit(1)
+      .for("update");
+    const owned = ownedRows.at(0);
+    if (!owned) {
+      return;
+    }
+    const retryable = isRetryableAutomaticOcrFailure({
+      attemptCount: owned.attemptCount,
       errorCode: failureCode,
-      nextAttemptAt:
-        retryable || retryableSearchIndex
-          ? new Date(Date.now() + automaticOcrRetryDelayMs(run.attemptCount))
-          : null,
-      status: "failed",
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(documentProcessingRuns.id, run.id),
-        eq(documentProcessingRuns.status, "running"),
-        eq(documentProcessingRuns.claimedBy, claimToken),
-      ),
-    );
+      requestSource: owned.requestSource,
+    });
+    const retryableSearchIndex = isRetryableSearchIndexFailure(failureCode);
+    await tx
+      .update(documentProcessingRuns)
+      .set({
+        claimedAt: null,
+        claimedBy: null,
+        errorAt: new Date(),
+        errorCode: failureCode,
+        nextAttemptAt:
+          retryable || retryableSearchIndex
+            ? new Date(
+                Date.now() + automaticOcrRetryDelayMs(owned.attemptCount),
+              )
+            : null,
+        status: "failed",
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(documentProcessingRuns.id, run.id),
+          eq(documentProcessingRuns.status, "running"),
+          eq(documentProcessingRuns.claimedBy, claimToken),
+        ),
+      );
+  });
 };
 
 const returnInterruptedRunToQueue = async ({
