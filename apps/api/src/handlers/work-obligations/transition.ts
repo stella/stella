@@ -172,7 +172,7 @@ const transitionWorkObligation = createSafeHandler(
           changes: {
             status: { old: existing.status, new: nextStatus },
           },
-          metadata: body.reason ? { reason: body.reason } : undefined,
+          ...(body.reason ? { metadata: { reason: body.reason } } : {}),
         });
 
         return { status: "transitioned" as const };

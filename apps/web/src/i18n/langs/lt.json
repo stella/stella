@@ -2933,9 +2933,6 @@
     "sourceTypeValues": {
       "api": "API",
       "calendar": "Kalendorius",
-      "document": "Dokumentas",
-      "email": "El. paštas",
-      "import": "Importas",
       "manual": "Rankinis"
     },
     "status": "Būsena",

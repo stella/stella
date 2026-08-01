@@ -229,7 +229,7 @@ export const updateTaskHandler = async function* ({
 
         if (nextWorkflowStatus !== workflow.status && workflowEventType) {
           workflowSet.status = nextWorkflowStatus;
-          workflowChanges.status = {
+          workflowChanges["status"] = {
             old: workflow.status,
             new: nextWorkflowStatus,
           };
@@ -265,7 +265,7 @@ export const updateTaskHandler = async function* ({
             };
           }
           workflowSet.workingTargetDate = body.dueDate;
-          workflowChanges.workingTargetDate = {
+          workflowChanges["workingTargetDate"] = {
             old: workflow.workingTargetDate,
             new: body.dueDate,
           };
@@ -294,7 +294,7 @@ export const updateTaskHandler = async function* ({
               : undefined;
         if (nextType !== undefined && nextType !== workflow.type) {
           workflowSet.type = nextType;
-          workflowChanges.type = { old: workflow.type, new: nextType };
+          workflowChanges["type"] = { old: workflow.type, new: nextType };
           workflowEvents.push({
             id: createSafeId<"workObligationEvent">(),
             workspaceId,
@@ -404,9 +404,9 @@ export const updateTaskHandler = async function* ({
             resourceType: AUDIT_RESOURCE_TYPE.WORK_OBLIGATION,
             resourceId: body.taskId,
             changes: workflowChanges,
-            metadata: body.workflowReason
-              ? { reason: body.workflowReason }
-              : undefined,
+            ...(body.workflowReason
+              ? { metadata: { reason: body.workflowReason } }
+              : {}),
           });
         }
         await recordAuditEvent(tx, {

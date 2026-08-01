@@ -180,7 +180,7 @@ const updateWorkObligation = createSafeHandler(
               : isSelfAssigned
                 ? WORK_OBLIGATION_STATUS.ACTIVE
                 : WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT;
-          changes.ownerUserId = {
+          changes["ownerUserId"] = {
             old: existing.ownerUserId,
             new: nextOwnerUserId,
           };
@@ -216,7 +216,7 @@ const updateWorkObligation = createSafeHandler(
 
         if (body.type !== undefined && body.type !== existing.type) {
           obligationUpdate.type = body.type;
-          changes.type = { old: existing.type, new: body.type };
+          changes["type"] = { old: existing.type, new: body.type };
           events.push({
             id: createSafeId<"workObligationEvent">(),
             workspaceId,
@@ -238,7 +238,7 @@ const updateWorkObligation = createSafeHandler(
           body.workingTargetDate !== existing.workingTargetDate
         ) {
           obligationUpdate.workingTargetDate = body.workingTargetDate;
-          changes.workingTargetDate = {
+          changes["workingTargetDate"] = {
             old: existing.workingTargetDate,
             new: body.workingTargetDate,
           };
@@ -264,7 +264,7 @@ const updateWorkObligation = createSafeHandler(
           body.hardDeadlineDate !== existing.hardDeadlineDate
         ) {
           obligationUpdate.hardDeadlineDate = body.hardDeadlineDate;
-          changes.hardDeadlineDate = {
+          changes["hardDeadlineDate"] = {
             old: existing.hardDeadlineDate,
             new: body.hardDeadlineDate,
           };
@@ -302,7 +302,7 @@ const updateWorkObligation = createSafeHandler(
           if (body.sourceDescription !== undefined) {
             obligationUpdate.sourceDescription = body.sourceDescription;
           }
-          changes.provenance = {
+          changes["provenance"] = {
             old: {
               sourceType: existing.sourceType,
               sourceEntityId: existing.sourceEntityId,
@@ -382,7 +382,7 @@ const updateWorkObligation = createSafeHandler(
           resourceType: AUDIT_RESOURCE_TYPE.WORK_OBLIGATION,
           resourceId: params.entityId,
           changes,
-          metadata: body.reason ? { reason: body.reason } : undefined,
+          ...(body.reason ? { metadata: { reason: body.reason } } : {}),
         });
 
         return { status: "updated" as const };

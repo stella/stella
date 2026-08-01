@@ -2933,9 +2933,6 @@
     "sourceTypeValues": {
       "api": "واجهة برمجة التطبيقات",
       "calendar": "التقويم",
-      "document": "مستند",
-      "email": "البريد الإلكتروني",
-      "import": "استيراد",
       "manual": "يدوي"
     },
     "status": "الحالة",

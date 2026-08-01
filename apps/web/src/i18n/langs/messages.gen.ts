@@ -2936,9 +2936,6 @@ type Messages = {
     "sourceTypeValues": {
       "api": "API";
       "calendar": "Calendar";
-      "document": "Document";
-      "email": "Email";
-      "import": "Import";
       "manual": "Manual";
     };
     "status": "Status";

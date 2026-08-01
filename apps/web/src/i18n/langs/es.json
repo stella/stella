@@ -2933,10 +2933,7 @@
     "sourceTypeValues": {
       "api": "API",
       "calendar": "Calendario",
-      "document": "Documento",
-      "email": "Correo electrónico",
-      "import": "Importación",
-      "manual": "Manual"
+      "manual": "Entrada manual"
     },
     "status": "Estado",
     "statusValues": {

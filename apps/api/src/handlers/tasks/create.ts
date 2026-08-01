@@ -304,7 +304,9 @@ export const createTaskEntityHandler = async function* ({
         taskStatus,
         workingTargetDate,
         hardDeadlineDate,
-        sourceDescription: body.sourceDescription,
+        ...(body.sourceDescription === undefined
+          ? {}
+          : { sourceDescription: body.sourceDescription }),
       });
 
       await tx

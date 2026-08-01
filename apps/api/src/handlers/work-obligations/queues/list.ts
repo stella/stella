@@ -124,38 +124,50 @@ const myWork = createSafeRootHandler(
     }
 
     const rows = yield* Result.await(
-      scopedDb((tx) =>
-        tx
-          .select({
-            entityId: workObligations.entityId,
-            workspaceId: workObligations.workspaceId,
-            workspaceName: workspaces.name,
-            type: workObligations.type,
-            workflowStatus: workObligations.status,
-            acknowledgedAt: workObligations.acknowledgedAt,
-            workingTargetDate: workObligations.workingTargetDate,
-            hardDeadlineDate: workObligations.hardDeadlineDate,
-            sourceType: workObligations.sourceType,
-            sourceDescription: workObligations.sourceDescription,
-            name: entities.name,
-            taskStatus: entities.status,
-            priority: entities.priority,
-            sortDate,
-          })
-          .from(workObligations)
-          .innerJoin(
-            entities,
-            and(
-              eq(entities.id, workObligations.entityId),
-              eq(entities.workspaceId, workObligations.workspaceId),
-              eq(entities.kind, "task"),
-            ),
-          )
-          .innerJoin(workspaces, eq(workspaces.id, workObligations.workspaceId))
-          .where(and(...conditions))
-          .orderBy(asc(sortDate), asc(workObligations.entityId))
-          .limit(limit + 1),
-      ),
+      Result.tryPromise({
+        try: async () =>
+          await scopedDb((tx) =>
+            tx
+              .select({
+                entityId: workObligations.entityId,
+                workspaceId: workObligations.workspaceId,
+                workspaceName: workspaces.name,
+                type: workObligations.type,
+                workflowStatus: workObligations.status,
+                acknowledgedAt: workObligations.acknowledgedAt,
+                workingTargetDate: workObligations.workingTargetDate,
+                hardDeadlineDate: workObligations.hardDeadlineDate,
+                sourceType: workObligations.sourceType,
+                sourceDescription: workObligations.sourceDescription,
+                name: entities.name,
+                taskStatus: entities.status,
+                priority: entities.priority,
+                sortDate,
+              })
+              .from(workObligations)
+              .innerJoin(
+                entities,
+                and(
+                  eq(entities.id, workObligations.entityId),
+                  eq(entities.workspaceId, workObligations.workspaceId),
+                  eq(entities.kind, "task"),
+                ),
+              )
+              .innerJoin(
+                workspaces,
+                eq(workspaces.id, workObligations.workspaceId),
+              )
+              .where(and(...conditions))
+              .orderBy(asc(sortDate), asc(workObligations.entityId))
+              .limit(limit + 1),
+          ),
+        catch: (cause) =>
+          new HandlerError({
+            status: 500,
+            message: "Could not load work queue",
+            cause,
+          }),
+      }),
     );
 
     const page = createCursorPage({

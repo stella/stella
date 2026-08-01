@@ -479,11 +479,11 @@ export const TaskDetailPanel = ({
       case "calendar":
         return t("sourceTypeValues.calendar");
       case "email":
-        return t("sourceTypeValues.email");
+        return tCommon("email");
       case "document":
-        return t("sourceTypeValues.document");
+        return tCommon("document");
       case "import":
-        return t("sourceTypeValues.import");
+        return tCommon("import");
       case "api":
         return t("sourceTypeValues.api");
       default: {
