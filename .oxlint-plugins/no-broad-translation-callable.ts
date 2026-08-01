@@ -21,6 +21,7 @@ const isIdentifierNamed = (node, name: string): boolean =>
 
 const isBroadTranslatorName = (node): boolean =>
   isIdentifierNamed(node, "getTranslator") ||
+  isIdentifierNamed(node, "getTranslations") ||
   isIdentifierNamed(node, "useTranslations");
 
 const isTranslationTypeModule = (source: string): boolean =>
@@ -29,6 +30,7 @@ const isTranslationTypeModule = (source: string): boolean =>
 const translationKeyTypeNames = new Set(["TranslationKey"]);
 const broadTranslatorMemberNames = new Set([
   "getTranslator",
+  "getTranslations",
   "useTranslations",
 ]);
 
@@ -105,6 +107,7 @@ export default {
       create(context) {
         const broadTranslatorTypeNames = new Set([
           "getTranslator",
+          "getTranslations",
           "useTranslations",
         ]);
         const broadKeyVariables = new Set();
@@ -186,7 +189,11 @@ export default {
                       broadKeyNamespaceVariables.add(variable);
                     }
                   }
-                  if (source === "use-intl") {
+                  if (
+                    source === "use-intl" ||
+                    (typeof source === "string" &&
+                      isTranslationTypeModule(source))
+                  ) {
                     const variable = resolveVariable(specifier.local);
                     if (variable) {
                       broadTranslatorNamespaceVariables.add(variable);

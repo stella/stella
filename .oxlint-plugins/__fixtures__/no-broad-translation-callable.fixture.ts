@@ -8,6 +8,8 @@
 import type * as intl from "use-intl";
 import type { useTranslations as useAliasedTranslations } from "use-intl";
 
+import type * as landingI18n from "../../apps/landing/src/i18n/utils";
+import type { getTranslations as getAliasedTranslations } from "../../apps/landing/src/i18n/utils";
 import type * as i18n from "../../apps/web/src/i18n/types";
 import type { TranslationKey as ImportedTranslationKey } from "../../apps/web/src/i18n/types";
 
@@ -25,6 +27,7 @@ type AppKey = TranslationKey;
 export type ExportedAppKey = TranslationKey;
 
 declare const getTranslator: () => unknown;
+declare const getTranslations: () => unknown;
 // oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- The generic namespace syntax is the allowed use-intl shape under test.
 declare const useTranslations: <Namespace extends string>() => {
   namespace: Namespace;
@@ -68,6 +71,22 @@ export type AliasedHookTranslator = ReturnType<typeof useAliasedTranslations>;
 // MUST flag: a namespace import of use-intl retains the full hook translator.
 // oxlint-disable-next-line no-broad-translation-callable/no-broad-translation-callable
 export type NamespacedHookTranslator = ReturnType<typeof intl.useTranslations>;
+
+// MUST flag: landing's full-catalog factory has the same broad callable shape.
+// oxlint-disable-next-line no-broad-translation-callable/no-broad-translation-callable
+export type LandingTranslator = ReturnType<typeof getTranslations>;
+
+// MUST flag: a renamed import cannot hide landing's translator factory.
+// oxlint-disable-next-line no-broad-translation-callable/no-broad-translation-callable
+export type AliasedLandingTranslator = ReturnType<
+  typeof getAliasedTranslations
+>;
+
+// MUST flag: a namespace import cannot hide landing's translator factory.
+// oxlint-disable-next-line no-broad-translation-callable/no-broad-translation-callable
+export type NamespacedLandingTranslator = ReturnType<
+  typeof landingI18n.getTranslations
+>;
 
 // Allowed: a namespace argument bounds the translator to one feature subtree.
 export type NamespacedTranslator = ReturnType<
