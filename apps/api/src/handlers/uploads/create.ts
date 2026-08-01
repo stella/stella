@@ -171,7 +171,7 @@ const presignUpload = createSafeHandler(
         propertyId: purposeBody.propertyId,
         parentId: purposeBody.parentId ?? null,
       });
-      if (Result.isError(validation)) {
+      if (validation.status === "error") {
         return validation;
       }
     } else if (purposeBody.purpose === "entity_version") {

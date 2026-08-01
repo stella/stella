@@ -16,7 +16,7 @@ const showLeaf = (node: ResourceNode, name: string) => {
     return undefined;
   }
   const show = node.children["show"];
-  if (show === undefined || show.kind !== "route") {
+  if (show?.kind !== "route") {
     return undefined;
   }
   const leaf = show.children[name];
