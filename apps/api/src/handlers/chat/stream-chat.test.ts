@@ -1,10 +1,5 @@
 import { EventType, StreamProcessor } from "@tanstack/ai";
-import type {
-  ModelMessage,
-  StreamChunk,
-  ToolCallPart,
-  UIMessage,
-} from "@tanstack/ai";
+import type { ModelMessage, StreamChunk, ToolCallPart } from "@tanstack/ai";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
@@ -28,6 +23,7 @@ import { toUserFileUrl } from "@/api/lib/user-files/types";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
+import { nonPersistableChatParts } from "./__fixtures__/non-persistable-chat-parts";
 import {
   chatMessageUsageFromTokenUsage,
   collectInitialRestorationPlaceholders,
@@ -1013,26 +1009,9 @@ describe("chat message usage metadata", () => {
 });
 
 describe("streamed chat message conversion", () => {
-  // Every `MessagePart` variant `isChatPart` rejects. Each is a part the SDK
-  // may legally stream, so none may cost the message the model finished.
-  const unsupportedParts: UIMessage["parts"] = [
-    {
-      type: "audio",
-      source: { type: "url", value: "https://example.test/a.mp3" },
-    },
-    {
-      type: "video",
-      source: { type: "url", value: "https://example.test/v.mp4" },
-    },
-    {
-      type: "ui-resource",
-      resource: { uri: "ui://widget", mimeType: "text/html" },
-      toolCallId: "call-1",
-      toolName: "widget",
-    },
-  ];
-
-  for (const unsupported of unsupportedParts) {
+  // Each is a part the SDK may legally stream, so none may cost the message
+  // the model finished.
+  for (const unsupported of nonPersistableChatParts) {
     test(`keeps the surrounding parts when a ${unsupported.type} part arrives`, () => {
       const message = toChatMessage({
         id: "assistant-message",
@@ -1085,6 +1064,54 @@ describe("streamed chat message conversion", () => {
         ]),
       }),
     );
+
+    expect(finishCount).toBe(0);
+  });
+
+  // The teardown `finally` reaches the same guard by a different route, so a
+  // dropped connection must not persist the blank turn either.
+  test("does not finish a part-less turn when the client disconnects", async () => {
+    const messageId = toSafeId<"chatMessage">(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    let finishCount = 0;
+    const responseMessage: ChatMessage = {
+      id: messageId,
+      parts: [],
+      role: "assistant",
+    };
+    const processor = new StreamProcessor({ events: {} });
+
+    const stream = processServerChatStream({
+      abortSignal: new AbortController().signal,
+      getResponseMessage: () => responseMessage,
+      mapMessageId: createChatMessageIdMapper(() => messageId),
+      onFinish: () => {
+        finishCount += 1;
+      },
+      processor,
+      source: streamChunks([
+        { type: EventType.RUN_STARTED, runId: "run-1", threadId: "thread-1" },
+        {
+          type: EventType.TEXT_MESSAGE_START,
+          messageId: "provider-message",
+          role: "assistant",
+        },
+        {
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          delta: "Dobrý den",
+          messageId: "provider-message",
+        },
+      ]),
+    });
+
+    // Breaking the `for await` `.return()`s the generator, running the teardown
+    // `finally` that calls `finalizeInterruptedResponseMessage`.
+    for await (const chunk of stream) {
+      if (chunk.type === EventType.TEXT_MESSAGE_CONTENT) {
+        break;
+      }
+    }
 
     expect(finishCount).toBe(0);
   });
