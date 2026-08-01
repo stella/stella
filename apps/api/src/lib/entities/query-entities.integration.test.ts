@@ -138,7 +138,9 @@ describe("entity active edit indicators", () => {
       createdAt: new Date("2026-08-01T11:00:00.000Z"),
     });
 
-    await expect(readActiveEditor()).resolves.toEqual({
+    const activeEditor = await readActiveEditor();
+
+    expect(activeEditor).toEqual({
       name: "User A1",
       image: null,
       isMe: true,
@@ -164,7 +166,9 @@ describe("entity active edit indicators", () => {
       createdAt,
     });
 
-    await expect(readActiveEditor()).resolves.toMatchObject({
+    const activeEditor = await readActiveEditor();
+
+    expect(activeEditor).toMatchObject({
       name: expectedEditor === ids.userA1 ? "User A1" : "User A2",
       isMe: expectedEditor === ids.userA1,
     });
@@ -186,7 +190,9 @@ describe("entity active edit indicators", () => {
       status: "cancelled",
     });
 
-    await expect(readActiveEditor()).resolves.toBeNull();
+    const activeEditor = await readActiveEditor();
+
+    expect(activeEditor).toBeNull();
   });
 
   test("does not expose an editor outside the active organization", async () => {
@@ -197,6 +203,8 @@ describe("entity active edit indicators", () => {
       createdAt: new Date("2026-08-01T10:00:00.000Z"),
     });
 
-    await expect(readActiveEditor()).resolves.toBeNull();
+    const activeEditor = await readActiveEditor();
+
+    expect(activeEditor).toBeNull();
   });
 });
