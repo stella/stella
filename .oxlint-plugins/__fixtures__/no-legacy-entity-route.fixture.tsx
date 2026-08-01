@@ -44,7 +44,7 @@ export const oneDynamicWorkspace = `/workspaces/${workspaceId}/entities/entity_4
 export const oneDynamicEntity = `/workspaces/ws_123/entities/${entityId}`;
 
 export const concatenatedLegacyRoute =
-  // oxlint-disable-next-line no-legacy-entity-route/no-legacy-entity-route -- regression case
+  // oxlint-disable-next-line no-legacy-entity-route/no-legacy-entity-route, prefer-template -- regression case
   "/workspaces/" + workspaceId + "/entities/" + entityId;
 
 export const currentDocumentRoute = "/workspaces/$workspaceId/$viewId/document";
@@ -54,4 +54,5 @@ export const entityApiRoute = `/entities/${workspaceId}/entity/${entityId}`;
 export const similarlyNamedRoute = `/workspaces/${workspaceId}/entity-versions/${entityId}`;
 export const similarlySuffixedRoute = `/workspaces/${workspaceId}/entities/${entityId}-archive`;
 export const similarlySuffixedConcatenation =
+  // oxlint-disable-next-line prefer-template -- intentional near-match for the concatenation guard
   "/workspaces/" + workspaceId + "/entities/" + entityId + "-archive";
