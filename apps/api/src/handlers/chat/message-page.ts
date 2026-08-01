@@ -226,16 +226,14 @@ const loadPlaceholdersOnTx = async ({
     return placeholderById;
   }
 
-  const fileRows =
-    // SAFETY: bounded by the `id IN (...)` set of file ids referenced by this page's messages (userFiles.id is the PK).
-    // eslint-disable-next-line require-query-limit/require-query-limit
-    await tx.query.userFiles.findMany({
-      where: {
-        id: { in: [...referencedFileIds] },
-        userId: { eq: userId },
-      },
-      columns: { id: true, placeholder: true },
-    });
+  const fileRows = await tx.query.userFiles.findMany({
+    where: {
+      id: { in: [...referencedFileIds] },
+      userId: { eq: userId },
+    },
+    columns: { id: true, placeholder: true },
+    limit: referencedFileIds.size,
+  });
   for (const fileRow of fileRows) {
     if (fileRow.placeholder !== null) {
       placeholderById.set(fileRow.id, fileRow.placeholder);

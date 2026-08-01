@@ -172,11 +172,10 @@ const readVersionsHandler = async function* ({
       // Fetch all author user details in one query
       const authorUsers =
         authorUserIds.size > 0
-          ? // SAFETY: distinct version authors of one entity page, an IN-list of user IDs bounded by LIMITS.workspaceMembersCount
-            // eslint-disable-next-line require-query-limit/require-query-limit
-            await tx.query.user.findMany({
+          ? await tx.query.user.findMany({
               where: { id: { in: [...authorUserIds] } },
               columns: { id: true, name: true, image: true },
+              limit: authorUserIds.size,
             })
           : [];
 

@@ -454,6 +454,31 @@ const countLintSuppressions = (content: string): number => {
   return total;
 };
 
+const REQUIRE_QUERY_LIMIT_DISABLE =
+  /(?:\/\/|\/\*)\s*(?:eslint|oxlint)-disable(?:-next-line|-line)?\b[^\n]*\brequire-query-limit\/require-query-limit\b/u;
+const LINT_DISABLE_WITHOUT_RULES =
+  /(?:\/\/|\/\*)\s*(?:eslint|oxlint)-disable(?:-next-line|-line)?\s*(?:--|\*\/|$)/u;
+
+// A dedicated guard keeps one newly-added require-query-limit escape hatch
+// from being funded by removing an unrelated lint suppression elsewhere. A
+// bare disable applies to every rule, so it counts too.
+const countRequireQueryLimitSuppressions = (content: string): number => {
+  let total = 0;
+  let literalState = NO_OPEN_TEMPLATE;
+
+  for (const raw of content.split("\n")) {
+    const { code, state } = stripStringLiterals(raw, literalState);
+    literalState = state;
+    if (
+      REQUIRE_QUERY_LIMIT_DISABLE.test(code) ||
+      LINT_DISABLE_WITHOUT_RULES.test(code)
+    ) {
+      total += 1;
+    }
+  }
+  return total;
+};
+
 // A compiler-suppression directive. Fidelity limit: a prose comment that
 // STARTS with the directive token (`// @ts-expect-error is bad`) counts, one
 // that merely mentions it mid-sentence does not; directives and leading
@@ -901,6 +926,14 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     include: APP_SOURCE_GLOBS,
     exclude: isExcludedSource,
     count: countLintSuppressions,
+  },
+  {
+    id: "require-query-limit-suppressions",
+    description:
+      "require-query-limit disable directives in API production source and operational scripts (each is a reviewed exception; a generic lint-suppression decrease cannot fund a new unbounded-read escape hatch)",
+    include: ["apps/api/src/**/*.{ts,tsx}", "apps/api/scripts/**/*.{ts,tsx}"],
+    exclude: isExcludedSource,
+    count: countRequireQueryLimitSuppressions,
   },
   {
     id: "ts-suppression-directives",
@@ -1364,11 +1397,24 @@ const LINT_SUPPRESSION_FIXTURE_LINES = [
 const SELF_TEST_LINT_SUPPRESSIONS = `${LINT_SUPPRESSION_FIXTURE_LINES.join("\n")}\n`;
 // Expected from THIS fixture: both linters' -next-line forms, the block-
 // comment form, and the bare `oxlint-disable` = 4. The string copy and the
-// prose comment are excluded. NOTE: the raw-use-effect fixture below also
-// contains 3 directives (its two rule-specific ones plus the other-rule one),
-// and this metric scans both apps, so the whole-repo expectation is 4 + 3.
+// prose comment are excluded. The raw-use-effect fixture contributes 3 more
+// directives, while the query-limit fixtures below contribute 4, so the
+// whole-repo expectation is 4 + 3 + 4.
 const EXPECTED_LINT_SUPPRESSIONS_OWN_FILE = 4;
-const EXPECTED_LINT_SUPPRESSIONS_TOTAL = 7;
+const EXPECTED_LINT_SUPPRESSIONS_TOTAL = 11;
+
+const REQUIRE_QUERY_LIMIT_SUPPRESSION_FIXTURE_LINES = [
+  "// eslint-disable-next-line require-query-limit/require-query-limit -- fixed parent cardinality",
+  "// oxlint-disable-next-line no-console, require-query-limit/require-query-limit -- reviewed",
+  "// eslint-disable -- a bare disable applies to every rule",
+  "// eslint-disable-next-line no-console -- another rule only",
+  "// require-query-limit/require-query-limit in prose is not a directive",
+  'const doc = "// eslint-disable-next-line require-query-limit/require-query-limit";',
+];
+const SELF_TEST_REQUIRE_QUERY_LIMIT_SUPPRESSIONS = `${REQUIRE_QUERY_LIMIT_SUPPRESSION_FIXTURE_LINES.join("\n")}\n`;
+// Three targeted/bare directives above, one bare disable in the general lint
+// fixture, and one operational-script directive.
+const EXPECTED_REQUIRE_QUERY_LIMIT_SUPPRESSIONS = 5;
 
 const TS_SUPPRESSION_FIXTURE_LINES = [
   "// @ts-expect-error legacy upstream shape",
@@ -1600,6 +1646,16 @@ const runSelfTest = (): number => {
     );
     writeFixture(
       root,
+      "apps/api/src/query-limit-suppressions.ts",
+      SELF_TEST_REQUIRE_QUERY_LIMIT_SUPPRESSIONS,
+    );
+    writeFixture(
+      root,
+      "apps/api/scripts/query-limit-suppressions.ts",
+      "// eslint-disable-next-line require-query-limit/require-query-limit -- operational job has a fixed input cap\n",
+    );
+    writeFixture(
+      root,
       "apps/api/src/ts-suppressions.ts",
       SELF_TEST_TS_SUPPRESSIONS,
     );
@@ -1746,6 +1802,19 @@ const runSelfTest = (): number => {
     ) {
       failures.push(
         `lint-suppression-directives per-file count for the dedicated fixture was ${lintSuppressionMetric.files["apps/api/src/lint-suppressions.ts"]}, expected ${EXPECTED_LINT_SUPPRESSIONS_OWN_FILE}`,
+      );
+    }
+
+    const queryLimitSuppressionMetric = requireSnapshot(
+      snapshot,
+      "require-query-limit-suppressions",
+    );
+    if (
+      queryLimitSuppressionMetric.count !==
+      EXPECTED_REQUIRE_QUERY_LIMIT_SUPPRESSIONS
+    ) {
+      failures.push(
+        `require-query-limit-suppressions counted ${queryLimitSuppressionMetric.count}, expected ${EXPECTED_REQUIRE_QUERY_LIMIT_SUPPRESSIONS}`,
       );
     }
 

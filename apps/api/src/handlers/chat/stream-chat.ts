@@ -2107,8 +2107,6 @@ const readUserFilesByIds = async ({
   }
 
   const rowsResult = await safeDb((tx) =>
-    // SAFETY: bounded by the `id IN (ids)` set; ids are the distinct user-file ids collected from the message parts (userFiles.id is the PK).
-    // eslint-disable-next-line require-query-limit/require-query-limit
     tx.query.userFiles.findMany({
       where: {
         id: { in: ids },
@@ -2122,6 +2120,7 @@ const readUserFilesByIds = async ({
         mimeType: true,
         s3Key: true,
       },
+      limit: ids.length,
     }),
   );
 

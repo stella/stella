@@ -876,7 +876,7 @@ const queryEntitiesGenerator = async function* ({
 
       return (
         tx
-          .select({
+          .selectDistinctOn([desktopEditSessions.entityId], {
             entityId: desktopEditSessions.entityId,
             createdBy: desktopEditSessions.createdBy,
             editorName: sessionEditor.name,
@@ -893,13 +893,23 @@ const queryEntitiesGenerator = async function* ({
           )
           .where(
             and(
+              // Keep the tenant boundary in this read even though pageIds
+              // originate from a workspace-scoped entity query and SafeDb
+              // enforces RLS. It also makes the matching index usable.
+              eq(desktopEditSessions.workspaceId, workspaceId),
               inArray(desktopEditSessions.entityId, pageIds),
               ...liveDesktopEditSessionPredicates(new Date()),
             ),
           )
-          // SAFETY: live (open, unexpired) edit sessions for the current page of entities (pageIds); per entity the open-session count is bounded by the desktop_edit_sessions_open_uidx unique index on (createdBy, entityId, propertyId), i.e. members (LIMITS.workspaceMembersCount) x properties (LIMITS.propertiesCount)
-          // eslint-disable-next-line require-query-limit/require-query-limit
-          .orderBy(desktopEditSessions.createdAt)
+          // DISTINCT ON selects the oldest live session per entity, matching
+          // the prior globally-createdAt-ordered Map behavior. `id` settles
+          // equal timestamps deterministically.
+          .orderBy(
+            desktopEditSessions.entityId,
+            desktopEditSessions.createdAt,
+            desktopEditSessions.id,
+          )
+          .limit(pageIds.length)
       );
     }),
   ]);
@@ -947,19 +957,16 @@ const queryEntitiesGenerator = async function* ({
     versionCounts.map((v) => [v.entityId, v.versionCount]),
   );
 
-  const activeEditMap = new Map<
-    string,
-    { name: string; image: string | null; isMe: boolean }
-  >();
-  for (const s of activeSessions) {
-    if (!activeEditMap.has(s.entityId)) {
-      activeEditMap.set(s.entityId, {
-        name: s.editorName,
-        image: s.editorImage,
-        isMe: s.createdBy === currentUserId,
-      });
-    }
-  }
+  const activeEditMap = new Map(
+    activeSessions.map((session) => [
+      session.entityId,
+      {
+        name: session.editorName,
+        image: session.editorImage,
+        isMe: session.createdBy === currentUserId,
+      },
+    ]),
+  );
 
   const fieldsByVersionId = groupByEntityVersionId(fieldRows);
   const cellMetadataByVersionId = groupByEntityVersionId(cellMetadataRows);
