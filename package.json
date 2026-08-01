@@ -35,6 +35,7 @@
     "format:check": "turbo run format -- --check",
     "lint": "bash scripts/lint-oxlint-fixtures.sh && turbo run lint",
     "lint:fix": "turbo run lint:fix",
+    "lint:profile:web": "bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware --debug timings --format=default apps/web",
     "lint:ws": "sherif -r unsync-similar-dependencies -i '@babel/core@^7.29.0' && bun packages/scripts/src/workspace-hygiene.ts",
     "i18n:check": "turbo run i18n:check --",
     "i18n:sync": "turbo run i18n:sync --",

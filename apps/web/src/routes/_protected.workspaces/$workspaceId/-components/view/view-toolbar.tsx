@@ -1079,26 +1079,35 @@ const TASK_DATE_OPTIONS = [
 type ResolveDatePropertyLabelArgs = {
   dateProperties: WorkspaceProperty[];
   id: string;
-  t: (key: TranslationKey) => string;
 };
+
+type DatePropertyLabel =
+  | { type: "custom"; value: string }
+  | {
+      key:
+        | (typeof INTERNAL_DATE_OPTIONS)[number]["labelKey"]
+        | (typeof TASK_DATE_OPTIONS)[number]["labelKey"]
+        | "workspaces.views.selectProperty";
+      type: "translated";
+    };
 
 const resolveDatePropertyLabel = ({
   dateProperties,
   id,
-  t,
-}: ResolveDatePropertyLabelArgs) => {
+}: ResolveDatePropertyLabelArgs): DatePropertyLabel => {
   const internal = INTERNAL_DATE_OPTIONS.find((o) => o.id === id);
   if (internal) {
-    return t(internal.labelKey);
+    return { key: internal.labelKey, type: "translated" };
   }
   const taskDate = TASK_DATE_OPTIONS.find((o) => o.id === id);
   if (taskDate) {
-    return t(taskDate.labelKey);
+    return { key: taskDate.labelKey, type: "translated" };
   }
-  return (
-    dateProperties.find((p) => p.id === id)?.name ??
-    t("workspaces.views.selectProperty")
-  );
+  const propertyName = dateProperties.find((p) => p.id === id)?.name;
+  if (propertyName) {
+    return { type: "custom", value: propertyName };
+  }
+  return { key: "workspaces.views.selectProperty", type: "translated" };
 };
 
 type CalendarDatePropertyControlProps = {
@@ -1116,11 +1125,14 @@ const CalendarDatePropertyControl = ({
 }: CalendarDatePropertyControlProps) => {
   const t = useTranslations();
   const dateProperties = properties.filter((p) => p.content.type === "date");
-  const datePropertyLabel = resolveDatePropertyLabel({
+  const resolvedDatePropertyLabel = resolveDatePropertyLabel({
     dateProperties,
     id: datePropertyId,
-    t,
   });
+  const datePropertyLabel =
+    resolvedDatePropertyLabel.type === "translated"
+      ? t(resolvedDatePropertyLabel.key)
+      : resolvedDatePropertyLabel.value;
 
   return (
     <span className="flex items-center gap-1 text-xs">
@@ -1296,16 +1308,22 @@ const TimelineDatePropertyControl = ({
 }: TimelineDatePropertyControlProps) => {
   const t = useTranslations();
   const dateProperties = properties.filter((p) => p.content.type === "date");
-  const startDatePropertyLabel = resolveDatePropertyLabel({
+  const resolvedStartDatePropertyLabel = resolveDatePropertyLabel({
     dateProperties,
     id: startDatePropertyId,
-    t,
   });
-  const endDatePropertyLabel = resolveDatePropertyLabel({
+  const startDatePropertyLabel =
+    resolvedStartDatePropertyLabel.type === "translated"
+      ? t(resolvedStartDatePropertyLabel.key)
+      : resolvedStartDatePropertyLabel.value;
+  const resolvedEndDatePropertyLabel = resolveDatePropertyLabel({
     dateProperties,
     id: endDatePropertyId,
-    t,
   });
+  const endDatePropertyLabel =
+    resolvedEndDatePropertyLabel.type === "translated"
+      ? t(resolvedEndDatePropertyLabel.key)
+      : resolvedEndDatePropertyLabel.value;
 
   const dateOptions = (
     <>

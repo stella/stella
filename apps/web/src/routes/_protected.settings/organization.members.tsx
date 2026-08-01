@@ -58,7 +58,7 @@ import { roleOptions } from "@/lib/auth-queries";
 import { compareByLocale } from "@/lib/collation";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { getRoles, rolePriority } from "@/lib/organization/consts";
+import { rolePriority, roleTranslationKeys } from "@/lib/organization/consts";
 import {
   useCancelInvitation,
   useInviteMember,
@@ -483,7 +483,13 @@ const RoleCell = ({
     );
   }
 
-  const roleData = getRoles(t);
+  const roleData = roleTranslationKeys.map(
+    ({ descriptionKey, labelKey, value }) => ({
+      description: t(descriptionKey),
+      label: t(labelKey),
+      value,
+    }),
+  );
 
   const handleConfirm = async () => {
     if (pendingRole) {
