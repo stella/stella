@@ -1,6 +1,15 @@
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 
+-- stella-migration-safety: reviewed destructive-change - widening varchar(32) -> varchar(64) is a metadata-only catalog change with no table rewrite or data loss; it aligns every physical corpus-index identifier column with the maximum constructed identifier length.
+ALTER TABLE "case_law_decisions" ALTER COLUMN "indexed_generation" SET DATA TYPE varchar(64);--> statement-breakpoint
+-- stella-migration-safety: reviewed destructive-change - widening varchar(32) -> varchar(64) is a metadata-only catalog change with no table rewrite or data loss; it aligns every physical corpus-index identifier column with the maximum constructed identifier length.
+ALTER TABLE "case_law_index_jobs" ALTER COLUMN "generation" SET DATA TYPE varchar(64);--> statement-breakpoint
+-- stella-migration-safety: reviewed destructive-change - widening varchar(32) -> varchar(64) is a metadata-only catalog change with no table rewrite or data loss; it aligns every physical corpus-index identifier column with the maximum constructed identifier length.
+ALTER TABLE "legislation_documents" ALTER COLUMN "indexed_generation" SET DATA TYPE varchar(64);--> statement-breakpoint
+-- stella-migration-safety: reviewed destructive-change - widening varchar(32) -> varchar(64) is a metadata-only catalog change with no table rewrite or data loss; it aligns every physical corpus-index identifier column with the maximum constructed identifier length.
+ALTER TABLE "legislation_index_jobs" ALTER COLUMN "generation" SET DATA TYPE varchar(64);--> statement-breakpoint
+
 CREATE TABLE IF NOT EXISTS "case_law_corpus_index_backfills" (
   "generation" varchar(32) PRIMARY KEY NOT NULL,
   "snapshot_at" timestamptz NOT NULL DEFAULT now(),
@@ -224,12 +233,17 @@ BEGIN
     )
     SELECT checkpoint.generation, NEW.id, 'delete', null, '{}', clock_timestamp()
     FROM case_law_corpus_index_backfills AS checkpoint
-    WHERE NOT EXISTS (
+    WHERE EXISTS (
       SELECT 1
-      FROM case_law_corpus_index_backfills AS newer
-      WHERE (newer.snapshot_at, newer.generation) >
-        (checkpoint.snapshot_at, checkpoint.generation)
-    )
+      FROM case_law_corpus_index_projections AS existing
+      WHERE existing.generation = checkpoint.generation
+        AND existing.decision_id = NEW.id
+    ) OR NOT EXISTS (
+        SELECT 1
+        FROM case_law_corpus_index_backfills AS newer
+        WHERE (newer.snapshot_at, newer.generation) >
+          (checkpoint.snapshot_at, checkpoint.generation)
+      )
     ON CONFLICT ON CONSTRAINT case_law_corpus_index_projections_pk DO UPDATE
     SET pending_action = EXCLUDED.pending_action,
         pending_hash = EXCLUDED.pending_hash,
@@ -283,12 +297,17 @@ BEGIN
          ARRAY[checkpoint.generation || '_' || lower(NEW.country)],
          clock_timestamp()
   FROM case_law_corpus_index_backfills AS checkpoint
-  WHERE NOT EXISTS (
+  WHERE EXISTS (
     SELECT 1
-    FROM case_law_corpus_index_backfills AS newer
-    WHERE (newer.snapshot_at, newer.generation) >
-      (checkpoint.snapshot_at, checkpoint.generation)
-  )
+    FROM case_law_corpus_index_projections AS existing
+    WHERE existing.generation = checkpoint.generation
+      AND existing.decision_id = NEW.id
+  ) OR NOT EXISTS (
+      SELECT 1
+      FROM case_law_corpus_index_backfills AS newer
+      WHERE (newer.snapshot_at, newer.generation) >
+        (checkpoint.snapshot_at, checkpoint.generation)
+    )
   ON CONFLICT ON CONSTRAINT case_law_corpus_index_projections_pk DO UPDATE
   SET pending_action = EXCLUDED.pending_action,
       pending_hash = EXCLUDED.pending_hash,
@@ -335,12 +354,19 @@ BEGIN
   )
   SELECT checkpoint.generation, NEW.id, 1, null, null, clock_timestamp()
   FROM case_law_corpus_index_backfills AS checkpoint
-  WHERE NOT EXISTS (
+  WHERE EXISTS (
     SELECT 1
-    FROM case_law_corpus_index_backfills AS newer
-    WHERE (newer.snapshot_at, newer.generation) >
-      (checkpoint.snapshot_at, checkpoint.generation)
-  )
+    FROM case_law_corpus_index_projections AS existing
+    INNER JOIN case_law_decisions AS existing_decision
+      ON existing_decision.id = existing.decision_id
+    WHERE existing.generation = checkpoint.generation
+      AND existing_decision.source_id = NEW.id
+  ) OR NOT EXISTS (
+      SELECT 1
+      FROM case_law_corpus_index_backfills AS newer
+      WHERE (newer.snapshot_at, newer.generation) >
+        (checkpoint.snapshot_at, checkpoint.generation)
+    )
   ON CONFLICT ON CONSTRAINT case_law_corpus_index_source_reconciliations_pk DO UPDATE
   SET revision = case_law_corpus_index_source_reconciliations.revision + 1,
       cursor_created_at = null,

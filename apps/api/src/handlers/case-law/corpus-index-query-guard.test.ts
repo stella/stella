@@ -75,6 +75,8 @@ test("generation checkpoint migration preserves replay and role invariants", asy
   );
   expect(source).toContain("pending_action = EXCLUDED.pending_action");
   expect(source).toContain("'delete', null, '{}', clock_timestamp()");
+  expect(source.match(/existing\.decision_id = NEW\.id/gu)).toHaveLength(2);
+  expect(source).toContain("existing_decision.source_id = NEW.id");
   expect(source).toContain(
     "NEW.indexed_generation =\n        (projection.generation || '_' || lower(NEW.country))",
   );
@@ -90,6 +92,14 @@ test("generation checkpoint migration preserves replay and role invariants", asy
   expect(source).toContain(
     'CREATE INDEX IF NOT EXISTS "case_law_corpus_index_projections_decision_idx"\n  ON "case_law_corpus_index_projections" ("decision_id")',
   );
+  for (const alteration of [
+    'ALTER TABLE "case_law_decisions" ALTER COLUMN "indexed_generation" SET DATA TYPE varchar(64)',
+    'ALTER TABLE "case_law_index_jobs" ALTER COLUMN "generation" SET DATA TYPE varchar(64)',
+    'ALTER TABLE "legislation_documents" ALTER COLUMN "indexed_generation" SET DATA TYPE varchar(64)',
+    'ALTER TABLE "legislation_index_jobs" ALTER COLUMN "generation" SET DATA TYPE varchar(64)',
+  ]) {
+    expect(source).toContain(alteration);
+  }
   expect(source).toContain(
     'CREATE INDEX CONCURRENTLY "case_law_decisions_source_generation_cursor_idx"\n  ON "case_law_decisions" ("source_id", "created_at", "id")',
   );

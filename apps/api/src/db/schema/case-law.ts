@@ -181,7 +181,7 @@ export const caseLawDecisions = p.pgTable(
      */
     contentHash: p.varchar("content_hash", { length: 64 }),
     indexedHash: p.varchar("indexed_hash", { length: 64 }),
-    indexedGeneration: p.varchar("indexed_generation", { length: 32 }),
+    indexedGeneration: p.varchar("indexed_generation", { length: 64 }),
     indexedAt: timestamptz("indexed_at"),
     createdAt: timestamptz("created_at")
       .default(sql`clock_timestamp()`)
@@ -601,7 +601,7 @@ export const caseLawIndexJobs = p.pgTable(
       () => caseLawDecisions.id,
       { onDelete: "cascade" },
     ),
-    generation: p.varchar({ length: 32 }).notNull(),
+    generation: p.varchar({ length: 64 }).notNull(),
     operation: p
       .varchar({ length: 16 })
       .notNull()

@@ -78,7 +78,7 @@ export const legislationDocuments = p.pgTable(
     astS3Key: p.varchar("ast_s3_key", { length: 512 }),
     contentHash: p.varchar("content_hash", { length: 64 }),
     indexedHash: p.varchar("indexed_hash", { length: 64 }),
-    indexedGeneration: p.varchar("indexed_generation", { length: 32 }),
+    indexedGeneration: p.varchar("indexed_generation", { length: 64 }),
     indexedAt: timestamptz("indexed_at"),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
     updatedAt: timestamptz("updated_at")
@@ -153,7 +153,7 @@ export const legislationIndexJobs = p.pgTable(
       () => legislationDocuments.id,
       { onDelete: "cascade" },
     ),
-    generation: p.varchar({ length: 32 }).notNull(),
+    generation: p.varchar({ length: 64 }).notNull(),
     operation: p
       .varchar({ length: 16 })
       .notNull()

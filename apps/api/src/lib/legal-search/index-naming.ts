@@ -11,9 +11,22 @@ import { panic } from "better-result";
  * consistent hashing) — index-level isolation, not per-family compute.
  */
 
-// corpus index index ids must match ^[a-zA-Z][a-zA-Z0-9._-]{2,254}$. The
-// jurisdiction segment comes from the trusted `country` column (always
-// alpha), but we guard so a malformed value can't craft an odd id.
+// Corpus index ids must match ^[a-zA-Z][a-zA-Z0-9._-]{2,254}$. Database
+// columns use the tighter bound below so every constructed physical id has
+// one storage contract across decisions, audit rows, and projection state.
+export const CORPUS_INDEX_GENERATION_MAX_LENGTH = 32;
+export const CORPUS_INDEX_ID_MAX_LENGTH = 64;
+
+const GENERATION_PATTERN = new RegExp(
+  `^[a-zA-Z][a-zA-Z0-9._-]{0,${CORPUS_INDEX_GENERATION_MAX_LENGTH - 1}}$`,
+  "u",
+);
+
+export const isCorpusIndexGeneration = (value: string): boolean =>
+  GENERATION_PATTERN.test(value);
+
+// The jurisdiction segment comes from the trusted `country` column (always
+// alpha), but we guard so a malformed value cannot craft an odd id.
 const JURISDICTION_PATTERN = /^[a-z]{2,8}$/u;
 
 export const isCorpusIndexJurisdiction = (value: string): boolean =>
@@ -23,11 +36,18 @@ export const corpusIndexId = (
   generation: string,
   jurisdiction: string,
 ): string => {
+  if (!isCorpusIndexGeneration(generation)) {
+    panic(`Invalid corpus index generation: ${generation}`);
+  }
   const jur = jurisdiction.toLowerCase();
   if (!isCorpusIndexJurisdiction(jur)) {
     panic(`Invalid jurisdiction for corpus index index id: ${jurisdiction}`);
   }
-  return `${generation}_${jur}`;
+  const indexId = `${generation}_${jur}`;
+  if (indexId.length > CORPUS_INDEX_ID_MAX_LENGTH) {
+    panic(`Corpus index id exceeds storage limit: ${indexId}`);
+  }
+  return indexId;
 };
 
 /** Recovers the generation prefix from a validated physical index id. */
@@ -37,7 +57,7 @@ export const tryCorpusIndexGeneration = (indexId: string): string | null => {
   const jurisdiction = indexId.slice(separator + 1);
   if (
     separator <= 0 ||
-    generation.length === 0 ||
+    !isCorpusIndexGeneration(generation) ||
     !isCorpusIndexJurisdiction(jurisdiction)
   ) {
     return null;
@@ -55,5 +75,9 @@ export const corpusIndexGeneration = (indexId: string): string => {
 };
 
 /** Glob matching every jurisdiction index for a generation (multi-index search). */
-export const corpusIndexPattern = (generation: string): string =>
-  `${generation}_*`;
+export const corpusIndexPattern = (generation: string): string => {
+  if (!isCorpusIndexGeneration(generation)) {
+    panic(`Invalid corpus index generation: ${generation}`);
+  }
+  return `${generation}_*`;
+};
