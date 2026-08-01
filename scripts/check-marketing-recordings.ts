@@ -36,7 +36,7 @@ export type RecordingManifestEntryWithVerification = RecordingManifestEntry & {
 };
 
 export type Verdict = {
-  basis: "manual-verification" | "recording" | "visual-reference" | null;
+  basis: "manual-verification" | "recording" | null;
   captureId: string;
   theme: CaptureTheme;
   status: "FRESH" | "STALE";
@@ -160,44 +160,6 @@ const changedWatchedPaths = (
   return output === "" ? [] : output.split("\n");
 };
 
-const DIRECT_INVALIDATION_PATHS = new Set([
-  "apps/web/e2e/marketing/record-product-story.ts",
-]);
-
-export const uncoveredChangedPaths = (
-  changedPaths: readonly string[],
-  visualReferenceIsCurrent: boolean,
-): string[] =>
-  changedPaths.filter(
-    (path) => DIRECT_INVALIDATION_PATHS.has(path) || !visualReferenceIsCurrent,
-  );
-
-const visualReferencePath = (visualReference: string, theme: CaptureTheme) =>
-  `apps/landing/public/media/products/${visualReference}${
-    theme === "dark" ? "-dark" : ""
-  }.png`;
-
-const gitBlob = (commit: string, path: string): string | null => {
-  try {
-    return git(["rev-parse", `${commit}:${path}`]);
-  } catch {
-    return null;
-  }
-};
-
-const visualReferenceUnchanged = (
-  recordedAtCommit: string,
-  visualReference: string | undefined,
-  theme: CaptureTheme,
-): boolean => {
-  if (!visualReference) {
-    return false;
-  }
-  const path = visualReferencePath(visualReference, theme);
-  const recordedBlob = gitBlob(recordedAtCommit, path);
-  return recordedBlob !== null && recordedBlob === gitBlob("HEAD", path);
-};
-
 export const rerecordCommand = (
   captureIds: readonly string[],
   theme?: CaptureTheme,
@@ -254,21 +216,7 @@ export const judgeEntry = (
     } else if (changedPaths.length === 0) {
       basis = "recording";
     } else {
-      const visualReferenceIsCurrent =
-        definition !== undefined &&
-        visualReferenceUnchanged(
-          entry.recordedAtCommit,
-          definition.visualReference,
-          entry.theme,
-        );
-      const uncoveredChanges = uncoveredChangedPaths(
-        changedPaths,
-        visualReferenceIsCurrent,
-      );
-      reasons.push(...uncoveredChanges.map((path) => `changed: ${path}`));
-      if (uncoveredChanges.length === 0) {
-        basis = "visual-reference";
-      }
+      reasons.push(...changedPaths.map((path) => `changed: ${path}`));
       if (entry.manualVerification && reasons.length > 0) {
         reasons.unshift(
           "manual verification does not match the watched source tree",
@@ -327,11 +275,7 @@ const main = () => {
     const label = `${verdict.captureId} (${verdict.theme})`;
     if (verdict.status === "FRESH") {
       const suffix =
-        verdict.basis === "manual-verification"
-          ? " (manual verification)"
-          : verdict.basis === "visual-reference"
-            ? " (visual reference unchanged)"
-            : "";
+        verdict.basis === "manual-verification" ? " (manual verification)" : "";
       process.stdout.write(`FRESH ${label}${suffix}\n`);
       continue;
     }

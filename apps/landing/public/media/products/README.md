@@ -136,13 +136,6 @@ rendering changes that arrive through dependency upgrades (notably
 `@stll/folio-react` for the editor scene) are not tracked, so judge those
 manually when bumping.
 
-For scenes with a deterministic ready-state screenshot, source changes alone
-do not make the recording stale when that committed screenshot is unchanged.
-The marketing screenshot suite renders the current app in CI and compares it
-with that reference, so this covers broad refactors without weakening the
-visual check. Recorder choreography changes always invalidate the recording;
-multi-step scenes without a representative screenshot remain source-triggered.
-
 ## Reshooting on release
 
 `bun run marketing:reshoot` re-records only the captures `marketing:stale`

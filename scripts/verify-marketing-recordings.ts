@@ -29,6 +29,11 @@ type VerificationOptions = {
   reason: string;
 };
 
+type AttestableKeyPartition = {
+  attestableKeys: ReadonlySet<string>;
+  neverRecorded: readonly string[];
+};
+
 class MarketingVerificationError extends Error {
   constructor(message: string) {
     super(message);
@@ -83,19 +88,41 @@ export const parseVerificationOptions = (
   return { captureIds, reason };
 };
 
+export const partitionAttestableKeys = (
+  selectedKeys: ReadonlySet<string>,
+  manifestKeys: ReadonlySet<string>,
+): AttestableKeyPartition => ({
+  attestableKeys: new Set(
+    [...selectedKeys].filter((key) => manifestKeys.has(key)),
+  ),
+  neverRecorded: [...selectedKeys].filter((key) => !manifestKeys.has(key)),
+});
+
 const assertWatchedPathsClean = (watchedPaths: readonly string[]) => {
-  const result = Bun.spawnSync([
-    "git",
-    "status",
-    "--porcelain=v1",
-    "--untracked-files=all",
-    "--",
-    ...watchedPaths,
-  ], {
-    cwd: ROOT_DIR,
-    stdout: "pipe",
-  });
-  if (!result.success || result.stdout.length > 0) {
+  const result = Bun.spawnSync(
+    [
+      "git",
+      "status",
+      "--porcelain=v1",
+      "--untracked-files=all",
+      "--",
+      ...watchedPaths,
+    ],
+    {
+      cwd: ROOT_DIR,
+      stderr: "pipe",
+      stdout: "pipe",
+    },
+  );
+  if (!result.success) {
+    const detail = new TextDecoder().decode(result.stderr).trim();
+    throw new MarketingVerificationError(
+      detail === ""
+        ? `git status failed with exit code ${String(result.exitCode)}`
+        : `git status failed: ${detail}`,
+    );
+  }
+  if (result.stdout.length > 0) {
     throw new MarketingVerificationError(
       "Commit watched-path changes before creating a manual verification",
     );
@@ -104,7 +131,11 @@ const assertWatchedPathsClean = (watchedPaths: readonly string[]) => {
 
 const main = () => {
   const options = parseVerificationOptions(process.argv.slice(2));
-  const staleKeys = new Set(
+  const manifestEntries = readManifestEntries();
+  const manifestKeys = new Set(
+    manifestEntries.map((entry) => `${entry.captureId}:${entry.theme}`),
+  );
+  const selectedStaleKeys = new Set(
     computeVerdicts()
       .filter(
         ({ captureId, status }) =>
@@ -112,6 +143,15 @@ const main = () => {
       )
       .map(({ captureId, theme }) => `${captureId}:${theme}`),
   );
+  const { attestableKeys: staleKeys, neverRecorded } = partitionAttestableKeys(
+    selectedStaleKeys,
+    manifestKeys,
+  );
+  if (neverRecorded.length > 0) {
+    process.stdout.write(
+      `marketing-verification: skipped never-recorded ${neverRecorded.join(", ")}\n`,
+    );
+  }
   if (staleKeys.size === 0) {
     process.stdout.write(
       "marketing-verification: no selected stale recordings\n",
@@ -132,7 +172,7 @@ const main = () => {
   ];
   assertWatchedPathsClean(watchedPaths);
 
-  const entries = readManifestEntries().map((entry) => {
+  const entries = manifestEntries.map((entry) => {
     if (!staleKeys.has(`${entry.captureId}:${entry.theme}`)) {
       return entry;
     }

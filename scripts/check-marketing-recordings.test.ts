@@ -6,10 +6,12 @@ import { captureDefinitions } from "../apps/web/e2e/marketing/captures";
 import {
   judgeEntry,
   manualVerificationMatches,
-  uncoveredChangedPaths,
   watchedPathsHashAtHead,
 } from "./check-marketing-recordings";
-import { parseVerificationOptions } from "./verify-marketing-recordings";
+import {
+  parseVerificationOptions,
+  partitionAttestableKeys,
+} from "./verify-marketing-recordings";
 
 const definition =
   captureDefinitions.at(0) ?? panic("expected a marketing capture definition");
@@ -59,17 +61,6 @@ describe("marketing recording freshness", () => {
     });
   });
 
-  test("uses a current visual reference only for source changes it covers", () => {
-    const recorderPath = "apps/web/e2e/marketing/record-product-story.ts";
-    const sourcePath = "apps/web/src/components/breadcrumbs/index.tsx";
-
-    expect(uncoveredChangedPaths([sourcePath], true)).toEqual([]);
-    expect(uncoveredChangedPaths([sourcePath], false)).toEqual([sourcePath]);
-    expect(uncoveredChangedPaths([sourcePath, recorderPath], true)).toEqual([
-      recorderPath,
-    ]);
-  });
-
   test("requires deliberate confirmation and a review reason", () => {
     expect(() => parseVerificationOptions([])).toThrow(
       "--confirm-current-recordings-reviewed",
@@ -81,5 +72,15 @@ describe("marketing recording freshness", () => {
         "Reviewed for a maintenance release",
       ]),
     ).not.toThrow();
+  });
+
+  test("never claims to attest a recording missing from the manifest", () => {
+    const partition = partitionAttestableKeys(
+      new Set(["workspace:light", "missing:dark"]),
+      new Set(["workspace:light"]),
+    );
+
+    expect([...partition.attestableKeys]).toEqual(["workspace:light"]);
+    expect(partition.neverRecorded).toEqual(["missing:dark"]);
   });
 });
