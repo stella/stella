@@ -8,12 +8,12 @@ import {
 } from "bun:test";
 import { inArray } from "drizzle-orm";
 
-import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import {
   entities,
   WORK_OBLIGATION_STATUS,
   workObligations,
 } from "@/api/db/schema";
+import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import acknowledgeWorkObligation from "@/api/handlers/work-obligations/acknowledgements/create";
 import transitionWorkObligation from "@/api/handlers/work-obligations/transition";
 import { createSafeId } from "@/api/lib/branded-types";

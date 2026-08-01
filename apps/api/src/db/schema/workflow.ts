@@ -41,8 +41,7 @@ export const WORK_OBLIGATION_STATUSES = [
   WORK_OBLIGATION_STATUS.COMPLETED,
   WORK_OBLIGATION_STATUS.CANCELLED,
 ] as const;
-export type WorkObligationStatus =
-  (typeof WORK_OBLIGATION_STATUSES)[number];
+export type WorkObligationStatus = (typeof WORK_OBLIGATION_STATUSES)[number];
 
 export const WORK_OBLIGATION_SOURCE = {
   MANUAL: "manual",
@@ -61,8 +60,7 @@ export const WORK_OBLIGATION_SOURCES = [
   WORK_OBLIGATION_SOURCE.IMPORT,
   WORK_OBLIGATION_SOURCE.API,
 ] as const;
-export type WorkObligationSource =
-  (typeof WORK_OBLIGATION_SOURCES)[number];
+export type WorkObligationSource = (typeof WORK_OBLIGATION_SOURCES)[number];
 
 export const WORK_OBLIGATION_EVENT_TYPE = {
   CREATED: "created",
@@ -175,16 +173,20 @@ export const workObligations = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
-    p.unique("work_obligations_entity_ws_unq").on(
-      table.entityId,
-      table.workspaceId,
-    ),
+    p
+      .unique("work_obligations_entity_ws_unq")
+      .on(table.entityId, table.workspaceId),
     p
       .foreignKey({
         columns: [table.entityId, table.workspaceId],
         foreignColumns: [entities.id, entities.workspaceId],
       })
       .onDelete("cascade"),
+    p.foreignKey({
+      columns: [table.sourceEntityId, table.workspaceId],
+      foreignColumns: [entities.id, entities.workspaceId],
+      name: "work_obligations_source_entity_workspace_fk",
+    }),
     p.check(
       "work_obligations_type_check",
       sql`${table.type} IN ('task', 'deadline')`,
@@ -242,9 +244,7 @@ export const workObligationEvents = p.pgTable(
     actorUserId: p
       .text("actor_user_id")
       .references(() => user.id, { onDelete: "set null" }),
-    type: p
-      .text("type", { enum: WORK_OBLIGATION_EVENT_TYPES })
-      .notNull(),
+    type: p.text("type", { enum: WORK_OBLIGATION_EVENT_TYPES }).notNull(),
     details: jsonb("details").$type<WorkObligationEventDetails>().notNull(),
     reason: p.varchar("reason", { length: 1000 }),
     occurredAt: timestamptz("occurred_at").notNull().defaultNow(),

@@ -22,13 +22,7 @@ const acknowledgeWorkObligation = createSafeHandler(
     mcp: { type: "capability", reason: "workflow_orchestration" },
     params: acknowledgeParams,
   },
-  async function* ({
-    safeDb,
-    workspaceId,
-    user,
-    params,
-    recordAuditEvent,
-  }) {
+  async function* ({ safeDb, workspaceId, user, params, recordAuditEvent }) {
     const result = yield* Result.await(
       safeDb(async (tx) => {
         const existing = await lockWorkObligation(tx, {
@@ -109,19 +103,31 @@ const acknowledgeWorkObligation = createSafeHandler(
         return Result.ok({ success: true });
       case "not_found":
         return Result.err(
-          new HandlerError({ status: 404, message: "Work obligation not found" }),
+          new HandlerError({
+            status: 404,
+            message: "Work obligation not found",
+          }),
         );
       case "not_owner":
         return Result.err(
-          new HandlerError({ status: 403, message: "Only the accountable owner can acknowledge this work" }),
+          new HandlerError({
+            status: 403,
+            message: "Only the accountable owner can acknowledge this work",
+          }),
         );
       case "invalid_status":
         return Result.err(
-          new HandlerError({ status: 409, message: "This work is not awaiting acknowledgement" }),
+          new HandlerError({
+            status: 409,
+            message: "This work is not awaiting acknowledgement",
+          }),
         );
       case "conflict":
         return Result.err(
-          new HandlerError({ status: 409, message: "Work changed concurrently; refresh and try again" }),
+          new HandlerError({
+            status: 409,
+            message: "Work changed concurrently; refresh and try again",
+          }),
         );
       default: {
         const exhaustive: never = result;

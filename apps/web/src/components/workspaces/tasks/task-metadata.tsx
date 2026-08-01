@@ -236,7 +236,9 @@ export const OwnerPicker = ({
               image={owner.image}
               name={owner.name}
             />
-            <span className="truncate">{owner.name ?? t("deletedAccount")}</span>
+            <span className="truncate">
+              {owner.name ?? t("deletedAccount")}
+            </span>
           </>
         ) : (
           <span className="text-muted-foreground">{t("noOwner")}</span>

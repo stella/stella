@@ -162,9 +162,8 @@ export const removeWorkspaceMemberHandler = async function* ({
             );
         }
 
-        const unassignmentEvents: (
-          typeof workObligationEvents.$inferInsert
-        )[] = [];
+        const unassignmentEvents: (typeof workObligationEvents.$inferInsert)[] =
+          [];
         for (const { entityId } of ownedWork) {
           unassignmentEvents.push({
             id: createSafeId<"workObligationEvent">(),

@@ -31,9 +31,7 @@ const updateWorkObligationBody = t.Object({
   hardDeadlineDate: t.Optional(t.Nullable(t.String({ format: "date" }))),
   sourceType: t.Optional(t.UnionEnum(WORK_OBLIGATION_SOURCES)),
   sourceEntityId: t.Optional(t.Nullable(tSafeId("entity"))),
-  sourceDescription: t.Optional(
-    t.Nullable(t.String({ maxLength: 1000 })),
-  ),
+  sourceDescription: t.Optional(t.Nullable(t.String({ maxLength: 1000 }))),
   reason: t.Optional(t.String({ minLength: 1, maxLength: 1000 })),
 });
 
@@ -63,7 +61,10 @@ const updateWorkObligation = createSafeHandler(
 
     if (!hasChange) {
       return Result.err(
-        new HandlerError({ status: 400, message: "No workflow change provided" }),
+        new HandlerError({
+          status: 400,
+          message: "No workflow change provided",
+        }),
       );
     }
 
@@ -394,35 +395,59 @@ const updateWorkObligation = createSafeHandler(
         return Result.ok({ success: true });
       case "not_found":
         return Result.err(
-          new HandlerError({ status: 404, message: "Work obligation not found" }),
+          new HandlerError({
+            status: 404,
+            message: "Work obligation not found",
+          }),
         );
       case "invalid_owner":
         return Result.err(
-          new HandlerError({ status: 400, message: "Owner must be a workspace member" }),
+          new HandlerError({
+            status: 400,
+            message: "Owner must be a workspace member",
+          }),
         );
       case "invalid_source":
         return Result.err(
-          new HandlerError({ status: 400, message: "Source must belong to this workspace" }),
+          new HandlerError({
+            status: 400,
+            message: "Source must belong to this workspace",
+          }),
         );
       case "closed_owner_change":
         return Result.err(
-          new HandlerError({ status: 409, message: "Reopen the work before changing its owner" }),
+          new HandlerError({
+            status: 409,
+            message: "Reopen the work before changing its owner",
+          }),
         );
       case "target_after_deadline":
         return Result.err(
-          new HandlerError({ status: 400, message: "Working target cannot be after the hard deadline" }),
+          new HandlerError({
+            status: 400,
+            message: "Working target cannot be after the hard deadline",
+          }),
         );
       case "delegation_reason_required":
         return Result.err(
-          new HandlerError({ status: 400, message: "A reason is required when delegating work" }),
+          new HandlerError({
+            status: 400,
+            message: "A reason is required when delegating work",
+          }),
         );
       case "deadline_reason_required":
         return Result.err(
-          new HandlerError({ status: 400, message: "A reason is required when revising a hard deadline" }),
+          new HandlerError({
+            status: 400,
+            message: "A reason is required when revising a hard deadline",
+          }),
         );
       case "conflict":
         return Result.err(
-          new HandlerError({ status: 409, message: "Work changed concurrently; refresh and try again" }),
+          new HandlerError({
+            status: 409,
+            message: "Work changed concurrently; refresh and try again",
+          }),
         );
       default: {
         const exhaustive: never = result;

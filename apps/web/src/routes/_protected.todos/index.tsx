@@ -35,8 +35,8 @@ import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-sto
 import { MatterRefLink } from "@/components/matter-ref-link";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getFormattingLocale } from "@/i18n/i18n-store";
-import { api } from "@/lib/api";
 import { useAnalytics } from "@/lib/analytics/provider";
+import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
@@ -152,9 +152,7 @@ function MyTodosPage() {
       return;
     }
     analytics.captureError(error);
-    stellaToast.error(
-      userErrorFromThrown(error, t("common.unexpectedError")),
-    );
+    stellaToast.error(userErrorFromThrown(error, t("common.unexpectedError")));
   }, [analytics, error, t]);
 
   const handleCreateTask = async (wsId: string) => {

@@ -2871,6 +2871,22 @@ type Messages = {
     "workspaceDuplicatedSuccessfully": "Matter duplicated successfully";
   };
   "tasks": {
+    "acknowledge": "Acknowledge";
+    "acknowledgementRequired": "Confirm that you have accepted responsibility for this work.";
+    "activity": "Activity";
+    "activityTypes": {
+      "acknowledged": "Responsibility acknowledged";
+      "cancelled": "Work cancelled";
+      "completed": "Work completed";
+      "created": "Work created";
+      "delegated": "Ownership delegated";
+      "hardDeadlineChanged": "Hard deadline changed";
+      "ownerAssigned": "Owner assigned";
+      "provenanceChanged": "Source changed";
+      "reopened": "Work reopened";
+      "typeChanged": "Work type changed";
+      "workingTargetChanged": "Working target changed";
+    };
     "addAssignee": "Add assignee";
     "addSubtask": "Add subtask";
     "assigneeRoles": {
@@ -2878,19 +2894,30 @@ type Messages = {
       "reviewer": "Reviewer";
     };
     "assignees": "Assignees";
+    "cancelledFromStatusControl": "Cancelled from the task status control";
     "clearDate": "Clear date";
+    "completeWork": "Complete work";
+    "deadlineChangedFromTask": "Hard deadline revised in the task details";
+    "delegationReason": "Reason for reassignment";
     "deletedAccount": "Deleted account";
     "dueDate": "Due date";
+    "hardDeadline": "Hard deadline";
+    "hardDeadlineOverdue": "Hard deadline overdue";
     "linkEntity": "Link entity";
     "linkedEntities": "Linked entities";
     "myTasksTitle": "My tasks";
+    "myWorkTitle": "My work";
     "newTask": "New task";
+    "noActivity": "No activity yet";
     "noAssignees": "No assignees";
     "noLinks": "No linked entities";
+    "noOwner": "No accountable owner";
     "noSubtasks": "No subtasks";
     "noTasksAssigned": "No tasks assigned to you";
+    "noWorkInQueue": "No work in this queue";
     "notFound": "Task not found";
     "overdue": "Overdue";
+    "owner": "Owner";
     "priority": "Priority";
     "priorityValues": {
       "high": "High";
@@ -2898,6 +2925,21 @@ type Messages = {
       "medium": "Medium";
       "none": "None";
       "urgent": "Urgent";
+    };
+    "queue": {
+      "atRisk": "At risk";
+      "completed": "Completed";
+      "inbox": "Inbox";
+      "upcoming": "Upcoming";
+    };
+    "reopenWork": "Reopen work";
+    "sourceTypeValues": {
+      "api": "API";
+      "calendar": "Calendar";
+      "document": "Document";
+      "email": "Email";
+      "import": "Import";
+      "manual": "Manual";
     };
     "status": "Status";
     "statusValues": {
@@ -2910,6 +2952,10 @@ type Messages = {
     "subtasks": "Subtasks";
     "title": "Tasks";
     "untitled": "Untitled task";
+    "workTypeValues": {
+      "deadline": "Deadline";
+      "task": "Task";
+    };
   };
   "templates": {
     "addItem": "Add item";

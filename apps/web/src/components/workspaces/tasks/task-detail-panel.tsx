@@ -135,9 +135,7 @@ export const TaskDetailPanel = ({
     },
     onError: (error) => {
       analytics.captureError(error);
-      stellaToast.error(
-        userErrorFromThrown(error, tCommon("unexpectedError")),
-      );
+      stellaToast.error(userErrorFromThrown(error, tCommon("unexpectedError")));
     },
   });
 
@@ -182,9 +180,7 @@ export const TaskDetailPanel = ({
     onSuccess: invalidateWorkflow,
     onError: (error) => {
       analytics.captureError(error);
-      stellaToast.error(
-        userErrorFromThrown(error, tCommon("unexpectedError")),
-      );
+      stellaToast.error(userErrorFromThrown(error, tCommon("unexpectedError")));
     },
   });
 
@@ -214,9 +210,7 @@ export const TaskDetailPanel = ({
     onSuccess: invalidateWorkflow,
     onError: (error) => {
       analytics.captureError(error);
-      stellaToast.error(
-        userErrorFromThrown(error, tCommon("unexpectedError")),
-      );
+      stellaToast.error(userErrorFromThrown(error, tCommon("unexpectedError")));
     },
   });
 

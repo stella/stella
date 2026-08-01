@@ -62,10 +62,7 @@ const TRANSITIONS = {
     taskStatus: TASK_STATUS.CANCELLED,
   },
   reopen: {
-    from: [
-      WORK_OBLIGATION_STATUS.COMPLETED,
-      WORK_OBLIGATION_STATUS.CANCELLED,
-    ],
+    from: [WORK_OBLIGATION_STATUS.COMPLETED, WORK_OBLIGATION_STATUS.CANCELLED],
     to: WORK_OBLIGATION_STATUS.ACTIVE,
     eventType: WORK_OBLIGATION_EVENT_TYPE.REOPENED,
     taskStatus: TASK_STATUS.IN_PROGRESS,
@@ -187,23 +184,38 @@ const transitionWorkObligation = createSafeHandler(
         return Result.ok({ success: true });
       case "not_found":
         return Result.err(
-          new HandlerError({ status: 404, message: "Work obligation not found" }),
+          new HandlerError({
+            status: 404,
+            message: "Work obligation not found",
+          }),
         );
       case "invalid_status":
         return Result.err(
-          new HandlerError({ status: 409, message: "Work cannot make that transition from its current status" }),
+          new HandlerError({
+            status: 409,
+            message: "Work cannot make that transition from its current status",
+          }),
         );
       case "not_owner":
         return Result.err(
-          new HandlerError({ status: 403, message: "Only the accountable owner can complete this work" }),
+          new HandlerError({
+            status: 403,
+            message: "Only the accountable owner can complete this work",
+          }),
         );
       case "reason_required":
         return Result.err(
-          new HandlerError({ status: 400, message: "A reason is required when cancelling assigned work" }),
+          new HandlerError({
+            status: 400,
+            message: "A reason is required when cancelling assigned work",
+          }),
         );
       case "conflict":
         return Result.err(
-          new HandlerError({ status: 409, message: "Work changed concurrently; refresh and try again" }),
+          new HandlerError({
+            status: 409,
+            message: "Work changed concurrently; refresh and try again",
+          }),
         );
       default: {
         const exhaustive: never = result;

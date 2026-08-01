@@ -93,6 +93,7 @@ import {
   templateVersions,
   templates,
 } from "./templates";
+import { workObligationEvents, workObligations } from "./workflow";
 import {
   anonymizationAllowlistEntries,
   anonymizationBlacklistEntries,
@@ -100,7 +101,6 @@ import {
   matterCounters,
   organizationSettings,
 } from "./workspace-admin";
-import { workObligationEvents, workObligations } from "./workflow";
 
 export const relations = defineRelations(
   {

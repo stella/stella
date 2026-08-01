@@ -106,9 +106,7 @@ const createTaskBodySchema = t.Object({
   ownerUserId: t.Optional(tSafeId("user")),
   workingTargetDate: t.Optional(t.Nullable(t.String({ format: "date" }))),
   hardDeadlineDate: t.Optional(t.Nullable(t.String({ format: "date" }))),
-  sourceDescription: t.Optional(
-    t.Nullable(t.String({ maxLength: 1000 })),
-  ),
+  sourceDescription: t.Optional(t.Nullable(t.String({ maxLength: 1000 }))),
 });
 
 const toDateOrNull = (value: string | null | undefined): Date | null =>
