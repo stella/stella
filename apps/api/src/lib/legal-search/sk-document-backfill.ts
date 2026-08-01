@@ -732,7 +732,13 @@ export const markDocumentUnavailable = async (
     // audit: skip — scheduler backfill of public case-law text; no user action
     await tx
       .update(caseLawDecisions)
-      .set({ fulltext: "" })
+      .set({
+        fulltext: "",
+        ...corpusMirrorColumns({
+          status: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+          written: null,
+        }),
+      })
       .where(
         and(
           eq(caseLawDecisions.id, decisionId),

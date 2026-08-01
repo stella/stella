@@ -3,6 +3,9 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
 import {
+  CASE_LAW_CORPUS_MIRROR_STATUS,
+  CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS,
+  caseLawCorpusUploadIntents,
   caseLawDecisions,
   caseLawIndexJobs,
   schedulerJobs,
@@ -78,29 +81,101 @@ export const backfillCaseLawRedactionTombstones: SchedulerTask = async ({
       return { status: "complete" as const, repaired: 0 };
     }
 
-    // audit: skip — bounded compatibility repair derived from append-only
-    // redaction audit rows.
-    const repaired = await tx
-      .update(caseLawDecisions)
-      .set({
-        redactedAt: sql`(
-          SELECT max(${caseLawIndexJobs.createdAt})
-          FROM ${caseLawIndexJobs}
-          WHERE ${caseLawIndexJobs.decisionId} = ${caseLawDecisions.id}
-            AND ${caseLawIndexJobs.operation} = 'redact'
-        )`,
+    const repairRows = await tx
+      .select({
+        astKey: caseLawDecisions.astS3Key,
+        id: caseLawDecisions.id,
+        sectionsKey: caseLawDecisions.normalizedS3Key,
+        textKey: caseLawDecisions.textS3Key,
       })
+      .from(caseLawDecisions)
       .where(
         and(
           inArray(caseLawDecisions.id, decisionIds),
           isNull(caseLawDecisions.redactedAt),
-          isNull(caseLawDecisions.fulltext),
-          isNull(caseLawDecisions.sections),
-          isNull(caseLawDecisions.documentAst),
-          isNull(caseLawDecisions.contentHash),
         ),
       )
-      .returning({ id: caseLawDecisions.id });
+      .for("update");
+    const repairIds = repairRows.map(({ id }) => id);
+    const now = new Date();
+
+    if (repairIds.length > 0) {
+      // Any upload that reserved before this row lock becomes cleanup work;
+      // settlement rechecks the tombstone after acquiring the same lock.
+      await tx
+        .update(caseLawCorpusUploadIntents)
+        .set({
+          status: CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.CLEANUP,
+          nextCleanupAt: now,
+        })
+        .where(
+          and(
+            inArray(caseLawCorpusUploadIntents.decisionId, repairIds),
+            eq(
+              caseLawCorpusUploadIntents.status,
+              CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.ACTIVE,
+            ),
+          ),
+        );
+
+      const pointerCleanupRows = repairRows.flatMap(
+        ({ astKey, id, sectionsKey, textKey }) => {
+          const fallbackKey = textKey ?? sectionsKey ?? astKey;
+          return fallbackKey === null
+            ? []
+            : [
+                {
+                  astS3Key: astKey ?? fallbackKey,
+                  decisionId: id,
+                  leaseExpiresAt: now,
+                  nextCleanupAt: now,
+                  normalizedS3Key: sectionsKey ?? fallbackKey,
+                  status: CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.CLEANUP,
+                  textS3Key: textKey ?? fallbackKey,
+                },
+              ];
+        },
+      );
+      if (pointerCleanupRows.length > 0) {
+        await tx.insert(caseLawCorpusUploadIntents).values(pointerCleanupRows);
+      }
+    }
+
+    // The audit is authoritative even if pre-fence ingestion restored a
+    // historical payload. Own every object key durably, then scrub the row in
+    // the same transaction so no restored content remains publicly readable.
+    // audit: skip — bounded compatibility repair derived from append-only
+    // redaction audit rows.
+    const repaired =
+      repairIds.length === 0
+        ? []
+        : await tx
+            .update(caseLawDecisions)
+            .set({
+              astS3Key: null,
+              corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+              contentHash: null,
+              documentAst: null,
+              fulltext: null,
+              indexedAt: null,
+              indexedHash: null,
+              normalizedS3Key: null,
+              redactedAt: sql`(
+                SELECT max(${caseLawIndexJobs.createdAt})
+                FROM ${caseLawIndexJobs}
+                WHERE ${caseLawIndexJobs.decisionId} = ${caseLawDecisions.id}
+                  AND ${caseLawIndexJobs.operation} = 'redact'
+              )`,
+              sections: null,
+              textS3Key: null,
+            })
+            .where(
+              and(
+                inArray(caseLawDecisions.id, repairIds),
+                isNull(caseLawDecisions.redactedAt),
+              ),
+            )
+            .returning({ id: caseLawDecisions.id });
 
     // Checkpoint last: replaying the same page is idempotent, while advancing
     // first could permanently skip a failed tombstone update.

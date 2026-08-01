@@ -130,13 +130,26 @@ describe("case-law corpus upload intents", () => {
       'CREATE INDEX CONCURRENTLY "case_law_index_jobs_redaction_decision_idx"',
     );
     expect(redactionBackfillTask).toContain(".limit(BACKFILL_LIMIT)");
+    expect(redactionBackfillTask).not.toContain(
+      "isNull(caseLawDecisions.fulltext)",
+    );
+    expect(redactionBackfillTask).toContain(
+      ".insert(caseLawCorpusUploadIntents)",
+    );
+    expect(redactionBackfillTask).toContain("fulltext: null");
+    expect(redactionBackfillTask).toContain("textS3Key: null");
     const tombstoneUpdate = redactionBackfillTask.indexOf(
       ".update(caseLawDecisions)",
+    );
+    const cleanupOwnership = redactionBackfillTask.indexOf(
+      ".insert(caseLawCorpusUploadIntents)",
     );
     const checkpoint = redactionBackfillTask.indexOf(
       ".set({ payload: { cursor: lastDecisionId } })",
     );
     expect(tombstoneUpdate).toBeGreaterThan(-1);
+    expect(cleanupOwnership).toBeGreaterThan(-1);
+    expect(tombstoneUpdate).toBeGreaterThan(cleanupOwnership);
     expect(checkpoint).toBeGreaterThan(tombstoneUpdate);
   });
 
