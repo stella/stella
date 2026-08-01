@@ -74,7 +74,7 @@ jobs:
 
       - name: Enforce release intent
         # The repository owner publishes this versioned shared contract.
-        uses: stella/.github/.github/actions/changeset-policy@v1.2.0 # zizmor: ignore[unpinned-uses]
+        uses: stella/.github/.github/actions/changeset-policy@v1.5.0 # zizmor: ignore[unpinned-uses]
         with:
           release-paths: |
             packages/cli/README.md
@@ -236,7 +236,7 @@ jobs:
 
       - name: Turbo remote cache
         if: needs.ci-changes.outputs.package_checks_required == 'true'
-        uses: rharkor/caching-for-turbo@75f8ebf4a43d2c60b23bc2a27082cfea94ffdad9 # v2.5.0
+        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
 
       - name: Install dependencies
         if: needs.ci-changes.outputs.package_checks_required == 'true'
@@ -601,7 +601,7 @@ jobs:
           bun-version-file: "package.json"
 
       - name: Turbo remote cache
-        uses: rharkor/caching-for-turbo@75f8ebf4a43d2c60b23bc2a27082cfea94ffdad9 # v2.5.0
+        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
 
       - name: Install dependencies
         run: bash scripts/bun-ci-retry.sh --ignore-scripts
@@ -658,7 +658,7 @@ jobs:
           bun-version-file: "package.json"
 
       - name: Turbo remote cache
-        uses: rharkor/caching-for-turbo@75f8ebf4a43d2c60b23bc2a27082cfea94ffdad9 # v2.5.0
+        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
 
       - name: Install dependencies
         run: bash scripts/bun-ci-retry.sh --ignore-scripts
@@ -1108,7 +1108,7 @@ jobs:
         # secrets exist; authenticated pulls raise the rate limit well above the
         # shared-runner anonymous cap that flakes the gotenberg image pull.
         if: steps.changed.outputs.run == 'true' && steps.dockerhub.outputs.available == 'true'
-        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+        uses: docker/login-action@371161bbe7024a29a25c5e19bfcbc0804fe9ad2c # v4.5.2
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
