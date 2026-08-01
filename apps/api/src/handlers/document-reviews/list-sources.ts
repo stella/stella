@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, ilike, or, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -13,40 +13,55 @@ import {
   entityFileListCursorCondition,
   entityListTimestampCursorExpr,
 } from "@/api/lib/entities/list-cursor";
+import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
-const listFilesQuerySchema = t.Object({
+const listSourcesQuerySchema = t.Object({
+  q: t.Optional(t.String({ maxLength: LIMITS.entityNameMaxLength })),
   limit: t.Optional(
-    t.Integer({ minimum: 1, maximum: LIMITS.entitiesWindowSizeMax }),
+    t.Integer({
+      minimum: 1,
+      maximum: LIMITS.documentReviewSourcesPageSizeMax,
+    }),
   ),
   cursor: t.Optional(t.String({ maxLength: 512 })),
 });
-type ListFilesQuery = (typeof listFilesQuerySchema)["static"];
+type ListSourcesQuery = (typeof listSourcesQuerySchema)["static"];
 
-type ListFilesHandlerProps = {
+type ListSourcesArgs = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
-  query: ListFilesQuery;
+  query: ListSourcesQuery;
 };
 
-const listFilesHandler = async function* ({
-  query,
+const listSourcesHandler = async function* ({
   safeDb,
   workspaceId,
-}: ListFilesHandlerProps) {
-  const limit = query.limit ?? LIMITS.entitiesWindowSizeDefault;
-  const cursor = decodeEntityFileListCursor(query.cursor);
+  query,
+}: ListSourcesArgs) {
+  const limit = query.limit ?? LIMITS.documentReviewSourcesPageSizeDefault;
+  const search = query.q?.trim() ?? "";
+  const cursor =
+    search.length === 0 ? decodeEntityFileListCursor(query.cursor) : null;
   const cursorCondition = entityFileListCursorCondition(cursor);
+  const nameCondition =
+    search.length === 0
+      ? undefined
+      : or(
+          ilike(entities.name, `${escapeLike(search)}%`),
+          ilike(entities.displayName, `${escapeLike(search)}%`),
+        );
+
   const rows = yield* Result.await(
     safeDb((tx) =>
       tx
         .select({
           createdAt: entityListTimestampCursorExpr(sql`${entities.createdAt}`),
           entityId: entities.id,
-          fieldId: fields.id,
+          fileFieldId: fields.id,
           name: entities.name,
-          parentId: entities.parentId,
           fieldContent: fields.content,
         })
         .from(entities)
@@ -56,79 +71,72 @@ const listFilesHandler = async function* ({
             eq(fields.entityVersionId, entities.currentVersionId),
             eq(fields.workspaceId, workspaceId),
             sql`${fields.content}->>'type' = 'file'`,
+            sql`${fields.content}->>'mimeType' = ${DOCX_MIME_TYPE}`,
           ),
         )
         .where(
           and(
             eq(entities.workspaceId, workspaceId),
             eq(entities.kind, "document"),
-            ...(cursorCondition ? [cursorCondition] : []),
+            nameCondition,
+            cursorCondition,
           ),
         )
         .orderBy(asc(entities.createdAt), asc(entities.id), asc(fields.id))
-        .limit(limit + 1),
+        .limit(search.length === 0 ? limit + 1 : limit),
     ),
   );
 
-  type FileRow = {
-    entityId: SafeId<"entity">;
-    name: string | null;
-    parentId: SafeId<"entity"> | null;
-    fileName: string;
-    mimeType: string;
-  };
-
-  const files: (FileRow & {
+  const sources: {
     createdAt: string;
-    fieldId: SafeId<"field">;
-  })[] = [];
+    entityId: SafeId<"entity">;
+    fileFieldId: SafeId<"field">;
+    name: string;
+    fileName: string;
+  }[] = [];
   for (const row of rows) {
     const content = row.fieldContent;
-    if (content.type !== "file") {
+    if (content.type !== "file" || content.mimeType !== DOCX_MIME_TYPE) {
       continue;
     }
-    files.push({
-      entityId: row.entityId,
-      name: row.name,
-      parentId: row.parentId,
+    sources.push({
       createdAt: row.createdAt,
-      fieldId: row.fieldId,
+      entityId: row.entityId,
+      fileFieldId: row.fileFieldId,
+      name: row.name,
       fileName: content.fileName,
-      mimeType: content.mimeType,
     });
   }
 
   const page = createCursorPage({
-    rows: files,
+    rows: sources,
     limit,
     cursorForItem: (item) =>
       encodeEntityFileListCursor({
         createdAt: item.createdAt,
-        fieldId: item.fieldId,
+        fieldId: item.fileFieldId,
         id: item.entityId,
       }),
   });
 
   return Result.ok({
     ...page,
-    items: page.items.map(
-      ({ createdAt: _createdAt, fieldId: _fieldId, ...file }) => file,
-    ),
+    items: page.items.map(({ createdAt: _createdAt, ...source }) => source),
   });
 };
 
 const config = {
   permissions: { workspace: ["read"] },
-  mcp: { type: "covered", by: "list_documents" },
   access: "read",
-  query: listFilesQuerySchema,
+  mcp: { type: "internal", reason: "document_processing" },
+  query: listSourcesQuerySchema,
 } satisfies HandlerConfig;
 
-const listFiles = createSafeHandler(
+const listDocumentReviewSources = createSafeHandler(
   config,
   async function* ({ query, safeDb, workspaceId }) {
-    return yield* listFilesHandler({ query, safeDb, workspaceId });
+    return yield* listSourcesHandler({ query, safeDb, workspaceId });
   },
 );
 
-export default listFiles;
+export default listDocumentReviewSources;

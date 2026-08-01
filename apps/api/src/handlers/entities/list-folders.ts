@@ -4,15 +4,15 @@ import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { entities } from "@/api/db/schema";
+import { createSafeHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { SafeId } from "@/api/lib/branded-types";
 import {
   decodeEntityListCursor,
   encodeEntityListCursor,
   entityListTimestampCursorExpr,
   entityListCursorCondition,
-} from "@/api/handlers/entities/list-cursor";
-import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
-import type { SafeId } from "@/api/lib/branded-types";
+} from "@/api/lib/entities/list-cursor";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
 
