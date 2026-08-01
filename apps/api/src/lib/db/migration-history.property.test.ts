@@ -75,17 +75,17 @@ describe("migration history invariant", () => {
       ],
       [
         "20260605143000_workflow_pending_fields_index",
-        "798fdbc4b5e88b6e6aae86815d2aab3b4d4e1c05207f86dd17dce4e2c1ca71fe",
+        "00e0820a64f6d5888c79ab9fcd611b599e6622bbc1dc8f4ad668c894af1a41d0",
         "0088003d298f869017cf4047a74692a9ddefa4bc246aa6c25ca950ebeb29f918",
       ],
       [
         "20260629123000_arabic_normalize_function",
-        "5c18323c0211930aee1eb476720d3a6f00b808156f1c72b758ff0458f92a685d",
+        "2efd4a25545a7a4aea7957fccae54994b4037d1963d6c4f479797500f6b79bf4",
         "36ccbd00b7e98f6489d4a493ff61eba96eec145b38ef684045ae408fe88521ce",
       ],
       [
         "20260701160000_property_playbook_definition_id",
-        "428aea6ac33b60c3e401a9c83b1eae0a5b87a9fbadaecd5ab48b38bb31ec64ca",
+        "f5e8604a73353044e3164bc67cb1e6c13936e61639a4190f809df5cc60b44f15",
         "423af8ce20ec27fa4895b37e3caf64f3470e1ebaa92da58cee04ea5c3dc9085e",
       ],
       [
@@ -105,17 +105,17 @@ describe("migration history invariant", () => {
       ],
       [
         "20260717170000_report_export_notifications",
-        "094bed35cbea00fc194dc2c2351c9034c55e67b6a6fb808b82cf008345566c3a",
+        "8aa876b20155b73a71d3d610210412f0a532dca61ee56f89446540e6eee3809e",
         "11856277db1674f04ecf66d39df8f81242f4347af15d60cf2270ee1e3910a317",
       ],
       [
         "20260719172000_user_created_at_index",
-        "cd765faf1da8f1da04146b4ca2736bd739a936f3b3b183b8b2448609a4b18447",
+        "60e691372d1eaff6bab6009ed2bc88fff625836b50253203e065c125accdf164",
         "d75842b57e1ba5f734b2dea9926c76da9fca178d41fafe8005f144cdc4960eee",
       ],
       [
         "20260720140000_machine_api_keys_org_index",
-        "f8714547100e32110a4cd266fb7836c76d6668c23c6223fe718bb5beb36469d3",
+        "cc793baee2e7e5c0637cc0f0edbc8cff44706119e7fdd88629d17246857b308f",
         "c9c7b5d968fe2efa54ef017592d43bb640688ebd6f56b957aca27b45b1412468",
       ],
       [

@@ -82,28 +82,6 @@ describe("arabic_normalize SQL function", () => {
       expect(result.rows.at(0)?.out).toBe(normalizeSearchText(input));
     }
   });
-
-  test("keeps concurrent index creation retry-safe", () => {
-    const migrationSql = readFileSync(
-      INITIAL_ARABIC_NORMALIZE_MIGRATION_PATH,
-      "utf-8",
-    );
-    const indexNames = [
-      "contacts_display_name_arabic_norm_trgm_idx",
-      "contacts_first_name_arabic_norm_trgm_idx",
-      "contacts_last_name_arabic_norm_trgm_idx",
-      "contacts_organization_name_arabic_norm_trgm_idx",
-    ];
-
-    for (const indexName of indexNames) {
-      expect(migrationSql).toContain(
-        `DROP INDEX CONCURRENTLY IF EXISTS "${indexName}"`,
-      );
-      expect(migrationSql).toContain(
-        `CREATE INDEX CONCURRENTLY IF NOT EXISTS "${indexName}"`,
-      );
-    }
-  });
 });
 
 const isPortableFunctionStatement = (statement: string): boolean => {

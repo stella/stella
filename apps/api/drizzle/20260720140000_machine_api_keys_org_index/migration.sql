@@ -31,26 +31,12 @@ SET statement_timeout = 0;
 SET lock_timeout = 0;
 --> statement-breakpoint
 
--- stella-migration-safety: reviewed destructive-change - drops only this
--- migration's own indexes by name before recreating them below. A cancelled
--- concurrent build leaves an INVALID index behind, and `IF NOT EXISTS` would
--- then skip recreating it — leaving the tenant filter running against an index
--- Postgres will not use. Dropping first and creating without `IF NOT EXISTS`
--- means a retry cannot record the migration while that boundary is unindexed.
-DROP INDEX CONCURRENTLY IF EXISTS "apikey_metadata_organization_id_idx";
---> statement-breakpoint
--- squawk-ignore prefer-robust-stmts
-CREATE INDEX CONCURRENTLY "apikey_metadata_organization_id_idx" ON "apikey" (((metadata::jsonb ->> 'organizationId'))) WHERE metadata IS NOT NULL;
+-- The runner validates these indexes and concurrently repairs INVALID builds.
+CREATE INDEX CONCURRENTLY IF NOT EXISTS "apikey_metadata_organization_id_idx" ON "apikey" (((metadata::jsonb ->> 'organizationId'))) WHERE metadata IS NOT NULL;
 --> statement-breakpoint
 
--- stella-migration-safety: reviewed destructive-change - same reasoning as the
--- index above; this one additionally carries the keyset ordering the
--- organization-scoped list paginates on.
-DROP INDEX CONCURRENTLY IF EXISTS "apikey_org_keyset_idx";
---> statement-breakpoint
 -- Keyset pagination for the organization-scoped list orders by (created_at, id).
--- squawk-ignore prefer-robust-stmts
-CREATE INDEX CONCURRENTLY "apikey_org_keyset_idx" ON "apikey" (((metadata::jsonb ->> 'organizationId')), "created_at" DESC, "id" DESC) WHERE metadata IS NOT NULL;
+CREATE INDEX CONCURRENTLY IF NOT EXISTS "apikey_org_keyset_idx" ON "apikey" (((metadata::jsonb ->> 'organizationId')), "created_at" DESC, "id" DESC) WHERE metadata IS NOT NULL;
 --> statement-breakpoint
 SET lock_timeout = '1s';
 --> statement-breakpoint

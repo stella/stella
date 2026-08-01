@@ -6,11 +6,8 @@ SET statement_timeout = 0;--> statement-breakpoint
 -- squawk-ignore transaction-nesting
 COMMIT;
 --> statement-breakpoint
--- stella-migration-safety: reviewed destructive-change - retry cleanup drops only this migration's index before rebuilding it, so an interrupted INVALID index cannot be mistaken for completion.
-DROP INDEX CONCURRENTLY IF EXISTS "properties_workspace_playbook_definition_idx";
---> statement-breakpoint
--- squawk-ignore prefer-robust-stmts -- preceding DROP removes invalid retry artifacts; IF NOT EXISTS could accept one.
-CREATE INDEX CONCURRENTLY "properties_workspace_playbook_definition_idx" ON "properties" USING btree ("workspace_id","playbook_definition_id");
+-- The runner validates this index and concurrently repairs an INVALID build.
+CREATE INDEX CONCURRENTLY IF NOT EXISTS "properties_workspace_playbook_definition_idx" ON "properties" USING btree ("workspace_id","playbook_definition_id");
 --> statement-breakpoint
 -- squawk-ignore transaction-nesting, ban-uncommitted-transaction
 BEGIN;
