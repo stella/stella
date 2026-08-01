@@ -390,6 +390,13 @@ describe("extractCitations", () => {
     ).toBe(true);
   });
 
+  test("dedupes a court-code-prefixed consolidated docket cited with different accepted separators", () => {
+    const text =
+      "č. j. KSCB 26 INS 8270,8271/2018-A-12 a dále č. j. KSCB 26 INS 8270/8271/2018-A-14";
+    const citations = extractCitations([{ index: 0, text }]);
+    expect(citations).toHaveLength(1);
+  });
+
   test("extracts č. j. with a colon", () => {
     const text = "vyrozumění soudního exekutora č. j.: 137 Ex 1850/23";
     const citations = extractCitations([{ index: 0, text }]);

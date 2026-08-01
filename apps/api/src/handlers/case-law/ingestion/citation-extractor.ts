@@ -378,6 +378,17 @@ const COURT_CODE_NORMALIZE_RE =
   /^(?<code>[A-Z]{2,5})\s(?<number>\d{1,3})\s?(?<registry>\p{L}{1,6})[\s/](?<docket>\d{1,6}\/\d{2,4})$/u;
 
 /**
+ * Matches a court-code-prefixed case number whose docket joins a second
+ * consolidated docket, comma- or slash-separated, sharing the trailing
+ * year -- the same join the court-code-prefixed extraction pattern
+ * accepts (mirroring CASE_NUMBER_BODY_COMMA), now with the issuing
+ * court's registry code in front: "KSCB 26 INS 8270,8271/2018" and
+ * "KSCB 26 INS 8270/8271/2018" resolve to one key.
+ */
+const COURT_CODE_CONSOLIDATED_NORMALIZE_RE =
+  /^(?<code>[A-Z]{2,5})\s(?<number>\d{1,3})\s?(?<registry>\p{L}{1,6})[\s/](?<docket1>\d{1,6})[,/](?<docket2>\d{1,6})\/(?<year>\d{2,4})$/u;
+
+/**
  * Matches a Czech/Slovak Constitutional Court case number (chamber,
  * "ÚS" or the diacritic-dropped "US", optional plenary "-st." infix,
  * then the docket) after whitespace/dot normalization, so the dedup key
@@ -457,7 +468,9 @@ const POLISH_LETTERS_DOCKET_RE =
  *    260/2008" vs "5Cdo/260/2008", "10C 84/97" vs "10C/84/97", "6CoE
  *    14/2007" vs "6 CoE 14/2007" vs "6CoE/14/2007"), including when a
  *    court registry code leads the number ("KSCB 26 INS 8270/2018" vs
- *    "KSCB 26INS/8270/2018");
+ *    "KSCB 26INS/8270/2018"), including a court-code-prefixed
+ *    consolidated docket join ("KSCB 26 INS 8270,8271/2018" vs "KSCB 26
+ *    INS 8270/8271/2018");
  *  - the boundary between a Polish roman-numeral chamber and its division
  *    code, glued or spaced ("IC 1523/96" vs "I C 1523/96"), including a
  *    two-token division code ("III A Ua 2389/02" vs "III AUa 2389/02") and
@@ -494,6 +507,13 @@ const canonicalizeDedupKey = (text: string): string => {
   const courtCode = COURT_CODE_NORMALIZE_RE.exec(cleaned);
   if (courtCode?.groups) {
     const canonical = `${courtCode.groups["code"]} ${courtCode.groups["number"]}${courtCode.groups["registry"]}/${courtCode.groups["docket"]}`;
+    return canonical.toLowerCase();
+  }
+
+  const courtCodeConsolidated =
+    COURT_CODE_CONSOLIDATED_NORMALIZE_RE.exec(cleaned);
+  if (courtCodeConsolidated?.groups) {
+    const canonical = `${courtCodeConsolidated.groups["code"]} ${courtCodeConsolidated.groups["number"]}${courtCodeConsolidated.groups["registry"]}/${courtCodeConsolidated.groups["docket1"]},${courtCodeConsolidated.groups["docket2"]}/${courtCodeConsolidated.groups["year"]}`;
     return canonical.toLowerCase();
   }
 
