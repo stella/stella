@@ -118,7 +118,9 @@ const GENERATION_PAGE_SELECT_COLUMNS = {
   generationIndexId: caseLawCorpusIndexProjections.indexId,
   generationIndexedHash: caseLawCorpusIndexProjections.indexedHash,
   generationPendingAction: caseLawCorpusIndexProjections.pendingAction,
-  generationPendingIndexIds: caseLawCorpusIndexProjections.pendingIndexIds,
+  generationPendingIndexIds: sql<
+    string[]
+  >`${caseLawCorpusIndexProjections.pendingIndexIds}`,
   sourceDescriptor: caseLawSources.descriptor,
 };
 
