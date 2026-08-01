@@ -64,6 +64,7 @@ export type CaptureDefinition = {
   captureId: string;
   dpr: number;
   sceneId: StoryCaptureId;
+  visualReference?: string;
   viewport: CaptureViewport;
   watchedPaths: readonly string[];
 };
@@ -141,6 +142,20 @@ const SCENE_WATCHED_PATHS: Record<StoryCaptureId, readonly string[]> = {
   ],
 };
 
+// Stable ready-state screenshots are checked against the current app in CI.
+// When one stays pixel-equivalent, source-only refactors in that scene do not
+// need to invalidate its existing recording. Scenes whose essential behavior
+// is a multi-step interaction keep source-path invalidation until they gain a
+// representative reference capture.
+const VISUAL_REFERENCES: Partial<Record<StoryCaptureId, string>> = {
+  agent: "agent",
+  editor: "editor",
+  "editor-doc": "editor",
+  review: "tabular-review",
+  templates: "templates",
+  workspace: "workspace",
+};
+
 // Scenes consumed at both the wide (scene-only embeds) and hero (companion
 // composition main window) viewports. "templates" is wide-only below: it
 // plays only in scene-only embeds (templates product page).
@@ -154,6 +169,7 @@ const toDefinition = (
   captureId,
   dpr: CAPTURE_DPR,
   sceneId,
+  visualReference: VISUAL_REFERENCES[sceneId],
   viewport,
   watchedPaths: [...COMMON_WATCHED_PATHS, ...SCENE_WATCHED_PATHS[sceneId]],
 });

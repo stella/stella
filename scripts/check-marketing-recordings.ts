@@ -26,7 +26,17 @@ import type {
 const ROOT_DIR = nodePath.resolve(import.meta.dirname, "..");
 const STRICT = process.argv.includes("--strict");
 
+export type ManualRecordingVerification = {
+  reason: string;
+  watchedPathsHash: string;
+};
+
+export type RecordingManifestEntryWithVerification = RecordingManifestEntry & {
+  manualVerification?: ManualRecordingVerification;
+};
+
 export type Verdict = {
+  basis: "manual-verification" | "recording" | "visual-reference" | null;
   captureId: string;
   theme: CaptureTheme;
   status: "FRESH" | "STALE";
@@ -44,7 +54,22 @@ const isViewport = (value: unknown): value is CaptureViewport =>
 const isTheme = (value: unknown): value is CaptureTheme =>
   CAPTURE_THEMES.some((theme) => theme === value);
 
-const isManifestEntry = (value: unknown): value is RecordingManifestEntry =>
+const SHA_256_PATTERN = /^[0-9a-f]{64}$/u;
+
+const isManualVerification = (
+  value: unknown,
+): value is ManualRecordingVerification =>
+  isRecord(value) &&
+  typeof value["reason"] === "string" &&
+  value["reason"].trim() === value["reason"] &&
+  value["reason"].length >= 12 &&
+  value["reason"].length <= 240 &&
+  typeof value["watchedPathsHash"] === "string" &&
+  SHA_256_PATTERN.test(value["watchedPathsHash"]);
+
+const isManifestEntry = (
+  value: unknown,
+): value is RecordingManifestEntryWithVerification =>
   isRecord(value) &&
   typeof value["captureId"] === "string" &&
   isTheme(value["theme"]) &&
@@ -52,31 +77,61 @@ const isManifestEntry = (value: unknown): value is RecordingManifestEntry =>
   typeof value["dpr"] === "number" &&
   typeof value["recordedAtCommit"] === "string" &&
   Array.isArray(value["watchedPaths"]) &&
-  value["watchedPaths"].every((path) => typeof path === "string");
+  value["watchedPaths"].every((path) => typeof path === "string") &&
+  (value["manualVerification"] === undefined ||
+    isManualVerification(value["manualVerification"]));
 
-const readManifestEntries = (): RecordingManifestEntry[] => {
-  const manifestPath = nodePath.join(ROOT_DIR, RECORDINGS_MANIFEST_PATH);
-  if (!existsSync(manifestPath)) {
-    return [];
-  }
-  const parsed: unknown = JSON.parse(readFileSync(manifestPath, "utf-8"));
-  if (!isRecord(parsed) || !Array.isArray(parsed["entries"])) {
-    throw new TypeError(
-      `${RECORDINGS_MANIFEST_PATH} must contain an entries array`,
-    );
-  }
-  return parsed["entries"].map((entry, index) => {
-    if (!isManifestEntry(entry)) {
+export const readManifestEntries =
+  (): RecordingManifestEntryWithVerification[] => {
+    const manifestPath = nodePath.join(ROOT_DIR, RECORDINGS_MANIFEST_PATH);
+    if (!existsSync(manifestPath)) {
+      return [];
+    }
+    const parsed: unknown = JSON.parse(readFileSync(manifestPath, "utf-8"));
+    if (!isRecord(parsed) || !Array.isArray(parsed["entries"])) {
       throw new TypeError(
-        `${RECORDINGS_MANIFEST_PATH} entry ${index} is malformed`,
+        `${RECORDINGS_MANIFEST_PATH} must contain an entries array`,
       );
     }
-    return entry;
-  });
-};
+    return parsed["entries"].map((entry, index) => {
+      if (!isManifestEntry(entry)) {
+        throw new TypeError(
+          `${RECORDINGS_MANIFEST_PATH} entry ${index} is malformed`,
+        );
+      }
+      return entry;
+    });
+  };
 
 const git = (args: readonly string[]): string =>
   execFileSync("git", [...args], { cwd: ROOT_DIR, encoding: "utf-8" }).trim();
+
+export const watchedPathsHashAtHead = (
+  watchedPaths: readonly string[],
+): string => {
+  const normalizedPaths = [...new Set(watchedPaths)].sort();
+  const tree = git([
+    "ls-tree",
+    "-r",
+    "--full-tree",
+    "HEAD",
+    "--",
+    ...normalizedPaths,
+  ]);
+  return new Bun.CryptoHasher("sha256")
+    .update(`${JSON.stringify(normalizedPaths)}\n${tree}\n`)
+    .digest("hex");
+};
+
+export const manualVerificationMatches = (
+  verification: ManualRecordingVerification | undefined,
+  watchedPaths: readonly string[],
+): boolean => {
+  if (!verification) {
+    return false;
+  }
+  return verification.watchedPathsHash === watchedPathsHashAtHead(watchedPaths);
+};
 
 const isKnownCommit = (commit: string): boolean => {
   try {
@@ -105,6 +160,44 @@ const changedWatchedPaths = (
   return output === "" ? [] : output.split("\n");
 };
 
+const DIRECT_INVALIDATION_PATHS = new Set([
+  "apps/web/e2e/marketing/record-product-story.ts",
+]);
+
+export const uncoveredChangedPaths = (
+  changedPaths: readonly string[],
+  visualReferenceIsCurrent: boolean,
+): string[] =>
+  changedPaths.filter(
+    (path) => DIRECT_INVALIDATION_PATHS.has(path) || !visualReferenceIsCurrent,
+  );
+
+const visualReferencePath = (visualReference: string, theme: CaptureTheme) =>
+  `apps/landing/public/media/products/${visualReference}${
+    theme === "dark" ? "-dark" : ""
+  }.png`;
+
+const gitBlob = (commit: string, path: string): string | null => {
+  try {
+    return git(["rev-parse", `${commit}:${path}`]);
+  } catch {
+    return null;
+  }
+};
+
+const visualReferenceUnchanged = (
+  recordedAtCommit: string,
+  visualReference: string | undefined,
+  theme: CaptureTheme,
+): boolean => {
+  if (!visualReference) {
+    return false;
+  }
+  const path = visualReferencePath(visualReference, theme);
+  const recordedBlob = gitBlob(recordedAtCommit, path);
+  return recordedBlob !== null && recordedBlob === gitBlob("HEAD", path);
+};
+
 export const rerecordCommand = (
   captureIds: readonly string[],
   theme?: CaptureTheme,
@@ -116,8 +209,11 @@ export const rerecordCommand = (
     "bun run capture:product-story",
   ].join(" ");
 
-const judgeEntry = (entry: RecordingManifestEntry): Verdict => {
+export const judgeEntry = (
+  entry: RecordingManifestEntryWithVerification,
+): Verdict => {
   const reasons: string[] = [];
+  let basis: Verdict["basis"] = null;
   const definition = captureDefinitions.find(
     ({ captureId }) => captureId === entry.captureId,
   );
@@ -149,14 +245,40 @@ const judgeEntry = (entry: RecordingManifestEntry): Verdict => {
     // a watched path added to captures.ts after a recording must invalidate
     // that recording too, which a stored snapshot could never do.
     const watchedPaths = definition?.watchedPaths ?? entry.watchedPaths;
-    reasons.push(
-      ...changedWatchedPaths(entry.recordedAtCommit, watchedPaths).map(
-        (path) => `changed: ${path}`,
-      ),
+    const changedPaths = changedWatchedPaths(
+      entry.recordedAtCommit,
+      watchedPaths,
     );
+    if (manualVerificationMatches(entry.manualVerification, watchedPaths)) {
+      basis = "manual-verification";
+    } else if (changedPaths.length === 0) {
+      basis = "recording";
+    } else {
+      const visualReferenceIsCurrent =
+        definition !== undefined &&
+        visualReferenceUnchanged(
+          entry.recordedAtCommit,
+          definition.visualReference,
+          entry.theme,
+        );
+      const uncoveredChanges = uncoveredChangedPaths(
+        changedPaths,
+        visualReferenceIsCurrent,
+      );
+      reasons.push(...uncoveredChanges.map((path) => `changed: ${path}`));
+      if (uncoveredChanges.length === 0) {
+        basis = "visual-reference";
+      }
+      if (entry.manualVerification && reasons.length > 0) {
+        reasons.unshift(
+          "manual verification does not match the watched source tree",
+        );
+      }
+    }
   }
 
   return {
+    basis: reasons.length === 0 ? basis : null,
     captureId: entry.captureId,
     theme: entry.theme,
     status: reasons.length === 0 ? "FRESH" : "STALE",
@@ -182,6 +304,7 @@ export const computeVerdicts = (): Verdict[] => {
         continue;
       }
       verdicts.push({
+        basis: null,
         captureId: definition.captureId,
         theme,
         status: "STALE",
@@ -203,7 +326,13 @@ const main = () => {
   for (const verdict of verdicts) {
     const label = `${verdict.captureId} (${verdict.theme})`;
     if (verdict.status === "FRESH") {
-      process.stdout.write(`FRESH ${label}\n`);
+      const suffix =
+        verdict.basis === "manual-verification"
+          ? " (manual verification)"
+          : verdict.basis === "visual-reference"
+            ? " (visual reference unchanged)"
+            : "";
+      process.stdout.write(`FRESH ${label}${suffix}\n`);
       continue;
     }
     process.stdout.write(`STALE ${label}\n`);
