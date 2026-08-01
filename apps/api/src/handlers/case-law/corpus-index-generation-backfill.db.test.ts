@@ -449,6 +449,9 @@ test(
         .update(caseLawDecisions)
         .set({ country: "CZE" })
         .where(eq(caseLawDecisions.id, publicFirstId));
+      await db
+        .delete(caseLawCorpusIndexBackfills)
+        .where(eq(caseLawCorpusIndexBackfills.generation, generation));
     }
   },
   { timeout: 30_000 },
@@ -581,6 +584,9 @@ test(
         .update(caseLawDecisions)
         .set({ contentHash: "first", indexedHash: "first" })
         .where(eq(caseLawDecisions.id, publicFirstId));
+      await db
+        .delete(caseLawCorpusIndexBackfills)
+        .where(eq(caseLawCorpusIndexBackfills.generation, generation));
     }
   },
   { timeout: 30_000 },
@@ -761,6 +767,10 @@ test(
           .update(caseLawCorpusIndexBackfills)
           .set({ leaseExpiresAt: new Date("2000-01-01T00:00:00.000Z") })
           .where(eq(caseLawCorpusIndexBackfills.generation, generation));
+        await db
+          .update(caseLawCorpusIndexWriterLeases)
+          .set({ leaseExpiresAt: new Date("2000-01-01T00:00:00.000Z") })
+          .where(eq(caseLawCorpusIndexWriterLeases.generation, generation));
         winnerResult = await winner(scopedDb, 1, generation);
         await options.beforeRemoteEffect(completeRemoteEffect);
         staleRemoteEffects += 1;
@@ -819,6 +829,10 @@ test(
           .update(caseLawCorpusIndexBackfills)
           .set({ leaseExpiresAt: new Date("2000-01-01T00:00:00.000Z") })
           .where(eq(caseLawCorpusIndexBackfills.generation, generation));
+        await db
+          .update(caseLawCorpusIndexWriterLeases)
+          .set({ leaseExpiresAt: new Date("2000-01-01T00:00:00.000Z") })
+          .where(eq(caseLawCorpusIndexWriterLeases.generation, generation));
         winnerResult = await winner(scopedDb, 1, generation);
         await runnerDb(options.beforeDatabaseMark);
         staleDatabaseMarks += 1;
