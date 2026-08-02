@@ -295,39 +295,43 @@ export const requestKey = ({
   pathname: string;
 }): string => `${method} ${normalizeApiPath(pathname)}`;
 
-// A dependency edge exists only when the next request starts PROMPTLY after
-// the previous response: real render-fetch waterfalls dispatch the next call
-// within milliseconds of the response that unblocked them. Without this cap,
-// an independent idle prefetch firing a second later would coincidentally
-// "chain" after whatever happened to finish before it, making the depth vary
-// with machine load instead of app structure.
-const CHAIN_GAP_MS = 500;
+// A request launched after this quiet gap starts a new observation sequence,
+// not another route-load round. This excludes idle prefetches from the route's
+// longest contiguous request sequence.
+const REQUEST_SEQUENCE_GAP_MS = 500;
 
-// Longest chain r1..rn where each next request starts after the previous one
-// ended, within CHAIN_GAP_MS: the number of causally sequential request
-// rounds, i.e. how many times the browser had to wait for a response before
-// it could fire the next call. Sorted by start with an O(n^2) longest-chain
-// DP; n is a handful of requests per route.
+// Longest sequence of non-overlapping request waves. A new round starts only
+// after every request in the current wave has completed. This deliberately
+// computes a lower bound: a request that depends on a fast response can be
+// hidden by an unrelated slow response, but runner load cannot serialize
+// independent completions into a false waterfall. Lengthening any response can
+// only merge rounds, never deepen them.
 export const waterfallDepth = (
   intervals: { start: number; end: number }[],
 ): number => {
-  const sorted = intervals
-    .map((interval) => ({ ...interval, depth: 1 }))
-    .sort((a, b) => a.start - b.start);
+  const sorted = intervals.toSorted((a, b) => a.start - b.start);
+  const first = sorted.at(0);
+  if (first === undefined) {
+    return 0;
+  }
 
-  let best = 0;
-  for (const [index, current] of sorted.entries()) {
-    for (let prevIndex = 0; prevIndex < index; prevIndex++) {
-      const prev = sorted[prevIndex];
-      if (
-        prev !== undefined &&
-        current.start >= prev.end &&
-        current.start - prev.end <= CHAIN_GAP_MS
-      ) {
-        current.depth = Math.max(current.depth, prev.depth + 1);
-      }
+  let best = 1;
+  let currentDepth = 1;
+  let waveEndsAt = first.end;
+
+  for (const interval of sorted.slice(1)) {
+    if (interval.start < waveEndsAt) {
+      waveEndsAt = Math.max(waveEndsAt, interval.end);
+      continue;
     }
-    best = Math.max(best, current.depth);
+
+    if (interval.start - waveEndsAt > REQUEST_SEQUENCE_GAP_MS) {
+      currentDepth = 1;
+    } else {
+      currentDepth += 1;
+    }
+    waveEndsAt = interval.end;
+    best = Math.max(best, currentDepth);
   }
   return best;
 };
@@ -457,11 +461,9 @@ const pushNewRequestProblems = ({
   );
 };
 
-// Under load, independent PARALLEL requests can serialize just enough to land
-// inside CHAIN_GAP_MS and bump the measured depth by one with no change to
-// the request manifest (a quiet CI runner rarely reproduces this; a busy dev
-// machine does). Mirrors dbQueryAllowance's role: tolerate one level of
-// measurement jitter before treating a depth increase as a real regression.
+// Browser scheduling can still split one logical wave at its boundary. Keep a
+// bounded +1 allowance; the wave calculation itself is monotonic under slower
+// responses, so load cannot accumulate arbitrary false depth.
 const DEPTH_JITTER_ALLOWANCE = 1;
 
 const pushWaterfallDepthProblems = ({
@@ -479,7 +481,7 @@ const pushWaterfallDepthProblems = ({
     return;
   }
   problems.push(
-    `Request waterfall got deeper on ${route}: ${entry.depth} -> ${metrics.depth} (already tolerating +${DEPTH_JITTER_ALLOWANCE} for parallel-request jitter)\n` +
+    `Request waterfall got deeper on ${route}: ${entry.depth} -> ${metrics.depth} (already tolerating +${DEPTH_JITTER_ALLOWANCE} for wave-boundary jitter)\n` +
       `  Each extra level is one more sequential network round the user waits\n` +
       `  through before the page can finish. Usually the fix is to start the\n` +
       `  query in the route loader (ensureRouteQueryData / prefetchRouteQuery in\n` +

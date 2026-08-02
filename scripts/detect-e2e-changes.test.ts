@@ -92,10 +92,14 @@ describe("detect-e2e-changes", () => {
 
   test("keeps production, Vite canary, and landing work parallel", () => {
     const production = workflowJob("e2e-production-shard");
+    expect(production).toContain(
+      "E2E_EXECUTION_PROFILE: ci-production-parallel",
+    );
     expect(production).not.toContain("Run Vite dependency canary");
     expect(production).not.toContain("Check landing islands");
 
     const canary = workflowJob("e2e-vite-canary");
+    expect(canary).not.toContain("E2E_EXECUTION_PROFILE");
     expect(canary).not.toContain("Build web for route checks");
     expect(canary).not.toContain("Run Playwright shard");
 
@@ -143,14 +147,21 @@ describe("detect-e2e-changes", () => {
     );
   });
 
-  test("shares a version-keyed Playwright browser cache across browser jobs", () => {
+  test("shares and launch-verifies a version-keyed browser cache", () => {
     expect(
       workflow.match(/uses: \.\/\.github\/actions\/setup-playwright/gu),
     ).toHaveLength(3);
     expect(nightlyWorkflow).toContain(
-      "uses: ./.github/actions/setup-playwright",
+      [
+        "uses: ./.github/actions/setup-playwright",
+        "        with:",
+        "          dependency-mode: full",
+      ].join("\n"),
     );
-    expect(playwrightSetup).toContain("bunx playwright --version");
+    expect(playwrightSetup).toContain(
+      'import metadata from "@playwright/test/package.json"',
+    );
+    expect(playwrightSetup).not.toContain("bunx playwright --version");
     expect(playwrightSetup).toContain("~/.cache/ms-playwright");
     expect(playwrightSetup).toContain(
       [
@@ -163,5 +174,25 @@ describe("detect-e2e-changes", () => {
     expect(playwrightSetup).toContain(
       "actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae",
     );
+    expect(playwrightSetup).toContain("id: browser-cache");
+    expect(playwrightSetup).toContain("full|launch-verified");
+    expect(playwrightSetup).toContain(
+      "if: steps.browser-cache.outputs.cache-hit != 'true'",
+    );
+    expect(playwrightSetup).toContain(
+      "if: steps.browser-cache.outputs.cache-hit == 'true' && inputs.dependency-mode == 'full'",
+    );
+    expect(playwrightSetup).toContain(
+      `PLAYWRIGHT_CACHE_HIT: ${githubExpression("steps.browser-cache.outputs.cache-hit")}`,
+    );
+    expect(playwrightSetup).toContain("if verify_chromium; then");
+    expect(playwrightSetup).toContain("bunx playwright install-deps chromium");
+  });
+
+  test("uploads blob reports from the configured Playwright output directory", () => {
+    expect(
+      workflow.match(/path: apps\/web\/e2e\/test-results\/blob-report\//gu),
+    ).toHaveLength(2);
+    expect(workflow).not.toContain("path: apps/web/test-results/blob-report/");
   });
 });

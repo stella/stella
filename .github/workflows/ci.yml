@@ -1182,6 +1182,7 @@ jobs:
 
       - name: Run Playwright shard
         env:
+          E2E_EXECUTION_PROFILE: ci-production-parallel
           E2E_EXPECT_DEV_ROUTES: "false"
           PLAYWRIGHT_BLOB_OUTPUT_NAME: report-${{ matrix.shard }}.zip
         run: >-
@@ -1193,7 +1194,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: playwright-blob-${{ matrix.shard }}
-          path: apps/web/test-results/blob-report/
+          path: apps/web/e2e/test-results/blob-report/
           retention-days: 7
 
       - name: Upload server logs
@@ -1359,7 +1360,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: playwright-blob-vite-canary
-          path: apps/web/test-results/blob-report/
+          path: apps/web/e2e/test-results/blob-report/
           retention-days: 7
 
       - name: Upload server logs

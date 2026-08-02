@@ -232,6 +232,8 @@ jobs:
 
       - name: Install Playwright browsers
         uses: ./.github/actions/setup-playwright
+        with:
+          dependency-mode: full
 
       - name: Seed deterministic marketing content
         run: bun --filter @stll/api db:seed-dev
