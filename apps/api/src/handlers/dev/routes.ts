@@ -13,7 +13,7 @@ import {
 } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { authMacro } from "@/api/lib/auth";
-import { popDevOtp } from "@/api/lib/dev-otp-store";
+import { readDevOtp } from "@/api/lib/dev-otp-store";
 import { rebuildSupplementalSearchIndex } from "@/api/lib/search/index-global";
 import { getSearchProvider } from "@/api/lib/search/provider";
 
@@ -148,7 +148,7 @@ export const devPublicRoute = new Elysia({ prefix: "/dev-public" })
   .get(
     "/last-otp",
     ({ query }) => {
-      const otp = popDevOtp(query.email);
+      const otp = readDevOtp(query.email);
       if (!otp) {
         return new Response("No OTP", { status: 404 });
       }
