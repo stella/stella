@@ -32,7 +32,7 @@ describe("new-account OTP abuse policy", () => {
     const observedKeys: string[] = [];
     const result = await evaluateNewAccountOtpPolicy({
       accountExists: async (email) => email === "user@mailinator.com",
-      clientIp: "192.0.2.1",
+      clientIp: null,
       context: {
         increment: async (key) => {
           observedKeys.push(key);
@@ -58,7 +58,7 @@ describe("new-account OTP abuse policy", () => {
     const observedKeys: string[] = [];
     const result = await evaluateNewAccountOtpPolicy({
       accountExists: async () => false,
-      clientIp: "192.0.2.1",
+      clientIp: null,
       context: {
         increment: async (key) => {
           observedKeys.push(key);
@@ -247,6 +247,49 @@ describe("new-account OTP abuse policy", () => {
     expect(overflows).toEqual([
       expect.objectContaining({ reason: "email", status: "rate_limited" }),
       expect.objectContaining({ reason: "email", status: "rate_limited" }),
+    ]);
+  });
+
+  test("returns the same IP limit for every account state", async () => {
+    type AccountState = "disposable" | "existing" | "permanent_new";
+
+    const overflowForAccountState = async (accountState: AccountState) => {
+      const context = new InMemoryRateLimitContext();
+      const evaluateAttempt = async (attempt: number) => {
+        const domain =
+          accountState === "disposable" ? "mailinator.com" : "example.com";
+        return await evaluateNewAccountOtpPolicy({
+          accountExists: async () => accountState === "existing",
+          clientIp: "192.0.2.1",
+          context,
+          email: `candidate-${attempt}@${domain}`,
+        });
+      };
+
+      try {
+        for (
+          let index = 0;
+          index < NEW_ACCOUNT_OTP_RATE_LIMITS.ip.max;
+          index += 1
+        ) {
+          // oxlint-disable-next-line no-await-in-loop -- sequential requests exercise one fixed-window counter
+          await evaluateAttempt(index);
+        }
+        return await evaluateAttempt(NEW_ACCOUNT_OTP_RATE_LIMITS.ip.max);
+      } finally {
+        context.kill();
+      }
+    };
+
+    const overflows = await Promise.all([
+      overflowForAccountState("existing"),
+      overflowForAccountState("disposable"),
+      overflowForAccountState("permanent_new"),
+    ]);
+    expect(overflows).toEqual([
+      expect.objectContaining({ reason: "ip", status: "rate_limited" }),
+      expect.objectContaining({ reason: "ip", status: "rate_limited" }),
+      expect.objectContaining({ reason: "ip", status: "rate_limited" }),
     ]);
   });
 });

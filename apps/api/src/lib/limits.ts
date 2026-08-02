@@ -381,9 +381,9 @@ export const AUTH_RATE_LIMITS = {
 } as const;
 
 /**
- * Longer-lived limits for signup-capable OTP requests. The email limit applies
- * regardless of account existence so its outward behavior cannot enumerate
- * registered addresses; the IP limit applies only to new accounts.
+ * Longer-lived limits for signup-capable OTP requests. Both limits apply
+ * regardless of account existence so their outward behavior cannot enumerate
+ * registered addresses.
  */
 export const NEW_ACCOUNT_OTP_RATE_LIMITS = {
   email: { duration: 60 * 60 * 1000, max: 3 },

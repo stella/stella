@@ -121,13 +121,6 @@ export const evaluateNewAccountOtpPolicy = async ({
     return emailRateLimitResult;
   }
 
-  if (await accountExists(normalizedEmail)) {
-    return { status: "allowed", reason: "existing_account" };
-  }
-  if (isDisposableEmailAddress(normalizedEmail)) {
-    return { status: "rejected", reason: "disposable_email" };
-  }
-
   if (clientIp) {
     const ipRateLimitResult = await consumeSignupOtpRateLimit({
       ...(context ? { context } : {}),
@@ -138,5 +131,13 @@ export const evaluateNewAccountOtpPolicy = async ({
       return ipRateLimitResult;
     }
   }
+
+  if (await accountExists(normalizedEmail)) {
+    return { status: "allowed", reason: "existing_account" };
+  }
+  if (isDisposableEmailAddress(normalizedEmail)) {
+    return { status: "rejected", reason: "disposable_email" };
+  }
+
   return { status: "allowed", reason: "new_account" };
 };
