@@ -188,4 +188,11 @@ describe("detect-e2e-changes", () => {
     expect(playwrightSetup).toContain("if verify_chromium; then");
     expect(playwrightSetup).toContain("bunx playwright install-deps chromium");
   });
+
+  test("uploads blob reports from the configured Playwright output directory", () => {
+    expect(
+      workflow.match(/path: apps\/web\/e2e\/test-results\/blob-report\//gu),
+    ).toHaveLength(2);
+    expect(workflow).not.toContain("path: apps/web/test-results/blob-report/");
+  });
 });
