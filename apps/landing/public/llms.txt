@@ -10,7 +10,7 @@ stella is built for firms that need control. Matters, documents, and search are 
 - AI outputs are grounded by citations and traceable to source material.
 - Sensitive text can be anonymized before AI workflows.
 - The AI layer uses TanStack AI and remains provider-agnostic across supported providers.
-- No lock-in: standard files, full export, and no per-seat pricing on the core workspace.
+- No lock-in: standard files, full export, and a self-hosted option with no seat licences.
 
 ## Start here
 
