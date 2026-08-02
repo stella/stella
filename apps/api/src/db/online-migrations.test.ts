@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   assertOnlineMigrationsApplied,
+  ONLINE_MIGRATION_INDEX_CUTOVERS,
   ONLINE_MIGRATION_INDEXES,
   runOnlineMigrations,
 } from "./online-migrations";
@@ -14,6 +15,12 @@ const CREDENTIAL_INDEX = "account_credential_singleton_uidx";
 const SOURCE_DOCUMENT_INDEX = "case_law_decisions_source_document_idx";
 const SOURCE_CASE_INDEX = "case_law_decisions_source_case_lang_null_idx";
 const LEGACY_SOURCE_CASE_INDEX = "case_law_decisions_source_case_lang_idx";
+const FILTER_INDEX_CUTOVER = ONLINE_MIGRATION_INDEX_CUTOVERS.at(0);
+if (!FILTER_INDEX_CUTOVER) {
+  throw new TypeError("Expected the filter index cutover");
+}
+const FILTER_INDEX = FILTER_INDEX_CUTOVER.final.name;
+const FILTER_INDEX_REPLACEMENT = FILTER_INDEX_CUTOVER.staged.name;
 
 describe("online migrations", () => {
   test("accepts an already valid index without rebuilding it", async () => {
@@ -170,6 +177,91 @@ describe("online migrations", () => {
     });
     expect(harness.released()).toBe(true);
   });
+
+  test("reuses a valid staged index when retrying the cutover", async () => {
+    const harness = createHarness({
+      indexStates: {
+        [FILTER_INDEX]: [undefined, true],
+        [FILTER_INDEX_REPLACEMENT]: [true],
+      },
+    });
+
+    await runOnlineMigrations(harness.pool);
+
+    expect(
+      indexOfStatement(
+        harness.statements,
+        `ALTER INDEX public."${FILTER_INDEX_REPLACEMENT}" RENAME TO "${FILTER_INDEX}"`,
+      ),
+    ).toBeGreaterThan(-1);
+    expect(
+      indexOfStatement(
+        harness.statements,
+        `${DROP_INDEX_FRAGMENT} public."${FILTER_INDEX_REPLACEMENT}"`,
+      ),
+    ).toBe(-1);
+    expect(indexOfStatement(harness.statements, CREATE_INDEX_FRAGMENT)).toBe(
+      -1,
+    );
+  });
+
+  test("keeps a ready final index and removes a stale staged copy", async () => {
+    const harness = createHarness({
+      indexStates: {
+        [FILTER_INDEX]: [true],
+        [FILTER_INDEX_REPLACEMENT]: [true],
+      },
+    });
+
+    await runOnlineMigrations(harness.pool);
+
+    expect(
+      indexOfStatement(
+        harness.statements,
+        `${DROP_INDEX_FRAGMENT} public."${FILTER_INDEX_REPLACEMENT}"`,
+      ),
+    ).toBeGreaterThan(-1);
+    expect(
+      indexOfStatement(
+        harness.statements,
+        `${DROP_INDEX_FRAGMENT} public."${FILTER_INDEX}"`,
+      ),
+    ).toBe(-1);
+  });
+
+  test("repairs the staged index before replacing an older definition", async () => {
+    const harness = createHarness({
+      indexStates: {
+        [FILTER_INDEX]: [
+          {
+            definitionBody:
+              "ON public.case_law_decisions USING btree (updated_at, id)",
+            isValid: true,
+          },
+          true,
+        ],
+        [FILTER_INDEX_REPLACEMENT]: [false, true],
+      },
+    });
+
+    await runOnlineMigrations(harness.pool);
+
+    const reindexOffset = indexOfStatement(
+      harness.statements,
+      `${REINDEX_FRAGMENT} public."${FILTER_INDEX_REPLACEMENT}"`,
+    );
+    const dropOffset = indexOfStatement(
+      harness.statements,
+      `${DROP_INDEX_FRAGMENT} public."${FILTER_INDEX}"`,
+    );
+    const renameOffset = indexOfStatement(
+      harness.statements,
+      `ALTER INDEX public."${FILTER_INDEX_REPLACEMENT}" RENAME TO "${FILTER_INDEX}"`,
+    );
+    expect(reindexOffset).toBeGreaterThan(-1);
+    expect(dropOffset).toBeGreaterThan(reindexOffset);
+    expect(renameOffset).toBeGreaterThan(dropOffset);
+  });
 });
 
 type IndexState =
@@ -200,6 +292,13 @@ const createHarness = ({
     Object.entries(artifacts).map(([name, values]) => [name, [...values]]),
   );
   let released = false;
+  const managedIndexes = [
+    ...ONLINE_MIGRATION_INDEXES,
+    ...ONLINE_MIGRATION_INDEX_CUTOVERS.flatMap(({ final, staged }) => [
+      final,
+      staged,
+    ]),
+  ];
 
   return {
     pool: {
@@ -224,7 +323,7 @@ const createHarness = ({
           if (query.includes("starts_with")) {
             const newPrefix = params.at(2);
             const oldPrefix = params.at(3);
-            const index = ONLINE_MIGRATION_INDEXES.find(
+            const index = managedIndexes.find(
               ({ name }) =>
                 artifactPrefix(name, "_ccnew") === newPrefix &&
                 artifactPrefix(name, "_ccold") === oldPrefix,
@@ -241,15 +340,14 @@ const createHarness = ({
           if (typeof indexName !== "string") {
             throw new TypeError("Expected index name query parameter");
           }
-          const index = ONLINE_MIGRATION_INDEXES.find(
-            ({ name }) => name === indexName,
-          );
+          const index = managedIndexes.find(({ name }) => name === indexName);
           if (!index) {
             throw new TypeError("Expected managed index name");
           }
           const offset = indexOffsets.get(indexName) ?? 0;
           const states = indexStates[indexName];
-          let state: IndexState = true;
+          let state: IndexState =
+            indexName === FILTER_INDEX_REPLACEMENT ? undefined : true;
           if (states) {
             state = offset < states.length ? states.at(offset) : states.at(-1);
           }

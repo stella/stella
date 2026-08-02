@@ -40,6 +40,14 @@ type SqlQuote = {
 };
 type TimeoutUpdate =
   | {
+      type: "checkpoint";
+      name: "lock" | "statement";
+    }
+  | {
+      type: "restore";
+      name: "lock" | "statement";
+    }
+  | {
       type: "set";
       name: "lock" | "statement";
       scope: "local" | "session";
@@ -289,6 +297,30 @@ const parseTimeoutUpdate = (statement: string): TimeoutUpdate | undefined => {
     return { type: "reset", name: "all" };
   }
 
+  const checkpointGroups =
+    /^(?:SELECT|PERFORM)\s+(?:pg_catalog\.)?set_config\(\s*'stella\.migration_(?<name>statement|lock)_timeout'\s*,\s*(?:pg_catalog\.)?current_setting\(\s*'(?<source>statement|lock)_timeout'\s*\)\s*,\s*false\s*\)$/iu.exec(
+      statement,
+    )?.groups;
+  const checkpointName = checkpointGroups?.["name"];
+  if (
+    (checkpointName === "lock" || checkpointName === "statement") &&
+    checkpointGroups?.["source"] === checkpointName
+  ) {
+    return { type: "checkpoint", name: checkpointName };
+  }
+
+  const restoreGroups =
+    /^(?:SELECT|PERFORM)\s+(?:pg_catalog\.)?set_config\(\s*'(?<name>statement|lock)_timeout'\s*,\s*(?:pg_catalog\.)?current_setting\(\s*'stella\.migration_(?<source>statement|lock)_timeout'\s*\)\s*,\s*false\s*\)$/iu.exec(
+      statement,
+    )?.groups;
+  const restoreName = restoreGroups?.["name"];
+  if (
+    (restoreName === "lock" || restoreName === "statement") &&
+    restoreGroups?.["source"] === restoreName
+  ) {
+    return { type: "restore", name: restoreName };
+  }
+
   const setGroups =
     /^SET\s+(?:(?<scope>SESSION|LOCAL)\s+)?(?<name>statement|lock)_timeout\s*(?:(?:=|TO)\s*(?<value>.+)|FROM\s+CURRENT)$/iu.exec(
       statement,
@@ -373,6 +405,9 @@ const collectUnsafeConcurrentTimeouts = (
   const violations = [];
   let statementTimeout: TimeoutState = "unset";
   let lockTimeout: TimeoutState = "unset";
+  let statementTimeoutCheckpoint: TimeoutState | undefined;
+  let lockTimeoutCheckpoint: TimeoutState | undefined;
+  let statementTimeoutRequiresRestore = false;
   let concurrentBlockOpen = false;
   let statementTimeoutRestored = false;
   let lockTimeoutRequiresRestore = false;
@@ -383,12 +418,16 @@ const collectUnsafeConcurrentTimeouts = (
     const isUnsupportedTransactionReversal =
       TRANSACTION_REVERSAL.test(statement);
     const isStatementRestore =
-      timeoutUpdate?.type === "set" &&
-      timeoutUpdate.name === "statement" &&
-      timeoutUpdate.scope === "session" &&
-      timeoutUpdate.state === "bounded";
+      (timeoutUpdate?.type === "restore" &&
+        timeoutUpdate.name === "statement" &&
+        statementTimeoutCheckpoint !== undefined) ||
+      (timeoutUpdate?.type === "set" &&
+        timeoutUpdate.name === "statement" &&
+        timeoutUpdate.scope === "session" &&
+        timeoutUpdate.state === "bounded");
     const isProtocolBridge =
       (timeoutUpdate?.type === "set" && timeoutUpdate.name === "lock") ||
+      (timeoutUpdate?.type === "restore" && timeoutUpdate.name === "lock") ||
       (timeoutUpdate?.type === "reset" &&
         (timeoutUpdate.name === "all" || timeoutUpdate.name === "lock")) ||
       /^(?:BEGIN|COMMIT)$/iu.test(statement);
@@ -399,9 +438,35 @@ const collectUnsafeConcurrentTimeouts = (
       );
     }
 
-    if (timeoutUpdate?.type === "set" && timeoutUpdate.scope === "session") {
+    if (timeoutUpdate?.type === "checkpoint") {
+      if (timeoutUpdate.name === "statement") {
+        statementTimeoutCheckpoint = statementTimeout;
+      } else {
+        lockTimeoutCheckpoint = lockTimeout;
+      }
+    } else if (timeoutUpdate?.type === "restore") {
+      const checkpoint =
+        timeoutUpdate.name === "statement"
+          ? statementTimeoutCheckpoint
+          : lockTimeoutCheckpoint;
+      if (checkpoint === undefined) {
+        violations.push(
+          `${relativePath}: ${timeoutUpdate.name} timeout restore lacks a checkpoint`,
+        );
+      } else if (timeoutUpdate.name === "statement") {
+        statementTimeout = checkpoint;
+        statementTimeoutRequiresRestore = false;
+      } else {
+        lockTimeout = checkpoint;
+        lockTimeoutRequiresRestore = false;
+      }
+    } else if (
+      timeoutUpdate?.type === "set" &&
+      timeoutUpdate.scope === "session"
+    ) {
       if (timeoutUpdate.name === "statement") {
         statementTimeout = timeoutUpdate.state;
+        statementTimeoutRequiresRestore = timeoutUpdate.state === "unbounded";
       } else {
         lockTimeout = timeoutUpdate.state;
         lockTimeoutRequiresRestore = timeoutUpdate.state !== "bounded";
@@ -458,7 +523,7 @@ const collectUnsafeConcurrentTimeouts = (
   }
   if (
     (concurrentBlockOpen && !statementTimeoutRestored) ||
-    (!concurrentBlockOpen && statementTimeout === "unbounded")
+    (!concurrentBlockOpen && statementTimeoutRequiresRestore)
   ) {
     violations.push(`${relativePath}: statement timeout is not restored`);
   }
@@ -543,6 +608,9 @@ const collectUnsafeTypeChangesInMigration = (
 
   let lockTimeout: TimeoutState = "unset";
   let statementTimeout: TimeoutState = "unset";
+  let lockTimeoutCheckpoint: TimeoutState | undefined;
+  let statementTimeoutCheckpoint: TimeoutState | undefined;
+  let statementTimeoutRequiresRestore = false;
   let metadataOnlyBlockOpen = false;
   let activePolicy: TypeChangePolicy | undefined;
   let activePolicyUsed = false;
@@ -583,10 +651,13 @@ const collectUnsafeTypeChangesInMigration = (
     const timeoutUpdate = parseTimeoutUpdate(statement);
     const isTypeChange = TYPE_CHANGE.test(statement);
     const isImmediateRestore =
-      timeoutUpdate?.type === "set" &&
-      timeoutUpdate.name === "statement" &&
-      timeoutUpdate.scope === "session" &&
-      timeoutUpdate.state === "bounded";
+      (timeoutUpdate?.type === "restore" &&
+        timeoutUpdate.name === "statement" &&
+        statementTimeoutCheckpoint !== undefined) ||
+      (timeoutUpdate?.type === "set" &&
+        timeoutUpdate.name === "statement" &&
+        timeoutUpdate.scope === "session" &&
+        timeoutUpdate.state === "bounded");
 
     if (
       activePolicy === "boundedRewrite" &&
@@ -612,6 +683,31 @@ const collectUnsafeTypeChangesInMigration = (
       }
     }
 
+    if (timeoutUpdate?.type === "checkpoint") {
+      if (timeoutUpdate.name === "lock") {
+        lockTimeoutCheckpoint = lockTimeout;
+      } else {
+        statementTimeoutCheckpoint = statementTimeout;
+      }
+      continue;
+    }
+    if (timeoutUpdate?.type === "restore") {
+      const checkpoint =
+        timeoutUpdate.name === "lock"
+          ? lockTimeoutCheckpoint
+          : statementTimeoutCheckpoint;
+      if (checkpoint === undefined) {
+        violations.push(
+          `${relativePath}: ${timeoutUpdate.name} timeout restore lacks a checkpoint`,
+        );
+      } else if (timeoutUpdate.name === "lock") {
+        lockTimeout = checkpoint;
+      } else {
+        statementTimeout = checkpoint;
+        statementTimeoutRequiresRestore = false;
+      }
+      continue;
+    }
     if (timeoutUpdate?.type === "set") {
       const nextState =
         timeoutUpdate.scope === "session" ? timeoutUpdate.state : "unset";
@@ -619,6 +715,7 @@ const collectUnsafeTypeChangesInMigration = (
         lockTimeout = nextState;
       } else {
         statementTimeout = nextState;
+        statementTimeoutRequiresRestore = nextState === "unbounded";
       }
       continue;
     }
@@ -684,7 +781,7 @@ const collectUnsafeTypeChangesInMigration = (
   if (activePolicy && !activePolicyUsed) {
     violations.push(`${relativePath}: type change policy is unused`);
   }
-  if (metadataOnlyBlockOpen || statementTimeout === "unbounded") {
+  if (metadataOnlyBlockOpen || statementTimeoutRequiresRestore) {
     violations.push(`${relativePath}: statement timeout is not restored`);
   }
 
@@ -943,6 +1040,47 @@ SELECT 1;`;
         SET lock_timeout = '1s';`,
       ),
     ).toEqual([]);
+  });
+
+  test("restores the exact incoming timeout state after concurrent work", () => {
+    const checkpoint = `SELECT set_config(
+      'stella.migration_statement_timeout',
+      current_setting('statement_timeout'),
+      false
+    )`;
+    const restore = `SELECT set_config(
+      'statement_timeout',
+      current_setting('stella.migration_statement_timeout'),
+      false
+    )`;
+
+    expect(parseTimeoutUpdate(checkpoint)).toEqual({
+      name: "statement",
+      type: "checkpoint",
+    });
+    expect(parseTimeoutUpdate(restore)).toEqual({
+      name: "statement",
+      type: "restore",
+    });
+    expect(
+      collectUnsafeConcurrentTimeouts(
+        "preserved/migration.sql",
+        `${checkpoint};
+        SET statement_timeout = 0;
+        CREATE INDEX CONCURRENTLY example_idx ON example (id);
+        ${restore};`,
+      ),
+    ).toEqual([]);
+    expect(
+      collectUnsafeConcurrentTimeouts(
+        "missing-checkpoint/migration.sql",
+        `SET statement_timeout = 0;
+        CREATE INDEX CONCURRENTLY example_idx ON example (id);
+        ${restore};`,
+      ),
+    ).toContain(
+      "missing-checkpoint/migration.sql: statement timeout restore lacks a checkpoint",
+    );
   });
 
   test("rejects transaction reversal in timeout protocols", () => {

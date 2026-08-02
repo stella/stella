@@ -66,9 +66,39 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   ...REWRITTEN_MIGRATION_INDEXES,
 ];
 
-export const ONLINE_VALIDATED_INDEX_NAMES: ReadonlySet<string> = new Set(
-  ONLINE_MIGRATION_INDEXES.map(({ name }) => name),
-);
+type OnlineIndexCutover = {
+  final: RequiredMigrationIndex;
+  staged: OnlineIndex;
+};
+
+export const ONLINE_MIGRATION_INDEX_CUTOVERS: readonly OnlineIndexCutover[] = [
+  {
+    final: {
+      definitionBody:
+        "ON public.case_law_decisions USING btree (updated_at DESC, id DESC)",
+      isUnique: false,
+      name: "case_law_decisions_updated_id_idx",
+      tableName: "case_law_decisions",
+    },
+    staged: {
+      createSql:
+        'CREATE INDEX CONCURRENTLY "case_law_decisions_updated_id_idx_replacement" ON public."case_law_decisions" USING btree ("updated_at" DESC, "id" DESC)',
+      definitionBody:
+        "ON public.case_law_decisions USING btree (updated_at DESC, id DESC)",
+      isUnique: false,
+      name: "case_law_decisions_updated_id_idx_replacement",
+      tableName: "case_law_decisions",
+    },
+  },
+];
+
+export const ONLINE_VALIDATED_INDEX_NAMES: ReadonlySet<string> = new Set([
+  ...ONLINE_MIGRATION_INDEXES.map(({ name }) => name),
+  ...ONLINE_MIGRATION_INDEX_CUTOVERS.flatMap(({ final, staged }) => [
+    final.name,
+    staged.name,
+  ]),
+]);
 
 type OnlineIndexReplacement = {
   legacyName: string;
@@ -136,6 +166,7 @@ const processOnlineMigrations = async (
     }
 
     await processOnlineIndexAt(connection, operation);
+    await processOnlineIndexCutoverAt(connection, operation);
     if (operation === "repair") {
       await retireReplacedIndexAt(connection);
     }
@@ -166,6 +197,24 @@ const processOnlineIndexAt = async (
     await assertIndexReady(connection, index);
   }
   await processOnlineIndexAt(connection, operation, offset + 1);
+};
+
+const processOnlineIndexCutoverAt = async (
+  connection: OnlineMigrationConnection,
+  operation: OnlineMigrationOperation,
+  offset = 0,
+): Promise<void> => {
+  const cutover = ONLINE_MIGRATION_INDEX_CUTOVERS.at(offset);
+  if (!cutover) {
+    return;
+  }
+
+  if (operation === "repair") {
+    await completeIndexCutover(connection, cutover);
+  } else {
+    await assertIndexReady(connection, cutover.final);
+  }
+  await processOnlineIndexCutoverAt(connection, operation, offset + 1);
 };
 
 const retireReplacedIndexAt = async (
@@ -274,15 +323,19 @@ const assertIndexDefinition = (
   index: RequiredMigrationIndex,
   state: PresentIndexState,
 ): void => {
-  if (
-    state.isUnique !== index.isUnique ||
-    definitionBody(state.definition) !== index.definitionBody
-  ) {
+  if (!hasExpectedIndexDefinition(index, state)) {
     panic(
       `Required migration index ${index.name} has an unexpected definition`,
     );
   }
 };
+
+const hasExpectedIndexDefinition = (
+  index: RequiredMigrationIndex,
+  state: PresentIndexState,
+): boolean =>
+  state.isUnique === index.isUnique &&
+  definitionBody(state.definition) === index.definitionBody;
 
 const assertNoReindexArtifacts = async (
   connection: OnlineMigrationConnection,
@@ -362,6 +415,43 @@ const ensureIndexValid = async (
   }
 
   await assertIndexReady(connection, index);
+};
+
+const completeIndexCutover = async (
+  connection: OnlineMigrationConnection,
+  { final, staged }: OnlineIndexCutover,
+): Promise<void> => {
+  const finalState = await readIndexState(connection, final);
+
+  if (finalState.type === "present") {
+    const finalIsReady =
+      hasExpectedIndexDefinition(final, finalState) &&
+      finalState.isValid &&
+      finalState.isReady;
+
+    if (finalIsReady) {
+      const stagedState = await readIndexState(connection, staged);
+      if (stagedState.type === "present") {
+        assertIndexDefinition(staged, stagedState);
+        await connection.execute(
+          `DROP INDEX CONCURRENTLY public.${quoteIdentifier(staged.name)}`,
+        );
+      }
+      return;
+    }
+  }
+
+  await ensureIndexValid(connection, staged);
+
+  if (finalState.type === "present") {
+    await connection.execute(
+      `DROP INDEX CONCURRENTLY public.${quoteIdentifier(final.name)}`,
+    );
+  }
+  await connection.execute(
+    `ALTER INDEX public.${quoteIdentifier(staged.name)} RENAME TO ${quoteIdentifier(final.name)}`,
+  );
+  await assertIndexReady(connection, final);
 };
 
 const POSTGRES_IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/u;
