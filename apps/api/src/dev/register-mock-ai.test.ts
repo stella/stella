@@ -28,9 +28,11 @@ const structuredOutputSchemaFor = (
 ): unknown => {
   const tanStackSchema = toTanStackValibotSchema(
     schema,
+    // The mock path's own purpose, not "structured-output": the synthesizer
+    // reads value constraints that real structured output drops.
     providerSafeJsonSchemaOptionsForTanStackProvider(
       provider,
-      "structured-output",
+      "mock-structured-output",
     ),
   );
   return convertSchemaToJsonSchema(tanStackSchema, {
@@ -99,10 +101,30 @@ const optionalFieldSchema = v.strictObject({
   note: v.optional(v.string()),
 });
 
+// Mirrors apps/api/src/lib/bbox/ai-generate-b-boxes.ts's `bboxOutputSchema`
+// shape: a required array that must be non-empty, plus a bounded number. The
+// synthesizer derives both from the projected schema, so it produces invalid
+// data the moment those constraints stop surviving the projection.
+const boundedCollectionSchema = v.strictObject({
+  boxes: v.pipe(
+    v.array(
+      v.strictObject({
+        // Narrower and wider than the synthesizer's own placeholder, so both
+        // the truncate and the pad path are covered.
+        code: v.pipe(v.string(), v.maxLength(2)),
+        label: v.pipe(v.string(), v.minLength(12)),
+        page: v.pipe(v.number(), v.integer(), v.minValue(1)),
+      }),
+    ),
+    v.minLength(1),
+  ),
+});
+
 const genericSynthesisBattery = [
   ["real templates/prefill schema", prefillOutputSchema],
   ["novel nested/array/enum/nullable schema", novelSchema],
   ["required-nullable ISO-date schema", nullableIsoDateSchema],
+  ["bounded non-empty collection schema", boundedCollectionSchema],
 ] as const;
 
 describe("mockStructuredData", () => {

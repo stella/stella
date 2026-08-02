@@ -88,7 +88,10 @@ export type ProviderSafeJsonSchemaProjection = {
 export type NullUnionStrategy = "json-schema" | "openapi";
 export type EnumValueStrategy = "json-schema" | "string-only";
 export type ValueConstraintStrategy = "preserve" | "omit";
-export type ProviderJsonSchemaPurpose = "structured-output" | "tool";
+export type ProviderJsonSchemaPurpose =
+  | "structured-output"
+  | "mock-structured-output"
+  | "tool";
 
 export type ProviderSafeJsonSchemaProjectionOptions = {
   enumValueStrategy?: EnumValueStrategy;
@@ -112,8 +115,14 @@ export const providerSafeJsonSchemaOptionsForTanStackProvider = (
   // request either: an OpenRouter model id resolves to an arbitrary upstream.
   // Constraints are validation, not shape, and the original Standard Schema
   // still validates the returned value locally, so structured output drops
-  // them for every provider. Tool schemas keep them: tool arguments are
-  // sampled without a schema compiler, and the bounds stay useful guidance.
+  // them for every provider.
+  //
+  // The other two purposes have no schema compiler to protect. Tool arguments
+  // are sampled directly, so their bounds stay useful guidance. The mock
+  // adapter goes further and *synthesizes* a response by walking these very
+  // keywords, so dropping them would hand it a schema it cannot satisfy: a
+  // required array would lose `minItems`, synthesize `[]`, and fail the
+  // caller's own `v.parse`.
   valueConstraintStrategy:
     purpose === "structured-output" ? "omit" : "preserve",
 });
