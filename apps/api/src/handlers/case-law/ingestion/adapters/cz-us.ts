@@ -402,7 +402,7 @@ export const czUsAdapter: SourceAdapter = {
         ctl00$MainContent$usneseni: "on",
         ctl00$MainContent$stanoviska_plena: "on",
         ctl00$MainContent$decidedFrom: "1.1.1900",
-        ctl00$MainContent$decidedTo: "31.12.2030",
+        ["ctl00$MainContent$decidedTo"]: `31.12.${new Date().getFullYear() + 1}`,
         ctl00$MainContent$but_search: "Vyhledat",
       });
       const submit = await fetchWithTimeout(searchUrl, {

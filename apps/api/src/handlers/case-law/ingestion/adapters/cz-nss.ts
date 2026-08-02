@@ -849,7 +849,7 @@ export const czNssAdapter: SourceAdapter = {
       );
       formData.set(
         "vyhledavaciSekce[1].vyhledavaciPodminka[0].vyhledavaciPodminkaHodnota[0].HodnotaDatumACasDo",
-        "31.12.2030",
+        `31.12.${new Date().getFullYear() + 1}`,
       );
 
       const response = await fetchWithTimeout(`${BASE_URL}/Home/Index`, {

@@ -146,7 +146,11 @@ const COVERAGE_THRESHOLD_PCT = 80;
 const STUCK_PREFIX = "Stuck:" as const;
 
 /** Timeout for each remote total fetch (ms). */
-const SOURCE_TOTAL_TIMEOUT = 10_000;
+// The slowest total is the NSS full-range count, which the source itself
+// takes tens of seconds to produce; the budget must exceed the adapter's
+// own request timeout or the probe aborts first and reports a false blind
+// spot.
+const SOURCE_TOTAL_TIMEOUT = 120_000;
 
 // ── Helpers ─────────────────────────────────────────────
 

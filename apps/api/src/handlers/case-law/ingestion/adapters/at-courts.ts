@@ -435,7 +435,8 @@ export const atCourtsAdapter: SourceAdapter = {
         return null;
       }
       const raw = json.OgdSearchResult?.OgdDocumentResults?.Hits?.["#text"];
-      const parsed = raw === undefined ? Number.NaN : Number.parseInt(raw, 10);
+      const parsed =
+        typeof raw === "string" ? Number.parseInt(raw, 10) : Number.NaN;
       return Number.isNaN(parsed) || parsed <= 0 ? null : parsed;
     } catch {
       return null;
