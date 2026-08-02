@@ -241,15 +241,15 @@ const CANARY_CACHING = {
 
 const structuredOutputSchema = v.strictObject({ ok: v.literal(true) });
 
-// Exercises the nested-array constraint shape that provider schema compilers
-// treat differently from a trivial object. The content is synthetic; this
-// canary exists to catch provider drift in the exact shared projection used by
-// production structured-output calls.
+// Exercises the nested shape and the value constraints (array bounds, string
+// lengths) that provider schema compilers treat differently from a trivial
+// object. The content is synthetic; this canary exists to catch provider drift
+// in the exact shared projection used by production structured-output calls.
 const nestedStructuredOutputSchema = v.strictObject({
   entries: v.pipe(
     v.array(
       v.strictObject({
-        heading: v.string(),
+        heading: v.pipe(v.string(), v.maxLength(120)),
         status: v.picklist(["accepted", "needs-work", "not-applicable"]),
         explanation: v.string(),
         primaryEvidence: v.pipe(

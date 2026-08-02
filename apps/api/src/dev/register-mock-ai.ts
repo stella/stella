@@ -440,10 +440,10 @@ const synthesizeJsonSchemaValue = (node: unknown): unknown => {
     case "array":
       return synthesizeJsonSchemaArray(node);
     case "string":
-      return "mock";
+      return synthesizeJsonSchemaString(node);
     case "number":
     case "integer":
-      return 0;
+      return synthesizeJsonSchemaNumber(node);
     case "boolean":
       return false;
     case "null":
@@ -481,6 +481,46 @@ const synthesizeJsonSchemaObject = (node: unknown): Record<string, unknown> => {
     result[key] = synthesizeJsonSchemaValue(propertySchema);
   }
   return result;
+};
+
+const numberKeyword = (
+  node: JsonSchemaNode,
+  key: string,
+): number | undefined =>
+  typeof node[key] === "number" ? node[key] : undefined;
+
+// The synthesized value has to satisfy the bounds the caller's own schema
+// enforces, not just the declared type: a `v.minValue(1)` field that comes
+// back as 0 fails the final `v.parse` exactly like a missing one would. A
+// fractional bound on an integer field has to be pulled inwards to a whole
+// number, or satisfying the bound would break the type instead.
+const synthesizeJsonSchemaNumber = (node: JsonSchemaNode): number => {
+  const isInteger = primaryType(node["type"]) === "integer";
+
+  const minimum = numberKeyword(node, "minimum");
+  if (minimum !== undefined) {
+    return isInteger ? Math.ceil(minimum) : minimum;
+  }
+
+  const maximum = numberKeyword(node, "maximum");
+  if (maximum === undefined || maximum >= 0) {
+    return 0;
+  }
+  return isInteger ? Math.floor(maximum) : maximum;
+};
+
+const MOCK_STRING = "mock";
+
+const synthesizeJsonSchemaString = (node: JsonSchemaNode): string => {
+  const minLength = numberKeyword(node, "minLength") ?? 0;
+  const maxLength = numberKeyword(node, "maxLength");
+  if (maxLength !== undefined && maxLength < MOCK_STRING.length) {
+    return MOCK_STRING.slice(0, Math.max(maxLength, minLength));
+  }
+
+  return minLength <= MOCK_STRING.length
+    ? MOCK_STRING
+    : MOCK_STRING.padEnd(minLength, "-");
 };
 
 const synthesizeJsonSchemaArray = (node: JsonSchemaNode): unknown[] => {
