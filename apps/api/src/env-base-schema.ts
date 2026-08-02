@@ -58,6 +58,25 @@ const databasePoolSecondsSchema = (fallback: string) =>
     fallback,
   );
 
+type BoundedIntegerEnvOptions = {
+  fallback: string;
+  min: number;
+  max: number;
+};
+
+const boundedIntegerEnv = ({ fallback, min, max }: BoundedIntegerEnvOptions) =>
+  v.optional(
+    v.pipe(
+      v.string(),
+      v.digits(),
+      v.transform(Number),
+      v.integer(),
+      v.minValue(min),
+      v.maxValue(max),
+    ),
+    fallback,
+  );
+
 export const envBaseServerSchema = {
   STELLA_VERSION: v.optional(v.string()),
   STELLA_COMMIT_SHA: v.optional(v.string()),
@@ -118,6 +137,25 @@ export const envBaseServerSchema = {
     v.pipe(v.string(), v.parseBoolean()),
     "false",
   ),
+  // Corpus-index throughput. The defaults reproduce the loop's historical
+  // pace exactly, so leaving these unset changes nothing; raising them is a
+  // deployment decision made where it is visible and revertible without a
+  // build. Bounds keep a typo from turning the loop into a stampede.
+  CORPUS_INDEX_BATCH_SIZE: boundedIntegerEnv({
+    fallback: "50",
+    min: 1,
+    max: 2000,
+  }),
+  CORPUS_INDEX_INTERVAL_MS: boundedIntegerEnv({
+    fallback: "15000",
+    min: 250,
+    max: 300_000,
+  }),
+  CORPUS_INDEX_READ_CONCURRENCY: boundedIntegerEnv({
+    fallback: "4",
+    min: 1,
+    max: 32,
+  }),
   isDev: v.boolean(),
 };
 
