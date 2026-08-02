@@ -145,9 +145,12 @@ export const listGatewayMcpToolDefinitions = async ({
       const { readOnlyHint } = tool.cachedTool;
       definitions.push({
         access: externalMcpToolAccess(readOnlyHint),
-        ...(readOnlyHint === undefined
-          ? {}
-          : { annotations: { readOnlyHint } }),
+        annotations: {
+          title: toDynamicToolTitle(
+            `${tool.connectorDisplayName}: ${tool.cachedTool.rawName}`,
+          ),
+          ...(readOnlyHint === undefined ? {} : { readOnlyHint }),
+        },
         anonymized: DYNAMIC_GATEWAY_ANONYMIZED,
         description: externalToolDescription({
           connectorDisplayName: tool.connectorDisplayName,
@@ -164,7 +167,10 @@ export const listGatewayMcpToolDefinitions = async ({
     for (const skill of await loadVisibleSkillTools({ context })) {
       definitions.push({
         access: "read",
-        annotations: { readOnlyHint: true },
+        annotations: {
+          title: toDynamicToolTitle(skill.name),
+          readOnlyHint: true,
+        },
         anonymized: DYNAMIC_GATEWAY_ANONYMIZED,
         description: skill.description,
         inputSchema: {
@@ -206,13 +212,14 @@ export const getGatewayMcpToolDefinition = async ({
 
     return {
       access: externalMcpToolAccess(externalTool.cachedTool.readOnlyHint),
-      ...(externalTool.cachedTool.readOnlyHint === undefined
-        ? {}
-        : {
-            annotations: {
-              readOnlyHint: externalTool.cachedTool.readOnlyHint,
-            },
-          }),
+      annotations: {
+        title: toDynamicToolTitle(
+          `${externalTool.connectorDisplayName}: ${externalTool.cachedTool.rawName}`,
+        ),
+        ...(externalTool.cachedTool.readOnlyHint === undefined
+          ? {}
+          : { readOnlyHint: externalTool.cachedTool.readOnlyHint }),
+      },
       anonymized: DYNAMIC_GATEWAY_ANONYMIZED,
       description: externalToolDescription({
         connectorDisplayName: externalTool.connectorDisplayName,
@@ -235,7 +242,10 @@ export const getGatewayMcpToolDefinition = async ({
 
   return {
     access: "read",
-    annotations: { readOnlyHint: true },
+    annotations: {
+      title: toDynamicToolTitle(skill.name),
+      readOnlyHint: true,
+    },
     anonymized: DYNAMIC_GATEWAY_ANONYMIZED,
     description: skill.description,
     inputSchema: {
@@ -251,11 +261,26 @@ export const getGatewayMcpToolDefinition = async ({
 export const toMcpTools = (
   definitions: readonly McpToolDefinition[],
 ): McpTool[] =>
-  definitions.map(({ annotations, description, inputSchema, name }) =>
-    annotations === undefined
-      ? { description, inputSchema, name }
-      : { annotations, description, inputSchema, name },
-  );
+  definitions.map(({ annotations, description, inputSchema, name }) => ({
+    annotations,
+    description,
+    inputSchema,
+    name,
+  }));
+
+// Display title for a dynamically-gated tool. External connectors and skills
+// carry human names already; clamp to the CLI trust boundary's 64-char wire
+// cap (MAX_TOOL_TITLE_CHARS in packages/cli/src/registry-trust.ts) so a long
+// connector or skill name cannot make the served listing fail a client's
+// fetched-registry validation.
+const DYNAMIC_TOOL_TITLE_MAX_CHARS = 64;
+
+const toDynamicToolTitle = (raw: string): string => {
+  const trimmed = raw.trim();
+  return trimmed.length <= DYNAMIC_TOOL_TITLE_MAX_CHARS
+    ? trimmed
+    : trimmed.slice(0, DYNAMIC_TOOL_TITLE_MAX_CHARS);
+};
 
 const externalToolDescription = ({
   connectorDisplayName,

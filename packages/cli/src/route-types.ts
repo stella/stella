@@ -29,6 +29,7 @@ export type RegistryToolListing = {
   description: string;
   inputSchema: JsonSchema;
   annotations?: {
+    title?: string;
     readOnlyHint?: boolean;
     destructiveHint?: boolean;
     idempotentHint?: boolean;

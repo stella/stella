@@ -5,6 +5,7 @@ import {
   MAX_LISTING_BYTES,
   MAX_PROPS,
   MAX_SCHEMA_DEPTH,
+  MAX_TOOL_TITLE_CHARS,
   MAX_TOOLS,
   validateFetchedToolsList,
 } from "./registry-trust.js";
@@ -99,6 +100,26 @@ describe("validateFetchedToolsList: rule 2 (meta-schema)", () => {
   test("a non-boolean annotation hint is rejected", () => {
     const tool = validTool({ annotations: { readOnlyHint: "yes" } });
     expect(validateFetchedToolsList(body([tool])).ok).toBe(false);
+  });
+
+  test("a string title annotation is accepted and projected", () => {
+    const tool = validTool({
+      annotations: { title: "List matters", readOnlyHint: true },
+    });
+    const result = validateFetchedToolsList(body([tool]));
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.listings[0]?.annotations?.title).toBe("List matters");
+    }
+  });
+
+  test("a non-string or over-cap title annotation is rejected", () => {
+    const nonString = validTool({ annotations: { title: true } });
+    expect(validateFetchedToolsList(body([nonString])).ok).toBe(false);
+    const overCap = validTool({
+      annotations: { title: "x".repeat(MAX_TOOL_TITLE_CHARS + 1) },
+    });
+    expect(validateFetchedToolsList(body([overCap])).ok).toBe(false);
   });
 
   test("invalid schema regex patterns are rejected at the trust boundary", () => {

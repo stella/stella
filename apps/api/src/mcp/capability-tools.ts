@@ -1260,7 +1260,7 @@ export const mapHandlerResult = ({
 
 const CAPABILITY_TOOL_DEFINITIONS = [
   {
-    annotations: { openWorldHint: false },
+    annotations: { title: "List capabilities", openWorldHint: false },
     name: "list_capabilities",
     access: "read",
     anonymized: { exposure: "excluded", reason: "dynamic_tenant_payload" },
@@ -1291,7 +1291,7 @@ const CAPABILITY_TOOL_DEFINITIONS = [
     },
   },
   {
-    annotations: { openWorldHint: false },
+    annotations: { title: "Describe capability", openWorldHint: false },
     name: "describe_capability",
     access: "read",
     anonymized: { exposure: "excluded", reason: "dynamic_tenant_payload" },
@@ -1320,7 +1320,11 @@ const CAPABILITY_TOOL_DEFINITIONS = [
     // lookup and template-tools.ts's fill_template declare open-world for;
     // the hint is static per tool, so it must cover that reachable case even
     // though most capabilities never leave the closed Stella domain.
-    annotations: { idempotentHint: false, openWorldHint: true },
+    annotations: {
+      title: "Invoke capability",
+      idempotentHint: false,
+      openWorldHint: true,
+    },
     name: "invoke_capability",
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },

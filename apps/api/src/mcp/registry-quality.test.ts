@@ -73,6 +73,14 @@ const TOOL_DESCRIPTION_CHAR_CEILING = 810;
 // verb_noun style: lowercase words joined by single underscores.
 const TOOL_NAME_PATTERN = /^[a-z]+(?:_[a-z]+)*$/u;
 
+// Display titles: sentence case, no trailing period, short enough for a
+// client's tool list or consent prompt. The 40-char product cap sits under
+// the CLI trust boundary's 64-char wire cap (MAX_TOOL_TITLE_CHARS in
+// packages/cli/src/registry-trust.ts), so every title the registry can emit
+// is also one a fetched listing would accept.
+const TOOL_TITLE_MAX_CHARS = 40;
+const TOOL_TITLE_PATTERN = /^[A-Z][^.]*[^.\s]$/u;
+
 describe.each([...SURFACES])(
   "MCP registry quality ($mode surface)",
   ({ mode, definitions }) => {
@@ -106,6 +114,26 @@ describe.each([...SURFACES])(
     test("tool names follow verb_noun naming", () => {
       for (const tool of definitions) {
         expect(tool.name).toMatch(TOOL_NAME_PATTERN);
+      }
+    });
+
+    test("tool titles are unique, sentence-case display names", () => {
+      const seen = new Map<string, string>();
+      for (const tool of definitions) {
+        const title = tool.annotations.title;
+        expect(title, `Tool ${tool.name} title "${title}"`).toMatch(
+          TOOL_TITLE_PATTERN,
+        );
+        expect(
+          title.length,
+          `Tool ${tool.name} title is ${title.length} chars`,
+        ).toBeLessThanOrEqual(TOOL_TITLE_MAX_CHARS);
+        const holder = seen.get(title);
+        expect(
+          holder,
+          `Tools ${holder} and ${tool.name} share the title "${title}"`,
+        ).toBeUndefined();
+        seen.set(title, tool.name);
       }
     });
 
@@ -281,10 +309,13 @@ describe("MCP registry annotation coherence", () => {
         source,
         `Anonymized tool ${tool.name} has no default-surface counterpart`,
       ).toBeDefined();
+      if (!source) {
+        continue;
+      }
       expect(
         tool.annotations,
         `Anonymized tool ${tool.name} annotations diverge from the default surface`,
-      ).toEqual(source?.annotations);
+      ).toEqual(source.annotations);
     }
   });
 });

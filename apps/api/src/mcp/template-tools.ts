@@ -397,7 +397,11 @@ const buildTemplateDetailTextFieldSpecs = (
 
 export const TEMPLATE_TOOL_DEFINITIONS = [
   {
-    annotations: { readOnlyHint: true, openWorldHint: false },
+    annotations: {
+      title: "List templates",
+      readOnlyHint: true,
+      openWorldHint: false,
+    },
     description:
       "List the document templates in this organization (NDAs, powers of " +
       "attorney, leases), or describe one template's fillable fields. Omit " +
@@ -474,7 +478,11 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
     // external interaction matter-tools.ts's company lookup declares open-
     // world for; the hint is static per tool, so it must cover that case even
     // though most fills touch no lookup field.
-    annotations: { idempotentHint: false, openWorldHint: true },
+    annotations: {
+      title: "Fill template",
+      idempotentHint: false,
+      openWorldHint: true,
+    },
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
     name: "fill_template",
@@ -526,7 +534,11 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
         "values",
       ],
     },
-    annotations: { idempotentHint: false, openWorldHint: true },
+    annotations: {
+      title: "Save filled template",
+      idempotentHint: false,
+      openWorldHint: true,
+    },
     access: "write",
     additionalScopes: ["stella:templates"],
     anonymized: { exposure: "excluded", reason: "write" },
@@ -561,7 +573,11 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
         fields: fieldsOverlayProp,
       },
     },
-    annotations: { idempotentHint: false, openWorldHint: false },
+    annotations: {
+      title: "Save template",
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
     name: "save_template",

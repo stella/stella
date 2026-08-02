@@ -76,7 +76,11 @@ const MANAGE_ORG_ACTIONS = [
 
 export const RESEARCH_ADMIN_TOOL_DEFINITIONS = [
   {
-    annotations: { readOnlyHint: true, openWorldHint: true },
+    annotations: {
+      title: "Search legislation",
+      readOnlyHint: true,
+      openWorldHint: true,
+    },
     description:
       "Search and read Spanish consolidated legislation from the BOE. In " +
       "search mode, pass query (free text) and/or filters (title, " +
@@ -149,7 +153,11 @@ export const RESEARCH_ADMIN_TOOL_DEFINITIONS = [
     scope: "stella:read",
   },
   {
-    annotations: { readOnlyHint: true, openWorldHint: false },
+    annotations: {
+      title: "List audit log",
+      readOnlyHint: true,
+      openWorldHint: false,
+    },
     description:
       "Read the organization's audit trail (compliance view). Returns audit " +
       "entries newest first, each with its action, resource type and id, actor " +
@@ -236,7 +244,11 @@ export const RESEARCH_ADMIN_TOOL_DEFINITIONS = [
       },
       required: ["action"],
     },
-    annotations: { idempotentHint: false, openWorldHint: false },
+    annotations: {
+      title: "Manage organization",
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
     name: "manage_organization",
