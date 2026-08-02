@@ -55,6 +55,14 @@ const _commentAfterOperator = sql`${formJson}::/* cast */jsonb`;
 // oxlint-disable-next-line no-bare-jsonb-cast/no-bare-jsonb-cast
 const _uppercaseCast = sql`${formJson}::JSONB`;
 
+// Schema-qualifying the type name resolves to the same type.
+// oxlint-disable-next-line no-bare-jsonb-cast/no-bare-jsonb-cast
+const _qualifiedCast = sql`${formJson}::pg_catalog.jsonb`;
+
+// ...as does quoting it.
+// oxlint-disable-next-line no-bare-jsonb-cast/no-bare-jsonb-cast
+const _quotedCast = sql`${formJson}::"jsonb"`;
+
 // Parenthesizing the parameter does not change what the cast applies to.
 // oxlint-disable-next-line no-bare-jsonb-cast/no-bare-jsonb-cast
 const _parenWrapped = sql`doc = (${formJson})::jsonb`;
@@ -104,6 +112,10 @@ const _positionalParenWrapped = "UPDATE t SET doc = ($1)::jsonb WHERE id = $2";
 // oxlint-disable-next-line no-bare-jsonb-cast/no-bare-jsonb-cast
 const _positionalAnsiCast = "UPDATE t SET doc = CAST($1 AS jsonb)";
 
+// ...with the type name schema-qualified.
+// oxlint-disable-next-line no-bare-jsonb-cast/no-bare-jsonb-cast
+const _positionalQualifiedAnsi = "SET doc = CAST($1 AS pg_catalog.jsonb)";
+
 // Property access is not an exemption: this is still a bound serialized value.
 // oxlint-disable-next-line no-bare-jsonb-cast/no-bare-jsonb-cast
 const _viaPropertyAccess = sql`doc = ${rowPayload.astJson}::jsonb`;
@@ -148,6 +160,9 @@ const _noCast = sql`${JSON.stringify(value)}`;
 // Whitespace must not turn the safe form into a false positive either.
 const _throughTextSpaced = sql`${formJson} ::text::jsonb`;
 
+// The qualified safe form stays a text parameter that Postgres parses.
+const _qualifiedThroughText = sql`${formJson}::pg_catalog.text::jsonb`;
+
 export const __noBareJsonbCastFixture = {
   _direct,
   _viaIdentifier,
@@ -158,6 +173,8 @@ export const __noBareJsonbCastFixture = {
   _commentBeforeCast,
   _commentAfterOperator,
   _uppercaseCast,
+  _qualifiedCast,
+  _quotedCast,
   _parenWrapped,
   _parenWrappedNested,
   _ansiCast,
@@ -171,10 +188,12 @@ export const __noBareJsonbCastFixture = {
   _positionalLiteral,
   _positionalParenWrapped,
   _positionalAnsiCast,
+  _positionalQualifiedAnsi,
   _positionalThroughText,
   _throughText,
   _identifierThroughText,
   _throughTextSpaced,
+  _qualifiedThroughText,
   _columnCast,
   _sqlLiteral,
   _callResultCast,

@@ -21,6 +21,7 @@
 //   sql`... ${json}::jsonb ...`           // any value, however it got here
 //   sql`... (${json})::jsonb ...`         // parens change nothing
 //   sql`... CAST(${json} AS jsonb) ...`   // ANSI spelling of the same cast
+//   sql`... ${json}::pg_catalog.jsonb ...` // qualified/quoted spellings too
 //
 // Property access earns no exemption of its own: `${payload.astJson}` is a
 // member expression and still a bound serialized string. Casting a real column
@@ -59,21 +60,34 @@ const stripSqlComments = (raw: string): string => raw.replace(SQL_COMMENT, " ");
 const stripLeadingSqlNoise = (raw: string): string =>
   stripSqlComments(raw).replace(/^\s+/u, "");
 
+// Every spelling Postgres resolves to the jsonb type: unqualified,
+// schema-qualified (`pg_catalog.jsonb`), quoted (`"jsonb"`), and their
+// combinations. Case-insensitivity comes from the flags on the composed
+// regexes; a quoted mixed-case spelling would not resolve to the type in
+// Postgres, but flagging it anyway is harmless because it fails at runtime.
+const JSONB_TYPE = String.raw`(?:"?pg_catalog"?\s*\.\s*)?"?jsonb\b"?`;
+
 // `::jsonb` with optional whitespace after the operator, case-insensitive
 // because SQL type names are. `::text::jsonb` does not match, which is the
 // whole point.
-const BARE_JSONB_CAST = /^::\s*jsonb\b/iu;
+const BARE_JSONB_CAST = new RegExp(String.raw`^::\s*${JSONB_TYPE}`, "iu");
 
 // `(${json})::jsonb` types the parameter exactly like the unparenthesized
 // form. The closing parens are matched here; whether they wrap the bare bind
 // is decided against the text before the interpolation.
-const PAREN_WRAPPED_CAST = /^([\s)]*\))\s*::\s*jsonb\b/iu;
+const PAREN_WRAPPED_CAST = new RegExp(
+  String.raw`^([\s)]*\))\s*::\s*${JSONB_TYPE}`,
+  "iu",
+);
 
 // `CAST(${json} AS jsonb)` resolves the parameter to jsonb exactly like the
 // `::` shorthand. Requiring the `CAST(` context on the other side of the
 // interpolation keeps a column alias that happens to be named `jsonb`
 // (`SELECT ${x} AS jsonb`) out.
-const ANSI_CAST_SUFFIX = /^[)\s]*as\s+jsonb\b/iu;
+const ANSI_CAST_SUFFIX = new RegExp(
+  String.raw`^[)\s]*as\s+${JSONB_TYPE}`,
+  "iu",
+);
 const ANSI_CAST_PREFIX = /\bcast\s*\((\s|\()*$/iu;
 
 // The interpolation is a bare paren wrap only when the text before it closes
@@ -126,11 +140,18 @@ const bareCastSurrounds = (prevRaw: string, nextRaw: string): boolean => {
 // has to be matched in the SQL text itself. The lookbehind on the wrapped form
 // keeps call results out (`to_jsonb($1)::jsonb` types the parameter by the
 // function's signature, not by the cast).
-const POSITIONAL_JSONB_CAST = /\$\d+\s*::\s*jsonb\b/iu;
-const POSITIONAL_WRAPPED_JSONB_CAST =
-  /(?<![\w$])\((\s*\()*\s*\$\d+\s*(\)\s*)*\)\s*::\s*jsonb\b/iu;
-const POSITIONAL_ANSI_JSONB_CAST =
-  /\bcast\s*\((\s|\()*\$\d+\s*(\)\s*)*as\s+jsonb\b/iu;
+const POSITIONAL_JSONB_CAST = new RegExp(
+  String.raw`\$\d+\s*::\s*${JSONB_TYPE}`,
+  "iu",
+);
+const POSITIONAL_WRAPPED_JSONB_CAST = new RegExp(
+  String.raw`(?<![\w$])\((\s*\()*\s*\$\d+\s*(\)\s*)*\)\s*::\s*${JSONB_TYPE}`,
+  "iu",
+);
+const POSITIONAL_ANSI_JSONB_CAST = new RegExp(
+  String.raw`\bcast\s*\((\s|\()*\$\d+\s*(\)\s*)*as\s+${JSONB_TYPE}`,
+  "iu",
+);
 
 const carriesPositionalBareCast = (text: string): boolean => {
   const sql = stripSqlComments(text);
