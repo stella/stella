@@ -83,8 +83,8 @@ minimumReleaseAgeExcludes = [
   "@typescript/typescript-win32-arm64",
   "@typescript/typescript-win32-x64",
   # better-result 3: opted in immediately for migration evaluation.
-  # Remove once 3.0 clears the 5-day quarantine.
-  "better-result",
+  # 3.0.0 was published at 2026-08-01T21:35:30.036Z.
+  "better-result", # quarantine-expires: 2026-08-06T21:35:30.036Z
   "drizzle-kit",
   "drizzle-orm",
 ]
