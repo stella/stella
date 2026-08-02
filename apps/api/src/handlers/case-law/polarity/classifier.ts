@@ -135,6 +135,9 @@ const trackSurfaceForm = async (
   scopedDb: ScopedDb,
 ) => {
   const pattern = phraseToPattern(keyPhrase);
+  // Bound below as `::text::jsonb`, never a bare `::jsonb`: the bare cast fixes
+  // the parameter's type to jsonb, so the driver JSON-encodes this string again
+  // and `@>` compares against a jsonb string instead of the array.
   const formJson = JSON.stringify([keyPhrase]);
 
   // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive that the require-audit-on-mutation rule scans for inside this arrow's body range
@@ -156,12 +159,12 @@ const trackSurfaceForm = async (
           surfaceForms: sql`
           CASE
             WHEN ${caseLawPolarityRules.surfaceForms}
-              @> ${formJson}::jsonb
+              @> ${formJson}::text::jsonb
             THEN ${caseLawPolarityRules.surfaceForms}
             WHEN ${caseLawPolarityRules.polarity} != ${polarity}
             THEN ${caseLawPolarityRules.surfaceForms}
             ELSE ${caseLawPolarityRules.surfaceForms}
-              || ${formJson}::jsonb
+              || ${formJson}::text::jsonb
           END
         `,
           source: sql`
@@ -171,10 +174,10 @@ const trackSurfaceForm = async (
               AND jsonb_array_length(
                 CASE
                   WHEN ${caseLawPolarityRules.surfaceForms}
-                    @> ${formJson}::jsonb
+                    @> ${formJson}::text::jsonb
                   THEN ${caseLawPolarityRules.surfaceForms}
                   ELSE ${caseLawPolarityRules.surfaceForms}
-                    || ${formJson}::jsonb
+                    || ${formJson}::text::jsonb
                 END
               ) >= ${PROMOTION_THRESHOLD}
             THEN ${RULE_SOURCE.LLM_PROMOTED}
@@ -188,10 +191,10 @@ const trackSurfaceForm = async (
               AND jsonb_array_length(
                 CASE
                   WHEN ${caseLawPolarityRules.surfaceForms}
-                    @> ${formJson}::jsonb
+                    @> ${formJson}::text::jsonb
                   THEN ${caseLawPolarityRules.surfaceForms}
                   ELSE ${caseLawPolarityRules.surfaceForms}
-                    || ${formJson}::jsonb
+                    || ${formJson}::text::jsonb
                 END
               ) >= ${PROMOTION_THRESHOLD}
             THEN 0.8
