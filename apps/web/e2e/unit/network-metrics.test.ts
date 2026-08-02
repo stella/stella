@@ -263,9 +263,7 @@ describe("diffNetworkBaseline", () => {
       new Map([["/contacts", metrics(["GET /v1/contacts"], 4)]]),
     );
     expect(problems.some((p) => p.includes("2 -> 4"))).toBe(true);
-    expect(
-      problems.some((p) => p.includes("wave-boundary jitter")),
-    ).toBe(true);
+    expect(problems.some((p) => p.includes("wave-boundary jitter"))).toBe(true);
   });
 
   test("a repeated API request is a problem", () => {
