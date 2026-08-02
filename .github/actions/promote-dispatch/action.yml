@@ -7,8 +7,11 @@ description: >
   cannot say what broke.
 
 inputs:
-  token:
-    description: App token with actions:write on the infra repository
+  app-client-id:
+    description: Client ID for the GitHub App installed on the target repository
+    required: true
+  app-private-key:
+    description: Private key for minting short-lived installation tokens
     required: true
   infra-repo:
     description: owner/name of the repository hosting the promote workflow
@@ -53,7 +56,8 @@ runs:
     - name: Dispatch and watch promote-release.yml
       shell: bash
       env:
-        GH_TOKEN: ${{ inputs.token }}
+        APP_CLIENT_ID: ${{ inputs.app-client-id }}
+        APP_PRIVATE_KEY: ${{ inputs.app-private-key }}
         INFRA_REPO: ${{ inputs.infra-repo }}
         WORKFLOW_FILE: ${{ inputs.workflow-file }}
         RELEASE_REF: ${{ inputs.release-ref }}
@@ -64,6 +68,88 @@ runs:
         GIT_SHA: ${{ inputs.git-sha }}
       run: |
         set -euo pipefail
+
+        readonly TOKEN_REFRESH_SECONDS=2700
+        readonly TOKEN_REFRESH_ATTEMPTS=20
+        readonly TOKEN_REFRESH_RETRY_SECONDS=15
+        readonly WATCH_POLL_SECONDS=10
+
+        base64url() {
+          openssl base64 -A | tr '/+' '_-' | tr -d '='
+        }
+
+        mint_app_token() {
+          local now issued_at expires_at header payload unsigned signature jwt
+          local installation_id repository_name request_body
+          now="$(date +%s)"
+          issued_at="$((now - 60))"
+          expires_at="$((now + 600))"
+          header="$(printf '%s' '{"typ":"JWT","alg":"RS256"}' | base64url)"
+          payload="$(
+            printf '{"iat":%s,"exp":%s,"iss":"%s"}' \
+              "$issued_at" "$expires_at" "$APP_CLIENT_ID" | base64url
+          )"
+          unsigned="${header}.${payload}"
+          signature="$(
+            openssl dgst -sha256 -sign <(printf '%s\n' "$APP_PRIVATE_KEY") \
+              <(printf '%s' "$unsigned") | base64url
+          )"
+          jwt="${unsigned}.${signature}"
+          echo "::add-mask::${jwt}" >&2
+
+          installation_id="$(
+            GH_TOKEN="$jwt" gh api -H "Authorization: Bearer ${jwt}" \
+              "/repos/${INFRA_REPO}/installation" --jq '.id'
+          )"
+          repository_name="${INFRA_REPO#*/}"
+          request_body="$(
+            jq -cn --arg repository "$repository_name" \
+              '{repositories: [$repository], permissions: {actions: "write"}}'
+          )"
+          GH_TOKEN="$jwt" gh api -H "Authorization: Bearer ${jwt}" \
+            --method POST \
+            "/app/installations/${installation_id}/access_tokens" \
+            --input - --jq '.token' <<<"$request_body"
+        }
+
+        refresh_app_token() {
+          local attempt token=""
+          for ((attempt = 1; attempt <= TOKEN_REFRESH_ATTEMPTS; attempt += 1)); do
+            if token="$(mint_app_token)" && [[ -n "$token" ]]; then
+              break
+            fi
+            token=""
+            echo "Token mint failed (${attempt}/${TOKEN_REFRESH_ATTEMPTS}); retaining the current token and retrying..." >&2
+            sleep "$TOKEN_REFRESH_RETRY_SECONDS"
+          done
+          if [[ -z "$token" ]]; then
+            echo "::error::Could not renew the GitHub App token after ${TOKEN_REFRESH_ATTEMPTS} attempts." >&2
+            exit 1
+          fi
+          if [[ -n "${current_app_token:-}" ]]; then
+            GH_TOKEN="$current_app_token" gh api --method DELETE \
+              "/installation/token" >/dev/null 2>&1 || true
+          fi
+          echo "::add-mask::${token}"
+          current_app_token="$token"
+          export GH_TOKEN="$token"
+          token_refreshed_at="$(date +%s)"
+        }
+
+        revoke_app_token() {
+          if [[ -n "${current_app_token:-}" ]]; then
+            GH_TOKEN="$current_app_token" gh api --method DELETE \
+              "/installation/token" >/dev/null 2>&1 || true
+          fi
+        }
+
+        if [[ ! "$INFRA_REPO" =~ ^[^/]+/[^/]+$ ]]; then
+          echo "::error::infra-repo must be an owner/name pair." >&2
+          exit 1
+        fi
+        current_app_token=""
+        trap revoke_app_token EXIT
+        refresh_app_token
 
         dispatched_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
         # Must match the `run-name:` template in
@@ -138,31 +224,42 @@ runs:
           exit 1
         fi
 
+        run_url="https://github.com/${INFRA_REPO}/actions/runs/${run_id}"
+        consecutive_read_failures=0
         echo "Watching run ${run_id}..."
-        if gh run watch "$run_id" --repo "$INFRA_REPO" --compact --exit-status; then
+        while true; do
+          now="$(date +%s)"
+          if (( now - token_refreshed_at >= TOKEN_REFRESH_SECONDS )); then
+            echo "Refreshing promotion watcher credentials..."
+            refresh_app_token
+          fi
+
+          if ! run_state="$(
+            gh api "/repos/${INFRA_REPO}/actions/runs/${run_id}" \
+              --jq '[.status, .conclusion, .html_url] | @tsv'
+          )"; then
+            consecutive_read_failures=$((consecutive_read_failures + 1))
+            if (( consecutive_read_failures >= 3 )); then
+              echo "::error::Lost track of promote run ${run_id} after ${consecutive_read_failures} consecutive API failures. Check ${run_url}" >&2
+              exit 1
+            fi
+            echo "Run status lookup failed (${consecutive_read_failures}/3); retrying..."
+            sleep "$WATCH_POLL_SECONDS"
+            continue
+          fi
+          consecutive_read_failures=0
+          status="$(cut -f1 <<<"$run_state")"
+          conclusion="$(cut -f2 <<<"$run_state")"
+          run_url="$(cut -f3 <<<"$run_state")"
+          if [[ "$status" == "completed" ]]; then
+            break
+          fi
+          sleep "$WATCH_POLL_SECONDS"
+        done
+
+        if [[ "$conclusion" == "success" ]]; then
+          echo "Promote run completed successfully: ${run_url}"
           exit 0
-        fi
-
-        # The watch failed, so this job fails either way. Read the run back
-        # only to say why. A lookup that itself fails must not mask that with
-        # `set -e` killing the step silently.
-        run_url="${INFRA_REPO}/actions/runs/${run_id}"
-        if ! run_state="$(
-          gh api "/repos/${INFRA_REPO}/actions/runs/${run_id}" \
-            --jq '[.conclusion, .html_url] | @tsv'
-        )"; then
-          echo "::error::Promote run ${run_id} did not complete successfully, and reading its final state failed. Check https://github.com/${run_url}" >&2
-          exit 1
-        fi
-        conclusion="$(cut -f1 <<<"$run_state")"
-        run_url="$(cut -f2 <<<"$run_state")"
-
-        # `gh run watch` can exit non-zero without the run having concluded,
-        # for example when the watch itself lost the API. Reporting an empty
-        # conclusion as a verdict would be misleading.
-        if [[ -z "$conclusion" || "$conclusion" == "null" ]]; then
-          echo "::error::Lost track of promote run ${run_id} before it concluded: ${run_url}" >&2
-          exit 1
         fi
 
         # A cancelled promote stays fatal. When a newer push superseded this

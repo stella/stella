@@ -86,16 +86,6 @@ jobs:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.build.outputs.digest }}
 
-      - name: Mint deployment token
-        id: deployment-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
-          private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: ${{ vars.STAGING_DEPLOY_REPOSITORY }}
-          permission-actions: write
-
       - name: Check staging deployment target is configured
         env:
           DEPLOY_REPOSITORY: ${{ github.repository_owner }}/${{ vars.STAGING_DEPLOY_REPOSITORY }}
@@ -113,7 +103,8 @@ jobs:
       - name: Deploy to staging
         uses: ./.github/actions/promote-dispatch
         with:
-          token: ${{ steps.deployment-token.outputs.token }}
+          app-client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
+          app-private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
           infra-repo: ${{ github.repository_owner }}/${{ vars.STAGING_DEPLOY_REPOSITORY }}
           workflow-file: ${{ vars.STAGING_DEPLOY_WORKFLOW }}
           release-ref: ${{ steps.ref.outputs.release_ref }}

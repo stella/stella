@@ -150,7 +150,9 @@ describe("API and CLI release contract", () => {
 
   test("release and pull-request smoke tests reject synthetic migration history", async () => {
     const workflows = await Promise.all([
-      Bun.file(new URL("../.github/workflows/release.yml", import.meta.url)).text(),
+      Bun.file(
+        new URL("../.github/workflows/release.yml", import.meta.url),
+      ).text(),
       Bun.file(
         new URL("../.github/workflows/db-migrations.yml", import.meta.url),
       ).text(),

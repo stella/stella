@@ -562,6 +562,10 @@ jobs:
           bun test
           scripts/check-api-deployment.test.ts
 
+      - name: Test maintenance release preparation
+        if: needs.ci-changes.outputs.package_checks_required == 'true'
+        run: bun test scripts/prepare-maintenance-release.property.test.ts
+
       # The api test runner only globs `src/**`, so this seed-side regression
       # guard (it imports `createMockDocx` and the Export Review citation
       # seeds) needs an explicit invocation to run in CI, like the scripts

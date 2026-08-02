@@ -578,9 +578,10 @@ jobs:
     # carrying a prerelease label (vX.Y.Z-anything) publishes the
     # artifact and is handled by `promote-staging` below.
     runs-on: ubuntu-latest
-    # Infra promotion can consume most of the old 30-minute budget; retain
-    # headroom for the exact-commit verification that gates CLI publication.
-    timeout-minutes: 40
+    # The infra workflow waits for online migrations to reach their real
+    # terminal state. Match GitHub's full hosted-job window so this caller
+    # cannot time out first and lose observation of an active promotion.
+    timeout-minutes: 360
     needs: [resolve, manifest, smoke]
     if: ${{ !contains(needs.resolve.outputs.release_ref, '-') }}
     permissions:
@@ -596,20 +597,11 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Mint App token for the infra repo
-        id: app-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
-          private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: stella-infra
-          permission-actions: write
-
       - name: Promote to production
         uses: ./.github/actions/promote-dispatch
         with:
-          token: ${{ steps.app-token.outputs.token }}
+          app-client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
+          app-private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
           infra-repo: ${{ github.repository_owner }}/stella-infra
           release-ref: ${{ needs.resolve.outputs.release_ref }}
           target-environment: production
@@ -655,20 +647,11 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Mint App token for the infra repo
-        id: app-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
-          private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: stella-infra
-          permission-actions: write
-
       - name: Promote to staging
         uses: ./.github/actions/promote-dispatch
         with:
-          token: ${{ steps.app-token.outputs.token }}
+          app-client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
+          app-private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
           infra-repo: ${{ github.repository_owner }}/stella-infra
           release-ref: ${{ needs.resolve.outputs.release_ref }}
           target-environment: staging

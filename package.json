@@ -31,6 +31,7 @@
     "marketing:stale": "bun scripts/check-marketing-recordings.ts",
     "marketing:verify-current": "bun scripts/verify-marketing-recordings.ts",
     "marketing:reshoot": "bun scripts/marketing-reshoot.ts",
+    "release:maintenance": "bun scripts/prepare-maintenance-release.ts",
     "sync-ai": "bash .ai/shared/scripts/sync-ai-skills.sh .",
     "sync-ai:check": "bash .ai/shared/scripts/sync-ai-skills.sh --check .",
     "link-codex": "bash scripts/link-codex-skills.sh",

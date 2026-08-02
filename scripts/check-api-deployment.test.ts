@@ -4,6 +4,57 @@ import { getApiHealthUrl, parseHealthCommit } from "./api-health";
 import { advanceDeploymentStability } from "./check-api-deployment";
 
 describe("API deployment health receipt", () => {
+  test("release promotion preserves the full online-migration window", async () => {
+    const [releaseWorkflow, stagingWorkflow, promoteAction] = await Promise.all(
+      [
+        Bun.file(
+          new URL("../.github/workflows/release.yml", import.meta.url),
+        ).text(),
+        Bun.file(
+          new URL("../.github/workflows/deploy-staging.yml", import.meta.url),
+        ).text(),
+        Bun.file(
+          new URL(
+            "../.github/actions/promote-dispatch/action.yml",
+            import.meta.url,
+          ),
+        ).text(),
+      ],
+    );
+    const promoteJobStart = releaseWorkflow.indexOf("\n  promote:\n");
+    const stagingJobStart = releaseWorkflow.indexOf(
+      "\n  promote-staging:\n",
+      promoteJobStart,
+    );
+    const promoteJob = releaseWorkflow.slice(promoteJobStart, stagingJobStart);
+
+    expect(promoteJobStart).toBeGreaterThanOrEqual(0);
+    expect(stagingJobStart).toBeGreaterThan(promoteJobStart);
+    expect(promoteJob).toContain("timeout-minutes: 360");
+    expect(promoteAction).toContain("readonly TOKEN_REFRESH_SECONDS=2700");
+    expect(promoteAction).toContain("readonly TOKEN_REFRESH_ATTEMPTS=20");
+    expect(promoteAction).toContain("refresh_app_token");
+    expect(promoteAction).toContain(
+      "now - token_refreshed_at >= TOKEN_REFRESH_SECONDS",
+    );
+    expect(promoteAction).toContain('"/installation/token"');
+    expect(promoteAction).toContain("retaining the current token and retrying");
+    expect(promoteAction).toContain('echo "::add-mask::${jwt}" >&2');
+    expect(promoteAction).toContain(`printf '%s\\n' "$APP_PRIVATE_KEY"`);
+    expect(
+      promoteAction.match(/Authorization: Bearer \$\{jwt\}/gu),
+    ).toHaveLength(2);
+    expect(promoteAction).not.toContain("gh run watch");
+    expect(promoteAction).toContain(
+      'run_url="https://github.com/${INFRA_REPO}/actions/runs/${run_id}"',
+    );
+    expect(promoteAction).not.toContain("Check https://github.com/${run_url}");
+    expect(releaseWorkflow).not.toContain("steps.app-token.outputs.token");
+    expect(stagingWorkflow).not.toContain(
+      "steps.deployment-token.outputs.token",
+    );
+  });
+
   test("preserves a configured API path prefix", () => {
     expect(getApiHealthUrl("https://example.com/api").toString()).toBe(
       "https://example.com/api/health",
