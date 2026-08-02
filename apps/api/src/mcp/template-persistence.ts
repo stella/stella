@@ -171,7 +171,7 @@ export const releaseTemplatePersistenceClaim = async ({
 
 class TemplatePersistenceClaimLostError extends TaggedError(
   "TemplatePersistenceClaimLostError",
-)<{ message: string }>() {}
+)<{ message: string }> {}
 
 export const recordTemplatePersistenceReceipt = async ({
   tx,

@@ -220,7 +220,7 @@ type NotificationFinalizationResult = {
 
 class NotificationFinalizationError extends TaggedError(
   "NotificationFinalizationError",
-)<{ affectedRows: number; message: string }>() {}
+)<{ affectedRows: number; message: string }> {}
 
 const finalizeNotificationStatus = async ({
   exportId,

@@ -61,7 +61,7 @@ const FLOW_AI_GENERATION_TIMEOUT_MS = 3 * 60 * 1000;
 export class FlowStepError extends TaggedError("FlowStepError")<{
   message: string;
   cause?: unknown;
-}>() {}
+}> {}
 
 // ── Per-job step execution (queue side) ─────────────────
 

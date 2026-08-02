@@ -17,4 +17,4 @@ export class FetchBoundaryError extends TaggedError("FetchBoundaryError")<{
   body?: string;
   message: string;
   cause?: unknown;
-}>() {}
+}> {}

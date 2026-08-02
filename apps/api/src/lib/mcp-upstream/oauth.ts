@@ -30,7 +30,7 @@ const PKCE_VERIFIER_BYTES = 48;
 class McpDiscoveryError extends TaggedError("McpDiscoveryError")<{
   message: string;
   cause?: unknown;
-}>() {}
+}> {}
 
 const protectedResourceMetadataSchema = v.looseObject({
   resource: v.pipe(v.string(), v.url()),

@@ -67,7 +67,7 @@ type VerifyOtpError = {
 class AlreadyToastedError extends TaggedError("AlreadyToastedError")<{
   message: string;
   cause: unknown;
-}>() {}
+}> {}
 
 export function OTPPanel({
   className,

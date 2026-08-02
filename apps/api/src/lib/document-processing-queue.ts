@@ -137,7 +137,7 @@ export class DocumentProcessingJobError extends TaggedError(
   code: string;
   message: string;
   cause?: unknown;
-}>() {}
+}> {}
 
 export const indexOcrProjection = async ({
   indexEntity,

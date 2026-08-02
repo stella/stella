@@ -85,7 +85,7 @@ type BufferIntentDeletionRow = Pick<
 
 class BufferIntentWorkspaceUnavailableError extends TaggedError(
   "BufferIntentWorkspaceUnavailableError",
-)<{ message: string }>() {}
+)<{ message: string }> {}
 
 /**
  * Share-lock the workspace while reserving an intent. Workspace deletion

@@ -29,7 +29,7 @@ export class FlowRunStartError extends TaggedError("FlowRunStartError")<{
   message: string;
   reason: "definition-not-found" | "definition-disabled" | "enqueue-failed";
   cause?: unknown;
-}>() {}
+}> {}
 
 export type StartFlowRunOptions = {
   safeDb: SafeDb;

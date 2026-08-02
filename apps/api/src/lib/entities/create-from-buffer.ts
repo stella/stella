@@ -73,19 +73,19 @@ type CreateEntityFromBufferInput = {
 
 class EntityLimitError extends TaggedError("EntityLimitError")<{
   message: string;
-}>() {}
+}> {}
 
 class DocumentTooLargeError extends TaggedError("DocumentTooLargeError")<{
   message: string;
-}>() {}
+}> {}
 
 class MissingFilePropertyError extends TaggedError("MissingFilePropertyError")<{
   message: string;
-}>() {}
+}> {}
 
 class InvalidParentError extends TaggedError("InvalidParentError")<{
   message: string;
-}>() {}
+}> {}
 
 type CreateEntityFromBufferValue = {
   entityId: SafeId<"entity">;

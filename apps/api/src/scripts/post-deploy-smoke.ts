@@ -46,7 +46,7 @@ const CHAT_STREAM_CONTENT_TYPE = "text/event-stream";
 class PostDeploySmokeError extends TaggedError("PostDeploySmokeError")<{
   message: string;
   cause?: unknown;
-}>() {}
+}> {}
 
 const smokeSessionSchema = v.strictObject({
   cookieName: v.string(),

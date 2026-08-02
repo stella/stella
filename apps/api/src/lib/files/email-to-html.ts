@@ -58,7 +58,7 @@ export class EmailParseError extends TaggedError("EmailParseError")<{
   message: string;
   mimeType: string;
   cause?: unknown;
-}>() {}
+}> {}
 
 type InlineImage = { cid: string; mimeType: string; dataBase64: string };
 

@@ -6,7 +6,7 @@ import { spawnWorker } from "@/api/lib/subprocess";
 
 class CorruptedPdfError extends TaggedError("CorruptedPdfError")<{
   message: string;
-}>() {}
+}> {}
 
 const WORKER_PATH = resolveRuntimeWorkerPath({
   outputFile: "pdf-worker.js",

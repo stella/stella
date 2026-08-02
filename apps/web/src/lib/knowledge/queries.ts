@@ -289,7 +289,7 @@ export class TemplateDocumentFetchError extends TaggedError(
 )<{
   message: string;
   status: number;
-}>() {}
+}> {}
 
 type TemplateFillDiscoverKey = {
   organizationId: string;

@@ -96,7 +96,7 @@ const MAX_HEADING_DEPTH = 64;
 /** A document exceeded the chunker's structural ceilings. */
 export class ChunkBudgetError extends TaggedError("ChunkBudgetError")<{
   message: string;
-}>() {}
+}> {}
 
 const PARAGRAPH_BREAK = /\n[ \t]*\n/u;
 

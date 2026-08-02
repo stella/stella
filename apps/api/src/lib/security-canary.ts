@@ -68,7 +68,7 @@ class SecurityCanaryRedisReplyError extends TaggedError(
 )<{
   message: string;
   reply: unknown;
-}>() {}
+}> {}
 
 type SecurityCanaryRedisClaim =
   | { status: "claimed"; ttlMs: number }

@@ -11,4 +11,4 @@ export class PDFViewerError extends TaggedError("PDFViewerError")<{
   code: PDFViewerCode;
   message: string;
   cause?: unknown;
-}>() {}
+}> {}

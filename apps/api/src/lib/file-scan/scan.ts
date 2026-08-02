@@ -10,7 +10,7 @@ import { hasZipMagic, ZIP_BASED_MIMES } from "@/api/lib/file-scan/zip";
 class FileScanError extends TaggedError("FileScanError")<{
   message: string;
   cause?: unknown;
-}>() {}
+}> {}
 
 type ScanFileInput = {
   buffer: Uint8Array;

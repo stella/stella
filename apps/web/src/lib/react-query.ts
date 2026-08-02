@@ -34,7 +34,7 @@ export class CriticalQueryTimeoutError extends TaggedError(
   message: string;
   queryKey: QueryKey;
   timeoutMs: number;
-}>() {}
+}> {}
 
 type EnsureCriticalQueryDataConfig = {
   timeoutMs?: number;

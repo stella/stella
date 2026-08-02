@@ -38,7 +38,7 @@ import { resolveS3Credentials } from "@/api/lib/s3";
 export class S3PresignError extends TaggedError("S3PresignError")<{
   message: string;
   cause?: unknown;
-}>() {}
+}> {}
 
 /**
  * Headers the API mandates the client must send when PUTting the

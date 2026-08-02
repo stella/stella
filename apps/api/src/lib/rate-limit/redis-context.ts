@@ -113,7 +113,7 @@ type RefundProvenance = {
 class RedisRateLimitReplyError extends TaggedError("RedisRateLimitReplyError")<{
   message: string;
   reply: unknown;
-}>() {}
+}> {}
 
 /** Replica-safe fixed-window context with a bounded, explicit outage policy. */
 export class RedisRateLimitContext implements Context {

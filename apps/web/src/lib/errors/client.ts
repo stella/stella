@@ -4,7 +4,7 @@ export class ClientOperationError extends TaggedError("ClientOperationError")<{
   action: string;
   message: string;
   cause?: unknown;
-}>() {}
+}> {}
 
 export class ClientCapabilityError extends TaggedError(
   "ClientCapabilityError",
@@ -12,8 +12,8 @@ export class ClientCapabilityError extends TaggedError(
   capability: string;
   message: string;
   cause?: unknown;
-}>() {}
+}> {}
 
 export class ClientUnknownError extends TaggedError("ClientUnknownError")<{
   message: string;
-}>() {}
+}> {}

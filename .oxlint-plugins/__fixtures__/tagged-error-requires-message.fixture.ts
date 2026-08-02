@@ -13,30 +13,30 @@ import { TaggedError } from "better-result";
 // oxlint-disable-next-line tagged-error-requires-message/tagged-error-requires-message
 class MissingMessageError extends TaggedError("MissingMessageError")<{
   id: string;
-}>() {}
+}> {}
 
 // `message` present but optional.
 // oxlint-disable-next-line tagged-error-requires-message/tagged-error-requires-message
 class OptionalMessageError extends TaggedError("OptionalMessageError")<{
   message?: string;
-}>() {}
+}> {}
 
 // `message` present but not typed `string`.
 // oxlint-disable-next-line tagged-error-requires-message/tagged-error-requires-message
 class NonStringMessageError extends TaggedError("NonStringMessageError")<{
   message: unknown;
-}>() {}
+}> {}
 
 // --- Cases the rule MUST NOT flag ---
 
 // Non-optional `message: string`.
 class ValidError extends TaggedError("ValidError")<{
   message: string;
-}>() {}
+}> {}
 
 // Named-alias props are resolved elsewhere and intentionally skipped.
 type AliasProps = { message: string };
-class AliasError extends TaggedError("AliasError")<AliasProps>() {}
+class AliasError extends TaggedError("AliasError")<AliasProps> {}
 
 export const __taggedErrorMessageFixture = {
   MissingMessageError,

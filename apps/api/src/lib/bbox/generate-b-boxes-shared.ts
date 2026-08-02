@@ -43,7 +43,7 @@ export type GenerateBBoxesResult = Result<
 
 class JustificationTextError extends TaggedError("JustificationTextError")<{
   message: string;
-}>() {}
+}> {}
 
 // Narrows a `JustificationBlock` to `DocxFolioJustificationBlock`. A
 // missing `kind` (legacy rows from before the discriminator landed)
@@ -178,7 +178,7 @@ const getFieldContentAsString = (content?: FieldContent) => {
 class JustificationDataError extends TaggedError("JustificationDataError")<{
   justificationId: SafeId<"justification">;
   message: string;
-}>() {}
+}> {}
 
 export const prepareJustificationData = async (
   organizationId: SafeId<"organization">,

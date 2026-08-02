@@ -62,7 +62,7 @@ const PROPERTY_ID = {
 
 export class OutlookMsgParseError extends TaggedError("OutlookMsgParseError")<{
   message: string;
-}>() {}
+}> {}
 
 export type OutlookMsgAttachment = {
   contentId: string | null;

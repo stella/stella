@@ -96,4 +96,4 @@ export class WebSearchProviderError extends TaggedError(
   message: string;
   provider: WebSearchProviderName | UrlFetcherName;
   status: number;
-}>() {}
+}> {}

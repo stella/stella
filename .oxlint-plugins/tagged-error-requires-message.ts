@@ -3,23 +3,23 @@
 // AGENTS.md mandates: "Every TaggedError must include a `message: string`
 // field." Without it, toast, reporting, and serialize paths have no
 // human-readable text to surface. This rule flags a class extending the
-// `TaggedError("Name")<{...}>()` factory whose inline type-argument literal
+// `TaggedError("Name")<{...}>` base class whose inline type-argument literal
 // omits a `message` key.
 //
 // Only the inline `TSTypeLiteral` form is checked; named-alias props (e.g.
-// `TaggedError("X")<XProps>()`) are skipped, since the alias is defined
+// `TaggedError("X")<XProps>`) are skipped, since the alias is defined
 // elsewhere and resolving it would need type information the linter lacks.
 //
 // Flagged:
 //   class DataError extends TaggedError("DataError")<{
 //     id: string;
-//   }>() {}
+//   }> {}
 //
 // Allowed:
 //   class DataError extends TaggedError("DataError")<{
 //     id: string; message: string;
-//   }>() {}
-//   class HandlerError extends TaggedError("HandlerError")<HandlerProps>() {}
+//   }> {}
+//   class HandlerError extends TaggedError("HandlerError")<HandlerProps> {}
 //
 // The `message` member must be present, non-optional, and typed `string`;
 // `message?: string` or `message: <not string>` is flagged too.
@@ -39,19 +39,13 @@ export default {
       },
       create(context) {
         const checkClass = (node) => {
-          // superClass is the outer `()` call: TaggedError("Name")<{...}>()
+          // superClass is the tag factory call: TaggedError("Name").
           const superClass = node.superClass;
           if (!superClass || superClass.type !== "CallExpression") {
             return;
           }
 
-          // Its callee is the factory call TaggedError("Name"), itself a
-          // CallExpression whose callee is the `TaggedError` Identifier.
-          const factoryCall = superClass.callee;
-          if (!factoryCall || factoryCall.type !== "CallExpression") {
-            return;
-          }
-          const factoryCallee = factoryCall.callee;
+          const factoryCallee = superClass.callee;
           if (
             !factoryCallee ||
             factoryCallee.type !== "Identifier" ||
@@ -60,8 +54,8 @@ export default {
             return;
           }
 
-          // The type arguments (<{...}>) hang off the OUTER call.
-          const firstTypeArg = superClass.typeArguments?.params?.[0];
+          // Heritage type arguments (<{...}>) hang off the class declaration.
+          const firstTypeArg = node.superTypeArguments?.params?.[0];
           // Only the inline object-literal form is checked; named aliases
           // (TSTypeReference) are resolved elsewhere and skipped to keep
           // false positives at zero.

@@ -115,14 +115,14 @@ export class CreateEntityVersionFromBufferError extends TaggedError(
 )<{
   message: string;
   reason: CreateEntityVersionFromBufferFailureReason;
-}>() {}
+}> {}
 
 class EntityVersionBufferCleanupError extends TaggedError(
   "EntityVersionBufferCleanupError",
 )<{
   message: string;
   cause: unknown;
-}>() {}
+}> {}
 
 type WriteTxResult =
   | { status: "ok"; versionNumber: number }
