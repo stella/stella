@@ -91,11 +91,11 @@ runs:
           )"
           unsigned="${header}.${payload}"
           signature="$(
-            openssl dgst -sha256 -sign <(printf '%s' "$APP_PRIVATE_KEY") \
+            openssl dgst -sha256 -sign <(printf '%s\n' "$APP_PRIVATE_KEY") \
               <(printf '%s' "$unsigned") | base64url
           )"
           jwt="${unsigned}.${signature}"
-          echo "::add-mask::${jwt}"
+          echo "::add-mask::${jwt}" >&2
 
           installation_id="$(
             GH_TOKEN="$jwt" gh api -H "Authorization: Bearer ${jwt}" \
@@ -224,7 +224,7 @@ runs:
           exit 1
         fi
 
-        run_url="${INFRA_REPO}/actions/runs/${run_id}"
+        run_url="https://github.com/${INFRA_REPO}/actions/runs/${run_id}"
         consecutive_read_failures=0
         echo "Watching run ${run_id}..."
         while true; do
@@ -240,7 +240,7 @@ runs:
           )"; then
             consecutive_read_failures=$((consecutive_read_failures + 1))
             if (( consecutive_read_failures >= 3 )); then
-              echo "::error::Lost track of promote run ${run_id} after ${consecutive_read_failures} consecutive API failures. Check https://github.com/${run_url}" >&2
+              echo "::error::Lost track of promote run ${run_id} after ${consecutive_read_failures} consecutive API failures. Check ${run_url}" >&2
               exit 1
             fi
             echo "Run status lookup failed (${consecutive_read_failures}/3); retrying..."

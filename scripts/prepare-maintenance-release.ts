@@ -19,7 +19,7 @@ const CONFIRMATION_FLAG = "--confirm-current-recordings-reviewed";
 const REASON_FLAG = "--reason";
 const STABLE_VERSION_PATTERN = /^(\d+)\.(\d+)\.(\d+)$/u;
 const MAINTENANCE_CHANGELOG =
-  "# Maintenance release\n\nStella includes reliability and maintenance improvements.\n";
+  "# Maintenance release\n\nstella includes reliability and maintenance improvements.\n";
 
 type StableVersion = {
   major: number;
@@ -46,8 +46,8 @@ type FileSnapshot = {
 };
 
 export class MaintenanceReleaseError extends Error {
-  constructor(message: string) {
-    super(message);
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
     this.name = "MaintenanceReleaseError";
   }
 }
@@ -203,8 +203,11 @@ export const withFileRollback = <T>({
       }
     }
     if (rollbackErrors.length > 0) {
+      const originalMessage =
+        error instanceof Error ? error.message : String(error);
       throw new MaintenanceReleaseError(
-        `Release preparation failed and ${String(rollbackErrors.length)} rollback operation(s) did not complete: ${rollbackErrors.map(String).join("; ")}`,
+        `Release preparation failed (${originalMessage}) and ${String(rollbackErrors.length)} rollback operation(s) did not complete: ${rollbackErrors.map(String).join("; ")}`,
+        { cause: error },
       );
     }
     throw error;

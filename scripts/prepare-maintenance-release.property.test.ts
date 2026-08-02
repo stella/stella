@@ -14,6 +14,7 @@ import nodePath from "node:path";
 import { propertyConfig } from "@stll/property-testing";
 
 import {
+  MaintenanceReleaseError,
   nextPatchVersion,
   parseMaintenanceReleaseOptions,
   parseStableVersion,
@@ -106,7 +107,7 @@ describe("maintenance release preparation", () => {
     expect(
       readFileSync(nodePath.join(root, "docs/changelog/v1.2.4.md"), "utf-8"),
     ).toBe(
-      "# Maintenance release\n\nStella includes reliability and maintenance improvements.\n",
+      "# Maintenance release\n\nstella includes reliability and maintenance improvements.\n",
     );
     const releaseDates: unknown = JSON.parse(
       readFileSync(
@@ -214,18 +215,31 @@ describe("maintenance release preparation", () => {
     );
     writeFileSync(releaseDatesPath, "{}\n");
 
-    expect(() =>
+    const originalFailure = new Error("persistent write failure");
+    let caught: unknown;
+    try {
       prepareMaintenanceReleaseFiles({
         publishedAt: "2026-02-03T04:05:06Z",
         rootDir: root,
         writeFile: (path, contents) => {
           if (path === releaseDatesPath) {
-            throw new Error("persistent write failure");
+            throw originalFailure;
           }
           writeFileSync(path, contents);
         },
-      }),
-    ).toThrow("1 rollback operation(s) did not complete");
+      });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(MaintenanceReleaseError);
+    if (!(caught instanceof MaintenanceReleaseError)) {
+      throw new Error("Expected maintenance release failure");
+    }
+    expect(caught.message).toContain("persistent write failure");
+    expect(caught.message).toContain(
+      "1 rollback operation(s) did not complete",
+    );
+    expect(caught.cause).toBe(originalFailure);
 
     expect(existsSync(nextChangelogPath)).toBe(false);
     expect(

@@ -39,10 +39,16 @@ describe("API deployment health receipt", () => {
     );
     expect(promoteAction).toContain('"/installation/token"');
     expect(promoteAction).toContain("retaining the current token and retrying");
+    expect(promoteAction).toContain('echo "::add-mask::${jwt}" >&2');
+    expect(promoteAction).toContain(`printf '%s\\n' "$APP_PRIVATE_KEY"`);
     expect(
       promoteAction.match(/Authorization: Bearer \$\{jwt\}/gu),
     ).toHaveLength(2);
     expect(promoteAction).not.toContain("gh run watch");
+    expect(promoteAction).toContain(
+      'run_url="https://github.com/${INFRA_REPO}/actions/runs/${run_id}"',
+    );
+    expect(promoteAction).not.toContain("Check https://github.com/${run_url}");
     expect(releaseWorkflow).not.toContain("steps.app-token.outputs.token");
     expect(stagingWorkflow).not.toContain(
       "steps.deployment-token.outputs.token",
