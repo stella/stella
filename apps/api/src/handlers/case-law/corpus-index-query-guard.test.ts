@@ -1,4 +1,6 @@
 import { expect, test } from "bun:test";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import nodePath from "node:path";
 
 import {
   CASE_LAW_CORPUS_INDEX_BACKFILL_STATUSES,
@@ -29,6 +31,71 @@ const ingestionSourceLeaseMigration = new URL(
   "../../../drizzle/20260801120000_case_law_source_ingestion_lease/migration.sql",
   import.meta.url,
 );
+const DRIZZLE_DIR = nodePath.resolve(import.meta.dir, "../../../drizzle");
+const SHARE_LOCK_PATTERN = /LOCK TABLE (?<tables>[^`]*?) IN SHARE MODE/u;
+const DRIZZLE_TABLE_REFERENCE_PATTERN = /\$\{(?<identifier>\w+)\}/gu;
+const PG_TABLE_DECLARATION_PATTERN =
+  /export const (?<identifier>\w+) = (?:p\.)?pgTable\(\s*"(?<table>\w+)"/gu;
+const TABLE_GRANT_PATTERN =
+  /^GRANT (?<privileges>.+?) ON TABLE (?<tables>.+?) TO (?<roles>.+)$/iu;
+// PostgreSQL admits SHARE MODE only for a role holding one of these at table
+// level; a column-scoped grant does not satisfy the check.
+const LOCK_CONFERRING_PRIVILEGES = [
+  "UPDATE",
+  "DELETE",
+  "TRUNCATE",
+  "MAINTAIN",
+] as const;
+
+const migrationStatements = (): string[] =>
+  readdirSync(DRIZZLE_DIR, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => nodePath.join(DRIZZLE_DIR, entry.name, "migration.sql"))
+    .filter((file) => existsSync(file))
+    .flatMap((file) =>
+      readFileSync(file, "utf-8")
+        .split(/\r?\n/u)
+        .map((line) => {
+          const commentStart = line.indexOf("--");
+          return commentStart === -1 ? line : line.slice(0, commentStart);
+        })
+        .join("\n")
+        .split(";")
+        .map((statement) => statement.replace(/\s+/gu, " ").trim())
+        .filter((statement) => statement.length > 0),
+    );
+
+const identifierList = (list: string): string[] =>
+  list.split(",").map((entry) => entry.trim().replaceAll('"', ""));
+
+const grantsIngestionLockPrivilege = (
+  statement: string,
+  table: string,
+): boolean => {
+  const grant = TABLE_GRANT_PATTERN.exec(statement);
+  if (!grant?.groups) {
+    return false;
+  }
+
+  const { privileges, roles, tables } = grant.groups;
+  if (
+    privileges === undefined ||
+    roles === undefined ||
+    tables === undefined ||
+    // A parenthesised column list marks the grant column-scoped.
+    privileges.includes("(") ||
+    !identifierList(roles).includes("stella_ingestion") ||
+    !identifierList(tables).includes(table)
+  ) {
+    return false;
+  }
+
+  const granted = identifierList(privileges.toUpperCase());
+  return LOCK_CONFERRING_PRIVILEGES.some((privilege) =>
+    granted.includes(privilege),
+  );
+};
+
 const GENERATION_STATE_TABLES = [
   "case_law_corpus_index_backfills",
   "case_law_corpus_index_source_reconciliations",
@@ -319,6 +386,39 @@ test("ordered source progress remains inside the ingestion role boundary", async
   );
   expect(leaseSource).toContain('ON TABLE "case_law_sources"');
   expect(leaseSource).toContain("TO stella_ingestion");
+});
+
+test("the ingestion role can take every lock the corpus checkpoint holds", async () => {
+  const [source, schemaSource] = await Promise.all([
+    Bun.file(caseLawCorpusIndexSource).text(),
+    Bun.file(caseLawSchemaSource).text(),
+  ]);
+
+  const sqlTableByIdentifier = new Map(
+    [...schemaSource.matchAll(PG_TABLE_DECLARATION_PATTERN)].map((match) => [
+      match.groups?.["identifier"],
+      match.groups?.["table"],
+    ]),
+  );
+  const lockTargets = SHARE_LOCK_PATTERN.exec(source)?.groups?.["tables"] ?? "";
+  const lockedTables = [
+    ...lockTargets.matchAll(DRIZZLE_TABLE_REFERENCE_PATTERN),
+  ].map((match) => sqlTableByIdentifier.get(match.groups?.["identifier"]));
+
+  // Non-vacuity: the lock must still be found and resolvable to table names.
+  expect(lockedTables).toContain("case_law_decisions");
+  expect(lockedTables).toContain("case_law_sources");
+
+  const statements = migrationStatements();
+  for (const table of lockedTables) {
+    expect(table).toBeDefined();
+    expect({
+      table,
+      lockable: statements.some((statement) =>
+        grantsIngestionLockPrivilege(statement, table ?? ""),
+      ),
+    }).toEqual({ table, lockable: true });
+  }
 });
 
 test("every case-law corpus search boundary uses generation projection state", async () => {
