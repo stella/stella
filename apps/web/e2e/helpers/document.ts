@@ -1,4 +1,5 @@
 import type { APIRequestContext } from "@playwright/test";
+import { panic } from "better-result";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -56,7 +57,7 @@ export const createUploadedDocumentRoute = async ({
       field.content.type === "file",
   );
   if (!fileField) {
-    throw new Error("Uploaded entity did not include the expected file field");
+    panic("Uploaded entity did not include the expected file field");
   }
 
   return {

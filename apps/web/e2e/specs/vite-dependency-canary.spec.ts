@@ -14,6 +14,8 @@ const EXPECTS_DEV_ROUTES = process.env["E2E_EXPECT_DEV_ROUTES"] !== "false";
 test.describe("Vite dependency optimizer canary", () => {
   let workspace: TestWorkspace | null = null;
 
+  test.setTimeout(90_000);
+
   test.skip(
     !EXPECTS_DEV_ROUTES,
     "This optimizer canary applies only to the Vite development server",
@@ -60,11 +62,10 @@ test.describe("Vite dependency optimizer canary", () => {
     );
 
     try {
-      // These graphs are independent. Requesting them concurrently lets Vite
-      // compile shared modules once without serializing four cold route waits.
+      // Bound cold compilation to two graphs at once. Four-way contention can
+      // starve a route on CI; these pairs still overlap shared module work.
+      await Promise.all([mountChatIndex(page), mountChatThread(threadPage)]);
       await Promise.all([
-        mountChatIndex(page),
-        mountChatThread(threadPage),
         mountDocumentRoute(documentPage, documentRoute.path),
         mountAutocomplete(autocompletePage),
       ]);
@@ -81,14 +82,14 @@ const mountChatIndex = async (page: Page): Promise<void> => {
   await page.goto("/chat", { waitUntil: "commit" });
   await expect(
     page.getByRole("textbox", { name: /type your question/iu }),
-  ).toBeVisible({ timeout: 45_000 });
+  ).toBeVisible({ timeout: 60_000 });
 };
 
 const mountChatThread = async (page: Page): Promise<void> => {
   // The thread route is a separate lazy chunk. A missing record is valid for
   // this dependency check; the route deliberately supports an empty thread.
   await page.goto(`/chat/${randomUUID()}`, { waitUntil: "commit" });
-  await expect(page.getByRole("log")).toBeVisible({ timeout: 45_000 });
+  await expect(page.getByRole("log")).toBeVisible({ timeout: 60_000 });
 };
 
 const mountDocumentRoute = async (page: Page, route: string): Promise<void> => {
@@ -97,12 +98,12 @@ const mountDocumentRoute = async (page: Page, route: string): Promise<void> => {
   await page.goto(route, { waitUntil: "commit" });
   await expect(
     page.getByRole("toolbar", { name: "AI message composer" }),
-  ).toBeVisible({ timeout: 45_000 });
+  ).toBeVisible({ timeout: 60_000 });
   await expect(
     page.locator(".layout-run-text", {
       hasText: "Stella E2E test document.",
     }),
-  ).toBeVisible({ timeout: 45_000 });
+  ).toBeVisible({ timeout: 60_000 });
 };
 
 const mountAutocomplete = async (page: Page): Promise<void> => {
@@ -111,5 +112,5 @@ const mountAutocomplete = async (page: Page): Promise<void> => {
     page.getByRole("heading", {
       name: "stella autocomplete — dev playground",
     }),
-  ).toBeVisible({ timeout: 45_000 });
+  ).toBeVisible({ timeout: 60_000 });
 };

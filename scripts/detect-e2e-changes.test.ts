@@ -33,6 +33,28 @@ const workflowJob = (jobId: string): string => {
     : workflow.slice(bodyStart, bodyStart + nextJob);
 };
 
+const workflowStepRun = (job: string, stepName: string): string => {
+  const marker = `\n      - name: ${stepName}\n`;
+  const start = job.indexOf(marker);
+  if (start === -1) {
+    throw new Error(`CI job is missing step ${stepName}`);
+  }
+  const bodyStart = start + marker.length;
+  const nextStep = job.slice(bodyStart).search(/\n {6}- name:/u);
+  const step =
+    nextStep === -1
+      ? job.slice(bodyStart)
+      : job.slice(bodyStart, bodyStart + nextStep);
+  const runMarker = "\n        run: ";
+  const runStart = step.indexOf(runMarker);
+  if (runStart === -1) {
+    throw new Error(`CI step ${stepName} is missing its run command`);
+  }
+  const run = step.slice(runStart + runMarker.length);
+  const runEnd = run.search(/\n(?= {0,8}\S)/u);
+  return (runEnd === -1 ? run : run.slice(0, runEnd)).trimEnd();
+};
+
 const detects = (scope: "core" | "landing", files: string[]) =>
   Bun.spawnSync(["bash", script, scope, ...files], {
     stdout: "pipe",
@@ -102,8 +124,16 @@ describe("detect-e2e-changes", () => {
     expect(canary).not.toContain("E2E_EXECUTION_PROFILE");
     expect(canary).not.toContain("Build web for route checks");
     expect(canary).not.toContain("Run Playwright shard");
-    expect(canary).toContain("e2e/specs/vite-dependency-canary.spec.ts");
-    expect(canary).not.toContain("--grep @dev-canary");
+    const canaryRun = workflowStepRun(canary, "Run Vite dependency canary");
+    expect(canaryRun).toBe(
+      [
+        ">-",
+        "          bun --filter @stll/web test:e2e --",
+        "          e2e/specs/vite-dependency-canary.spec.ts",
+        "          --project chromium",
+      ].join("\n"),
+    );
+    expect(canaryRun).not.toMatch(/--grep(?:=|\s)+["']?@dev-canary/u);
 
     const landing = workflowJob("e2e-landing");
     expect(landing).not.toContain("Start docker stack");
