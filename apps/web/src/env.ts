@@ -1,7 +1,7 @@
 import { createEnv } from "@t3-oss/env-core";
 import { panic } from "better-result";
 
-import { envWebClientSchema } from "@/env-schema";
+import { envWebClientSchema, envWebInvariantViolation } from "@/env-schema";
 
 export const env = createEnv({
   clientPrefix: "VITE_",
@@ -10,6 +10,7 @@ export const env = createEnv({
   emptyStringAsUndefined: true,
 });
 
-if (env.VITE_PUBLIC_LAW_INDEXING_ENABLED && !env.VITE_PUBLIC_LAW_ENABLED) {
-  panic("VITE_PUBLIC_LAW_INDEXING_ENABLED requires VITE_PUBLIC_LAW_ENABLED.");
+const invariantViolation = envWebInvariantViolation(env);
+if (invariantViolation !== null) {
+  panic(invariantViolation);
 }

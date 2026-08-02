@@ -15,6 +15,7 @@ import {
   envApiInvariantViolation,
   resolveEmailProvider,
 } from "../apps/api/src/env-schema";
+import { envWebInvariantViolation } from "../apps/web/src/env-schema";
 import {
   AMBIENT_ENV_KEYS,
   API_ENV_SCHEMA,
@@ -145,7 +146,42 @@ const isEnvNameCharacter = (character: string | undefined) =>
   isEnvNameStart(character) ||
   (character !== undefined && character >= "0" && character <= "9");
 
-const expandEnvReferences = (value: string, environment: NodeJS.ProcessEnv) => {
+const MAX_ENV_EXPANSION_DEPTH = 200;
+
+const findExpansionEnd = (value: string, fallbackStart: number) => {
+  let nestedDepth = 0;
+  for (let index = fallbackStart; index < value.length; index += 1) {
+    if (
+      value.at(index) === "$" &&
+      value.at(index + 1) === "{" &&
+      value.at(index - 1) !== "\\"
+    ) {
+      nestedDepth += 1;
+      index += 1;
+      continue;
+    }
+    if (value.at(index) !== "}") {
+      continue;
+    }
+    if (nestedDepth === 0) {
+      return index;
+    }
+    nestedDepth -= 1;
+  }
+  return -1;
+};
+
+type ExpandEnvReferencesOptions = {
+  depth: number;
+  environment: NodeJS.ProcessEnv;
+  value: string;
+};
+
+const expandEnvReferences = ({
+  depth,
+  environment,
+  value,
+}: ExpandEnvReferencesOptions) => {
   const output: string[] = [];
   let index = 0;
   while (index < value.length) {
@@ -163,7 +199,7 @@ const expandEnvReferences = (value: string, environment: NodeJS.ProcessEnv) => {
 
     const braced = value.at(index + 1) === "{";
     const nameStart = index + (braced ? 2 : 1);
-    if (!isEnvNameStart(value.at(nameStart))) {
+    if (!isEnvNameCharacter(value.at(nameStart))) {
       output.push("$");
       index += 1;
       continue;
@@ -172,13 +208,35 @@ const expandEnvReferences = (value: string, environment: NodeJS.ProcessEnv) => {
     while (isEnvNameCharacter(value.at(nameEnd))) {
       nameEnd += 1;
     }
+    const name = value.slice(nameStart, nameEnd);
+    if (braced && value.slice(nameEnd, nameEnd + 2) === ":-") {
+      const fallbackStart = nameEnd + 2;
+      const fallbackEnd = findExpansionEnd(value, fallbackStart);
+      if (fallbackEnd === -1) {
+        output.push("$");
+        index += 1;
+        continue;
+      }
+      const current = environment[name];
+      output.push(
+        current === undefined && depth < MAX_ENV_EXPANSION_DEPTH
+          ? expandEnvReferences({
+              depth: depth + 1,
+              environment,
+              value: value.slice(fallbackStart, fallbackEnd),
+            })
+          : (current ?? value.slice(fallbackStart, fallbackEnd)),
+      );
+      index = fallbackEnd + 1;
+      continue;
+    }
     if (braced && value.at(nameEnd) !== "}") {
       output.push("$");
       index += 1;
       continue;
     }
 
-    output.push(environment[value.slice(nameStart, nameEnd)] ?? "");
+    output.push(environment[name] ?? "");
     index = nameEnd + (braced ? 1 : 0);
   }
   return output.join("");
@@ -189,11 +247,19 @@ export const parseEnvText = (
   ambientEnvironment: NodeJS.ProcessEnv = process.env,
 ) => {
   const values: Record<string, string> = {};
-  const environment = { ...ambientEnvironment };
-  for (const [name, value] of Object.entries(parseEnv(text))) {
-    const expanded = expandEnvReferences(value ?? "", environment);
+  const parsed = parseEnv(text);
+  const environment = { ...parsed, ...ambientEnvironment };
+  const ambientNames = new Set(Object.keys(ambientEnvironment));
+  for (const [name, value] of Object.entries(parsed)) {
+    const expanded = expandEnvReferences({
+      depth: 0,
+      environment,
+      value: value ?? "",
+    });
     values[name] = expanded;
-    environment[name] = expanded;
+    if (!ambientNames.has(name)) {
+      environment[name] = expanded;
+    }
   }
   return values;
 };
@@ -453,6 +519,22 @@ const validateApiEnvironment = (input: DoctorInput): DoctorValidationResult => {
     : { status: "invalid", issues, values };
 };
 
+const validateWebEnvironment = (input: DoctorInput): DoctorValidationResult => {
+  const result = v.safeParse(v.object(WEB_ENV_SCHEMA), input);
+  if (!result.success) {
+    return {
+      status: "invalid",
+      issues: result.issues.map(formatEnvIssue),
+      values: input,
+    };
+  }
+  const values = { ...input, ...result.output };
+  const issue = envWebInvariantViolation(result.output);
+  return issue === null
+    ? { status: "valid", values }
+    : { status: "invalid", issues: [issue], values };
+};
+
 export const validateDoctorEnvironment = (
   app: EnvApp,
   rawInput: DoctorInput,
@@ -461,10 +543,10 @@ export const validateDoctorEnvironment = (
   if (app === ENV_APP.api) {
     return validateApiEnvironment(input);
   }
-  return validateSchema(
-    app === ENV_APP.web ? WEB_ENV_SCHEMA : COLLAB_ENV_SCHEMA,
-    input,
-  );
+  if (app === ENV_APP.web) {
+    return validateWebEnvironment(input);
+  }
+  return validateSchema(COLLAB_ENV_SCHEMA, input);
 };
 
 const runDoctor = (app: EnvApp) => {

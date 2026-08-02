@@ -77,6 +77,11 @@ describe("environment file parsing", () => {
           `DB_PORT=\${PORT_PREFIX}32`,
           "AMBIENT_PORT=$PGPORT",
           String.raw`LITERAL=\$PGPORT`,
+          `DEFAULT_PORT=\${MISSING_PORT:-5432}`,
+          "EMPTY_VALUE=",
+          `EMPTY_DEFAULT=\${EMPTY_VALUE:-5433}`,
+          `SET_DEFAULT=\${PGPORT:-5432}`,
+          `NESTED_DEFAULT=\${MISSING_PORT:-\${PGPORT:-5432}}`,
         ].join("\n"),
         { PGPORT: "6432" },
       ),
@@ -84,9 +89,14 @@ describe("environment file parsing", () => {
       ACTIVE: "value # preserved",
       AMBIENT_PORT: "6432",
       DB_PORT: "5432",
+      DEFAULT_PORT: "5432",
       EMPTY: "",
+      EMPTY_DEFAULT: "",
+      EMPTY_VALUE: "",
       LITERAL: "$PGPORT",
+      NESTED_DEFAULT: "6432",
       PORT_PREFIX: "54",
+      SET_DEFAULT: "6432",
       SMTP_PORT: "1025",
     });
   });
@@ -183,6 +193,20 @@ describe("environment doctor output", () => {
     expect(result.status).toBe("invalid");
     if (result.status === "invalid") {
       expect(result.issues).toContain(expected);
+    }
+  });
+
+  test("applies the web runtime invariant", () => {
+    const result = validateDoctorEnvironment("web", {
+      ...parseEnvText(renderWebEnvExample()),
+      VITE_PUBLIC_LAW_ENABLED: "false",
+      VITE_PUBLIC_LAW_INDEXING_ENABLED: "true",
+    });
+    expect(result.status).toBe("invalid");
+    if (result.status === "invalid") {
+      expect(result.issues).toContain(
+        "VITE_PUBLIC_LAW_INDEXING_ENABLED requires VITE_PUBLIC_LAW_ENABLED.",
+      );
     }
   });
 });

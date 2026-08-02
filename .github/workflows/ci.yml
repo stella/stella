@@ -597,6 +597,10 @@ jobs:
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: bun test scripts/code-check-affected.test.ts
 
+      - name: Test environment tooling
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: bun test scripts/env-tool.test.ts
+
       - name: Test bun ci retry script
         run: bash scripts/bun-ci-retry.test.sh
 

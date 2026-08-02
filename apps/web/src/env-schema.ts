@@ -76,3 +76,18 @@ export const envWebClientSchema = {
     "https://github.com/stella/stella/releases/latest/download",
   ),
 };
+
+type EnvWebInvariantInput = {
+  VITE_PUBLIC_LAW_ENABLED: boolean;
+  VITE_PUBLIC_LAW_INDEXING_ENABLED: boolean;
+};
+
+export const envWebInvariantViolation = ({
+  VITE_PUBLIC_LAW_ENABLED,
+  VITE_PUBLIC_LAW_INDEXING_ENABLED,
+}: EnvWebInvariantInput): string | null => {
+  if (VITE_PUBLIC_LAW_INDEXING_ENABLED && !VITE_PUBLIC_LAW_ENABLED) {
+    return "VITE_PUBLIC_LAW_INDEXING_ENABLED requires VITE_PUBLIC_LAW_ENABLED.";
+  }
+  return null;
+};
