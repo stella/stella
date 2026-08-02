@@ -418,7 +418,10 @@ describe("new-account email policy", () => {
   test("rejects a disposable address when creating its account", async () => {
     const rejection: unknown = await Promise.resolve()
       .then(() =>
-        assertNewAccountEmailAllowedForCreation("blocked@mailinator.com"),
+        assertNewAccountEmailAllowedForCreation({
+          email: "blocked@mailinator.com",
+          path: "/sign-in/email-otp",
+        }),
       )
       .then(
         () => null,
@@ -429,6 +432,20 @@ describe("new-account email policy", () => {
       body: { code: "DISPOSABLE_EMAIL_NOT_ALLOWED" },
       statusCode: 400,
     });
+  });
+
+  test("does not apply the OTP blocklist to other user-creation sources", () => {
+    const otherCreationPaths = [
+      "/callback/google",
+      "/sign-up/email",
+      undefined,
+    ];
+    for (const path of otherCreationPaths) {
+      assertNewAccountEmailAllowedForCreation({
+        email: "provider-user@mailinator.com",
+        path,
+      });
+    }
   });
 
   test("returns the computed retry delay with a signup 429", async () => {

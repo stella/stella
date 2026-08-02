@@ -151,10 +151,14 @@ type NewAccountEmailOtpPolicyOptions = {
   rateLimitContext?: Pick<RateLimitContext, "increment">;
 };
 
-export const assertNewAccountEmailAllowedForCreation = (
-  email: string,
-): void => {
-  if (!isDisposableEmailAddress(email)) {
+export const assertNewAccountEmailAllowedForCreation = ({
+  email,
+  path,
+}: {
+  email: string;
+  path: string | undefined;
+}): void => {
+  if (path !== SIGN_IN_EMAIL_OTP_PATH || !isDisposableEmailAddress(email)) {
     return;
   }
 
@@ -730,7 +734,10 @@ const createAuth = () => {
       user: {
         create: {
           before: async (user, ctx) => {
-            assertNewAccountEmailAllowedForCreation(user.email);
+            assertNewAccountEmailAllowedForCreation({
+              email: user.email,
+              path: ctx?.path,
+            });
             validateTimezoneId(user["timezoneId"]);
             // Email-OTP and some social providers leave `name` blank.
             // The `notNull` schema constraint allows empty strings, which
