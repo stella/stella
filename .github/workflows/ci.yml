@@ -1056,7 +1056,7 @@ jobs:
       - name: Log in to Docker Hub
         # Skipped automatically until DOCKERHUB_USERNAME / DOCKERHUB_TOKEN repo
         # secrets exist; authenticated pulls raise the rate limit well above the
-        # shared-runner anonymous cap that flakes the gotenberg image pull.
+        # shared-runner anonymous cap that can flake infrastructure image pulls.
         if: steps.dockerhub.outputs.available == 'true'
         uses: docker/login-action@371161bbe7024a29a25c5e19bfcbc0804fe9ad2c # v4.5.2
         with:
@@ -1075,7 +1075,7 @@ jobs:
         # stack does not poison the retry.
         run: |
           for attempt in 1 2 3; do
-            if docker compose --profile dev up -d --wait postgres minio valkey gotenberg \
+            if docker compose --profile dev up -d --wait postgres minio valkey \
               && docker compose --profile dev run --rm --no-deps minio-setup; then
               exit 0
             fi
@@ -1269,7 +1269,7 @@ jobs:
       - name: Start docker stack
         run: |
           for attempt in 1 2 3; do
-            if docker compose --profile dev up -d --wait postgres minio valkey gotenberg \
+            if docker compose --profile dev up -d --wait postgres minio valkey \
               && docker compose --profile dev run --rm --no-deps minio-setup; then
               exit 0
             fi
