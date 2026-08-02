@@ -28,11 +28,11 @@ describe("new-account OTP abuse policy", () => {
     }
   });
 
-  test("allows an existing account after consuming the shared email limit", async () => {
+  test("allows an existing account without consuming signup capacity", async () => {
     const observedKeys: string[] = [];
     const result = await evaluateNewAccountOtpPolicy({
       accountExists: async (email) => email === "user@mailinator.com",
-      clientIp: null,
+      clientIp: "192.0.2.1",
       context: {
         increment: async (key) => {
           observedKeys.push(key);
@@ -50,8 +50,7 @@ describe("new-account OTP abuse policy", () => {
       status: "allowed",
       reason: "existing_account",
     });
-    expect(observedKeys).toHaveLength(1);
-    expect(observedKeys.at(0)).toStartWith("auth:new-account-otp:email:");
+    expect(observedKeys).toHaveLength(0);
   });
 
   test("rejects a new disposable address after the shared email limit", async () => {
@@ -210,8 +209,10 @@ describe("new-account OTP abuse policy", () => {
     }
   });
 
-  test("returns the same email limit regardless of account existence", async () => {
-    const overflowForAccountState = async (exists: boolean) => {
+  test("applies the same email limit to every new-account email type", async () => {
+    type NewAccountEmailType = "disposable" | "permanent";
+
+    const overflowForEmailType = async (emailType: NewAccountEmailType) => {
       const context = new InMemoryRateLimitContext();
       try {
         for (
@@ -221,18 +222,24 @@ describe("new-account OTP abuse policy", () => {
         ) {
           // oxlint-disable-next-line no-await-in-loop -- sequential requests exercise one fixed-window counter
           await evaluateNewAccountOtpPolicy({
-            accountExists: async () => exists,
+            accountExists: async () => false,
             clientIp: null,
             context,
-            email: "candidate@example.com",
+            email:
+              emailType === "disposable"
+                ? "candidate@mailinator.com"
+                : "candidate@example.com",
           });
         }
 
         const overflow = await evaluateNewAccountOtpPolicy({
-          accountExists: async () => exists,
+          accountExists: async () => false,
           clientIp: null,
           context,
-          email: "candidate@example.com",
+          email:
+            emailType === "disposable"
+              ? "candidate@mailinator.com"
+              : "candidate@example.com",
         });
         return overflow;
       } finally {
@@ -241,8 +248,8 @@ describe("new-account OTP abuse policy", () => {
     };
 
     const overflows = await Promise.all([
-      overflowForAccountState(false),
-      overflowForAccountState(true),
+      overflowForEmailType("disposable"),
+      overflowForEmailType("permanent"),
     ]);
     expect(overflows).toEqual([
       expect.objectContaining({ reason: "email", status: "rate_limited" }),
@@ -250,8 +257,8 @@ describe("new-account OTP abuse policy", () => {
     ]);
   });
 
-  test("returns the same IP limit for every account state", async () => {
-    type AccountState = "disposable" | "existing" | "permanent_new";
+  test("returns the same IP limit for every new-account email type", async () => {
+    type AccountState = "disposable" | "permanent_new";
 
     const overflowForAccountState = async (accountState: AccountState) => {
       const context = new InMemoryRateLimitContext();
@@ -259,7 +266,7 @@ describe("new-account OTP abuse policy", () => {
         const domain =
           accountState === "disposable" ? "mailinator.com" : "example.com";
         return await evaluateNewAccountOtpPolicy({
-          accountExists: async () => accountState === "existing",
+          accountExists: async () => false,
           clientIp: "192.0.2.1",
           context,
           email: `candidate-${attempt}@${domain}`,
@@ -282,12 +289,10 @@ describe("new-account OTP abuse policy", () => {
     };
 
     const overflows = await Promise.all([
-      overflowForAccountState("existing"),
       overflowForAccountState("disposable"),
       overflowForAccountState("permanent_new"),
     ]);
     expect(overflows).toEqual([
-      expect.objectContaining({ reason: "ip", status: "rate_limited" }),
       expect.objectContaining({ reason: "ip", status: "rate_limited" }),
       expect.objectContaining({ reason: "ip", status: "rate_limited" }),
     ]);

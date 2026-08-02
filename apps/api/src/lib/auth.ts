@@ -92,7 +92,6 @@ import {
 import {
   evaluateNewAccountOtpPolicy,
   isDisposableEmailAddress,
-  SIGNUP_RETRY_AFTER_HEADER,
 } from "@/api/lib/signup-abuse";
 import { includes } from "@/api/lib/type-guards";
 import {
@@ -146,8 +145,26 @@ const authAccountExists = async (normalizedEmail: string): Promise<boolean> => {
   return existingAccount.at(0) !== undefined;
 };
 
+export const NEW_ACCOUNT_OTP_RATE_LIMIT_MODE = {
+  bypassed: "bypassed",
+  enforced: "enforced",
+} as const;
+
+type NewAccountOtpRateLimitMode =
+  (typeof NEW_ACCOUNT_OTP_RATE_LIMIT_MODE)[keyof typeof NEW_ACCOUNT_OTP_RATE_LIMIT_MODE];
+
+const NEW_ACCOUNT_EMAIL_OTP_ACTION = {
+  continue: "continue",
+  suppressOtp: "suppress_otp",
+} as const;
+
+type NewAccountEmailOtpAction =
+  | { type: typeof NEW_ACCOUNT_EMAIL_OTP_ACTION.continue }
+  | { type: typeof NEW_ACCOUNT_EMAIL_OTP_ACTION.suppressOtp };
+
 type NewAccountEmailOtpPolicyOptions = {
   accountExists?: (normalizedEmail: string) => Promise<boolean>;
+  rateLimitMode?: NewAccountOtpRateLimitMode;
   rateLimitContext?: Pick<RateLimitContext, "increment">;
 };
 
@@ -169,7 +186,7 @@ export const assertNewAccountEmailAllowedForCreation = ({
   });
 };
 
-export const assertNewAccountEmailOtpAllowed = async (
+export const getNewAccountEmailOtpAction = async (
   ctx: {
     body?: unknown;
     path: string;
@@ -177,14 +194,18 @@ export const assertNewAccountEmailOtpAllowed = async (
   },
   {
     accountExists = authAccountExists,
+    rateLimitMode = env.E2E_DISABLE_AUTH_RATE_LIMIT
+      ? NEW_ACCOUNT_OTP_RATE_LIMIT_MODE.bypassed
+      : NEW_ACCOUNT_OTP_RATE_LIMIT_MODE.enforced,
     rateLimitContext,
   }: NewAccountEmailOtpPolicyOptions = {},
-): Promise<void> => {
+): Promise<NewAccountEmailOtpAction> => {
   if (
+    rateLimitMode === NEW_ACCOUNT_OTP_RATE_LIMIT_MODE.bypassed ||
     ctx.path !== SEND_VERIFICATION_OTP_PATH ||
     !isSignInEmailOtpBody(ctx.body)
   ) {
-    return;
+    return { type: NEW_ACCOUNT_EMAIL_OTP_ACTION.continue };
   }
 
   const clientIp = ctx.request
@@ -199,22 +220,16 @@ export const assertNewAccountEmailOtpAllowed = async (
 
   switch (result.status) {
     case "allowed":
-      return;
+      return { type: NEW_ACCOUNT_EMAIL_OTP_ACTION.continue };
     case "rejected":
       // Keep the OTP-request response identical for existing and new accounts.
       // The user.create hook rejects the disposable address only after Better
       // Auth has verified the OTP and is about to create an account.
-      return;
+      return { type: NEW_ACCOUNT_EMAIL_OTP_ACTION.continue };
     case "rate_limited":
-      throw new APIError(
-        "TOO_MANY_REQUESTS",
-        {
-          message: "Too many account creation attempts. Try again later.",
-        },
-        { [SIGNUP_RETRY_AFTER_HEADER]: String(result.retryAfterSeconds) },
-      );
+      return { type: NEW_ACCOUNT_EMAIL_OTP_ACTION.suppressOtp };
     default:
-      result satisfies never;
+      return result satisfies never;
   }
 };
 
@@ -847,6 +862,23 @@ const createAuth = () => {
         expiresIn: 5 * 60,
         allowedAttempts: 3,
         async sendVerificationOTP({ email, otp, type }, ctx) {
+          const newAccountOtpAction = await getNewAccountEmailOtpAction({
+            body: { email, type },
+            path: ctx?.path ?? "",
+            request: ctx?.request,
+          });
+          switch (newAccountOtpAction.type) {
+            case NEW_ACCOUNT_EMAIL_OTP_ACTION.continue:
+              break;
+            case NEW_ACCOUNT_EMAIL_OTP_ACTION.suppressOtp:
+              // The endpoint still returns its ordinary success response, so
+              // the limiter cannot disclose whether the address is registered.
+              return;
+            default:
+              newAccountOtpAction satisfies never;
+              return;
+          }
+
           if (env.isDev) {
             // eslint-disable-next-line no-console -- dev-only OTP echo for local testing (env.isDev gated; value printed verbatim by design)
             console.log(`[DEV] OTP for ${email}: ${otp} (type: ${type})`);
@@ -995,7 +1027,6 @@ const createAuth = () => {
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
         await assertSelfhostEmailOtpAllowed(ctx.path);
-        await assertNewAccountEmailOtpAllowed(ctx);
 
         if (TWO_FACTOR_MANAGE_PATHS.has(ctx.path)) {
           await requireTwoFactorManageOtp(ctx);

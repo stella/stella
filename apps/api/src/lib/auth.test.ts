@@ -12,10 +12,11 @@ import { member, organization, user } from "@/api/db/auth-schema";
 import { contacts, workspaceMembers, workspaces } from "@/api/db/schema";
 import {
   assertNewAccountEmailAllowedForCreation,
-  assertNewAccountEmailOtpAllowed,
   getAuth,
+  getNewAccountEmailOtpAction,
   isSixDigitOtpBody,
   isTwoFactorRedirectResponse,
+  NEW_ACCOUNT_OTP_RATE_LIMIT_MODE,
   resolveMemberAuthorization,
   TWO_FACTOR_MANAGE_PATHS,
   withStellaTwoFactorSignInGate,
@@ -406,13 +407,18 @@ describe("isSixDigitOtpBody", () => {
 
 describe("new-account email policy", () => {
   test("does not reveal whether a disposable-address account exists when sending its OTP", async () => {
-    await assertNewAccountEmailOtpAllowed(
-      {
-        body: { email: "blocked@mailinator.com", type: "sign-in" },
-        path: "/email-otp/send-verification-otp",
-      },
-      { accountExists: async () => false },
+    const actions = await Promise.all(
+      [false, true].map(async (accountExists) =>
+        getNewAccountEmailOtpAction(
+          {
+            body: { email: "blocked@mailinator.com", type: "sign-in" },
+            path: "/email-otp/send-verification-otp",
+          },
+          { accountExists: async () => accountExists },
+        ),
+      ),
     );
+    expect(actions).toEqual([{ type: "continue" }, { type: "continue" }]);
   });
 
   test("rejects a disposable address when creating its account", async () => {
@@ -448,9 +454,8 @@ describe("new-account email policy", () => {
     }
   });
 
-  test("returns the computed retry delay with a signup 429", async () => {
-    const retryAfterSeconds = 171;
-    const rejection: unknown = await assertNewAccountEmailOtpAllowed(
+  test("suppresses the OTP side effect for a limited new-account request", async () => {
+    const action = await getNewAccountEmailOtpAction(
       {
         body: { email: "new-user@example.com", type: "sign-in" },
         path: "/email-otp/send-verification-otp",
@@ -460,20 +465,45 @@ describe("new-account email policy", () => {
         rateLimitContext: {
           increment: async () => ({
             count: 4,
-            nextReset: new Date(Date.now() + retryAfterSeconds * 1000),
+            nextReset: new Date(Date.now() + 60_000),
             start: Date.now(),
           }),
         },
       },
-    ).then(
-      () => null,
-      (error: unknown) => error,
+    );
+    expect(action).toEqual({ type: "suppress_otp" });
+  });
+
+  test("bypasses the signup limiter with the E2E auth-rate-limit mode", async () => {
+    let accountLookupCount = 0;
+    let incrementCount = 0;
+    const action = await getNewAccountEmailOtpAction(
+      {
+        body: { email: "new-user@example.com", type: "sign-in" },
+        path: "/email-otp/send-verification-otp",
+      },
+      {
+        accountExists: async () => {
+          accountLookupCount += 1;
+          return false;
+        },
+        rateLimitContext: {
+          increment: async () => {
+            incrementCount += 1;
+            return {
+              count: 1,
+              nextReset: new Date(Date.now() + 60_000),
+              start: Date.now(),
+            };
+          },
+        },
+        rateLimitMode: NEW_ACCOUNT_OTP_RATE_LIMIT_MODE.bypassed,
+      },
     );
 
-    expect(rejection).toMatchObject({
-      headers: { "Retry-After": String(retryAfterSeconds) },
-      statusCode: 429,
-    });
+    expect(action).toEqual({ type: "continue" });
+    expect(accountLookupCount).toBe(0);
+    expect(incrementCount).toBe(0);
   });
 });
 

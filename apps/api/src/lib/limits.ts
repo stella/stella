@@ -381,9 +381,9 @@ export const AUTH_RATE_LIMITS = {
 } as const;
 
 /**
- * Longer-lived limits for signup-capable OTP requests. Both limits apply
- * regardless of account existence so their outward behavior cannot enumerate
- * registered addresses.
+ * Longer-lived limits for new-account OTP requests. Rate-limited requests are
+ * acknowledged without sending an OTP, keeping account state out of the HTTP
+ * response while preserving existing users' login capacity.
  */
 export const NEW_ACCOUNT_OTP_RATE_LIMITS = {
   email: { duration: 60 * 60 * 1000, max: 3 },

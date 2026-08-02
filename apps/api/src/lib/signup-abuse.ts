@@ -7,7 +7,6 @@ import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
 
 const DISPOSABLE_EMAIL_DOMAINS = disposableEmailBlocklistSet();
 const NEW_ACCOUNT_OTP_RATE_LIMIT_SCOPE = "auth:new-account-otp";
-export const SIGNUP_RETRY_AFTER_HEADER = "Retry-After";
 
 let sharedRateLimitContext: RedisRateLimitContext | null = null;
 
@@ -56,15 +55,11 @@ const identityHash = (identity: string): string =>
 const counterKey = (kind: "email" | "ip", identity: string): string =>
   `${NEW_ACCOUNT_OTP_RATE_LIMIT_SCOPE}:${kind}:${identityHash(identity)}`;
 
-const retryAfterSeconds = (nextReset: Date): number =>
-  Math.max(1, Math.ceil((nextReset.getTime() - Date.now()) / 1000));
-
 type SignupOtpRateLimitResult =
   | { status: "allowed" }
   | {
       status: "rate_limited";
       reason: "email" | "ip";
-      retryAfterSeconds: number;
     };
 
 export const consumeSignupOtpRateLimit = async ({
@@ -85,7 +80,6 @@ export const consumeSignupOtpRateLimit = async ({
     return {
       status: "rate_limited",
       reason: kind,
-      retryAfterSeconds: retryAfterSeconds(counter.nextReset),
     };
   }
   return { status: "allowed" };
@@ -97,7 +91,6 @@ export type NewAccountOtpPolicyResult =
   | {
       status: "rate_limited";
       reason: "email" | "ip";
-      retryAfterSeconds: number;
     };
 
 export const evaluateNewAccountOtpPolicy = async ({
@@ -112,6 +105,10 @@ export const evaluateNewAccountOtpPolicy = async ({
   email: string;
 }): Promise<NewAccountOtpPolicyResult> => {
   const normalizedEmail = normalizeAuthEmail(email);
+  if (await accountExists(normalizedEmail)) {
+    return { status: "allowed", reason: "existing_account" };
+  }
+
   const emailRateLimitResult = await consumeSignupOtpRateLimit({
     ...(context ? { context } : {}),
     identity: normalizedEmail,
@@ -132,9 +129,6 @@ export const evaluateNewAccountOtpPolicy = async ({
     }
   }
 
-  if (await accountExists(normalizedEmail)) {
-    return { status: "allowed", reason: "existing_account" };
-  }
   if (isDisposableEmailAddress(normalizedEmail)) {
     return { status: "rejected", reason: "disposable_email" };
   }
