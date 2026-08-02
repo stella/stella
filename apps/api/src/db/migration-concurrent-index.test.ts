@@ -22,9 +22,7 @@ const TYPE_CHANGE_CLAUSE =
 const TRANSACTION_REVERSAL =
   /^(?:ABORT|ROLLBACK|SAVEPOINT|RELEASE\s+SAVEPOINT)\b/iu;
 const PROCEDURAL_TIMEOUT_MUTATION =
-  /\b(?:set_config\s*\(|(?:RESET|DISCARD)\s+ALL\b|RESET\s+(?:statement|lock)_timeout\b|SET\s+(?:(?:SESSION|LOCAL)\s+)?(?:statement|lock)_timeout\b)/iu;
-const DYNAMIC_PROCEDURAL_TIMEOUT_MUTATION =
-  /\bEXECUTE\b[\s\S]*?(?:\b(?:statement|lock)_timeout\b|\b(?:RESET|DISCARD)\s+ALL\b)/iu;
+  /\b(?:EXECUTE\b|set_config\s*\(|(?:RESET|DISCARD)\s+ALL\b|RESET\s+(?:statement|lock)_timeout\b|SET\s+(?:(?:SESSION|LOCAL)\s+)?(?:statement|lock)_timeout\b)/iu;
 const TYPE_CHANGE_POLICY = {
   boundedRewrite: "stella-migration-safety: bounded-type-rewrite",
   metadataOnly: "stella-migration-safety: metadata-only-type-change",
@@ -447,8 +445,7 @@ const isUnsupportedProceduralTimeoutMutation = (
   statement: string,
 ) =>
   /^DO\b/iu.test(statement) &&
-  (PROCEDURAL_TIMEOUT_MUTATION.test(maskSqlSingleQuotedLiterals(statement)) ||
-    DYNAMIC_PROCEDURAL_TIMEOUT_MUTATION.test(statement)) &&
+  PROCEDURAL_TIMEOUT_MUTATION.test(maskSqlSingleQuotedLiterals(statement)) &&
   !(
     CUSTOM_BOUNDED_TYPE_CHANGE_MIGRATIONS.has(relativePath) &&
     isCustomStatementBudget(statement)
@@ -459,6 +456,10 @@ const collectUnsafeConcurrentTimeouts = (
   source: string,
 ) => {
   const violations = [];
+  const statements = splitSqlStatements(source);
+  const hasConcurrentOperation = statements.some((statement) =>
+    CONCURRENT_INDEX_OPERATION.test(statement),
+  );
   let statementTimeout: TimeoutState = "unset";
   let lockTimeout: TimeoutState = "unset";
   let statementTimeoutCheckpoint: TimeoutState | undefined;
@@ -468,8 +469,11 @@ const collectUnsafeConcurrentTimeouts = (
   let statementTimeoutRestored = false;
   let lockTimeoutRequiresRestore = false;
 
-  for (const statement of splitSqlStatements(source)) {
-    if (isUnsupportedProceduralTimeoutMutation(relativePath, statement)) {
+  for (const statement of statements) {
+    if (
+      hasConcurrentOperation &&
+      isUnsupportedProceduralTimeoutMutation(relativePath, statement)
+    ) {
       violations.push(
         `${relativePath}: procedural timeout mutations are not supported`,
       );
@@ -667,6 +671,10 @@ const collectUnsafeTypeChangesInMigration = (
   const violations = [];
   const isCustomBoundedMigration =
     CUSTOM_BOUNDED_TYPE_CHANGE_MIGRATIONS.has(relativePath);
+  const statements = splitSqlStatements(source);
+  const hasTypeChange = statements.some((statement) =>
+    TYPE_CHANGE_ANYWHERE.test(statement),
+  );
 
   let lockTimeout: TimeoutState = "unset";
   let statementTimeout: TimeoutState = "unset";
@@ -678,7 +686,7 @@ const collectUnsafeTypeChangesInMigration = (
   let activePolicyUsed = false;
   let sawCustomStatementBudget = false;
 
-  for (const statement of splitSqlStatements(source)) {
+  for (const statement of statements) {
     const typeChangeClauseCount = [...statement.matchAll(TYPE_CHANGE_CLAUSE)]
       .length;
     if (TRANSACTION_REVERSAL.test(statement)) {
@@ -687,7 +695,10 @@ const collectUnsafeTypeChangesInMigration = (
       );
       continue;
     }
-    if (isUnsupportedProceduralTimeoutMutation(relativePath, statement)) {
+    if (
+      hasTypeChange &&
+      isUnsupportedProceduralTimeoutMutation(relativePath, statement)
+    ) {
       violations.push(
         `${relativePath}: procedural timeout mutations are not supported`,
       );
@@ -1207,6 +1218,8 @@ SELECT 1;`;
       "RESET ALL;",
       "DISCARD ALL;",
       "EXECUTE 'RESET ALL';",
+      "EXECUTE 'RESET ' || 'ALL';",
+      "EXECUTE format('RESET %s', 'ALL');",
     ]) {
       const mutation = `DO $$ BEGIN ${command} END $$;`;
       expect(
