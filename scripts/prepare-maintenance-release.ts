@@ -1,8 +1,16 @@
 #!/usr/bin/env bun
 
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import {
+  existsSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import nodePath from "node:path";
 
+import { RECORDINGS_MANIFEST_PATH } from "../apps/web/e2e/marketing/captures";
 import { computeVerdicts } from "./check-marketing-recordings";
 
 const ROOT_DIR = nodePath.resolve(import.meta.dirname, "..");
@@ -28,6 +36,13 @@ type PreparedMaintenanceRelease = {
   changelogPath: string;
   previousTag: string;
   version: string;
+};
+
+type ReleaseFileWriter = (path: string, contents: string) => void;
+
+type FileSnapshot = {
+  contents: string | null;
+  path: string;
 };
 
 export class MaintenanceReleaseError extends Error {
@@ -149,12 +164,61 @@ const readReleaseDates = (rootDir: string): Record<string, string> => {
   return releaseDates;
 };
 
+const atomicWriteFile: ReleaseFileWriter = (path, contents) => {
+  const temporaryPath = `${path}.${String(process.pid)}.${randomUUID()}.tmp`;
+  try {
+    writeFileSync(temporaryPath, contents, { flag: "wx" });
+    renameSync(temporaryPath, path);
+  } finally {
+    rmSync(temporaryPath, { force: true });
+  }
+};
+
+export const withFileRollback = <T>({
+  operation,
+  paths,
+  writeFile = atomicWriteFile,
+}: {
+  operation: () => T;
+  paths: readonly string[];
+  writeFile?: ReleaseFileWriter;
+}): T => {
+  const snapshots: FileSnapshot[] = paths.map((path) => ({
+    contents: existsSync(path) ? readFileSync(path, "utf-8") : null,
+    path,
+  }));
+  try {
+    return operation();
+  } catch (error) {
+    const rollbackErrors: unknown[] = [];
+    for (const { contents, path } of snapshots) {
+      try {
+        if (contents === null) {
+          rmSync(path, { force: true });
+        } else {
+          writeFile(path, contents);
+        }
+      } catch (rollbackError) {
+        rollbackErrors.push(rollbackError);
+      }
+    }
+    if (rollbackErrors.length > 0) {
+      throw new MaintenanceReleaseError(
+        `Release preparation failed and ${String(rollbackErrors.length)} rollback operation(s) did not complete: ${rollbackErrors.map(String).join("; ")}`,
+      );
+    }
+    throw error;
+  }
+};
+
 export const prepareMaintenanceReleaseFiles = ({
   publishedAt,
   rootDir,
+  writeFile = atomicWriteFile,
 }: {
   publishedAt: string;
   rootDir: string;
+  writeFile?: ReleaseFileWriter;
 }): PreparedMaintenanceRelease => {
   if (Number.isNaN(Date.parse(publishedAt))) {
     throw new MaintenanceReleaseError(
@@ -182,15 +246,21 @@ export const prepareMaintenanceReleaseFiles = ({
     );
   }
 
+  const releaseDatesPath = nodePath.join(rootDir, RELEASE_DATES_PATH);
   const releaseDates = readReleaseDates(rootDir);
   releaseDates[previousTag] = publishedAt;
-  writeFileSync(
-    nodePath.join(rootDir, RELEASE_DATES_PATH),
-    `${JSON.stringify(releaseDates, null, 2)}\n`,
-  );
-  writeFileSync(versionPath, `${next.value}\n`);
-  writeFileSync(absoluteChangelogPath, MAINTENANCE_CHANGELOG);
-  return { changelogPath, previousTag, version: next.value };
+  return withFileRollback({
+    operation: () => {
+      // VERSION is the commit marker: every dependent file is durable before
+      // it advances. Atomic sibling renames prevent truncated files.
+      writeFile(absoluteChangelogPath, MAINTENANCE_CHANGELOG);
+      writeFile(releaseDatesPath, `${JSON.stringify(releaseDates, null, 2)}\n`);
+      writeFile(versionPath, `${next.value}\n`);
+      return { changelogPath, previousTag, version: next.value };
+    },
+    paths: [versionPath, releaseDatesPath, absoluteChangelogPath],
+    writeFile,
+  });
 };
 
 const run = (command: readonly string[]) => {
@@ -294,18 +364,30 @@ const main = async () => {
     readFileSync(nodePath.join(ROOT_DIR, "VERSION"), "utf-8").trim(),
   );
   const publishedAt = await fetchPublishedAt(`v${current.value}`);
-  ensureFreshRecordings(options.recordingReviewReason);
-  const prepared = prepareMaintenanceReleaseFiles({
-    publishedAt,
-    rootDir: ROOT_DIR,
+  const next = nextPatchVersion(current);
+  const prepared = withFileRollback({
+    operation: () => {
+      ensureFreshRecordings(options.recordingReviewReason);
+      const release = prepareMaintenanceReleaseFiles({
+        publishedAt,
+        rootDir: ROOT_DIR,
+      });
+      run([
+        "bash",
+        "scripts/check-release-changelog.sh",
+        "--version",
+        release.version,
+      ]);
+      run(["bun", "run", "marketing:stale", "--strict"]);
+      return release;
+    },
+    paths: [
+      nodePath.join(ROOT_DIR, RECORDINGS_MANIFEST_PATH),
+      nodePath.join(ROOT_DIR, "VERSION"),
+      nodePath.join(ROOT_DIR, RELEASE_DATES_PATH),
+      nodePath.join(ROOT_DIR, `docs/changelog/v${next.value}.md`),
+    ],
   });
-  run([
-    "bash",
-    "scripts/check-release-changelog.sh",
-    "--version",
-    prepared.version,
-  ]);
-  run(["bun", "run", "marketing:stale", "--strict"]);
   process.stdout.write(
     [
       `maintenance-release: prepared ${prepared.version}`,

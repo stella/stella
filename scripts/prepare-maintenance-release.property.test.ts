@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -17,6 +18,7 @@ import {
   parseMaintenanceReleaseOptions,
   parseStableVersion,
   prepareMaintenanceReleaseFiles,
+  withFileRollback,
 } from "./prepare-maintenance-release";
 
 const roots: string[] = [];
@@ -149,5 +151,114 @@ describe("maintenance release preparation", () => {
         rootDir: root,
       }),
     ).toThrow("already exists");
+  });
+
+  test("restores every release file when preparation fails", () => {
+    const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
+    roots.push(root);
+    mkdirSync(nodePath.join(root, "docs/changelog"), { recursive: true });
+    mkdirSync(nodePath.join(root, "apps/landing/src/data"), {
+      recursive: true,
+    });
+    const versionPath = nodePath.join(root, "VERSION");
+    const releaseDatesPath = nodePath.join(
+      root,
+      "apps/landing/src/data/changelog-release-dates.json",
+    );
+    const nextChangelogPath = nodePath.join(root, "docs/changelog/v1.2.4.md");
+    writeFileSync(versionPath, "1.2.3\n");
+    writeFileSync(
+      nodePath.join(root, "docs/changelog/v1.2.3.md"),
+      "# Previous release\n",
+    );
+    writeFileSync(releaseDatesPath, '{"v1.2.2":"2026-01-01T00:00:00Z"}\n');
+
+    let failed = false;
+    expect(() =>
+      prepareMaintenanceReleaseFiles({
+        publishedAt: "2026-02-03T04:05:06Z",
+        rootDir: root,
+        writeFile: (path, contents) => {
+          if (path === releaseDatesPath && !failed) {
+            failed = true;
+            throw new Error("simulated write failure");
+          }
+          writeFileSync(path, contents);
+        },
+      }),
+    ).toThrow("simulated write failure");
+
+    expect(readFileSync(versionPath, "utf-8")).toBe("1.2.3\n");
+    expect(readFileSync(releaseDatesPath, "utf-8")).toBe(
+      '{"v1.2.2":"2026-01-01T00:00:00Z"}\n',
+    );
+    expect(existsSync(nextChangelogPath)).toBe(false);
+  });
+
+  test("continues rollback after a persistent restore failure", () => {
+    const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
+    roots.push(root);
+    mkdirSync(nodePath.join(root, "docs/changelog"), { recursive: true });
+    mkdirSync(nodePath.join(root, "apps/landing/src/data"), {
+      recursive: true,
+    });
+    const releaseDatesPath = nodePath.join(
+      root,
+      "apps/landing/src/data/changelog-release-dates.json",
+    );
+    const nextChangelogPath = nodePath.join(root, "docs/changelog/v1.2.4.md");
+    writeFileSync(nodePath.join(root, "VERSION"), "1.2.3\n");
+    writeFileSync(
+      nodePath.join(root, "docs/changelog/v1.2.3.md"),
+      "# Previous release\n",
+    );
+    writeFileSync(releaseDatesPath, "{}\n");
+
+    expect(() =>
+      prepareMaintenanceReleaseFiles({
+        publishedAt: "2026-02-03T04:05:06Z",
+        rootDir: root,
+        writeFile: (path, contents) => {
+          if (path === releaseDatesPath) {
+            throw new Error("persistent write failure");
+          }
+          writeFileSync(path, contents);
+        },
+      }),
+    ).toThrow("1 rollback operation(s) did not complete");
+
+    expect(existsSync(nextChangelogPath)).toBe(false);
+    expect(
+      prepareMaintenanceReleaseFiles({
+        publishedAt: "2026-02-03T04:05:06Z",
+        rootDir: root,
+      }),
+    ).toMatchObject({ version: "1.2.4" });
+  });
+
+  test("restores attestation and release files as one transaction", () => {
+    const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
+    roots.push(root);
+    const manifestPath = nodePath.join(root, "recordings-manifest.json");
+    const versionPath = nodePath.join(root, "VERSION");
+    const changelogPath = nodePath.join(root, "v1.2.4.md");
+    writeFileSync(manifestPath, '{"entries":[]}\n');
+    writeFileSync(versionPath, "1.2.3\n");
+
+    expect(() =>
+      withFileRollback({
+        operation: () => {
+          writeFileSync(manifestPath, '{"entries":[{"reviewed":true}]}\n');
+          writeFileSync(versionPath, "1.2.4\n");
+          writeFileSync(changelogPath, "# Maintenance release\n");
+          throw new Error("simulated post-attestation failure");
+        },
+        paths: [manifestPath, versionPath, changelogPath],
+      }),
+    ).toThrow("simulated post-attestation failure");
+
+    expect(readFileSync(manifestPath, "utf-8")).toBe('{"entries":[]}\n');
+    expect(readFileSync(versionPath, "utf-8")).toBe("1.2.3\n");
+    expect(existsSync(changelogPath)).toBe(false);
   });
 });

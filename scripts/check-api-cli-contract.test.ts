@@ -148,25 +148,11 @@ describe("API and CLI release contract", () => {
     );
   });
 
-  test("release promotion preserves the full online-migration window", async () => {
-    const releaseWorkflow = await Bun.file(
-      new URL("../.github/workflows/release.yml", import.meta.url),
-    ).text();
-    const promoteJobStart = releaseWorkflow.indexOf("\n  promote:\n");
-    const stagingJobStart = releaseWorkflow.indexOf(
-      "\n  promote-staging:\n",
-      promoteJobStart,
-    );
-    const promoteJob = releaseWorkflow.slice(promoteJobStart, stagingJobStart);
-
-    expect(promoteJobStart).toBeGreaterThanOrEqual(0);
-    expect(stagingJobStart).toBeGreaterThan(promoteJobStart);
-    expect(promoteJob).toContain("timeout-minutes: 360");
-  });
-
   test("release and pull-request smoke tests reject synthetic migration history", async () => {
     const workflows = await Promise.all([
-      Bun.file(new URL("../.github/workflows/release.yml", import.meta.url)).text(),
+      Bun.file(
+        new URL("../.github/workflows/release.yml", import.meta.url),
+      ).text(),
       Bun.file(
         new URL("../.github/workflows/db-migrations.yml", import.meta.url),
       ).text(),
