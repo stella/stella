@@ -114,6 +114,11 @@ const boundedCollectionSchema = v.strictObject({
         code: v.pipe(v.string(), v.maxLength(2)),
         label: v.pipe(v.string(), v.minLength(12)),
         page: v.pipe(v.number(), v.integer(), v.minValue(1)),
+        // Fractional bounds on integer fields: satisfying the bound must not
+        // break the type. The upper one is negative so it is the binding
+        // constraint rather than the synthesizer's 0 default.
+        rank: v.pipe(v.number(), v.integer(), v.minValue(1.5)),
+        offset: v.pipe(v.number(), v.integer(), v.maxValue(-1.5)),
       }),
     ),
     v.minLength(1),

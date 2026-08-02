@@ -11,7 +11,6 @@ import * as v from "valibot";
 
 import type { ModelRole } from "@stll/ai-catalog";
 
-import { isMockAI } from "@/api/consts";
 import type {
   AIRequestServiceTier,
   CachingDecision,
@@ -29,6 +28,7 @@ import { tanStackCacheControl } from "@/api/lib/tanstack-ai-caching";
 import {
   getTanStackTextModelById,
   getTanStackTextModelForRole,
+  isMockTextAdapterActive,
 } from "@/api/lib/tanstack-ai-models";
 import type {
   ResolvedTanStackTextModel,
@@ -342,7 +342,7 @@ const structuredOutputProjectionOptions = (
 ): ProviderSafeJsonSchemaProjectionOptions =>
   providerSafeJsonSchemaOptionsForTanStackProvider(
     provider,
-    isMockAI() ? "mock-structured-output" : "structured-output",
+    isMockTextAdapterActive() ? "mock-structured-output" : "structured-output",
   );
 
 export const generateTanStackObjectForRole = async <
