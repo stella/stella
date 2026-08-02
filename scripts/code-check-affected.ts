@@ -223,10 +223,12 @@ const affectedWorkspacePaths = (mergeBase: string): string[] => {
 export const affectedCommands = (
   plan: Extract<CheckPlan, { type: "affected" }>,
 ) => {
-  // Root `scripts/` sits outside every workspace, so no affected target ever
-  // covers it. Run the SQL bind-cast guard unconditionally; otherwise a PR
-  // touching only a root script would skip the check entirely.
-  const commands: string[][] = [["bash", "scripts/lint-root-scripts-sql.sh"]];
+  // Root scripts sit outside every workspace, so no affected target covers
+  // their cross-cutting checks. Run those guards unconditionally.
+  const commands: string[][] = [
+    ["bun", "run", "env:check"],
+    ["bash", "scripts/lint-root-scripts-sql.sh"],
+  ];
   if (plan.checkLanding) {
     commands.push(["bun", "--cwd", "apps/landing", "typecheck"]);
     commands.push(["bun", "apps/landing/scripts/check-logical-properties.ts"]);
