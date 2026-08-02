@@ -8,6 +8,7 @@ import {
 } from "@/lib/errors/localization";
 
 const AUTH_ERROR_CODES = {
+  DISPOSABLE_EMAIL_NOT_ALLOWED: true,
   YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION: true,
 } as const;
 type AuthErrorCode = keyof typeof AUTH_ERROR_CODES;
@@ -27,6 +28,7 @@ type ToAuthClientErrorProps = {
 };
 
 const AUTH_ERROR_KEYS = {
+  DISPOSABLE_EMAIL_NOT_ALLOWED: "errors.apiCodes.disposableEmailNotAllowed",
   YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION:
     "errors.apiCodes.notOrganizationMember",
 } as const;

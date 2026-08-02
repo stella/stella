@@ -24,7 +24,7 @@ import Elysia, { t } from "elysia";
 import { ac, roles } from "@stll/permissions";
 import type { PermissionInput } from "@stll/permissions";
 
-import { authSchema, member } from "@/api/db/auth-schema";
+import { authSchema, member, user as authUser } from "@/api/db/auth-schema";
 import { rootDb, rlsDb } from "@/api/db/root";
 import { workspaceMembers, workspaces } from "@/api/db/schema";
 import {
@@ -67,7 +67,10 @@ import {
   MACHINE_API_KEY_START_LENGTH,
 } from "@/api/lib/machine-api-key-config";
 import { isMemberRole } from "@/api/lib/member-roles";
-import { enrichRequestContext } from "@/api/lib/observability/request-context";
+import {
+  enrichRequestContext,
+  getRequestContext,
+} from "@/api/lib/observability/request-context";
 import { parseUserAgent } from "@/api/lib/parse-user-agent";
 import {
   hasMemberPermission,
@@ -85,6 +88,7 @@ import {
   isSelfhostLocalPasswordAuthEnabled,
   shouldHandleSelfhostBootstrapPath,
 } from "@/api/lib/selfhost-auth";
+import { evaluateNewAccountOtpPolicy } from "@/api/lib/signup-abuse";
 import { includes } from "@/api/lib/type-guards";
 import {
   getMcpResourceUrl,
@@ -99,6 +103,7 @@ const ACCESS_TOKEN_EXPIRES_IN = 15 * 60;
 const REFRESH_TOKEN_EXPIRES_IN = 30 * 24 * 60 * 60;
 
 const VERIFY_EMAIL_PATH = "/email-otp/verify-email";
+const SEND_VERIFICATION_OTP_PATH = "/email-otp/send-verification-otp";
 const SIGN_IN_EMAIL_PATH = "/sign-in/email";
 const NEW_SESSION_SECURITY_PATHS = new Set([
   VERIFY_EMAIL_PATH,
@@ -109,6 +114,71 @@ const WORD_EDIT_SHORTCUT_MAX_LENGTH = 16;
 
 /** Passwordless email-OTP sign-in path (not a better-auth credential path). */
 const SIGN_IN_EMAIL_OTP_PATH = "/sign-in/email-otp";
+
+type SignInEmailOtpBody = {
+  email: string;
+  type: "sign-in";
+};
+
+const isSignInEmailOtpBody = (body: unknown): body is SignInEmailOtpBody => {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    return false;
+  }
+  return (
+    "type" in body &&
+    body.type === "sign-in" &&
+    "email" in body &&
+    typeof body.email === "string"
+  );
+};
+
+const authAccountExists = async (normalizedEmail: string): Promise<boolean> => {
+  const existingAccount = await rootDb
+    .select({ id: authUser.id })
+    .from(authUser)
+    .where(eq(authUser.email, normalizedEmail))
+    .limit(1);
+  return existingAccount.at(0) !== undefined;
+};
+
+const assertNewAccountEmailOtpAllowed = async (ctx: {
+  body?: unknown;
+  path: string;
+  request?: Request | undefined;
+}): Promise<void> => {
+  if (
+    ctx.path !== SEND_VERIFICATION_OTP_PATH ||
+    !isSignInEmailOtpBody(ctx.body)
+  ) {
+    return;
+  }
+
+  const clientIp = ctx.request
+    ? (getRequestContext(ctx.request)?.clientIp ?? null)
+    : null;
+  const result = await evaluateNewAccountOtpPolicy({
+    accountExists: authAccountExists,
+    clientIp,
+    email: ctx.body.email,
+  });
+
+  switch (result.status) {
+    case "allowed":
+      return;
+    case "rejected":
+      throw new APIError("BAD_REQUEST", {
+        code: "DISPOSABLE_EMAIL_NOT_ALLOWED",
+        message:
+          "Temporary email addresses are not allowed. Use a permanent email address.",
+      });
+    case "rate_limited":
+      throw new APIError("TOO_MANY_REQUESTS", {
+        message: "Too many account creation attempts. Try again later.",
+      });
+    default:
+      result satisfies never;
+  }
+};
 
 /**
  * Better Auth handles every social provider (`/callback/google`,
@@ -883,6 +953,7 @@ const createAuth = () => {
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
         await assertSelfhostEmailOtpAllowed(ctx.path);
+        await assertNewAccountEmailOtpAllowed(ctx);
 
         if (TWO_FACTOR_MANAGE_PATHS.has(ctx.path)) {
           await requireTwoFactorManageOtp(ctx);

@@ -1233,6 +1233,7 @@
       "aiConfigProviderValidationFailed": "Le fournisseur d’IA a refusé la configuration. Vérifiez la clé API et le modèle.",
       "deeplKeyRejected": "La clé DeepL enregistrée a été refusée. Remplacez-la dans les paramètres de l’organisation.",
       "deeplQuotaExceeded": "Le quota de caractères DeepL de cette organisation est épuisé.",
+      "disposableEmailNotAllowed": "Les adresses e-mail temporaires ne sont pas autorisées. Utilisez une adresse e-mail permanente.",
       "forbidden": "Vous n’avez pas l’autorisation d’effectuer cette action.",
       "internalServerError": "Une erreur s’est produite. Veuillez réessayer.",
       "legalSourceEntityLimitReached": "Ce dossier a atteint la limite d’entités, le document n’a donc pas pu être créé.",

@@ -139,6 +139,7 @@
     "better-auth": "1.6.25",
     "better-result": "3.0.0",
     "diff": "9.0.0",
+    "disposable-email-domains-js": "1.25.0",
     "drizzle-kit": "1.0.0-rc.4",
     "drizzle-orm": "1.0.0-rc.4",
     "elysia": "1.4.29",

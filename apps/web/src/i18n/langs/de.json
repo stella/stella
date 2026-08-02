@@ -1233,6 +1233,7 @@
       "aiConfigProviderValidationFailed": "Der KI-Anbieter hat die Konfiguration abgelehnt. Prüfen Sie API-Schlüssel und Modell.",
       "deeplKeyRejected": "Der gespeicherte DeepL-Schlüssel wurde abgelehnt. Ersetzen Sie ihn in den Organisationseinstellungen.",
       "deeplQuotaExceeded": "Das DeepL-Zeichenkontingent dieser Organisation ist aufgebraucht.",
+      "disposableEmailNotAllowed": "Temporäre E-Mail-Adressen sind nicht zulässig. Verwenden Sie eine dauerhafte E-Mail-Adresse.",
       "forbidden": "Sie haben keine Berechtigung für diese Aktion.",
       "internalServerError": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
       "legalSourceEntityLimitReached": "Diese Angelegenheit hat das Entitätenlimit erreicht, daher konnte das Dokument nicht erstellt werden.",

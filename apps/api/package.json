@@ -95,6 +95,7 @@
     "cheerio": "^1.2.0",
     "client-zip": "^2.5.0",
     "diff": "catalog:",
+    "disposable-email-domains-js": "catalog:",
     "domhandler": "^6.0.1",
     "drizzle-orm": "catalog:",
     "elysia": "catalog:",

@@ -454,16 +454,25 @@ describe("toAuthClientError", () => {
     }
   });
 
-  test("localizes known auth client codes", () => {
+  test.each([
+    [
+      "DISPOSABLE_EMAIL_NOT_ALLOWED",
+      "Temporary email addresses are not allowed. Use a permanent email address.",
+    ],
+    [
+      "YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION",
+      "You are not a member of this organization.",
+    ],
+  ])("localizes the known auth client code %s", (code, expected) => {
     const error = toAuthClientError({
-      code: "YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION",
-      message: "No membership",
+      code,
+      message: "Raw auth error",
       status: 403,
       statusText: "Forbidden",
     });
 
     expect(AuthClientError.is(error)).toBe(true);
-    expect(error.message).toBe("You are not a member of this organization.");
+    expect(error.message).toBe(expected);
   });
 });
 

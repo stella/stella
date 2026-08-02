@@ -1233,6 +1233,7 @@
       "aiConfigProviderValidationFailed": "Az AI-szolgáltató elutasította a beállítást. Ellenőrizze az API-kulcsot és a modellt.",
       "deeplKeyRejected": "A mentett DeepL-kulcsot a szolgáltató elutasította. Cserélje le a szervezet beállításaiban.",
       "deeplQuotaExceeded": "A szervezet DeepL-karakterkerete elfogyott.",
+      "disposableEmailNotAllowed": "Az ideiglenes e-mail-címek nem engedélyezettek. Használjon állandó e-mail-címet.",
       "forbidden": "Nincs jogosultsága ehhez a művelethez.",
       "internalServerError": "Hiba történt. Próbálja újra.",
       "legalSourceEntityLimitReached": "Ez az ügy elérte az entitások korlátját, ezért a dokumentum nem hozható létre.",

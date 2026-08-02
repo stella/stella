@@ -381,6 +381,16 @@ export const AUTH_RATE_LIMITS = {
 } as const;
 
 /**
+ * Longer-lived limits for OTP requests that would create a new account.
+ * Existing accounts bypass these limits and remain covered by the ordinary
+ * Better Auth sign-in limits above.
+ */
+export const NEW_ACCOUNT_OTP_RATE_LIMITS = {
+  email: { duration: 60 * 60 * 1000, max: 3 },
+  ip: { duration: 3 * 60 * 60 * 1000, max: 25 },
+} as const;
+
+/**
  * Max window (seconds) across all auth rate-limit rules.
  * Used as the Redis TTL for better-auth's customStorage,
  * which does not pass per-endpoint window to `set`.

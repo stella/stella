@@ -402,6 +402,26 @@ describe("isSixDigitOtpBody", () => {
   });
 });
 
+describe("new-account email policy", () => {
+  test("rejects a disposable email before sending its sign-in OTP", async () => {
+    const email = `blocked-${tid()}@mailinator.com`;
+
+    const rejection: unknown = await getAuth()
+      .api.sendVerificationOTP({
+        body: { email, type: "sign-in" },
+      })
+      .then(
+        () => null,
+        (error: unknown) => error,
+      );
+
+    expect(rejection).toMatchObject({
+      body: { code: "DISPOSABLE_EMAIL_NOT_ALLOWED" },
+      statusCode: 400,
+    });
+  });
+});
+
 describe("session freshness", () => {
   test("freshAge stays disabled so day-old sessions can read list-sessions", () => {
     // Better Auth defaults `freshAge` to 1 day and gates `list-sessions` (the

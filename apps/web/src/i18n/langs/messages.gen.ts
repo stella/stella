@@ -1236,6 +1236,7 @@ type Messages = {
       "aiConfigProviderValidationFailed": "The AI provider rejected the configuration. Check the API key and model.";
       "deeplKeyRejected": "The stored DeepL key was rejected. Replace it in organization settings.";
       "deeplQuotaExceeded": "The DeepL character quota for this organization has been used up.";
+      "disposableEmailNotAllowed": "Temporary email addresses are not allowed. Use a permanent email address.";
       "forbidden": "You do not have permission to do this.";
       "internalServerError": "The server could not complete the action. Please try again.";
       "legalSourceEntityLimitReached": "This matter has reached the entity limit, so the document could not be created.";
