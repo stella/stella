@@ -20,11 +20,13 @@
 //   sql`... ${JSON.stringify(value)}::jsonb ...`
 //   sql`... ${json}::jsonb ...`           // any value, however it got here
 //
-// There is no exemption for property access either: `${payload.astJson}` is a
+// Property access earns no exemption of its own: `${payload.astJson}` is a
 // member expression and still a bound serialized string. Casting a real column
-// (`${table.column}::jsonb`) is the one legitimate use, and it is rare enough
-// to carry an explicit disable naming why, rather than an inferred escape hatch
-// that any serialized value can slip through.
+// (`${table.column}::jsonb`) is the one legitimate use, and those few sites are
+// named explicitly in `allowedColumnExpressions` rather than inferred from
+// shape, which any serialized value could imitate. Keeping the list in the
+// config also avoids inline suppressions inside schema files, where an edit
+// would demand a migration it does not need.
 //
 // Allowed:
 //   sql`... ${JSON.stringify(value)}::text::jsonb ...`
@@ -93,6 +95,32 @@ const sqlTextsOf = (node: AstNode): string[] => {
   });
 };
 
+// `a.b` for a simple property access, so a configured allowlist can name the
+// handful of real column casts without matching anything more elaborate.
+const dottedNameOf = (node: unknown): string | undefined => {
+  if (
+    !isAstNode(node) ||
+    node.type !== "MemberExpression" ||
+    node.computed === true
+  ) {
+    return undefined;
+  }
+  const { object, property } = node;
+  if (
+    !isAstNode(object) ||
+    object.type !== "Identifier" ||
+    !isAstNode(property) ||
+    property.type !== "Identifier"
+  ) {
+    return undefined;
+  }
+  const objectName = object["name"];
+  const propertyName = property["name"];
+  return typeof objectName === "string" && typeof propertyName === "string"
+    ? `${objectName}.${propertyName}`
+    : undefined;
+};
+
 export default {
   meta: { name: "no-bare-jsonb-cast" },
   rules: {
@@ -106,8 +134,27 @@ export default {
             "JSON-encodes the string again and Postgres sees a jsonb string " +
             "instead of the object.",
         },
+        schema: [
+          {
+            type: "object",
+            properties: {
+              allowedColumnExpressions: {
+                type: "array",
+                items: { type: "string" },
+              },
+            },
+            additionalProperties: false,
+          },
+        ],
       },
       create(context) {
+        const options = context.options?.[0] ?? {};
+        const allowedColumnExpressions = new Set<string>(
+          Array.isArray(options.allowedColumnExpressions)
+            ? options.allowedColumnExpressions
+            : [],
+        );
+
         // A positional cast is reported wherever the SQL text carrying it
         // appears, so guard against reporting the same node twice.
         const reportedPositional = new WeakSet<object>();
@@ -139,6 +186,16 @@ export default {
             const quasis = Array.isArray(node.quasis) ? node.quasis : [];
 
             for (const [index, expression] of expressions.entries()) {
+              // A named column cast: the cast applies to the column, not to a
+              // bind parameter, so nothing is double-encoded.
+              const dotted = dottedNameOf(expression);
+              if (
+                dotted !== undefined &&
+                allowedColumnExpressions.has(dotted)
+              ) {
+                continue;
+              }
+
               // The text directly after this interpolation carries the cast.
               // A quasi's `value` is a plain `{ raw, cooked }` record, not an
               // AST node, so it carries no `type` to narrow on.

@@ -89,10 +89,10 @@ const _positionalThroughText = `UPDATE t SET doc = $1::text::jsonb WHERE id = $2
 const _throughText = sql`${JSON.stringify(value)}::text::jsonb`;
 const _identifierThroughText = sql`surface_forms @> ${formJson}::text::jsonb`;
 
-// Casting a real column is the one legitimate bare cast, and it carries an
-// explicit disable rather than an inferred exemption — property access alone
-// cannot tell a column from a serialized value.
-// oxlint-disable-next-line no-bare-jsonb-cast/no-bare-jsonb-cast -- casts the column itself, not a bind parameter
+// A column cast named in `allowedColumnExpressions` (`table.metadata`): the
+// cast applies to the column, not to a bind parameter. Property access alone
+// is not enough — see `_viaPropertyAccess` above, which has the same shape and
+// is flagged because it is not on that list.
 const _columnCast = sql`${table.metadata}::jsonb ->> 'organizationId'`;
 
 // A SQL literal is written by Postgres, not bound by the driver.

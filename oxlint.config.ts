@@ -113,7 +113,16 @@ export default defineConfig({
     "no-coerced-optional-union-enum/no-coerced-optional-union-enum": "error",
     "tagged-error-requires-message/tagged-error-requires-message": "error",
     "require-custom-jsonb-column/require-custom-jsonb-column": "error",
-    "no-bare-jsonb-cast/no-bare-jsonb-cast": "error",
+    "no-bare-jsonb-cast/no-bare-jsonb-cast": [
+      "error",
+      {
+        // The only interpolations that legitimately take a bare `::jsonb`:
+        // each casts a text column, not a bind parameter. Named here rather
+        // than inferred from shape, because `payload.astJson` is a member
+        // expression too and is a serialized value.
+        allowedColumnExpressions: ["apikey.metadata", "table.metadata"],
+      },
+    ],
     "require-timestamptz-column/require-timestamptz-column": "error",
     "no-naive-timestamp-cast/no-naive-timestamp-cast": "error",
     "no-spread-input-in-query-key/no-spread-input-in-query-key": "error",
