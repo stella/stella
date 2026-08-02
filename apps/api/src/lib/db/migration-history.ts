@@ -26,8 +26,10 @@ const rewrittenMigrationHistories = {
   // moved the slug backfill into src/scripts/backfill-case-law-slugs.ts.
   "20260603120000_case_law_public_slugs": {
     currentHash:
-      "6b7745706b35e0bba31829f9c5262794c7ed4f33455679f28fd998c37eb1718c",
+      "45c054dee36fdea9f6a9e198b8312e239f37e82d89f25e4323ad45930c90bcae",
     priorHashes: [
+      "0871ab1cb27aa8c34c0f41a42c022e27261b9830d4b99627539d256a36855d50",
+      "6b7745706b35e0bba31829f9c5262794c7ed4f33455679f28fd998c37eb1718c",
       "4757efe9484615eff7bcba9c34687be4aa9b28e07a71137a3638a3072d8a6d3d",
       "0d7608766b5bbec1031a31e8a004fc093124596b0cbf4446bd4269ffc834a90b",
     ],
@@ -43,8 +45,10 @@ const rewrittenMigrationHistories = {
   },
   "20260605143000_workflow_pending_fields_index": {
     currentHash:
-      "00e0820a64f6d5888c79ab9fcd611b599e6622bbc1dc8f4ad668c894af1a41d0",
+      "acfc36c18e0f33499e0adaf90e889db2f0e72eae7fdebabf070f36c5aa32be29",
     priorHashes: [
+      "657ac42e4a380c1c13bbb9139278e84bd14cea4d8c1ccfa18345a72b3a2c06e1",
+      "00e0820a64f6d5888c79ab9fcd611b599e6622bbc1dc8f4ad668c894af1a41d0",
       "0088003d298f869017cf4047a74692a9ddefa4bc246aa6c25ca950ebeb29f918",
     ],
     requiredIndexes: [
@@ -174,10 +178,22 @@ const rewrittenMigrationHistories = {
       },
     ],
   },
+  // The schema effect is unchanged; the current file separates the bounded
+  // lock wait from the unbounded execution budget for metadata-only DDL.
+  "20260718120000_chat_thread_title_source_default": {
+    currentHash:
+      "98d87d9f20bcc8f379f428c954abacadab2feb7c9784fe58b2aa0a56f0b4489b",
+    priorHashes: [
+      "eb0a41ec2f1c3baec7d0371fc9b380a3151ff793edb6e67fef974294582f7930",
+    ],
+    requiredIndexes: [],
+  },
   "20260719172000_user_created_at_index": {
     currentHash:
-      "60e691372d1eaff6bab6009ed2bc88fff625836b50253203e065c125accdf164",
+      "fc18e91775ad01f0cf0a3e1ee4db7f41361d980a270edd46c2dabc1f3315b576",
     priorHashes: [
+      "adf459f649b10c8c7472147385a35de7cbda34637cd3ff7f75834cff35516029",
+      "60e691372d1eaff6bab6009ed2bc88fff625836b50253203e065c125accdf164",
       "d75842b57e1ba5f734b2dea9926c76da9fca178d41fafe8005f144cdc4960eee",
     ],
     requiredIndexes: [
@@ -212,6 +228,27 @@ const rewrittenMigrationHistories = {
       },
     ],
   },
+  // The schema effect is unchanged; the current file preserves the caller's
+  // timeout settings and delegates its replay-safe cutover to the reconciler.
+  "20260729120000_case_law_filter_search_index": {
+    currentHash:
+      "39cd50f9708a46b92a877ddb7e0f99857fdd1feec439bf15ce4997a53692e8b5",
+    priorHashes: [
+      "d5694708690bf58d1eb66f4e7b809e3e9a84be5978d7bea7a5f011a692993e53",
+      "6b0f5b13272eb84bb333ed0ae2a5e0f74c2459566938e2938b66667d4f0de433",
+    ],
+    requiredIndexes: [],
+  },
+  // The schema effect is unchanged; the current file gives the conversion a
+  // finite execution budget when the session starts at PostgreSQL's default.
+  "20260729150000_timestamptz_everywhere": {
+    currentHash:
+      "ecd84e833a249b738353900445cf4f8ef2dac475492ccec8fbd5cbba875863c3",
+    priorHashes: [
+      "3c60d3d8fe57b06efd452dc6f9580c5bbfb85e9b606cbf7cc6d3437cd2b1dda1",
+    ],
+    requiredIndexes: [],
+  },
   "20260731130000_decision_source_document_id": {
     currentHash:
       "479cd1cd88870fb947ea7da61411f76d96a18f07bf7cc308465ce8d62dc8c40e",
@@ -235,6 +272,16 @@ const rewrittenMigrationHistories = {
         tableName: "case_law_decisions",
       },
     ],
+  },
+  // The schema effect is unchanged; the current file separates the bounded
+  // lock wait from the unbounded execution budget for metadata-only DDL.
+  "20260731170000_case_law_corpus_generation_backfill": {
+    currentHash:
+      "4e35ff3e0fce8117382eb87ff73df18751954da90014ca9a2619a4a544de89e8",
+    priorHashes: [
+      "6eeb473a0902a7a807133c5057c2b582c2d40f748705b36d967a75bec6df8a7b",
+    ],
+    requiredIndexes: [],
   },
 } as const satisfies Readonly<Record<string, RewrittenMigrationHistory>>;
 

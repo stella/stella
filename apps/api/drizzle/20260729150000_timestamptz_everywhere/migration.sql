@@ -66,15 +66,15 @@
 -- index rebuilds room to finish. Session-level: survives the COMMITs below.
 SET lock_timeout = '10s';--> statement-breakpoint
 
--- Give rebuilds at least 20 minutes, but never lower an operator-raised or
--- disabled (0) session/server value: pg_settings reports the current value
--- in milliseconds regardless of the unit it was set with.
+-- Give rebuilds at least 20 minutes while preserving any higher
+-- operator-raised value: pg_settings reports the current value in
+-- milliseconds regardless of the unit it was set with.
 DO $$
 DECLARE current_ms integer;
 BEGIN
   SELECT setting::integer INTO current_ms
   FROM pg_settings WHERE name = 'statement_timeout';
-  IF current_ms <> 0 AND current_ms < 1200000 THEN
+  IF current_ms = 0 OR current_ms < 1200000 THEN
     PERFORM set_config('statement_timeout', '20min', false);
   END IF;
 END

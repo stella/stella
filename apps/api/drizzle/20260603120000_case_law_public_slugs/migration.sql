@@ -17,6 +17,12 @@
 -- concurrently repairs an interrupted INVALID build. IF NOT EXISTS preserves
 -- an already-valid uniqueness boundary when a prior run reached the index but
 -- stopped before recording the migration.
+SELECT set_config(
+  'stella.migration_statement_timeout',
+  current_setting('statement_timeout'),
+  false
+);
+--> statement-breakpoint
 SET statement_timeout = 0;
 --> statement-breakpoint
 COMMIT;
@@ -25,6 +31,10 @@ CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "case_law_decisions_slug_uidx"
   ON "case_law_decisions" ("slug")
   WHERE "slug" IS NOT NULL;
 --> statement-breakpoint
-BEGIN;
+SELECT set_config(
+  'statement_timeout',
+  current_setting('stella.migration_statement_timeout'),
+  false
+);
 --> statement-breakpoint
-SET statement_timeout = DEFAULT;
+BEGIN;

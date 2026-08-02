@@ -1,3 +1,13 @@
+SELECT set_config(
+  'stella.migration_lock_timeout',
+  current_setting('lock_timeout'),
+  false
+);--> statement-breakpoint
+SELECT set_config(
+  'stella.migration_statement_timeout',
+  current_setting('statement_timeout'),
+  false
+);--> statement-breakpoint
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 
@@ -8,7 +18,9 @@ SET statement_timeout = '5s';--> statement-breakpoint
 -- Drizzle wraps pending migrations in one transaction, while PostgreSQL
 -- requires CREATE INDEX CONCURRENTLY to run outside a transaction block.
 -- Split the migrator transaction, lift the timeouts for the concurrent build,
--- then restore and reopen a transaction for Drizzle's migration row.
+-- then restore and reopen a transaction for Drizzle's migration row. The
+-- online migration reconciler validates the replacement and performs the
+-- replay-safe cutover after the ledger entry commits.
 -- squawk-ignore transaction-nesting
 COMMIT;
 --> statement-breakpoint
@@ -17,26 +29,21 @@ SET statement_timeout = 0;
 SET lock_timeout = 0;
 --> statement-breakpoint
 
--- stella-migration-safety: reviewed destructive-change - retry cleanup targets
--- only this migration's temporary replacement index. A cancelled concurrent
--- build can leave an INVALID index that blocks recreation by name.
-DROP INDEX CONCURRENTLY IF EXISTS "case_law_decisions_updated_id_idx_replacement";
---> statement-breakpoint
--- squawk-ignore prefer-robust-stmts
-CREATE INDEX CONCURRENTLY "case_law_decisions_updated_id_idx_replacement"
+CREATE INDEX CONCURRENTLY IF NOT EXISTS "case_law_decisions_updated_id_idx_replacement"
   ON "case_law_decisions" ("updated_at" DESC, "id" DESC);
 --> statement-breakpoint
--- stella-migration-safety: reviewed destructive-change - replace only this
--- migration's previous index after its successor has finished building.
-DROP INDEX CONCURRENTLY IF EXISTS "case_law_decisions_updated_id_idx";
+SELECT set_config(
+  'statement_timeout',
+  current_setting('stella.migration_statement_timeout'),
+  false
+);
 --> statement-breakpoint
-ALTER INDEX "case_law_decisions_updated_id_idx_replacement"
-  RENAME TO "case_law_decisions_updated_id_idx";
+SELECT set_config(
+  'lock_timeout',
+  current_setting('stella.migration_lock_timeout'),
+  false
+);
 --> statement-breakpoint
 
-SET statement_timeout = '5s';
---> statement-breakpoint
-SET lock_timeout = '1s';
---> statement-breakpoint
 -- squawk-ignore transaction-nesting, ban-uncommitted-transaction
 BEGIN;
