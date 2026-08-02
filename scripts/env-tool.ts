@@ -126,15 +126,22 @@ export const renderCollabEnvExample = () =>
 export const parseEnvText = (text: string) => {
   const values: Record<string, string> = {};
   for (const line of text.split(/\r?\n/u)) {
-    const match = line.match(
-      /^\s*(?:export\s+)?(?<name>[A-Z][A-Z0-9_]*)\s*=\s*(?<value>.*)$/u,
-    );
-    if (!match?.groups) {
+    const assignment = line.trim().replace(/^export\s+/u, "");
+    const separatorIndex = assignment.indexOf("=");
+    if (separatorIndex < 1) {
       continue;
     }
-    const raw = match.groups["value"]?.trim() ?? "";
-    const quoted = raw.match(/^(?<quote>["'])(?<value>.*)\k<quote>$/u);
-    values[match.groups["name"] ?? ""] = quoted?.groups?.["value"] ?? raw;
+    const name = assignment.slice(0, separatorIndex).trim();
+    if (!/^[A-Z][A-Z0-9_]*$/u.test(name)) {
+      continue;
+    }
+    const raw = assignment.slice(separatorIndex + 1).trim();
+    const quote = raw.at(0);
+    const isQuoted =
+      raw.length >= 2 &&
+      (quote === '"' || quote === "'") &&
+      raw.at(-1) === quote;
+    values[name] = isQuoted ? raw.slice(1, -1) : raw;
   }
   return values;
 };
