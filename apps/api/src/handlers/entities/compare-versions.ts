@@ -51,39 +51,38 @@ export default createSafeHandler(
     }
 
     // Fetch fields for both versions to get file content
-    const [baseFieldsResult, targetFieldsResult] = await Promise.all([
-      safeDb((tx) =>
-        tx
-          .select({ content: fields.content })
-          .from(fields)
-          .innerJoin(
-            entityVersions,
-            and(
-              eq(fields.entityVersionId, entityVersions.id),
-              eq(entityVersions.entityId, entityId),
-              isNull(entityVersions.deletedAt),
-            ),
-          )
-          .where(eq(fields.entityVersionId, baseVersionId)),
-      ),
-      safeDb((tx) =>
-        tx
-          .select({ content: fields.content })
-          .from(fields)
-          .innerJoin(
-            entityVersions,
-            and(
-              eq(fields.entityVersionId, entityVersions.id),
-              eq(entityVersions.entityId, entityId),
-              isNull(entityVersions.deletedAt),
-            ),
-          )
-          .where(eq(fields.entityVersionId, targetVersionId)),
-      ),
-    ]);
-
-    const baseFields = yield* baseFieldsResult;
-    const targetFields = yield* targetFieldsResult;
+    const [baseFields, targetFields] = yield* Result.await(
+      Result.allAsync([
+        safeDb((tx) =>
+          tx
+            .select({ content: fields.content })
+            .from(fields)
+            .innerJoin(
+              entityVersions,
+              and(
+                eq(fields.entityVersionId, entityVersions.id),
+                eq(entityVersions.entityId, entityId),
+                isNull(entityVersions.deletedAt),
+              ),
+            )
+            .where(eq(fields.entityVersionId, baseVersionId)),
+        ),
+        safeDb((tx) =>
+          tx
+            .select({ content: fields.content })
+            .from(fields)
+            .innerJoin(
+              entityVersions,
+              and(
+                eq(fields.entityVersionId, entityVersions.id),
+                eq(entityVersions.entityId, entityId),
+                isNull(entityVersions.deletedAt),
+              ),
+            )
+            .where(eq(fields.entityVersionId, targetVersionId)),
+        ),
+      ]),
+    );
 
     // Find the DOCX file field in each version
     const findDocxContent = (
