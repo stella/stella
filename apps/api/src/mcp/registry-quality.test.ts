@@ -73,13 +73,15 @@ const TOOL_DESCRIPTION_CHAR_CEILING = 810;
 // verb_noun style: lowercase words joined by single underscores.
 const TOOL_NAME_PATTERN = /^[a-z]+(?:_[a-z]+)*$/u;
 
-// Display titles: sentence case, no trailing period, short enough for a
-// client's tool list or consent prompt. The 40-char product cap sits under
-// the CLI trust boundary's 64-char wire cap (MAX_TOOL_TITLE_CHARS in
-// packages/cli/src/registry-trust.ts), so every title the registry can emit
-// is also one a fetched listing would accept.
+// Display titles: start with an uppercase letter, end without a period or
+// whitespace, and contain at least one lowercase letter (sentence case, not
+// shouting; the lowercase check lives in the test since a regex cannot say
+// "not fully uppercase" readably). Internal punctuation is allowed. The
+// 40-char product cap sits under the CLI trust boundary's 64-unit wire cap
+// (MAX_TOOL_TITLE_CHARS in packages/cli/src/registry-trust.ts), so every
+// title the registry can emit is also one a fetched listing would accept.
 const TOOL_TITLE_MAX_CHARS = 40;
-const TOOL_TITLE_PATTERN = /^[A-Z][^.]*[^.\s]$/u;
+const TOOL_TITLE_PATTERN = /^[A-Z].*[^.\s]$/u;
 
 describe.each([...SURFACES])(
   "MCP registry quality ($mode surface)",
@@ -124,6 +126,10 @@ describe.each([...SURFACES])(
         expect(title, `Tool ${tool.name} title "${title}"`).toMatch(
           TOOL_TITLE_PATTERN,
         );
+        expect(
+          title,
+          `Tool ${tool.name} title "${title}" is fully uppercase`,
+        ).not.toBe(title.toUpperCase());
         expect(
           title.length,
           `Tool ${tool.name} title is ${title.length} chars`,

@@ -169,7 +169,7 @@ export const listGatewayMcpToolDefinitions = async ({
       definitions.push({
         access: "read",
         annotations: {
-          title: toDynamicToolTitle(skill.name),
+          title: toDynamicToolTitle(skill.name) || skill.exposedName,
           readOnlyHint: true,
         },
         anonymized: DYNAMIC_GATEWAY_ANONYMIZED,
@@ -245,7 +245,7 @@ export const getGatewayMcpToolDefinition = async ({
   return {
     access: "read",
     annotations: {
-      title: toDynamicToolTitle(skill.name),
+      title: toDynamicToolTitle(skill.name) || skill.exposedName,
       readOnlyHint: true,
     },
     anonymized: DYNAMIC_GATEWAY_ANONYMIZED,

@@ -38,7 +38,13 @@ export const MAX_PROPS = 100;
 /** Tool names must match this (spec S5.5 rule 2). */
 export const TOOL_NAME_PATTERN: RegExp = /^[a-z][a-z0-9_]{0,63}$/u;
 
-/** Longest display title a fetched listing may carry (spec S5.5 rule 2). */
+/**
+ * Longest display title a fetched listing may carry, in UTF-16 code units
+ * (spec S5.5 rule 2). Deliberately the same unit `String.length` measures and
+ * the server clamps by, and the stricter of the two possible readings: a
+ * bound in code points would accept up to twice as many units for
+ * astral-heavy strings.
+ */
 export const MAX_TOOL_TITLE_CHARS = 64;
 
 /** The only annotation keys a fetched listing may carry (spec S5.5 rule 2). */
