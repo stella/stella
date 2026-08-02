@@ -17,6 +17,8 @@ const TYPE_CHANGE =
   /^ALTER\s+TABLE\b[^;]*?\bALTER\s+(?:COLUMN\s+)?(?:(?:U&)?"(?:""|[^"])+"(?:\s+UESCAPE\s+'(?:''|[^'])*')?|[A-Z_\u0080-\u{10FFFF}][A-Z0-9_$\u0080-\u{10FFFF}]*)\s+(?:SET\s+DATA\s+)?TYPE\b/iu;
 const TYPE_CHANGE_ANYWHERE =
   /\bALTER\s+TABLE\b[\s\S]*?\bALTER\s+(?:COLUMN\s+)?(?:(?:U&)?"(?:""|[^"])+"(?:\s+UESCAPE\s+'(?:''|[^'])*')?|[A-Z_\u0080-\u{10FFFF}][A-Z0-9_$\u0080-\u{10FFFF}]*)\s+(?:SET\s+DATA\s+)?TYPE\b/iu;
+const TYPE_CHANGE_CLAUSE =
+  /\bALTER\s+(?:COLUMN\s+)?(?:(?:U&)?"(?:""|[^"])+"(?:\s+UESCAPE\s+'(?:''|[^'])*')?|[A-Z_\u0080-\u{10FFFF}][A-Z0-9_$\u0080-\u{10FFFF}]*)\s+(?:SET\s+DATA\s+)?TYPE\b/giu;
 const TRANSACTION_REVERSAL =
   /^(?:ABORT|ROLLBACK|SAVEPOINT|RELEASE\s+SAVEPOINT)\b/iu;
 const TYPE_CHANGE_POLICY = {
@@ -410,6 +412,9 @@ const collectUnsafeConcurrentTimeouts = (
       }
       if (timeoutUpdate.name === "all" || timeoutUpdate.name === "lock") {
         lockTimeout = "unset";
+        if (concurrentBlockOpen) {
+          lockTimeoutRequiresRestore = true;
+        }
       }
     }
 
@@ -544,6 +549,8 @@ const collectUnsafeTypeChangesInMigration = (
   let sawCustomStatementBudget = false;
 
   for (const statement of splitSqlStatements(source)) {
+    const typeChangeClauseCount = [...statement.matchAll(TYPE_CHANGE_CLAUSE)]
+      .length;
     if (TRANSACTION_REVERSAL.test(statement)) {
       violations.push(
         `${relativePath}: timeout safety does not support transaction reversal`,
@@ -650,6 +657,12 @@ const collectUnsafeTypeChangesInMigration = (
           `${relativePath}: custom type rewrite lacks its bounded execution budget`,
         );
       }
+      continue;
+    }
+    if (activePolicy === "metadataOnly" && typeChangeClauseCount > 1) {
+      violations.push(
+        `${relativePath}: multiple type changes in one statement are not supported by the metadata-only timeout policy`,
+      );
       continue;
     }
     activePolicyUsed = true;
@@ -908,6 +921,18 @@ SELECT 1;`;
         SET statement_timeout = '5s';`,
       ),
     ).toContain("unbounded-lock/migration.sql: lock timeout is not restored");
+    for (const reset of ["RESET lock_timeout", "DISCARD ALL"]) {
+      expect(
+        collectUnsafeConcurrentTimeouts(
+          "reset-lock/migration.sql",
+          `SET statement_timeout = 0;
+          SET lock_timeout = '1s';
+          CREATE INDEX CONCURRENTLY example_idx ON example (id);
+          ${reset};
+          SET statement_timeout = '5s';`,
+        ),
+      ).toContain("reset-lock/migration.sql: lock timeout is not restored");
+    }
     expect(
       collectUnsafeConcurrentTimeouts(
         "restored-lock/migration.sql",
@@ -1102,6 +1127,22 @@ SELECT 1;`;
       ),
     ).toContain(
       "procedural/migration.sql: procedural type changes are not supported by the timeout safety policy",
+    );
+  });
+
+  test("requires one execution policy per type-change statement", () => {
+    expect(
+      collectUnsafeTypeChangesInMigration(
+        "combined/migration.sql",
+        `SET lock_timeout = '1s';
+        -- ${TYPE_CHANGE_POLICY.metadataOnly}
+        SET statement_timeout = 0;
+        ALTER TABLE example
+          ALTER COLUMN metadata_value TYPE varchar(64),
+          ALTER COLUMN rewritten_value TYPE timestamptz;`,
+      ),
+    ).toContain(
+      "combined/migration.sql: multiple type changes in one statement are not supported by the metadata-only timeout policy",
     );
   });
 
