@@ -146,9 +146,10 @@ export const listGatewayMcpToolDefinitions = async ({
       definitions.push({
         access: externalMcpToolAccess(readOnlyHint),
         annotations: {
-          title: toDynamicToolTitle(
-            `${tool.connectorDisplayName}: ${tool.cachedTool.rawName}`,
-          ),
+          title: externalToolTitle({
+            connectorDisplayName: tool.connectorDisplayName,
+            rawName: tool.cachedTool.rawName,
+          }),
           ...(readOnlyHint === undefined ? {} : { readOnlyHint }),
         },
         anonymized: DYNAMIC_GATEWAY_ANONYMIZED,
@@ -213,9 +214,10 @@ export const getGatewayMcpToolDefinition = async ({
     return {
       access: externalMcpToolAccess(externalTool.cachedTool.readOnlyHint),
       annotations: {
-        title: toDynamicToolTitle(
-          `${externalTool.connectorDisplayName}: ${externalTool.cachedTool.rawName}`,
-        ),
+        title: externalToolTitle({
+          connectorDisplayName: externalTool.connectorDisplayName,
+          rawName: externalTool.cachedTool.rawName,
+        }),
         ...(externalTool.cachedTool.readOnlyHint === undefined
           ? {}
           : { readOnlyHint: externalTool.cachedTool.readOnlyHint }),
@@ -275,11 +277,54 @@ export const toMcpTools = (
 // fetched-registry validation.
 const DYNAMIC_TOOL_TITLE_MAX_CHARS = 64;
 
-const toDynamicToolTitle = (raw: string): string => {
+// The budget counts UTF-16 units (that is what the trust boundary measures),
+// but the cut advances by code point so a boundary can never emit a lone
+// surrogate.
+const clampTitle = (raw: string, maxUnits: number): string => {
   const trimmed = raw.trim();
-  return trimmed.length <= DYNAMIC_TOOL_TITLE_MAX_CHARS
-    ? trimmed
-    : trimmed.slice(0, DYNAMIC_TOOL_TITLE_MAX_CHARS);
+  if (trimmed.length <= maxUnits) {
+    return trimmed;
+  }
+  let clamped = "";
+  for (const point of trimmed) {
+    if (clamped.length + point.length > maxUnits) {
+      break;
+    }
+    clamped += point;
+  }
+  return clamped.trimEnd();
+};
+
+const toDynamicToolTitle = (raw: string): string =>
+  clampTitle(raw, DYNAMIC_TOOL_TITLE_MAX_CHARS);
+
+// `<connector display name>: <upstream tool name>`, preferring the tool name:
+// connector display names can be far longer than the cap, and truncating the
+// combined string from the right would leave every tool of such a connector
+// with the same title. The distinguishing suffix keeps its budget first; the
+// display-name prefix gets whatever remains.
+const EXTERNAL_TITLE_SEPARATOR = ": ";
+
+const externalToolTitle = ({
+  connectorDisplayName,
+  rawName,
+}: {
+  connectorDisplayName: string;
+  rawName: string;
+}): string => {
+  const name = toDynamicToolTitle(rawName);
+  const displayBudget =
+    DYNAMIC_TOOL_TITLE_MAX_CHARS -
+    name.length -
+    EXTERNAL_TITLE_SEPARATOR.length;
+  if (displayBudget <= 0) {
+    return name;
+  }
+  const display = clampTitle(connectorDisplayName, displayBudget);
+  if (display.length === 0) {
+    return name;
+  }
+  return `${display}${EXTERNAL_TITLE_SEPARATOR}${name}`;
 };
 
 const externalToolDescription = ({

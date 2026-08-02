@@ -193,7 +193,7 @@ describe("MCP registry access coherence", () => {
     for (const tool of defaultTools) {
       if (tool.access === "write") {
         expect(
-          tool.annotations?.readOnlyHint,
+          tool.annotations.readOnlyHint,
           `Tool ${tool.name} is access: "write" but carries readOnlyHint`,
         ).not.toBe(true);
       }
@@ -202,7 +202,7 @@ describe("MCP registry access coherence", () => {
 
   test('destructiveHint tools are always access: "write"', () => {
     for (const tool of defaultTools) {
-      if (tool.annotations?.destructiveHint) {
+      if (tool.annotations.destructiveHint) {
         expect(
           tool.access,
           `Tool ${tool.name} carries destructiveHint but is not access: "write"`,
@@ -257,7 +257,7 @@ describe("MCP registry annotation coherence", () => {
   test("every tool declares openWorldHint explicitly (boolean)", () => {
     for (const tool of defaultTools) {
       expect(
-        typeof tool.annotations?.openWorldHint,
+        typeof tool.annotations.openWorldHint,
         `Tool ${tool.name} must declare annotations.openWorldHint explicitly`,
       ).toBe("boolean");
     }
@@ -269,7 +269,7 @@ describe("MCP registry annotation coherence", () => {
         continue;
       }
       expect(
-        typeof tool.annotations?.idempotentHint,
+        typeof tool.annotations.idempotentHint,
         `Tool ${tool.name} is access: "write" but does not declare annotations.idempotentHint`,
       ).toBe("boolean");
     }
@@ -281,7 +281,7 @@ describe("MCP registry annotation coherence", () => {
         continue;
       }
       expect(
-        tool.annotations?.idempotentHint,
+        tool.annotations.idempotentHint,
         `Tool ${tool.name} is access: "read"; idempotentHint is meaningless and must be omitted`,
       ).toBeUndefined();
     }
@@ -293,7 +293,7 @@ describe("MCP registry annotation coherence", () => {
         continue;
       }
       expect(
-        tool.annotations?.idempotentHint,
+        tool.annotations.idempotentHint,
         `Tool ${tool.name} is a delete_* tool and must be idempotentHint true`,
       ).toBe(true);
     }
@@ -424,7 +424,7 @@ describe("destructive write-tool naming convention", () => {
 
   test("every destructiveHint write tool is named delete_*", () => {
     const offenders = writeTools
-      .filter((tool) => tool.annotations?.destructiveHint === true)
+      .filter((tool) => tool.annotations.destructiveHint === true)
       .filter((tool) => !tool.name.startsWith("delete_"))
       .map((tool) => tool.name);
     expect(offenders).toEqual([]);
@@ -433,7 +433,7 @@ describe("destructive write-tool naming convention", () => {
   test("every delete_* write tool carries destructiveHint", () => {
     const offenders = writeTools
       .filter((tool) => tool.name.startsWith("delete_"))
-      .filter((tool) => tool.annotations?.destructiveHint !== true)
+      .filter((tool) => tool.annotations.destructiveHint !== true)
       .map((tool) => tool.name);
     expect(offenders).toEqual([]);
   });

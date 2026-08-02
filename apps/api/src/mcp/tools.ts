@@ -133,7 +133,7 @@ export const handleMcpToolCall = async ({
   // approved the action. Runs before dispatch so the mutation never starts
   // without the confirmation.
   if (
-    staticTool.annotations?.destructiveHint === true &&
+    staticTool.annotations.destructiveHint === true &&
     args["confirm"] !== true
   ) {
     return structuredErrorResult({
@@ -154,7 +154,7 @@ export const handleMcpToolCall = async ({
 
   try {
     const executionContext =
-      staticTool.annotations?.destructiveHint === true
+      staticTool.annotations.destructiveHint === true
         ? bindApprovedMcpAuditContext(context)
         : context;
     // Handlers never see the mode: they return either a finished result or an
