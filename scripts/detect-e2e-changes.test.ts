@@ -171,9 +171,13 @@ describe("detect-e2e-changes", () => {
     for (const jobId of ["e2e-production-shard", "e2e-vite-canary"]) {
       const job = workflowJob(jobId);
       expect(job).toContain("- name: Start docker stack");
-      expect(job).toContain(
-        "docker compose --profile dev up -d --wait postgres minio valkey",
-      );
+      const composeStartLines = job
+        .split("\n")
+        .filter((line) => line.includes("docker compose --profile dev up"))
+        .map((line) => line.trim());
+      expect(composeStartLines).toEqual([
+        "if docker compose --profile dev up -d --wait postgres minio valkey \\",
+      ]);
       expect(job).not.toContain("gotenberg");
     }
   });
