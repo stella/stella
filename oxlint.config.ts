@@ -1903,6 +1903,7 @@ export default defineConfig({
         "apps/api/src/handlers/hosted-usage-webhook/routes.ts",
         "apps/api/src/handlers/smoke/routes.ts",
         "apps/api/src/handlers/verify/routes.ts",
+        "apps/api/src/handlers/well-known/routes.ts",
         "apps/api/src/handlers/workspaces/events.ts",
       ],
       rules: {

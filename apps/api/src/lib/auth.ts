@@ -42,6 +42,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { verifyConfirmationOtp } from "@/api/lib/confirmation-otp";
 import { isUuid, tUuid } from "@/api/lib/custom-schema";
+import { getDemoAccountOtpOverride } from "@/api/lib/demo-account-otp";
 import { detached } from "@/api/lib/detached";
 import { detectedCountryFromRequestContext } from "@/api/lib/detected-country";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
@@ -900,6 +901,11 @@ const createAuth = () => {
         otpLength: 6,
         expiresIn: 5 * 60,
         allowedAttempts: 3,
+        // Returning undefined falls back to the plugin's random generator
+        // (`opts.generateOTP(...) || defaultOTPGenerator`), so every account
+        // except the configured demo account keeps random codes.
+        generateOTP: ({ email, type }) =>
+          getDemoAccountOtpOverride({ email, type }),
         async sendVerificationOTP({ email, otp, type }, ctx) {
           await runEmailOtpRequestOnResponseSchedule({
             responseDelayMs: getEmailOtpMinimumResponseDuration({
@@ -930,6 +936,13 @@ const createAuth = () => {
                 // eslint-disable-next-line no-console -- dev-only OTP echo for local testing (env.isDev gated; value printed verbatim by design)
                 console.log(`[DEV] OTP for ${email}: ${otp} (type: ${type})`);
                 stashDevOtp(email, otp);
+                return;
+              }
+
+              if (getDemoAccountOtpOverride({ email, type }) !== undefined) {
+                // The demo account's fixed code is shared out-of-band;
+                // nothing to deliver. The shared response schedule above
+                // keeps the timing indistinguishable from a real send.
                 return;
               }
 
