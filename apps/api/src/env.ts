@@ -3,6 +3,7 @@ import { panic } from "better-result";
 import * as v from "valibot";
 
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
+import { SIGNUP_RATE_LIMIT_IP_SOURCE } from "@/api/lib/client-ip-config";
 
 const featureFlagSchema = v.optional(
   v.pipe(v.string(), v.parseBoolean()),
@@ -218,6 +219,16 @@ const envApi = createEnv({
      * directly.
      */
     STELLA_TRUSTED_PROXY_CIDRS: v.optional(v.string()),
+    /**
+     * Selects the trustworthy source for the signup IP rate-limit bucket.
+     * Direct deployments use Bun's socket peer; deployments behind a proxy
+     * require a trusted `x-forwarded-for` chain. The conservative default
+     * disables the bucket unless a trusted proxy supplies that chain.
+     */
+    STELLA_SIGNUP_RATE_LIMIT_IP_SOURCE: v.optional(
+      v.picklist(Object.values(SIGNUP_RATE_LIMIT_IP_SOURCE)),
+      SIGNUP_RATE_LIMIT_IP_SOURCE.trustedProxy,
+    ),
 
     // Social login — Google
     GOOGLE_AUTH_CLIENT_ID: v.optional(v.string()),

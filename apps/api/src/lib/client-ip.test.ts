@@ -4,8 +4,9 @@ import {
   isTrustedProxy,
   parseTrustedProxies,
   resolveClientIp,
-  resolveTrustedForwardedClientIp,
+  resolveSignupRateLimitClientIp,
 } from "@/api/lib/client-ip";
+import { SIGNUP_RATE_LIMIT_IP_SOURCE } from "@/api/lib/client-ip-config";
 
 const fakeServer = (peer: string | null) => ({
   requestIP: () => (peer === null ? null : { address: peer }),
@@ -152,47 +153,67 @@ describe("resolveClientIp", () => {
   });
 });
 
-describe("resolveTrustedForwardedClientIp", () => {
+describe("resolveSignupRateLimitClientIp", () => {
   const request = (headers: Record<string, string> = {}) =>
     new Request("https://example/test", { headers });
 
   test("does not create a shared bucket from an untrusted socket peer", () => {
     expect(
-      resolveTrustedForwardedClientIp(
+      resolveSignupRateLimitClientIp(
         request({ "x-forwarded-for": "198.51.100.5" }),
         fakeServer("203.0.113.7"),
-        { trusted: parseTrustedProxies(undefined) },
+        {
+          source: SIGNUP_RATE_LIMIT_IP_SOURCE.trustedProxy,
+          trusted: parseTrustedProxies(undefined),
+        },
       ),
     ).toBeNull();
   });
 
+  test("uses only the socket peer in explicit direct mode", () => {
+    expect(
+      resolveSignupRateLimitClientIp(
+        request({ "x-forwarded-for": "198.51.100.5" }),
+        fakeServer("203.0.113.7"),
+        { source: SIGNUP_RATE_LIMIT_IP_SOURCE.direct },
+      ),
+    ).toBe("203.0.113.7");
+  });
+
   test("returns a forwarded client only through a configured proxy", () => {
     expect(
-      resolveTrustedForwardedClientIp(
+      resolveSignupRateLimitClientIp(
         request({ "x-forwarded-for": "198.51.100.5" }),
         fakeServer("10.1.2.3"),
-        { trusted: parseTrustedProxies("10.0.0.0/8") },
+        {
+          source: SIGNUP_RATE_LIMIT_IP_SOURCE.trustedProxy,
+          trusted: parseTrustedProxies("10.0.0.0/8"),
+        },
       ),
     ).toBe("198.51.100.5");
   });
 
   test("ignores spoofable provider headers for the shared signup bucket", () => {
     expect(
-      resolveTrustedForwardedClientIp(
+      resolveSignupRateLimitClientIp(
         request({
           "cf-connecting-ip": "8.8.8.8",
           "x-real-ip": "9.9.9.9",
           "x-forwarded-for": "198.51.100.5",
         }),
         fakeServer("10.1.2.3"),
-        { trusted: parseTrustedProxies("10.0.0.0/8") },
+        {
+          source: SIGNUP_RATE_LIMIT_IP_SOURCE.trustedProxy,
+          trusted: parseTrustedProxies("10.0.0.0/8"),
+        },
       ),
     ).toBe("198.51.100.5");
   });
 
   test("does not use a trusted proxy peer when the client header is absent", () => {
     expect(
-      resolveTrustedForwardedClientIp(request(), fakeServer("10.1.2.3"), {
+      resolveSignupRateLimitClientIp(request(), fakeServer("10.1.2.3"), {
+        source: SIGNUP_RATE_LIMIT_IP_SOURCE.trustedProxy,
         trusted: parseTrustedProxies("10.0.0.0/8"),
       }),
     ).toBeNull();

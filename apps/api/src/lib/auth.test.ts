@@ -1,4 +1,5 @@
 import type { HookEndpointContext } from "better-auth";
+import { Result } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -12,11 +13,13 @@ import { member, organization, user } from "@/api/db/auth-schema";
 import { contacts, workspaceMembers, workspaces } from "@/api/db/schema";
 import {
   assertNewAccountEmailAllowedForCreation,
+  getEmailOtpMinimumResponseDuration,
   getAuth,
   getNewAccountEmailOtpAction,
   isSixDigitOtpBody,
   isTwoFactorRedirectResponse,
   NEW_ACCOUNT_OTP_RATE_LIMIT_MODE,
+  runEmailOtpRequestOnMinimumSchedule,
   resolveMemberAuthorization,
   TWO_FACTOR_MANAGE_PATHS,
   withStellaTwoFactorSignInGate,
@@ -504,6 +507,88 @@ describe("new-account email policy", () => {
     expect(action).toEqual({ type: "continue" });
     expect(accountLookupCount).toBe(0);
     expect(incrementCount).toBe(0);
+  });
+});
+
+describe("email OTP delivery schedule", () => {
+  test("holds an immediate suppression for the full minimum schedule", async () => {
+    const schedule = Promise.withResolvers<undefined>();
+    let settled = false;
+    const scheduled = runEmailOtpRequestOnMinimumSchedule({
+      minimumDurationMs: 1000,
+      runRequest: async () => {},
+      wait: async () => await schedule.promise,
+    });
+    const observeSettlement = async () => {
+      await scheduled;
+      settled = true;
+    };
+    const observed = observeSettlement();
+
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    schedule.resolve(undefined);
+    await observed;
+    expect(settled).toBe(true);
+  });
+
+  test("holds a provider failure until the schedule and preserves its identity", async () => {
+    const deliveryError = new Error("delivery failed");
+    const delivery = Promise.withResolvers<undefined>();
+    const schedule = Promise.withResolvers<undefined>();
+    const scheduled = runEmailOtpRequestOnMinimumSchedule({
+      minimumDurationMs: 1000,
+      runRequest: async () => await delivery.promise,
+      wait: async () => await schedule.promise,
+    });
+    let settled = false;
+    const observeOutcome = async () => {
+      const outcome = await Result.tryPromise({
+        try: async () => await scheduled,
+        catch: (cause) => cause,
+      });
+      settled = true;
+      return outcome;
+    };
+    const observed = observeOutcome();
+
+    await Promise.resolve();
+    delivery.reject(deliveryError);
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    schedule.resolve(undefined);
+
+    const outcome = await observed;
+    expect(Result.isError(outcome)).toBe(true);
+    if (Result.isError(outcome)) {
+      expect(outcome.error).toBe(deliveryError);
+    }
+  });
+
+  test("pads only production sign-in OTP requests", () => {
+    expect(
+      getEmailOtpMinimumResponseDuration({
+        isDev: false,
+        path: "/email-otp/send-verification-otp",
+        type: "sign-in",
+      }),
+    ).toBeGreaterThan(0);
+
+    for (const input of [
+      {
+        isDev: true,
+        path: "/email-otp/send-verification-otp",
+        type: "sign-in",
+      },
+      {
+        isDev: false,
+        path: "/email-otp/send-verification-otp",
+        type: "forget-password",
+      },
+      { isDev: false, path: "/email-otp/verify-email", type: "sign-in" },
+    ]) {
+      expect(getEmailOtpMinimumResponseDuration(input)).toBe(0);
+    }
   });
 });
 

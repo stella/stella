@@ -18,6 +18,10 @@
 import { BlockList, isIP, isIPv6 } from "node:net";
 
 import { env } from "@/api/env";
+import {
+  SIGNUP_RATE_LIMIT_IP_SOURCE,
+  type SignupRateLimitIpSource,
+} from "@/api/lib/client-ip-config";
 
 type ServerLike = {
   requestIP: (request: Request) => { address: string } | null;
@@ -149,20 +153,35 @@ export const resolveClientIp = (
 /**
  * Returns a client IP suitable for a shared signup-rate-limit bucket.
  *
- * A socket peer is deliberately insufficient here: in a deployment with an
- * unconfigured reverse proxy, that peer identifies the proxy and would put
- * every user into one availability-sensitive bucket. The bucket is enabled
- * only when the peer is explicitly trusted and supplies a valid client IP.
+ * Direct mode trusts only the kernel-provided socket peer and ignores request
+ * headers. Trusted-proxy mode requires the peer to be in the configured proxy
+ * set and derives the client from its `x-forwarded-for` chain. Keeping the
+ * deployment topology explicit prevents both attacker-controlled buckets and
+ * one shared bucket for every user behind an unconfigured proxy.
  */
-export const resolveTrustedForwardedClientIp = (
+export const resolveSignupRateLimitClientIp = (
   request: Request,
   server: ServerLike | null,
-  options?: { trusted?: TrustedProxies },
+  options?: {
+    source?: SignupRateLimitIpSource;
+    trusted?: TrustedProxies;
+  },
 ): string | null => {
   const peer = server?.requestIP(request)?.address ?? null;
   if (!peer) {
     return null;
   }
+
+  const source = options?.source ?? env.STELLA_SIGNUP_RATE_LIMIT_IP_SOURCE;
+  switch (source) {
+    case SIGNUP_RATE_LIMIT_IP_SOURCE.direct:
+      return peer;
+    case SIGNUP_RATE_LIMIT_IP_SOURCE.trustedProxy:
+      break;
+    default:
+      return source satisfies never;
+  }
+
   const trusted = options?.trusted ?? getTrustedProxies();
   if (!isTrustedProxy(peer, trusted)) {
     return null;

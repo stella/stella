@@ -55,6 +55,7 @@ import {
 import {
   AUTH_RATE_LIMIT_MAX_WINDOW,
   AUTH_RATE_LIMITS,
+  EMAIL_OTP_MIN_RESPONSE_DURATION_MS,
   LIMITS,
 } from "@/api/lib/limits";
 import { extractLangFromRequest } from "@/api/lib/locale";
@@ -161,6 +162,44 @@ const NEW_ACCOUNT_EMAIL_OTP_ACTION = {
 type NewAccountEmailOtpAction =
   | { type: typeof NEW_ACCOUNT_EMAIL_OTP_ACTION.continue }
   | { type: typeof NEW_ACCOUNT_EMAIL_OTP_ACTION.suppressOtp };
+
+type EmailOtpRequestScheduleOptions = {
+  minimumDurationMs: number;
+  runRequest: () => Promise<void>;
+  wait?: (durationMs: number) => Promise<void>;
+};
+
+export const runEmailOtpRequestOnMinimumSchedule = async ({
+  minimumDurationMs,
+  runRequest,
+  wait = Bun.sleep,
+}: EmailOtpRequestScheduleOptions): Promise<void> => {
+  const [request, schedule] = await Promise.allSettled([
+    Promise.resolve().then(runRequest),
+    wait(minimumDurationMs),
+  ]);
+  if (request.status === "rejected") {
+    throw request.reason;
+  }
+  if (schedule.status === "rejected") {
+    throw schedule.reason;
+  }
+};
+
+type EmailOtpMinimumResponseDurationOptions = {
+  isDev: boolean;
+  path: string | undefined;
+  type: string;
+};
+
+export const getEmailOtpMinimumResponseDuration = ({
+  isDev,
+  path,
+  type,
+}: EmailOtpMinimumResponseDurationOptions): number =>
+  !isDev && path === SEND_VERIFICATION_OTP_PATH && type === "sign-in"
+    ? EMAIL_OTP_MIN_RESPONSE_DURATION_MS
+    : 0;
 
 type NewAccountEmailOtpPolicyOptions = {
   accountExists?: (normalizedEmail: string) => Promise<boolean>;
@@ -862,38 +901,48 @@ const createAuth = () => {
         expiresIn: 5 * 60,
         allowedAttempts: 3,
         async sendVerificationOTP({ email, otp, type }, ctx) {
-          const newAccountOtpAction = await getNewAccountEmailOtpAction({
-            body: { email, type },
-            path: ctx?.path ?? "",
-            request: ctx?.request,
+          await runEmailOtpRequestOnMinimumSchedule({
+            minimumDurationMs: getEmailOtpMinimumResponseDuration({
+              isDev: env.isDev,
+              path: ctx?.path,
+              type,
+            }),
+            runRequest: async () => {
+              const newAccountOtpAction = await getNewAccountEmailOtpAction({
+                body: { email, type },
+                path: ctx?.path ?? "",
+                request: ctx?.request,
+              });
+              switch (newAccountOtpAction.type) {
+                case NEW_ACCOUNT_EMAIL_OTP_ACTION.continue:
+                  break;
+                case NEW_ACCOUNT_EMAIL_OTP_ACTION.suppressOtp:
+                  // The endpoint still returns its ordinary success response.
+                  // The shared minimum schedule also avoids a fast-return
+                  // timing signal when delivery is suppressed.
+                  return;
+                default:
+                  newAccountOtpAction satisfies never;
+                  return;
+              }
+
+              if (env.isDev) {
+                // eslint-disable-next-line no-console -- dev-only OTP echo for local testing (env.isDev gated; value printed verbatim by design)
+                console.log(`[DEV] OTP for ${email}: ${otp} (type: ${type})`);
+                stashDevOtp(email, otp);
+                return;
+              }
+
+              if (!isTransactionalEmailConfigured()) {
+                throw new APIError("BAD_REQUEST", {
+                  message: "Email sign-in is not configured for this instance.",
+                });
+              }
+
+              const lang = extractLangFromRequest(ctx?.request);
+              await sendOTPEmail({ email, otp, type, lang });
+            },
           });
-          switch (newAccountOtpAction.type) {
-            case NEW_ACCOUNT_EMAIL_OTP_ACTION.continue:
-              break;
-            case NEW_ACCOUNT_EMAIL_OTP_ACTION.suppressOtp:
-              // The endpoint still returns its ordinary success response, so
-              // the limiter cannot disclose whether the address is registered.
-              return;
-            default:
-              newAccountOtpAction satisfies never;
-              return;
-          }
-
-          if (env.isDev) {
-            // eslint-disable-next-line no-console -- dev-only OTP echo for local testing (env.isDev gated; value printed verbatim by design)
-            console.log(`[DEV] OTP for ${email}: ${otp} (type: ${type})`);
-            stashDevOtp(email, otp);
-            return;
-          }
-
-          if (!isTransactionalEmailConfigured()) {
-            throw new APIError("BAD_REQUEST", {
-              message: "Email sign-in is not configured for this instance.",
-            });
-          }
-
-          const lang = extractLangFromRequest(ctx?.request);
-          await sendOTPEmail({ email, otp, type, lang });
         },
       }),
       twoFactorWithSignInGate,

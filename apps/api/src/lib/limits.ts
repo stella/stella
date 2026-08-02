@@ -391,6 +391,12 @@ export const NEW_ACCOUNT_OTP_RATE_LIMITS = {
 } as const;
 
 /**
+ * Minimum production duration for an email-OTP delivery callback. Padding both
+ * delivered and suppressed requests reduces account-dependent timing signals.
+ */
+export const EMAIL_OTP_MIN_RESPONSE_DURATION_MS = 1000;
+
+/**
  * Max window (seconds) across all auth rate-limit rules.
  * Used as the Redis TTL for better-auth's customStorage,
  * which does not pass per-endpoint window to `set`.

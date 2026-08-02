@@ -13,6 +13,7 @@ services:
       - ${STELLA_API_ENV_FILE:-apps/api/.env}
     environment:
       NODE_ENV: production
+      STELLA_SIGNUP_RATE_LIMIT_IP_SOURCE: ${STELLA_SIGNUP_RATE_LIMIT_IP_SOURCE:-direct}
     ports:
       - "${STELLA_API_HOST_PORT:-3001}:3001"
     depends_on:

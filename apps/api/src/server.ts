@@ -90,7 +90,7 @@ import { getAnalytics } from "@/api/lib/analytics/client";
 import { getAuth } from "@/api/lib/auth";
 import {
   resolveClientIp,
-  resolveTrustedForwardedClientIp,
+  resolveSignupRateLimitClientIp,
 } from "@/api/lib/client-ip";
 import {
   beginRequestQueryCounter,
@@ -268,7 +268,7 @@ const api = new Elysia()
     initRequestContext(request, sessionId);
     enrichRequestContext(request, {
       clientIp: resolveClientIp(request, context.server ?? null),
-      signupRateLimitIp: resolveTrustedForwardedClientIp(
+      signupRateLimitIp: resolveSignupRateLimitClientIp(
         request,
         context.server ?? null,
       ),
