@@ -129,8 +129,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          jq -e --arg prefix "cargo +${HAWK_RUST_TOOLCHAIN} hawk " \
-            '.scripts["rust:hawk"] | startswith($prefix)' package.json >/dev/null
+          expected_hawk_script="cargo +${HAWK_RUST_TOOLCHAIN} hawk check --target-dir target/hawk -D warnings -A hawk::dead_public -A hawk::unnecessary_public"
+          jq -e --arg expected "$expected_hawk_script" \
+            '.scripts["rust:hawk"] == $expected' package.json >/dev/null
           archive="$RUNNER_TEMP/cargo-hawk.tar.gz"
           install_dir="$RUNNER_TEMP/cargo-hawk"
           curl --proto '=https' --tlsv1.2 --retry 3 -fsSL \
