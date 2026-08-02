@@ -11,4 +11,4 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS "user_createdAt_idx" ON "user" USING btr
 -- squawk-ignore transaction-nesting, ban-uncommitted-transaction
 BEGIN;
 --> statement-breakpoint
-SET statement_timeout = DEFAULT;
+SET statement_timeout = '5s';

@@ -17,6 +17,7 @@ const TYPE_CHANGE =
   /^ALTER\s+TABLE\b[^;]*?\bALTER\s+(?:COLUMN\s+)?(?:"[^"]+"|[A-Z_][A-Z0-9_$]*)\s+(?:SET\s+DATA\s+)?TYPE\b/iu;
 const TYPE_CHANGE_ANYWHERE =
   /\bALTER\s+TABLE\b[\s\S]*?\bALTER\s+(?:COLUMN\s+)?(?:"[^"]+"|[A-Z_][A-Z0-9_$]*)\s+(?:SET\s+DATA\s+)?TYPE\b/iu;
+const TRANSACTION_REVERSAL = /^(?:ROLLBACK|SAVEPOINT|RELEASE\s+SAVEPOINT)\b/iu;
 const TYPE_CHANGE_POLICY = {
   boundedRewrite: "stella-migration-safety: bounded-type-rewrite",
   metadataOnly: "stella-migration-safety: metadata-only-type-change",
@@ -369,14 +370,12 @@ const collectUnsafeConcurrentTimeouts = (
     const timeoutUpdate = parseTimeoutUpdate(statement);
     const isConcurrentOperation = CONCURRENT_INDEX_OPERATION.test(statement);
     const isUnsupportedTransactionReversal =
-      /^(?:ROLLBACK|SAVEPOINT|RELEASE\s+SAVEPOINT)\b/iu.test(statement);
+      TRANSACTION_REVERSAL.test(statement);
     const isStatementRestore =
-      (timeoutUpdate?.type === "set" &&
-        timeoutUpdate.name === "statement" &&
-        timeoutUpdate.scope === "session" &&
-        timeoutUpdate.state === "bounded") ||
-      (timeoutUpdate?.type === "reset" &&
-        (timeoutUpdate.name === "all" || timeoutUpdate.name === "statement"));
+      timeoutUpdate?.type === "set" &&
+      timeoutUpdate.name === "statement" &&
+      timeoutUpdate.scope === "session" &&
+      timeoutUpdate.state === "bounded";
     const isProtocolBridge =
       (timeoutUpdate?.type === "set" && timeoutUpdate.name === "lock") ||
       (timeoutUpdate?.type === "reset" &&
@@ -536,6 +535,12 @@ const collectUnsafeTypeChangesInMigration = (
   let sawCustomStatementBudget = false;
 
   for (const statement of splitSqlStatements(source)) {
+    if (TRANSACTION_REVERSAL.test(statement)) {
+      violations.push(
+        `${relativePath}: timeout safety does not support transaction reversal`,
+      );
+      continue;
+    }
     if (/^DO\b/iu.test(statement) && TYPE_CHANGE_ANYWHERE.test(statement)) {
       violations.push(
         `${relativePath}: procedural type changes are not supported by the timeout safety policy`,
@@ -852,6 +857,16 @@ SELECT 1;`;
     );
     expect(
       collectUnsafeConcurrentTimeouts(
+        "reset-restore/migration.sql",
+        `SET statement_timeout = 0;
+        CREATE INDEX CONCURRENTLY example_idx ON example (id);
+        RESET statement_timeout;`,
+      ),
+    ).toContain(
+      "reset-restore/migration.sql: timeouts are not restored immediately after concurrent index operations",
+    );
+    expect(
+      collectUnsafeConcurrentTimeouts(
         "unbounded-lock/migration.sql",
         `SET statement_timeout = 0;
         SET lock_timeout = 0;
@@ -892,6 +907,19 @@ SELECT 1;`;
       ),
     ).toContain(
       "savepoint/migration.sql: timeout safety does not support transaction reversal",
+    );
+    expect(
+      collectUnsafeTypeChangesInMigration(
+        "type-rollback/migration.sql",
+        `BEGIN;
+        SET lock_timeout = '1s';
+        ROLLBACK;
+        -- ${TYPE_CHANGE_POLICY.boundedRewrite}
+        SET statement_timeout = '5s';
+        ALTER TABLE example ALTER COLUMN value TYPE timestamptz;`,
+      ),
+    ).toContain(
+      "type-rollback/migration.sql: timeout safety does not support transaction reversal",
     );
   });
 

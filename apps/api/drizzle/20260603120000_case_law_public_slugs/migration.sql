@@ -27,4 +27,4 @@ CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "case_law_decisions_slug_uidx"
 --> statement-breakpoint
 BEGIN;
 --> statement-breakpoint
-SET statement_timeout = DEFAULT;
+SET statement_timeout = '5s';

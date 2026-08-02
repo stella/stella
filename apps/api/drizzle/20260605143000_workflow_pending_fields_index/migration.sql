@@ -11,4 +11,4 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS "fields_pending_workspace_idx" ON "field
 --> statement-breakpoint
 BEGIN;
 --> statement-breakpoint
-SET statement_timeout = DEFAULT;
+SET statement_timeout = '5s';

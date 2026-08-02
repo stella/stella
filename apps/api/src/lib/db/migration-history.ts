@@ -26,8 +26,9 @@ const rewrittenMigrationHistories = {
   // moved the slug backfill into src/scripts/backfill-case-law-slugs.ts.
   "20260603120000_case_law_public_slugs": {
     currentHash:
-      "6b7745706b35e0bba31829f9c5262794c7ed4f33455679f28fd998c37eb1718c",
+      "0871ab1cb27aa8c34c0f41a42c022e27261b9830d4b99627539d256a36855d50",
     priorHashes: [
+      "6b7745706b35e0bba31829f9c5262794c7ed4f33455679f28fd998c37eb1718c",
       "4757efe9484615eff7bcba9c34687be4aa9b28e07a71137a3638a3072d8a6d3d",
       "0d7608766b5bbec1031a31e8a004fc093124596b0cbf4446bd4269ffc834a90b",
     ],
@@ -43,8 +44,9 @@ const rewrittenMigrationHistories = {
   },
   "20260605143000_workflow_pending_fields_index": {
     currentHash:
-      "00e0820a64f6d5888c79ab9fcd611b599e6622bbc1dc8f4ad668c894af1a41d0",
+      "657ac42e4a380c1c13bbb9139278e84bd14cea4d8c1ccfa18345a72b3a2c06e1",
     priorHashes: [
+      "00e0820a64f6d5888c79ab9fcd611b599e6622bbc1dc8f4ad668c894af1a41d0",
       "0088003d298f869017cf4047a74692a9ddefa4bc246aa6c25ca950ebeb29f918",
     ],
     requiredIndexes: [
@@ -186,8 +188,9 @@ const rewrittenMigrationHistories = {
   },
   "20260719172000_user_created_at_index": {
     currentHash:
-      "60e691372d1eaff6bab6009ed2bc88fff625836b50253203e065c125accdf164",
+      "adf459f649b10c8c7472147385a35de7cbda34637cd3ff7f75834cff35516029",
     priorHashes: [
+      "60e691372d1eaff6bab6009ed2bc88fff625836b50253203e065c125accdf164",
       "d75842b57e1ba5f734b2dea9926c76da9fca178d41fafe8005f144cdc4960eee",
     ],
     requiredIndexes: [
