@@ -11,6 +11,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import {
   decodeChatModelSelection,
+  isChatModelReasoningEffortAvailable,
   isChatModelSelectionAvailable,
 } from "@/api/lib/chat-model-selection";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -28,6 +29,20 @@ const config = {
   // gotcha (see `webSearchEnabled` on updateThread for the sibling toggle).
   body: t.Object({
     model: t.Union([t.String(), t.Null()]),
+    // Optional for rolling compatibility with clients that predate the effort
+    // control. Literal union avoids Elysia's absent-UnionEnum coercion.
+    reasoningEffort: t.Optional(
+      t.Union([
+        t.Literal("none"),
+        t.Literal("minimal"),
+        t.Literal("low"),
+        t.Literal("medium"),
+        t.Literal("high"),
+        t.Literal("xhigh"),
+        t.Literal("max"),
+        t.Null(),
+      ]),
+    ),
   }),
 } satisfies HandlerConfig;
 
@@ -35,7 +50,7 @@ const updateThreadModel = createSafeRootHandler(
   config,
   async function* ({
     getWorkspaceAccess,
-    body: { model },
+    body,
     orgAIConfig,
     query: { workspaceId },
     params,
@@ -44,11 +59,26 @@ const updateThreadModel = createSafeRootHandler(
     user,
     recordAuditEvent,
   }) {
+    const { model } = body;
+    const reasoningEffort = body.reasoningEffort ?? null;
+    if (model === null && reasoningEffort !== null) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Auto model selection cannot specify reasoning effort",
+        }),
+      );
+    }
     if (model !== null) {
       const decoded = decodeChatModelSelection(model);
       if (
         !decoded ||
-        !isChatModelSelectionAvailable({ ...decoded, orgAIConfig })
+        !isChatModelSelectionAvailable({ ...decoded, orgAIConfig }) ||
+        (reasoningEffort !== null &&
+          !isChatModelReasoningEffortAvailable({
+            ...decoded,
+            reasoningEffort,
+          }))
       ) {
         return Result.err(
           new HandlerError({
@@ -80,6 +110,7 @@ const updateThreadModel = createSafeRootHandler(
           .select({
             id: chatThreads.id,
             chatModel: chatThreads.chatModel,
+            chatReasoningEffort: chatThreads.chatReasoningEffort,
           })
           .from(chatThreads)
           .where(threadPredicate())
@@ -88,7 +119,7 @@ const updateThreadModel = createSafeRootHandler(
         if (existing) {
           await tx
             .update(chatThreads)
-            .set({ chatModel: model })
+            .set({ chatModel: model, chatReasoningEffort: reasoningEffort })
             .where(threadPredicate());
 
           await recordAuditEvent(tx, {
@@ -100,6 +131,10 @@ const updateThreadModel = createSafeRootHandler(
               chatModel: {
                 old: existing.chatModel,
                 new: model,
+              },
+              chatReasoningEffort: {
+                old: existing.chatReasoningEffort,
+                new: reasoningEffort,
               },
             },
           });
@@ -123,6 +158,7 @@ const updateThreadModel = createSafeRootHandler(
             contextMatterIds: [],
             dataWorkspaceIds,
             chatModel: model,
+            chatReasoningEffort: reasoningEffort,
           })
           .onConflictDoNothing()
           .returning({ id: chatThreads.id });
@@ -140,6 +176,7 @@ const updateThreadModel = createSafeRootHandler(
                 new: {
                   title: CHAT_THREAD_PLACEHOLDER_TITLE,
                   chatModel: model,
+                  chatReasoningEffort: reasoningEffort,
                 },
               },
             },
@@ -152,6 +189,7 @@ const updateThreadModel = createSafeRootHandler(
           .select({
             id: chatThreads.id,
             chatModel: chatThreads.chatModel,
+            chatReasoningEffort: chatThreads.chatReasoningEffort,
           })
           .from(chatThreads)
           .where(threadPredicate())
@@ -163,7 +201,7 @@ const updateThreadModel = createSafeRootHandler(
 
         await tx
           .update(chatThreads)
-          .set({ chatModel: model })
+          .set({ chatModel: model, chatReasoningEffort: reasoningEffort })
           .where(threadPredicate());
 
         await recordAuditEvent(tx, {
@@ -175,6 +213,10 @@ const updateThreadModel = createSafeRootHandler(
             chatModel: {
               old: racedExisting.chatModel,
               new: model,
+            },
+            chatReasoningEffort: {
+              old: racedExisting.chatReasoningEffort,
+              new: reasoningEffort,
             },
           },
         });
@@ -192,7 +234,7 @@ const updateThreadModel = createSafeRootHandler(
       );
     }
 
-    return Result.ok({ model });
+    return Result.ok({ model, reasoningEffort });
   },
 );
 

@@ -20,6 +20,7 @@ import {
 import { useDebounce } from "use-debounce";
 import { useTranslations } from "use-intl";
 
+import type { ReasoningEffort } from "@stll/ai-catalog";
 import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
 import {
@@ -43,7 +44,8 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
-import { PROVIDER_LABELS } from "@/components/ai-config-role-models.logic";
+import type { ProviderValue } from "@/components/ai-config-role-models.logic";
+import { AIProviderIcon } from "@/components/ai-provider-icons";
 import {
   buildChatSlashItems,
   commandShortcutRowsFromSkillPages,
@@ -85,9 +87,6 @@ import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { useEntitiesOptions } from "@/lib/workspaces/queries/entities";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 
-const PROVIDER_LABEL_FALLBACKS: Readonly<Partial<Record<string, string>>> =
-  PROVIDER_LABELS;
-
 /** Enables and drives the Models submenu. Omit on surfaces without a model
  *  picker (the API expects a per-thread `PATCH .../model` target). */
 export type ComposerModelsMenuProps = {
@@ -96,10 +95,14 @@ export type ComposerModelsMenuProps = {
   /** Current per-thread override ("provider::modelId"), or null when the
    *  thread uses the org default. */
   selectedModel: string | null;
+  selectedReasoningEffort: ReasoningEffort | null;
   /** Persist the chosen model (see `useChatModelSelection`). Fire-and-forget
    *  here: the caller's own send path is what awaits the outcome via
    *  `awaitPendingSelection`, not this submenu. */
-  selectModel: (model: string | null) => void;
+  selectModel: (selection: {
+    model: string | null;
+    reasoningEffort: ReasoningEffort | null;
+  }) => void;
 };
 
 /** Enables and drives the Skills submenu. Reuses the same data source and
@@ -371,6 +374,13 @@ const useFocusSearchOnOpen = (
   }, [open, ref]);
 };
 
+type ComposerModelRow = {
+  iconProvider: ProviderValue | null;
+  label: string;
+  reasoningEffort: ReasoningEffort | null;
+  value: string;
+};
+
 const ComposerModelsSubmenu = ({
   enabled,
   guideAnchorsEnabled,
@@ -390,14 +400,21 @@ const ComposerModelsSubmenu = ({
   });
 
   const rows = useMemo(() => {
-    const allRows = [
-      { value: "", label: t("chat.modelSelector.defaultLabel") },
+    const allRows: ComposerModelRow[] = [
+      {
+        value: "",
+        label: t("chat.modelSelector.autoLabel"),
+        iconProvider: null,
+        reasoningEffort: null,
+      },
     ];
     if (data) {
       for (const option of data.options) {
         allRows.push({
           value: option.value,
-          label: `${PROVIDER_LABEL_FALLBACKS[option.provider] ?? option.provider} · ${option.modelId}`,
+          label: option.displayName,
+          iconProvider: option.iconProvider,
+          reasoningEffort: null,
         });
       }
     }
@@ -409,11 +426,14 @@ const ComposerModelsSubmenu = ({
   }, [data, search, t]);
 
   const handleSelect = (value: string) => {
-    const model = value === "" ? null : value;
-    if (model === selectedModel) {
+    const row = rows.find((candidate) => candidate.value === value);
+    if (!row || value === selectedModel) {
       return;
     }
-    selectModel(model);
+    selectModel({
+      model: value === "" ? null : value,
+      reasoningEffort: row.reasoningEffort,
+    });
   };
 
   return (
@@ -457,11 +477,13 @@ const ComposerModelsSubmenu = ({
                 }}
                 value={row.value}
               >
-                {/* Model identifiers are decision-critical and often share a
-                    long provider prefix. Keep the complete value visible;
-                    wrap only when the viewport cannot fit the wider popup. */}
-                <span className="block [overflow-wrap:anywhere] whitespace-normal">
-                  {row.label}
+                {/* Keep friendly product names complete; wrap only when the
+                    viewport cannot fit the wider popup. */}
+                <span className="flex min-w-0 items-center gap-2">
+                  <ComposerModelIcon provider={row.iconProvider} />
+                  <span className="block [overflow-wrap:anywhere] whitespace-normal">
+                    {row.label}
+                  </span>
                 </span>
               </MenuRadioItem>
             ))}
@@ -469,6 +491,23 @@ const ComposerModelsSubmenu = ({
         )}
       </MenuSubPopup>
     </MenuSub>
+  );
+};
+
+const ComposerModelIcon = ({
+  provider,
+}: {
+  provider: ProviderValue | null;
+}) => {
+  if (provider === null) {
+    return null;
+  }
+  return (
+    <AIProviderIcon
+      aria-hidden="true"
+      className="size-4 shrink-0"
+      provider={provider}
+    />
   );
 };
 
@@ -544,7 +583,7 @@ const ComposerSkillsSubmenu = ({
     () => commandShortcutRowsFromSkillPages(data?.pages),
     [data?.pages],
   );
-  // `includeReservedCommands` defaults to false, so `/new` and `/model`
+  // `includeReservedCommands` defaults to false, so `/new`
   // never appear here — only saved prompts and enabled skills.
   const items = useMemo(
     () =>

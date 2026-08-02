@@ -3,6 +3,7 @@ import { useRef } from "react";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import type { ReasoningEffort } from "@stll/ai-catalog";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { api } from "@/lib/api";
@@ -25,7 +26,12 @@ export type UseChatModelSelectionOptions = {
    *  `applyChatModelChange`). Only invoked when the settling request is
    *  still the latest one issued -- a slower, stale response can never
    *  revert a newer selection (the `requestIdRef` guard below). */
-  onPersisted: (model: string | null) => void;
+  onPersisted: (selection: PersistedChatModelSelection) => void;
+};
+
+export type PersistedChatModelSelection = {
+  model: string | null;
+  reasoningEffort: ReasoningEffort | null;
 };
 
 export type ChatModelSelection = {
@@ -33,7 +39,7 @@ export type ChatModelSelection = {
    *  fire-and-forget is fine there since `awaitPendingSelection` is what
    *  gates the send path. Already toasts on failure (unless a newer
    *  selection has since superseded this one). */
-  selectModel: (model: string | null) => void;
+  selectModel: (selection: PersistedChatModelSelection) => void;
   /** Resolves once the most recently issued `selectModel` call has
    *  settled, or immediately if none is in flight. An error result means
    *  the PATCH failed or timed out and has already been toasted -- the
@@ -71,25 +77,22 @@ export const useChatModelSelection = ({
   );
 
   const persist = async (
-    model: string | null,
+    selection: PersistedChatModelSelection,
   ): Promise<Result<void, ModelPersistError>> => {
     const requestId = ++requestIdRef.current;
     const result = await Result.tryPromise(
       async () =>
         await api.chat
           .threads({ threadId: toSafeId<"chatThread">(threadRef.threadId) })
-          .model.patch(
-            { model },
-            {
-              query:
-                threadRef.scope === "workspace"
-                  ? {
-                      workspaceId: toSafeId<"workspace">(threadRef.workspaceId),
-                    }
-                  : {},
-              fetch: { signal: AbortSignal.timeout(MODEL_SELECT_TIMEOUT_MS) },
-            },
-          ),
+          .model.patch(selection, {
+            query:
+              threadRef.scope === "workspace"
+                ? {
+                    workspaceId: toSafeId<"workspace">(threadRef.workspaceId),
+                  }
+                : {},
+            fetch: { signal: AbortSignal.timeout(MODEL_SELECT_TIMEOUT_MS) },
+          }),
     );
     // A stale response (a newer selection has already been issued): never
     // toast for it and never touch the cache -- the newer request owns
@@ -122,13 +125,13 @@ export const useChatModelSelection = ({
       return Result.err(error);
     }
     if (isLatest) {
-      onPersisted(model);
+      onPersisted(selection);
     }
     return Result.ok(undefined);
   };
 
-  const selectModel = (model: string | null) => {
-    const promise = persist(model);
+  const selectModel = (selection: PersistedChatModelSelection) => {
+    const promise = persist(selection);
     pendingRef.current = promise;
     detached(
       promise.finally(() => {

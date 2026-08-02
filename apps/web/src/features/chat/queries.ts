@@ -8,6 +8,7 @@ import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import type { DataTag, QueryClient, QueryKey } from "@tanstack/react-query";
 import { panic } from "better-result";
 
+import type { ReasoningEffort } from "@stll/ai-catalog";
 import { CHAT_SEND_MODE, isChatSendMode } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import { CHAT_TOOL_SCOPE, CHAT_TURN_INTENT } from "@stll/api-contract";
@@ -384,6 +385,8 @@ type ThreadFetch = {
   /** Per-thread model override ("provider::modelId"); null uses the org
    *  default (see `chatModelSelection.ts` on the API side). */
   model: string | null;
+  /** Explicit effort for a manual model; null in Auto/provider-default mode. */
+  reasoningEffort: ReasoningEffort | null;
   /** Model-context estimate for the next send; null for a missing or empty
    *  thread (nothing to meter yet). */
   context: ChatContextUsage | null;
@@ -509,6 +512,7 @@ const fetchThreadMessages = async (
         webSearchAvailable: false,
         webSearchEnabled: false,
         model: null,
+        reasoningEffort: null,
         context: null,
       };
     }
@@ -526,6 +530,7 @@ const fetchThreadMessages = async (
     webSearchAvailable: response.data.webSearchAvailable,
     webSearchEnabled: response.data.webSearchEnabled,
     model: response.data.model,
+    reasoningEffort: response.data.reasoningEffort,
     context: response.data.context,
   };
 };
@@ -597,6 +602,7 @@ type FileChatThreadFetchResult = {
   webSearchAvailable: boolean;
   webSearchEnabled: boolean;
   model: string | null;
+  reasoningEffort: ReasoningEffort | null;
   context: ChatContextUsage | null;
 };
 
@@ -625,6 +631,7 @@ const fetchFileChatThread = async ({
     webSearchAvailable: data.webSearchAvailable,
     webSearchEnabled: data.webSearchEnabled,
     model: data.model,
+    reasoningEffort: data.reasoningEffort,
     context: data.context,
   };
 };
@@ -1453,6 +1460,7 @@ export type ChatThreadFetched = {
    *  default. Mutated via PATCH /chat/threads/:id/model, same shape as
    *  `webSearchEnabled` above. */
   model: string | null;
+  reasoningEffort: ReasoningEffort | null;
   /**
    * Model-context estimate for the next send, driving the composer
    * meter. Null for a missing or empty thread (nothing to meter yet).
@@ -1539,6 +1547,7 @@ export const fileChatThreadOptions = ({
           webSearchAvailable: fetched.webSearchAvailable,
           webSearchEnabled: fetched.webSearchEnabled,
           model: fetched.model,
+          reasoningEffort: fetched.reasoningEffort,
           context: fetched.context,
         },
       );
@@ -2519,24 +2528,30 @@ export const invalidateChatThreadAcrossScopes = async ({
  * invalidate the thread across scopes so any other cached view (inspector
  * tab, other scope) picks it up too. `queryKey` must come from a
  * `queryOptions()` call (its data type is inferred from the key's tag), so
- * this only accepts a cache entry shaped like `{ model }` -- exactly what
- * `chatThreadOptions` and the draft `/chat` composer's own meta query
- * return. Shared by every composer surface with a Models submenu so the
- * cache-update + invalidation pairing can't drift between them again.
+ * this only accepts a cache entry shaped like `{ model, reasoningEffort }`;
+ * exactly what `chatThreadOptions` and the draft `/chat` composer's meta
+ * query return. Shared by every composer surface with a Models submenu so
+ * the cache update and invalidation pairing can't drift again.
  */
 export const applyChatModelChange = ({
   model,
+  reasoningEffort,
   queryClient,
   queryKey,
   threadId,
 }: {
   model: string | null;
+  reasoningEffort: ReasoningEffort | null;
   queryClient: QueryClient;
-  queryKey: DataTag<QueryKey, { model: string | null }, Error>;
+  queryKey: DataTag<
+    QueryKey,
+    { model: string | null; reasoningEffort: ReasoningEffort | null },
+    Error
+  >;
   threadId: ChatThreadId;
 }): void => {
   queryClient.setQueryData(queryKey, (prev) =>
-    prev ? { ...prev, model } : prev,
+    prev ? { ...prev, model, reasoningEffort } : prev,
   );
   detached(
     invalidateChatThreadAcrossScopes({ queryClient, threadId }),

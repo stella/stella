@@ -2,6 +2,8 @@ import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
+import type { ReasoningEffort } from "@stll/ai-catalog";
+
 import type { Transaction } from "@/api/db/root";
 import type { SafeDbError } from "@/api/db/safe-db";
 import { chatThreads, fileChatThreads } from "@/api/db/schema";
@@ -72,6 +74,7 @@ type FileThreadLookupInput = {
  */
 type ThreadMetadata = {
   chatModel: string | null;
+  chatReasoningEffort: ReasoningEffort | null;
   contextMatterIds: SafeId<"workspace">[];
   usedAnonymization: boolean;
   webSearchEnabled: boolean;
@@ -93,6 +96,7 @@ type ResolveFileThreadMessagePage = {
   webSearchAvailable: boolean;
   webSearchEnabled: boolean;
   model: string | null;
+  reasoningEffort: ReasoningEffort | null;
   context: ThreadContextUsage | null;
 };
 
@@ -121,6 +125,7 @@ const emptyMessagePage = (
   webSearchAvailable,
   webSearchEnabled: false,
   model: null,
+  reasoningEffort: null,
   context: null,
 });
 
@@ -191,6 +196,7 @@ const loadResolvedThreadMessagePage = async ({
   orgAIConfig,
   contextMatterIds,
   chatModel,
+  chatReasoningEffort,
   usedAnonymization,
   webSearchAvailable,
   webSearchEnabled,
@@ -261,6 +267,7 @@ const loadResolvedThreadMessagePage = async ({
     webSearchAvailable,
     webSearchEnabled,
     model: chatModel,
+    reasoningEffort: chatReasoningEffort,
     context,
   };
 };
@@ -280,6 +287,7 @@ const findFileChatThread = async (
       .select({
         chatThreadId: fileChatThreads.chatThreadId,
         chatModel: chatThreads.chatModel,
+        chatReasoningEffort: chatThreads.chatReasoningEffort,
         contextMatterIds: chatThreads.contextMatterIds,
         usedAnonymization: chatThreads.usedAnonymization,
         webSearchEnabled: chatThreads.webSearchEnabled,
@@ -343,6 +351,7 @@ const findFieldKeyedChatThread = async (
       .select({
         id: chatThreads.id,
         chatModel: chatThreads.chatModel,
+        chatReasoningEffort: chatThreads.chatReasoningEffort,
         contextMatterIds: chatThreads.contextMatterIds,
         usedAnonymization: chatThreads.usedAnonymization,
         webSearchEnabled: chatThreads.webSearchEnabled,
@@ -475,6 +484,7 @@ const createFileChatThread = async (
       orgAIConfig,
       webSearchAvailable,
       chatModel: fieldKeyedThread.chatModel,
+      chatReasoningEffort: fieldKeyedThread.chatReasoningEffort,
       contextMatterIds: fieldKeyedThread.contextMatterIds,
       usedAnonymization: fieldKeyedThread.usedAnonymization,
       webSearchEnabled: fieldKeyedThread.webSearchEnabled,
@@ -567,6 +577,7 @@ const resolveFileThread = createSafeHandler(
           orgAIConfig,
           webSearchAvailable,
           chatModel: existing.chatModel,
+          chatReasoningEffort: existing.chatReasoningEffort,
           contextMatterIds: existing.contextMatterIds,
           usedAnonymization: existing.usedAnonymization,
           webSearchEnabled: existing.webSearchEnabled,
@@ -636,6 +647,7 @@ const resolveFileThread = createSafeHandler(
             orgAIConfig,
             webSearchAvailable,
             chatModel: found.chatModel,
+            chatReasoningEffort: found.chatReasoningEffort,
             contextMatterIds: found.contextMatterIds,
             usedAnonymization: found.usedAnonymization,
             webSearchEnabled: found.webSearchEnabled,

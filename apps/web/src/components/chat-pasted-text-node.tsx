@@ -112,7 +112,7 @@ export const ChatPastedTextNode = (props: NodeViewProps) => {
         });
   const chipLabel = attrs.label.length > 0 ? attrs.label : fallbackLabel;
 
-  // Reserved slash commands (`/new`, `/model`) are action triggers, not
+  // Reserved slash commands such as `/new` are action triggers, not
   // editable content, so they render as a static chip without the expand/edit
   // popover the other sources use.
   if (attrs.source === "command") {

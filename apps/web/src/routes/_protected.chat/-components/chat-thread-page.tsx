@@ -73,7 +73,6 @@ import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
-import { useModelSelectorStore } from "@/lib/model-selector-store";
 import { managementRoles } from "@/lib/organization/consts";
 import type { ChatPrompt } from "@/lib/prompts/types";
 import { useSavedPrompts } from "@/lib/prompts/use-saved-prompts";
@@ -357,9 +356,10 @@ export const ChatThreadPage = ({
   // submit on the outcome (see `onSubmit` below) so a send can never race
   // a just-changed model onto the old, stale one.
   const modelSelection = useChatModelSelection({
-    onPersisted: (model) => {
+    onPersisted: ({ model, reasoningEffort }) => {
       applyChatModelChange({
         model,
+        reasoningEffort,
         queryClient,
         queryKey: threadQueryOptions.queryKey,
         threadId: toSafeId<"chatThread">(threadRef.threadId),
@@ -487,12 +487,6 @@ export const ChatThreadPage = ({
       }
       return;
     }
-    if (reservedCommand?.id === "model") {
-      controller.setContent("");
-      useModelSelectorStore.getState().open();
-      return;
-    }
-
     if (!(await ensureAIAvailable())) {
       return;
     }
@@ -693,6 +687,7 @@ export const ChatThreadPage = ({
                     activeOrganizationId,
                     threadRef,
                     selectedModel: data.model,
+                    selectedReasoningEffort: data.reasoningEffort,
                     selectModel: modelSelection.selectModel,
                   }}
                   skillsOrganizationId={activeOrganizationId}
@@ -704,6 +699,7 @@ export const ChatThreadPage = ({
                         activeOrganizationId,
                         threadRef,
                         selectedModel: data.model,
+                        selectedReasoningEffort: data.reasoningEffort,
                         selectModel: modelSelection.selectModel,
                       }}
                       leadingContext={

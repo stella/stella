@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 /**
  * Per-thread chat-role model selection: encode/decode the
  * `"<provider>::<modelId>"` string stored in `chatThreads.chatModel`, and
@@ -15,8 +17,16 @@
  * offered `BYOK_MODEL_OPTIONS` entry for a configured provider is a valid
  * chat-role selection.
  */
-import { BYOK_MODEL_OPTIONS } from "@stll/ai-catalog";
-import type { BYOKProvider, ModelRole } from "@stll/ai-catalog";
+import {
+  BYOK_MODEL_OPTIONS,
+  getModelDisplayMetadata,
+  getModelReasoningEfforts,
+} from "@stll/ai-catalog";
+import type {
+  BYOKProvider,
+  ModelRole,
+  ReasoningEffort,
+} from "@stll/ai-catalog";
 
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -35,7 +45,15 @@ export type ChatModelSelection = {
 };
 
 export type ChatModelOption = ChatModelSelection & {
+  displayName: string;
+  iconProvider: BYOKProvider;
+  reasoningEfforts: readonly ReasoningEffort[] | null;
   value: string;
+};
+
+export type EffectiveChatModelSelection = {
+  modelId: string | undefined;
+  reasoningEffort: ReasoningEffort | undefined;
 };
 
 const isBYOKProviderValue = (value: string): value is BYOKProvider =>
@@ -92,11 +110,45 @@ export const isChatModelSelectionAvailable = ({
 const chatModelOptionsForProvider = (
   provider: BYOKProvider,
 ): ChatModelOption[] =>
-  BYOK_MODEL_OPTIONS[provider].map((modelId) => ({
-    provider,
-    modelId,
-    value: encodeChatModelSelection({ provider, modelId }),
-  }));
+  BYOK_MODEL_OPTIONS[provider].map((modelId) => {
+    const metadata = getModelDisplayMetadata(modelId);
+    if (metadata === null) {
+      return panic(`Missing display metadata for offered model "${modelId}"`);
+    }
+    return {
+      provider,
+      modelId,
+      displayName: metadata.displayName,
+      iconProvider: metadata.iconProvider,
+      reasoningEfforts: getChatModelReasoningEfforts({ provider, modelId }),
+      value: encodeChatModelSelection({ provider, modelId }),
+    };
+  });
+
+const USER_SELECTABLE_EFFORT_PROVIDERS = new Set<BYOKProvider>([
+  "google",
+  "anthropic",
+  "openai",
+  "openrouter",
+]);
+
+/** Effort values the active Stella adapter can actually forward. */
+export const getChatModelReasoningEfforts = ({
+  provider,
+  modelId,
+}: ChatModelSelection): readonly ReasoningEffort[] | null =>
+  USER_SELECTABLE_EFFORT_PROVIDERS.has(provider)
+    ? getModelReasoningEfforts(modelId)
+    : null;
+
+export const isChatModelReasoningEffortAvailable = ({
+  provider,
+  modelId,
+  reasoningEffort,
+}: ChatModelSelection & { reasoningEffort: ReasoningEffort }): boolean =>
+  getChatModelReasoningEfforts({ provider, modelId })?.includes(
+    reasoningEffort,
+  ) ?? false;
 
 const configuredChatProviders = (
   orgAIConfig: OrgAIConfig | null,
@@ -178,37 +230,6 @@ export const getDefaultChatModelValue = ({
 };
 
 /**
- * The concrete configured model behind a friendly composer mode. These are
- * still persisted as ordinary provider/model overrides, so old clients and
- * the existing "all models" picker remain fully interoperable.
- */
-export const getChatModeModelValue = ({
-  orgAIConfig,
-  organizationId,
-  role,
-}: {
-  orgAIConfig: OrgAIConfig | null;
-  organizationId: SafeId<"organization"> | null;
-  role: Extract<ModelRole, "fast" | "reasoning">;
-}): string | null => {
-  if (!hasResolvableModelForRole({ orgAIConfig, role })) {
-    return null;
-  }
-
-  const info = getTanStackTextModelInfoForRole(role, orgAIConfig, {
-    organizationId,
-  });
-  if (!isBYOKProviderValue(info.provider)) {
-    return null;
-  }
-  const selection = { provider: info.provider, modelId: info.modelId };
-  if (!isChatModelSelectionAvailable({ ...selection, orgAIConfig })) {
-    return null;
-  }
-  return encodeChatModelSelection(selection);
-};
-
-/**
  * Resolves the effective chat model override for a turn: the dev
  * override (local-only, already validated by
  * `validateTanStackDevModelOverride`) always wins; otherwise a valid
@@ -237,4 +258,39 @@ export const resolveEffectiveChatModelId = ({
     return undefined;
   }
   return threadChatModel;
+};
+
+/**
+ * Resolve the complete per-turn manual selection. A stale effort degrades to
+ * Stella's adapter default; a stale model degrades to Auto.
+ */
+export const resolveEffectiveChatModelSelection = ({
+  devModelId,
+  threadChatModel,
+  threadReasoningEffort,
+  orgAIConfig,
+}: {
+  devModelId: string | undefined;
+  threadChatModel: string | null;
+  threadReasoningEffort: ReasoningEffort | null;
+  orgAIConfig: OrgAIConfig | null;
+}): EffectiveChatModelSelection => {
+  const modelId = resolveEffectiveChatModelId({
+    devModelId,
+    threadChatModel,
+    orgAIConfig,
+  });
+  if (devModelId || modelId === undefined || threadReasoningEffort === null) {
+    return { modelId, reasoningEffort: undefined };
+  }
+  const decoded = decodeChatModelSelection(modelId);
+  const reasoningEffort =
+    decoded &&
+    isChatModelReasoningEffortAvailable({
+      ...decoded,
+      reasoningEffort: threadReasoningEffort,
+    })
+      ? threadReasoningEffort
+      : undefined;
+  return { modelId, reasoningEffort };
 };

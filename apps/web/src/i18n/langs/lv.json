@@ -503,19 +503,22 @@
       },
       "loadError": "Neizdevās ielādēt entītijas"
     },
-    "modelMode": {
-      "deepThinking": "Padziļināta domāšana",
-      "deepThinkingDescription": "Sarežģīta argumentācija un analīze",
-      "exactModels": "Konkrēts modelis",
-      "fastDescription": "Ātri ikdienas jautājumi",
-      "select": "Atlasīt atbildes režīmu",
-      "standard": "Standarta",
-      "standardDescription": "Vislabāk piemērots vairumam uzdevumu"
-    },
     "modelSelector": {
-      "defaultLabel": "Noklusējuma (tērzēšanas loma)",
-      "description": "Izvēlieties AI modeli, kas tiks izmantots aktīvajai tērzēšanas sesijai.",
-      "title": "Atlasīt tērzēšanas modeli"
+      "autoDescription": "Automātiski izvēlas modeli un spriešanas līmeni.",
+      "autoLabel": "Automātiski",
+      "effortLabel": "Spriešanas līmenis",
+      "effortValues": {
+        "high": "Augsts",
+        "low": "Zems",
+        "max": "Maksimāls",
+        "medium": "Vidējs",
+        "minimal": "Minimāls",
+        "none": "Izslēgts",
+        "providerDefault": "Noklusējuma",
+        "xhigh": "Ļoti augsts"
+      },
+      "title": "Atlasīt tērzēšanas modeli",
+      "viaProvider": "izmantojot {provider}"
     },
     "moveToMain": "Pārvietot uz galveno skatu",
     "moveToSide": "Pārvietot uz sānu paneli",

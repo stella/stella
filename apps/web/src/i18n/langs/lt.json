@@ -503,19 +503,22 @@
       },
       "loadError": "Nepavyko įkelti objektų"
     },
-    "modelMode": {
-      "deepThinking": "Gilus mąstymas",
-      "deepThinkingDescription": "Sudėtingas samprotavimas ir analizė",
-      "exactModels": "Konkretus modelis",
-      "fastDescription": "Greiti kasdieniai klausimai",
-      "select": "Pasirinkti atsakymo režimą",
-      "standard": "Standartinis",
-      "standardDescription": "Tinka daugumai užduočių"
-    },
     "modelSelector": {
-      "defaultLabel": "Numatytasis (pokalbio vaidmuo)",
-      "description": "Pasirinkite AI modelį, naudojamą aktyviai pokalbių sesijai.",
-      "title": "Pasirinkti pokalbių modelį"
+      "autoDescription": "Automatiškai parenka modelį ir samprotavimo lygį.",
+      "autoLabel": "Automatinis",
+      "effortLabel": "Samprotavimo lygis",
+      "effortValues": {
+        "high": "Aukštas",
+        "low": "Žemas",
+        "max": "Didžiausias",
+        "medium": "Vidutinis",
+        "minimal": "Minimalus",
+        "none": "Išjungta",
+        "providerDefault": "Numatytasis",
+        "xhigh": "Labai aukštas"
+      },
+      "title": "Pasirinkti pokalbių modelį",
+      "viaProvider": "per {provider}"
     },
     "moveToMain": "Perkelti į pagrindinį rodinį",
     "moveToSide": "Perkelti į šoninį skydelį",

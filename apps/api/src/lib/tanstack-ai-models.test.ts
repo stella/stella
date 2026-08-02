@@ -686,6 +686,52 @@ describe("tanStackModelOptionsForRole", () => {
     });
   });
 
+  test("manual chat effort reaches each supported provider adapter", () => {
+    expect(
+      looseOptions(
+        tanStackModelOptionsForRole({
+          role: "chat",
+          provider: "google",
+          modelId: "gemini-3.6-flash",
+          organizationId: null,
+          reasoningEffort: "medium",
+        }),
+      ),
+    ).toMatchObject({ thinkingConfig: { thinkingLevel: "MEDIUM" } });
+    expect(
+      tanStackModelOptionsForRole({
+        role: "chat",
+        provider: "anthropic",
+        modelId: "claude-sonnet-5",
+        organizationId: null,
+        reasoningEffort: "high",
+      }),
+    ).toMatchObject({
+      thinking: { type: "adaptive" },
+      output_config: { effort: "high" },
+    });
+    expect(
+      tanStackModelOptionsForRole({
+        role: "chat",
+        provider: "openai",
+        modelId: "gpt-5.5",
+        organizationId: null,
+        reasoningEffort: "xhigh",
+      }),
+    ).toMatchObject({ reasoning: { effort: "xhigh" } });
+    expect(
+      looseOptions(
+        tanStackModelOptionsForRole({
+          role: "chat",
+          provider: "openrouter",
+          modelId: "openai/gpt-5.5",
+          organizationId: null,
+          reasoningEffort: "low",
+        }),
+      ),
+    ).toMatchObject({ reasoning: { effort: "low" } });
+  });
+
   test("never emits a reasoning control outside the model's declared capability", () => {
     // The whole-class invariant behind the "Reasoning is mandatory"
     // 502: for EVERY offered model and role, any effort (or Gemini

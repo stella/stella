@@ -295,6 +295,200 @@ type BYOKModelIdByProvider = {
 
 export type OfferedBYOKModelId = BYOKModelIdByProvider[BYOKProvider];
 
+export type ModelDisplayMetadata = {
+  /** Human-readable product name; model names are trademarks and stay untranslated. */
+  displayName: string;
+  /** Brand mark to show. This may differ from the routing provider. */
+  iconProvider: BYOKProvider;
+};
+
+/**
+ * Presentation metadata for every offered model. Keeping this exhaustive beside
+ * the allowlist prevents a newly offered model from leaking a raw provider ID
+ * into user-facing pickers. OpenRouter entries deliberately carry their model
+ * creator's icon while their routing provider remains available separately.
+ */
+export const MODEL_DISPLAY_METADATA = {
+  "gemini-3.6-flash": {
+    displayName: "Gemini 3.6 Flash",
+    iconProvider: "google",
+  },
+  "gemini-3.5-flash-lite": {
+    displayName: "Gemini 3.5 Flash Lite",
+    iconProvider: "google",
+  },
+  "gemini-3.1-pro-preview": {
+    displayName: "Gemini 3.1 Pro Preview",
+    iconProvider: "google",
+  },
+  "gemini-3.5-flash": {
+    displayName: "Gemini 3.5 Flash",
+    iconProvider: "google",
+  },
+  "gemini-3.1-flash-lite": {
+    displayName: "Gemini 3.1 Flash Lite",
+    iconProvider: "google",
+  },
+  "claude-sonnet-5": {
+    displayName: "Claude Sonnet 5",
+    iconProvider: "anthropic",
+  },
+  "claude-fable-5": {
+    displayName: "Claude Fable 5",
+    iconProvider: "anthropic",
+  },
+  "claude-opus-5": {
+    displayName: "Claude Opus 5",
+    iconProvider: "anthropic",
+  },
+  "claude-opus-4-8": {
+    displayName: "Claude Opus 4.8",
+    iconProvider: "anthropic",
+  },
+  "claude-opus-4-7": {
+    displayName: "Claude Opus 4.7",
+    iconProvider: "anthropic",
+  },
+  "claude-sonnet-4-6": {
+    displayName: "Claude Sonnet 4.6",
+    iconProvider: "anthropic",
+  },
+  "claude-opus-4-6": {
+    displayName: "Claude Opus 4.6",
+    iconProvider: "anthropic",
+  },
+  "claude-haiku-4-5-20251001": {
+    displayName: "Claude Haiku 4.5",
+    iconProvider: "anthropic",
+  },
+  "gpt-5.6": { displayName: "GPT-5.6", iconProvider: "openai" },
+  "gpt-5.5": { displayName: "GPT-5.5", iconProvider: "openai" },
+  "gpt-5.4": { displayName: "GPT-5.4", iconProvider: "openai" },
+  "gpt-5.4-mini": {
+    displayName: "GPT-5.4 Mini",
+    iconProvider: "openai",
+  },
+  "gpt-5.4-nano": {
+    displayName: "GPT-5.4 Nano",
+    iconProvider: "openai",
+  },
+  "gpt-5.2": { displayName: "GPT-5.2", iconProvider: "openai" },
+  "openai/gpt-5.6-luna": {
+    displayName: "GPT-5.6 Luna",
+    iconProvider: "openai",
+  },
+  "openai/gpt-5.6-terra": {
+    displayName: "GPT-5.6 Terra",
+    iconProvider: "openai",
+  },
+  "google/gemini-3.6-flash": {
+    displayName: "Gemini 3.6 Flash",
+    iconProvider: "google",
+  },
+  "google/gemini-3.5-flash-lite": {
+    displayName: "Gemini 3.5 Flash Lite",
+    iconProvider: "google",
+  },
+  "google/gemini-3.1-pro-preview": {
+    displayName: "Gemini 3.1 Pro Preview",
+    iconProvider: "google",
+  },
+  "google/gemini-3.5-flash": {
+    displayName: "Gemini 3.5 Flash",
+    iconProvider: "google",
+  },
+  "google/gemini-3.1-flash-lite": {
+    displayName: "Gemini 3.1 Flash Lite",
+    iconProvider: "google",
+  },
+  "anthropic/claude-sonnet-5": {
+    displayName: "Claude Sonnet 5",
+    iconProvider: "anthropic",
+  },
+  "anthropic/claude-opus-5": {
+    displayName: "Claude Opus 5",
+    iconProvider: "anthropic",
+  },
+  "anthropic/claude-opus-4.8": {
+    displayName: "Claude Opus 4.8",
+    iconProvider: "anthropic",
+  },
+  "anthropic/claude-sonnet-4.6": {
+    displayName: "Claude Sonnet 4.6",
+    iconProvider: "anthropic",
+  },
+  "openai/gpt-5.5": { displayName: "GPT-5.5", iconProvider: "openai" },
+  "openai/gpt-5.4-mini": {
+    displayName: "GPT-5.4 Mini",
+    iconProvider: "openai",
+  },
+  "us.anthropic.claude-sonnet-4-5-20250929-v1:0": {
+    displayName: "Claude Sonnet 4.5",
+    iconProvider: "anthropic",
+  },
+  "us.anthropic.claude-haiku-4-5-20251001-v1:0": {
+    displayName: "Claude Haiku 4.5",
+    iconProvider: "anthropic",
+  },
+  "us.amazon.nova-pro-v1:0": {
+    displayName: "Amazon Nova Pro",
+    iconProvider: "bedrock",
+  },
+  "us.amazon.nova-lite-v1:0": {
+    displayName: "Amazon Nova Lite",
+    iconProvider: "bedrock",
+  },
+  "us.amazon.nova-micro-v1:0": {
+    displayName: "Amazon Nova Micro",
+    iconProvider: "bedrock",
+  },
+  "openai.gpt-oss-120b-1:0": {
+    displayName: "GPT OSS 120B",
+    iconProvider: "openai",
+  },
+  "openai.gpt-oss-20b-1:0": {
+    displayName: "GPT OSS 20B",
+    iconProvider: "openai",
+  },
+  "us.deepseek.r1-v1:0": {
+    displayName: "DeepSeek R1",
+    iconProvider: "bedrock",
+  },
+  "mistral-large-latest": {
+    displayName: "Mistral Large",
+    iconProvider: "mistral",
+  },
+  "mistral-medium-latest": {
+    displayName: "Mistral Medium",
+    iconProvider: "mistral",
+  },
+  "mistral-small-latest": {
+    displayName: "Mistral Small",
+    iconProvider: "mistral",
+  },
+  "magistral-medium-latest": {
+    displayName: "Magistral Medium",
+    iconProvider: "mistral",
+  },
+  "magistral-small": {
+    displayName: "Magistral Small",
+    iconProvider: "mistral",
+  },
+  "pixtral-large-latest": {
+    displayName: "Pixtral Large",
+    iconProvider: "mistral",
+  },
+} as const satisfies Record<OfferedBYOKModelId, ModelDisplayMetadata>;
+
+const MODEL_DISPLAY_METADATA_BY_ID: Readonly<
+  Record<string, ModelDisplayMetadata>
+> = MODEL_DISPLAY_METADATA;
+
+export const getModelDisplayMetadata = (
+  modelId: string,
+): ModelDisplayMetadata | null =>
+  MODEL_DISPLAY_METADATA_BY_ID[normalizeModelCatalogId(modelId)] ?? null;
+
 const TANSTACK_DOCUMENT_INPUT_MODEL_OPTIONS = {
   anthropic: ["claude-sonnet-5", "claude-sonnet-4-6"],
   bedrock: [

@@ -40,7 +40,6 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { AppBreadcrumbs } from "@/components/breadcrumbs/app-breadcrumbs";
 import { ChatEditorProvider } from "@/components/chat-editor-provider";
 import { ChatMentionProviders } from "@/components/chat-mention-providers";
-import { ModelSelectorDialog } from "@/components/chat/model-selector-dialog";
 import {
   initializeInspectorTabBroadcast,
   useInspectorTabsStore,
@@ -351,7 +350,6 @@ function ProtectedComponent() {
               <WorkspaceInspectorSidePanel />
               <ShortcutEchoHud />
               <KeyboardShortcutsDialog />
-              <ModelSelectorDialog />
             </ChatEditorProvider>
           </AIAvailabilityProvider>
         </ChatMentionProviders>
