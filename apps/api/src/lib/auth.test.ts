@@ -11,6 +11,7 @@ import {
 import { member, organization, user } from "@/api/db/auth-schema";
 import { contacts, workspaceMembers, workspaces } from "@/api/db/schema";
 import {
+  assertNewAccountEmailAllowedForCreation,
   assertNewAccountEmailOtpAllowed,
   getAuth,
   isSixDigitOtpBody,
@@ -404,21 +405,57 @@ describe("isSixDigitOtpBody", () => {
 });
 
 describe("new-account email policy", () => {
-  test("rejects a disposable email before sending its sign-in OTP", async () => {
-    const rejection: unknown = await assertNewAccountEmailOtpAllowed(
+  test("does not reveal whether a disposable-address account exists when sending its OTP", async () => {
+    await assertNewAccountEmailOtpAllowed(
       {
         body: { email: "blocked@mailinator.com", type: "sign-in" },
         path: "/email-otp/send-verification-otp",
       },
       { accountExists: async () => false },
+    );
+  });
+
+  test("rejects a disposable address when creating its account", async () => {
+    const rejection: unknown = await Promise.resolve()
+      .then(() =>
+        assertNewAccountEmailAllowedForCreation("blocked@mailinator.com"),
+      )
+      .then(
+        () => null,
+        (error: unknown) => error,
+      );
+
+    expect(rejection).toMatchObject({
+      body: { code: "DISPOSABLE_EMAIL_NOT_ALLOWED" },
+      statusCode: 400,
+    });
+  });
+
+  test("returns the computed retry delay with a signup 429", async () => {
+    const retryAfterSeconds = 171;
+    const rejection: unknown = await assertNewAccountEmailOtpAllowed(
+      {
+        body: { email: "new-user@example.com", type: "sign-in" },
+        path: "/email-otp/send-verification-otp",
+      },
+      {
+        accountExists: async () => false,
+        rateLimitContext: {
+          increment: async () => ({
+            count: 4,
+            nextReset: new Date(Date.now() + retryAfterSeconds * 1000),
+            start: Date.now(),
+          }),
+        },
+      },
     ).then(
       () => null,
       (error: unknown) => error,
     );
 
     expect(rejection).toMatchObject({
-      body: { code: "DISPOSABLE_EMAIL_NOT_ALLOWED" },
-      statusCode: 400,
+      headers: { "Retry-After": String(retryAfterSeconds) },
+      statusCode: 429,
     });
   });
 });

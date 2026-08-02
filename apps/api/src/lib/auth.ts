@@ -20,6 +20,7 @@ import { Result } from "better-result";
 import { and, eq, exists, inArray, isNotNull, or } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
 import Elysia, { t } from "elysia";
+import type { Context as RateLimitContext } from "elysia-rate-limit";
 
 import { ac, roles } from "@stll/permissions";
 import type { PermissionInput } from "@stll/permissions";
@@ -88,7 +89,10 @@ import {
   isSelfhostLocalPasswordAuthEnabled,
   shouldHandleSelfhostBootstrapPath,
 } from "@/api/lib/selfhost-auth";
-import { evaluateNewAccountOtpPolicy } from "@/api/lib/signup-abuse";
+import {
+  evaluateNewAccountOtpPolicy,
+  isDisposableEmailAddress,
+} from "@/api/lib/signup-abuse";
 import { includes } from "@/api/lib/type-guards";
 import {
   getMcpResourceUrl,
@@ -143,6 +147,21 @@ const authAccountExists = async (normalizedEmail: string): Promise<boolean> => {
 
 type NewAccountEmailOtpPolicyOptions = {
   accountExists?: (normalizedEmail: string) => Promise<boolean>;
+  rateLimitContext?: Pick<RateLimitContext, "increment">;
+};
+
+export const assertNewAccountEmailAllowedForCreation = (
+  email: string,
+): void => {
+  if (!isDisposableEmailAddress(email)) {
+    return;
+  }
+
+  throw new APIError("BAD_REQUEST", {
+    code: "DISPOSABLE_EMAIL_NOT_ALLOWED",
+    message:
+      "Temporary email addresses are not allowed. Use a permanent email address.",
+  });
 };
 
 export const assertNewAccountEmailOtpAllowed = async (
@@ -151,7 +170,10 @@ export const assertNewAccountEmailOtpAllowed = async (
     path: string;
     request?: Request | undefined;
   },
-  { accountExists = authAccountExists }: NewAccountEmailOtpPolicyOptions = {},
+  {
+    accountExists = authAccountExists,
+    rateLimitContext,
+  }: NewAccountEmailOtpPolicyOptions = {},
 ): Promise<void> => {
   if (
     ctx.path !== SEND_VERIFICATION_OTP_PATH ||
@@ -166,6 +188,7 @@ export const assertNewAccountEmailOtpAllowed = async (
   const result = await evaluateNewAccountOtpPolicy({
     accountExists,
     clientIp,
+    ...(rateLimitContext ? { context: rateLimitContext } : {}),
     email: ctx.body.email,
   });
 
@@ -173,15 +196,18 @@ export const assertNewAccountEmailOtpAllowed = async (
     case "allowed":
       return;
     case "rejected":
-      throw new APIError("BAD_REQUEST", {
-        code: "DISPOSABLE_EMAIL_NOT_ALLOWED",
-        message:
-          "Temporary email addresses are not allowed. Use a permanent email address.",
-      });
+      // Keep the OTP-request response identical for existing and new accounts.
+      // The user.create hook rejects the disposable address only after Better
+      // Auth has verified the OTP and is about to create an account.
+      return;
     case "rate_limited":
-      throw new APIError("TOO_MANY_REQUESTS", {
-        message: "Too many account creation attempts. Try again later.",
-      });
+      throw new APIError(
+        "TOO_MANY_REQUESTS",
+        {
+          message: "Too many account creation attempts. Try again later.",
+        },
+        { "Retry-After": String(result.retryAfterSeconds) },
+      );
     default:
       result satisfies never;
   }
@@ -703,6 +729,7 @@ const createAuth = () => {
       user: {
         create: {
           before: async (user, ctx) => {
+            assertNewAccountEmailAllowedForCreation(user.email);
             validateTimezoneId(user["timezoneId"]);
             // Email-OTP and some social providers leave `name` blank.
             // The `notNull` schema constraint allows empty strings, which
