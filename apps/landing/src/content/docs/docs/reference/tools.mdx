@@ -1,0 +1,48 @@
+---
+title: Tool reference
+description: Every tool the stella server and CLI expose, generated from the registry.
+---
+
+import registry from "../../../../../../../packages/cli/src/generated/registry-snapshot.json";
+
+This page is generated from the committed tool-registry snapshot, the same
+artifact the CLI's commands are generated from, so it cannot drift from the
+deployed surface.
+
+Access is the tool's declared behavior: **read** tools never change state;
+**write** tools do and require confirmation in interactive clients;
+**destructive** writes delete or irreversibly change data and always require
+explicit confirmation.
+
+<table>
+  <thead>
+    <tr>
+      <th>Tool</th>
+      <th>CLI command</th>
+      <th>Access</th>
+      <th>What it does</th>
+    </tr>
+  </thead>
+  <tbody>
+    {registry.map((tool) => (
+      <tr>
+        <td>
+          <strong>{tool.annotations?.title ?? tool.name}</strong>
+          <br />
+          <code>{tool.name}</code>
+        </td>
+        <td>
+          <code>stella {tool.cli.command.join(" ")}</code>
+        </td>
+        <td>
+          {tool.annotations?.destructiveHint
+            ? "destructive"
+            : tool.annotations?.readOnlyHint
+              ? "read"
+              : "write"}
+        </td>
+        <td>{tool.description}</td>
+      </tr>
+    ))}
+  </tbody>
+</table>

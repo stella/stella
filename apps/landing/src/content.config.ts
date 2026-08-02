@@ -1,3 +1,5 @@
+import { docsLoader } from "@astrojs/starlight/loaders";
+import { docsSchema } from "@astrojs/starlight/schema";
 import { glob } from "astro/loaders";
 import { z } from "astro/zod";
 import { defineCollection } from "astro:content";
@@ -13,4 +15,12 @@ const blog = defineCollection({
   }),
 });
 
-export const collections = { blog };
+// Starlight's docs collection. Every entry lives under
+// `src/content/docs/docs/`, so the generated routes all sit below `/docs`
+// and the injected catch-all never claims a marketing page.
+const docs = defineCollection({
+  loader: docsLoader(),
+  schema: docsSchema(),
+});
+
+export const collections = { blog, docs };
