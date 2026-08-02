@@ -81,7 +81,6 @@ describe("environment file parsing", () => {
           "EMPTY_VALUE=",
           `EMPTY_DEFAULT=\${EMPTY_VALUE:-5433}`,
           `SET_DEFAULT=\${PGPORT:-5432}`,
-          `NESTED_DEFAULT=\${MISSING_PORT:-\${PGPORT:-5432}}`,
         ].join("\n"),
         { PGPORT: "6432" },
       ),
@@ -94,10 +93,19 @@ describe("environment file parsing", () => {
       EMPTY_DEFAULT: "",
       EMPTY_VALUE: "",
       LITERAL: "$PGPORT",
-      NESTED_DEFAULT: "6432",
       PORT_PREFIX: "54",
       SET_DEFAULT: "6432",
       SMTP_PORT: "1025",
+    });
+  });
+
+  test("preserves unsupported nested fallbacks for validation", () => {
+    expect(
+      parseEnvText(`DB_PORT=\${MISSING_PORT:-\${PGPORT:-5432}}`, {
+        PGPORT: "6432",
+      }),
+    ).toEqual({
+      DB_PORT: `${String.fromCodePoint(36)}{MISSING_PORT:-${String.fromCodePoint(36)}{PGPORT:-5432}}`,
     });
   });
 });
@@ -251,6 +259,28 @@ describe("environment usage auditing", () => {
       ),
     ).toEqual([
       { file: "apps/web/Dockerfile", line: 1, name: "BUILDPLATFORM" },
+    ]);
+  });
+
+  test("traces literal names through computed environment helpers", () => {
+    const usages = findEnvUsages(
+      "scripts/example.ts",
+      [
+        'const DEPLOYMENT_URL_ENV = "API_DEPLOYMENT_URL";',
+        "const readEnv = (name: string) => process.env[name];",
+        'readEnv("API_DEPLOYMENT_EXPECTED_COMMIT");',
+        "readEnv(DEPLOYMENT_URL_ENV);",
+        "readEnv(dynamicName);",
+      ].join("\n"),
+    );
+
+    expect(usages).toEqual([
+      {
+        file: "scripts/example.ts",
+        line: 3,
+        name: "API_DEPLOYMENT_EXPECTED_COMMIT",
+      },
+      { file: "scripts/example.ts", line: 4, name: "API_DEPLOYMENT_URL" },
     ]);
   });
 });

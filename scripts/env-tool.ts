@@ -3,6 +3,7 @@ import { Result } from "better-result";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { parseEnv } from "node:util";
+import ts from "typescript";
 import * as v from "valibot";
 
 import { resolveDatabaseUrl } from "../apps/api/src/db-url";
@@ -217,15 +218,23 @@ const expandEnvReferences = ({
         index += 1;
         continue;
       }
+      const fallback = value.slice(fallbackStart, fallbackEnd);
+      if (/(?<!\\)\$\{/u.test(fallback)) {
+        // Bun does not recursively parse braced fallbacks. Preserve the
+        // unsupported expression so schema validation rejects it.
+        output.push(value.slice(index, fallbackEnd + 1));
+        index = fallbackEnd + 1;
+        continue;
+      }
       const current = environment[name];
       output.push(
         current === undefined && depth < MAX_ENV_EXPANSION_DEPTH
           ? expandEnvReferences({
               depth: depth + 1,
               environment,
-              value: value.slice(fallbackStart, fallbackEnd),
+              value: fallback,
             })
-          : (current ?? value.slice(fallbackStart, fallbackEnd)),
+          : (current ?? fallback),
       );
       index = fallbackEnd + 1;
       continue;
@@ -320,8 +329,148 @@ const AUDIT_IGNORE_FILES = new Set([
 
 type EnvUsage = { file: string; line: number; name: string };
 
-export const findEnvUsages = (file: string, text: string): EnvUsage[] => {
+const ENV_NAME_PATTERN = /^[A-Z][A-Z0-9_]*$/u;
+const SCRIPT_FILE_PATTERN = /\.[cm]?[jt]sx?$/u;
+
+const findComputedEnvUsages = (file: string, text: string): EnvUsage[] => {
+  if (!SCRIPT_FILE_PATTERN.test(file)) {
+    return [];
+  }
+
+  const source = ts.createSourceFile(
+    file,
+    text,
+    ts.ScriptTarget.Latest,
+    true,
+    file.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  );
+  const constants = new Map<string, string>();
+  const helpers = new Map<string, number>();
   const usages: EnvUsage[] = [];
+
+  const literalEnvName = (node: ts.Node | undefined) => {
+    if (
+      node &&
+      (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node))
+    ) {
+      return ENV_NAME_PATTERN.test(node.text) ? node.text : undefined;
+    }
+    if (node && ts.isIdentifier(node)) {
+      return constants.get(node.text);
+    }
+    return undefined;
+  };
+
+  const collectConstants = (node: ts.Node) => {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
+      const value = literalEnvName(node.initializer);
+      if (value) {
+        constants.set(node.name.text, value);
+      }
+    }
+    ts.forEachChild(node, collectConstants);
+  };
+  collectConstants(source);
+
+  const envArgument = (node: ts.Node) => {
+    if (!ts.isElementAccessExpression(node)) {
+      return undefined;
+    }
+    const envAccess = node.expression;
+    if (
+      !ts.isPropertyAccessExpression(envAccess) ||
+      envAccess.name.text !== "env" ||
+      !ts.isIdentifier(envAccess.expression) ||
+      (envAccess.expression.text !== "process" &&
+        envAccess.expression.text !== "Bun")
+    ) {
+      return undefined;
+    }
+    return node.argumentExpression;
+  };
+
+  type HelperDeclaration =
+    | ts.ArrowFunction
+    | ts.FunctionDeclaration
+    | ts.FunctionExpression;
+
+  const isHelperDeclaration = (node: ts.Node): node is HelperDeclaration =>
+    ts.isArrowFunction(node) ||
+    ts.isFunctionDeclaration(node) ||
+    ts.isFunctionExpression(node);
+
+  const helperName = (node: HelperDeclaration) => {
+    if (ts.isFunctionDeclaration(node) && node.name) {
+      return node.name.text;
+    }
+    if (
+      (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) &&
+      ts.isVariableDeclaration(node.parent) &&
+      ts.isIdentifier(node.parent.name)
+    ) {
+      return node.parent.name.text;
+    }
+    return undefined;
+  };
+
+  const collectReads = (node: ts.Node) => {
+    const argument = envArgument(node);
+    if (argument && ts.isIdentifier(argument)) {
+      const constantName = constants.get(argument.text);
+      if (constantName) {
+        usages.push({
+          file,
+          line:
+            source.getLineAndCharacterOfPosition(argument.getStart(source))
+              .line + 1,
+          name: constantName,
+        });
+      } else {
+        let parent = node.parent;
+        while (parent && !isHelperDeclaration(parent)) {
+          parent = parent.parent;
+        }
+        if (parent && isHelperDeclaration(parent)) {
+          const parameterIndex = parent.parameters.findIndex(
+            ({ name }) => ts.isIdentifier(name) && name.text === argument.text,
+          );
+          const name = helperName(parent);
+          if (name && parameterIndex !== -1) {
+            helpers.set(name, parameterIndex);
+          }
+        }
+      }
+    }
+    ts.forEachChild(node, collectReads);
+  };
+  collectReads(source);
+
+  const collectCalls = (node: ts.Node) => {
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
+      const parameterIndex = helpers.get(node.expression.text);
+      if (parameterIndex !== undefined) {
+        const argument = node.arguments.at(parameterIndex);
+        const name = literalEnvName(argument);
+        if (name && argument) {
+          usages.push({
+            file,
+            line:
+              source.getLineAndCharacterOfPosition(argument.getStart(source))
+                .line + 1,
+            name,
+          });
+        }
+      }
+    }
+    ts.forEachChild(node, collectCalls);
+  };
+  collectCalls(source);
+
+  return usages;
+};
+
+export const findEnvUsages = (file: string, text: string): EnvUsage[] => {
+  const usages = findComputedEnvUsages(file, text);
   let patterns = STATIC_ENV_PATTERNS;
   if (file.includes("Dockerfile")) {
     patterns = [
