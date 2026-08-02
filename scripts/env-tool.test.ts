@@ -166,14 +166,23 @@ describe("environment file parsing", () => {
     ).toEqual({ SECRET: "-".repeat(16) });
   });
 
-  test("matches Bun dotenv layer order and final-value expansion", () => {
-    expect(doctorEnvFileNames("production")).toEqual([
+  test("matches runtime dotenv precedence and final-value expansion", () => {
+    expect(doctorEnvFileNames({ app: "api", mode: "production" })).toEqual([
       ".env",
       ".env.production",
       ".env.local",
       ".env.production.local",
     ]);
-    expect(doctorEnvFileNames("staging")).toEqual([".env", ".env.local"]);
+    expect(doctorEnvFileNames({ app: "web", mode: "production" })).toEqual([
+      ".env",
+      ".env.local",
+      ".env.production",
+      ".env.production.local",
+    ]);
+    expect(doctorEnvFileNames({ app: "api", mode: undefined })).toEqual([
+      ".env",
+      ".env.local",
+    ]);
     expect(
       resolveDoctorMode({
         app: "web",
@@ -280,7 +289,7 @@ describe("environment doctor output", () => {
       DB_USER: "postgres",
     });
 
-    const result = validateDoctorEnvironment("api", input);
+    const result = validateDoctorEnvironment({ app: "api", input });
     expect(result.status).toBe("valid");
     expect(result.values["DATABASE_URL"]).toBe(
       "postgres://postgres:@localhost:5432/stella?sslmode=require",
@@ -299,7 +308,7 @@ describe("environment doctor output", () => {
       DB_USER: "postgres",
     });
 
-    const result = validateDoctorEnvironment("api", input);
+    const result = validateDoctorEnvironment({ app: "api", input });
     expect(result.status).toBe("invalid");
     if (result.status === "invalid") {
       expect(result.issues).toContain(
@@ -325,9 +334,9 @@ describe("environment doctor output", () => {
       overrides: { NODE_ENV: "production" },
     },
   ])("applies runtime invariant: $expected", ({ expected, overrides }) => {
-    const result = validateDoctorEnvironment("api", {
-      ...validApiInput(),
-      ...overrides,
+    const result = validateDoctorEnvironment({
+      app: "api",
+      input: { ...validApiInput(), ...overrides },
     });
     expect(result.status).toBe("invalid");
     if (result.status === "invalid") {
@@ -335,11 +344,28 @@ describe("environment doctor output", () => {
     }
   });
 
+  test("applies the selected API mode to runtime invariants", () => {
+    const result = validateDoctorEnvironment({
+      app: "api",
+      input: validApiInput(),
+      mode: "production",
+    });
+    expect(result.status).toBe("invalid");
+    if (result.status === "invalid") {
+      expect(result.issues).toContain(
+        "CONTENT_ENCRYPTION_KEY is required when NODE_ENV is 'production' or 'staging'.",
+      );
+    }
+  });
+
   test("applies the web runtime invariant", () => {
-    const result = validateDoctorEnvironment("web", {
-      ...parseEnvText(renderWebEnvExample()),
-      VITE_PUBLIC_LAW_ENABLED: "false",
-      VITE_PUBLIC_LAW_INDEXING_ENABLED: "true",
+    const result = validateDoctorEnvironment({
+      app: "web",
+      input: {
+        ...parseEnvText(renderWebEnvExample()),
+        VITE_PUBLIC_LAW_ENABLED: "false",
+        VITE_PUBLIC_LAW_INDEXING_ENABLED: "true",
+      },
     });
     expect(result.status).toBe("invalid");
     if (result.status === "invalid") {

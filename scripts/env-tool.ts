@@ -784,39 +784,55 @@ export const resolveDoctorMode = ({
   return app === ENV_APP.web ? ENV_MODE.development : undefined;
 };
 
-export const doctorEnvFileNames = (nodeEnv: string | undefined) => {
-  const names = [".env"];
-  const mode = nodeEnv && isEnvMode(nodeEnv) ? nodeEnv : undefined;
-  if (mode) {
-    names.push(`.env.${mode}`);
-  }
-  names.push(".env.local");
-  if (mode) {
-    names.push(`.env.${mode}.local`);
-  }
-  return names;
+type DoctorEnvFileNamesOptions = {
+  app: EnvApp;
+  mode: EnvMode | undefined;
 };
 
-export const validateDoctorEnvironment = (
-  app: EnvApp,
-  rawInput: DoctorInput,
-): DoctorValidationResult =>
-  ENV_APP_CONFIG[app].validate(normalizeEmptyEnvironment(rawInput));
+export const doctorEnvFileNames = ({
+  app,
+  mode,
+}: DoctorEnvFileNamesOptions) => {
+  if (!mode) {
+    return [".env", ".env.local"];
+  }
+  if (app === ENV_APP.web) {
+    return [".env", ".env.local", `.env.${mode}`, `.env.${mode}.local`];
+  }
+  return [".env", `.env.${mode}`, ".env.local", `.env.${mode}.local`];
+};
+
+type ValidateDoctorEnvironmentOptions = {
+  app: EnvApp;
+  input: DoctorInput;
+  mode?: EnvMode | undefined;
+};
+
+export const validateDoctorEnvironment = ({
+  app,
+  input,
+  mode,
+}: ValidateDoctorEnvironmentOptions): DoctorValidationResult => {
+  const selectedInput =
+    app === ENV_APP.api && mode ? { ...input, NODE_ENV: mode } : input;
+  return ENV_APP_CONFIG[app].validate(normalizeEmptyEnvironment(selectedInput));
+};
 
 const runDoctor = (app: EnvApp, mode: EnvMode | undefined) => {
   const { examplePath, owners } = ENV_APP_CONFIG[app];
   const envDirectory = path.dirname(examplePath);
   const baseEnvPath = path.join(envDirectory, ".env");
-  const envPaths = doctorEnvFileNames(mode).map((name) =>
+  const envPaths = doctorEnvFileNames({ app, mode }).map((name) =>
     path.join(envDirectory, name),
   );
   const existingEnvPaths = envPaths.filter(existsSync);
   const fileValues = parseEnvLayers(
     existingEnvPaths.map((envPath) => readFileSync(envPath, "utf-8")),
   );
-  const validation = validateDoctorEnvironment(app, {
-    ...fileValues,
-    ...process.env,
+  const validation = validateDoctorEnvironment({
+    app,
+    input: { ...fileValues, ...process.env },
+    mode,
   });
   const displayedEnvPaths = (
     existingEnvPaths.length > 0 ? existingEnvPaths : [baseEnvPath]
