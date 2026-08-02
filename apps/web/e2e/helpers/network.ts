@@ -462,6 +462,11 @@ const pushNewRequestProblems = ({
   );
 };
 
+// Browser scheduling can split one logical launch burst across the threshold.
+// Keep that bounded +1 allowance; unlike the former response-order metric, the
+// launch-only calculation cannot accumulate arbitrary depth from slow replies.
+const DEPTH_JITTER_ALLOWANCE = 1;
+
 const pushWaterfallDepthProblems = ({
   route,
   entry,
@@ -473,11 +478,11 @@ const pushWaterfallDepthProblems = ({
   metrics: RouteNetworkMetrics;
   problems: string[];
 }) => {
-  if (metrics.depth <= entry.depth) {
+  if (metrics.depth <= entry.depth + DEPTH_JITTER_ALLOWANCE) {
     return;
   }
   problems.push(
-    `Request waterfall got deeper on ${route}: ${entry.depth} -> ${metrics.depth}\n` +
+    `Request waterfall got deeper on ${route}: ${entry.depth} -> ${metrics.depth} (already tolerating +${DEPTH_JITTER_ALLOWANCE} for launch-scheduling jitter)\n` +
       `  Each extra level is one more sequential network round the user waits\n` +
       `  through before the page can finish. Usually the fix is to start the\n` +
       `  query in the route loader (ensureRouteQueryData / prefetchRouteQuery in\n` +

@@ -232,12 +232,23 @@ describe("diffNetworkBaseline", () => {
     expect(problems.some((p) => p.includes("GET /v1/contacts/:id"))).toBe(true);
   });
 
-  test("a deeper waterfall is a problem", () => {
+  test("a waterfall within the launch-jitter allowance passes", () => {
     const { problems } = diffNetworkBaseline(
       baseline,
       new Map([["/contacts", metrics(["GET /v1/contacts"], 3)]]),
     );
-    expect(problems.some((p) => p.includes("2 -> 3"))).toBe(true);
+    expect(problems).toEqual([]);
+  });
+
+  test("a waterfall beyond the launch-jitter allowance is a problem", () => {
+    const { problems } = diffNetworkBaseline(
+      baseline,
+      new Map([["/contacts", metrics(["GET /v1/contacts"], 4)]]),
+    );
+    expect(problems.some((p) => p.includes("2 -> 4"))).toBe(true);
+    expect(
+      problems.some((p) => p.includes("launch-scheduling jitter")),
+    ).toBe(true);
   });
 
   test("a repeated API request is a problem", () => {
