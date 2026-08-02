@@ -4,7 +4,15 @@ const store = new Map<string, Entry>();
 const TTL_MS = 5 * 60_000;
 
 export const stashDevOtp = (email: string, otp: string): void => {
-  store.set(email, { otp, ts: Date.now() });
+  const entry = { otp, ts: Date.now() };
+  store.set(email, entry);
+
+  const expiryTimer = setTimeout(() => {
+    if (store.get(email) === entry) {
+      store.delete(email);
+    }
+  }, TTL_MS);
+  expiryTimer.unref();
 };
 
 export const readDevOtp = (email: string): string | null => {
@@ -12,7 +20,7 @@ export const readDevOtp = (email: string): string | null => {
   if (!entry) {
     return null;
   }
-  if (Date.now() - entry.ts > TTL_MS) {
+  if (Date.now() - entry.ts >= TTL_MS) {
     store.delete(email);
     return null;
   }
