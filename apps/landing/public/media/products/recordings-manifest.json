@@ -599,8 +599,8 @@
       ],
       "manualVerification": {
         "artifactsHash": "b30a6816404858e6719c18565abc00860e4caeb7fa52961ce6ff879ecaa00818",
-        "reason": "Current recordings remain representative after maintenance changes.",
-        "watchedPathsHash": "585d5fcd92c07d90928e36721675753a9e14c5b5b76b038a1ae8633cb1fd23df"
+        "reason": "Reviewed current light and dark template-fill recordings; dialog, source selection, and completion state render correctly.",
+        "watchedPathsHash": "d06bb93589788157e19a723c7b3897616db98732bb5d516db5c382e65cad695d"
       }
     },
     {
@@ -630,8 +630,8 @@
       ],
       "manualVerification": {
         "artifactsHash": "a9623a9af54a7be8fbd95001ae304743a357b404bed1128ba64ad0f9a39cc597",
-        "reason": "Current recordings remain representative after maintenance changes.",
-        "watchedPathsHash": "585d5fcd92c07d90928e36721675753a9e14c5b5b76b038a1ae8633cb1fd23df"
+        "reason": "Reviewed current light and dark template-fill recordings; dialog, source selection, and completion state render correctly.",
+        "watchedPathsHash": "d06bb93589788157e19a723c7b3897616db98732bb5d516db5c382e65cad695d"
       }
     },
     {
