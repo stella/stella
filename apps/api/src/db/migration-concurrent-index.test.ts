@@ -15,6 +15,8 @@ const CONCURRENT_DROP =
   /\bDROP\s+INDEX\s+CONCURRENTLY\s+IF\s+EXISTS\s+"([^"]+)"/giu;
 const TYPE_CHANGE =
   /^ALTER\s+TABLE\b[^;]*?\bALTER\s+(?:COLUMN\s+)?(?:"[^"]+"|[A-Z_][A-Z0-9_$]*)\s+(?:SET\s+DATA\s+)?TYPE\b/iu;
+const TYPE_CHANGE_ANYWHERE =
+  /\bALTER\s+TABLE\b[\s\S]*?\bALTER\s+(?:COLUMN\s+)?(?:"[^"]+"|[A-Z_][A-Z0-9_$]*)\s+(?:SET\s+DATA\s+)?TYPE\b/iu;
 const TYPE_CHANGE_POLICY = {
   boundedRewrite: "stella-migration-safety: bounded-type-rewrite",
   metadataOnly: "stella-migration-safety: metadata-only-type-change",
@@ -42,6 +44,11 @@ type TimeoutUpdate =
   | {
       type: "reset";
       name: "all" | "lock" | "statement";
+    }
+  | {
+      type: "preserve";
+      name: "lock" | "statement";
+      scope: "local" | "session";
     };
 
 const classifyTimeout = (value: string): TimeoutState => {
@@ -54,8 +61,12 @@ const classifyTimeout = (value: string): TimeoutState => {
   return "unset";
 };
 
-const dollarQuoteDelimiterAt = (source: string, index: number) =>
-  /^\$(?:[A-Z_][A-Z0-9_]*)?\$/iu.exec(source.slice(index))?.at(0);
+const dollarQuoteDelimiterAt = (source: string, index: number) => {
+  if (/[A-Z0-9_$]/iu.test(source[index - 1] ?? "")) {
+    return undefined;
+  }
+  return /^\$(?:[A-Z_][A-Z0-9_]*)?\$/iu.exec(source.slice(index))?.at(0);
+};
 
 const sqlQuoteAt = (
   source: string,
@@ -272,12 +283,21 @@ const parseTimeoutUpdate = (statement: string): TimeoutUpdate | undefined => {
     )?.groups;
   const setName = setGroups?.["name"];
   if (setName === "lock" || setName === "statement") {
+    const scope =
+      setGroups?.["scope"]?.toLowerCase() === "local" ? "local" : "session";
+    if (!setGroups?.["value"]) {
+      return { type: "preserve", name: setName, scope };
+    }
+    if (/^DEFAULT$/iu.test(setGroups["value"])) {
+      return scope === "session"
+        ? { type: "reset", name: setName }
+        : { type: "preserve", name: setName, scope };
+    }
     return {
       type: "set",
       name: setName,
-      scope:
-        setGroups?.["scope"]?.toLowerCase() === "local" ? "local" : "session",
-      state: classifyTimeout(setGroups?.["value"] ?? ""),
+      scope,
+      state: classifyTimeout(setGroups["value"]),
     };
   }
 
@@ -340,44 +360,70 @@ const collectUnsafeConcurrentTimeouts = (
 ) => {
   const violations = [];
   let statementTimeout: TimeoutState = "unset";
+  let lockTimeout: TimeoutState = "unset";
   let concurrentBlockOpen = false;
+  let statementTimeoutRestored = false;
+  let lockTimeoutRequiresRestore = false;
 
   for (const statement of splitSqlStatements(source)) {
     const timeoutUpdate = parseTimeoutUpdate(statement);
     const isConcurrentOperation = CONCURRENT_INDEX_OPERATION.test(statement);
+    const isUnsupportedTransactionReversal =
+      /^(?:ROLLBACK|SAVEPOINT|RELEASE\s+SAVEPOINT)\b/iu.test(statement);
     const isStatementRestore =
       (timeoutUpdate?.type === "set" &&
         timeoutUpdate.name === "statement" &&
         timeoutUpdate.scope === "session" &&
-        timeoutUpdate.state !== "unbounded") ||
+        timeoutUpdate.state === "bounded") ||
       (timeoutUpdate?.type === "reset" &&
         (timeoutUpdate.name === "all" || timeoutUpdate.name === "statement"));
     const isProtocolBridge =
       (timeoutUpdate?.type === "set" && timeoutUpdate.name === "lock") ||
+      (timeoutUpdate?.type === "reset" &&
+        (timeoutUpdate.name === "all" || timeoutUpdate.name === "lock")) ||
       /^(?:BEGIN|COMMIT)$/iu.test(statement);
 
-    if (concurrentBlockOpen) {
-      if (!isConcurrentOperation && !isStatementRestore && !isProtocolBridge) {
-        violations.push(
-          `${relativePath}: statement timeout is not restored immediately after concurrent index operations`,
-        );
-        concurrentBlockOpen = false;
-      } else if (isStatementRestore) {
-        concurrentBlockOpen = false;
-      }
+    if (isUnsupportedTransactionReversal) {
+      violations.push(
+        `${relativePath}: timeout safety does not support transaction reversal`,
+      );
     }
 
-    if (timeoutUpdate?.type === "set") {
+    if (timeoutUpdate?.type === "set" && timeoutUpdate.scope === "session") {
       if (timeoutUpdate.name === "statement") {
-        statementTimeout =
-          timeoutUpdate.scope === "session" ? timeoutUpdate.state : "unset";
+        statementTimeout = timeoutUpdate.state;
+      } else {
+        lockTimeout = timeoutUpdate.state;
+        lockTimeoutRequiresRestore = timeoutUpdate.state !== "bounded";
       }
-      continue;
-    }
-    if (timeoutUpdate?.type === "reset") {
+    } else if (timeoutUpdate?.type === "reset") {
       if (timeoutUpdate.name === "all" || timeoutUpdate.name === "statement") {
         statementTimeout = "unset";
       }
+      if (timeoutUpdate.name === "all" || timeoutUpdate.name === "lock") {
+        lockTimeout = "unset";
+      }
+    }
+
+    if (concurrentBlockOpen) {
+      if (isStatementRestore) {
+        statementTimeoutRestored = true;
+      }
+      if (statementTimeoutRestored && !lockTimeoutRequiresRestore) {
+        concurrentBlockOpen = false;
+      } else if (
+        !isConcurrentOperation &&
+        !isStatementRestore &&
+        !isProtocolBridge
+      ) {
+        violations.push(
+          `${relativePath}: timeouts are not restored immediately after concurrent index operations`,
+        );
+        concurrentBlockOpen = false;
+      }
+    }
+
+    if (timeoutUpdate || isUnsupportedTransactionReversal) {
       continue;
     }
     if (!isConcurrentOperation) {
@@ -390,9 +436,17 @@ const collectUnsafeConcurrentTimeouts = (
       );
     }
     concurrentBlockOpen = true;
+    statementTimeoutRestored = false;
+    lockTimeoutRequiresRestore = lockTimeout === "unbounded";
   }
 
-  if (concurrentBlockOpen || statementTimeout === "unbounded") {
+  if (concurrentBlockOpen && lockTimeoutRequiresRestore) {
+    violations.push(`${relativePath}: lock timeout is not restored`);
+  }
+  if (
+    (concurrentBlockOpen && !statementTimeoutRestored) ||
+    (!concurrentBlockOpen && statementTimeout === "unbounded")
+  ) {
     violations.push(`${relativePath}: statement timeout is not restored`);
   }
 
@@ -482,6 +536,13 @@ const collectUnsafeTypeChangesInMigration = (
   let sawCustomStatementBudget = false;
 
   for (const statement of splitSqlStatements(source)) {
+    if (/^DO\b/iu.test(statement) && TYPE_CHANGE_ANYWHERE.test(statement)) {
+      violations.push(
+        `${relativePath}: procedural type changes are not supported by the timeout safety policy`,
+      );
+      continue;
+    }
+
     const declaredPolicy = parseTypeChangePolicy(statement);
     if (declaredPolicy) {
       if (metadataOnlyBlockOpen) {
@@ -728,6 +789,11 @@ SELECT 1;`;
         ALTER TABLE example ALTER COLUMN value TYPE timestamptz;`,
       ),
     ).toContain(`${relativePath}: type change has an unbounded lock wait`);
+    expect(parseTimeoutUpdate("SET statement_timeout FROM CURRENT")).toEqual({
+      type: "preserve",
+      name: "statement",
+      scope: "session",
+    });
   });
 
   test("tracks every timeout form around concurrent index operations", () => {
@@ -774,6 +840,59 @@ SELECT 1;`;
         SELECT set_config('statement_timeout', '5s', false);`,
       ),
     ).toEqual([]);
+    expect(
+      collectUnsafeConcurrentTimeouts(
+        "from-current/migration.sql",
+        `SET statement_timeout = 0;
+        CREATE INDEX CONCURRENTLY example_idx ON example (id);
+        SET statement_timeout FROM CURRENT;`,
+      ),
+    ).toContain(
+      "from-current/migration.sql: timeouts are not restored immediately after concurrent index operations",
+    );
+    expect(
+      collectUnsafeConcurrentTimeouts(
+        "unbounded-lock/migration.sql",
+        `SET statement_timeout = 0;
+        SET lock_timeout = 0;
+        CREATE INDEX CONCURRENTLY example_idx ON example (id);
+        SET statement_timeout = '5s';`,
+      ),
+    ).toContain("unbounded-lock/migration.sql: lock timeout is not restored");
+    expect(
+      collectUnsafeConcurrentTimeouts(
+        "restored-lock/migration.sql",
+        `SET statement_timeout = 0;
+        SET lock_timeout = 0;
+        CREATE INDEX CONCURRENTLY example_idx ON example (id);
+        SET statement_timeout = '5s';
+        SET lock_timeout = '1s';`,
+      ),
+    ).toEqual([]);
+  });
+
+  test("rejects transaction reversal in timeout protocols", () => {
+    expect(
+      collectUnsafeConcurrentTimeouts(
+        "rollback/migration.sql",
+        `BEGIN;
+        SET statement_timeout = 0;
+        ROLLBACK;
+        CREATE INDEX CONCURRENTLY example_idx ON example (id);`,
+      ),
+    ).toContain(
+      "rollback/migration.sql: timeout safety does not support transaction reversal",
+    );
+    expect(
+      collectUnsafeConcurrentTimeouts(
+        "savepoint/migration.sql",
+        `SAVEPOINT before_timeout;
+        SET statement_timeout = 0;
+        CREATE INDEX CONCURRENTLY example_idx ON example (id);`,
+      ),
+    ).toContain(
+      "savepoint/migration.sql: timeout safety does not support transaction reversal",
+    );
   });
 
   test("keeps lock waits bounded for custom execution budgets", () => {
@@ -874,6 +993,35 @@ SELECT 1;`;
     expect(
       splitSqlStatements(String.raw`SELECT E'it\'s; still quoted'; SELECT 1;`),
     ).toHaveLength(2);
+  });
+
+  test("requires token boundaries for dollar-quoted bodies", () => {
+    const identifierSource = `SELECT foo$bar$;
+      ALTER TABLE example ALTER COLUMN value TYPE varchar(64);`;
+    expect(splitSqlStatements(identifierSource)).toHaveLength(2);
+    expect(
+      collectUnsafeTypeChangesInMigration(
+        "dollar-identifier/migration.sql",
+        identifierSource,
+      ),
+    ).toContain(
+      "dollar-identifier/migration.sql: type change lacks an explicit execution policy",
+    );
+  });
+
+  test("rejects type changes hidden inside procedural bodies", () => {
+    expect(
+      collectUnsafeTypeChangesInMigration(
+        "procedural/migration.sql",
+        `DO $$
+        BEGIN
+          ALTER TABLE example ALTER COLUMN value TYPE varchar(64);
+        END
+        $$;`,
+      ),
+    ).toContain(
+      "procedural/migration.sql: procedural type changes are not supported by the timeout safety policy",
+    );
   });
 
   test("bounds lock waits without interrupting acquired type changes", async () => {
