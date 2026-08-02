@@ -558,9 +558,9 @@ jobs:
       # dependencies, so it remains runnable when a PR changes only workflows
       # and the dependency install above is intentionally skipped.
       - name: Test release policy scripts
-        run: >-
-          bun test
-          scripts/check-api-deployment.test.ts
+        run: |
+          bun test scripts/check-api-deployment.test.ts
+          bash scripts/create-release-manifest.test.sh
 
       - name: Test maintenance release preparation
         if: needs.ci-changes.outputs.package_checks_required == 'true'

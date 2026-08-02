@@ -215,6 +215,7 @@ run_step "API release contract self-test" bun test \
   --preload ./apps/api/src/tests/setup-env.ts \
   scripts/check-api-cli-contract.test.ts \
   scripts/check-api-deployment.test.ts
+run_step "Release manifest self-test" bash scripts/create-release-manifest.test.sh
 run_step "Maintenance release preparation self-test" bun test \
   scripts/prepare-maintenance-release.property.test.ts
 run_step "Desktop-release-changes self-test" bash scripts/detect-desktop-release-changes.test.sh
