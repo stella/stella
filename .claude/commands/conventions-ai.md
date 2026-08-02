@@ -43,6 +43,10 @@ tool failures, persistence, and UI reconstruction from producing silent state lo
 - Model turn ownership explicitly. Pending user-input and approval tools own the
   turn until resolved; do not show autonomous follow-ups or drain queued messages
   while the chat is submitted, streaming, awaiting input, or in error recovery.
+- Treat a thread id as a protocol-ownership key. Two independently mounted chat
+  runtimes must not drive the same thread; surfaces that intentionally show one
+  conversation must share one runtime instance. Otherwise allocate a distinct
+  thread so tool continuation, retries, and persistence have one owner.
 
 ## Advertise only executable capabilities
 
@@ -74,6 +78,9 @@ tool failures, persistence, and UI reconstruction from producing silent state lo
   touched boundary supports them.
 - Assert unavailable capabilities are absent from both the final provider tool
   request and the assembled system prompt.
+- For artifact or file surfaces that spawn chat, assert the new surface has empty
+  history, a thread id distinct from its origin conversation, and a stable id
+  across streaming updates and rerenders.
 
 ## Review checklist
 

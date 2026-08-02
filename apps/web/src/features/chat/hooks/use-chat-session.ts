@@ -41,10 +41,10 @@ import {
 import { saveCreateDocumentDraft } from "@/components/chat/create-document-draft-runtime";
 import "@/components/chat/create-document-draft-inspector";
 import {
+  buildCreateDocumentDraftPayload,
   buildCreateDocumentDownloadFileName,
   CREATE_DOCUMENT_DRAFT_VIEW,
   createDocumentDraftTabId,
-  type CreateDocumentDraftPayload,
   isCreateDocumentDraftPayload,
   isSameCreateDocumentDraftPayload,
   selectCreateDocumentDrafts,
@@ -86,7 +86,7 @@ import type {
   ChatEditApplyMode,
   DocxEditRepresentation,
 } from "@/lib/chat-edit-mode";
-import type { ChatThreadRef } from "@/lib/chat-thread-ref";
+import { createChatThreadId, type ChatThreadRef } from "@/lib/chat-thread-ref";
 import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import {
@@ -274,28 +274,31 @@ export const useChatSession = ({
     const label = draft.name
       ? buildCreateDocumentDownloadFileName(draft.name)
       : t("chat.createDocument.headerStreaming");
-    const payload = {
-      chatThreadId: threadRef.threadId,
-      toolCallId: draft.toolCallId,
-      name: draft.name,
-      source: draft.source,
-      status: draft.status,
+    const existing = inspector.tabs.find((tab) => tab.id === id);
+    const payload = buildCreateDocumentDraftPayload({
+      createThreadId: createChatThreadId,
+      draft,
+      existingPayload:
+        existing?.type === "view" &&
+        existing.viewType === CREATE_DOCUMENT_DRAFT_VIEW
+          ? existing.payload
+          : undefined,
+      originChatThreadId: threadRef.threadId,
       ...(threadRef.scope === "workspace"
         ? { workspaceId: threadRef.workspaceId }
         : {}),
-    } satisfies CreateDocumentDraftPayload;
+    });
     for (const tab of inspector.tabs) {
       if (
         tab.id !== id &&
         tab.type === "view" &&
         tab.viewType === CREATE_DOCUMENT_DRAFT_VIEW &&
         isCreateDocumentDraftPayload(tab.payload) &&
-        tab.payload.chatThreadId === threadRef.threadId
+        tab.payload.originChatThreadId === threadRef.threadId
       ) {
         inspector.closeTab(tab.id);
       }
     }
-    const existing = inspector.tabs.find((tab) => tab.id === id);
     if (existing !== undefined) {
       if (
         existing.type === "view" &&

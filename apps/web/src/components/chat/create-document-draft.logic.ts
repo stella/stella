@@ -8,6 +8,7 @@ type CreateDocumentInput = ChatUITools["create-document"]["input"];
 export const CREATE_DOCUMENT_DRAFT_VIEW = "create-document-draft";
 
 export type CreateDocumentDraftPayload = {
+  originChatThreadId: ChatThreadId;
   chatThreadId: ChatThreadId;
   toolCallId: string;
   name: string;
@@ -28,8 +29,11 @@ export const isCreateDocumentDraftPayload = (
   return (
     "toolCallId" in payload &&
     typeof payload.toolCallId === "string" &&
+    "originChatThreadId" in payload &&
+    typeof payload.originChatThreadId === "string" &&
     "chatThreadId" in payload &&
     typeof payload.chatThreadId === "string" &&
+    payload.chatThreadId !== payload.originChatThreadId &&
     "name" in payload &&
     typeof payload.name === "string" &&
     "source" in payload &&
@@ -45,6 +49,7 @@ export const isSameCreateDocumentDraftPayload = (
 ): boolean =>
   isCreateDocumentDraftPayload(left) &&
   left.toolCallId === right.toolCallId &&
+  left.originChatThreadId === right.originChatThreadId &&
   left.chatThreadId === right.chatThreadId &&
   left.name === right.name &&
   left.source === right.source &&
@@ -61,6 +66,42 @@ export type CreateDocumentDraft = {
   name: string;
   source: string;
   status: "streaming" | "ready";
+};
+
+type BuildCreateDocumentDraftPayloadOptions = {
+  createThreadId: () => ChatThreadId;
+  draft: CreateDocumentDraft;
+  existingPayload: unknown;
+  originChatThreadId: ChatThreadId;
+  workspaceId?: string | undefined;
+};
+
+export const buildCreateDocumentDraftPayload = ({
+  createThreadId,
+  draft,
+  existingPayload,
+  originChatThreadId,
+  workspaceId,
+}: BuildCreateDocumentDraftPayloadOptions): CreateDocumentDraftPayload => {
+  let chatThreadId =
+    isCreateDocumentDraftPayload(existingPayload) &&
+    existingPayload.originChatThreadId === originChatThreadId &&
+    existingPayload.toolCallId === draft.toolCallId
+      ? existingPayload.chatThreadId
+      : createThreadId();
+  while (chatThreadId === originChatThreadId) {
+    chatThreadId = createThreadId();
+  }
+
+  return {
+    originChatThreadId,
+    chatThreadId,
+    toolCallId: draft.toolCallId,
+    name: draft.name,
+    source: draft.source,
+    status: draft.status,
+    ...(workspaceId === undefined ? {} : { workspaceId }),
+  };
 };
 
 const isReadyDraftOutput = (

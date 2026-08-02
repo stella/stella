@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  buildCreateDocumentDraftPayload,
   buildCreateDocumentDownloadFileName,
+  isCreateDocumentDraftPayload,
   isSameCreateDocumentDraftPayload,
   normalizeCreateDocumentInput,
   selectCreateDocumentDrafts,
@@ -138,7 +140,8 @@ describe("create-document drafts", () => {
 
   test("recognizes an unchanged inspector payload", () => {
     const payload = {
-      chatThreadId: toChatThreadId("thread-1"),
+      originChatThreadId: toChatThreadId("thread-origin"),
+      chatThreadId: toChatThreadId("thread-draft"),
       toolCallId: "tool-1",
       name: "Purchase agreement",
       source: "@doc kind=agreement locale=en page=A4",
@@ -153,6 +156,54 @@ describe("create-document drafts", () => {
         { ...payload, source: `${payload.source}\n@title Changed` },
         payload,
       ),
+    ).toBe(false);
+  });
+
+  test("gives the draft overlay a fresh stable thread", () => {
+    const originChatThreadId = toChatThreadId("thread-origin");
+    const draftChatThreadId = toChatThreadId("thread-draft");
+    const generatedThreadIds = [originChatThreadId, draftChatThreadId];
+    let generatedIndex = 0;
+    const createThreadId = () =>
+      generatedThreadIds.at(generatedIndex++) ?? draftChatThreadId;
+    const draft = {
+      toolCallId: "tool-1",
+      name: "Power of attorney",
+      source: "@doc kind=other locale=en page=A4",
+      status: "streaming",
+    } as const;
+
+    const initial = buildCreateDocumentDraftPayload({
+      createThreadId,
+      draft,
+      existingPayload: undefined,
+      originChatThreadId,
+    });
+
+    expect(initial.originChatThreadId).toBe(originChatThreadId);
+    expect(initial.chatThreadId).toBe(draftChatThreadId);
+    expect(initial.chatThreadId).not.toBe(initial.originChatThreadId);
+    expect(generatedIndex).toBe(2);
+
+    const updated = buildCreateDocumentDraftPayload({
+      createThreadId: () => toChatThreadId("unexpected-thread"),
+      draft: {
+        ...draft,
+        source: `${draft.source}\n@title Power of attorney`,
+        status: "ready",
+      },
+      existingPayload: initial,
+      originChatThreadId,
+    });
+
+    expect(updated.chatThreadId).toBe(draftChatThreadId);
+    expect(updated.source).toContain("@title Power of attorney");
+    expect(isCreateDocumentDraftPayload(updated)).toBe(true);
+    expect(
+      isCreateDocumentDraftPayload({
+        ...updated,
+        chatThreadId: originChatThreadId,
+      }),
     ).toBe(false);
   });
 
