@@ -21,6 +21,7 @@ const TYPE_CHANGE_CLAUSE =
   /\bALTER\s+(?:COLUMN\s+)?(?:(?:U&)?"(?:""|[^"])+"(?:\s+UESCAPE\s+'(?:''|[^'])*')?|[A-Z_\u0080-\u{10FFFF}][A-Z0-9_$\u0080-\u{10FFFF}]*)\s+(?:SET\s+DATA\s+)?TYPE\b/giu;
 const TRANSACTION_REVERSAL =
   /^(?:ABORT|ROLLBACK|SAVEPOINT|RELEASE\s+SAVEPOINT)\b/iu;
+const PROCEDURAL_TIMEOUT_REFERENCE = /\b(?:statement|lock)_timeout\b/iu;
 const TYPE_CHANGE_POLICY = {
   boundedRewrite: "stella-migration-safety: bounded-type-rewrite",
   metadataOnly: "stella-migration-safety: metadata-only-type-change",
@@ -394,8 +395,19 @@ const parseTypeChangePolicy = (
 };
 
 const isCustomStatementBudget = (statement: string) =>
-  /^DO\s+\$\$[\s\S]*SELECT\s+setting::integer\s+INTO\s+current_ms\s+FROM\s+pg_settings\s+WHERE\s+name\s*=\s*'statement_timeout';[\s\S]*IF\s+current_ms\s*=\s*0\s+OR\s+current_ms\s*<\s*1200000\s+THEN[\s\S]*PERFORM\s+set_config\(\s*'statement_timeout'\s*,\s*'20min'\s*,\s*false\s*\);[\s\S]*END[\s\S]*\$\$$/iu.test(
+  /^DO\s+\$\$\s*DECLARE\s+current_ms\s+integer\s*;\s*BEGIN\s+SELECT\s+setting::integer\s+INTO\s+current_ms\s+FROM\s+pg_settings\s+WHERE\s+name\s*=\s*'statement_timeout'\s*;\s*IF\s+current_ms\s*=\s*0\s+OR\s+current_ms\s*<\s*1200000\s+THEN\s+PERFORM\s+set_config\(\s*'statement_timeout'\s*,\s*'20min'\s*,\s*false\s*\)\s*;\s*END\s+IF\s*;\s*END\s*\$\$$/iu.test(
     statement,
+  );
+
+const isUnsupportedProceduralTimeoutMutation = (
+  relativePath: string,
+  statement: string,
+) =>
+  /^DO\b/iu.test(statement) &&
+  PROCEDURAL_TIMEOUT_REFERENCE.test(statement) &&
+  !(
+    CUSTOM_BOUNDED_TYPE_CHANGE_MIGRATIONS.has(relativePath) &&
+    isCustomStatementBudget(statement)
   );
 
 const collectUnsafeConcurrentTimeouts = (
@@ -413,6 +425,12 @@ const collectUnsafeConcurrentTimeouts = (
   let lockTimeoutRequiresRestore = false;
 
   for (const statement of splitSqlStatements(source)) {
+    if (isUnsupportedProceduralTimeoutMutation(relativePath, statement)) {
+      violations.push(
+        `${relativePath}: procedural timeout mutations are not supported`,
+      );
+      continue;
+    }
     const timeoutUpdate = parseTimeoutUpdate(statement);
     const isConcurrentOperation = CONCURRENT_INDEX_OPERATION.test(statement);
     const isUnsupportedTransactionReversal =
@@ -622,6 +640,12 @@ const collectUnsafeTypeChangesInMigration = (
     if (TRANSACTION_REVERSAL.test(statement)) {
       violations.push(
         `${relativePath}: timeout safety does not support transaction reversal`,
+      );
+      continue;
+    }
+    if (isUnsupportedProceduralTimeoutMutation(relativePath, statement)) {
+      violations.push(
+        `${relativePath}: procedural timeout mutations are not supported`,
       );
       continue;
     }
@@ -1133,6 +1157,38 @@ SELECT 1;`;
     );
   });
 
+  test("rejects timeout mutations hidden in procedural blocks", () => {
+    const mutation = `DO $$
+    BEGIN
+      PERFORM set_config('lock_timeout', '0', false);
+    END
+    $$;`;
+
+    expect(
+      collectUnsafeConcurrentTimeouts(
+        "concurrent/migration.sql",
+        `SET statement_timeout = 0;
+        ${mutation}
+        CREATE INDEX CONCURRENTLY example_idx ON example (id);
+        SET statement_timeout = '5s';`,
+      ),
+    ).toContain(
+      "concurrent/migration.sql: procedural timeout mutations are not supported",
+    );
+    expect(
+      collectUnsafeTypeChangesInMigration(
+        "type-change/migration.sql",
+        `SET lock_timeout = '1s';
+        SET statement_timeout = '5s';
+        ${mutation}
+        -- ${TYPE_CHANGE_POLICY.boundedRewrite}
+        ALTER TABLE example ALTER COLUMN value TYPE timestamptz;`,
+      ),
+    ).toContain(
+      "type-change/migration.sql: procedural timeout mutations are not supported",
+    );
+  });
+
   test("keeps lock waits bounded for custom execution budgets", () => {
     const relativePath = "20260729150000_timestamptz_everywhere/migration.sql";
     for (const timeoutSetup of [
@@ -1189,6 +1245,20 @@ SELECT 1;`;
       ),
     ).toContain(
       `${relativePath}: custom type rewrite lacks its bounded execution budget`,
+    );
+    const budgetWithExtraMutation = customStatementBudget.replace(
+      "END IF;",
+      "END IF; PERFORM set_config('statement_timeout', '0', false);",
+    );
+    expect(
+      collectUnsafeTypeChangesInMigration(
+        relativePath,
+        `SET lock_timeout = '1s';
+        ${budgetWithExtraMutation}
+        ${typeChange}`,
+      ),
+    ).toContain(
+      `${relativePath}: procedural timeout mutations are not supported`,
     );
   });
 
