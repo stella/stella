@@ -38,8 +38,18 @@ export const MAX_PROPS = 100;
 /** Tool names must match this (spec S5.5 rule 2). */
 export const TOOL_NAME_PATTERN: RegExp = /^[a-z][a-z0-9_]{0,63}$/u;
 
-/** The only annotation hints a fetched listing may carry (spec S5.5 rule 2). */
+/**
+ * Longest display title a fetched listing may carry, in UTF-16 code units
+ * (spec S5.5 rule 2). Deliberately the same unit `String.length` measures and
+ * the server clamps by, and the stricter of the two possible readings: a
+ * bound in code points would accept up to twice as many units for
+ * astral-heavy strings.
+ */
+export const MAX_TOOL_TITLE_CHARS = 64;
+
+/** The only annotation keys a fetched listing may carry (spec S5.5 rule 2). */
 const ALLOWED_ANNOTATION_KEYS: ReadonlySet<string> = new Set([
+  "title",
   "readOnlyHint",
   "destructiveHint",
   "idempotentHint",
@@ -268,7 +278,7 @@ const walkSchema = (schema: unknown, depth: number): string | undefined => {
   return undefined;
 };
 
-/** Validate the `annotations` field to the two known boolean hints (rule 2). */
+/** Validate the `annotations` field to the known keys (rule 2). */
 const annotationsViolation = (annotations: unknown): string | undefined => {
   if (annotations === undefined) {
     return undefined;
@@ -279,6 +289,15 @@ const annotationsViolation = (annotations: unknown): string | undefined => {
   for (const [key, value] of Object.entries(annotations)) {
     if (!ALLOWED_ANNOTATION_KEYS.has(key)) {
       return `annotations has an unknown key '${key}'`;
+    }
+    if (key === "title") {
+      if (typeof value !== "string") {
+        return "annotations.title must be a string";
+      }
+      if (value.length > MAX_TOOL_TITLE_CHARS) {
+        return `annotations.title longer than ${MAX_TOOL_TITLE_CHARS}`;
+      }
+      continue;
     }
     if (typeof value !== "boolean") {
       return `annotations.${key} must be a boolean`;
@@ -299,11 +318,15 @@ const projectListing = (
     return { name, description, inputSchema };
   }
   const annotations: {
+    title?: string;
     readOnlyHint?: boolean;
     destructiveHint?: boolean;
     idempotentHint?: boolean;
     openWorldHint?: boolean;
   } = {};
+  if (typeof rawAnnotations["title"] === "string") {
+    annotations.title = rawAnnotations["title"];
+  }
   if (typeof rawAnnotations["readOnlyHint"] === "boolean") {
     annotations.readOnlyHint = rawAnnotations["readOnlyHint"];
   }

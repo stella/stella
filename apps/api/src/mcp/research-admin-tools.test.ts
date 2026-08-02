@@ -273,7 +273,7 @@ describe("manage_organization remove_member confirm gate", () => {
     // The remove_member gate is action-level inside the handler instead. (It
     // does carry the behavioural idempotent/open-world hints like every write
     // tool; only destructiveHint drives the central gate.)
-    expect(def?.annotations?.destructiveHint).not.toBe(true);
+    expect(def?.annotations.destructiveHint).not.toBe(true);
   });
 
   test("remove_member without confirm is refused with confirmation_required", async () => {

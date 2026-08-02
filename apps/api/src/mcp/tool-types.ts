@@ -98,7 +98,15 @@ export type McpToolDefinition = {
    * be advertised or called with only one half of their consent contract.
    */
   additionalScopes?: readonly ToolScope[];
-  annotations?: McpTool["annotations"];
+  /**
+   * MCP client-hint annotations. Required, and `title` is required within it
+   * (no default), so a new tool cannot land without a human-readable display
+   * name; clients render `title` in tool listings and consent prompts where
+   * the `verb_noun` wire name would read poorly. The behavioural hints stay
+   * optional; the registry-quality suite enforces their coherence and the
+   * title style.
+   */
+  annotations: NonNullable<McpTool["annotations"]> & { title: string };
   anonymized: McpAnonymizedPolicy;
   description: string;
   /**

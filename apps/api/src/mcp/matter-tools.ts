@@ -244,7 +244,11 @@ export const MATTER_TOOL_DEFINITIONS = [
         ),
       },
     },
-    annotations: { idempotentHint: false, openWorldHint: false },
+    annotations: {
+      title: "Save matter",
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
     name: "save_matter",
@@ -252,6 +256,7 @@ export const MATTER_TOOL_DEFINITIONS = [
   },
   {
     annotations: {
+      title: "Delete matter",
       destructiveHint: true,
       idempotentHint: true,
       openWorldHint: false,
@@ -273,7 +278,11 @@ export const MATTER_TOOL_DEFINITIONS = [
     scope: "stella:matters_write",
   },
   {
-    annotations: { readOnlyHint: true, openWorldHint: false },
+    annotations: {
+      title: "List contacts",
+      readOnlyHint: true,
+      openWorldHint: false,
+    },
     description:
       "List or search the organization's internal contact directory. Returns " +
       "internal contact IDs accepted by read_contact, save_contact, and " +
@@ -328,7 +337,11 @@ export const MATTER_TOOL_DEFINITIONS = [
         notes: nullableStringProp("Free-text notes; pass null to clear"),
       },
     },
-    annotations: { idempotentHint: false, openWorldHint: false },
+    annotations: {
+      title: "Save contact",
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
     name: "save_contact",
@@ -336,6 +349,7 @@ export const MATTER_TOOL_DEFINITIONS = [
   },
   {
     annotations: {
+      title: "Delete contact",
       destructiveHint: true,
       idempotentHint: true,
       openWorldHint: false,
@@ -358,7 +372,11 @@ export const MATTER_TOOL_DEFINITIONS = [
     scope: "stella:matters_write",
   },
   {
-    annotations: { readOnlyHint: true, openWorldHint: true },
+    annotations: {
+      title: "Look up business registry",
+      readOnlyHint: true,
+      openWorldHint: true,
+    },
     description:
       "Look up a company in a public business register (ARES, Brreg, " +
       "Companies House, EDGAR, GCIS, KRS, ORSR, PRH, recherche-entreprises, " +
@@ -388,7 +406,11 @@ export const MATTER_TOOL_DEFINITIONS = [
     scope: "stella:read",
   },
   {
-    annotations: { readOnlyHint: true, openWorldHint: false },
+    annotations: {
+      title: "List tasks",
+      readOnlyHint: true,
+      openWorldHint: false,
+    },
     description:
       "List tasks in a matter, or read one task in detail. Pass task_id to " +
       "get a single task's fields, assignees, and linked entities. Otherwise " +
@@ -469,7 +491,11 @@ export const MATTER_TOOL_DEFINITIONS = [
         unlink_link_id: stringProp("Entity-link ID to remove"),
       },
     },
-    annotations: { idempotentHint: false, openWorldHint: false },
+    annotations: {
+      title: "Save task",
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
     name: "save_task",
@@ -501,7 +527,11 @@ export const MATTER_TOOL_DEFINITIONS = [
       },
       required: ["matter_id"],
     },
-    annotations: { idempotentHint: false, openWorldHint: false },
+    annotations: {
+      title: "Link contact to matter",
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
     name: "link_matter_contact",

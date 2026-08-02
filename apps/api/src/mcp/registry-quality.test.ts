@@ -73,6 +73,16 @@ const TOOL_DESCRIPTION_CHAR_CEILING = 810;
 // verb_noun style: lowercase words joined by single underscores.
 const TOOL_NAME_PATTERN = /^[a-z]+(?:_[a-z]+)*$/u;
 
+// Display titles: start with an uppercase letter, end without a period or
+// whitespace, and contain at least one lowercase letter (sentence case, not
+// shouting; the lowercase check lives in the test since a regex cannot say
+// "not fully uppercase" readably). Internal punctuation is allowed. The
+// 40-char product cap sits under the CLI trust boundary's 64-unit wire cap
+// (MAX_TOOL_TITLE_CHARS in packages/cli/src/registry-trust.ts), so every
+// title the registry can emit is also one a fetched listing would accept.
+const TOOL_TITLE_MAX_CHARS = 40;
+const TOOL_TITLE_PATTERN = /^[A-Z].*[^.\s]$/u;
+
 describe.each([...SURFACES])(
   "MCP registry quality ($mode surface)",
   ({ mode, definitions }) => {
@@ -106,6 +116,30 @@ describe.each([...SURFACES])(
     test("tool names follow verb_noun naming", () => {
       for (const tool of definitions) {
         expect(tool.name).toMatch(TOOL_NAME_PATTERN);
+      }
+    });
+
+    test("tool titles are unique, sentence-case display names", () => {
+      const seen = new Map<string, string>();
+      for (const tool of definitions) {
+        const title = tool.annotations.title;
+        expect(title, `Tool ${tool.name} title "${title}"`).toMatch(
+          TOOL_TITLE_PATTERN,
+        );
+        expect(
+          title,
+          `Tool ${tool.name} title "${title}" is fully uppercase`,
+        ).not.toBe(title.toUpperCase());
+        expect(
+          title.length,
+          `Tool ${tool.name} title is ${title.length} chars`,
+        ).toBeLessThanOrEqual(TOOL_TITLE_MAX_CHARS);
+        const holder = seen.get(title);
+        expect(
+          holder,
+          `Tools ${holder} and ${tool.name} share the title "${title}"`,
+        ).toBeUndefined();
+        seen.set(title, tool.name);
       }
     });
 
@@ -165,7 +199,7 @@ describe("MCP registry access coherence", () => {
     for (const tool of defaultTools) {
       if (tool.access === "write") {
         expect(
-          tool.annotations?.readOnlyHint,
+          tool.annotations.readOnlyHint,
           `Tool ${tool.name} is access: "write" but carries readOnlyHint`,
         ).not.toBe(true);
       }
@@ -174,7 +208,7 @@ describe("MCP registry access coherence", () => {
 
   test('destructiveHint tools are always access: "write"', () => {
     for (const tool of defaultTools) {
-      if (tool.annotations?.destructiveHint) {
+      if (tool.annotations.destructiveHint) {
         expect(
           tool.access,
           `Tool ${tool.name} carries destructiveHint but is not access: "write"`,
@@ -229,7 +263,7 @@ describe("MCP registry annotation coherence", () => {
   test("every tool declares openWorldHint explicitly (boolean)", () => {
     for (const tool of defaultTools) {
       expect(
-        typeof tool.annotations?.openWorldHint,
+        typeof tool.annotations.openWorldHint,
         `Tool ${tool.name} must declare annotations.openWorldHint explicitly`,
       ).toBe("boolean");
     }
@@ -241,7 +275,7 @@ describe("MCP registry annotation coherence", () => {
         continue;
       }
       expect(
-        typeof tool.annotations?.idempotentHint,
+        typeof tool.annotations.idempotentHint,
         `Tool ${tool.name} is access: "write" but does not declare annotations.idempotentHint`,
       ).toBe("boolean");
     }
@@ -253,7 +287,7 @@ describe("MCP registry annotation coherence", () => {
         continue;
       }
       expect(
-        tool.annotations?.idempotentHint,
+        tool.annotations.idempotentHint,
         `Tool ${tool.name} is access: "read"; idempotentHint is meaningless and must be omitted`,
       ).toBeUndefined();
     }
@@ -265,7 +299,7 @@ describe("MCP registry annotation coherence", () => {
         continue;
       }
       expect(
-        tool.annotations?.idempotentHint,
+        tool.annotations.idempotentHint,
         `Tool ${tool.name} is a delete_* tool and must be idempotentHint true`,
       ).toBe(true);
     }
@@ -281,10 +315,13 @@ describe("MCP registry annotation coherence", () => {
         source,
         `Anonymized tool ${tool.name} has no default-surface counterpart`,
       ).toBeDefined();
+      if (!source) {
+        continue;
+      }
       expect(
         tool.annotations,
         `Anonymized tool ${tool.name} annotations diverge from the default surface`,
-      ).toEqual(source?.annotations);
+      ).toEqual(source.annotations);
     }
   });
 });
@@ -393,7 +430,7 @@ describe("destructive write-tool naming convention", () => {
 
   test("every destructiveHint write tool is named delete_*", () => {
     const offenders = writeTools
-      .filter((tool) => tool.annotations?.destructiveHint === true)
+      .filter((tool) => tool.annotations.destructiveHint === true)
       .filter((tool) => !tool.name.startsWith("delete_"))
       .map((tool) => tool.name);
     expect(offenders).toEqual([]);
@@ -402,7 +439,7 @@ describe("destructive write-tool naming convention", () => {
   test("every delete_* write tool carries destructiveHint", () => {
     const offenders = writeTools
       .filter((tool) => tool.name.startsWith("delete_"))
-      .filter((tool) => tool.annotations?.destructiveHint !== true)
+      .filter((tool) => tool.annotations.destructiveHint !== true)
       .map((tool) => tool.name);
     expect(offenders).toEqual([]);
   });

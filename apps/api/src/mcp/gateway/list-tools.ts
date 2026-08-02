@@ -145,9 +145,13 @@ export const listGatewayMcpToolDefinitions = async ({
       const { readOnlyHint } = tool.cachedTool;
       definitions.push({
         access: externalMcpToolAccess(readOnlyHint),
-        ...(readOnlyHint === undefined
-          ? {}
-          : { annotations: { readOnlyHint } }),
+        annotations: {
+          title: externalToolTitle({
+            connectorDisplayName: tool.connectorDisplayName,
+            rawName: tool.cachedTool.rawName,
+          }),
+          ...(readOnlyHint === undefined ? {} : { readOnlyHint }),
+        },
         anonymized: DYNAMIC_GATEWAY_ANONYMIZED,
         description: externalToolDescription({
           connectorDisplayName: tool.connectorDisplayName,
@@ -164,7 +168,10 @@ export const listGatewayMcpToolDefinitions = async ({
     for (const skill of await loadVisibleSkillTools({ context })) {
       definitions.push({
         access: "read",
-        annotations: { readOnlyHint: true },
+        annotations: {
+          title: toDynamicToolTitle(skill.name) || skill.exposedName,
+          readOnlyHint: true,
+        },
         anonymized: DYNAMIC_GATEWAY_ANONYMIZED,
         description: skill.description,
         inputSchema: {
@@ -206,13 +213,15 @@ export const getGatewayMcpToolDefinition = async ({
 
     return {
       access: externalMcpToolAccess(externalTool.cachedTool.readOnlyHint),
-      ...(externalTool.cachedTool.readOnlyHint === undefined
-        ? {}
-        : {
-            annotations: {
-              readOnlyHint: externalTool.cachedTool.readOnlyHint,
-            },
-          }),
+      annotations: {
+        title: externalToolTitle({
+          connectorDisplayName: externalTool.connectorDisplayName,
+          rawName: externalTool.cachedTool.rawName,
+        }),
+        ...(externalTool.cachedTool.readOnlyHint === undefined
+          ? {}
+          : { readOnlyHint: externalTool.cachedTool.readOnlyHint }),
+      },
       anonymized: DYNAMIC_GATEWAY_ANONYMIZED,
       description: externalToolDescription({
         connectorDisplayName: externalTool.connectorDisplayName,
@@ -235,7 +244,10 @@ export const getGatewayMcpToolDefinition = async ({
 
   return {
     access: "read",
-    annotations: { readOnlyHint: true },
+    annotations: {
+      title: toDynamicToolTitle(skill.name) || skill.exposedName,
+      readOnlyHint: true,
+    },
     anonymized: DYNAMIC_GATEWAY_ANONYMIZED,
     description: skill.description,
     inputSchema: {
@@ -251,11 +263,69 @@ export const getGatewayMcpToolDefinition = async ({
 export const toMcpTools = (
   definitions: readonly McpToolDefinition[],
 ): McpTool[] =>
-  definitions.map(({ annotations, description, inputSchema, name }) =>
-    annotations === undefined
-      ? { description, inputSchema, name }
-      : { annotations, description, inputSchema, name },
-  );
+  definitions.map(({ annotations, description, inputSchema, name }) => ({
+    annotations,
+    description,
+    inputSchema,
+    name,
+  }));
+
+// Display title for a dynamically-gated tool. External connectors and skills
+// carry human names already; clamp to the CLI trust boundary's 64-char wire
+// cap (MAX_TOOL_TITLE_CHARS in packages/cli/src/registry-trust.ts) so a long
+// connector or skill name cannot make the served listing fail a client's
+// fetched-registry validation.
+const DYNAMIC_TOOL_TITLE_MAX_CHARS = 64;
+
+// The budget counts UTF-16 units (that is what the trust boundary measures),
+// but the cut advances by code point so a boundary can never emit a lone
+// surrogate.
+const clampTitle = (raw: string, maxUnits: number): string => {
+  const trimmed = raw.trim();
+  if (trimmed.length <= maxUnits) {
+    return trimmed;
+  }
+  let clamped = "";
+  for (const point of trimmed) {
+    if (clamped.length + point.length > maxUnits) {
+      break;
+    }
+    clamped += point;
+  }
+  return clamped.trimEnd();
+};
+
+const toDynamicToolTitle = (raw: string): string =>
+  clampTitle(raw, DYNAMIC_TOOL_TITLE_MAX_CHARS);
+
+// `<connector display name>: <upstream tool name>`, preferring the tool name:
+// connector display names can be far longer than the cap, and truncating the
+// combined string from the right would leave every tool of such a connector
+// with the same title. The distinguishing suffix keeps its budget first; the
+// display-name prefix gets whatever remains.
+const EXTERNAL_TITLE_SEPARATOR = ": ";
+
+const externalToolTitle = ({
+  connectorDisplayName,
+  rawName,
+}: {
+  connectorDisplayName: string;
+  rawName: string;
+}): string => {
+  const name = toDynamicToolTitle(rawName);
+  const displayBudget =
+    DYNAMIC_TOOL_TITLE_MAX_CHARS -
+    name.length -
+    EXTERNAL_TITLE_SEPARATOR.length;
+  if (displayBudget <= 0) {
+    return name;
+  }
+  const display = clampTitle(connectorDisplayName, displayBudget);
+  if (display.length === 0) {
+    return name;
+  }
+  return `${display}${EXTERNAL_TITLE_SEPARATOR}${name}`;
+};
 
 const externalToolDescription = ({
   connectorDisplayName,
