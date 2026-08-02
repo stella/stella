@@ -3470,7 +3470,6 @@
           "approvedBy": "Kinnitaja",
           "channel": "Kanal",
           "dateTime": "Kuupäev ja kellaaeg",
-          "direct": "Otsene tegevus",
           "eventId": "Sündmuse ID",
           "notAvailable": "Pole saadaval",
           "openTarget": "Ava üksus",

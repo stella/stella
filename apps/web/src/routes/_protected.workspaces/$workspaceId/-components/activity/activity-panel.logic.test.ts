@@ -7,6 +7,7 @@ import {
   activityDayKey,
   expandActivityGroupsForList,
   groupActivityItems,
+  resolveVisibleActivityTriggerType,
   resolveSelectedActivityGroup,
 } from "./activity-panel.logic";
 
@@ -53,6 +54,30 @@ const item = (
     type: "user_dispatch",
     user: null,
   },
+});
+
+describe("activity provenance", () => {
+  test("hides direct activity and retains exceptional trigger types", () => {
+    const triggerTypes = [
+      "direct",
+      "user_dispatch",
+      "agent_delegation",
+      "schedule",
+      "webhook",
+      "credential",
+      "system",
+    ] as const satisfies readonly MatterActivityItem["trigger"]["type"][];
+
+    expect(triggerTypes.map(resolveVisibleActivityTriggerType)).toEqual([
+      null,
+      "user_dispatch",
+      "agent_delegation",
+      "schedule",
+      "webhook",
+      "credential",
+      "system",
+    ]);
+  });
 });
 
 describe("groupActivityItems", () => {
