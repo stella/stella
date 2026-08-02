@@ -295,39 +295,44 @@ export const requestKey = ({
   pathname: string;
 }): string => `${method} ${normalizeApiPath(pathname)}`;
 
-// A dependency edge exists only when the next request starts PROMPTLY after
-// the previous response: real render-fetch waterfalls dispatch the next call
-// within milliseconds of the response that unblocked them. Without this cap,
-// an independent idle prefetch firing a second later would coincidentally
-// "chain" after whatever happened to finish before it, making the depth vary
-// with machine load instead of app structure.
-const CHAIN_GAP_MS = 500;
+// Requests launched within one browser scheduling burst belong to the same
+// round. Completion timestamps are deliberately excluded: timing alone cannot
+// prove that one response caused the next request, and a loaded runner can
+// serialize independent responses into an arbitrarily deep false waterfall.
+const REQUEST_BURST_MS = 50;
 
-// Longest chain r1..rn where each next request starts after the previous one
-// ended, within CHAIN_GAP_MS: the number of causally sequential request
-// rounds, i.e. how many times the browser had to wait for a response before
-// it could fire the next call. Sorted by start with an O(n^2) longest-chain
-// DP; n is a handful of requests per route.
+// A request launched after this quiet gap starts a new observation sequence,
+// not another route-load round. This excludes idle prefetches from the route's
+// longest contiguous burst sequence.
+const REQUEST_SEQUENCE_GAP_MS = 500;
+
+// Longest sequence of request-launch bursts. This is a stable lower bound on
+// user-visible request rounds: backend latency and response ordering cannot
+// change it, while a newly deferred request still creates another round.
 export const waterfallDepth = (
   intervals: { start: number; end: number }[],
 ): number => {
-  const sorted = intervals
-    .map((interval) => ({ ...interval, depth: 1 }))
-    .sort((a, b) => a.start - b.start);
+  const starts = intervals.map(({ start }) => start).sort((a, b) => a - b);
+  const firstStart = starts.at(0);
+  if (firstStart === undefined) {
+    return 0;
+  }
 
-  let best = 0;
-  for (const [index, current] of sorted.entries()) {
-    for (let prevIndex = 0; prevIndex < index; prevIndex++) {
-      const prev = sorted[prevIndex];
-      if (
-        prev !== undefined &&
-        current.start >= prev.end &&
-        current.start - prev.end <= CHAIN_GAP_MS
-      ) {
-        current.depth = Math.max(current.depth, prev.depth + 1);
-      }
+  let best = 1;
+  let currentDepth = 1;
+  let burstStartedAt = firstStart;
+  let previousStart = firstStart;
+
+  for (const start of starts.slice(1)) {
+    if (start - previousStart > REQUEST_SEQUENCE_GAP_MS) {
+      currentDepth = 1;
+      burstStartedAt = start;
+    } else if (start - burstStartedAt > REQUEST_BURST_MS) {
+      currentDepth += 1;
+      burstStartedAt = start;
     }
-    best = Math.max(best, current.depth);
+    previousStart = start;
+    best = Math.max(best, currentDepth);
   }
   return best;
 };
@@ -457,13 +462,6 @@ const pushNewRequestProblems = ({
   );
 };
 
-// Under load, independent PARALLEL requests can serialize just enough to land
-// inside CHAIN_GAP_MS and bump the measured depth by one with no change to
-// the request manifest (a quiet CI runner rarely reproduces this; a busy dev
-// machine does). Mirrors dbQueryAllowance's role: tolerate one level of
-// measurement jitter before treating a depth increase as a real regression.
-const DEPTH_JITTER_ALLOWANCE = 1;
-
 const pushWaterfallDepthProblems = ({
   route,
   entry,
@@ -475,11 +473,11 @@ const pushWaterfallDepthProblems = ({
   metrics: RouteNetworkMetrics;
   problems: string[];
 }) => {
-  if (metrics.depth <= entry.depth + DEPTH_JITTER_ALLOWANCE) {
+  if (metrics.depth <= entry.depth) {
     return;
   }
   problems.push(
-    `Request waterfall got deeper on ${route}: ${entry.depth} -> ${metrics.depth} (already tolerating +${DEPTH_JITTER_ALLOWANCE} for parallel-request jitter)\n` +
+    `Request waterfall got deeper on ${route}: ${entry.depth} -> ${metrics.depth}\n` +
       `  Each extra level is one more sequential network round the user waits\n` +
       `  through before the page can finish. Usually the fix is to start the\n` +
       `  query in the route loader (ensureRouteQueryData / prefetchRouteQuery in\n` +

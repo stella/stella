@@ -51,30 +51,29 @@ describe("waterfallDepth", () => {
     ).toBe(1);
   });
 
-  test("a strict chain is n rounds", () => {
+  test("distinct launch bursts are separate rounds", () => {
     expect(
       waterfallDepth([
-        { start: 0, end: 10 },
-        { start: 10, end: 20 },
-        { start: 20, end: 30 },
+        { start: 0, end: 75 },
+        { start: 75, end: 150 },
+        { start: 150, end: 225 },
       ]),
     ).toBe(3);
   });
 
-  test("mixed overlap counts only the sequential rounds", () => {
-    // Two parallel at the start, then one that waits for both.
+  test("mixed launch bursts count only distinct rounds", () => {
     expect(
       waterfallDepth([
-        { start: 0, end: 10 },
-        { start: 0, end: 12 },
-        { start: 12, end: 20 },
+        { start: 0, end: 100 },
+        { start: 2, end: 12 },
+        { start: 75, end: 100 },
       ]),
     ).toBe(2);
   });
 
   test("an independent late request does not chain", () => {
-    // Gap between the first response and the late request exceeds the causal
-    // window, so this is an idle prefetch, not a waterfall round.
+    // A quiet gap between launches makes this an idle prefetch, not another
+    // route-load round.
     expect(
       waterfallDepth([
         { start: 0, end: 10 },
@@ -83,15 +82,29 @@ describe("waterfallDepth", () => {
     ).toBe(1);
   });
 
-  test("a pending tail (end = now) extends the chain by one", () => {
-    const now = 1000;
-    expect(
-      waterfallDepth([
-        { start: 0, end: 10 },
-        { start: 10, end: 20 },
-        { start: 20, end: now },
-      ]),
-    ).toBe(3);
+  test("response-timing property cannot change launch rounds", () => {
+    const starts = [0, 2, 4, 75, 77, 150];
+    for (let seed = 1; seed <= 256; seed++) {
+      let state = seed;
+      const intervals = starts.map((start) => {
+        state = (state * 48_271) % 2_147_483_647;
+        return { start, end: start + (state % 1000) };
+      });
+      expect(waterfallDepth(intervals)).toBe(3);
+    }
+  });
+
+  test("interval order cannot change launch rounds", () => {
+    const intervals = [
+      { start: 0, end: 500 },
+      { start: 2, end: 10 },
+      { start: 75, end: 80 },
+      { start: 77, end: 90 },
+      { start: 150, end: 155 },
+    ];
+
+    expect(waterfallDepth(intervals)).toBe(3);
+    expect(waterfallDepth(intervals.toReversed())).toBe(3);
   });
 });
 
@@ -219,25 +232,12 @@ describe("diffNetworkBaseline", () => {
     expect(problems.some((p) => p.includes("GET /v1/contacts/:id"))).toBe(true);
   });
 
-  test("a waterfall within the jitter allowance passes", () => {
-    // baseline depth 2 + DEPTH_JITTER_ALLOWANCE (1) = 3: parallel-request
-    // serialization jitter under load, not a real regression.
+  test("a deeper waterfall is a problem", () => {
     const { problems } = diffNetworkBaseline(
       baseline,
       new Map([["/contacts", metrics(["GET /v1/contacts"], 3)]]),
     );
-    expect(problems).toEqual([]);
-  });
-
-  test("a waterfall beyond the jitter allowance is a problem", () => {
-    const { problems } = diffNetworkBaseline(
-      baseline,
-      new Map([["/contacts", metrics(["GET /v1/contacts"], 4)]]),
-    );
-    expect(problems.some((p) => p.includes("2 -> 4"))).toBe(true);
-    expect(problems.some((p) => p.includes("already tolerating +1"))).toBe(
-      true,
-    );
+    expect(problems.some((p) => p.includes("2 -> 3"))).toBe(true);
   });
 
   test("a repeated API request is a problem", () => {
