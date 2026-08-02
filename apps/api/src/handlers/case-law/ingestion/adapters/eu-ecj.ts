@@ -632,6 +632,70 @@ export const euEcjAdapter: SourceAdapter = {
   minRequestIntervalMs: 1000,
   pageTimeoutMs: ECJ_PAGE_TIMEOUT,
 
+  /**
+   * Counts (work, language) pairs under the same type and manifestation
+   * filters the page query uses, so the total is the exact universe this
+   * crawl can ever ingest — not Cellar's whole case-law class, which
+   * includes works with no XHTML manifestation that a crawl would never
+   * store.
+   */
+  async getTotalCount(signal) {
+    try {
+      const query = `
+PREFIX cdm: <http://publications.europa.eu/ontology/cdm#>
+SELECT (COUNT(*) AS ?n)
+WHERE {
+  SELECT DISTINCT ?doc ?language
+  WHERE {
+    ?doc cdm:case-law_ecli ?ecli .
+    ?doc a ?type .
+    ?expression cdm:expression_belongs_to_work ?doc .
+    ?expression cdm:expression_uses_language ?language .
+    ?manifestation cdm:manifestation_manifests_expression ?expression .
+    ?manifestation cdm:manifestation_type ?manifestationType .
+    FILTER(?type IN (
+      cdm:judgement,
+      cdm:order,
+      cdm:order_cjeu,
+      cdm:opinion_advocate_general,
+      cdm:opinion_advocate-general
+    ))
+    FILTER(STR(?manifestationType) = "xhtml")
+  }
+}`.trim();
+      const response = await fetchWithTimeout(SPARQL_URL, {
+        method: "POST",
+        signal,
+        timeoutMs: 60_000,
+        headers: {
+          Accept: "application/sparql-results+json",
+          "Content-Type": "application/x-www-form-urlencoded",
+          "User-Agent": INGESTION_USER_AGENT,
+        },
+        body: new URLSearchParams({ query }).toString(),
+      });
+      if (!response.ok) {
+        return null;
+      }
+      const json: unknown = await response.json();
+      if (!isRecord(json)) {
+        return null;
+      }
+      const results = json["results"];
+      if (!isRecord(results) || !Array.isArray(results["bindings"])) {
+        return null;
+      }
+      const binding: unknown = results["bindings"].at(0);
+      if (!isRecord(binding) || !isRecord(binding["n"])) {
+        return null;
+      }
+      const parsed = Number.parseInt(String(binding["n"]["value"]), 10);
+      return Number.isNaN(parsed) || parsed <= 0 ? null : parsed;
+    } catch {
+      return null;
+    }
+  },
+
   async fetchPage(cursor, _config, signal) {
     return await Result.tryPromise({
       try: async () => {
