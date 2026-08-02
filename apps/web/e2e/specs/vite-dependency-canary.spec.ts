@@ -1,3 +1,4 @@
+import type { Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 
 import { createUploadedDocumentRoute } from "../helpers/document";
@@ -32,6 +33,8 @@ test.describe("Vite dependency optimizer canary", () => {
   });
 
   test("cold lazy dependency graphs settle without restarting Vite", async ({
+    browserErrors,
+    context,
     page,
     request,
   }) => {
@@ -46,33 +49,67 @@ test.describe("Vite dependency optimizer canary", () => {
       workspace: testWorkspace,
     });
 
-    await page.goto("/chat", { waitUntil: "commit" });
-    await expect(
-      page.getByRole("textbox", { name: /type your question/iu }),
-    ).toBeVisible({ timeout: 30_000 });
+    const [threadPage, documentPage, autocompletePage] = await Promise.all([
+      context.newPage(),
+      context.newPage(),
+      context.newPage(),
+    ]);
+    const extraPages = [threadPage, documentPage, autocompletePage];
+    const detachErrorCollectors = extraPages.map((extraPage) =>
+      browserErrors.trackPage(extraPage),
+    );
 
-    // The thread route is a separate lazy chunk. A missing record is valid for
-    // this dependency check; the route deliberately supports an empty thread.
-    await page.goto(`/chat/${randomUUID()}`, { waitUntil: "commit" });
-    await expect(page.getByRole("log")).toBeVisible({ timeout: 30_000 });
-
-    // A direct document route mounts the Folio editor and file-chat overlay
-    // without repeating the production suite's table-navigation journey.
-    await page.goto(documentRoute.path, { waitUntil: "commit" });
-    await expect(
-      page.getByRole("toolbar", { name: "AI message composer" }),
-    ).toBeVisible({ timeout: 45_000 });
-    await expect(
-      page.locator(".layout-run-text", {
-        hasText: "Stella E2E test document.",
-      }),
-    ).toBeVisible({ timeout: 45_000 });
-
-    await page.goto("/dev/autocomplete", { waitUntil: "commit" });
-    await expect(
-      page.getByRole("heading", {
-        name: "stella autocomplete — dev playground",
-      }),
-    ).toBeVisible({ timeout: 30_000 });
+    try {
+      // These graphs are independent. Requesting them concurrently lets Vite
+      // compile shared modules once without serializing four cold route waits.
+      await Promise.all([
+        mountChatIndex(page),
+        mountChatThread(threadPage),
+        mountDocumentRoute(documentPage, documentRoute.path),
+        mountAutocomplete(autocompletePage),
+      ]);
+    } finally {
+      await Promise.all(extraPages.map(async (extraPage) => extraPage.close()));
+      for (const detach of detachErrorCollectors) {
+        detach();
+      }
+    }
   });
 });
+
+const mountChatIndex = async (page: Page): Promise<void> => {
+  await page.goto("/chat", { waitUntil: "commit" });
+  await expect(
+    page.getByRole("textbox", { name: /type your question/iu }),
+  ).toBeVisible({ timeout: 45_000 });
+};
+
+const mountChatThread = async (page: Page): Promise<void> => {
+  // The thread route is a separate lazy chunk. A missing record is valid for
+  // this dependency check; the route deliberately supports an empty thread.
+  await page.goto(`/chat/${randomUUID()}`, { waitUntil: "commit" });
+  await expect(page.getByRole("log")).toBeVisible({ timeout: 45_000 });
+};
+
+const mountDocumentRoute = async (page: Page, route: string): Promise<void> => {
+  // A direct document route mounts the Folio editor and file-chat overlay
+  // without repeating the production suite's table-navigation journey.
+  await page.goto(route, { waitUntil: "commit" });
+  await expect(
+    page.getByRole("toolbar", { name: "AI message composer" }),
+  ).toBeVisible({ timeout: 45_000 });
+  await expect(
+    page.locator(".layout-run-text", {
+      hasText: "Stella E2E test document.",
+    }),
+  ).toBeVisible({ timeout: 45_000 });
+};
+
+const mountAutocomplete = async (page: Page): Promise<void> => {
+  await page.goto("/dev/autocomplete", { waitUntil: "commit" });
+  await expect(
+    page.getByRole("heading", {
+      name: "stella autocomplete — dev playground",
+    }),
+  ).toBeVisible({ timeout: 45_000 });
+};
