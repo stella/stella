@@ -44,6 +44,27 @@ describe("DEFAULT_MODELS", () => {
       expect(DEFAULT_MODELS[provider]).toEqual(BYOK_DEFAULT_MODELS[provider]);
     }
   });
+
+  test("uses the recommended provider models for every role", () => {
+    expect(BYOK_DEFAULT_MODELS.google).toEqual({
+      fast: "gemini-3.6-flash",
+      chat: "gemini-3.6-flash",
+      reasoning: "gemini-3.6-flash",
+      pdf: "gemini-3.6-flash",
+    });
+    expect(BYOK_DEFAULT_MODELS.openrouter).toEqual({
+      fast: "openai/gpt-5.6-luna",
+      chat: "openai/gpt-5.6-terra",
+      reasoning: "openai/gpt-5.6-terra",
+      pdf: "openai/gpt-5.6-terra",
+    });
+    expect(BYOK_DEFAULT_MODELS.anthropic).toEqual({
+      fast: "claude-opus-5",
+      chat: "claude-opus-5",
+      reasoning: "claude-opus-5",
+      pdf: "claude-opus-5",
+    });
+  });
 });
 
 describe("BYOK_MODEL_OPTIONS", () => {
@@ -66,6 +87,8 @@ describe("BYOK_MODEL_OPTIONS", () => {
     expect(BYOK_MODEL_OPTIONS.anthropic).toContain("claude-sonnet-5");
     expect(BYOK_MODEL_OPTIONS.anthropic).toContain("claude-opus-5");
     expect(BYOK_MODEL_OPTIONS.openrouter).toContain("google/gemini-3.6-flash");
+    expect(BYOK_MODEL_OPTIONS.openrouter).toContain("openai/gpt-5.6-luna");
+    expect(BYOK_MODEL_OPTIONS.openrouter).toContain("openai/gpt-5.6-terra");
     expect(BYOK_MODEL_OPTIONS.openrouter).toContain("anthropic/claude-opus-5");
   });
 });
@@ -77,6 +100,9 @@ describe("BYOK provider role support", () => {
     );
     expect(BYOK_DOCUMENT_INPUT_MODEL_OPTIONS.openrouter).toContain(
       "google/gemini-3.6-flash",
+    );
+    expect(BYOK_DOCUMENT_INPUT_MODEL_OPTIONS.openrouter).toContain(
+      "openai/gpt-5.6-terra",
     );
     expect(BYOK_DOCUMENT_INPUT_MODEL_OPTIONS.bedrock).toContain(
       "us.amazon.nova-pro-v1:0",

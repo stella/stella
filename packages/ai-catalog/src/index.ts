@@ -117,16 +117,16 @@ export const FIRST_PARTY_MODEL_PROVIDERS: Exclude<
  */
 export const BYOK_DEFAULT_MODELS = {
   google: {
-    fast: "gemini-3.1-flash-lite",
+    fast: "gemini-3.6-flash",
     chat: "gemini-3.6-flash",
-    reasoning: "gemini-3.1-pro-preview",
+    reasoning: "gemini-3.6-flash",
     pdf: "gemini-3.6-flash",
   },
   openrouter: {
-    fast: "google/gemini-3.1-flash-lite",
-    chat: "google/gemini-3.6-flash",
-    reasoning: "google/gemini-3.1-pro-preview",
-    pdf: "google/gemini-3.6-flash",
+    fast: "openai/gpt-5.6-luna",
+    chat: "openai/gpt-5.6-terra",
+    reasoning: "openai/gpt-5.6-terra",
+    pdf: "openai/gpt-5.6-terra",
   },
   openai: {
     fast: "gpt-5.4-nano",
@@ -135,10 +135,10 @@ export const BYOK_DEFAULT_MODELS = {
     pdf: "gpt-5.4",
   },
   anthropic: {
-    fast: "claude-haiku-4-5-20251001",
-    chat: "claude-sonnet-4-6",
-    reasoning: "claude-sonnet-4-6",
-    pdf: "claude-sonnet-4-6",
+    fast: "claude-opus-5",
+    chat: "claude-opus-5",
+    reasoning: "claude-opus-5",
+    pdf: "claude-opus-5",
   },
   bedrock: {
     fast: "us.amazon.nova-micro-v1:0",
@@ -218,6 +218,8 @@ export const BYOK_MODEL_OPTIONS = {
     "gpt-5.2",
   ],
   openrouter: [
+    "openai/gpt-5.6-luna",
+    "openai/gpt-5.6-terra",
     "google/gemini-3.6-flash",
     "google/gemini-3.5-flash-lite",
     "google/gemini-3.1-pro-preview",
@@ -342,6 +344,8 @@ const STELLA_EXTENDED_DOCUMENT_INPUT_MODEL_OPTIONS = {
     "gpt-5.2",
   ],
   openrouter: [
+    "openai/gpt-5.6-luna",
+    "openai/gpt-5.6-terra",
     "google/gemini-3.6-flash",
     "google/gemini-3.5-flash-lite",
     "anthropic/claude-opus-5",
@@ -992,6 +996,8 @@ export const CONTEXT_WINDOW_TOKENS: Readonly<Record<string, number>> = {
   "anthropic/claude-opus-5": 1_000_000,
   "anthropic/claude-opus-4.8": 200_000,
   "anthropic/claude-sonnet-4.6": 200_000,
+  "openai/gpt-5.6-luna": 922_000,
+  "openai/gpt-5.6-terra": 922_000,
   "openai/gpt-5.5": 400_000,
   "openai/gpt-5.4-mini": 400_000,
   // AWS Bedrock IDs.
