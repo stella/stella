@@ -281,14 +281,22 @@ export const registerTanStackMockTextAdapterFactory = (
 };
 
 /**
- * Whether requests are actually served by the mock adapter. `USE_MOCK_AI` alone
- * is not enough: the factory is registered by a dev-only module, so a build
- * that never imports it falls through to a real provider with the flag still
- * set. Callers that shape a request differently for the mock must ask this, not
- * the env flag, or they will shape a real provider's request by mistake.
+ * The mock factory when it will actually serve requests, otherwise undefined.
+ * `USE_MOCK_AI` alone is not enough: the factory is registered by a dev-only
+ * module, so a build that never imports it falls through to a real provider
+ * with the flag still set.
+ */
+const activeMockTextAdapterFactory = ():
+  | TanStackTextAdapterFactory
+  | undefined => (env.USE_MOCK_AI ? mockTextAdapterFactory : undefined);
+
+/**
+ * Whether requests are actually served by the mock adapter. Callers that shape
+ * a request differently for the mock must ask this, not the env flag, or they
+ * will shape a real provider's request by mistake.
  */
 export const isMockTextAdapterActive = (): boolean =>
-  env.USE_MOCK_AI && mockTextAdapterFactory !== undefined;
+  activeMockTextAdapterFactory() !== undefined;
 
 const decodeModelOverride = (value: string): ModelOverride => {
   const [providerRaw, ...modelParts] = value.split("::");
@@ -556,8 +564,9 @@ const createTanStackTextAdapterFactory = ({
   apiKey,
   region,
 }: TanStackModelFactoryOptions): TanStackTextAdapterFactory => {
-  if (isMockTextAdapterActive()) {
-    return mockTextAdapterFactory;
+  const mockFactory = activeMockTextAdapterFactory();
+  if (mockFactory) {
+    return mockFactory;
   }
 
   const supportedProvider = resolveTanStackTextProvider({ provider, region });
