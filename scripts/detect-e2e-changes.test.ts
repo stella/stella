@@ -102,6 +102,8 @@ describe("detect-e2e-changes", () => {
     expect(canary).not.toContain("E2E_EXECUTION_PROFILE");
     expect(canary).not.toContain("Build web for route checks");
     expect(canary).not.toContain("Run Playwright shard");
+    expect(canary).toContain("e2e/specs/vite-dependency-canary.spec.ts");
+    expect(canary).not.toContain("--grep @dev-canary");
 
     const landing = workflowJob("e2e-landing");
     expect(landing).not.toContain("Start docker stack");

@@ -1333,7 +1333,8 @@ jobs:
           PLAYWRIGHT_BLOB_OUTPUT_NAME: report-vite-canary.zip
         run: >-
           bun --filter @stll/web test:e2e --
-          --project chromium --grep @dev-canary
+          e2e/specs/vite-dependency-canary.spec.ts
+          --project chromium
 
       # These imports load only through cold lazy routes; a mid-test optimizer
       # restart would make the apparent canary result nondeterministic.

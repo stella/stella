@@ -13,7 +13,8 @@ import {
   partitionRoundRobin,
   resolveE2eExecutionProfile,
 } from "../execution-profile";
-import { apiDelete, apiGet, apiPut, apiUploadDocx } from "../helpers/api";
+import { apiDelete, apiPut } from "../helpers/api";
+import { createUploadedDocumentRoute } from "../helpers/document";
 import {
   type RouteNetworkMetrics,
   assertNetworkBaseline,
@@ -42,9 +43,6 @@ const DEFAULT_SETTLE_MS = 1000;
 const REPO_ROOT = path.resolve(import.meta.dirname, "../../../..");
 const STORAGE_STATE = path.resolve(REPO_ROOT, ".playwright/storage-state.json");
 
-const DOCX_MIME =
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-const DOCX_PATH = path.resolve(import.meta.dirname, "../fixtures/simple.docx");
 const ROUTE_TREE_PATH = path.resolve(
   import.meta.dirname,
   "../../src/routeTree.gen.ts",
@@ -263,7 +261,11 @@ const declareRouteSmokeGroup = ({
       createdWorkspace = workspace;
       const contactId = await createContact(apiRequest);
       createdContactId = contactId;
-      const documentRoute = await createDocumentRoute(apiRequest, workspace);
+      const documentRoute = await createUploadedDocumentRoute({
+        fileName: "route-smoke.docx",
+        request: apiRequest,
+        workspace,
+      });
       world = { workspace, contactId, documentRoute };
     });
 
@@ -379,47 +381,6 @@ const createContact = async (request: APIRequestContext): Promise<string> => {
   });
 
   return contactId;
-};
-
-const createDocumentRoute = async (
-  request: APIRequestContext,
-  workspace: TestWorkspace,
-): Promise<{ entityId: string; path: string }> => {
-  const docxBuffer = await readFile(DOCX_PATH);
-  const uploaded = await apiUploadDocx(
-    request,
-    workspace.id,
-    workspace.filePropertyId,
-    {
-      name: "route-smoke.docx",
-      mimeType: DOCX_MIME,
-      buffer: docxBuffer,
-    },
-  );
-
-  const entity = await apiGet<{
-    fields?: {
-      id: string;
-      propertyId: string;
-      content: { type: string };
-    }[];
-  }>(request, `/entities/${workspace.id}/entity/${uploaded.entityId}`);
-
-  const fileField = entity.fields?.find(
-    (field) =>
-      field.propertyId === workspace.filePropertyId &&
-      field.content.type === "file",
-  );
-  if (!fileField) {
-    throw new Error("Uploaded entity did not include the expected file field");
-  }
-
-  return {
-    entityId: uploaded.entityId,
-    path:
-      `/workspaces/${workspace.id}/${workspace.viewId}/document` +
-      `?entity=${uploaded.entityId}&field=${fileField.id}`,
-  };
 };
 
 const smokeRoute = async ({
