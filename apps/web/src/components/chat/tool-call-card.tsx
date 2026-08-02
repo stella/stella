@@ -496,7 +496,13 @@ export const ToolCallCard = ({
           type="button"
         >
           {activityState && <ChatActivityOrb state={activityState} />}
-          <span className="min-w-0 truncate">
+          <span
+            className={cn(
+              "min-w-0 truncate",
+              isLoading &&
+                "animate-skeleton motion-reduce:text-muted-foreground bg-[linear-gradient(90deg,var(--color-foreground-ghost)_35%,var(--color-muted-foreground)_50%,var(--color-foreground-ghost)_65%)] bg-[length:250%_100%] bg-clip-text text-transparent motion-reduce:animate-none rtl:[animation-name:skeleton-rtl]",
+            )}
+          >
             <span>{label}</span>
             {subtitle && (
               <span
