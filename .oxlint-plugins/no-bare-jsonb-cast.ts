@@ -18,6 +18,10 @@
 //   sql`... ${JSON.stringify(value)}::text::jsonb ...`
 //   sql`... ${table.column}::jsonb ...`   // casting a column, not a bind
 //   sql`... '[]'::jsonb ...`              // SQL literal, not a bind
+//
+// The positional form is covered too, matched in the SQL text rather than the
+// interpolations, because the value is bound by index:
+//   db.unsafe(`... SET doc = $1::jsonb ...`, [JSON.stringify(value)])
 
 import { isIdentifier } from "./utils.ts";
 
@@ -66,6 +70,30 @@ const stripLeadingSqlNoise = (raw: string): string => {
 // whole point.
 const BARE_JSONB_CAST = /^::\s*jsonb\b/iu;
 
+// The positional form: `db.unsafe("... $1::jsonb ...", [json])`. The parameter
+// is bound by index rather than interpolated, so it never appears in
+// `TemplateLiteral.expressions` and has to be matched in the SQL text itself.
+const POSITIONAL_JSONB_CAST = /\$\d+\s*::\s*jsonb\b/iu;
+
+// Any string the rule can read SQL out of: a plain literal, or a template
+// literal's static chunks.
+const sqlTextsOf = (node: AstNode): string[] => {
+  if (node.type === "Literal") {
+    return typeof node.value === "string" ? [node.value] : [];
+  }
+  if (node.type !== "TemplateLiteral" || !Array.isArray(node.quasis)) {
+    return [];
+  }
+  return node.quasis.flatMap((quasi) => {
+    const value = isAstNode(quasi) ? quasi.value : undefined;
+    return typeof value === "object" &&
+      value !== null &&
+      typeof (value as { raw?: unknown }).raw === "string"
+      ? [(value as { raw: string }).raw]
+      : [];
+  });
+};
+
 export default {
   meta: { name: "no-bare-jsonb-cast" },
   rules: {
@@ -84,6 +112,24 @@ export default {
         // Identifiers in this file bound to a JSON.stringify(...) result.
         const serializedNames = new Set<string>();
 
+        // A positional cast is reported wherever the SQL text carrying it
+        // appears, so guard against reporting the same node twice.
+        const reportedPositional = new WeakSet<object>();
+
+        const reportPositionalCasts = (node: AstNode) => {
+          if (reportedPositional.has(node)) {
+            return;
+          }
+          const carriesPositionalCast = sqlTextsOf(node).some((text) =>
+            POSITIONAL_JSONB_CAST.test(text),
+          );
+          if (!carriesPositionalCast) {
+            return;
+          }
+          reportedPositional.add(node);
+          context.report({ node, messageId: "bareJsonbCast" });
+        };
+
         return {
           VariableDeclarator(node: AstNode) {
             if (isIdentifier(node.id) && isJsonStringifyCall(node.init)) {
@@ -92,7 +138,12 @@ export default {
             }
           },
 
+          Literal(node: AstNode) {
+            reportPositionalCasts(node);
+          },
+
           TemplateLiteral(node: AstNode) {
+            reportPositionalCasts(node);
             const expressions = Array.isArray(node.expressions)
               ? node.expressions
               : [];

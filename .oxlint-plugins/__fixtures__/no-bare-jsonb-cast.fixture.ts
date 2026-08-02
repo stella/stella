@@ -46,7 +46,19 @@ const _commentBeforeCast = sql`${formJson} /* keep as jsonb */ ::jsonb`;
 // oxlint-disable-next-line no-bare-jsonb-cast/no-bare-jsonb-cast
 const _uppercaseCast = sql`${formJson}::JSONB`;
 
+// The positional form binds by index, so the cast lives in the SQL text and
+// never appears among the template's expressions.
+// oxlint-disable-next-line no-bare-jsonb-cast/no-bare-jsonb-cast
+const _positionalTemplate = `UPDATE t SET doc = $1::jsonb WHERE id = $2`;
+
+// ...and the same written as a plain string literal.
+// oxlint-disable-next-line no-bare-jsonb-cast/no-bare-jsonb-cast
+const _positionalLiteral = "UPDATE t SET doc = $1 :: JSONB WHERE id = $2";
+
 // --- Cases the rule MUST NOT flag ---
+
+// Positional casts routed through text are the correct form.
+const _positionalThroughText = `UPDATE t SET doc = $1::text::jsonb WHERE id = $2`;
 
 // The correct form: the parameter stays text and Postgres parses it.
 const _throughText = sql`${JSON.stringify(value)}::text::jsonb`;
@@ -74,6 +86,9 @@ export const __noBareJsonbCastFixture = {
   _spaceAfterOperator,
   _commentBeforeCast,
   _uppercaseCast,
+  _positionalTemplate,
+  _positionalLiteral,
+  _positionalThroughText,
   _throughText,
   _identifierThroughText,
   _throughTextSpaced,

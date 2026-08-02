@@ -21,6 +21,11 @@ export default defineConfig({
     colorScheme: "light",
     locale: "en-GB",
     trace: "retain-on-failure",
+    // The dev server compiles route chunks on demand, and a module the entry
+    // is still waiting on holds DOMContentLoaded open. Playwright's 30s
+    // default would then time out the navigation itself, before any readiness
+    // assertion gets to run. Matches COLD_COMPILE_TIMEOUT in the app specs.
+    navigationTimeout: 60_000,
   },
   // Two targets share this suite: the app (screenshot captures of product
   // surfaces) and the landing site itself (island/navigation guards). The
