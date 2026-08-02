@@ -17,7 +17,7 @@ import {
   agentAuthRoute,
 } from "@/api/handlers/agent-auth/routes";
 import { getAuth } from "@/api/lib/auth";
-import { popDevOtp } from "@/api/lib/dev-otp-store";
+import { readDevOtp } from "@/api/lib/dev-otp-store";
 import {
   getMcpResourceUrl,
   MCP_ANONYMIZED_RESOURCE_SCOPES,
@@ -100,7 +100,7 @@ const createHumanSession = async () => {
   const auth = getAuth();
   const email = `agent-test-${Bun.randomUUIDv7()}@stella.dev`;
   await auth.api.sendVerificationOTP({ body: { email, type: "sign-in" } });
-  const otp = popDevOtp(email);
+  const otp = readDevOtp(email);
   if (!otp) {
     throw new Error("dev OTP not stashed; is env.isDev true under test?");
   }

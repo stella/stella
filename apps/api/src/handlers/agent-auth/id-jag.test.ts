@@ -33,7 +33,7 @@ import {
 } from "@/api/handlers/agent-auth/routes";
 import { getAuth } from "@/api/lib/auth";
 import { getAuthIssuerUrl } from "@/api/lib/auth-paths";
-import { popDevOtp } from "@/api/lib/dev-otp-store";
+import { readDevOtp } from "@/api/lib/dev-otp-store";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
 import {
   initAgentAuthTestDb,
@@ -214,7 +214,7 @@ const decodeJwt = (jwt: string): Json => {
 const createHumanSession = async (email: string) => {
   const auth = getAuth();
   await auth.api.sendVerificationOTP({ body: { email, type: "sign-in" } });
-  const otp = popDevOtp(email);
+  const otp = readDevOtp(email);
   if (!otp) {
     throw new Error("dev OTP not stashed; is env.isDev true under test?");
   }

@@ -7,7 +7,7 @@ import { fetchWithTimeout } from "@/lib/fetch";
 const devOtpSchema = v.object({ otp: v.string() });
 
 /**
- * Reads (and consumes) the email-OTP the dev API mirrors for an address so the
+ * Reads the email-OTP the dev API mirrors for an address so the
  * sign-in flow can prefill the code instead of making you copy it by hand. The
  * mirror endpoint only exists in dev, so this resolves to `null` in production
  * (and the fetch is tree-shaken out) and whenever no mirrored code is waiting.
