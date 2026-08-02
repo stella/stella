@@ -133,6 +133,27 @@ describe("reduceSendQueue", () => {
     expect(result.state.isGenerating).toBe(false);
   });
 
+  test("only a ready terminal state can drain the queue", () => {
+    const entry = makeEntry("a");
+
+    for (const status of ["submitted", "streaming"] as const) {
+      const state: SendQueueState = {
+        ...createInitialSendQueueState(CONVERSATION_ID),
+        queue: [entry],
+        wasGenerating: true,
+      };
+
+      const result = reduceSendQueue(state, {
+        type: "turn-boundary-checked",
+        isGenerating: false,
+        status,
+      });
+
+      expect(result.dispatchedEntry).toBeNull();
+      expect(result.state.queue).toEqual([entry]);
+    }
+  });
+
   test("dispatch failure from a message-start error requeues the entry at the front", () => {
     const waiting = makeEntry("waiting");
     const state: SendQueueState = {

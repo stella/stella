@@ -46,6 +46,11 @@ const createDocumentToolOutputSchema = v.union([
   }),
   v.strictObject({
     success: v.literal(true),
+    destination: v.literal("draft"),
+    fileName: v.string(),
+  }),
+  v.strictObject({
+    success: v.literal(true),
     destination: v.literal("download"),
     fileName: v.string(),
   }),
@@ -71,8 +76,14 @@ export const createCreateDocumentTool = () =>
       "does NOT edit, convert, clone or preserve formatting from an " +
       "existing DOCX; never use it when the user asks to edit, rewrite, " +
       "save, update, or make a new version of an already-open document. " +
+      "Exception: when the open item is an unsaved draft produced by an " +
+      "earlier create-document call in this chat, use create-document again " +
+      "with the complete revised source so the live draft is replaced. This " +
+      "exception never applies to a persisted matter document. " +
       "The user can save the draft to a destination matter or download it " +
-      "without saving; do not ask the user to identify a matter in your " +
+      "without saving. Showing the editable draft completes this tool, so the " +
+      "user can keep refining it in later chat turns before saving. Do not ask " +
+      "the user to identify a matter in your " +
       "reply. When the success output includes `mention`, copy that field " +
       "verbatim when naming the saved document in your reply.\n\n" +
       "DIRECTIVES (one per block, on its own line):\n" +
@@ -87,6 +98,9 @@ export const createCreateDocumentTool = () =>
       "  @schedule <heading> — schedule/annex starting on a new page.\n" +
       "  @signatures — side-by-side party signature block; see below.\n" +
       "  @pagebreak — force a page break.\n\n" +
+      "INLINE EMPHASIS: wrap inline text in `**` for bold, for example " +
+      "`**Seller:** [[seller name]]`. The markers are compiled into DOCX runs " +
+      "and are not shown literally.\n\n" +
       "PLACEHOLDERS: wrap unknown values in `[[ ]]` — the compiler highlights them in yellow so the user can spot and fill them. Example: `Buyer shall pay [[purchase price]] on or before [[closing date]].` Briefly tell the user in your reply which placeholders you left.\n\n" +
       "@signatures: one block at the end, key:value lines per party. Keys: `party` (legal name), `by` (signing person, alias `name`), `title` (role). Use the document-language alias for the keys — e.g. `party / strana / partei / partie / parte / fél`. Each `party:` line opens a new party block; omit `by` and `title` to leave a blank line for hand-fill. The compiler renders one column per party (party name bolded, signing space, rule, then your `by:` / `title:` values raw) — no compiler-added captions. If you want labels like 'Datum:' or 'Podpis', write them inline in the source above the @signatures block (with @paragraph), in the document's language.",
     inputSchema: toTanStackToolSchema(createDocumentToolInputSchema),

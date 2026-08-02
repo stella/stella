@@ -493,13 +493,40 @@ const CHAT_PART_PERSISTENCE = {
   video: "persist",
 } as const satisfies Record<ChatTanStackPart["type"], ChatPartPersistence>;
 
+type TanStackStructuredOutputStatus = Extract<
+  ChatTanStackPart,
+  { type: "structured-output" }
+>["status"];
+
+const TANSTACK_STRUCTURED_OUTPUT_STATUSES = {
+  complete: true,
+  error: true,
+  streaming: true,
+} as const satisfies Record<TanStackStructuredOutputStatus, true>;
+
+const isTanStackStructuredOutputStatus = (
+  value: unknown,
+): value is TanStackStructuredOutputStatus =>
+  typeof value === "string" &&
+  Object.hasOwn(TANSTACK_STRUCTURED_OUTPUT_STATUSES, value);
+
+const isStructuredOutputPart = (part: Record<string, unknown>): boolean =>
+  isTanStackStructuredOutputStatus(part["status"]) &&
+  typeof part["raw"] === "string" &&
+  (!("reasoning" in part) ||
+    part["reasoning"] === undefined ||
+    typeof part["reasoning"] === "string") &&
+  (!("errorMessage" in part) ||
+    part["errorMessage"] === undefined ||
+    typeof part["errorMessage"] === "string");
+
 // Validators are independently exhaustive over the persistable subset, so a
 // part cannot enter the persistence boundary without structural validation.
 const CHAT_PART_VALIDATORS = {
   audio: (part) => isMediaPart(part, "audio/"),
   document: isContentPartWithSource,
   image: isContentPartWithSource,
-  "structured-output": (part) => "data" in part,
+  "structured-output": isStructuredOutputPart,
   text: (part) => typeof part["content"] === "string",
   thinking: (part) => typeof part["content"] === "string",
   "tool-call": (part) =>
@@ -515,6 +542,32 @@ const CHAT_PART_VALIDATORS = {
   "ui-resource": isUiResourcePart,
   video: (part) => isMediaPart(part, "video/"),
 } satisfies Record<PersistableChatPartType, ChatPartValidator>;
+
+type TanStackToolCallState = Extract<
+  ChatTanStackPart,
+  { type: "tool-call" }
+>["state"];
+
+const TANSTACK_TOOL_CALL_STATES = {
+  "awaiting-input": true,
+  "input-streaming": true,
+  "input-complete": true,
+  "approval-requested": true,
+  "approval-responded": true,
+  complete: true,
+  error: true,
+} as const satisfies Record<TanStackToolCallState, true>;
+
+type TanStackToolResultState = Extract<
+  ChatTanStackPart,
+  { type: "tool-result" }
+>["state"];
+
+const TANSTACK_TOOL_RESULT_STATES = {
+  streaming: true,
+  complete: true,
+  error: true,
+} as const satisfies Record<TanStackToolResultState, true>;
 
 const isChatPartPersistenceType = (
   type: string,
@@ -617,18 +670,24 @@ export const restoreServerOwnedChatParts = ({
 };
 
 const normalizeMediaSource = (source: ContentPartSource): ContentPartSource => {
-  if (source.type === "data") {
-    return {
-      type: "data",
-      value: source.value,
-      mimeType: source.mimeType,
-    };
+  switch (source.type) {
+    case "data":
+      return {
+        type: "data",
+        value: source.value,
+        mimeType: source.mimeType,
+      };
+    case "url":
+      return {
+        type: "url",
+        value: source.value,
+        ...(source.mimeType === undefined ? {} : { mimeType: source.mimeType }),
+      };
+    default: {
+      const exhaustive: never = source;
+      return exhaustive;
+    }
   }
-  return {
-    type: "url",
-    value: source.value,
-    ...(source.mimeType === undefined ? {} : { mimeType: source.mimeType }),
-  };
 };
 
 const normalizeChatPartForPersistence = (part: ChatPart): ChatPart => {
@@ -893,16 +952,16 @@ const legacyToolApprovalToTanStack = (
   };
 };
 
-const isTanStackToolCallState = (value: unknown): boolean =>
-  value === "awaiting-input" ||
-  value === "input-streaming" ||
-  value === "input-complete" ||
-  value === "approval-requested" ||
-  value === "approval-responded" ||
-  value === "complete";
+const isTanStackToolCallState = (
+  value: unknown,
+): value is TanStackToolCallState =>
+  typeof value === "string" && Object.hasOwn(TANSTACK_TOOL_CALL_STATES, value);
 
-const isTanStackToolResultState = (value: unknown): boolean =>
-  value === "streaming" || value === "complete" || value === "error";
+const isTanStackToolResultState = (
+  value: unknown,
+): value is TanStackToolResultState =>
+  typeof value === "string" &&
+  Object.hasOwn(TANSTACK_TOOL_RESULT_STATES, value);
 
 const isTanStackToolResultContent = (value: unknown): boolean =>
   typeof value === "string" ||

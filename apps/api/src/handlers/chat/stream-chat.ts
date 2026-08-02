@@ -161,14 +161,27 @@ export const pruneOrphanedToolParts = (
       return message;
     }
 
-    const parts = message.parts.filter(
-      (part) =>
-        part.type !== "tool-call" ||
-        part.state === "complete" ||
-        part.state === "input-complete" ||
-        part.state === "approval-responded" ||
-        part.output !== undefined,
-    );
+    const parts = message.parts.filter((part) => {
+      if (part.type !== "tool-call") {
+        return true;
+      }
+
+      const { state } = part;
+      switch (state) {
+        case "awaiting-input":
+        case "input-streaming":
+        case "approval-requested":
+          return false;
+        case "input-complete":
+        case "approval-responded":
+        case "complete":
+        case "error":
+          return true;
+        default:
+          state satisfies never;
+          return panic("Unhandled tool-call state");
+      }
+    });
     return parts.length === message.parts.length
       ? message
       : { ...message, parts };
@@ -985,9 +998,15 @@ export const processServerChatStream = async function* ({
         deferredRunFinishedChunks.length > 0
       ) {
         // Continuation events such as `approval-requested` belong before the
-        // run's finish, but a later run does not. Flush the prior boundary
-        // before starting a fallback/next attempt so run lifecycles cannot
-        // interleave as START(A), START(B), FINISH(A).
+        // run's finish, but a later run does not. Register the later run with
+        // the server-side processor before closing the prior run so the
+        // processor keeps the shared assistant message active across a
+        // server-tool continuation. The client still receives the canonical
+        // FINISH(A), START(B) order. Without this internal overlap, TanStack
+        // finalizes after A and a tool-only B has no message-start event to
+        // reactivate, so its client-tool call is visible live but omitted from
+        // the persisted assistant turn.
+        processor.processChunk(sourceChunk);
         const priorRunFinishedChunks = deferredRunFinishedChunks.splice(0);
         for (const chunk of priorRunFinishedChunks) {
           processor.processChunk(chunk);
@@ -995,6 +1014,8 @@ export const processServerChatStream = async function* ({
         for (const chunk of priorRunFinishedChunks) {
           yield chunk;
         }
+        yield sourceChunk;
+        continue;
       }
       const chunk =
         sourceChunk.type === EventType.RUN_ERROR

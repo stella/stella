@@ -36,6 +36,7 @@ import {
   hydrateMessages,
   normalizeFinalAssistantMessageId,
   processServerChatStream,
+  pruneOrphanedToolParts,
   recordChatAttemptFinish,
   remapOutgoingMessageIds,
   toChatMessage,
@@ -82,6 +83,39 @@ const stripTimestamps = (chunks: readonly StreamChunk[]) =>
 const scopedDb: ScopedDb = async () => {
   throw new Error("Expected stream deanonymization test not to access DB");
 };
+
+describe("tool-call history pruning", () => {
+  test("classifies every TanStack tool-call state and retains terminal errors", () => {
+    const states = [
+      "awaiting-input",
+      "input-streaming",
+      "input-complete",
+      "approval-requested",
+      "approval-responded",
+      "complete",
+      "error",
+    ] as const;
+    const message = {
+      id: "assistant-1",
+      parts: states.map((state) => ({
+        arguments: "{}",
+        id: `tool-${state}`,
+        name: "web_search",
+        state,
+        type: "tool-call" as const,
+      })),
+      role: "assistant" as const,
+    } satisfies ChatMessage;
+
+    const prunedMessage = pruneOrphanedToolParts([message]).at(0);
+
+    expect(
+      prunedMessage?.parts.flatMap((part) =>
+        part.type === "tool-call" ? [part.state] : [],
+      ),
+    ).toEqual(["input-complete", "approval-responded", "complete", "error"]);
+  });
+});
 
 describe("outgoing chat stream message ids", () => {
   test("normalizes provider assistant message ids to one stable stella UUID", async () => {
@@ -459,6 +493,140 @@ describe("outgoing chat stream message ids", () => {
       `${EventType.RUN_FINISHED}:fallback-run`,
     ]);
     expect(persistedTexts).toEqual(["Fallback answer"]);
+  });
+
+  test("persists a client tool requested after a completed server-tool run", async () => {
+    const messageId = toSafeId<"chatMessage">(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    let responseMessage: ChatMessage | null = null;
+    const processor = new StreamProcessor({
+      events: {
+        onStreamEnd: (message) => {
+          responseMessage = toChatMessage(message);
+        },
+      },
+    });
+    let persistedToolNames: string[] = [];
+    const stream = processServerChatStream({
+      abortSignal: new AbortController().signal,
+      getResponseMessage: () => responseMessage,
+      mapMessageId: createChatMessageIdMapper(() => messageId),
+      onFinish: ({ responseMessage: finishedMessage }) => {
+        persistedToolNames = finishedMessage.parts.flatMap((part) =>
+          part.type === "tool-call" ? [part.name] : [],
+        );
+      },
+      processor,
+      source: streamChunks([
+        {
+          type: EventType.RUN_STARTED,
+          runId: "list-run",
+          threadId: "thread-1",
+        },
+        {
+          type: EventType.TOOL_CALL_START,
+          parentMessageId: "provider-list-message",
+          toolCallId: "list-call",
+          toolCallName: "list_templates",
+          // eslint-disable-next-line typescript/no-deprecated -- AG-UI still requires the compatibility field.
+          toolName: "list_templates",
+        },
+        {
+          type: EventType.TOOL_CALL_ARGS,
+          delta: "{}",
+          toolCallId: "list-call",
+        },
+        {
+          type: EventType.TOOL_CALL_END,
+          input: {},
+          toolCallId: "list-call",
+          toolCallName: "list_templates",
+          // eslint-disable-next-line typescript/no-deprecated -- AG-UI still requires the compatibility field.
+          toolName: "list_templates",
+        },
+        {
+          type: EventType.TOOL_CALL_RESULT,
+          content: '{"templates":[]}',
+          messageId: "provider-list-message",
+          toolCallId: "list-call",
+        },
+        {
+          type: EventType.RUN_FINISHED,
+          finishReason: "tool_calls",
+          runId: "list-run",
+          threadId: "thread-1",
+        },
+        {
+          type: EventType.RUN_STARTED,
+          runId: "ask-run",
+          threadId: "thread-1",
+        },
+        {
+          type: EventType.TOOL_CALL_START,
+          parentMessageId: "provider-ask-message",
+          toolCallId: "ask-call",
+          toolCallName: "ask-user",
+          // eslint-disable-next-line typescript/no-deprecated -- AG-UI still requires the compatibility field.
+          toolName: "ask-user",
+        },
+        {
+          type: EventType.TOOL_CALL_ARGS,
+          delta:
+            '{"question":"What scope should the power of attorney cover?"}',
+          toolCallId: "ask-call",
+        },
+        {
+          type: EventType.TOOL_CALL_END,
+          input: {
+            question: "What scope should the power of attorney cover?",
+          },
+          toolCallId: "ask-call",
+          toolCallName: "ask-user",
+          // eslint-disable-next-line typescript/no-deprecated -- AG-UI still requires the compatibility field.
+          toolName: "ask-user",
+        },
+        {
+          type: EventType.RUN_FINISHED,
+          finishReason: "tool_calls",
+          runId: "ask-run",
+          threadId: "thread-1",
+        },
+        {
+          type: EventType.CUSTOM,
+          name: "tool-input-available",
+          value: {
+            input: {
+              question: "What scope should the power of attorney cover?",
+            },
+            toolCallId: "ask-call",
+            toolName: "ask-user",
+          },
+        },
+      ]),
+    });
+
+    const chunks = await collectChunks(stream);
+    let clientToolNames: string[] = [];
+    const clientProcessor = new StreamProcessor({
+      events: {
+        onMessagesChange: (messages) => {
+          const assistant = messages.findLast(
+            (message) => message.role === "assistant",
+          );
+          clientToolNames =
+            assistant?.parts.flatMap((part) =>
+              part.type === "tool-call" ? [part.name] : [],
+            ) ?? [];
+        },
+      },
+    });
+    for (const chunk of chunks) {
+      clientProcessor.processChunk(chunk);
+    }
+
+    expect(persistedToolNames).toEqual(["list_templates", "ask-user"]);
+    expect(persistedToolNames).toEqual(clientToolNames);
   });
 
   test("persists approval requests emitted after a model run finishes", async () => {

@@ -14,6 +14,7 @@ import {
   isChatTurnInFlight,
   isExternalInputChatToolName,
   isPublicOfficialChatToolName,
+  isRunningToolPart,
   isToolApprovedByGrant,
   isUnresolvedFolioAgentDocToolCallPart,
   sanitizeRunningToolCalls,
@@ -479,7 +480,7 @@ describe("hasRunningToolCallInLatestAssistantMessage", () => {
     );
   });
 
-  test("ignores create-document prompts waiting for a matter selection", () => {
+  test("keeps the turn running until a create-document draft is settled", () => {
     const messages = [
       {
         id: "message-1",
@@ -505,9 +506,7 @@ describe("hasRunningToolCallInLatestAssistantMessage", () => {
       typeof hasRunningToolCallInLatestAssistantMessage
     >[0]["messages"];
 
-    expect(hasRunningToolCallInLatestAssistantMessage({ messages })).toBe(
-      false,
-    );
+    expect(hasRunningToolCallInLatestAssistantMessage({ messages })).toBe(true);
   });
 
   test("ignores stale running tool parts from older messages", () => {
@@ -798,6 +797,43 @@ describe("isChatTurnInFlight", () => {
   });
 });
 
+describe("isRunningToolPart", () => {
+  test("classifies every TanStack tool-call state", () => {
+    const expectedByState = {
+      "awaiting-input": true,
+      "approval-requested": false,
+      "approval-responded": false,
+      complete: false,
+      error: false,
+      "input-complete": true,
+      "input-streaming": true,
+    } as const satisfies Record<
+      Extract<ChatPart, { type: "tool-call" }>["state"],
+      boolean
+    >;
+
+    for (const [state, expected] of Object.entries(expectedByState)) {
+      expect(
+        isRunningToolPart({
+          name: "web_search",
+          state,
+          type: "tool-call",
+        }),
+      ).toBe(expected);
+    }
+  });
+
+  test("rejects unknown runtime states", () => {
+    expect(
+      isRunningToolPart({
+        name: "web_search",
+        state: "future-sdk-state",
+        type: "tool-call",
+      }),
+    ).toBe(false);
+  });
+});
+
 describe("sanitizeRunningToolCalls", () => {
   const runningToolPart = {
     arguments: JSON.stringify({ query: "consumer credit" }),
@@ -867,6 +903,34 @@ describe("sanitizeRunningToolCalls", () => {
 
     // Long-lived by design: the message keeps its reference (no change).
     expect(sanitizeRunningToolCalls(messages)[0]).toBe(messages[0]);
+  });
+
+  test("leaves a resumable create-document draft untouched", () => {
+    const messages: PersistedChatMessage[] = [
+      {
+        id: "message-1",
+        parts: [
+          {
+            arguments: JSON.stringify({
+              name: "Engagement letter",
+              source: "@title Engagement letter",
+            }),
+            id: "tool-call-1",
+            input: {
+              name: "Engagement letter",
+              source: "@title Engagement letter",
+            },
+            name: "create-document",
+            state: "input-complete",
+            type: "tool-call",
+          } satisfies ChatPart,
+        ],
+        role: "assistant",
+      },
+    ];
+
+    expect(sanitizeRunningToolCalls(messages)[0]).toBe(messages[0]);
+    expect(isChatTurnInFlight({ status: "ready", messages })).toBe(true);
   });
 
   test("leaves an approval-requested tool call untouched", () => {

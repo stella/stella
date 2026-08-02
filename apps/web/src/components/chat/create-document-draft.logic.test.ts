@@ -5,10 +5,39 @@ import {
   isSameCreateDocumentDraftPayload,
   normalizeCreateDocumentInput,
   selectCreateDocumentDrafts,
+  selectUnsettledCreateDocumentDrafts,
 } from "@/components/chat/create-document-draft.logic";
+import { toChatThreadId } from "@/lib/chat-thread-ref";
 
 describe("create-document drafts", () => {
-  test("selects a streamed draft and stops selecting it after resolution", () => {
+  test("surfaces partial source while tool arguments are streaming", () => {
+    const messages = [
+      {
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-call",
+            id: "tool-streaming",
+            name: "create-document",
+            arguments:
+              '{"name":"Power of attorney","source":"@doc kind=other\\n@paragraph\\nDraft in pro',
+            state: "input-streaming",
+          },
+        ],
+      },
+    ] satisfies Parameters<typeof selectCreateDocumentDrafts>[0];
+
+    expect(selectCreateDocumentDrafts(messages)).toEqual([
+      {
+        toolCallId: "tool-streaming",
+        name: "Power of attorney",
+        source: "@doc kind=other\n@paragraph\nDraft in pro",
+        status: "streaming",
+      },
+    ]);
+  });
+
+  test("keeps a ready unsaved draft selected and stops after export", () => {
     const input = {
       name: "Purchase agreement",
       source: "@doc kind=agreement locale=en page=A4\n@title Purchase",
@@ -37,6 +66,43 @@ describe("create-document drafts", () => {
         status: "ready",
       },
     ]);
+
+    const readyDraft = [
+      {
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-call",
+            id: "tool-1",
+            name: "create-document",
+            arguments: JSON.stringify(input),
+            state: "complete",
+            input,
+            output: {
+              success: true,
+              destination: "draft",
+              fileName: "Purchase agreement.docx",
+            },
+          },
+        ],
+      },
+    ] satisfies Parameters<typeof selectCreateDocumentDrafts>[0];
+    expect(selectCreateDocumentDrafts(readyDraft)).toEqual([
+      {
+        toolCallId: "tool-1",
+        name: "Purchase agreement",
+        source: input.source,
+        status: "ready",
+      },
+    ]);
+    expect(selectUnsettledCreateDocumentDrafts(readyDraft)).toEqual([]);
+    expect(selectUnsettledCreateDocumentDrafts(unresolved)).toHaveLength(1);
+    expect(
+      selectUnsettledCreateDocumentDrafts([
+        ...unresolved,
+        { role: "user", parts: [{ type: "text", content: "Make it longer" }] },
+      ]),
+    ).toEqual([]);
 
     const resolved = [
       {
@@ -72,6 +138,7 @@ describe("create-document drafts", () => {
 
   test("recognizes an unchanged inspector payload", () => {
     const payload = {
+      chatThreadId: toChatThreadId("thread-1"),
       toolCallId: "tool-1",
       name: "Purchase agreement",
       source: "@doc kind=agreement locale=en page=A4",

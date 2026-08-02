@@ -1,0 +1,4 @@
+interface:
+  display_name: "AI Conventions"
+  short_description: "Harden AI SDK and streaming boundaries"
+  default_prompt: "Use $conventions-ai to review and harden this AI integration."

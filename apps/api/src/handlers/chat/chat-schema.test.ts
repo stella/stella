@@ -481,6 +481,64 @@ describe("validateMessage", () => {
     expectInvalidChatMessage(result);
   });
 
+  test("accepts a failed tool call and its error result during continuation", async () => {
+    const result = await validateMessage({
+      message: {
+        id: chatMessageId("msg_failed_tool_continuation"),
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-call",
+            id: "tool-call-1",
+            name: "search-documents",
+            arguments: JSON.stringify({ query: "contract" }),
+            input: { query: "contract" },
+            output: { error: "Search is temporarily unavailable" },
+            state: "error",
+          },
+          {
+            type: "tool-result",
+            toolCallId: "tool-call-1",
+            content: "null",
+            error: "Search is temporarily unavailable",
+            state: "error",
+          },
+        ],
+      },
+      safeDb: noDbReads,
+      threadId: chatThreadId("thread_failed_tool_continuation"),
+      tools: searchTools,
+      userId: userId("user_failed_tool_continuation"),
+    });
+
+    expect(Result.isOk(result)).toBe(true);
+  });
+
+  test("rejects a malformed failed tool-call output", async () => {
+    const result = await validateMessage({
+      message: {
+        id: chatMessageId("msg_malformed_failed_tool"),
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-call",
+            id: "tool-call-1",
+            name: "search-documents",
+            arguments: JSON.stringify({ query: "contract" }),
+            output: { error: 123 },
+            state: "error",
+          },
+        ],
+      },
+      safeDb: noDbReads,
+      threadId: chatThreadId("thread_malformed_failed_tool"),
+      tools: searchTools,
+      userId: userId("user_malformed_failed_tool"),
+    });
+
+    expectInvalidChatMessage(result);
+  });
+
   test("accepts tool results that match the paired tool output", async () => {
     const result = await validateMessage({
       message: {

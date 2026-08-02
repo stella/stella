@@ -16,6 +16,7 @@ import {
   isServerOwnedChatPart,
   restoreServerOwnedChatParts,
   toChatMessageContent,
+  toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
 import type { ChatPart } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -37,6 +38,32 @@ const budgetPropertyPartFromKind = (kind: number): ChatPart => {
 };
 
 describe("persisted chat message parts", () => {
+  test("persists every structured-output terminal and streaming state", () => {
+    const parts = [
+      { raw: '{"answer":', status: "streaming", type: "structured-output" },
+      {
+        data: { answer: 42 },
+        raw: '{"answer":42}',
+        status: "complete",
+        type: "structured-output",
+      },
+      {
+        errorMessage: "Invalid structured output",
+        raw: "not-json",
+        status: "error",
+        type: "structured-output",
+      },
+    ] as const satisfies ChatPart[];
+
+    expect(
+      toPersistableChatMessage({
+        id: toSafeId<"chatMessage">("11111111-1111-4111-8111-111111111111"),
+        parts: [...parts],
+        role: "assistant",
+      }).parts,
+    ).toEqual(parts);
+  });
+
   test("preserves server-owned search-summary provenance", () => {
     const message = chatMessageFromPersisted({
       id: toSafeId<"chatMessage">("019eb9fa-c91f-7000-9b9c-9365977dda78"),
@@ -259,5 +286,20 @@ describe("chat attachment parts", () => {
     expect(() =>
       classifyChatPartForPersistence({ type: "tool-call", state: "new-state" }),
     ).toThrow("Cannot persist malformed chat part type: tool-call");
+  });
+
+  test("persists a tool call that ended in a recoverable execution error", () => {
+    const part = {
+      type: "tool-call" as const,
+      id: "call-1",
+      name: "load-skill",
+      arguments: JSON.stringify({ skillName: "missing-skill" }),
+      state: "error" as const,
+    } satisfies ChatPart;
+
+    expect(classifyChatPartForPersistence(part)).toEqual({
+      type: "persist",
+      part,
+    });
   });
 });

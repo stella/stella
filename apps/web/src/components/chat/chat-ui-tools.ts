@@ -31,9 +31,9 @@ export type ChatClientTools =
 export type ChatMessageMetadata = NonNullable<ChatMessage["metadata"]>;
 export type SharedChatUITools = Pick<ChatUITools, "ask-user">;
 export type AskUserOutput = SharedChatUITools["ask-user"]["output"];
-// `create-document` is client-executed and uses the matter-pick UI as
-// its gate, not the approval flow. Keep it out of the approval set so
-// `NeedsMatterCard` renders instead of `ToolApprovalCard`.
+// `create-document` is client-executed and renders its own draft UI, not the
+// approval flow. Keep it out of the approval set so `NeedsMatterCard` renders
+// instead of `ToolApprovalCard`.
 type BuiltInApprovalToolName = Exclude<
   keyof ChatUITools,
   "ask-user" | "create-document"
@@ -70,14 +70,21 @@ type ExternalInputToolName = Extract<
   BuiltInApprovalToolName,
   "boe_search_legislation" | "fetch_url" | "web_search"
 >;
-const RUNNING_TOOL_STATES = {
+const TOOL_CALL_STATE_IS_RUNNING = {
   "awaiting-input": true,
+  "approval-requested": false,
+  "approval-responded": false,
+  complete: false,
+  error: false,
   "input-complete": true,
   "input-streaming": true,
-} as const satisfies Record<string, true>;
+} as const satisfies Record<ChatToolCallPart["state"], boolean>;
+const isChatToolCallState = (
+  value: string,
+): value is ChatToolCallPart["state"] =>
+  Object.hasOwn(TOOL_CALL_STATE_IS_RUNNING, value);
 const USER_INPUT_TOOL_NAMES = {
   "ask-user": true,
-  "create-document": true,
 } as const satisfies Record<string, true>;
 
 // Mirrors the `@stll/folio-agents` tool names registered server-side in
@@ -530,7 +537,10 @@ export const isRunningToolPart = (part: unknown): boolean => {
     return false;
   }
 
-  if (!(part.state in RUNNING_TOOL_STATES)) {
+  if (
+    !isChatToolCallState(part.state) ||
+    !TOOL_CALL_STATE_IS_RUNNING[part.state]
+  ) {
     return false;
   }
 
@@ -685,6 +695,12 @@ const toTerminalIfRunningToolPart = (part: ChatPart): ChatPart => {
   if (part.type !== "tool-call" || !isRunningToolPart(part)) {
     return part;
   }
+  // The draft compiler can deterministically resume this client-executed tool
+  // after hydration. Preserve it so the session effect can return its result
+  // instead of turning a recoverable draft into an interrupted tool call.
+  if (part.name === "create-document" && part.state === "input-complete") {
+    return part;
+  }
   return { ...part, state: INTERRUPTED_TOOL_CALL_STATE };
 };
 
@@ -706,10 +722,11 @@ const toTerminalIfRunningToolPart = (part: ChatPart): ChatPart => {
  *    turn "generating" forever. The runtime's `stop` applies this right
  *    after aborting.
  *
- * `ask-user` / `create-document` and approval-flow parts are long-lived by
- * design and already excluded by `isRunningToolPart`. Messages and parts
- * left unchanged are returned by reference so downstream memoization stays
- * stable.
+ * `ask-user` and approval-flow parts are user-owned and excluded by
+ * `isRunningToolPart`. A complete `create-document` input is resumable by the
+ * client and remains live until the draft result is returned. Messages and
+ * parts left unchanged are returned by reference so downstream memoization
+ * stays stable.
  */
 export const sanitizeRunningToolCalls = (
   messages: readonly PersistedChatMessage[],
@@ -754,13 +771,36 @@ export const isChatTurnInFlight = ({
   messages,
   turnAbandoned = false,
 }: ChatTurnInFlightOptions): boolean => {
-  if (status === "submitted" || status === "streaming") {
-    return true;
-  }
-  if (status === "error" || turnAbandoned) {
+  if (turnAbandoned) {
     return false;
   }
-  return hasRunningToolCallInLatestAssistantMessage({ messages });
+
+  switch (status) {
+    case "submitted":
+    case "streaming":
+      return true;
+    case "error":
+      return false;
+    case "ready":
+      return hasRunningToolCallInLatestAssistantMessage({ messages });
+    default:
+      status satisfies never;
+      return panic("Unhandled chat client state");
+  }
+};
+
+export const isChatClientRequestActive = (status: ChatClientState): boolean => {
+  switch (status) {
+    case "submitted":
+    case "streaming":
+      return true;
+    case "error":
+    case "ready":
+      return false;
+    default:
+      status satisfies never;
+      return panic("Unhandled chat client state");
+  }
 };
 
 /**

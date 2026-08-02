@@ -42,6 +42,7 @@ import { useChatSession } from "@/features/chat/hooks/use-chat-session";
 import { useChatThreadRuntime } from "@/features/chat/hooks/use-chat-thread-runtime";
 import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
 import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
+import { resolveSuggestedPromptsAvailability } from "@/features/chat/lib/suggested-prompts-availability";
 import {
   applyChatModelChange,
   chatThreadOptions,
@@ -238,8 +239,6 @@ export const ChatThreadPage = ({
   // Gated by draft store emptiness so the query does not fire when the
   // user is already typing a custom follow-up.
   const lastMessage = messages.at(-1);
-  const lastMessageId = lastMessage?.id ?? null;
-  const lastMessageRole = lastMessage?.role ?? null;
   // Ask-user cards report their local "edit answers" mode here: reopening an
   // answered card turns it back into a live clarification form, which the
   // persisted part state (`output-available`) does not reflect.
@@ -281,22 +280,29 @@ export const ChatThreadPage = ({
   const askUserOwnsTurn =
     lastMessageHasPendingAskUser || editingAskUserToolCallIds.size > 0;
   const editorIsEmpty = useIsChatDraftEmpty(threadRef);
-  const eligibleForSuggestions =
-    editorIsEmpty &&
-    lastMessageId !== null &&
-    lastMessageRole === "assistant" &&
-    !askUserOwnsTurn;
+  const suggestedPromptsAvailability = resolveSuggestedPromptsAvailability({
+    editorIsEmpty,
+    error,
+    isGenerating,
+    lastMessage: lastMessage ?? null,
+    turnOwner: askUserOwnsTurn ? "ask-user" : "composer",
+  });
+  const lastMessageId =
+    suggestedPromptsAvailability.status === "eligible"
+      ? suggestedPromptsAvailability.lastMessageId
+      : "";
   const { data: suggestedPromptsData } = useQuery(
     chatThreadSuggestedPromptsOptions({
       activeOrganizationId,
-      enabled: !isGenerating && eligibleForSuggestions,
-      lastMessageId: lastMessageId ?? "",
+      enabled: suggestedPromptsAvailability.status === "eligible",
+      lastMessageId,
       threadRef,
     }),
   );
-  const suggestedFollowupPrompts = suggestedPromptsData
-    ? suggestedPromptsData.prompts
-    : [];
+  const suggestedFollowupPrompts =
+    suggestedPromptsAvailability.status === "eligible" && suggestedPromptsData
+      ? suggestedPromptsData.prompts
+      : [];
   const suggestedFollowupPrompt = suggestedFollowupPrompts.at(0) ?? undefined;
 
   // Seed brand-new (empty) threads from the persisted web-search

@@ -128,23 +128,69 @@ const EXTERNAL_FACT_SOURCING_WITH_WEB =
 const EXTERNAL_FACT_SOURCING_NO_WEB =
   "EXTERNAL-FACT SOURCING: Ground factual answers in a matching skill when one fits — the skill catalog is in this prompt; `load-skill` before applying it. Web research is not enabled for this thread, so when no skill fits, answer from your own knowledge and explicitly flag that no external source was available in this conversation (the user can enable web search to add one). Never use `execute_typescript` for external research — its `external_*` functions read stella's internal workspace data only.";
 
+const EXTERNAL_FACT_SOURCING_WITH_WEB_NO_SKILLS =
+  "EXTERNAL-FACT SOURCING: Always try to ground factual answers in an external source before falling back to your own knowledge. Call `web_search` (with `fetch_url` follow-up when snippets are short or contradict). Only when those tools return nothing usable may you answer from your own knowledge, and you MUST flag that you have no source for the claim. Never use `execute_typescript` for external research — its `external_*` functions read stella's internal workspace data only. Cite tool-returned sources in the reply.";
+
+const EXTERNAL_FACT_SOURCING_NO_WEB_NO_SKILLS =
+  "EXTERNAL-FACT SOURCING: Web research is not enabled for this thread. Answer from your own knowledge and explicitly flag that no external source was available in this conversation (the user can enable web search to add one). Never use `execute_typescript` for external research — its `external_*` functions read stella's internal workspace data only.";
+
 const SUBAGENT_DELEGATION_SECTION =
   "DELEGATION: When a task splits into independent pieces (no piece depends on another's result), call `spawn_subagents` to run them in parallel instead of doing them one by one yourself. Subagents are cheaper and read/write workspace data under the single approval already granted to `spawn_subagents` — do not ask the user to approve each subagent separately. Prefer this whenever breadth or parallelism would speed up the task.";
 
-const buildCoreRuleSections = ({
+const ASK_USER_BOUNDARY =
+  "ASK-USER BOUNDARY: Use `ask-user` only for missing task facts (preferences, jurisdiction, parties, scope). Never use it to request tool-call permission or consent — stella handles approvals outside the model. When you decide to call `ask-user`, do not emit any other tool calls (e.g. `execute_typescript`) in the same turn — wait for the user's answer first; otherwise the user sees retrieved data before they have answered the clarifying question and that data may be off-topic.";
+
+const ASK_USER_BOUNDARY_WITH_SKILLS = `${ASK_USER_BOUNDARY} EXCEPTION: \`load-skill\` may immediately precede \`ask-user\` in the same turn so the clarifying questions can be informed by the skill's methodology.`;
+
+type BuildCoreRuleSectionsOptions = {
+  skillCatalogStatus: "available" | "empty";
+  toolAvailability: ChatToolAvailability;
+};
+
+type GetExternalFactSourcingRuleOptions = {
+  skillCatalogStatus: BuildCoreRuleSectionsOptions["skillCatalogStatus"];
+  webResearch: boolean;
+};
+
+const getExternalFactSourcingRule = ({
+  skillCatalogStatus,
   webResearch,
-  subagents,
-}: ChatToolAvailability): readonly string[] => [
+}: GetExternalFactSourcingRuleOptions): string => {
+  if (webResearch) {
+    return skillCatalogStatus === "available"
+      ? EXTERNAL_FACT_SOURCING_WITH_WEB
+      : EXTERNAL_FACT_SOURCING_WITH_WEB_NO_SKILLS;
+  }
+
+  return skillCatalogStatus === "available"
+    ? EXTERNAL_FACT_SOURCING_NO_WEB
+    : EXTERNAL_FACT_SOURCING_NO_WEB_NO_SKILLS;
+};
+
+const buildCoreRuleSections = ({
+  skillCatalogStatus,
+  toolAvailability: { webResearch, subagents },
+}: BuildCoreRuleSectionsOptions): readonly string[] => [
   "You are an AI inside stella, a legal workspace. Answer directly; skip greetings and persona. For complex or ambiguous tasks, call `ask-user` to gather requirements before acting.",
-  "ASK-USER BOUNDARY: Use `ask-user` only for missing task facts (preferences, jurisdiction, parties, scope). Never use it to request tool-call permission or consent — stella handles approvals outside the model. When you decide to call `ask-user`, do not emit any other tool calls (e.g. `execute_typescript`) in the same turn — wait for the user's answer first; otherwise the user sees retrieved data before they have answered the clarifying question and that data may be off-topic. EXCEPTION: `load-skill` may immediately precede `ask-user` in the same turn so the clarifying questions can be informed by the skill's methodology.",
+  skillCatalogStatus === "available"
+    ? ASK_USER_BOUNDARY_WITH_SKILLS
+    : ASK_USER_BOUNDARY,
   "REPEATED-QUESTION GUARD: When the user answers a question (even tersely — 'Yes', 'Czechia', 'all parties'), treat the answer as the answer and advance to the next step. Do not re-ask the same question with cosmetic rewording or restate it as confirmation. If their answer leaves a required fact still missing, ask ONLY for that missing fact, never the one they already answered.",
   "TRUTHFULNESS: Never guess, infer, or fabricate document content — retrieve via tools first. Only claim an action occurred when its tool returned success for that action; surface skips, no-ops, and errors plainly.",
+  "TOOL FAILURE RECOVERY: A failed tool call is not a failed user turn. Read the tool error, then continue autonomously: correct the input, choose an available alternative, or complete the task without that tool. Mention the failure only when it materially limits the answer. Ask the user to retry only when no useful path remains.",
   "WRITES: Creating, updating, or deleting workspace data happens through direct write tools, discoverable the same way as the read surface. Every write is gated — the user approves each call before it runs — so never state or imply a change was made until that tool returns success; a pending approval is not a completed action.",
   "FRESH DATA: Answer questions about what currently exists in the workspace (which matters, documents, tasks, contacts, or fields there are) from a fresh tool call, never from memory or an earlier turn — workspace data changes between turns.",
-  webResearch ? EXTERNAL_FACT_SOURCING_WITH_WEB : EXTERNAL_FACT_SOURCING_NO_WEB,
-  "POST-LOAD-SKILL: After `load-skill` returns, never produce a 'Loaded the X skill' confirmation message. In the SAME turn, do one of: (a) immediately apply the skill's methodology to the user's stated task using the appropriate tool(s) and surface the result as your answer; or (b) if the user's request is bare (just a skill reference) or missing facts the skill explicitly requires (jurisdiction, parties, scope, parameters), call `ask-user` with the SPECIFIC clarifying questions the skill methodology calls for — never generic 'what do you want me to do?'. Read the skill body; ask only for what the skill needs to proceed.",
-  "SKILL-RESOURCES: When `load-skill` returns a non-empty `resources` list, treat those paths as part of the skill's methodology — not optional appendices. Before producing the final answer, call `read-skill-resource` on every resource the user's task plausibly depends on (criteria checklists, jurisdictional references, templates the skill prescribes). EMIT ALL READ CALLS IN A SINGLE ASSISTANT TURN — multiple `read-skill-resource` invocations issued together execute in parallel and finish in one round-trip; issuing them across separate turns serializes the reads and multiplies latency. Never claim you 'applied the skill' if you only read the top-level instructions; if you skip resources, say so plainly and offer to re-run with the resources read.",
-  "SKILL-REF LINKS: When the user's message contains a markdown link of the form `[name](#stella-skill-ref=slug)`, treat it as an explicit request to use that skill. Call `load-skill` with `skillName: slug` immediately (unless that skill is already loaded in this thread), then follow POST-LOAD-SKILL. Do not echo the link or narrate the load.",
+  getExternalFactSourcingRule({
+    skillCatalogStatus,
+    webResearch,
+  }),
+  ...(skillCatalogStatus === "available"
+    ? [
+        "POST-LOAD-SKILL: After `load-skill` returns, never produce a 'Loaded the X skill' confirmation message. In the SAME turn, do one of: (a) immediately apply the skill's methodology to the user's stated task using the appropriate tool(s) and surface the result as your answer; or (b) if the user's request is bare (just a skill reference) or missing facts the skill explicitly requires (jurisdiction, parties, scope, parameters), call `ask-user` with the SPECIFIC clarifying questions the skill methodology calls for — never generic 'what do you want me to do?'. Read the skill body; ask only for what the skill needs to proceed.",
+        "SKILL-RESOURCES: When `load-skill` returns a non-empty `resources` list, treat those paths as part of the skill's methodology — not optional appendices. Before producing the final answer, call `read-skill-resource` on every resource the user's task plausibly depends on (criteria checklists, jurisdictional references, templates the skill prescribes). EMIT ALL READ CALLS IN A SINGLE ASSISTANT TURN — multiple `read-skill-resource` invocations issued together execute in parallel and finish in one round-trip; issuing them across separate turns serializes the reads and multiplies latency. Never claim you 'applied the skill' if you only read the top-level instructions; if you skip resources, say so plainly and offer to re-run with the resources read.",
+        "SKILL-REF LINKS: When the user's message contains a markdown link of the form `[name](#stella-skill-ref=slug)`, treat it as an explicit request to use that skill. Call `load-skill` with `skillName: slug` immediately (unless that skill is already loaded in this thread), then follow POST-LOAD-SKILL. Do not echo the link or narrate the load.",
+      ]
+    : []),
   `DOCX REVIEW TAGS: DOCX text from read tools may contain insertion/deletion/comment tags (${DOCX_REVIEW_MARKUP_EXAMPLES.insertion}, ${DOCX_REVIEW_MARKUP_EXAMPLES.deletion}, ${DOCX_REVIEW_MARKUP_EXAMPLES.comment}) with optional author/initials/date/status/thread attributes. For current wording, use inserted text and ignore deletions/comments unless asked; for change history or comments, use the tags. Never show tag syntax unless explicitly asked.`,
   "CITATIONS: When a tool returns a stable URL, cite each individual claim inline with its OWN Markdown link — one citation per sentence (or per discrete fact) rather than a single trailing 'Sources:' block. Anchor text should be short (source domain, citation, or `[1]`-style footnote), and each link must point to the specific URL that supports THAT claim. The stella inspector opens these links in-app on click, so prefer them over plain text. Never invent URLs.",
   "LEGAL REFERENCE RESOLUTION: Citation resolvers are exact-match. On a no-match, retry with a broader search tool using citation variants before declaring it unavailable.",
@@ -604,7 +650,10 @@ export const estimateChatContextPromptTokens = ({
   skillMetadata?: readonly PromptSkillMetadata[] | undefined;
 } = {}): ChatContextPromptEstimate => {
   const instructionsText = joinPromptSections([
-    ...buildCoreRuleSections(toolAvailability),
+    ...buildCoreRuleSections({
+      skillCatalogStatus: skillMetadata.length > 0 ? "available" : "empty",
+      toolAvailability,
+    }),
     buildSkillCatalogSection(skillMetadata),
   ]);
   return {
@@ -1336,7 +1385,10 @@ const buildPromptParts = ({
     splitSkillMetadataForPrompt(skillMetadata);
   const cacheStablePrefix = brandChatCacheStablePrefix(
     joinPromptSections([
-      ...buildCoreRuleSections(toolAvailability),
+      ...buildCoreRuleSections({
+        skillCatalogStatus: skillMetadata.length > 0 ? "available" : "empty",
+        toolAvailability,
+      }),
       buildSkillCatalogSection(safeSkillMetadata),
       CHAT_CODE_MODE_SYSTEM_PROMPT,
     ]),

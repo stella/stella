@@ -67,18 +67,20 @@ type EditWorkspaceDocumentOutput =
   ChatUITools["edit_workspace_document"]["output"];
 
 const getApprovalId = (part: ApprovalToolPart): string | null => {
-  switch (part.state) {
+  const { state } = part;
+  switch (state) {
     case "awaiting-input":
     case "input-complete":
     case "input-streaming":
       return null;
     case "approval-requested":
     case "approval-responded":
-      return part.approval.id;
     case "complete":
+    case "error":
       return part.approval.id;
     default:
-      return null;
+      state satisfies never;
+      return panic("Unhandled approval tool state");
   }
 };
 

@@ -89,11 +89,20 @@ export const NeedsMatterCard = ({
   const sourcePreview = partialInput?.source ?? "";
 
   const isStreaming = part.state === "input-streaming";
-  const isAwaitingMatter =
-    part.state === "input-complete" && part.output === undefined;
   const completedOutput = part.state === "complete" ? part.output : undefined;
+  const readyDraftOutput =
+    completedOutput?.success === true &&
+    "destination" in completedOutput &&
+    completedOutput.destination === "draft"
+      ? completedOutput
+      : null;
+  const isAwaitingMatter =
+    (part.state === "input-complete" && part.output === undefined) ||
+    readyDraftOutput !== null;
   const successfulOutput =
-    completedOutput?.success === true ? completedOutput : null;
+    completedOutput?.success === true && readyDraftOutput === null
+      ? completedOutput
+      : null;
   const failedOutput =
     completedOutput?.success === false ? completedOutput : null;
 

@@ -21,6 +21,7 @@ import type {
 } from "@/components/chat/chat-ui-tools";
 import {
   hasRunningToolCallInLatestAssistantMessage,
+  isChatClientRequestActive,
   sanitizeRunningToolCalls,
 } from "@/components/chat/chat-ui-tools";
 import type { ChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
@@ -1680,8 +1681,7 @@ const hasInFlightChatRuntimeWork = (runtime: ChatRuntime): boolean => {
   return (
     snapshot.isLoading ||
     snapshot.sessionGenerating ||
-    snapshot.status === "submitted" ||
-    snapshot.status === "streaming" ||
+    isChatClientRequestActive(snapshot.status) ||
     hasRunningToolCallInLatestAssistantMessage({
       messages: snapshot.messages,
     })

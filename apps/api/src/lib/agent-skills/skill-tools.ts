@@ -26,12 +26,16 @@ import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { toTanStackValibotSchema as toTanStackToolSchema } from "@/api/lib/tanstack-ai-schema";
 
+type AvailableSkillMetadata = SkillMetadata & {
+  source?: "built-in" | "installed" | undefined;
+};
+
 type CreateSkillToolsProps = {
   activeSkillContext?: ActiveChatSkillContext | null | undefined;
   organizationId: SafeId<"organization">;
   recordAuditEvent?: AuditRecorder | undefined;
   safeDb: SafeDb;
-  skills: readonly SkillMetadata[];
+  skills: readonly AvailableSkillMetadata[];
   userId: SafeId<"user">;
 };
 
@@ -57,6 +61,16 @@ export const createSkillTools = ({
         })
       : {};
 
+  if (skills.length === 0) {
+    return {
+      "load-skill": undefined,
+      "read-skill-resource": undefined,
+      ...currentSkillEditTools,
+    };
+  }
+
+  const skillNameSchema = createSkillNameSchema(skills);
+
   return {
     "load-skill": toolDefinition({
       name: "load-skill",
@@ -67,12 +81,7 @@ export const createSkillTools = ({
         "methodology or resource list.",
       inputSchema: toTanStackToolSchema(
         v.strictObject({
-          skillName: v.pipe(
-            v.string(),
-            v.description(
-              "Skill name exactly as listed in the chat skill catalog.",
-            ),
-          ),
+          skillName: skillNameSchema,
         }),
       ),
     }).server(async ({ skillName }) => {
@@ -113,12 +122,7 @@ export const createSkillTools = ({
         "matter data.",
       inputSchema: toTanStackToolSchema(
         v.strictObject({
-          skillName: v.pipe(
-            v.string(),
-            v.description(
-              "Skill name exactly as listed in the chat skill catalog.",
-            ),
-          ),
+          skillName: skillNameSchema,
           path: v.pipe(
             v.string(),
             v.description(
@@ -174,6 +178,31 @@ export const createSkillTools = ({
 
     ...currentSkillEditTools,
   };
+};
+
+const SKILL_NAME_DESCRIPTION =
+  "Skill name exactly as listed in the chat skill catalog.";
+
+const createSkillNameSchema = (skills: readonly AvailableSkillMetadata[]) => {
+  // Installed names are user-controlled and can contain privileged matter
+  // context. They stay out of provider-visible JSON Schema; the runtime
+  // availability check remains authoritative for mixed catalogs. A catalog
+  // containing only built-in public names can make invalid calls impossible
+  // at the provider boundary with an exact enum.
+  if (skills.some((skill) => skill.source === "installed")) {
+    return v.pipe(v.string(), v.description(SKILL_NAME_DESCRIPTION));
+  }
+
+  const skillNames = skills.map((skill) => skill.name);
+  const firstSkillName = skillNames.at(0);
+  if (firstSkillName === undefined) {
+    return v.pipe(v.string(), v.description(SKILL_NAME_DESCRIPTION));
+  }
+
+  return v.pipe(
+    v.picklist([firstSkillName, ...skillNames.slice(1)]),
+    v.description(SKILL_NAME_DESCRIPTION),
+  );
 };
 
 const readSkillResourceContent = async ({
@@ -661,7 +690,9 @@ const assertAvailableSkill = ({
 }) => {
   if (!availableSkillIds.has(skillName)) {
     throw new ChatToolError({
-      message: `Skill is not available in this chat context: ${skillName}`,
+      message:
+        `No skill named "${skillName}" is available in this chat context. ` +
+        "Continue without it or choose an exact name from the skill catalog.",
     });
   }
 };

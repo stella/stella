@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
+import { selectCreateDocumentDrafts } from "@/components/chat/create-document-draft.logic";
 import {
   __resetChatRequestStateForTests,
   acquireChatRuntime,
@@ -680,6 +681,189 @@ describe("chat runtime", () => {
   });
   afterEach(() => {
     globalThis.fetch = previousFetch;
+  });
+
+  test("exposes progressive create-document source from TanStack tool arguments", async () => {
+    const threadId = toChatThreadId("thread-progressive-draft");
+    const messageId = "66666666-6666-4666-8666-666666666666";
+    globalThis.fetch = createFetchMock(async () =>
+      createSseResponse([
+        { type: "RUN_STARTED", threadId, runId: "run-progressive-draft" },
+        { type: "TEXT_MESSAGE_START", messageId, role: "assistant" },
+        {
+          type: "TOOL_CALL_START",
+          parentMessageId: messageId,
+          toolCallId: "tool-progressive-draft",
+          toolCallName: "create-document",
+          toolName: "create-document",
+        },
+        {
+          type: "TOOL_CALL_ARGS",
+          delta:
+            '{"name":"Power of attorney","source":"@doc kind=other\\n@paragraph\\nProgress',
+          toolCallId: "tool-progressive-draft",
+        },
+        {
+          type: "TOOL_CALL_ARGS",
+          delta: 'ive draft"}',
+          toolCallId: "tool-progressive-draft",
+        },
+        {
+          type: "TOOL_CALL_END",
+          input: {
+            name: "Power of attorney",
+            source: "@doc kind=other\n@paragraph\nProgressive draft",
+          },
+          toolCallId: "tool-progressive-draft",
+          toolCallName: "create-document",
+          toolName: "create-document",
+        },
+        {
+          type: "RUN_FINISHED",
+          threadId,
+          runId: "run-progressive-draft",
+          finishReason: "tool_calls",
+        },
+      ]),
+    );
+    const runtime = createChatRuntime({
+      context: undefined,
+      initialMessages: [],
+      key: { scope: "global", threadId },
+      onError: (error) => {
+        throw error;
+      },
+      onFinish: () => {},
+    });
+    const observedSources: string[] = [];
+    const unsubscribe = runtime.subscribe(() => {
+      const draft = selectCreateDocumentDrafts(
+        runtime.getSnapshot().messages,
+      ).at(-1);
+      if (draft?.source) {
+        observedSources.push(draft.source);
+      }
+    });
+
+    await sendThreadChatMessage(
+      runtime,
+      createOutgoingMessage(
+        "77777777-7777-4777-8777-777777777777",
+        "Create a document",
+      ),
+    );
+    unsubscribe();
+
+    expect(observedSources).toContain("@doc kind=other\n@paragraph\nProgress");
+    expect(observedSources.at(-1)).toBe(
+      "@doc kind=other\n@paragraph\nProgressive draft",
+    );
+  });
+
+  test("completes an editable draft before accepting its revision prompt", async () => {
+    const threadId = toChatThreadId("thread-draft");
+    const requests: unknown[] = [];
+    const responseMessageIds = [
+      "11111111-1111-4111-8111-111111111111",
+      "44444444-4444-4444-8444-444444444444",
+    ];
+    globalThis.fetch = createFetchMock(async (_input, init) => {
+      requests.push(parseJsonRequestBody(init));
+      const messageId = responseMessageIds.at(requests.length - 1);
+      if (messageId === undefined) {
+        throw new Error("Unexpected chat request");
+      }
+      return createSseResponse([
+        { type: "RUN_STARTED", threadId, runId: `run-${requests.length}` },
+        { type: "TEXT_MESSAGE_START", messageId, role: "assistant" },
+        {
+          type: "TEXT_MESSAGE_CONTENT",
+          messageId,
+          delta: requests.length === 1 ? "Draft ready." : "Making it longer.",
+        },
+        { type: "TEXT_MESSAGE_END", messageId },
+        {
+          type: "RUN_FINISHED",
+          threadId,
+          runId: `run-${requests.length}`,
+          finishReason: "stop",
+        },
+      ]);
+    });
+
+    const input = {
+      name: "Power of attorney",
+      source: "@doc kind=other locale=en page=A4\n@title Power of attorney",
+    };
+    const runtime = createChatRuntime({
+      context: undefined,
+      initialMessages: [
+        {
+          id: "33333333-3333-4333-8333-333333333333",
+          role: "assistant",
+          parts: [
+            {
+              type: "tool-call",
+              id: "tool-draft",
+              name: "create-document",
+              state: "input-complete",
+              arguments: JSON.stringify(input),
+              input,
+            },
+          ],
+        },
+      ],
+      key: { scope: "global", threadId },
+      onError: (error) => {
+        throw error;
+      },
+      onFinish: () => {},
+    });
+
+    await runtime.addToolResult({
+      tool: "create-document",
+      toolCallId: "tool-draft",
+      output: {
+        success: true,
+        destination: "draft",
+        fileName: "Power of attorney.docx",
+      },
+    });
+
+    expect(requests.at(0)).toMatchObject({
+      message: {
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-call",
+            id: "tool-draft",
+            state: "complete",
+            output: { success: true, destination: "draft" },
+          },
+          { type: "tool-result", toolCallId: "tool-draft" },
+        ],
+      },
+    });
+
+    await sendThreadChatMessage(
+      runtime,
+      createOutgoingMessage(
+        "55555555-5555-4555-8555-555555555555",
+        "Make it three pages.",
+      ),
+    );
+
+    expect(requests).toHaveLength(2);
+    expect(requests.at(1)).toMatchObject({
+      message: {
+        role: "user",
+        parts: [{ type: "text", content: "Make it three pages." }],
+      },
+    });
+    expect(runtime.getSnapshot().messages.at(-1)).toMatchObject({
+      role: "assistant",
+      parts: [{ type: "text", content: "Making it longer." }],
+    });
   });
 
   test("streams reasoning and final text through tanstack ChatClient", async () => {

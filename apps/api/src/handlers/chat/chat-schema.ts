@@ -262,6 +262,23 @@ type ValidateMessageResult = Result<
 type ChatToolSchema = SchemaInput | undefined;
 type ChatToolCallPart = Extract<ChatPart, { type: "tool-call" }>;
 type ChatToolResultPart = Extract<ChatPart, { type: "tool-result" }>;
+const TOOL_CALL_OUTPUT_VALIDATION = {
+  "awaiting-input": "schema",
+  "approval-requested": "schema",
+  "approval-responded": "schema",
+  complete: "schema",
+  error: "error",
+  "input-complete": "schema",
+  "input-streaming": "schema",
+} as const satisfies Record<ChatToolCallPart["state"], "error" | "schema">;
+const TOOL_RESULT_VALIDATION = {
+  complete: "output",
+  error: "error",
+  streaming: "incomplete",
+} as const satisfies Record<
+  ChatToolResultPart["state"],
+  "error" | "incomplete" | "output"
+>;
 type ValidatedToolCallPart = {
   name: string;
   hasOutput: boolean;
@@ -706,6 +723,14 @@ const validateToolCallPart = ({
     }
   }
 
+  if (TOOL_CALL_OUTPUT_VALIDATION[part.state] === "error") {
+    const errorOutputResult = validateToolCallErrorOutput(part);
+    if (Result.isError(errorOutputResult)) {
+      return Result.err(errorOutputResult.error);
+    }
+    return Result.ok({ hasOutput: false, name: part.name, output: undefined });
+  }
+
   let hasOutput = false;
   let validatedOutput: unknown = undefined;
   if (part.output !== undefined) {
@@ -725,6 +750,30 @@ const validateToolCallPart = ({
   return Result.ok({ hasOutput, name: part.name, output: validatedOutput });
 };
 
+const validateToolCallErrorOutput = (
+  part: ChatToolCallPart,
+): Result<void, HandlerError<400>> => {
+  const output: unknown = part.output;
+  if (output === undefined) {
+    return Result.ok();
+  }
+  if (
+    typeof output !== "object" ||
+    output === null ||
+    !("error" in output) ||
+    typeof output.error !== "string" ||
+    output.error.length === 0
+  ) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: `Invalid chat tool call error output: ${part.id}`,
+      }),
+    );
+  }
+  return Result.ok();
+};
+
 const validateToolResultPart = ({
   part,
   toolCallsById,
@@ -734,7 +783,8 @@ const validateToolResultPart = ({
   toolCallsById: Map<string, ValidatedToolCallPart>;
   tools: ChatToolMap;
 }): Result<void, HandlerError<400>> => {
-  if (part.state === "streaming") {
+  const validation = TOOL_RESULT_VALIDATION[part.state];
+  if (validation === "incomplete") {
     return Result.err(
       new HandlerError({
         status: 400,
@@ -753,7 +803,7 @@ const validateToolResultPart = ({
     );
   }
 
-  if (part.state === "error") {
+  if (validation === "error") {
     return validateToolErrorResult(part);
   }
 

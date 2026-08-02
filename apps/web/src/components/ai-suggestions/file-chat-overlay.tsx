@@ -89,6 +89,7 @@ import { useChatSession } from "@/features/chat/hooks/use-chat-session";
 import { useChatThreadRuntime } from "@/features/chat/hooks/use-chat-thread-runtime";
 import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
 import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
+import { resolveSuggestedPromptsAvailability } from "@/features/chat/lib/suggested-prompts-availability";
 import type {
   ApplyActiveDocxEditsInput,
   ApplyActiveDocxEditsOutput,
@@ -1456,25 +1457,31 @@ const FileChatOverlayInner = ({
 
   // Check eligibility for suggested prompts using draft state (avoids
   // unnecessary API calls when user is typing).
-  const lastMessageId = messages.at(-1)?.id ?? null;
-  const lastMessageRole = messages.at(-1)?.role ?? null;
+  const lastMessage = messages.at(-1);
   const editorIsInitiallyEmpty = useIsChatDraftEmpty(threadRef);
-  const eligibleForSuggestions =
-    editorIsInitiallyEmpty &&
-    !isGenerating &&
-    lastMessageId !== null &&
-    lastMessageRole === "assistant";
+  const suggestedPromptsAvailability = resolveSuggestedPromptsAvailability({
+    editorIsEmpty: editorIsInitiallyEmpty,
+    error,
+    isGenerating,
+    lastMessage: lastMessage ?? null,
+    turnOwner: "composer",
+  });
+  const lastMessageId =
+    suggestedPromptsAvailability.status === "eligible"
+      ? suggestedPromptsAvailability.lastMessageId
+      : "";
   const { data: suggestedPromptsData } = useQuery(
     chatThreadSuggestedPromptsOptions({
       activeOrganizationId,
-      enabled: eligibleForSuggestions,
-      lastMessageId: lastMessageId ?? "",
+      enabled: suggestedPromptsAvailability.status === "eligible",
+      lastMessageId,
       threadRef,
     }),
   );
-  const suggestedPrompts = suggestedPromptsData
-    ? suggestedPromptsData.prompts
-    : [];
+  const suggestedPrompts =
+    suggestedPromptsAvailability.status === "eligible" && suggestedPromptsData
+      ? suggestedPromptsData.prompts
+      : [];
   const suggestedFollowupPrompt = suggestedPrompts.at(0) ?? undefined;
 
   const editorController = useChatEditor({

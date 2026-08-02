@@ -301,6 +301,8 @@ describe("chat prompt builders", () => {
     });
 
     expect(prompt.cacheStablePrefix).not.toContain("Available stella skills");
+    expect(prompt.cacheStablePrefix).not.toContain("load-skill");
+    expect(prompt.cacheStablePrefix).not.toContain("read-skill-resource");
     expect(prompt.cacheStablePrefix).not.toContain("\n\n\n\n");
     expect(prompt.fullPrompt).not.toContain("\n\n\n\n");
   });

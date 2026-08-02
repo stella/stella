@@ -2,8 +2,8 @@ import { useDeferredValue, useMemo, useRef } from "react";
 
 import { useTranslations } from "use-intl";
 
-import { compileLegalSourceToDocument } from "@stll/docx-core";
-
+import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
+import { compileCreateDocumentSourceToDocument } from "@/components/chat/create-document-compiler";
 import { registerCreateDocumentDraftSaver } from "@/components/chat/create-document-draft-runtime";
 import type { CreateDocumentDraftPayload } from "@/components/chat/create-document-draft.logic";
 import {
@@ -25,7 +25,7 @@ export const CreateDocumentDraftInspectorEditor = ({
   const compiled = useMemo(
     () =>
       source.trim()
-        ? compileLegalSourceToDocument(source, {
+        ? compileCreateDocumentSourceToDocument(source, {
             titleFallback: payload.name || "Draft",
           })
         : null,
@@ -52,8 +52,8 @@ export const CreateDocumentDraftInspectorEditor = ({
     );
   }
 
-  return (
-    <div className="min-h-0 flex-1 overflow-auto">
+  const editor = (
+    <div className="h-full min-h-0 overflow-auto">
       <DocxEditor
         ref={editorRef}
         autoOpenReviewSidebar={false}
@@ -68,5 +68,20 @@ export const CreateDocumentDraftInspectorEditor = ({
         showZoomControl={payload.status === "ready"}
       />
     </div>
+  );
+
+  if (payload.status === "streaming") {
+    return editor;
+  }
+
+  return (
+    <FileViewerWithAI
+      chatThreadId={payload.chatThreadId}
+      docxEditable
+      docxEditorRef={editorRef}
+      workspaceId={payload.workspaceId}
+    >
+      {editor}
+    </FileViewerWithAI>
   );
 };

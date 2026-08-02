@@ -5,6 +5,7 @@ import { DownloadIcon, Loader2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
+import { Checkbox } from "@stll/ui/components/checkbox";
 import {
   Popover,
   PopoverPopup,
@@ -20,12 +21,21 @@ import {
 } from "@stll/ui/components/select";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
+import { saveCreateDocumentDraft } from "@/components/chat/create-document-draft-runtime";
+import {
+  buildCreateDocumentDownloadFileName,
+  type CreateDocumentDraft,
+} from "@/components/chat/create-document-draft.logic";
+import { hasMessageExportCitations } from "@/components/chat/message-export-menu.logic";
 import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
+import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { APIError, unwrapEden } from "@/lib/errors/api";
+import { ClientOperationError } from "@/lib/errors/client";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { toSafeId } from "@/lib/safe-id";
 import { downloadFile } from "@/lib/utils";
@@ -54,52 +64,102 @@ const DOWNLOAD_TIMEOUT_MS = 60_000;
 const EXPORT_REQUEST_TIMEOUT_MS = 130_000;
 
 type MessageExportMenuProps = {
+  artifact?: CreateDocumentDraft | undefined;
   threadRef: ChatThreadRef;
-  messageId: string;
+  // Optional only for dev HMR compatibility: an already-mounted child can
+  // briefly receive the previous parent's prop shape during a module swap.
+  message?: PersistedChatMessage | undefined;
 };
 
 export const MessageExportMenu = ({
+  artifact,
   threadRef,
-  messageId,
+  message,
 }: MessageExportMenuProps) => {
   const t = useTranslations();
   const [open, setOpen] = useState(false);
-  const [citationStyle, setCitationStyle] =
-    useState<CitationStyle>("footnotes");
+  const hasCitations =
+    message !== undefined && hasMessageExportCitations(message);
+  const [citationStyle, setCitationStyle] = useState<CitationStyle>(
+    hasCitations ? "footnotes" : "none",
+  );
+  const [includeMessage, setIncludeMessage] = useState(true);
+  const [includeArtifact, setIncludeArtifact] = useState(
+    artifact !== undefined,
+  );
   const [isExportPending, setIsExportPending] = useState(false);
 
   const handleExport = async () => {
     setIsExportPending(true);
     const result = await Result.tryPromise(async () => {
-      const response = await api.chat
-        .threads({ threadId: threadRef.threadId })
-        .export.post(
-          {
-            messageId: toSafeId<"chatMessage">(messageId),
-            format: "docx",
-            citationStyle,
-          },
-          {
-            query:
-              threadRef.scope === "workspace"
-                ? { workspaceId: toSafeId<"workspace">(threadRef.workspaceId) }
-                : {},
-            fetch: {
-              signal: AbortSignal.timeout(EXPORT_REQUEST_TIMEOUT_MS),
+      const downloads: { blob: Blob; fileName: string }[] = [];
+      if (includeMessage) {
+        if (message === undefined) {
+          throw new ClientOperationError({
+            action: "export-chat-message",
+            message: "Chat message is unavailable during a live update",
+          });
+        }
+        const response = await api.chat
+          .threads({ threadId: threadRef.threadId })
+          .export.post(
+            {
+              messageId: toSafeId<"chatMessage">(message.id),
+              format: "docx",
+              citationStyle: hasCitations ? citationStyle : "none",
             },
-          },
-        );
-      const { downloadUrl, fileName } = unwrapEden(response);
-      const file = await fetchWithTimeout(downloadUrl, {
-        timeoutMs: DOWNLOAD_TIMEOUT_MS,
-      });
-      if (!file.ok) {
-        throw new APIError({
-          status: file.status,
-          message: `Export download failed (HTTP ${file.status}).`,
+            {
+              query:
+                threadRef.scope === "workspace"
+                  ? {
+                      workspaceId: toSafeId<"workspace">(threadRef.workspaceId),
+                    }
+                  : {},
+              fetch: {
+                signal: AbortSignal.timeout(EXPORT_REQUEST_TIMEOUT_MS),
+              },
+            },
+          );
+        const { downloadUrl, fileName } = unwrapEden(response);
+        const file = await fetchWithTimeout(downloadUrl, {
+          timeoutMs: DOWNLOAD_TIMEOUT_MS,
+        });
+        if (!file.ok) {
+          throw new APIError({
+            status: file.status,
+            message: `Export download failed (HTTP ${file.status}).`,
+          });
+        }
+        downloads.push({ blob: await file.blob(), fileName });
+      }
+
+      if (includeArtifact && artifact !== undefined) {
+        const editedBuffer = await saveCreateDocumentDraft(artifact.toolCallId);
+        let buffer = editedBuffer;
+        if (buffer === null) {
+          const { compileCreateDocumentSourceToDocx } =
+            await import("@/components/chat/create-document-compiler");
+          const compiled = await compileCreateDocumentSourceToDocx(
+            artifact.source,
+            { titleFallback: artifact.name },
+          );
+          if (compiled.status !== "ok") {
+            throw new ClientOperationError({
+              action: "export-create-document-draft",
+              message: "Generated document source could not be compiled",
+            });
+          }
+          buffer = compiled.buffer;
+        }
+        downloads.push({
+          blob: new Blob([new Uint8Array(buffer)], { type: DOCX_MIME }),
+          fileName: buildCreateDocumentDownloadFileName(artifact.name),
         });
       }
-      downloadFile(await file.blob(), fileName);
+
+      for (const download of downloads) {
+        downloadFile(download.blob, download.fileName);
+      }
     });
     setIsExportPending(false);
 
@@ -137,33 +197,59 @@ export const MessageExportMenu = ({
               docx: (chunks) => <bdi dir="ltr">{chunks}</bdi>,
             })}
           </p>
-          <label className="flex flex-col gap-1.5 text-xs">
-            <span className="text-muted-foreground">
-              {t("common.export.citations")}
-            </span>
-            <Select
-              onValueChange={(value) => {
-                if (value !== null) {
-                  setCitationStyle(value);
-                }
-              }}
-              value={citationStyle}
-            >
-              <SelectTrigger size="sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectPopup>
-                {CITATION_STYLE_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {t(option.labelKey)}
-                  </SelectItem>
-                ))}
-              </SelectPopup>
-            </Select>
-          </label>
+          {artifact !== undefined && (
+            <div className="flex flex-col gap-2 text-xs">
+              <label className="flex items-center gap-2">
+                <Checkbox
+                  checked={includeMessage}
+                  onCheckedChange={setIncludeMessage}
+                />
+                <span>{t("common.export.title")}</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <Checkbox
+                  checked={includeArtifact}
+                  onCheckedChange={setIncludeArtifact}
+                />
+                <span className="truncate">
+                  {buildCreateDocumentDownloadFileName(artifact.name)}
+                </span>
+              </label>
+            </div>
+          )}
+          {includeMessage && hasCitations && (
+            <label className="flex flex-col gap-1.5 text-xs">
+              <span className="text-muted-foreground">
+                {t("common.export.citations")}
+              </span>
+              <Select
+                onValueChange={(value) => {
+                  if (value !== null) {
+                    setCitationStyle(value);
+                  }
+                }}
+                value={citationStyle}
+              >
+                <SelectTrigger size="sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectPopup>
+                  {CITATION_STYLE_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {t(option.labelKey)}
+                    </SelectItem>
+                  ))}
+                </SelectPopup>
+              </Select>
+            </label>
+          )}
           <Button
             aria-live="polite"
-            disabled={isExportPending}
+            disabled={
+              isExportPending ||
+              message === undefined ||
+              (!includeMessage && (artifact === undefined || !includeArtifact))
+            }
             onClick={() => {
               detached(handleExport(), "MessageExportMenu");
             }}

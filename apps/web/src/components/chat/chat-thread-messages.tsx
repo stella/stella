@@ -58,7 +58,9 @@ import {
   hasRunningToolCallInLatestAssistantMessage,
   isApprovalPart,
 } from "@/components/chat/chat-ui-tools";
+import type { CreateDocumentDraft } from "@/components/chat/create-document-draft.logic";
 import { MessageExportMenu } from "@/components/chat/message-export-menu";
+import { findCreateDocumentArtifactForMessage } from "@/components/chat/message-export-menu.logic";
 import { NeedsMatterCard } from "@/components/chat/needs-matter-card";
 import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";
 import { rehypeAnonSpans } from "@/components/chat/rehype-anon-spans";
@@ -261,6 +263,10 @@ export const ChatThreadMessages = ({
               workspaceId={workspaceId}
             />
             <AssistantMessageActions
+              exportArtifact={findCreateDocumentArtifactForMessage(
+                messages,
+                index,
+              )}
               isGenerating={generationActive}
               isLatestAssistantMessage={
                 message.id === retryableAssistantMessageId
@@ -893,12 +899,14 @@ const getMessageText = (message: PersistedChatMessage) => {
 };
 
 const AssistantMessageActions = ({
+  exportArtifact,
   isGenerating,
   isLatestAssistantMessage,
   message,
   onResend,
   threadRef,
 }: {
+  exportArtifact: CreateDocumentDraft | null;
   isGenerating: boolean;
   isLatestAssistantMessage: boolean;
   message: PersistedChatMessage;
@@ -962,7 +970,12 @@ const AssistantMessageActions = ({
         </Button>
       )}
       {(!isGenerating || !isLatestAssistantMessage) && text && threadRef && (
-        <MessageExportMenu messageId={message.id} threadRef={threadRef} />
+        <MessageExportMenu
+          artifact={exportArtifact ?? undefined}
+          key={`${message.id}:${exportArtifact?.toolCallId ?? "message-only"}`}
+          message={message}
+          threadRef={threadRef}
+        />
       )}
     </div>
   );
@@ -1317,6 +1330,17 @@ const AssistantMessageParts = ({
               part={part}
             />
           );
+        }
+
+        if (
+          part.type === "tool-call" &&
+          part.state === "error" &&
+          (part.name === "load-skill" || part.name === "read-skill-resource")
+        ) {
+          // Skill lookup is internal routing. Once the agent has the error and
+          // can recover, showing the miss as a prominent transcript event adds
+          // implementation noise without giving the user an action to take.
+          return null;
         }
 
         if (

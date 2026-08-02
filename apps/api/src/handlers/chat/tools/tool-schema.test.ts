@@ -482,6 +482,42 @@ describe("chat tool schemas", () => {
     ).not.toThrow();
   });
 
+  test("does not offer skill lookup when the catalog is empty", () => {
+    const tools = createSkillTools({
+      organizationId,
+      safeDb: unusedSafeDb,
+      skills: [],
+      userId,
+    });
+
+    expect(tools["load-skill"]).toBeUndefined();
+    expect(tools["read-skill-resource"]).toBeUndefined();
+  });
+
+  test("constrains public skill calls to the available catalog", () => {
+    const tools = createSkillTools({
+      organizationId,
+      safeDb: unusedSafeDb,
+      skills: [
+        {
+          description: "Run a public legal workflow.",
+          name: "public-legal-workflow",
+          version: "1.0",
+        },
+      ],
+      userId,
+    });
+    const loadSkill = tools["load-skill"];
+    if (!loadSkill?.inputSchema) {
+      throw new TypeError("Expected load-skill input schema");
+    }
+
+    const schema = convertSchemaToJsonSchema(loadSkill.inputSchema);
+    expect(schema?.properties?.["skillName"]?.enum).toEqual([
+      "public-legal-workflow",
+    ]);
+  });
+
   test("keeps installed skill names out of tool schema descriptions", () => {
     const tools = createSkillTools({
       organizationId,
@@ -490,6 +526,7 @@ describe("chat tool schemas", () => {
         {
           description: "Private matter-specific workflow.",
           name: "acme-closing-strategy",
+          source: "installed",
           version: "1.0",
         },
       ],
