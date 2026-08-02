@@ -200,9 +200,10 @@ et standalone "tööruum") because the app uses the Matter term where its UI
 says workspace. On the landing, "workspace" as _product positioning_ (the
 category the product belongs to) may translate literally; the
 grandfathered entries in `i18n-lint-baseline.json` exist for exactly that
-distinction: the cs and fr taglines, plus the three cs strings that carry the
+distinction: the cs and fr taglines, plus the two cs strings that carry the
 identity phrase next to the word "matters" (`hero.subtitle`,
-`meta.homeDescription`, `story.workspaceEyebrow`). Czech had been dodging the
+`story.workspaceEyebrow`; `meta.homeDescription` left the list when metas
+moved to demand terms — see below). Czech had been dodging the
 ban with a second rendering of workspace; one correct term plus an honest
 baseline entry beats two terms. Do not add baseline entries for any other
 reason. Each entry is keyed on the (source, target) pair, so editing either
@@ -240,6 +241,34 @@ uses the Estonian compound _õigustööruum_ and the French _plateforme
 juridique open source_ — the renderings those locales' `meta.homeDescription`
 already uses. Reach for an existing lint-safe wording before coining a new
 one; a third synonym costs more than the repetition it avoids.
+
+### Metas are the exception: demand terms
+
+Meta titles and descriptions are the one surface written for a searcher
+rather than a reader already on the page. Body copy keeps the identity
+phrase; in cs, sk, and de the metas instead lead with phrasings legal
+readers actually search for, and the literal category label stays out of
+meta strings entirely — in a results page it reads as a label, not an
+answer to anything anyone typed:
+
+| Locale | Meta demand terms                                | Excluded from metas                         |
+| ------ | ------------------------------------------------ | ------------------------------------------- |
+| cs     | AI pro právníky, právní rešerše, revize smluv    | právní pracovní prostor, advokátní spis     |
+| de     | KI für Anwälte, Aktenverwaltung, Vertragsanalyse | Arbeitsbereich, Kanzleisoftware, Schwärzung |
+| sk     | AI právny asistent                               | právny pracovný priestor, advokátsky spis   |
+
+de additionally excludes _Kanzleisoftware_ (the term promises
+practice-management features — beA, Fristen, RVG — the product does not
+have) and _Schwärzung_ (it claims irreversible removal, while the
+anonymization engine is reversible by design). cs and sk exclude the
+compound _advokátní/advokátsky spis_: it names the advocate's formal
+client file, which is narrower than the product's matter — the plain
+Matter term (`spis`) already says the right thing.
+
+`scripts/check-meta-budgets.ts` enforces both directions alongside the
+length budgets: an excluded term fails in any meta string of its locale,
+and the home title and description together must carry at least one of the
+locale's demand terms.
 
 ### Linking the phrase: the `<gh>…</gh>` markers
 

@@ -83,8 +83,8 @@
     "toolsTitle": "Nástroje pre AI agentov."
   },
   "meta": {
-    "homeDescription": "Open source právny pracovný priestor pre advokátov: spisy, dokumenty, kontrola zmlúv aj právne rešerše. Prevádzkujte sami alebo v cloude. AI podľa využitia.",
-    "homeTitle": "stella | open source právny pracovný priestor"
+    "homeDescription": "AI právny asistent pre advokátov: spisy, dokumenty, kontrola zmlúv aj právne rešerše v jednej aplikácii. Prevádzkujte sami alebo v cloude. AI podľa využitia.",
+    "homeTitle": "stella | AI právny asistent pre advokátske kancelárie"
   },
   "nav": {
     "aiFactSheet": "Prehľad pre AI",
@@ -376,7 +376,7 @@
         }
       },
       "metaDescription": "Vyhľadávajte, čítajte a pracujte s aplikáciou stella z príkazového riadka alebo z klienta kompatibilného s MCP. Obe rozhrania zdieľajú oprávnenia aj dáta.",
-      "metaTitle": "MCP server a CLI pre váš právny pracovný priestor | stella",
+      "metaTitle": "MCP server a CLI pre vašu advokátsku kanceláriu | stella",
       "quickAnswer": {
         "answer": "Dve rozhrania k rovnakým schopnostiam aplikácie stella. CLI zrkadlí register nástrojov MCP ako príkazy, zatiaľ čo MCP server umožňuje kompatibilným AI agentom a nástrojom pracovať so spismi, dokumentmi, vzormi aj verejnými právnymi dátami pod rovnakou kontrolou prístupu.",
         "question": "Čo je CLI a MCP server aplikácie stella?"
@@ -855,8 +855,8 @@
           "question": "Dosiahnu na pracovný priestor aj iné nástroje?"
         }
       },
-      "metaDescription": "Spisy, dokumenty, úpravy Word .docx, revízia, rešerše aj chat v jednom právnom pracovnom priestore. Práca zostáva v kontexte od podkladov až po odpoveď.",
-      "metaTitle": "Správa advokátskych spisov na jednom mieste | stella",
+      "metaDescription": "Spisy, dokumenty, úpravy Word .docx, revízia aj rešerše na jednom mieste. Elektronický spis, v ktorom práca zostáva v kontexte od podkladov po odpoveď.",
+      "metaTitle": "Správa spisov a dokumentov na jednom mieste | stella",
       "quickAnswer": {
         "answer": "Webová aplikácia, ktorá drží spisy, dokumenty, úpravy Word .docx, revíziu, rešerše aj chat na jednom mieste. Všetko, čo do spisu pridáte, pri ňom zostane, takže kontext nájdete aj po návrate. Sprievodná desktopová aplikácia slúži ako lokálny most, keď dokument potrebuje Microsoft Word.",
         "question": "Čo je pracovný priestor v aplikácii stella?"
