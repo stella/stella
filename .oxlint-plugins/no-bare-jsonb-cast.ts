@@ -44,6 +44,28 @@ const isJsonStringifyCall = (node: unknown): boolean => {
   );
 };
 
+// Postgres ignores whitespace and comments between the parameter and its cast,
+// so the guard has to as well; otherwise `${json} ::jsonb` or a cast on the
+// next line reads as safe.
+const stripLeadingSqlNoise = (raw: string): string => {
+  let rest = raw;
+  for (;;) {
+    const next = rest
+      .replace(/^\s+/u, "")
+      .replace(/^--[^\n]*/u, "")
+      .replace(/^\/\*[\S\s]*?\*\//u, "");
+    if (next === rest) {
+      return next;
+    }
+    rest = next;
+  }
+};
+
+// `::jsonb` with optional whitespace after the operator, case-insensitive
+// because SQL type names are. `::text::jsonb` does not match, which is the
+// whole point.
+const BARE_JSONB_CAST = /^::\s*jsonb\b/iu;
+
 export default {
   meta: { name: "no-bare-jsonb-cast" },
   rules: {
@@ -98,7 +120,7 @@ export default {
                 typeof (value as { raw?: unknown }).raw === "string"
                   ? (value as { raw: string }).raw
                   : "";
-              if (!raw.startsWith("::jsonb")) {
+              if (!BARE_JSONB_CAST.test(stripLeadingSqlNoise(raw))) {
                 continue;
               }
 
