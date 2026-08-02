@@ -81,6 +81,7 @@ describe("environment file parsing", () => {
           "EMPTY_VALUE=",
           `EMPTY_DEFAULT=\${EMPTY_VALUE:-5433}`,
           `SET_DEFAULT=\${PGPORT:-5432}`,
+          `UNEXPANDED_DEFAULT=\${MISSING_PORT:-$PGPORT}`,
         ].join("\n"),
         { PGPORT: "6432" },
       ),
@@ -96,6 +97,7 @@ describe("environment file parsing", () => {
       PORT_PREFIX: "54",
       SET_DEFAULT: "6432",
       SMTP_PORT: "1025",
+      UNEXPANDED_DEFAULT: "$PGPORT",
     });
   });
 
@@ -144,15 +146,17 @@ describe("environment doctor output", () => {
     expect(message).not.toContain(secret);
   });
 
-  test("normalizes empty schema values but preserves an empty database password", () => {
+  test("normalizes empty schema values after database URL resolution", () => {
     expect(
       normalizeEmptyEnvironment({
         DB_PASSWORD: "",
+        DB_SSLMODE: "",
         EMAIL_PROVIDER: "",
         OCR_SERVICE_URL: "",
       }),
     ).toEqual({
       DB_PASSWORD: "",
+      DB_SSLMODE: "",
       EMAIL_PROVIDER: undefined,
       OCR_SERVICE_URL: undefined,
     });
@@ -175,6 +179,27 @@ describe("environment doctor output", () => {
     expect(result.values["DATABASE_URL"]).toBe(
       "postgres://postgres:@localhost:5432/stella?sslmode=require",
     );
+  });
+
+  test("rejects an empty database SSL mode like API startup", () => {
+    const input = validApiInput();
+    delete input["DATABASE_URL"];
+    Object.assign(input, {
+      DB_HOST: "localhost",
+      DB_NAME: "stella",
+      DB_PASSWORD: "",
+      DB_PORT: "5432",
+      DB_SSLMODE: "",
+      DB_USER: "postgres",
+    });
+
+    const result = validateDoctorEnvironment("api", input);
+    expect(result.status).toBe("invalid");
+    if (result.status === "invalid") {
+      expect(result.issues).toContain(
+        "DATABASE_URL: invalid database component settings.",
+      );
+    }
   });
 
   test.each([
@@ -260,6 +285,15 @@ describe("environment usage auditing", () => {
     ).toEqual([
       { file: "apps/web/Dockerfile", line: 1, name: "BUILDPLATFORM" },
     ]);
+  });
+
+  test("finds required shell environment inputs", () => {
+    expect(
+      findEnvUsages(
+        "scripts/example.sh",
+        `release_ref="${String.fromCodePoint(36)}{RELEASE_REF:?RELEASE_REF is required}"`,
+      ),
+    ).toEqual([{ file: "scripts/example.sh", line: 1, name: "RELEASE_REF" }]);
   });
 
   test("traces literal names through computed environment helpers", () => {

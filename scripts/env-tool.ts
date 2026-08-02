@@ -147,8 +147,6 @@ const isEnvNameCharacter = (character: string | undefined) =>
   isEnvNameStart(character) ||
   (character !== undefined && character >= "0" && character <= "9");
 
-const MAX_ENV_EXPANSION_DEPTH = 200;
-
 const findExpansionEnd = (value: string, fallbackStart: number) => {
   let nestedDepth = 0;
   for (let index = fallbackStart; index < value.length; index += 1) {
@@ -173,13 +171,11 @@ const findExpansionEnd = (value: string, fallbackStart: number) => {
 };
 
 type ExpandEnvReferencesOptions = {
-  depth: number;
   environment: NodeJS.ProcessEnv;
   value: string;
 };
 
 const expandEnvReferences = ({
-  depth,
   environment,
   value,
 }: ExpandEnvReferencesOptions) => {
@@ -227,15 +223,7 @@ const expandEnvReferences = ({
         continue;
       }
       const current = environment[name];
-      output.push(
-        current === undefined && depth < MAX_ENV_EXPANSION_DEPTH
-          ? expandEnvReferences({
-              depth: depth + 1,
-              environment,
-              value: fallback,
-            })
-          : (current ?? fallback),
-      );
+      output.push(current ?? fallback);
       index = fallbackEnd + 1;
       continue;
     }
@@ -261,7 +249,6 @@ export const parseEnvText = (
   const ambientNames = new Set(Object.keys(ambientEnvironment));
   for (const [name, value] of Object.entries(parsed)) {
     const expanded = expandEnvReferences({
-      depth: 0,
       environment,
       value: value ?? "",
     });
@@ -322,8 +309,11 @@ const AUDIT_GLOBS = [
 ];
 
 const AUDIT_IGNORE_FILES = new Set([
-  // This invariant test contains process.env syntax as source-text fixtures.
+  // These tests contain environment syntax as source-text fixtures or use
+  // test-process-only variables that are not repository configuration.
   "packages/property-testing/src/ci-gate-coverage.test.ts",
+  "scripts/bun-ci-retry.test.sh",
+  "scripts/detect-desktop-release-changes.test.sh",
   "scripts/env-tool.test.ts",
 ]);
 
@@ -478,7 +468,7 @@ export const findEnvUsages = (file: string, text: string): EnvUsage[] => {
       DEPLOYMENT_ENV_PATTERN,
       BARE_DOCKER_ENV_PATTERN,
     ];
-  } else if (/\.ya?ml$/u.test(file)) {
+  } else if (/\.(?:sh|ya?ml)$/u.test(file)) {
     patterns = [...STATIC_ENV_PATTERNS, DEPLOYMENT_ENV_PATTERN];
   }
   for (const pattern of patterns) {
@@ -595,11 +585,15 @@ type DoctorValidationResult =
 const isEnvApp = (value: string): value is EnvApp =>
   Object.values(ENV_APP).some((app) => app === value);
 
+const EMPTY_DATABASE_COMPONENT_KEYS = new Set(["DB_PASSWORD", "DB_SSLMODE"]);
+
 export const normalizeEmptyEnvironment = (input: DoctorInput): DoctorInput => {
   const normalized: DoctorInput = {};
   for (const [name, value] of Object.entries(input)) {
     normalized[name] =
-      value === "" && name !== "DB_PASSWORD" ? undefined : value;
+      value === "" && !EMPTY_DATABASE_COMPONENT_KEYS.has(name)
+        ? undefined
+        : value;
   }
   return normalized;
 };
