@@ -193,8 +193,13 @@ test("capture landing product screenshots", async ({
           .click();
         // eslint-disable-next-line no-await-in-loop -- see above
         await expect(page).toHaveURL(/\/law\/[a-z-]+\/cases\//u);
+        // The case detail is its own code-split chunk, so this click is the
+        // first load of another route: same cold-compile allowance as the
+        // navigations above, not the config's 15s default.
         // eslint-disable-next-line no-await-in-loop -- see above
-        await expect(page.locator("article").first()).toBeVisible();
+        await expect(page.locator("article").first()).toBeVisible({
+          timeout: COLD_COMPILE_TIMEOUT,
+        });
         // The reader briefly renders a logged-out "locked" AI button while
         // the client-side session query settles (useClientAuthStatus), then
         // swaps in the authenticated workspace. Wait for that swap so the

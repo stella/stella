@@ -8,10 +8,12 @@
 import { sql } from "drizzle-orm";
 
 const value = { a: 1 };
+const formJsonSource = JSON.stringify([{ a: 1 }]);
 const column = sql`some_column`;
 // Columns are reached through the schema object in real code; that member form
 // is what the rule treats as a column cast.
 const table = { metadata: column };
+const rowPayload = { astJson: formJsonSource };
 
 // A serialized value bound directly and cast with a bare `::jsonb`.
 // oxlint-disable-next-line no-bare-jsonb-cast/no-bare-jsonb-cast
@@ -70,6 +72,14 @@ const _positionalTemplate = `UPDATE t SET doc = $1::jsonb WHERE id = $2`;
 // oxlint-disable-next-line no-bare-jsonb-cast/no-bare-jsonb-cast
 const _positionalLiteral = "UPDATE t SET doc = $1 :: JSONB WHERE id = $2";
 
+// Postgres treats a comment as whitespace, so it cannot hide a positional cast.
+// oxlint-disable-next-line no-bare-jsonb-cast/no-bare-jsonb-cast
+const _positionalComment = "UPDATE t SET doc = $1 /* serialized */ ::jsonb";
+
+// Property access is not an exemption: this is still a bound serialized value.
+// oxlint-disable-next-line no-bare-jsonb-cast/no-bare-jsonb-cast
+const _viaPropertyAccess = sql`doc = ${rowPayload.astJson}::jsonb`;
+
 // --- Cases the rule MUST NOT flag ---
 
 // Positional casts routed through text are the correct form.
@@ -79,10 +89,10 @@ const _positionalThroughText = `UPDATE t SET doc = $1::text::jsonb WHERE id = $2
 const _throughText = sql`${JSON.stringify(value)}::text::jsonb`;
 const _identifierThroughText = sql`surface_forms @> ${formJson}::text::jsonb`;
 
-// Casting a column reference is unrelated: there is no bind parameter whose
-// type the cast could pin, so nothing is double-encoded. Only the member form
-// is exempt — a bare identifier could hold anything, so it is treated as a
-// value and must use `::text::jsonb`.
+// Casting a real column is the one legitimate bare cast, and it carries an
+// explicit disable rather than an inferred exemption — property access alone
+// cannot tell a column from a serialized value.
+// oxlint-disable-next-line no-bare-jsonb-cast/no-bare-jsonb-cast -- casts the column itself, not a bind parameter
 const _columnCast = sql`${table.metadata}::jsonb ->> 'organizationId'`;
 
 // A SQL literal is written by Postgres, not bound by the driver.
@@ -105,7 +115,9 @@ export const __noBareJsonbCastFixture = {
   _uppercaseCast,
   _viaParameter,
   _viaAlias,
+  _viaPropertyAccess,
   _positionalTemplate,
+  _positionalComment,
   _positionalLiteral,
   _positionalThroughText,
   _throughText,

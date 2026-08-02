@@ -17,6 +17,7 @@ import { MACHINE_API_KEY_CONFIG_ID } from "@/api/lib/machine-api-key-config";
  */
 
 /** The owning organization id, read out of the plugin's JSON metadata column. */
+// oxlint-disable-next-line no-bare-jsonb-cast/no-bare-jsonb-cast -- casts the text column itself, not a bind parameter, so nothing is double-encoded
 const metadataOrganizationId = sql`(${apikey.metadata}::jsonb ->> 'organizationId')`;
 
 /**

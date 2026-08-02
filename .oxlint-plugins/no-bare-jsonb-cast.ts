@@ -20,9 +20,14 @@
 //   sql`... ${JSON.stringify(value)}::jsonb ...`
 //   sql`... ${json}::jsonb ...`           // any value, however it got here
 //
+// There is no exemption for property access either: `${payload.astJson}` is a
+// member expression and still a bound serialized string. Casting a real column
+// (`${table.column}::jsonb`) is the one legitimate use, and it is rare enough
+// to carry an explicit disable naming why, rather than an inferred escape hatch
+// that any serialized value can slip through.
+//
 // Allowed:
 //   sql`... ${JSON.stringify(value)}::text::jsonb ...`
-//   sql`... ${table.column}::jsonb ...`   // casting a column, not a bind
 //   sql`... '[]'::jsonb ...`              // SQL literal, not a bind
 //
 // The positional form is covered too, matched in the SQL text rather than the
@@ -61,7 +66,13 @@ const BARE_JSONB_CAST = /^::\s*jsonb\b/iu;
 // The positional form: `db.unsafe("... $1::jsonb ...", [json])`. The parameter
 // is bound by index rather than interpolated, so it never appears in
 // `TemplateLiteral.expressions` and has to be matched in the SQL text itself.
+// Comments count as whitespace to Postgres, so they are stripped before the
+// match rather than allowed to hide the cast.
+const SQL_COMMENT = /--[^\n]*|\/\*[\S\s]*?\*\//gu;
 const POSITIONAL_JSONB_CAST = /\$\d+\s*::\s*jsonb\b/iu;
+
+const carriesPositionalBareCast = (text: string): boolean =>
+  POSITIONAL_JSONB_CAST.test(text.replace(SQL_COMMENT, " "));
 
 // Any string the rule can read SQL out of: a plain literal, or a template
 // literal's static chunks.
@@ -106,7 +117,7 @@ export default {
             return;
           }
           const carriesPositionalCast = sqlTextsOf(node).some((text) =>
-            POSITIONAL_JSONB_CAST.test(text),
+            carriesPositionalBareCast(text),
           );
           if (!carriesPositionalCast) {
             return;
@@ -128,19 +139,6 @@ export default {
             const quasis = Array.isArray(node.quasis) ? node.quasis : [];
 
             for (const [index, expression] of expressions.entries()) {
-              // Allow only a column reference (`${table.column}::jsonb`), which
-              // casts a column rather than pinning a bind parameter's type.
-              // Everything else is treated as a value: whether it is serialized
-              // cannot be known from this file — it may arrive through a helper
-              // parameter, an alias, or a later assignment — so the safe form is
-              // required unconditionally rather than inferred.
-              if (
-                isAstNode(expression) &&
-                expression.type === "MemberExpression"
-              ) {
-                continue;
-              }
-
               // The text directly after this interpolation carries the cast.
               // A quasi's `value` is a plain `{ raw, cooked }` record, not an
               // AST node, so it carries no `type` to narrow on.

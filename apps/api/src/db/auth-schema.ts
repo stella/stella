@@ -328,10 +328,12 @@ export const apikey = pgTable(
     // CONCURRENTLY by the migration, since a plain build would lock out every
     // credential verification while it ran.
     index("apikey_metadata_organization_id_idx")
+      // oxlint-disable-next-line no-bare-jsonb-cast/no-bare-jsonb-cast -- casts the text column itself; the index expression must stay byte-identical to the migration's
       .on(sql`((${table.metadata}::jsonb ->> 'organizationId'))`)
       .where(sql`${table.metadata} IS NOT NULL`),
     index("apikey_org_keyset_idx")
       .on(
+        // oxlint-disable-next-line no-bare-jsonb-cast/no-bare-jsonb-cast -- casts the text column itself; the index expression must stay byte-identical to the migration's
         sql`((${table.metadata}::jsonb ->> 'organizationId'))`,
         sql`${table.createdAt} DESC`,
         sql`${table.id} DESC`,
