@@ -784,6 +784,17 @@ export const resolveDoctorMode = ({
   return app === ENV_APP.web ? ENV_MODE.development : undefined;
 };
 
+type ResolveDoctorProcessEnvironmentOptions = {
+  environment: NodeJS.ProcessEnv;
+  mode: EnvMode | undefined;
+};
+
+export const resolveDoctorProcessEnvironment = ({
+  environment,
+  mode,
+}: ResolveDoctorProcessEnvironmentOptions): NodeJS.ProcessEnv =>
+  mode ? { ...environment, NODE_ENV: mode } : environment;
+
 type DoctorEnvFileNamesOptions = {
   app: EnvApp;
   mode: EnvMode | undefined;
@@ -826,12 +837,17 @@ const runDoctor = (app: EnvApp, mode: EnvMode | undefined) => {
     path.join(envDirectory, name),
   );
   const existingEnvPaths = envPaths.filter(existsSync);
+  const doctorProcessEnvironment = resolveDoctorProcessEnvironment({
+    environment: process.env,
+    mode,
+  });
   const fileValues = parseEnvLayers(
     existingEnvPaths.map((envPath) => readFileSync(envPath, "utf-8")),
+    doctorProcessEnvironment,
   );
   const validation = validateDoctorEnvironment({
     app,
-    input: { ...fileValues, ...process.env },
+    input: { ...fileValues, ...doctorProcessEnvironment },
     mode,
   });
   const displayedEnvPaths = (

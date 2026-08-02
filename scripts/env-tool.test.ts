@@ -21,6 +21,7 @@ import {
   renderCollabEnvExample,
   renderWebEnvExample,
   resolveDoctorMode,
+  resolveDoctorProcessEnvironment,
   validateDoctorEnvironment,
 } from "./env-tool";
 
@@ -220,6 +221,13 @@ describe("environment file parsing", () => {
       FROM_MODE: "mode-local",
       VALUE: "mode-local",
     });
+    const doctorProcessEnvironment = resolveDoctorProcessEnvironment({
+      environment: { NODE_ENV: "development" },
+      mode: "production",
+    });
+    expect(
+      parseEnvText("EXPANDED_MODE=$NODE_ENV", doctorProcessEnvironment),
+    ).toEqual({ EXPANDED_MODE: "production" });
   });
 });
 
