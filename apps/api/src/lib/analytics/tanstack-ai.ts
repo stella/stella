@@ -6,6 +6,7 @@ import type { ModelRole } from "@stll/ai-catalog";
 import type { SafeDb } from "@/api/db/safe-db";
 import type { UsageActionType, UsageServiceTier } from "@/api/db/schema";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import { classifyAIError } from "@/api/lib/ai-error";
 import { captureError as captureTelemetryError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { errorTag } from "@/api/lib/errors/utils";
@@ -298,8 +299,15 @@ export const createTanStackAIAnalyticsCallbacks = ({
     hasCapturedGenerationError = true;
     const resolvedModelInfo = resolveAnalyticsModelInfo();
 
-    logger.error("tanstack_ai.generation.failed", {
+    // Classified kinds (quota, billing, retired model, provider outage) are
+    // expected operational states of an upstream account, not faults in this
+    // service, so they log at WARN; `unknown` is a failure shape this code
+    // does not anticipate and is the only kind logged at ERROR. Same split as
+    // `reportStreamFailure` in the chat stream handler.
+    const kind = classifyAIError(error);
+    const attributes = {
       "error.type": errorTag(error),
+      "ai.error_kind": kind,
       "ai.feature": config.feature,
       ...(resolvedModelInfo
         ? {
@@ -307,7 +315,12 @@ export const createTanStackAIAnalyticsCallbacks = ({
             "ai.model": resolvedModelInfo.modelId,
           }
         : {}),
-    });
+    };
+    if (kind === "unknown") {
+      logger.error("tanstack_ai.generation.failed", attributes);
+    } else {
+      logger.warn("tanstack_ai.generation.failed", attributes);
+    }
     captureTelemetryError(error, {
       feature: config.feature,
       organization_id: config.usageMetering?.organizationId ?? "",
