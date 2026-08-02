@@ -395,7 +395,7 @@ const parseTypeChangePolicy = (
 };
 
 const isCustomStatementBudget = (statement: string) =>
-  /^DO\s+\$\$[\s\S]*SELECT\s+setting::integer\s+INTO\s+current_ms\s+FROM\s+pg_settings\s+WHERE\s+name\s*=\s*'statement_timeout';[\s\S]*IF\s+current_ms\s*=\s*0\s+OR\s+current_ms\s*<\s*1200000\s+THEN[\s\S]*PERFORM\s+set_config\(\s*'statement_timeout'\s*,\s*'20min'\s*,\s*false\s*\);[\s\S]*END[\s\S]*\$\$$/iu.test(
+  /^DO\s+\$\$\s*DECLARE\s+current_ms\s+integer\s*;\s*BEGIN\s+SELECT\s+setting::integer\s+INTO\s+current_ms\s+FROM\s+pg_settings\s+WHERE\s+name\s*=\s*'statement_timeout'\s*;\s*IF\s+current_ms\s*=\s*0\s+OR\s+current_ms\s*<\s*1200000\s+THEN\s+PERFORM\s+set_config\(\s*'statement_timeout'\s*,\s*'20min'\s*,\s*false\s*\)\s*;\s*END\s+IF\s*;\s*END\s*\$\$$/iu.test(
     statement,
   );
 
@@ -1245,6 +1245,20 @@ SELECT 1;`;
       ),
     ).toContain(
       `${relativePath}: custom type rewrite lacks its bounded execution budget`,
+    );
+    const budgetWithExtraMutation = customStatementBudget.replace(
+      "END IF;",
+      "END IF; PERFORM set_config('statement_timeout', '0', false);",
+    );
+    expect(
+      collectUnsafeTypeChangesInMigration(
+        relativePath,
+        `SET lock_timeout = '1s';
+        ${budgetWithExtraMutation}
+        ${typeChange}`,
+      ),
+    ).toContain(
+      `${relativePath}: procedural timeout mutations are not supported`,
     );
   });
 
