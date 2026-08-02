@@ -82,6 +82,7 @@ import { userFilesRoute } from "@/api/handlers/user-files/routes";
 import { verifyAuthRoute, verifyRoute } from "@/api/handlers/verify/routes";
 import { viewTemplatesRoute } from "@/api/handlers/view-templates/routes";
 import { viewsRoute } from "@/api/handlers/views/routes";
+import { wellKnownRoute } from "@/api/handlers/well-known/routes";
 import { workspaceEventsRoute } from "@/api/handlers/workspaces/events";
 import { workspacesRoute } from "@/api/handlers/workspaces/routes";
 import { initAccountDeletionCleanupWorker } from "@/api/lib/account-deletion-cleanup-queue";
@@ -467,6 +468,7 @@ const api = new Elysia()
       .use(agentAuthConfirmRoute),
   )
   .use(healthRoute)
+  .use(wellKnownRoute)
   .use(verifyRoute)
   .use(hostedUsageWebhookRoute)
   .use(mcpRoute)

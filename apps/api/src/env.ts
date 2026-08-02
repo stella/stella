@@ -211,6 +211,27 @@ const envApi = createEnv({
     SELFHOST_BOOTSTRAP_TOKEN: v.optional(v.pipe(v.string(), v.minLength(32))),
 
     /**
+     * Fixed sign-in OTP for one designated demo account, for external
+     * evaluations that need working credentials without inbox access. Inert
+     * unless both are set. The override applies only to the `sign-in` OTP
+     * type for the exact configured address; the code still goes through the
+     * normal OTP store, so the attempt limit and expiry keep applying, and
+     * email delivery is skipped for this account (the code is shared
+     * out-of-band).
+     */
+    DEMO_ACCOUNT_EMAIL: v.optional(
+      v.pipe(v.string(), v.trim(), v.toLowerCase(), v.email()),
+    ),
+    DEMO_ACCOUNT_OTP: v.optional(v.pipe(v.string(), v.digits(), v.length(6))),
+
+    /**
+     * Plain-text token served at `/.well-known/openai-apps-challenge` so an
+     * external verifier can confirm control of this API's host. Unset (the
+     * default), the endpoint returns 404.
+     */
+    OPENAI_APPS_CHALLENGE_TOKEN: v.optional(v.pipe(v.string(), v.minLength(1))),
+
+    /**
      * Comma-separated CIDRs of proxies the API may trust to set the
      * `x-forwarded-for` header.
      * Typical value covers Cloudflare's published IP ranges and any

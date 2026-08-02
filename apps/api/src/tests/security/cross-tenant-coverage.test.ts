@@ -111,6 +111,8 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   smoke: WAIVER_REASON.noTenantReadSurface,
   uploads: WAIVER_REASON.noTenantReadSurface,
   verify: WAIVER_REASON.noTenantReadSurface,
+  // Static plain-text host-verification token from env; no database access.
+  "well-known": WAIVER_REASON.noTenantReadSurface,
 };
 
 const handlerDomains = readdirSync(handlersDir, { withFileTypes: true })
