@@ -1233,6 +1233,7 @@
       "aiConfigProviderValidationFailed": "MI pakalpojuma sniedzējs noraidīja konfigurāciju. Pārbaudiet API atslēgu un modeli.",
       "deeplKeyRejected": "Saglabātā DeepL atslēga tika noraidīta. Aizstājiet to organizācijas iestatījumos.",
       "deeplQuotaExceeded": "Šīs organizācijas DeepL rakstzīmju kvota ir iztērēta.",
+      "disposableEmailNotAllowed": "Pagaidu e-pasta adreses nav atļautas. Izmantojiet pastāvīgu e-pasta adresi.",
       "forbidden": "Jums nav atļaujas veikt šo darbību.",
       "internalServerError": "Radās kļūda. Lūdzu, mēģiniet vēlreiz.",
       "legalSourceEntityLimitReached": "Šajā lietā ir sasniegts entītiju ierobežojums, tāpēc dokumentu nevarēja izveidot.",

@@ -1233,6 +1233,7 @@
       "aiConfigProviderValidationFailed": "Dostawca AI odrzucił konfigurację. Sprawdź klucz API i model.",
       "deeplKeyRejected": "Zapisany klucz DeepL został odrzucony. Zastąp go w ustawieniach organizacji.",
       "deeplQuotaExceeded": "Limit znaków DeepL dla tej organizacji został wyczerpany.",
+      "disposableEmailNotAllowed": "Tymczasowe adresy e-mail są niedozwolone. Użyj stałego adresu e-mail.",
       "forbidden": "Nie masz uprawnień do wykonania tej czynności.",
       "internalServerError": "Coś poszło nie tak. Spróbuj ponownie.",
       "legalSourceEntityLimitReached": "Ta sprawa osiągnęła limit encji, dlatego nie można było utworzyć dokumentu.",

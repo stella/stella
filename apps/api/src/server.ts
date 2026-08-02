@@ -89,6 +89,10 @@ import { captureRequestError } from "@/api/lib/analytics/capture";
 import { getAnalytics } from "@/api/lib/analytics/client";
 import { getAuth } from "@/api/lib/auth";
 import {
+  resolveClientIp,
+  resolveSignupRateLimitClientIp,
+} from "@/api/lib/client-ip";
+import {
   beginRequestQueryCounter,
   currentQueryCount,
   DB_QUERY_COUNT_HEADER,
@@ -108,6 +112,7 @@ import {
   type RequestErrorFingerprint,
 } from "@/api/lib/observability/logger";
 import {
+  enrichRequestContext,
   getRequestContext,
   getRequestId,
   initRequestContext,
@@ -261,6 +266,13 @@ const api = new Elysia()
         : undefined;
 
     initRequestContext(request, sessionId);
+    enrichRequestContext(request, {
+      clientIp: resolveClientIp(request, context.server ?? null),
+      signupRateLimitIp: resolveSignupRateLimitClientIp(
+        request,
+        context.server ?? null,
+      ),
+    });
 
     // Stamp the receipt on every response from the central header point, next
     // to the security headers, so REST callers always get an `x-request-id`

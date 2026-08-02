@@ -20,11 +20,12 @@ import { Result } from "better-result";
 import { and, eq, exists, inArray, isNotNull, or } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
 import Elysia, { t } from "elysia";
+import type { Context as RateLimitContext } from "elysia-rate-limit";
 
 import { ac, roles } from "@stll/permissions";
 import type { PermissionInput } from "@stll/permissions";
 
-import { authSchema, member } from "@/api/db/auth-schema";
+import { authSchema, member, user as authUser } from "@/api/db/auth-schema";
 import { rootDb, rlsDb } from "@/api/db/root";
 import { workspaceMembers, workspaces } from "@/api/db/schema";
 import {
@@ -41,6 +42,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { verifyConfirmationOtp } from "@/api/lib/confirmation-otp";
 import { isUuid, tUuid } from "@/api/lib/custom-schema";
+import { detached } from "@/api/lib/detached";
 import { detectedCountryFromRequestContext } from "@/api/lib/detected-country";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
 import { stashDevOtp } from "@/api/lib/dev-otp-store";
@@ -54,6 +56,7 @@ import {
 import {
   AUTH_RATE_LIMIT_MAX_WINDOW,
   AUTH_RATE_LIMITS,
+  EMAIL_OTP_MIN_RESPONSE_DURATION_MS,
   LIMITS,
 } from "@/api/lib/limits";
 import { extractLangFromRequest } from "@/api/lib/locale";
@@ -67,7 +70,10 @@ import {
   MACHINE_API_KEY_START_LENGTH,
 } from "@/api/lib/machine-api-key-config";
 import { isMemberRole } from "@/api/lib/member-roles";
-import { enrichRequestContext } from "@/api/lib/observability/request-context";
+import {
+  enrichRequestContext,
+  getRequestContext,
+} from "@/api/lib/observability/request-context";
 import { parseUserAgent } from "@/api/lib/parse-user-agent";
 import {
   hasMemberPermission,
@@ -85,6 +91,10 @@ import {
   isSelfhostLocalPasswordAuthEnabled,
   shouldHandleSelfhostBootstrapPath,
 } from "@/api/lib/selfhost-auth";
+import {
+  evaluateNewAccountOtpPolicy,
+  isDisposableEmailAddress,
+} from "@/api/lib/signup-abuse";
 import { includes } from "@/api/lib/type-guards";
 import {
   getMcpResourceUrl,
@@ -99,6 +109,7 @@ const ACCESS_TOKEN_EXPIRES_IN = 15 * 60;
 const REFRESH_TOKEN_EXPIRES_IN = 30 * 24 * 60 * 60;
 
 const VERIFY_EMAIL_PATH = "/email-otp/verify-email";
+const SEND_VERIFICATION_OTP_PATH = "/email-otp/send-verification-otp";
 const SIGN_IN_EMAIL_PATH = "/sign-in/email";
 const NEW_SESSION_SECURITY_PATHS = new Set([
   VERIFY_EMAIL_PATH,
@@ -109,6 +120,157 @@ const WORD_EDIT_SHORTCUT_MAX_LENGTH = 16;
 
 /** Passwordless email-OTP sign-in path (not a better-auth credential path). */
 const SIGN_IN_EMAIL_OTP_PATH = "/sign-in/email-otp";
+
+type SignInEmailOtpBody = {
+  email: string;
+  type: "sign-in";
+};
+
+const isSignInEmailOtpBody = (body: unknown): body is SignInEmailOtpBody => {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    return false;
+  }
+  return (
+    "type" in body &&
+    body.type === "sign-in" &&
+    "email" in body &&
+    typeof body.email === "string"
+  );
+};
+
+const authAccountExists = async (normalizedEmail: string): Promise<boolean> => {
+  const existingAccount = await rootDb
+    .select({ id: authUser.id })
+    .from(authUser)
+    .where(eq(authUser.email, normalizedEmail))
+    .limit(1);
+  return existingAccount.at(0) !== undefined;
+};
+
+export const NEW_ACCOUNT_OTP_RATE_LIMIT_MODE = {
+  bypassed: "bypassed",
+  enforced: "enforced",
+} as const;
+
+type NewAccountOtpRateLimitMode =
+  (typeof NEW_ACCOUNT_OTP_RATE_LIMIT_MODE)[keyof typeof NEW_ACCOUNT_OTP_RATE_LIMIT_MODE];
+
+const NEW_ACCOUNT_EMAIL_OTP_ACTION = {
+  continue: "continue",
+  suppressOtp: "suppress_otp",
+} as const;
+
+type NewAccountEmailOtpAction =
+  | { type: typeof NEW_ACCOUNT_EMAIL_OTP_ACTION.continue }
+  | { type: typeof NEW_ACCOUNT_EMAIL_OTP_ACTION.suppressOtp };
+
+type EmailOtpResponseScheduleOptions = {
+  detach?: (operation: Promise<void>) => void;
+  responseDelayMs: number;
+  runRequest: () => Promise<void>;
+  wait?: (durationMs: number) => Promise<void>;
+};
+
+export const runEmailOtpRequestOnResponseSchedule = async ({
+  detach = (operation) => detached(operation, "auth.email-otp-delivery"),
+  responseDelayMs,
+  runRequest,
+  wait = Bun.sleep,
+}: EmailOtpResponseScheduleOptions): Promise<void> => {
+  if (responseDelayMs <= 0) {
+    await runRequest();
+    return;
+  }
+
+  detach(Promise.resolve().then(runRequest));
+  await wait(responseDelayMs);
+};
+
+type EmailOtpMinimumResponseDurationOptions = {
+  isDev: boolean;
+  path: string | undefined;
+  type: string;
+};
+
+export const getEmailOtpMinimumResponseDuration = ({
+  isDev,
+  path,
+  type,
+}: EmailOtpMinimumResponseDurationOptions): number =>
+  !isDev && path === SEND_VERIFICATION_OTP_PATH && type === "sign-in"
+    ? EMAIL_OTP_MIN_RESPONSE_DURATION_MS
+    : 0;
+
+type NewAccountEmailOtpPolicyOptions = {
+  accountExists?: (normalizedEmail: string) => Promise<boolean>;
+  rateLimitMode?: NewAccountOtpRateLimitMode;
+  rateLimitContext?: Pick<RateLimitContext, "increment">;
+};
+
+export const assertNewAccountEmailAllowedForCreation = ({
+  email,
+  path,
+}: {
+  email: string;
+  path: string | undefined;
+}): void => {
+  if (path !== SIGN_IN_EMAIL_OTP_PATH || !isDisposableEmailAddress(email)) {
+    return;
+  }
+
+  throw new APIError("BAD_REQUEST", {
+    code: "DISPOSABLE_EMAIL_NOT_ALLOWED",
+    message:
+      "Temporary email addresses are not allowed. Use a permanent email address.",
+  });
+};
+
+export const getNewAccountEmailOtpAction = async (
+  ctx: {
+    body?: unknown;
+    path: string;
+    request?: Request | undefined;
+  },
+  {
+    accountExists = authAccountExists,
+    rateLimitMode = env.E2E_DISABLE_AUTH_RATE_LIMIT
+      ? NEW_ACCOUNT_OTP_RATE_LIMIT_MODE.bypassed
+      : NEW_ACCOUNT_OTP_RATE_LIMIT_MODE.enforced,
+    rateLimitContext,
+  }: NewAccountEmailOtpPolicyOptions = {},
+): Promise<NewAccountEmailOtpAction> => {
+  if (
+    rateLimitMode === NEW_ACCOUNT_OTP_RATE_LIMIT_MODE.bypassed ||
+    ctx.path !== SEND_VERIFICATION_OTP_PATH ||
+    !isSignInEmailOtpBody(ctx.body)
+  ) {
+    return { type: NEW_ACCOUNT_EMAIL_OTP_ACTION.continue };
+  }
+
+  const clientIp = ctx.request
+    ? (getRequestContext(ctx.request)?.signupRateLimitIp ?? null)
+    : null;
+  const result = await evaluateNewAccountOtpPolicy({
+    accountExists,
+    clientIp,
+    ...(rateLimitContext ? { context: rateLimitContext } : {}),
+    email: ctx.body.email,
+  });
+
+  switch (result.status) {
+    case "allowed":
+      return { type: NEW_ACCOUNT_EMAIL_OTP_ACTION.continue };
+    case "rejected":
+      // Keep the OTP-request response identical for existing and new accounts.
+      // The user.create hook rejects the disposable address only after Better
+      // Auth has verified the OTP and is about to create an account.
+      return { type: NEW_ACCOUNT_EMAIL_OTP_ACTION.continue };
+    case "rate_limited":
+      return { type: NEW_ACCOUNT_EMAIL_OTP_ACTION.suppressOtp };
+    default:
+      return result satisfies never;
+  }
+};
 
 /**
  * Better Auth handles every social provider (`/callback/google`,
@@ -626,6 +788,10 @@ const createAuth = () => {
       user: {
         create: {
           before: async (user, ctx) => {
+            assertNewAccountEmailAllowedForCreation({
+              email: user.email,
+              path: ctx?.path,
+            });
             validateTimezoneId(user["timezoneId"]);
             // Email-OTP and some social providers leave `name` blank.
             // The `notNull` schema constraint allows empty strings, which
@@ -735,21 +901,48 @@ const createAuth = () => {
         expiresIn: 5 * 60,
         allowedAttempts: 3,
         async sendVerificationOTP({ email, otp, type }, ctx) {
-          if (env.isDev) {
-            // eslint-disable-next-line no-console -- dev-only OTP echo for local testing (env.isDev gated; value printed verbatim by design)
-            console.log(`[DEV] OTP for ${email}: ${otp} (type: ${type})`);
-            stashDevOtp(email, otp);
-            return;
-          }
+          await runEmailOtpRequestOnResponseSchedule({
+            responseDelayMs: getEmailOtpMinimumResponseDuration({
+              isDev: env.isDev,
+              path: ctx?.path,
+              type,
+            }),
+            runRequest: async () => {
+              const newAccountOtpAction = await getNewAccountEmailOtpAction({
+                body: { email, type },
+                path: ctx?.path ?? "",
+                request: ctx?.request,
+              });
+              switch (newAccountOtpAction.type) {
+                case NEW_ACCOUNT_EMAIL_OTP_ACTION.continue:
+                  break;
+                case NEW_ACCOUNT_EMAIL_OTP_ACTION.suppressOtp:
+                  // The endpoint still returns its ordinary success response.
+                  // The shared response schedule avoids a fast-return timing
+                  // signal when delivery is suppressed.
+                  return;
+                default:
+                  newAccountOtpAction satisfies never;
+                  return;
+              }
 
-          if (!isTransactionalEmailConfigured()) {
-            throw new APIError("BAD_REQUEST", {
-              message: "Email sign-in is not configured for this instance.",
-            });
-          }
+              if (env.isDev) {
+                // eslint-disable-next-line no-console -- dev-only OTP echo for local testing (env.isDev gated; value printed verbatim by design)
+                console.log(`[DEV] OTP for ${email}: ${otp} (type: ${type})`);
+                stashDevOtp(email, otp);
+                return;
+              }
 
-          const lang = extractLangFromRequest(ctx?.request);
-          await sendOTPEmail({ email, otp, type, lang });
+              if (!isTransactionalEmailConfigured()) {
+                throw new APIError("BAD_REQUEST", {
+                  message: "Email sign-in is not configured for this instance.",
+                });
+              }
+
+              const lang = extractLangFromRequest(ctx?.request);
+              await sendOTPEmail({ email, otp, type, lang });
+            },
+          });
         },
       }),
       twoFactorWithSignInGate,

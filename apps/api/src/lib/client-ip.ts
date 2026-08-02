@@ -1,7 +1,7 @@
 /**
  * Resolves the client IP for a request, refusing to trust
- * `cf-connecting-ip` / `x-real-ip` / `x-forwarded-for` headers unless
- * the request actually arrived through a trusted proxy.
+ * `x-forwarded-for` unless the request actually arrived through a trusted
+ * proxy.
  *
  * The TCP socket's peer address is the only thing we can rely on by
  * default: a header value can be set to anything by the caller, but
@@ -18,6 +18,10 @@
 import { BlockList, isIP, isIPv6 } from "node:net";
 
 import { env } from "@/api/env";
+import {
+  SIGNUP_RATE_LIMIT_IP_SOURCE,
+  type SignupRateLimitIpSource,
+} from "@/api/lib/client-ip-config";
 
 type ServerLike = {
   requestIP: (request: Request) => { address: string } | null;
@@ -85,14 +89,6 @@ const getTrustedProxies = (): TrustedProxies => {
   return cachedTrustedProxies;
 };
 
-const nullableIpHeader = (headers: Headers, name: string): string | null => {
-  const value = headers.get(name)?.trim();
-  if (!value || isIP(value) === 0) {
-    return null;
-  }
-  return value;
-};
-
 const clientIpFromForwardedFor = (
   forwardedFor: string | null,
   peer: string,
@@ -143,14 +139,6 @@ export const resolveClientIp = (
   if (!isTrustedProxy(peer, trusted)) {
     return peer;
   }
-  const cf = nullableIpHeader(request.headers, "cf-connecting-ip");
-  if (cf) {
-    return cf;
-  }
-  const real = nullableIpHeader(request.headers, "x-real-ip");
-  if (real) {
-    return real;
-  }
   const xff = clientIpFromForwardedFor(
     request.headers.get("x-forwarded-for"),
     peer,
@@ -160,4 +148,48 @@ export const resolveClientIp = (
     return xff;
   }
   return peer;
+};
+
+/**
+ * Returns a client IP suitable for a shared signup-rate-limit bucket.
+ *
+ * Direct mode trusts only the kernel-provided socket peer and ignores request
+ * headers. Trusted-proxy mode requires the peer to be in the configured proxy
+ * set and derives the client from its `x-forwarded-for` chain. Keeping the
+ * deployment topology explicit prevents both attacker-controlled buckets and
+ * one shared bucket for every user behind an unconfigured proxy.
+ */
+export const resolveSignupRateLimitClientIp = (
+  request: Request,
+  server: ServerLike | null,
+  options?: {
+    source?: SignupRateLimitIpSource;
+    trusted?: TrustedProxies;
+  },
+): string | null => {
+  const peer = server?.requestIP(request)?.address ?? null;
+  if (!peer) {
+    return null;
+  }
+
+  const source = options?.source ?? env.STELLA_SIGNUP_RATE_LIMIT_IP_SOURCE;
+  switch (source) {
+    case SIGNUP_RATE_LIMIT_IP_SOURCE.direct:
+      return peer;
+    case SIGNUP_RATE_LIMIT_IP_SOURCE.trustedProxy:
+      break;
+    default:
+      return source satisfies never;
+  }
+
+  const trusted = options?.trusted ?? getTrustedProxies();
+  if (!isTrustedProxy(peer, trusted)) {
+    return null;
+  }
+
+  return clientIpFromForwardedFor(
+    request.headers.get("x-forwarded-for"),
+    peer,
+    trusted,
+  );
 };

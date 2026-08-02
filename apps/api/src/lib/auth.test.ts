@@ -11,9 +11,14 @@ import {
 import { member, organization, user } from "@/api/db/auth-schema";
 import { contacts, workspaceMembers, workspaces } from "@/api/db/schema";
 import {
+  assertNewAccountEmailAllowedForCreation,
+  getEmailOtpMinimumResponseDuration,
   getAuth,
+  getNewAccountEmailOtpAction,
   isSixDigitOtpBody,
   isTwoFactorRedirectResponse,
+  NEW_ACCOUNT_OTP_RATE_LIMIT_MODE,
+  runEmailOtpRequestOnResponseSchedule,
   resolveMemberAuthorization,
   TWO_FACTOR_MANAGE_PATHS,
   withStellaTwoFactorSignInGate,
@@ -399,6 +404,226 @@ describe("isSixDigitOtpBody", () => {
     expect(isSixDigitOtpBody({ otp: "12345" })).toBe(false);
     expect(isSixDigitOtpBody({ otp: "1234567" })).toBe(false);
     expect(isSixDigitOtpBody({ otp: "12a456" })).toBe(false);
+  });
+});
+
+describe("new-account email policy", () => {
+  test("does not reveal whether a disposable-address account exists when sending its OTP", async () => {
+    const actions = await Promise.all(
+      [false, true].map(async (accountExists) =>
+        getNewAccountEmailOtpAction(
+          {
+            body: { email: "blocked@mailinator.com", type: "sign-in" },
+            path: "/email-otp/send-verification-otp",
+          },
+          { accountExists: async () => accountExists },
+        ),
+      ),
+    );
+    expect(actions).toEqual([{ type: "continue" }, { type: "continue" }]);
+  });
+
+  test("rejects a disposable address when creating its account", async () => {
+    const rejection: unknown = await Promise.resolve()
+      .then(() =>
+        assertNewAccountEmailAllowedForCreation({
+          email: "blocked@mailinator.com",
+          path: "/sign-in/email-otp",
+        }),
+      )
+      .then(
+        () => null,
+        (error: unknown) => error,
+      );
+
+    expect(rejection).toMatchObject({
+      body: { code: "DISPOSABLE_EMAIL_NOT_ALLOWED" },
+      statusCode: 400,
+    });
+  });
+
+  test("does not apply the OTP blocklist to other user-creation sources", () => {
+    const otherCreationPaths = [
+      "/callback/google",
+      "/sign-up/email",
+      undefined,
+    ];
+    for (const path of otherCreationPaths) {
+      assertNewAccountEmailAllowedForCreation({
+        email: "provider-user@mailinator.com",
+        path,
+      });
+    }
+  });
+
+  test("suppresses the OTP side effect for a limited new-account request", async () => {
+    const action = await getNewAccountEmailOtpAction(
+      {
+        body: { email: "new-user@example.com", type: "sign-in" },
+        path: "/email-otp/send-verification-otp",
+      },
+      {
+        accountExists: async () => false,
+        rateLimitContext: {
+          increment: async () => ({
+            count: 4,
+            nextReset: new Date(Date.now() + 60_000),
+            start: Date.now(),
+          }),
+        },
+      },
+    );
+    expect(action).toEqual({ type: "suppress_otp" });
+  });
+
+  test("bypasses the signup limiter with the E2E auth-rate-limit mode", async () => {
+    let accountLookupCount = 0;
+    let incrementCount = 0;
+    const action = await getNewAccountEmailOtpAction(
+      {
+        body: { email: "new-user@example.com", type: "sign-in" },
+        path: "/email-otp/send-verification-otp",
+      },
+      {
+        accountExists: async () => {
+          accountLookupCount += 1;
+          return false;
+        },
+        rateLimitContext: {
+          increment: async () => {
+            incrementCount += 1;
+            return {
+              count: 1,
+              nextReset: new Date(Date.now() + 60_000),
+              start: Date.now(),
+            };
+          },
+        },
+        rateLimitMode: NEW_ACCOUNT_OTP_RATE_LIMIT_MODE.bypassed,
+      },
+    );
+
+    expect(action).toEqual({ type: "continue" });
+    expect(accountLookupCount).toBe(0);
+    expect(incrementCount).toBe(0);
+  });
+});
+
+describe("email OTP response schedule", () => {
+  test("holds an immediate suppression for the fixed response delay", async () => {
+    const schedule = Promise.withResolvers<undefined>();
+    let settled = false;
+    const scheduled = runEmailOtpRequestOnResponseSchedule({
+      responseDelayMs: 1000,
+      runRequest: async () => {},
+      wait: async () => await schedule.promise,
+    });
+    const observeSettlement = async () => {
+      await scheduled;
+      settled = true;
+    };
+    const observed = observeSettlement();
+
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    schedule.resolve(undefined);
+    await observed;
+    expect(settled).toBe(true);
+  });
+
+  test("returns on schedule while provider delivery is still pending", async () => {
+    const delivery = Promise.withResolvers<undefined>();
+    const deliveryFinished = Promise.withResolvers<undefined>();
+    const schedule = Promise.withResolvers<undefined>();
+    let deliverySettled = false;
+    const scheduled = runEmailOtpRequestOnResponseSchedule({
+      responseDelayMs: 1000,
+      runRequest: async () => {
+        await delivery.promise;
+        deliverySettled = true;
+        deliveryFinished.resolve(undefined);
+      },
+      wait: async () => await schedule.promise,
+    });
+
+    schedule.resolve(undefined);
+    await scheduled;
+    expect(deliverySettled).toBe(false);
+
+    delivery.resolve(undefined);
+    await deliveryFinished.promise;
+    expect(deliverySettled).toBe(true);
+  });
+
+  test("captures a provider failure without changing the response schedule", async () => {
+    const deliveryError = new Error("delivery failed");
+    const delivery = Promise.withResolvers<undefined>();
+    const schedule = Promise.withResolvers<undefined>();
+    const observedError = Promise.withResolvers<unknown>();
+    const scheduled = runEmailOtpRequestOnResponseSchedule({
+      detach: (operation) => {
+        operation.catch((error: unknown) => observedError.resolve(error));
+      },
+      responseDelayMs: 1000,
+      runRequest: async () => await delivery.promise,
+      wait: async () => await schedule.promise,
+    });
+    let settled = false;
+    const observeSettlement = async () => {
+      await scheduled;
+      settled = true;
+    };
+    const observed = observeSettlement();
+
+    await Promise.resolve();
+    delivery.reject(deliveryError);
+    expect(settled).toBe(false);
+    expect(await observedError.promise).toBe(deliveryError);
+    schedule.resolve(undefined);
+
+    await observed;
+    expect(settled).toBe(true);
+  });
+
+  test("preserves synchronous error propagation when no delay is configured", async () => {
+    const deliveryError = new Error("delivery failed");
+    const outcome = await runEmailOtpRequestOnResponseSchedule({
+      responseDelayMs: 0,
+      runRequest: async () => {
+        throw deliveryError;
+      },
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(outcome).toBe(deliveryError);
+  });
+
+  test("pads only production sign-in OTP requests", () => {
+    expect(
+      getEmailOtpMinimumResponseDuration({
+        isDev: false,
+        path: "/email-otp/send-verification-otp",
+        type: "sign-in",
+      }),
+    ).toBeGreaterThan(0);
+
+    for (const input of [
+      {
+        isDev: true,
+        path: "/email-otp/send-verification-otp",
+        type: "sign-in",
+      },
+      {
+        isDev: false,
+        path: "/email-otp/send-verification-otp",
+        type: "forget-password",
+      },
+      { isDev: false, path: "/email-otp/verify-email", type: "sign-in" },
+    ]) {
+      expect(getEmailOtpMinimumResponseDuration(input)).toBe(0);
+    }
   });
 });
 

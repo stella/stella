@@ -381,6 +381,23 @@ export const AUTH_RATE_LIMITS = {
 } as const;
 
 /**
+ * Longer-lived limits for new-account OTP requests. Rate-limited requests are
+ * acknowledged without sending an OTP, keeping account state out of the HTTP
+ * response while preserving existing users' login capacity.
+ */
+export const NEW_ACCOUNT_OTP_RATE_LIMITS = {
+  email: { duration: 60 * 60 * 1000, max: 3 },
+  ip: { duration: 3 * 60 * 60 * 1000, max: 25 },
+} as const;
+
+/**
+ * Fixed production response delay for sign-in email-OTP requests. Delivery and
+ * suppression continue independently so provider latency cannot reveal account
+ * state through the HTTP response.
+ */
+export const EMAIL_OTP_MIN_RESPONSE_DURATION_MS = 1000;
+
+/**
  * Max window (seconds) across all auth rate-limit rules.
  * Used as the Redis TTL for better-auth's customStorage,
  * which does not pass per-endpoint window to `set`.

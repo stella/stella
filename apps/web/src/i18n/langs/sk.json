@@ -1233,6 +1233,7 @@
       "aiConfigProviderValidationFailed": "Poskytovateľ AI konfiguráciu odmietol. Skontrolujte kľúč API a model.",
       "deeplKeyRejected": "Uložený kľúč DeepL bol odmietnutý. Nahraďte ho v nastaveniach organizácie.",
       "deeplQuotaExceeded": "Limit znakov DeepL pre túto organizáciu bol vyčerpaný.",
+      "disposableEmailNotAllowed": "Dočasné e-mailové adresy nie sú povolené. Použite trvalú e-mailovú adresu.",
       "forbidden": "Na túto akciu nemáte oprávnenie.",
       "internalServerError": "Niečo sa pokazilo. Skúste to prosím znova.",
       "legalSourceEntityLimitReached": "Tento spis dosiahol limit entít, preto dokument nebolo možné vytvoriť.",

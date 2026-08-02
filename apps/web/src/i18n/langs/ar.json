@@ -1233,6 +1233,7 @@
       "aiConfigProviderValidationFailed": "رفض مزود الذكاء الاصطناعي الإعداد. تحقق من مفتاح API والنموذج.",
       "deeplKeyRejected": "تم رفض مفتاح DeepL المحفوظ. استبدله في إعدادات المؤسسة.",
       "deeplQuotaExceeded": "تم استنفاد حصة أحرف DeepL لهذه المؤسسة.",
+      "disposableEmailNotAllowed": "عناوين البريد الإلكتروني المؤقتة غير مسموح بها. استخدم عنوان بريد إلكتروني دائم.",
       "forbidden": "ليست لديك صلاحية لتنفيذ ذلك.",
       "internalServerError": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
       "legalSourceEntityLimitReached": "وصل هذا الملف القانوني إلى الحد الأقصى للكيانات، لذا تعذر إنشاء المستند.",

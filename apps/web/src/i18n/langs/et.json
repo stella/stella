@@ -1233,6 +1233,7 @@
       "aiConfigProviderValidationFailed": "AI-teenusepakkuja lükkas seadistuse tagasi. Kontrollige API-võtit ja mudelit.",
       "deeplKeyRejected": "Salvestatud DeepL-i võti lükati tagasi. Asendage see organisatsiooni seadetes.",
       "deeplQuotaExceeded": "Selle organisatsiooni DeepL-i tähemärgikvoot on ammendatud.",
+      "disposableEmailNotAllowed": "Ajutised e-posti aadressid ei ole lubatud. Kasutage püsivat e-posti aadressi.",
       "forbidden": "Teil pole selleks toiminguks õigust.",
       "internalServerError": "Midagi läks valesti. Proovige uuesti.",
       "legalSourceEntityLimitReached": "See toimik on jõudnud olemite piiranguni, mistõttu dokumenti ei saanud luua.",

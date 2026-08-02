@@ -6,6 +6,8 @@ export const REQUEST_ID_HEADER = "x-request-id";
 type RequestContext = {
   startTime: number;
   requestId: string;
+  clientIp?: string | null;
+  signupRateLimitIp?: string | null;
   posthogDistinctId?: string;
   organizationId?: string;
   sessionId?: string;

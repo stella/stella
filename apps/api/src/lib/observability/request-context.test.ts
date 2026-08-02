@@ -2,7 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { Elysia } from "elysia";
 
 import {
+  enrichRequestContext,
   getCurrentRequestId,
+  getRequestContext,
   getRequestId,
   initRequestContext,
   REQUEST_ID_HEADER,
@@ -21,6 +23,20 @@ describe("request id ambient store", () => {
     expect(seen).toBe("req_test");
     // Torn down once the callback returns.
     expect(getCurrentRequestId()).toBeUndefined();
+  });
+});
+
+describe("request metadata", () => {
+  test("keeps the trusted client IP inside the request-scoped context", () => {
+    const request = new Request("http://localhost/ping");
+    initRequestContext(request);
+    enrichRequestContext(request, {
+      clientIp: "192.0.2.1",
+      signupRateLimitIp: "198.51.100.1",
+    });
+
+    expect(getRequestContext(request)?.clientIp).toBe("192.0.2.1");
+    expect(getRequestContext(request)?.signupRateLimitIp).toBe("198.51.100.1");
   });
 });
 

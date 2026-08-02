@@ -1233,6 +1233,7 @@
       "aiConfigProviderValidationFailed": "DI teikėjas atmetė konfigūraciją. Patikrinkite API raktą ir modelį.",
       "deeplKeyRejected": "Išsaugotas „DeepL“ raktas buvo atmestas. Pakeiskite jį organizacijos nustatymuose.",
       "deeplQuotaExceeded": "Šios organizacijos „DeepL“ simbolių kvota išnaudota.",
+      "disposableEmailNotAllowed": "Laikini el. pašto adresai neleidžiami. Naudokite nuolatinį el. pašto adresą.",
       "forbidden": "Neturite teisės atlikti šio veiksmo.",
       "internalServerError": "Kažkas nepavyko. Bandykite dar kartą.",
       "legalSourceEntityLimitReached": "Šioje byloje pasiektas objektų limitas, todėl dokumento sukurti nepavyko.",
