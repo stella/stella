@@ -51,24 +51,35 @@ describe("waterfallDepth", () => {
     ).toBe(1);
   });
 
-  test("distinct launch bursts are separate rounds", () => {
+  test("distinct non-overlapping waves are separate rounds", () => {
     expect(
       waterfallDepth([
-        { start: 0, end: 75 },
-        { start: 75, end: 150 },
-        { start: 150, end: 225 },
+        { start: 0, end: 10 },
+        { start: 10, end: 20 },
+        { start: 20, end: 30 },
       ]),
     ).toBe(3);
   });
 
-  test("mixed launch bursts count only distinct rounds", () => {
+  test("mixed overlap counts only distinct waves", () => {
     expect(
       waterfallDepth([
         { start: 0, end: 100 },
         { start: 2, end: 12 },
-        { start: 75, end: 100 },
+        { start: 100, end: 120 },
       ]),
     ).toBe(2);
+  });
+
+  test("a long parallel request prevents false chains through fast replies", () => {
+    expect(
+      waterfallDepth([
+        { start: 0, end: 500 },
+        { start: 2, end: 10 },
+        { start: 10, end: 20 },
+        { start: 20, end: 30 },
+      ]),
+    ).toBe(1);
   });
 
   test("an independent late request does not chain", () => {
@@ -82,25 +93,31 @@ describe("waterfallDepth", () => {
     ).toBe(1);
   });
 
-  test("response-timing property cannot change launch rounds", () => {
-    const starts = [0, 2, 4, 75, 77, 150];
+  test("slower-response property cannot deepen a waterfall", () => {
+    const starts = [0, 2, 75, 77, 150, 225];
     for (let seed = 1; seed <= 256; seed++) {
       let state = seed;
       const intervals = starts.map((start) => {
         state = (state * 48_271) % 2_147_483_647;
-        return { start, end: start + (state % 1000) };
+        return { start, end: start + 1 + (state % 100) };
       });
-      expect(waterfallDepth(intervals)).toBe(3);
+      const slowerIntervals = intervals.map(({ start, end }) => {
+        state = (state * 48_271) % 2_147_483_647;
+        return { start, end: end + (state % 1000) };
+      });
+      expect(waterfallDepth(slowerIntervals)).toBeLessThanOrEqual(
+        waterfallDepth(intervals),
+      );
     }
   });
 
   test("interval order cannot change launch rounds", () => {
     const intervals = [
-      { start: 0, end: 500 },
-      { start: 2, end: 10 },
-      { start: 75, end: 80 },
-      { start: 77, end: 90 },
-      { start: 150, end: 155 },
+      { start: 0, end: 10 },
+      { start: 2, end: 12 },
+      { start: 12, end: 20 },
+      { start: 15, end: 25 },
+      { start: 25, end: 35 },
     ];
 
     expect(waterfallDepth(intervals)).toBe(3);
@@ -232,7 +249,7 @@ describe("diffNetworkBaseline", () => {
     expect(problems.some((p) => p.includes("GET /v1/contacts/:id"))).toBe(true);
   });
 
-  test("a waterfall within the launch-jitter allowance passes", () => {
+  test("a waterfall within the wave-boundary allowance passes", () => {
     const { problems } = diffNetworkBaseline(
       baseline,
       new Map([["/contacts", metrics(["GET /v1/contacts"], 3)]]),
@@ -240,14 +257,14 @@ describe("diffNetworkBaseline", () => {
     expect(problems).toEqual([]);
   });
 
-  test("a waterfall beyond the launch-jitter allowance is a problem", () => {
+  test("a waterfall beyond the wave-boundary allowance is a problem", () => {
     const { problems } = diffNetworkBaseline(
       baseline,
       new Map([["/contacts", metrics(["GET /v1/contacts"], 4)]]),
     );
     expect(problems.some((p) => p.includes("2 -> 4"))).toBe(true);
     expect(
-      problems.some((p) => p.includes("launch-scheduling jitter")),
+      problems.some((p) => p.includes("wave-boundary jitter")),
     ).toBe(true);
   });
 

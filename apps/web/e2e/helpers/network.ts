@@ -295,43 +295,42 @@ export const requestKey = ({
   pathname: string;
 }): string => `${method} ${normalizeApiPath(pathname)}`;
 
-// Requests launched within one browser scheduling burst belong to the same
-// round. Completion timestamps are deliberately excluded: timing alone cannot
-// prove that one response caused the next request, and a loaded runner can
-// serialize independent responses into an arbitrarily deep false waterfall.
-const REQUEST_BURST_MS = 50;
-
 // A request launched after this quiet gap starts a new observation sequence,
 // not another route-load round. This excludes idle prefetches from the route's
-// longest contiguous burst sequence.
+// longest contiguous request sequence.
 const REQUEST_SEQUENCE_GAP_MS = 500;
 
-// Longest sequence of request-launch bursts. This is a stable lower bound on
-// user-visible request rounds: backend latency and response ordering cannot
-// change it, while a newly deferred request still creates another round.
+// Longest sequence of non-overlapping request waves. A new round starts only
+// after every request in the current wave has completed. This deliberately
+// computes a lower bound: a request that depends on a fast response can be
+// hidden by an unrelated slow response, but runner load cannot serialize
+// independent completions into a false waterfall. Lengthening any response can
+// only merge rounds, never deepen them.
 export const waterfallDepth = (
   intervals: { start: number; end: number }[],
 ): number => {
-  const starts = intervals.map(({ start }) => start).sort((a, b) => a - b);
-  const firstStart = starts.at(0);
-  if (firstStart === undefined) {
+  const sorted = intervals.toSorted((a, b) => a.start - b.start);
+  const first = sorted.at(0);
+  if (first === undefined) {
     return 0;
   }
 
   let best = 1;
   let currentDepth = 1;
-  let burstStartedAt = firstStart;
-  let previousStart = firstStart;
+  let waveEndsAt = first.end;
 
-  for (const start of starts.slice(1)) {
-    if (start - previousStart > REQUEST_SEQUENCE_GAP_MS) {
-      currentDepth = 1;
-      burstStartedAt = start;
-    } else if (start - burstStartedAt > REQUEST_BURST_MS) {
-      currentDepth += 1;
-      burstStartedAt = start;
+  for (const interval of sorted.slice(1)) {
+    if (interval.start < waveEndsAt) {
+      waveEndsAt = Math.max(waveEndsAt, interval.end);
+      continue;
     }
-    previousStart = start;
+
+    if (interval.start - waveEndsAt > REQUEST_SEQUENCE_GAP_MS) {
+      currentDepth = 1;
+    } else {
+      currentDepth += 1;
+    }
+    waveEndsAt = interval.end;
     best = Math.max(best, currentDepth);
   }
   return best;
@@ -462,9 +461,9 @@ const pushNewRequestProblems = ({
   );
 };
 
-// Browser scheduling can split one logical launch burst across the threshold.
-// Keep that bounded +1 allowance; unlike the former response-order metric, the
-// launch-only calculation cannot accumulate arbitrary depth from slow replies.
+// Browser scheduling can still split one logical wave at its boundary. Keep a
+// bounded +1 allowance; the wave calculation itself is monotonic under slower
+// responses, so load cannot accumulate arbitrary false depth.
 const DEPTH_JITTER_ALLOWANCE = 1;
 
 const pushWaterfallDepthProblems = ({
@@ -482,7 +481,7 @@ const pushWaterfallDepthProblems = ({
     return;
   }
   problems.push(
-    `Request waterfall got deeper on ${route}: ${entry.depth} -> ${metrics.depth} (already tolerating +${DEPTH_JITTER_ALLOWANCE} for launch-scheduling jitter)\n` +
+    `Request waterfall got deeper on ${route}: ${entry.depth} -> ${metrics.depth} (already tolerating +${DEPTH_JITTER_ALLOWANCE} for wave-boundary jitter)\n` +
       `  Each extra level is one more sequential network round the user waits\n` +
       `  through before the page can finish. Usually the fix is to start the\n` +
       `  query in the route loader (ensureRouteQueryData / prefetchRouteQuery in\n` +
