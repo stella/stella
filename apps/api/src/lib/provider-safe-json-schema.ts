@@ -49,7 +49,25 @@ export const PROVIDER_SAFE_JSON_SCHEMA_KEYWORDS = [
   "example",
 ] as const;
 
+/**
+ * Allowlisted keywords that constrain a value rather than describe its shape.
+ * Dropped under `valueConstraintStrategy: "omit"`; the source Standard Schema
+ * still enforces them locally. The `satisfies` keeps this a subset of the
+ * allowlist, so a keyword can never be omitted here yet unreachable there.
+ */
+export const VALUE_CONSTRAINT_JSON_SCHEMA_KEYWORDS = [
+  "minimum",
+  "maximum",
+  "minItems",
+  "maxItems",
+  "minLength",
+  "maxLength",
+] as const satisfies readonly (typeof PROVIDER_SAFE_JSON_SCHEMA_KEYWORDS)[number][];
+
 const ALLOWED_KEYWORDS = new Set<string>(PROVIDER_SAFE_JSON_SCHEMA_KEYWORDS);
+const VALUE_CONSTRAINT_KEYWORDS = new Set<string>(
+  VALUE_CONSTRAINT_JSON_SCHEMA_KEYWORDS,
+);
 const ALLOWED_TYPE_VALUES = new Set([
   "array",
   "boolean",
@@ -69,34 +87,35 @@ export type ProviderSafeJsonSchemaProjection = {
 
 export type NullUnionStrategy = "json-schema" | "openapi";
 export type EnumValueStrategy = "json-schema" | "string-only";
-export type ArrayBoundStrategy = "preserve" | "omit";
+export type ValueConstraintStrategy = "preserve" | "omit";
 export type ProviderJsonSchemaPurpose = "structured-output" | "tool";
 
 export type ProviderSafeJsonSchemaProjectionOptions = {
-  arrayBoundStrategy?: ArrayBoundStrategy;
   enumValueStrategy?: EnumValueStrategy;
   nullUnionStrategy?: NullUnionStrategy;
+  valueConstraintStrategy?: ValueConstraintStrategy;
 };
 
 export const providerSafeJsonSchemaOptionsForTanStackProvider = (
   provider: string,
   purpose: ProviderJsonSchemaPurpose,
 ): ProviderSafeJsonSchemaProjectionOptions => ({
-  // Gemini counts array bounds against an undocumented structured-output
-  // schema complexity budget. A nested schema accepted without maxItems can
-  // be rejected with HTTP 400 as soon as the same bound is added. Bounds are
-  // validation constraints, not shape information, and the original Standard
-  // Schema still validates the returned value locally. Tool schemas use a
-  // separate profile because their bounds remain useful provider guidance.
-  arrayBoundStrategy:
-    provider === "google" && purpose === "structured-output"
-      ? "omit"
-      : "preserve",
   enumValueStrategy:
     provider === "google" || provider === "openrouter"
       ? "string-only"
       : "json-schema",
   nullUnionStrategy: provider === "google" ? "openapi" : "json-schema",
+  // Constrained-decoding compilers reject value constraints outright
+  // (Anthropic: HTTP 400 `For 'array' type, property 'maxItems' is not
+  // supported`) or count them against an undocumented schema complexity
+  // budget (Gemini). The set of rejecting providers is not knowable per
+  // request either: an OpenRouter model id resolves to an arbitrary upstream.
+  // Constraints are validation, not shape, and the original Standard Schema
+  // still validates the returned value locally, so structured output drops
+  // them for every provider. Tool schemas keep them: tool arguments are
+  // sampled without a schema compiler, and the bounds stay useful guidance.
+  valueConstraintStrategy:
+    purpose === "structured-output" ? "omit" : "preserve",
 });
 
 const isJsonObject = (value: unknown): value is JsonObject =>
@@ -132,9 +151,9 @@ const resolveLocalJsonPointer = (root: JsonObject, ref: string): unknown => {
 type ProjectionContext = {
   root: JsonObject;
   dropped: string[];
-  arrayBoundStrategy: ArrayBoundStrategy;
   enumValueStrategy: EnumValueStrategy;
   nullUnionStrategy: NullUnionStrategy;
+  valueConstraintStrategy: ValueConstraintStrategy;
 };
 
 type NormalizeSchemaDialectParams = {
@@ -866,8 +885,8 @@ const filterProviderSafeKeywords = ({
   const result: JsonObject = {};
   for (const [key, value] of Object.entries(node)) {
     if (
-      context.arrayBoundStrategy === "omit" &&
-      (key === "minItems" || key === "maxItems")
+      context.valueConstraintStrategy === "omit" &&
+      VALUE_CONSTRAINT_KEYWORDS.has(key)
     ) {
       context.dropped.push(joinPath(path, key));
       continue;
@@ -937,11 +956,11 @@ export const projectToProviderSafeJsonSchema = (
   const context: ProjectionContext = {
     root: schema,
     dropped: [],
-    arrayBoundStrategy: options.arrayBoundStrategy ?? "preserve",
     enumValueStrategy:
       options.enumValueStrategy ??
       (nullUnionStrategy === "openapi" ? "string-only" : "json-schema"),
     nullUnionStrategy,
+    valueConstraintStrategy: options.valueConstraintStrategy ?? "preserve",
   };
   const projected = projectNode({
     node: schema,
