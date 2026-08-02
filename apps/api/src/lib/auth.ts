@@ -42,6 +42,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { verifyConfirmationOtp } from "@/api/lib/confirmation-otp";
 import { isUuid, tUuid } from "@/api/lib/custom-schema";
+import { detached } from "@/api/lib/detached";
 import { detectedCountryFromRequestContext } from "@/api/lib/detected-country";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
 import { stashDevOtp } from "@/api/lib/dev-otp-store";
@@ -163,27 +164,26 @@ type NewAccountEmailOtpAction =
   | { type: typeof NEW_ACCOUNT_EMAIL_OTP_ACTION.continue }
   | { type: typeof NEW_ACCOUNT_EMAIL_OTP_ACTION.suppressOtp };
 
-type EmailOtpRequestScheduleOptions = {
-  minimumDurationMs: number;
+type EmailOtpResponseScheduleOptions = {
+  detach?: (operation: Promise<void>) => void;
+  responseDelayMs: number;
   runRequest: () => Promise<void>;
   wait?: (durationMs: number) => Promise<void>;
 };
 
-export const runEmailOtpRequestOnMinimumSchedule = async ({
-  minimumDurationMs,
+export const runEmailOtpRequestOnResponseSchedule = async ({
+  detach = (operation) => detached(operation, "auth.email-otp-delivery"),
+  responseDelayMs,
   runRequest,
   wait = Bun.sleep,
-}: EmailOtpRequestScheduleOptions): Promise<void> => {
-  const [request, schedule] = await Promise.allSettled([
-    Promise.resolve().then(runRequest),
-    wait(minimumDurationMs),
-  ]);
-  if (request.status === "rejected") {
-    throw request.reason;
+}: EmailOtpResponseScheduleOptions): Promise<void> => {
+  if (responseDelayMs <= 0) {
+    await runRequest();
+    return;
   }
-  if (schedule.status === "rejected") {
-    throw schedule.reason;
-  }
+
+  detach(Promise.resolve().then(runRequest));
+  await wait(responseDelayMs);
 };
 
 type EmailOtpMinimumResponseDurationOptions = {
@@ -901,8 +901,8 @@ const createAuth = () => {
         expiresIn: 5 * 60,
         allowedAttempts: 3,
         async sendVerificationOTP({ email, otp, type }, ctx) {
-          await runEmailOtpRequestOnMinimumSchedule({
-            minimumDurationMs: getEmailOtpMinimumResponseDuration({
+          await runEmailOtpRequestOnResponseSchedule({
+            responseDelayMs: getEmailOtpMinimumResponseDuration({
               isDev: env.isDev,
               path: ctx?.path,
               type,
@@ -918,8 +918,8 @@ const createAuth = () => {
                   break;
                 case NEW_ACCOUNT_EMAIL_OTP_ACTION.suppressOtp:
                   // The endpoint still returns its ordinary success response.
-                  // The shared minimum schedule also avoids a fast-return
-                  // timing signal when delivery is suppressed.
+                  // The shared response schedule avoids a fast-return timing
+                  // signal when delivery is suppressed.
                   return;
                 default:
                   newAccountOtpAction satisfies never;

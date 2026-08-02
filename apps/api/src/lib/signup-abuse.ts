@@ -1,5 +1,7 @@
 import { disposableEmailBlocklistSet } from "disposable-email-domains-js";
 import type { Context } from "elysia-rate-limit";
+import { Address4, Address6 } from "ip-address";
+import { isIP } from "node:net";
 
 import { env } from "@/api/env";
 import { NEW_ACCOUNT_OTP_RATE_LIMITS } from "@/api/lib/limits";
@@ -7,6 +9,7 @@ import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
 
 const DISPOSABLE_EMAIL_DOMAINS = disposableEmailBlocklistSet();
 const NEW_ACCOUNT_OTP_RATE_LIMIT_SCOPE = "auth:new-account-otp";
+const IPV6_RATE_LIMIT_PREFIX_LENGTH = 64;
 
 let sharedRateLimitContext: RedisRateLimitContext | null = null;
 
@@ -52,8 +55,30 @@ const identityHash = (identity: string): string =>
     .update(identity)
     .digest("hex");
 
+export const normalizeSignupOtpIpIdentity = (identity: string): string => {
+  const ipVersion = isIP(identity);
+  if (ipVersion === 4) {
+    return new Address4(identity).correctForm();
+  }
+  if (ipVersion !== 6) {
+    return identity;
+  }
+
+  const address = new Address6(identity);
+  if (address.isMapped4()) {
+    return address.to4().correctForm();
+  }
+  return new Address6(
+    `${address.correctForm()}/${IPV6_RATE_LIMIT_PREFIX_LENGTH}`,
+  )
+    .startAddress()
+    .correctForm();
+};
+
 const counterKey = (kind: "email" | "ip", identity: string): string =>
-  `${NEW_ACCOUNT_OTP_RATE_LIMIT_SCOPE}:${kind}:${identityHash(identity)}`;
+  `${NEW_ACCOUNT_OTP_RATE_LIMIT_SCOPE}:${kind}:${identityHash(
+    kind === "ip" ? normalizeSignupOtpIpIdentity(identity) : identity,
+  )}`;
 
 type SignupOtpRateLimitResult =
   | { status: "allowed" }

@@ -1,5 +1,4 @@
 import type { HookEndpointContext } from "better-auth";
-import { Result } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -19,7 +18,7 @@ import {
   isSixDigitOtpBody,
   isTwoFactorRedirectResponse,
   NEW_ACCOUNT_OTP_RATE_LIMIT_MODE,
-  runEmailOtpRequestOnMinimumSchedule,
+  runEmailOtpRequestOnResponseSchedule,
   resolveMemberAuthorization,
   TWO_FACTOR_MANAGE_PATHS,
   withStellaTwoFactorSignInGate,
@@ -510,12 +509,12 @@ describe("new-account email policy", () => {
   });
 });
 
-describe("email OTP delivery schedule", () => {
-  test("holds an immediate suppression for the full minimum schedule", async () => {
+describe("email OTP response schedule", () => {
+  test("holds an immediate suppression for the fixed response delay", async () => {
     const schedule = Promise.withResolvers<undefined>();
     let settled = false;
-    const scheduled = runEmailOtpRequestOnMinimumSchedule({
-      minimumDurationMs: 1000,
+    const scheduled = runEmailOtpRequestOnResponseSchedule({
+      responseDelayMs: 1000,
       runRequest: async () => {},
       wait: async () => await schedule.promise,
     });
@@ -532,37 +531,73 @@ describe("email OTP delivery schedule", () => {
     expect(settled).toBe(true);
   });
 
-  test("holds a provider failure until the schedule and preserves its identity", async () => {
+  test("returns on schedule while provider delivery is still pending", async () => {
+    const delivery = Promise.withResolvers<undefined>();
+    const deliveryFinished = Promise.withResolvers<undefined>();
+    const schedule = Promise.withResolvers<undefined>();
+    let deliverySettled = false;
+    const scheduled = runEmailOtpRequestOnResponseSchedule({
+      responseDelayMs: 1000,
+      runRequest: async () => {
+        await delivery.promise;
+        deliverySettled = true;
+        deliveryFinished.resolve(undefined);
+      },
+      wait: async () => await schedule.promise,
+    });
+
+    schedule.resolve(undefined);
+    await scheduled;
+    expect(deliverySettled).toBe(false);
+
+    delivery.resolve(undefined);
+    await deliveryFinished.promise;
+    expect(deliverySettled).toBe(true);
+  });
+
+  test("captures a provider failure without changing the response schedule", async () => {
     const deliveryError = new Error("delivery failed");
     const delivery = Promise.withResolvers<undefined>();
     const schedule = Promise.withResolvers<undefined>();
-    const scheduled = runEmailOtpRequestOnMinimumSchedule({
-      minimumDurationMs: 1000,
+    const observedError = Promise.withResolvers<unknown>();
+    const scheduled = runEmailOtpRequestOnResponseSchedule({
+      detach: (operation) => {
+        operation.catch((error: unknown) => observedError.resolve(error));
+      },
+      responseDelayMs: 1000,
       runRequest: async () => await delivery.promise,
       wait: async () => await schedule.promise,
     });
     let settled = false;
-    const observeOutcome = async () => {
-      const outcome = await Result.tryPromise({
-        try: async () => await scheduled,
-        catch: (cause) => cause,
-      });
+    const observeSettlement = async () => {
+      await scheduled;
       settled = true;
-      return outcome;
     };
-    const observed = observeOutcome();
+    const observed = observeSettlement();
 
     await Promise.resolve();
     delivery.reject(deliveryError);
-    await Promise.resolve();
     expect(settled).toBe(false);
+    expect(await observedError.promise).toBe(deliveryError);
     schedule.resolve(undefined);
 
-    const outcome = await observed;
-    expect(Result.isError(outcome)).toBe(true);
-    if (Result.isError(outcome)) {
-      expect(outcome.error).toBe(deliveryError);
-    }
+    await observed;
+    expect(settled).toBe(true);
+  });
+
+  test("preserves synchronous error propagation when no delay is configured", async () => {
+    const deliveryError = new Error("delivery failed");
+    const outcome = await runEmailOtpRequestOnResponseSchedule({
+      responseDelayMs: 0,
+      runRequest: async () => {
+        throw deliveryError;
+      },
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(outcome).toBe(deliveryError);
   });
 
   test("pads only production sign-in OTP requests", () => {

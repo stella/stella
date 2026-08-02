@@ -391,8 +391,9 @@ export const NEW_ACCOUNT_OTP_RATE_LIMITS = {
 } as const;
 
 /**
- * Minimum production duration for an email-OTP delivery callback. Padding both
- * delivered and suppressed requests reduces account-dependent timing signals.
+ * Fixed production response delay for sign-in email-OTP requests. Delivery and
+ * suppression continue independently so provider latency cannot reveal account
+ * state through the HTTP response.
  */
 export const EMAIL_OTP_MIN_RESPONSE_DURATION_MS = 1000;
 

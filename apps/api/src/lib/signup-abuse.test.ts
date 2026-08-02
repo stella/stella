@@ -8,6 +8,7 @@ import {
   consumeSignupOtpRateLimit,
   evaluateNewAccountOtpPolicy,
   isDisposableEmailAddress,
+  normalizeSignupOtpIpIdentity,
 } from "./signup-abuse";
 
 describe("new-account OTP abuse policy", () => {
@@ -126,6 +127,27 @@ describe("new-account OTP abuse policy", () => {
     expect(observedKeys.join(":")).not.toContain(normalizedEmail);
     expect(observedKeys.join(":")).not.toContain(clientIp);
     expect(observedKeys.join(":")).not.toContain(unkeyedEmailDigest);
+  });
+
+  test("aggregates IPv6 identities by /64 without coupling adjacent networks", () => {
+    expect(normalizeSignupOtpIpIdentity("2001:db8:abcd:1234::1")).toBe(
+      "2001:db8:abcd:1234::",
+    );
+    expect(normalizeSignupOtpIpIdentity("2001:0db8:abcd:1234:ffff::2")).toBe(
+      "2001:db8:abcd:1234::",
+    );
+    expect(normalizeSignupOtpIpIdentity("2001:db8:abcd:1235::1")).toBe(
+      "2001:db8:abcd:1235::",
+    );
+  });
+
+  test("normalizes IPv4-mapped IPv6 identities to the IPv4 bucket", () => {
+    expect(normalizeSignupOtpIpIdentity("::ffff:192.0.2.1")).toBe(
+      normalizeSignupOtpIpIdentity("192.0.2.1"),
+    );
+    expect(normalizeSignupOtpIpIdentity("::ffff:c000:201")).toBe(
+      normalizeSignupOtpIpIdentity("192.0.2.1"),
+    );
   });
 
   test("limits repeated attempts per normalized email without coupling other emails", async () => {
