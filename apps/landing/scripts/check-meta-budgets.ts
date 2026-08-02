@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { products } from "../src/data/products/registry";
-import { localeCodes } from "../src/i18n/config";
+import { type Locale, localeCodes } from "../src/i18n/config";
 import { catalogs } from "../src/i18n/utils";
 
 // SERP length budgets for every indexable page's meta strings, in every locale.
@@ -32,6 +32,78 @@ const pagesFor = (locale: (typeof localeCodes)[number]): PageMeta[] => {
       description: catalog[slug].metaDescription,
     })),
   ];
+};
+
+/**
+ * Metas are written for searchers, not for the product catalog: each locale below
+ * targets researched demand phrasings and excludes the literal category label from
+ * meta strings, per the exception carved out in src/i18n/TRANSLATION.md ("Metas are
+ * the exception" under "The identity phrase"). That rule used to depend on whoever
+ * touched a catalog remembering it, which is how three locales drifted at once.
+ * Checked here instead.
+ */
+type TermPolicy = {
+  banned: readonly RegExp[];
+  homeRequiredAny: readonly RegExp[];
+};
+
+const termPolicies: Partial<Record<Locale, TermPolicy>> = {
+  cs: {
+    banned: [/pracovn\S*\s+prostor\S*/iu, /advokátn\S*\s+spis\S*/iu],
+    homeRequiredAny: [
+      /AI pro právníky/iu,
+      /právní rešerš/iu,
+      /reviz\S*\s+smluv/iu,
+    ],
+  },
+  sk: {
+    banned: [/pracovn\S*\s+priestor\S*/iu, /advokátsk\S*\s+spis\S*/iu],
+    homeRequiredAny: [/AI právny asistent/iu],
+  },
+  de: {
+    banned: [/arbeitsbereich/iu, /kanzleisoftware/iu, /schwärzung/iu],
+    homeRequiredAny: [
+      /KI für Anwälte/iu,
+      /aktenverwaltung/iu,
+      /vertragsanalyse/iu,
+    ],
+  },
+};
+
+const termPolicyViolations = (
+  locale: Locale,
+  pages: readonly PageMeta[],
+): string[] => {
+  const policy = termPolicies[locale];
+  if (!policy) {
+    return [];
+  }
+  const violations: string[] = [];
+  for (const meta of pages) {
+    for (const field of ["title", "description"] as const) {
+      for (const banned of policy.banned) {
+        const match = meta[field].match(banned);
+        if (match) {
+          violations.push(
+            `${meta.page} ${field} uses a term excluded from metas: "${match[0]}"`,
+          );
+        }
+      }
+    }
+  }
+  const home = pages.find(({ page }) => page === "/");
+  if (
+    home &&
+    policy.homeRequiredAny.length > 0 &&
+    !policy.homeRequiredAny.some((required) =>
+      required.test(`${home.title} ${home.description}`),
+    )
+  ) {
+    violations.push(
+      `${home.page} home metas carry none of the locale's meta demand terms`,
+    );
+  }
+  return violations;
 };
 
 const budgetViolations = ({ page, title, description }: PageMeta): string[] => {
@@ -78,6 +150,7 @@ for (const locale of localeCodes) {
   const violations = [
     ...pages.flatMap(budgetViolations),
     ...duplicateViolations(pages),
+    ...termPolicyViolations(locale, pages),
   ];
   for (const violation of violations) {
     failures.push(`${locale}: ${violation}`);

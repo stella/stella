@@ -83,8 +83,8 @@
     "toolsTitle": "Nástroje pro AI agenty."
   },
   "meta": {
-    "homeDescription": "Open source právní pracovní prostor pro advokáty: spisy, dokumenty, revize smluv i právní rešerše. Provozujte sami či v cloudu. AI podle využití.",
-    "homeTitle": "stella | open source právní pracovní prostor"
+    "homeDescription": "AI pro právníky v open source aplikaci: správa spisů a dokumentů, revize smluv i právní rešerše. Provozujte sami či v cloudu. AI podle využití.",
+    "homeTitle": "stella | AI pro právníky, právní rešerše a revize smluv"
   },
   "nav": {
     "aiFactSheet": "Přehled pro AI",
@@ -214,7 +214,7 @@
         }
       },
       "metaDescription": "Ptejte se svých spisů, dokumentů i rejstříků. AI agent jedná se schválením, opírá odpovědi o citace a rozšiřuje se o dovednosti i externí konektory.",
-      "metaTitle": "AI agent pro právníky a advokátní spisy | stella",
+      "metaTitle": "AI agent pro právníky a jejich spisy | stella",
       "quickAnswer": {
         "answer": "AI agent odpovídá na otázky nad vašimi spisy, soubory, obchodními rejstříky i připojenými nástroji. Než něco udělá, požádá o schválení, u toho, co čte, ukazuje náhled zdroje, a odpovědi opírá o citace. Rozšíříte ho o znovupoužitelné dovednosti a externí konektory kompatibilní s MCP.",
         "question": "Co AI agent umí?"
@@ -376,7 +376,7 @@
         }
       },
       "metaDescription": "Vyhledávejte, čtěte a pracujte s aplikací stella z příkazové řádky nebo z klienta kompatibilního s MCP. Obě rozhraní sdílejí schopnosti, oprávnění i data.",
-      "metaTitle": "MCP server a CLI pro váš právní pracovní prostor | stella",
+      "metaTitle": "MCP server a CLI pro advokátní kancelář | stella",
       "quickAnswer": {
         "answer": "Dvě rozhraní ke stejným schopnostem aplikace stella. CLI zrcadlí registr nástrojů MCP jako příkazy, zatímco MCP server umožňuje kompatibilním AI agentům a nástrojům pracovat se spisy, dokumenty, vzory i veřejnými právními daty pod stejnou kontrolou přístupu.",
         "question": "Co je CLI a MCP server aplikace stella?"
@@ -855,8 +855,8 @@
           "question": "Dosáhnou na pracovní prostor i jiné nástroje?"
         }
       },
-      "metaDescription": "Spisy, dokumenty, úpravy Word .docx, revize i rešerše na jednom místě. Elektronický advokátní spis, ve kterém práce zůstává v kontextu od podkladů po odpověď.",
-      "metaTitle": "Elektronický advokátní spis a správa dokumentů | stella",
+      "metaDescription": "Spisy, dokumenty, úpravy Word .docx, revize i rešerše na jednom místě. Elektronický spis, ve kterém práce zůstává v kontextu od podkladů po odpověď.",
+      "metaTitle": "Elektronický spis a správa dokumentů | stella",
       "quickAnswer": {
         "answer": "Webová aplikace, která drží spisy, dokumenty, úpravy Word .docx, revize, rešerše i chat na jednom místě. Vše, co do spisu přidáte, u něj zůstane, takže kontext najdete i po návratu. Doprovodná desktopová aplikace slouží jako lokální most, když dokument potřebuje Microsoft Word.",
         "question": "Co je pracovní prostor v aplikaci stella?"

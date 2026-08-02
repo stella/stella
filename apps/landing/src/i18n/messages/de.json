@@ -83,8 +83,8 @@
     "toolsTitle": "Werkzeuge für KI-Agenten."
   },
   "meta": {
-    "homeDescription": "Juristischer Open-Source-Arbeitsbereich für Kanzleien: Akten, Dokumente, Vertragsanalyse und Recherche. Selbst hosten oder in der Cloud. Nutzungsbasierte KI.",
-    "homeTitle": "stella | juristischer Open-Source-Arbeitsbereich"
+    "homeDescription": "KI für Anwälte: Akten, Dokumente, Vertragsanalyse und juristische Recherche in einer Open-Source-Plattform. Selbst hosten oder Cloud. Nutzungsbasierte KI.",
+    "homeTitle": "stella | KI für Anwälte, Aktenverwaltung, Vertragsanalyse"
   },
   "nav": {
     "aiFactSheet": "KI-Faktenblatt",
@@ -855,7 +855,7 @@
           "question": "Können andere Werkzeuge auf den Arbeitsbereich zugreifen?"
         }
       },
-      "metaDescription": "Akten, Dokumente, Word-.docx-Bearbeitung, Prüfung, Recherche und Chat in einem juristischen Arbeitsbereich, von den Unterlagen bis zur Antwort.",
+      "metaDescription": "Akten, Dokumente, Word-.docx-Bearbeitung, Prüfung, Recherche und Chat in einer digitalen Aktenverwaltung, von den Unterlagen bis zur Antwort.",
       "metaTitle": "Digitale Aktenverwaltung für Kanzleien | stella",
       "quickAnswer": {
         "answer": "Eine Web-App, die Akten, Dokumente, Word-.docx-Bearbeitung, Prüfung, Recherche und Chat an einem Ort hält. Alles, was in eine Akte kommt, bleibt bei ihr, sodass der Kontext da ist, wenn Sie zurückkehren. Eine begleitende Desktop-App dient als lokale Brücke, wenn ein Dokument Microsoft Word braucht.",
