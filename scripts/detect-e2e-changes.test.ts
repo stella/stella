@@ -112,6 +112,24 @@ describe("detect-e2e-changes", () => {
     }
   });
 
+  test("plans trust and changed scopes in one security gate", () => {
+    const plan = workflowJob("ci-plan");
+    expect(workflow).not.toContain("\n  trust-check:\n");
+    expect(workflow).not.toContain("\n  ci-changes:\n");
+    expect(plan.indexOf("Check if PR is trusted")).toBeLessThan(
+      plan.indexOf("Checkout"),
+    );
+    expect(plan.indexOf("Checkout")).toBeLessThan(
+      plan.indexOf("Check changed file scope"),
+    );
+    expect(plan).toContain("persist-credentials: false");
+    expect(
+      plan.match(/steps\.check\.outputs\.trusted == 'true'/gu),
+    ).toHaveLength(2);
+    expect(workflow).not.toContain("needs.trust-check");
+    expect(workflow).not.toContain("needs.ci-changes");
+  });
+
   test("keeps production, Vite canary, and landing work parallel", () => {
     const production = workflowJob("e2e-production-shard");
     expect(production).toContain(
@@ -165,7 +183,7 @@ describe("detect-e2e-changes", () => {
 
   test("builds the production web artifact once per workflow run", () => {
     const webBuild = workflowJob("web-build");
-    expect(webBuild).toContain("needs: [trust-check, ci-changes]");
+    expect(webBuild).toContain("needs: ci-plan");
     expect(webBuild).toContain("Upload production E2E web build");
     expect(webBuild).toContain("VITE_FEATURE_TIME_BILLING");
 
