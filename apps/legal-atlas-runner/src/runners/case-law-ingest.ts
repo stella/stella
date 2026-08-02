@@ -187,7 +187,12 @@ const SEARCH_INDEX_INTERVAL_MS = 10_000;
 const SEARCH_INDEX_IDLE_MAX_MS = 15 * 60_000;
 const SEARCH_INDEX_BATCH_SIZE = 20;
 const SEARCH_INDEX_DRAIN_CONCURRENCY = 4;
-const CORPUS_INDEX_INTERVAL_MS = 15_000;
+// Throughput comes from the environment so a drain can be sped up or
+// reverted as a deployment change; the defaults preserve the historical
+// pace.
+const CORPUS_INDEX_INTERVAL_MS = envBase.CORPUS_INDEX_INTERVAL_MS;
+const CORPUS_INDEX_BATCH_SIZE = envBase.CORPUS_INDEX_BATCH_SIZE;
+const CORPUS_INDEX_READ_CONCURRENCY = envBase.CORPUS_INDEX_READ_CONCURRENCY;
 // Citation authority decays slowly; a periodic full recompute keeps the
 // materialized ranking signal fresh without per-cycle cost. The first
 // recompute runs shortly after startup rather than a full interval in: a
@@ -1170,8 +1175,9 @@ export const runCaseLawIngest = async (
           async () =>
             await backfillCorpusIndex(
               backfillDb,
-              LIMITS.corpusIndexBatchSize,
+              CORPUS_INDEX_BATCH_SIZE,
               generation,
+              { readConcurrency: CORPUS_INDEX_READ_CONCURRENCY },
             ),
         );
         if (result.indexed > 0) {
