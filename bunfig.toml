@@ -82,6 +82,9 @@ minimumReleaseAgeExcludes = [
   "@typescript/typescript-sunos-x64",
   "@typescript/typescript-win32-arm64",
   "@typescript/typescript-win32-x64",
+  # better-result 3: opted in immediately for migration evaluation.
+  # Remove once 3.0 clears the 5-day quarantine.
+  "better-result",
   "drizzle-kit",
   "drizzle-orm",
 ]
