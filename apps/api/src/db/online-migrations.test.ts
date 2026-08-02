@@ -229,6 +229,27 @@ describe("online migrations", () => {
     ).toBe(-1);
   });
 
+  test("cleans interrupted final-index maintenance before completing", async () => {
+    const artifactName = `${FILTER_INDEX}_ccnew`;
+    const harness = createHarness({
+      artifacts: {
+        [FILTER_INDEX]: [{ isValid: false, name: artifactName }],
+      },
+      indexStates: {
+        [FILTER_INDEX]: [true, true],
+      },
+    });
+
+    await runOnlineMigrations(harness.pool);
+
+    expect(
+      indexOfStatement(
+        harness.statements,
+        `${DROP_INDEX_FRAGMENT} public."${artifactName}"`,
+      ),
+    ).toBeGreaterThan(-1);
+  });
+
   test("repairs the staged index before replacing an older definition", async () => {
     const harness = createHarness({
       indexStates: {

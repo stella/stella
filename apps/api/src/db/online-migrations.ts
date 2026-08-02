@@ -430,6 +430,8 @@ const completeIndexCutover = async (
       finalState.isReady;
 
     if (finalIsReady) {
+      await cleanupFailedReindexArtifacts(connection, final);
+      await assertIndexReady(connection, final);
       const stagedState = await readIndexState(connection, staged);
       if (stagedState.type === "present") {
         assertIndexDefinition(staged, stagedState);

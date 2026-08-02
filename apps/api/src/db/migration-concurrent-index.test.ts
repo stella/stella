@@ -21,6 +21,7 @@ const TYPE_CHANGE_CLAUSE =
   /\bALTER\s+(?:COLUMN\s+)?(?:(?:U&)?"(?:""|[^"])+"(?:\s+UESCAPE\s+'(?:''|[^'])*')?|[A-Z_\u0080-\u{10FFFF}][A-Z0-9_$\u0080-\u{10FFFF}]*)\s+(?:SET\s+DATA\s+)?TYPE\b/giu;
 const TRANSACTION_REVERSAL =
   /^(?:ABORT|ROLLBACK|SAVEPOINT|RELEASE\s+SAVEPOINT)\b/iu;
+const PROCEDURAL_TIMEOUT_REFERENCE = /\b(?:statement|lock)_timeout\b/iu;
 const TYPE_CHANGE_POLICY = {
   boundedRewrite: "stella-migration-safety: bounded-type-rewrite",
   metadataOnly: "stella-migration-safety: metadata-only-type-change",
@@ -398,6 +399,17 @@ const isCustomStatementBudget = (statement: string) =>
     statement,
   );
 
+const isUnsupportedProceduralTimeoutMutation = (
+  relativePath: string,
+  statement: string,
+) =>
+  /^DO\b/iu.test(statement) &&
+  PROCEDURAL_TIMEOUT_REFERENCE.test(statement) &&
+  !(
+    CUSTOM_BOUNDED_TYPE_CHANGE_MIGRATIONS.has(relativePath) &&
+    isCustomStatementBudget(statement)
+  );
+
 const collectUnsafeConcurrentTimeouts = (
   relativePath: string,
   source: string,
@@ -413,6 +425,12 @@ const collectUnsafeConcurrentTimeouts = (
   let lockTimeoutRequiresRestore = false;
 
   for (const statement of splitSqlStatements(source)) {
+    if (isUnsupportedProceduralTimeoutMutation(relativePath, statement)) {
+      violations.push(
+        `${relativePath}: procedural timeout mutations are not supported`,
+      );
+      continue;
+    }
     const timeoutUpdate = parseTimeoutUpdate(statement);
     const isConcurrentOperation = CONCURRENT_INDEX_OPERATION.test(statement);
     const isUnsupportedTransactionReversal =
@@ -622,6 +640,12 @@ const collectUnsafeTypeChangesInMigration = (
     if (TRANSACTION_REVERSAL.test(statement)) {
       violations.push(
         `${relativePath}: timeout safety does not support transaction reversal`,
+      );
+      continue;
+    }
+    if (isUnsupportedProceduralTimeoutMutation(relativePath, statement)) {
+      violations.push(
+        `${relativePath}: procedural timeout mutations are not supported`,
       );
       continue;
     }
@@ -1130,6 +1154,38 @@ SELECT 1;`;
       ),
     ).toContain(
       "type-abort/migration.sql: timeout safety does not support transaction reversal",
+    );
+  });
+
+  test("rejects timeout mutations hidden in procedural blocks", () => {
+    const mutation = `DO $$
+    BEGIN
+      PERFORM set_config('lock_timeout', '0', false);
+    END
+    $$;`;
+
+    expect(
+      collectUnsafeConcurrentTimeouts(
+        "concurrent/migration.sql",
+        `SET statement_timeout = 0;
+        ${mutation}
+        CREATE INDEX CONCURRENTLY example_idx ON example (id);
+        SET statement_timeout = '5s';`,
+      ),
+    ).toContain(
+      "concurrent/migration.sql: procedural timeout mutations are not supported",
+    );
+    expect(
+      collectUnsafeTypeChangesInMigration(
+        "type-change/migration.sql",
+        `SET lock_timeout = '1s';
+        SET statement_timeout = '5s';
+        ${mutation}
+        -- ${TYPE_CHANGE_POLICY.boundedRewrite}
+        ALTER TABLE example ALTER COLUMN value TYPE timestamptz;`,
+      ),
+    ).toContain(
+      "type-change/migration.sql: procedural timeout mutations are not supported",
     );
   });
 
