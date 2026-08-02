@@ -468,7 +468,7 @@ if (!databaseUrl || !runPostgresTests) {
       const firstScopedDb: ScopedDb = async (transactionWork) => {
         const call = firstCallCount;
         firstCallCount += 1;
-        const value = await scopedDb(async (tx) => {
+        return await scopedDb(async (tx) => {
           if (call === 0) {
             const result = await transactionWork(tx);
             await synchronizeInitialRead();
@@ -476,10 +476,6 @@ if (!databaseUrl || !runPostgresTests) {
           }
           return await transactionWork(tx);
         });
-        if (call === 1) {
-          releaseFirstWrite();
-        }
-        return value;
       };
 
       let secondCallCount = 0;
@@ -497,14 +493,26 @@ if (!databaseUrl || !runPostgresTests) {
         });
       };
 
+      // Gate the second writer on the first writer finishing, not on a
+      // transaction count. Slug allocation spends a transaction per
+      // candidate and a taken candidate aborts it, so the write the second
+      // writer has to observe is not at any fixed call index.
+      const firstWrite = processDecision({
+        input: first,
+        observationOrder: 1n,
+        sourceId,
+        scopedDb: firstScopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
+      const firstWriteSettled = firstWrite.then(releaseFirstWrite, () => {
+        // Release the second writer either way; `firstWrite` below reports
+        // the failure, and leaving the latch closed would hang the suite.
+        releaseFirstWrite();
+      });
+
       await Promise.all([
-        processDecision({
-          input: first,
-          observationOrder: 1n,
-          sourceId,
-          scopedDb: firstScopedDb,
-          observedAt: new Date("2026-07-31T12:00:00.000Z"),
-        }),
+        firstWrite,
+        firstWriteSettled,
         processDecision({
           input: second,
           observationOrder: 2n,

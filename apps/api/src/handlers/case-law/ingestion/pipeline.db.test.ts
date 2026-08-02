@@ -10,6 +10,7 @@ import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline";
 import type { SafeId } from "@/api/lib/branded-types";
+import { getPgErrorCode } from "@/api/lib/pg-error";
 
 type JsonbStorageRow = {
   storageType: string;
@@ -205,7 +206,10 @@ if (!databaseUrl || !runPostgresTests) {
           () => null,
           (error: unknown) => error,
         );
-      expect(legacyFailure).toMatchObject({ code: "55000" });
+      // Drizzle wraps the driver error, and Bun's SQL driver reports the
+      // SQLSTATE on `errno` rather than `code`; read it through the helper
+      // that already knows both shapes.
+      expect(getPgErrorCode(legacyFailure)).toBe("55000");
 
       await processDecision({
         input: { ...initial, rawHash: "legacy-fence-newer" },
