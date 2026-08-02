@@ -55,7 +55,7 @@ export default {
           }
 
           // Heritage type arguments (<{...}>) hang off the class declaration.
-          const firstTypeArg = node.superTypeArguments?.params?.[0];
+          const firstTypeArg = node.superTypeArguments?.params?.at(0);
           // Only the inline object-literal form is checked; named aliases
           // (TSTypeReference) are resolved elsewhere and skipped to keep
           // false positives at zero.
