@@ -65,10 +65,30 @@ describe("generated environment examples", () => {
 });
 
 describe("environment file parsing", () => {
-  test("reads active quoted assignments and ignores comments", () => {
+  test("matches Bun comments, quoting, and variable expansion", () => {
     expect(
-      parseEnvText('ACTIVE="value"\n# SECRET="hidden"\nexport EMPTY=\'\'\n'),
-    ).toEqual({ ACTIVE: "value", EMPTY: "" });
+      parseEnvText(
+        [
+          'ACTIVE="value # preserved"',
+          "# SECRET=hidden",
+          "export EMPTY=''",
+          "SMTP_PORT=1025 # local relay",
+          "PORT_PREFIX=54",
+          `DB_PORT=\${PORT_PREFIX}32`,
+          "AMBIENT_PORT=$PGPORT",
+          String.raw`LITERAL=\$PGPORT`,
+        ].join("\n"),
+        { PGPORT: "6432" },
+      ),
+    ).toEqual({
+      ACTIVE: "value # preserved",
+      AMBIENT_PORT: "6432",
+      DB_PORT: "5432",
+      EMPTY: "",
+      LITERAL: "$PGPORT",
+      PORT_PREFIX: "54",
+      SMTP_PORT: "1025",
+    });
   });
 });
 

@@ -2,6 +2,7 @@
 import { Result } from "better-result";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { parseEnv } from "node:util";
 import * as v from "valibot";
 
 import { resolveDatabaseUrl } from "../apps/api/src/db-url";
@@ -134,25 +135,65 @@ export const renderCollabEnvExample = () =>
     ),
   );
 
-export const parseEnvText = (text: string) => {
+const isEnvNameStart = (character: string | undefined) =>
+  character !== undefined &&
+  ((character >= "A" && character <= "Z") ||
+    (character >= "a" && character <= "z") ||
+    character === "_");
+
+const isEnvNameCharacter = (character: string | undefined) =>
+  isEnvNameStart(character) ||
+  (character !== undefined && character >= "0" && character <= "9");
+
+const expandEnvReferences = (value: string, environment: NodeJS.ProcessEnv) => {
+  const output: string[] = [];
+  let index = 0;
+  while (index < value.length) {
+    const character = value.at(index);
+    if (character === "\\" && value.at(index + 1) === "$") {
+      output.push("$");
+      index += 2;
+      continue;
+    }
+    if (character !== "$") {
+      output.push(character ?? "");
+      index += 1;
+      continue;
+    }
+
+    const braced = value.at(index + 1) === "{";
+    const nameStart = index + (braced ? 2 : 1);
+    if (!isEnvNameStart(value.at(nameStart))) {
+      output.push("$");
+      index += 1;
+      continue;
+    }
+    let nameEnd = nameStart + 1;
+    while (isEnvNameCharacter(value.at(nameEnd))) {
+      nameEnd += 1;
+    }
+    if (braced && value.at(nameEnd) !== "}") {
+      output.push("$");
+      index += 1;
+      continue;
+    }
+
+    output.push(environment[value.slice(nameStart, nameEnd)] ?? "");
+    index = nameEnd + (braced ? 1 : 0);
+  }
+  return output.join("");
+};
+
+export const parseEnvText = (
+  text: string,
+  ambientEnvironment: NodeJS.ProcessEnv = process.env,
+) => {
   const values: Record<string, string> = {};
-  for (const line of text.split(/\r?\n/u)) {
-    const assignment = line.trim().replace(/^export\s+/u, "");
-    const separatorIndex = assignment.indexOf("=");
-    if (separatorIndex < 1) {
-      continue;
-    }
-    const name = assignment.slice(0, separatorIndex).trim();
-    if (!/^[A-Z][A-Z0-9_]*$/u.test(name)) {
-      continue;
-    }
-    const raw = assignment.slice(separatorIndex + 1).trim();
-    const quote = raw.at(0);
-    const isQuoted =
-      raw.length >= 2 &&
-      (quote === '"' || quote === "'") &&
-      raw.at(-1) === quote;
-    values[name] = isQuoted ? raw.slice(1, -1) : raw;
+  const environment = { ...ambientEnvironment };
+  for (const [name, value] of Object.entries(parseEnv(text))) {
+    const expanded = expandEnvReferences(value ?? "", environment);
+    values[name] = expanded;
+    environment[name] = expanded;
   }
   return values;
 };
