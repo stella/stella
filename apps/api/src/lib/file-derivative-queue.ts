@@ -386,11 +386,16 @@ const processPdfDerivativeJob = async ({
 const getS3File = async (key: string): Promise<ArrayBuffer> =>
   await getS3().file(key).arrayBuffer();
 
+// The derivative-state literals below cast `::text::jsonb`, never a bare
+// `::jsonb`. A bare cast fixes the bind parameter's type to jsonb, so the
+// driver JSON-encodes the already-serialized string and `jsonb_set` stores a
+// jsonb *string* instead of an object. `->>'status'` on that returns NULL, so
+// the claim predicates read it back as 'pending' and requeue the field forever.
 const readyPdfDerivativeContent = (pdfFileId: string) =>
   sql<FieldContent>`jsonb_set(
     jsonb_set(${fields.content}, '{pdfFileId}', to_jsonb(${pdfFileId}::text), true),
     '{pdfDerivative}',
-    ${JSON.stringify({ status: "ready" })}::jsonb,
+    ${JSON.stringify({ status: "ready" })}::text::jsonb,
     true
   )`;
 
@@ -398,7 +403,7 @@ const failedPdfDerivativeContent = () =>
   sql<FieldContent>`jsonb_set(
     ${fields.content},
     '{pdfDerivative}',
-    ${JSON.stringify({ status: "failed" })}::jsonb,
+    ${JSON.stringify({ status: "failed" })}::text::jsonb,
     true
   )`;
 
@@ -577,7 +582,7 @@ const readyThumbnailContent = (thumbnailFileId: string, placeholder: string) =>
       true
     ),
     '{thumbnailDerivative}',
-    ${JSON.stringify({ status: "ready" })}::jsonb,
+    ${JSON.stringify({ status: "ready" })}::text::jsonb,
     true
   )`;
 
@@ -585,7 +590,7 @@ const failedThumbnailContent = () =>
   sql<FieldContent>`jsonb_set(
     ${fields.content},
     '{thumbnailDerivative}',
-    ${JSON.stringify({ status: "failed" })}::jsonb,
+    ${JSON.stringify({ status: "failed" })}::text::jsonb,
     true
   )`;
 

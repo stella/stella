@@ -113,6 +113,10 @@ export default defineConfig({
     "no-coerced-optional-union-enum/no-coerced-optional-union-enum": "error",
     "tagged-error-requires-message/tagged-error-requires-message": "error",
     "require-custom-jsonb-column/require-custom-jsonb-column": "error",
+    // The column-cast allowlist lives in per-file overrides below, scoped to
+    // the files that own the schema objects, so the same spelling elsewhere
+    // stays flagged.
+    "no-bare-jsonb-cast/no-bare-jsonb-cast": "error",
     "require-timestamptz-column/require-timestamptz-column": "error",
     "no-naive-timestamp-cast/no-naive-timestamp-cast": "error",
     "no-spread-input-in-query-key/no-spread-input-in-query-key": "error",
@@ -379,6 +383,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-coerced-optional-union-enum.ts",
     "./.oxlint-plugins/tagged-error-requires-message.ts",
     "./.oxlint-plugins/require-custom-jsonb-column.ts",
+    "./.oxlint-plugins/no-bare-jsonb-cast.ts",
     "./.oxlint-plugins/require-timestamptz-column.ts",
     "./.oxlint-plugins/no-naive-timestamp-cast.ts",
     "./.oxlint-plugins/no-spread-input-in-query-key.ts",
@@ -433,6 +438,39 @@ export default defineConfig({
         // directives.
         "suppression-hygiene/require-description": "off",
         "suppression-hygiene/no-foreign-directive": "off",
+      },
+    },
+    {
+      // The only interpolations that legitimately take a bare `::jsonb`: each
+      // casts a text column, not a bind parameter. Named rather than inferred
+      // from shape (`payload.astJson` is a member expression too and is a
+      // serialized value), and scoped to the file that owns the schema object
+      // so the same spelling elsewhere stays flagged.
+      files: ["apps/api/src/db/auth-schema.ts"],
+      rules: {
+        "no-bare-jsonb-cast/no-bare-jsonb-cast": [
+          "error",
+          { allowedColumnExpressions: ["table.metadata"] },
+        ],
+      },
+    },
+    {
+      files: ["apps/api/src/lib/machine-api-key-scope.ts"],
+      rules: {
+        "no-bare-jsonb-cast/no-bare-jsonb-cast": [
+          "error",
+          { allowedColumnExpressions: ["apikey.metadata"] },
+        ],
+      },
+    },
+    {
+      // Exercise the allowed-column case (`_columnCast`) in the fixture.
+      files: [".oxlint-plugins/__fixtures__/no-bare-jsonb-cast.fixture.ts"],
+      rules: {
+        "no-bare-jsonb-cast/no-bare-jsonb-cast": [
+          "error",
+          { allowedColumnExpressions: ["table.metadata"] },
+        ],
       },
     },
     {

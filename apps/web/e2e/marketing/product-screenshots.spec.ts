@@ -29,6 +29,11 @@ const MARKETING_ORGANIZATION_ID = "test-org-stella-dev";
 const THEME_STORAGE_KEY = "stella-ui-theme";
 const requestedCapture = process.env["MARKETING_CAPTURE"];
 
+// Route chunks are compiled on demand by the dev server, so the first visit to
+// each route pays a cold build that the config's 15s expect timeout cannot
+// cover on a CI runner. Mirrors the same allowance in e2e/specs/route-smoke.
+const COLD_COMPILE_TIMEOUT = 60_000;
+
 const captures = [
   {
     name: "workspace",
@@ -122,6 +127,14 @@ test("capture landing product screenshots", async ({
   // a fresh page sits on about:blank, where the localStorage access in the
   // theme loop below throws a SecurityError.
   await page.goto("/", { waitUntil: "domcontentloaded" });
+  // `domcontentloaded` only means the document parsed; on a cold dev server the
+  // client still has to compile and hydrate the app before anything but the
+  // splash paints (measured at ~11s locally, several times that on a CI
+  // runner). Absorb that one-time cost here so the per-capture waits below
+  // only ever cover a route transition.
+  await expect(page.locator("main").first()).toBeVisible({
+    timeout: COLD_COMPILE_TIMEOUT,
+  });
 
   // Resolved once (not per capture/theme): only needed when the "agent"
   // capture is actually part of this run.
@@ -157,11 +170,18 @@ test("capture landing product screenshots", async ({
       await page.goto(capturePath, { waitUntil: "domcontentloaded" });
       // eslint-disable-next-line no-await-in-loop -- see above
       await expect(page).not.toHaveURL(/\/sign-in(?:\/|\?|$)/u);
+      // Each capture is the first visit to its route, so its chunk compiles on
+      // demand here too; the config's 15s expect timeout is not enough for that
+      // on a CI runner.
       // eslint-disable-next-line no-await-in-loop -- see above
-      await expect(page.getByText(capture.readyText).first()).toBeVisible();
+      await expect(page.getByText(capture.readyText).first()).toBeVisible({
+        timeout: COLD_COMPILE_TIMEOUT,
+      });
       if ("readySelector" in capture) {
         // eslint-disable-next-line no-await-in-loop -- see above
-        await expect(page.locator(capture.readySelector).first()).toBeVisible();
+        await expect(page.locator(capture.readySelector).first()).toBeVisible({
+          timeout: COLD_COMPILE_TIMEOUT,
+        });
       }
       if ("prepare" in capture && capture.prepare === "open-decision") {
         // Film a specific national decision deterministically, rather than
@@ -173,8 +193,13 @@ test("capture landing product screenshots", async ({
           .click();
         // eslint-disable-next-line no-await-in-loop -- see above
         await expect(page).toHaveURL(/\/law\/[a-z-]+\/cases\//u);
+        // The case detail is its own code-split chunk, so this click is the
+        // first load of another route: same cold-compile allowance as the
+        // navigations above, not the config's 15s default.
         // eslint-disable-next-line no-await-in-loop -- see above
-        await expect(page.locator("article").first()).toBeVisible();
+        await expect(page.locator("article").first()).toBeVisible({
+          timeout: COLD_COMPILE_TIMEOUT,
+        });
         // The reader briefly renders a logged-out "locked" AI button while
         // the client-side session query settles (useClientAuthStatus), then
         // swaps in the authenticated workspace. Wait for that swap so the

@@ -24,6 +24,7 @@ const FULL_CHECK_FILES = new Set([
   "package.json",
   "scripts/code-check-affected.ts",
   "scripts/lint-oxlint-fixtures.sh",
+  "scripts/lint-root-scripts-sql.sh",
   "turbo.json",
   "tsconfig.json",
   "tsconfig.oxlint-plugins.json",
@@ -222,7 +223,10 @@ const affectedWorkspacePaths = (mergeBase: string): string[] => {
 export const affectedCommands = (
   plan: Extract<CheckPlan, { type: "affected" }>,
 ) => {
-  const commands: string[][] = [];
+  // Root `scripts/` sits outside every workspace, so no affected target ever
+  // covers it. Run the SQL bind-cast guard unconditionally; otherwise a PR
+  // touching only a root script would skip the check entirely.
+  const commands: string[][] = [["bash", "scripts/lint-root-scripts-sql.sh"]];
   if (plan.checkLanding) {
     commands.push(["bun", "--cwd", "apps/landing", "typecheck"]);
     commands.push(["bun", "apps/landing/scripts/check-logical-properties.ts"]);

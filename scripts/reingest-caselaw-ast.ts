@@ -28,7 +28,7 @@ type DecisionRow = {
 };
 
 const extractUnid = (url: string): string | null => {
-  const match = /WebSearch\/([A-F0-9]+)/i.exec(url);
+  const match = /WebSearch\/([A-F0-9]+)/iu.exec(url);
   return match?.[1] ?? null;
 };
 
@@ -61,8 +61,7 @@ const main = async () => {
   let skipped = 0;
   let failed = 0;
 
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i]!;
+  for (const [i, row] of rows.entries()) {
     const unid = row.source_url ? extractUnid(row.source_url) : null;
 
     if (!unid) {
@@ -75,6 +74,8 @@ const main = async () => {
 
     const signal = AbortSignal.timeout(15_000);
 
+    // Crawled one decision at a time on purpose; the sleep below rate-limits it.
+    // oxlint-disable-next-line no-await-in-loop -- deliberate sequential crawl
     const [webHtml, printHtml] = await Promise.all([
       fetchHtml(webUrl, signal),
       fetchHtml(printUrl, signal),
@@ -99,12 +100,14 @@ const main = async () => {
 
       const astJson = JSON.stringify(result.documentAst);
       const metaJson = JSON.stringify(result.sourceMetadata);
+      // Each decision is written before the next is fetched.
+      // oxlint-disable-next-line no-await-in-loop -- deliberate sequential write
       await db`
         UPDATE case_law_decisions
         SET
-          document_ast = ${astJson}::jsonb,
+          document_ast = ${astJson}::text::jsonb,
           fulltext = ${result.fulltext},
-          metadata = metadata || ${metaJson}::jsonb
+          metadata = metadata || ${metaJson}::text::jsonb
         WHERE id = ${row.id}
       `;
 
@@ -124,6 +127,7 @@ const main = async () => {
 
     // Rate limit
     if (i < rows.length - 1) {
+      // oxlint-disable-next-line no-await-in-loop -- this await is the rate limit
       await Bun.sleep(300);
     }
   }

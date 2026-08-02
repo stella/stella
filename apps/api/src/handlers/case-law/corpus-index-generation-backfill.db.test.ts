@@ -1726,7 +1726,7 @@ test("the database rejects every malformed corpus source descriptor shape", asyn
     const rejection: unknown = await db
       .execute(
         sql`UPDATE ${caseLawSources}
-            SET descriptor = ${encoded}::jsonb
+            SET descriptor = ${encoded}::text::jsonb
             WHERE id = ${publicSourceId}`,
       )
       .then(

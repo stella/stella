@@ -592,7 +592,11 @@ const processDecisionAttempt = async ({
                 storedObservationPrecedes({ order: observationOrder }),
                 isNull(caseLawDecisions.redactedAt),
                 sql`${caseLawDecisions.sourceHash} IS NOT DISTINCT FROM ${existing.sourceHash}`,
-                sql`${caseLawDecisions.metadata} IS NOT DISTINCT FROM ${JSON.stringify(existing.metadata)}::jsonb`,
+                // `::text::jsonb`, never a bare `::jsonb`: the cast fixes the
+                // bind parameter's type, and the driver then JSON-encodes the
+                // already-serialized string, so the comparison sees a jsonb
+                // *string* rather than the object and never matches.
+                sql`${caseLawDecisions.metadata} IS NOT DISTINCT FROM ${JSON.stringify(existing.metadata)}::text::jsonb`,
               ),
             )
             .returning({ id: caseLawDecisions.id })

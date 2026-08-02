@@ -21,6 +21,13 @@ export default defineConfig({
     colorScheme: "light",
     locale: "en-GB",
     trace: "retain-on-failure",
+    // The dev server compiles route chunks on demand, and a module the entry
+    // is still waiting on holds DOMContentLoaded open. The test runner puts
+    // no timeout on navigation by default, so a wedged compile would burn the
+    // whole 240s test budget before failing; this bounds the navigation while
+    // leaving room for the one-time compile. Matches COLD_COMPILE_TIMEOUT in
+    // the app specs.
+    navigationTimeout: 60_000,
   },
   // Two targets share this suite: the app (screenshot captures of product
   // surfaces) and the landing site itself (island/navigation guards). The
