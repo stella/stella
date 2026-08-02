@@ -21,7 +21,10 @@ const TYPE_CHANGE_CLAUSE =
   /\bALTER\s+(?:COLUMN\s+)?(?:(?:U&)?"(?:""|[^"])+"(?:\s+UESCAPE\s+'(?:''|[^'])*')?|[A-Z_\u0080-\u{10FFFF}][A-Z0-9_$\u0080-\u{10FFFF}]*)\s+(?:SET\s+DATA\s+)?TYPE\b/giu;
 const TRANSACTION_REVERSAL =
   /^(?:ABORT|ROLLBACK|SAVEPOINT|RELEASE\s+SAVEPOINT)\b/iu;
-const PROCEDURAL_TIMEOUT_REFERENCE = /\b(?:statement|lock)_timeout\b/iu;
+const PROCEDURAL_TIMEOUT_MUTATION =
+  /\b(?:set_config\s*\(|(?:RESET|DISCARD)\s+ALL\b|RESET\s+(?:statement|lock)_timeout\b|SET\s+(?:(?:SESSION|LOCAL)\s+)?(?:statement|lock)_timeout\b)/iu;
+const DYNAMIC_PROCEDURAL_TIMEOUT_MUTATION =
+  /\bEXECUTE\b[\s\S]*?(?:\b(?:statement|lock)_timeout\b|\b(?:RESET|DISCARD)\s+ALL\b)/iu;
 const TYPE_CHANGE_POLICY = {
   boundedRewrite: "stella-migration-safety: bounded-type-rewrite",
   metadataOnly: "stella-migration-safety: metadata-only-type-change",
@@ -98,6 +101,46 @@ const sqlQuoteAt = (
     !POSTGRES_IDENTIFIER_CONTINUATION.test(beforePrefix);
 
   return { backslashEscapes: isEscapeString, character };
+};
+
+const maskSqlSingleQuotedLiterals = (source: string) => {
+  let result = "";
+  let index = 0;
+  let quote: SqlQuote | undefined;
+
+  while (index < source.length) {
+    const character = source[index] ?? "";
+    const nextCharacter = source[index + 1] ?? "";
+
+    if (!quote) {
+      if (character === "'") {
+        quote = sqlQuoteAt(source, index, character);
+        result += " ";
+      } else {
+        result += character;
+      }
+      index += 1;
+      continue;
+    }
+
+    result += character === "\n" ? "\n" : " ";
+    if (quote.backslashEscapes && character === "\\" && nextCharacter) {
+      result += nextCharacter === "\n" ? "\n" : " ";
+      index += 2;
+      continue;
+    }
+    if (character === "'" && nextCharacter === "'") {
+      result += " ";
+      index += 2;
+      continue;
+    }
+    if (character === "'") {
+      quote = undefined;
+    }
+    index += 1;
+  }
+
+  return result;
 };
 
 const policyStatementForComment = (comment: string) => {
@@ -404,7 +447,8 @@ const isUnsupportedProceduralTimeoutMutation = (
   statement: string,
 ) =>
   /^DO\b/iu.test(statement) &&
-  PROCEDURAL_TIMEOUT_REFERENCE.test(statement) &&
+  (PROCEDURAL_TIMEOUT_MUTATION.test(maskSqlSingleQuotedLiterals(statement)) ||
+    DYNAMIC_PROCEDURAL_TIMEOUT_MUTATION.test(statement)) &&
   !(
     CUSTOM_BOUNDED_TYPE_CHANGE_MIGRATIONS.has(relativePath) &&
     isCustomStatementBudget(statement)
@@ -1158,35 +1202,37 @@ SELECT 1;`;
   });
 
   test("rejects timeout mutations hidden in procedural blocks", () => {
-    const mutation = `DO $$
-    BEGIN
-      PERFORM set_config('lock_timeout', '0', false);
-    END
-    $$;`;
-
-    expect(
-      collectUnsafeConcurrentTimeouts(
-        "concurrent/migration.sql",
-        `SET statement_timeout = 0;
-        ${mutation}
-        CREATE INDEX CONCURRENTLY example_idx ON example (id);
-        SET statement_timeout = '5s';`,
-      ),
-    ).toContain(
-      "concurrent/migration.sql: procedural timeout mutations are not supported",
-    );
-    expect(
-      collectUnsafeTypeChangesInMigration(
-        "type-change/migration.sql",
-        `SET lock_timeout = '1s';
-        SET statement_timeout = '5s';
-        ${mutation}
-        -- ${TYPE_CHANGE_POLICY.boundedRewrite}
-        ALTER TABLE example ALTER COLUMN value TYPE timestamptz;`,
-      ),
-    ).toContain(
-      "type-change/migration.sql: procedural timeout mutations are not supported",
-    );
+    for (const command of [
+      "PERFORM set_config('lock_timeout', '0', false);",
+      "RESET ALL;",
+      "DISCARD ALL;",
+      "EXECUTE 'RESET ALL';",
+    ]) {
+      const mutation = `DO $$ BEGIN ${command} END $$;`;
+      expect(
+        collectUnsafeConcurrentTimeouts(
+          "concurrent/migration.sql",
+          `SET statement_timeout = 0;
+          ${mutation}
+          CREATE INDEX CONCURRENTLY example_idx ON example (id);
+          SET statement_timeout = '5s';`,
+        ),
+      ).toContain(
+        "concurrent/migration.sql: procedural timeout mutations are not supported",
+      );
+      expect(
+        collectUnsafeTypeChangesInMigration(
+          "type-change/migration.sql",
+          `SET lock_timeout = '1s';
+          SET statement_timeout = '5s';
+          ${mutation}
+          -- ${TYPE_CHANGE_POLICY.boundedRewrite}
+          ALTER TABLE example ALTER COLUMN value TYPE timestamptz;`,
+        ),
+      ).toContain(
+        "type-change/migration.sql: procedural timeout mutations are not supported",
+      );
+    }
   });
 
   test("keeps lock waits bounded for custom execution budgets", () => {
