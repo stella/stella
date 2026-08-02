@@ -66,6 +66,7 @@ import {
   activityDayKey,
   expandActivityGroupsForList,
   groupActivityItems,
+  resolveVisibleActivityTriggerType,
   resolveSelectedActivityGroup,
   toSingleActivityGroup,
 } from "./activity-panel.logic";
@@ -561,8 +562,6 @@ const HorizontalActivityMilestone = ({
   const first = items[0];
 
   if (group.type !== "automation_run") {
-    const detail = <TriggerDetail item={first} />;
-
     return (
       <HorizontalMilestoneFrame activityAt={first.activityAt} dateAt={dateAt}>
         <button
@@ -570,7 +569,7 @@ const HorizontalActivityMilestone = ({
           onClick={() => onSelectGroup(group)}
           type="button"
         >
-          <ActivityTriplet detail={detail} group={group} size="compact" />
+          <ActivityTriplet detail="provenance" group={group} size="compact" />
         </button>
       </HorizontalMilestoneFrame>
     );
@@ -582,7 +581,8 @@ const HorizontalActivityMilestone = ({
     ) : (
       <WorkflowIcon className="size-4" />
     );
-  const detail = <TriggerDetail item={first} />;
+  const showProvenance =
+    resolveVisibleActivityTriggerType(first.trigger.type) !== null;
   return (
     <HorizontalMilestoneFrame activityAt={first.activityAt} dateAt={dateAt}>
       <div className="flex min-h-5 items-center gap-1.5 text-[13px] leading-5 font-medium">
@@ -596,9 +596,11 @@ const HorizontalActivityMilestone = ({
           <RunCount count={items.length} />
         </span>
       </div>
-      <p className="text-muted-foreground mt-0.5 text-[11px] leading-4">
-        {detail}
-      </p>
+      {showProvenance && (
+        <p className="text-muted-foreground mt-0.5 text-[11px] leading-4">
+          <TriggerDetail item={first} />
+        </p>
+      )}
       <div className="mt-3 space-y-1">
         {items.map((item) => (
           <HorizontalRunActivityItem
@@ -680,7 +682,8 @@ const ActivityRunRow = ({
     return <ActivityItemRow group={group} onSelectGroup={onSelectGroup} />;
   }
 
-  const detail = <TriggerDetail item={first} />;
+  const showProvenance =
+    resolveVisibleActivityTriggerType(first.trigger.type) !== null;
   const marker =
     first.performer.type === "agent" ? (
       <BotIcon className="size-3.5" />
@@ -701,7 +704,11 @@ const ActivityRunRow = ({
             <RunCount count={items.length} />
           </span>
         </div>
-        <p className="text-muted-foreground mt-0.5 text-xs">{detail}</p>
+        {showProvenance && (
+          <p className="text-muted-foreground mt-0.5 text-xs">
+            <TriggerDetail item={first} />
+          </p>
+        )}
         <div className="mt-2.5 space-y-0.5 ps-3">
           {items.map((item) => (
             <RunActivityItem
@@ -808,7 +815,6 @@ const ActivityItemRow = ({
   onSelectGroup: (group: ActivityGroup) => void;
 }) => {
   const item = group.items[0];
-  const detail = <TriggerDetail item={item} />;
   const icon = activityGroupTargetIcon(group);
 
   return (
@@ -818,7 +824,7 @@ const ActivityItemRow = ({
         onClick={() => onSelectGroup(group)}
         type="button"
       >
-        <ActivityTriplet detail={detail} group={group} size="default" />
+        <ActivityTriplet detail="provenance" group={group} size="default" />
       </button>
     </TimelineEntry>
   );
@@ -848,7 +854,8 @@ const ActivityList = ({
         </div>
         {listGroups.map((group) => {
           const item = group.items[0];
-          const provenance = <TriggerDetail item={item} />;
+          const showProvenance =
+            resolveVisibleActivityTriggerType(item.trigger.type) !== null;
           return (
             <div
               className="border-b last:border-b-0"
@@ -886,7 +893,7 @@ const ActivityList = ({
                   </span>
                 </span>
                 <span className="text-muted-foreground min-w-0 text-xs leading-4">
-                  {provenance}
+                  {showProvenance ? <TriggerDetail item={item} /> : null}
                 </span>
               </button>
             </div>
@@ -913,7 +920,8 @@ const ActivityDetailsSheet = ({
   }
 
   const item = group.items[0];
-  const provenance = <TriggerDetail item={item} />;
+  const showProvenance =
+    resolveVisibleActivityTriggerType(item.trigger.type) !== null;
   const openTarget =
     group.items.length === 1 ? getOpenTarget(item, workspaceId) : undefined;
   const rows = [
@@ -990,10 +998,14 @@ const ActivityDetailsSheet = ({
           },
         ]
       : []),
-    {
-      label: t("workspaces.overview.activity.details.trigger"),
-      value: provenance,
-    },
+    ...(showProvenance
+      ? [
+          {
+            label: t("workspaces.overview.activity.details.trigger"),
+            value: <TriggerDetail item={item} />,
+          },
+        ]
+      : []),
     ...(item.approval.status !== "not_required"
       ? [
           {
@@ -1146,7 +1158,7 @@ const Performer = ({ item }: { item: MatterActivityItem }) => {
 };
 
 type ActivityTripletProps = {
-  detail?: ReactNode;
+  detail?: "provenance";
   group: ActivityGroup;
   size: "compact" | "default";
 };
@@ -1154,6 +1166,9 @@ type ActivityTripletProps = {
 const ActivityTriplet = ({ detail, group, size }: ActivityTripletProps) => {
   const item = group.items[0];
   const compact = size === "compact";
+  const showProvenance =
+    detail === "provenance" &&
+    resolveVisibleActivityTriggerType(item.trigger.type) !== null;
   return (
     <span
       className={
@@ -1177,7 +1192,7 @@ const ActivityTriplet = ({ detail, group, size }: ActivityTripletProps) => {
           <ActivityGroupTargetName group={group} />
         </BidiText>
       </span>
-      {detail !== null && detail !== undefined && (
+      {showProvenance && (
         <span
           className={
             compact
@@ -1186,7 +1201,9 @@ const ActivityTriplet = ({ detail, group, size }: ActivityTripletProps) => {
           }
         >
           <span aria-hidden="true" />
-          <span>{detail}</span>
+          <span>
+            <TriggerDetail item={item} />
+          </span>
         </span>
       )}
     </span>
@@ -1263,7 +1280,11 @@ const TriggerDetail = ({ item }: { item: MatterActivityItem }) => {
   const t = useTranslations();
   const rawUser = item.trigger.user?.name;
   const user = rawUser ? isolateBidi(rawUser) : null;
-  switch (item.trigger.type) {
+  const triggerType = resolveVisibleActivityTriggerType(item.trigger.type);
+  if (!triggerType) {
+    return null;
+  }
+  switch (triggerType) {
     case "user_dispatch": {
       if (!user) {
         return t("workspaces.overview.activity.provenance.dispatched");
@@ -1289,12 +1310,6 @@ const TriggerDetail = ({ item }: { item: MatterActivityItem }) => {
       return user
         ? t("workspaces.overview.activity.provenance.delegatedBy", { user })
         : t("workspaces.overview.activity.provenance.delegated");
-    case "direct":
-      return (
-        <TriggerLabelWithSource source={item.trigger.source}>
-          {t("workspaces.overview.activity.details.direct")}
-        </TriggerLabelWithSource>
-      );
     case "webhook":
       return (
         <TriggerLabelWithSource source={item.trigger.source}>
@@ -1308,7 +1323,7 @@ const TriggerDetail = ({ item }: { item: MatterActivityItem }) => {
         </TriggerLabelWithSource>
       );
     default: {
-      const exhaustive: never = item.trigger.type;
+      const exhaustive: never = triggerType;
       return exhaustive;
     }
   }

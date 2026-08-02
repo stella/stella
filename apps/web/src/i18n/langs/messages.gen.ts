@@ -3941,7 +3941,6 @@ type Messages = {
           "approvedBy": "Approved by";
           "channel": "Channel";
           "dateTime": "Date and time";
-          "direct": "Direct activity";
           "eventId": "Event ID";
           "notAvailable": "Not available";
           "openTarget": "Open item";
