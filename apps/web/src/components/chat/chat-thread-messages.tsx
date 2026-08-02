@@ -26,6 +26,11 @@ import {
 } from "@/components/ai-elements/message";
 import { AnonymizedSpan } from "@/components/chat/anonymized-span";
 import { AskUserCard } from "@/components/chat/ask-user-card";
+import { ChatActivityOrb } from "@/components/chat/chat-activity-orb";
+import {
+  hasCompletedResearchInLatestAssistantMessage,
+  resolveChatActivityIndicatorState,
+} from "@/components/chat/chat-activity.logic";
 import { useChatApproval } from "@/components/chat/chat-approval-context";
 import { ChatImageAttachment } from "@/components/chat/chat-image-attachment";
 import {
@@ -49,7 +54,10 @@ import type {
   ChatUITools,
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
-import { isApprovalPart } from "@/components/chat/chat-ui-tools";
+import {
+  hasRunningToolCallInLatestAssistantMessage,
+  isApprovalPart,
+} from "@/components/chat/chat-ui-tools";
 import { MessageExportMenu } from "@/components/chat/message-export-menu";
 import { NeedsMatterCard } from "@/components/chat/needs-matter-card";
 import { rehypeAnonSpans } from "@/components/chat/rehype-anon-spans";
@@ -112,6 +120,13 @@ export const ChatThreadMessages = ({
     [messages],
   );
   const shouldShowToolCalls = showToolCallDetails ?? showToolCalls ?? false;
+  const activityIndicatorState = resolveChatActivityIndicatorState({
+    hasCompletedResearch:
+      hasCompletedResearchInLatestAssistantMessage(messages),
+    hasRunningTool: hasRunningToolCallInLatestAssistantMessage({ messages }),
+    hasVisibleResponse: hasVisibleResponseContent(messages),
+    hasVisibleContent: hasVisibleContent(messages),
+  });
 
   // Null when this list renders outside a `Conversation` (the file-chat
   // overlay uses its own scroll container and never wires load-older).
@@ -330,9 +345,9 @@ export const ChatThreadMessages = ({
           onSendWithoutAnonymization={onSendWithoutAnonymization}
         />
       )}
-      {showThinkingIndicator &&
-        generationActive &&
-        !hasVisibleContent(messages) && <ThinkingIndicator />}
+      {showThinkingIndicator && generationActive && activityIndicatorState && (
+        <ThinkingIndicator state={activityIndicatorState} />
+      )}
       {onRemoveQueuedMessage &&
         queuedMessages !== undefined &&
         queuedMessages.length > 0 && (
@@ -716,17 +731,17 @@ const UserAttachments = ({
   );
 };
 
-const ThinkingIndicator = () => {
+const ThinkingIndicator = ({ state }: { state: "solving" | "working" }) => {
   const t = useTranslations();
 
   return (
     <Message from="assistant">
       <MessageContent>
         <div className="text-muted-foreground flex items-center gap-2 text-xs">
-          <div className="bg-muted relative h-1 w-9 overflow-hidden rounded-full">
-            <div className="bg-foreground/35 h-full w-1/2 animate-pulse rounded-full" />
-          </div>
-          <span>{t("chat.thinking")}</span>
+          <ChatActivityOrb state={state} />
+          <span>
+            {t(state === "solving" ? "chat.analyzingSources" : "chat.thinking")}
+          </span>
         </div>
       </MessageContent>
     </Message>
@@ -847,6 +862,22 @@ const hasVisibleContent = (
   }
 
   return false;
+};
+
+const hasVisibleResponseContent = (
+  messages: readonly PersistedChatMessage[],
+): boolean => {
+  const message = messages.at(-1);
+  if (message?.role !== "assistant") {
+    return false;
+  }
+
+  return message.parts.some(
+    (part) =>
+      (part.type === "text" && part.content.trim().length > 0) ||
+      (part.type === "thinking" && part.content.trim().length > 0) ||
+      isRichChatPart(part),
+  );
 };
 
 const getMessageText = (message: PersistedChatMessage) => {

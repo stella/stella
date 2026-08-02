@@ -366,6 +366,7 @@
     },
     "aiPrompt": "Pole pro zprávu AI",
     "aiThread": "Konverzace s AI",
+    "analyzingSources": "Analyzuji zdroje",
     "anonymizedMode": "Anonymizovaný režim AI",
     "anonymizedModeDisabled": "Anonymizovaný režim AI je vypnutý",
     "anonymizedModeEnabled": "Anonymizovaný režim AI je zapnutý",

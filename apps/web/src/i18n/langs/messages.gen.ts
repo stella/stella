@@ -369,6 +369,7 @@ type Messages = {
     };
     "aiPrompt": "AI message composer";
     "aiThread": "AI conversation";
+    "analyzingSources": "Analyzing sources";
     "anonymizedMode": "Anonymized AI mode";
     "anonymizedModeDisabled": "Anonymized AI mode is off";
     "anonymizedModeEnabled": "Anonymized AI mode is on";

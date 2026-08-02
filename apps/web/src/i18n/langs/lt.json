@@ -366,6 +366,7 @@
     },
     "aiPrompt": "DI pranešimo laukas",
     "aiThread": "DI pokalbis",
+    "analyzingSources": "Analizuojami šaltiniai",
     "anonymizedMode": "Anonimizuotas DI režimas",
     "anonymizedModeDisabled": "Anonimizuotas DI režimas išjungtas",
     "anonymizedModeEnabled": "Anonimizuotas DI režimas įjungtas",

@@ -366,6 +366,7 @@
     },
     "aiPrompt": "Pole wiadomości AI",
     "aiThread": "Konwersacja AI",
+    "analyzingSources": "Analizowanie źródeł",
     "anonymizedMode": "Zanonimizowany tryb AI",
     "anonymizedModeDisabled": "Zanonimizowany tryb AI jest wyłączony",
     "anonymizedModeEnabled": "Zanonimizowany tryb AI jest włączony",

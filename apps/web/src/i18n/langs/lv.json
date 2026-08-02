@@ -366,6 +366,7 @@
     },
     "aiPrompt": "MI ziņojuma lauks",
     "aiThread": "MI saruna",
+    "analyzingSources": "Avotu analīze",
     "anonymizedMode": "Anonimizēts AI režīms",
     "anonymizedModeDisabled": "Anonimizēts AI režīms ir izslēgts",
     "anonymizedModeEnabled": "Anonimizēts AI režīms ir ieslēgts",

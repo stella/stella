@@ -12,6 +12,8 @@ import {
 } from "@stll/ui/components/popover";
 import { cn } from "@stll/ui/lib/utils";
 
+import { ChatActivityOrb } from "@/components/chat/chat-activity-orb";
+import { getChatToolActivityState } from "@/components/chat/chat-activity.logic";
 import {
   type ChatToolCallPart,
   getChatToolTitleKey,
@@ -397,6 +399,7 @@ export const ToolCallCard = ({
   });
 
   const isLoading = isRunningToolPart(part);
+  const activityState = isLoading ? getChatToolActivityState(name) : null;
   const [timing, setTiming] = useState(() =>
     createToolCallTiming({ durationMs, isRunning: isLoading, now: Date.now() }),
   );
@@ -492,13 +495,8 @@ export const ToolCallCard = ({
           }}
           type="button"
         >
-          <span
-            className={cn(
-              "min-w-0 truncate",
-              isLoading &&
-                "animate-skeleton motion-reduce:text-muted-foreground bg-[linear-gradient(90deg,var(--color-foreground-ghost)_35%,var(--color-muted-foreground)_50%,var(--color-foreground-ghost)_65%)] bg-[length:250%_100%] bg-clip-text text-transparent motion-reduce:animate-none rtl:[animation-name:skeleton-rtl]",
-            )}
-          >
+          {activityState && <ChatActivityOrb state={activityState} />}
+          <span className="min-w-0 truncate">
             <span>{label}</span>
             {subtitle && (
               <span

@@ -366,6 +366,7 @@
     },
     "aiPrompt": "KI-Nachrichtenfeld",
     "aiThread": "KI-Konversation",
+    "analyzingSources": "Quellen werden analysiert",
     "anonymizedMode": "Anonymisierter KI-Modus",
     "anonymizedModeDisabled": "Anonymisierter KI-Modus ist aus",
     "anonymizedModeEnabled": "Anonymisierter KI-Modus ist an",

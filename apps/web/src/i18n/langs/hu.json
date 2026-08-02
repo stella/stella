@@ -366,6 +366,7 @@
     },
     "aiPrompt": "AI-üzenetmező",
     "aiThread": "AI-beszélgetés",
+    "analyzingSources": "Források elemzése",
     "anonymizedMode": "Anonimizált AI mód",
     "anonymizedModeDisabled": "Az anonimizált AI mód ki van kapcsolva",
     "anonymizedModeEnabled": "Az anonimizált AI mód be van kapcsolva",

@@ -366,6 +366,7 @@
     },
     "aiPrompt": "أداة تحرير رسائل AI",
     "aiThread": "محادثة AI",
+    "analyzingSources": "جارٍ تحليل المصادر",
     "anonymizedMode": "وضع AI المجهّل",
     "anonymizedModeDisabled": "وضع AI المجهّل متوقّف",
     "anonymizedModeEnabled": "وضع AI المجهّل مفعّل",

@@ -366,6 +366,7 @@
     },
     "aiPrompt": "Campo de mensaje de IA",
     "aiThread": "Conversación de IA",
+    "analyzingSources": "Analizando fuentes",
     "anonymizedMode": "Modo de IA anonimizado",
     "anonymizedModeDisabled": "El modo de IA anonimizado está desactivado",
     "anonymizedModeEnabled": "El modo de IA anonimizado está activado",
