@@ -10,9 +10,15 @@
 // This is the hand-written-SQL counterpart to require-custom-jsonb-column,
 // which covers the same hazard for Drizzle schema columns.
 //
+// Any interpolated value is flagged, not just a recognisable
+// `JSON.stringify(...)`: whether a value is already serialized cannot be known
+// from one file, since it can arrive through a helper parameter, an alias, or a
+// later assignment. Requiring the safe form unconditionally is what makes the
+// guard sound; inferring the producer would only catch the obvious cases.
+//
 // Flagged:
 //   sql`... ${JSON.stringify(value)}::jsonb ...`
-//   const json = JSON.stringify(value); sql`... ${json}::jsonb ...`
+//   sql`... ${json}::jsonb ...`           // any value, however it got here
 //
 // Allowed:
 //   sql`... ${JSON.stringify(value)}::text::jsonb ...`
@@ -23,30 +29,12 @@
 // interpolations, because the value is bound by index:
 //   db.unsafe(`... SET doc = $1::jsonb ...`, [JSON.stringify(value)])
 
-import { isIdentifier } from "./utils.ts";
-
 type AstNode = { type: string } & Record<string, unknown>;
 
 const isAstNode = (node: unknown): node is AstNode =>
   typeof node === "object" &&
   node !== null &&
   typeof (node as { type?: unknown }).type === "string";
-
-// `JSON.stringify(...)` — the only producer that yields an already-serialized
-// string, which is exactly what the bare cast double-encodes.
-const isJsonStringifyCall = (node: unknown): boolean => {
-  if (!isAstNode(node) || node.type !== "CallExpression") {
-    return false;
-  }
-  const callee = node.callee;
-  return (
-    isAstNode(callee) &&
-    callee.type === "MemberExpression" &&
-    callee.computed !== true &&
-    isIdentifier(callee.object, "JSON") &&
-    isIdentifier(callee.property, "stringify")
-  );
-};
 
 // Postgres ignores whitespace and comments between the parameter and its cast,
 // so the guard has to as well; otherwise `${json} ::jsonb` or a cast on the
@@ -109,9 +97,6 @@ export default {
         },
       },
       create(context) {
-        // Identifiers in this file bound to a JSON.stringify(...) result.
-        const serializedNames = new Set<string>();
-
         // A positional cast is reported wherever the SQL text carrying it
         // appears, so guard against reporting the same node twice.
         const reportedPositional = new WeakSet<object>();
@@ -131,13 +116,6 @@ export default {
         };
 
         return {
-          VariableDeclarator(node: AstNode) {
-            if (isIdentifier(node.id) && isJsonStringifyCall(node.init)) {
-              const { name } = node.id as { name: string };
-              serializedNames.add(name);
-            }
-          },
-
           Literal(node: AstNode) {
             reportPositionalCasts(node);
           },
@@ -150,13 +128,16 @@ export default {
             const quasis = Array.isArray(node.quasis) ? node.quasis : [];
 
             for (const [index, expression] of expressions.entries()) {
-              const bindsSerializedValue =
-                isJsonStringifyCall(expression) ||
-                (isIdentifier(expression) &&
-                  serializedNames.has(
-                    (expression as unknown as { name: string }).name,
-                  ));
-              if (!bindsSerializedValue) {
+              // Allow only a column reference (`${table.column}::jsonb`), which
+              // casts a column rather than pinning a bind parameter's type.
+              // Everything else is treated as a value: whether it is serialized
+              // cannot be known from this file — it may arrive through a helper
+              // parameter, an alias, or a later assignment — so the safe form is
+              // required unconditionally rather than inferred.
+              if (
+                isAstNode(expression) &&
+                expression.type === "MemberExpression"
+              ) {
                 continue;
               }
 

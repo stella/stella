@@ -9,6 +9,9 @@ import { sql } from "drizzle-orm";
 
 const value = { a: 1 };
 const column = sql`some_column`;
+// Columns are reached through the schema object in real code; that member form
+// is what the rule treats as a column cast.
+const table = { metadata: column };
 
 // A serialized value bound directly and cast with a bare `::jsonb`.
 // oxlint-disable-next-line no-bare-jsonb-cast/no-bare-jsonb-cast
@@ -46,6 +49,18 @@ const _commentBeforeCast = sql`${formJson} /* keep as jsonb */ ::jsonb`;
 // oxlint-disable-next-line no-bare-jsonb-cast/no-bare-jsonb-cast
 const _uppercaseCast = sql`${formJson}::JSONB`;
 
+// A serialized value reaching the template through a helper parameter. Nothing
+// in this file says `payload` is JSON, which is exactly why the guard cannot
+// depend on recognising the producer.
+// oxlint-disable-next-line no-bare-jsonb-cast/no-bare-jsonb-cast
+const _viaParameter = (payload: string) => sql`doc = ${payload}::jsonb`;
+
+// ...and through a plain alias of an alias.
+const alias = formJson;
+const aliasOfAlias = alias;
+// oxlint-disable-next-line no-bare-jsonb-cast/no-bare-jsonb-cast
+const _viaAlias = sql`doc = ${aliasOfAlias}::jsonb`;
+
 // The positional form binds by index, so the cast lives in the SQL text and
 // never appears among the template's expressions.
 // oxlint-disable-next-line no-bare-jsonb-cast/no-bare-jsonb-cast
@@ -65,8 +80,10 @@ const _throughText = sql`${JSON.stringify(value)}::text::jsonb`;
 const _identifierThroughText = sql`surface_forms @> ${formJson}::text::jsonb`;
 
 // Casting a column reference is unrelated: there is no bind parameter whose
-// type the cast could pin, so nothing is double-encoded.
-const _columnCast = sql`${column}::jsonb ->> 'organizationId'`;
+// type the cast could pin, so nothing is double-encoded. Only the member form
+// is exempt — a bare identifier could hold anything, so it is treated as a
+// value and must use `::text::jsonb`.
+const _columnCast = sql`${table.metadata}::jsonb ->> 'organizationId'`;
 
 // A SQL literal is written by Postgres, not bound by the driver.
 const _sqlLiteral = sql`coalesce(${column}, '[]'::jsonb)`;
@@ -86,6 +103,8 @@ export const __noBareJsonbCastFixture = {
   _spaceAfterOperator,
   _commentBeforeCast,
   _uppercaseCast,
+  _viaParameter,
+  _viaAlias,
   _positionalTemplate,
   _positionalLiteral,
   _positionalThroughText,
