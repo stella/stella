@@ -16,7 +16,7 @@ export class HostedUsageProviderApiError extends TaggedError(
   message: string;
   status?: number;
   cause?: unknown;
-}>() {}
+}> {}
 
 type HostedSetupMetadata = {
   organization_id: string;

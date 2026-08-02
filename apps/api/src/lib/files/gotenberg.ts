@@ -113,7 +113,7 @@ class GotenbergError extends TaggedError("GotenbergError")<{
   message: string;
   statusCode?: number;
   cause?: unknown;
-}>() {}
+}> {}
 
 const gotenbergAuth = (): string => {
   const credentials = Buffer.from(

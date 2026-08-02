@@ -45,7 +45,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 571,
+    "count": 568,
     "files": {
       "apps/api/src/db/migrate.ts": 2,
       "apps/api/src/db/schema.ts": 1,
@@ -57,11 +57,11 @@
       "apps/api/src/handlers/case-law/corpus-index.ts": 2,
       "apps/api/src/handlers/case-law/decisions/search.ts": 1,
       "apps/api/src/handlers/case-law/decisions/sitemap.ts": 1,
-      "apps/api/src/handlers/case-law/decisions/slug-backfill.ts": 4,
+      "apps/api/src/handlers/case-law/decisions/slug-backfill.ts": 3,
       "apps/api/src/handlers/case-law/erasure.ts": 5,
       "apps/api/src/handlers/case-law/ingestion/adapters/cz-ns.ts": 5,
       "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss.ts": 2,
-      "apps/api/src/handlers/case-law/ingestion/adapters/cz-regional.ts": 5,
+      "apps/api/src/handlers/case-law/ingestion/adapters/cz-regional.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/adapters/cz-us.ts": 5,
       "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts": 3,
       "apps/api/src/handlers/case-law/ingestion/adapters/health-check.ts": 1,
@@ -225,6 +225,7 @@
       "apps/web/src/components/chat-editor-provider.tsx": 10,
       "apps/web/src/components/chat-mention-list.tsx": 2,
       "apps/web/src/components/chat/chat-anon-decorations-plugin.ts": 2,
+      "apps/web/src/components/chat/chat-rich-message-part.tsx": 1,
       "apps/web/src/components/chat/chat-thread-messages.tsx": 7,
       "apps/web/src/components/chat/tool-approval-card.tsx": 2,
       "apps/web/src/components/chat/web-search-sources.tsx": 1,

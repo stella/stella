@@ -41,7 +41,7 @@ class EntityVersionTargetError extends TaggedError("EntityVersionTargetError")<{
     | "entity-read-only"
     | "missing-file-field";
   message: string;
-}>() {}
+}> {}
 
 type EntityVersionTargetErrorCode = EntityVersionTargetError["code"];
 

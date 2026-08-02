@@ -16,7 +16,7 @@ export class APIError extends TaggedError("ApiError")<{
   message: string;
   rawMessage?: string | undefined;
   details?: Record<string, unknown> | undefined;
-}>() {}
+}> {}
 
 const MAX_API_RETRY_COUNT = 3;
 const TOO_MANY_REQUESTS_STATUS = 429;

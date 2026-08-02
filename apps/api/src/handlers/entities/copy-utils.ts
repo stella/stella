@@ -192,7 +192,7 @@ type CopyFileObjectsOptions = {
 class FileObjectCopyError extends TaggedError("FileObjectCopyError")<{
   message: string;
   cause?: unknown;
-}>() {}
+}> {}
 
 export const copyFileObjects = async ({
   sources,

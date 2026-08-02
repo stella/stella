@@ -1,6 +1,11 @@
 /**
- * Every first-party `@stll/*` package the lockfile resolves from npm must be
- * listed in `bunfig.toml`'s `minimumReleaseAgeExcludes`.
+ * Guard `bunfig.toml`'s `minimumReleaseAgeExcludes`:
+ *
+ * 1. Every first-party `@stll/*` package the lockfile resolves from npm must
+ *    be excluded.
+ * 2. A temporary third-party exclusion annotated with
+ *    `# quarantine-expires: <timestamp>` fails at that timestamp, when Bun's
+ *    release-age gate can take over again.
  *
  * The 5-day quarantine is a supply-chain control for third-party code. First-
  * party packages publish continuously, so they are excluded by name. The
@@ -23,23 +28,85 @@ import path from "node:path";
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const LOCKFILE = "bun.lock";
 const BUNFIG = "bunfig.toml";
+const EXPIRY_MARKER = "quarantine-expires:";
+const EXACT_UTC_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
 
 /** Packages resolved from the workspace itself never hit the registry. */
 const WORKSPACE_PROTOCOL = "workspace:";
 
-const readExcludes = (bunfig: string): Set<string> => {
+const readExcludeBlock = (bunfig: string): string => {
   const start = bunfig.indexOf("minimumReleaseAgeExcludes");
   if (start === -1) {
-    return new Set();
+    return "";
   }
   const end = bunfig.indexOf("]", start);
-  const block = bunfig.slice(start, end === -1 ? undefined : end);
+  return bunfig.slice(start, end === -1 ? undefined : end);
+};
+
+const readExcludes = (bunfig: string): Set<string> => {
+  const block = readExcludeBlock(bunfig);
   return new Set(
     [...block.matchAll(/"(?<name>@?[^"]+)"/gu)].flatMap((match) => {
       const name = match.groups?.["name"];
       return name === undefined ? [] : [name];
     }),
   );
+};
+
+type TemporaryExclude = {
+  name: string;
+  expiresAt: string;
+};
+
+type TemporaryExcludesResult = {
+  entries: TemporaryExclude[];
+  errors: string[];
+};
+
+const readTemporaryExcludes = (bunfig: string): TemporaryExcludesResult => {
+  const entries: TemporaryExclude[] = [];
+  const errors: string[] = [];
+
+  for (const line of readExcludeBlock(bunfig).split("\n")) {
+    if (!line.includes(EXPIRY_MARKER)) {
+      continue;
+    }
+
+    const commentStart = line.indexOf("#");
+    const declaration = line.slice(0, commentStart).trim();
+    const comment = line.slice(commentStart + 1).trim();
+    const quotedName = declaration.endsWith(",")
+      ? declaration.slice(0, -1).trim()
+      : declaration;
+    const isQuotedName =
+      quotedName.startsWith('"') &&
+      quotedName.endsWith('"') &&
+      !quotedName.slice(1, -1).includes('"');
+    if (!comment.startsWith(EXPIRY_MARKER) || !isQuotedName) {
+      errors.push(
+        `${BUNFIG} has a malformed temporary quarantine annotation: ${line.trim()}`,
+      );
+      continue;
+    }
+
+    const name = quotedName.slice(1, -1);
+    const expiresAt = comment.slice(EXPIRY_MARKER.length).trim();
+    const expiresAtMs = Date.parse(expiresAt);
+    if (
+      !EXACT_UTC_TIMESTAMP.test(expiresAt) ||
+      Number.isNaN(expiresAtMs) ||
+      new Date(expiresAtMs).toISOString() !== expiresAt
+    ) {
+      errors.push(
+        `${BUNFIG} temporary quarantine exclude "${name}" has an invalid UTC expiry: ${expiresAt}`,
+      );
+      continue;
+    }
+
+    entries.push({ expiresAt, name });
+  }
+
+  return { entries, errors };
 };
 
 /**
@@ -64,26 +131,78 @@ const readRegistryStllPackages = (lockfile: string): Set<string> =>
     ),
   );
 
-const bunfig = readFileSync(path.join(REPO_ROOT, BUNFIG), "utf-8");
-const lockfile = readFileSync(path.join(REPO_ROOT, LOCKFILE), "utf-8");
+export type QuarantineExcludeCheckResult = {
+  errors: string[];
+  excludeCount: number;
+  firstPartyCount: number;
+  activeTemporaryCount: number;
+};
 
-const excludes = readExcludes(bunfig);
-const missing = [...readRegistryStllPackages(lockfile)]
-  .filter((name) => !excludes.has(name))
-  .sort();
+export const checkQuarantineExcludes = ({
+  bunfig,
+  lockfile,
+  now = new Date(),
+}: {
+  bunfig: string;
+  lockfile: string;
+  now?: Date;
+}): QuarantineExcludeCheckResult => {
+  const excludes = readExcludes(bunfig);
+  const firstPartyPackages = readRegistryStllPackages(lockfile);
+  const missing = [...firstPartyPackages]
+    .filter((name) => !excludes.has(name))
+    .sort();
+  const temporary = readTemporaryExcludes(bunfig);
+  const errors = [...temporary.errors];
 
-if (missing.length > 0) {
-  console.error(
-    `${BUNFIG} minimumReleaseAgeExcludes is missing ${missing.length} first-party package(s):\n` +
-      missing.map((name) => `  "${name}",`).join("\n") +
-      `\n\nAdd them. Until then, a fresh publish of any of these installs ` +
-      `partially: the quarantine blocks it, and an optionalDependency that ` +
-      `is blocked is skipped silently, so the failure surfaces at runtime ` +
-      `rather than at install.`,
+  if (missing.length > 0) {
+    errors.push(
+      `${BUNFIG} minimumReleaseAgeExcludes is missing ${missing.length} first-party package(s):\n${ 
+        missing.map((name) => `  "${name}",`).join("\n") 
+        }\n\nAdd them. Until then, a fresh publish of any of these installs ` +
+        `partially: the quarantine blocks it, and an optionalDependency that ` +
+        `is blocked is skipped silently, so the failure surfaces at runtime ` +
+        `rather than at install.`,
+    );
+  }
+
+  const nowMs = now.getTime();
+  for (const { expiresAt, name } of temporary.entries) {
+    if (nowMs < Date.parse(expiresAt)) {
+      continue;
+    }
+    errors.push(
+      `${BUNFIG} temporary quarantine exclude "${name}" expired at ${expiresAt}. ` +
+        `Remove it: the configured release-age gate can admit the package now.`,
+    );
+  }
+
+  return {
+    activeTemporaryCount: temporary.entries.length,
+    errors,
+    excludeCount: excludes.size,
+    firstPartyCount: firstPartyPackages.size,
+  };
+};
+
+const main = () => {
+  const result = checkQuarantineExcludes({
+    bunfig: readFileSync(path.join(REPO_ROOT, BUNFIG), "utf-8"),
+    lockfile: readFileSync(path.join(REPO_ROOT, LOCKFILE), "utf-8"),
+  });
+
+  if (result.errors.length > 0) {
+    console.error(result.errors.join("\n\n"));
+    process.exit(1);
+  }
+
+  console.log(
+    `${BUNFIG}: ${result.excludeCount} quarantine excludes cover all ` +
+      `${result.firstPartyCount} registry-backed first-party packages; ` +
+      `${result.activeTemporaryCount} temporary exclude(s) remain active.`,
   );
-  process.exit(1);
-}
+};
 
-console.log(
-  `${BUNFIG}: all ${excludes.size} quarantine excludes cover every first-party package in ${LOCKFILE}.`,
-);
+if (import.meta.main) {
+  main();
+}

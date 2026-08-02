@@ -33,7 +33,7 @@ export class DocxArchiveError extends TaggedError("DocxArchiveError")<{
     | "entry-too-large"
     | "total-too-large";
   cause?: unknown;
-}>() {}
+}> {}
 
 type ArchiveOptions = {
   maxEntryBytes?: number;

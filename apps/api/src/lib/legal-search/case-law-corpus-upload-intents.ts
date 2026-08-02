@@ -213,7 +213,7 @@ type WriteReservedCaseLawCorpusUploadOptions = {
 class CorpusUploadWriteError extends TaggedError("CorpusUploadWriteError")<{
   cause: unknown;
   message: string;
-}>() {}
+}> {}
 
 export type WriteReservedCaseLawCorpusUploadResult =
   | CaseLawCorpusUploadApplyResult

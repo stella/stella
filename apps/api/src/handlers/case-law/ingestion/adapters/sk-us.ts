@@ -57,6 +57,7 @@ const SEARCH_URL = `${BASE_URL}/o/v1/dms/search`;
 const DOC_DOWNLOAD_URL = `${BASE_URL}/docDownload`;
 
 const PAGE_SIZE = 10;
+const SEARCH_RETRY_DELAY_MS = 500;
 
 /** First year with decisions in the API. */
 const FIRST_YEAR = 1993;
@@ -374,6 +375,41 @@ const executeSearch = async (
   return data;
 };
 
+type ExecuteSearchWithRetryOptions = {
+  cursor: string | null;
+  offset: number;
+  signal?: AbortSignal | undefined;
+  year: number;
+};
+
+const executeSearchWithRetry = async ({
+  cursor,
+  offset,
+  signal,
+  year,
+}: ExecuteSearchWithRetryOptions) =>
+  await Result.tryPromise(
+    {
+      try: async ({ signal: attemptSignal }) => {
+        if (attemptSignal?.aborted) {
+          throw new DOMException("Cycle aborted", "AbortError");
+        }
+        return await executeSearch(year, offset, attemptSignal);
+      },
+      catch: adapterCatch(ADAPTER_KEYS.SK_US, cursor),
+    },
+    {
+      ...(signal ? { signal } : {}),
+      retry: {
+        times: 1,
+        delayMs: SEARCH_RETRY_DELAY_MS,
+        backoff: "constant",
+        shouldRetry: (error) =>
+          !(error.cause instanceof DOMException) && !isAuthFailure(error.cause),
+      },
+    },
+  );
+
 // ── Adapter ──────────────────────────────────────────────
 
 export const skUsAdapter: SourceAdapter = {
@@ -395,24 +431,19 @@ export const skUsAdapter: SourceAdapter = {
         const { year, offset } = parseCursor(cursor);
         const currentYear = new Date().getFullYear();
 
-        let data: SearchResponse | null;
-        try {
-          data = await executeSearch(year, offset, signal);
-        } catch (error) {
-          if (error instanceof DOMException) {
-            throw error;
+        const searchResult = await executeSearchWithRetry({
+          cursor,
+          offset,
+          signal,
+          year,
+        });
+        if (Result.isError(searchResult)) {
+          if (signal?.aborted) {
+            throw new DOMException("Cycle aborted", "AbortError");
           }
-          // A 401/403 is the court putting the endpoint back behind
-          // authentication, not a flaky request. There is no credential
-          // to refresh, so an identical second attempt can only fail the
-          // same way: surface it instead of doubling the traffic.
-          if (isAuthFailure(error)) {
-            throw error;
-          }
-          // One retry: the DMS search is intermittently flaky under
-          // load. An abort is not retried (handled above).
-          data = await executeSearch(year, offset, signal);
+          throw searchResult.error;
         }
+        const data = searchResult.value;
 
         // 204 / empty search for this year window.
         // Advance to next year if available.

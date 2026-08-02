@@ -2,7 +2,7 @@ import { Result, TaggedError } from "better-result";
 
 class PatternError extends TaggedError("PatternError")<{
   message: string;
-}>() {}
+}> {}
 
 const RECOGNIZED_TOKENS = ["{SEQ}", "{YYYY}", "{YY}", "{MM}"] as const;
 const TOKEN_REGEX = /\{[^{}]+\}/gu;

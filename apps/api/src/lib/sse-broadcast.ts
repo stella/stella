@@ -53,7 +53,7 @@ export class SSEBroadcastError extends TaggedError("SSEBroadcastError")<{
   message: string;
   cause: unknown;
   scope: RedisPayload["scope"];
-}>() {}
+}> {}
 
 export const parseRedisPayload = (raw: string): RedisPayload | null => {
   const parsed: unknown = JSON.parse(raw);

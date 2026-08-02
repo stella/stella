@@ -17,7 +17,7 @@ export class AuthClientError extends TaggedError("AuthClientError")<{
   message: string;
   status: number;
   statusText: string;
-}>() {}
+}> {}
 
 type ToAuthClientErrorProps = {
   code?: string | undefined;

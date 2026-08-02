@@ -14,7 +14,7 @@ export class SafeOutboundFetchError extends TaggedError(
 )<{
   cause?: unknown;
   message: string;
-}>() {}
+}> {}
 
 export type SafeOutboundAddress = {
   address: string;

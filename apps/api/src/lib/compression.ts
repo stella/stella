@@ -15,7 +15,7 @@ import { zstdDecompress } from "node:zlib";
 /** A corpus payload exceeded the decompressed-size ceiling. */
 export class PayloadBudgetError extends TaggedError("PayloadBudgetError")<{
   message: string;
-}>() {}
+}> {}
 
 export const zstdCompress = (data: string | Uint8Array): Uint8Array => {
   const bytes = typeof data === "string" ? Buffer.from(data, "utf-8") : data;

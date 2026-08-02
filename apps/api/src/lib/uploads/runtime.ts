@@ -67,7 +67,7 @@ export class UploadFinalizeError extends TaggedError("UploadFinalizeError")<{
   message: string;
   /** Optional reason persisted on the pending_uploads row. */
   rejectReason?: string;
-}>() {}
+}> {}
 
 /**
  * Re-export of the better-result helper for cases where a non-OK

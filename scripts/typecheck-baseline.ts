@@ -9,12 +9,13 @@
 // weeks later, with no diff to point at. Lint and tests see none of it.
 //
 // This runs the native tsc (tsgo, via packages/scripts/src/tsc-native.ts)
-// with --extendedDiagnostics per project and guards the deterministic size
-// counters against a committed baseline: a jump past the headroom fails CI as
-// a reviewable event, an improvement just prompts a re-baseline. Calibration
-// (two identical runs on apps/api): Files, Lines, Identifiers, Symbols,
-// Types, and Instantiations are byte-identical run to run; memory and time
-// fields wobble, so they are printed for context but never gated.
+// with --extendedDiagnostics and --singleThreaded per project, then guards the
+// deterministic size counters against a committed baseline. Native tsc uses
+// independent checker-local caches in parallel mode and assigns files to those
+// checkers by position. Adding an otherwise inert root file can repartition the
+// project and change aggregate Types/Instantiations substantially, so parallel
+// diagnostics are unsuitable as a comparable cost metric. Memory and time
+// fields still wobble; they are printed for context but never gated.
 //
 // Modes:
 //   bun scripts/typecheck-baseline.ts                  report per-project counters
@@ -35,6 +36,11 @@ const BASELINE_PATH = path.resolve(SCRIPTS_DIR, "typecheck-baseline.json");
 const BASELINE_REL = "scripts/typecheck-baseline.json";
 const TSC_NATIVE = "packages/scripts/src/tsc-native.ts";
 const WRITE_HINT = "bun scripts/typecheck-baseline.ts --write-baseline";
+const MEASUREMENT_FLAGS = [
+  "--noEmit",
+  "--extendedDiagnostics",
+  "--singleThreaded",
+] as const;
 
 // One entry per tsconfig project the repo typechecks in CI. Fixed schema
 // (like bundle-baseline's GROUP_KEYS): a new project must be added here
@@ -53,9 +59,9 @@ const PROJECTS = [
 
 type ProjectId = (typeof PROJECTS)[number]["id"];
 
-// The gated counters. Both are fully deterministic for a given commit +
-// lockfile (verified by calibration, see header); growth here is real type
-// work added to every future typecheck, not machine noise.
+// The gated counters. In single-threaded mode both are fully deterministic for
+// a given commit and lockfile; growth here is type work, not checker-pool
+// partition noise.
 const GATED_FIELDS = ["types", "instantiations"] as const;
 
 type GatedField = (typeof GATED_FIELDS)[number];
@@ -81,21 +87,15 @@ const RATCHET_DOWN = 0.95;
 // --- Running tsc -------------------------------------------------------------
 
 // tsc processes are memory-hungry; run projects strictly one at a time, same
-// reason scripts/verify.sh serializes typecheck tasks (--concurrency=1).
+// reason scripts/verify.sh serializes typecheck tasks (--concurrency=1). The
+// measurement itself also uses one checker so its counters remain comparable.
 type RunResult =
   | { ok: true; diagnostics: string }
   | { ok: false; error: string };
 
 const runProject = (project: string): RunResult => {
   const proc = Bun.spawnSync(
-    [
-      process.execPath,
-      TSC_NATIVE,
-      "-p",
-      project,
-      "--noEmit",
-      "--extendedDiagnostics",
-    ],
+    [process.execPath, TSC_NATIVE, "-p", project, ...MEASUREMENT_FLAGS],
     { cwd: REPO_ROOT, stdout: "pipe", stderr: "pipe" },
   );
   const stdout = proc.stdout.toString();
@@ -392,42 +392,47 @@ const runCheck = (): number => {
 // exact numbers from a REAL captured tsgo output, and the comparison fires on
 // an explosion while ignoring routine growth within the headroom.
 
-// Verbatim tsgo 7.0.2 output from `-p apps/api --noEmit --extendedDiagnostics`.
+// Verbatim tsgo 7.0.2 output from
+// `-p apps/api --noEmit --extendedDiagnostics --singleThreaded`.
 const SELF_TEST_DIAGNOSTICS = [
-  "Files:              6113",
-  "Lines:            984633",
-  "Identifiers:     1143015",
-  "Symbols:         4159160",
-  "Types:           1742161",
-  "Instantiations:  8893375",
-  "Memory used:    2400322K",
-  "Memory allocs:  26176510",
-  "Config time:      0.028s",
-  "Parse time:       0.437s",
-  "Bind time:        0.089s",
-  "Check time:       6.460s",
-  "Emit time:        0.001s",
-  "Total time:       7.046s",
+  "Files:              7107",
+  "Lines:           1137044",
+  "Identifiers:     1323604",
+  "Symbols:         2812488",
+  "Types:            911491",
+  "Instantiations:  4879903",
+  "Memory used:    1719495K",
+  "Memory allocs:  15739381",
+  "Config time:      0.024s",
+  "Parse time:       3.981s",
+  "Bind time:        1.482s",
+  "Check time:      50.673s",
+  "Emit time:        0.006s",
+  "Total time:      56.202s",
 ].join("\n");
 
 const runSelfTest = (): number => {
   const failures: string[] = [];
 
+  if (!MEASUREMENT_FLAGS.includes("--singleThreaded")) {
+    failures.push("measurement flags allow checker-pool partition noise");
+  }
+
   const parsed = parseCounters(SELF_TEST_DIAGNOSTICS, "apps/api");
   if (!parsed.ok) {
     failures.push("parser rejected a real tsgo diagnostics output");
   } else {
-    if (parsed.counters.types !== 1_742_161) {
-      failures.push(`parsed types = ${parsed.counters.types}, want 1742161`);
+    if (parsed.counters.types !== 911_491) {
+      failures.push(`parsed types = ${parsed.counters.types}, want 911491`);
     }
-    if (parsed.counters.instantiations !== 8_893_375) {
+    if (parsed.counters.instantiations !== 4_879_903) {
       failures.push(
-        `parsed instantiations = ${parsed.counters.instantiations}, want 8893375`,
+        `parsed instantiations = ${parsed.counters.instantiations}, want 4879903`,
       );
     }
   }
-  if (diagnosticField(SELF_TEST_DIAGNOSTICS, "Check time") !== 6.46) {
-    failures.push("Check time did not parse as 6.46");
+  if (diagnosticField(SELF_TEST_DIAGNOSTICS, "Check time") !== 50.673) {
+    failures.push("Check time did not parse as 50.673");
   }
   const missing = parseCounters("Files: 12\n", "apps/api");
   if (missing.ok) {

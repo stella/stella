@@ -171,6 +171,11 @@ run_knip() {
   done
 }
 
+run_quarantine_exclude_guard() {
+  bun test scripts/check-stll-quarantine-excludes.test.ts || return 1
+  bun scripts/check-stll-quarantine-excludes.ts
+}
+
 run_test() {
   if [[ -n "$affected_flag" ]]; then
     bun run test -- --concurrency=2 "$affected_flag"
@@ -182,6 +187,7 @@ run_test() {
 run_step "AI skill sync" bash .ai/shared/scripts/sync-ai-skills.sh --check .
 run_step "Workspace hygiene" bun run lint:ws
 run_step "Lockfile workspace-version guard" bun scripts/check-lockfile-workspace-versions.ts
+run_step "Quarantine-exclude guards" run_quarantine_exclude_guard
 run_step "Policy evidence" bun run policies:check
 run_step "Marketing content evidence" bun run marketing:check
 run_step "Marketing recording verification self-test" bun test \

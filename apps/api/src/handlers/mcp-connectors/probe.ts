@@ -14,7 +14,7 @@ const PROBE_MAX_BYTES = 1_000_000;
 class McpProbeError extends TaggedError("McpProbeError")<{
   message: string;
   cause?: unknown;
-}>() {}
+}> {}
 
 export type McpProbeResult =
   | {

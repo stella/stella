@@ -1695,7 +1695,7 @@ const prepareChatContext = async ({
       orgSettingsRow?.practiceJurisdictions,
     );
 
-    const [systemResult, hydratedMessagesResult] = await Promise.all([
+    const promptAndMessagesResult = await Result.allAsync([
       buildChatSystemPromptParts({
         activeDecision,
         activeExternal,
@@ -1720,16 +1720,16 @@ const prepareChatContext = async ({
         userId,
       }),
     ]);
-    const systemPrompt = yield* systemResult;
-    const hydratedMessages = yield* hydratedMessagesResult.mapError((error) =>
-      ChatError.is(error)
-        ? new HandlerError({
-            status: 500,
-            message: error.message,
-            cause: error,
-          })
-        : error,
-    );
+    const [systemPrompt, hydratedMessages] =
+      yield* promptAndMessagesResult.mapError((error) =>
+        ChatError.is(error)
+          ? new HandlerError({
+              status: 500,
+              message: error.message,
+              cause: error,
+            })
+          : error,
+      );
 
     const messagesWithActiveFileFallback = yield* Result.await(
       attachActivePdfWhenExtractionIsEmpty({

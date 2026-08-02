@@ -3,7 +3,7 @@ import { Result, TaggedError } from "better-result";
 export class DataUrlError extends TaggedError("DataUrlError")<{
   message: string;
   cause?: unknown;
-}>() {}
+}> {}
 
 export const DATA_URL_PAYLOAD_TOO_LARGE_MESSAGE =
   "Data URL payload exceeds size limit";

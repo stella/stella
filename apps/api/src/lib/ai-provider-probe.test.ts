@@ -21,7 +21,7 @@ process.env["AZURE_API_VERSION"] = "";
 class MockSafeOutboundFetchError extends TaggedError("SafeOutboundFetchError")<{
   cause?: unknown;
   message: string;
-}>() {}
+}> {}
 
 type SafeOutboundFetchCall = {
   url: URL;

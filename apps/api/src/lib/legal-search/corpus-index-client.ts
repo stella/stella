@@ -16,7 +16,7 @@ export class CorpusIndexError extends TaggedError("CorpusIndexError")<{
   message: string;
   status?: number | undefined;
   cause?: unknown;
-}>() {}
+}> {}
 
 const SEARCH_TIMEOUT_MS = 30_000;
 const INGEST_TIMEOUT_MS = 120_000;

@@ -80,7 +80,7 @@ class S3Error extends TaggedError("S3Error")<{
   code?: string | undefined;
   key?: string | undefined;
   cause?: unknown;
-}>() {}
+}> {}
 
 export const deleteS3Objects = async ({
   fileRows,

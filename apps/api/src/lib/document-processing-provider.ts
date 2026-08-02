@@ -24,7 +24,7 @@ export class DocumentOcrProviderError extends TaggedError(
   message: string;
   cause?: unknown;
   status?: number | undefined;
-}>() {}
+}> {}
 
 export type DocumentOcrResult = {
   pageCount: number;

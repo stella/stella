@@ -45,7 +45,7 @@ export const THUMBNAIL_MIME_TYPE = "image/webp";
 export class ImageDerivativeError extends TaggedError("ImageDerivativeError")<{
   message: string;
   code?: string | undefined;
-}>() {}
+}> {}
 
 type ImageThumbnailResult = {
   /** Encoded WebP thumbnail bytes, longest edge <= THUMBNAIL_MAX_EDGE. */

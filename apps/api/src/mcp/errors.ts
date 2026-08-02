@@ -5,13 +5,13 @@ export class McpAuthenticationError extends TaggedError(
 )<{
   message: string;
   cause?: unknown;
-}>() {}
+}> {}
 
 export class McpOrganizationAccessError extends TaggedError(
   "McpOrganizationAccessError",
 )<{
   message: string;
-}>() {}
+}> {}
 
 /**
  * An infrastructure failure while verifying the bearer token (JWKS fetch/network
@@ -26,7 +26,7 @@ export class McpTokenVerificationError extends TaggedError(
 )<{
   message: string;
   cause?: unknown;
-}>() {}
+}> {}
 
 /**
  * A backing store read failed while loading the dynamic gateway surface
@@ -39,4 +39,4 @@ export class McpTokenVerificationError extends TaggedError(
 export class McpGatewayLoadError extends TaggedError("McpGatewayLoadError")<{
   message: string;
   cause?: unknown;
-}>() {}
+}> {}
