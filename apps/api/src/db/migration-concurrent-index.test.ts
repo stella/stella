@@ -14,9 +14,9 @@ const CONCURRENT_UNIQUE_CREATE =
 const CONCURRENT_DROP =
   /\bDROP\s+INDEX\s+CONCURRENTLY\s+IF\s+EXISTS\s+"([^"]+)"/giu;
 const TYPE_CHANGE =
-  /^ALTER\s+TABLE\b[^;]*?\bALTER\s+(?:COLUMN\s+)?(?:"[^"]+"|[A-Z_\u0080-\u{10FFFF}][A-Z0-9_$\u0080-\u{10FFFF}]*)\s+(?:SET\s+DATA\s+)?TYPE\b/iu;
+  /^ALTER\s+TABLE\b[^;]*?\bALTER\s+(?:COLUMN\s+)?(?:(?:U&)?"(?:""|[^"])+"(?:\s+UESCAPE\s+'(?:''|[^'])*')?|[A-Z_\u0080-\u{10FFFF}][A-Z0-9_$\u0080-\u{10FFFF}]*)\s+(?:SET\s+DATA\s+)?TYPE\b/iu;
 const TYPE_CHANGE_ANYWHERE =
-  /\bALTER\s+TABLE\b[\s\S]*?\bALTER\s+(?:COLUMN\s+)?(?:"[^"]+"|[A-Z_\u0080-\u{10FFFF}][A-Z0-9_$\u0080-\u{10FFFF}]*)\s+(?:SET\s+DATA\s+)?TYPE\b/iu;
+  /\bALTER\s+TABLE\b[\s\S]*?\bALTER\s+(?:COLUMN\s+)?(?:(?:U&)?"(?:""|[^"])+"(?:\s+UESCAPE\s+'(?:''|[^'])*')?|[A-Z_\u0080-\u{10FFFF}][A-Z0-9_$\u0080-\u{10FFFF}]*)\s+(?:SET\s+DATA\s+)?TYPE\b/iu;
 const TRANSACTION_REVERSAL =
   /^(?:ABORT|ROLLBACK|SAVEPOINT|RELEASE\s+SAVEPOINT)\b/iu;
 const TYPE_CHANGE_POLICY = {
@@ -740,6 +740,16 @@ $$;`;
     expect(
       TYPE_CHANGE.test(
         "ALTER TABLE example ALTER COLUMN café TYPE timestamptz",
+      ),
+    ).toBe(true);
+    expect(
+      TYPE_CHANGE.test(
+        'ALTER TABLE example ALTER COLUMN "a""b" TYPE timestamptz',
+      ),
+    ).toBe(true);
+    expect(
+      TYPE_CHANGE.test(
+        String.raw`ALTER TABLE example ALTER COLUMN U&"d\0061t" TYPE timestamptz`,
       ),
     ).toBe(true);
   });
