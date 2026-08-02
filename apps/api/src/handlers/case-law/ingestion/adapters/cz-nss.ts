@@ -824,16 +824,33 @@ export const czNssAdapter: SourceAdapter = {
   pageTimeoutMs: 120_000,
   maxSyncPages: 20,
 
+  /**
+   * The portal aggregates several courts, and its search filters cannot be
+   * scoped to one of them without executing the site's own scripts — so the
+   * count, like the crawl, covers the portal's whole collection rather than
+   * this court alone. The benchmark still matches what the crawl sees.
+   */
   async getTotalCount(signal) {
     try {
       const session = await getSession(signal);
 
-      // Submit empty search (no date filters = all results)
+      // A search with no criterion silently no-ops (the page re-renders
+      // unsubmitted), so an all-inclusive decision-date range supplies the
+      // one criterion without excluding anything. Counting the full range
+      // is slow on the source's side; the longer timeout is deliberate.
       const formData = new URLSearchParams();
       for (const [name, value] of session.formFields) {
         formData.set(name, value);
       }
       formData.set("__RequestVerificationToken", session.token);
+      formData.set(
+        "vyhledavaciSekce[1].vyhledavaciPodminka[0].vyhledavaciPodminkaHodnota[0].HodnotaDatumACasOd",
+        "01.01.1990",
+      );
+      formData.set(
+        "vyhledavaciSekce[1].vyhledavaciPodminka[0].vyhledavaciPodminkaHodnota[0].HodnotaDatumACasDo",
+        "31.12.2030",
+      );
 
       const response = await fetchWithTimeout(`${BASE_URL}/Home/Index`, {
         method: "POST",
@@ -846,7 +863,7 @@ export const czNssAdapter: SourceAdapter = {
         },
         body: formData.toString(),
         redirect: "follow",
-        timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+        timeoutMs: 90_000,
       });
 
       if (!response.ok) {

@@ -407,6 +407,41 @@ export const atCourtsAdapter: SourceAdapter = {
   minRequestIntervalMs: 1000,
   pageTimeoutMs: 220_000,
 
+  /**
+   * The search envelope carries the total hit count on every page, so the
+   * source's own total is one minimal request with the same query the crawl
+   * uses — the benchmark then measures exactly the universe the crawl sees.
+   */
+  async getTotalCount(signal) {
+    try {
+      const response = await fetchWithTimeout(
+        `${API_URL}?${new URLSearchParams({
+          Seitennummer: "1",
+          Seitengroesse: String(PAGE_SIZE),
+          Sortierung: "Aenderungsdatum",
+          Aufsteigend: "false",
+        }).toString()}`,
+        {
+          signal,
+          headers: { Accept: "application/json" },
+          timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+        },
+      );
+      if (!response.ok) {
+        return null;
+      }
+      const json: unknown = await response.json();
+      if (!isRisApiResponse(json)) {
+        return null;
+      }
+      const raw = json.OgdSearchResult?.OgdDocumentResults?.Hits?.["#text"];
+      const parsed = raw === undefined ? Number.NaN : Number.parseInt(raw, 10);
+      return Number.isNaN(parsed) || parsed <= 0 ? null : parsed;
+    } catch {
+      return null;
+    }
+  },
+
   fetchPage: createPagePaginatedFetch<RisApiResponse>({
     adapterKey: ADAPTER_KEYS.AT_COURTS,
     pageSize: PAGE_SIZE,

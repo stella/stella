@@ -654,11 +654,55 @@ export const czRegionalAdapter: SourceAdapter = {
   // tight for large pages with slow upstream responses.
   pageTimeoutMs: 100_000,
 
-  async getTotalCount(_signal) {
-    // The rozhodnuti.justice.cz API is date-based with no
-    // single total count endpoint. There is no efficient way
-    // to get the total without crawling all dates.
-    return await Promise.resolve(null);
+  /**
+   * The year endpoint (`/opendata/{year}`) returns exact per-month
+   * publication counts, so the source's total is the sum over the years it
+   * has published — from October 2020, when the open-data feed began. A
+   * failed year returns null rather than a partial sum, because an
+   * undercount would read as a coverage gap that does not exist.
+   */
+  async getTotalCount(signal) {
+    try {
+      const FIRST_PUBLICATION_YEAR = 2020;
+      const currentYear = new Date().getFullYear();
+      const years = Array.from(
+        { length: currentYear - FIRST_PUBLICATION_YEAR + 1 },
+        (_, i) => FIRST_PUBLICATION_YEAR + i,
+      );
+      const perYear = await Promise.all(
+        years.map(async (year) => {
+          const response = await fetchWithTimeout(
+            `${BASE_URL}/opendata/${year}`,
+            { signal, timeoutMs: ADAPTER_TIMEOUT.REQUEST },
+          );
+          if (!response.ok) {
+            return null;
+          }
+          const json: unknown = await response.json();
+          if (!Array.isArray(json)) {
+            return null;
+          }
+          let sum = 0;
+          for (const month of json) {
+            if (!isRecord(month) || typeof month["pocet"] !== "number") {
+              return null;
+            }
+            sum += month["pocet"];
+          }
+          return sum;
+        }),
+      );
+      let total = 0;
+      for (const sum of perYear) {
+        if (sum === null) {
+          return null;
+        }
+        total += sum;
+      }
+      return total > 0 ? total : null;
+    } catch {
+      return null;
+    }
   },
 
   async fetchPage(cursor, _config, signal) {

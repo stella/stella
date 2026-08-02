@@ -421,6 +421,13 @@ export const skUsAdapter: SourceAdapter = {
   pageTimeoutMs: 120_000,
   maxSyncPages: 10,
 
+  /**
+   * Known blind spot: the court's decision search runs on a portal widget
+   * whose search endpoint answers scripted requests with an empty 204 even
+   * when replayed with browser-identical headers and session state, so the
+   * total it shows in a browser cannot be read from here. Coverage for this
+   * source is benchmarked only by what the crawl itself reports.
+   */
   async getTotalCount(_signal) {
     return await Promise.resolve(null);
   },

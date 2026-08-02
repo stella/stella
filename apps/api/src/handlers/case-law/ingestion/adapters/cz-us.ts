@@ -360,11 +360,85 @@ export const czUsAdapter: SourceAdapter = {
   pageTimeoutMs: 120_000,
   maxSyncPages: 20,
 
-  // NALUS requires a POST with ASP.NET ViewState to return search results.
-  // A GET to the search page returns the form but no count; full historical
-  // ÚS ingestion should add a POST-based total count.
-  async getTotalCount(_signal) {
-    return await Promise.resolve(null);
+  /**
+   * NALUS reports its total only on a search result page, and a search
+   * demands a session: the form's ViewState fields and cookies from a GET,
+   * a POST carrying them plus at least one criterion (an all-inclusive date
+   * range excludes nothing), then the redirected results page, which states
+   * "z celkem N".
+   */
+  async getTotalCount(signal) {
+    try {
+      const searchUrl = "https://nalus.usoud.cz/Search/Search.aspx";
+      const first = await fetchWithTimeout(searchUrl, {
+        signal,
+        timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+      });
+      if (!first.ok) {
+        return null;
+      }
+      const cookies = first.headers
+        .getSetCookie()
+        .map((cookie) => cookie.split(";")[0])
+        .join("; ");
+      const html = await first.text();
+      const hidden = (name: string): string | null => {
+        const match = new RegExp(`id="${name}" value="([^"]*)"`, "u").exec(
+          html,
+        );
+        return match?.[1] ?? null;
+      };
+      const viewState = hidden("__VIEWSTATE");
+      const generator = hidden("__VIEWSTATEGENERATOR");
+      const validation = hidden("__EVENTVALIDATION");
+      if (viewState === null || validation === null) {
+        return null;
+      }
+      const form = new URLSearchParams({
+        __VIEWSTATE: viewState,
+        ...(generator === null ? {} : { __VIEWSTATEGENERATOR: generator }),
+        __EVENTVALIDATION: validation,
+        ctl00$MainContent$nalezy: "on",
+        ctl00$MainContent$usneseni: "on",
+        ctl00$MainContent$stanoviska_plena: "on",
+        ctl00$MainContent$decidedFrom: "1.1.1900",
+        ctl00$MainContent$decidedTo: "31.12.2030",
+        ctl00$MainContent$but_search: "Vyhledat",
+      });
+      const submit = await fetchWithTimeout(searchUrl, {
+        method: "POST",
+        signal,
+        redirect: "manual",
+        timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          Cookie: cookies,
+        },
+        body: form.toString(),
+      });
+      if (submit.status !== 302 && !submit.ok) {
+        return null;
+      }
+      const results = await fetchWithTimeout(
+        "https://nalus.usoud.cz/Search/Results.aspx",
+        {
+          signal,
+          timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+          headers: { Cookie: cookies },
+        },
+      );
+      if (!results.ok) {
+        return null;
+      }
+      const total = /z celkem (?<n>\d+)/u.exec(await results.text())?.groups?.[
+        "n"
+      ];
+      const parsed =
+        total === undefined ? Number.NaN : Number.parseInt(total, 10);
+      return Number.isNaN(parsed) || parsed <= 0 ? null : parsed;
+    } catch {
+      return null;
+    }
   },
 
   async fetchPage(cursor, _config, signal) {
