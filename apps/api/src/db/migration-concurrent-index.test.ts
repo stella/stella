@@ -21,7 +21,6 @@ const TYPE_CHANGE_CLAUSE =
   /\bALTER\s+(?:COLUMN\s+)?(?:(?:U&)?"(?:""|[^"])+"(?:\s+UESCAPE\s+'(?:''|[^'])*')?|[A-Z_\u0080-\u{10FFFF}][A-Z0-9_$\u0080-\u{10FFFF}]*)\s+(?:SET\s+DATA\s+)?TYPE\b/giu;
 const TRANSACTION_REVERSAL =
   /^(?:ABORT|ROLLBACK|SAVEPOINT|RELEASE\s+SAVEPOINT)\b/iu;
-const PROCEDURAL_TIMEOUT_REFERENCE = /\b(?:statement|lock)_timeout\b/iu;
 const TYPE_CHANGE_POLICY = {
   boundedRewrite: "stella-migration-safety: bounded-type-rewrite",
   metadataOnly: "stella-migration-safety: metadata-only-type-change",
@@ -31,6 +30,44 @@ const CUSTOM_BOUNDED_TYPE_CHANGE_MIGRATIONS = new Set([
   // This conversion derives a 20-minute execution budget from pg_settings in
   // a DO block, which the statement scanner deliberately does not interpret.
   "20260729150000_timestamptz_everywhere/migration.sql",
+]);
+// Migrations may execute only these exact historical DO blocks.
+// Fingerprinting the complete statement makes comments, quoting tricks, and
+// dynamically assembled commands unable to bypass migration safety checks.
+const APPROVED_PROCEDURAL_STATEMENTS = new Set([
+  "20260429220500_global-search-unaccent/migration.sql:6eab967f03d9401b8f0791d81603f9540ac19fb872df5404f9b66ffff431d589",
+  "20260429220500_global-search-unaccent/migration.sql:fe14433fc2fcc398e1d4efcd301f325a8f6e76705c158cd829b17fb9bb7f8797",
+  "20260429220500_global-search-unaccent/migration.sql:2d8e7507916a4d6160ec2edebc72136c1b814cd55e2d766021ed5bbc25b5fd10",
+  "20260429220500_global-search-unaccent/migration.sql:96584144b62646b9e7859c471fb271a920e6785cec5645cfd5182576f128141f",
+  "20260504100000_chat-threads-organization-scope/migration.sql:56576f1e71c46aaba73327268f179c9fa6bafb717cffc7230cf6b2294c663e18",
+  "20260510140000_document_rls_role_bootstrap/migration.sql:98cea54dd358cd650e49f706f9dc97990ab002e11ebead4736153aa8e40bbfe4",
+  "20260510140000_document_rls_role_bootstrap/migration.sql:395c2e81d9db0b318f21466b273293c831b6715cc6d40f50db83cb39ff11c9c3",
+  "20260510140000_document_rls_role_bootstrap/migration.sql:d7eda9dce4fb0c195bb88935168ca9fcf2307267adf33e3a08d697dae946fd5b",
+  "20260510140000_document_rls_role_bootstrap/migration.sql:462404b62bc8a7440ce8e11aba1569886bc20b5c28c36ff2a88dc473f88dc45c",
+  "20260516000000_case_law_ingestion_role/migration.sql:c3b2204559fb83fd696a107f42a35550c1ad035d337ce140010b63cb548e0a7b",
+  "20260516000000_case_law_ingestion_role/migration.sql:7b418d2eab757c5c8d2105af6a199e9d7230ffaf213392eb0643bfb46018791a",
+  "20260710173000_scalable_workspace_authorization/migration.sql:3b9057e5984cb105ddfdd2dc180e3e2f99655e12806fe59d7932b9bbdde7efea",
+  "20260710173000_scalable_workspace_authorization/migration.sql:1fbe6a02081e270d5825863e873adb9007091344f41a9cc11296e90e9b370668",
+  "20260710173000_scalable_workspace_authorization/migration.sql:162ceb09f52df96363765049625fc9fd03c2a5f00814c25c70ea50c7f043213d",
+  "20260729150000_timestamptz_everywhere/migration.sql:1649cdb7d657ac6006bb5a1b76422b0b9be8fc0d7b8b338231fcd41b7778a7fe",
+  "20260730090000_document_processing_mode/migration.sql:7de38e6645893bfca31e121c098e424c77a00aae03fd3400ebab26c6d6123437",
+  "20260730120000_extracted_content_source_provenance/migration.sql:4094a6ecc995baccbc5cb4ef508627f026d7106e0b82b2848a594f3133a1bee0",
+  "20260730120000_extracted_content_source_provenance/migration.sql:f7ed57df2f71621ff26baa780f24f69a652a3e125d29e8090057890a89477720",
+  "20260730120000_extracted_content_source_provenance/migration.sql:2917a6d88b1415b2b3fa6e9e1bf547a19da3d350f85dc97e6200eb318bcfd378",
+  "20260731200000_case_law_ingestion_retry_state/migration.sql:205b4776581f87ba60c7e8bd7b4d45ea50575dcc515360917b141e01850c2de7",
+  "20260731220000_case_law_redaction_fence/migration.sql:2802dc5388a64131da315915a25f9c0bbda6d72d6d7a2e7081aa03036dfd64d8",
+  "20260731140000_matter_activity_provenance/migration.sql:f610b6a8787606f96741173e9cf7cc3a84ba23eb4ff892b39dbb56cec39a096b",
+  "20260731170000_case_law_corpus_generation_backfill/migration.sql:a37f67d4e178fc403e75d871d17a31ee964754f87589f995571b71a1d15ca144",
+  "20260731170000_case_law_corpus_generation_backfill/migration.sql:a12d358dc0bc37698b3cd6a8ff5c4d0355050db0117f7671f574e0bfdfd282b6",
+  "20260731170000_case_law_corpus_generation_backfill/migration.sql:75b21e27d35379209cc63a9dbf5fc1b6ad21a2945cf4cc0788f9e5a335aad806",
+  "20260731170000_case_law_corpus_generation_backfill/migration.sql:d12b8d4de8e6436dfebb1177277fbc1dbbf4482afb429b38ae599c14350cf8c5",
+  "20260731170000_case_law_corpus_generation_backfill/migration.sql:83417da56687155c11d3f0c999608af4a6abcdd78162f2d0a485e33ff40f9b7f",
+  "20260731170000_case_law_corpus_generation_backfill/migration.sql:e395b6cbdc652a7d70833c571587cda7e4dba86323a19a1bcfe67874a90afec1",
+  "20260731170000_case_law_corpus_generation_backfill/migration.sql:938744a8ba4d42a4fc2f6738ef8060d25b4cce08e0f88c393b9ae0a30d046984",
+  "20260731170000_case_law_corpus_generation_backfill/migration.sql:bd1d14e9b83389dfc908098d23d61c93c1bc8c3a12a06fb8d090c7aa6de698e9",
+  "20260731170000_case_law_corpus_generation_backfill/migration.sql:156772a852d5e4193fc68e5effb6881b8f9f022435c91882f16d5ad642c88993",
+  "20260801140000_report_export_result_field/migration.sql:f6ad29cee9c49e07aad487cf5a8d5f32838b63a1cfa8f92a071a4f0afc277a5d",
+  "20260801120000_case_law_source_ingestion_lease/migration.sql:c8cddc8405b46385e7159c745ccb8c095e88e67a6c4ff0a2d6bcd1cd124a2b63",
 ]);
 
 type TimeoutState = "bounded" | "unbounded" | "unset";
@@ -399,22 +436,30 @@ const isCustomStatementBudget = (statement: string) =>
     statement,
   );
 
-const isUnsupportedProceduralTimeoutMutation = (
+const isUnapprovedProceduralStatement = (
   relativePath: string,
   statement: string,
-) =>
-  /^DO\b/iu.test(statement) &&
-  PROCEDURAL_TIMEOUT_REFERENCE.test(statement) &&
-  !(
+) => {
+  if (!/^DO\b/iu.test(statement)) {
+    return false;
+  }
+  if (
     CUSTOM_BOUNDED_TYPE_CHANGE_MIGRATIONS.has(relativePath) &&
     isCustomStatementBudget(statement)
-  );
+  ) {
+    return false;
+  }
+
+  const hash = new Bun.CryptoHasher("sha256").update(statement).digest("hex");
+  return !APPROVED_PROCEDURAL_STATEMENTS.has(`${relativePath}:${hash}`);
+};
 
 const collectUnsafeConcurrentTimeouts = (
   relativePath: string,
   source: string,
 ) => {
   const violations = [];
+  const statements = splitSqlStatements(source);
   let statementTimeout: TimeoutState = "unset";
   let lockTimeout: TimeoutState = "unset";
   let statementTimeoutCheckpoint: TimeoutState | undefined;
@@ -424,10 +469,10 @@ const collectUnsafeConcurrentTimeouts = (
   let statementTimeoutRestored = false;
   let lockTimeoutRequiresRestore = false;
 
-  for (const statement of splitSqlStatements(source)) {
-    if (isUnsupportedProceduralTimeoutMutation(relativePath, statement)) {
+  for (const statement of statements) {
+    if (isUnapprovedProceduralStatement(relativePath, statement)) {
       violations.push(
-        `${relativePath}: procedural timeout mutations are not supported`,
+        `${relativePath}: procedural migration statement is not approved`,
       );
       continue;
     }
@@ -623,6 +668,7 @@ const collectUnsafeTypeChangesInMigration = (
   const violations = [];
   const isCustomBoundedMigration =
     CUSTOM_BOUNDED_TYPE_CHANGE_MIGRATIONS.has(relativePath);
+  const statements = splitSqlStatements(source);
 
   let lockTimeout: TimeoutState = "unset";
   let statementTimeout: TimeoutState = "unset";
@@ -634,7 +680,7 @@ const collectUnsafeTypeChangesInMigration = (
   let activePolicyUsed = false;
   let sawCustomStatementBudget = false;
 
-  for (const statement of splitSqlStatements(source)) {
+  for (const statement of statements) {
     const typeChangeClauseCount = [...statement.matchAll(TYPE_CHANGE_CLAUSE)]
       .length;
     if (TRANSACTION_REVERSAL.test(statement)) {
@@ -643,9 +689,9 @@ const collectUnsafeTypeChangesInMigration = (
       );
       continue;
     }
-    if (isUnsupportedProceduralTimeoutMutation(relativePath, statement)) {
+    if (isUnapprovedProceduralStatement(relativePath, statement)) {
       violations.push(
-        `${relativePath}: procedural timeout mutations are not supported`,
+        `${relativePath}: procedural migration statement is not approved`,
       );
       continue;
     }
@@ -1158,35 +1204,40 @@ SELECT 1;`;
   });
 
   test("rejects timeout mutations hidden in procedural blocks", () => {
-    const mutation = `DO $$
-    BEGIN
-      PERFORM set_config('lock_timeout', '0', false);
-    END
-    $$;`;
-
-    expect(
-      collectUnsafeConcurrentTimeouts(
-        "concurrent/migration.sql",
-        `SET statement_timeout = 0;
-        ${mutation}
-        CREATE INDEX CONCURRENTLY example_idx ON example (id);
-        SET statement_timeout = '5s';`,
-      ),
-    ).toContain(
-      "concurrent/migration.sql: procedural timeout mutations are not supported",
-    );
-    expect(
-      collectUnsafeTypeChangesInMigration(
-        "type-change/migration.sql",
-        `SET lock_timeout = '1s';
-        SET statement_timeout = '5s';
-        ${mutation}
-        -- ${TYPE_CHANGE_POLICY.boundedRewrite}
-        ALTER TABLE example ALTER COLUMN value TYPE timestamptz;`,
-      ),
-    ).toContain(
-      "type-change/migration.sql: procedural timeout mutations are not supported",
-    );
+    for (const command of [
+      "PERFORM set_config('lock_timeout', '0', false);",
+      `PERFORM pg_catalog."set_config"('lock_timeout', '0', false);`,
+      "RESET ALL;",
+      "DISCARD ALL;",
+      "EXECUTE 'RESET ALL';",
+      "EXECUTE 'RESET ' || 'ALL';",
+      "EXECUTE format('RESET %s', 'ALL');",
+    ]) {
+      const mutation = `DO $$ BEGIN ${command} END $$;`;
+      expect(
+        collectUnsafeConcurrentTimeouts(
+          "concurrent/migration.sql",
+          `SET statement_timeout = 0;
+          ${mutation}
+          CREATE INDEX CONCURRENTLY example_idx ON example (id);
+          SET statement_timeout = '5s';`,
+        ),
+      ).toContain(
+        "concurrent/migration.sql: procedural migration statement is not approved",
+      );
+      expect(
+        collectUnsafeTypeChangesInMigration(
+          "type-change/migration.sql",
+          `SET lock_timeout = '1s';
+          SET statement_timeout = '5s';
+          ${mutation}
+          -- ${TYPE_CHANGE_POLICY.boundedRewrite}
+          ALTER TABLE example ALTER COLUMN value TYPE timestamptz;`,
+        ),
+      ).toContain(
+        "type-change/migration.sql: procedural migration statement is not approved",
+      );
+    }
   });
 
   test("keeps lock waits bounded for custom execution budgets", () => {
@@ -1258,11 +1309,11 @@ SELECT 1;`;
         ${typeChange}`,
       ),
     ).toContain(
-      `${relativePath}: procedural timeout mutations are not supported`,
+      `${relativePath}: procedural migration statement is not approved`,
     );
   });
 
-  test("ignores timeout text in SQL comments and quoted bodies", () => {
+  test("requires exact approval for procedural statements", () => {
     const relativePath = "20260729150000_timestamptz_everywhere/migration.sql";
     expect(
       collectUnsafeTypeChangesInMigration(
@@ -1282,7 +1333,9 @@ SELECT 1;`;
         /* RESET lock_timeout; */
         ALTER TABLE example ALTER COLUMN value TYPE timestamptz;`,
       ),
-    ).toEqual([]);
+    ).toContain(
+      `${relativePath}: procedural migration statement is not approved`,
+    );
   });
 
   test("applies backslash escaping only to PostgreSQL escape strings", () => {
@@ -1334,7 +1387,7 @@ SELECT 1;`;
         $$;`,
       ),
     ).toContain(
-      "procedural/migration.sql: procedural type changes are not supported by the timeout safety policy",
+      "procedural/migration.sql: procedural migration statement is not approved",
     );
   });
 
