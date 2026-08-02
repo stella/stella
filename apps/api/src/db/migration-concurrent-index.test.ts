@@ -17,7 +17,8 @@ const TYPE_CHANGE =
   /^ALTER\s+TABLE\b[^;]*?\bALTER\s+(?:COLUMN\s+)?(?:"[^"]+"|[A-Z_][A-Z0-9_$]*)\s+(?:SET\s+DATA\s+)?TYPE\b/iu;
 const TYPE_CHANGE_ANYWHERE =
   /\bALTER\s+TABLE\b[\s\S]*?\bALTER\s+(?:COLUMN\s+)?(?:"[^"]+"|[A-Z_][A-Z0-9_$]*)\s+(?:SET\s+DATA\s+)?TYPE\b/iu;
-const TRANSACTION_REVERSAL = /^(?:ROLLBACK|SAVEPOINT|RELEASE\s+SAVEPOINT)\b/iu;
+const TRANSACTION_REVERSAL =
+  /^(?:ABORT|ROLLBACK|SAVEPOINT|RELEASE\s+SAVEPOINT)\b/iu;
 const TYPE_CHANGE_POLICY = {
   boundedRewrite: "stella-migration-safety: bounded-type-rewrite",
   metadataOnly: "stella-migration-safety: metadata-only-type-change",
@@ -920,6 +921,19 @@ SELECT 1;`;
       ),
     ).toContain(
       "type-rollback/migration.sql: timeout safety does not support transaction reversal",
+    );
+    expect(
+      collectUnsafeTypeChangesInMigration(
+        "type-abort/migration.sql",
+        `BEGIN;
+        SET lock_timeout = '1s';
+        ABORT;
+        -- ${TYPE_CHANGE_POLICY.boundedRewrite}
+        SET statement_timeout = '5s';
+        ALTER TABLE example ALTER COLUMN value TYPE timestamptz;`,
+      ),
+    ).toContain(
+      "type-abort/migration.sql: timeout safety does not support transaction reversal",
     );
   });
 
