@@ -19,14 +19,18 @@
 // Flagged:
 //   sql`... ${JSON.stringify(value)}::jsonb ...`
 //   sql`... ${json}::jsonb ...`           // any value, however it got here
+//   sql`... (${json})::jsonb ...`         // parens change nothing
+//   sql`... CAST(${json} AS jsonb) ...`   // ANSI spelling of the same cast
 //
 // Property access earns no exemption of its own: `${payload.astJson}` is a
 // member expression and still a bound serialized string. Casting a real column
 // (`${table.column}::jsonb`) is the one legitimate use, and those few sites are
 // named explicitly in `allowedColumnExpressions` rather than inferred from
-// shape, which any serialized value could imitate. Keeping the list in the
-// config also avoids inline suppressions inside schema files, where an edit
-// would demand a migration it does not need.
+// shape, which any serialized value could imitate. The config scopes each
+// entry to the file that owns the schema object (via an override), so the
+// same spelling elsewhere earns no exemption. Keeping the list in the config
+// also avoids inline suppressions inside schema files, where an edit would
+// demand a migration it does not need.
 //
 // Allowed:
 //   sql`... ${JSON.stringify(value)}::text::jsonb ...`
@@ -35,6 +39,8 @@
 // The positional form is covered too, matched in the SQL text rather than the
 // interpolations, because the value is bound by index:
 //   db.unsafe(`... SET doc = $1::jsonb ...`, [JSON.stringify(value)])
+//   db.unsafe(`... SET doc = ($1)::jsonb ...`, [JSON.stringify(value)])
+//   db.unsafe(`... SET doc = CAST($1 AS jsonb) ...`, [JSON.stringify(value)])
 
 type AstNode = { type: string } & Record<string, unknown>;
 
@@ -43,38 +49,108 @@ const isAstNode = (node: unknown): node is AstNode =>
   node !== null &&
   typeof (node as { type?: unknown }).type === "string";
 
-// Postgres ignores whitespace and comments between the parameter and its cast,
-// so the guard has to as well; otherwise `${json} ::jsonb` or a cast on the
-// next line reads as safe.
-const stripLeadingSqlNoise = (raw: string): string => {
-  let rest = raw;
-  for (;;) {
-    const next = rest
-      .replace(/^\s+/u, "")
-      .replace(/^--[^\n]*/u, "")
-      .replace(/^\/\*[\S\s]*?\*\//u, "");
-    if (next === rest) {
-      return next;
-    }
-    rest = next;
-  }
-};
+// Postgres treats comments as whitespace wherever they appear, so they are
+// replaced with a space before any matching; otherwise a comment could hide
+// part of the cast (`${json} ::jsonb` split across lines, `::/* cast */jsonb`).
+const SQL_COMMENT = /--[^\n]*|\/\*[\S\s]*?\*\//gu;
+
+const stripSqlComments = (raw: string): string => raw.replace(SQL_COMMENT, " ");
+
+const stripLeadingSqlNoise = (raw: string): string =>
+  stripSqlComments(raw).replace(/^\s+/u, "");
 
 // `::jsonb` with optional whitespace after the operator, case-insensitive
 // because SQL type names are. `::text::jsonb` does not match, which is the
 // whole point.
 const BARE_JSONB_CAST = /^::\s*jsonb\b/iu;
 
-// The positional form: `db.unsafe("... $1::jsonb ...", [json])`. The parameter
-// is bound by index rather than interpolated, so it never appears in
-// `TemplateLiteral.expressions` and has to be matched in the SQL text itself.
-// Comments count as whitespace to Postgres, so they are stripped before the
-// match rather than allowed to hide the cast.
-const SQL_COMMENT = /--[^\n]*|\/\*[\S\s]*?\*\//gu;
-const POSITIONAL_JSONB_CAST = /\$\d+\s*::\s*jsonb\b/iu;
+// `(${json})::jsonb` types the parameter exactly like the unparenthesized
+// form. The closing parens are matched here; whether they wrap the bare bind
+// is decided against the text before the interpolation.
+const PAREN_WRAPPED_CAST = /^([\s)]*\))\s*::\s*jsonb\b/iu;
 
-const carriesPositionalBareCast = (text: string): boolean =>
-  POSITIONAL_JSONB_CAST.test(text.replace(SQL_COMMENT, " "));
+// `CAST(${json} AS jsonb)` resolves the parameter to jsonb exactly like the
+// `::` shorthand. Requiring the `CAST(` context on the other side of the
+// interpolation keeps a column alias that happens to be named `jsonb`
+// (`SELECT ${x} AS jsonb`) out.
+const ANSI_CAST_SUFFIX = /^[)\s]*as\s+jsonb\b/iu;
+const ANSI_CAST_PREFIX = /\bcast\s*\((\s|\()*$/iu;
+
+// The interpolation is a bare paren wrap only when the text before it closes
+// with a matching run of `(` that is not a call: `= (${json})::jsonb` is the
+// hazard, while in `to_jsonb(${json})::jsonb` the parameter is typed by the
+// function's signature and the cast applies to its result.
+const bindIsParenWrapped = (prevRaw: string, closers: number): boolean => {
+  const prev = stripSqlComments(prevRaw);
+  let index = prev.length - 1;
+  let openers = 0;
+  while (index >= 0 && openers < closers) {
+    const char = prev.charAt(index);
+    if (char === "(") {
+      openers += 1;
+    } else if (!/\s/u.test(char)) {
+      return false;
+    }
+    index -= 1;
+  }
+  if (openers < closers) {
+    return false;
+  }
+  while (index >= 0 && /\s/u.test(prev.charAt(index))) {
+    index -= 1;
+  }
+  return index < 0 || !/[\w$]/u.test(prev.charAt(index));
+};
+
+// Whether the quasi texts around an interpolation cast the bind parameter to
+// jsonb without going through text, in any of the spellings Postgres accepts.
+const bareCastSurrounds = (prevRaw: string, nextRaw: string): boolean => {
+  const next = stripLeadingSqlNoise(nextRaw);
+  if (BARE_JSONB_CAST.test(next)) {
+    return true;
+  }
+  const wrapped = PAREN_WRAPPED_CAST.exec(next);
+  if (wrapped) {
+    const closers = (wrapped[1] ?? "").split(")").length - 1;
+    return bindIsParenWrapped(prevRaw, closers);
+  }
+  return (
+    ANSI_CAST_SUFFIX.test(next) &&
+    ANSI_CAST_PREFIX.test(stripSqlComments(prevRaw))
+  );
+};
+
+// The positional forms: `db.unsafe("... $1::jsonb ...", [json])` and its
+// parenthesized and ANSI spellings. The parameter is bound by index rather
+// than interpolated, so it never appears in `TemplateLiteral.expressions` and
+// has to be matched in the SQL text itself. The lookbehind on the wrapped form
+// keeps call results out (`to_jsonb($1)::jsonb` types the parameter by the
+// function's signature, not by the cast).
+const POSITIONAL_JSONB_CAST = /\$\d+\s*::\s*jsonb\b/iu;
+const POSITIONAL_WRAPPED_JSONB_CAST =
+  /(?<![\w$])\((\s*\()*\s*\$\d+\s*(\)\s*)*\)\s*::\s*jsonb\b/iu;
+const POSITIONAL_ANSI_JSONB_CAST =
+  /\bcast\s*\((\s|\()*\$\d+\s*(\)\s*)*as\s+jsonb\b/iu;
+
+const carriesPositionalBareCast = (text: string): boolean => {
+  const sql = stripSqlComments(text);
+  return (
+    POSITIONAL_JSONB_CAST.test(sql) ||
+    POSITIONAL_WRAPPED_JSONB_CAST.test(sql) ||
+    POSITIONAL_ANSI_JSONB_CAST.test(sql)
+  );
+};
+
+// A quasi's `value` is a plain `{ raw, cooked }` record, not an AST node, so
+// it carries no `type` to narrow on.
+const rawTextOf = (quasi: unknown): string => {
+  const value = isAstNode(quasi) ? quasi.value : undefined;
+  return typeof value === "object" &&
+    value !== null &&
+    typeof (value as { raw?: unknown }).raw === "string"
+    ? (value as { raw: string }).raw
+    : "";
+};
 
 // Any string the rule can read SQL out of: a plain literal, or a template
 // literal's static chunks.
@@ -85,14 +161,7 @@ const sqlTextsOf = (node: AstNode): string[] => {
   if (node.type !== "TemplateLiteral" || !Array.isArray(node.quasis)) {
     return [];
   }
-  return node.quasis.flatMap((quasi) => {
-    const value = isAstNode(quasi) ? quasi.value : undefined;
-    return typeof value === "object" &&
-      value !== null &&
-      typeof (value as { raw?: unknown }).raw === "string"
-      ? [(value as { raw: string }).raw]
-      : [];
-  });
+  return node.quasis.map((quasi) => rawTextOf(quasi));
 };
 
 // `a.b` for a simple property access, so a configured allowlist can name the
@@ -196,18 +265,11 @@ export default {
                 continue;
               }
 
-              // The text directly after this interpolation carries the cast.
-              // A quasi's `value` is a plain `{ raw, cooked }` record, not an
-              // AST node, so it carries no `type` to narrow on.
-              const following = quasis[index + 1];
-              const value = isAstNode(following) ? following.value : undefined;
-              const raw =
-                typeof value === "object" &&
-                value !== null &&
-                typeof (value as { raw?: unknown }).raw === "string"
-                  ? (value as { raw: string }).raw
-                  : "";
-              if (!BARE_JSONB_CAST.test(stripLeadingSqlNoise(raw))) {
+              // The text directly after this interpolation carries the cast;
+              // the paren-wrapped and ANSI forms also need the text before it.
+              const prevRaw = rawTextOf(quasis[index]);
+              const nextRaw = rawTextOf(quasis[index + 1]);
+              if (!bareCastSurrounds(prevRaw, nextRaw)) {
                 continue;
               }
 

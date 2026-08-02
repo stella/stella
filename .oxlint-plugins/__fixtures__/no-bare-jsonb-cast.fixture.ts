@@ -47,9 +47,29 @@ const _spaceAfterOperator = sql`${formJson}:: jsonb`;
 // oxlint-disable-next-line no-bare-jsonb-cast/no-bare-jsonb-cast
 const _commentBeforeCast = sql`${formJson} /* keep as jsonb */ ::jsonb`;
 
+// ...and a comment between the operator and the type name.
+// oxlint-disable-next-line no-bare-jsonb-cast/no-bare-jsonb-cast
+const _commentAfterOperator = sql`${formJson}::/* cast */jsonb`;
+
 // SQL type names are case-insensitive.
 // oxlint-disable-next-line no-bare-jsonb-cast/no-bare-jsonb-cast
 const _uppercaseCast = sql`${formJson}::JSONB`;
+
+// Parenthesizing the parameter does not change what the cast applies to.
+// oxlint-disable-next-line no-bare-jsonb-cast/no-bare-jsonb-cast
+const _parenWrapped = sql`doc = (${formJson})::jsonb`;
+
+// ...nor does nesting the parens.
+// oxlint-disable-next-line no-bare-jsonb-cast/no-bare-jsonb-cast
+const _parenWrappedNested = sql`doc = ( ( ${formJson} ) )::jsonb`;
+
+// The ANSI spelling resolves the parameter to jsonb exactly like `::`.
+// oxlint-disable-next-line no-bare-jsonb-cast/no-bare-jsonb-cast
+const _ansiCast = sql`doc = CAST(${formJson} AS jsonb)`;
+
+// ...in any case, with parens and comments inside.
+// oxlint-disable-next-line no-bare-jsonb-cast/no-bare-jsonb-cast
+const _ansiCastWrapped = sql`doc = cast( ( ${formJson} ) /* ast */ as JSONB )`;
 
 // A serialized value reaching the template through a helper parameter. Nothing
 // in this file says `payload` is JSON, which is exactly why the guard cannot
@@ -76,9 +96,23 @@ const _positionalLiteral = "UPDATE t SET doc = $1 :: JSONB WHERE id = $2";
 // oxlint-disable-next-line no-bare-jsonb-cast/no-bare-jsonb-cast
 const _positionalComment = "UPDATE t SET doc = $1 /* serialized */ ::jsonb";
 
+// Parens around a positional bind leave the cast on the parameter.
+// oxlint-disable-next-line no-bare-jsonb-cast/no-bare-jsonb-cast
+const _positionalParenWrapped = "UPDATE t SET doc = ($1)::jsonb WHERE id = $2";
+
+// The ANSI spelling of the positional cast.
+// oxlint-disable-next-line no-bare-jsonb-cast/no-bare-jsonb-cast
+const _positionalAnsiCast = "UPDATE t SET doc = CAST($1 AS jsonb)";
+
 // Property access is not an exemption: this is still a bound serialized value.
 // oxlint-disable-next-line no-bare-jsonb-cast/no-bare-jsonb-cast
 const _viaPropertyAccess = sql`doc = ${rowPayload.astJson}::jsonb`;
+
+// An allowlist spelling from another file's override earns no exemption here:
+// `apikey.metadata` is only allowed in the file that owns the schema object.
+const apikey = { metadata: formJsonSource };
+// oxlint-disable-next-line no-bare-jsonb-cast/no-bare-jsonb-cast
+const _allowlistSpellingElsewhere = sql`${apikey.metadata}::jsonb`;
 
 // --- Cases the rule MUST NOT flag ---
 
@@ -98,6 +132,16 @@ const _columnCast = sql`${table.metadata}::jsonb ->> 'organizationId'`;
 // A SQL literal is written by Postgres, not bound by the driver.
 const _sqlLiteral = sql`coalesce(${column}, '[]'::jsonb)`;
 
+// A call is not a paren wrap: the parameter is typed by the function's
+// signature, and the trailing cast applies to the call's result.
+const _callResultCast = sql`doc = to_jsonb(${formJson})::jsonb`;
+
+// A column alias that happens to be named `jsonb` is not a cast.
+const _aliasNamedJsonb = sql`SELECT ${formJson} AS jsonb`;
+
+// The ANSI cast through text is the safe form, like `::text::jsonb`.
+const _ansiThroughText = sql`doc = CAST(${formJson} AS text)::jsonb`;
+
 // A serialized value with no jsonb cast at all is not this rule's concern.
 const _noCast = sql`${JSON.stringify(value)}`;
 
@@ -112,18 +156,29 @@ export const __noBareJsonbCastFixture = {
   _newlineBeforeCast,
   _spaceAfterOperator,
   _commentBeforeCast,
+  _commentAfterOperator,
   _uppercaseCast,
+  _parenWrapped,
+  _parenWrappedNested,
+  _ansiCast,
+  _ansiCastWrapped,
   _viaParameter,
   _viaAlias,
   _viaPropertyAccess,
+  _allowlistSpellingElsewhere,
   _positionalTemplate,
   _positionalComment,
   _positionalLiteral,
+  _positionalParenWrapped,
+  _positionalAnsiCast,
   _positionalThroughText,
   _throughText,
   _identifierThroughText,
   _throughTextSpaced,
   _columnCast,
   _sqlLiteral,
+  _callResultCast,
+  _aliasNamedJsonb,
+  _ansiThroughText,
   _noCast,
 };
