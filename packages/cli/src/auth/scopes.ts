@@ -4,16 +4,17 @@
 // principle applied to scopes): this only rejects obviously-malformed input
 // (empty, containing whitespace) before it reaches a URL query string.
 
-import { Result } from "better-result";
+import { Result, TaggedError, type TaggedErrorClass } from "better-result";
 import * as v from "valibot";
 
-import { CliBaseError } from "./errors.js";
+const InvalidScopeInputErrorBase: TaggedErrorClass<"InvalidScopeInputError"> =
+  TaggedError("InvalidScopeInputError");
 
-class InvalidScopeInputError extends CliBaseError<"InvalidScopeInputError"> {
-  override readonly name = "InvalidScopeInputError";
-
+class InvalidScopeInputError extends InvalidScopeInputErrorBase<{
+  message: string;
+}> {
   constructor(message: string) {
-    super("InvalidScopeInputError", message);
+    super({ message });
   }
 }
 

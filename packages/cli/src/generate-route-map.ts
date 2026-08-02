@@ -5,8 +5,9 @@
 // `tools/list`; both call sites share this one function and the same
 // annotations, so the trees are byte-identical.
 
+import { TaggedError, type TaggedErrorClass } from "better-result";
+
 import { RESERVED_FLAGS, RESERVED_TOP_LEVEL_NAMES } from "./annotations.js";
-import { CliBaseError } from "./auth/errors.js";
 import { flagKey } from "./flag-name.js";
 import type {
   FlagSpec,
@@ -64,11 +65,14 @@ const propertyMap = (schema: PropSchema): Record<string, PropSchema> => {
 };
 
 /** Hard codegen failure: a collision or reserved-name violation (spec S1). */
-export class RouteGenerationError extends CliBaseError<"RouteGenerationError"> {
-  override readonly name = "RouteGenerationError";
+const RouteGenerationErrorBase: TaggedErrorClass<"RouteGenerationError"> =
+  TaggedError("RouteGenerationError");
 
+export class RouteGenerationError extends RouteGenerationErrorBase<{
+  message: string;
+}> {
   constructor(message: string) {
-    super("RouteGenerationError", message);
+    super({ message });
   }
 }
 

@@ -6,9 +6,8 @@
 //
 // The bearer token is NEVER logged or embedded in an error message.
 
-import { Result } from "better-result";
+import { Result, TaggedError, type TaggedErrorClass } from "better-result";
 
-import { CliBaseError } from "./auth/errors.js";
 import { MCP_HTTP_PATH } from "./mcp-constants.js";
 
 // Most `tools/call` requests keep the default bounded client ceiling. A
@@ -63,28 +62,15 @@ export type ReadResourceResult = { contents: readonly ResourceContent[] };
  * An application-level tool error (`isError: true`, HTTP 200) is NOT this: it
  * comes back as a normal `CallToolResult` for the output layer to surface.
  */
-export class McpClientError extends CliBaseError<"McpClientError"> {
-  override readonly name = "McpClientError";
-  readonly kind: "transport" | "http" | "rpc";
-  readonly httpStatus?: number;
-  readonly rpcCode?: number;
+const McpClientErrorBase: TaggedErrorClass<"McpClientError"> =
+  TaggedError("McpClientError");
 
-  constructor(props: {
-    message: string;
-    kind: "transport" | "http" | "rpc";
-    httpStatus?: number;
-    rpcCode?: number;
-  }) {
-    super("McpClientError", props.message);
-    this.kind = props.kind;
-    if (props.httpStatus !== undefined) {
-      this.httpStatus = props.httpStatus;
-    }
-    if (props.rpcCode !== undefined) {
-      this.rpcCode = props.rpcCode;
-    }
-  }
-}
+export class McpClientError extends McpClientErrorBase<{
+  message: string;
+  kind: "transport" | "http" | "rpc";
+  httpStatus?: number;
+  rpcCode?: number;
+}> {}
 
 type JsonRpcRequest = {
   jsonrpc: "2.0";

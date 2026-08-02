@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { Result, TaggedError, type TaggedErrorClass } from "better-result";
 import * as v from "valibot";
 
 import packageJson from "../package.json" with { type: "json" };
@@ -6,7 +6,6 @@ import {
   AUTH_FETCH_TIMEOUT_MS,
   CLI_REQUIRED_RESOURCE_SCOPES,
 } from "./auth/constants.js";
-import { CliBaseError } from "./auth/errors.js";
 
 const MCP_DISCOVERY_PATH = "/.well-known/oauth-protected-resource/mcp";
 export const CLI_SUPPORTED_API_CONTRACT_VERSION = 1;
@@ -58,15 +57,13 @@ export type CompatibilityReport = {
   readonly serverUrl: string;
 };
 
-export class CompatibilityCheckError extends CliBaseError<"CompatibilityCheckError"> {
-  override readonly name = "CompatibilityCheckError";
-  override readonly cause?: unknown;
+const CompatibilityCheckErrorBase: TaggedErrorClass<"CompatibilityCheckError"> =
+  TaggedError("CompatibilityCheckError");
 
-  constructor(props: { message: string; cause?: unknown }) {
-    super("CompatibilityCheckError", props.message);
-    this.cause = props.cause;
-  }
-}
+export class CompatibilityCheckError extends CompatibilityCheckErrorBase<{
+  message: string;
+  cause?: unknown;
+}> {}
 
 const parseSemver = (input: string): ParsedSemver | undefined => {
   const buildParts = input.split("+");
