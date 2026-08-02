@@ -27,6 +27,7 @@
         "turbo": "^2.10.7",
         "typescript": "catalog:",
         "ultracite": "catalog:",
+        "valibot": "catalog:",
         "vite": "catalog:",
       },
     },

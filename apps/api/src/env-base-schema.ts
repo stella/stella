@@ -1,0 +1,120 @@
+/**
+ * Base environment variables shared by all entrypoints
+ * (API server, ingestion scripts, CLI tools).
+ *
+ * API-specific variables (auth, email, gotenberg, etc.) live in env.ts;
+ * document-processing settings live in env-document-processing-worker.ts.
+ * Scripts that only need DB + S3 + observability should import
+ * from here to avoid requiring the full API env.
+ */
+import * as v from "valibot";
+
+import { CORPUS_STORAGE_MODES } from "@/api/lib/corpus-storage-mode";
+
+/**
+ * NODE_ENV values that identify a deployed (non-local) Stella
+ * environment. Used to gate strict env validation and the
+ * `isDev` default below. Kept here so every entrypoint that
+ * imports `envBase` sees the same definition.
+ */
+export const DEPLOYED_NODE_ENVS = new Set(["production", "staging"]);
+
+const databasePoolMaxSchema = v.optional(
+  v.pipe(
+    v.string(),
+    v.digits(),
+    v.transform(Number),
+    v.integer(),
+    v.minValue(1),
+  ),
+  "5",
+);
+
+const documentOcrBatchIntervalMinutesSchema = v.optional(
+  v.pipe(
+    v.string(),
+    v.digits(),
+    v.transform(Number),
+    v.integer(),
+    v.minValue(5),
+    v.maxValue(10_080),
+  ),
+  "1440",
+);
+
+// Connection-recycling bounds for the Bun SQL pools, in seconds.
+// Bun never recycles connections by default (maxLifetime/idleTimeout both 0).
+// Keep that default until the runtime retires only idle connections; current
+// Bun timers can interrupt in-flight queries. Operators can opt in explicitly
+// after upgrading the runtime. 0 disables a bound.
+const databasePoolSecondsSchema = (fallback: string) =>
+  v.optional(
+    v.pipe(v.string(), v.digits(), v.transform(Number), v.integer()),
+    fallback,
+  );
+
+export const envBaseServerSchema = {
+  STELLA_VERSION: v.optional(v.string()),
+  STELLA_COMMIT_SHA: v.optional(v.string()),
+  STELLA_WORKER_DIR: v.optional(v.string()),
+  SKIP_MIGRATION_CHECK: v.optional(v.pipe(v.string(), v.parseBoolean())),
+  INGESTION_USER_AGENT: v.optional(v.string()),
+  DATABASE_URL: v.pipe(v.string(), v.url()),
+  DATABASE_ROOT_POOL_MAX: databasePoolMaxSchema,
+  DATABASE_RLS_POOL_MAX: databasePoolMaxSchema,
+  DATABASE_POOL_MAX_LIFETIME_S: databasePoolSecondsSchema("0"),
+  DATABASE_POOL_IDLE_TIMEOUT_S: databasePoolSecondsSchema("0"),
+  DOCUMENT_OCR_BATCH_INTERVAL_MINUTES: documentOcrBatchIntervalMinutesSchema,
+  S3_ENDPOINT: v.string(),
+  S3_BUCKET: v.string(),
+  S3_CREDENTIALS_PROVIDER: v.optional(
+    v.picklist(["auto", "env", "aws-runtime", "none"]),
+    "auto",
+  ),
+  S3_ACCESS_KEY_ID: v.optional(v.string()),
+  S3_SECRET_ACCESS_KEY: v.optional(v.string()),
+  S3_REGION: v.string(),
+  S3_SCOPED_SIGNING_ROLE_ARN: v.optional(v.string()),
+  POSTHOG_KEY: v.optional(v.string()),
+  POSTHOG_HOST: v.optional(v.string()),
+  POSTHOG_LOCAL_DEBUG: v.optional(
+    v.pipe(v.string(), v.parseBoolean()),
+    "false",
+  ),
+  POSTHOG_LOCAL_DEBUG_AI_CONTENT: v.optional(
+    v.pipe(v.string(), v.parseBoolean()),
+    "false",
+  ),
+  // Legal corpus + corpus index. Defaults keep the shipped pg-fts /
+  // Postgres-text path active; flipping to corpus index is a config change.
+  LEGAL_SEARCH_PROVIDER: v.optional(
+    v.picklist(["pg-fts", "corpus-index"]),
+    "pg-fts",
+  ),
+  // Blue-green generation prefix. Each jurisdiction gets its own index
+  // (`<generation>_<country>`, e.g. case_law_v1_svk); bump the prefix to
+  // rebuild all jurisdictions and flip to it.
+  LEGAL_SEARCH_INDEX_GENERATION: v.optional(v.string(), "case_law_v1"),
+  CORPUS_INDEX_ENDPOINT: v.optional(v.pipe(v.string(), v.url())),
+  CORPUS_INDEX_S3_BUCKET: v.optional(v.string()),
+  // Falls back to S3_BUCKET when unset (dev). Required when corpus
+  // storage is on (enforced post-validation).
+  LEGAL_CORPUS_S3_BUCKET: v.optional(v.string()),
+  // Where the canonical corpus payload lives. Unset derives the mode from
+  // the legacy CORPUS_STORAGE_ENABLED boolean below.
+  CORPUS_STORAGE_MODE: v.optional(v.picklist(CORPUS_STORAGE_MODES)),
+  // Superseded by CORPUS_STORAGE_MODE; still accepted, and true still
+  // means "dual-write". Read `corpusStorageMode`, never this field.
+  CORPUS_STORAGE_ENABLED: v.optional(
+    v.pipe(v.string(), v.parseBoolean()),
+    "false",
+  ),
+  CORPUS_INDEXING_ENABLED: v.optional(
+    v.pipe(v.string(), v.parseBoolean()),
+    "false",
+  ),
+  isDev: v.optional(
+    v.boolean(),
+    !DEPLOYED_NODE_ENVS.has(process.env.NODE_ENV ?? ""),
+  ),
+};

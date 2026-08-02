@@ -1,0 +1,599 @@
+import * as v from "valibot";
+
+import { envBaseServerSchema } from "../apps/api/src/env-base-schema";
+import { envDocumentProcessingWorkerServerSchema } from "../apps/api/src/env-document-processing-worker-schema";
+import { envApiServerSchema } from "../apps/api/src/env-schema";
+import { envCollabServerSchema } from "../apps/collab/src/env-schema";
+import { envWebClientSchema } from "../apps/web/src/env-schema";
+
+export const ENV_EXPOSURE = {
+  internal: "internal",
+  public: "public",
+  secret: "secret",
+} as const;
+
+export type EnvExposure = (typeof ENV_EXPOSURE)[keyof typeof ENV_EXPOSURE];
+
+export const ENV_REQUIREMENT = {
+  defaulted: "defaulted",
+  optional: "optional",
+  required: "required",
+} as const;
+
+export type EnvRequirement =
+  (typeof ENV_REQUIREMENT)[keyof typeof ENV_REQUIREMENT];
+
+export const ENV_OWNER = {
+  apiBase: "api-base",
+  apiServer: "api-server",
+  cli: "cli",
+  collab: "collab",
+  documentWorker: "document-worker",
+  legalAtlasRunner: "legal-atlas-runner",
+  web: "web",
+} as const;
+
+export type EnvOwner = (typeof ENV_OWNER)[keyof typeof ENV_OWNER];
+
+export type EnvCatalogEntry = {
+  description: string;
+  documented: boolean;
+  example: string | undefined;
+  exposure: EnvExposure;
+  name: string;
+  owner: EnvOwner;
+  requirement: EnvRequirement;
+  schema: v.GenericSchema;
+  section: string;
+};
+
+type SchemaRecord = Record<string, v.GenericSchema>;
+
+const INTERNAL_SERVER_KEYS = new Set([
+  "AI_MODEL_CHAT",
+  "AI_MODEL_FAST",
+  "AI_MODEL_PDF",
+  "AI_MODEL_REASONING",
+  "AI_PROVIDER",
+  "AI_PROVIDER_BASE_URL",
+  "AZURE_API_VERSION",
+  "AZURE_BASE_URL",
+  "AZURE_RESOURCE_NAME",
+  "BETTER_AUTH_COOKIE_PREFIX",
+  "BETTER_AUTH_URL",
+  "CORPUS_INDEXING_ENABLED",
+  "CORPUS_INDEX_ENDPOINT",
+  "CORPUS_INDEX_S3_BUCKET",
+  "CORPUS_STORAGE_ENABLED",
+  "CORPUS_STORAGE_MODE",
+  "DATABASE_POOL_IDLE_TIMEOUT_S",
+  "DATABASE_POOL_MAX_LIFETIME_S",
+  "DATABASE_RLS_POOL_MAX",
+  "DATABASE_ROOT_POOL_MAX",
+  "DEBUG_UNREDACTED_ERRORS",
+  "DOCUMENT_OCR_BATCH_INTERVAL_MINUTES",
+  "E2E_DISABLE_AUTH_RATE_LIMIT",
+  "EMAIL_PROVIDER",
+  "EXTENSION_ORIGIN",
+  "FEATURE_AGENT_ID_JAG",
+  "FEATURE_CALENDAR",
+  "FEATURE_CASE_LAW",
+  "FEATURE_CHAT",
+  "FEATURE_CONTACTS",
+  "FEATURE_DESKTOP_EDITING",
+  "FEATURE_KNOWLEDGE_TEMPLATES",
+  "FEATURE_MCP",
+  "FEATURE_PUBLIC_LAW",
+  "FEATURE_SHAREPOINT",
+  "FEATURE_TIME_BILLING",
+  "FEATURE_TODOS",
+  "FEATURE_USAGE",
+  "FEATURE_WEB_SEARCH",
+  "FEEDBACK_INTAKE_URL",
+  "FRONTEND_URL",
+  "GOOGLE_AUTH_CLIENT_ID",
+  "GOTENBERG_URL",
+  "HOSTED_USAGE_PROVIDER",
+  "HOSTED_USAGE_PROVIDER_BASE_URL",
+  "HUGGINGFACE_BASE_URL",
+  "LEGAL_CORPUS_S3_BUCKET",
+  "LEGAL_SEARCH_INDEX_GENERATION",
+  "LEGAL_SEARCH_PROVIDER",
+  "MICROSOFT_AUTH_CLIENT_ID",
+  "MICROSOFT_AUTH_TENANT_ID",
+  "OCR_SERVICE_URL",
+  "PORT",
+  "POSTHOG_HOST",
+  "POSTHOG_KEY",
+  "POSTHOG_LOCAL_DEBUG",
+  "POSTHOG_LOCAL_DEBUG_AI_CONTENT",
+  "PUBLIC_URL",
+  "REQUIRE_PERSONAL_AI_KEY",
+  "S3_BUCKET",
+  "S3_CREDENTIALS_PROVIDER",
+  "S3_ENDPOINT",
+  "S3_REGION",
+  "S3_SCOPED_SIGNING_ROLE_ARN",
+  "SELFHOST_LOCAL_PASSWORD_AUTH",
+  "SES_CONFIGURATION_SET",
+  "SES_REGION",
+  "SKIP_MIGRATION_CHECK",
+  "SMTP_HOST",
+  "SMTP_PORT",
+  "STELLA_API_PORT",
+  "STELLA_API_URL",
+  "STELLA_COLLAB_PORT",
+  "STELLA_COMMIT_SHA",
+  "STELLA_SIGNUP_RATE_LIMIT_IP_SOURCE",
+  "STELLA_TRUSTED_PROXY_CIDRS",
+  "STELLA_USAGE_POLICY_SEEDS",
+  "STELLA_VERSION",
+  "STELLA_WORKER_DIR",
+  "USAGE_ENFORCEMENT_ENABLED",
+  "USE_MOCK_AI",
+  "WEB_FETCH_PROVIDER",
+  "WEB_SEARCH_PROVIDER",
+]);
+
+const EXAMPLE_VALUES: Record<string, string> = {
+  BETTER_AUTH_SECRET: "your-secret-at-least-32-chars-long",
+  BETTER_AUTH_URL: "http://localhost:3001",
+  DATABASE_URL: "postgres://postgres:postgres@localhost:5432/stella",
+  EMAIL_PROVIDER: "smtp",
+  EDGAR_USER_AGENT: "stella admin@example.com",
+  FEEDBACK_EMAIL_TO: "maintainer@example.com",
+  FRONTEND_URL: "http://localhost:3000",
+  GOOGLE_GENERATIVE_AI_API_KEY: "key-test",
+  GOTENBERG_PASSWORD: "gotenberg",
+  GOTENBERG_URL: "http://localhost:3003",
+  GOTENBERG_USERNAME: "gotenberg",
+  MICROSOFT_AUTH_TENANT_ID: "common",
+  POSTHOG_KEY: "phc_",
+  POSTHOG_HOST: "https://eu.i.posthog.com",
+  PUBLIC_URL: "http://localhost:3001",
+  REDIS_URL: "redis://localhost:6379",
+  S3_ACCESS_KEY_ID: "minioadmin",
+  S3_BUCKET: "stella",
+  S3_CREDENTIALS_PROVIDER: "auto",
+  S3_ENDPOINT: "http://localhost:9000",
+  S3_REGION: "us-east-1",
+  S3_SECRET_ACCESS_KEY: "minioadmin",
+  SMTP_HOST: "localhost",
+  SMTP_PASSWORD: "",
+  SMTP_PORT: "1025",
+  SMTP_USERNAME: "",
+  STELLA_API_URL: "http://localhost:3001",
+  STELLA_COLLAB_PORT: "3002",
+  STELLA_SIGNUP_RATE_LIMIT_IP_SOURCE: "direct",
+  STELLA_TRUSTED_PROXY_CIDRS: "10.0.0.0/8",
+  TRANSACTIONAL_EMAIL_FROM: "noreply@example.com",
+  USE_MOCK_AI: "true",
+  VITE_API_URL: "http://localhost:3001",
+  VITE_COLLAB_URL: "ws://localhost:3002",
+  VITE_EMPTY_STATE_MATTERS_VIDEO_URL:
+    "https://assets.stll.app/empty-states/matters-intro.mp4",
+  VITE_FEEDBACK_EMAIL_TO: "ops@example.com",
+  VITE_POSTHOG_KEY: "phc_",
+  VITE_POSTHOG_HOST: "https://eu.i.posthog.com",
+  VITE_PUBLIC_APP_URL: "http://localhost:3000",
+};
+
+const DESCRIPTION_OVERRIDES: Record<string, string> = {
+  BETTER_AUTH_SECRET:
+    "HMAC secret used to sign Better Auth sessions. Use at least 32 characters; rotation logs everyone out.",
+  BETTER_AUTH_URL:
+    "Issuer URL Better Auth uses to mint and verify session tokens.",
+  COMPANIES_HOUSE_API_KEY:
+    "UK Companies House API key. Unset disables the adapter.",
+  CONTENT_ENCRYPTION_KEY:
+    "64-character hex AES key for extracted file text at rest. Unset stores extracted content as plaintext.",
+  DATABASE_POOL_IDLE_TIMEOUT_S:
+    "Idle database connection lifetime in seconds; zero disables retirement.",
+  DATABASE_POOL_MAX_LIFETIME_S:
+    "Maximum database connection lifetime in seconds; zero disables retirement.",
+  DATABASE_RLS_POOL_MAX:
+    "Maximum RLS pool size. Keep its sum with DATABASE_ROOT_POOL_MAX within the process connection budget.",
+  DATABASE_ROOT_POOL_MAX:
+    "Maximum root pool size. Keep its sum with DATABASE_RLS_POOL_MAX within the process connection budget.",
+  DATABASE_URL:
+    "Postgres owner URL used by Drizzle. Requests downgrade to the stella role so row-level security applies.",
+  DOCUMENT_OCR_BATCH_INTERVAL_MINUTES:
+    "Interval for releasing queued OCR requests, in minutes.",
+  EDGAR_USER_AGENT:
+    "Identifying SEC EDGAR contact string. Unset disables the adapter because the SEC requires one.",
+  EMAIL_PROVIDER:
+    'Transactional email transport: "ses" or "smtp". Leave unset when email is not configured.',
+  FEEDBACK_EMAIL_TO:
+    "Destination for MCP and public-intake feedback email. Unset disables local email delivery.",
+  FEEDBACK_INTAKE_URL:
+    "Endpoint for approved, sanitized feedback forwarded through the stella channel.",
+  FRONTEND_URL:
+    "Web app origin used for absolute transactional-email links and trusted redirects.",
+  GOOGLE_AUTH_CLIENT_ID:
+    "Google OAuth client ID; required when the matching web login flag is enabled.",
+  GOOGLE_AUTH_CLIENT_SECRET:
+    "Google OAuth client secret; required when the matching web login flag is enabled.",
+  GOTENBERG_PASSWORD:
+    "Password for the Gotenberg sidecar's HTTP basic authentication.",
+  GOTENBERG_URL:
+    "Gotenberg document-conversion service URL. Remote deployments must use HTTPS.",
+  GOTENBERG_USERNAME:
+    "Username for the Gotenberg sidecar's HTTP basic authentication.",
+  MICROSOFT_AUTH_CLIENT_ID:
+    "Microsoft OAuth client ID; required when the matching web login flag is enabled.",
+  MICROSOFT_AUTH_CLIENT_SECRET:
+    "Microsoft OAuth client secret; required when the matching web login flag is enabled.",
+  MICROSOFT_AUTH_TENANT_ID:
+    'Microsoft tenant ID, or "common" for work and personal Microsoft accounts.',
+  OCR_SERVICE_TOKEN:
+    "Bearer token for the dedicated OCR service. Use at least 16 characters.",
+  OCR_SERVICE_URL:
+    "Dedicated PaddleOCR service URL. HTTPS is required except for loopback addresses.",
+  OPERATOR_METRICS_TOKEN:
+    "Bearer token for registration metrics. Unset disables the endpoint; use a long random value.",
+  POSTHOG_KEY:
+    'PostHog project key. The placeholder "phc_" disables capture for local development.',
+  POSTHOG_LOCAL_DEBUG:
+    "Allow PostHog capture from localhost when using a real project key.",
+  POSTHOG_LOCAL_DEBUG_AI_CONTENT:
+    "Include raw AI prompts and outputs in local diagnostics. This may expose privileged content.",
+  PUBLIC_URL:
+    "Public API origin for verification links and OAuth callbacks. Defaults to BETTER_AUTH_URL.",
+  REDIS_URL:
+    "Valkey or Redis URL used for cross-instance broadcasts and rate limits. Treated as secret because it may contain credentials.",
+  S3_ACCESS_KEY_ID:
+    "S3 access-key ID. Omit with the secret to use the SDK credential chain.",
+  S3_BUCKET: "S3 bucket for uploaded files.",
+  S3_CREDENTIALS_PROVIDER:
+    'Credential source: "auto", "env", "aws-runtime", or "none".',
+  S3_ENDPOINT: "S3 or S3-compatible object-storage endpoint.",
+  S3_REGION: "S3 region for uploaded files and request signing.",
+  S3_SCOPED_SIGNING_ROLE_ARN:
+    "IAM role used to issue presigned URLs scoped to an organization or workspace prefix.",
+  S3_SECRET_ACCESS_KEY:
+    "S3 secret access key. Omit with the access-key ID to use the SDK credential chain.",
+  SECURITY_CANARY_API_KEY_SHA256:
+    "SHA-256 digest of a decoy machine API key. Keep its plaintext outside this environment.",
+  SELFHOST_BOOTSTRAP_TOKEN:
+    "One-time token required for the first local-password account.",
+  SELFHOST_LOCAL_PASSWORD_AUTH:
+    "Enable email/password auth for self-hosting. Initial signup also requires a bootstrap token.",
+  SMTP_HOST: "SMTP relay hostname; required when EMAIL_PROVIDER is smtp.",
+  SMTP_PASSWORD:
+    "SMTP password. Set together with SMTP_USERNAME, or leave both empty for an unauthenticated relay.",
+  SMTP_PORT: "SMTP relay port; required when EMAIL_PROVIDER is smtp.",
+  SMTP_USERNAME:
+    "SMTP username. Set together with SMTP_PASSWORD, or leave both empty for an unauthenticated relay.",
+  STELLA_API_URL:
+    "API origin used by collaboration to validate room tokens and persist Yjs snapshots.",
+  STELLA_COLLAB_PORT: "Port for the Hocuspocus collaboration server.",
+  STELLA_SIGNUP_RATE_LIMIT_IP_SOURCE:
+    'Client-IP source for signup limits. Use "direct" without a proxy and "trusted_proxy" behind configured proxies.',
+  STELLA_TRUSTED_PROXY_CIDRS:
+    "Comma-separated CIDRs for proxies directly in front of the API. Never trust public client ranges.",
+  TRANSACTIONAL_EMAIL_FROM:
+    "Verified sender address used for every transactional email.",
+  USE_MOCK_AI:
+    "Return canned AI responses instead of calling an upstream provider.",
+  VITE_API_URL: "API base URL used by the SPA for Eden treaty requests.",
+  VITE_AUTH_GOOGLE:
+    "Show Google login only when the API has matching OAuth credentials.",
+  VITE_AUTH_MICROSOFT:
+    "Show Microsoft login only when the API has matching OAuth credentials.",
+  VITE_COLLAB_URL:
+    "WebSocket URL for collaborative editing. Unset keeps the single-user editing path.",
+  VITE_EMPTY_STATE_MATTERS_VIDEO_URL:
+    "Public URL for the Matters onboarding video. Unset uses only the bundled poster.",
+  VITE_FEEDBACK_EMAIL_TO:
+    "Recipient for the in-app feedback button. Unset hides the button.",
+  VITE_POSTHOG_KEY:
+    'Public PostHog project key. The placeholder "phc_" disables local capture.',
+  VITE_POSTHOG_LOCAL_DEBUG:
+    "Allow browser PostHog capture from localhost when using a real key.",
+  VITE_PUBLIC_APP_URL:
+    "Public web origin used for canonical URLs, Open Graph metadata, and sitemaps.",
+  VITE_SELFHOST: "Enable the release-update notice for self-hosted operators.",
+  VITE_SEO_INDEXABLE: "Allow search engines to index this deployment.",
+  VITE_TERMS_URL: "Absolute or root-relative Terms of Service link.",
+};
+
+const ACTIVE_EXAMPLE_KEYS = new Set([
+  "BETTER_AUTH_SECRET",
+  "BETTER_AUTH_URL",
+  "DATABASE_ROOT_POOL_MAX",
+  "DATABASE_RLS_POOL_MAX",
+  "DATABASE_URL",
+  "DOCUMENT_OCR_BATCH_INTERVAL_MINUTES",
+  "EMAIL_PROVIDER",
+  "FRONTEND_URL",
+  "GOOGLE_GENERATIVE_AI_API_KEY",
+  "GOTENBERG_PASSWORD",
+  "GOTENBERG_URL",
+  "GOTENBERG_USERNAME",
+  "POSTHOG_KEY",
+  "REDIS_URL",
+  "S3_ACCESS_KEY_ID",
+  "S3_BUCKET",
+  "S3_CREDENTIALS_PROVIDER",
+  "S3_ENDPOINT",
+  "S3_REGION",
+  "S3_SCOPED_SIGNING_ROLE_ARN",
+  "S3_SECRET_ACCESS_KEY",
+  "SMTP_HOST",
+  "SMTP_PASSWORD",
+  "SMTP_PORT",
+  "SMTP_USERNAME",
+  "STELLA_SIGNUP_RATE_LIMIT_IP_SOURCE",
+  "TRANSACTIONAL_EMAIL_FROM",
+  "USE_MOCK_AI",
+  "VITE_API_URL",
+  "VITE_POSTHOG_KEY",
+  "VITE_PUBLIC_APP_URL",
+]);
+
+const HIDDEN_SCHEMA_KEYS = new Set(["isDev"]);
+
+const humanizeEnvName = (name: string) => {
+  const words = name
+    .replace(/^VITE_/u, "")
+    .split("_")
+    .map((word) => word.toLocaleLowerCase("en-US"));
+  const text = words.join(" ");
+  return `${text.charAt(0).toLocaleUpperCase("en-US")}${text.slice(1)}.`;
+};
+
+const sectionFor = (name: string) => {
+  if (/^(DATABASE|STELLA_WORKER|SKIP_MIGRATION)/u.test(name)) {
+    return "Database";
+  }
+  if (/^(S3|CORPUS|LEGAL_)/u.test(name)) {
+    return "Storage and legal search";
+  }
+  if (/^(POSTHOG|DEBUG_)/u.test(name)) {
+    return "Observability";
+  }
+  if (
+    /^(AI_|GOOGLE_.*AI|OPENAI|OPENROUTER|AZURE_|ANTHROPIC|BEDROCK|MISTRAL|HUGGINGFACE|REQUIRE_PERSONAL|USE_MOCK)/u.test(
+      name,
+    )
+  ) {
+    return "AI providers";
+  }
+  if (
+    /^(BETTER_AUTH|GOOGLE_AUTH|MICROSOFT_AUTH|SELFHOST|SECURITY_CANARY)/u.test(
+      name,
+    )
+  ) {
+    return "Authentication";
+  }
+  if (/^(EMAIL|SES_|SMTP_|TRANSACTIONAL|FEEDBACK)/u.test(name)) {
+    return "Email and feedback";
+  }
+  if (
+    /^(FEATURE_|VITE_FEATURE|VITE_PUBLIC_LAW|VITE_PLAYBOOKS|VITE_WORKFLOWS|VITE_SEO)/u.test(
+      name,
+    )
+  ) {
+    return "Feature flags";
+  }
+  if (/^(OCR_|CONTENT_ENCRYPTION|DOCUMENT_)/u.test(name)) {
+    return "Document processing";
+  }
+  if (/^(HOSTED_USAGE|USAGE_|STELLA_USAGE)/u.test(name)) {
+    return "Usage";
+  }
+  if (/^(WEB_|TAVILY|JINA|EDGAR|COMPANIES|INEGI|INGESTION)/u.test(name)) {
+    return "External data";
+  }
+  if (/^(VITE_POSTHOG)/u.test(name)) {
+    return "Analytics";
+  }
+  if (
+    /^(FRONTEND|PUBLIC_URL|EXTENSION|GOTENBERG|VITE_API|VITE_PUBLIC|VITE_COLLAB|VITE_TERMS|VITE_EMPTY|VITE_DESKTOP_RELEASES)/u.test(
+      name,
+    )
+  ) {
+    return "URLs";
+  }
+  if (/^(STELLA_TRUSTED|STELLA_SIGNUP)/u.test(name)) {
+    return "Network";
+  }
+  return "Runtime";
+};
+
+const requirementFor = (schema: v.GenericSchema): EnvRequirement => {
+  const parsed = v.safeParse(schema, undefined);
+  if (!parsed.success) {
+    return ENV_REQUIREMENT.required;
+  }
+  if (parsed.output !== undefined) {
+    return ENV_REQUIREMENT.defaulted;
+  }
+  return ENV_REQUIREMENT.optional;
+};
+
+const exposureFor = (name: string, owner: EnvOwner): EnvExposure => {
+  if (owner === ENV_OWNER.web) {
+    return ENV_EXPOSURE.public;
+  }
+  if (INTERNAL_SERVER_KEYS.has(name)) {
+    return ENV_EXPOSURE.internal;
+  }
+  return ENV_EXPOSURE.secret;
+};
+
+type CreateCatalogEntriesOptions = {
+  owner: EnvOwner;
+  schema: SchemaRecord;
+};
+
+const createCatalogEntries = ({ owner, schema }: CreateCatalogEntriesOptions) =>
+  Object.entries(schema).map(
+    ([name, entrySchema]): EnvCatalogEntry => ({
+      description: DESCRIPTION_OVERRIDES[name] ?? humanizeEnvName(name),
+      documented: !HIDDEN_SCHEMA_KEYS.has(name),
+      example: EXAMPLE_VALUES[name],
+      exposure: exposureFor(name, owner),
+      name,
+      owner,
+      requirement: requirementFor(entrySchema),
+      schema: entrySchema,
+      section: sectionFor(name),
+    }),
+  );
+
+export const ENV_CATALOG = [
+  ...createCatalogEntries({
+    owner: ENV_OWNER.apiBase,
+    schema: envBaseServerSchema,
+  }),
+  ...createCatalogEntries({
+    owner: ENV_OWNER.documentWorker,
+    schema: envDocumentProcessingWorkerServerSchema,
+  }),
+  ...createCatalogEntries({
+    owner: ENV_OWNER.apiServer,
+    schema: envApiServerSchema,
+  }),
+  ...createCatalogEntries({ owner: ENV_OWNER.web, schema: envWebClientSchema }),
+  ...createCatalogEntries({
+    owner: ENV_OWNER.collab,
+    schema: envCollabServerSchema,
+  }),
+];
+
+export const API_ENV_SCHEMA = {
+  ...envBaseServerSchema,
+  ...envDocumentProcessingWorkerServerSchema,
+  ...envApiServerSchema,
+};
+
+export const WEB_ENV_SCHEMA = envWebClientSchema;
+export const COLLAB_ENV_SCHEMA = envCollabServerSchema;
+
+export const isActiveExampleEntry = (name: string) =>
+  ACTIVE_EXAMPLE_KEYS.has(name);
+
+export const MANUAL_SCHEMA_KEYS = new Set([
+  "DEV",
+  "DB_BACKFILL_TRANSACTION_TIMEOUT_MS",
+  "DB_ROOT_QUERY_TIMEOUT_MS",
+  "DB_TRANSACTION_TIMEOUT_MS",
+  "DISABLED_ADAPTERS",
+  "HOME",
+  "MAX_CONCURRENT_ADAPTER_CYCLES",
+  "MAX_CONCURRENT_DB_WRITES",
+  "STELLA_API_KEY",
+  "STELLA_DESKTOP_VIEW_PORT",
+  "STELLA_SERVER_URL",
+  "XDG_CACHE_HOME",
+  "XDG_CONFIG_HOME",
+  "SSR",
+]);
+
+export const DEPLOYMENT_ENV_KEYS = new Set([
+  "BUILDPLATFORM",
+  "GOTENBERG_API_BASIC_AUTH_PASSWORD",
+  "GOTENBERG_API_BASIC_AUTH_USERNAME",
+  "PUBLIC_API_URL",
+  "PUBLIC_APP_URL",
+  "PUBLIC_EMPTY_STATE_MATTERS_VIDEO_URL",
+  "PUBLIC_FEEDBACK_EMAIL_TO",
+  "PUBLIC_GOOGLE_LOGIN_ENABLED",
+  "PUBLIC_LAW_ENABLED",
+  "PUBLIC_LAW_INDEXING_ENABLED",
+  "PUBLIC_MICROSOFT_LOGIN_ENABLED",
+  "PUBLIC_POSTHOG_HOST",
+  "PUBLIC_POSTHOG_TOKEN",
+  "SEO_INDEXABLE",
+  "STELLA_API_CPUS",
+  "STELLA_API_ENV_FILE",
+  "STELLA_API_HOST_PORT",
+  "STELLA_API_IMAGE",
+  "STELLA_API_MEM_LIMIT",
+  "STELLA_API_PIDS_LIMIT",
+  "STELLA_DOCUMENT_PROCESSING_WORKER_CPUS",
+  "STELLA_DOCUMENT_PROCESSING_WORKER_MEM_LIMIT",
+  "STELLA_DOCUMENT_PROCESSING_WORKER_PIDS_LIMIT",
+  "STELLA_GOTENBERG_CPUS",
+  "STELLA_GOTENBERG_HOST_PORT",
+  "STELLA_GOTENBERG_MEM_LIMIT",
+  "STELLA_GOTENBERG_PIDS_LIMIT",
+  "STELLA_MINIO_CONSOLE_PORT",
+  "STELLA_MINIO_HOST_PORT",
+  "STELLA_OCR_CPUS",
+  "STELLA_OCR_IMAGE",
+  "STELLA_OCR_MEM_LIMIT",
+  "STELLA_OCR_PIDS_LIMIT",
+  "STELLA_OCR_SHM_SIZE",
+  "STELLA_OCR_TMPFS_SIZE",
+  "STELLA_PG_HOST_PORT",
+  "STELLA_QUICKWIT_GRPC_PORT",
+  "STELLA_QUICKWIT_REST_PORT",
+  "STELLA_SCHEDULER_CPUS",
+  "STELLA_SCHEDULER_MEM_LIMIT",
+  "STELLA_SCHEDULER_PIDS_LIMIT",
+  "STELLA_VALKEY_HOST_PORT",
+  "TARGETARCH",
+  "TARGETPLATFORM",
+  "TEXT_DETECTION_MODEL_SHA256",
+  "TEXT_DETECTION_MODEL_URL",
+  "TEXT_RECOGNITION_MODEL_SHA256",
+  "TEXT_RECOGNITION_MODEL_URL",
+  "VIRTUAL_ENV",
+  "VITE_FEATURE_TIME_BILLING",
+]);
+
+export const TOOLING_ENV_KEYS = new Set([
+  "AI_BENCH_JSON",
+  "AI_BENCH_MODEL",
+  "AI_BENCH_REPEATS",
+  "AI_BENCH_SURFACE",
+  "AI_CANARY_API_KEY",
+  "ANALYZE",
+  "DEV_LINKED_PACKAGE_ROOTS",
+  "E2E_API_URL",
+  "E2E_EXECUTION_PROFILE",
+  "E2E_EXPECT_DEV_ROUTES",
+  "E2E_LANDING_URL",
+  "E2E_NETWORK_BASELINE",
+  "E2E_WEB_URL",
+  "EXPECTED_COMMIT",
+  "MARKETING_CAPTURE",
+  "MARKETING_COMMIT",
+  "MARKETING_THEME",
+  "MATTER_ACTIVITY_USER_ID",
+  "MATTER_ACTIVITY_WORKSPACE_ID",
+  "PROPERTY_ROLE_BACKFILL_BATCH_SIZE",
+  "PROPERTY_TEST_NUM_RUNS_FACTOR",
+  "RAILWAY_API_TOKEN",
+  "RAILWAY_PROJECT_TOKEN",
+  "RAILWAY_TEMPLATE_ENVIRONMENT",
+  "RAILWAY_TEMPLATE_PROJECT_ID",
+  "SMOKE_API_URL",
+  "SMOKE_TEST",
+  "STELLA_DEV_INSTANCE",
+  "STELLA_INFRA_OFFSET",
+  "STELLA_PORT_OFFSET",
+  "STELLA_RUN_POSTGRES_TESTS",
+  "STELLA_SEED_ID_NAMESPACE",
+  "STELLA_SEED_ORG_ID",
+  "STELLA_SEED_USER_ID",
+  "TURBO_SCM_BASE",
+]);
+
+export const AMBIENT_ENV_KEYS = new Set([
+  "AWS_ACCESS_KEY_ID",
+  "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
+  "AWS_REGION",
+  "AWS_SECRET_ACCESS_KEY",
+  "AWS_SESSION_TOKEN",
+  "CI",
+  "GITHUB_TOKEN",
+  "GH_TOKEN",
+  "HOSTNAME",
+  "NODE_ENV",
+  "PATH",
+  "RAILWAY_GIT_COMMIT_SHA",
+  "TZ",
+]);
