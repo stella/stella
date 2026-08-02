@@ -1,4 +1,7 @@
 #!/usr/bin/env bun
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
 import { products } from "../src/data/products/registry";
 import { type Locale, localeCodes } from "../src/i18n/config";
 import { catalogs } from "../src/i18n/utils";
@@ -106,6 +109,38 @@ const termPolicyViolations = (
   return violations;
 };
 
+// The English-only static pages set their metas inline as Base-layout props,
+// which the catalog-driven loop above cannot see — which is how every one of
+// them drifted under the description budget at once. Extracted here from the
+// page source (first title/description prop wins) and checked with the same
+// budgets and duplicate detection as the catalog pages, merged into the en run.
+// The 404 page is excluded: it is not an indexable surface.
+const staticPageFiles = [
+  { page: "/ai-info", file: "src/pages/ai-info.astro" },
+  { page: "/blog", file: "src/pages/blog/index.astro" },
+  { page: "/changelog", file: "src/pages/changelog.astro" },
+  { page: "/docx-editor", file: "src/pages/docx-editor.astro" },
+  { page: "/imprint", file: "src/pages/imprint.astro" },
+  { page: "/press", file: "src/pages/press.astro" },
+  { page: "/privacy", file: "src/pages/privacy.astro" },
+  { page: "/security", file: "src/pages/security.astro" },
+  { page: "/terms", file: "src/pages/terms.astro" },
+];
+
+const staticPages = (): PageMeta[] =>
+  staticPageFiles.map(({ page, file }) => {
+    const source = readFileSync(
+      path.join(import.meta.dir, "..", file),
+      "utf-8",
+    );
+    const title = source.match(/\btitle="([^"]+)"/u)?.[1];
+    const description = source.match(/\bdescription="([^"]+)"/u)?.[1];
+    if (title === undefined || description === undefined) {
+      return { page, title: title ?? "", description: description ?? "" };
+    }
+    return { page, title, description };
+  });
+
 const budgetViolations = ({ page, title, description }: PageMeta): string[] => {
   const violations: string[] = [];
   if (title.length > TITLE_MAX) {
@@ -146,7 +181,10 @@ const duplicateViolations = (pages: readonly PageMeta[]): string[] => {
 
 const failures: string[] = [];
 for (const locale of localeCodes) {
-  const pages = pagesFor(locale);
+  const pages =
+    locale === "en"
+      ? [...pagesFor(locale), ...staticPages()]
+      : pagesFor(locale);
   const violations = [
     ...pages.flatMap(budgetViolations),
     ...duplicateViolations(pages),
