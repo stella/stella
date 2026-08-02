@@ -4,6 +4,7 @@ import {
   isTrustedProxy,
   parseTrustedProxies,
   resolveClientIp,
+  resolveTrustedForwardedClientIp,
 } from "@/api/lib/client-ip";
 
 const fakeServer = (peer: string | null) => ({
@@ -155,5 +156,38 @@ describe("resolveClientIp", () => {
     expect(
       resolveClientIp(request(), fakeServer("10.1.2.3"), { trusted }),
     ).toBe("10.1.2.3");
+  });
+});
+
+describe("resolveTrustedForwardedClientIp", () => {
+  const request = (headers: Record<string, string> = {}) =>
+    new Request("https://example/test", { headers });
+
+  test("does not create a shared bucket from an untrusted socket peer", () => {
+    expect(
+      resolveTrustedForwardedClientIp(
+        request({ "x-forwarded-for": "198.51.100.5" }),
+        fakeServer("203.0.113.7"),
+        { trusted: parseTrustedProxies(undefined) },
+      ),
+    ).toBeNull();
+  });
+
+  test("returns a forwarded client only through a configured proxy", () => {
+    expect(
+      resolveTrustedForwardedClientIp(
+        request({ "x-forwarded-for": "198.51.100.5" }),
+        fakeServer("10.1.2.3"),
+        { trusted: parseTrustedProxies("10.0.0.0/8") },
+      ),
+    ).toBe("198.51.100.5");
+  });
+
+  test("does not use a trusted proxy peer when the client header is absent", () => {
+    expect(
+      resolveTrustedForwardedClientIp(request(), fakeServer("10.1.2.3"), {
+        trusted: parseTrustedProxies("10.0.0.0/8"),
+      }),
+    ).toBeNull();
   });
 });

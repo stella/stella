@@ -88,7 +88,10 @@ import { initAccountDeletionCleanupWorker } from "@/api/lib/account-deletion-cle
 import { captureRequestError } from "@/api/lib/analytics/capture";
 import { getAnalytics } from "@/api/lib/analytics/client";
 import { getAuth } from "@/api/lib/auth";
-import { resolveClientIp } from "@/api/lib/client-ip";
+import {
+  resolveClientIp,
+  resolveTrustedForwardedClientIp,
+} from "@/api/lib/client-ip";
 import {
   beginRequestQueryCounter,
   currentQueryCount,
@@ -265,6 +268,10 @@ const api = new Elysia()
     initRequestContext(request, sessionId);
     enrichRequestContext(request, {
       clientIp: resolveClientIp(request, context.server ?? null),
+      signupRateLimitIp: resolveTrustedForwardedClientIp(
+        request,
+        context.server ?? null,
+      ),
     });
 
     // Stamp the receipt on every response from the central header point, next

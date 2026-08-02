@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { env } from "@/api/env";
 import { NEW_ACCOUNT_OTP_RATE_LIMITS } from "@/api/lib/limits";
 import { InMemoryRateLimitContext } from "@/api/lib/rate-limit/rate-limit";
 
@@ -63,6 +64,45 @@ describe("new-account OTP abuse policy", () => {
       status: "rejected",
       reason: "disposable_email",
     });
+  });
+
+  test("pseudonymizes rate-limit identities with the deployment secret", async () => {
+    const normalizedEmail = "new-user@example.com";
+    const clientIp = "192.0.2.1";
+    const observedKeys: string[] = [];
+    const nextReset = new Date(Date.now() + 60_000);
+
+    await consumeNewAccountOtpRateLimit({
+      clientIp,
+      context: {
+        increment: async (key) => {
+          observedKeys.push(key);
+          return { count: 1, nextReset, start: Date.now() };
+        },
+      },
+      normalizedEmail,
+    });
+
+    const keyedEmailDigest = new Bun.CryptoHasher(
+      "sha256",
+      env.BETTER_AUTH_SECRET,
+    )
+      .update(normalizedEmail)
+      .digest("hex");
+    const keyedIpDigest = new Bun.CryptoHasher("sha256", env.BETTER_AUTH_SECRET)
+      .update(clientIp)
+      .digest("hex");
+    const unkeyedEmailDigest = new Bun.CryptoHasher("sha256")
+      .update(normalizedEmail)
+      .digest("hex");
+
+    expect(observedKeys).toEqual([
+      `auth:new-account-otp:email:${keyedEmailDigest}`,
+      `auth:new-account-otp:ip:${keyedIpDigest}`,
+    ]);
+    expect(observedKeys.join(":")).not.toContain(normalizedEmail);
+    expect(observedKeys.join(":")).not.toContain(clientIp);
+    expect(observedKeys.join(":")).not.toContain(unkeyedEmailDigest);
   });
 
   test("limits repeated attempts per normalized email without coupling other emails", async () => {

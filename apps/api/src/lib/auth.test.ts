@@ -11,6 +11,7 @@ import {
 import { member, organization, user } from "@/api/db/auth-schema";
 import { contacts, workspaceMembers, workspaces } from "@/api/db/schema";
 import {
+  assertNewAccountEmailOtpAllowed,
   getAuth,
   isSixDigitOtpBody,
   isTwoFactorRedirectResponse,
@@ -404,16 +405,16 @@ describe("isSixDigitOtpBody", () => {
 
 describe("new-account email policy", () => {
   test("rejects a disposable email before sending its sign-in OTP", async () => {
-    const email = `blocked-${tid()}@mailinator.com`;
-
-    const rejection: unknown = await getAuth()
-      .api.sendVerificationOTP({
-        body: { email, type: "sign-in" },
-      })
-      .then(
-        () => null,
-        (error: unknown) => error,
-      );
+    const rejection: unknown = await assertNewAccountEmailOtpAllowed(
+      {
+        body: { email: "blocked@mailinator.com", type: "sign-in" },
+        path: "/email-otp/send-verification-otp",
+      },
+      { accountExists: async () => false },
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
 
     expect(rejection).toMatchObject({
       body: { code: "DISPOSABLE_EMAIL_NOT_ALLOWED" },

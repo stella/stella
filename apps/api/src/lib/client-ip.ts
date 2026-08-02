@@ -161,3 +161,40 @@ export const resolveClientIp = (
   }
   return peer;
 };
+
+/**
+ * Returns a client IP suitable for a shared signup-rate-limit bucket.
+ *
+ * A socket peer is deliberately insufficient here: in a deployment with an
+ * unconfigured reverse proxy, that peer identifies the proxy and would put
+ * every user into one availability-sensitive bucket. The bucket is enabled
+ * only when the peer is explicitly trusted and supplies a valid client IP.
+ */
+export const resolveTrustedForwardedClientIp = (
+  request: Request,
+  server: ServerLike | null,
+  options?: { trusted?: TrustedProxies },
+): string | null => {
+  const peer = server?.requestIP(request)?.address ?? null;
+  if (!peer) {
+    return null;
+  }
+  const trusted = options?.trusted ?? getTrustedProxies();
+  if (!isTrustedProxy(peer, trusted)) {
+    return null;
+  }
+
+  const cf = nullableIpHeader(request.headers, "cf-connecting-ip");
+  if (cf) {
+    return cf;
+  }
+  const real = nullableIpHeader(request.headers, "x-real-ip");
+  if (real) {
+    return real;
+  }
+  return clientIpFromForwardedFor(
+    request.headers.get("x-forwarded-for"),
+    peer,
+    trusted,
+  );
+};

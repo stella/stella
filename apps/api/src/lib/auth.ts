@@ -141,11 +141,18 @@ const authAccountExists = async (normalizedEmail: string): Promise<boolean> => {
   return existingAccount.at(0) !== undefined;
 };
 
-const assertNewAccountEmailOtpAllowed = async (ctx: {
-  body?: unknown;
-  path: string;
-  request?: Request | undefined;
-}): Promise<void> => {
+type NewAccountEmailOtpPolicyOptions = {
+  accountExists?: (normalizedEmail: string) => Promise<boolean>;
+};
+
+export const assertNewAccountEmailOtpAllowed = async (
+  ctx: {
+    body?: unknown;
+    path: string;
+    request?: Request | undefined;
+  },
+  { accountExists = authAccountExists }: NewAccountEmailOtpPolicyOptions = {},
+): Promise<void> => {
   if (
     ctx.path !== SEND_VERIFICATION_OTP_PATH ||
     !isSignInEmailOtpBody(ctx.body)
@@ -154,10 +161,10 @@ const assertNewAccountEmailOtpAllowed = async (ctx: {
   }
 
   const clientIp = ctx.request
-    ? (getRequestContext(ctx.request)?.clientIp ?? null)
+    ? (getRequestContext(ctx.request)?.signupRateLimitIp ?? null)
     : null;
   const result = await evaluateNewAccountOtpPolicy({
-    accountExists: authAccountExists,
+    accountExists,
     clientIp,
     email: ctx.body.email,
   });

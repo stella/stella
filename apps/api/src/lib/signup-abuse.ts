@@ -1,6 +1,7 @@
 import { disposableEmailBlocklistSet } from "disposable-email-domains-js";
 import type { Context } from "elysia-rate-limit";
 
+import { env } from "@/api/env";
 import { NEW_ACCOUNT_OTP_RATE_LIMITS } from "@/api/lib/limits";
 import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
 
@@ -47,7 +48,9 @@ export const isDisposableEmailAddress = (email: string): boolean => {
 };
 
 const identityHash = (identity: string): string =>
-  new Bun.CryptoHasher("sha256").update(identity).digest("hex");
+  new Bun.CryptoHasher("sha256", env.BETTER_AUTH_SECRET)
+    .update(identity)
+    .digest("hex");
 
 const counterKey = (kind: "email" | "ip", identity: string): string =>
   `${NEW_ACCOUNT_OTP_RATE_LIMIT_SCOPE}:${kind}:${identityHash(identity)}`;
