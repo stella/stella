@@ -1,6 +1,13 @@
 #!/usr/bin/env bun
-import { Result } from "better-result";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { panic, Result } from "better-result";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { parseEnv } from "node:util";
 import ts from "typescript";
@@ -64,6 +71,12 @@ const defaultExample = (entry: EnvCatalogEntry) => {
 const requirementLabel = (entry: EnvCatalogEntry) => {
   if (entry.requirement === "required") {
     return "Required";
+  }
+  if (entry.requirement === "conditional") {
+    if (!entry.requirementNote) {
+      panic(`Conditional environment entry ${entry.name} requires a note.`);
+    }
+    return `Conditionally required when ${entry.requirementNote}`;
   }
   if (entry.requirement === "defaulted") {
     return "Optional with a default";
@@ -137,135 +150,67 @@ export const renderCollabEnvExample = () =>
     ),
   );
 
-const isEnvNameStart = (character: string | undefined) =>
-  character !== undefined &&
-  ((character >= "A" && character <= "Z") ||
-    (character >= "a" && character <= "z") ||
-    character === "_");
+const BUN_ENV_READER =
+  'const names=JSON.parse(process.argv[1]??"[]");process.stdout.write(JSON.stringify(Object.fromEntries(names.map(name=>[name,process.env[name]??""]))));';
 
-const isEnvNameCharacter = (character: string | undefined) =>
-  isEnvNameStart(character) ||
-  (character !== undefined && character >= "0" && character <= "9");
-
-const findExpansionEnd = (value: string, fallbackStart: number) => {
-  let nestedDepth = 0;
-  for (let index = fallbackStart; index < value.length; index += 1) {
-    if (
-      value.at(index) === "$" &&
-      value.at(index + 1) === "{" &&
-      value.at(index - 1) !== "\\"
-    ) {
-      nestedDepth += 1;
-      index += 1;
-      continue;
+const definedEnvironment = (environment: NodeJS.ProcessEnv) => {
+  const defined: Record<string, string> = {};
+  for (const [name, value] of Object.entries(environment)) {
+    if (value !== undefined) {
+      defined[name] = value;
     }
-    if (value.at(index) !== "}") {
-      continue;
-    }
-    if (nestedDepth === 0) {
-      return index;
-    }
-    nestedDepth -= 1;
   }
-  return -1;
-};
-
-type ExpandEnvReferencesOptions = {
-  environment: NodeJS.ProcessEnv;
-  value: string;
-};
-
-const expandEnvReferences = ({
-  environment,
-  value,
-}: ExpandEnvReferencesOptions) => {
-  const output: string[] = [];
-  let index = 0;
-  while (index < value.length) {
-    const character = value.at(index);
-    if (character === "\\" && value.at(index + 1) === "$") {
-      output.push("$");
-      index += 2;
-      continue;
-    }
-    if (character !== "$") {
-      output.push(character ?? "");
-      index += 1;
-      continue;
-    }
-
-    let dollarEnd = index + 1;
-    while (value.at(dollarEnd) === "$") {
-      dollarEnd += 1;
-    }
-    const expansionStart = dollarEnd - 1;
-    const braced = value.at(dollarEnd) === "{";
-    const nameStart = dollarEnd + (braced ? 1 : 0);
-    if (!isEnvNameCharacter(value.at(nameStart))) {
-      output.push("$");
-      index = dollarEnd;
-      continue;
-    }
-    let nameEnd = nameStart + 1;
-    while (isEnvNameCharacter(value.at(nameEnd))) {
-      nameEnd += 1;
-    }
-    const name = value.slice(nameStart, nameEnd);
-    if (braced && value.slice(nameEnd, nameEnd + 2) === ":-") {
-      const fallbackStart = nameEnd + 2;
-      const fallbackEnd = findExpansionEnd(value, fallbackStart);
-      if (fallbackEnd === -1) {
-        output.push("$");
-        index = dollarEnd;
-        continue;
-      }
-      const fallback = value.slice(fallbackStart, fallbackEnd);
-      if (/(?<!\\)\$\{/u.test(fallback)) {
-        // Bun does not recursively parse braced fallbacks. Preserve the
-        // unsupported expression so schema validation rejects it.
-        output.push(value.slice(expansionStart, fallbackEnd + 1));
-        index = fallbackEnd + 1;
-        continue;
-      }
-      const current = environment[name];
-      output.push(current ?? fallback);
-      index = fallbackEnd + 1;
-      continue;
-    }
-    if (braced && value.at(nameEnd) !== "}") {
-      output.push("$");
-      index = dollarEnd;
-      continue;
-    }
-
-    output.push(environment[name] ?? "");
-    index = nameEnd + (braced ? 1 : 0);
-  }
-  return output.join("");
+  return defined;
 };
 
 export const parseEnvLayers = (
   texts: string[],
   ambientEnvironment: NodeJS.ProcessEnv = process.env,
 ) => {
-  const parsed: Record<string, string> = {};
-  for (const text of texts) {
-    Object.assign(parsed, parseEnv(text));
+  const text = texts.join("\n");
+  const names = Object.keys(parseEnv(text));
+  if (names.length === 0) {
+    return {};
   }
-  const values: Record<string, string> = {};
-  const environment = { ...parsed, ...ambientEnvironment };
-  const ambientNames = new Set(Object.keys(ambientEnvironment));
-  for (const [name, value] of Object.entries(parsed)) {
-    const expanded = expandEnvReferences({
-      environment,
-      value: value ?? "",
+  const temporaryDirectory = mkdtempSync(
+    path.join(tmpdir(), "stella-env-tool-"),
+  );
+  const envPath = path.join(temporaryDirectory, "environment.env");
+  const spawned = Result.try(() => {
+    writeFileSync(envPath, text, { mode: 0o600 });
+    return Bun.spawnSync({
+      cmd: [
+        process.execPath,
+        "--no-env-file",
+        `--env-file=${envPath}`,
+        "-e",
+        BUN_ENV_READER,
+        JSON.stringify(names),
+      ],
+      cwd: temporaryDirectory,
+      env: definedEnvironment(ambientEnvironment),
     });
-    values[name] = expanded;
-    if (!ambientNames.has(name)) {
-      environment[name] = expanded;
-    }
+  });
+  rmSync(temporaryDirectory, { recursive: true });
+  if (Result.isError(spawned)) {
+    panic("Bun failed to load environment layers.");
   }
-  return values;
+  const result = spawned.value;
+  if (result.exitCode !== 0) {
+    panic("Bun failed to load environment layers.");
+  }
+  const decoded = Result.try(() => JSON.parse(result.stdout.toString()));
+  if (Result.isError(decoded)) {
+    panic("Bun returned invalid environment data.");
+  }
+  const validated = v.safeParse(
+    v.record(v.string(), v.string()),
+    decoded.value,
+  );
+  if (!validated.success) {
+    panic("Bun returned invalid environment values.");
+  }
+  return validated.output;
 };
 
 export const parseEnvText = (
@@ -356,7 +301,14 @@ const findComputedEnvUsages = (file: string, text: string): EnvUsage[] => {
     file.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
   );
   const constants = new Map<string, string>();
-  const helpers = new Map<string, number>();
+  type HelperReference =
+    | { parameterIndex: number; type: "positional" }
+    | {
+        parameterIndex: number;
+        propertyName: string;
+        type: "object-property";
+      };
+  const helpers = new Map<string, HelperReference>();
   const usages: EnvUsage[] = [];
 
   const literalEnvName = (node: ts.Node | undefined) => {
@@ -424,6 +376,51 @@ const findComputedEnvUsages = (file: string, text: string): EnvUsage[] => {
     return undefined;
   };
 
+  const bindingPropertyName = (element: ts.BindingElement) => {
+    if (element.propertyName === undefined && ts.isIdentifier(element.name)) {
+      return element.name.text;
+    }
+    if (
+      element.propertyName &&
+      (ts.isIdentifier(element.propertyName) ||
+        ts.isStringLiteral(element.propertyName))
+    ) {
+      return element.propertyName.text;
+    }
+    return undefined;
+  };
+
+  const helperReference = (
+    declaration: HelperDeclaration,
+    argumentName: string,
+  ): HelperReference | undefined => {
+    for (const [
+      parameterIndex,
+      parameter,
+    ] of declaration.parameters.entries()) {
+      if (
+        ts.isIdentifier(parameter.name) &&
+        parameter.name.text === argumentName
+      ) {
+        return { parameterIndex, type: "positional" };
+      }
+      if (!ts.isObjectBindingPattern(parameter.name)) {
+        continue;
+      }
+      const element = parameter.name.elements.find(
+        ({ name }) => ts.isIdentifier(name) && name.text === argumentName,
+      );
+      if (!element) {
+        continue;
+      }
+      const propertyName = bindingPropertyName(element);
+      if (propertyName) {
+        return { parameterIndex, propertyName, type: "object-property" };
+      }
+    }
+    return undefined;
+  };
+
   const collectReads = (node: ts.Node) => {
     const argument = envArgument(node);
     if (argument && ts.isIdentifier(argument)) {
@@ -442,12 +439,10 @@ const findComputedEnvUsages = (file: string, text: string): EnvUsage[] => {
           parent = parent.parent;
         }
         if (parent && isHelperDeclaration(parent)) {
-          const parameterIndex = parent.parameters.findIndex(
-            ({ name }) => ts.isIdentifier(name) && name.text === argument.text,
-          );
           const name = helperName(parent);
-          if (name && parameterIndex !== -1) {
-            helpers.set(name, parameterIndex);
+          const reference = helperReference(parent, argument.text);
+          if (name && reference) {
+            helpers.set(name, reference);
           }
         }
       }
@@ -456,11 +451,42 @@ const findComputedEnvUsages = (file: string, text: string): EnvUsage[] => {
   };
   collectReads(source);
 
+  const propertyName = (node: ts.PropertyName) =>
+    ts.isIdentifier(node) || ts.isStringLiteral(node) ? node.text : undefined;
+
+  const referencedCallArgument = (
+    call: ts.CallExpression,
+    reference: HelperReference,
+  ) => {
+    const argument = call.arguments.at(reference.parameterIndex);
+    if (reference.type === "positional") {
+      return argument;
+    }
+    if (!argument || !ts.isObjectLiteralExpression(argument)) {
+      return undefined;
+    }
+    for (const property of argument.properties) {
+      if (
+        ts.isPropertyAssignment(property) &&
+        propertyName(property.name) === reference.propertyName
+      ) {
+        return property.initializer;
+      }
+      if (
+        ts.isShorthandPropertyAssignment(property) &&
+        property.name.text === reference.propertyName
+      ) {
+        return property.name;
+      }
+    }
+    return undefined;
+  };
+
   const collectCalls = (node: ts.Node) => {
     if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
-      const parameterIndex = helpers.get(node.expression.text);
-      if (parameterIndex !== undefined) {
-        const argument = node.arguments.at(parameterIndex);
+      const reference = helpers.get(node.expression.text);
+      if (reference) {
+        const argument = referencedCallArgument(node, reference);
         const name = literalEnvName(argument);
         if (name && argument) {
           usages.push({
@@ -725,11 +751,39 @@ const ENV_APP_CONFIG = {
   },
 } as const satisfies Record<EnvApp, EnvAppConfig>;
 
-const BUN_ENV_MODES = new Set(["development", "production", "test"]);
+const ENV_MODE = {
+  development: "development",
+  production: "production",
+  test: "test",
+} as const;
+type EnvMode = (typeof ENV_MODE)[keyof typeof ENV_MODE];
+
+const isEnvMode = (value: string): value is EnvMode =>
+  Object.values(ENV_MODE).some((mode) => mode === value);
+
+type ResolveDoctorModeOptions = {
+  app: EnvApp;
+  nodeEnv: string | undefined;
+  requestedMode: EnvMode | undefined;
+};
+
+export const resolveDoctorMode = ({
+  app,
+  nodeEnv,
+  requestedMode,
+}: ResolveDoctorModeOptions): EnvMode | undefined => {
+  if (requestedMode) {
+    return requestedMode;
+  }
+  if (nodeEnv && isEnvMode(nodeEnv)) {
+    return nodeEnv;
+  }
+  return app === ENV_APP.web ? ENV_MODE.development : undefined;
+};
 
 export const doctorEnvFileNames = (nodeEnv: string | undefined) => {
   const names = [".env"];
-  const mode = nodeEnv && BUN_ENV_MODES.has(nodeEnv) ? nodeEnv : undefined;
+  const mode = nodeEnv && isEnvMode(nodeEnv) ? nodeEnv : undefined;
   if (mode) {
     names.push(`.env.${mode}`);
   }
@@ -746,11 +800,11 @@ export const validateDoctorEnvironment = (
 ): DoctorValidationResult =>
   ENV_APP_CONFIG[app].validate(normalizeEmptyEnvironment(rawInput));
 
-const runDoctor = (app: EnvApp) => {
+const runDoctor = (app: EnvApp, mode: EnvMode | undefined) => {
   const { examplePath, owners } = ENV_APP_CONFIG[app];
   const envDirectory = path.dirname(examplePath);
   const baseEnvPath = path.join(envDirectory, ".env");
-  const envPaths = doctorEnvFileNames(process.env.NODE_ENV).map((name) =>
+  const envPaths = doctorEnvFileNames(mode).map((name) =>
     path.join(envDirectory, name),
   );
   const existingEnvPaths = envPaths.filter(existsSync);
@@ -811,12 +865,23 @@ const main = async () => {
   }
   if (command === "doctor") {
     const app = process.argv.at(3) ?? "api";
-    if (!isEnvApp(app)) {
-      console.error("Usage: bun run env:doctor [api|collab|web]");
+    const requestedMode = process.argv.at(4);
+    if (
+      !isEnvApp(app) ||
+      (requestedMode !== undefined && !isEnvMode(requestedMode))
+    ) {
+      console.error(
+        "Usage: bun run env:doctor [api|collab|web] [development|production|test]",
+      );
       process.exitCode = 1;
       return;
     }
-    if (!runDoctor(app)) {
+    const mode = resolveDoctorMode({
+      app,
+      nodeEnv: process.env.NODE_ENV,
+      requestedMode,
+    });
+    if (!runDoctor(app, mode)) {
       process.exitCode = 1;
     }
     return;

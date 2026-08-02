@@ -18,6 +18,7 @@ export const ENV_EXPOSURE = {
 export type EnvExposure = (typeof ENV_EXPOSURE)[keyof typeof ENV_EXPOSURE];
 
 export const ENV_REQUIREMENT = {
+  conditional: "conditional",
   defaulted: "defaulted",
   optional: "optional",
   required: "required",
@@ -46,6 +47,7 @@ export type EnvCatalogEntry = {
   name: string;
   owner: EnvOwner;
   requirement: EnvRequirement;
+  requirementNote: string | undefined;
   schema: v.GenericSchema;
   section: string;
 };
@@ -200,7 +202,7 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   COMPANIES_HOUSE_API_KEY:
     "UK Companies House API key. Unset disables the adapter.",
   CONTENT_ENCRYPTION_KEY:
-    "64-character hex AES key for extracted file text at rest. Unset stores extracted content as plaintext.",
+    "64-character hex AES key for extracted file text at rest. Local development may omit it.",
   DATABASE_POOL_IDLE_TIMEOUT_S:
     "Idle database connection lifetime in seconds; zero disables retirement.",
   DATABASE_POOL_MAX_LIFETIME_S:
@@ -280,14 +282,15 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "S3 secret access key. Omit with the access-key ID to use the SDK credential chain.",
   SECURITY_CANARY_API_KEY_SHA256:
     "SHA-256 digest of a decoy machine API key. Keep its plaintext outside this environment.",
+  SES_REGION: "AWS region used for SES transactional email delivery.",
+  SMTP_HOST: "SMTP relay hostname.",
+  SMTP_PORT: "SMTP relay port.",
   SELFHOST_BOOTSTRAP_TOKEN:
     "One-time token required for the first local-password account.",
   SELFHOST_LOCAL_PASSWORD_AUTH:
     "Enable email/password auth for self-hosting. Initial signup also requires a bootstrap token.",
-  SMTP_HOST: "SMTP relay hostname; required when EMAIL_PROVIDER is smtp.",
   SMTP_PASSWORD:
     "SMTP password. Set together with SMTP_USERNAME, or leave both empty for an unauthenticated relay.",
-  SMTP_PORT: "SMTP relay port; required when EMAIL_PROVIDER is smtp.",
   SMTP_USERNAME:
     "SMTP username. Set together with SMTP_PASSWORD, or leave both empty for an unauthenticated relay.",
   STELLA_API_URL:
@@ -321,6 +324,17 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   VITE_SELFHOST: "Enable the release-update notice for self-hosted operators.",
   VITE_SEO_INDEXABLE: "Allow search engines to index this deployment.",
   VITE_TERMS_URL: "Absolute or root-relative Terms of Service link.",
+};
+
+const CONDITIONAL_REQUIREMENT_NOTES: Record<string, string> = {
+  CONTENT_ENCRYPTION_KEY: "NODE_ENV is production or staging",
+  CORPUS_INDEX_ENDPOINT: "LEGAL_SEARCH_PROVIDER is corpus-index",
+  LEGAL_CORPUS_S3_BUCKET: "corpus storage is enabled in a deployed environment",
+  MICROSOFT_AUTH_TENANT_ID: "Microsoft OAuth credentials are configured",
+  SES_REGION: "EMAIL_PROVIDER is ses",
+  SMTP_HOST: "EMAIL_PROVIDER is smtp",
+  SMTP_PORT: "EMAIL_PROVIDER is smtp",
+  TRANSACTIONAL_EMAIL_FROM: "EMAIL_PROVIDER is ses or smtp",
 };
 
 const ACTIVE_EXAMPLE_KEYS = new Set([
@@ -453,19 +467,23 @@ type CreateCatalogEntriesOptions = {
 };
 
 const createCatalogEntries = ({ owner, schema }: CreateCatalogEntriesOptions) =>
-  Object.entries(schema).map(
-    ([name, entrySchema]): EnvCatalogEntry => ({
+  Object.entries(schema).map(([name, entrySchema]): EnvCatalogEntry => {
+    const requirementNote = CONDITIONAL_REQUIREMENT_NOTES[name];
+    return {
       description: DESCRIPTION_OVERRIDES[name] ?? humanizeEnvName(name),
       documented: !HIDDEN_SCHEMA_KEYS.has(name),
       example: EXAMPLE_VALUES[name],
       exposure: exposureFor(name, owner),
       name,
       owner,
-      requirement: requirementFor(entrySchema),
+      requirement: requirementNote
+        ? ENV_REQUIREMENT.conditional
+        : requirementFor(entrySchema),
+      requirementNote,
       schema: entrySchema,
       section: sectionFor(name),
-    }),
-  );
+    };
+  });
 
 export const ENV_CATALOG = [
   ...createCatalogEntries({

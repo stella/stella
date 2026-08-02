@@ -20,6 +20,7 @@ import {
   renderApiEnvExample,
   renderCollabEnvExample,
   renderWebEnvExample,
+  resolveDoctorMode,
   validateDoctorEnvironment,
 } from "./env-tool";
 
@@ -83,6 +84,15 @@ describe("generated environment examples", () => {
     expect(requirementFor(schema)).toBe(ENV_REQUIREMENT.optional);
     expect(transformExecuted).toBe(false);
   });
+
+  test("preserves conditional requirements from runtime invariants", () => {
+    const sesRegion = ENV_CATALOG.find(({ name }) => name === "SES_REGION");
+    expect(sesRegion?.requirement).toBe(ENV_REQUIREMENT.conditional);
+    expect(sesRegion?.requirementNote).toBe("EMAIL_PROVIDER is ses");
+    expect(renderApiEnvExample()).toContain(
+      "Conditionally required when EMAIL_PROVIDER is ses.",
+    );
+  });
 });
 
 describe("environment file parsing", () => {
@@ -102,7 +112,6 @@ describe("environment file parsing", () => {
           "EMPTY_VALUE=",
           `EMPTY_DEFAULT=\${EMPTY_VALUE:-5433}`,
           `SET_DEFAULT=\${PGPORT:-5432}`,
-          `UNEXPANDED_DEFAULT=\${MISSING_PORT:-$PGPORT}`,
         ].join("\n"),
         { PGPORT: "6432" },
       ),
@@ -118,18 +127,15 @@ describe("environment file parsing", () => {
       PORT_PREFIX: "54",
       SET_DEFAULT: "6432",
       SMTP_PORT: "1025",
-      UNEXPANDED_DEFAULT: "$PGPORT",
     });
   });
 
-  test("preserves unsupported nested fallbacks for validation", () => {
-    expect(
+  test("fails closed when Bun rejects nested fallbacks", () => {
+    expect(() =>
       parseEnvText(`DB_PORT=\${MISSING_PORT:-\${PGPORT:-5432}}`, {
         PGPORT: "6432",
       }),
-    ).toEqual({
-      DB_PORT: `${String.fromCodePoint(36)}{MISSING_PORT:-${String.fromCodePoint(36)}{PGPORT:-5432}}`,
-    });
+    ).toThrow("Bun failed to load environment layers.");
   });
 
   test("matches Bun consecutive-dollar expansion", () => {
@@ -154,6 +160,12 @@ describe("environment file parsing", () => {
     });
   });
 
+  test("delegates punctuation expansion to Bun", () => {
+    expect(
+      parseEnvText(`SECRET=${`${String.fromCodePoint(36)}-`.repeat(16)}`, {}),
+    ).toEqual({ SECRET: "-".repeat(16) });
+  });
+
   test("matches Bun dotenv layer order and final-value expansion", () => {
     expect(doctorEnvFileNames("production")).toEqual([
       ".env",
@@ -162,6 +174,27 @@ describe("environment file parsing", () => {
       ".env.production.local",
     ]);
     expect(doctorEnvFileNames("staging")).toEqual([".env", ".env.local"]);
+    expect(
+      resolveDoctorMode({
+        app: "web",
+        nodeEnv: undefined,
+        requestedMode: undefined,
+      }),
+    ).toBe("development");
+    expect(
+      resolveDoctorMode({
+        app: "web",
+        nodeEnv: "production",
+        requestedMode: undefined,
+      }),
+    ).toBe("production");
+    expect(
+      resolveDoctorMode({
+        app: "web",
+        nodeEnv: "production",
+        requestedMode: "test",
+      }),
+    ).toBe("test");
     expect(
       parseEnvLayers(
         [
@@ -397,6 +430,27 @@ describe("environment usage auditing", () => {
         name: "API_DEPLOYMENT_EXPECTED_COMMIT",
       },
       { file: "scripts/example.ts", line: 4, name: "API_DEPLOYMENT_URL" },
+    ]);
+  });
+
+  test("traces object properties through destructured environment helpers", () => {
+    const usages = findEnvUsages(
+      "apps/legal-atlas-runner/src/env.ts",
+      [
+        "const readIntegerEnv = ({ name: envName }: IntegerEnvOptions) =>",
+        "  Bun.env[envName];",
+        "readIntegerEnv({",
+        '  name: "MAX_CONCURRENT_DB_WRITES",',
+        "});",
+      ].join("\n"),
+    );
+
+    expect(usages).toEqual([
+      {
+        file: "apps/legal-atlas-runner/src/env.ts",
+        line: 4,
+        name: "MAX_CONCURRENT_DB_WRITES",
+      },
     ]);
   });
 
