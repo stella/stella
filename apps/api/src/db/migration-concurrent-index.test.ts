@@ -14,9 +14,9 @@ const CONCURRENT_UNIQUE_CREATE =
 const CONCURRENT_DROP =
   /\bDROP\s+INDEX\s+CONCURRENTLY\s+IF\s+EXISTS\s+"([^"]+)"/giu;
 const TYPE_CHANGE =
-  /^ALTER\s+TABLE\b[^;]*?\bALTER\s+(?:COLUMN\s+)?(?:"[^"]+"|[\p{L}_][\p{L}\p{M}\p{N}_$]*)\s+(?:SET\s+DATA\s+)?TYPE\b/iu;
+  /^ALTER\s+TABLE\b[^;]*?\bALTER\s+(?:COLUMN\s+)?(?:"[^"]+"|[A-Z_\u0080-\u{10FFFF}][A-Z0-9_$\u0080-\u{10FFFF}]*)\s+(?:SET\s+DATA\s+)?TYPE\b/iu;
 const TYPE_CHANGE_ANYWHERE =
-  /\bALTER\s+TABLE\b[\s\S]*?\bALTER\s+(?:COLUMN\s+)?(?:"[^"]+"|[\p{L}_][\p{L}\p{M}\p{N}_$]*)\s+(?:SET\s+DATA\s+)?TYPE\b/iu;
+  /\bALTER\s+TABLE\b[\s\S]*?\bALTER\s+(?:COLUMN\s+)?(?:"[^"]+"|[A-Z_\u0080-\u{10FFFF}][A-Z0-9_$\u0080-\u{10FFFF}]*)\s+(?:SET\s+DATA\s+)?TYPE\b/iu;
 const TRANSACTION_REVERSAL =
   /^(?:ABORT|ROLLBACK|SAVEPOINT|RELEASE\s+SAVEPOINT)\b/iu;
 const TYPE_CHANGE_POLICY = {
@@ -63,11 +63,15 @@ const classifyTimeout = (value: string): TimeoutState => {
   return "unset";
 };
 
+const POSTGRES_IDENTIFIER_CONTINUATION = /[A-Z0-9_$\u0080-\u{10FFFF}]/iu;
+
 const dollarQuoteDelimiterAt = (source: string, index: number) => {
-  if (/[A-Z0-9_$]/iu.test(source[index - 1] ?? "")) {
+  if (POSTGRES_IDENTIFIER_CONTINUATION.test(source[index - 1] ?? "")) {
     return undefined;
   }
-  return /^\$(?:[A-Z_][A-Z0-9_]*)?\$/iu.exec(source.slice(index))?.at(0);
+  return /^\$(?:[A-Z_\u0080-\u{10FFFF}][A-Z0-9_\u0080-\u{10FFFF}]*)?\$/iu
+    .exec(source.slice(index))
+    ?.at(0);
 };
 
 const sqlQuoteAt = (
@@ -80,7 +84,7 @@ const sqlQuoteAt = (
   const isEscapeString =
     character === "'" &&
     prefix.toLowerCase() === "e" &&
-    !/[A-Z0-9_$]/iu.test(beforePrefix);
+    !POSTGRES_IDENTIFIER_CONTINUATION.test(beforePrefix);
 
   return { backslashEscapes: isEscapeString, character };
 };
@@ -1057,17 +1061,23 @@ SELECT 1;`;
   });
 
   test("requires token boundaries for dollar-quoted bodies", () => {
-    const identifierSource = `SELECT foo$bar$;
-      ALTER TABLE example ALTER COLUMN value TYPE varchar(64);`;
-    expect(splitSqlStatements(identifierSource)).toHaveLength(2);
+    for (const identifier of ["foo$bar$", "café$tag$"]) {
+      const identifierSource = `SELECT ${identifier};
+        ALTER TABLE example ALTER COLUMN value TYPE varchar(64);`;
+      expect(splitSqlStatements(identifierSource)).toHaveLength(2);
+      expect(
+        collectUnsafeTypeChangesInMigration(
+          "dollar-identifier/migration.sql",
+          identifierSource,
+        ),
+      ).toContain(
+        "dollar-identifier/migration.sql: type change lacks an explicit execution policy",
+      );
+    }
+
     expect(
-      collectUnsafeTypeChangesInMigration(
-        "dollar-identifier/migration.sql",
-        identifierSource,
-      ),
-    ).toContain(
-      "dollar-identifier/migration.sql: type change lacks an explicit execution policy",
-    );
+      splitSqlStatements("DO $täg$ SELECT ';'; $täg$; SELECT 1;"),
+    ).toHaveLength(2);
   });
 
   test("rejects type changes hidden inside procedural bodies", () => {
