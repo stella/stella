@@ -19,11 +19,9 @@ export const ChatActivityOrb = ({ state }: ChatActivityOrbProps) => {
       role="presentation"
       size={usesDetailedPreset ? DETAILED_ORB_SIZE : INLINE_ORB_SIZE}
       state={state}
-      style={
-        usesDetailedPreset
-          ? { height: INLINE_ORB_SIZE, width: INLINE_ORB_SIZE }
-          : undefined
-      }
+      {...(usesDetailedPreset
+        ? { style: { height: INLINE_ORB_SIZE, width: INLINE_ORB_SIZE } }
+        : {})}
     />
   );
 };
