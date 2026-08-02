@@ -417,6 +417,7 @@ const uploadEntityHandler = async function* ({
 
     return Result.ok({
       entityId,
+      fieldId,
       fileId,
       fileName: fileName.value,
       renamed: fileName.renamed,

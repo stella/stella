@@ -60,6 +60,7 @@ import {
 } from "@/components/chat/chat-ui-tools";
 import { MessageExportMenu } from "@/components/chat/message-export-menu";
 import { NeedsMatterCard } from "@/components/chat/needs-matter-card";
+import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";
 import { rehypeAnonSpans } from "@/components/chat/rehype-anon-spans";
 import { SourceChips } from "@/components/chat/source-chips";
 import { SpawnSubagentsCard } from "@/components/chat/spawn-subagents-card";
@@ -1028,13 +1029,13 @@ type ChatThreadMessagesProps = {
     | undefined;
   onCreateDocumentResolve: (
     toolCallId: string,
-    matterId: string,
+    destination: CreateDocumentDestination,
     input: ChatUITools["create-document"]["input"],
   ) => Promise<void> | void;
   onOpenCreatedDocument: (
     output: Extract<
       ChatUITools["create-document"]["output"],
-      { success: true }
+      { entityId: string }
     >,
   ) => Promise<void> | void;
   showThinkingIndicator?: boolean | undefined;

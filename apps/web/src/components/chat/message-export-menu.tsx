@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { Result } from "better-result";
-import { DownloadIcon } from "lucide-react";
+import { DownloadIcon, Loader2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
@@ -162,13 +162,17 @@ export const MessageExportMenu = ({
             </Select>
           </label>
           <Button
+            aria-live="polite"
             disabled={isExportPending}
             onClick={() => {
               detached(handleExport(), "MessageExportMenu");
             }}
             size="sm"
           >
-            {t("common.export.title")}
+            {isExportPending && (
+              <Loader2Icon aria-hidden className="size-3.5 animate-spin" />
+            )}
+            {isExportPending ? t("common.preparing") : t("common.export.title")}
           </Button>
         </div>
       </PopoverPopup>

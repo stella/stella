@@ -37,8 +37,21 @@ import {
   sanitizeRunningToolCalls,
   withParsedToolCallInputs,
 } from "@/components/chat/chat-ui-tools";
+import { saveCreateDocumentDraft } from "@/components/chat/create-document-draft-runtime";
+import "@/components/chat/create-document-draft-inspector";
+import {
+  buildCreateDocumentDownloadFileName,
+  CREATE_DOCUMENT_DRAFT_VIEW,
+  createDocumentDraftTabId,
+  type CreateDocumentDraftPayload,
+  isSameCreateDocumentDraftPayload,
+  selectCreateDocumentDrafts,
+} from "@/components/chat/create-document-draft.logic";
 import { openEntityInInspector } from "@/components/chat/entity-open";
-import type { NeedsMatterMatter } from "@/components/chat/needs-matter-card";
+import type {
+  CreateDocumentDestination,
+  NeedsMatterMatter,
+} from "@/components/chat/needs-matter-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -71,21 +84,33 @@ import type {
   DocxEditRepresentation,
 } from "@/lib/chat-edit-mode";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
+import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
-import { internalToolErrorMessage, toAPIError } from "@/lib/errors/api";
+import {
+  APIError,
+  internalToolErrorMessage,
+  toAPIError,
+} from "@/lib/errors/api";
+import { ClientOperationError } from "@/lib/errors/client";
 import { fileOptions } from "@/lib/files/queries";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
 import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
+import { downloadFile } from "@/lib/utils";
 import {
   workspacesKeys,
   workspacesNavigationOptions,
 } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities.logic";
+import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 
 type CreateDocumentInput = ChatUITools["create-document"]["input"];
 type CreateDocumentOutput = ChatUITools["create-document"]["output"];
 type CreateDocumentSuccess = Extract<CreateDocumentOutput, { success: true }>;
+type CreateDocumentMatterSuccess = Extract<
+  CreateDocumentSuccess,
+  { entityId: string }
+>;
 
 type UseChatSessionOptions = {
   chat: ChatRuntime;
@@ -124,6 +149,50 @@ export type ResendLatestMessageOptions = {
 const EMPTY_MCP_CONNECTOR_IDENTITIES: readonly McpConnectorApprovalIdentity[] =
   [];
 const EMPTY_CONTEXT_MATTER_IDS: readonly string[] = [];
+
+type PreparedCreateDocumentDraft = {
+  buffer: ArrayBuffer;
+  fileName: string;
+};
+
+const prepareCreateDocumentDraft = async (
+  toolCallId: string,
+  input: CreateDocumentInput,
+): Promise<PreparedCreateDocumentDraft | null> => {
+  const editedBuffer = await saveCreateDocumentDraft(toolCallId);
+  const fileName = buildCreateDocumentDownloadFileName(input.name);
+  if (editedBuffer !== null) {
+    return { buffer: editedBuffer, fileName };
+  }
+
+  const { compileLegalSourceToDocx } = await import("@stll/docx-core");
+  const compiled = await compileLegalSourceToDocx(input.source, {
+    titleFallback: input.name,
+  });
+  if (compiled.status !== "ok") {
+    return null;
+  }
+  return { buffer: Uint8Array.from(compiled.buffer).buffer, fileName };
+};
+
+const openCreatedDocumentInInspector = async (
+  output: CreateDocumentMatterSuccess,
+) => {
+  await openEntityInInspector(
+    output.entityId,
+    output.fileName,
+    output.workspaceId,
+  );
+  const tab = useInspectorTabsStore
+    .getState()
+    .tabs.find(
+      (candidate) =>
+        candidate.type === "pdf" && candidate.entityId === output.entityId,
+    );
+  if (tab) {
+    useInspectorCommandStore.getState().requestDocxEdit(tab.id);
+  }
+};
 
 // `QueuedChatMessage` is the view-facing shape of a queued entry; the
 // canonical definition (plus `QueuedChatEntry` and the send-queue
@@ -190,6 +259,45 @@ export const useChatSession = ({
     () => withParsedToolCallInputs(snapshot.messages),
     [snapshot.messages],
   );
+  const openedCreateDocumentDraftIdsRef = useRef(new Set<string>());
+  useExternalSyncEffect(() => {
+    const inspector = useInspectorTabsStore.getState();
+    for (const draft of selectCreateDocumentDrafts(messages)) {
+      const id = createDocumentDraftTabId(draft.toolCallId);
+      const label = draft.name
+        ? buildCreateDocumentDownloadFileName(draft.name)
+        : t("chat.createDocument.headerStreaming");
+      const payload = {
+        toolCallId: draft.toolCallId,
+        name: draft.name,
+        source: draft.source,
+        status: draft.status,
+      } satisfies CreateDocumentDraftPayload;
+      const existing = inspector.tabs.find((tab) => tab.id === id);
+      if (existing !== undefined) {
+        if (
+          existing.type === "view" &&
+          existing.viewType === CREATE_DOCUMENT_DRAFT_VIEW &&
+          existing.label === label &&
+          isSameCreateDocumentDraftPayload(existing.payload, payload)
+        ) {
+          continue;
+        }
+        inspector.updateView({ id, label, payload });
+        continue;
+      }
+      if (openedCreateDocumentDraftIdsRef.current.has(id)) {
+        continue;
+      }
+      openedCreateDocumentDraftIdsRef.current.add(id);
+      inspector.openView({
+        type: CREATE_DOCUMENT_DRAFT_VIEW,
+        id,
+        label,
+        payload,
+      });
+    }
+  }, [messages, t]);
   const sendChatMessage = useCallback(
     async (message: ChatUserMessageInput, options?: ChatSendMessageOptions) => {
       await sendThreadChatMessage(chat, message, options);
@@ -711,23 +819,101 @@ export const useChatSession = ({
   const handleCreateDocumentResolve = useCallback(
     async (
       toolCallId: string,
-      matterId: string,
+      destination: CreateDocumentDestination,
       input: CreateDocumentInput,
     ) => {
-      const response = await api
-        .entities({ workspaceId: toSafeId<"workspace">(matterId) })
-        ["create-from-legal-source"].post({
-          queryKey: entitiesKeys.all(matterId),
-          queryKeys: [workspacesKeys.overviewActivityAll(matterId)],
-          name: input.name,
-          source: input.source,
+      if (destination.type === "download") {
+        const downloadResult = await Result.tryPromise(async () => {
+          const draft = await prepareCreateDocumentDraft(toolCallId, input);
+          if (draft === null) {
+            return { status: "invalid-source" } as const;
+          }
+          downloadFile(
+            new Blob([new Uint8Array(draft.buffer)], { type: DOCX_MIME }),
+            draft.fileName,
+          );
+          return { status: "downloaded", fileName: draft.fileName } as const;
         });
 
-      if (response.error) {
-        const apiError = toAPIError(response.error);
+        if (
+          Result.isError(downloadResult) ||
+          downloadResult.value.status === "invalid-source"
+        ) {
+          if (Result.isError(downloadResult)) {
+            getAnalytics().captureError(downloadResult.error);
+          }
+          const failure: CreateDocumentOutput = {
+            success: false,
+            message: t("chat.createDocument.failedHeader"),
+          };
+          await addToolResult({
+            tool: "create-document",
+            toolCallId,
+            output: failure,
+          });
+          return;
+        }
+
+        const output: CreateDocumentOutput = {
+          success: true,
+          destination: "download",
+          fileName: downloadResult.value.fileName,
+        };
+        await addToolResult({
+          tool: "create-document",
+          toolCallId,
+          output,
+        });
+        return;
+      }
+
+      const { matterId } = destination;
+      const createResult = await Result.tryPromise(async () => {
+        const draft = await prepareCreateDocumentDraft(toolCallId, input);
+        if (draft === null) {
+          throw new ClientOperationError({
+            action: "prepare-create-document-draft",
+            message: "Generated document source could not be compiled",
+          });
+        }
+        const properties = await queryClient.fetchQuery(
+          propertiesOptions(matterId),
+        );
+        const fileProperty = properties.find(
+          (property) => property.content.type === "file",
+        );
+        if (fileProperty === undefined) {
+          throw new ClientOperationError({
+            action: "save-create-document-draft",
+            message: "Destination matter has no file property",
+          });
+        }
+
+        const file = new File([new Uint8Array(draft.buffer)], draft.fileName, {
+          type: DOCX_MIME,
+        });
+        const response = await api
+          .entities({ workspaceId: toSafeId<"workspace">(matterId) })
+          .upload.post({
+            queryKey: entitiesKeys.all(matterId),
+            queryKeys: [workspacesKeys.overviewActivityAll(matterId)],
+            file,
+            name: draft.fileName,
+            propertyId: fileProperty.id,
+          });
+        if (response.error) {
+          throw toAPIError(response.error);
+        }
+        return { created: response.data, fileName: draft.fileName };
+      });
+
+      if (Result.isError(createResult)) {
+        getAnalytics().captureError(createResult.error);
         const failure: CreateDocumentOutput = {
           success: false,
-          message: internalToolErrorMessage(apiError),
+          message: APIError.is(createResult.error)
+            ? internalToolErrorMessage(createResult.error)
+            : t("chat.createDocument.failedHeader"),
         };
         await addToolResult({
           tool: "create-document",
@@ -736,6 +922,20 @@ export const useChatSession = ({
         });
         return;
       }
+
+      const { created, fileName } = createResult.value;
+      const href = `#stella-entity=${matterId}:${created.entityId}`;
+      const output: CreateDocumentMatterSuccess = {
+        success: true,
+        fileName,
+        entityId: created.entityId,
+        fieldId: created.fieldId,
+        workspaceId: matterId,
+        entityRef: created.entityId,
+        matterRef: matterId,
+        href,
+        mention: `[${fileName}](${href})`,
+      };
 
       await invalidateCreatedDocumentQueries({
         queryClient,
@@ -752,64 +952,34 @@ export const useChatSession = ({
       // is the presigned URL roundtrip + S3 download. We kick this
       // off as a fire-and-forget; failures are silent because the
       // editor will retry the same query on mount.
-      if (typeof response.data.fieldId === "string") {
-        detached(
-          queryClient.prefetchQuery(
-            fileOptions({
-              workspaceId: matterId,
-              fieldId: response.data.fieldId,
-              purpose: "native-display",
-            }),
-          ),
-          "useChatSession",
-        );
-      }
+      detached(
+        queryClient.prefetchQuery(
+          fileOptions({
+            workspaceId: matterId,
+            fieldId: output.fieldId,
+            purpose: "native-display",
+          }),
+        ),
+        "useChatSession",
+      );
+
+      useInspectorTabsStore
+        .getState()
+        .closeTab(createDocumentDraftTabId(toolCallId));
+      await openCreatedDocumentInInspector(output);
 
       await addToolResult({
         tool: "create-document",
         toolCallId,
-        output: response.data,
+        output,
       });
     },
-    [addToolResult, queryClient],
+    [addToolResult, queryClient, t],
   );
 
   const handleOpenCreatedDocument = useCallback(
-    async (output: CreateDocumentSuccess) => {
-      // Old chat threads predate `entityId`/`workspaceId` on the
-      // tool output. Without them we can't open the file, so bail —
-      // the card surfaces this by hiding the open affordance.
-      if (!output.entityId || !output.workspaceId) {
-        return;
-      }
-      // Pin this chat thread in the workspace inspector. Inherit
-      // Keep the user on the chat surface and let the global
-      // InspectorPanel (mounted on every protected route) host the
-      // file. Tabs carry their own `workspaceId`, so a doc that
-      // lives in workspace B while the chat is bound to workspace A
-      // (or to no workspace at all) still renders correctly without
-      // a route change. Skip pinning the chat as a separate inspector
-      // tab — the user is already in this chat as the main surface,
-      // so a duplicate chat tab in the side panel reads as confusing
-      // ("the doc AND the same chat I am in"). `openEntityInInspector`
-      // resolves the file field and synchronously calls `openFile`,
-      // so the tab is in the store by the time we read it; we then
-      // ask the panel to start folio edit mode for whichever PDF tab
-      // carries the entity.
-      await openEntityInInspector(
-        output.entityId,
-        output.fileName,
-        output.workspaceId,
-      );
-      const tab = useInspectorTabsStore
-        .getState()
-        .tabs.find(
-          (candidate) =>
-            candidate.type === "pdf" && candidate.entityId === output.entityId,
-        );
-      if (tab) {
-        useInspectorCommandStore.getState().requestDocxEdit(tab.id);
-      }
+    async (output: CreateDocumentMatterSuccess) => {
+      await openCreatedDocumentInInspector(output);
     },
     [],
   );

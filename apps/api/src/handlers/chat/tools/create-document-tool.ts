@@ -45,6 +45,11 @@ const createDocumentToolOutputSchema = v.union([
     mention: v.string(),
   }),
   v.strictObject({
+    success: v.literal(true),
+    destination: v.literal("download"),
+    fileName: v.string(),
+  }),
+  v.strictObject({
     success: v.literal(false),
     message: v.string(),
   }),
@@ -66,9 +71,10 @@ export const createCreateDocumentTool = () =>
       "does NOT edit, convert, clone or preserve formatting from an " +
       "existing DOCX; never use it when the user asks to edit, rewrite, " +
       "save, update, or make a new version of an already-open document. " +
-      "The user picks the destination matter via the UI; do not ask the " +
-      "user to identify a matter in your reply. On success, copy the " +
-      "`mention` field verbatim when naming the document in your reply.\n\n" +
+      "The user can save the draft to a destination matter or download it " +
+      "without saving; do not ask the user to identify a matter in your " +
+      "reply. When the success output includes `mention`, copy that field " +
+      "verbatim when naming the saved document in your reply.\n\n" +
       "DIRECTIVES (one per block, on its own line):\n" +
       "  @doc kind=<agreement|letter|memo|checklist|pleading|other> locale=<bcp47> page=<A4|Letter> — opening line; locale picks footer + signature captions for en/cs/sk/de/fr/es/it/pl/pt/nl/hu (falls back to English).\n" +
       "  @title <text> — document title.\n" +

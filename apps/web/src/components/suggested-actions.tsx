@@ -69,9 +69,7 @@ export const SuggestedActions = ({
       aria-label={label}
       className={cn(
         "flex max-w-full gap-1.5",
-        horizontal
-          ? "[scrollbar-width:none] overflow-x-auto [&::-webkit-scrollbar]:hidden"
-          : "flex-col items-start",
+        horizontal ? "scrollbar-hover overflow-x-auto" : "flex-col items-start",
         className,
       )}
       role="group"

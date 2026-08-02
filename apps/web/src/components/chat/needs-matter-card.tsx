@@ -3,6 +3,7 @@ import { useDeferredValue, useMemo, useState } from "react";
 import {
   ArrowRightIcon,
   CheckIcon,
+  DownloadIcon,
   ExternalLinkIcon,
   FilePlusIcon,
   LoaderIcon,
@@ -21,7 +22,13 @@ import type {
   ChatToolCallPart,
   ChatUITools,
 } from "@/components/chat/chat-ui-tools";
+import {
+  buildCreateDocumentDownloadFileName,
+  normalizeCreateDocumentInput,
+} from "@/components/chat/create-document-draft.logic";
+import { DocumentIcon } from "@/components/document-icon";
 import { MatterIcon } from "@/components/matter-icon";
+import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 
 type CreateDocumentPart = Extract<
@@ -31,6 +38,14 @@ type CreateDocumentPart = Extract<
 type CreateDocumentInput = ChatUITools["create-document"]["input"];
 type CreateDocumentOutput = ChatUITools["create-document"]["output"];
 type CreateDocumentSuccess = Extract<CreateDocumentOutput, { success: true }>;
+type CreateDocumentMatterSuccess = Extract<
+  CreateDocumentSuccess,
+  { entityId: string }
+>;
+
+export type CreateDocumentDestination =
+  | { type: "matter"; matterId: string }
+  | { type: "download" };
 
 export type NeedsMatterMatter = {
   id: string;
@@ -43,10 +58,10 @@ type NeedsMatterCardProps = {
   part: CreateDocumentPart;
   onResolve: (
     toolCallId: string,
-    matterId: string,
+    destination: CreateDocumentDestination,
     input: CreateDocumentInput,
   ) => Promise<void> | void;
-  onOpenCreated: (output: CreateDocumentSuccess) => Promise<void> | void;
+  onOpenCreated: (output: CreateDocumentMatterSuccess) => Promise<void> | void;
 };
 
 export const NeedsMatterCard = ({
@@ -100,7 +115,18 @@ export const NeedsMatterCard = ({
       name: partialInput.name ?? "Untitled",
       source: partialInput.source,
     };
-    await onResolve(part.id, matterId, fullInput);
+    await onResolve(part.id, { type: "matter", matterId }, fullInput);
+  };
+
+  const handleDownload = async () => {
+    if (!partialInput?.source) {
+      return;
+    }
+    const fullInput: CreateDocumentInput = {
+      name: partialInput.name ?? "Untitled",
+      source: partialInput.source,
+    };
+    await onResolve(part.id, { type: "download" }, fullInput);
   };
 
   return (
@@ -123,6 +149,7 @@ export const NeedsMatterCard = ({
         <MatterPickerSection
           isLoadingMatters={isLoadingMatters}
           matters={matters}
+          onDownload={handleDownload}
           onContinue={handleMatterContinue}
         />
       )}
@@ -138,6 +165,7 @@ type DocumentPreviewProps = {
 const DocumentPreview = ({ name, source }: DocumentPreviewProps) => {
   const t = useTranslations();
   const snippet = useMemo(() => extractPreviewSnippet(source), [source]);
+  const fileName = name ? buildCreateDocumentDownloadFileName(name) : "";
 
   if (!name && !snippet) {
     return null;
@@ -147,9 +175,9 @@ const DocumentPreview = ({ name, source }: DocumentPreviewProps) => {
     <div className="border-border/50 flex gap-3 border-t px-3 py-3">
       <DocumentThumbnail />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
-        {name && (
+        {fileName && (
           <p className="truncate text-xs font-semibold tracking-wide uppercase">
-            {name}
+            {fileName}
           </p>
         )}
         {snippet ? (
@@ -167,39 +195,14 @@ const DocumentPreview = ({ name, source }: DocumentPreviewProps) => {
 };
 
 const DocumentThumbnail = () => (
-  <div className="bg-background border-border/60 flex h-16 w-12 shrink-0 flex-col gap-0.5 rounded border p-1.5 shadow-sm">
-    <div className="bg-foreground-muted h-1 rounded" />
-    <div className="bg-foreground-placeholder h-0.5 rounded" />
-    <div className="bg-foreground-placeholder h-0.5 rounded" />
-    <div className="bg-foreground-placeholder h-0.5 w-3/4 rounded" />
-    <div className="bg-foreground-disabled mt-auto h-0.5 rounded" />
-    <div className="bg-foreground-disabled h-0.5 w-1/2 rounded" />
+  <div className="bg-background border-border/60 flex h-16 w-12 shrink-0 items-center justify-center rounded border shadow-sm">
+    <DocumentIcon
+      className="size-9"
+      fileName="document.docx"
+      mimeType={DOCX_MIME}
+    />
   </div>
 );
-
-const normalizeCreateDocumentInput = (
-  input: unknown,
-): Partial<CreateDocumentInput> | null => {
-  if (typeof input !== "object" || input === null) {
-    return null;
-  }
-
-  const normalized: Partial<CreateDocumentInput> = {};
-  if ("name" in input && typeof input.name === "string") {
-    normalized.name = input.name;
-  }
-  let source: string | null = null;
-  if ("source" in input && typeof input.source === "string") {
-    source = input.source;
-  } else if ("markdown" in input && typeof input.markdown === "string") {
-    source = input.markdown;
-  }
-  if (source !== null) {
-    normalized.source = source;
-  }
-
-  return normalized;
-};
 
 // Strip the source `@`-directives (`@title`, `@clause`, etc.)
 // so the preview shows readable text instead of compiler input.
@@ -240,18 +243,21 @@ type MatterPickerSectionProps = {
   matters: readonly NeedsMatterMatter[];
   isLoadingMatters: boolean;
   onContinue: (matterId: string) => Promise<void> | void;
+  onDownload: () => Promise<void> | void;
 };
 
 const MatterPickerSection = ({
   matters,
   isLoadingMatters,
   onContinue,
+  onDownload,
 }: MatterPickerSectionProps) => {
   const t = useTranslations();
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
   const [selectedMatterId, setSelectedMatterId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   const filtered = useMemo(() => {
     const q = deferredSearch.trim().toLowerCase();
@@ -266,7 +272,7 @@ const MatterPickerSection = ({
   }, [matters, deferredSearch]);
 
   const handleContinue = async () => {
-    if (!selectedMatterId || isSubmitting) {
+    if (!selectedMatterId || isSubmitting || isDownloading) {
       return;
     }
     setIsSubmitting(true);
@@ -274,6 +280,18 @@ const MatterPickerSection = ({
       await onContinue(selectedMatterId);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleDownload = async () => {
+    if (isSubmitting || isDownloading) {
+      return;
+    }
+    setIsDownloading(true);
+    try {
+      await onDownload();
+    } finally {
+      setIsDownloading(false);
     }
   };
 
@@ -290,7 +308,7 @@ const MatterPickerSection = ({
           <input
             className="placeholder:text-foreground-placeholder h-7 w-full min-w-0 bg-transparent text-xs outline-none"
             dir={contentDir(search)}
-            disabled={isSubmitting}
+            disabled={isSubmitting || isDownloading}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t("inspector.matterPicker.searchPlaceholder")}
             type="text"
@@ -334,7 +352,7 @@ const MatterPickerSection = ({
                         ? "bg-foreground text-background"
                         : "hover:bg-muted",
                     )}
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || isDownloading}
                     key={m.id}
                     onClick={() => setSelectedMatterId(m.id)}
                     type="button"
@@ -367,7 +385,19 @@ const MatterPickerSection = ({
 
       <div className="border-border/50 flex items-center justify-end gap-2 border-t px-3 py-2">
         <Button
-          disabled={selectedMatterId === null || isSubmitting}
+          disabled={isSubmitting || isDownloading}
+          onClick={() => {
+            detached(handleDownload(), "MatterPickerSection.download");
+          }}
+          size="sm"
+          type="button"
+          variant="ghost"
+        >
+          <DownloadIcon className="size-3.5" />
+          {isDownloading ? t("common.loading") : t("common.download")}
+        </Button>
+        <Button
+          disabled={selectedMatterId === null || isSubmitting || isDownloading}
           onClick={() => {
             detached(handleContinue(), "MatterPickerSection");
           }}
@@ -385,12 +415,16 @@ const MatterPickerSection = ({
 
 type CreatedSuccessCardProps = {
   output: CreateDocumentSuccess;
-  onOpen: (output: CreateDocumentSuccess) => Promise<void> | void;
+  onOpen: (output: CreateDocumentMatterSuccess) => Promise<void> | void;
 };
 
 const CreatedSuccessCard = ({ output, onOpen }: CreatedSuccessCardProps) => {
   const t = useTranslations();
-  const canOpen = Boolean(output.entityId) && Boolean(output.workspaceId);
+  const matterOutput = "entityId" in output ? output : null;
+  const canOpen =
+    matterOutput !== null &&
+    Boolean(matterOutput.entityId) &&
+    Boolean(matterOutput.workspaceId);
 
   const body = (
     <>
@@ -428,7 +462,7 @@ const CreatedSuccessCard = ({ output, onOpen }: CreatedSuccessCardProps) => {
             "border-border/50 hover:bg-muted/60 flex w-full items-center gap-3 border-t px-3 py-3 text-start transition-colors",
           )}
           onClick={() => {
-            detached(onOpen(output), "CreatedSuccessCard");
+            detached(onOpen(matterOutput), "CreatedSuccessCard");
           }}
           type="button"
         >
