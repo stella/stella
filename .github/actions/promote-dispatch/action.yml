@@ -43,6 +43,12 @@ inputs:
       refs, which have no GitHub Release manifest to resolve it from.
     required: false
     default: ""
+  web-image-digest:
+    description: >
+      Prebuilt web image digest (sha256:...). Required when a tagged release
+      includes the frontend.
+    required: false
+    default: ""
   git-sha:
     description: >
       Full 40-char commit SHA the synthetic ref points at. Only valid with
@@ -65,6 +71,7 @@ runs:
         RUN_MIGRATIONS: ${{ inputs.run-migrations }}
         FRONTEND: ${{ inputs.frontend }}
         IMAGE_DIGEST: ${{ inputs.image-digest }}
+        WEB_IMAGE_DIGEST: ${{ inputs.web-image-digest }}
         GIT_SHA: ${{ inputs.git-sha }}
       run: |
         set -euo pipefail
@@ -147,6 +154,14 @@ runs:
           echo "::error::infra-repo must be an owner/name pair." >&2
           exit 1
         fi
+        if [[ -n "$WEB_IMAGE_DIGEST" && ! "$WEB_IMAGE_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+          echo "::error::web-image-digest must look like sha256:<64 lowercase hex chars>." >&2
+          exit 1
+        fi
+        if [[ "$FRONTEND" == "true" && "$RELEASE_REF" != main-* && -z "$WEB_IMAGE_DIGEST" ]]; then
+          echo "::error::Tagged frontend promotions require a prebuilt web image digest." >&2
+          exit 1
+        fi
         current_app_token=""
         trap revoke_app_token EXIT
         refresh_app_token
@@ -170,6 +185,9 @@ runs:
         # source for a different commit.
         if [[ -n "$IMAGE_DIGEST" ]]; then
           dispatch_args+=(-f "inputs[image_digest]=${IMAGE_DIGEST}")
+        fi
+        if [[ -n "$WEB_IMAGE_DIGEST" ]]; then
+          dispatch_args+=(-f "inputs[web_image_digest]=${WEB_IMAGE_DIGEST}")
         fi
         if [[ -n "$GIT_SHA" ]]; then
           dispatch_args+=(-f "inputs[git_sha]=${GIT_SHA}")

@@ -5,15 +5,36 @@
 #
 set -euo pipefail
 
-if [[ $# -ne 3 ]]; then
-  echo "Usage: $0 <version> <image-name> <image-digest>" >&2
+if [[ $# -ne 6 ]]; then
+  echo "Usage: $0 <version> <api-image-name> <api-image-digest> <web-image-name> <web-image-digest> <web-target-environment>" >&2
   exit 1
 fi
 
 VERSION="$1"
 IMAGE_NAME="$2"
 IMAGE_DIGEST="$3"
+WEB_IMAGE_NAME="$4"
+WEB_IMAGE_DIGEST="$5"
+WEB_TARGET_ENVIRONMENT="$6"
 MIGRATIONS_DIR="apps/api/drizzle"
+
+validate_digest() {
+  local label="$1"
+  local digest="$2"
+
+  if [[ ! "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+    echo "ERROR: ${label} must look like sha256:<64 lowercase hex chars>." >&2
+    exit 1
+  fi
+}
+
+validate_digest "API image digest" "$IMAGE_DIGEST"
+validate_digest "web image digest" "$WEB_IMAGE_DIGEST"
+
+if [[ "$WEB_TARGET_ENVIRONMENT" != "production" && "$WEB_TARGET_ENVIRONMENT" != "staging" ]]; then
+  echo "ERROR: web target environment must be production or staging." >&2
+  exit 1
+fi
 
 if ! command -v jq >/dev/null 2>&1; then
   echo "ERROR: jq is required to create the release manifest." >&2
@@ -67,6 +88,9 @@ jq -n \
   --arg generatedAt "$GENERATED_AT" \
   --arg imageName "$IMAGE_NAME" \
   --arg imageDigest "$IMAGE_DIGEST" \
+  --arg webImageName "$WEB_IMAGE_NAME" \
+  --arg webImageDigest "$WEB_IMAGE_DIGEST" \
+  --arg webTargetEnvironment "$WEB_TARGET_ENVIRONMENT" \
   --arg migrationsPath "$MIGRATIONS_DIR" \
   --arg migrationsSha256 "$MIGRATION_SHA256" \
   --argjson migrationCount "$MIGRATION_COUNT" \
@@ -82,6 +106,12 @@ jq -n \
       name: $imageName,
       digest: $imageDigest,
       reference: ($imageName + "@" + $imageDigest)
+    },
+    webImage: {
+      name: $webImageName,
+      digest: $webImageDigest,
+      reference: ($webImageName + "@" + $webImageDigest),
+      targetEnvironment: $webTargetEnvironment
     },
     migrations: {
       path: $migrationsPath,

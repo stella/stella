@@ -17,9 +17,15 @@ permissions:
   id-token: write
   attestations: write
 
+concurrency:
+  group: release-${{ github.event_name == 'workflow_dispatch' && inputs.release_ref || github.ref_name }}
+  cancel-in-progress: false
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository_owner }}/stella-api
+  WEB_IMAGE_NAME: ${{ github.repository_owner }}/stella-web
+  WEB_PUBLICATION_PREDICATE: https://stll.app/attestations/release-image-publication/v1
 
 jobs:
   resolve:
@@ -404,11 +410,303 @@ jobs:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.build.outputs.digest }}
 
+  prepare-web-image:
+    name: Build and publish web image
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    needs: resolve
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    outputs:
+      digest: ${{ steps.result.outputs.digest }}
+      target-environment: ${{ steps.target.outputs.environment }}
+
+    steps:
+      - name: Resolve web build target
+        id: target
+        env:
+          RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
+        run: |
+          target_environment=production
+          if [[ "$RELEASE_REF" == *-* ]]; then
+            target_environment=staging
+          fi
+          {
+            echo "environment=${target_environment}"
+            echo "request_id=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@371161bbe7024a29a25c5e19bfcbc0804fe9ad2c # v4.5.2
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Reuse an existing release receipt
+        id: existing
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE: ${{ env.REGISTRY }}/${{ env.WEB_IMAGE_NAME }}
+          PREDICATE_TYPE: ${{ env.WEB_PUBLICATION_PREDICATE }}
+          RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
+          RELEASE_SHA: ${{ needs.resolve.outputs.release_sha }}
+          TARGET_ENV: ${{ steps.target.outputs.environment }}
+        run: |
+          set -euo pipefail
+          mkdir -p existing-release
+          receipt_digest=""
+          if gh release download "$RELEASE_REF" \
+            --pattern release-manifest.json \
+            --dir existing-release 2>/dev/null; then
+            receipt_digest="$(jq -r '.webImage.digest // empty' existing-release/release-manifest.json)"
+            target_environment="$(jq -r '.webImage.targetEnvironment // empty' existing-release/release-manifest.json)"
+            if [[ -n "$receipt_digest" && "$target_environment" != "$TARGET_ENV" ]]; then
+              echo "::error::Existing web image receipt targets a different environment."
+              exit 1
+            fi
+          fi
+
+          if ! tagged_digest="$(docker buildx imagetools inspect "${IMAGE}:${RELEASE_REF}" --format '{{.Manifest.Digest}}' 2>/dev/null)"; then
+            if [[ -n "$receipt_digest" ]]; then
+              echo "::error::Existing web image receipt has no matching registry tag."
+              exit 1
+            fi
+            echo "reused=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ ! "$tagged_digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+            echo "::error::Existing web image tag has an invalid digest."
+            exit 1
+          fi
+          if [[ -n "$receipt_digest" && "$tagged_digest" != "$receipt_digest" ]]; then
+            echo "::error::Existing web image tag does not match its release receipt."
+            exit 1
+          fi
+
+          verification="$(gh attestation verify "oci://${IMAGE}@${tagged_digest}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/release.yml" \
+            --predicate-type "$PREDICATE_TYPE" \
+            --deny-self-hosted-runners \
+            --format json)"
+          jq -e \
+            --arg release_ref "$RELEASE_REF" \
+            --arg release_sha "$RELEASE_SHA" \
+            --arg target_environment "$TARGET_ENV" \
+            'any(.[].verificationResult.statement.predicate;
+              .releaseRef == $release_ref
+              and .releaseSha == $release_sha
+              and .targetEnvironment == $target_environment)' \
+            <<<"$verification" >/dev/null
+          {
+            echo "digest=${tagged_digest}"
+            echo "reused=true"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Mint App token for the web build workflow
+        if: steps.existing.outputs.reused != 'true'
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: stella-infra
+          permission-actions: write
+
+      - name: Dispatch and watch web image build
+        if: steps.existing.outputs.reused != 'true'
+        id: build-run
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          INFRA_REPO: ${{ github.repository_owner }}/stella-infra
+          RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
+          RELEASE_SHA: ${{ needs.resolve.outputs.release_sha }}
+          REQUEST_ID: ${{ steps.target.outputs.request_id }}
+          TARGET_ENV: ${{ steps.target.outputs.environment }}
+        run: |
+          set -euo pipefail
+
+          dispatched_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          expected_title="Build web ${RELEASE_REF} → ${TARGET_ENV} [${REQUEST_ID}]"
+          gh api --method POST \
+            "/repos/${INFRA_REPO}/actions/workflows/build-release-web.yml/dispatches" \
+            -f "ref=main" \
+            -f "inputs[release_ref]=${RELEASE_REF}" \
+            -f "inputs[release_sha]=${RELEASE_SHA}" \
+            -f "inputs[request_id]=${REQUEST_ID}" \
+            -f "inputs[target_environment]=${TARGET_ENV}"
+
+          run_id=""
+          for attempt in {1..30}; do
+            if ! run_id="$(
+              gh api \
+                "/repos/${INFRA_REPO}/actions/workflows/build-release-web.yml/runs?event=workflow_dispatch&per_page=10" \
+                --jq ".workflow_runs[] | select(.created_at >= \"${dispatched_at}\") | select(.display_title == \"${expected_title}\") | .id" \
+                | head -n 1
+            )"; then
+              run_id=""
+            fi
+            if [[ -n "$run_id" ]]; then
+              break
+            fi
+            sleep 2
+          done
+
+          if [[ -z "$run_id" ]]; then
+            echo "::error::Could not correlate the dispatched web image build."
+            exit 1
+          fi
+
+          while true; do
+            if ! run_state="$(
+              gh api "/repos/${INFRA_REPO}/actions/runs/${run_id}" \
+                --jq '[.status, .conclusion, .html_url] | @tsv'
+            )"; then
+              sleep 10
+              continue
+            fi
+            status="$(cut -f1 <<<"$run_state")"
+            conclusion="$(cut -f2 <<<"$run_state")"
+            run_url="$(cut -f3 <<<"$run_state")"
+            if [[ "$status" == "completed" ]]; then
+              break
+            fi
+            sleep 10
+          done
+
+          if [[ "$conclusion" != "success" ]]; then
+            echo "::error::Web image build concluded ${conclusion}: ${run_url}"
+            exit 1
+          fi
+          echo "run_id=${run_id}" >> "$GITHUB_OUTPUT"
+
+      - name: Download web image archive
+        if: steps.existing.outputs.reused != 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          INFRA_REPO: ${{ github.repository_owner }}/stella-infra
+          RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
+          TARGET_ENV: ${{ steps.target.outputs.environment }}
+        run: |
+          gh run download "${{ steps.build-run.outputs.run_id }}" \
+            --repo "$INFRA_REPO" \
+            --name "release-web-image-${RELEASE_REF}-${TARGET_ENV}" \
+            --dir release-web-image
+
+      - name: Verify web image receipt
+        if: steps.existing.outputs.reused != 'true'
+        id: archive
+        env:
+          RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
+          RELEASE_SHA: ${{ needs.resolve.outputs.release_sha }}
+          TARGET_ENV: ${{ steps.target.outputs.environment }}
+        run: |
+          set -euo pipefail
+          if [[ ! -f release-web-image/stella-web.tar || -L release-web-image/stella-web.tar ]]; then
+            echo "::error::Web image archive must be a regular file."
+            exit 1
+          fi
+          if [[ ! -f release-web-image/source-receipt.json || -L release-web-image/source-receipt.json ]]; then
+            echo "::error::Web image source receipt must be a regular file."
+            exit 1
+          fi
+          if [[ ! -f release-web-image/stella-web.intoto.jsonl || -L release-web-image/stella-web.intoto.jsonl ]]; then
+            echo "::error::Web image build attestation must be a regular file."
+            exit 1
+          fi
+          jq -e \
+            --arg release_ref "$RELEASE_REF" \
+            --arg release_sha "$RELEASE_SHA" \
+            --arg target_environment "$TARGET_ENV" \
+            '.schemaVersion == 1
+              and .releaseRef == $release_ref
+              and .releaseSha == $release_sha
+              and .targetEnvironment == $target_environment' \
+            release-web-image/source-receipt.json >/dev/null
+          gh attestation verify release-web-image/stella-web.tar \
+            --bundle release-web-image/stella-web.intoto.jsonl \
+            --repo "${GITHUB_REPOSITORY_OWNER}/stella-infra" \
+            --signer-workflow "${GITHUB_REPOSITORY_OWNER}/stella-infra/.github/workflows/build-release-web.yml" \
+            --deny-self-hosted-runners >/dev/null
+          archive_digest="$(sha256sum release-web-image/stella-web.tar | awk '{print $1}')"
+          echo "digest=sha256:${archive_digest}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish web image
+        if: steps.existing.outputs.reused != 'true'
+        id: publish
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ env.WEB_IMAGE_NAME }}
+          RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
+        run: |
+          set -euo pipefail
+          docker load --input release-web-image/stella-web.tar
+          source_image="stella-web-release:${RELEASE_REF}"
+          candidate_tag="candidate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          docker tag "$source_image" "${IMAGE}:${candidate_tag}"
+          docker push "${IMAGE}:${candidate_tag}"
+
+          digest="$(docker buildx imagetools inspect "${IMAGE}:${candidate_tag}" --format '{{.Manifest.Digest}}')"
+          if [[ ! "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+            echo "::error::Registry returned an invalid web image digest."
+            exit 1
+          fi
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+
+      - name: Write web image publication predicate
+        if: steps.existing.outputs.reused != 'true'
+        env:
+          ARCHIVE_DIGEST: ${{ steps.archive.outputs.digest }}
+          BUILD_RUN_ID: ${{ steps.build-run.outputs.run_id }}
+          RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
+          RELEASE_SHA: ${{ needs.resolve.outputs.release_sha }}
+          TARGET_ENV: ${{ steps.target.outputs.environment }}
+        run: |
+          jq -n \
+            --arg archive_digest "$ARCHIVE_DIGEST" \
+            --arg build_run_id "$BUILD_RUN_ID" \
+            --arg release_ref "$RELEASE_REF" \
+            --arg release_sha "$RELEASE_SHA" \
+            --arg target_environment "$TARGET_ENV" \
+            '{archiveDigest: $archive_digest, buildRunId: $build_run_id, releaseRef: $release_ref, releaseSha: $release_sha, targetEnvironment: $target_environment}' \
+            > web-image-publication.json
+
+      - name: Attest web image publication
+        if: steps.existing.outputs.reused != 'true'
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.WEB_IMAGE_NAME }}
+          subject-digest: ${{ steps.publish.outputs.digest }}
+          predicate-type: ${{ env.WEB_PUBLICATION_PREDICATE }}
+          predicate-path: web-image-publication.json
+          push-to-registry: true
+
+      - name: Resolve web image digest
+        id: result
+        env:
+          EXISTING_DIGEST: ${{ steps.existing.outputs.digest }}
+          PUBLISHED_DIGEST: ${{ steps.publish.outputs.digest }}
+        run: |
+          digest="${EXISTING_DIGEST:-$PUBLISHED_DIGEST}"
+          if [[ ! "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+            echo "::error::Web image digest was not resolved."
+            exit 1
+          fi
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+
   manifest:
     name: Assemble multi-arch manifest and GitHub release
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: [resolve, build-arm64, build-amd64, smoke]
+    needs: [resolve, build-arm64, build-amd64, prepare-web-image, smoke]
     permissions:
       contents: write
       packages: write
@@ -417,11 +715,17 @@ jobs:
       artifact-metadata: write
 
     steps:
-      - name: Checkout
+      - name: Checkout release source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.resolve.outputs.release_sha }}
           fetch-depth: 0
+          persist-credentials: false
+
+      - name: Checkout workflow source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: .workflow-source
           persist-credentials: false
 
       - name: Set up Docker Buildx
@@ -437,43 +741,119 @@ jobs:
       - name: Create multi-arch manifest list
         id: manifest
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
           ARM64_DIGEST: ${{ needs.build-arm64.outputs.digest }}
           AMD64_DIGEST: ${{ needs.build-amd64.outputs.digest }}
           SHA: ${{ needs.resolve.outputs.release_sha }}
         run: |
-          tags=(-t "${IMAGE}:${RELEASE_REF}" -t "${IMAGE}:sha-${SHA:0:7}")
-          # Advance the convenience `:latest` tag only for stable releases, so
-          # self-host `docker compose pull` resolves to the newest stable image.
-          # Prereleases (e.g. v1.2.3-rc1, which contain a hyphen) must not move it.
-          case "${RELEASE_REF}" in
-            *-*) ;;
-            *) tags+=(-t "${IMAGE}:latest") ;;
-          esac
-          docker buildx imagetools create "${tags[@]}" \
+          set -euo pipefail
+          mkdir -p existing-api-release
+          receipt_digest=""
+          if gh release download "$RELEASE_REF" \
+            --pattern release-manifest.json \
+            --dir existing-api-release 2>/dev/null; then
+            receipt_digest="$(jq -r '.image.digest // empty' existing-api-release/release-manifest.json)"
+          fi
+
+          if tagged_digest="$(docker buildx imagetools inspect "${IMAGE}:${RELEASE_REF}" --format '{{.Manifest.Digest}}' 2>/dev/null)"; then
+            if [[ ! "$tagged_digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+              echo "::error::Existing API image tag has an invalid digest."
+              exit 1
+            fi
+            if [[ -n "$receipt_digest" && "$tagged_digest" != "$receipt_digest" ]]; then
+              echo "::error::Existing API image tag does not match its release receipt."
+              exit 1
+            fi
+            gh attestation verify "oci://${IMAGE}@${tagged_digest}" \
+              --repo "$GITHUB_REPOSITORY" \
+              --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" \
+              --deny-self-hosted-runners >/dev/null
+            docker pull --platform linux/arm64 "${IMAGE}@${tagged_digest}" >/dev/null
+            image_env="$(docker image inspect "${IMAGE}@${tagged_digest}" --format '{{json .Config.Env}}')"
+            jq -e \
+              --arg commit "$SHA" \
+              --arg version "${RELEASE_REF#v}" \
+              'index("STELLA_COMMIT_SHA=" + $commit) != null
+                and index("STELLA_VERSION=" + $version) != null' \
+              <<<"$image_env" >/dev/null
+            {
+              echo "created=false"
+              echo "digest=${tagged_digest}"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ -n "$receipt_digest" ]]; then
+            echo "::error::Existing API image receipt has no matching registry tag."
+            exit 1
+          fi
+
+          candidate_tag="candidate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          docker buildx imagetools create --tag "${IMAGE}:${candidate_tag}" \
             "${IMAGE}@${ARM64_DIGEST}" \
             "${IMAGE}@${AMD64_DIGEST}"
 
-          digest="$(docker buildx imagetools inspect "${IMAGE}:${RELEASE_REF}" --format '{{.Manifest.Digest}}')"
-          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+          digest="$(docker buildx imagetools inspect "${IMAGE}:${candidate_tag}" --format '{{.Manifest.Digest}}')"
+          {
+            echo "created=true"
+            echo "digest=${digest}"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Attest release image index provenance
-        uses: ./.github/actions/provenance
+        if: steps.manifest.outputs.created == 'true'
+        uses: ./.workflow-source/.github/actions/provenance
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.manifest.outputs.digest }}
+
+      - name: Publish immutable release image tags
+        env:
+          API_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          API_IMAGE_DIGEST: ${{ steps.manifest.outputs.digest }}
+          RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
+          SHA: ${{ needs.resolve.outputs.release_sha }}
+          WEB_IMAGE: ${{ env.REGISTRY }}/${{ env.WEB_IMAGE_NAME }}
+          WEB_IMAGE_DIGEST: ${{ needs.prepare-web-image.outputs.digest }}
+        run: |
+          set -euo pipefail
+          publish_tag() {
+            local image="$1"
+            local tag="$2"
+            local digest="$3"
+            local existing_digest
+            if existing_digest="$(docker buildx imagetools inspect "${image}:${tag}" --format '{{.Manifest.Digest}}' 2>/dev/null)"; then
+              if [[ "$existing_digest" != "$digest" ]]; then
+                echo "::error::Immutable image tag ${image}:${tag} points to a different digest."
+                exit 1
+              fi
+              return
+            fi
+            docker buildx imagetools create \
+              --tag "${image}:${tag}" \
+              "${image}@${digest}"
+          }
+
+          publish_tag "$API_IMAGE" "$RELEASE_REF" "$API_IMAGE_DIGEST"
+          publish_tag "$API_IMAGE" "sha-${SHA:0:7}" "$API_IMAGE_DIGEST"
+          publish_tag "$WEB_IMAGE" "$RELEASE_REF" "$WEB_IMAGE_DIGEST"
 
       - name: Create release manifest
         env:
           IMAGE_DIGEST: ${{ steps.manifest.outputs.digest }}
           IMAGE_NAME: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          WEB_IMAGE_DIGEST: ${{ needs.prepare-web-image.outputs.digest }}
+          WEB_IMAGE_NAME: ${{ env.REGISTRY }}/${{ env.WEB_IMAGE_NAME }}
+          WEB_TARGET_ENVIRONMENT: ${{ needs.prepare-web-image.outputs.target-environment }}
           RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
         run: |
-          bash scripts/create-release-manifest.sh \
+          bash .workflow-source/scripts/create-release-manifest.sh \
             "$RELEASE_REF" \
             "$IMAGE_NAME" \
             "$IMAGE_DIGEST" \
+            "$WEB_IMAGE_NAME" \
+            "$WEB_IMAGE_DIGEST" \
+            "$WEB_TARGET_ENVIRONMENT" \
             > release-manifest.json
 
       - name: Upload manifest artifact
@@ -573,6 +953,21 @@ jobs:
           fi
           gh release upload "$RELEASE_REF" release-manifest.json --clobber
 
+      - name: Advance stable image tags
+        if: ${{ !contains(needs.resolve.outputs.release_ref, '-') }}
+        env:
+          API_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          API_IMAGE_DIGEST: ${{ steps.manifest.outputs.digest }}
+          WEB_IMAGE: ${{ env.REGISTRY }}/${{ env.WEB_IMAGE_NAME }}
+          WEB_IMAGE_DIGEST: ${{ needs.prepare-web-image.outputs.digest }}
+        run: |
+          docker buildx imagetools create \
+            --tag "${API_IMAGE}:latest" \
+            "${API_IMAGE}@${API_IMAGE_DIGEST}"
+          docker buildx imagetools create \
+            --tag "${WEB_IMAGE}:latest" \
+            "${WEB_IMAGE}@${WEB_IMAGE_DIGEST}"
+
   promote:
     # Auto-promote stable releases (vX.Y.Z) to production. Any tag
     # carrying a prerelease label (vX.Y.Z-anything) publishes the
@@ -582,7 +977,7 @@ jobs:
     # terminal state. Match GitHub's full hosted-job window so this caller
     # cannot time out first and lose observation of an active promotion.
     timeout-minutes: 360
-    needs: [resolve, manifest, smoke]
+    needs: [resolve, manifest, prepare-web-image, smoke]
     if: ${{ !contains(needs.resolve.outputs.release_ref, '-') }}
     permissions:
       contents: read
@@ -605,6 +1000,7 @@ jobs:
           infra-repo: ${{ github.repository_owner }}/stella-infra
           release-ref: ${{ needs.resolve.outputs.release_ref }}
           target-environment: production
+          web-image-digest: ${{ needs.prepare-web-image.outputs.digest }}
 
       # Swap the workspace to the release being promoted: the verification
       # script must come from that revision, not from the workflow's.
@@ -633,7 +1029,7 @@ jobs:
     # and apply role.
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs: [resolve, manifest, smoke]
+    needs: [resolve, manifest, prepare-web-image, smoke]
     if: ${{ contains(needs.resolve.outputs.release_ref, '-rc.') }}
     permissions:
       contents: read
@@ -655,3 +1051,4 @@ jobs:
           infra-repo: ${{ github.repository_owner }}/stella-infra
           release-ref: ${{ needs.resolve.outputs.release_ref }}
           target-environment: staging
+          web-image-digest: ${{ needs.prepare-web-image.outputs.digest }}

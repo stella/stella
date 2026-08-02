@@ -27,10 +27,58 @@ describe("API deployment health receipt", () => {
       promoteJobStart,
     );
     const promoteJob = releaseWorkflow.slice(promoteJobStart, stagingJobStart);
+    const webBuildJobStart = releaseWorkflow.indexOf(
+      "\n  prepare-web-image:\n",
+    );
+    const manifestJobStart = releaseWorkflow.indexOf(
+      "\n  manifest:\n",
+      webBuildJobStart,
+    );
+    const webBuildJob = releaseWorkflow.slice(
+      webBuildJobStart,
+      manifestJobStart,
+    );
+    const manifestJob = releaseWorkflow.slice(
+      manifestJobStart,
+      promoteJobStart,
+    );
 
     expect(promoteJobStart).toBeGreaterThanOrEqual(0);
     expect(stagingJobStart).toBeGreaterThan(promoteJobStart);
+    expect(webBuildJobStart).toBeGreaterThanOrEqual(0);
+    expect(manifestJobStart).toBeGreaterThan(webBuildJobStart);
     expect(promoteJob).toContain("timeout-minutes: 360");
+    expect(webBuildJob).toContain("timeout-minutes: 55");
+    expect(webBuildJob).toContain('-f "inputs[release_sha]=${RELEASE_SHA}"');
+    expect(webBuildJob).toContain('-f "inputs[request_id]=${REQUEST_ID}"');
+    expect(webBuildJob).toContain(".releaseSha == $release_sha");
+    expect(webBuildJob).toContain("stella-web.intoto.jsonl");
+    expect(webBuildJob).toContain(
+      "actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d",
+    );
+    expect(webBuildJob).toContain(
+      'candidate_tag="candidate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"',
+    );
+    expect(webBuildJob).toContain(".targetEnvironment == $target_environment");
+    expect(webBuildJob).not.toContain('tags+=("${IMAGE}:latest")');
+    expect(manifestJob).toContain(
+      "bash .workflow-source/scripts/create-release-manifest.sh",
+    );
+    expect(manifestJob).toContain("Publish immutable release image tags");
+    expect(manifestJob).toContain(
+      "Immutable image tag ${image}:${tag} points to a different digest.",
+    );
+    expect(manifestJob).toContain('"STELLA_COMMIT_SHA=" + $commit');
+    expect(manifestJob.indexOf("Publish GitHub release manifest")).toBeLessThan(
+      manifestJob.indexOf("Advance stable image tags"),
+    );
+    expect(releaseWorkflow).toContain(
+      "group: release-${{ github.event_name == 'workflow_dispatch' && inputs.release_ref || github.ref_name }}",
+    );
+    expect(releaseWorkflow).toContain(
+      "needs: [resolve, build-arm64, build-amd64, prepare-web-image, smoke]",
+    );
+    expect(releaseWorkflow.match(/web-image-digest:/gu)).toHaveLength(2);
     expect(promoteAction).toContain("readonly TOKEN_REFRESH_SECONDS=2700");
     expect(promoteAction).toContain("readonly TOKEN_REFRESH_ATTEMPTS=20");
     expect(promoteAction).toContain("refresh_app_token");
@@ -49,7 +97,13 @@ describe("API deployment health receipt", () => {
       'run_url="https://github.com/${INFRA_REPO}/actions/runs/${run_id}"',
     );
     expect(promoteAction).not.toContain("Check https://github.com/${run_url}");
-    expect(releaseWorkflow).not.toContain("steps.app-token.outputs.token");
+    expect(promoteAction).toContain(
+      '-f "inputs[web_image_digest]=${WEB_IMAGE_DIGEST}"',
+    );
+    expect(promoteAction).toContain(
+      "Tagged frontend promotions require a prebuilt web image digest.",
+    );
+    expect(promoteJob).not.toContain("steps.app-token.outputs.token");
     expect(stagingWorkflow).not.toContain(
       "steps.deployment-token.outputs.token",
     );
