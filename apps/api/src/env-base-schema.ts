@@ -9,7 +9,12 @@
  */
 import * as v from "valibot";
 
-import { CORPUS_STORAGE_MODES } from "@/api/lib/corpus-storage-mode";
+import {
+  CORPUS_STORAGE_MODES,
+  type CorpusStorageMode,
+  corpusStorageInvariantViolation,
+  resolveCorpusStorageMode,
+} from "@/api/lib/corpus-storage-mode";
 
 /**
  * NODE_ENV values that identify a deployed (non-local) Stella
@@ -113,8 +118,53 @@ export const envBaseServerSchema = {
     v.pipe(v.string(), v.parseBoolean()),
     "false",
   ),
-  isDev: v.optional(
-    v.boolean(),
-    !DEPLOYED_NODE_ENVS.has(process.env.NODE_ENV ?? ""),
-  ),
+  isDev: v.boolean(),
+};
+
+/** Alternative inputs accepted by resolveDatabaseUrl(). */
+export const databaseComponentEnvSchema = {
+  DB_HOST: v.optional(v.string()),
+  DB_PORT: v.optional(v.pipe(v.string(), v.digits())),
+  DB_USER: v.optional(v.string()),
+  DB_PASSWORD: v.optional(v.string()),
+  DB_NAME: v.optional(v.string()),
+  DB_SSLMODE: v.optional(v.picklist(["require", "verify-ca", "verify-full"])),
+};
+
+type EnvBaseInvariantInput = {
+  CORPUS_INDEX_ENDPOINT?: string | undefined;
+  CORPUS_INDEXING_ENABLED: boolean;
+  CORPUS_STORAGE_ENABLED: boolean;
+  CORPUS_STORAGE_MODE?: CorpusStorageMode | undefined;
+  LEGAL_CORPUS_S3_BUCKET?: string | undefined;
+  LEGAL_SEARCH_PROVIDER: "pg-fts" | "corpus-index";
+  isDev: boolean;
+};
+
+export const envBaseInvariantViolation = ({
+  CORPUS_INDEX_ENDPOINT,
+  CORPUS_INDEXING_ENABLED,
+  CORPUS_STORAGE_ENABLED,
+  CORPUS_STORAGE_MODE,
+  LEGAL_CORPUS_S3_BUCKET,
+  LEGAL_SEARCH_PROVIDER,
+  isDev,
+}: EnvBaseInvariantInput): string | null => {
+  if (
+    LEGAL_SEARCH_PROVIDER === "corpus-index" &&
+    CORPUS_INDEX_ENDPOINT === undefined
+  ) {
+    return "LEGAL_SEARCH_PROVIDER=corpus-index requires CORPUS_INDEX_ENDPOINT to be set";
+  }
+
+  return corpusStorageInvariantViolation({
+    mode: resolveCorpusStorageMode({
+      mode: CORPUS_STORAGE_MODE,
+      legacyEnabled: CORPUS_STORAGE_ENABLED,
+    }),
+    searchProvider: LEGAL_SEARCH_PROVIDER,
+    corpusIndexingEnabled: CORPUS_INDEXING_ENABLED,
+    corpusBucket: LEGAL_CORPUS_S3_BUCKET,
+    isDev,
+  });
 };

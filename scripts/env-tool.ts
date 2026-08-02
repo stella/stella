@@ -1,8 +1,19 @@
 #!/usr/bin/env bun
+import { Result } from "better-result";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
+import { resolveDatabaseUrl } from "../apps/api/src/db-url";
+import {
+  DEPLOYED_NODE_ENVS,
+  envBaseInvariantViolation,
+} from "../apps/api/src/env-base-schema";
+import { documentProcessingEnvInvariantViolation } from "../apps/api/src/env-document-processing-worker-schema";
+import {
+  envApiInvariantViolation,
+  resolveEmailProvider,
+} from "../apps/api/src/env-schema";
 import {
   AMBIENT_ENV_KEYS,
   API_ENV_SCHEMA,
@@ -181,7 +192,6 @@ const STATIC_ENV_PATTERNS = [
   /\b(?:process|Bun)\.env\[["']([A-Z][A-Z0-9_]*)["']\]/gu,
   /\bimport\.meta\.env\.([A-Z][A-Z0-9_]*)/gu,
   /\bimport\.meta\.env\[["']([A-Z][A-Z0-9_]*)["']\]/gu,
-  /\$\{\{\s*(?:env|secrets|vars)\.([A-Z][A-Z0-9_]*)/gu,
 ];
 
 const DEPLOYMENT_ENV_PATTERN = /\$\{([A-Z][A-Z0-9_]*)(?=[:}?])/gu;
@@ -191,7 +201,6 @@ const AUDIT_GLOBS = [
   "apps/**/*.{ts,tsx,js,mjs,cjs,yml,yaml}",
   "packages/**/*.{ts,tsx,js,mjs,cjs}",
   "scripts/**/*.{ts,js,sh}",
-  ".github/workflows/*.{yml,yaml}",
   "**/Dockerfile*",
   "**/docker-compose*.yml",
 ];
@@ -314,52 +323,132 @@ export const formatEnvIssue = (issue: v.BaseIssue<unknown>) => {
   return `${key}: ${issue.message}`;
 };
 
-const runDoctor = (app: string) => {
-  const isWeb = app === "web";
-  const isCollab = app === "collab";
-  let schema: Record<string, v.GenericSchema>;
-  if (isWeb) {
-    schema = WEB_ENV_SCHEMA;
-  } else if (isCollab) {
-    schema = COLLAB_ENV_SCHEMA;
-  } else {
-    schema = {
-      ...API_ENV_SCHEMA,
-      // The application infers and checks this field against process.env.
-      // Doctor validates the same relationship against its isolated input.
-      EMAIL_PROVIDER: v.optional(v.picklist(["ses", "smtp"])),
+const ENV_APP = {
+  api: "api",
+  collab: "collab",
+  web: "web",
+} as const;
+
+type EnvApp = (typeof ENV_APP)[keyof typeof ENV_APP];
+type DoctorInput = Record<string, string | undefined>;
+type DoctorValues = Record<string, unknown>;
+type DoctorValidationResult =
+  | { status: "invalid"; issues: string[]; values: DoctorValues }
+  | { status: "valid"; values: DoctorValues };
+
+const isEnvApp = (value: string): value is EnvApp =>
+  Object.values(ENV_APP).some((app) => app === value);
+
+export const normalizeEmptyEnvironment = (input: DoctorInput): DoctorInput => {
+  const normalized: DoctorInput = {};
+  for (const [name, value] of Object.entries(input)) {
+    normalized[name] =
+      value === "" && name !== "DB_PASSWORD" ? undefined : value;
+  }
+  return normalized;
+};
+
+const validateSchema = (
+  schema: Record<string, v.GenericSchema>,
+  input: DoctorInput,
+): DoctorValidationResult => {
+  const result = v.safeParse(v.object(schema), input);
+  if (!result.success) {
+    return {
+      status: "invalid",
+      issues: result.issues.map(formatEnvIssue),
+      values: input,
     };
   }
+  return { status: "valid", values: { ...input, ...result.output } };
+};
+
+const validateApiEnvironment = (input: DoctorInput): DoctorValidationResult => {
+  const databaseUrl = Result.try(() => resolveDatabaseUrl(input));
+  if (Result.isError(databaseUrl)) {
+    return {
+      status: "invalid",
+      issues: ["DATABASE_URL: invalid database component settings."],
+      values: input,
+    };
+  }
+
+  const nodeEnv = input["NODE_ENV"];
+  const runtimeInput = {
+    ...input,
+    DATABASE_URL: databaseUrl.value,
+    isDev: !DEPLOYED_NODE_ENVS.has(nodeEnv ?? ""),
+  };
+  const parsed = v.safeParse(v.object(API_ENV_SCHEMA), runtimeInput);
+  if (!parsed.success) {
+    return {
+      status: "invalid",
+      issues: parsed.issues.map(formatEnvIssue),
+      values: runtimeInput,
+    };
+  }
+
+  const emailProvider = resolveEmailProvider(parsed.output);
+  const output = { ...parsed.output, EMAIL_PROVIDER: emailProvider };
+  const issues: string[] = [];
+  const baseIssue = envBaseInvariantViolation(output);
+  if (baseIssue !== null) {
+    issues.push(baseIssue);
+  }
+  const documentProcessingIssue = documentProcessingEnvInvariantViolation({
+    contentEncryptionKey: output.CONTENT_ENCRYPTION_KEY,
+    nodeEnv,
+  });
+  if (documentProcessingIssue !== null) {
+    issues.push(documentProcessingIssue);
+  }
+  const apiIssue = envApiInvariantViolation({ ...output, nodeEnv });
+  if (apiIssue !== null) {
+    issues.push(apiIssue);
+  }
+  const values = { ...runtimeInput, ...output };
+  return issues.length === 0
+    ? { status: "valid", values }
+    : { status: "invalid", issues, values };
+};
+
+export const validateDoctorEnvironment = (
+  app: EnvApp,
+  rawInput: DoctorInput,
+): DoctorValidationResult => {
+  const input = normalizeEmptyEnvironment(rawInput);
+  if (app === ENV_APP.api) {
+    return validateApiEnvironment(input);
+  }
+  return validateSchema(
+    app === ENV_APP.web ? WEB_ENV_SCHEMA : COLLAB_ENV_SCHEMA,
+    input,
+  );
+};
+
+const runDoctor = (app: EnvApp) => {
   let examplePath = API_EXAMPLE_PATH;
-  if (isWeb) {
+  if (app === ENV_APP.web) {
     examplePath = WEB_EXAMPLE_PATH;
-  } else if (isCollab) {
+  } else if (app === ENV_APP.collab) {
     examplePath = COLLAB_EXAMPLE_PATH;
   }
   const envPath = examplePath.replace(/\.example$/u, "");
   const fileValues = existsSync(envPath)
     ? parseEnvText(readFileSync(envPath, "utf-8"))
     : {};
-  const input = { ...fileValues, ...process.env };
-  if (
-    !isWeb &&
-    !isCollab &&
-    input["EMAIL_PROVIDER"] === undefined &&
-    ["SMTP_HOST", "SMTP_PORT", "SMTP_USERNAME", "SMTP_PASSWORD"].some(
-      (name) => input[name] !== undefined,
-    )
-  ) {
-    input["EMAIL_PROVIDER"] = "smtp";
-  }
-  const result = v.safeParse(v.object(schema), input);
+  const validation = validateDoctorEnvironment(app, {
+    ...fileValues,
+    ...process.env,
+  });
   let owners = new Set<EnvOwner>([
     ENV_OWNER.apiBase,
     ENV_OWNER.documentWorker,
     ENV_OWNER.apiServer,
   ]);
-  if (isWeb) {
+  if (app === ENV_APP.web) {
     owners = new Set([ENV_OWNER.web]);
-  } else if (isCollab) {
+  } else if (app === ENV_APP.collab) {
     owners = new Set([ENV_OWNER.collab]);
   }
   console.log(
@@ -368,38 +457,25 @@ const runDoctor = (app: string) => {
   for (const entry of ENV_CATALOG.filter(
     ({ documented, owner }) => documented && owners.has(owner),
   )) {
-    const value = result.success
-      ? Reflect.get(result.output, entry.name)
-      : input[entry.name];
+    const value = validation.values[entry.name];
     console.log(
       `${entry.name}: ${formatEnvValue(entry, value)} [${sourceLabel(entry.name, fileValues)}; ${entry.exposure}]`,
     );
   }
-  const emailProvider = input["EMAIL_PROVIDER"];
-  const emailValid =
-    isWeb ||
-    isCollab ||
-    emailProvider === undefined ||
-    (emailProvider === "ses"
-      ? Boolean(input["SES_REGION"] && input["TRANSACTIONAL_EMAIL_FROM"])
-      : Boolean(
-          input["SMTP_HOST"] &&
-          input["SMTP_PORT"] &&
-          input["TRANSACTIONAL_EMAIL_FROM"],
-        ));
-  if (result.success && emailValid) {
-    console.log(`${app}: valid`);
-    return true;
-  }
-  if (!result.success) {
-    for (const issue of result.issues) {
-      console.error(formatEnvIssue(issue));
+  switch (validation.status) {
+    case "valid":
+      console.log(`${app}: valid`);
+      return true;
+    case "invalid":
+      for (const issue of validation.issues) {
+        console.error(issue);
+      }
+      return false;
+    default: {
+      const exhaustive: never = validation;
+      return exhaustive;
     }
   }
-  if (!emailValid) {
-    console.error("Missing required env vars for the selected EMAIL_PROVIDER.");
-  }
-  return false;
 };
 
 const main = async () => {
@@ -423,7 +499,7 @@ const main = async () => {
   }
   if (command === "doctor") {
     const app = process.argv.at(3) ?? "api";
-    if (!["api", "collab", "web"].includes(app)) {
+    if (!isEnvApp(app)) {
       console.error("Usage: bun run env:doctor [api|collab|web]");
       process.exitCode = 1;
       return;

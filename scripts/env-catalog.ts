@@ -1,6 +1,9 @@
-import * as v from "valibot";
+import type * as v from "valibot";
 
-import { envBaseServerSchema } from "../apps/api/src/env-base-schema";
+import {
+  databaseComponentEnvSchema,
+  envBaseServerSchema,
+} from "../apps/api/src/env-base-schema";
 import { envDocumentProcessingWorkerServerSchema } from "../apps/api/src/env-document-processing-worker-schema";
 import { envApiServerSchema } from "../apps/api/src/env-schema";
 import { envCollabServerSchema } from "../apps/collab/src/env-schema";
@@ -70,6 +73,11 @@ const INTERNAL_SERVER_KEYS = new Set([
   "DATABASE_POOL_MAX_LIFETIME_S",
   "DATABASE_RLS_POOL_MAX",
   "DATABASE_ROOT_POOL_MAX",
+  "DB_HOST",
+  "DB_NAME",
+  "DB_PORT",
+  "DB_SSLMODE",
+  "DB_USER",
   "DEBUG_UNREDACTED_ERRORS",
   "DOCUMENT_OCR_BATCH_INTERVAL_MINUTES",
   "E2E_DISABLE_AUTH_RATE_LIMIT",
@@ -139,6 +147,12 @@ const EXAMPLE_VALUES: Record<string, string> = {
   BETTER_AUTH_SECRET: "your-secret-at-least-32-chars-long",
   BETTER_AUTH_URL: "http://localhost:3001",
   DATABASE_URL: "postgres://postgres:postgres@localhost:5432/stella",
+  DB_HOST: "localhost",
+  DB_NAME: "stella",
+  DB_PASSWORD: "",
+  DB_PORT: "5432",
+  DB_SSLMODE: "require",
+  DB_USER: "postgres",
   EMAIL_PROVIDER: "smtp",
   EDGAR_USER_AGENT: "stella admin@example.com",
   FEEDBACK_EMAIL_TO: "maintainer@example.com",
@@ -197,6 +211,18 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Maximum root pool size. Keep its sum with DATABASE_RLS_POOL_MAX within the process connection budget.",
   DATABASE_URL:
     "Postgres owner URL used by Drizzle. Requests downgrade to the stella role so row-level security applies.",
+  DB_HOST:
+    "Postgres hostname used with the component settings when DATABASE_URL is unset.",
+  DB_NAME:
+    "Postgres database name used with the component settings when DATABASE_URL is unset.",
+  DB_PASSWORD:
+    "Postgres password used with the component settings when DATABASE_URL is unset.",
+  DB_PORT:
+    "Postgres port used with the component settings when DATABASE_URL is unset.",
+  DB_SSLMODE:
+    "TLS mode for component database settings: require, verify-ca, or verify-full.",
+  DB_USER:
+    "Postgres user used with the component settings when DATABASE_URL is unset.",
   DOCUMENT_OCR_BATCH_INTERVAL_MINUTES:
     "Interval for releasing queued OCR requests, in minutes.",
   EDGAR_USER_AGENT:
@@ -401,12 +427,11 @@ const sectionFor = (name: string) => {
   return "Runtime";
 };
 
-const requirementFor = (schema: v.GenericSchema): EnvRequirement => {
-  const parsed = v.safeParse(schema, undefined);
-  if (!parsed.success) {
+export const requirementFor = (schema: v.GenericSchema): EnvRequirement => {
+  if (schema.type !== "optional") {
     return ENV_REQUIREMENT.required;
   }
-  if (parsed.output !== undefined) {
+  if ("default" in schema && schema.default !== undefined) {
     return ENV_REQUIREMENT.defaulted;
   }
   return ENV_REQUIREMENT.optional;
@@ -446,6 +471,10 @@ export const ENV_CATALOG = [
   ...createCatalogEntries({
     owner: ENV_OWNER.apiBase,
     schema: envBaseServerSchema,
+  }),
+  ...createCatalogEntries({
+    owner: ENV_OWNER.apiBase,
+    schema: databaseComponentEnvSchema,
   }),
   ...createCatalogEntries({
     owner: ENV_OWNER.documentWorker,

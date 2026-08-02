@@ -1,5 +1,7 @@
 import * as v from "valibot";
 
+import { DEPLOYED_NODE_ENVS } from "@/api/env-base-schema";
+
 const isSecureOcrServiceUrl = (value: string) => {
   const url = new URL(value);
   if (url.protocol === "https:") {
@@ -40,4 +42,19 @@ export const envDocumentProcessingWorkerServerSchema = {
       ),
     ),
   ),
+};
+
+type DocumentProcessingEnvInvariantInput = {
+  contentEncryptionKey: string | undefined;
+  nodeEnv: string | undefined;
+};
+
+export const documentProcessingEnvInvariantViolation = ({
+  contentEncryptionKey,
+  nodeEnv,
+}: DocumentProcessingEnvInvariantInput): string | null => {
+  if (DEPLOYED_NODE_ENVS.has(nodeEnv ?? "") && !contentEncryptionKey) {
+    return "CONTENT_ENCRYPTION_KEY is required when NODE_ENV is 'production' or 'staging'.";
+  }
+  return null;
 };

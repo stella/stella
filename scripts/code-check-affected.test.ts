@@ -51,6 +51,7 @@ describe("affected code-check planning", () => {
       "bash",
       "scripts/lint-root-scripts-sql.sh",
     ]);
+    expect(commands).toContainEqual(["bun", "run", "env:check"]);
     const oxc = commands.find((command) => command.includes("oxlint"));
     expect(oxc).toContain("--type-aware");
     expect(oxc).toContain("--type-check");

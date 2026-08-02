@@ -7,38 +7,30 @@ const featureFlagSchema = v.optional(
   "false",
 );
 
-const hasAnySmtpTransportEnv = () =>
-  !!(
-    process.env["SMTP_HOST"] ||
-    process.env["SMTP_PORT"] ||
-    process.env["SMTP_USERNAME"] ||
-    process.env["SMTP_PASSWORD"]
-  );
-
-const inferEmailProvider = (provider: "ses" | "smtp" | undefined) => {
-  if (provider || !hasAnySmtpTransportEnv()) {
-    return provider;
-  }
-
-  return "smtp";
+type EmailProviderInput = {
+  EMAIL_PROVIDER?: "ses" | "smtp" | undefined;
+  SMTP_HOST?: string | undefined;
+  SMTP_PASSWORD?: string | undefined;
+  SMTP_PORT?: number | undefined;
+  SMTP_USERNAME?: string | undefined;
 };
 
-const hasRequiredEmailProviderEnv = (provider: "ses" | "smtp" | undefined) => {
-  if (provider === undefined) {
-    return true;
+export const resolveEmailProvider = ({
+  EMAIL_PROVIDER,
+  SMTP_HOST,
+  SMTP_PASSWORD,
+  SMTP_PORT,
+  SMTP_USERNAME,
+}: EmailProviderInput): "ses" | "smtp" | undefined => {
+  if (
+    EMAIL_PROVIDER !== undefined ||
+    [SMTP_HOST, SMTP_PASSWORD, SMTP_PORT, SMTP_USERNAME].every(
+      (value) => value === undefined,
+    )
+  ) {
+    return EMAIL_PROVIDER;
   }
-
-  if (provider === "ses") {
-    return !!(
-      process.env["SES_REGION"] && process.env["TRANSACTIONAL_EMAIL_FROM"]
-    );
-  }
-
-  return !!(
-    process.env["SMTP_HOST"] &&
-    process.env["SMTP_PORT"] &&
-    process.env["TRANSACTIONAL_EMAIL_FROM"]
-  );
+  return "smtp";
 };
 
 /**
@@ -94,14 +86,7 @@ export const envApiServerSchema = {
   ),
   USE_MOCK_AI: v.optional(v.pipe(v.string(), v.parseBoolean()), "false"),
   E2E_DISABLE_AUTH_RATE_LIMIT: v.optional(
-    v.pipe(
-      v.string(),
-      v.parseBoolean(),
-      v.check(
-        (disabled) => !disabled || process.env.NODE_ENV === "development",
-        "E2E_DISABLE_AUTH_RATE_LIMIT is test-only and requires NODE_ENV=development.",
-      ),
-    ),
+    v.pipe(v.string(), v.parseBoolean()),
     "false",
   ),
   BETTER_AUTH_SECRET: v.pipe(v.string(), v.minLength(32)),
@@ -145,14 +130,7 @@ export const envApiServerSchema = {
       ),
     ),
   ),
-  EMAIL_PROVIDER: v.pipe(
-    v.optional(v.picklist(["ses", "smtp"])),
-    v.transform(inferEmailProvider),
-    v.check(
-      hasRequiredEmailProviderEnv,
-      "Missing required env vars for the selected EMAIL_PROVIDER",
-    ),
-  ),
+  EMAIL_PROVIDER: v.optional(v.picklist(["ses", "smtp"])),
   SES_REGION: v.optional(v.string()),
   SES_ACCESS_KEY_ID: v.optional(v.string()),
   SES_SECRET_ACCESS_KEY: v.optional(v.string()),
@@ -225,9 +203,7 @@ export const envApiServerSchema = {
    * external verifier can confirm control of this API's host. Unset (the
    * default), the endpoint returns 404.
    */
-  OPENAI_APPS_CHALLENGE_TOKEN: v.optional(
-    v.pipe(v.string(), v.minLength(1)),
-  ),
+  OPENAI_APPS_CHALLENGE_TOKEN: v.optional(v.pipe(v.string(), v.minLength(1))),
 
   /**
    * Comma-separated CIDRs of proxies the API may trust to set the
@@ -411,4 +387,51 @@ export const envApiServerSchema = {
    * encode an operator policy.
    */
   STELLA_USAGE_POLICY_SEEDS: v.optional(v.string(), "[]"),
+};
+
+type EnvApiInvariantInput = {
+  E2E_DISABLE_AUTH_RATE_LIMIT: boolean;
+  EMAIL_PROVIDER?: "ses" | "smtp" | undefined;
+  MICROSOFT_AUTH_CLIENT_ID?: string | undefined;
+  MICROSOFT_AUTH_CLIENT_SECRET?: string | undefined;
+  MICROSOFT_AUTH_TENANT_ID?: string | undefined;
+  SES_REGION?: string | undefined;
+  SMTP_HOST?: string | undefined;
+  SMTP_PORT?: number | undefined;
+  TRANSACTIONAL_EMAIL_FROM?: string | undefined;
+  nodeEnv?: string | undefined;
+};
+
+export const envApiInvariantViolation = ({
+  E2E_DISABLE_AUTH_RATE_LIMIT,
+  EMAIL_PROVIDER,
+  MICROSOFT_AUTH_CLIENT_ID,
+  MICROSOFT_AUTH_CLIENT_SECRET,
+  MICROSOFT_AUTH_TENANT_ID,
+  SES_REGION,
+  SMTP_HOST,
+  SMTP_PORT,
+  TRANSACTIONAL_EMAIL_FROM,
+  nodeEnv,
+}: EnvApiInvariantInput): string | null => {
+  if (E2E_DISABLE_AUTH_RATE_LIMIT && nodeEnv !== "development") {
+    return "E2E_DISABLE_AUTH_RATE_LIMIT is test-only and requires NODE_ENV=development.";
+  }
+  if (
+    (MICROSOFT_AUTH_CLIENT_ID || MICROSOFT_AUTH_CLIENT_SECRET) &&
+    !MICROSOFT_AUTH_TENANT_ID
+  ) {
+    return "MICROSOFT_AUTH_TENANT_ID is required when Microsoft OAuth is configured.";
+  }
+  if (EMAIL_PROVIDER === "ses") {
+    return SES_REGION && TRANSACTIONAL_EMAIL_FROM
+      ? null
+      : "Missing required env vars for the selected EMAIL_PROVIDER.";
+  }
+  if (EMAIL_PROVIDER === "smtp") {
+    return SMTP_HOST && SMTP_PORT !== undefined && TRANSACTIONAL_EMAIL_FROM
+      ? null
+      : "Missing required env vars for the selected EMAIL_PROVIDER.";
+  }
+  return null;
 };

@@ -2,7 +2,11 @@ import { createEnv } from "@t3-oss/env-core";
 import { panic } from "better-result";
 
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
-import { envApiServerSchema } from "@/api/env-schema";
+import {
+  envApiInvariantViolation,
+  envApiServerSchema,
+  resolveEmailProvider,
+} from "@/api/env-schema";
 
 /**
  * API-specific environment variables. These are only required when the full
@@ -15,16 +19,21 @@ const envApi = createEnv({
   runtimeEnv: process.env,
 });
 
-if (
-  (envApi.MICROSOFT_AUTH_CLIENT_ID || envApi.MICROSOFT_AUTH_CLIENT_SECRET) &&
-  !envApi.MICROSOFT_AUTH_TENANT_ID
-) {
-  panic(
-    "MICROSOFT_AUTH_TENANT_ID is required when Microsoft OAuth is configured.",
-  );
+const emailProvider = resolveEmailProvider(envApi);
+const invariantViolation = envApiInvariantViolation({
+  ...envApi,
+  EMAIL_PROVIDER: emailProvider,
+  nodeEnv: process.env.NODE_ENV,
+});
+if (invariantViolation !== null) {
+  panic(invariantViolation);
 }
 
-export const env = { ...envDocumentProcessingWorker, ...envApi };
+export const env = {
+  ...envDocumentProcessingWorker,
+  ...envApi,
+  EMAIL_PROVIDER: emailProvider,
+};
 
 // Prevent accidental mutation of env vars at runtime.
 // Must run AFTER createEnv has consumed process.env.
