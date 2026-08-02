@@ -55,6 +55,7 @@ type Messages = {
     "legal": "Legal";
     "navLabel": "Footer";
     "press": "Press";
+    "privacy": "Privacy";
     "publicData": "Public data";
     "resources": "Resources";
     "sourceCode": "Source code";

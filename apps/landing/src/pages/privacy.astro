@@ -1,0 +1,163 @@
+---
+import Base from "../layouts/Base.astro";
+import LandingFooter from "../components/LandingFooter.astro";
+
+const sections = [
+  {
+    title: "1. Who we are and what this policy covers",
+    body: [
+      "This policy explains how stella labs, s.r.o. (\"stella\", \"we\") processes personal data when you visit our websites, create an account, or use the hosted stella service at stll.app. We are the controller for the data described here.",
+      "Self-hosted stella instances are operated by the organizations that run them. This policy applies only to the hosted service and our websites.",
+    ],
+  },
+  {
+    title: "2. Workspace content belongs to your organization",
+    body: [
+      "Documents, matters, contacts, tasks, and other content stored in stella workspaces (\"workspace content\") are controlled by the organization that owns the workspace. We process workspace content only on that organization's behalf, under our Terms of Service; a data processing agreement is available on request.",
+      "If you want workspace content corrected or deleted, contact the organization that runs the workspace. We honor their instructions.",
+      "We never use workspace content to train AI models, and we never sell personal data.",
+    ],
+  },
+  {
+    title: "3. What we collect",
+    body: [
+      "Data you provide: your email address (sign-in uses one-time codes sent to your email; we store no passwords), display name, organization membership, billing details when your organization subscribes, and messages you send us (support, feedback).",
+      "Data collected automatically: server logs (IP address, browser type, timestamps), product usage events (features used, errors encountered), and security and audit events (sign-ins, permission changes) that form your organization's audit trail.",
+      "Data from third parties: if you sign in with a Google or Microsoft account, we receive your email address and name from that provider.",
+    ],
+  },
+  {
+    title: "4. Why we process it and on what legal basis",
+    body: [
+      "To provide the service, manage accounts and organizations, and offer support: performance of a contract (Art. 6(1)(b) GDPR). Retained for the life of the account.",
+      "To bill subscriptions and meter usage: performance of a contract and compliance with legal obligations (Art. 6(1)(b) and (c)). Billing records are retained for statutory accounting and tax periods.",
+      "To secure the service, prevent abuse, and maintain audit trails: legitimate interest (Art. 6(1)(f)). Server logs are retained for up to 12 months.",
+      "To improve the product: legitimate interest, using aggregated or account-level usage events processed in the EU.",
+      "To send product and marketing emails to existing customers: legitimate interest (Art. 6(1)(f)), under the existing-customer exception for electronic marketing; every message includes an unsubscribe link and you can object at any time.",
+      "To establish or defend legal claims: legitimate interest, retained for statutory limitation periods.",
+      "We do not carry out automated decision-making that produces legal or similarly significant effects about you.",
+    ],
+  },
+  {
+    title: "5. Public legal information",
+    body: [
+      "stella's research features index court decisions and legislation as published by courts and official bodies. These public documents can contain personal data of parties, representatives, and judges as published by the issuing authority. We process this data as controller, on the basis of legitimate interest in making public legal information searchable for legal professionals.",
+      "We index these sources as published and provide pseudonymization tooling for content our users produce from them. If you believe a published decision indexed by stella should not surface your personal data, contact us at privacy@stll.app; you can object to this processing at any time.",
+    ],
+  },
+  {
+    title: "6. Who receives personal data",
+    body: [
+      "We use a small number of service providers under data processing terms: Amazon Web Services (hosting, storage, and email delivery; EU Frankfurt region), PostHog (product analytics; EU cloud), and Polar Software Inc. (payments, acting as merchant of record; payment card data is processed by their payment provider, Stripe).",
+      "Beyond that, personal data leaves stella only where the service requires it under your organization's configuration: if your organization connects its own AI provider key, prompts and relevant context are sent to that provider under the organization's own agreement with it.",
+      "We may also disclose data to authorities where legally required, and to successors as part of a corporate transaction. We do not share personal data with advertisers.",
+    ],
+  },
+  {
+    title: "7. International transfers",
+    body: [
+      "The service is hosted and data is stored in the EU (AWS Frankfurt). Product analytics run on PostHog's EU cloud.",
+      "Billing data is processed by our merchant of record, Polar Software Inc., established in the United States; transfers rely on the European Commission's Standard Contractual Clauses and, where applicable, adequacy decisions. Where your organization connects a non-EU AI provider, that transfer happens under the organization's own agreement with the provider.",
+    ],
+  },
+  {
+    title: "8. How long we keep data",
+    body: [
+      "Account data is kept for the life of the account. When you delete data, a workspace, or an organization, it is removed from live systems immediately; encrypted database backups age out within 14 days, and object-storage version history within 12 months. Server logs are retained for up to 12 months; billing records for statutory periods.",
+      "Data we no longer need is deleted or anonymized.",
+    ],
+  },
+  {
+    title: "9. Your rights",
+    body: [
+      "Under the GDPR you can request access to, correction, or deletion of your personal data; restriction of processing; object to processing based on legitimate interest (and to marketing, always); receive your data in a portable format; and withdraw consent at any time without affecting prior processing.",
+      "Write to privacy@stll.app; we may need to verify your identity, and we respond within one month. You can also lodge a complaint with a supervisory authority; for us that is the Czech Office for Personal Data Protection (Úřad pro ochranu osobních údajů, uoou.gov.cz), or the authority of your habitual residence.",
+      "For personal data inside workspace content, we will refer your request to the organization that controls the workspace.",
+    ],
+  },
+  {
+    title: "10. Cookies and analytics",
+    body: [
+      "Our public websites set no analytics or advertising cookies, and no third-party trackers run on them.",
+      "The signed-in application sets only cookies strictly necessary for authentication and security. Product analytics are collected without cookies and without cross-site tracking, tied to your account, and processed in the EU.",
+    ],
+  },
+  {
+    title: "11. Security",
+    body: [
+      "Data is encrypted in transit and at rest. Access is controlled per organization and workspace, backed by database-level isolation, role-based permissions, and audit logging. Our security controls and their evidence are documented publicly on our security page.",
+      "If a personal data breach affects you, we notify you and the competent supervisory authority as required by law.",
+      "If you discover a vulnerability, contact security@stll.app.",
+    ],
+  },
+  {
+    title: "12. Children",
+    body: [
+      "stella is a professional tool and is not directed at children under 16. We do not knowingly collect their data.",
+    ],
+  },
+  {
+    title: "13. Changes to this policy",
+    body: [
+      "We post updates on this page with a new effective date. For material changes we notify you in the product or by email.",
+    ],
+  },
+];
+---
+
+<Base
+  title="stella | privacy"
+  description="How stella processes personal data: what we collect, why, who receives it, and your rights."
+>
+  <div class="flex min-h-dvh flex-col">
+    <main class="flex-1">
+      <div class="mx-auto max-w-3xl px-6 py-16 lg:py-24">
+        <header class="mb-12">
+          <p class="text-xs font-medium uppercase tracking-wider" style="color: var(--foreground); opacity: 0.5">
+            Legal
+          </p>
+          <h1 class="mt-3 font-display text-4xl font-medium tracking-tight sm:text-5xl">
+            Privacy Policy
+          </h1>
+          <p class="mt-5 max-w-xl text-base leading-relaxed" style="color: var(--muted-foreground)">
+            How stella processes personal data, and the rights you have over it.
+          </p>
+          <div class="mt-8 space-y-2 text-sm leading-relaxed" style="color: var(--muted-foreground)">
+            <p>Effective: August 2, 2026</p>
+            <p>
+              Controller:
+              <a href="/imprint" class="transition-opacity hover:opacity-70" style="color: var(--foreground)">
+                stella labs, s.r.o.
+              </a>
+            </p>
+            <p>Registered office: Nad Porubkou 2355, Poruba, 708 00 Ostrava, Czech Republic</p>
+            <p>Company ID (IČO): 24632872</p>
+            <p>
+              Registered in the Commercial Register maintained by the Regional Court in Ostrava,
+              Section C, File No. 103233
+            </p>
+            <p>
+              Privacy contact:
+              <a href="mailto:privacy@stll.app" class="transition-opacity hover:opacity-70" style="color: var(--foreground)">
+                privacy@stll.app
+              </a>
+            </p>
+          </div>
+        </header>
+
+        <div class="space-y-10">
+          {sections.map((section) => (
+            <section>
+              <h2 class="font-display text-xl font-medium tracking-tight">{section.title}</h2>
+              <div class="mt-3 space-y-3 text-sm leading-[1.8]" style="color: var(--muted-foreground)">
+                {section.body.map((paragraph) => <p>{paragraph}</p>)}
+              </div>
+            </section>
+          ))}
+        </div>
+      </div>
+    </main>
+
+    <LandingFooter />
+  </div>
+</Base>
