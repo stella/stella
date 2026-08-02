@@ -92,6 +92,7 @@ import {
 import {
   evaluateNewAccountOtpPolicy,
   isDisposableEmailAddress,
+  SIGNUP_RETRY_AFTER_HEADER,
 } from "@/api/lib/signup-abuse";
 import { includes } from "@/api/lib/type-guards";
 import {
@@ -206,7 +207,7 @@ export const assertNewAccountEmailOtpAllowed = async (
         {
           message: "Too many account creation attempts. Try again later.",
         },
-        { "Retry-After": String(result.retryAfterSeconds) },
+        { [SIGNUP_RETRY_AFTER_HEADER]: String(result.retryAfterSeconds) },
       );
     default:
       result satisfies never;

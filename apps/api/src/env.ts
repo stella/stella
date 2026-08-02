@@ -210,8 +210,8 @@ const envApi = createEnv({
     SELFHOST_BOOTSTRAP_TOKEN: v.optional(v.pipe(v.string(), v.minLength(32))),
 
     /**
-     * Comma-separated CIDRs of proxies the API may trust to set
-     * `cf-connecting-ip`, `x-real-ip`, or `x-forwarded-for` headers.
+     * Comma-separated CIDRs of proxies the API may trust to set the
+     * `x-forwarded-for` header.
      * Typical value covers Cloudflare's published IP ranges and any
      * load balancers in front of the API. Unset (the default) means
      * no proxy is trusted and the audit log records the socket peer

@@ -7,6 +7,7 @@ import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
 
 const DISPOSABLE_EMAIL_DOMAINS = disposableEmailBlocklistSet();
 const NEW_ACCOUNT_OTP_RATE_LIMIT_SCOPE = "auth:new-account-otp";
+export const SIGNUP_RETRY_AFTER_HEADER = "Retry-After";
 
 let sharedRateLimitContext: RedisRateLimitContext | null = null;
 
@@ -58,7 +59,7 @@ const counterKey = (kind: "email" | "ip", identity: string): string =>
 const retryAfterSeconds = (nextReset: Date): number =>
   Math.max(1, Math.ceil((nextReset.getTime() - Date.now()) / 1000));
 
-type NewAccountOtpRateLimitResult =
+type SignupOtpRateLimitResult =
   | { status: "allowed" }
   | {
       status: "rate_limited";
@@ -66,41 +67,25 @@ type NewAccountOtpRateLimitResult =
       retryAfterSeconds: number;
     };
 
-export const consumeNewAccountOtpRateLimit = async ({
-  clientIp,
+export const consumeSignupOtpRateLimit = async ({
   context = getSharedRateLimitContext(),
-  normalizedEmail,
+  identity,
+  kind,
 }: {
-  clientIp: string | null;
   context?: Pick<Context, "increment">;
-  normalizedEmail: string;
-}): Promise<NewAccountOtpRateLimitResult> => {
-  const emailCounterPromise = context.increment(
-    counterKey("email", normalizedEmail),
-    NEW_ACCOUNT_OTP_RATE_LIMITS.email.duration,
+  identity: string;
+  kind: "email" | "ip";
+}): Promise<SignupOtpRateLimitResult> => {
+  const limit = NEW_ACCOUNT_OTP_RATE_LIMITS[kind];
+  const counter = await context.increment(
+    counterKey(kind, identity),
+    limit.duration,
   );
-  const ipCounterPromise = clientIp
-    ? context.increment(
-        counterKey("ip", clientIp),
-        NEW_ACCOUNT_OTP_RATE_LIMITS.ip.duration,
-      )
-    : null;
-
-  const emailCounter = await emailCounterPromise;
-  const ipCounter = ipCounterPromise ? await ipCounterPromise : null;
-
-  if (emailCounter.count > NEW_ACCOUNT_OTP_RATE_LIMITS.email.max) {
+  if (counter.count > limit.max) {
     return {
       status: "rate_limited",
-      reason: "email",
-      retryAfterSeconds: retryAfterSeconds(emailCounter.nextReset),
-    };
-  }
-  if (ipCounter && ipCounter.count > NEW_ACCOUNT_OTP_RATE_LIMITS.ip.max) {
-    return {
-      status: "rate_limited",
-      reason: "ip",
-      retryAfterSeconds: retryAfterSeconds(ipCounter.nextReset),
+      reason: kind,
+      retryAfterSeconds: retryAfterSeconds(counter.nextReset),
     };
   }
   return { status: "allowed" };
@@ -127,6 +112,15 @@ export const evaluateNewAccountOtpPolicy = async ({
   email: string;
 }): Promise<NewAccountOtpPolicyResult> => {
   const normalizedEmail = normalizeAuthEmail(email);
+  const emailRateLimitResult = await consumeSignupOtpRateLimit({
+    ...(context ? { context } : {}),
+    identity: normalizedEmail,
+    kind: "email",
+  });
+  if (emailRateLimitResult.status === "rate_limited") {
+    return emailRateLimitResult;
+  }
+
   if (await accountExists(normalizedEmail)) {
     return { status: "allowed", reason: "existing_account" };
   }
@@ -134,13 +128,15 @@ export const evaluateNewAccountOtpPolicy = async ({
     return { status: "rejected", reason: "disposable_email" };
   }
 
-  const rateLimitResult = await consumeNewAccountOtpRateLimit({
-    clientIp,
-    ...(context ? { context } : {}),
-    normalizedEmail,
-  });
-  if (rateLimitResult.status === "rate_limited") {
-    return rateLimitResult;
+  if (clientIp) {
+    const ipRateLimitResult = await consumeSignupOtpRateLimit({
+      ...(context ? { context } : {}),
+      identity: clientIp,
+      kind: "ip",
+    });
+    if (ipRateLimitResult.status === "rate_limited") {
+      return ipRateLimitResult;
+    }
   }
   return { status: "allowed", reason: "new_account" };
 };

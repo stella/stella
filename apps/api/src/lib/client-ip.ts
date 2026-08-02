@@ -1,7 +1,7 @@
 /**
  * Resolves the client IP for a request, refusing to trust
- * `cf-connecting-ip` / `x-real-ip` / `x-forwarded-for` headers unless
- * the request actually arrived through a trusted proxy.
+ * `x-forwarded-for` unless the request actually arrived through a trusted
+ * proxy.
  *
  * The TCP socket's peer address is the only thing we can rely on by
  * default: a header value can be set to anything by the caller, but
@@ -85,14 +85,6 @@ const getTrustedProxies = (): TrustedProxies => {
   return cachedTrustedProxies;
 };
 
-const nullableIpHeader = (headers: Headers, name: string): string | null => {
-  const value = headers.get(name)?.trim();
-  if (!value || isIP(value) === 0) {
-    return null;
-  }
-  return value;
-};
-
 const clientIpFromForwardedFor = (
   forwardedFor: string | null,
   peer: string,
@@ -143,14 +135,6 @@ export const resolveClientIp = (
   if (!isTrustedProxy(peer, trusted)) {
     return peer;
   }
-  const cf = nullableIpHeader(request.headers, "cf-connecting-ip");
-  if (cf) {
-    return cf;
-  }
-  const real = nullableIpHeader(request.headers, "x-real-ip");
-  if (real) {
-    return real;
-  }
   const xff = clientIpFromForwardedFor(
     request.headers.get("x-forwarded-for"),
     peer,
@@ -184,14 +168,6 @@ export const resolveTrustedForwardedClientIp = (
     return null;
   }
 
-  const cf = nullableIpHeader(request.headers, "cf-connecting-ip");
-  if (cf) {
-    return cf;
-  }
-  const real = nullableIpHeader(request.headers, "x-real-ip");
-  if (real) {
-    return real;
-  }
   return clientIpFromForwardedFor(
     request.headers.get("x-forwarded-for"),
     peer,

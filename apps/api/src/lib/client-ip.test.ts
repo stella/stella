@@ -87,30 +87,23 @@ describe("resolveClientIp", () => {
     ).toBe("203.0.113.7");
   });
 
-  test("trusts cf-connecting-ip when peer is inside the trusted set", () => {
+  test("ignores provider-specific headers behind a generic trusted proxy", () => {
     const trusted = parseTrustedProxies("10.0.0.0/8");
     expect(
       resolveClientIp(
         request({
           "cf-connecting-ip": "8.8.8.8",
           "x-real-ip": "9.9.9.9",
-          "x-forwarded-for": "10.10.10.10",
+          "x-forwarded-for": "198.51.100.23",
         }),
         fakeServer("10.1.2.3"),
         { trusted },
       ),
-    ).toBe("8.8.8.8");
+    ).toBe("198.51.100.23");
   });
 
-  test("falls back to x-real-ip then the first untrusted x-forwarded-for hop", () => {
+  test("uses the first untrusted x-forwarded-for hop", () => {
     const trusted = parseTrustedProxies("10.0.0.0/8");
-    expect(
-      resolveClientIp(
-        request({ "x-real-ip": "9.9.9.9" }),
-        fakeServer("10.1.2.3"),
-        { trusted },
-      ),
-    ).toBe("9.9.9.9");
     expect(
       resolveClientIp(
         request({ "x-forwarded-for": "9.9.9.9, 198.51.100.23" }),
@@ -177,6 +170,20 @@ describe("resolveTrustedForwardedClientIp", () => {
     expect(
       resolveTrustedForwardedClientIp(
         request({ "x-forwarded-for": "198.51.100.5" }),
+        fakeServer("10.1.2.3"),
+        { trusted: parseTrustedProxies("10.0.0.0/8") },
+      ),
+    ).toBe("198.51.100.5");
+  });
+
+  test("ignores spoofable provider headers for the shared signup bucket", () => {
+    expect(
+      resolveTrustedForwardedClientIp(
+        request({
+          "cf-connecting-ip": "8.8.8.8",
+          "x-real-ip": "9.9.9.9",
+          "x-forwarded-for": "198.51.100.5",
+        }),
         fakeServer("10.1.2.3"),
         { trusted: parseTrustedProxies("10.0.0.0/8") },
       ),

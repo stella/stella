@@ -127,6 +127,7 @@ import {
 } from "@/api/lib/s3";
 import { securityCanaryInterceptor } from "@/api/lib/security-canary";
 import { setSecurityHeaders } from "@/api/lib/security-headers";
+import { SIGNUP_RETRY_AFTER_HEADER } from "@/api/lib/signup-abuse";
 import { startSse, stopSse } from "@/api/lib/sse";
 import { initStyleSetPackageCleanupWorker } from "@/api/lib/style-set-package-cleanup-queue";
 import { initWorkflowWorkers } from "@/api/lib/workflow-queue";
@@ -320,6 +321,7 @@ const api = new Elysia()
         "set-auth-token",
         "Content-Disposition",
         REQUEST_ID_HEADER,
+        SIGNUP_RETRY_AFTER_HEADER,
       ],
     }),
   )
