@@ -14,9 +14,9 @@ const CONCURRENT_UNIQUE_CREATE =
 const CONCURRENT_DROP =
   /\bDROP\s+INDEX\s+CONCURRENTLY\s+IF\s+EXISTS\s+"([^"]+)"/giu;
 const TYPE_CHANGE =
-  /^ALTER\s+TABLE\b[^;]*?\bALTER\s+(?:COLUMN\s+)?(?:"[^"]+"|[A-Z_][A-Z0-9_$]*)\s+(?:SET\s+DATA\s+)?TYPE\b/iu;
+  /^ALTER\s+TABLE\b[^;]*?\bALTER\s+(?:COLUMN\s+)?(?:"[^"]+"|[\p{L}_][\p{L}\p{M}\p{N}_$]*)\s+(?:SET\s+DATA\s+)?TYPE\b/iu;
 const TYPE_CHANGE_ANYWHERE =
-  /\bALTER\s+TABLE\b[\s\S]*?\bALTER\s+(?:COLUMN\s+)?(?:"[^"]+"|[A-Z_][A-Z0-9_$]*)\s+(?:SET\s+DATA\s+)?TYPE\b/iu;
+  /\bALTER\s+TABLE\b[\s\S]*?\bALTER\s+(?:COLUMN\s+)?(?:"[^"]+"|[\p{L}_][\p{L}\p{M}\p{N}_$]*)\s+(?:SET\s+DATA\s+)?TYPE\b/iu;
 const TRANSACTION_REVERSAL =
   /^(?:ABORT|ROLLBACK|SAVEPOINT|RELEASE\s+SAVEPOINT)\b/iu;
 const TYPE_CHANGE_POLICY = {
@@ -279,6 +279,10 @@ const splitSqlStatements = (source: string) => {
 };
 
 const parseTimeoutUpdate = (statement: string): TimeoutUpdate | undefined => {
+  if (/^DISCARD\s+ALL$/iu.test(statement)) {
+    return { type: "reset", name: "all" };
+  }
+
   const setGroups =
     /^SET\s+(?:(?<scope>SESSION|LOCAL)\s+)?(?<name>statement|lock)_timeout\s*(?:(?:=|TO)\s*(?<value>.+)|FROM\s+CURRENT)$/iu.exec(
       statement,
@@ -729,6 +733,11 @@ $$;`;
     expect(
       TYPE_CHANGE.test('ALTER TABLE "example" ALTER "value" TYPE timestamptz'),
     ).toBe(true);
+    expect(
+      TYPE_CHANGE.test(
+        "ALTER TABLE example ALTER COLUMN café TYPE timestamptz",
+      ),
+    ).toBe(true);
   });
 
   test("requires immediate timeout restoration after metadata-only blocks", () => {
@@ -865,6 +874,16 @@ SELECT 1;`;
       ),
     ).toContain(
       "reset-restore/migration.sql: timeouts are not restored immediately after concurrent index operations",
+    );
+    expect(
+      collectUnsafeConcurrentTimeouts(
+        "discard-all/migration.sql",
+        `SET statement_timeout = 0;
+        DISCARD ALL;
+        CREATE INDEX CONCURRENTLY example_idx ON example (id);`,
+      ),
+    ).toContain(
+      "discard-all/migration.sql: concurrent index operation has a timeout",
     );
     expect(
       collectUnsafeConcurrentTimeouts(
