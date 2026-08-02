@@ -1,6 +1,9 @@
 name: CI
 
 env:
+  HAWK_RUST_TOOLCHAIN: "1.97.1"
+  HAWK_VERSION: "0.1.11"
+  HAWK_X86_64_UNKNOWN_LINUX_GNU_SHA256: "8380db63360ae94f9890d7e426cce00e479d884f516614cea998c85d5f30ab6d"
   UV_VERSION: "0.10.1"
 
 on:
@@ -122,8 +125,26 @@ jobs:
         with:
           profile: quality
           cache-scope: quality
+      - name: Install pinned Hawk
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -e --arg prefix "cargo +${HAWK_RUST_TOOLCHAIN} hawk " \
+            '.scripts["rust:hawk"] | startswith($prefix)' package.json >/dev/null
+          archive="$RUNNER_TEMP/cargo-hawk.tar.gz"
+          install_dir="$RUNNER_TEMP/cargo-hawk"
+          curl --proto '=https' --tlsv1.2 --retry 3 -fsSL \
+            -o "$archive" \
+            "https://github.com/astral-sh/hawk/releases/download/${HAWK_VERSION}/cargo-hawk-x86_64-unknown-linux-gnu.tar.gz"
+          echo "${HAWK_X86_64_UNKNOWN_LINUX_GNU_SHA256}  ${archive}" | sha256sum --check
+          mkdir -p "$install_dir"
+          tar -xzf "$archive" -C "$install_dir" --strip-components=1
+          echo "$install_dir" >> "$GITHUB_PATH"
+          rustup toolchain install "$HAWK_RUST_TOOLCHAIN" --profile minimal
       - name: Rust checks
         run: bun run rust:check
+      - name: Hawk visibility lint
+        run: bun run rust:hawk
       - name: Cargo deny (supply chain)
         run: bun run rust:deny
       - name: Snapshot hygiene (insta)

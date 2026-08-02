@@ -158,9 +158,7 @@ pub(crate) fn diagnostic_stage_name(stage: DiagnosticStage) -> String {
   .to_owned()
 }
 
-pub(crate) const fn diagnostic_prepare_stage_name(
-  stage: DiagnosticStage,
-) -> &'static str {
+const fn diagnostic_prepare_stage_name(stage: DiagnosticStage) -> &'static str {
   match stage {
     DiagnosticStage::PrepareCacheKey => "prepare.cache-key",
     DiagnosticStage::PrepareCacheBypass => "prepare.cache.bypass",
@@ -197,9 +195,7 @@ pub(crate) const fn diagnostic_prepare_stage_name(
   }
 }
 
-pub(crate) const fn diagnostic_warm_stage_name(
-  stage: DiagnosticStage,
-) -> &'static str {
+const fn diagnostic_warm_stage_name(stage: DiagnosticStage) -> &'static str {
   match stage {
     DiagnosticStage::WarmRegex => "warm.regex",
     DiagnosticStage::WarmCustomRegex => "warm.custom-regex",
@@ -211,9 +207,7 @@ pub(crate) const fn diagnostic_warm_stage_name(
   }
 }
 
-pub(crate) const fn diagnostic_search_stage_name(
-  stage: DiagnosticStage,
-) -> &'static str {
+const fn diagnostic_search_stage_name(stage: DiagnosticStage) -> &'static str {
   match stage {
     DiagnosticStage::Normalize => "normalize",
     DiagnosticStage::FindMatches => "find-matches",
@@ -231,9 +225,7 @@ pub(crate) const fn diagnostic_search_stage_name(
   }
 }
 
-pub(crate) const fn diagnostic_detect_stage_name(
-  stage: DiagnosticStage,
-) -> &'static str {
+const fn diagnostic_detect_stage_name(stage: DiagnosticStage) -> &'static str {
   match stage {
     DiagnosticStage::DetectTotal => "detect.total",
     DiagnosticStage::EntityCallerInput => "entity.caller.input",
@@ -281,9 +273,7 @@ pub(crate) const fn diagnostic_detect_stage_name(
   }
 }
 
-pub(crate) const fn diagnostic_finish_stage_name(
-  stage: DiagnosticStage,
-) -> &'static str {
+const fn diagnostic_finish_stage_name(stage: DiagnosticStage) -> &'static str {
   match stage {
     DiagnosticStage::EntityZoneAdjustment => "entity.zone-adjustment",
     DiagnosticStage::EntityCallerRetained => "entity.caller.retained",

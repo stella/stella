@@ -80,16 +80,13 @@ enum CorePreparedSearchPackageArtifactsInner<'a> {
 }
 
 impl<'a> CorePreparedSearchPackageArtifacts<'a> {
-  pub(crate) const fn borrowed(bytes: &'a [u8]) -> Self {
+  const fn borrowed(bytes: &'a [u8]) -> Self {
     Self {
       inner: CorePreparedSearchPackageArtifactsInner::Borrowed(bytes),
     }
   }
 
-  pub(crate) fn owned_payload(
-    payload: Vec<u8>,
-    artifacts_start: usize,
-  ) -> Result<Self> {
+  fn owned_payload(payload: Vec<u8>, artifacts_start: usize) -> Result<Self> {
     if payload.get(artifacts_start..).is_none() {
       return Err(invalid_prepared_search_package("missing artifacts"));
     }

@@ -31,7 +31,7 @@ const BR_CEP_CONTEXT_WINDOW: usize = 200;
 const PLAIN_POSTAL_CONTEXT_WINDOW: usize = 120;
 const US_ZIP_CONTEXT_WINDOW: usize = 120;
 
-pub(crate) fn us_state_zip_prefix_len(
+fn us_state_zip_prefix_len(
   text: &str,
   state_abbreviations: &BTreeSet<String>,
 ) -> Option<usize> {
@@ -283,7 +283,7 @@ pub(crate) struct AddressSeedDetection {
 
 impl PreparedAddressSeedData {
   #[cfg(test)]
-  pub(crate) fn new(data: AddressSeedData) -> Result<Self> {
+  fn new(data: AddressSeedData) -> Result<Self> {
     Self::new_with_state_abbreviations(data, Vec::new())
   }
 

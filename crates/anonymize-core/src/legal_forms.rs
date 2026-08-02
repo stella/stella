@@ -72,7 +72,7 @@ pub(crate) struct PreparedLegalFormData {
 
 impl PreparedLegalFormData {
   #[cfg(test)]
-  pub(crate) fn new(data: LegalFormData) -> Self {
+  fn new(data: LegalFormData) -> Self {
     Self::new_with_soft_wrap_boundary_labels(data, Vec::new())
   }
 

@@ -571,7 +571,7 @@ impl PreparedNameCorpusData {
     chain
   }
 
-  pub(super) fn is_likely_cjk_person_name(&self, text: &str) -> bool {
+  fn is_likely_cjk_person_name(&self, text: &str) -> bool {
     if self.cjk_non_person_terms.contains(text) {
       return false;
     }
@@ -581,7 +581,7 @@ impl PreparedNameCorpusData {
       .is_some_and(|first| self.cjk_surname_starters.contains(&first))
   }
 
-  pub(super) fn is_organization(&self, text: &str) -> bool {
+  fn is_organization(&self, text: &str) -> bool {
     segment_words(text)
       .iter()
       .any(|word| self.organization_terms.contains(&word.text.to_lowercase()))

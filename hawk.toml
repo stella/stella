@@ -1,0 +1,52 @@
+# Hawk cannot observe npm, Python, or WebAssembly consumers of these libraries.
+# The rust:hawk script preserves public APIs and denies restricted-visibility findings.
+
+[[production]]
+package = "stella-anonymize-adapter-contract"
+lib = "stella_anonymize_adapter_contract"
+reason = "workspace library; audit restricted visibility without changing its public API"
+
+[[production]]
+package = "stella-anonymize-binding-core"
+lib = "stella_anonymize_binding_core"
+reason = "workspace library; audit restricted visibility without changing its public API"
+
+[[production]]
+package = "stella-anonymize-core"
+lib = "stella_anonymize_core"
+reason = "workspace library; audit restricted visibility without changing its public API"
+
+[[production]]
+package = "stella-anonymize-docx-core"
+lib = "stella_anonymize_docx_core"
+reason = "workspace library; audit restricted visibility without changing its public API"
+
+[[production]]
+package = "stella-anonymize-napi"
+lib = "stella_anonymize_napi"
+reason = "workspace library; audit restricted visibility without changing its public API"
+
+[[production]]
+package = "stella-anonymize-pdf-core"
+lib = "stella_anonymize_pdf_core"
+reason = "workspace library; audit restricted visibility without changing its public API"
+
+[[production]]
+package = "stella-anonymize-py"
+lib = "stella_anonymize_core_py"
+reason = "workspace library; audit restricted visibility without changing its public API"
+
+[[production]]
+package = "stella-anonymize-wasm"
+lib = "stella_anonymize_wasm"
+reason = "workspace library; audit restricted visibility without changing its public API"
+
+[[production]]
+package = "stella-document-rules-core"
+lib = "stella_document_rules_core"
+reason = "workspace library; audit restricted visibility without changing its public API"
+
+[[exclude]]
+crate = "stella_anonymize_core"
+module = "assemble::data"
+reason = "generated data index is emitted with workspace-visible declarations"

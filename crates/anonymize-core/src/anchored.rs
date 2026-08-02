@@ -157,7 +157,7 @@ impl PreparedAnchoredDocument {
   }
 
   #[cfg(test)]
-  pub(crate) const fn full_document_scans(&self) -> usize {
+  const fn full_document_scans(&self) -> usize {
     self.full_document_scans
   }
 }

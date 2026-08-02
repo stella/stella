@@ -64,7 +64,7 @@ pub(super) enum StaticDetectorInput {
 }
 
 impl StaticDetectorInput {
-  pub(super) const fn is_growing(self) -> bool {
+  const fn is_growing(self) -> bool {
     matches!(
       self,
       Self::FullText

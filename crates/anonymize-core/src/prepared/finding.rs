@@ -1,7 +1,7 @@
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) struct FindingSpan {
-  pub(super) start: u32,
-  pub(super) end: u32,
+  start: u32,
+  end: u32,
 }
 
 impl FindingSpan {

@@ -23,6 +23,7 @@
     "test:built": "turbo run test --only",
     "rust:fmt": "cargo ci-fmt",
     "rust:lint": "cargo ci-clippy",
+    "rust:hawk": "cargo +1.97.1 hawk check --target-dir target/hawk -D warnings -A hawk::dead_public -A hawk::unnecessary_public",
     "rust:dylint": "cargo ci-dylint",
     "rust:test": "cargo ci-test && cargo ci-test-doc",
     "rust:deny": "cargo ci-deny",

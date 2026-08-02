@@ -370,7 +370,7 @@ fn run_rules<'a>(
   Ok(findings)
 }
 
-pub(crate) fn run_all_rules(
+fn run_all_rules(
   rules: &RuleSet,
   counters: &ExecutionCounters,
   analyses: &[Arc<BlockAnalysis>],
@@ -417,10 +417,7 @@ pub(crate) fn neighborhood_bounds(
   }
 }
 
-pub(crate) fn validate_findings(
-  document: &Document,
-  findings: &[Finding],
-) -> Result<()> {
+fn validate_findings(document: &Document, findings: &[Finding]) -> Result<()> {
   for finding in findings {
     validate_span(document, finding.primary())?;
     for span in finding.related() {

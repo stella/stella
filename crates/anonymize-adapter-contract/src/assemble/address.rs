@@ -185,7 +185,7 @@ fn build_street_abbreviations(street_types: &OrderedMap<Value>) -> Vec<String> {
 // ── address_seed_data ───────────────────────────────
 
 pub(super) struct AddressSharedData {
-  pub(super) boundary_words: Vec<String>,
+  boundary_words: Vec<String>,
   br_cep_cue_words: Vec<String>,
   pub(super) us_state_abbreviations: Vec<String>,
 }

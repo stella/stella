@@ -415,7 +415,7 @@ pub(crate) fn prepared_search_core_package_payload_to_bytes(
   Ok(bytes)
 }
 
-pub(crate) fn compact_core_package_config(config: &mut PreparedEngineConfig) {
+fn compact_core_package_config(config: &mut PreparedEngineConfig) {
   if core_literal_patterns_are_identity_mapped(config) {
     config.search.literal_patterns.clear();
   }
@@ -454,7 +454,7 @@ pub(crate) fn core_package_view_from_payload<'a>(
 pub(crate) struct CorePackagePayloadSlices<'a> {
   pub(crate) config: &'a [u8],
   pub(crate) artifacts: &'a [u8],
-  pub(crate) artifacts_start: usize,
+  artifacts_start: usize,
 }
 
 pub(crate) fn core_package_payload_slices(
