@@ -9,11 +9,13 @@ import {
   requirementFor,
 } from "./env-catalog";
 import {
+  doctorEnvFileNames,
   findEnvUsages,
   formatEnvIssue,
   formatEnvValue,
   isIgnoredAuditPath,
   normalizeEmptyEnvironment,
+  parseEnvLayers,
   parseEnvText,
   renderApiEnvExample,
   renderCollabEnvExample,
@@ -127,6 +129,54 @@ describe("environment file parsing", () => {
       }),
     ).toEqual({
       DB_PORT: `${String.fromCodePoint(36)}{MISSING_PORT:-${String.fromCodePoint(36)}{PGPORT:-5432}}`,
+    });
+  });
+
+  test("matches Bun consecutive-dollar expansion", () => {
+    const dollars = String.fromCodePoint(36);
+    expect(
+      parseEnvText(
+        [
+          "VALUE=resolved",
+          `RUN=${dollars.repeat(32)}`,
+          `PREFIX=${dollars.repeat(3)}VALUE`,
+          `SUFFIX=${dollars}VALUE${dollars.repeat(4)}`,
+          String.raw`ESCAPED=\$$$VALUE`,
+        ].join("\n"),
+        {},
+      ),
+    ).toEqual({
+      ESCAPED: "$resolved",
+      PREFIX: "resolved",
+      RUN: "$",
+      SUFFIX: "resolved$",
+      VALUE: "resolved",
+    });
+  });
+
+  test("matches Bun dotenv layer order and final-value expansion", () => {
+    expect(doctorEnvFileNames("production")).toEqual([
+      ".env",
+      ".env.production",
+      ".env.local",
+      ".env.production.local",
+    ]);
+    expect(doctorEnvFileNames("staging")).toEqual([".env", ".env.local"]);
+    expect(
+      parseEnvLayers(
+        [
+          "VALUE=base\nFROM_BASE=$VALUE",
+          "VALUE=mode\nFROM_MODE=$VALUE",
+          "VALUE=local\nFROM_LOCAL=$VALUE",
+          "VALUE=mode-local",
+        ],
+        {},
+      ),
+    ).toEqual({
+      FROM_BASE: "mode-local",
+      FROM_LOCAL: "mode-local",
+      FROM_MODE: "mode-local",
+      VALUE: "mode-local",
     });
   });
 });
@@ -347,6 +397,41 @@ describe("environment usage auditing", () => {
         name: "API_DEPLOYMENT_EXPECTED_COMMIT",
       },
       { file: "scripts/example.ts", line: 4, name: "API_DEPLOYMENT_URL" },
+    ]);
+  });
+
+  test("finds static Rust runtime and build-time environment reads", () => {
+    expect(
+      findEnvUsages(
+        "apps/desktop/src-tauri/src/config.rs",
+        [
+          'option_env!("STELLA_DESKTOP_DEFAULT_ORIGINS");',
+          'env!("STELLA_DESKTOP_BUILD_ID");',
+          'std::env::var("STELLA_DESKTOP_ALLOWED_ORIGINS");',
+          'std::env::var_os("STELLA_DESKTOP_BRIDGE_PORT");',
+        ].join("\n"),
+      ),
+    ).toEqual([
+      {
+        file: "apps/desktop/src-tauri/src/config.rs",
+        line: 3,
+        name: "STELLA_DESKTOP_ALLOWED_ORIGINS",
+      },
+      {
+        file: "apps/desktop/src-tauri/src/config.rs",
+        line: 4,
+        name: "STELLA_DESKTOP_BRIDGE_PORT",
+      },
+      {
+        file: "apps/desktop/src-tauri/src/config.rs",
+        line: 1,
+        name: "STELLA_DESKTOP_DEFAULT_ORIGINS",
+      },
+      {
+        file: "apps/desktop/src-tauri/src/config.rs",
+        line: 2,
+        name: "STELLA_DESKTOP_BUILD_ID",
+      },
     ]);
   });
 });

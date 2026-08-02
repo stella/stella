@@ -194,11 +194,16 @@ const expandEnvReferences = ({
       continue;
     }
 
-    const braced = value.at(index + 1) === "{";
-    const nameStart = index + (braced ? 2 : 1);
+    let dollarEnd = index + 1;
+    while (value.at(dollarEnd) === "$") {
+      dollarEnd += 1;
+    }
+    const expansionStart = dollarEnd - 1;
+    const braced = value.at(dollarEnd) === "{";
+    const nameStart = dollarEnd + (braced ? 1 : 0);
     if (!isEnvNameCharacter(value.at(nameStart))) {
       output.push("$");
-      index += 1;
+      index = dollarEnd;
       continue;
     }
     let nameEnd = nameStart + 1;
@@ -211,14 +216,14 @@ const expandEnvReferences = ({
       const fallbackEnd = findExpansionEnd(value, fallbackStart);
       if (fallbackEnd === -1) {
         output.push("$");
-        index += 1;
+        index = dollarEnd;
         continue;
       }
       const fallback = value.slice(fallbackStart, fallbackEnd);
       if (/(?<!\\)\$\{/u.test(fallback)) {
         // Bun does not recursively parse braced fallbacks. Preserve the
         // unsupported expression so schema validation rejects it.
-        output.push(value.slice(index, fallbackEnd + 1));
+        output.push(value.slice(expansionStart, fallbackEnd + 1));
         index = fallbackEnd + 1;
         continue;
       }
@@ -229,7 +234,7 @@ const expandEnvReferences = ({
     }
     if (braced && value.at(nameEnd) !== "}") {
       output.push("$");
-      index += 1;
+      index = dollarEnd;
       continue;
     }
 
@@ -239,12 +244,15 @@ const expandEnvReferences = ({
   return output.join("");
 };
 
-export const parseEnvText = (
-  text: string,
+export const parseEnvLayers = (
+  texts: string[],
   ambientEnvironment: NodeJS.ProcessEnv = process.env,
 ) => {
+  const parsed: Record<string, string> = {};
+  for (const text of texts) {
+    Object.assign(parsed, parseEnv(text));
+  }
   const values: Record<string, string> = {};
-  const parsed = parseEnv(text);
   const environment = { ...parsed, ...ambientEnvironment };
   const ambientNames = new Set(Object.keys(ambientEnvironment));
   for (const [name, value] of Object.entries(parsed)) {
@@ -259,6 +267,11 @@ export const parseEnvText = (
   }
   return values;
 };
+
+export const parseEnvText = (
+  text: string,
+  ambientEnvironment: NodeJS.ProcessEnv = process.env,
+) => parseEnvLayers([text], ambientEnvironment);
 
 const generatedExamples = () => [
   { content: renderApiEnvExample(), path: API_EXAMPLE_PATH },
@@ -296,12 +309,16 @@ const STATIC_ENV_PATTERNS = [
   /\bimport\.meta\.env\.([A-Z][A-Z0-9_]*)/gu,
   /\bimport\.meta\.env\[["']([A-Z][A-Z0-9_]*)["']\]/gu,
 ];
+const STATIC_RUST_ENV_PATTERNS = [
+  /\b(?:std::)?env::var(?:_os)?\(\s*"([A-Z][A-Z0-9_]*)"/gu,
+  /\b(?:env|option_env)!\(\s*"([A-Z][A-Z0-9_]*)"/gu,
+];
 
 const DEPLOYMENT_ENV_PATTERN = /\$\{([A-Z][A-Z0-9_]*)(?=[:}?])/gu;
 const BARE_DOCKER_ENV_PATTERN = /\$(?!\{)([A-Z][A-Z0-9_]*)\b/gu;
 
 const AUDIT_GLOBS = [
-  "apps/**/*.{ts,tsx,js,mjs,cjs,yml,yaml}",
+  "apps/**/*.{ts,tsx,js,mjs,cjs,rs,yml,yaml}",
   "packages/**/*.{ts,tsx,js,mjs,cjs}",
   "scripts/**/*.{ts,js,sh}",
   "**/Dockerfile*",
@@ -466,7 +483,9 @@ const findComputedEnvUsages = (file: string, text: string): EnvUsage[] => {
 export const findEnvUsages = (file: string, text: string): EnvUsage[] => {
   const usages = findComputedEnvUsages(file, text);
   let patterns = STATIC_ENV_PATTERNS;
-  if (file.includes("Dockerfile")) {
+  if (file.endsWith(".rs")) {
+    patterns = STATIC_RUST_ENV_PATTERNS;
+  } else if (file.includes("Dockerfile")) {
     patterns = [
       ...STATIC_ENV_PATTERNS,
       DEPLOYMENT_ENV_PATTERN,
@@ -706,6 +725,21 @@ const ENV_APP_CONFIG = {
   },
 } as const satisfies Record<EnvApp, EnvAppConfig>;
 
+const BUN_ENV_MODES = new Set(["development", "production", "test"]);
+
+export const doctorEnvFileNames = (nodeEnv: string | undefined) => {
+  const names = [".env"];
+  const mode = nodeEnv && BUN_ENV_MODES.has(nodeEnv) ? nodeEnv : undefined;
+  if (mode) {
+    names.push(`.env.${mode}`);
+  }
+  names.push(".env.local");
+  if (mode) {
+    names.push(`.env.${mode}.local`);
+  }
+  return names;
+};
+
 export const validateDoctorEnvironment = (
   app: EnvApp,
   rawInput: DoctorInput,
@@ -714,17 +748,23 @@ export const validateDoctorEnvironment = (
 
 const runDoctor = (app: EnvApp) => {
   const { examplePath, owners } = ENV_APP_CONFIG[app];
-  const envPath = examplePath.replace(/\.example$/u, "");
-  const fileValues = existsSync(envPath)
-    ? parseEnvText(readFileSync(envPath, "utf-8"))
-    : {};
+  const envDirectory = path.dirname(examplePath);
+  const baseEnvPath = path.join(envDirectory, ".env");
+  const envPaths = doctorEnvFileNames(process.env.NODE_ENV).map((name) =>
+    path.join(envDirectory, name),
+  );
+  const existingEnvPaths = envPaths.filter(existsSync);
+  const fileValues = parseEnvLayers(
+    existingEnvPaths.map((envPath) => readFileSync(envPath, "utf-8")),
+  );
   const validation = validateDoctorEnvironment(app, {
     ...fileValues,
     ...process.env,
   });
-  console.log(
-    `Environment doctor: ${app} (${path.relative(REPO_ROOT, envPath)})`,
-  );
+  const displayedEnvPaths = (
+    existingEnvPaths.length > 0 ? existingEnvPaths : [baseEnvPath]
+  ).map((envPath) => path.relative(REPO_ROOT, envPath));
+  console.log(`Environment doctor: ${app} (${displayedEnvPaths.join(", ")})`);
   for (const entry of ENV_CATALOG.filter(
     ({ documented, owner }) => documented && owners.has(owner),
   )) {
