@@ -12,6 +12,7 @@ import {
   findEnvUsages,
   formatEnvIssue,
   formatEnvValue,
+  isIgnoredAuditPath,
   normalizeEmptyEnvironment,
   parseEnvText,
   renderApiEnvExample,
@@ -37,6 +38,24 @@ describe("generated environment examples", () => {
       }
       const matches = example.match(new RegExp(`^#? ?${entry.name}=`, "gmu"));
       expect(matches).toHaveLength(1);
+    }
+  });
+
+  test("groups component database settings in the database section", () => {
+    const example = renderApiEnvExample();
+    const databaseSection = example.slice(
+      example.indexOf("# --- Database"),
+      example.indexOf("# --- Storage and legal search"),
+    );
+    for (const name of [
+      "DB_HOST",
+      "DB_NAME",
+      "DB_PASSWORD",
+      "DB_PORT",
+      "DB_SSLMODE",
+      "DB_USER",
+    ]) {
+      expect(databaseSection).toContain(name);
     }
   });
 
@@ -126,24 +145,28 @@ describe("environment doctor output", () => {
     expect(formatEnvValue(secretEntry, "do-not-print-this")).toBe("<redacted>");
   });
 
-  test("does not echo invalid secrets in validation errors", () => {
+  test("does not echo invalid non-public values in validation errors", () => {
     const secret = "actual-secret-value";
-    const result = v.safeParse(
-      v.object({ DATABASE_URL: v.pipe(v.string(), v.url()) }),
-      { DATABASE_URL: secret },
-    );
-    expect(result.success).toBe(false);
-    if (result.success) {
-      return;
+    for (const key of [
+      "CORPUS_INDEX_ENDPOINT",
+      "DATABASE_URL",
+      "UNKNOWN_KEY",
+    ]) {
+      const result = v.safeParse(
+        v.object({ [key]: v.pipe(v.string(), v.url()) }),
+        { [key]: secret },
+      );
+      expect(result.success).toBe(false);
+      if (result.success) {
+        continue;
+      }
+      const issue = result.issues.at(0);
+      expect(issue).toBeDefined();
+      if (!issue) {
+        continue;
+      }
+      expect(formatEnvIssue(issue)).not.toContain(secret);
     }
-    const issue = result.issues.at(0);
-    expect(issue).toBeDefined();
-    if (!issue) {
-      return;
-    }
-    const message = formatEnvIssue(issue);
-    expect(message).toBe("DATABASE_URL: invalid secret value.");
-    expect(message).not.toContain(secret);
   });
 
   test("normalizes empty schema values after database URL resolution", () => {
@@ -210,7 +233,7 @@ describe("environment doctor output", () => {
     },
     {
       expected:
-        "LEGAL_SEARCH_PROVIDER=corpus-index requires CORPUS_INDEX_ENDPOINT to be set",
+        "LEGAL_SEARCH_PROVIDER=corpus-index requires CORPUS_INDEX_ENDPOINT to be set.",
       overrides: { LEGAL_SEARCH_PROVIDER: "corpus-index" },
     },
     {
@@ -294,6 +317,15 @@ describe("environment usage auditing", () => {
         `release_ref="${String.fromCodePoint(36)}{RELEASE_REF:?RELEASE_REF is required}"`,
       ),
     ).toEqual([{ file: "scripts/example.sh", line: 1, name: "RELEASE_REF" }]);
+  });
+
+  test("ignores dependency and cache paths at any depth", () => {
+    expect(isIgnoredAuditPath("node_modules/package/Dockerfile")).toBe(true);
+    expect(isIgnoredAuditPath("apps/web/node_modules/package/Dockerfile")).toBe(
+      true,
+    );
+    expect(isIgnoredAuditPath(".cache/generated/Dockerfile")).toBe(true);
+    expect(isIgnoredAuditPath("apps/api/Dockerfile")).toBe(false);
   });
 
   test("traces literal names through computed environment helpers", () => {

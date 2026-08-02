@@ -316,6 +316,10 @@ const AUDIT_IGNORE_FILES = new Set([
   "scripts/detect-desktop-release-changes.test.sh",
   "scripts/env-tool.test.ts",
 ]);
+const AUDIT_IGNORE_PATH_SEGMENTS = new Set([".cache", "node_modules"]);
+
+export const isIgnoredAuditPath = (file: string) =>
+  file.split("/").some((segment) => AUDIT_IGNORE_PATH_SEGMENTS.has(segment));
 
 type EnvUsage = { file: string; line: number; name: string };
 
@@ -501,11 +505,7 @@ const auditEnvironment = async () => {
     const glob = new Bun.Glob(pattern);
     // eslint-disable-next-line no-await-in-loop -- each glob is a lazy async iterator
     for await (const file of glob.scan({ cwd: REPO_ROOT, onlyFiles: true })) {
-      if (
-        !file.includes("/node_modules/") &&
-        !file.includes("/.cache/") &&
-        !AUDIT_IGNORE_FILES.has(file)
-      ) {
+      if (!isIgnoredAuditPath(file) && !AUDIT_IGNORE_FILES.has(file)) {
         files.add(file);
       }
     }
@@ -563,8 +563,8 @@ export const formatEnvIssue = (issue: v.BaseIssue<unknown>) => {
     return "Invalid environment configuration.";
   }
   const entry = ENV_CATALOG.find(({ name }) => name === key);
-  if (entry?.exposure === ENV_EXPOSURE.secret) {
-    return `${key}: invalid secret value.`;
+  if (entry?.exposure !== ENV_EXPOSURE.public) {
+    return `${key}: invalid ${entry?.exposure ?? ENV_EXPOSURE.secret} value.`;
   }
   return `${key}: ${issue.message}`;
 };
@@ -678,27 +678,42 @@ const validateWebEnvironment = (input: DoctorInput): DoctorValidationResult => {
     : { status: "invalid", issues: [issue], values };
 };
 
+type EnvAppConfig = {
+  examplePath: string;
+  owners: ReadonlySet<EnvOwner>;
+  validate: (input: DoctorInput) => DoctorValidationResult;
+};
+
+const ENV_APP_CONFIG = {
+  api: {
+    examplePath: API_EXAMPLE_PATH,
+    owners: new Set<EnvOwner>([
+      ENV_OWNER.apiBase,
+      ENV_OWNER.documentWorker,
+      ENV_OWNER.apiServer,
+    ]),
+    validate: validateApiEnvironment,
+  },
+  collab: {
+    examplePath: COLLAB_EXAMPLE_PATH,
+    owners: new Set<EnvOwner>([ENV_OWNER.collab]),
+    validate: (input: DoctorInput) => validateSchema(COLLAB_ENV_SCHEMA, input),
+  },
+  web: {
+    examplePath: WEB_EXAMPLE_PATH,
+    owners: new Set<EnvOwner>([ENV_OWNER.web]),
+    validate: validateWebEnvironment,
+  },
+} as const satisfies Record<EnvApp, EnvAppConfig>;
+
 export const validateDoctorEnvironment = (
   app: EnvApp,
   rawInput: DoctorInput,
-): DoctorValidationResult => {
-  const input = normalizeEmptyEnvironment(rawInput);
-  if (app === ENV_APP.api) {
-    return validateApiEnvironment(input);
-  }
-  if (app === ENV_APP.web) {
-    return validateWebEnvironment(input);
-  }
-  return validateSchema(COLLAB_ENV_SCHEMA, input);
-};
+): DoctorValidationResult =>
+  ENV_APP_CONFIG[app].validate(normalizeEmptyEnvironment(rawInput));
 
 const runDoctor = (app: EnvApp) => {
-  let examplePath = API_EXAMPLE_PATH;
-  if (app === ENV_APP.web) {
-    examplePath = WEB_EXAMPLE_PATH;
-  } else if (app === ENV_APP.collab) {
-    examplePath = COLLAB_EXAMPLE_PATH;
-  }
+  const { examplePath, owners } = ENV_APP_CONFIG[app];
   const envPath = examplePath.replace(/\.example$/u, "");
   const fileValues = existsSync(envPath)
     ? parseEnvText(readFileSync(envPath, "utf-8"))
@@ -707,16 +722,6 @@ const runDoctor = (app: EnvApp) => {
     ...fileValues,
     ...process.env,
   });
-  let owners = new Set<EnvOwner>([
-    ENV_OWNER.apiBase,
-    ENV_OWNER.documentWorker,
-    ENV_OWNER.apiServer,
-  ]);
-  if (app === ENV_APP.web) {
-    owners = new Set([ENV_OWNER.web]);
-  } else if (app === ENV_APP.collab) {
-    owners = new Set([ENV_OWNER.collab]);
-  }
   console.log(
     `Environment doctor: ${app} (${path.relative(REPO_ROOT, envPath)})`,
   );
@@ -751,8 +756,9 @@ const main = async () => {
     return;
   }
   if (command === "check") {
-    const valid = checkExamples() && (await auditEnvironment());
-    if (!valid) {
+    const examplesValid = checkExamples();
+    const auditValid = await auditEnvironment();
+    if (!(examplesValid && auditValid)) {
       process.exitCode = 1;
     }
     return;

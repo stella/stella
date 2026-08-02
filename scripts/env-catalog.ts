@@ -369,7 +369,7 @@ const humanizeEnvName = (name: string) => {
 };
 
 const sectionFor = (name: string) => {
-  if (/^(DATABASE|STELLA_WORKER|SKIP_MIGRATION)/u.test(name)) {
+  if (/^(DATABASE|DB_|STELLA_WORKER|SKIP_MIGRATION)/u.test(name)) {
     return "Database";
   }
   if (/^(S3|CORPUS|LEGAL_)/u.test(name)) {

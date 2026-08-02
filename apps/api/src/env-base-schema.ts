@@ -154,7 +154,7 @@ export const envBaseInvariantViolation = ({
     LEGAL_SEARCH_PROVIDER === "corpus-index" &&
     CORPUS_INDEX_ENDPOINT === undefined
   ) {
-    return "LEGAL_SEARCH_PROVIDER=corpus-index requires CORPUS_INDEX_ENDPOINT to be set";
+    return "LEGAL_SEARCH_PROVIDER=corpus-index requires CORPUS_INDEX_ENDPOINT to be set.";
   }
 
   return corpusStorageInvariantViolation({
