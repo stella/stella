@@ -4,6 +4,38 @@ import { getApiHealthUrl, parseHealthCommit } from "./api-health";
 import { advanceDeploymentStability } from "./check-api-deployment";
 
 describe("API deployment health receipt", () => {
+  test("ties staging promotion to the current health gate", async () => {
+    const workflow = await Bun.file(
+      new URL("../.github/workflows/deploy-staging.yml", import.meta.url),
+    ).text();
+    const healthJobStart = workflow.indexOf("\n  staging-health:\n");
+    const deployJobStart = workflow.indexOf("\n  build-and-deploy:\n");
+    const verifyJobStart = workflow.indexOf("\n  verify-staging:\n");
+    const healthJob = workflow.slice(healthJobStart, deployJobStart);
+    const deployJob = workflow.slice(deployJobStart, verifyJobStart);
+
+    expect(healthJobStart).toBeGreaterThanOrEqual(0);
+    expect(deployJobStart).toBeGreaterThan(healthJobStart);
+    expect(verifyJobStart).toBeGreaterThan(deployJobStart);
+    expect(healthJob).toContain("permissions: {}");
+    expect(healthJob).toContain(
+      "STAGING_HEALTH_URL: https://api-staging.stll.app/health",
+    );
+    expect(healthJob).toContain('readonly NOT_READY_STATUS="not_ready"');
+    expect(healthJob).toContain('readonly READY_STATUS="ready"');
+    expect(healthJob).toContain('status="$NOT_READY_STATUS"');
+    expect(healthJob).toContain('status="$READY_STATUS"');
+    expect(healthJob).toContain(`echo "status=\${status}" >> "$GITHUB_OUTPUT"`);
+    expect(healthJob).toContain(
+      "Staging health gate did not pass; skipping this deployment.",
+    );
+    expect(deployJob).toContain("needs: staging-health");
+    expect(deployJob).toContain("github.event_name == 'workflow_dispatch'");
+    expect(deployJob).toContain(
+      "needs.staging-health.outputs.status == 'ready'",
+    );
+  });
+
   test("release promotion preserves the full online-migration window", async () => {
     const [releaseWorkflow, stagingWorkflow, promoteAction] = await Promise.all(
       [
@@ -49,31 +81,31 @@ describe("API deployment health receipt", () => {
     expect(manifestJobStart).toBeGreaterThan(webBuildJobStart);
     expect(promoteJob).toContain("timeout-minutes: 360");
     expect(webBuildJob).toContain("timeout-minutes: 55");
-    expect(webBuildJob).toContain('-f "inputs[release_sha]=${RELEASE_SHA}"');
-    expect(webBuildJob).toContain('-f "inputs[request_id]=${REQUEST_ID}"');
+    expect(webBuildJob).toContain(`-f "inputs[release_sha]=\${RELEASE_SHA}"`);
+    expect(webBuildJob).toContain(`-f "inputs[request_id]=\${REQUEST_ID}"`);
     expect(webBuildJob).toContain(".releaseSha == $release_sha");
     expect(webBuildJob).toContain("stella-web.intoto.jsonl");
     expect(webBuildJob).toContain(
       "actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d",
     );
     expect(webBuildJob).toContain(
-      'candidate_tag="candidate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"',
+      `candidate_tag="candidate-\${GITHUB_RUN_ID}-\${GITHUB_RUN_ATTEMPT}"`,
     );
     expect(webBuildJob).toContain(".targetEnvironment == $target_environment");
-    expect(webBuildJob).not.toContain('tags+=("${IMAGE}:latest")');
+    expect(webBuildJob).not.toContain(`tags+=("\${IMAGE}:latest")`);
     expect(manifestJob).toContain(
       "bash .workflow-source/scripts/create-release-manifest.sh",
     );
     expect(manifestJob).toContain("Publish immutable release image tags");
     expect(manifestJob).toContain(
-      "Immutable image tag ${image}:${tag} points to a different digest.",
+      `Immutable image tag \${image}:\${tag} points to a different digest.`,
     );
     expect(manifestJob).toContain('"STELLA_COMMIT_SHA=" + $commit');
     expect(manifestJob.indexOf("Publish GitHub release manifest")).toBeLessThan(
       manifestJob.indexOf("Advance stable image tags"),
     );
     expect(releaseWorkflow).toContain(
-      "group: release-${{ github.event_name == 'workflow_dispatch' && inputs.release_ref || github.ref_name }}",
+      `group: release-\${{ github.event_name == 'workflow_dispatch' && inputs.release_ref || github.ref_name }}`,
     );
     expect(releaseWorkflow).toContain(
       "needs: [resolve, build-arm64, build-amd64, prepare-web-image, smoke]",
@@ -87,18 +119,18 @@ describe("API deployment health receipt", () => {
     );
     expect(promoteAction).toContain('"/installation/token"');
     expect(promoteAction).toContain("retaining the current token and retrying");
-    expect(promoteAction).toContain('echo "::add-mask::${jwt}" >&2');
+    expect(promoteAction).toContain(`echo "::add-mask::\${jwt}" >&2`);
     expect(promoteAction).toContain(`printf '%s\\n' "$APP_PRIVATE_KEY"`);
     expect(
       promoteAction.match(/Authorization: Bearer \$\{jwt\}/gu),
     ).toHaveLength(2);
     expect(promoteAction).not.toContain("gh run watch");
     expect(promoteAction).toContain(
-      'run_url="https://github.com/${INFRA_REPO}/actions/runs/${run_id}"',
+      `run_url="https://github.com/\${INFRA_REPO}/actions/runs/\${run_id}"`,
     );
-    expect(promoteAction).not.toContain("Check https://github.com/${run_url}");
+    expect(promoteAction).not.toContain(`Check https://github.com/\${run_url}`);
     expect(promoteAction).toContain(
-      '-f "inputs[web_image_digest]=${WEB_IMAGE_DIGEST}"',
+      `-f "inputs[web_image_digest]=\${WEB_IMAGE_DIGEST}"`,
     );
     expect(promoteAction).toContain(
       "Tagged frontend promotions require a prebuilt web image digest.",

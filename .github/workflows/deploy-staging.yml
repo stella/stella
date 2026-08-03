@@ -18,9 +18,71 @@ env:
   IMAGE_NAME: ${{ github.repository_owner }}/stella-api
 
 jobs:
+  # Tie promotion and its dependent smoke job to the current health of the
+  # staging environment.
+  staging-health:
+    name: Check staging health
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    permissions: {}
+    outputs:
+      status: ${{ steps.probe.outputs.status }}
+
+    steps:
+      - name: Probe staging health
+        id: probe
+        env:
+          STAGING_HEALTH_URL: https://api-staging.stll.app/health
+        run: |
+          set -euo pipefail
+
+          readonly READY_STATUS="ready"
+          readonly NOT_READY_STATUS="not_ready"
+          readonly MAX_ATTEMPTS=3
+          readonly RETRY_SECONDS=5
+
+          response_file="$RUNNER_TEMP/staging-health.json"
+          status="$NOT_READY_STATUS"
+          for ((attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1)); do
+            http_status="000"
+            if ! http_status="$(
+              curl \
+                --connect-timeout 5 \
+                --max-time 10 \
+                --output "$response_file" \
+                --silent \
+                --show-error \
+                --write-out '%{http_code}' \
+                "$STAGING_HEALTH_URL"
+            )"; then
+              http_status="000"
+            fi
+
+            if [[ "$http_status" == "200" ]] &&
+              jq -e '.status == "ok"' "$response_file" >/dev/null 2>&1; then
+              status="$READY_STATUS"
+              break
+            fi
+
+            echo "Staging health probe ${attempt}/${MAX_ATTEMPTS} returned HTTP ${http_status}."
+            if (( attempt < MAX_ATTEMPTS )); then
+              sleep "$RETRY_SECONDS"
+            fi
+          done
+
+          echo "status=${status}" >> "$GITHUB_OUTPUT"
+          if [[ "$status" == "$NOT_READY_STATUS" ]]; then
+            echo "::notice::Staging health gate did not pass; skipping this deployment."
+          fi
+
   build-and-deploy:
     name: Build + deploy staging
-    if: github.ref == 'refs/heads/main'
+    needs: staging-health
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'workflow_dispatch' ||
+      needs.staging-health.outputs.status == 'ready')
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 90
     permissions:
