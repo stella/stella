@@ -1,114 +1,87 @@
 ---
 name: rabbit-round
-description: 'Process one evidence-backed round of unresolved automated PR review comments and current CI without claiming work before it is pushed.'
+description: "Process one evidence-backed round of automated pull-request review comments from CodeRabbit, Gemini, Copilot, Devin, Greptile, and similar bots."
 ---
 
 # Rabbit Round
 
-Process one round of CodeRabbit, Gemini Code Assist, Copilot, Devin, and similar
-automated review feedback. This skill is intentionally single-pass; use
-`/finish-pr` when the user asks to keep watching until convergence.
+Process one round of automated review feedback. Use `/finish-pr` when the user
+wants repeated monitoring until a pull request converges.
 
-## 1. Resolve Context
+## 1. Capture the Review State
 
-Get the PR, current head, repository, and requester identity:
+Resolve the repository, PR, current head SHA, requester identity, draft state,
+and applicable comment-attribution rules. Fail visibly if the PR cannot be
+identified.
 
-```bash
-gh pr view --json number,headRefOid,headRefName,baseRefName,isDraft,url
-gh api user --jq '.login'
-```
+Fetch paginated review threads through GitHub GraphQL so unresolved state and
+thread replies are preserved. Fetch top-level issue comments separately. Record
+every participant and reply author in a thread, which comments apply to the
+current head, and which are stale. Treat a thread as bot-authored only when every
+participant is a confirmed allowed bot; a mixed or uncertain thread follows the
+human-thread rules.
 
-Every published reply ends with `CC on behalf of {username}` as plain text,
-without `@` or a profile link.
+Do not rely only on the REST review-comments list: it does not represent thread
+resolution or the complete conversation reliably.
 
-## 2. Fetch the Complete Current Review State
+## 2. Triage Every Actionable Bot Finding
 
-Use paginated GraphQL `reviewThreads` and keep unresolved threads. Fetch
-top-level issue comments separately because some bots post there. Include
-nitpicks and filter by bot authorship; never resolve, minimize, or otherwise
-moderate a human-authored thread.
+Classify each unresolved bot review thread and each actionable top-level bot
+comment:
 
-Record thread ID, comment database ID, path, author, body, and whether the
-comment targets the current head or stale code. Deduplicate repeated bot
-findings before acting.
+- **Accept**: correct and improves safety, behavior, tests, or maintainability.
+- **Accept with adjustment**: the concern is valid but the proposed fix conflicts
+  with repository structure or a stronger invariant.
+- **Already addressed**: current code or a pushed commit demonstrably resolves it.
+- **Push back**: incorrect, stale, speculative, or contrary to documented
+  constraints.
 
-## 3. Decide From Code, Not Authority
+Read the cited code and applicable instructions before deciding. Treat security,
+authorization, data loss, and compatibility claims as hypotheses to verify, not
+as votes to accept automatically. Never modify or resolve human review threads.
 
-Read the applicable `AGENTS.md`, changed file, surrounding contract, tests, and
-current diff. Classify every bot point:
+## 3. Implement Before Replying
 
-- **accept**: a reachable correctness, security, typing, performance,
-  maintainability, or convention defect;
-- **accept with modification**: the concern is real but the proposed patch is
-  weaker than the repository pattern;
-- **push back**: disproven, stale, purely stylistic, or conflicting with an
-  established invariant;
-- **already addressed**: current remote head demonstrably contains the fix.
+Apply accepted changes, including tests when they cover a real failure mode. Run
+focused checks while iterating and the repository's canonical affected-change or
+CI-equivalent verification before publication when practical.
 
-Never accept a suggestion merely to make the unresolved count zero.
+Commit and push the implementation before saying it is fixed. Push a new branch
+normally; use `--force-with-lease` only after intentionally rebasing a published
+branch. Capture the resulting head SHA. If this round pushes a new head, its
+final status is `pending_bots` even when GitHub has not registered checks or
+reviewers yet; a newly published head cannot be clean in the same pass.
 
-## 4. Implement Before Replying
+## 4. Reply With Verifiable Evidence
 
-Implement all accepted findings, add the strongest proportionate regression
-guard, and run focused checks. Use `bun run verify` for the final code pass when
-appropriate; honor explicit local-check constraints and report them.
+Reply in the review thread or top-level issue conversation for each handled bot
+finding. Keep responses short and factual:
 
-Commit and push the fixes before telling GitHub they are implemented. A new
-branch pushes normally; a deliberately rebased published branch uses
-`--force-with-lease`.
+- implemented in `<sha>` with the relevant behavior
+- implemented with an adjustment and why
+- already addressed, with the code or commit that proves it
+- not changing, with a concrete repository constraint or technical reason
 
-## 5. Reply, Then Resolve
+Follow repository attribution rules for GitHub comments. Do not claim a check
+passed unless it ran successfully on the reported head.
 
-After the implementation exists on the remote head:
+After replying, resolve only review threads whose every participant is a
+confirmed allowed bot and that are implemented, already addressed, or answered
+with a supported pushback. Leave human, mixed-participant, and uncertain threads
+open. Top-level comments have no thread-resolution state; do not minimize bot
+summaries by default.
 
-- reply in the review thread using `in_reply_to`;
-- state the concrete resolution or concise evidence for pushback;
-- append the required attribution;
-- resolve the addressed bot thread through GraphQL.
+## 5. Recheck the Current Head
 
-For top-level bot comments, reply only when a response is useful. Do not hide a
-bot summary by default; minimize it only when the user explicitly asks and it
-has been fully addressed. Never claim “implemented” before the fixing commit is
-pushed.
+Refresh the PR after the push and report one status:
 
-## 6. Check CI and Bot Completion
+- `clean`: all current-head automated reviewers are terminal, required checks
+  are green, and no actionable automated finding remains in a review thread or
+  top-level comment
+- `pending_bots`: this round pushed the current head, or a current-head
+  automated review or required check is still running
+- `needs_changes`: actionable automated feedback remains
+- `failing_ci`: a current-head required check failed
 
-Inspect current-head checks and failed logs:
-
-```bash
-gh pr checks --json name,state,link
-gh run list --branch "$(git branch --show-current)" --limit 5 \
-  --json status,conclusion,name,databaseId,headSha
-```
-
-Ignore failures from an obsolete head. Fix current-head CI root causes in scope;
-do not suppress them or widen baselines mechanically. If this round pushed a
-new commit, bots and CI must be considered pending even when the previous head
-was green.
-
-## 7. Return One Status
-
-- `clean`: current head is green, review bots are complete, and no actionable
-  automated thread remains;
-- `pending_bots`: checks/review are still running or this round pushed a new
-  head;
-- `needs_changes`: actionable feedback remains unresolved;
-- `failing_ci`: current-head CI still fails after the attempted fixes.
-
-When clean, preserve an explicitly requested draft state unless the user asks
-to mark it ready. Stop after reporting the single-round status; do not schedule
-another round from inside this skill.
-
-## Reply Shapes
-
-```text
-Accepted and fixed in <commit>. <What changed and what guards it>.
-
-CC on behalf of username
-```
-
-```text
-Pushing back: <specific evidence showing why the finding does not apply>.
-
-CC on behalf of username
-```
+Preserve the PR's explicit draft state. This skill performs one pass; it does not
+schedule polling, merge, deploy, or bypass protections.

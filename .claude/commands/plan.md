@@ -1,98 +1,102 @@
-# Create Plan
+# Plan
 
-Create an implementation plan only when the user explicitly asks for one. A
-plan is a durable handoff artifact, not a substitute for resolving the product
-shape first.
+Create an implementation plan only when the user explicitly requests one. A
+plan records decisions and executable slices; it is not a substitute for
+inspecting the repository.
 
-## Arguments
+## 1. Establish the Planning Context
 
-`$ARGUMENTS` describes the feature, task, or plan slug. Infer a short
-kebab-case slug from the conversation when none is supplied.
+Read applicable repository instructions and the existing planning system.
+Prefer the repository's established location and format. When present, inspect:
 
-## Workflow
+- `.agents/ARCHITECTURE.md`
+- `.agents/GOALS.md`
+- `.agents/STATUS.md`
+- recent related plans
+- the code, tests, schemas, and configuration the task would change
 
-1. **Check decision readiness.** Separate settled decisions from genuine open
-   questions. If a missing answer would materially change the product or
-   architecture, resolve it with the user before writing. Do not pause for
-   choices that can be discovered from the repository or decided safely from
-   existing conventions.
-2. **Read current evidence.** Read the applicable `AGENTS.md`,
-   `.agents/GOALS.md` when present, relevant code and tests, and nearby plans.
-   Treat code and current repository instructions as authoritative; do not
-   require optional context files that are absent.
-3. **Create a collision-resistant filename.** Use UTC timestamp, slug, and a
-   short unique suffix:
+Use `$ARGUMENTS` as a short slug when provided; otherwise derive one from the
+task.
 
-   ```bash
-   date -u +%Y%m%d-%H%M%S
-   ```
+Do not create a second planning system. Use `.agents/plans/` only when it is
+already established or the repository clearly adopts the shared convention.
+If no planning area exists and the repository does not adopt this convention,
+ask the user where to save the plan before creating a new directory.
 
-   Write `.agents/plans/{timestamp}-{slug}-{unique}.md` using exclusive file
-   creation. If the candidate exists, generate a new suffix and retry; never
-   overwrite an existing plan. Do not allocate a global sequential number,
-   which is race-prone across worktrees.
-4. **Write the plan once the shape is coherent.** The user's request to plan
-   authorizes creating the file. Do not ask for confirmation after writing or
-   add a second save step.
+## 2. Resolve Decisions With Evidence
 
-## Plan Shape
+Trace the current behavior through real entry points and boundaries. Record
+facts separately from proposals. Ask about a materially different product,
+security, migration, or compatibility choice only when repository evidence
+cannot resolve it. Do not pause for discoverable implementation details.
+
+Prefer vertical slices that leave the repository working after each slice when
+the implementation shape is sufficiently settled. Otherwise plan outcomes and
+contracts without inventing files or symbols. Identify ownership boundaries,
+data contracts, invalid states, rollout risks, and generated artifacts
+explicitly.
+
+## 3. Create a Collision-Safe File
+
+Follow the repository's existing naming scheme when one exists and is safe for
+concurrent worktrees. Otherwise use:
+
+```text
+YYYYMMDD-HHMMSS-<slug>-<short-unique-suffix>.md
+```
+
+Use UTC for the timestamp. Create the file exclusively and retry with a new
+suffix on collision. Never overwrite an existing plan. Do not derive a global
+sequential number from a directory listing: concurrent worktrees can choose the
+same number.
+
+## 4. Write the Plan
+
+Use only sections that carry information:
 
 ```markdown
-# Plan: [Feature Name]
-
-Date: YYYY-MM-DD
+# Plan: [Feature]
 
 ## Goal
 
-The user-visible or operational outcome, in 1–3 sentences.
+What outcome changes, for whom, and why.
 
 ## Current State
 
-What exists now, with the relevant files, contracts, and constraints.
+Relevant behavior, entry points, constraints, and evidence.
 
 ## Decisions
 
-- **Decision:** choice and why it wins over the material alternatives.
+- **Decision**: choice, alternatives considered, and why they were rejected.
 
 ## Scope
 
-**In:** ...
-
-**Out:** ...
+In scope and intentionally out of scope.
 
 ## Vertical Slices
 
-1. Small independently verifiable end-to-end slice.
-2. Next slice and its dependency on the first.
+1. End-to-end slice with real files, boundaries, and a verifiable outcome.
 
 ## Contracts and Invariants
 
-Types, API/data boundaries, tenant/security rules, failure semantics,
-pagination, performance budgets, i18n, and compatibility requirements that
-must survive implementation.
+Types, schemas, authorization, compatibility, idempotency, and failure behavior.
 
 ## Verification
 
-Tests and checks that can catch real failures the type system or lint cannot.
+Focused checks, integration coverage, and observable acceptance criteria.
 
 ## Rollout and Recovery
 
-Additive migration order, compatibility window, observability, and rollback or
-forward-fix path when relevant.
+Migration, sequencing, monitoring, rollback, or "Not applicable".
 
 ## Open Questions
 
-Only unresolved decisions that still need a named answer. Omit when empty.
+Only unresolved decisions that can change the plan.
 ```
 
-## Quality Bar
+Name concrete files and symbols only where repository evidence and settled
+implementation decisions support them. Avoid pseudocode unless a contract would
+otherwise remain ambiguous. Keep the plan concise enough to stay useful during
+implementation.
 
-- Keep the plan concise and specific enough for another agent to implement.
-- Prefer vertical slices over horizontal layer checklists.
-- Name real files and existing primitives; do not invent paths without
-  checking them.
-- State what is deliberately deferred so follow-up ideas do not expand the
-  first slice.
-- Do not write implementation pseudocode unless a contract is otherwise
-  ambiguous.
-- Report the created plan path and the few decisions that matter most.
+Report the created path and any decision that still needs the user.
