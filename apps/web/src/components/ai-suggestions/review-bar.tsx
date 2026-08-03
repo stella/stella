@@ -129,7 +129,7 @@ export const ReviewBar = ({
   );
   const activeItem = suggestions.at(activeIndex);
   const activeAction =
-    activeItem === undefined ? "busy" : getReviewBarAction(activeItem.status);
+    activeItem === undefined ? "busy" : getReviewBarAction(activeItem);
 
   const focusAt = useLatestCallback((index: number) => {
     const item = suggestions.at(index);
@@ -187,10 +187,7 @@ export const ReviewBar = ({
 
   const revertActive = useLatestCallback(() => {
     const target = suggestions.at(activeIndex);
-    if (
-      target === undefined ||
-      getReviewBarAction(target.status) !== "revert"
-    ) {
+    if (target === undefined || getReviewBarAction(target) !== "revert") {
       return;
     }
     revertOne(target);
@@ -293,7 +290,7 @@ export const ReviewBar = ({
         <ChevronDownIcon className="size-4" />
       </Button>
       <span aria-hidden="true" className="bg-border mx-0.5 h-5 w-px" />
-      {activeAction === "revert" ? (
+      {activeAction === "revert" && (
         <Button
           className="h-7 px-2.5 text-xs"
           onClick={revertActive}
@@ -306,7 +303,8 @@ export const ReviewBar = ({
             {t("docxReview.revert")}
           </span>
         </Button>
-      ) : (
+      )}
+      {activeAction !== "revert" && activeAction !== "resolved" && (
         <>
           <Button
             className="h-7 px-2.5 text-xs"

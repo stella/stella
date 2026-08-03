@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { getReviewBarAction, getReviewBarPosition } from "./review-bar.logic";
+import {
+  canRevertReviewSuggestion,
+  getReviewBarAction,
+  getReviewBarPosition,
+} from "./review-bar.logic";
 import type { ReviewSuggestion, ReviewSuggestionStatus } from "./review-store";
 
 const suggestion = (
@@ -43,11 +47,24 @@ describe("review bar session progress", () => {
     });
   });
 
-  test("offers revert for every terminal decision", () => {
-    expect(getReviewBarAction("accepted")).toBe("revert");
-    expect(getReviewBarAction("rejected")).toBe("revert");
-    expect(getReviewBarAction("skipped")).toBe("revert");
-    expect(getReviewBarAction("pending")).toBe("resolve");
-    expect(getReviewBarAction("applying")).toBe("busy");
+  test("offers revert only when the terminal decision is locally reversible", () => {
+    const hydratedAccepted = suggestion("accepted", "accepted");
+    const liveAccepted = {
+      ...hydratedAccepted,
+      revisionIds: [7],
+    };
+    const rejected = suggestion("rejected", "rejected");
+    const skipped = suggestion("skipped", "skipped");
+
+    expect(canRevertReviewSuggestion(hydratedAccepted)).toBe(false);
+    expect(getReviewBarAction(hydratedAccepted)).toBe("resolved");
+    expect(canRevertReviewSuggestion(liveAccepted)).toBe(true);
+    expect(getReviewBarAction(liveAccepted)).toBe("revert");
+    expect(getReviewBarAction(rejected)).toBe("revert");
+    expect(getReviewBarAction(skipped)).toBe("revert");
+    expect(getReviewBarAction(suggestion("pending", "pending"))).toBe(
+      "resolve",
+    );
+    expect(getReviewBarAction(suggestion("applying", "applying"))).toBe("busy");
   });
 });

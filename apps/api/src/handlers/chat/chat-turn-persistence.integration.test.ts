@@ -155,6 +155,25 @@ describe("durable chat turn persistence", () => {
       status: "completed",
       userMessageId,
     });
+
+    const replay = unwrap(
+      await claimChatTurnForExecution({
+        acceptedTurnId: null,
+        incomingMessageId: userMessageId,
+        incomingMessageRole: "user",
+        organizationId: ids.orgA,
+        safeDb,
+        threadId,
+        userId: ids.userA1,
+        workspaceId: ids.wsA1,
+      }),
+    );
+    expect(replay).toBeNull();
+    expect(
+      await testDb.query.chatTurns.findMany({
+        where: { userMessageId: { eq: userMessageId } },
+      }),
+    ).toHaveLength(1);
   });
 
   test("adopts a persisted pre-migration user message into the durable lifecycle", async () => {

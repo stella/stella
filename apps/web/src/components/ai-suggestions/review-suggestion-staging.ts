@@ -12,10 +12,13 @@ type ReviewSuggestionStagingEditor = {
     "applied" | "undoHandle"
   >;
   getSuggestions: DocxEditorRef["getSuggestions"];
+  rejectSuggestion: DocxEditorRef["rejectSuggestion"];
 };
 
 type StageReviewSuggestionsOptions = {
+  canStage: boolean;
   editor: ReviewSuggestionStagingEditor;
+  managedSuggestionIds: Set<string>;
   suggestions: readonly ReviewSuggestion[];
   updateSuggestion: (
     id: string,
@@ -29,13 +32,51 @@ type StageReviewSuggestionsOptions = {
  * serialized DOCX until the reviewer accepts them.
  */
 export const stageReviewSuggestions = ({
+  canStage,
   editor,
+  managedSuggestionIds,
   suggestions,
   updateSuggestion,
 }: StageReviewSuggestionsOptions): void => {
-  const alreadyStaged = new Set(
+  const liveSuggestionIds = new Set(
     editor.getSuggestions().map((suggestion) => suggestion.suggestionId),
   );
+  const desiredSuggestionIds = new Set(
+    suggestions.flatMap((suggestion) =>
+      suggestion.status === "pending" && suggestion.pendingOperation !== null
+        ? [suggestion.pendingOperation.id]
+        : [],
+    ),
+  );
+
+  // The editor outlives a review-session reset. Remove only suggestions this
+  // bridge previously staged; unrelated user-authored Folio suggestions must
+  // remain untouched.
+  for (const suggestionId of managedSuggestionIds) {
+    if (desiredSuggestionIds.has(suggestionId)) {
+      continue;
+    }
+    if (
+      !liveSuggestionIds.has(suggestionId) ||
+      editor.rejectSuggestion(suggestionId)
+    ) {
+      managedSuggestionIds.delete(suggestionId);
+      liveSuggestionIds.delete(suggestionId);
+    }
+  }
+
+  // Reclaim matching suggestions after an effect restart without claiming
+  // any native suggestion that is absent from the active review session.
+  for (const suggestionId of desiredSuggestionIds) {
+    if (liveSuggestionIds.has(suggestionId)) {
+      managedSuggestionIds.add(suggestionId);
+    }
+  }
+
+  if (!canStage) {
+    return;
+  }
+
   const groups = new Map<FolioAIEditSnapshot, ReviewSuggestion[]>();
   for (const item of suggestions) {
     const operation = item.pendingOperation;
@@ -44,7 +85,7 @@ export const stageReviewSuggestions = ({
       item.status !== "pending" ||
       operation === null ||
       snapshot === null ||
-      alreadyStaged.has(operation.id)
+      liveSuggestionIds.has(operation.id)
     ) {
       continue;
     }
@@ -80,6 +121,10 @@ export const stageReviewSuggestions = ({
       );
       if (item === undefined) {
         continue;
+      }
+      const suggestionId = item.pendingOperation?.id;
+      if (suggestionId !== undefined) {
+        managedSuggestionIds.add(suggestionId);
       }
       updateSuggestion(item.id, {
         revisionIds: applied.revisionIds ?? null,

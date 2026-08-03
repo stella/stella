@@ -237,6 +237,20 @@ export const claimChatTurnForExecution = async ({
         return null;
       }
 
+      // Legacy adoption is only for messages that predate durable turns. A
+      // retry of any already-owned message is a fixed point, including a
+      // completed turn whose streamed response was lost by the client.
+      const existingTurn = await tx.query.chatTurns.findFirst({
+        where: {
+          threadId: { eq: threadId },
+          userMessageId: { eq: userMessageId },
+        },
+        columns: { id: true },
+      });
+      if (existingTurn) {
+        return null;
+      }
+
       const legacyTurnId = createSafeId<"chatTurn">();
       // audit: skip — deploy compatibility for a persisted pre-chat_turns message; later message settlement is audited
       await tx.insert(chatTurns).values({

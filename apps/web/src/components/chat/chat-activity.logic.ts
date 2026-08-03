@@ -162,7 +162,8 @@ const isFailedToolOutput = (output: unknown): boolean =>
   typeof output === "object" &&
   output !== null &&
   (("error" in output && output.error !== undefined && output.error !== null) ||
-    ("success" in output && output.success === false));
+    ("success" in output && output.success === false) ||
+    ("isError" in output && output.isError === true));
 
 export const getLatestCompletedResearchPartIndex = (
   messages: readonly ChatMessage[],

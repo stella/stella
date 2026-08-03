@@ -6,13 +6,14 @@ import { ONLINE_VALIDATED_INDEX_NAMES } from "./online-migrations";
 const MIGRATIONS_DIR = nodePath.resolve(import.meta.dir, "../../drizzle");
 const ZERO_DURATION = /^'?0\s*(?:us|ms|s|min|h|d)?'?$/iu;
 const CONCURRENT_INDEX_OPERATION =
-  /^(?:CREATE\s+(?:UNIQUE\s+)?|DROP\s+)INDEX\s+CONCURRENTLY\b/iu;
+  /^(?:(?:CREATE\s+(?:UNIQUE\s+)?|DROP\s+)INDEX\s+CONCURRENTLY|REINDEX\s+INDEX\s+CONCURRENTLY)\b/iu;
 const CONCURRENT_IF_NOT_EXISTS =
   /\bCREATE\s+(?:UNIQUE\s+)?INDEX\s+CONCURRENTLY\s+IF\s+NOT\s+EXISTS\s+"([^"]+)"/giu;
 const CONCURRENT_UNIQUE_CREATE =
   /\bCREATE\s+UNIQUE\s+INDEX\s+CONCURRENTLY(?<idempotent>\s+IF\s+NOT\s+EXISTS)?\s+"(?<name>[^"]+)"/giu;
 const CONCURRENT_DROP =
   /\bDROP\s+INDEX\s+CONCURRENTLY\s+IF\s+EXISTS\s+"([^"]+)"/giu;
+const CONCURRENT_REINDEX = /\bREINDEX\s+INDEX\s+CONCURRENTLY\s+"([^"]+)"/giu;
 const TYPE_CHANGE =
   /^ALTER\s+TABLE\b[^;]*?\bALTER\s+(?:COLUMN\s+)?(?:(?:U&)?"(?:""|[^"])+"(?:\s+UESCAPE\s+'(?:''|[^'])*')?|[A-Z_\u0080-\u{10FFFF}][A-Z0-9_$\u0080-\u{10FFFF}]*)\s+(?:SET\s+DATA\s+)?TYPE\b/iu;
 const TYPE_CHANGE_ANYWHERE =
@@ -625,6 +626,18 @@ const collectUnsafeConcurrentIndexes = async (): Promise<string[]> => {
     const concurrentUniqueCreates = [
       ...sqlWithoutLineComments.matchAll(CONCURRENT_UNIQUE_CREATE),
     ];
+    const concurrentReindexPositions = new Map<string, number[]>();
+    for (const match of sqlWithoutLineComments.matchAll(CONCURRENT_REINDEX)) {
+      const name = match.at(1);
+      if (name === undefined) {
+        continue;
+      }
+      const positions = concurrentReindexPositions.get(name) ?? [];
+      positions.push(match.index);
+      concurrentReindexPositions.set(name, positions);
+    }
+    const firstForeignKeyIndex =
+      sqlWithoutLineComments.search(/\bFOREIGN\s+KEY\b/iu);
     const createdUniqueIndexes = new Set(
       concurrentUniqueCreates.flatMap(({ groups }) => {
         const name = groups?.["name"];
@@ -639,7 +652,8 @@ const collectUnsafeConcurrentIndexes = async (): Promise<string[]> => {
         `${relativePath}: unique replacement drop must follow online validity postconditions`,
       );
     }
-    for (const { groups } of concurrentUniqueCreates) {
+    for (const match of concurrentUniqueCreates) {
+      const { groups } = match;
       const name = groups?.["name"];
       if (!name) {
         continue;
@@ -647,6 +661,18 @@ const collectUnsafeConcurrentIndexes = async (): Promise<string[]> => {
       if (!groups["idempotent"]) {
         violations.push(
           `${relativePath}: unique index ${name} is not retry-idempotent`,
+        );
+      }
+      if (
+        groups["idempotent"] &&
+        firstForeignKeyIndex !== -1 &&
+        !(concurrentReindexPositions.get(name) ?? []).some(
+          (position) =>
+            position > match.index && position < firstForeignKeyIndex,
+        )
+      ) {
+        violations.push(
+          `${relativePath}: unique index ${name} is used before retry validity repair`,
         );
       }
       if (droppedIndexes.has(name)) {

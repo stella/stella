@@ -14,7 +14,7 @@
  */
 
 import type { ReactNode, RefObject } from "react";
-import { startTransition } from "react";
+import { startTransition, useRef } from "react";
 
 import {
   setAISuggestionsMeta,
@@ -150,6 +150,7 @@ const ReviewFolioDecorationsBridge = ({
   docxEditable: boolean;
   entityId: string;
 }) => {
+  const managedSuggestionIdsRef = useRef(new Set<string>());
   const suggestions = useReviewStore(
     (state) => state.sessions[entityId] ?? EMPTY_REVIEW_SUGGESTIONS,
   );
@@ -175,15 +176,15 @@ const ReviewFolioDecorationsBridge = ({
         animationFrame = requestAnimationFrame(sync);
         return;
       }
-      if (docxEditable) {
-        stageReviewSuggestions({
-          editor,
-          suggestions,
-          updateSuggestion: (id, patch) => {
-            useReviewStore.getState().updateSuggestion(entityId, id, patch);
-          },
-        });
-      }
+      stageReviewSuggestions({
+        canStage: docxEditable,
+        editor,
+        managedSuggestionIds: managedSuggestionIdsRef.current,
+        suggestions,
+        updateSuggestion: (id, patch) => {
+          useReviewStore.getState().updateSuggestion(entityId, id, patch);
+        },
+      });
       const nativeSuggestionIds = new Set(
         editor.getSuggestions().map((suggestion) => suggestion.suggestionId),
       );

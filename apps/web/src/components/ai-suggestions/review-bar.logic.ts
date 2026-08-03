@@ -1,24 +1,40 @@
-import type {
-  ReviewSuggestion,
-  ReviewSuggestionStatus,
-} from "@/components/ai-suggestions/review-store";
+import type { ReviewSuggestion } from "@/components/ai-suggestions/review-store";
 
-export type ReviewBarAction = "resolve" | "revert" | "busy";
+export type ReviewBarAction = "resolve" | "revert" | "busy" | "resolved";
+
+export const canRevertReviewSuggestion = (
+  suggestion: ReviewSuggestion,
+): boolean => {
+  switch (suggestion.status) {
+    case "accepted":
+      return suggestion.revisionIds !== null || suggestion.undoHandle !== null;
+    case "rejected":
+    case "skipped":
+      return true;
+    case "applying":
+    case "pending":
+      return false;
+    default:
+      suggestion.status satisfies never;
+      return false;
+  }
+};
 
 export const getReviewBarAction = (
-  status: ReviewSuggestionStatus,
+  suggestion: ReviewSuggestion,
 ): ReviewBarAction => {
-  switch (status) {
+  switch (suggestion.status) {
     case "pending":
       return "resolve";
     case "applying":
       return "busy";
-    case "accepted":
     case "rejected":
     case "skipped":
       return "revert";
+    case "accepted":
+      return canRevertReviewSuggestion(suggestion) ? "revert" : "resolved";
     default:
-      status satisfies never;
+      suggestion.status satisfies never;
       return "busy";
   }
 };

@@ -1,10 +1,9 @@
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 
--- Prepare the existing message table for a later additive composite FK. The
--- turn table does not depend on this index in this deploy, so an interrupted
--- build cannot block the additive schema migration; the online migration
--- registry validates and concurrently repairs it after the ledger update.
+-- Prepare the existing message table for the additive composite FKs below.
+-- Drizzle wraps pending migrations in one transaction, while PostgreSQL
+-- requires concurrent index operations to run outside a transaction block.
 -- squawk-ignore transaction-nesting
 COMMIT;
 --> statement-breakpoint
@@ -12,8 +11,14 @@ SET statement_timeout = 0;
 --> statement-breakpoint
 SET lock_timeout = 0;
 --> statement-breakpoint
+
 CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "chat_messages_id_thread_uidx"
   ON "chat_messages" ("id", "thread_id");
+--> statement-breakpoint
+-- CREATE INDEX CONCURRENTLY can leave this named index INVALID when
+-- interrupted. REINDEX INDEX is PostgreSQL's validity repair for that state;
+-- it must complete before the composite foreign keys use the index.
+REINDEX INDEX CONCURRENTLY "chat_messages_id_thread_uidx";
 --> statement-breakpoint
 SET statement_timeout = '5s';
 --> statement-breakpoint

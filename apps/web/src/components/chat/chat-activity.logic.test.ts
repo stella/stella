@@ -87,6 +87,25 @@ describe("thread activity", () => {
         { ...message, parts: message.parts.slice(0, 2) },
       ]),
     ).toBeNull();
+
+    expect(
+      getLatestCompletedResearchPartIndex([
+        {
+          ...message,
+          parts: [
+            { type: "text" as const, content: "I will check." },
+            {
+              type: "tool-call" as const,
+              id: "failed-mcp-search",
+              name: "mcp__registry__lookup_company" as const,
+              arguments: "{}",
+              state: "complete" as const,
+              output: { content: [], isError: true },
+            },
+          ],
+        },
+      ]),
+    ).toBeNull();
   });
 
   test("shows solving only between completed research and visible output", () => {
