@@ -77,6 +77,7 @@ import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-sto
 import {
   invalidateCreatedDocumentQueries,
   promoteCreateDocumentDraftInspectorTab,
+  resetFailedCreateDocumentDraftInspectorTab,
   resolveBoundCreateDocumentDraftChatThreadId,
   setCreateDocumentDraftInspectorTabStatus,
 } from "@/features/chat/hooks/use-chat-session-created-document.logic";
@@ -1064,7 +1065,7 @@ export const useChatSession = ({
       if (persistence.status !== "saving") {
         return;
       }
-      const lockedDraftEditor = setCreateDocumentDraftInspectorTabStatus({
+      setCreateDocumentDraftInspectorTabStatus({
         inspector,
         status: "saving",
         toolCallId,
@@ -1141,13 +1142,10 @@ export const useChatSession = ({
 
       if (Result.isError(createResult)) {
         endCreateDocumentDraftPersistence(toolCallId);
-        if (lockedDraftEditor) {
-          setCreateDocumentDraftInspectorTabStatus({
-            inspector: useInspectorTabsStore.getState(),
-            status: "ready",
-            toolCallId,
-          });
-        }
+        resetFailedCreateDocumentDraftInspectorTab({
+          getInspector: useInspectorTabsStore.getState,
+          toolCallId,
+        });
         getAnalytics().captureError(createResult.error);
         stellaToast.add({
           title: APIError.is(createResult.error)

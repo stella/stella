@@ -99,6 +99,23 @@ export const setCreateDocumentDraftInspectorTabStatus = ({
   return true;
 };
 
+type ResetFailedCreateDocumentDraftInspectorTabOptions = {
+  getInspector: () => Pick<InspectorTabsStore, "tabs" | "updateView">;
+  toolCallId: string;
+};
+
+/** Read the current inspector state at settlement time: a draft can be opened
+ * after saving starts, so the tab present at failure is authoritative. */
+export const resetFailedCreateDocumentDraftInspectorTab = ({
+  getInspector,
+  toolCallId,
+}: ResetFailedCreateDocumentDraftInspectorTabOptions): boolean =>
+  setCreateDocumentDraftInspectorTabStatus({
+    inspector: getInspector(),
+    status: "ready",
+    toolCallId,
+  });
+
 type SetCreateDocumentDraftInspectorChatThreadIdOptions = {
   chatThreadId: ChatThreadId;
   inspector: Pick<InspectorTabsStore, "tabs" | "updateView">;

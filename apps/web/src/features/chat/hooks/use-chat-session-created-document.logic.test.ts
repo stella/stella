@@ -19,6 +19,7 @@ import {
   bindCreateDocumentDraftInspectorChatThread,
   getBoundCreateDocumentDraftInspectorChatThreadId,
   promoteCreateDocumentDraftInspectorTab,
+  resetFailedCreateDocumentDraftInspectorTab,
   resolveBoundCreateDocumentDraftChatThreadId,
   setCreateDocumentDraftInspectorChatThreadId,
   setCreateDocumentDraftInspectorTabStatus,
@@ -191,6 +192,71 @@ describe("create-document inspector transition", () => {
     expect(
       restoredTab?.type === "view" ? restoredTab.payload : null,
     ).toMatchObject({ status: "ready" });
+  });
+
+  test("restores a draft reopened while its save is pending after failure", () => {
+    const toolCallId = "tool-1";
+    const reopenedTabs: InspectorTab[] = [
+      {
+        id: createDocumentDraftTabId(toolCallId),
+        label: "Power of attorney.docx",
+        payload: {
+          ...buildCreateDocumentDraftPayload({
+            draft: {
+              messageId: "message-origin",
+              toolCallId,
+              name: "Power of attorney",
+              source: "@doc kind=other locale=en page=A4",
+              status: "ready",
+            },
+            existingPayload: undefined,
+            originChatThreadId: toChatThreadId("thread-origin"),
+          }),
+          status: "saving",
+        },
+        type: "view",
+        viewType: CREATE_DOCUMENT_DRAFT_VIEW,
+      },
+    ];
+    const closedInspector = {
+      tabs: [],
+      updateView: () => {},
+    } satisfies Pick<InspectorTabsStore, "tabs" | "updateView">;
+    const reopenedInspector = {
+      tabs: reopenedTabs,
+      updateView: ({ id, label, payload }) => {
+        const tab = reopenedTabs.find((candidate) => candidate.id === id);
+        if (tab?.type !== "view") {
+          return;
+        }
+        tab.label = label;
+        tab.payload = payload;
+      },
+    } satisfies Pick<InspectorTabsStore, "tabs" | "updateView">;
+    let currentInspector: Pick<InspectorTabsStore, "tabs" | "updateView"> =
+      closedInspector;
+
+    // Saving began while no draft editor was mounted.
+    expect(
+      setCreateDocumentDraftInspectorTabStatus({
+        inspector: currentInspector,
+        status: "saving",
+        toolCallId,
+      }),
+    ).toBe(false);
+
+    // The runtime opens the draft while the save is still in flight.
+    currentInspector = reopenedInspector;
+
+    expect(
+      resetFailedCreateDocumentDraftInspectorTab({
+        getInspector: () => currentInspector,
+        toolCallId,
+      }),
+    ).toBe(true);
+    expect(reopenedTabs.at(0)).toMatchObject({
+      payload: { status: "ready" },
+    });
   });
 
   test("promotes the open draft in place without a close/open cycle", () => {
