@@ -1,37 +1,14 @@
-import {
-  File,
-  FileImage,
-  FileSpreadsheet,
-  FileText,
-  MailIcon,
-} from "lucide-react";
+import type { SVGProps } from "react";
+
+import { File, FileImage, FileText, MailIcon } from "lucide-react";
 
 import { getDocumentIconKind } from "@/components/document-icon.logic";
 import { MarkdownIcon } from "@/components/markdown-icon";
 
-type DocxIconProps = {
-  className?: string | undefined;
-  style?: React.CSSProperties | undefined;
-  width?: number | string;
-  height?: number | string;
-};
-
-export const DocxIcon = ({
-  className,
-  style,
-  width,
-  height,
-}: DocxIconProps) => (
-  <svg
-    aria-hidden="true"
-    className={className}
-    fill="none"
-    height={height}
-    style={style}
-    viewBox="0 0 48 48"
-    width={width}
-    xmlns="http://www.w3.org/2000/svg"
-  >
+// Page body shared by all three: white sheet, folded top-right corner, grey
+// outline, in a 48×48 viewBox.
+const OfficePage = () => (
+  <>
     <path
       d="M13.5 44h29c.275 0 .5-.225.5-.5V14h-8.5c-.827 0-1.5-.673-1.5-1.5V4H13.5c-.275 0-.5.225-.5.5v39c0 .275.225.5.5.5z"
       fill="#fff"
@@ -44,6 +21,18 @@ export const DocxIcon = ({
       fillRule="evenodd"
       opacity=".64"
     />
+  </>
+);
+
+export const DocxIcon = (props: SVGProps<SVGSVGElement>) => (
+  <svg
+    aria-hidden="true"
+    fill="none"
+    viewBox="0 0 48 48"
+    xmlns="http://www.w3.org/2000/svg"
+    {...props}
+  >
+    <OfficePage />
     <path d="M39.5 30H28v1h11.5a.5.5 0 0 0 0-1z" fill="#103F91" />
     <path d="M39.5 27H28v1h11.5a.5.5 0 0 0 0-1z" fill="#185ABD" />
     <path d="M39.5 24H28v1h11.5a.5.5 0 0 0 0-1z" fill="#2B7CD3" />
@@ -56,6 +45,58 @@ export const DocxIcon = ({
       d="M11.829 29.322c.033.262.055.49.065.684h.038c.045-.446.117-.89.214-1.328L13.921 21h2.295l1.836 7.564c.092.373.168.848.23 1.426h.03c.026-.399.09-.859.191-1.38l1.47-7.61h2.088l-2.57 11H17.05l-1.752-7.287c-.051-.21-.109-.484-.172-.822a10.585 10.585 0 0 1-.119-.736h-.03c-.02.18-.06.446-.119.798-.059.354-.106.613-.141.783L13.072 32h-2.479L8 21h2.127l1.598 7.694c.036.159.07.369.104.628z"
       fill="#F9F7F7"
     />
+  </svg>
+);
+
+// Green lettered badge, shared by the XLSX and CSV marks.
+const SpreadsheetBadge = () => (
+  <>
+    <path
+      d="M6 37h18a2 2 0 002-2V17a2 2 0 00-2-2H6a2 2 0 00-2 2v18a2 2 0 002 2z"
+      fill="#107C41"
+    />
+    <path
+      d="M9.518 32l3.851-6.017L9.841 20h2.839l1.926 3.825c.177.362.298.633.365.811h.025c.127-.29.26-.572.398-.845L17.454 20h2.605l-3.62 5.95L20.15 32h-2.772l-2.225-4.2a3.522 3.522 0 01-.265-.561h-.033a2.605 2.605 0 01-.257.543L12.307 32h-2.79z"
+      fill="#F9F7F7"
+    />
+  </>
+);
+
+export const XlsxIcon = (props: SVGProps<SVGSVGElement>) => (
+  <svg
+    aria-hidden="true"
+    fill="none"
+    viewBox="0 0 48 48"
+    xmlns="http://www.w3.org/2000/svg"
+    {...props}
+  >
+    <OfficePage />
+    <path d="M39 31h-3a1 1 0 110-2h3a1 1 0 110 2z" fill="#134A2C" />
+    <path d="M32 31h-3a1 1 0 110-2h3a1 1 0 110 2z" fill="#185C37" />
+    <path d="M39 27h-3a1 1 0 110-2h3a1 1 0 110 2z" fill="#21A366" />
+    <path d="M32 27h-3a1 1 0 110-2h3a1 1 0 110 2z" fill="#107C41" />
+    <path d="M39 23h-3a1 1 0 110-2h3a1 1 0 110 2z" fill="#33C481" />
+    <path d="M32 23h-3a1 1 0 110-2h3a1 1 0 110 2z" fill="#21A366" />
+    <SpreadsheetBadge />
+  </svg>
+);
+
+// The CSV mark pairs the spreadsheet badge with an "a," glyph: same workbook
+// family, marked as delimited text.
+export const CsvIcon = (props: SVGProps<SVGSVGElement>) => (
+  <svg
+    aria-hidden="true"
+    fill="none"
+    viewBox="0 0 48 48"
+    xmlns="http://www.w3.org/2000/svg"
+    {...props}
+  >
+    <OfficePage />
+    <path
+      d="M36 31.03h-1.58v-1.54h-.038c-.687 1.187-1.699 1.781-3.034 1.781-.95 0-1.711-.258-2.282-.775-.572-.517-.858-1.212-.858-2.085 0-1.837 1.085-2.909 3.255-3.217l2.957-.414c0-1.67-.678-2.504-2.032-2.504-1.188 0-2.26.401-3.217 1.203v-1.618c.289-.218.784-.428 1.483-.63.7-.202 1.323-.304 1.869-.304 2.317 0 3.477 1.23 3.477 3.69v6.413zm-1.58-4.989l-2.388.337c-.816.116-1.387.31-1.715.583-.327.273-.49.715-.49 1.324 0 .495.175.891.528 1.19.354.299.806.448 1.359.448.783 0 1.43-.276 1.94-.829.51-.552.767-1.242.767-2.07v-.983zm5.58 3.23L38.468 34h-1.126l1.126-4.729H40z"
+      fill="#33C481"
+    />
+    <SpreadsheetBadge />
   </svg>
 );
 
@@ -126,7 +167,11 @@ export function DocumentIcon({
   }
 
   if (iconKind === "spreadsheet") {
-    return <FileSpreadsheet className={className} />;
+    return <XlsxIcon className={className} />;
+  }
+
+  if (iconKind === "csv") {
+    return <CsvIcon className={className} />;
   }
 
   if (iconKind === "image") {

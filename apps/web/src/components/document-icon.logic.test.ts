@@ -23,6 +23,17 @@ describe("document icon MIME classification", () => {
     expect(getDocumentIconKind("text/plain")).toBe("text");
   });
 
+  // text/csv also matches the generic text/ prefix, so it must be classified
+  // before the text fallback to keep its own icon.
+  test("separates CSV from spreadsheet workbooks and plain text", () => {
+    expect(getDocumentIconKind("text/csv")).toBe("csv");
+    expect(
+      getDocumentIconKind(
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      ),
+    ).toBe("spreadsheet");
+  });
+
   test("classifies markdown by MIME or extension", () => {
     expect(getDocumentIconKind("text/markdown")).toBe("markdown");
     expect(getDocumentIconKind("application/octet-stream", "notes.md")).toBe(

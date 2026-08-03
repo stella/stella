@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
@@ -11,6 +11,7 @@ import {
   DownloadIcon,
   EyeIcon,
   HashIcon,
+  Loader2Icon,
   PlayIcon,
   Rows3Icon,
   SparklesIcon,
@@ -41,6 +42,7 @@ import {
 } from "@stll/ui/components/select";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { CsvIcon, DocxIcon, XlsxIcon } from "@/components/document-icon";
 import { FolderExpandToggle } from "@/components/file-tree/folder-expand-toggle";
 import {
   getInternalPropertyId,
@@ -347,6 +349,51 @@ const TableContentModeControl = ({ viewId }: TableContentModeControlProps) => {
 
 type TableExportFormat = "csv" | "xlsx" | "docx";
 
+// One row per downloadable format, in menu order. `separatorBefore` splits the
+// spreadsheet formats from the document formats.
+const TABLE_EXPORT_FORMATS = [
+  {
+    format: "csv",
+    icon: CsvIcon,
+    labelKey: "workspaces.views.exportCsv",
+    separatorBefore: false,
+  },
+  {
+    format: "xlsx",
+    icon: XlsxIcon,
+    labelKey: "workspaces.views.exportXlsx",
+    separatorBefore: false,
+  },
+  {
+    format: "docx",
+    icon: DocxIcon,
+    labelKey: "workspaces.views.exportDocxPlain",
+    separatorBefore: true,
+  },
+] as const satisfies readonly {
+  format: TableExportFormat;
+  icon: ComponentType<{ className?: string }>;
+  labelKey: TranslationKey;
+  separatorBefore: boolean;
+}[];
+
+type ExportFormatIconProps = {
+  Icon: ComponentType<{ className?: string }>;
+  pending: boolean;
+};
+
+// The file-type icons carry their own colours, so `opacity-100` opts them out
+// of the menu's default icon dimming.
+const ExportFormatIcon = ({ Icon, pending }: ExportFormatIconProps) => {
+  if (pending) {
+    return (
+      <Loader2Icon className="text-muted-foreground size-4.5 animate-spin sm:size-4" />
+    );
+  }
+
+  return <Icon className="size-4.5 opacity-100 sm:size-4" />;
+};
+
 type TableExportMenuProps = {
   view: Pick<WorkspaceView, "id" | "name">;
   workspaceId: string;
@@ -420,33 +467,26 @@ const TableExportMenu = ({ view, workspaceId }: TableExportMenuProps) => {
         >
           <DownloadIcon className="size-3.5" />
         </MenuTrigger>
-        <MenuPopup>
-          <MenuItem
-            disabled={exportingFormat !== null}
-            onClick={() => {
-              detached(handleExport("csv"), "TableExportMenu");
-            }}
-          >
-            {t("workspaces.views.exportCsv")}
-          </MenuItem>
-          <MenuItem
-            disabled={exportingFormat !== null}
-            onClick={() => {
-              detached(handleExport("xlsx"), "TableExportMenu");
-            }}
-          >
-            {t("workspaces.views.exportXlsx")}
-          </MenuItem>
-          <MenuSeparator />
-          <MenuItem
-            disabled={exportingFormat !== null}
-            onClick={() => {
-              detached(handleExport("docx"), "TableExportMenu");
-            }}
-          >
-            {t("workspaces.views.exportDocxPlain")}
-          </MenuItem>
+        <MenuPopup className="min-w-56">
+          {TABLE_EXPORT_FORMATS.map((option) => (
+            <Fragment key={option.format}>
+              {option.separatorBefore ? <MenuSeparator /> : null}
+              <MenuItem
+                disabled={exportingFormat !== null}
+                onClick={() => {
+                  detached(handleExport(option.format), "TableExportMenu");
+                }}
+              >
+                <ExportFormatIcon
+                  Icon={option.icon}
+                  pending={exportingFormat === option.format}
+                />
+                {t(option.labelKey)}
+              </MenuItem>
+            </Fragment>
+          ))}
           <MenuItem onClick={() => setReportOpen(true)}>
+            <ExportFormatIcon Icon={DocxIcon} pending={false} />
             {t("workspaces.views.exportDocxTemplate")}
           </MenuItem>
         </MenuPopup>

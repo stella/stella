@@ -12,7 +12,11 @@ const spreadsheetMimeTypes = Object.freeze({
   "application/vnd.ms-excel": true,
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": true,
   "application/vnd.oasis.opendocument.spreadsheet": true,
+});
+
+const csvMimeTypes = Object.freeze({
   "text/csv": true,
+  "application/csv": true,
 });
 
 const imageMimeTypes = Object.freeze({
@@ -28,6 +32,7 @@ export type DocumentIconKind =
   | "pdf"
   | "word"
   | "spreadsheet"
+  | "csv"
   | "image"
   | "email"
   | "markdown"
@@ -48,6 +53,10 @@ export const getDocumentIconKind = (
 
   if (Object.hasOwn(spreadsheetMimeTypes, mimeType)) {
     return "spreadsheet";
+  }
+
+  if (Object.hasOwn(csvMimeTypes, mimeType)) {
+    return "csv";
   }
 
   if (Object.hasOwn(imageMimeTypes, mimeType)) {
