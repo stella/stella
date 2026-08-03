@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   buildArchivePaths,
   buildErrorManifest,
+  groupFileContentsByEntityId,
   mapOrderedConcurrent,
   uniquePath,
 } from "./zip-archive";
@@ -173,6 +174,34 @@ describe("buildArchivePaths", () => {
     const paths = buildArchivePaths({ rootId: "root", rootName: "R", nodes });
     expect(paths.get("a")?.startsWith("R")).toBe(true);
     expect(paths.get("b")?.startsWith("R")).toBe(true);
+  });
+});
+
+describe("groupFileContentsByEntityId", () => {
+  const file = (fileId: string) => ({
+    fileId,
+    fileName: `${fileId}.pdf`,
+    mimeType: "application/pdf",
+  });
+
+  test("keeps every file of an entity, in input order", () => {
+    const grouped = groupFileContentsByEntityId([
+      { entityId: "doc_1", content: file("a") },
+      { entityId: "doc_2", content: file("b") },
+      { entityId: "doc_1", content: file("c") },
+    ]);
+
+    expect(grouped.get("doc_1")?.map((c) => c.fileId)).toEqual(["a", "c"]);
+    expect(grouped.get("doc_2")?.map((c) => c.fileId)).toEqual(["b"]);
+  });
+
+  test("leaves entities without a file absent", () => {
+    expect(groupFileContentsByEntityId([]).size).toBe(0);
+    expect(
+      groupFileContentsByEntityId([
+        { entityId: "doc_1", content: file("a") },
+      ]).get("doc_2"),
+    ).toBeUndefined();
   });
 });
 

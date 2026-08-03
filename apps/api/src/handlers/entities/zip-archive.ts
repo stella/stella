@@ -177,6 +177,36 @@ export const mapOrderedConcurrent = async function* <T, R>(
   }
 };
 
+/** An uploaded file held by a document descendant. */
+export type ArchiveFileContent = {
+  fileId: string;
+  fileName: string;
+  mimeType: string;
+};
+
+/**
+ * Group uploaded files by the id of the document that holds them. A
+ * document can carry several file fields, so each id maps to a list;
+ * documents without one are absent rather than mapped to an empty list.
+ */
+export const groupFileContentsByEntityId = (
+  files: readonly { entityId: string; content: ArchiveFileContent }[],
+): Map<string, ArchiveFileContent[]> => {
+  const contentsByEntityId = new Map<string, ArchiveFileContent[]>();
+  for (const { entityId, content } of files) {
+    const contents = contentsByEntityId.get(entityId);
+    // Absent means "no file seen for this document yet", the normal state
+    // on first encounter, so start the list rather than treating the miss
+    // as a violated invariant.
+    if (contents === undefined) {
+      contentsByEntityId.set(entityId, [content]);
+      continue;
+    }
+    contents.push(content);
+  }
+  return contentsByEntityId;
+};
+
 /** Body of the in-archive notice listing files that could not be fetched. */
 export const buildErrorManifest = (failedPaths: readonly string[]): string =>
   [
