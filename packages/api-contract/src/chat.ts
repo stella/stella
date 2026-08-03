@@ -37,7 +37,7 @@ export type ChatSendRequest = {
     url: string;
   };
   activeDraft?: {
-    docxEditSnapshot?: DocxEditSnapshot;
+    docxEditSnapshot: DocxEditSnapshot;
     fileName: string;
     originChatMessageId: SafeId<"chatMessage">;
     originChatThreadId: SafeId<"chatThread">;

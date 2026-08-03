@@ -37,6 +37,8 @@ type ResolveBlockReplacementOptions = {
   replacementText: string;
 };
 
+const MAX_INLINE_BLOCK_REPLACEMENT_CHARS = 48;
+
 /**
  * Folio's paged suggestion overlay can preview one inline replacement, but it
  * does not reflow an entire replacement block. Reduce a block rewrite to the
@@ -73,15 +75,24 @@ const resolveBlockReplacement = ({
   }
 
   const replacementEnd = replacementText.length - suffixLength;
+  const originalText = blockText.slice(prefixLength, originalEnd);
+  const suggestedText = replacementText.slice(prefixLength, replacementEnd);
+  if (
+    originalText.length > MAX_INLINE_BLOCK_REPLACEMENT_CHARS ||
+    suggestedText.length > MAX_INLINE_BLOCK_REPLACEMENT_CHARS ||
+    suggestedText.includes("\n")
+  ) {
+    return null;
+  }
   return {
     contextAfter: blockText.slice(originalEnd),
     contextBefore: blockText.slice(0, prefixLength),
-    originalText: blockText.slice(prefixLength, originalEnd),
+    originalText,
     range: {
       from: blockTextFrom + prefixLength,
       to: blockTextFrom + originalEnd,
     },
-    suggestedText: replacementText.slice(prefixLength, replacementEnd),
+    suggestedText,
   };
 };
 

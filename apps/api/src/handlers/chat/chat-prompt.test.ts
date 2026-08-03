@@ -505,6 +505,9 @@ describe("chat prompt builders", () => {
     expect(prompt).toContain("apply-active-docx-edits");
     expect(prompt).toContain('"blockId":"b-1"');
     expect(prompt).toContain("do not call matter retrieval or create-document");
+    expect(prompt).toContain("Do not call `execute_typescript`");
+    expect(prompt).toContain("Editable DOCX blocks:");
+    expect(prompt).not.toContain("TEMPLATE EDITING");
   });
 
   test("active-template prompt wires the suggest-fields and edit flows when a snapshot exists", () => {

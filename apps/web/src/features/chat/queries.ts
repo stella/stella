@@ -69,7 +69,7 @@ type ActiveFileContext = {
 };
 
 type ActiveDraftContext = {
-  docxEditSnapshot?: ActiveFileContext["docxEditSnapshot"];
+  docxEditSnapshot: NonNullable<ActiveFileContext["docxEditSnapshot"]>;
   fileName: string;
   originChatMessageId: string;
   originChatThreadId: string;
@@ -143,7 +143,7 @@ export type ApplyActiveDocxEditsOutput =
 export type ChatThreadOptionsContext = {
   allowMissingThread?: boolean | undefined;
   getActiveDecision?: (() => ActiveDecisionContext | undefined) | undefined;
-  getActiveDraft?: (() => ActiveDraftContext | undefined) | undefined;
+  getActiveDraft?: (() => ActiveDraftContext) | undefined;
   getActiveExternal?: (() => ActiveExternalContext | undefined) | undefined;
   getActiveFile?: (() => ActiveFileContext | undefined) | undefined;
   getActiveSkill?: (() => ActiveSkillContext | undefined) | undefined;
@@ -1013,13 +1013,9 @@ export const buildSendRequestBody = ({
         activeDraft.originChatThreadId,
       ),
       toolCallId: activeDraft.toolCallId,
-      ...(activeDraft.docxEditSnapshot === undefined
-        ? {}
-        : {
-            docxEditSnapshot: toChatSendDocxEditSnapshot(
-              activeDraft.docxEditSnapshot,
-            ),
-          }),
+      docxEditSnapshot: toChatSendDocxEditSnapshot(
+        activeDraft.docxEditSnapshot,
+      ),
     };
   }
 

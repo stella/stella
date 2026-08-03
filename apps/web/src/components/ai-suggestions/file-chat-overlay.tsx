@@ -28,8 +28,8 @@ import {
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
-import { Result } from "better-result";
-import { LoaderCircleIcon } from "lucide-react";
+import { panic, Result } from "better-result";
+import { LoaderCircleIcon, MessageSquareIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import { v7 as uuidv7 } from "uuid";
 
@@ -44,6 +44,7 @@ import type {
   FolioAIEditSnapshot,
 } from "@stll/folio-react";
 import { BidiText } from "@stll/ui/components/bidi-text";
+import { Button } from "@stll/ui/components/button";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { resolveDocxSuggestionRequest } from "@/components/ai-suggestions/docx-suggestion-persistence";
@@ -1165,6 +1166,10 @@ const FileChatOverlayInner = ({
     setEditorReady(false);
   }
   useExternalSyncEffect(() => {
+    lastSentDocxEditSnapshotRef.current = null;
+    return undefined;
+  }, [activeDocumentKey]);
+  useExternalSyncEffect(() => {
     if (editorReady || !hasDocxEditSurface) {
       return undefined;
     }
@@ -1240,21 +1245,21 @@ const FileChatOverlayInner = ({
   });
   const getActiveDraft = useLatestCallback(() => {
     if (!activeDraft) {
-      lastSentDocxEditSnapshotRef.current = null;
-      return undefined;
+      return panic("Active draft context requested without an active draft");
     }
-    const snapshot = docxEditorRef?.current?.createAIEditSnapshot() ?? null;
+    const snapshot =
+      docxEditorRef?.current?.createAIEditSnapshot() ??
+      lastSentDocxEditSnapshotRef.current;
+    if (snapshot === null) {
+      return panic("Active draft context requested before its snapshot exists");
+    }
     lastSentDocxEditSnapshotRef.current = snapshot;
     return {
       ...activeDraft,
-      ...(snapshot === null
-        ? {}
-        : {
-            docxEditSnapshot: {
-              blocks: snapshot.blocks,
-              canApplyEdits: Boolean(docxEditable),
-            },
-          }),
+      docxEditSnapshot: {
+        blocks: snapshot.blocks,
+        canApplyEdits: Boolean(docxEditable),
+      },
     };
   });
   const getActiveExternal = useLatestCallback(() => activeExternal);
@@ -2251,12 +2256,27 @@ const FileChatOverlayInner = ({
                 ) : undefined
               }
               endExtras={
-                <ComposerEditModeControl
-                  onChange={setEditModeOptionId}
-                  optionId={editModeOptionId}
-                  selectable={canSelectEditMode}
-                  unsafe={docxEditSafety === "unsafe"}
-                />
+                <>
+                  <ComposerEditModeControl
+                    onChange={setEditModeOptionId}
+                    optionId={editModeOptionId}
+                    selectable={canSelectEditMode}
+                    unsafe={docxEditSafety === "unsafe"}
+                  />
+                  {!panelOpen && hasThreadContent && (
+                    <Button
+                      aria-label={t("chat.aiThread")}
+                      className="text-muted-foreground hover:text-foreground"
+                      onClick={() => setPanelOpen(true)}
+                      size="icon-xs"
+                      tooltip={t("chat.aiThread")}
+                      type="button"
+                      variant="ghost"
+                    >
+                      <MessageSquareIcon className="size-3.5" />
+                    </Button>
+                  )}
+                </>
               }
               threadRef={threadRef}
             />

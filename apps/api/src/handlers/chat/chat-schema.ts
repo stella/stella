@@ -92,7 +92,7 @@ export const activeDraftSchema = t.Object({
   originChatThreadId: tSafeId("chatThread"),
   toolCallId: t.String(),
   fileName: t.String(),
-  docxEditSnapshot: t.Optional(docxEditSnapshotSchema),
+  docxEditSnapshot: docxEditSnapshotSchema,
 });
 
 /**

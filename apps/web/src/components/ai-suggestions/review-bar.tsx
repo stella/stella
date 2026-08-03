@@ -23,7 +23,7 @@
  * it wins over any editor default before the editor can act.
  */
 
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import type { RefObject } from "react";
 
 import {
@@ -48,17 +48,20 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { AcceptAllButton } from "@/components/ai-suggestions/accept-all-button";
 import {
+  getReviewBarAction,
+  getReviewBarPosition,
+} from "@/components/ai-suggestions/review-bar.logic";
+import {
   getReviewFocusedId,
   useReviewStore,
 } from "@/components/ai-suggestions/review-store";
 import type { ReviewSuggestion } from "@/components/ai-suggestions/review-store";
 import { useReviewActions } from "@/components/ai-suggestions/use-review-actions";
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { detached } from "@/lib/detached";
 
 const EMPTY_SUGGESTIONS: readonly ReviewSuggestion[] = [];
-const ACCEPT_ALL_UNDO_DURATION_MS = 6000;
 
 // Shortcut hints shown in the button tooltips so the bindings are
 // discoverable in the UI, not just the docstring. Rendered with the
@@ -77,7 +80,7 @@ const SHORTCUT_HINTS = IS_MAC
     };
 
 const isPending = (item: ReviewSuggestion): boolean =>
-  item.status === "pending" || item.status === "applying";
+  item.status === "pending";
 
 type ReviewBarProps = {
   entityId: string;
@@ -120,37 +123,27 @@ export const ReviewBar = ({
   });
 
   const pendingItems = suggestions.filter(isPending);
-  const total = pendingItems.length;
-  const focusedIndex = pendingItems.findIndex((item) => item.id === focusedId);
-  const activeIndex = Math.max(focusedIndex, 0);
-  const [recentAcceptedBatch, setRecentAcceptedBatch] = useState<
-    readonly ReviewSuggestion[] | null
-  >(null);
-
-  useExternalSyncEffect(() => {
-    if (recentAcceptedBatch === null) {
-      return undefined;
-    }
-    const timeout = window.setTimeout(
-      () => setRecentAcceptedBatch(null),
-      ACCEPT_ALL_UNDO_DURATION_MS,
-    );
-    return () => window.clearTimeout(timeout);
-  }, [recentAcceptedBatch]);
+  const { activeIndex, current, total } = getReviewBarPosition(
+    suggestions,
+    focusedId,
+  );
+  const activeItem = suggestions.at(activeIndex);
+  const activeAction =
+    activeItem === undefined ? "busy" : getReviewBarAction(activeItem.status);
 
   const focusAt = useLatestCallback((index: number) => {
-    const item = pendingItems.at(index);
+    const item = suggestions.at(index);
     if (item) {
       navigateTo(item);
     }
   });
 
   const goPrev = useLatestCallback(() => {
-    focusAt(focusedIndex <= 0 ? 0 : focusedIndex - 1);
+    focusAt(activeIndex <= 0 ? 0 : activeIndex - 1);
   });
 
   const goNext = useLatestCallback(() => {
-    focusAt(focusedIndex === -1 ? 0 : Math.min(total - 1, focusedIndex + 1));
+    focusAt(Math.min(total - 1, activeIndex + 1));
   });
 
   // Guards against a second acceptance starting while the current one is
@@ -161,15 +154,14 @@ export const ReviewBar = ({
     if (acceptBusyRef.current) {
       return;
     }
-    const target = pendingItems.at(activeIndex);
-    if (!target) {
+    const target = suggestions.at(activeIndex);
+    if (target?.status !== "pending") {
       return;
     }
     // Capture the neighbour BEFORE accepting: after accept the target
     // leaves the pending queue, so the "next" to park on is the item that
     // followed it (or the one before, at the end of the list).
-    const next =
-      pendingItems.at(activeIndex + 1) ?? pendingItems.at(activeIndex - 1);
+    const next = suggestions.at(activeIndex + 1);
     acceptBusyRef.current = true;
     // `.finally` (not try/finally): a try-without-catch trips the React
     // Compiler's HIR lowering and bails the component out of optimization.
@@ -182,43 +174,26 @@ export const ReviewBar = ({
   });
 
   const rejectAndAdvance = useLatestCallback(() => {
-    const target = pendingItems.at(activeIndex);
-    if (!target) {
+    const target = suggestions.at(activeIndex);
+    if (target?.status !== "pending") {
       return;
     }
-    const next =
-      pendingItems.at(activeIndex + 1) ?? pendingItems.at(activeIndex - 1);
+    const next = suggestions.at(activeIndex + 1);
     rejectOne(target);
     if (next && next.id !== target.id) {
       navigateTo(next);
     }
   });
 
-  const acceptAllWithUndo = useLatestCallback(
-    async (items: readonly ReviewSuggestion[]) => {
-      await acceptMany(items);
-      const accepted = items.filter((item) => {
-        const live = useReviewStore
-          .getState()
-          .sessions[entityId]?.find(
-            (candidate) =>
-              candidate.id === item.id ||
-              candidate.pendingOperation?.id === item.pendingOperation?.id,
-          );
-        return live?.status === "accepted";
-      });
-      setRecentAcceptedBatch(accepted.length > 0 ? accepted : null);
-    },
-  );
-
-  const undoAcceptedBatch = useLatestCallback(() => {
-    if (recentAcceptedBatch === null) {
+  const revertActive = useLatestCallback(() => {
+    const target = suggestions.at(activeIndex);
+    if (
+      target === undefined ||
+      getReviewBarAction(target.status) !== "revert"
+    ) {
       return;
     }
-    for (const item of recentAcceptedBatch.toReversed()) {
-      revertOne(item);
-    }
-    setRecentAcceptedBatch(null);
+    revertOne(target);
   });
 
   const handleKeyDown = useLatestCallback((event: KeyboardEvent) => {
@@ -236,6 +211,9 @@ export const ReviewBar = ({
         // Alt+Enter accepts, Alt+Shift+Enter rejects. Branch on shift
         // explicitly so a stray shift can't turn accept into reject or
         // vice versa.
+        if (activeAction !== "resolve") {
+          return;
+        }
         claimShortcut(event);
         if (event.shiftKey) {
           rejectAndAdvance();
@@ -272,30 +250,9 @@ export const ReviewBar = ({
     };
   });
 
-  if (total === 0 && recentAcceptedBatch === null) {
+  if (total === 0) {
     return null;
   }
-
-  if (total === 0) {
-    return (
-      <div
-        className="bg-popover/90 border-border pointer-events-auto absolute start-1/2 bottom-28 z-50 -translate-x-1/2 rounded-full border p-1 shadow-lg [backdrop-filter:blur(18px)_saturate(160%)]"
-        data-docx-review-undo=""
-      >
-        <Button
-          className="h-8 rounded-full px-3 text-sm"
-          onClick={undoAcceptedBatch}
-          size="sm"
-          variant="ghost"
-        >
-          <RotateCcwIcon className="me-1.5 size-4" />
-          {t("common.undo")}
-        </Button>
-      </div>
-    );
-  }
-
-  const current = Math.min(activeIndex + 1, total);
 
   return (
     <div
@@ -336,43 +293,64 @@ export const ReviewBar = ({
         <ChevronDownIcon className="size-4" />
       </Button>
       <span aria-hidden="true" className="bg-border mx-0.5 h-5 w-px" />
-      <Button
-        className="h-7 px-2.5 text-xs"
-        onClick={() => {
-          detached(acceptAndAdvance(), "ReviewBar");
-        }}
-        size="sm"
-        tooltip={`${t("common.accept")} · ${SHORTCUT_HINTS.accept}`}
-        variant="default"
-      >
-        <CheckIcon className="me-1 size-3.5 @max-[80rem]/file-viewer:me-0" />
-        <span className="@max-[80rem]/file-viewer:hidden">
-          {t("common.accept")}
-        </span>
-      </Button>
-      <Button
-        className="h-7 px-2.5 text-xs"
-        onClick={rejectAndAdvance}
-        size="sm"
-        tooltip={`${t("docxReview.reject")} · ${SHORTCUT_HINTS.reject}`}
-        variant="outline"
-      >
-        <XIcon className="me-1 size-3.5 @max-[80rem]/file-viewer:me-0" />
-        <span className="@max-[80rem]/file-viewer:hidden">
-          {t("docxReview.reject")}
-        </span>
-      </Button>
-      <AcceptAllButton
-        className="h-7 px-2.5 text-xs"
-        onAcceptAll={acceptAllWithUndo}
-        pendingItems={pendingItems}
-        size="sm"
-        variant="ghost"
-      >
-        <span className="@max-[80rem]/file-viewer:hidden">
-          {t("docxReview.acceptAll")}
-        </span>
-      </AcceptAllButton>
+      {activeAction === "revert" ? (
+        <Button
+          className="h-7 px-2.5 text-xs"
+          onClick={revertActive}
+          size="sm"
+          tooltip={t("docxReview.revert")}
+          variant="outline"
+        >
+          <RotateCcwIcon className="me-1 size-3.5 @max-[80rem]/file-viewer:me-0" />
+          <span className="@max-[80rem]/file-viewer:hidden">
+            {t("docxReview.revert")}
+          </span>
+        </Button>
+      ) : (
+        <>
+          <Button
+            className="h-7 px-2.5 text-xs"
+            disabled={activeAction === "busy"}
+            onClick={() => {
+              detached(acceptAndAdvance(), "ReviewBar");
+            }}
+            size="sm"
+            tooltip={`${t("common.accept")} · ${SHORTCUT_HINTS.accept}`}
+            variant="default"
+          >
+            <CheckIcon className="me-1 size-3.5 @max-[80rem]/file-viewer:me-0" />
+            <span className="@max-[80rem]/file-viewer:hidden">
+              {t("common.accept")}
+            </span>
+          </Button>
+          <Button
+            className="h-7 px-2.5 text-xs"
+            disabled={activeAction === "busy"}
+            onClick={rejectAndAdvance}
+            size="sm"
+            tooltip={`${t("docxReview.reject")} · ${SHORTCUT_HINTS.reject}`}
+            variant="outline"
+          >
+            <XIcon className="me-1 size-3.5 @max-[80rem]/file-viewer:me-0" />
+            <span className="@max-[80rem]/file-viewer:hidden">
+              {t("docxReview.reject")}
+            </span>
+          </Button>
+        </>
+      )}
+      {pendingItems.length > 0 && (
+        <AcceptAllButton
+          className="h-7 px-2.5 text-xs"
+          onAcceptAll={acceptMany}
+          pendingItems={pendingItems}
+          size="sm"
+          variant="ghost"
+        >
+          <span className="@max-[80rem]/file-viewer:hidden">
+            {t("docxReview.acceptAll")}
+          </span>
+        </AcceptAllButton>
+      )}
       <span aria-hidden="true" className="bg-border mx-0.5 h-5 w-px" />
       <Select
         onValueChange={(value) => {

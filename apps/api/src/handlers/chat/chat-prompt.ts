@@ -588,17 +588,10 @@ export const buildActiveDraftPrompt = (
     text: activeDraft.fileName,
   });
   const snapshot = activeDraft.docxEditSnapshot;
-  const editingSections =
-    snapshot === undefined
-      ? []
-      : buildActiveTemplateEditSections({ snapshot, toolAvailability });
 
   return [
     `ACTIVE UNSAVED DRAFT: The user is viewing and editing the generated DOCX draft "${safeName}" in the inspector. It is not yet a matter entity; do not call matter retrieval or create-document for requests about it. The current document text is in the block list below.`,
-    toolAvailability.docxEditMode === CHAT_EDIT_APPLY_MODE.manual
-      ? "For requested changes, use `apply-active-docx-edits`; the browser will queue the operations against this unsaved draft for review."
-      : "Answer questions from the current block list. Do not claim the visible draft is unavailable.",
-    ...editingSections,
+    buildActiveDocxEditPrompt({ docxEditSnapshot: snapshot }, toolAvailability),
   ].join("\n");
 };
 
@@ -1015,7 +1008,7 @@ const buildActiveTemplateEditSections = ({
 };
 
 const buildActiveDocxEditPrompt = (
-  activeFile: IncomingActiveFile,
+  activeFile: Pick<IncomingActiveFile, "docxEditSnapshot">,
   toolAvailability: ChatToolAvailability,
 ) => {
   const snapshot = activeFile.docxEditSnapshot;

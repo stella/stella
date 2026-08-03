@@ -141,4 +141,29 @@ describe("buildFolioReviewDecorations", () => {
       ),
     ).toEqual([]);
   });
+
+  test("keeps whole-paragraph rewrites out of Folio's non-reflowing overlay", () => {
+    expect(
+      buildFolioReviewDecorations(
+        [
+          suggestion({
+            pendingOperation: {
+              blockId: "A1",
+              id: "suggestion-1",
+              text: "Martina Novotna, residing at Techlovice 113, 503 27 Techlovice, company number 00750883.",
+              type: "replaceBlock",
+            },
+            preview: {
+              after:
+                "Martina Novotna, residing at Techlovice 113, 503 27 Techlovice, company number 00750883.",
+              before: "Pay within 30 days.",
+              type: "replaceBlock",
+            },
+            type: "replaceBlock",
+          }),
+        ],
+        doc,
+      ),
+    ).toEqual([]);
+  });
 });

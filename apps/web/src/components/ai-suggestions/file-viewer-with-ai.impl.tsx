@@ -33,6 +33,7 @@ import { resolveFileReviewSessionId } from "./file-review-session";
 import { buildFolioReviewDecorations } from "./review-folio-decorations";
 import { useReviewStore } from "./review-store";
 import type { ReviewSuggestion } from "./review-store";
+import { stageReviewSuggestions } from "./review-suggestion-staging";
 import "./file-viewer-with-ai.css";
 
 type ActiveFile = {
@@ -142,9 +143,11 @@ const EMPTY_REVIEW_SUGGESTIONS: readonly ReviewSuggestion[] = [];
 
 const ReviewFolioDecorationsBridge = ({
   docxEditorRef,
+  docxEditable,
   entityId,
 }: {
   docxEditorRef: RefObject<DocxEditorRef | null>;
+  docxEditable: boolean;
   entityId: string;
 }) => {
   const suggestions = useReviewStore(
@@ -162,14 +165,34 @@ const ReviewFolioDecorationsBridge = ({
         return;
       }
       const editor = docxEditorRef.current;
-      editor?.ensureEditorView({ focus: false });
-      const view = editor?.getEditorRef()?.getView();
+      if (editor === null) {
+        animationFrame = requestAnimationFrame(sync);
+        return;
+      }
+      editor.ensureEditorView({ focus: false });
+      const view = editor.getEditorRef()?.getView();
       if (!view) {
         animationFrame = requestAnimationFrame(sync);
         return;
       }
+      if (docxEditable) {
+        stageReviewSuggestions({
+          editor,
+          suggestions,
+          updateSuggestion: (id, patch) => {
+            useReviewStore.getState().updateSuggestion(entityId, id, patch);
+          },
+        });
+      }
+      const nativeSuggestionIds = new Set(
+        editor.getSuggestions().map((suggestion) => suggestion.suggestionId),
+      );
       const folioSuggestions = buildFolioReviewDecorations(
-        suggestions,
+        suggestions.filter(
+          (suggestion) =>
+            suggestion.pendingOperation === null ||
+            !nativeSuggestionIds.has(suggestion.pendingOperation.id),
+        ),
         view.state.doc,
       );
       const suggestionsMeta = setAISuggestionsMeta(folioSuggestions);
@@ -188,7 +211,7 @@ const ReviewFolioDecorationsBridge = ({
         cancelAnimationFrame(animationFrame);
       }
     };
-  }, [docxEditorRef, focusedId, suggestions]);
+  }, [docxEditable, docxEditorRef, entityId, focusedId, suggestions]);
 
   return null;
 };
@@ -239,6 +262,7 @@ export const FileChatOverlayHost = ({
       {docxEditorRef !== undefined && reviewSessionId !== undefined && (
         <ReviewFolioDecorationsBridge
           docxEditorRef={docxEditorRef}
+          docxEditable={docxEditable === true}
           entityId={reviewSessionId}
         />
       )}

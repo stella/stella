@@ -1,3 +1,4 @@
+import { Value } from "@sinclair/typebox/value";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
@@ -7,7 +8,10 @@ import {
   createChatAttachmentPart,
   toChatMessageContent,
 } from "@/api/handlers/chat/chat-message-parts";
-import { validateMessage as validateMessageWithPersistence } from "@/api/handlers/chat/chat-schema";
+import {
+  activeDraftSchema,
+  validateMessage as validateMessageWithPersistence,
+} from "@/api/handlers/chat/chat-schema";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
@@ -70,6 +74,33 @@ const createUserFilePart = ({
       url: toUserFileUrl(userFileId(fileId)),
     }),
   ] satisfies ChatParts;
+
+describe("active draft request context", () => {
+  const identity = {
+    fileName: "Agreement.docx",
+    originChatMessageId: "019fc771-8b17-7000-b85e-559afc54cfe5",
+    originChatThreadId: "019fc771-8b17-74bf-b85e-559afc54cfe5",
+    toolCallId: "create-document-1",
+  };
+
+  test("requires the live document snapshot it advertises to the model", () => {
+    expect(Value.Check(activeDraftSchema, identity)).toBe(false);
+    expect(
+      Value.Check(activeDraftSchema, {
+        ...identity,
+        docxEditSnapshot: {
+          blocks: [
+            {
+              id: "block-1",
+              kind: "paragraph",
+              text: "Confidential information",
+            },
+          ],
+        },
+      }),
+    ).toBe(true);
+  });
+});
 
 describe("validateChatFileParts", () => {
   test("rejects too many attachments in one message", () => {
