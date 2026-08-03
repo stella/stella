@@ -7,9 +7,9 @@ import {
   clearCreateDocumentDraftChatThreadBinding,
   completeCreateDocumentDraft,
   endCreateDocumentDraftPersistence,
+  getCreateDocumentDraftPersistence,
   getCreateDocumentDraftRestoration,
   getBoundCreateDocumentDraftChatThreadId,
-  isCreateDocumentDraftPersistenceActive,
   prepareCreateDocumentDraft,
   registerCreateDocumentDraftSaver,
   runCreateDocumentOperationWithRetry,
@@ -98,21 +98,42 @@ describe("create-document operation retries", () => {
 
 describe("create-document draft runtime", () => {
   test("keeps a closed draft locked throughout matter persistence", () => {
-    expect(beginCreateDocumentDraftPersistence("tool-1")).toBe(true);
-    expect(beginCreateDocumentDraftPersistence("tool-1")).toBe(false);
-    expect(isCreateDocumentDraftPersistenceActive("tool-1")).toBe(true);
+    const capturedChatThreadId = toChatThreadId("draft-thread");
+    expect(
+      beginCreateDocumentDraftPersistence({
+        boundChatThreadId: capturedChatThreadId,
+        toolCallId: "tool-1",
+      }),
+    ).toEqual({ status: "saving", boundChatThreadId: capturedChatThreadId });
+    expect(
+      beginCreateDocumentDraftPersistence({
+        boundChatThreadId: toChatThreadId("other-thread"),
+        toolCallId: "tool-1",
+      }),
+    ).toEqual({ status: "already-saving" });
+    expect(getCreateDocumentDraftPersistence("tool-1")).toEqual({
+      status: "saving",
+      boundChatThreadId: capturedChatThreadId,
+    });
 
     endCreateDocumentDraftPersistence("tool-1");
 
-    expect(isCreateDocumentDraftPersistenceActive("tool-1")).toBe(false);
+    expect(getCreateDocumentDraftPersistence("tool-1")).toEqual({
+      status: "idle",
+    });
   });
 
   test("clears the draft persistence lock only when the draft is terminal", () => {
-    beginCreateDocumentDraftPersistence("tool-1");
+    beginCreateDocumentDraftPersistence({
+      boundChatThreadId: null,
+      toolCallId: "tool-1",
+    });
 
     completeCreateDocumentDraft("tool-1");
 
-    expect(isCreateDocumentDraftPersistenceActive("tool-1")).toBe(false);
+    expect(getCreateDocumentDraftPersistence("tool-1")).toEqual({
+      status: "idle",
+    });
   });
 
   test("retains the latest editor bytes when the editor unmounts", async () => {

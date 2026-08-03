@@ -23,7 +23,28 @@ let retainedDraftChatBindings: Record<
   string,
   RetainedDraftChatBinding | undefined
 > = {};
-let savingDrafts: Readonly<Record<string, true | undefined>> = {};
+/**
+ * Persistence owns a draft chat's identity from snapshot through settlement.
+ * Keeping the captured server-bound thread in this lifecycle state means the
+ * upload request, the inspector promotion, and the overlay guard have one
+ * immutable source of truth rather than independently reading a mutable tab.
+ */
+export type CreateDocumentDraftPersistence =
+  | { status: "idle" }
+  | { status: "saving"; boundChatThreadId: ChatThreadId | null };
+
+type BeginCreateDocumentDraftPersistenceOptions = {
+  boundChatThreadId: ChatThreadId | null;
+  toolCallId: string;
+};
+
+export type BeginCreateDocumentDraftPersistenceResult =
+  | { status: "already-saving" }
+  | Extract<CreateDocumentDraftPersistence, { status: "saving" }>;
+
+let draftPersistences: Readonly<
+  Record<string, CreateDocumentDraftPersistence | undefined>
+> = {};
 
 const draftRuntimeKey = (toolCallId: string): string => `tool:${toolCallId}`;
 const withoutRuntimeKey = <T>(
@@ -294,27 +315,32 @@ export const getBoundCreateDocumentDraftChatThreadId = (
  * visible after its inspector tab closes. Keep the write lock with the draft
  * runtime itself so reopening during the upload is necessarily read-only.
  */
-export const beginCreateDocumentDraftPersistence = (
-  toolCallId: string,
-): boolean => {
+export const beginCreateDocumentDraftPersistence = ({
+  boundChatThreadId,
+  toolCallId,
+}: BeginCreateDocumentDraftPersistenceOptions): BeginCreateDocumentDraftPersistenceResult => {
   const key = draftRuntimeKey(toolCallId);
-  if (savingDrafts[key] === true) {
-    return false;
+  if (draftPersistences[key]?.status === "saving") {
+    return { status: "already-saving" };
   }
-  savingDrafts = { ...savingDrafts, [key]: true };
-  return true;
+  draftPersistences = {
+    ...draftPersistences,
+    [key]: { status: "saving", boundChatThreadId },
+  };
+  return { status: "saving", boundChatThreadId };
 };
 
-export const isCreateDocumentDraftPersistenceActive = (
+export const getCreateDocumentDraftPersistence = (
   toolCallId: string,
-): boolean => savingDrafts[draftRuntimeKey(toolCallId)] === true;
+): CreateDocumentDraftPersistence =>
+  draftPersistences[draftRuntimeKey(toolCallId)] ?? { status: "idle" };
 
 export const endCreateDocumentDraftPersistence = (toolCallId: string): void => {
   const key = draftRuntimeKey(toolCallId);
-  if (savingDrafts[key] !== true) {
+  if (draftPersistences[key]?.status !== "saving") {
     return;
   }
-  savingDrafts = withoutRuntimeKey(savingDrafts, key);
+  draftPersistences = withoutRuntimeKey(draftPersistences, key);
 };
 
 export const completeCreateDocumentDraft = (toolCallId: string): void => {
@@ -329,5 +355,5 @@ export const __resetCreateDocumentDraftRuntimeForTests = (): void => {
   draftSavers = {};
   retainedDraftSnapshots = {};
   retainedDraftChatBindings = {};
-  savingDrafts = {};
+  draftPersistences = {};
 };

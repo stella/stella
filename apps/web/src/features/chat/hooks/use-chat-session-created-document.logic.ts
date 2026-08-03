@@ -1,5 +1,6 @@
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
 
+import type { CreateDocumentDraftPersistence } from "@/components/chat/create-document-draft-runtime";
 import {
   CREATE_DOCUMENT_DRAFT_VIEW,
   bindCreateDocumentDraftChatThread,
@@ -17,6 +18,7 @@ type PromoteCreateDocumentDraftInspectorTabOptions = {
   fieldId: string;
   fileName: string;
   getInspector: () => Pick<InspectorTabsStore, "tabs" | "updateView">;
+  persistence: Extract<CreateDocumentDraftPersistence, { status: "saving" }>;
   toolCallId: string;
   workspaceId: string;
 };
@@ -27,6 +29,7 @@ export const promoteCreateDocumentDraftInspectorTab = ({
   fieldId,
   fileName,
   getInspector,
+  persistence,
   toolCallId,
   workspaceId,
 }: PromoteCreateDocumentDraftInspectorTabOptions): boolean => {
@@ -40,6 +43,16 @@ export const promoteCreateDocumentDraftInspectorTab = ({
   ) {
     return false;
   }
+  const payload =
+    persistence.boundChatThreadId === null
+      ? tab.payload
+      : bindCreateDocumentDraftChatThread({
+          chatThreadId: persistence.boundChatThreadId,
+          payload: setCreateDocumentDraftChatThreadId({
+            chatThreadId: persistence.boundChatThreadId,
+            payload: tab.payload,
+          }),
+        });
   inspector.updateView({
     id,
     label: fileName,
@@ -47,7 +60,7 @@ export const promoteCreateDocumentDraftInspectorTab = ({
       entityId,
       fieldId,
       fileName,
-      payload: tab.payload,
+      payload,
       workspaceId,
     }),
   });

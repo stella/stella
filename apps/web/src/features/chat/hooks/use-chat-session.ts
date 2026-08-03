@@ -44,7 +44,7 @@ import {
   completeCreateDocumentDraft,
   endCreateDocumentDraftPersistence,
   getBoundCreateDocumentDraftChatThreadId,
-  isCreateDocumentDraftPersistenceActive,
+  getCreateDocumentDraftPersistence,
   prepareCreateDocumentDraft as prepareCreateDocumentDraftBuffer,
   settleCreateDocumentDraftWithRetry,
 } from "@/components/chat/create-document-draft-runtime";
@@ -329,12 +329,14 @@ export const useChatSession = ({
           ? { workspaceId: threadRef.workspaceId }
           : {}),
       });
-      const payload = isCreateDocumentDraftPersistenceActive(draft.toolCallId)
-        ? setCreateDocumentDraftPayloadStatus({
-            payload: basePayload,
-            status: "saving",
-          })
-        : basePayload;
+      const persistence = getCreateDocumentDraftPersistence(draft.toolCallId);
+      const payload =
+        persistence.status === "saving"
+          ? setCreateDocumentDraftPayloadStatus({
+              payload: basePayload,
+              status: "saving",
+            })
+          : basePayload;
       for (const tab of inspector.tabs) {
         if (
           tab.id !== id &&
@@ -1048,21 +1050,26 @@ export const useChatSession = ({
       if (draftMessageId === null) {
         return;
       }
-      if (!beginCreateDocumentDraftPersistence(toolCallId)) {
-        return;
-      }
       const inspector = useInspectorTabsStore.getState();
-      const lockedDraftEditor = setCreateDocumentDraftInspectorTabStatus({
-        inspector,
-        status: "saving",
-        toolCallId,
-      });
-      const draftChatThreadId = resolveBoundCreateDocumentDraftChatThreadId({
+      const boundChatThreadId = resolveBoundCreateDocumentDraftChatThreadId({
         inspector,
         retainedChatThreadId:
           getBoundCreateDocumentDraftChatThreadId(toolCallId),
         toolCallId,
       });
+      const persistence = beginCreateDocumentDraftPersistence({
+        boundChatThreadId,
+        toolCallId,
+      });
+      if (persistence.status !== "saving") {
+        return;
+      }
+      const lockedDraftEditor = setCreateDocumentDraftInspectorTabStatus({
+        inspector,
+        status: "saving",
+        toolCallId,
+      });
+      const draftChatThreadId = persistence.boundChatThreadId;
       const createResult = await Result.tryPromise(async () => {
         const draft = await prepareCreateDocumentDraft(toolCallId, input);
         if (draft === null) {
@@ -1159,16 +1166,17 @@ export const useChatSession = ({
           output,
         ),
       );
-      completeCreateDocumentDraft(toolCallId);
 
       const promotedDraftInPlace = promoteCreateDocumentDraftInspectorTab({
         entityId: output.entityId,
         fieldId: output.fieldId,
         fileName: output.fileName,
         getInspector: useInspectorTabsStore.getState,
+        persistence,
         toolCallId,
         workspaceId: output.workspaceId,
       });
+      completeCreateDocumentDraft(toolCallId);
 
       await invalidateCreatedDocumentQueries({
         queryClient,

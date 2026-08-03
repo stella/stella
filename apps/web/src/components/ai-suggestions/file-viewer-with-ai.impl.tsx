@@ -22,6 +22,10 @@ import {
 } from "@stll/folio-react";
 import type { DocxEditorRef } from "@stll/folio-react";
 
+import {
+  getCreateDocumentDraftPersistence,
+  type CreateDocumentDraftPersistence,
+} from "@/components/chat/create-document-draft-runtime";
 import type { DocxComments } from "@/components/docx/app-docx-editor";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { DocxEditSafety } from "@/lib/chat-edit-mode";
@@ -234,7 +238,21 @@ export const FileChatOverlayHost = ({
   onActiveDraftChatBound,
   requestDocxEditMode,
 }: FileChatOverlayHostProps) => {
+  const draftPersistence: CreateDocumentDraftPersistence =
+    activeDraft === undefined
+      ? { status: "idle" }
+      : getCreateDocumentDraftPersistence(activeDraft.toolCallId);
   const handleNewThread = () => {
+    // The current runtime state is read again at the interaction boundary.
+    // This closes the small interval before React commits the saving payload:
+    // a click cannot rotate the thread after the save captured its binding.
+    if (
+      activeDraft !== undefined &&
+      getCreateDocumentDraftPersistence(activeDraft.toolCallId).status ===
+        "saving"
+    ) {
+      return;
+    }
     // The previous thread's queued/accepted/rejected suggestions
     // belong to that thread's history. Carrying them into a fresh
     // thread invites the user to act on proposals they no longer
@@ -275,6 +293,7 @@ export const FileChatOverlayHost = ({
         activeDraft={activeDraft}
         activeFile={activeFile}
         chatThreadId={chatThreadId}
+        draftPersistence={draftPersistence}
         docxComments={docxComments}
         docxEditable={docxEditable}
         docxEditSafety={docxEditSafety}

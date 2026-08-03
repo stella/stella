@@ -89,6 +89,10 @@ import type {
   UnresolvedActiveDocxEditToolCallPart,
   UnresolvedFolioAgentDocToolCallPart,
 } from "@/components/chat/chat-ui-tools";
+import {
+  getCreateDocumentDraftPersistence,
+  type CreateDocumentDraftPersistence,
+} from "@/components/chat/create-document-draft-runtime";
 import { useChatModelSelection } from "@/components/chat/use-chat-model-selection";
 import type { DocxComments } from "@/components/docx/app-docx-editor";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -862,6 +866,8 @@ type FileChatOverlayProps = {
         toolCallId: string;
       }
     | undefined;
+  /** The persistence lifecycle owns this draft chat while it is being saved. */
+  draftPersistence: CreateDocumentDraftPersistence;
   activeExternal?: ActiveExternal | undefined;
   docxEditorRef?: RefObject<DocxEditorRef | null> | undefined;
   docxEditable?: boolean | undefined;
@@ -924,6 +930,7 @@ export const FileChatOverlay = ({
   chatThreadId,
   activeFile,
   activeDraft,
+  draftPersistence,
   activeExternal,
   docxEditable,
   docxEditSafety,
@@ -948,6 +955,7 @@ export const FileChatOverlay = ({
       <Suspense fallback={fallback}>
         <ResolvedFileChatOverlay
           activeFile={{ ...activeFile, fileFieldId }}
+          draftPersistence={draftPersistence}
           docxComments={docxComments}
           docxEditable={docxEditable}
           docxEditSafety={docxEditSafety}
@@ -966,6 +974,7 @@ export const FileChatOverlay = ({
       <FileChatOverlayInner
         activeExternal={activeExternal}
         activeDraft={activeDraft}
+        draftPersistence={draftPersistence}
         activeFile={activeFile}
         chatThreadId={chatThreadId}
         docxComments={docxComments}
@@ -996,6 +1005,7 @@ const ResolvedFileChatOverlay = ({
   docxEditable,
   docxEditSafety,
   docxEditorRef,
+  draftPersistence,
   onDocxCommentsChange,
   onNewThread,
   requestDocxEditMode,
@@ -1022,6 +1032,7 @@ const ResolvedFileChatOverlay = ({
     <FileChatOverlayInner
       activeFile={activeFile}
       chatThreadId={chatThreadId}
+      draftPersistence={draftPersistence}
       docxComments={docxComments}
       docxEditable={docxEditable}
       docxEditSafety={docxEditSafety}
@@ -1043,6 +1054,7 @@ const FileChatOverlayInner = ({
   chatThreadId,
   activeFile,
   activeDraft,
+  draftPersistence,
   activeExternal,
   docxEditable,
   docxEditSafety,
@@ -1497,6 +1509,10 @@ const FileChatOverlayInner = ({
   });
   const { ensureAIAvailable, openIfAIUnavailable } = useAIKeyGate();
   const [panelOpen, setPanelOpen] = useState(false);
+  const isDraftChatFrozen = (): boolean =>
+    activeDraft !== undefined &&
+    getCreateDocumentDraftPersistence(activeDraft.toolCallId).status ===
+      "saving";
   const handlePromptSubmit = useLatestCallback(
     async ({
       prompt,
@@ -1506,6 +1522,9 @@ const FileChatOverlayInner = ({
       files: ChatDraftAttachment[];
     }) => {
       try {
+        if (isDraftChatFrozen()) {
+          return;
+        }
         if (!(await ensureAIAvailable())) {
           return;
         }
@@ -2047,6 +2066,9 @@ const FileChatOverlayInner = ({
   // rotation remount only swaps the surface, while the old Chat
   // instance would keep streaming inside the query cache.
   const startNewThread = () => {
+    if (isDraftChatFrozen()) {
+      return;
+    }
     stop();
     shouldFocusComposerAfterNewThreadRef.current = true;
     setPanelOpen(false);
@@ -2064,6 +2086,12 @@ const FileChatOverlayInner = ({
     stickToBottomRef.current = true;
     el.scrollTop = el.scrollHeight;
   }, [lastMessageId, panelOpen]);
+  let sendDisabledReason: "draft-saving" | "editor-loading" | undefined;
+  if (draftPersistence.status === "saving") {
+    sendDisabledReason = "draft-saving";
+  } else if ((activeFile || activeDraft) && docxEditorRef && !editorReady) {
+    sendDisabledReason = "editor-loading";
+  }
   // While pinned to the bottom, follow every content growth — streaming tokens
   // during "preparation" steps, the reasoning block expanding, and the async
   // follow-up chips arriving after the answer — so the view tracks the content
@@ -2181,7 +2209,10 @@ const FileChatOverlayInner = ({
                 // Mirror the PromptBar send guard: when an editable DOCX's edit
                 // snapshot isn't ready, block the chip send too so the model
                 // never sees a follow-up without current edit context.
-                if (!canSubmitWithCurrentDocxSnapshot()) {
+                if (
+                  isDraftChatFrozen() ||
+                  !canSubmitWithCurrentDocxSnapshot()
+                ) {
                   return;
                 }
                 editorController.setContent(prompt);
@@ -2276,11 +2307,7 @@ const FileChatOverlayInner = ({
           }}
           pendingCount={0}
           queueWhileGenerating
-          sendDisabledReason={
-            (activeFile || activeDraft) && docxEditorRef && !editorReady
-              ? "editor-loading"
-              : undefined
-          }
+          sendDisabledReason={sendDisabledReason}
           status={isGenerating ? "generating" : "idle"}
           dock={
             <ChatComposerDock
@@ -2291,7 +2318,11 @@ const FileChatOverlayInner = ({
                 selectedModel: data.model,
                 selectModel: modelSelection.selectModel,
               }}
-              onNewThread={hasMessages ? startNewThread : null}
+              onNewThread={
+                hasMessages && draftPersistence.status !== "saving"
+                  ? startNewThread
+                  : null
+              }
               leadingContext={
                 // The matter control is a real picker on every surface, so
                 // the user can widen or narrow the file chat's context just

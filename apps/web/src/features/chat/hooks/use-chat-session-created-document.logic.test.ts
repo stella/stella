@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   buildCreateDocumentDraftPayload,
+  bindCreateDocumentDraftChatThread,
   CREATE_DOCUMENT_DRAFT_VIEW,
   createDocumentDraftTabId,
   isCreateDocumentDraftPayload,
@@ -236,6 +237,7 @@ describe("create-document inspector transition", () => {
         fieldId: "field-1",
         fileName: "Power of attorney.docx",
         getInspector: () => inspector,
+        persistence: { status: "saving", boundChatThreadId: null },
         toolCallId,
         workspaceId: "workspace-1",
       }),
@@ -333,12 +335,84 @@ describe("create-document inspector transition", () => {
         fieldId: "field-1",
         fileName: "Power of attorney.docx",
         getInspector: () => currentInspector,
+        persistence: { status: "saving", boundChatThreadId: null },
         toolCallId,
         workspaceId: "workspace-1",
       }),
     ).toBe(true);
     expect(reopenedTabs.at(0)).toMatchObject({
       payload: { status: "persisted", entityId: "entity-1" },
+    });
+  });
+
+  test("promotes the chat identity captured when saving despite a stale rotation", () => {
+    const toolCallId = "tool-1";
+    const draft = buildCreateDocumentDraftPayload({
+      draft: {
+        messageId: "message-origin",
+        toolCallId,
+        name: "Power of attorney",
+        source: "@doc kind=other locale=en page=A4",
+        status: "ready",
+      },
+      existingPayload: undefined,
+      originChatThreadId: toChatThreadId("thread-origin"),
+    });
+    const capturedChatThreadId = draft.chatThreadId;
+    const tabs: InspectorTab[] = [
+      {
+        id: createDocumentDraftTabId(toolCallId),
+        label: "Power of attorney.docx",
+        payload: bindCreateDocumentDraftChatThread({
+          chatThreadId: capturedChatThreadId,
+          payload: draft,
+        }),
+        type: "view",
+        viewType: CREATE_DOCUMENT_DRAFT_VIEW,
+      },
+    ];
+    const inspector = {
+      tabs,
+      updateView: ({ id, label, payload }) => {
+        const tab = tabs.find((candidate) => candidate.id === id);
+        if (tab?.type !== "view") {
+          return;
+        }
+        tab.label = label;
+        tab.payload = payload;
+      },
+    } satisfies Pick<InspectorTabsStore, "tabs" | "updateView">;
+
+    // This represents an event already queued before the save UI committed.
+    // Promotion must retain the captured, server-bound identity regardless.
+    expect(
+      setCreateDocumentDraftInspectorChatThreadId({
+        chatThreadId: toChatThreadId("thread-stale-rotation"),
+        inspector,
+        toolCallId,
+      }),
+    ).toBe(true);
+
+    expect(
+      promoteCreateDocumentDraftInspectorTab({
+        entityId: "entity-1",
+        fieldId: "field-1",
+        fileName: "Power of attorney.docx",
+        getInspector: () => inspector,
+        persistence: {
+          status: "saving",
+          boundChatThreadId: capturedChatThreadId,
+        },
+        toolCallId,
+        workspaceId: "workspace-1",
+      }),
+    ).toBe(true);
+    expect(tabs.at(0)).toMatchObject({
+      payload: {
+        chatThreadBinding: "bound",
+        chatThreadId: capturedChatThreadId,
+        status: "persisted",
+      },
     });
   });
 
@@ -353,6 +427,7 @@ describe("create-document inspector transition", () => {
         fieldId: "field-1",
         fileName: "Power of attorney.docx",
         getInspector: () => inspector,
+        persistence: { status: "saving", boundChatThreadId: null },
         toolCallId: "tool-1",
         workspaceId: "workspace-1",
       }),

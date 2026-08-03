@@ -218,7 +218,7 @@ type PromptBarProps = {
    * empty-state placeholder so the user doesn't fire a message
    * into a dead context.
    */
-  sendDisabledReason?: "editor-loading" | undefined;
+  sendDisabledReason?: "draft-saving" | "editor-loading" | undefined;
   /**
    * When true the composer keeps accepting input while a response
    * streams: pressing Enter queues a send via `useChatSession` and
@@ -948,7 +948,11 @@ export function PromptBar(props: PromptBarProps) {
               aria-hidden="true"
               className="size-3.5 shrink-0 animate-spin"
             />
-            <span className="truncate">{t("chat.editorLoading")}</span>
+            <span className="truncate">
+              {sendDisabledReason === "editor-loading"
+                ? t("chat.editorLoading")
+                : t("folio.savingDocument")}
+            </span>
           </div>
         )}
         {isEmpty &&
