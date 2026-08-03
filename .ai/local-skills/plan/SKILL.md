@@ -1,91 +1,100 @@
 ---
 name: plan
-description: 'Create a new plan file in `.agents/plans/` for a feature or task.'
+description: 'Create a concise, evidence-backed implementation plan in `.agents/plans/` when the user explicitly asks for a plan artifact.'
 ---
 
 # Create Plan
 
-Create a new plan file in `.agents/plans/` for a feature or task.
+Create an implementation plan only when the user explicitly asks for one. A
+plan is a durable handoff artifact, not a substitute for resolving the product
+shape first.
 
 ## Arguments
 
-$ARGUMENTS — A short slug for the plan (kebab-case), e.g. "full-text-search"
-or "matter-lifecycle". If empty, determine an appropriate slug from
-the conversation context.
+`$ARGUMENTS` describes the feature, task, or plan slug. Infer a short
+kebab-case slug from the conversation when none is supplied.
 
-## Instructions
+## Workflow
 
-1. **Read context** — read `.agents/ARCHITECTURE.md` and `.agents/GOALS.md`
-   to understand the current system and priorities.
-
-2. **Determine the next plan number** — list existing plans and increment:
+1. **Check decision readiness.** Separate settled decisions from genuine open
+   questions. If a missing answer would materially change the product or
+   architecture, resolve it with the user before writing. Do not pause for
+   choices that can be discovered from the repository or decided safely from
+   existing conventions.
+2. **Read current evidence.** Read the applicable `AGENTS.md`,
+   `.agents/GOALS.md` when present, relevant code and tests, and nearby plans.
+   Treat code and current repository instructions as authoritative; do not
+   require optional context files that are absent.
+3. **Create a collision-resistant filename.** Use UTC timestamp plus slug:
 
    ```bash
-   ls .agents/plans/
+   date -u +%Y%m%d-%H%M%S
    ```
 
-   Use the next sequential number (e.g., if `001-matters.md` exists,
-   use `002`).
+   Write `.agents/plans/{timestamp}-{slug}.md`. Never allocate a global
+   sequential number; concurrent worktrees make that race-prone.
+4. **Write the plan once the shape is coherent.** The user's request to plan
+   authorizes creating the file. Do not ask for confirmation after writing or
+   add a second save step.
 
-3. **Research the feature** — before writing the plan, explore the
-   codebase to understand what exists, what needs to change, and what
-   the implications are. Read relevant handler files, schema, routes,
-   and components.
+## Plan Shape
 
-4. **Write the plan** to `.agents/plans/{number}-{slug}.md` with this
-   structure:
+```markdown
+# Plan: [Feature Name]
 
-   ```markdown
-   # Plan: [Feature Name]
+Date: YYYY-MM-DD
 
-   Date: YYYY-MM-DD
+## Goal
 
-   ## Goal
+The user-visible or operational outcome, in 1–3 sentences.
 
-   What are we building and why? 1-3 sentences.
+## Current State
 
-   ## Design Decisions
+What exists now, with the relevant files, contracts, and constraints.
 
-   Key choices and why we made them. Focus on _what_ and _why_,
-   not prescriptive implementation details.
+## Decisions
 
-   - **Decision 1**: Why this approach over alternatives.
-   - **Decision 2**: Why this approach over alternatives.
+- **Decision:** choice and why it wins over the material alternatives.
 
-   ## Scope
+## Scope
 
-   **In scope:**
+**In:** ...
 
-   - ...
+**Out:** ...
 
-   **Out of scope:**
+## Vertical Slices
 
-   - ...
+1. Small independently verifiable end-to-end slice.
+2. Next slice and its dependency on the first.
 
-   ## Implementation
+## Contracts and Invariants
 
-   Where the code lives and what changes. Be specific about files.
+Types, API/data boundaries, tenant/security rules, failure semantics,
+pagination, performance budgets, i18n, and compatibility requirements that
+must survive implementation.
 
-   - `apps/api/src/...` — what changes here
-   - `apps/web/src/...` — what changes here
-   - DB schema changes (if any)
+## Verification
 
-   ## Test Cases
+Tests and checks that can catch real failures the type system or lint cannot.
 
-   What needs to be tested.
+## Rollout and Recovery
 
-   ## Open Questions
+Additive migration order, compatibility window, observability, and rollback or
+forward-fix path when relevant.
 
-   Unresolved decisions (remove section when all resolved).
-   ```
+## Open Questions
 
-5. **Plan guidelines**:
-   - Focus on _what_ and _why_, avoid prescriptive _how_
-   - Consider both API layers: backend handlers and frontend routes
-   - Note DB schema changes explicitly — they affect migrations
-   - Flag security implications (ethical walls, workspace isolation,
-     auth) per the security audit checklist
-   - Keep it concise — a plan is a thinking tool, not documentation
+Only unresolved decisions that still need a named answer. Omit when empty.
+```
 
-6. **Confirm with the user** — show the plan and ask if they want to
-   adjust anything before saving.
+## Quality Bar
+
+- Keep the plan concise and specific enough for another agent to implement.
+- Prefer vertical slices over horizontal layer checklists.
+- Name real files and existing primitives; do not invent paths without
+  checking them.
+- State what is deliberately deferred so follow-up ideas do not expand the
+  first slice.
+- Do not write implementation pseudocode unless a contract is otherwise
+  ambiguous.
+- Report the created plan path and the few decisions that matter most.

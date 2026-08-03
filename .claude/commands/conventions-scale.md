@@ -1,65 +1,72 @@
 # Scalability Conventions
 
-Apply when making architectural decisions, designing new endpoints,
-or adding database tables.
+Apply when making architectural decisions, designing endpoints or workers,
+adding database tables, or changing data-volume behavior.
 
 ## Principle
 
-Never paint yourself into a corner. The architecture must support
-Magic Circle scale (2,000–5,000+ lawyers, millions of documents)
-without a rewrite.
+Design for 2,000–5,000+ lawyers and millions of documents without requiring a
+rewrite. Choose the scalable shape when it costs roughly the same. When it is
+materially more expensive, isolate the simpler implementation behind a clear
+contract so callers do not depend on its limitations.
 
-- If the scalable solution costs roughly the same effort as the
-  simple one, choose the scalable solution now.
-- If real scalability requires significantly more work, the
-  simple solution is fine, but it must be _replaceable_ without
-  restructuring surrounding code. Isolate it behind an interface,
-  a config flag, or a clean module boundary.
+## Required Shape
 
-## What This Means in Practice
+**Bounded reads.** Never return or scan an unbounded growing collection in a
+request or repair job. List endpoints accept a normalized limit and opaque
+cursor and return `Page<T>` from `apps/api/src/lib/pagination.ts`:
+`{ items, nextCursor, limit }`. Offset pagination, `totalCount`, and unbounded
+lists require explicit justification.
 
-**Pagination and streaming.** Never return unbounded result sets.
-Every list endpoint should accept `limit`/`cursor` and return the
-standard `Page<T>` envelope from `apps/api/src/lib/pagination.ts`:
-`{ items, nextCursor, limit }`. Cursors are opaque to callers, and
-`limit` is the normalized server-applied limit. Offset pagination,
-`totalCount`, and unbounded lists require explicit justification in
-the endpoint design. For file processing, prefer streaming over
-loading entire files into memory.
+**Tenant isolation.** Stella already uses PostgreSQL RLS plus query-level
+authorization. Workspace reads and writes go through authorized `scopedDb`
+and include the tenant boundary in the query. `SafeId` and handler permission
+checks complement RLS; none replaces the others. Root DB access is reserved
+for demonstrated system-level operations with an explicit deny-by-default
+policy.
 
-**Tenant isolation.** Application-level filtering (via `SafeId`
-and `workspaceAccessMacro`) is the current approach. Do not
-introduce patterns that would prevent adding PostgreSQL RLS
-later: always filter by tenant ID in the query itself, never
-fetch-then-check in application code.
+**Stateless services.** API processes must work behind a load balancer with N
+replicas. Do not depend on process-local mutable state for ownership, queues,
+locks, required caches, or progress. Use durable queues, database leases,
+compare-and-set transitions, and external caches where appropriate.
 
-**Stateless API processes.** Keep the Elysia server stateless so
-it can run behind a load balancer with N replicas. No in-process
-singletons that hold mutable state (caches, queues, locks).
-Background work should be delegable to a separate worker or
-queue consumer.
+**Bounded background work.** Workers use durable checkpoints, deterministic
+job identity, bounded concurrency, backpressure, and per-item failure records.
+A retry or overlapping run must converge instead of duplicating effects.
 
-**Resource limits as configuration.** Limits (entity count,
-property count, file size) must never be magic numbers scattered
-in handlers. Define them in `lib/limits.ts`.
+**Streaming and batching.** Stream large files and exports; do not buffer them
+entirely in memory. Batch database and remote operations and avoid per-row
+network/query fan-out. Put explicit ceilings on batch size, payload size,
+parallelism, retries, and execution time.
 
-**AI provider abstraction.** Do not hardcode a single AI
-provider in business logic. The provider should be selectable
-via configuration.
+**Configuration-owned limits.** Growing-domain limits live in the owning
+slice's named configuration or shared limit primitives, not as scattered magic
+numbers. Defaults, hard ceilings, and normalized server-applied values must be
+distinguishable.
 
-**Indexes.** When adding a column used in `WHERE`, `ORDER BY`,
-or `JOIN`, add an index in the same migration. Composite indexes
-lead with the tenant-scoping column.
+**Indexes and access paths.** Add an index with every new request-path filter,
+sort, or join; lead composite indexes with tenant scope. Check the query plan
+for large-table or high-frequency paths rather than inferring performance from
+the schema.
 
-**Connection pooling.** Avoid long-held transactions; keep
-transactions as short as possible. Design for an external pooler
-(PgBouncer).
+**Short transactions.** Keep external I/O outside transactions and design for
+an external pooler. Long-running workflows persist progress between short
+transactions.
 
-## Known Scale Gaps (acceptable today, tracked for later)
+**Replaceable providers.** AI, search, object storage, email, conversion, and
+connector providers stay behind typed boundaries. Business logic must not
+depend on one provider's model names, pagination quirks, or retry semantics.
 
-New code must not make these worse:
+## Evidence Before Exceptions
 
-- No session caching (session lookups hit DB every request)
-- No granular RBAC (workspace-level only)
-- Frontend entity table has no virtualization or server pagination
-- Random nanoid PKs (prefer ULIDs for new high-volume tables)
+Do not keep a hand-maintained list of today's scale gaps in this skill; it
+becomes stale. Inspect live baselines and code instead:
+
+- `bun scripts/perf-hotspots.ts` for current network/query debt;
+- affected query plans and table cardinality for database work;
+- `scripts/typecheck-baseline.ts` for type-instantiation growth;
+- bundle and route network baselines for frontend changes.
+
+When accepting a temporary limitation, record its bound, the replacement
+boundary, the signal that triggers migration, and the strongest guard that
+prevents new code from making it worse.

@@ -52,6 +52,14 @@ protection from stale work.
 11. **Owned schema.** The vertical slice owns its source, item, attempt, and
     failure tables. Shared code provides transaction and identity primitives,
     not a cross-domain ingestion framework.
+12. **Bounded external calls.** Every remote request has an explicit timeout,
+    bounded retry policy with jitter, provider-aware rate limiting, and a
+    maximum concurrency. Persist retry state; do not hold a database
+    transaction while waiting on the provider.
+13. **Poison-item isolation.** One malformed or permanently rejected item must
+    not stall an entire source forever. Persist the item identity, classified
+    terminal/retryable outcome, sanitized error context, and operator-visible
+    repair path before allowing later progress.
 
 ## Checkpoint Boundary
 
@@ -72,7 +80,11 @@ Test the behavior that types and lint cannot prove:
 - deliver duplicates concurrently and assert one durable effect;
 - crash after a remote side effect and before acknowledgment, then replay;
 - finish stale work after a newer version and assert it cannot overwrite;
-- leave an enqueue gap and assert the bounded repair scan finds it.
+- leave an enqueue gap and assert the bounded repair scan finds it;
+- exhaust the retry budget for one poison item and assert later items still
+  reach a durable terminal state without silently dropping the failure;
+- overlap two workers at the provider concurrency limit and assert calls stay
+  bounded and the persisted winner cannot be overwritten.
 
 Prefer invariant and state-machine tests over one example retry.
 

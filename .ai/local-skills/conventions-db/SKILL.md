@@ -1,92 +1,90 @@
 ---
 name: conventions-db
-description: 'Apply when writing or modifying database schema, queries, or migrations.'
+description: 'Apply when writing or modifying database schema, queries, migrations, transactions, or tenant-scoped persistence.'
 ---
 
 # Database Conventions
 
-Apply when writing or modifying database schema, queries, or
-migrations.
+Apply when writing or modifying database schema, queries, migrations,
+transactions, or tenant-scoped persistence.
 
 ## Schema
 
-- Schema lives in `/apps/api/src/db/schema.ts`
-- Use Drizzle migrations (`bun run db:push`)
-- For closed persisted domain values, define one named `as const` value list and
-  pass it to Drizzle with `text({ enum: VALUES })`. This provides insert/select
-  inference without introducing a TypeScript or PostgreSQL enum.
-- Drizzle's `{ enum: VALUES }` and `.$type<T>()` are compile-time-only; neither
-  validates stored values. Add an explicit database `CHECK` when an invalid value
-  could compromise lifecycle, billing, authorization, audit, or workflow invariants.
-- Reserve `.$type<T>()` for branded or structured types. Use a native PostgreSQL
-  enum only when the value set is genuinely permanent.
-- Cascade deletes for workspace-owned resources
-- Restrict deletes for file references (prevent orphaning)
-- When writing multi-delete transactions, trace the FK graph
-  from `schema.ts` and delete in dependency order: delete the
-  parent with cascade FKs first (removing referencing rows),
-  then delete restrict-FK targets last.
-- JSONB columns for flexible content schemas
-- Timestamp columns must use the `timestamptz` helper from
-  `apps/api/src/db/columns.ts` (re-exported via `schema/common.ts`). Stock
-  pg-core `timestamp()` produces a naive timestamp whose meaning depends on
-  the session time zone; the `require-timestamptz-column` lint rule bans it. The companion
-  `no-naive-timestamp-cast` rule bans `::timestamp` casts in SQL text; use
-  `::timestamptz`, or `::timestamp AT TIME ZONE '...'` when deliberately
-  anchoring a zoneless value.
+- Schema lives under `apps/api/src/db/schema/`; read the owning slice and
+  related foreign keys before editing.
+- For closed persisted domain values, define one named `as const` value list
+  and pass it to Drizzle with `text({ enum: VALUES })`. Add a database `CHECK`
+  when invalid values could compromise lifecycle, authorization, audit, or
+  workflow invariants; Drizzle's enum option is compile-time-only.
+- Reserve `.$type<T>()` for branded or structured types. Use a native
+  PostgreSQL enum only when the value set is genuinely permanent.
+- Use cascade deletes for workspace-owned dependants and restrict deletes for
+  shared file references. Trace the full FK graph before multi-resource
+  deletion.
+- Timestamp columns use the `timestamptz` helper from
+  `apps/api/src/db/columns.ts`. Never introduce a naive PostgreSQL timestamp or
+  `::timestamp` cast without explicitly anchoring its time zone.
+- Add indexes for columns used in `WHERE`, `ORDER BY`, or `JOIN`; lead
+  composite indexes with the tenant-scoping columns. Treat changes to large
+  tables as lock-sensitive.
 
 ## Migrations
 
-- Schema changes must be additive across at least one deploy. Add new
-  tables/columns/indexes first, deploy code that can read and write both
-  shapes, backfill separately when needed, switch reads/writes, then drop
-  the old shape in a later release.
-- Remember the deploy order: migrations run before the new API tasks finish
-  rolling out. Old API tasks can serve requests against the new schema during
-  the rollout, and a failed rollout can leave the old API running on the new
-  schema.
-- Drizzle does not generate down migrations. If a migration succeeds and the
-  application rollout fails, rollback is a manual forward fix unless the old
-  application remains schema-compatible.
-- Do not include irreversible schema operations in the same release as risky
-  application code. Split them into a small migration-only release or an
-  additive preparatory release.
-- Destructive or backwards-incompatible SQL requires an explicit acknowledgement
-  in the migration file. `scripts/check-migration-safety.ts` blocks guarded
-  operations such as `DROP`, `TRUNCATE`, `DELETE FROM`, table/column renames,
-  dropped constraints, column type changes, and disabling row-level security
-  unless the file includes:
+- `bun --filter @stll/api db:migrate` is the shipped migration path used by CI
+  and deployment. `db:push` is a local declarative schema-diff tool; it does
+  not replace committed migrations and must not be described as the deploy
+  path.
+- Schema changes remain additive across a rollout: add, deploy compatible
+  reads/writes, backfill in bounded batches, switch, then remove the old shape
+  in a later release.
+- Migrations run before new API tasks finish rolling out. Old tasks must remain
+  compatible with the migrated schema, and a failed rollout must have a safe
+  forward-fix path.
+- Keep irreversible schema operations out of the same release as risky
+  application changes. Destructive SQL requires the reviewed annotation
+  enforced by `scripts/check-migration-safety.ts`.
+- Use `CREATE INDEX CONCURRENTLY` where supported for large live tables. Keep
+  long backfills outside schema migrations and checkpoint them durably.
+- Validate migration history two ways: apply every committed migration to a
+  fresh database, then confirm `drizzle-kit push --explain` reports no schema
+  drift. Do not repair drift by resetting a shared database.
 
-  ```sql
-  -- stella-migration-safety: reviewed destructive-change - <why this is safe and how rollback is handled>
-  ```
+## Tenant Scope and Queries
 
-- Treat existing large-table changes as lock-sensitive. Prefer `CREATE INDEX
-  CONCURRENTLY`, avoid table rewrites in request-critical tables, and backfill
-  in bounded batches outside the schema migration when the data volume can grow.
+- Workspace data uses the authorized `scopedDb` supplied by safe handlers so
+  PostgreSQL RLS and query-level scope reinforce each other. Raw/root database
+  access needs a demonstrated system-level reason and a deny-by-default RLS
+  posture.
+- Ownership IDs come from server-validated context, never request bodies. Keep
+  tenant predicates in the database query even when a preceding authorization
+  check exists.
+- Prefer Drizzle's relational query API for ordinary relation reads. Use
+  SQL-like syntax for cross-table filtering, aggregation, locking, unions, or
+  mutations where it expresses the invariant more directly.
+- Every list query uses a bounded `limit` and cursor and returns the standard
+  `Page<T>` envelope from `apps/api/src/lib/pagination.ts`. Offset pagination,
+  `totalCount`, and unbounded `findMany` require explicit justification.
+- Do not filter unindexed JSONB in request paths. Fetch through indexed tenant
+  columns, then narrow structured content with a type guard rather than a cast.
+- Batch relation reads and writes. Never issue a query per item when a join,
+  relation preload, `IN` query, or bulk mutation can express the same work.
 
-## Queries
+## Concurrency and Transactions
 
-- Prefer Drizzle's relational query API (`db.query.*.findFirst`,
-  `findMany`) over SQL-like syntax (`select().from().where()`).
-  Use SQL-like syntax only for cross-table filtering,
-  aggregations, unions.
-- Every new list query must support `limit` and a cursor or
-  offset. Never return an unbounded `findMany` without a limit.
-- Add indexes for any column used in `WHERE`, `ORDER BY`, or
-  `JOIN`. Lead composite indexes with the tenant-scoping column.
-- Keep transactions short: do I/O (S3, external APIs) outside
-  the transaction, not inside.
-- Don't filter on unindexed JSONB fields in `WHERE` clauses.
-  Fetch by an indexed column, then validate the JSONB content
-  in application code. Narrow the discriminated union with a
-  type guard instead of using `as` casts.
-- Any status-conditional mutation (read a row, decide based on its status,
-  then write) must close the check-then-act gap: either hold a `SELECT ...
-  FOR UPDATE` lock from the read that makes the decision, re-checking the
-  status inside that same locked read, or express the precondition directly
-  in the mutating statement's `WHERE` clause and check the affected-row
-  count instead of trusting the earlier read. A plain read followed by an
-  unconditional write is a race between concurrent requests. See
-  `apps/api/src/handlers/invoices/lock-invoice.ts` for the reference
-  implementation shared by the invoice update/transition/delete handlers.
+- Keep transactions short; perform S3, network, conversion, and other external
+  I/O outside them.
+- Close every read-decide-write race. Lock the decisive row with `SELECT ...
+  FOR UPDATE`, or encode the expected state/version in the mutation `WHERE`
+  clause and check the affected-row count.
+- Make retries converge. Stable identities, unique constraints, conditional
+  transitions, and idempotency keys are stronger than read-before-insert
+  checks.
+- Preserve lock order across call sites. When multiple resources must be
+  locked, define and reuse a deterministic ordering to avoid deadlocks.
+
+## Verification
+
+Test behavior that schema inference cannot prove: cross-tenant denial,
+concurrent transitions, replay/idempotence, migration parity, destructive
+delete ordering, and cursor stability under inserts. Prefer invariant or
+integration tests over mocked query-shape tests.

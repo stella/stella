@@ -48,6 +48,27 @@ handling, or external APIs. Stella handles privileged legal data
 Prefer solutions that make security bugs **structurally impossible**
 (compile-time, lint-time) over ones that rely on developer discipline.
 
+### Authorized database boundary
+
+Workspace-scoped handlers use `createSafeHandler`, declare permissions beside
+the route, derive `workspaceId: SafeId<"workspace">` from the authorized
+context, and access tenant data through `scopedDb`. Never accept ownership IDs
+from body/query input or fall back to root `db` because a relation is awkward
+to express. Root/system handlers require a documented non-tenant purpose and
+tables whose RLS posture denies ordinary application access.
+
+When an identifier comes from a related row, authorize it in the same query or
+transaction that uses it. A prior UI filter, cache lookup, or separate
+read-then-write check is not an authorization boundary.
+
+### Server-bound audit events
+
+Actors, workspace/organization ownership, request metadata, and before/after
+identifiers come from authenticated server context. Clients may supply a user
+action or reason where the domain requires it, but never the authoritative
+actor or tenant. Required audit writes participate in the same transaction as
+the mutation, or use a durable outbox when the sink is external.
+
 ### Workspace status filtering
 
 `resolveAccessibleWorkspaces` returns **all** workspaces (including

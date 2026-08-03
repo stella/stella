@@ -2,23 +2,20 @@
 
 Review and update third-party dependencies. Use this when asked
 to upgrade packages, survey new minor or major releases for
-useful features, assess whether Stella can adopt them, or
+useful features, assess whether a repository can adopt them, or
 validate whether a release looks suspicious before bumping it.
 
 ## Scope
 
-Default to Bun packages, Cargo crates (Tauri desktop), and
-Docker base images. Expand to GitHub Actions when the request
-mentions them or the affected files live in `.github/`.
+Default to Bun packages, Cargo crates, and Docker base images.
+Expand to GitHub Actions when the request mentions them or the
+affected files live in `.github/`.
 
-Stella already has automated controls:
+Stella repositories may already have automated controls such as:
 
-- `bunfig.toml` enforces a 5-day minimum release age for
-  packages.
-- `dependency-review.yml` blocks incompatible licenses and
-  high-severity CVEs.
-- `sbom.yml` regenerates `sbom.cdx.json` and
-  `THIRD-PARTY-NOTICES.txt`.
+- `bunfig.toml` minimum release age rules
+- dependency review workflows for license and vulnerability checks
+- SBOM or provenance workflows that regenerate dependency artifacts
 
 Do not duplicate those checks manually unless the user asks for
 an audit or the automation looks stale or broken.
@@ -48,38 +45,38 @@ If the request is vague, default to:
    - root `package.json` `catalog`, `catalogs`, and `resolutions`
    - workspace `package.json` files
    - `bun.lock`
-   - `apps/desktop/src-tauri/Cargo.toml` and `Cargo.lock`
+   - `Cargo.toml` and `Cargo.lock`
    - `.github/dependabot.yml` for grouping expectations
    - `.github/workflows/*.yml` for GitHub Action pins
-   - `apps/api/Dockerfile` for the base image digest
+   - Dockerfiles and base image digests
 
 2. **Inventory outdated candidates**:
    - run `bun outdated --filter="*"` for Bun workspace packages
-   - run `cargo outdated --root-deps-only` in
-     `apps/desktop/src-tauri` for Cargo crates. If `cargo-outdated`
-     is missing, prefer `cargo binstall cargo-outdated` (prebuilt
-     binary, seconds) over `cargo install cargo-outdated` (compiles
-     from source, several minutes). As a fallback, use
-     `cargo update --dry-run` plus targeted `cargo search` /
-     `cargo info` checks
-   - flag prerelease-pinned deps separately: `bun outdated`
-     and `bun update` resolve the npm `latest` dist-tag, so a
-     dependency intentionally pinned to a prerelease channel
-     (`alpha`, `beta`, `rc`, `next`, `canary`, `dev`) never
-     shows up as outdated and never moves, even when newer
-     prereleases exist on its own channel. Grep the manifests
-     and catalog for prerelease specifiers, then compare each
-     pin against its real channel with `npm view <pkg>
-     dist-tags`. A `bunfig.toml` `minimumReleaseAgeExcludes`
-     entry is a strong hint that a package is deliberately
-     tracked ahead of stable.
-   - inspect open dependency PRs if the request is about
-     triage rather than local edits
+   - run `cargo outdated --root-deps-only` for Cargo crates. If
+     `cargo-outdated` is missing, prefer `cargo binstall
+cargo-outdated` when available (prebuilt binary, seconds)
+     over `cargo install cargo-outdated` (compiles from source,
+     several minutes). As a fallback, use `cargo update --dry-run`
+     plus targeted `cargo search` / `cargo info` checks
+   - flag prerelease-pinned deps separately. `bun outdated` reports
+     the latest version allowed by the declared requirement as
+     `Update` and the registry's `latest` release as `Latest`.
+     Exact prerelease pins, and ranges that exclude newer releases
+     from the intended prerelease channel (`alpha`, `beta`, `rc`,
+     `next`, `canary`, `dev`), can therefore show no applicable
+     update even when that channel has advanced. Grep manifests and
+     catalogs for prerelease versions and non-`latest` tags, then
+     compare each one with `npm view <pkg> dist-tags` and the
+     intended channel's version. A `bunfig.toml`
+     `minimumReleaseAgeExcludes` entry is a strong hint that a
+     package is deliberately tracked ahead of stable.
+   - inspect open dependency PRs if the request is about triage
+     rather than local edits
    - include GitHub Actions only when the request covers them
 
 3. **Plan the full sweep, then batch it**:
-   - cover all outdated dependencies in the requested scope,
-     not just the first safe batch
+   - cover all outdated dependencies in the requested scope, not
+     just the first safe batch
    - split the work into coherent ecosystem or library-family
      batches
    - follow existing Dependabot grouping where possible
@@ -93,35 +90,32 @@ If the request is vague, default to:
    - major: assume migration work
    - `0.x` minor: treat as potentially breaking
    - prerelease (`beta`, `rc`, etc.): unstable channel; assume
-     breaking changes can land between any two prerelease
-     builds, so read the diff and validate even for a "small"
-     bump
+     breaking changes can land between any two prerelease builds,
+     so read the diff and validate even for a "small" bump
 
 5. **Read official upgrade sources**:
    - changelog or release notes
    - migration guide
    - breaking changes
-   - peer dependency, engine, runtime, and module-format
-     changes
+   - peer dependency, engine, runtime, and module-format changes
 
-   Prefer official docs, releases, and package metadata over
-   blog posts or third-party summaries.
+   Prefer official docs, releases, and package metadata over blog
+   posts or third-party summaries.
 
 6. **Scan the codebase for adoption opportunities**:
    - search current usage with `rg`
-   - look for deprecated APIs, local workarounds,
-     compatibility shims, TODOs, or comments the new release
-     could remove
+   - look for deprecated APIs, local workarounds, compatibility
+     shims, TODOs, or comments the new release could remove
    - if a new version unlocks a better pattern, identify the
      concrete files that could adopt it now
 
 7. **Check suspicious-release signals before adopting a fresh version**:
    - start with cheap metadata checks first
-   - release age relative to Stella's 5-day quarantine
+   - release age relative to repository quarantine rules
    - publisher, maintainer, repository, or homepage change
    - missing or unusual git tag or release notes
-   - new `preinstall`, `install`, `postinstall`, or
-     `prepare` scripts
+   - new `preinstall`, `install`, `postinstall`, or `prepare`
+     scripts
    - new native binaries or bundled blobs
 
    Only escalate to tarball and file-tree inspection when the
@@ -130,13 +124,8 @@ If the request is vague, default to:
    cover:
    - sudden tarball size or file-tree jump
    - obfuscated files
-   - package contents that differ materially from prior
-     releases without explanation
-
-   For broad sweeps, if subagents are available, delegate the
-   deep suspicious-release pass to a smaller background agent
-   while the main agent handles changelogs, adoption scan, and
-   code changes.
+   - package contents that differ materially from prior releases
+     without explanation
 
    Good defaults:
 
@@ -149,46 +138,47 @@ If the request is vague, default to:
    release is high risk.
 
 8. **Apply the change at the real source of truth**:
-   - prefer root `catalog`, `catalogs`, or `resolutions`
-     updates over per-workspace drift
+   - prefer root `catalog`, `catalogs`, or `resolutions` updates
+     over per-workspace drift
    - update GitHub Actions by commit SHA, not floating tags
    - keep Docker images pinned by digest
    - for Cargo, prefer `cargo update -p <crate>` when the
-     existing semver range already covers the new version;
-     edit `Cargo.toml` only when bumping past the range
-   - prerelease-pinned deps are usually exact-pinned to a
-     non-`latest` dist-tag, so neither `bun update` nor `bun
-     update --latest` will move them; edit the pin by hand to
-     the target prerelease version and run `bun install`
-   - after each batch passes validation, commit that batch
-     before moving to the next one
+     existing semver range already covers the new version; edit
+     `Cargo.toml` only when bumping past the range
+   - ordinary `bun update` respects the declared requirement, but
+     `bun update --latest` ignores it and can replace an exact
+     prerelease pin or non-`latest` tag with the registry's
+     `latest` release while rewriting the manifest. Use `--latest`
+     only when that channel change is intentional. To remain on a
+     prerelease channel, resolve the target explicitly (for example,
+     `npm view <pkg>@<tag> version`), edit the real source of truth
+     to that exact prerelease or deliberate tag. Then run `bun install`
+   - after each batch passes validation, commit that batch before
+     moving to the next one
 
 9. **Review the lockfile delta**:
    - use `bun update`, or edit manifests and run `bun install`
-   - for Cargo, run `cargo update` and read the `Cargo.lock`
-     diff the same way (unexpected transitive additions or
-     replacements)
-   - read the `bun.lock` diff for unexpected transitive
-     additions, dependency replacement, or new script-bearing
-     packages
-   - if the new tree introduces untrusted packages with
-     scripts, inspect them before trusting anything
+   - for Cargo, run `cargo update` and read the `Cargo.lock` diff
+     the same way (unexpected transitive additions or replacements)
+   - read the `bun.lock` diff for unexpected transitive additions,
+     dependency replacement, or new script-bearing packages
+   - if the new tree introduces untrusted packages with scripts,
+     inspect them before trusting anything
 
 10. **Validate in layers**:
-    - run the smallest focused checks for the affected
-      ecosystem first
+    - run the smallest focused checks for the affected ecosystem
+      first
     - then run repo checks relevant to the touched surfaces
-    - for Bun package updates, default to `bun run lint`,
-      `bun run typecheck`, and the relevant tests
-    - for Cargo updates, run `cargo check` (and `cargo test`
-      when crates touch logic, not just deps) in
-      `apps/desktop/src-tauri`
-    - verify generated artifacts or migrations explicitly when
-      the upgraded dependency affects them
+    - for Bun package updates, default to `bun run lint`, `bun run
+typecheck`, and the relevant tests
+    - for Cargo updates, run `cargo check` and `cargo test` when
+      crates touch logic, not just deps
+    - verify generated artifacts explicitly when the upgraded
+      dependency affects them
 
 11. **Prefer removal and consolidation over passive growth**:
-    - if the upgrade makes a local helper, polyfill, or
-      wrapper obsolete, remove it
+    - if the upgrade makes a local helper, polyfill, or wrapper
+      obsolete, remove it
     - if several packages now overlap, prefer the one already
       aligned with the codebase
 

@@ -229,7 +229,7 @@ const loadOlder = useCallback(async () => {
 
 In-repo exemplars: `apps/web/src/components/inspector/versions-facet.tsx`
 (`seededDataRef`) and
-`apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts`
+`apps/web/src/features/chat/hooks/use-chat-session.ts`
 (`seededChatRef`). This is a narrow, explicitly allowlisted exception to
 `no-ref-mirror` (not a general recipe to reach for) — `useLatestCallback`
 (and React's `useEffectEvent`) do not protect this window because their

@@ -21,10 +21,16 @@ the current list of target languages (add translations to every
    found in `apps/web/src/i18n/langs/` (every `.json` file
    except `en.json`). Write natural, idiomatic translations;
    avoid literal/robotic phrasing.
-3. Run `bun run typegen` (from `apps/web`) to regenerate type
-   declarations. It does **not** run during `bun run typecheck`;
-   drift and untranslated values are caught by `bun run i18n:check`
-   (pre-push).
+3. Run `bun run i18n:sync` from `apps/web`. This synchronizes locale
+   structure, regenerates typed messages, and updates generated glossary
+   output. Never edit `messages.gen.ts` or generated terminology tables by
+   hand.
+4. Run `bun run i18n:check` from `apps/web`. Typecheck does not regenerate or
+   validate the catalogs, so a clean typecheck is not evidence that i18n is in
+   sync.
+5. Read the rendered sentence in context, including interpolation and plural
+   branches. Passing key parity is not proof that a translation is natural or
+   that placeholders remain grammatically valid.
 
 ## Key Naming
 
@@ -37,6 +43,11 @@ like `billing.expenses.deleteExpense`. Feature-specific keys
 are only justified when the wording truly differs from the
 generic version (e.g., a confirmation message that mentions
 the resource by name).
+
+Prefer complete translatable sentences over fragments assembled in JSX. Keep
+interpolation variables semantic (`{documentName}`, not `{value}`), use ICU
+plural/select branches for grammatical variation, and never concatenate
+translated fragments whose word order differs by locale.
 
 Key naming, pluralization, and style rules are documented
 in `apps/web/src/i18n/TERMINOLOGY.md`.
