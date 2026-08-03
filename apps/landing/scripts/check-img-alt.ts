@@ -23,12 +23,60 @@ const sourceFiles = (dir: string): string[] =>
       : [];
   });
 
-/** Comments can legitimately mention a bare `<img>`; strip them before scanning. */
-const stripComments = (source: string): string =>
-  source
-    .replace(/<!--[\s\S]*?-->/gu, "")
-    .replace(/\/\*[\s\S]*?\*\//gu, "")
-    .replace(/^[\t ]*\/\/.*$/gmu, "");
+type MaskRangeOptions = {
+  masked: string[];
+  source: string;
+  start: number;
+  end: number;
+};
+
+const maskRange = ({ masked, source, start, end }: MaskRangeOptions): void => {
+  for (let index = start; index < end; index += 1) {
+    if (source[index] !== "\n" && source[index] !== "\r") {
+      masked[index] = " ";
+    }
+  }
+};
+
+/** Comments can legitimately mention a bare `<img>`; mask them before scanning. */
+export const maskComments = (source: string): string => {
+  const masked = source.split("");
+  let index = 0;
+  while (index < source.length) {
+    if (index === 0 || source[index - 1] === "\n") {
+      let commentStart = index;
+      while (source[commentStart] === " " || source[commentStart] === "\t") {
+        commentStart += 1;
+      }
+      if (source.startsWith("//", commentStart)) {
+        const newline = source.indexOf("\n", commentStart + 2);
+        const end = newline === -1 ? source.length : newline;
+        maskRange({ masked, source, start: index, end });
+        index = end;
+        continue;
+      }
+    }
+
+    if (source.startsWith("<!--", index)) {
+      const close = source.indexOf("-->", index + 4);
+      const end = close === -1 ? source.length : close + 3;
+      maskRange({ masked, source, start: index, end });
+      index = end;
+      continue;
+    }
+
+    if (source.startsWith("/*", index)) {
+      const close = source.indexOf("*/", index + 2);
+      const end = close === -1 ? source.length : close + 2;
+      maskRange({ masked, source, start: index, end });
+      index = end;
+      continue;
+    }
+
+    index += 1;
+  }
+  return masked.join("");
+};
 
 export const hasExplicitAlt = (tag: string): boolean => /\salt\s*=/u.test(tag);
 
@@ -36,17 +84,16 @@ const main = (): void => {
   const failures: string[] = [];
   for (const file of sourceFiles(SRC_ROOT)) {
     const source = readFileSync(file, "utf-8");
-    const stripped = stripComments(source);
-    for (const match of stripped.matchAll(/<img\b[^>]*>/gu)) {
+    const masked = maskComments(source);
+    for (const match of masked.matchAll(/<img\b[^>]*>/gu)) {
       const tag = match[0];
       // A spread ({...props}) can carry alt; that shape is not statically
       // checkable here, so it is trusted and skipped.
       if (hasExplicitAlt(tag) || tag.includes("{...")) {
         continue;
       }
-      const offset = source.indexOf(tag);
-      const line =
-        offset === -1 ? "?" : source.slice(0, offset).split("\n").length;
+      const offset = match.index;
+      const line = source.slice(0, offset).split("\n").length;
       failures.push(
         `${file.slice(SRC_ROOT.length + 1)}:${line}: <img> without an alt attribute`,
       );
