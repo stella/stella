@@ -11,6 +11,7 @@ import type React from "react";
 
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import type { QueryKey } from "@tanstack/react-query";
+import Bold from "@tiptap/extension-bold";
 import HardBreak from "@tiptap/extension-hard-break";
 import History from "@tiptap/extension-history";
 import Paragraph from "@tiptap/extension-paragraph";
@@ -25,6 +26,7 @@ import { useTranslations } from "use-intl";
 
 import { CHAT_CONTEXT_FILE_MAX_BYTES } from "@stll/chat-limits";
 
+import { createChatComposerDocument } from "@/components/chat-editor-markdown.logic";
 import {
   buildChatSlashItems,
   commandShortcutRowsFromSkillPages,
@@ -188,9 +190,8 @@ export type ChatEditorController = {
    */
   placeholder: string;
   removeFile: (id: string) => void;
-  setContent: (
-    content: Parameters<Editor["commands"]["setContent"]>[0],
-  ) => void;
+  /** Replace the prompt with plain text or inline Markdown source. */
+  setContent: (content: string) => void;
   setEditable: (editable: boolean) => void;
   setSubmitHandler: (handler: (() => Promise<void>) | null) => void;
   submit: (
@@ -971,6 +972,7 @@ export const useChatEditor = ({
       createPromptEditorDocument(),
       Paragraph,
       Text,
+      Bold,
       // Shift+Enter inserts a hard break (newline) instead of
       // splitting the paragraph; matches expected chat-input
       // behaviour everywhere — Slack, Discord, ChatGPT, etc.
@@ -1086,7 +1088,9 @@ export const useChatEditor = ({
           const targetEditor = editorRef.current;
           if (suggestion && targetEditor?.isEmpty) {
             event.preventDefault();
-            targetEditor.commands.setContent(suggestion);
+            targetEditor.commands.setContent(
+              createChatComposerDocument(suggestion),
+            );
             return true;
           }
         }
@@ -1208,11 +1212,11 @@ export const useChatEditor = ({
   );
 
   const setContent = useCallback(
-    (content: Parameters<Editor["commands"]["setContent"]>[0]) => {
+    (content: string) => {
       if (!isUsableEditor(editor)) {
         return;
       }
-      editor.commands.setContent(content);
+      editor.commands.setContent(createChatComposerDocument(content));
     },
     [editor],
   );
