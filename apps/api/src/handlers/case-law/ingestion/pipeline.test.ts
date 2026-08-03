@@ -588,7 +588,14 @@ describe("processDecision — source raw upload failure", () => {
       observedAt: new Date("2026-08-03T00:00:00.000Z"),
     });
 
-    expect(outcome.status).toBe("retryable");
+    if (outcome.status !== "retryable") {
+      throw new Error(`expected a retryable outcome, got ${outcome.status}`);
+    }
+
     expect(outcome.inserted).toBe(false);
+    // The reason selects the halt message and keeps this failure
+    // attributable apart from a corpus-write failure, so pin it: asserting
+    // only the status would pass on the corpus-write reason too.
+    expect(outcome.reason).toBe("source-raw-write");
   });
 });
