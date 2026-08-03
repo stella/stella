@@ -2,6 +2,9 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import {
   __resetCreateDocumentDraftRuntimeForTests,
+  completeCreateDocumentDraft,
+  getCreateDocumentDraftRestoration,
+  prepareCreateDocumentDraft,
   registerCreateDocumentDraftSaver,
   runCreateDocumentOperationWithRetry,
   saveCreateDocumentDraft,
@@ -106,6 +109,71 @@ describe("create-document draft runtime", () => {
     });
 
     expect((await saveCreateDocumentDraft("tool-1")).status).toBe("failed");
+  });
+
+  test("never recompiles the model source after editor serialization fails", async () => {
+    const error = new Error("serialization failed");
+    let fallbackCalls = 0;
+    registerCreateDocumentDraftSaver("tool-1", async () => {
+      throw error;
+    });
+
+    const prepared = await prepareCreateDocumentDraft({
+      toolCallId: "tool-1",
+      compileFallback: async () => {
+        fallbackCalls += 1;
+        return new Uint8Array([9]).buffer;
+      },
+    });
+
+    expect(prepared.status).toBe("failed");
+    expect(fallbackCalls).toBe(0);
+  });
+
+  test("keeps edited bytes through nonterminal reads until matter save completes", async () => {
+    const edited = new Uint8Array([1, 2, 3]).buffer;
+    const original = new Uint8Array([9]).buffer;
+    let fallbackCalls = 0;
+    registerCreateDocumentDraftSaver("tool-1", async () => edited)();
+    const prepare = async () =>
+      await prepareCreateDocumentDraft({
+        toolCallId: "tool-1",
+        compileFallback: async () => {
+          fallbackCalls += 1;
+          return original;
+        },
+      });
+
+    expect(await prepare()).toEqual({ status: "ready", buffer: edited });
+    expect(await prepare()).toEqual({ status: "ready", buffer: edited });
+    expect(fallbackCalls).toBe(0);
+
+    completeCreateDocumentDraft("tool-1");
+
+    expect(await prepare()).toEqual({ status: "ready", buffer: original });
+    expect(fallbackCalls).toBe(1);
+  });
+
+  test("exposes retained edited bytes for a remounted editor", async () => {
+    const edited = new Uint8Array([4, 5, 6]).buffer;
+    registerCreateDocumentDraftSaver("tool-1", async () => edited)();
+
+    const restoration = getCreateDocumentDraftRestoration("tool-1");
+
+    expect(restoration).not.toBeNull();
+    expect(await restoration).toBe(edited);
+  });
+
+  test("restores the last valid bytes but keeps a later serialization failure terminal", async () => {
+    const edited = new Uint8Array([4, 5, 6]).buffer;
+    const error = new Error("serialization failed");
+    registerCreateDocumentDraftSaver("tool-1", async () => edited)();
+    registerCreateDocumentDraftSaver("tool-1", async () => {
+      throw error;
+    });
+
+    expect((await saveCreateDocumentDraft("tool-1")).status).toBe("failed");
+    expect(await getCreateDocumentDraftRestoration("tool-1")).toBe(edited);
   });
 
   test("bounds retained snapshots while keeping refreshed drafts newest", async () => {

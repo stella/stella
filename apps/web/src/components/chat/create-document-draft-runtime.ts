@@ -9,7 +9,9 @@ const MAX_RETAINED_DRAFT_SNAPSHOT_BYTES = 64 * 1024 * 1024;
 
 type RetainedDraftSnapshot = {
   byteLength: number | null;
+  captureId: object;
   promise: Promise<CreateDocumentDraftSaveResult>;
+  restoration: Promise<ArrayBuffer | null>;
 };
 
 let draftSavers: Record<string, CreateDocumentDraftSaver | undefined> = {};
@@ -60,6 +62,16 @@ export type CreateDocumentDraftSaveResult =
   | { status: "failed"; error: unknown }
   | { status: "saved"; buffer: ArrayBuffer }
   | { status: "unavailable" };
+
+export type PrepareCreateDocumentDraftResult =
+  | { status: "failed"; error: unknown }
+  | { status: "ready"; buffer: ArrayBuffer }
+  | { status: "unavailable" };
+
+type PrepareCreateDocumentDraftOptions = {
+  compileFallback: () => Promise<ArrayBuffer | null>;
+  toolCallId: string;
+};
 
 type SettleCreateDocumentDraftOptions = {
   isActive: () => boolean;
@@ -148,26 +160,45 @@ const captureDraftSnapshot = async (
   toolCallId: string,
   saver: CreateDocumentDraftSaver,
 ): Promise<CreateDocumentDraftSaveResult> => {
-  const snapshot = runDraftSaver(saver);
+  const key = draftRuntimeKey(toolCallId);
+  const previous = retainedDraftSnapshots[key];
+  const captureId = {};
+  const saved = runDraftSaver(saver);
+  const restoration = saved.then(async (result) => {
+    if (result.status === "saved") {
+      return result.buffer;
+    }
+    return (await previous?.restoration) ?? null;
+  });
+  const snapshot = (async () => {
+    const result = await saved;
+    const restorationBuffer = await restoration;
+    const retained = retainedDraftSnapshots[key];
+    if (retained?.captureId === captureId) {
+      retainedDraftSnapshots = {
+        ...retainedDraftSnapshots,
+        [key]: {
+          byteLength: restorationBuffer?.byteLength ?? 0,
+          captureId: retained.captureId,
+          promise: retained.promise,
+          restoration: retained.restoration,
+        },
+      };
+      pruneRetainedDraftSnapshotsByBytes();
+    }
+    return result;
+  })();
   retainedDraftSnapshots = withRetainedDraftSnapshot(
     retainedDraftSnapshots,
-    draftRuntimeKey(toolCallId),
-    { byteLength: null, promise: snapshot },
+    key,
+    {
+      byteLength: previous?.byteLength ?? null,
+      captureId,
+      promise: snapshot,
+      restoration,
+    },
   );
-  const result = await snapshot;
-  const key = draftRuntimeKey(toolCallId);
-  const retained = retainedDraftSnapshots[key];
-  if (retained?.promise === snapshot) {
-    retainedDraftSnapshots = {
-      ...retainedDraftSnapshots,
-      [key]: {
-        byteLength: result.status === "saved" ? result.buffer.byteLength : 0,
-        promise: snapshot,
-      },
-    };
-    pruneRetainedDraftSnapshotsByBytes();
-  }
-  return result;
+  return await snapshot;
 };
 
 export const registerCreateDocumentDraftSaver = (
@@ -193,20 +224,55 @@ export const saveCreateDocumentDraft = async (
   const key = draftRuntimeKey(toolCallId);
   const saver = draftSavers[key];
   if (saver !== undefined) {
-    return await captureDraftSnapshot(toolCallId, saver);
-  }
-  return (
-    (await retainedDraftSnapshots[key]?.promise) ?? {
-      status: "unavailable",
+    const result = await captureDraftSnapshot(toolCallId, saver);
+    if (result.status !== "unavailable") {
+      return result;
     }
-  );
+  }
+  const retained = retainedDraftSnapshots[key];
+  if (retained === undefined) {
+    return { status: "unavailable" };
+  }
+  const result = await retained.promise;
+  if (result.status !== "unavailable") {
+    return result;
+  }
+  const restoration = await retained.restoration;
+  return restoration === null
+    ? result
+    : { status: "saved", buffer: restoration };
 };
 
-export const clearCreateDocumentDraftSnapshot = (toolCallId: string): void => {
-  retainedDraftSnapshots = withoutRuntimeKey(
-    retainedDraftSnapshots,
-    draftRuntimeKey(toolCallId),
-  );
+export const prepareCreateDocumentDraft = async ({
+  compileFallback,
+  toolCallId,
+}: PrepareCreateDocumentDraftOptions): Promise<PrepareCreateDocumentDraftResult> => {
+  const saved = await saveCreateDocumentDraft(toolCallId);
+  switch (saved.status) {
+    case "failed":
+      return saved;
+    case "saved":
+      return { status: "ready", buffer: saved.buffer };
+    case "unavailable": {
+      const fallback = await compileFallback();
+      return fallback === null
+        ? { status: "unavailable" }
+        : { status: "ready", buffer: fallback };
+    }
+    default:
+      return saved satisfies never;
+  }
+};
+
+export const getCreateDocumentDraftRestoration = (
+  toolCallId: string,
+): Promise<ArrayBuffer | null> | null =>
+  retainedDraftSnapshots[draftRuntimeKey(toolCallId)]?.restoration ?? null;
+
+export const completeCreateDocumentDraft = (toolCallId: string): void => {
+  const key = draftRuntimeKey(toolCallId);
+  draftSavers = withoutRuntimeKey(draftSavers, key);
+  retainedDraftSnapshots = withoutRuntimeKey(retainedDraftSnapshots, key);
 };
 
 export const __resetCreateDocumentDraftRuntimeForTests = (): void => {

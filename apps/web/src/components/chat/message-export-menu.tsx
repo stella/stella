@@ -22,10 +22,7 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
-import {
-  clearCreateDocumentDraftSnapshot,
-  saveCreateDocumentDraft,
-} from "@/components/chat/create-document-draft-runtime";
+import { prepareCreateDocumentDraft } from "@/components/chat/create-document-draft-runtime";
 import {
   buildCreateDocumentDownloadFileName,
   type CreateDocumentDraft,
@@ -145,20 +142,31 @@ export const MessageExportMenu = ({
       }
 
       if (includeArtifact && artifact !== undefined) {
-        const draftSave = await saveCreateDocumentDraft(artifact.toolCallId);
-        let buffer = draftSave.status === "saved" ? draftSave.buffer : null;
-        if (draftSave.status === "failed") {
-          getAnalytics().captureError(draftSave.error);
-        }
-        if (buffer === null) {
-          const compiled = await compileArtifactDraft(artifact);
-          if (compiled.status !== "ok") {
+        const prepared = await prepareCreateDocumentDraft({
+          toolCallId: artifact.toolCallId,
+          compileFallback: async () => {
+            const compiled = await compileArtifactDraft(artifact);
+            return compiled.status === "ok" ? compiled.buffer : null;
+          },
+        });
+        let buffer: ArrayBuffer;
+        switch (prepared.status) {
+          case "failed":
+            throw new ClientOperationError({
+              action: "export-create-document-draft",
+              cause: prepared.error,
+              message: "Edited document could not be serialized",
+            });
+          case "ready":
+            buffer = prepared.buffer;
+            break;
+          case "unavailable":
             throw new ClientOperationError({
               action: "export-create-document-draft",
               message: "Generated document source could not be compiled",
             });
-          }
-          buffer = compiled.buffer;
+          default:
+            buffer = prepared satisfies never;
         }
         downloads.push({
           blob: new Blob([new Uint8Array(buffer)], { type: DOCX_MIME }),
@@ -168,9 +176,6 @@ export const MessageExportMenu = ({
 
       for (const download of downloads) {
         downloadFile(download.blob, download.fileName);
-      }
-      if (includeArtifact && artifact !== undefined) {
-        clearCreateDocumentDraftSnapshot(artifact.toolCallId);
       }
     });
     setIsExportPending(false);

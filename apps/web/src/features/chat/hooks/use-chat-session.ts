@@ -39,8 +39,8 @@ import {
   withParsedToolCallInputs,
 } from "@/components/chat/chat-ui-tools";
 import {
-  clearCreateDocumentDraftSnapshot,
-  saveCreateDocumentDraft,
+  completeCreateDocumentDraft,
+  prepareCreateDocumentDraft as prepareCreateDocumentDraftBuffer,
   settleCreateDocumentDraftWithRetry,
 } from "@/components/chat/create-document-draft-runtime";
 import "@/components/chat/create-document-draft-inspector";
@@ -170,24 +170,29 @@ const prepareCreateDocumentDraft = async (
   toolCallId: string,
   input: CreateDocumentInput,
 ): Promise<PreparedCreateDocumentDraft | null> => {
-  const draftSave = await saveCreateDocumentDraft(toolCallId);
   const fileName = buildCreateDocumentDownloadFileName(input.name);
-  if (draftSave.status === "saved") {
-    return { buffer: draftSave.buffer, fileName };
-  }
-  if (draftSave.status === "failed") {
-    getAnalytics().captureError(draftSave.error);
-  }
-
-  const { compileCreateDocumentSourceToDocx } =
-    await import("@/components/chat/create-document-compiler");
-  const compiled = await compileCreateDocumentSourceToDocx(input.source, {
-    titleFallback: input.name,
+  const prepared = await prepareCreateDocumentDraftBuffer({
+    toolCallId,
+    compileFallback: async () => {
+      const { compileCreateDocumentSourceToDocx } =
+        await import("@/components/chat/create-document-compiler");
+      const compiled = await compileCreateDocumentSourceToDocx(input.source, {
+        titleFallback: input.name,
+      });
+      return compiled.status === "ok" ? compiled.buffer : null;
+    },
   });
-  if (compiled.status !== "ok") {
-    return null;
+  switch (prepared.status) {
+    case "failed":
+      getAnalytics().captureError(prepared.error);
+      return null;
+    case "ready":
+      return { buffer: prepared.buffer, fileName };
+    case "unavailable":
+      return null;
+    default:
+      return prepared satisfies never;
   }
-  return { buffer: compiled.buffer, fileName };
 };
 
 const openCreatedDocumentInInspector = async (
@@ -933,7 +938,6 @@ export const useChatSession = ({
             new Blob([new Uint8Array(draft.buffer)], { type: DOCX_MIME }),
             draft.fileName,
           );
-          clearCreateDocumentDraftSnapshot(toolCallId);
           return { status: "downloaded", fileName: draft.fileName } as const;
         });
 
@@ -1042,6 +1046,7 @@ export const useChatSession = ({
           output,
         ),
       );
+      completeCreateDocumentDraft(toolCallId);
 
       await invalidateCreatedDocumentQueries({
         queryClient,
@@ -1073,7 +1078,6 @@ export const useChatSession = ({
         .getState()
         .closeTab(createDocumentDraftTabId(toolCallId));
       await openCreatedDocumentInInspector(output);
-      clearCreateDocumentDraftSnapshot(toolCallId);
     },
     [chat, queryClient, setMessages, t, threadRef],
   );

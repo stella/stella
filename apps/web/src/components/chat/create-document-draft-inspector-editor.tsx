@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef } from "react";
+import { use, useCallback, useMemo, useRef, useState } from "react";
 
 import { useTranslations } from "use-intl";
 
@@ -6,6 +6,7 @@ import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-a
 import { ReviewBar } from "@/components/ai-suggestions/review-bar";
 import { compileCreateDocumentSourceToDocument } from "@/components/chat/create-document-compiler";
 import { attachCreateDocumentDraftEditor } from "@/components/chat/create-document-draft-inspector-editor.logic";
+import { getCreateDocumentDraftRestoration } from "@/components/chat/create-document-draft-runtime";
 import {
   buildCreateDocumentDownloadFileName,
   createDocumentDraftReviewId,
@@ -34,6 +35,11 @@ export const CreateDocumentDraftInspectorEditor = ({
         : null,
     [payload.name, payload.source],
   );
+  const availableRestoration = getCreateDocumentDraftRestoration(
+    payload.toolCallId,
+  );
+  const [restoration] = useState(availableRestoration);
+  const restoredBuffer = restoration === null ? null : use(restoration);
 
   const attachEditor = useCallback(
     (editor: DocxEditorRef | null) => {
@@ -65,7 +71,8 @@ export const CreateDocumentDraftInspectorEditor = ({
         ref={attachEditor}
         autoOpenReviewSidebar={false}
         className="folio-docx-preview folio-peek h-full"
-        document={compiled.document}
+        document={restoredBuffer === null ? compiled.document : null}
+        documentBuffer={restoredBuffer}
         documentKey={payload.toolCallId}
         initialZoom="fit-width"
         loadingIndicator={null}

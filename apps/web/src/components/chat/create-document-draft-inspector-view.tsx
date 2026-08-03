@@ -32,7 +32,7 @@ export const CreateDocumentDraftInspector = ({
           </div>
         }
       >
-        <LazyCreateDocumentDraftEditor payload={tab.payload} />
+        <LazyCreateDocumentDraftEditor key={tab.id} payload={tab.payload} />
       </Suspense>
     </div>
   );
