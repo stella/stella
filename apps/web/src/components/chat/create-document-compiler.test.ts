@@ -127,4 +127,40 @@ Neuzavřená ** značka
     ]);
     expect(runs.some((run) => run.formatting?.bold === true)).toBe(false);
   });
+
+  test("preserves separate bold spans that cover an entire paragraph", () => {
+    const compiled = compileCreateDocumentSourceToDocument(`
+@doc kind=other locale=en page=A4
+@paragraph
+**Buyer** and **Seller**
+`);
+    expect(compiled.status).toBe("ok");
+    if (compiled.status !== "ok") {
+      return;
+    }
+
+    const paragraph = compiled.document.package.document.content.find(
+      (block) =>
+        block.type === "paragraph" && block.formatting?.styleId === "BodyText",
+    );
+    expect(paragraph?.type).toBe("paragraph");
+    if (paragraph?.type !== "paragraph") {
+      return;
+    }
+
+    const runs = paragraph.content.filter((part) => part.type === "run");
+    expect(
+      runs.map((run) => ({
+        bold: run.formatting?.bold === true,
+        text: run.content
+          .filter((content) => content.type === "text")
+          .map((content) => content.text)
+          .join(""),
+      })),
+    ).toEqual([
+      { bold: true, text: "Buyer" },
+      { bold: false, text: " and " },
+      { bold: true, text: "Seller" },
+    ]);
+  });
 });

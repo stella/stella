@@ -52,7 +52,17 @@ const countInlineBoldDelimiters = (content: ParagraphContent[]): number => {
  * a whole column look like a heading. Keep the readable text but drop the
  * delimiters rather than turning the complete body paragraph bold.
  */
-const isWholeParagraphBold = (content: ParagraphContent[]): boolean => {
+const isWholeParagraphBold = ({
+  content,
+  delimiterCount,
+}: {
+  content: ParagraphContent[];
+  delimiterCount: number;
+}): boolean => {
+  if (delimiterCount !== 2) {
+    return false;
+  }
+
   const text = content
     .flatMap((part) => (part.type === "run" ? [getInlineText(part) ?? ""] : []))
     .join("");
@@ -100,7 +110,10 @@ const formatParagraphInlineBold = (paragraph: Paragraph): Paragraph => {
     return paragraph;
   }
 
-  const suppressWholeParagraphBold = isWholeParagraphBold(paragraph.content);
+  const suppressWholeParagraphBold = isWholeParagraphBold({
+    content: paragraph.content,
+    delimiterCount,
+  });
   const hasUnmatchedTrailingDelimiter = delimiterCount % 2 === 1;
   let remainingDelimiters = delimiterCount;
   let bold = false;
