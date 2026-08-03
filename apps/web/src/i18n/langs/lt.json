@@ -881,11 +881,11 @@
     "expenses": "Išlaidos",
     "export": {
       "citations": "Citatos",
-      "failed": "Nepavyko eksportuoti žinutės",
+      "failed": "Nepavyko išsaugoti žinutės",
       "footnotes": "Išnašos",
       "formatDocx": "„Word“ dokumentas (<docx>.docx</docx>)",
       "inline": "Tekste",
-      "title": "Eksportuoti žinutę"
+      "title": "Išsaugoti žinutę"
     },
     "filter": "Filtras",
     "formula": "Formulė",

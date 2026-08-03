@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  assistantMessageFallbackText,
   collectAnonRestorations,
   getFollowingAssistantRestorations,
   userMessageFallbackText,
@@ -21,6 +22,22 @@ const assistantMessage = (
   metadata: pairs.length > 0 ? { anonRestorations: { pairs } } : undefined,
   parts: [{ type: "text", content: "reply" }],
   role: "assistant",
+});
+
+describe("assistantMessageFallbackText", () => {
+  test("does not flash raw Markdown delimiters before the renderer loads", () => {
+    expect(
+      assistantMessageFallbackText(
+        "## **Drafting options**\nUse `create-document` or [a template](https://example.test).",
+      ),
+    ).toBe("Drafting options\nUse create-document or a template.");
+  });
+
+  test("keeps malformed links intact without rescanning their contents", () => {
+    const malformed = `[label](${"destination".repeat(1000)}`;
+
+    expect(assistantMessageFallbackText(malformed)).toBe(malformed);
+  });
 });
 
 describe("userMessageFallbackText", () => {

@@ -12,77 +12,109 @@ import type {
   TableCell,
 } from "@stll/docx-core";
 
-type InlineTextSegment = {
-  bold: boolean;
-  text: string;
-};
+const INLINE_BOLD_DELIMITER = "**";
 
-const INLINE_BOLD_PATTERN = /\*\*([^*]+)\*\*/gu;
-
-const splitInlineBold = (text: string): InlineTextSegment[] | null => {
-  const segments: InlineTextSegment[] = [];
-  let cursor = 0;
-
-  for (const match of text.matchAll(INLINE_BOLD_PATTERN)) {
-    const index = match.index;
-    const boldText = match.at(1);
-    if (boldText === undefined) {
-      continue;
-    }
-    if (index > cursor) {
-      segments.push({ bold: false, text: text.slice(cursor, index) });
-    }
-    segments.push({ bold: true, text: boldText });
-    cursor = index + match[0].length;
-  }
-
-  if (segments.length === 0) {
-    return null;
-  }
-  if (cursor < text.length) {
-    segments.push({ bold: false, text: text.slice(cursor) });
-  }
-  return segments;
-};
-
-const expandInlineBoldRun = (run: Run): Run[] => {
+const getInlineText = (run: Run): string | null => {
   const content = run.content.at(0);
   if (run.content.length !== 1 || content?.type !== "text") {
-    return [run];
+    return null;
   }
+  return content.text;
+};
 
-  const segments = splitInlineBold(content.text);
-  if (segments === null) {
-    return [run];
+const countInlineBoldDelimiters = (content: ParagraphContent[]): number => {
+  let count = 0;
+  for (const part of content) {
+    if (part.type !== "run") {
+      continue;
+    }
+    const text = getInlineText(part);
+    if (text === null) {
+      continue;
+    }
+    let cursor = 0;
+    while (true) {
+      const index = text.indexOf(INLINE_BOLD_DELIMITER, cursor);
+      if (index === -1) {
+        break;
+      }
+      count += 1;
+      cursor = index + INLINE_BOLD_DELIMITER.length;
+    }
   }
+  return count;
+};
 
-  const runs: Run[] = [];
-  for (const segment of segments) {
-    runs.push({
-      ...run,
-      ...(segment.bold
-        ? {
-            formatting: {
-              ...run.formatting,
-              bold: true,
-              boldCs: true,
-            },
-          }
-        : {}),
-      content: [{ ...content, text: segment.text }],
-    });
+const appendInlineBoldRun = (
+  runs: Run[],
+  run: Run,
+  text: string,
+  bold: boolean,
+) => {
+  if (text.length === 0) {
+    return;
   }
-  return runs;
+  const content = run.content.at(0);
+  if (content?.type !== "text") {
+    return;
+  }
+  runs.push({
+    ...run,
+    ...(bold
+      ? {
+          formatting: {
+            ...run.formatting,
+            bold: true,
+            boldCs: true,
+          },
+        }
+      : {}),
+    content: [{ ...content, text }],
+  });
 };
 
 const formatParagraphInlineBold = (paragraph: Paragraph): Paragraph => {
+  const delimiterCount = countInlineBoldDelimiters(paragraph.content);
+  if (delimiterCount < 2) {
+    return paragraph;
+  }
+
+  const hasUnmatchedTrailingDelimiter = delimiterCount % 2 === 1;
+  let remainingDelimiters = delimiterCount;
+  let bold = false;
   const content: ParagraphContent[] = [];
+  const runs: Run[] = [];
   for (const part of paragraph.content) {
-    if (part.type === "run") {
-      content.push(...expandInlineBoldRun(part));
+    if (part.type !== "run") {
+      content.push(part);
       continue;
     }
-    content.push(part);
+    const text = getInlineText(part);
+    if (text === null) {
+      content.push(part);
+      continue;
+    }
+
+    runs.length = 0;
+    let cursor = 0;
+    while (true) {
+      const delimiterIndex = text.indexOf(INLINE_BOLD_DELIMITER, cursor);
+      if (delimiterIndex === -1) {
+        appendInlineBoldRun(runs, part, text.slice(cursor), bold);
+        break;
+      }
+      appendInlineBoldRun(runs, part, text.slice(cursor, delimiterIndex), bold);
+      const isUnmatchedTrailingDelimiter =
+        hasUnmatchedTrailingDelimiter && remainingDelimiters === 1;
+      remainingDelimiters -= 1;
+      if (isUnmatchedTrailingDelimiter) {
+        appendInlineBoldRun(runs, part, INLINE_BOLD_DELIMITER, bold);
+      } else {
+        bold = !bold;
+      }
+      cursor = delimiterIndex + INLINE_BOLD_DELIMITER.length;
+    }
+    content.push(...runs);
   }
   return { ...paragraph, content };
 };

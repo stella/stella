@@ -186,7 +186,7 @@ const DocumentPreview = ({ name, source }: DocumentPreviewProps) => {
       <DocumentThumbnail />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         {fileName && (
-          <p className="truncate text-xs font-semibold tracking-wide uppercase">
+          <p className="truncate text-xs font-semibold" dir="auto">
             {fileName}
           </p>
         )}

@@ -61,4 +61,37 @@ Neuzavřená ** značka
       "Neuzavřená ** značka",
     );
   });
+
+  test("compiles bold spanning a highlighted placeholder without leaking markers", () => {
+    const compiled = compileCreateDocumentSourceToDocument(`
+@doc kind=other locale=cs page=A4
+@paragraph
+**[[Název/Jméno poskytovatele]]** se sídlem: [[Adresa poskytovatele]]
+`);
+    expect(compiled.status).toBe("ok");
+    if (compiled.status !== "ok") {
+      return;
+    }
+
+    const paragraph = compiled.document.package.document.content.find(
+      (block) =>
+        block.type === "paragraph" && block.formatting?.styleId === "BodyText",
+    );
+    expect(paragraph?.type).toBe("paragraph");
+    if (paragraph?.type !== "paragraph") {
+      return;
+    }
+
+    const runs = paragraph.content.filter((part) => part.type === "run");
+    const text = runs.flatMap((run) =>
+      run.content.flatMap((item) => (item.type === "text" ? [item.text] : [])),
+    );
+    expect(text.join("")).toBe(
+      "Název/Jméno poskytovatele se sídlem: Adresa poskytovatele",
+    );
+    expect(text.join("")).not.toContain("**");
+    expect(runs.at(0)?.formatting?.bold).toBe(true);
+    expect(runs.at(0)?.formatting?.highlight).toBe("yellow");
+    expect(runs.at(1)?.formatting?.bold).not.toBe(true);
+  });
 });

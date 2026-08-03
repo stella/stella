@@ -233,7 +233,7 @@ describe("chat thread messages", () => {
       />,
     );
 
-    expect(html.match(/aria-label="Export message"/gu)).toHaveLength(1);
+    expect(html.match(/aria-label="Save message"/gu)).toHaveLength(1);
   });
 
   test("renders assistant reasoning separately from the final answer", () => {
@@ -348,11 +348,16 @@ describe("chat thread messages", () => {
     expect(html).toContain("Searching chat history");
   });
 
-  test("keeps assistant reasoning visible while it is the only streaming content", () => {
+  test("keeps streaming reasoning visible and immediately collapsible", () => {
     const chatMessages: PersistedChatMessage[] = [
       {
         id: "message-A",
-        parts: [{ type: "thinking", content: "Reading cited documents." }],
+        parts: [
+          {
+            type: "thinking",
+            content: "## **Reading cited documents** with `create-document`.",
+          },
+        ],
         role: "assistant",
       },
     ];
@@ -371,8 +376,11 @@ describe("chat thread messages", () => {
       />,
     );
 
-    expect(html).not.toContain("<details");
-    expect(html).toContain("Reading cited documents.");
+    expect(html).toContain("<details");
+    expect(html).toContain('open=""');
+    expect(html).toContain("Reading cited documents with create-document.");
+    expect(html).not.toContain("**");
+    expect(html).not.toContain("animate-pulse");
     expect(html).not.toContain("Working with context");
   });
 
@@ -405,6 +413,45 @@ describe("chat thread messages", () => {
     expect(html).not.toContain("<details open");
     expect(html).toContain("Checking cited filings.");
     expect(html).not.toContain("Working with context");
+  });
+
+  test("preserves generated document filename casing in the preview", () => {
+    const input = {
+      name: "Dohoda_o_ochrane_duvernych_informaci_NDA",
+      source: "@doc kind=agreement locale=cs page=A4\n@title Dohoda",
+    };
+    const chatMessages: PersistedChatMessage[] = [
+      {
+        id: "message-document",
+        parts: [
+          {
+            type: "tool-call",
+            id: "tool-document",
+            name: "create-document",
+            arguments: JSON.stringify(input),
+            state: "input-complete",
+            input,
+          },
+        ],
+        role: "assistant",
+      },
+    ];
+
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        approvalPendingMessageId={null}
+        messages={chatMessages}
+        onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+      />,
+    );
+
+    expect(html).toContain("Dohoda_o_ochrane_duvernych_informaci_NDA.docx");
+    expect(html).not.toContain("tracking-wide uppercase");
   });
 
   test("uses generated thumbnail URLs for image attachments with placeholders", () => {

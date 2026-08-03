@@ -884,11 +884,11 @@ type Messages = {
     "expenses": "Expenses";
     "export": {
       "citations": "Citations";
-      "failed": "Couldn't export the message";
+      "failed": "Couldn't save the message";
       "footnotes": "Footnotes";
       "formatDocx": "Word document (<docx>.docx</docx>)";
       "inline": "Inline";
-      "title": "Export message";
+      "title": "Save message";
     };
     "filter": "Filter";
     "formula": "Formula";

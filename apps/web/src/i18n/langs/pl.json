@@ -881,11 +881,11 @@
     "expenses": "Wydatki",
     "export": {
       "citations": "Cytowania",
-      "failed": "Nie udało się wyeksportować wiadomości",
+      "failed": "Nie udało się zapisać wiadomości",
       "footnotes": "Przypisy dolne",
       "formatDocx": "Dokument Word (<docx>.docx</docx>)",
       "inline": "W tekście",
-      "title": "Eksportuj wiadomość"
+      "title": "Zapisz wiadomość"
     },
     "filter": "Filtr",
     "formula": "Formuła",

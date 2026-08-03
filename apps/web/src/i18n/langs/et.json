@@ -881,11 +881,11 @@
     "expenses": "Kulud",
     "export": {
       "citations": "Viited",
-      "failed": "Sõnumit ei õnnestunud eksportida",
+      "failed": "Sõnumit ei õnnestunud salvestada",
       "footnotes": "Allmärkused",
       "formatDocx": "Wordi dokument (<docx>.docx</docx>)",
       "inline": "Tekstisisene",
-      "title": "Ekspordi sõnum"
+      "title": "Salvesta sõnum"
     },
     "filter": "Filter",
     "formula": "Valem",

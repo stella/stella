@@ -87,7 +87,7 @@ export const SuggestedActions = ({
           <Button
             aria-keyshortcuts={keyShortcut}
             className={cn(
-              "text-foreground h-9 gap-2 rounded-full px-3 text-[13px] font-medium",
+              "text-foreground h-8 gap-2 rounded-full px-3 text-xs font-normal sm:text-xs",
               !horizontal && "max-w-full",
             )}
             onClick={() => onSelect(action.id)}

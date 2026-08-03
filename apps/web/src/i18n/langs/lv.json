@@ -881,11 +881,11 @@
     "expenses": "Izdevumi",
     "export": {
       "citations": "Atsauces",
-      "failed": "Neizdevās eksportēt ziņojumu",
+      "failed": "Neizdevās saglabāt ziņojumu",
       "footnotes": "Vēres",
       "formatDocx": "Word dokuments (<docx>.docx</docx>)",
       "inline": "Tekstā",
-      "title": "Eksportēt ziņojumu"
+      "title": "Saglabāt ziņojumu"
     },
     "filter": "Filtrs",
     "formula": "Formula",

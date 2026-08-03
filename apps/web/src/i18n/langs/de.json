@@ -881,11 +881,11 @@
     "expenses": "Ausgaben",
     "export": {
       "citations": "Zitate",
-      "failed": "Nachricht konnte nicht exportiert werden",
+      "failed": "Nachricht konnte nicht gespeichert werden",
       "footnotes": "Fußnoten",
       "formatDocx": "Word-Dokument (<docx>.docx</docx>)",
       "inline": "Im Text",
-      "title": "Nachricht exportieren"
+      "title": "Nachricht speichern"
     },
     "filter": "Filtern",
     "formula": "Formel",

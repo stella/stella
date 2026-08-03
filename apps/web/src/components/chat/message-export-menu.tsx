@@ -28,6 +28,7 @@ import {
   type CreateDocumentDraft,
 } from "@/components/chat/create-document-draft.logic";
 import { hasMessageExportCitations } from "@/components/chat/message-export-menu.logic";
+import { DocumentIcon } from "@/components/document-icon";
 import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -96,6 +97,10 @@ export const MessageExportMenu = ({
     artifact !== undefined,
   );
   const [isExportPending, setIsExportPending] = useState(false);
+  const artifactFileName =
+    artifact === undefined
+      ? undefined
+      : buildCreateDocumentDownloadFileName(artifact.name);
 
   const handleExport = async () => {
     setIsExportPending(true);
@@ -221,6 +226,10 @@ export const MessageExportMenu = ({
                   checked={includeMessage}
                   onCheckedChange={setIncludeMessage}
                 />
+                <DocumentIcon
+                  className="size-4 shrink-0"
+                  mimeType={DOCX_MIME}
+                />
                 <span>{t("common.export.title")}</span>
               </label>
               <label className="flex items-center gap-2">
@@ -228,9 +237,12 @@ export const MessageExportMenu = ({
                   checked={includeArtifact}
                   onCheckedChange={setIncludeArtifact}
                 />
-                <span className="truncate">
-                  {buildCreateDocumentDownloadFileName(artifact.name)}
-                </span>
+                <DocumentIcon
+                  className="size-4 shrink-0"
+                  fileName={artifactFileName}
+                  mimeType={DOCX_MIME}
+                />
+                <span className="truncate">{artifactFileName}</span>
               </label>
             </div>
           )}

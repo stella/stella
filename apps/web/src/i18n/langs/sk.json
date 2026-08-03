@@ -881,11 +881,11 @@
     "expenses": "Výdavky",
     "export": {
       "citations": "Citácie",
-      "failed": "Správu sa nepodarilo exportovať",
+      "failed": "Správu sa nepodarilo uložiť",
       "footnotes": "Poznámky pod čiarou",
       "formatDocx": "Dokument Word (<docx>.docx</docx>)",
       "inline": "V texte",
-      "title": "Exportovať správu"
+      "title": "Uložiť správu"
     },
     "filter": "Filtrovať",
     "formula": "Vzorec",

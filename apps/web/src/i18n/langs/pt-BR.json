@@ -881,11 +881,11 @@
     "expenses": "Despesas",
     "export": {
       "citations": "Citações",
-      "failed": "Não foi possível exportar a mensagem",
+      "failed": "Não foi possível salvar a mensagem",
       "footnotes": "Notas de rodapé",
       "formatDocx": "Documento Word (<docx>.docx</docx>)",
       "inline": "No texto",
-      "title": "Exportar mensagem"
+      "title": "Salvar mensagem"
     },
     "filter": "Filtro",
     "formula": "Fórmula",
