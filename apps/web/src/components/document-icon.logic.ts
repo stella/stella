@@ -4,18 +4,25 @@ import { EML_MIME, MSG_MIME, isEmailFile, isMarkdownFile } from "@/lib/consts";
 const wordMimeTypes = Object.freeze({
   "application/msword": true,
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document": true,
+});
+
+const rtfMimeTypes = Object.freeze({
   "application/rtf": true,
+  "text/rtf": true,
+});
+
+const openDocumentTextMimeTypes = Object.freeze({
   "application/vnd.oasis.opendocument.text": true,
 });
 
-// Only the Excel formats get the Excel mark. ODS is a spreadsheet but not an
-// Excel workbook, so it keeps the unbranded spreadsheet glyph.
+// Each format carries its own mark: the Excel and Word marks are reserved for
+// the formats they name, and RTF/ODT/ODS get theirs.
 const excelMimeTypes = Object.freeze({
   "application/vnd.ms-excel": true,
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": true,
 });
 
-const spreadsheetMimeTypes = Object.freeze({
+const openDocumentSheetMimeTypes = Object.freeze({
   "application/vnd.oasis.opendocument.spreadsheet": true,
 });
 
@@ -36,8 +43,10 @@ const emailMimeTypes = Object.freeze({ [EML_MIME]: true, [MSG_MIME]: true });
 export type DocumentIconKind =
   | "pdf"
   | "word"
+  | "rtf"
+  | "openDocumentText"
   | "excel"
-  | "spreadsheet"
+  | "openDocumentSheet"
   | "csv"
   | "image"
   | "email"
@@ -57,12 +66,20 @@ export const getDocumentIconKind = (
     return "word";
   }
 
+  if (Object.hasOwn(rtfMimeTypes, mimeType)) {
+    return "rtf";
+  }
+
+  if (Object.hasOwn(openDocumentTextMimeTypes, mimeType)) {
+    return "openDocumentText";
+  }
+
   if (Object.hasOwn(excelMimeTypes, mimeType)) {
     return "excel";
   }
 
-  if (Object.hasOwn(spreadsheetMimeTypes, mimeType)) {
-    return "spreadsheet";
+  if (Object.hasOwn(openDocumentSheetMimeTypes, mimeType)) {
+    return "openDocumentSheet";
   }
 
   if (Object.hasOwn(csvMimeTypes, mimeType)) {

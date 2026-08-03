@@ -34,12 +34,17 @@ describe("document icon MIME classification", () => {
     ).toBe("excel");
   });
 
-  // The Excel mark is brand-specific: a spreadsheet that is not an Excel
-  // workbook must not carry it.
-  test("keeps non-Excel spreadsheets off the Excel mark", () => {
+  // Each mark names one format. A format must never borrow another's mark,
+  // so every member of the old catch-all "word"/"spreadsheet" groups is pinned.
+  test("gives RTF, ODT, and ODS their own marks", () => {
+    expect(getDocumentIconKind("application/rtf")).toBe("rtf");
+    expect(getDocumentIconKind("application/vnd.oasis.opendocument.text")).toBe(
+      "openDocumentText",
+    );
     expect(
       getDocumentIconKind("application/vnd.oasis.opendocument.spreadsheet"),
-    ).toBe("spreadsheet");
+    ).toBe("openDocumentSheet");
+    expect(getDocumentIconKind("application/msword")).toBe("word");
     expect(getDocumentIconKind("application/vnd.ms-excel")).toBe("excel");
   });
 
