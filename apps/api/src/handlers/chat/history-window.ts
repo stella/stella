@@ -242,6 +242,8 @@ export type TruncationTarget = {
   messagesForPersistence: WindowedThreadMessage[];
   /** Rows strictly after the target — deleted on replay. */
   deleteMessageIdsBeforeLatest: SafeId<"chatMessage">[];
+  /** Whether replaying this target would discard a newer user turn. */
+  hasLaterUserMessage: boolean;
 };
 
 /**
@@ -308,7 +310,7 @@ export const resolveTruncationTarget = async ({
     const idsAfterTarget = yield* Result.await(
       safeDb((tx) =>
         tx
-          .select({ id: chatMessages.id })
+          .select({ id: chatMessages.id, role: chatMessages.role })
           .from(chatMessages)
           .where(
             and(
@@ -328,6 +330,7 @@ export const resolveTruncationTarget = async ({
     return Result.ok({
       messagesForPersistence: retainedPrefix.map(toWindowedMessage),
       deleteMessageIdsBeforeLatest: idsAfterTarget.map((row) => row.id),
+      hasLaterUserMessage: idsAfterTarget.some((row) => row.role === "user"),
     });
   });
 

@@ -24,13 +24,27 @@ const CREATE_DOCUMENT_DRAFT_THREAD_NAMESPACE =
 type CreateDocumentDraftPayloadBase = {
   originChatMessageId: string;
   originChatThreadId: ChatThreadId;
-  chatThreadId: ChatThreadId;
   toolCallId: string;
   name: string;
   source: string;
 };
 
+type CreateDocumentDraftChatThread =
+  | {
+      /** The client may display this chat, but the server has not bound it to
+       * the generated draft yet, so it cannot be linked while saving. */
+      chatThreadBinding: "unbound";
+      chatThreadId: ChatThreadId;
+    }
+  | {
+      /** A persisted user message carries the server-owned active-draft
+       * context for exactly this inspector chat. */
+      chatThreadBinding: "bound";
+      chatThreadId: ChatThreadId;
+    };
+
 export type CreateDocumentDraftPayload = CreateDocumentDraftPayloadBase &
+  CreateDocumentDraftChatThread &
   (
     | {
         status: "streaming" | "ready" | "saving";
@@ -62,6 +76,7 @@ export const persistCreateDocumentDraftPayload = ({
 }: PersistCreateDocumentDraftPayloadOptions): CreateDocumentDraftPayload => ({
   originChatMessageId: payload.originChatMessageId,
   originChatThreadId: payload.originChatThreadId,
+  chatThreadBinding: payload.chatThreadBinding,
   chatThreadId: payload.chatThreadId,
   toolCallId: payload.toolCallId,
   name: payload.name,
@@ -101,6 +116,7 @@ export const setCreateDocumentDraftChatThreadId = ({
       return {
         originChatMessageId: payload.originChatMessageId,
         originChatThreadId: payload.originChatThreadId,
+        chatThreadBinding: "unbound",
         chatThreadId,
         toolCallId: payload.toolCallId,
         name: payload.name,
@@ -114,7 +130,68 @@ export const setCreateDocumentDraftChatThreadId = ({
       return {
         originChatMessageId: payload.originChatMessageId,
         originChatThreadId: payload.originChatThreadId,
+        chatThreadBinding: "unbound",
         chatThreadId,
+        toolCallId: payload.toolCallId,
+        name: payload.name,
+        source: payload.source,
+        status: "persisted",
+        entityId: payload.entityId,
+        fieldId: payload.fieldId,
+        fileName: payload.fileName,
+        workspaceId: payload.workspaceId,
+      };
+    default: {
+      const exhaustiveStatus: never = payload;
+      return exhaustiveStatus;
+    }
+  }
+};
+
+type BindCreateDocumentDraftChatThreadOptions = {
+  chatThreadId: ChatThreadId;
+  payload: CreateDocumentDraftPayload;
+};
+
+/**
+ * A deterministic inspector id only gives the browser a stable draft-chat
+ * surface. Saving may forward it only after a server-persisted message proves
+ * that this chat owns the active generated-document draft.
+ */
+export const bindCreateDocumentDraftChatThread = ({
+  chatThreadId,
+  payload,
+}: BindCreateDocumentDraftChatThreadOptions): CreateDocumentDraftPayload => {
+  if (
+    chatThreadId !== payload.chatThreadId ||
+    payload.chatThreadBinding === "bound"
+  ) {
+    return payload;
+  }
+
+  switch (payload.status) {
+    case "streaming":
+    case "ready":
+    case "saving":
+      return {
+        originChatMessageId: payload.originChatMessageId,
+        originChatThreadId: payload.originChatThreadId,
+        chatThreadBinding: "bound",
+        chatThreadId: payload.chatThreadId,
+        toolCallId: payload.toolCallId,
+        name: payload.name,
+        source: payload.source,
+        status: payload.status,
+        ...(payload.workspaceId === undefined
+          ? {}
+          : { workspaceId: payload.workspaceId }),
+      };
+    case "persisted":
+      return {
+        originChatMessageId: payload.originChatMessageId,
+        originChatThreadId: payload.originChatThreadId,
+        chatThreadBinding: "bound",
+        chatThreadId: payload.chatThreadId,
         toolCallId: payload.toolCallId,
         name: payload.name,
         source: payload.source,
@@ -150,6 +227,9 @@ export const isCreateDocumentDraftPayload = (
     "chatThreadId" in payload &&
     typeof payload.chatThreadId === "string" &&
     payload.chatThreadId !== payload.originChatThreadId &&
+    "chatThreadBinding" in payload &&
+    (payload.chatThreadBinding === "unbound" ||
+      payload.chatThreadBinding === "bound") &&
     "name" in payload &&
     typeof payload.name === "string" &&
     "source" in payload &&
@@ -189,6 +269,7 @@ export const isSameCreateDocumentDraftPayload = (
   left.toolCallId === right.toolCallId &&
   left.originChatMessageId === right.originChatMessageId &&
   left.originChatThreadId === right.originChatThreadId &&
+  left.chatThreadBinding === right.chatThreadBinding &&
   left.chatThreadId === right.chatThreadId &&
   left.name === right.name &&
   left.source === right.source &&
@@ -244,6 +325,9 @@ export const buildCreateDocumentDraftPayload = ({
   return {
     originChatMessageId: draft.messageId,
     originChatThreadId,
+    chatThreadBinding: hasExistingIdentity
+      ? existingPayload.chatThreadBinding
+      : "unbound",
     chatThreadId,
     toolCallId: draft.toolCallId,
     name: draft.name,
@@ -271,6 +355,7 @@ export const setCreateDocumentDraftPayloadStatus = ({
   return {
     originChatMessageId: payload.originChatMessageId,
     originChatThreadId: payload.originChatThreadId,
+    chatThreadBinding: payload.chatThreadBinding,
     chatThreadId: payload.chatThreadId,
     toolCallId: payload.toolCallId,
     name: payload.name,

@@ -560,7 +560,6 @@ const linkGeneratedDocumentDraftChatThread = async ({
   // the destination file chat: first promote its authoritative scope, then
   // widen the data scope before associating destination-file metadata.
   await expandThreadDataScopeOnTx({
-    currentDataWorkspaceIds: draftThread.dataWorkspaceIds,
     newWorkspaceIds: [workspaceId],
     recordAuditEvent,
     threadId: generatedDraft.draftChatThreadId,
@@ -908,7 +907,6 @@ const uploadEntityHandler = async function* ({
         await lockWorkspacesForEntityCap(tx, [workspaceId]);
 
         let generatedDraftPartIndex: number | null = null;
-        let generatedDraftDataWorkspaceIds: readonly SafeId<"workspace">[] = [];
         let generatedDraftThreadWorkspaceId: SafeId<"workspace"> | null = null;
         let draftChatThread: DraftChatThread | null = null;
         if (generatedDraft !== undefined) {
@@ -947,7 +945,6 @@ const uploadEntityHandler = async function* ({
             };
           }
           generatedDraftPartIndex = draftState.partIndex;
-          generatedDraftDataWorkspaceIds = draftState.dataWorkspaceIds;
           generatedDraftThreadWorkspaceId = draftState.threadWorkspaceId;
           const draftChatThreadLookup =
             await findGeneratedDocumentDraftChatThread({
@@ -1066,7 +1063,6 @@ const uploadEntityHandler = async function* ({
           // global thread can never retain destination-matter data without
           // the RLS scope that protects it.
           await expandThreadDataScopeOnTx({
-            currentDataWorkspaceIds: generatedDraftDataWorkspaceIds,
             newWorkspaceIds: [workspaceId],
             recordAuditEvent,
             threadId: generatedDraft.threadId,

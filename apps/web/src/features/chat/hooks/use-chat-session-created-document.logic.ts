@@ -2,6 +2,7 @@ import type { QueryClient, QueryKey } from "@tanstack/react-query";
 
 import {
   CREATE_DOCUMENT_DRAFT_VIEW,
+  bindCreateDocumentDraftChatThread,
   createDocumentDraftTabId,
   isCreateDocumentDraftPayload,
   persistCreateDocumentDraftPayload,
@@ -118,7 +119,37 @@ export const setCreateDocumentDraftInspectorChatThreadId = ({
   return true;
 };
 
-export const getCreateDocumentDraftInspectorChatThreadId = ({
+type BindCreateDocumentDraftInspectorChatThreadOptions =
+  SetCreateDocumentDraftInspectorChatThreadIdOptions;
+
+export const bindCreateDocumentDraftInspectorChatThread = ({
+  chatThreadId,
+  inspector,
+  toolCallId,
+}: BindCreateDocumentDraftInspectorChatThreadOptions): boolean => {
+  const id = createDocumentDraftTabId(toolCallId);
+  const tab = inspector.tabs.find((candidate) => candidate.id === id);
+  if (
+    tab?.type !== "view" ||
+    tab.viewType !== CREATE_DOCUMENT_DRAFT_VIEW ||
+    !isCreateDocumentDraftPayload(tab.payload)
+  ) {
+    return false;
+  }
+
+  const payload = bindCreateDocumentDraftChatThread({
+    chatThreadId,
+    payload: tab.payload,
+  });
+  if (payload === tab.payload) {
+    return payload.chatThreadBinding === "bound";
+  }
+
+  inspector.updateView({ id, label: tab.label, payload });
+  return true;
+};
+
+export const getBoundCreateDocumentDraftInspectorChatThreadId = ({
   inspector,
   toolCallId,
 }: Omit<
@@ -130,7 +161,8 @@ export const getCreateDocumentDraftInspectorChatThreadId = ({
   );
   return tab?.type === "view" &&
     tab.viewType === CREATE_DOCUMENT_DRAFT_VIEW &&
-    isCreateDocumentDraftPayload(tab.payload)
+    isCreateDocumentDraftPayload(tab.payload) &&
+    tab.payload.chatThreadBinding === "bound"
     ? tab.payload.chatThreadId
     : null;
 };

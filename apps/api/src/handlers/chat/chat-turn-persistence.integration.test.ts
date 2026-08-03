@@ -178,6 +178,40 @@ describe("durable chat turn persistence", () => {
         where: { userMessageId: { eq: userMessageId } },
       }),
     ).toHaveLength(1);
+
+    const regeneration = createChatTurnAcceptance({
+      organizationId: ids.orgA,
+      threadId,
+      userId: ids.userA1,
+      userMessageId,
+      workspaceId: ids.wsA1,
+    });
+    unwrap(
+      await safeDb(async (tx) => {
+        await insertChatTurnAcceptanceOnTx({
+          acceptance: regeneration,
+          tx,
+        });
+      }),
+    );
+    const regeneratedExecution = unwrap(
+      await claimChatTurnForExecution({
+        acceptedTurnId: regeneration.id,
+        incomingMessageId: userMessageId,
+        incomingMessageRole: "user",
+        organizationId: ids.orgA,
+        safeDb,
+        threadId,
+        userId: ids.userA1,
+        workspaceId: ids.wsA1,
+      }),
+    );
+    expect(regeneratedExecution?.id).toBe(regeneration.id);
+    expect(
+      await testDb.query.chatTurns.findMany({
+        where: { userMessageId: { eq: userMessageId } },
+      }),
+    ).toHaveLength(2);
   });
 
   test("adopts a persisted pre-migration user message into the durable lifecycle", async () => {

@@ -27,6 +27,7 @@ export const FileViewerWithAI = ({
   workspaceId,
   chatThreadId,
   onChatThreadIdChange,
+  onActiveDraftChatBound,
   activeFile,
   activeDraft,
   activeExternal,
@@ -95,6 +96,7 @@ export const FileViewerWithAI = ({
             setOverlayThread({ overlayKey, threadId });
             onChatThreadIdChange?.(threadId);
           }}
+          onActiveDraftChatBound={onActiveDraftChatBound}
           onDocxCommentsChange={onDocxCommentsChange}
           requestDocxEditMode={requestDocxEditMode}
           workspaceId={workspaceId}

@@ -73,6 +73,8 @@ export type FileViewerWithAIProps = {
   chatThreadId?: ChatThreadId | undefined;
   /** Persist an explicit thread rotation in the viewer's owning surface. */
   onChatThreadIdChange?: ((threadId: ChatThreadId) => void) | undefined;
+  /** The server has persisted this draft chat's active-draft binding. */
+  onActiveDraftChatBound?: ((threadId: ChatThreadId) => void) | undefined;
   /**
    * Optional file context surfaced to the model so prompts can
    * reference "the file you're looking at" — entity id and human
@@ -229,6 +231,7 @@ export const FileChatOverlayHost = ({
   docxComments,
   onDocxCommentsChange,
   onChatThreadIdChange,
+  onActiveDraftChatBound,
   requestDocxEditMode,
 }: FileChatOverlayHostProps) => {
   const handleNewThread = () => {
@@ -277,6 +280,7 @@ export const FileChatOverlayHost = ({
         docxEditSafety={docxEditSafety}
         docxEditorRef={docxEditorRef}
         onDocxCommentsChange={onDocxCommentsChange}
+        onActiveDraftChatBound={onActiveDraftChatBound}
         onNewThread={handleNewThread}
         requestDocxEditMode={requestDocxEditMode}
         workspaceId={workspaceId}

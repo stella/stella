@@ -6,6 +6,7 @@ import {
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
+import { CHAT_TURN_INTENT } from "@stll/api-contract";
 
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import { selectCreateDocumentDrafts } from "@/components/chat/create-document-draft.logic";
@@ -1005,6 +1006,61 @@ describe("chat runtime", () => {
           ],
         },
       ],
+    });
+  });
+
+  test("marks TanStack reload as an explicit regeneration request", async () => {
+    const threadId = toChatThreadId("thread-A");
+    const userMessageId = "22222222-2222-4222-8222-222222222205";
+    const requests: unknown[] = [];
+
+    globalThis.fetch = createFetchMock(async (_input, init) => {
+      requests.push(parseJsonRequestBody(init));
+      return createSseResponse([
+        { type: "RUN_STARTED", threadId, runId: "run-regenerate" },
+        {
+          type: "TEXT_MESSAGE_START",
+          messageId: assistantMessageId,
+          role: "assistant",
+        },
+        {
+          type: "TEXT_MESSAGE_CONTENT",
+          messageId: assistantMessageId,
+          delta: "Replacement",
+        },
+        { type: "TEXT_MESSAGE_END", messageId: assistantMessageId },
+        {
+          type: "RUN_FINISHED",
+          threadId,
+          runId: "run-regenerate",
+          finishReason: "stop",
+        },
+      ]);
+    });
+
+    const runtime = createChatRuntime({
+      context: undefined,
+      initialMessages: [
+        createMessage(userMessageId),
+        {
+          id: "33333333-3333-4333-8333-333333333333",
+          role: "assistant",
+          parts: [{ type: "text", content: "Original" }],
+        },
+      ],
+      key: { scope: "global", threadId },
+      onError: (error) => {
+        throw error;
+      },
+      onFinish: () => {},
+    });
+
+    await runtime.reload();
+
+    expect(requests).toHaveLength(1);
+    expect(requests.at(0)).toMatchObject({
+      message: { id: userMessageId, role: "user" },
+      turnIntent: CHAT_TURN_INTENT.regenerate,
     });
   });
 

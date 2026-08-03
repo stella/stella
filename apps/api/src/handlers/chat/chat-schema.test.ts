@@ -3,6 +3,9 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
+import { CHAT_TURN_INTENT } from "@stll/api-contract";
+
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   createChatAttachmentPart,
@@ -12,6 +15,7 @@ import {
 } from "@/api/handlers/chat/chat-message-parts";
 import {
   activeDraftSchema,
+  sendMessageBodySchema,
   validateMessage as validateMessageWithPersistence,
 } from "@/api/handlers/chat/chat-schema";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
@@ -102,6 +106,33 @@ describe("active draft request context", () => {
         },
       }),
     ).toBe(true);
+  });
+});
+
+describe("chat turn intent", () => {
+  const request = {
+    threadId: "019fc771-8b17-74bf-b85e-559afc54cfe5",
+    sendMode: CHAT_SEND_MODE.rawOverride,
+    message: {
+      id: "019fc771-8b17-7000-b85e-559afc54cfe5",
+      role: "user",
+      parts: [{ type: "text", content: "Try again" }],
+    },
+  };
+
+  test("accepts only the shared explicit regeneration discriminator", () => {
+    expect(
+      Value.Check(sendMessageBodySchema, {
+        ...request,
+        turnIntent: CHAT_TURN_INTENT.regenerate,
+      }),
+    ).toBe(true);
+    expect(
+      Value.Check(sendMessageBodySchema, {
+        ...request,
+        turnIntent: "retry",
+      }),
+    ).toBe(false);
   });
 });
 

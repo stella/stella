@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   buildCreateDocumentDraftPayload,
   buildCreateDocumentDownloadFileName,
+  bindCreateDocumentDraftChatThread,
   findReadyCreateDocumentDraftMessageId,
   getCreateDocumentDraftEditorAccess,
   isCreateDocumentDraftPayload,
@@ -295,6 +296,7 @@ describe("create-document drafts", () => {
     const payload = {
       originChatMessageId: "message-origin",
       originChatThreadId: toChatThreadId("thread-origin"),
+      chatThreadBinding: "unbound",
       chatThreadId: toChatThreadId("thread-draft"),
       toolCallId: "tool-1",
       name: "Purchase agreement",
@@ -330,6 +332,7 @@ describe("create-document drafts", () => {
     });
 
     expect(initial.originChatThreadId).toBe(originChatThreadId);
+    expect(initial.chatThreadBinding).toBe("unbound");
     expect(initial.chatThreadId).not.toBe(initial.originChatThreadId);
 
     const updated = buildCreateDocumentDraftPayload({
@@ -367,6 +370,7 @@ describe("create-document drafts", () => {
       payload: updated,
     });
     expect(rotated.chatThreadId).toBe(toChatThreadId("thread-rotated"));
+    expect(rotated.chatThreadBinding).toBe("unbound");
     expect(
       buildCreateDocumentDraftPayload({
         draft: { ...draft, status: "ready" },
@@ -377,6 +381,40 @@ describe("create-document drafts", () => {
     expect(
       setCreateDocumentDraftChatThreadId({
         chatThreadId: originChatThreadId,
+        payload: rotated,
+      }),
+    ).toBe(rotated);
+  });
+
+  test("forwards a draft chat only after the server-confirmed binding", () => {
+    const payload = buildCreateDocumentDraftPayload({
+      draft: {
+        messageId: "message-origin",
+        toolCallId: "tool-1",
+        name: "Power of attorney",
+        source: "@doc kind=other locale=en page=A4",
+        status: "ready",
+      },
+      existingPayload: undefined,
+      originChatThreadId: toChatThreadId("thread-origin"),
+    });
+
+    expect(payload.chatThreadBinding).toBe("unbound");
+    const bound = bindCreateDocumentDraftChatThread({
+      chatThreadId: payload.chatThreadId,
+      payload,
+    });
+    expect(bound.chatThreadBinding).toBe("bound");
+    expect(bound.chatThreadId).toBe(payload.chatThreadId);
+
+    const rotated = setCreateDocumentDraftChatThreadId({
+      chatThreadId: toChatThreadId("thread-rotated"),
+      payload: bound,
+    });
+    expect(rotated.chatThreadBinding).toBe("unbound");
+    expect(
+      bindCreateDocumentDraftChatThread({
+        chatThreadId: toChatThreadId("other-thread"),
         payload: rotated,
       }),
     ).toBe(rotated);

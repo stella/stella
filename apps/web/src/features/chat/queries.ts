@@ -10,7 +10,7 @@ import { panic } from "better-result";
 
 import { CHAT_SEND_MODE, isChatSendMode } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
-import { CHAT_TOOL_SCOPE } from "@stll/api-contract";
+import { CHAT_TOOL_SCOPE, CHAT_TURN_INTENT } from "@stll/api-contract";
 import type { ChatSendRequest } from "@stll/api-contract";
 
 import type { ChatContextUsage } from "@/components/chat/chat-context-meter";
@@ -377,6 +377,7 @@ export type ChatContinuationRequestBody = {
   sendMode?: ChatSendMode | undefined;
   toolScope?: ChatToolScope | undefined;
   truncateAfterMessageId?: SafeId<"chatMessage"> | undefined;
+  turnIntent?: (typeof CHAT_TURN_INTENT)["regenerate"] | undefined;
 };
 export type ChatSendMessageOptions = {
   body?: ChatContinuationRequestBody | undefined;
@@ -847,9 +848,17 @@ export const createChatRuntime = ({
     },
     getSnapshot: () => snapshot,
     reload: async (options) => {
-      await withBody(options, async () => {
-        await client.reload();
-      });
+      await withBody(
+        {
+          body: {
+            ...options?.body,
+            turnIntent: CHAT_TURN_INTENT.regenerate,
+          },
+        },
+        async () => {
+          await client.reload();
+        },
+      );
     },
     setMessages: (messages) => {
       client.setMessagesManually(messages);
@@ -966,6 +975,10 @@ export const buildSendRequestBody = ({
 
   if (requestBody?.truncateAfterMessageId !== undefined) {
     body.truncateAfterMessageId = requestBody.truncateAfterMessageId;
+  }
+
+  if (requestBody?.turnIntent !== undefined) {
+    body.turnIntent = requestBody.turnIntent;
   }
 
   if (requestBody?.toolScope !== undefined) {
@@ -1305,6 +1318,9 @@ const normalizeChatContinuationRequestBody = (
     body.truncateAfterMessageId = toSafeId<"chatMessage">(
       data["truncateAfterMessageId"],
     );
+  }
+  if (data["turnIntent"] === CHAT_TURN_INTENT.regenerate) {
+    body.turnIntent = data["turnIntent"];
   }
 
   return Object.keys(body).length === 0 ? undefined : body;

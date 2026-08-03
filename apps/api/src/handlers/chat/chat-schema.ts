@@ -9,6 +9,7 @@ import type { Static } from "elysia";
 import { t } from "elysia";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
+import { CHAT_TURN_INTENT } from "@stll/api-contract";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import type { StoredFileRef } from "@/api/handlers/chat/attachment-validation";
@@ -192,6 +193,7 @@ export const sendMessageBodySchema = t.Object({
   contextMatterIds: t.Optional(t.Array(tSafeId("workspace"))),
   message: rawMessageSchema,
   truncateAfterMessageId: t.Optional(tSafeId("chatMessage")),
+  turnIntent: t.Optional(t.Literal(CHAT_TURN_INTENT.regenerate)),
   /**
    * Optional named tool scope for this turn. Only server-defined
    * scope names validate; the server maps the name to a fixed tool

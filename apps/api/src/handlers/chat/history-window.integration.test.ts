@@ -410,6 +410,7 @@ describe("resolveTruncationTarget", () => {
       m4.id,
       m5.id,
     ]);
+    expect(resolved.hasLaterUserMessage).toBe(true);
   });
 
   test("retains a target whose created_at has sub-millisecond precision", async () => {
@@ -450,6 +451,32 @@ describe("resolveTruncationTarget", () => {
       target.id,
     ]);
     expect(resolved.deleteMessageIdsBeforeLatest).toEqual([m2.id]);
+    expect(resolved.hasLaterUserMessage).toBe(true);
+  });
+
+  test("distinguishes the latest user turn from an older replay target", async () => {
+    const base = Date.parse("2026-07-02T00:00:00.000Z");
+    const { threadId, messages } = await seedThread([
+      { createdAt: new Date(base), text: "latest user" },
+      { createdAt: new Date(base + 1), text: "answer" },
+    ]);
+    const latestUser = messages.at(0);
+    if (!latestUser) {
+      throw new Error("seed precondition failed");
+    }
+
+    const resolved = unwrap(
+      await resolveTruncationTarget({
+        safeDb,
+        threadId,
+        targetMessageId: latestUser.id,
+      }),
+    );
+    if (resolved === null) {
+      throw new Error("expected the target to resolve");
+    }
+
+    expect(resolved.hasLaterUserMessage).toBe(false);
   });
 
   test("returns null when the target id is not in the thread", async () => {

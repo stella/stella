@@ -3,6 +3,7 @@ import { and, eq, inArray } from "drizzle-orm";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
+import { CHAT_TURN_INTENT } from "@stll/api-contract";
 import type { SkillMetadata } from "@stll/skills";
 
 import type { Transaction } from "@/api/db/root";
@@ -157,6 +158,7 @@ import { isReadyGeneratedDocumentDraft } from "@/api/lib/chat/created-draft";
 import {
   expandThreadDataScope,
   expandThreadDataScopeOnTx,
+  replaceThreadDataScopeOnTx,
 } from "@/api/lib/chat/data-scope";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { detached } from "@/api/lib/detached";
@@ -820,6 +822,25 @@ const sendMessage = createSafeRootHandler(
         message: uploadResult.message,
       });
 
+      const isExplicitRegeneration =
+        body.turnIntent === CHAT_TURN_INTENT.regenerate;
+      if (
+        isExplicitRegeneration &&
+        (parsedMessage.message.role !== "user" ||
+          body.truncateAfterMessageId !== undefined)
+      ) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message:
+              "Regeneration requires one unambiguous user-message target",
+          }),
+        );
+      }
+      const replayTargetMessageId =
+        body.truncateAfterMessageId ??
+        (isExplicitRegeneration ? parsedMessage.message.id : undefined);
+
       let messagesForPersistence: ChatThreadState["data"]["messages"] =
         thread.data.messages;
       let deleteMessageIdsBeforeLatest: SafeId<"chatMessage">[] = [];
@@ -827,8 +848,8 @@ const sendMessage = createSafeRootHandler(
       // stored list is a bounded window that may exclude an old re-sent/edited
       // id, so a targeted existence check guards against a duplicate insert.
       let incomingMessageExists = false;
-      if (body.truncateAfterMessageId !== undefined) {
-        if (parsedMessage.message.id !== body.truncateAfterMessageId) {
+      if (replayTargetMessageId !== undefined) {
+        if (parsedMessage.message.id !== replayTargetMessageId) {
           return Result.err(
             new HandlerError({
               status: 400,
@@ -844,7 +865,7 @@ const sendMessage = createSafeRootHandler(
           resolveTruncationTarget({
             safeDb,
             threadId: body.threadId,
-            targetMessageId: body.truncateAfterMessageId,
+            targetMessageId: replayTargetMessageId,
           }),
         );
         if (truncationTarget === null) {
@@ -859,6 +880,14 @@ const sendMessage = createSafeRootHandler(
         messagesForPersistence = truncationTarget.messagesForPersistence;
         deleteMessageIdsBeforeLatest =
           truncationTarget.deleteMessageIdsBeforeLatest;
+        if (isExplicitRegeneration && truncationTarget.hasLaterUserMessage) {
+          return Result.err(
+            new HandlerError({
+              status: 409,
+              message: "Only the latest user turn can be regenerated",
+            }),
+          );
+        }
       } else {
         incomingMessageExists = yield* Result.await(
           chatMessageExistsForThread({
@@ -869,13 +898,35 @@ const sendMessage = createSafeRootHandler(
         );
       }
 
-      const latestMessagePlan = planMessagePersistence({
+      const baseLatestMessagePlan = planMessagePersistence({
         message: parsedMessage.message,
         storedMessages: messagesForPersistence,
         incomingMessageExists,
       });
       if (
-        body.truncateAfterMessageId !== undefined &&
+        isExplicitRegeneration &&
+        baseLatestMessagePlan.persistencePlan.type !== "none"
+      ) {
+        return Result.err(
+          new HandlerError({
+            status: 409,
+            message: "Regeneration target is not a persisted user message",
+          }),
+        );
+      }
+      const latestMessagePlan = isExplicitRegeneration
+        ? {
+            existingIds: baseLatestMessagePlan.existingIds,
+            messages: baseLatestMessagePlan.messages,
+            persistencePlan: {
+              message: parsedMessage.message,
+              messageId: parsedMessage.message.id,
+              type: "update",
+            } satisfies MessagePersistencePlan,
+          }
+        : baseLatestMessagePlan;
+      if (
+        replayTargetMessageId !== undefined &&
         latestMessagePlan.persistencePlan.type !== "update"
       ) {
         return Result.err(
@@ -887,7 +938,7 @@ const sendMessage = createSafeRootHandler(
       }
 
       const recomputedDataWorkspaceIds =
-        body.truncateAfterMessageId !== undefined
+        replayTargetMessageId !== undefined
           ? recomputeThreadDataScope({
               accessibleSet,
               baseWorkspaceId: workspaceId,
@@ -898,7 +949,7 @@ const sendMessage = createSafeRootHandler(
       const messagesForContextInput = await selectMessagesForContextInput({
         messages: latestMessagePlan.messages,
         safeDb,
-        skipCheckpoint: body.truncateAfterMessageId !== undefined,
+        skipCheckpoint: replayTargetMessageId !== undefined,
         threadId: body.threadId,
       });
 
@@ -1086,13 +1137,12 @@ const sendMessage = createSafeRootHandler(
         mentions: parsedMessage.mentions,
         message: parsedMessage.message,
       }).filter((id) => accessibleSet.has(id));
-      let dataScopeAfterIncomingMessage: SafeId<"workspace">[];
-      if (recomputedDataWorkspaceIds !== null) {
-        dataScopeAfterIncomingMessage = recomputedDataWorkspaceIds;
-      } else {
-        dataScopeAfterIncomingMessage = yield* Result.await(
+      if (
+        recomputedDataWorkspaceIds === null &&
+        incomingMessageWorkspaceIds.length > 0
+      ) {
+        yield* Result.await(
           expandThreadDataScope({
-            currentDataWorkspaceIds: thread.data.dataWorkspaceIds,
             newWorkspaceIds: incomingMessageWorkspaceIds,
             recordAuditEvent,
             safeDb,
@@ -1124,11 +1174,11 @@ const sendMessage = createSafeRootHandler(
         workspaceId,
         persistencePlan: latestMessagePlan.persistencePlan,
         deleteMessageIds: deleteMessageIdsBeforeLatest,
-        dataWorkspaceIdsChange:
+        dataScopeReplacement:
           recomputedDataWorkspaceIds === null
             ? undefined
             : {
-                oldDataWorkspaceIds: thread.data.dataWorkspaceIds,
+                observedDataWorkspaceIds: thread.data.dataWorkspaceIds,
                 newDataWorkspaceIds: recomputedDataWorkspaceIds,
               },
       } as const;
@@ -1457,7 +1507,6 @@ const sendMessage = createSafeRootHandler(
                     });
                   const persistResult = await persistMessage({
                     dataScopeExpansion: {
-                      currentDataWorkspaceIds: dataScopeAfterIncomingMessage,
                       newWorkspaceIds: assistantWorkspaceIds,
                     },
                     persistencePlan,
@@ -2267,8 +2316,12 @@ type InsertMessagesProps = {
 };
 
 type ChatDataScopeExpansion = {
-  currentDataWorkspaceIds: readonly SafeId<"workspace">[];
   newWorkspaceIds: readonly SafeId<"workspace">[];
+};
+
+type ChatDataScopeReplacement = {
+  newDataWorkspaceIds: readonly SafeId<"workspace">[];
+  observedDataWorkspaceIds: readonly SafeId<"workspace">[];
 };
 
 type ChatTurnSettlement = {
@@ -2310,11 +2363,36 @@ const applyChatDataScopeExpansionOnTx = async ({
   tx: Transaction;
   workspaceId: SafeId<"workspace"> | null;
 }): Promise<void> => {
-  if (expansion === undefined) {
+  if (expansion === undefined || expansion.newWorkspaceIds.length === 0) {
     return;
   }
   await expandThreadDataScopeOnTx({
     ...expansion,
+    recordAuditEvent,
+    threadId,
+    threadWorkspaceId: workspaceId,
+    tx,
+  });
+};
+
+const applyChatDataScopeReplacementOnTx = async ({
+  recordAuditEvent,
+  replacement,
+  threadId,
+  tx,
+  workspaceId,
+}: {
+  recordAuditEvent: AuditRecorder;
+  replacement: ChatDataScopeReplacement | undefined;
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+  workspaceId: SafeId<"workspace"> | null;
+}): Promise<void> => {
+  if (replacement === undefined) {
+    return;
+  }
+  await replaceThreadDataScopeOnTx({
+    ...replacement,
     recordAuditEvent,
     threadId,
     threadWorkspaceId: workspaceId,
@@ -2459,12 +2537,7 @@ type PersistMessageProps = {
   workspaceId: SafeId<"workspace"> | null;
   persistencePlan: MessagePersistencePlan;
   deleteMessageIds?: SafeId<"chatMessage">[];
-  dataWorkspaceIdsChange?:
-    | {
-        oldDataWorkspaceIds: readonly SafeId<"workspace">[];
-        newDataWorkspaceIds: SafeId<"workspace">[];
-      }
-    | undefined;
+  dataScopeReplacement?: ChatDataScopeReplacement | undefined;
 };
 
 const persistMessage = async (props: PersistMessageProps) => {
@@ -2490,7 +2563,7 @@ const runPersistMessage = async ({
   workspaceId,
   persistencePlan,
   deleteMessageIds = [],
-  dataWorkspaceIdsChange,
+  dataScopeReplacement,
 }: PersistMessageProps) => {
   if (persistencePlan.type === "insert") {
     return await insertMessages({
@@ -2512,6 +2585,13 @@ const runPersistMessage = async ({
       await applyChatDataScopeExpansionOnTx({
         expansion: dataScopeExpansion,
         recordAuditEvent,
+        threadId,
+        tx,
+        workspaceId,
+      });
+      await applyChatDataScopeReplacementOnTx({
+        recordAuditEvent,
+        replacement: dataScopeReplacement,
         threadId,
         tx,
         workspaceId,
@@ -2559,9 +2639,6 @@ const runPersistMessage = async ({
         .update(chatThreads)
         .set({
           updatedAt: new Date(),
-          ...(dataWorkspaceIdsChange === undefined
-            ? {}
-            : { dataWorkspaceIds: dataWorkspaceIdsChange.newDataWorkspaceIds }),
           ...(shouldMarkThreadUsedAnonymization({
             messages: [persistencePlan.message],
             sendMode: acceptedSendMode,
@@ -2570,27 +2647,6 @@ const runPersistMessage = async ({
             : {}),
         })
         .where(eq(chatThreads.id, threadId));
-
-      if (
-        dataWorkspaceIdsChange !== undefined &&
-        !workspaceIdsEqual(
-          dataWorkspaceIdsChange.oldDataWorkspaceIds,
-          dataWorkspaceIdsChange.newDataWorkspaceIds,
-        )
-      ) {
-        await recordAuditEvent(tx, {
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
-          resourceId: threadId,
-          workspaceId,
-          changes: {
-            dataWorkspaceIds: {
-              old: [...dataWorkspaceIdsChange.oldDataWorkspaceIds],
-              new: [...dataWorkspaceIdsChange.newDataWorkspaceIds],
-            },
-          },
-        });
-      }
 
       await recordAuditEvent(tx, {
         action: AUDIT_ACTION.UPDATE,

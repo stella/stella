@@ -85,6 +85,7 @@ import {
 import type {
   ApprovalToolName,
   ApprovalToolPart,
+  PersistedChatMessage,
   UnresolvedActiveDocxEditToolCallPart,
   UnresolvedFolioAgentDocToolCallPart,
 } from "@/components/chat/chat-ui-tools";
@@ -887,7 +888,27 @@ type FileChatOverlayProps = {
    * for a fresh value.
    */
   onNewThread: () => void;
+  /** Called only after the server-persisted chat history proves this overlay
+   * thread owns the active generated-document draft. */
+  onActiveDraftChatBound?: ((threadId: ChatThreadId) => void) | undefined;
 };
+
+const hasPersistedActiveDraftChatBinding = ({
+  activeDraft,
+  messages,
+}: {
+  activeDraft: NonNullable<FileChatOverlayProps["activeDraft"]>;
+  messages: readonly PersistedChatMessage[];
+}): boolean =>
+  messages.some((message) => {
+    const context = message.metadata?.activeDraftContext;
+    return (
+      context?.type === "generated-document" &&
+      context.originChatMessageId === activeDraft.originChatMessageId &&
+      context.originChatThreadId === activeDraft.originChatThreadId &&
+      context.toolCallId === activeDraft.toolCallId
+    );
+  });
 
 const fallback = (
   <div
@@ -910,6 +931,7 @@ export const FileChatOverlay = ({
   docxComments,
   onDocxCommentsChange,
   onNewThread,
+  onActiveDraftChatBound,
   requestDocxEditMode,
 }: FileChatOverlayProps) => {
   if (chatThreadId === undefined) {
@@ -951,6 +973,7 @@ export const FileChatOverlay = ({
         docxEditSafety={docxEditSafety}
         docxEditorRef={docxEditorRef}
         onDocxCommentsChange={onDocxCommentsChange}
+        onActiveDraftChatBound={onActiveDraftChatBound}
         onNewThread={onNewThread}
         requestDocxEditMode={requestDocxEditMode}
         workspaceId={workspaceId}
@@ -1026,6 +1049,7 @@ const FileChatOverlayInner = ({
   docxEditorRef,
   docxComments,
   onDocxCommentsChange,
+  onActiveDraftChatBound,
   onNewThread,
 }: FileChatOverlayInnerProps) => {
   const t = useTranslations();
@@ -1375,6 +1399,19 @@ const FileChatOverlayInner = ({
     context: chatThreadContext,
   });
   const { data } = useSuspenseQuery(threadQueryOptions);
+  const hasPersistedDraftChatBinding =
+    activeDraft !== undefined &&
+    hasPersistedActiveDraftChatBinding({
+      activeDraft,
+      messages: data.messages,
+    });
+  useExternalSyncEffect(() => {
+    if (!hasPersistedDraftChatBinding) {
+      return undefined;
+    }
+    onActiveDraftChatBound?.(chatThreadId);
+    return undefined;
+  }, [chatThreadId, hasPersistedDraftChatBinding, onActiveDraftChatBound]);
   const queryClient = useQueryClient();
   // Persists the composer (+) menu's Models submenu selection into this
   // thread's cache, mirroring `ChatThreadPage`'s wiring so the file-chat (+)

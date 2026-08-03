@@ -74,7 +74,7 @@ import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import {
-  getCreateDocumentDraftInspectorChatThreadId,
+  getBoundCreateDocumentDraftInspectorChatThreadId,
   invalidateCreatedDocumentQueries,
   promoteCreateDocumentDraftInspectorTab,
   setCreateDocumentDraftInspectorTabStatus,
@@ -1056,10 +1056,11 @@ export const useChatSession = ({
         status: "saving",
         toolCallId,
       });
-      const draftChatThreadId = getCreateDocumentDraftInspectorChatThreadId({
-        inspector,
-        toolCallId,
-      });
+      const draftChatThreadId =
+        getBoundCreateDocumentDraftInspectorChatThreadId({
+          inspector,
+          toolCallId,
+        });
       const createResult = await Result.tryPromise(async () => {
         const draft = await prepareCreateDocumentDraft(toolCallId, input);
         if (draft === null) {

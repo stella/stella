@@ -5,6 +5,7 @@ import {
   buildCreateDocumentDraftPayload,
   CREATE_DOCUMENT_DRAFT_VIEW,
   createDocumentDraftTabId,
+  isCreateDocumentDraftPayload,
 } from "@/components/chat/create-document-draft.logic";
 import type {
   InspectorTab,
@@ -14,7 +15,8 @@ import { toChatThreadId } from "@/lib/chat-thread-ref";
 
 import {
   invalidateCreatedDocumentQueries,
-  getCreateDocumentDraftInspectorChatThreadId,
+  bindCreateDocumentDraftInspectorChatThread,
+  getBoundCreateDocumentDraftInspectorChatThreadId,
   promoteCreateDocumentDraftInspectorTab,
   setCreateDocumentDraftInspectorChatThreadId,
   setCreateDocumentDraftInspectorTabStatus,
@@ -64,36 +66,62 @@ describe("invalidateCreatedDocumentQueries", () => {
 });
 
 describe("create-document inspector transition", () => {
-  test("returns the retained draft chat identity for matter persistence", () => {
+  test("forwards only a server-bound draft chat for matter persistence", () => {
+    const tabs: InspectorTab[] = [
+      {
+        id: createDocumentDraftTabId("tool-1"),
+        label: "Draft.docx",
+        payload: buildCreateDocumentDraftPayload({
+          draft: {
+            messageId: "message-1",
+            toolCallId: "tool-1",
+            name: "Draft",
+            source: "@doc",
+            status: "ready",
+          },
+          existingPayload: undefined,
+          originChatThreadId: toChatThreadId("origin-thread"),
+        }),
+        type: "view",
+        viewType: CREATE_DOCUMENT_DRAFT_VIEW,
+      },
+    ];
     const inspector = {
-      tabs: [
-        {
-          id: createDocumentDraftTabId("tool-1"),
-          label: "Draft.docx",
-          payload: buildCreateDocumentDraftPayload({
-            draft: {
-              messageId: "message-1",
-              toolCallId: "tool-1",
-              name: "Draft",
-              source: "@doc",
-              status: "ready",
-            },
-            existingPayload: undefined,
-            originChatThreadId: toChatThreadId("origin-thread"),
-          }),
-          type: "view" as const,
-          viewType: CREATE_DOCUMENT_DRAFT_VIEW,
-        },
-      ],
-      updateView: () => {},
-    };
+      tabs,
+      updateView: ({ id, label, payload }) => {
+        const tab = tabs.find((candidate) => candidate.id === id);
+        if (tab?.type !== "view") {
+          return;
+        }
+        tab.label = label;
+        tab.payload = payload;
+      },
+    } satisfies Pick<InspectorTabsStore, "tabs" | "updateView">;
 
     expect(
-      getCreateDocumentDraftInspectorChatThreadId({
+      getBoundCreateDocumentDraftInspectorChatThreadId({
         inspector,
         toolCallId: "tool-1",
       }),
-    ).not.toBeNull();
+    ).toBeNull();
+
+    const tab = tabs.at(0);
+    if (tab?.type !== "view" || !isCreateDocumentDraftPayload(tab.payload)) {
+      throw new Error("Expected a generated document draft tab");
+    }
+    expect(
+      bindCreateDocumentDraftInspectorChatThread({
+        chatThreadId: tab.payload.chatThreadId,
+        inspector,
+        toolCallId: "tool-1",
+      }),
+    ).toBe(true);
+    expect(
+      getBoundCreateDocumentDraftInspectorChatThreadId({
+        inspector,
+        toolCallId: "tool-1",
+      }),
+    ).toBe(tab.payload.chatThreadId);
   });
 
   test("locks an open draft during save and restores it after failure", () => {

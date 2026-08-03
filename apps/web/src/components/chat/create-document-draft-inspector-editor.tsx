@@ -19,7 +19,10 @@ import {
   type DocxEditorRef,
 } from "@/components/docx/app-docx-editor";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
-import { setCreateDocumentDraftInspectorChatThreadId } from "@/features/chat/hooks/use-chat-session-created-document.logic";
+import {
+  bindCreateDocumentDraftInspectorChatThread,
+  setCreateDocumentDraftInspectorChatThreadId,
+} from "@/features/chat/hooks/use-chat-session-created-document.logic";
 import { fileOptions } from "@/lib/files/queries";
 
 type CreateDocumentDraftInspectorEditorProps = {
@@ -81,6 +84,16 @@ export const CreateDocumentDraftInspectorEditor = ({
   const handleChatThreadIdChange = useCallback(
     (chatThreadId: CreateDocumentDraftPayload["chatThreadId"]) => {
       setCreateDocumentDraftInspectorChatThreadId({
+        chatThreadId,
+        inspector: useInspectorTabsStore.getState(),
+        toolCallId: payload.toolCallId,
+      });
+    },
+    [payload.toolCallId],
+  );
+  const handleActiveDraftChatBound = useCallback(
+    (chatThreadId: CreateDocumentDraftPayload["chatThreadId"]) => {
+      bindCreateDocumentDraftInspectorChatThread({
         chatThreadId,
         inspector: useInspectorTabsStore.getState(),
         toolCallId: payload.toolCallId,
@@ -171,6 +184,7 @@ export const CreateDocumentDraftInspectorEditor = ({
       docxEditable={draftEditable}
       docxEditorRef={editorRef}
       onChatThreadIdChange={handleChatThreadIdChange}
+      onActiveDraftChatBound={handleActiveDraftChatBound}
       workspaceId={payload.workspaceId}
     >
       {editor}
