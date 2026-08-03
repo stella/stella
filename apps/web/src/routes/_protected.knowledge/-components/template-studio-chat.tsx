@@ -651,6 +651,7 @@ const TemplateStudioChatInner = ({
     handleAskUserEditAndRerun,
     handleAlwaysAllow,
     handleCreateDocumentResolve,
+    handleOpenCreateDocumentDraft,
     handleOpenCreatedDocument,
     createDocumentMatters,
     isLoadingCreateDocumentMatters,
@@ -1271,6 +1272,7 @@ const TemplateStudioChatInner = ({
               onAskUserEditAndRerun={handleAskUserEditAndRerun}
               onAskUserSubmit={handleAskUserSubmit}
               onCreateDocumentResolve={handleCreateDocumentResolve}
+              onOpenCreateDocumentDraft={handleOpenCreateDocumentDraft}
               onOpenCreatedDocument={handleOpenCreatedDocument}
               onRemoveQueuedMessage={removeQueuedMessage}
               onResend={resendLatestMessage}

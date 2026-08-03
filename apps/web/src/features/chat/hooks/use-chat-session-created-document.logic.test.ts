@@ -15,6 +15,7 @@ import { toChatThreadId } from "@/lib/chat-thread-ref";
 import {
   invalidateCreatedDocumentQueries,
   promoteCreateDocumentDraftInspectorTab,
+  setCreateDocumentDraftInspectorTabStatus,
 } from "./use-chat-session-created-document.logic";
 
 describe("invalidateCreatedDocumentQueries", () => {
@@ -61,6 +62,64 @@ describe("invalidateCreatedDocumentQueries", () => {
 });
 
 describe("create-document inspector transition", () => {
+  test("locks an open draft during save and restores it after failure", () => {
+    const toolCallId = "tool-1";
+    const id = createDocumentDraftTabId(toolCallId);
+    const tabs: InspectorTab[] = [
+      {
+        type: "view",
+        viewType: CREATE_DOCUMENT_DRAFT_VIEW,
+        id,
+        label: "Power of attorney.docx",
+        payload: buildCreateDocumentDraftPayload({
+          draft: {
+            messageId: "message-origin",
+            toolCallId,
+            name: "Power of attorney",
+            source: "@doc kind=other locale=en page=A4",
+            status: "ready",
+          },
+          existingPayload: undefined,
+          originChatThreadId: toChatThreadId("thread-origin"),
+        }),
+      },
+    ];
+    const inspector = {
+      tabs,
+      updateView: ({ id: updatedId, label, payload }) => {
+        const tab = tabs.find((candidate) => candidate.id === updatedId);
+        if (tab?.type === "view") {
+          tab.label = label;
+          tab.payload = payload;
+        }
+      },
+    } satisfies Pick<InspectorTabsStore, "tabs" | "updateView">;
+
+    expect(
+      setCreateDocumentDraftInspectorTabStatus({
+        inspector,
+        status: "saving",
+        toolCallId,
+      }),
+    ).toBe(true);
+    const savingTab = tabs.at(0);
+    expect(savingTab?.type === "view" ? savingTab.payload : null).toMatchObject(
+      { status: "saving" },
+    );
+
+    expect(
+      setCreateDocumentDraftInspectorTabStatus({
+        inspector,
+        status: "ready",
+        toolCallId,
+      }),
+    ).toBe(true);
+    const restoredTab = tabs.at(0);
+    expect(
+      restoredTab?.type === "view" ? restoredTab.payload : null,
+    ).toMatchObject({ status: "ready" });
+  });
+
   test("promotes the open draft in place without a close/open cycle", () => {
     const toolCallId = "tool-1";
     const id = createDocumentDraftTabId(toolCallId);

@@ -218,6 +218,7 @@ export const ChatThreadPage = ({
     handleAskUserEditAndRerun,
     handleAlwaysAllow,
     handleCreateDocumentResolve,
+    handleOpenCreateDocumentDraft,
     handleOpenCreatedDocument,
     createDocumentMatters,
     isLoadingCreateDocumentMatters,
@@ -586,6 +587,7 @@ export const ChatThreadPage = ({
                       onAskUserEditingChange={handleAskUserEditingChange}
                       onAskUserSubmit={handleAskUserSubmit}
                       onCreateDocumentResolve={handleCreateDocumentResolve}
+                      onOpenCreateDocumentDraft={handleOpenCreateDocumentDraft}
                       onOpenCreatedDocument={handleOpenCreatedDocument}
                       onRemoveQueuedMessage={removeQueuedMessage}
                       onResend={resendLatestMessage}

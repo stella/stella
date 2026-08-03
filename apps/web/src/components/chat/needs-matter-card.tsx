@@ -62,18 +62,44 @@ type NeedsMatterCardProps = {
     input: CreateDocumentInput,
   ) => Promise<void> | void;
   onOpenCreated: (output: CreateDocumentMatterSuccess) => Promise<void> | void;
+  onOpenDraft?: ((toolCallId: string) => void) | undefined;
+};
+
+const isCreateDocumentToolFailureState = (
+  part: CreateDocumentPart,
+): boolean => {
+  switch (part.state) {
+    case "error":
+    case "approval-requested":
+    case "approval-responded":
+      return true;
+    case "awaiting-input":
+    case "input-streaming":
+    case "input-complete":
+    case "complete":
+      return false;
+    default:
+      return part.state satisfies never;
+  }
 };
 
 export const NeedsMatterCard = ({
   part,
   onResolve,
   onOpenCreated,
+  onOpenDraft,
 }: NeedsMatterCardProps) => {
   const {
     createDocumentMatters: matters,
     isLoadingCreateDocumentMatters: isLoadingMatters,
   } = useChatMatters();
   const t = useTranslations();
+
+  if (isCreateDocumentToolFailureState(part)) {
+    return (
+      <CreatedFailureCard message={t("chat.createDocument.failedHeader")} />
+    );
+  }
 
   // Streaming-tolerant input read. `part.input` is derived from the
   // part's `arguments` at the session boundary (see
@@ -148,6 +174,16 @@ export const NeedsMatterCard = ({
             ? t("chat.createDocument.headerStreaming")
             : t("chat.createDocument.headerReady")}
         </span>
+        {isAwaitingMatter && onOpenDraft !== undefined && (
+          <Button
+            className="ms-auto"
+            onClick={() => onOpenDraft(part.id)}
+            size="xs"
+            variant="ghost"
+          >
+            {t("chat.createDocument.openInFolio")}
+          </Button>
+        )}
         {isStreaming && (
           <LoaderIcon className="text-muted-foreground ms-auto size-3.5 shrink-0 animate-spin" />
         )}

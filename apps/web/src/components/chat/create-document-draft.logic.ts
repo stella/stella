@@ -33,7 +33,7 @@ type CreateDocumentDraftPayloadBase = {
 export type CreateDocumentDraftPayload = CreateDocumentDraftPayloadBase &
   (
     | {
-        status: "streaming" | "ready";
+        status: "streaming" | "ready" | "saving";
         workspaceId?: string | undefined;
       }
     | {
@@ -99,7 +99,11 @@ export const isCreateDocumentDraftPayload = (
   if (!hasBasePayload || !("status" in payload)) {
     return false;
   }
-  if (payload.status === "streaming" || payload.status === "ready") {
+  if (
+    payload.status === "streaming" ||
+    payload.status === "ready" ||
+    payload.status === "saving"
+  ) {
     return (
       !("workspaceId" in payload) ||
       payload.workspaceId === undefined ||
@@ -186,8 +190,37 @@ export const buildCreateDocumentDraftPayload = ({
     toolCallId: draft.toolCallId,
     name: draft.name,
     source: draft.source,
-    status: draft.status,
+    status:
+      hasExistingIdentity && existingPayload.status === "saving"
+        ? "saving"
+        : draft.status,
     ...(workspaceId === undefined ? {} : { workspaceId }),
+  };
+};
+
+type SetCreateDocumentDraftPayloadStatusOptions = {
+  payload: CreateDocumentDraftPayload;
+  status: "ready" | "saving";
+};
+
+export const setCreateDocumentDraftPayloadStatus = ({
+  payload,
+  status,
+}: SetCreateDocumentDraftPayloadStatusOptions): CreateDocumentDraftPayload => {
+  if (payload.status === "persisted") {
+    return payload;
+  }
+  return {
+    originChatMessageId: payload.originChatMessageId,
+    originChatThreadId: payload.originChatThreadId,
+    chatThreadId: payload.chatThreadId,
+    toolCallId: payload.toolCallId,
+    name: payload.name,
+    source: payload.source,
+    status,
+    ...(payload.workspaceId === undefined
+      ? {}
+      : { workspaceId: payload.workspaceId }),
   };
 };
 

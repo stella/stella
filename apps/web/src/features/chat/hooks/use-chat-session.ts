@@ -49,6 +49,7 @@ import {
   buildCreateDocumentDownloadFileName,
   CREATE_DOCUMENT_DRAFT_VIEW,
   createDocumentDraftTabId,
+  type CreateDocumentDraft,
   findReadyCreateDocumentDraftMessageId,
   isCreateDocumentDraftPayload,
   isCreateDocumentDraftSettlementActive,
@@ -69,6 +70,7 @@ import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-sto
 import {
   invalidateCreatedDocumentQueries,
   promoteCreateDocumentDraftInspectorTab,
+  setCreateDocumentDraftInspectorTabStatus,
 } from "@/features/chat/hooks/use-chat-session-created-document.logic";
 import { reconcileDocumentDeletionToolCalls } from "@/features/chat/hooks/use-chat-session-document-deletion.logic";
 import {
@@ -167,6 +169,11 @@ const EMPTY_CONTEXT_MATTER_IDS: readonly string[] = [];
 type PreparedCreateDocumentDraft = {
   buffer: ArrayBuffer;
   fileName: string;
+};
+
+type OpenCreateDocumentDraftOptions = {
+  draft: CreateDocumentDraft;
+  mode: "automatic" | "explicit";
 };
 
 const prepareCreateDocumentDraft = async (
@@ -283,63 +290,90 @@ export const useChatSession = ({
     [snapshot.messages],
   );
   const openedCreateDocumentDraftIdsRef = useRef(new Set<string>());
+  const openCreateDocumentDraft = useCallback(
+    ({ draft, mode }: OpenCreateDocumentDraftOptions) => {
+      const inspector = useInspectorTabsStore.getState();
+      const id = createDocumentDraftTabId(draft.toolCallId);
+      const label = draft.name
+        ? buildCreateDocumentDownloadFileName(draft.name)
+        : t("chat.createDocument.headerStreaming");
+      const existing = inspector.tabs.find((tab) => tab.id === id);
+      const payload = buildCreateDocumentDraftPayload({
+        draft,
+        existingPayload:
+          existing?.type === "view" &&
+          existing.viewType === CREATE_DOCUMENT_DRAFT_VIEW
+            ? existing.payload
+            : undefined,
+        originChatThreadId: threadRef.threadId,
+        ...(threadRef.scope === "workspace"
+          ? { workspaceId: threadRef.workspaceId }
+          : {}),
+      });
+      for (const tab of inspector.tabs) {
+        if (
+          tab.id !== id &&
+          tab.type === "view" &&
+          tab.viewType === CREATE_DOCUMENT_DRAFT_VIEW &&
+          isCreateDocumentDraftPayload(tab.payload) &&
+          tab.payload.originChatThreadId === threadRef.threadId
+        ) {
+          inspector.closeTab(tab.id);
+        }
+      }
+      if (mode === "explicit") {
+        openedCreateDocumentDraftIdsRef.current.add(id);
+        inspector.openView({
+          type: CREATE_DOCUMENT_DRAFT_VIEW,
+          id,
+          label,
+          payload,
+        });
+        return;
+      }
+      if (existing !== undefined) {
+        if (
+          existing.type === "view" &&
+          existing.viewType === CREATE_DOCUMENT_DRAFT_VIEW &&
+          existing.label === label &&
+          isSameCreateDocumentDraftPayload(existing.payload, payload)
+        ) {
+          return;
+        }
+        inspector.updateView({ id, label, payload });
+        return;
+      }
+      if (openedCreateDocumentDraftIdsRef.current.has(id)) {
+        return;
+      }
+      openedCreateDocumentDraftIdsRef.current.add(id);
+      inspector.openView({
+        type: CREATE_DOCUMENT_DRAFT_VIEW,
+        id,
+        label,
+        payload,
+      });
+    },
+    [t, threadRef],
+  );
   useExternalSyncEffect(() => {
-    const inspector = useInspectorTabsStore.getState();
     const draft = selectCreateDocumentDrafts(messages).at(-1);
     if (draft === undefined) {
       return;
     }
-    const id = createDocumentDraftTabId(draft.toolCallId);
-    const label = draft.name
-      ? buildCreateDocumentDownloadFileName(draft.name)
-      : t("chat.createDocument.headerStreaming");
-    const existing = inspector.tabs.find((tab) => tab.id === id);
-    const payload = buildCreateDocumentDraftPayload({
-      draft,
-      existingPayload:
-        existing?.type === "view" &&
-        existing.viewType === CREATE_DOCUMENT_DRAFT_VIEW
-          ? existing.payload
-          : undefined,
-      originChatThreadId: threadRef.threadId,
-      ...(threadRef.scope === "workspace"
-        ? { workspaceId: threadRef.workspaceId }
-        : {}),
-    });
-    for (const tab of inspector.tabs) {
-      if (
-        tab.id !== id &&
-        tab.type === "view" &&
-        tab.viewType === CREATE_DOCUMENT_DRAFT_VIEW &&
-        isCreateDocumentDraftPayload(tab.payload) &&
-        tab.payload.originChatThreadId === threadRef.threadId
-      ) {
-        inspector.closeTab(tab.id);
+    openCreateDocumentDraft({ draft, mode: "automatic" });
+  }, [messages, openCreateDocumentDraft]);
+  const handleOpenCreateDocumentDraft = useCallback(
+    (toolCallId: string) => {
+      const draft = selectCreateDocumentDrafts(messages).find(
+        (candidate) => candidate.toolCallId === toolCallId,
+      );
+      if (draft !== undefined) {
+        openCreateDocumentDraft({ draft, mode: "explicit" });
       }
-    }
-    if (existing !== undefined) {
-      if (
-        existing.type === "view" &&
-        existing.viewType === CREATE_DOCUMENT_DRAFT_VIEW &&
-        existing.label === label &&
-        isSameCreateDocumentDraftPayload(existing.payload, payload)
-      ) {
-        return;
-      }
-      inspector.updateView({ id, label, payload });
-      return;
-    }
-    if (openedCreateDocumentDraftIdsRef.current.has(id)) {
-      return;
-    }
-    openedCreateDocumentDraftIdsRef.current.add(id);
-    inspector.openView({
-      type: CREATE_DOCUMENT_DRAFT_VIEW,
-      id,
-      label,
-      payload,
-    });
-  }, [messages, t, threadRef]);
+    },
+    [messages, openCreateDocumentDraft],
+  );
   const settlingCreateDocumentDraftIdsRef = useRef(new Set<string>());
   const addToolResult = chat.addToolResult;
   useExternalSyncEffect(() => {
@@ -968,6 +1002,12 @@ export const useChatSession = ({
       if (draftMessageId === null) {
         return;
       }
+      const inspector = useInspectorTabsStore.getState();
+      const lockedDraftEditor = setCreateDocumentDraftInspectorTabStatus({
+        inspector,
+        status: "saving",
+        toolCallId,
+      });
       const createResult = await Result.tryPromise(async () => {
         const draft = await prepareCreateDocumentDraft(toolCallId, input);
         if (draft === null) {
@@ -1031,6 +1071,13 @@ export const useChatSession = ({
       });
 
       if (Result.isError(createResult)) {
+        if (lockedDraftEditor) {
+          setCreateDocumentDraftInspectorTabStatus({
+            inspector: useInspectorTabsStore.getState(),
+            status: "ready",
+            toolCallId,
+          });
+        }
         getAnalytics().captureError(createResult.error);
         stellaToast.add({
           title: APIError.is(createResult.error)
@@ -1051,7 +1098,6 @@ export const useChatSession = ({
       );
       completeCreateDocumentDraft(toolCallId);
 
-      const inspector = useInspectorTabsStore.getState();
       const promotedDraftInPlace = promoteCreateDocumentDraftInspectorTab({
         entityId: output.entityId,
         fieldId: output.fieldId,
@@ -1273,6 +1319,7 @@ export const useChatSession = ({
     handleAskUserEditAndRerun,
     handleAlwaysAllow,
     handleCreateDocumentResolve,
+    handleOpenCreateDocumentDraft,
     handleOpenCreatedDocument,
     createDocumentMatters,
     isLoadingCreateDocumentMatters: isLoadingMatters,

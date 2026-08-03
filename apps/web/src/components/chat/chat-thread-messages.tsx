@@ -101,6 +101,7 @@ export const ChatThreadMessages = ({
   onAskUserEditAndRerun,
   onAskUserEditingChange,
   onCreateDocumentResolve,
+  onOpenCreateDocumentDraft,
   onOpenCreatedDocument,
   showThinkingIndicator = false,
   showToolCallDetails,
@@ -255,6 +256,7 @@ export const ChatThreadMessages = ({
               onAskUserEditingChange={onAskUserEditingChange}
               onAskUserSubmit={onAskUserSubmit}
               onCreateDocumentResolve={onCreateDocumentResolve}
+              onOpenCreateDocumentDraft={onOpenCreateDocumentDraft}
               onOpenCreatedDocument={onOpenCreatedDocument}
               shouldShowToolCalls={shouldShowToolCalls}
               streamdownComponents={streamdownComponents}
@@ -1095,6 +1097,7 @@ type ChatThreadMessagesProps = {
     destination: CreateDocumentDestination,
     input: ChatUITools["create-document"]["input"],
   ) => Promise<void> | void;
+  onOpenCreateDocumentDraft?: ((toolCallId: string) => void) | undefined;
   onOpenCreatedDocument: (
     output: Extract<
       ChatUITools["create-document"]["output"],
@@ -1202,6 +1205,7 @@ type AssistantMessagePartsProps = Pick<
   | "onAskUserEditingChange"
   | "onAskUserSubmit"
   | "onCreateDocumentResolve"
+  | "onOpenCreateDocumentDraft"
   | "onOpenCreatedDocument"
   | "streamdownComponents"
   | "workspaceId"
@@ -1280,6 +1284,7 @@ const AssistantMessageParts = ({
   onAskUserEditingChange,
   onAskUserSubmit,
   onCreateDocumentResolve,
+  onOpenCreateDocumentDraft,
   onOpenCreatedDocument,
   shouldShowToolCalls,
   streamdownComponents,
@@ -1374,6 +1379,7 @@ const AssistantMessageParts = ({
             <NeedsMatterCard
               key={part.id}
               onOpenCreated={onOpenCreatedDocument}
+              onOpenDraft={onOpenCreateDocumentDraft}
               onResolve={onCreateDocumentResolve}
               part={part}
             />

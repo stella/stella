@@ -239,6 +239,7 @@ export const ChatTabPanel = ({
     handleAskUserEditAndRerun,
     handleAlwaysAllow,
     handleCreateDocumentResolve,
+    handleOpenCreateDocumentDraft,
     handleOpenCreatedDocument,
     createDocumentMatters,
     isLoadingCreateDocumentMatters,
@@ -463,6 +464,7 @@ export const ChatTabPanel = ({
                   onLoadOlder={loadOlder}
                   onAskUserSubmit={handleAskUserSubmit}
                   onCreateDocumentResolve={handleCreateDocumentResolve}
+                  onOpenCreateDocumentDraft={handleOpenCreateDocumentDraft}
                   onOpenCreatedDocument={handleOpenCreatedDocument}
                   onRemoveQueuedMessage={removeQueuedMessage}
                   onResend={resendLatestMessage}

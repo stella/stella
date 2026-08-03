@@ -1422,6 +1422,7 @@ const FileChatOverlayInner = ({
     handleAskUserEditAndRerun,
     handleAlwaysAllow,
     handleCreateDocumentResolve,
+    handleOpenCreateDocumentDraft,
     handleOpenCreatedDocument,
     createDocumentMatters,
     isLoadingCreateDocumentMatters,
@@ -2094,6 +2095,7 @@ const FileChatOverlayInner = ({
               onAskUserSubmit={handleAskUserSubmit}
               onCreateDocumentResolve={handleCreateDocumentResolve}
               onLoadOlder={loadOlder}
+              onOpenCreateDocumentDraft={handleOpenCreateDocumentDraft}
               onOpenCreatedDocument={handleOpenCreatedDocument}
               onRemoveQueuedMessage={removeQueuedMessage}
               onResend={resendLatestMessage}

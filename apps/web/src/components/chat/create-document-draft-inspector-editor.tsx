@@ -40,6 +40,8 @@ export const CreateDocumentDraftInspectorEditor = ({
   );
   const [restoration] = useState(availableRestoration);
   const restoredBuffer = restoration === null ? null : use(restoration);
+  const draftReadOnly =
+    payload.status === "streaming" || payload.status === "saving";
 
   const attachEditor = useCallback(
     (editor: DocxEditorRef | null) => {
@@ -76,8 +78,8 @@ export const CreateDocumentDraftInspectorEditor = ({
         documentKey={payload.toolCallId}
         initialZoom="fit-width"
         loadingIndicator={null}
-        mode={payload.status === "streaming" ? "viewing" : "editing"}
-        readOnly={payload.status === "streaming"}
+        mode={draftReadOnly ? "viewing" : "editing"}
+        readOnly={draftReadOnly}
         showToolbar={payload.status !== "streaming"}
         showZoomControl={payload.status !== "streaming"}
       />

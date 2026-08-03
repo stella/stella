@@ -454,6 +454,84 @@ describe("chat thread messages", () => {
     expect(html).not.toContain("tracking-wide uppercase");
   });
 
+  test("renders a terminal generated-document state as a failure", () => {
+    const chatMessages: PersistedChatMessage[] = [
+      {
+        id: "message-document-error",
+        parts: [
+          {
+            type: "tool-call",
+            id: "tool-document-error",
+            name: "create-document",
+            arguments: "{}",
+            state: "error",
+          },
+        ],
+        role: "assistant",
+      },
+    ];
+
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        approvalPendingMessageId={null}
+        messages={chatMessages}
+        onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+      />,
+    );
+
+    expect(html).toContain("Could not create document");
+    expect(html).not.toContain("Document ready");
+  });
+
+  test("offers an explicit way to reopen a closed generated draft", () => {
+    const input = {
+      name: "Power of attorney",
+      source: "@doc kind=other locale=en page=A4\n@title Power of attorney",
+    };
+    const chatMessages: PersistedChatMessage[] = [
+      {
+        id: "message-document-ready",
+        parts: [
+          {
+            type: "tool-call",
+            id: "tool-document-ready",
+            name: "create-document",
+            arguments: JSON.stringify(input),
+            input,
+            output: {
+              success: true,
+              destination: "draft",
+              fileName: "Power of attorney.docx",
+            },
+            state: "complete",
+          },
+        ],
+        role: "assistant",
+      },
+    ];
+
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        approvalPendingMessageId={null}
+        messages={chatMessages}
+        onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreateDocumentDraft={() => {}}
+        onOpenCreatedDocument={() => {}}
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+      />,
+    );
+
+    expect(html).toContain("Open in editor");
+  });
+
   test("uses generated thumbnail URLs for image attachments with placeholders", () => {
     const imagePart = {
       type: "image",

@@ -11,6 +11,7 @@ import {
   replaceReadyCreateDocumentDraftOutput,
   selectCreateDocumentDrafts,
   selectUnsettledCreateDocumentDrafts,
+  setCreateDocumentDraftPayloadStatus,
   terminalizeUnsettledCreateDocumentDraft,
 } from "@/components/chat/create-document-draft.logic";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
@@ -329,6 +330,43 @@ describe("create-document drafts", () => {
     expect(isCreateDocumentDraftPayload({ ...updated, workspaceId: 42 })).toBe(
       false,
     );
+  });
+
+  test("keeps the editor locked while a save snapshot is in flight", () => {
+    const ready = buildCreateDocumentDraftPayload({
+      draft: {
+        messageId: "message-origin",
+        toolCallId: "tool-1",
+        name: "Power of attorney",
+        source: "@doc kind=other locale=en page=A4",
+        status: "ready",
+      },
+      existingPayload: undefined,
+      originChatThreadId: toChatThreadId("thread-origin"),
+    });
+    const saving = setCreateDocumentDraftPayloadStatus({
+      payload: ready,
+      status: "saving",
+    });
+    const rebuilt = buildCreateDocumentDraftPayload({
+      draft: {
+        messageId: "message-origin",
+        toolCallId: "tool-1",
+        name: "Power of attorney",
+        source: "@doc kind=other locale=en page=A4\n@title Updated",
+        status: "ready",
+      },
+      existingPayload: saving,
+      originChatThreadId: toChatThreadId("thread-origin"),
+    });
+
+    expect(rebuilt.status).toBe("saving");
+    expect(
+      setCreateDocumentDraftPayloadStatus({
+        payload: rebuilt,
+        status: "ready",
+      }).status,
+    ).toBe("ready");
   });
 
   test("promotes a draft to a persisted file without changing editor identity", () => {
