@@ -6,7 +6,7 @@ description: 'Apply when a performance-guard check (network baseline, bundle bas
 # Performance Guard Conventions
 
 Apply when a performance-guard check fails in CI, or when touching a route or
-endpoint flagged in the hotspot table below.
+endpoint flagged by the live `bun scripts/perf-hotspots.ts` report.
 
 ## Overview
 

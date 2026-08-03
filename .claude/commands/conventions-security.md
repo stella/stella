@@ -54,7 +54,7 @@ tables whose RLS posture denies ordinary application access.
 
 When an identifier comes from a related row, authorize it in the same query or
 transaction that uses it. A prior UI filter, cache lookup, or separate
-read-then-write check is not an authorization boundary.
+read-then-write check is not an access-control boundary.
 
 ### Server-bound audit events
 

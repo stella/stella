@@ -7,7 +7,7 @@ checks.
 
 ## Instructions
 
-1. **Resolve ports** (dry run):
+1. **Resolve application ports** (dry run):
 
    Run the dev-runner in dry-run mode to learn which ports it will
    use. The runner hashes the worktree/branch name into a port
@@ -17,12 +17,32 @@ checks.
    bun run dev --dry-run --skip-install --no-browser
    ```
 
-   Parse the numeric `offset:` and the `web:` and `api:` URLs. Use
-   that resolved offset as the infrastructure offset so each
-   worktree gets its own Postgres, Valkey, MinIO, and Gotenberg
-   state. Offset `0` is the shared root-checkout infrastructure.
+   Parse the numeric `offset:` and the `web:` and `api:` URLs. This
+   offset covers application ports only; do not copy it into
+   `--infra-offset` without the independent ownership check below.
 
-2. **Start the dev runner**:
+2. **Resolve infrastructure ownership**:
+
+   Offset `0` belongs to the root checkout and its shared Docker
+   project. A non-root worktree needs a stable non-zero offset whose
+   Compose project and volumes belong to that worktree.
+
+   Reuse a previously recorded assignment for the same canonical
+   worktree path. For a new assignment, select from the full valid
+   infrastructure range, reserve the candidate with a race-safe
+   lock, and validate all five shifted ports (Postgres, Valkey,
+   MinIO API, MinIO console, and Gotenberg). Reject the candidate if
+   any container or Docker volume already uses the corresponding
+   `stella-dev-<offset>` project unless its Compose working-directory
+   label matches this worktree. Probe another candidate on any
+   ownership or port collision.
+
+   The runner hashes application offsets into only 400 buckets and
+   checks application ports separately. That hash is not an
+   infrastructure ownership mechanism, and adjacent infrastructure
+   offsets can overlap because MinIO uses consecutive ports.
+
+3. **Start the dev runner**:
 
    Launch the full runner in the background. It manages Docker
    services, env symlinks, `db:push`, process lifecycle, and
@@ -38,24 +58,25 @@ checks.
    `--skip-install` only when this worktree is already bootstrapped
    and its dependencies have not changed.
 
-3. **Handle cold-start setup safely**:
+4. **Handle cold-start setup safely**:
 
    The first isolated run creates Docker volumes and applies every
    migration, so it can take longer. Never reset or repair the
-   shared database to resolve migration drift; confirm the command
-   uses the resolved non-zero `--infra-offset` instead.
+   shared database to resolve migration drift. In a non-root
+   worktree, confirm the command uses its owned non-zero
+   `--infra-offset`; in the root checkout, keep offset `0`.
 
    If the runner completes infrastructure and migrations but exits
    only because its application-readiness deadline elapsed, rerun
    the same command once. The expensive setup is cached. If the
    second run fails, inspect its logs and report the blocker.
 
-4. **Wait for readiness**:
+5. **Wait for readiness**:
 
    Poll the resolved API health endpoint (`{apiUrl}/health`) and
    the web root with bounded per-request timeouts until both return
    200. The dry-run output from step 1 gives the exact URLs. Allow
    up to 120 seconds for a cold start.
 
-5. **Report** the resolved URLs and status to the user. Leave the
+6. **Report** the resolved URLs and status to the user. Leave the
    runner active until the user asks to stop it.

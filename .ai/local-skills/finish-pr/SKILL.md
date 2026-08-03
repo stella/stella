@@ -36,9 +36,11 @@ ready for review.
    terminal, no actionable unresolved automated threads, no unresolved
    requested human changes, and an independent review with no blocking
    finding. A clean old head does not count after a push or rebase.
-7. Mark the PR ready when clean. Merge only when the user explicitly requested
-   it and repository policy permits it; use the requested normal/admin method
-   without bypassing an unresolved correctness concern.
+7. Preserve an explicitly requested draft state unless the user asks to mark
+   it ready. Otherwise mark a complete PR ready when clean. Merge only when the
+   user explicitly requested it and repository policy permits it; use the
+   requested normal/admin method without bypassing an unresolved correctness
+   concern.
 
 Stop and report a genuine blocker when it requires user authority, unavailable
 external state, or a product decision. Do not call an unchanged pending check a

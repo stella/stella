@@ -90,9 +90,9 @@ was green.
 - `needs_changes`: actionable feedback remains unresolved;
 - `failing_ci`: current-head CI still fails after the attempted fixes.
 
-When clean, mark a draft ready only if the change itself is complete. Stop
-after reporting the single-round status; do not schedule another round from
-inside this skill.
+When clean, preserve an explicitly requested draft state unless the user asks
+to mark it ready. Stop after reporting the single-round status; do not schedule
+another round from inside this skill.
 
 ## Reply Shapes
 

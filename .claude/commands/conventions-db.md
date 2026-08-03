@@ -27,7 +27,7 @@ transactions, or tenant-scoped persistence.
 
 - `bun --filter @stll/api db:migrate` is the shipped migration path used by CI
   and deployment. `db:push` is a local declarative schema-diff tool; it does
-  not replace committed migrations and must not be described as the deploy
+  not replace committed migrations and must not be described as the deployment
   path.
 - Schema changes remain additive across a rollout: add, deploy compatible
   reads/writes, backfill in bounded batches, switch, then remove the old shape
@@ -38,11 +38,15 @@ transactions, or tenant-scoped persistence.
 - Keep irreversible schema operations out of the same release as risky
   application changes. Destructive SQL requires the reviewed annotation
   enforced by `scripts/check-migration-safety.ts`.
-- Use `CREATE INDEX CONCURRENTLY` where supported for large live tables. Keep
-  long backfills outside schema migrations and checkpoint them durably.
+- For large live tables, follow the repository's guarded concurrent-index
+  protocol: either split and reopen the migrator transaction exactly as
+  enforced by `migration-concurrent-index.test.ts`, or put repairable work in
+  `online-migrations.ts`. Keep long backfills outside schema migrations and
+  checkpoint them durably.
 - Validate migration history two ways: apply every committed migration to a
-  fresh database, then confirm `drizzle-kit push --explain` reports no schema
-  drift. Do not repair drift by resetting a shared database.
+  fresh database, then confirm
+  `bun --filter @stll/api db:push -- --explain` reports no schema drift. Do not
+  repair drift by resetting a shared database.
 
 ## Tenant Scope and Queries
 

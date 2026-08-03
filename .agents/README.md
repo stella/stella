@@ -19,7 +19,7 @@ See [CLAUDE.md](../CLAUDE.md) for project guidelines.
 
 - **Plans** focus on _what_ and _why_, not prescriptive implementation
   details. Use the collision-resistant timestamp format from the `/plan`
-  skill: `YYYYMMDD-HHMMSS-feature.md`.
+  skill: `YYYYMMDD-HHMMSS-feature-unique.md`.
 - **Justifications** record decisions that future contributors (or
   agents) might question. Include alternatives considered and why
   they were rejected.

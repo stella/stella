@@ -11,8 +11,13 @@ history:
 ```bash
 git branch --show-current
 git status --short
-gh pr view --json number,state,isDraft,headRefName,baseRefName,url 2>/dev/null || true
+gh pr list --head "$(git branch --show-current)" --state all \
+  --json number,state,isDraft,headRefName,baseRefName,url
 ```
+
+An empty list means no PR exists. Authentication, network, or repository
+errors must remain visible and stop the workflow before history changes or
+publication.
 
 Never prepare a PR in the user's dirty shared checkout. If the checkout is on
 the default branch, has unrelated changes, or spans multiple repositories or

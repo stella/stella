@@ -20,14 +20,17 @@ kebab-case slug from the conversation when none is supplied.
    `.agents/GOALS.md` when present, relevant code and tests, and nearby plans.
    Treat code and current repository instructions as authoritative; do not
    require optional context files that are absent.
-3. **Create a collision-resistant filename.** Use UTC timestamp plus slug:
+3. **Create a collision-resistant filename.** Use UTC timestamp, slug, and a
+   short unique suffix:
 
    ```bash
    date -u +%Y%m%d-%H%M%S
    ```
 
-   Write `.agents/plans/{timestamp}-{slug}.md`. Never allocate a global
-   sequential number; concurrent worktrees make that race-prone.
+   Write `.agents/plans/{timestamp}-{slug}-{unique}.md` using exclusive file
+   creation. If the candidate exists, generate a new suffix and retry; never
+   overwrite an existing plan. Do not allocate a global sequential number,
+   which is race-prone across worktrees.
 4. **Write the plan once the shape is coherent.** The user's request to plan
    authorizes creating the file. Do not ask for confirmation after writing or
    add a second save step.
