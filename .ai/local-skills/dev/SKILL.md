@@ -37,6 +37,7 @@ checks.
    infrastructure range, reserve the candidate with a race-safe
    lock, and validate all five shifted ports (Postgres, Valkey,
    MinIO API, MinIO console, and Gotenberg). Reject the candidate if
+   any of those ports intersects the dry-run web or API ports, or if
    any container or Docker volume already uses the corresponding
    `stella-dev-<offset>` project unless its Compose working-directory
    label matches this worktree. Probe another candidate on any
@@ -76,12 +77,15 @@ checks.
    the same command once. The expensive setup is cached. If the
    second run fails, inspect its logs and report the blocker.
 
-5. **Wait for readiness**:
+5. **Use the runner's readiness result**:
 
-   Poll the resolved API health endpoint (`{apiUrl}/health`) and
-   the web root with bounded per-request timeouts until both return
-   200. The dry-run output from step 1 gives the exact URLs. Allow
-   up to 120 seconds for a cold start.
+   Capture the live runner output and read the final summary for the
+   exact web and API URLs. Infrastructure startup or another process
+   can make the runner move away from the dry-run application offset,
+   so never poll or report the preliminary URLs from step 1. The
+   runner prints its final summary only after its bounded internal
+   readiness checks pass; do not duplicate those checks or open a
+   browser to verify them again.
 
 6. **Report** the resolved URLs and status to the user. Leave the
    runner active until the user asks to stop it.

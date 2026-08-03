@@ -46,8 +46,12 @@ PR.
 
 ## 3. Rebase the Correct Layer
 
-Fetch the base immediately before review. If `gh stack view` shows a stack, use
-`gh stack rebase` and review each layer against its immediate parent. Otherwise:
+Fetch the base immediately before review. Check `gh extension list` for the
+optional `github/gh-stack` extension before invoking `gh stack`. If installed
+and `gh stack view` identifies a stack, use `gh stack rebase` and review each
+layer against its immediate parent. If the extension is absent or the branch
+is not stacked, use ordinary Git; do not install an optional extension merely
+to prepare a normal PR:
 
 ```bash
 git fetch origin main
