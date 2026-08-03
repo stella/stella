@@ -295,6 +295,30 @@ describe("AI provider canary retry contract", () => {
         signal,
       ),
     ).toBe(false);
+    expect(
+      isRetryableCanaryError(
+        new CanaryProviderRunError(
+          { error: { code: "unknown_permanent_error" } },
+          "before-tool-call",
+        ),
+        signal,
+      ),
+    ).toBe(false);
+  });
+
+  test("prefers a provider status nested beneath a generic transport wrapper", () => {
+    const signal = new AbortController().signal;
+    const error = new CanaryProviderRunError(
+      {
+        cause: { code: "authentication_error", status: 401 },
+        status: 502,
+      },
+      "before-tool-call",
+    );
+
+    expect(error.status).toBe(401);
+    expect(error.code).toBe("authentication_error");
+    expect(isRetryableCanaryError(error, signal)).toBe(false);
   });
 });
 
@@ -311,5 +335,38 @@ describe("AI provider weekly tool execution contract", () => {
         observedInputs: [input],
       }),
     ).not.toThrow();
+  });
+
+  test("rejects every invalid execution cardinality and argument shape", () => {
+    const input = {
+      details: { value: "stella-weekly" },
+      type: "nested",
+    };
+    const invalidExecutions = [
+      {
+        expectedMessage:
+          "Provider did not execute the weekly canary tool exactly once.",
+        observedInputs: [],
+      },
+      {
+        expectedMessage:
+          "Provider did not execute the weekly canary tool exactly once.",
+        observedInputs: [input, input],
+      },
+      {
+        expectedMessage:
+          "Provider returned unexpected weekly canary tool arguments.",
+        observedInputs: [{ details: { value: "unexpected" }, type: "nested" }],
+      },
+    ];
+
+    for (const { expectedMessage, observedInputs } of invalidExecutions) {
+      expect(() =>
+        requireWeeklyToolExecution({
+          expectedInputs: [input],
+          observedInputs,
+        }),
+      ).toThrow(expectedMessage);
+    }
   });
 });

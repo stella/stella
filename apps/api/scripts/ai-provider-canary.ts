@@ -177,31 +177,43 @@ type CanaryRunStage =
   | "after-tool-call"
   | "after-tool-result";
 
-const providerCode = (error: unknown, depth = 0): string | null => {
+const PROVIDER_ERROR_NESTED_KEYS = ["rawEvent", "error", "cause"] as const;
+
+const rawProviderCode = (error: unknown, depth = 0): string | null => {
   if (!isRecord(error)) {
     return null;
   }
-  const code = error["code"];
-  if (typeof code === "string" && SAFE_PROVIDER_CODES.has(code)) {
-    return code;
-  }
 
-  if (depth >= 3) {
-    return null;
-  }
-  for (const key of ["rawEvent", "error", "cause"] as const) {
-    const nestedCode = providerCode(error[key], depth + 1);
-    if (nestedCode !== null) {
-      return nestedCode;
+  if (depth < 3) {
+    for (const key of PROVIDER_ERROR_NESTED_KEYS) {
+      const nestedCode = rawProviderCode(error[key], depth + 1);
+      if (nestedCode !== null) {
+        return nestedCode;
+      }
     }
   }
-  return null;
+
+  const code = error["code"];
+  return typeof code === "string" ? code : null;
 };
+
+const safeProviderCode = (code: string | null): string | null =>
+  code !== null && SAFE_PROVIDER_CODES.has(code) ? code : null;
 
 const providerStatus = (error: unknown, depth = 0): number | null => {
   if (!isRecord(error)) {
     return null;
   }
+
+  if (depth < 3) {
+    for (const key of PROVIDER_ERROR_NESTED_KEYS) {
+      const nestedStatus = providerStatus(error[key], depth + 1);
+      if (nestedStatus !== null) {
+        return nestedStatus;
+      }
+    }
+  }
+
   for (const key of ["status", "statusCode", "code"] as const) {
     const value = error[key];
     if (
@@ -213,16 +225,6 @@ const providerStatus = (error: unknown, depth = 0): number | null => {
       return value;
     }
   }
-
-  if (depth >= 3) {
-    return null;
-  }
-  for (const key of ["rawEvent", "error", "cause"] as const) {
-    const nestedStatus = providerStatus(error[key], depth + 1);
-    if (nestedStatus !== null) {
-      return nestedStatus;
-    }
-  }
   return null;
 };
 
@@ -231,13 +233,15 @@ const isRetryableProviderStatus = (status: number): boolean =>
 
 export class CanaryProviderRunError extends TypeError {
   readonly code: string | null;
+  readonly retryCode: string | null;
   readonly stage: CanaryRunStage;
   readonly status: number | null;
 
   constructor(event: unknown, stage: CanaryRunStage) {
     super("Provider stream failed.");
     this.name = "CanaryProviderRunError";
-    this.code = providerCode(event);
+    this.retryCode = rawProviderCode(event);
+    this.code = safeProviderCode(this.retryCode);
     this.stage = stage;
     this.status = providerStatus(event);
   }
@@ -255,7 +259,9 @@ export const isRetryableCanaryError = (
     if (error.status !== null) {
       return isRetryableProviderStatus(error.status);
     }
-    return error.code === null || RETRYABLE_PROVIDER_CODES.has(error.code);
+    return (
+      error.retryCode === null || RETRYABLE_PROVIDER_CODES.has(error.retryCode)
+    );
   }
 
   const status = providerStatus(error);
@@ -1033,6 +1039,30 @@ const probeLabel = (context: CanaryContext, probe: Probe): string => {
 const attemptSummary = (attempts: number): string =>
   attempts === 1 ? "" : ` after ${attempts} attempts`;
 
+type RecordProbeResultOptions = {
+  label: string;
+  provider: CanaryProvider;
+  result: CanaryProbeResult;
+};
+
+const recordProbeResult = ({
+  label,
+  provider,
+  result,
+}: RecordProbeResultOptions): number => {
+  if (result.status === "passed") {
+    console.log(
+      `[ai-canary] ${provider}/${label}: passed${attemptSummary(result.attempts)}`,
+    );
+    return 0;
+  }
+
+  console.error(
+    `[ai-canary] ${provider}/${label}: failed${attemptSummary(result.attempts)} (${errorSummary(result.error, result.signal)})`,
+  );
+  return 1;
+};
+
 const run = async (): Promise<void> => {
   const args = parseCanaryRunArgs(Bun.argv.slice(2));
   const { provider } = args;
@@ -1108,17 +1138,12 @@ const runProbes = async (
     },
     timeoutMs: probe.timeoutMs,
   });
-  if (result.status === "passed") {
-    console.log(
-      `[ai-canary] ${context.provider}/${label}: passed${attemptSummary(result.attempts)}`,
-    );
-    return await runProbes(context, index + 1, failures);
-  }
-
-  console.error(
-    `[ai-canary] ${context.provider}/${label}: failed${attemptSummary(result.attempts)} (${errorSummary(result.error, result.signal)})`,
-  );
-  return await runProbes(context, index + 1, failures + 1);
+  const failureDelta = recordProbeResult({
+    label,
+    provider: context.provider,
+    result,
+  });
+  return await runProbes(context, index + 1, failures + failureDelta);
 };
 
 const runWeeklyCanaryProbes = async (
@@ -1136,16 +1161,11 @@ const runWeeklyCanaryProbes = async (
       },
       timeoutMs: MODEL_ROLE_PROBE_TIMEOUT_MS,
     });
-    if (result.status === "passed") {
-      console.log(
-        `[ai-canary] ${context.provider}/${label}: passed${attemptSummary(result.attempts)}`,
-      );
-    } else {
-      console.error(
-        `[ai-canary] ${context.provider}/${label}: failed${attemptSummary(result.attempts)} (${errorSummary(result.error, result.signal)})`,
-      );
-      totalFailures += 1;
-    }
+    totalFailures += recordProbeResult({
+      label,
+      provider: context.provider,
+      result,
+    });
 
     const structuredLabel = `weekly-structured-role-${role}:${context.rotation.modelId}`;
     // oxlint-disable-next-line no-await-in-loop -- structured probes share the same provider quota and must remain sequential.
@@ -1159,16 +1179,11 @@ const runWeeklyCanaryProbes = async (
       },
       timeoutMs: MODEL_ROLE_PROBE_TIMEOUT_MS,
     });
-    if (structuredResult.status === "passed") {
-      console.log(
-        `[ai-canary] ${context.provider}/${structuredLabel}: passed${attemptSummary(structuredResult.attempts)}`,
-      );
-    } else {
-      console.error(
-        `[ai-canary] ${context.provider}/${structuredLabel}: failed${attemptSummary(structuredResult.attempts)} (${errorSummary(structuredResult.error, structuredResult.signal)})`,
-      );
-      totalFailures += 1;
-    }
+    totalFailures += recordProbeResult({
+      label: structuredLabel,
+      provider: context.provider,
+      result: structuredResult,
+    });
   }
 
   const label = `weekly-tool-${context.rotation.toolShape}:${context.rotation.modelId}`;
@@ -1178,17 +1193,10 @@ const runWeeklyCanaryProbes = async (
     },
     timeoutMs: TOOL_ROUND_TRIP_PROBE_TIMEOUT_MS,
   });
-  if (result.status === "passed") {
-    console.log(
-      `[ai-canary] ${context.provider}/${label}: passed${attemptSummary(result.attempts)}`,
-    );
-    return totalFailures;
-  }
-
-  console.error(
-    `[ai-canary] ${context.provider}/${label}: failed${attemptSummary(result.attempts)} (${errorSummary(result.error, result.signal)})`,
+  return (
+    totalFailures +
+    recordProbeResult({ label, provider: context.provider, result })
   );
-  return totalFailures + 1;
 };
 
 if (import.meta.main) {
