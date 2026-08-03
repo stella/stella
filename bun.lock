@@ -100,7 +100,7 @@
         "drizzle-orm": "catalog:",
         "elysia": "catalog:",
         "elysia-rate-limit": "^4.6.2",
-        "ip-address": "^10.2.0",
+        "ip-address": "^10.3.1",
         "jose": "^6.2.4",
         "jszip": "catalog:",
         "nodemailer": "^9.0.3",
@@ -756,6 +756,7 @@
     "brace-expansion": "5.0.9",
     "fast-uri": "3.1.5",
     "fast-xml-parser": "5.10.1",
+    "ip-address": "10.3.1",
     "lucide-react": "1.27.0",
     "postcss": "8.5.19",
     "prosemirror-model": "1.25.11",
@@ -3443,7 +3444,7 @@
 
     "ioredis": ["ioredis@5.11.1", "", { "dependencies": { "@ioredis/commands": "1.10.0", "cluster-key-slot": "1.1.1", "debug": "4.4.3", "denque": "2.1.0", "redis-errors": "1.2.0", "redis-parser": "3.0.0", "standard-as-callback": "2.1.0" } }, "sha512-ehuGcf94bQXhfagULNXrJdfnWO38v070jxSx/qE87Kjzmu2fU7ro5EFAb+OPituLqgfyuQaym5DlrNydW2sJ9A=="],
 
-    "ip-address": ["ip-address@10.2.0", "", {}, "sha512-/+S6j4E9AHvW9SWMSEY9Xfy66O5PWvVEJ08O0y5JGyEKQpojb0K0GKpz/v5HJ/G0vi3D2sjGK78119oXZeE0qA=="],
+    "ip-address": ["ip-address@10.3.1", "", {}, "sha512-1e9d3kb97NHJTIJDZW9rKqW2h6+dFa50Dy0fpPSMQp2ADje5gvKsXmdiK6dwY5t76TaTt5+P5N1Y/LoToIxP6g=="],
 
     "ipaddr.js": ["ipaddr.js@1.9.1", "", {}, "sha512-0KI/607xoxSToH7GjN1FfSbLoU0+btTicjsQSWQlh/hZykN8KpmMf7uYwPW3R+akZ6R/w18ZlXSHBYXiYUPO3g=="],
 
