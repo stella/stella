@@ -1,6 +1,6 @@
 import { chat, EventType, maxIterations, toolDefinition } from "@tanstack/ai";
 import type { ModelMessage, Tool } from "@tanstack/ai";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { isDeepStrictEqual } from "node:util";
 import * as v from "valibot";
 
@@ -48,6 +48,7 @@ const MODEL_ROLE_PROBE_TIMEOUT_MS = 30_000;
 const TOOL_ROUND_TRIP_PROBE_TIMEOUT_MS = 45_000;
 const CANARY_PROBE_MAX_ATTEMPTS = 2;
 const CANARY_PROBE_RETRY_DELAY_MS = 5000;
+const PROVIDER_ERROR_MESSAGE_MAX_LENGTH = 16_384;
 const MILLISECONDS_PER_WEEK = 7 * 24 * 60 * 60 * 1000;
 const SYNTHETIC_PROMPT = "Reply with exactly OK.";
 export const PDF_CANARY_TOKEN = "STELLA_PDF_CANARY_OK";
@@ -189,6 +190,32 @@ type CanaryRunStage =
 
 const PROVIDER_ERROR_NESTED_KEYS = ["rawEvent", "error", "cause"] as const;
 
+const providerErrorBodyFromMessage = (
+  error: Record<string, unknown>,
+): Record<string, unknown> | null => {
+  if (PROVIDER_ERROR_NESTED_KEYS.some((key) => error[key] !== undefined)) {
+    return null;
+  }
+
+  const message = error["message"];
+  if (typeof message !== "string") {
+    return null;
+  }
+  if (message.length > PROVIDER_ERROR_MESSAGE_MAX_LENGTH) {
+    return null;
+  }
+  const body = message.trimStart();
+  if (!body.startsWith("{")) {
+    return null;
+  }
+
+  const parsed = Result.try((): unknown => JSON.parse(body));
+  if (Result.isError(parsed) || !isRecord(parsed.value)) {
+    return null;
+  }
+  return parsed.value;
+};
+
 const explicitRetryability = (error: unknown, depth = 0): boolean | null => {
   if (!isRecord(error)) {
     return null;
@@ -215,6 +242,13 @@ const explicitRetryability = (error: unknown, depth = 0): boolean | null => {
         return nestedRetryability;
       }
     }
+    const messageRetryability = explicitRetryability(
+      providerErrorBodyFromMessage(error),
+      depth + 1,
+    );
+    if (messageRetryability !== null) {
+      return messageRetryability;
+    }
   }
   return null;
 };
@@ -230,6 +264,13 @@ const rawProviderCode = (error: unknown, depth = 0): string | null => {
       if (nestedCode !== null) {
         return nestedCode;
       }
+    }
+    const messageCode = rawProviderCode(
+      providerErrorBodyFromMessage(error),
+      depth + 1,
+    );
+    if (messageCode !== null) {
+      return messageCode;
     }
   }
 
@@ -251,6 +292,13 @@ const providerStatus = (error: unknown, depth = 0): number | null => {
       if (nestedStatus !== null) {
         return nestedStatus;
       }
+    }
+    const messageStatus = providerStatus(
+      providerErrorBodyFromMessage(error),
+      depth + 1,
+    );
+    if (messageStatus !== null) {
+      return messageStatus;
     }
   }
 
@@ -297,6 +345,13 @@ const terminalProviderCode = (error: unknown, depth = 0): string | null => {
         return nestedCode;
       }
     }
+    const messageCode = terminalProviderCode(
+      providerErrorBodyFromMessage(error),
+      depth + 1,
+    );
+    if (messageCode !== null) {
+      return messageCode;
+    }
   }
   return null;
 };
@@ -333,11 +388,11 @@ export const isRetryableCanaryError = (
     if (error.terminalCode !== null) {
       return false;
     }
-    if (error.status !== null) {
-      return isRetryableProviderStatus(error.status);
-    }
     if (error.retryable !== null) {
       return error.retryable;
+    }
+    if (error.status !== null) {
+      return isRetryableProviderStatus(error.status);
     }
     return error.retryCode === null || isRetryableProviderCode(error.retryCode);
   }
@@ -346,13 +401,13 @@ export const isRetryableCanaryError = (
   if (terminalProviderCode(error) !== null) {
     return false;
   }
-  const status = providerStatus(error);
-  if (status !== null) {
-    return isRetryableProviderStatus(status);
-  }
   const retryable = explicitRetryability(error);
   if (retryable !== null) {
     return retryable;
+  }
+  const status = providerStatus(error);
+  if (status !== null) {
+    return isRetryableProviderStatus(status);
   }
   return isRetryableProviderCode(code);
 };

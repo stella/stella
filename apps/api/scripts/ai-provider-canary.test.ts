@@ -366,6 +366,98 @@ describe("AI provider canary retry contract", () => {
     ).toEqual([false, false, false, false]);
   });
 
+  test("classifies bounded message-only provider error bodies", () => {
+    const signal = new AbortController().signal;
+    const cases = [
+      { body: { error: { code: 400 } }, retryable: false },
+      { body: { error: { code: 402 } }, retryable: false },
+      { body: { error: { code: 404 } }, retryable: false },
+      { body: { error: { code: 429 } }, retryable: true },
+      { body: { error: { code: 503 } }, retryable: true },
+      { body: { code: "billing_error" }, retryable: false },
+      { body: { code: "provider_error" }, retryable: true },
+    ];
+
+    const outcomes = cases.flatMap(({ body }) => {
+      const message = `\n ${JSON.stringify(body)}`;
+      return [
+        isRetryableCanaryError(
+          new CanaryProviderRunError({ message }, "before-tool-call"),
+          signal,
+        ),
+        isRetryableCanaryError({ message, status: 502 }, signal),
+      ];
+    });
+
+    expect(outcomes).toEqual(
+      cases.flatMap(({ retryable }) => [retryable, retryable]),
+    );
+  });
+
+  test("uses message bodies only when structured provider details are absent", () => {
+    const signal = new AbortController().signal;
+    const terminalMessage = JSON.stringify({ error: { code: 400 } });
+    const cases = [
+      new CanaryProviderRunError(
+        {
+          message: terminalMessage,
+          rawEvent: { code: "provider_error", status: 503 },
+        },
+        "before-tool-call",
+      ),
+      {
+        cause: { code: "provider_error", status: 503 },
+        message: terminalMessage,
+      },
+      new CanaryProviderRunError({ message: "{malformed" }, "before-tool-call"),
+      new CanaryProviderRunError(
+        { message: "plain provider failure" },
+        "before-tool-call",
+      ),
+    ];
+
+    expect(cases.map((error) => isRetryableCanaryError(error, signal))).toEqual(
+      [true, true, true, true],
+    );
+  });
+
+  test("does not parse provider error messages beyond the size bound", () => {
+    const signal = new AbortController().signal;
+    const terminalBody = JSON.stringify({ error: { code: 400 } });
+    const messages = [
+      JSON.stringify({
+        error: { code: 400 },
+        padding: "x".repeat(20_000),
+      }),
+      `${" ".repeat(20_000)}${terminalBody}`,
+    ];
+    const errors = messages.flatMap((message) => [
+      new CanaryProviderRunError({ message }, "before-tool-call"),
+      { message, status: 502 },
+    ]);
+
+    expect(
+      errors.map((error) => isRetryableCanaryError(error, signal)),
+    ).toEqual([true, true, true, true]);
+  });
+
+  test("honors explicit retryability before HTTP status fallback", () => {
+    const signal = new AbortController().signal;
+    const cases = [
+      { isRetryable: false, status: 429 },
+      { retryable: false, status: 503 },
+      { isRetryable: true, status: 400 },
+      new CanaryProviderRunError(
+        { retryable: false, status: 502 },
+        "before-tool-call",
+      ),
+    ];
+
+    expect(cases.map((error) => isRetryableCanaryError(error, signal))).toEqual(
+      [false, false, true, false],
+    );
+  });
+
   test("classifies only known status-less transport errors and SDK markers", () => {
     const signal = new AbortController().signal;
     const cases = [
