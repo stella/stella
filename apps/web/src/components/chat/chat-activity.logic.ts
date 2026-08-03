@@ -1,6 +1,6 @@
 import type { OrbState } from "thinking-orbs";
 
-import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
+import type { ChatMessage, ChatUITools } from "@/components/chat/chat-ui-tools";
 
 export type ChatToolActivityCategory =
   | "artifact"
@@ -13,8 +13,6 @@ const BUILT_IN_CHAT_TOOL_ACTIVITY_CATEGORIES = {
   add_comment: "mutation",
   "apply-active-docx-edits": "artifact",
   "ask-user": "user-input",
-  ares_lookup_company: "research",
-  ares_search_companies: "research",
   boe_find_related_laws: "research",
   boe_get_law: "research",
   boe_get_law_block: "research",
@@ -22,6 +20,7 @@ const BUILT_IN_CHAT_TOOL_ACTIVITY_CATEGORIES = {
   boe_search_legislation: "research",
   borme_get_summary: "research",
   business_registry_lookup: "research",
+  compare_versions: "research",
   "create-current-skill-resource": "mutation",
   "create-document": "user-input",
   create_workspace_document: "artifact",
@@ -30,6 +29,8 @@ const BUILT_IN_CHAT_TOOL_ACTIVITY_CATEGORIES = {
   delete_document: "mutation",
   delete_matter: "mutation",
   delete_time_entry: "mutation",
+  describe_template: "research",
+  discover_tools: "research",
   edit_workspace_document: "artifact",
   "expand-chat-history": "research",
   fetch_url: "research",
@@ -37,16 +38,17 @@ const BUILT_IN_CHAT_TOOL_ACTIVITY_CATEGORIES = {
   find_text: "research",
   infosoud_lookup_case: "research",
   link_matter_contact: "mutation",
+  list_templates: "research",
+  "load-skill": "research",
   manage_organization: "mutation",
-  "read-contact": "research",
-  "read-content-across-matters": "research",
-  read_contact: "research",
-  read_content_across_matters: "research",
+  execute_typescript: "computation",
   read_changes: "research",
   read_comments: "research",
   read_document: "research",
+  "read-skill-resource": "research",
   reply_comment: "mutation",
   resolve_comment: "mutation",
+  run_playbook: "mutation",
   save_clause: "mutation",
   save_contact: "mutation",
   save_document: "mutation",
@@ -54,22 +56,40 @@ const BUILT_IN_CHAT_TOOL_ACTIVITY_CATEGORIES = {
   save_task: "mutation",
   save_template: "mutation",
   save_time_entry: "mutation",
-  "search-across-matters": "research",
   "search-chat-history": "research",
-  search_across_matters: "research",
   set_field_value: "mutation",
   set_practice_jurisdictions: "mutation",
+  spawn_subagents: "computation",
   suggest_template_fields: "artifact",
   "update-current-skill-body": "mutation",
   "update-current-skill-resource": "mutation",
   "update-entity-fields": "mutation",
   web_search: "research",
+} as const satisfies Record<keyof ChatUITools, ChatToolActivityCategory>;
+
+const RETIRED_CHAT_TOOL_ACTIVITY_CATEGORIES = {
+  ares_lookup_company: "research",
+  ares_search_companies: "research",
+  "describe-stella-api": "research",
+  "describe-stella-function": "research",
+  "execute-typescript": "computation",
+  "read-contact": "research",
+  "read-content-across-matters": "research",
+  read_contact: "research",
+  read_content_across_matters: "research",
+  "run-stella-query": "computation",
+  "search-across-matters": "research",
 } as const satisfies Record<string, ChatToolActivityCategory>;
+
+const CHAT_TOOL_ACTIVITY_CATEGORIES = {
+  ...BUILT_IN_CHAT_TOOL_ACTIVITY_CATEGORIES,
+  ...RETIRED_CHAT_TOOL_ACTIVITY_CATEGORIES,
+} as const;
 
 const isCategorizedBuiltInChatToolName = (
   toolName: string,
-): toolName is keyof typeof BUILT_IN_CHAT_TOOL_ACTIVITY_CATEGORIES =>
-  toolName in BUILT_IN_CHAT_TOOL_ACTIVITY_CATEGORIES;
+): toolName is keyof typeof CHAT_TOOL_ACTIVITY_CATEGORIES =>
+  toolName in CHAT_TOOL_ACTIVITY_CATEGORIES;
 
 const EXTERNAL_ARTIFACT_OPERATION_PATTERN =
   /(?:^|[_-])(?:compose|draft|fill|render|shape|transform)(?:$|[_-])/u;
@@ -102,7 +122,7 @@ export const getChatToolActivityCategory = (
   toolName: string,
 ): ChatToolActivityCategory => {
   if (isCategorizedBuiltInChatToolName(toolName)) {
-    return BUILT_IN_CHAT_TOOL_ACTIVITY_CATEGORIES[toolName];
+    return CHAT_TOOL_ACTIVITY_CATEGORIES[toolName];
   }
 
   if (toolName.startsWith("mcp__")) {
@@ -138,20 +158,32 @@ export const getChatToolActivityState = (
   }
 };
 
-export const hasCompletedResearchInLatestAssistantMessage = (
-  messages: readonly PersistedChatMessage[],
-): boolean => {
+const isFailedToolOutput = (output: unknown): boolean =>
+  typeof output === "object" &&
+  output !== null &&
+  (("error" in output && output.error !== undefined && output.error !== null) ||
+    ("success" in output && output.success === false));
+
+export const getLatestCompletedResearchPartIndex = (
+  messages: readonly ChatMessage[],
+): number | null => {
   const message = messages.at(-1);
   if (message?.role !== "assistant") {
-    return false;
+    return null;
   }
 
-  return message.parts.some(
-    (part) =>
-      part.type === "tool-call" &&
+  for (let index = message.parts.length - 1; index >= 0; index -= 1) {
+    const part = message.parts[index];
+    if (
+      part?.type === "tool-call" &&
       part.state === "complete" &&
-      getChatToolActivityCategory(part.name) === "research",
-  );
+      getChatToolActivityCategory(part.name) === "research" &&
+      !isFailedToolOutput(part.output)
+    ) {
+      return index;
+    }
+  }
+  return null;
 };
 
 type ResolveChatActivityIndicatorStateOptions = {

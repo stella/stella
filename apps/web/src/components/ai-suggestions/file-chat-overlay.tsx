@@ -13,7 +13,14 @@
  * extracts and renders accept/reject cards). That work is Phase E.
  */
 
-import { Suspense, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  Suspense,
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { RefObject } from "react";
 
 import {
@@ -80,6 +87,7 @@ import type {
   UnresolvedActiveDocxEditToolCallPart,
   UnresolvedFolioAgentDocToolCallPart,
 } from "@/components/chat/chat-ui-tools";
+import { createDocumentDraftReviewId } from "@/components/chat/create-document-draft.logic";
 import { useChatModelSelection } from "@/components/chat/use-chat-model-selection";
 import type { DocxComments } from "@/components/docx/app-docx-editor";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -89,7 +97,10 @@ import { useChatSession } from "@/features/chat/hooks/use-chat-session";
 import { useChatThreadRuntime } from "@/features/chat/hooks/use-chat-thread-runtime";
 import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
 import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
-import { resolveSuggestedPromptsAvailability } from "@/features/chat/lib/suggested-prompts-availability";
+import {
+  resolveSuggestedPromptsAvailability,
+  resolveSuggestedPromptsTurnOwner,
+} from "@/features/chat/lib/suggested-prompts-availability";
 import type {
   ApplyActiveDocxEditsInput,
   ApplyActiveDocxEditsOutput,
@@ -838,6 +849,7 @@ type FileChatOverlayProps = {
    * fine but loses the file-context hint.
    */
   activeFile?: ActiveFile | undefined;
+  activeDraft?: { fileName: string; toolCallId: string } | undefined;
   activeExternal?: ActiveExternal | undefined;
   docxEditorRef?: RefObject<DocxEditorRef | null> | undefined;
   docxEditable?: boolean | undefined;
@@ -879,6 +891,7 @@ export const FileChatOverlay = ({
   workspaceId,
   chatThreadId,
   activeFile,
+  activeDraft,
   activeExternal,
   docxEditable,
   docxEditSafety,
@@ -919,6 +932,7 @@ export const FileChatOverlay = ({
     <Suspense fallback={fallback}>
       <FileChatOverlayInner
         activeExternal={activeExternal}
+        activeDraft={activeDraft}
         activeFile={activeFile}
         chatThreadId={chatThreadId}
         docxComments={docxComments}
@@ -994,6 +1008,7 @@ const FileChatOverlayInner = ({
   workspaceId,
   chatThreadId,
   activeFile,
+  activeDraft,
   activeExternal,
   docxEditable,
   docxEditSafety,
@@ -1051,12 +1066,17 @@ const FileChatOverlayInner = ({
     latestDocxCommentsRef.current = normalizeDocxComments(docxComments);
   }, [docxComments]);
   const hasDocxEditSurface =
-    activeFile !== undefined && docxEditorRef !== undefined;
+    (activeFile !== undefined || activeDraft !== undefined) &&
+    docxEditorRef !== undefined;
   // Whether the floating DOCX `ReviewBar` is showing for this entity — it
   // renders while any suggestion is pending/applying (mirrors the bar's own
   // `isPending` gate). When it is, the thread card lifts above the bar so the
   // two floating surfaces never overlap.
-  const reviewEntityId = activeFile?.entityId;
+  const reviewEntityId =
+    activeFile?.entityId ??
+    (activeDraft === undefined
+      ? undefined
+      : createDocumentDraftReviewId(activeDraft.toolCallId));
   const hasPendingReview = useReviewStore((state) => {
     if (reviewEntityId === undefined) {
       return false;
@@ -1073,7 +1093,7 @@ const FileChatOverlayInner = ({
     (state) => state.setOptionId,
   );
   const activeDocxEditModeState = resolveActiveDocxEditModeState({
-    activeFileEditable: activeFile?.editable,
+    activeFileEditable: activeDraft === undefined ? activeFile?.editable : true,
     docxEditable,
     hasDocxEditSurface,
     safety: docxEditSafety ?? "safe",
@@ -1081,7 +1101,8 @@ const FileChatOverlayInner = ({
   });
   const getLatestActiveDocxEditSelection = useLatestCallback(() => {
     const state = resolveActiveDocxEditModeState({
-      activeFileEditable: activeFile?.editable,
+      activeFileEditable:
+        activeDraft === undefined ? activeFile?.editable : true,
       docxEditable,
       hasDocxEditSurface,
       safety: docxEditSafety ?? "safe",
@@ -1118,10 +1139,9 @@ const FileChatOverlayInner = ({
   // hold several file fields, so an entity-only key would keep `editorReady`
   // true when switching to another file/version on the same entity and skip the
   // snapshot poll for the newly mounted editor.
-  const activeDocumentKey =
-    activeFile === undefined
-      ? undefined
-      : `${activeFile.entityId}:${activeFile.fileFieldId ?? ""}`;
+  const activeDocumentKey = activeFile
+    ? `${activeFile.entityId}:${activeFile.fileFieldId ?? ""}`
+    : activeDraft?.toolCallId;
   const [readyForDocumentKey, setReadyForDocumentKey] =
     useState(activeDocumentKey);
   if (activeDocumentKey !== readyForDocumentKey) {
@@ -1202,6 +1222,25 @@ const FileChatOverlayInner = ({
       supportsDocxEdits: true,
     };
   });
+  const getActiveDraft = useLatestCallback(() => {
+    if (!activeDraft) {
+      lastSentDocxEditSnapshotRef.current = null;
+      return undefined;
+    }
+    const snapshot = docxEditorRef?.current?.createAIEditSnapshot() ?? null;
+    lastSentDocxEditSnapshotRef.current = snapshot;
+    return {
+      ...activeDraft,
+      ...(snapshot === null
+        ? {}
+        : {
+            docxEditSnapshot: {
+              blocks: snapshot.blocks,
+              canApplyEdits: Boolean(docxEditable),
+            },
+          }),
+    };
+  });
   const getActiveExternal = useLatestCallback(() => activeExternal);
   const handleActiveDocxEditToolCall = useLatestCallback(
     (input: ApplyActiveDocxEditsInput): ApplyActiveDocxEditsOutput => {
@@ -1210,7 +1249,7 @@ const FileChatOverlayInner = ({
       // touched here; the user reviews each suggestion in the
       // panel and the unlock prompt only fires when the user
       // actually clicks Accept.
-      if (!activeFile) {
+      if (reviewEntityId === undefined) {
         return {
           version: 1,
           applied: [],
@@ -1234,7 +1273,7 @@ const FileChatOverlayInner = ({
       // preview + apply both handle that defensively.
       const lastSnapshot = lastSentDocxEditSnapshotRef.current;
       const { queuedIds, skipped, items } = queueReviewSuggestions({
-        entityId: activeFile.entityId,
+        entityId: reviewEntityId,
         prepared,
         snapshotBlocks: lastSnapshot
           ? lastSnapshot.blocks
@@ -1248,6 +1287,7 @@ const FileChatOverlayInner = ({
       // `persisted` stays false => resolve/revert never call the server).
       if (
         docxEditorRef !== undefined &&
+        activeFile !== undefined &&
         workspaceId !== undefined &&
         items.length > 0
       ) {
@@ -1293,6 +1333,7 @@ const FileChatOverlayInner = ({
     getSendMode,
     getUserContext,
     ...(activeExternal ? { getActiveExternal: () => getActiveExternal() } : {}),
+    ...(activeDraft ? { getActiveDraft: () => getActiveDraft() } : {}),
     ...(activeFile ? { getActiveFile: () => getActiveFile() } : {}),
     ...(hasDocxEditSurface
       ? {
@@ -1431,7 +1472,12 @@ const FileChatOverlayInner = ({
 
   let filePlaceholder: string | undefined;
   let filePlaceholderAction: string | undefined;
-  if (activeFile === undefined) {
+  if (activeDraft) {
+    filePlaceholder = t("chat.editableFilePlaceholder", {
+      fileName: activeDraft.fileName,
+    });
+    filePlaceholderAction = t("chat.editableFilePlaceholderAction");
+  } else if (activeFile === undefined) {
     if (activeExternal) {
       filePlaceholder = t("chat.externalSourcePlaceholder", {
         title: activeExternal.title,
@@ -1458,13 +1504,37 @@ const FileChatOverlayInner = ({
   // Check eligibility for suggested prompts using draft state (avoids
   // unnecessary API calls when user is typing).
   const lastMessage = messages.at(-1);
+  const [editingAskUserToolCallIds, setEditingAskUserToolCallIds] = useState<
+    ReadonlySet<string>
+  >(() => new Set<string>());
+  const handleAskUserEditingChange = useCallback(
+    (toolCallId: string, isEditing: boolean) => {
+      setEditingAskUserToolCallIds((current) => {
+        if (current.has(toolCallId) === isEditing) {
+          return current;
+        }
+        const next = new Set(current);
+        if (isEditing) {
+          next.add(toolCallId);
+        } else {
+          next.delete(toolCallId);
+        }
+        return next;
+      });
+    },
+    [],
+  );
   const editorIsInitiallyEmpty = useIsChatDraftEmpty(threadRef);
   const suggestedPromptsAvailability = resolveSuggestedPromptsAvailability({
     editorIsEmpty: editorIsInitiallyEmpty,
     error,
     isGenerating,
     lastMessage: lastMessage ?? null,
-    turnOwner: "composer",
+    turnOwner: resolveSuggestedPromptsTurnOwner({
+      approvalPendingMessageId,
+      hasReopenedAskUser: editingAskUserToolCallIds.size > 0,
+      lastMessage: lastMessage ?? null,
+    }),
   });
   const lastMessageId =
     suggestedPromptsAvailability.status === "eligible"
@@ -2013,6 +2083,7 @@ const FileChatOverlayInner = ({
               loadOlderError={loadOlderError}
               messages={messages}
               onAskUserEditAndRerun={handleAskUserEditAndRerun}
+              onAskUserEditingChange={handleAskUserEditingChange}
               onAskUserSubmit={handleAskUserSubmit}
               onCreateDocumentResolve={handleCreateDocumentResolve}
               onLoadOlder={loadOlder}
@@ -2090,14 +2161,17 @@ const FileChatOverlayInner = ({
           }}
           skillsOrganizationId={activeOrganizationId}
           emptyPlaceholder={
-            (activeFile || activeExternal) && filePlaceholderAction ? (
+            (activeFile || activeDraft || activeExternal) &&
+            filePlaceholderAction ? (
               <span className="text-foreground-ghost flex min-w-0 items-center gap-1.5 text-[13px] leading-5">
                 <span className="shrink-0">{filePlaceholderAction}</span>
                 <BidiText
                   as="span"
                   className="text-foreground-label max-w-64 truncate"
                 >
-                  {activeFile?.fileName ?? activeExternal?.title}
+                  {activeFile?.fileName ??
+                    activeDraft?.fileName ??
+                    activeExternal?.title}
                 </BidiText>
               </span>
             ) : undefined
@@ -2127,7 +2201,7 @@ const FileChatOverlayInner = ({
           pendingCount={0}
           queueWhileGenerating
           sendDisabledReason={
-            activeFile && docxEditorRef && !editorReady
+            (activeFile || activeDraft) && docxEditorRef && !editorReady
               ? "editor-loading"
               : undefined
           }

@@ -28,7 +28,7 @@ import { AnonymizedSpan } from "@/components/chat/anonymized-span";
 import { AskUserCard } from "@/components/chat/ask-user-card";
 import { ChatActivityOrb } from "@/components/chat/chat-activity-orb";
 import {
-  hasCompletedResearchInLatestAssistantMessage,
+  getLatestCompletedResearchPartIndex,
   resolveChatActivityIndicatorState,
 } from "@/components/chat/chat-activity.logic";
 import { useChatApproval } from "@/components/chat/chat-approval-context";
@@ -123,11 +123,15 @@ export const ChatThreadMessages = ({
     [messages],
   );
   const shouldShowToolCalls = showToolCallDetails ?? showToolCalls ?? false;
+  const latestCompletedResearchPartIndex =
+    getLatestCompletedResearchPartIndex(messages);
   const activityIndicatorState = resolveChatActivityIndicatorState({
-    hasCompletedResearch:
-      hasCompletedResearchInLatestAssistantMessage(messages),
+    hasCompletedResearch: latestCompletedResearchPartIndex !== null,
     hasRunningTool: hasRunningToolCallInLatestAssistantMessage({ messages }),
-    hasVisibleResponse: hasVisibleResponseContent(messages),
+    hasVisibleResponse: hasVisibleResponseContent(
+      messages,
+      latestCompletedResearchPartIndex,
+    ),
     hasVisibleContent: hasVisibleContent(messages),
   });
 
@@ -873,18 +877,21 @@ const hasVisibleContent = (
 
 const hasVisibleResponseContent = (
   messages: readonly PersistedChatMessage[],
+  afterPartIndex: number | null,
 ): boolean => {
   const message = messages.at(-1);
   if (message?.role !== "assistant") {
     return false;
   }
 
-  return message.parts.some(
-    (part) =>
-      (part.type === "text" && part.content.trim().length > 0) ||
-      (part.type === "thinking" && part.content.trim().length > 0) ||
-      isRichChatPart(part),
-  );
+  return message.parts
+    .slice((afterPartIndex ?? -1) + 1)
+    .some(
+      (part) =>
+        (part.type === "text" && part.content.trim().length > 0) ||
+        (part.type === "thinking" && part.content.trim().length > 0) ||
+        isRichChatPart(part),
+    );
 };
 
 const getMessageText = (message: PersistedChatMessage) => {

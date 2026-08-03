@@ -82,7 +82,7 @@ const lastChat = () => chatArgs.at(-1);
 const lastToolNames = () => (lastChat()?.tools ?? []).map((tool) => tool.name);
 
 describe("buildAiFieldGenerator skill-tool wiring", () => {
-  test("wires load-skill tools when the prompt references a skill", async () => {
+  test("does not advertise skill tools for a ref when the catalog is empty", async () => {
     const generate = buildAiFieldGenerator({
       orgAIConfig,
       organizationId,
@@ -95,8 +95,8 @@ describe("buildAiFieldGenerator skill-tool wiring", () => {
       values: {},
     });
 
-    expect(lastChat()?.tools).toBeDefined();
-    expect(lastToolNames()).toEqual(["load-skill", "read-skill-resource"]);
+    expect(lastChat()?.tools).toBeUndefined();
+    expect(lastToolNames()).toEqual([]);
   });
 
   test("passes no tools when the prompt has no skill reference", async () => {
@@ -159,7 +159,7 @@ describe("buildAiFieldGenerator document-text injection", () => {
 describe("buildAiOccurrenceAdapter skill-tool wiring", () => {
   const occurrences = [{ context: "see {{scope}} herein" }];
 
-  test("wires load-skill tools when the instruction references a skill", async () => {
+  test("does not advertise skill tools for a ref when the catalog is empty", async () => {
     const adapt = buildAiOccurrenceAdapter({
       orgAIConfig,
       organizationId,
@@ -174,8 +174,8 @@ describe("buildAiOccurrenceAdapter skill-tool wiring", () => {
       occurrences,
     });
 
-    expect(lastChat()?.tools).toBeDefined();
-    expect(lastToolNames()).toEqual(["load-skill", "read-skill-resource"]);
+    expect(lastChat()?.tools).toBeUndefined();
+    expect(lastToolNames()).toEqual([]);
   });
 
   test("passes no tools when the instruction has no skill reference", async () => {

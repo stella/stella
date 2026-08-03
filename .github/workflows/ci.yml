@@ -442,6 +442,15 @@ jobs:
           (cd packages/cli && bun run codegen)
           git diff --exit-code -- packages/cli/src/generated packages/cli/skills
 
+      - name: Documentation source dependency guard
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # Every documentation source exposed to coding agents must correspond
+        # to a dependency declared by a workspace. This prevents stale SDK
+        # docs from steering implementation after a dependency migration.
+        run: |
+          bun test scripts/docs-source-dependency-guard.test.ts
+          bun run check:docs-sources
+
       - name: Capability catalog drift guard
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         # The committed capability catalog (every `tool`/`covered` safe handler,

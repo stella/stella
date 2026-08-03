@@ -12,6 +12,7 @@ import { DOCX_REVIEW_MARKUP_EXAMPLES } from "@/api/lib/docx-review-markup";
 import {
   appendAnonymizedModeHintToChatSafePrompt,
   appendActiveFilePromptIfEntityExists,
+  buildActiveDraftPrompt,
   buildActiveSkillSection,
   buildActiveTemplatePrompt,
   buildChatPromptCacheKey,
@@ -481,6 +482,27 @@ describe("chat prompt builders", () => {
     expect(prompt).toContain("Plna moc.docx");
     expect(prompt).not.toContain("apply-active-docx-edits");
     expect(prompt).not.toContain("suggest_template_fields");
+  });
+
+  test("active-draft prompt grounds edits in the visible unsaved document", () => {
+    const prompt = buildActiveDraftPrompt(
+      {
+        toolCallId: "tool-draft",
+        fileName: "Plna moc.docx",
+        docxEditSnapshot: {
+          blocks: [
+            { id: "b-1", kind: "paragraph", text: "Zmocnitel: Jan Novak" },
+          ],
+        },
+      },
+      FULL_TOOL_AVAILABILITY,
+    );
+
+    expect(prompt).toContain("ACTIVE UNSAVED DRAFT");
+    expect(prompt).toContain("Plna moc.docx");
+    expect(prompt).toContain("apply-active-docx-edits");
+    expect(prompt).toContain('"blockId":"b-1"');
+    expect(prompt).toContain("do not call matter retrieval or create-document");
   });
 
   test("active-template prompt wires the suggest-fields and edit flows when a snapshot exists", () => {

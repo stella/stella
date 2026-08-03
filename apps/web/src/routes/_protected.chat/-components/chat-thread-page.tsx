@@ -42,7 +42,10 @@ import { useChatSession } from "@/features/chat/hooks/use-chat-session";
 import { useChatThreadRuntime } from "@/features/chat/hooks/use-chat-thread-runtime";
 import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
 import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
-import { resolveSuggestedPromptsAvailability } from "@/features/chat/lib/suggested-prompts-availability";
+import {
+  resolveSuggestedPromptsAvailability,
+  resolveSuggestedPromptsTurnOwner,
+} from "@/features/chat/lib/suggested-prompts-availability";
 import {
   applyChatModelChange,
   chatThreadOptions,
@@ -262,30 +265,17 @@ export const ChatThreadPage = ({
     },
     [],
   );
-  // An ask-user clarification card owns the turn, and its own questions and
-  // submit button take precedence over generic follow-up suggestions, so
-  // suppress both the chips and the Tab-to-ask editor hint while one is live.
-  // A card is live when it is still awaiting input (always the last message),
-  // or when any card has been reopened via Edit — including an earlier card
-  // with downstream replies, where the persisted `output-available` state no
-  // longer reflects the live edit-and-rerun form.
-  const lastMessageHasPendingAskUser =
-    lastMessage?.role === "assistant" &&
-    lastMessage.parts.some(
-      (part) =>
-        part.type === "tool-call" &&
-        part.name === "ask-user" &&
-        part.state !== "complete",
-    );
-  const askUserOwnsTurn =
-    lastMessageHasPendingAskUser || editingAskUserToolCallIds.size > 0;
   const editorIsEmpty = useIsChatDraftEmpty(threadRef);
   const suggestedPromptsAvailability = resolveSuggestedPromptsAvailability({
     editorIsEmpty,
     error,
     isGenerating,
     lastMessage: lastMessage ?? null,
-    turnOwner: askUserOwnsTurn ? "ask-user" : "composer",
+    turnOwner: resolveSuggestedPromptsTurnOwner({
+      approvalPendingMessageId,
+      hasReopenedAskUser: editingAskUserToolCallIds.size > 0,
+      lastMessage: lastMessage ?? null,
+    }),
   });
   const lastMessageId =
     suggestedPromptsAvailability.status === "eligible"

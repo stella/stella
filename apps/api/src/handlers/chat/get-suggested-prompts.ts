@@ -71,12 +71,15 @@ export const latestAssistantTurnAwaitsUser = (
     return false;
   }
 
-  return latest.parts.some(
-    (part) =>
-      part.type === "tool-call" &&
-      part.name === "ask-user" &&
-      ASK_USER_STATE_AWAITS_USER[part.state],
-  );
+  return latest.parts.some((part) => {
+    if (part.type !== "tool-call") {
+      return false;
+    }
+    if (part.state === "approval-requested") {
+      return true;
+    }
+    return part.name === "ask-user" && ASK_USER_STATE_AWAITS_USER[part.state];
+  });
 };
 
 // Budget for the visible output only: a few short lines, well under 100

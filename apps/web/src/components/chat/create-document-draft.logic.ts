@@ -1,11 +1,25 @@
 import { parsePartialJSON } from "@tanstack/ai-client";
+import { v5 as uuidv5 } from "uuid";
 
-import type { ChatPart, ChatUITools } from "@/components/chat/chat-ui-tools";
-import type { ChatThreadId } from "@/lib/chat-thread-ref";
+import type {
+  ChatMessage,
+  ChatPart,
+  ChatUITools,
+} from "@/components/chat/chat-ui-tools";
+import { type ChatThreadId, toChatThreadId } from "@/lib/chat-thread-ref";
 
 type CreateDocumentInput = ChatUITools["create-document"]["input"];
+type CreateDocumentOutput = ChatUITools["create-document"]["output"];
+type CreateDocumentMatterOutput = Extract<
+  CreateDocumentOutput,
+  { entityId: string; success: true }
+>;
 
 export const CREATE_DOCUMENT_DRAFT_VIEW = "create-document-draft";
+export const createDocumentDraftReviewId = (toolCallId: string): string =>
+  `draft:${toolCallId}`;
+const CREATE_DOCUMENT_DRAFT_THREAD_NAMESPACE =
+  "58cd2ab8-5b47-4c60-8ccc-edbbabf7fc69";
 
 export type CreateDocumentDraftPayload = {
   originChatThreadId: ChatThreadId;
@@ -39,7 +53,10 @@ export const isCreateDocumentDraftPayload = (
     "source" in payload &&
     typeof payload.source === "string" &&
     "status" in payload &&
-    (payload.status === "streaming" || payload.status === "ready")
+    (payload.status === "streaming" || payload.status === "ready") &&
+    (!("workspaceId" in payload) ||
+      payload.workspaceId === undefined ||
+      typeof payload.workspaceId === "string")
   );
 };
 
@@ -58,8 +75,7 @@ export const isSameCreateDocumentDraftPayload = (
 
 const DOWNLOAD_EXTENSION = ".docx";
 const MAX_DOWNLOAD_FILENAME_LENGTH = 255;
-// eslint-disable-next-line no-control-regex -- strips control characters from a browser download name
-const UNSAFE_DOWNLOAD_FILENAME_CHARACTERS = /["/\\<>\r\n\0|*?:]/gu;
+const UNSAFE_DOWNLOAD_FILENAME_CHARACTERS = '"/\\<>\r\n\0|*?:';
 
 export type CreateDocumentDraft = {
   toolCallId: string;
@@ -69,7 +85,6 @@ export type CreateDocumentDraft = {
 };
 
 type BuildCreateDocumentDraftPayloadOptions = {
-  createThreadId: () => ChatThreadId;
   draft: CreateDocumentDraft;
   existingPayload: unknown;
   originChatThreadId: ChatThreadId;
@@ -77,21 +92,22 @@ type BuildCreateDocumentDraftPayloadOptions = {
 };
 
 export const buildCreateDocumentDraftPayload = ({
-  createThreadId,
   draft,
   existingPayload,
   originChatThreadId,
   workspaceId,
 }: BuildCreateDocumentDraftPayloadOptions): CreateDocumentDraftPayload => {
-  let chatThreadId =
+  const chatThreadId =
     isCreateDocumentDraftPayload(existingPayload) &&
     existingPayload.originChatThreadId === originChatThreadId &&
     existingPayload.toolCallId === draft.toolCallId
       ? existingPayload.chatThreadId
-      : createThreadId();
-  while (chatThreadId === originChatThreadId) {
-    chatThreadId = createThreadId();
-  }
+      : toChatThreadId(
+          uuidv5(
+            `${originChatThreadId}:${draft.toolCallId}`,
+            CREATE_DOCUMENT_DRAFT_THREAD_NAMESPACE,
+          ),
+        );
 
   return {
     originChatThreadId,
@@ -116,12 +132,76 @@ const isReadyDraftOutput = (
   "fileName" in output &&
   typeof output.fileName === "string";
 
+export const findReadyCreateDocumentDraftMessageId = (
+  messages: readonly ChatMessage[],
+  toolCallId: string,
+): string | null => {
+  for (const message of messages) {
+    if (message.role !== "assistant") {
+      continue;
+    }
+    const hasDraft = message.parts.some(
+      (part) =>
+        part.type === "tool-call" &&
+        part.name === "create-document" &&
+        part.id === toolCallId &&
+        part.state === "complete" &&
+        isReadyDraftOutput(part.output),
+    );
+    if (hasDraft) {
+      return message.id;
+    }
+  }
+  return null;
+};
+
+export const replaceReadyCreateDocumentDraftOutput = (
+  messages: readonly ChatMessage[],
+  toolCallId: string,
+  output: CreateDocumentMatterOutput,
+): ChatMessage[] =>
+  messages.map((message) => {
+    if (message.role !== "assistant") {
+      return message;
+    }
+    const parts = message.parts.map((part) => {
+      if (
+        part.type !== "tool-call" ||
+        part.name !== "create-document" ||
+        part.id !== toolCallId ||
+        part.state !== "complete" ||
+        !isReadyDraftOutput(part.output)
+      ) {
+        return part;
+      }
+      return { ...part, output };
+    });
+    return parts.some((part, index) => part !== message.parts[index])
+      ? { ...message, parts }
+      : message;
+  });
+
 export const buildCreateDocumentDownloadFileName = (name: string): string => {
+  let sanitized = "";
+  for (const character of name) {
+    sanitized += UNSAFE_DOWNLOAD_FILENAME_CHARACTERS.includes(character)
+      ? "_"
+      : character;
+  }
+  sanitized = sanitized.split("..").join("__");
+  let firstNonDot = 0;
+  while (sanitized.at(firstNonDot) === ".") {
+    firstNonDot += 1;
+  }
+  let lastNonDot = sanitized.length;
+  while (lastNonDot > firstNonDot && sanitized.at(lastNonDot - 1) === ".") {
+    lastNonDot -= 1;
+  }
   const safeBase =
-    name
-      .replace(UNSAFE_DOWNLOAD_FILENAME_CHARACTERS, "_")
-      .replace(/\.\./gu, "__")
-      .replace(/^\.+|\.+$/gu, "_") || "document";
+    `${firstNonDot > 0 ? "_" : ""}${sanitized.slice(
+      firstNonDot,
+      lastNonDot,
+    )}${lastNonDot < sanitized.length ? "_" : ""}` || "document";
   return `${safeBase.slice(
     0,
     MAX_DOWNLOAD_FILENAME_LENGTH - DOWNLOAD_EXTENSION.length,
@@ -180,7 +260,7 @@ export const selectCreateDocumentDrafts = (
       const isStreamingDraft =
         part.type === "tool-call" &&
         part.name === "create-document" &&
-        part.state === "input-streaming" &&
+        (part.state === "awaiting-input" || part.state === "input-streaming") &&
         part.output === undefined;
       const isUnresolvedReadyDraft =
         part.type === "tool-call" &&
@@ -237,4 +317,26 @@ export const selectUnsettledCreateDocumentDrafts = (
     });
   }
   return drafts;
+};
+
+export const isCreateDocumentDraftSettlementActive = (
+  messages: readonly { role: string; parts: readonly ChatPart[] }[],
+  toolCallId: string,
+): boolean => {
+  for (const message of messages) {
+    for (const part of message.parts) {
+      if (
+        part.type !== "tool-call" ||
+        part.name !== "create-document" ||
+        part.id !== toolCallId
+      ) {
+        continue;
+      }
+      return (
+        (part.state === "input-complete" && part.output === undefined) ||
+        (part.state === "complete" && isReadyDraftOutput(part.output))
+      );
+    }
+  }
+  return false;
 };

@@ -19,6 +19,7 @@ import { CHAT_EDIT_APPLY_MODE } from "@/api/handlers/chat/chat-schema";
 import type {
   ChatEditApplyMode,
   IncomingActiveDecision,
+  IncomingActiveDraft,
   IncomingActiveExternal,
   IncomingActiveFile,
   IncomingActiveSkill,
@@ -311,6 +312,7 @@ export const buildChatPromptCacheKey = (
 
 type BuildChatSystemPromptProps = {
   activeDecision: IncomingActiveDecision | undefined;
+  activeDraft?: IncomingActiveDraft | undefined;
   activeExternal: IncomingActiveExternal | undefined;
   activeFile: IncomingActiveFile | undefined;
   activeSkill?: IncomingActiveSkill | undefined;
@@ -341,6 +343,7 @@ type BuildChatSystemPromptProps = {
 
 export const buildChatSystemPromptParts = async ({
   activeDecision,
+  activeDraft,
   activeExternal,
   activeFile,
   activeSkill,
@@ -454,6 +457,11 @@ export const buildChatSystemPromptParts = async ({
       });
     }
 
+    const activeDraftSection =
+      activeDraft === undefined
+        ? ""
+        : buildActiveDraftPrompt(activeDraft, toolAvailability);
+
     // Template Studio context: org-scoped (works at global scope too).
     // The templateId is client-supplied, so confirm it belongs to the
     // caller's organization before echoing anything about it.
@@ -483,6 +491,7 @@ export const buildChatSystemPromptParts = async ({
       externalSection,
       activeSkillSection,
       matterScopeSection,
+      activeDraftSection,
       activeFileSection,
       activeTemplateSection,
     ]
@@ -567,6 +576,29 @@ const buildContextMatterScopeSection = ({
   return [
     heading,
     `Restrict matter-scoped function calls (\`read.list*\`, \`read.search*\`, \`read.get*\`) to \`matterRefs: [${refList}]\`. Do NOT call them with matter refs outside this set — even if the user names another matter, surface that as a clarification instead of widening scope yourself.`,
+  ].join("\n");
+};
+
+export const buildActiveDraftPrompt = (
+  activeDraft: IncomingActiveDraft,
+  toolAvailability: ChatToolAvailability,
+) => {
+  const safeName = sanitizePromptValue({
+    maxLength: 200,
+    text: activeDraft.fileName,
+  });
+  const snapshot = activeDraft.docxEditSnapshot;
+  const editingSections =
+    snapshot === undefined
+      ? []
+      : buildActiveTemplateEditSections({ snapshot, toolAvailability });
+
+  return [
+    `ACTIVE UNSAVED DRAFT: The user is viewing and editing the generated DOCX draft "${safeName}" in the inspector. It is not yet a matter entity; do not call matter retrieval or create-document for requests about it. The current document text is in the block list below.`,
+    toolAvailability.docxEditMode === CHAT_EDIT_APPLY_MODE.manual
+      ? "For requested changes, use `apply-active-docx-edits`; the browser will queue the operations against this unsaved draft for review."
+      : "Answer questions from the current block list. Do not claim the visible draft is unavailable.",
+    ...editingSections,
   ].join("\n");
 };
 

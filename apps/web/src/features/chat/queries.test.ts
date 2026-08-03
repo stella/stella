@@ -380,6 +380,15 @@ describe("buildSendRequestBody", () => {
     const body = buildSendRequestBody({
       context: {
         getActiveDecision: () => ({ decisionId: "decision-A" }),
+        getActiveDraft: () => ({
+          docxEditSnapshot: {
+            blocks: [
+              { id: "draft-block", kind: "heading", text: "Draft title" },
+            ],
+          },
+          fileName: "draft.docx",
+          toolCallId: "tool-draft",
+        }),
         getActiveExternal: () => ({
           connectorSlug: undefined,
           title: "Source",
@@ -418,6 +427,13 @@ describe("buildSendRequestBody", () => {
       activeExternal: {
         title: "Source",
         url: "https://example.com",
+      },
+      activeDraft: {
+        docxEditSnapshot: {
+          blocks: [{ id: "draft-block", kind: "heading", text: "Draft title" }],
+        },
+        fileName: "draft.docx",
+        toolCallId: "tool-draft",
       },
       activeFile: {
         docxEditSnapshot: {

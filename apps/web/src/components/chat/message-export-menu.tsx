@@ -22,7 +22,10 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
-import { saveCreateDocumentDraft } from "@/components/chat/create-document-draft-runtime";
+import {
+  clearCreateDocumentDraftSnapshot,
+  saveCreateDocumentDraft,
+} from "@/components/chat/create-document-draft-runtime";
 import {
   buildCreateDocumentDownloadFileName,
   type CreateDocumentDraft,
@@ -69,6 +72,14 @@ type MessageExportMenuProps = {
   // Optional only for dev HMR compatibility: an already-mounted child can
   // briefly receive the previous parent's prop shape during a module swap.
   message?: PersistedChatMessage | undefined;
+};
+
+const compileArtifactDraft = async (artifact: CreateDocumentDraft) => {
+  const { compileCreateDocumentSourceToDocx } =
+    await import("@/components/chat/create-document-compiler");
+  return await compileCreateDocumentSourceToDocx(artifact.source, {
+    titleFallback: artifact.name,
+  });
 };
 
 export const MessageExportMenu = ({
@@ -134,15 +145,13 @@ export const MessageExportMenu = ({
       }
 
       if (includeArtifact && artifact !== undefined) {
-        const editedBuffer = await saveCreateDocumentDraft(artifact.toolCallId);
-        let buffer = editedBuffer;
+        const draftSave = await saveCreateDocumentDraft(artifact.toolCallId);
+        let buffer = draftSave.status === "saved" ? draftSave.buffer : null;
+        if (draftSave.status === "failed") {
+          getAnalytics().captureError(draftSave.error);
+        }
         if (buffer === null) {
-          const { compileCreateDocumentSourceToDocx } =
-            await import("@/components/chat/create-document-compiler");
-          const compiled = await compileCreateDocumentSourceToDocx(
-            artifact.source,
-            { titleFallback: artifact.name },
-          );
+          const compiled = await compileArtifactDraft(artifact);
           if (compiled.status !== "ok") {
             throw new ClientOperationError({
               action: "export-create-document-draft",
@@ -159,6 +168,9 @@ export const MessageExportMenu = ({
 
       for (const download of downloads) {
         downloadFile(download.blob, download.fileName);
+      }
+      if (includeArtifact && artifact !== undefined) {
+        clearCreateDocumentDraftSnapshot(artifact.toolCallId);
       }
     });
     setIsExportPending(false);

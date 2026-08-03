@@ -1677,8 +1677,8 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
             docxEditable={isUnlocked}
             docxEditorRef={editorRef}
             entityId={entityId}
+            persistence={{ type: "workspace", workspaceId }}
             requestDocxEditMode={requestEditMode}
-            workspaceId={workspaceId}
           />
         </FileViewerWithAI>
       </div>

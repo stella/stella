@@ -1,11 +1,16 @@
-import { useDeferredValue, useMemo, useRef } from "react";
+import { useMemo, useRef } from "react";
 
 import { useTranslations } from "use-intl";
 
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
+import { ReviewBar } from "@/components/ai-suggestions/review-bar";
 import { compileCreateDocumentSourceToDocument } from "@/components/chat/create-document-compiler";
 import { registerCreateDocumentDraftSaver } from "@/components/chat/create-document-draft-runtime";
-import type { CreateDocumentDraftPayload } from "@/components/chat/create-document-draft.logic";
+import {
+  buildCreateDocumentDownloadFileName,
+  createDocumentDraftReviewId,
+  type CreateDocumentDraftPayload,
+} from "@/components/chat/create-document-draft.logic";
 import {
   DocxEditor,
   type DocxEditorRef,
@@ -21,15 +26,14 @@ export const CreateDocumentDraftInspectorEditor = ({
 }: CreateDocumentDraftInspectorEditorProps) => {
   const t = useTranslations();
   const editorRef = useRef<DocxEditorRef>(null);
-  const source = useDeferredValue(payload.source);
   const compiled = useMemo(
     () =>
-      source.trim()
-        ? compileCreateDocumentSourceToDocument(source, {
+      payload.source.trim()
+        ? compileCreateDocumentSourceToDocument(payload.source, {
             titleFallback: payload.name || "Draft",
           })
         : null,
-    [payload.name, source],
+    [payload.name, payload.source],
   );
 
   useExternalSyncEffect(
@@ -59,7 +63,7 @@ export const CreateDocumentDraftInspectorEditor = ({
         autoOpenReviewSidebar={false}
         className="folio-docx-preview folio-peek h-full"
         document={compiled.document}
-        documentKey={`${payload.toolCallId}:${source}`}
+        documentKey={payload.toolCallId}
         initialZoom="fit-width"
         loadingIndicator={null}
         mode={payload.status === "ready" ? "editing" : "viewing"}
@@ -76,12 +80,22 @@ export const CreateDocumentDraftInspectorEditor = ({
 
   return (
     <FileViewerWithAI
+      activeDraft={{
+        fileName: buildCreateDocumentDownloadFileName(payload.name),
+        toolCallId: payload.toolCallId,
+      }}
       chatThreadId={payload.chatThreadId}
       docxEditable
       docxEditorRef={editorRef}
       workspaceId={payload.workspaceId}
     >
       {editor}
+      <ReviewBar
+        docxEditable
+        docxEditorRef={editorRef}
+        entityId={createDocumentDraftReviewId(payload.toolCallId)}
+        persistence={{ type: "local" }}
+      />
     </FileViewerWithAI>
   );
 };

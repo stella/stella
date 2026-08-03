@@ -87,6 +87,12 @@ export const activeFileSchema = t.Object({
   docxEditSnapshot: t.Optional(docxEditSnapshotSchema),
 });
 
+export const activeDraftSchema = t.Object({
+  toolCallId: t.String(),
+  fileName: t.String(),
+  docxEditSnapshot: t.Optional(docxEditSnapshotSchema),
+});
+
 /**
  * Template Studio surface: the user is authoring a reusable DOCX
  * template (org-scoped, not a workspace entity). The snapshot mirrors
@@ -192,6 +198,7 @@ export const sendMessageBodySchema = t.Object({
    */
   toolScope: t.Optional(t.Literal(CHAT_TOOL_SCOPE.suggestTemplateFields)),
   userContext: t.Optional(userContextSchema),
+  activeDraft: t.Optional(activeDraftSchema),
   activeFile: t.Optional(activeFileSchema),
   activeTemplate: t.Optional(activeTemplateSchema),
   activeDecision: t.Optional(activeDecisionSchema),
@@ -234,6 +241,7 @@ export type ChatSendRequest = Static<typeof sendMessageBodySchema>;
 type RawIncomingMessage = Static<typeof rawMessageSchema>;
 export type IncomingUserContext = Static<typeof userContextSchema>;
 export type IncomingActiveFile = Static<typeof activeFileSchema>;
+export type IncomingActiveDraft = Static<typeof activeDraftSchema>;
 export type IncomingActiveTemplate = Static<typeof activeTemplateSchema>;
 export type IncomingActiveDecision = Static<typeof activeDecisionSchema>;
 export type IncomingActiveExternal = Static<typeof activeExternalSchema>;

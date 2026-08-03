@@ -510,15 +510,29 @@ const isTanStackStructuredOutputStatus = (
   typeof value === "string" &&
   Object.hasOwn(TANSTACK_STRUCTURED_OUTPUT_STATUSES, value);
 
-const isStructuredOutputPart = (part: Record<string, unknown>): boolean =>
-  isTanStackStructuredOutputStatus(part["status"]) &&
-  typeof part["raw"] === "string" &&
-  (!("reasoning" in part) ||
-    part["reasoning"] === undefined ||
-    typeof part["reasoning"] === "string") &&
-  (!("errorMessage" in part) ||
-    part["errorMessage"] === undefined ||
-    typeof part["errorMessage"] === "string");
+const isStructuredOutputPart = (part: Record<string, unknown>): boolean => {
+  const status = part["status"];
+  if (
+    !isTanStackStructuredOutputStatus(status) ||
+    typeof part["raw"] !== "string" ||
+    ("reasoning" in part &&
+      part["reasoning"] !== undefined &&
+      typeof part["reasoning"] !== "string")
+  ) {
+    return false;
+  }
+
+  switch (status) {
+    case "streaming":
+      return !("errorMessage" in part && part["errorMessage"] !== undefined);
+    case "complete":
+      return "data" in part && part["data"] !== undefined;
+    case "error":
+      return typeof part["errorMessage"] === "string";
+    default:
+      return status satisfies never;
+  }
+};
 
 // Validators are independently exhaustive over the persistable subset, so a
 // part cannot enter the persistence boundary without structural validation.

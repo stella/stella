@@ -28,6 +28,7 @@ import type {
 import type {
   ChatSendRequest,
   IncomingActiveDecision,
+  IncomingActiveDraft,
   IncomingActiveExternal,
   IncomingActiveFile,
   IncomingActiveSkill,
@@ -822,7 +823,9 @@ const sendMessage = createSafeRootHandler(
         activeFile: activeFileForTools,
         editApplyMode,
         hasActiveDocxEditClient:
-          hasActiveDocxFileClient || body.activeTemplate !== undefined,
+          hasActiveDocxFileClient ||
+          body.activeDraft !== undefined ||
+          body.activeTemplate !== undefined,
         memberRole: memberRole.role,
         recordAuditEventAvailable: true,
         requestWorkspaceId: workspaceId,
@@ -831,6 +834,7 @@ const sendMessage = createSafeRootHandler(
       });
       const chatContextResult = await prepareChatContext({
         activeDecision: body.activeDecision,
+        activeDraft: body.activeDraft,
         activeExternal: body.activeExternal,
         activeFile: body.activeFile,
         activeSkill: body.activeSkill,
@@ -1006,7 +1010,9 @@ const sendMessage = createSafeRootHandler(
         toolWorkspaceIds,
         activeFile: activeFileForTools,
         hasActiveDocxEditClient:
-          hasActiveDocxFileClient || body.activeTemplate !== undefined,
+          hasActiveDocxFileClient ||
+          body.activeDraft !== undefined ||
+          body.activeTemplate !== undefined,
         hasActiveDocxFileClient,
         editApplyMode,
         docxEditRepresentation,
@@ -1626,6 +1632,7 @@ const resolveExternalToolsForValidation = async (
 
 type PrepareChatContextProps = {
   activeDecision: IncomingActiveDecision | undefined;
+  activeDraft: IncomingActiveDraft | undefined;
   activeExternal: IncomingActiveExternal | undefined;
   activeFile: IncomingActiveFile | undefined;
   activeSkill: IncomingActiveSkill | undefined;
@@ -1666,6 +1673,7 @@ type PrepareChatContextResult = Result<
 
 const prepareChatContext = async ({
   activeDecision,
+  activeDraft,
   activeExternal,
   activeFile,
   activeSkill,
@@ -1698,6 +1706,7 @@ const prepareChatContext = async ({
     const promptAndMessagesResult = await Result.allAsync([
       buildChatSystemPromptParts({
         activeDecision,
+        activeDraft,
         activeExternal,
         activeFile,
         activeSkill,

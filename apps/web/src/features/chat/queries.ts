@@ -68,6 +68,12 @@ type ActiveFileContext = {
   supportsDocxEdits?: boolean | undefined;
 };
 
+type ActiveDraftContext = {
+  docxEditSnapshot?: ActiveFileContext["docxEditSnapshot"];
+  fileName: string;
+  toolCallId: string;
+};
+
 type ActiveTemplateContext = {
   docxEditSnapshot?: ActiveFileContext["docxEditSnapshot"];
   fileName: string;
@@ -135,6 +141,7 @@ export type ApplyActiveDocxEditsOutput =
 export type ChatThreadOptionsContext = {
   allowMissingThread?: boolean | undefined;
   getActiveDecision?: (() => ActiveDecisionContext | undefined) | undefined;
+  getActiveDraft?: (() => ActiveDraftContext | undefined) | undefined;
   getActiveExternal?: (() => ActiveExternalContext | undefined) | undefined;
   getActiveFile?: (() => ActiveFileContext | undefined) | undefined;
   getActiveSkill?: (() => ActiveSkillContext | undefined) | undefined;
@@ -196,6 +203,10 @@ const getChatRuntimeContextKind = (
 
   if (context?.getActiveFile) {
     return "active-file";
+  }
+
+  if (context?.getActiveDraft) {
+    return "active-docx-edit";
   }
 
   if (context?.getActiveExternal) {
@@ -864,7 +875,7 @@ export const createChatRuntime = ({
           messages: snapshot.messages,
         })
       ) {
-        const sanitized = sanitizeRunningToolCalls(snapshot.messages);
+        const sanitized = sanitizeRunningToolCalls(snapshot.messages, "cancel");
         client.setMessagesManually(sanitized);
         setSnapshot({ messages: sanitized });
       }
@@ -968,6 +979,21 @@ export const buildSendRequestBody = ({
         : {
             docxEditSnapshot: toChatSendDocxEditSnapshot(
               activeFile.docxEditSnapshot,
+            ),
+          }),
+    };
+  }
+
+  const activeDraft = context?.getActiveDraft?.();
+  if (activeDraft) {
+    body.activeDraft = {
+      fileName: activeDraft.fileName,
+      toolCallId: activeDraft.toolCallId,
+      ...(activeDraft.docxEditSnapshot === undefined
+        ? {}
+        : {
+            docxEditSnapshot: toChatSendDocxEditSnapshot(
+              activeDraft.docxEditSnapshot,
             ),
           }),
     };
@@ -1494,6 +1520,7 @@ const chatThreadIdentity = ({
 // send, and is already part of the query key.
 const CHAT_CONTEXT_CAPABILITY_KEYS = [
   "getActiveDecision",
+  "getActiveDraft",
   "getActiveExternal",
   "getActiveFile",
   "getActiveSkill",

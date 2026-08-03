@@ -7,6 +7,10 @@ import { jsonField } from "@/api/db/json-utils";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
+import {
+  UPLOAD_ENTITY_ORIGIN,
+  uploadTriggeredFlowPolicy,
+} from "@/api/handlers/entities/upload-origin";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -45,6 +49,12 @@ const uploadEntityBodySchema = t.Object({
     maxSize: FILE_SIZE_LIMITS.document,
   }),
   name: tDefaultVarchar,
+  origin: t.Optional(
+    t.Union([
+      t.Literal(UPLOAD_ENTITY_ORIGIN.GENERATED_DOCUMENT),
+      t.Literal(UPLOAD_ENTITY_ORIGIN.USER),
+    ]),
+  ),
   propertyId: tSafeId("property"),
 });
 
@@ -140,7 +150,7 @@ const uploadEntityHandler = async function* ({
   workspaceId,
   userId,
   recordAuditEvent,
-  body: { file, name: rawName, propertyId },
+  body: { file, name: rawName, origin = UPLOAD_ENTITY_ORIGIN.USER, propertyId },
 }: UploadEntityHandlerProps) {
   const name = sanitizeFilename(rawName);
   // Non-authoritative fast-fail: cheap, unlocked, avoids scanning
@@ -372,16 +382,16 @@ const uploadEntityHandler = async function* ({
       captureError(error, { entityId, mimeType: file.type }),
     );
 
-    // File-upload flow trigger. Fire-and-forget on the USER upload path only;
-    // flow-created documents (create-document step) never reach this call site.
-    maybeStartUploadTriggeredFlows({
-      entityId,
-      workspaceId,
-      organizationId,
-      fileName: fileName.value,
-    }).catch((error: unknown) => {
-      captureError(error, { entityId, workspaceId });
-    });
+    if (uploadTriggeredFlowPolicy(origin) === "start") {
+      maybeStartUploadTriggeredFlows({
+        entityId,
+        workspaceId,
+        organizationId,
+        fileName: fileName.value,
+      }).catch((error: unknown) => {
+        captureError(error, { entityId, workspaceId });
+      });
+    }
 
     enqueuePdfDerivativeOrMarkFailed({
       encrypted,

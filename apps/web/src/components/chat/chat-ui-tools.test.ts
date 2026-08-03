@@ -933,6 +933,38 @@ describe("sanitizeRunningToolCalls", () => {
     expect(isChatTurnInFlight({ status: "ready", messages })).toBe(true);
   });
 
+  test("terminates a complete create-document input when the user cancels", () => {
+    const messages: PersistedChatMessage[] = [
+      {
+        id: "message-1",
+        parts: [
+          {
+            arguments: JSON.stringify({
+              name: "Engagement letter",
+              source: "@title Engagement letter",
+            }),
+            id: "tool-call-1",
+            input: {
+              name: "Engagement letter",
+              source: "@title Engagement letter",
+            },
+            name: "create-document",
+            state: "input-complete",
+            type: "tool-call",
+          } satisfies ChatPart,
+        ],
+        role: "assistant",
+      },
+    ];
+
+    const sanitized = sanitizeRunningToolCalls(messages, "cancel");
+    const part = sanitized[0]?.parts[0];
+    if (part?.type !== "tool-call") {
+      throw new Error("Expected a tool-call part");
+    }
+    expect(part.state).toBe("error");
+  });
+
   test("leaves an approval-requested tool call untouched", () => {
     const messages: PersistedChatMessage[] = [
       {

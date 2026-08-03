@@ -74,8 +74,7 @@ const isPending = (item: ReviewSuggestion): boolean =>
 
 type ReviewBarProps = {
   entityId: string;
-  /** Workspace the entity lives in; scopes the suggestion persistence calls. */
-  workspaceId: string;
+  persistence: { type: "local" } | { type: "workspace"; workspaceId: string };
   docxEditorRef: RefObject<DocxEditorRef | null>;
   /** Whether the editor currently accepts edit operations. */
   docxEditable: boolean;
@@ -84,7 +83,7 @@ type ReviewBarProps = {
 
 export const ReviewBar = ({
   entityId,
-  workspaceId,
+  persistence,
   docxEditorRef,
   docxEditable,
   requestDocxEditMode,
@@ -106,7 +105,7 @@ export const ReviewBar = ({
     navigateTo,
   } = useReviewActions({
     entityId,
-    workspaceId,
+    persistence,
     docxEditorRef,
     docxEditable,
     requestDocxEditMode,

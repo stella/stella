@@ -174,7 +174,7 @@ const CHAT_TOOL_TITLE_KEYS = {
 // `business_registry_lookup` (or removed for other reasons). Keep
 // title keys around so historical chat history still renders with a
 // recognisable label rather than the generic "unknown" fallback.
-const LEGACY_CHAT_TOOL_TITLE_KEYS = {
+const RETIRED_CHAT_TOOL_TITLE_KEYS = {
   ares_lookup_company: "chat.tool.ares_lookup_company",
   ares_search_companies: "chat.tool.ares_search_companies",
   // Retired hand-rolled code-execution tools, replaced by the code-mode
@@ -191,7 +191,7 @@ const LEGACY_CHAT_TOOL_TITLE_KEYS = {
 
 const CHAT_TOOL_DISPLAY_TITLE_KEYS = {
   ...CHAT_TOOL_TITLE_KEYS,
-  ...LEGACY_CHAT_TOOL_TITLE_KEYS,
+  ...RETIRED_CHAT_TOOL_TITLE_KEYS,
 } as const;
 
 const UNKNOWN_CHAT_TOOL_TITLE_KEY =
@@ -691,14 +691,23 @@ export const selectUnresolvedActiveDocxEditToolCallParts = (
 // is never that message.
 const INTERRUPTED_TOOL_CALL_STATE = "error" as const;
 
-const toTerminalIfRunningToolPart = (part: ChatPart): ChatPart => {
+export type RunningToolCallSanitization = "cancel" | "hydrate";
+
+const toTerminalIfRunningToolPart = (
+  part: ChatPart,
+  mode: RunningToolCallSanitization,
+): ChatPart => {
   if (part.type !== "tool-call" || !isRunningToolPart(part)) {
     return part;
   }
   // The draft compiler can deterministically resume this client-executed tool
   // after hydration. Preserve it so the session effect can return its result
   // instead of turning a recoverable draft into an interrupted tool call.
-  if (part.name === "create-document" && part.state === "input-complete") {
+  if (
+    mode === "hydrate" &&
+    part.name === "create-document" &&
+    part.state === "input-complete"
+  ) {
     return part;
   }
   return { ...part, state: INTERRUPTED_TOOL_CALL_STATE };
@@ -717,7 +726,7 @@ const toTerminalIfRunningToolPart = (part: ChatPart): ChatPart => {
  *    (written at stream end, not mid-stream), so any running tool-call part
  *    in server-loaded messages belongs to a turn whose stream died before
  *    finishing (API restart / deploy / crash mid tool call).
- *  - Explicit stop: the AI SDK's `stop()` aborts the live request but never
+ *  - Explicit stop: TanStack AI's `stop()` aborts the live request but never
  *    rewrites message parts, so a tool part caught mid-input would keep the
  *    turn "generating" forever. The runtime's `stop` applies this right
  *    after aborting.
@@ -730,12 +739,15 @@ const toTerminalIfRunningToolPart = (part: ChatPart): ChatPart => {
  */
 export const sanitizeRunningToolCalls = (
   messages: readonly PersistedChatMessage[],
+  mode: RunningToolCallSanitization = "hydrate",
 ): PersistedChatMessage[] =>
   messages.map((message) => {
     if (message.role !== "assistant") {
       return message;
     }
-    const parts = message.parts.map(toTerminalIfRunningToolPart);
+    const parts = message.parts.map((part) =>
+      toTerminalIfRunningToolPart(part, mode),
+    );
     const partsChanged = parts.some(
       (part, index) => part !== message.parts[index],
     );
@@ -746,7 +758,7 @@ type ChatTurnInFlightOptions = {
   status: ChatClientState;
   messages: PersistedChatMessage[];
   /**
-   * Set when the user explicitly stopped the turn. The AI SDK's
+   * Set when the user explicitly stopped the turn. TanStack AI's
    * `stop()` only aborts a live request; it never rewrites message
    * parts, so a tool part caught mid-input stays in a running state
    * and would otherwise keep the turn "in flight" forever.
@@ -761,7 +773,7 @@ type ChatTurnInFlightOptions = {
  * in multi-step tool turns).
  *
  * An errored turn is never in flight. When the stream dies mid tool
- * call (network drop, server restart) the AI SDK flips its status to
+ * call (network drop, server restart) TanStack AI flips its status to
  * `"error"` but leaves the partial tool part in a running state; the
  * SDK never auto-continues after an error, so treating that tail as
  * in-flight would wedge the session as "generating" until reload.

@@ -182,7 +182,7 @@ export const ReviewPanelImpl = ({
     navigateTo,
   } = useReviewActions({
     entityId,
-    workspaceId,
+    persistence: { type: "workspace", workspaceId },
     docxEditorRef,
     docxEditable,
     requestDocxEditMode,

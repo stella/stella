@@ -10,6 +10,7 @@
 
 import type { RefObject } from "react";
 
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { DocxEditorRef, FolioAIEditApplyMode } from "@stll/folio-react";
@@ -63,12 +64,7 @@ type ApplyOutcome = {
 
 export type UseReviewActionsOptions = {
   entityId: string;
-  /**
-   * Workspace the entity lives in. Scopes the persistence calls that
-   * fire (server-side) when a `persisted` suggestion is resolved or
-   * reverted.
-   */
-  workspaceId: string;
+  persistence: { type: "local" } | { type: "workspace"; workspaceId: string };
   docxEditorRef: RefObject<DocxEditorRef | null>;
   /** Whether the editor currently accepts edit operations. */
   docxEditable: boolean;
@@ -99,7 +95,7 @@ export type ReviewActions = {
 
 export const useReviewActions = ({
   entityId,
-  workspaceId,
+  persistence,
   docxEditorRef,
   docxEditable,
   requestDocxEditMode,
@@ -117,6 +113,12 @@ export const useReviewActions = ({
   // THEMSELVES, not as "AI".
   const user = useAuthenticatedUser();
   const wordAuthor = getWordEditAuthorName(user);
+  const persistedWorkspaceId = useLatestCallback(() => {
+    if (persistence.type === "local") {
+      return panic("A local DOCX suggestion cannot be persisted");
+    }
+    return persistence.workspaceId;
+  });
 
   const setApplyMode = useLatestCallback((mode: FolioAIEditApplyMode) => {
     setApplyModeAction(entityId, mode);
@@ -425,7 +427,7 @@ export const useReviewActions = ({
             live.id,
             async () =>
               await resolveDocxSuggestionRequest({
-                workspaceId,
+                workspaceId: persistedWorkspaceId(),
                 entityId,
                 suggestionId: live.id,
                 status: "accepted",
@@ -471,7 +473,7 @@ export const useReviewActions = ({
             claimed.id,
             async () =>
               await resolveDocxSuggestionRequest({
-                workspaceId,
+                workspaceId: persistedWorkspaceId(),
                 entityId,
                 suggestionId: claimed.id,
                 status: "rejected",
@@ -553,7 +555,7 @@ export const useReviewActions = ({
           item.id,
           async () =>
             await revertDocxSuggestionRequest({
-              workspaceId,
+              workspaceId: persistedWorkspaceId(),
               entityId,
               suggestionId: item.id,
             }),
@@ -639,7 +641,7 @@ export const useReviewActions = ({
                 item.id,
                 async () =>
                   await resolveDocxSuggestionRequest({
-                    workspaceId,
+                    workspaceId: persistedWorkspaceId(),
                     entityId,
                     suggestionId: item.id,
                     status: "accepted",
@@ -690,7 +692,7 @@ export const useReviewActions = ({
               item.id,
               async () =>
                 await resolveDocxSuggestionRequest({
-                  workspaceId,
+                  workspaceId: persistedWorkspaceId(),
                   entityId,
                   suggestionId: item.id,
                   status: "rejected",

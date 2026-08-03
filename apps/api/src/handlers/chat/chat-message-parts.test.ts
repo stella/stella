@@ -64,6 +64,31 @@ describe("persisted chat message parts", () => {
     ).toEqual(parts);
   });
 
+  test("rejects malformed structured-output states at the persistence boundary", () => {
+    const malformedParts = [
+      { raw: "{}", status: "future", type: "structured-output" },
+      { raw: 42, status: "streaming", type: "structured-output" },
+      {
+        raw: "{}",
+        reasoning: 42,
+        status: "streaming",
+        type: "structured-output",
+      },
+      { raw: "{}", status: "complete", type: "structured-output" },
+      { raw: "{}", status: "error", type: "structured-output" },
+      {
+        errorMessage: 42,
+        raw: "{}",
+        status: "error",
+        type: "structured-output",
+      },
+    ];
+
+    for (const part of malformedParts) {
+      expect(() => classifyChatPartForPersistence(part)).toThrow();
+    }
+  });
+
   test("preserves server-owned search-summary provenance", () => {
     const message = chatMessageFromPersisted({
       id: toSafeId<"chatMessage">("019eb9fa-c91f-7000-9b9c-9365977dda78"),

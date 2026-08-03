@@ -96,9 +96,10 @@ export const NeedsMatterCard = ({
     completedOutput.destination === "draft"
       ? completedOutput
       : null;
-  const isAwaitingMatter =
-    (part.state === "input-complete" && part.output === undefined) ||
-    readyDraftOutput !== null;
+  // Destination actions mutate an already completed draft. Waiting for the
+  // draft settlement makes a second TanStack `addToolResult` structurally
+  // impossible and avoids racing the automatic draft completion.
+  const isAwaitingMatter = readyDraftOutput !== null;
   const successfulOutput =
     completedOutput?.success === true && readyDraftOutput === null
       ? completedOutput

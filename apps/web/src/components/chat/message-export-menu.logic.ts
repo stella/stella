@@ -4,8 +4,11 @@ import {
   selectCreateDocumentDrafts,
 } from "@/components/chat/create-document-draft.logic";
 
-const MARKDOWN_CITATION_PATTERN =
-  /(?:\[[^\]]+\]\((?:https?:\/\/|#(?:folio|stella-))|https?:\/\/)/u;
+const hasCitationLink = (content: string): boolean =>
+  content.includes("http://") ||
+  content.includes("https://") ||
+  content.includes("](#folio") ||
+  content.includes("](#stella-");
 
 export const hasMessageExportCitations = (
   message: PersistedChatMessage,
@@ -14,8 +17,7 @@ export const hasMessageExportCitations = (
     return true;
   }
   return message.parts.some(
-    (part) =>
-      part.type === "text" && MARKDOWN_CITATION_PATTERN.test(part.content),
+    (part) => part.type === "text" && hasCitationLink(part.content),
   );
 };
 

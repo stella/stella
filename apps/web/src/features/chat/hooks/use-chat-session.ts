@@ -38,15 +38,23 @@ import {
   sanitizeRunningToolCalls,
   withParsedToolCallInputs,
 } from "@/components/chat/chat-ui-tools";
-import { saveCreateDocumentDraft } from "@/components/chat/create-document-draft-runtime";
+import {
+  clearCreateDocumentDraftSnapshot,
+  runCreateDocumentOperationWithRetry,
+  saveCreateDocumentDraft,
+  settleCreateDocumentDraftWithRetry,
+} from "@/components/chat/create-document-draft-runtime";
 import "@/components/chat/create-document-draft-inspector";
 import {
   buildCreateDocumentDraftPayload,
   buildCreateDocumentDownloadFileName,
   CREATE_DOCUMENT_DRAFT_VIEW,
   createDocumentDraftTabId,
+  findReadyCreateDocumentDraftMessageId,
   isCreateDocumentDraftPayload,
+  isCreateDocumentDraftSettlementActive,
   isSameCreateDocumentDraftPayload,
+  replaceReadyCreateDocumentDraftOutput,
   selectCreateDocumentDrafts,
   selectUnsettledCreateDocumentDrafts,
 } from "@/components/chat/create-document-draft.logic";
@@ -86,13 +94,14 @@ import type {
   ChatEditApplyMode,
   DocxEditRepresentation,
 } from "@/lib/chat-edit-mode";
-import { createChatThreadId, type ChatThreadRef } from "@/lib/chat-thread-ref";
+import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import {
   APIError,
   internalToolErrorMessage,
   toAPIError,
+  unwrapEden,
 } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { fileOptions } from "@/lib/files/queries";
@@ -162,10 +171,13 @@ const prepareCreateDocumentDraft = async (
   toolCallId: string,
   input: CreateDocumentInput,
 ): Promise<PreparedCreateDocumentDraft | null> => {
-  const editedBuffer = await saveCreateDocumentDraft(toolCallId);
+  const draftSave = await saveCreateDocumentDraft(toolCallId);
   const fileName = buildCreateDocumentDownloadFileName(input.name);
-  if (editedBuffer !== null) {
-    return { buffer: editedBuffer, fileName };
+  if (draftSave.status === "saved") {
+    return { buffer: draftSave.buffer, fileName };
+  }
+  if (draftSave.status === "failed") {
+    getAnalytics().captureError(draftSave.error);
   }
 
   const { compileCreateDocumentSourceToDocx } =
@@ -276,7 +288,6 @@ export const useChatSession = ({
       : t("chat.createDocument.headerStreaming");
     const existing = inspector.tabs.find((tab) => tab.id === id);
     const payload = buildCreateDocumentDraftPayload({
-      createThreadId: createChatThreadId,
       draft,
       existingPayload:
         existing?.type === "view" &&
@@ -335,31 +346,43 @@ export const useChatSession = ({
       settlingCreateDocumentDraftIdsRef.current.add(draft.toolCallId);
       detached(
         (async () => {
-          const settleResult = await Result.tryPromise(async () => {
-            const { compileCreateDocumentSourceToDocument } =
-              await import("@/components/chat/create-document-compiler");
-            const compiled = compileCreateDocumentSourceToDocument(
-              draft.source,
-              { titleFallback: draft.name || "Draft" },
-            );
-            const output: CreateDocumentOutput =
-              compiled.status === "ok"
-                ? {
-                    success: true,
-                    destination: "draft",
-                    fileName: buildCreateDocumentDownloadFileName(draft.name),
-                  }
-                : {
-                    success: false,
-                    message: t("chat.createDocument.failedHeader"),
-                  };
-            await addToolResult({
-              tool: "create-document",
-              toolCallId: draft.toolCallId,
-              output,
-            });
+          const settleResult = await settleCreateDocumentDraftWithRetry({
+            isActive: () =>
+              isCreateDocumentDraftSettlementActive(
+                chat.getSnapshot().messages,
+                draft.toolCallId,
+              ),
+            settle: async () => {
+              const { compileCreateDocumentSourceToDocument } =
+                await import("@/components/chat/create-document-compiler");
+              const compiled = compileCreateDocumentSourceToDocument(
+                draft.source,
+                { titleFallback: draft.name || "Draft" },
+              );
+              const output: CreateDocumentOutput =
+                compiled.status === "ok"
+                  ? {
+                      success: true,
+                      destination: "draft",
+                      fileName: buildCreateDocumentDownloadFileName(draft.name),
+                    }
+                  : {
+                      success: false,
+                      message: t("chat.createDocument.failedHeader"),
+                    };
+              await addToolResult({
+                tool: "create-document",
+                toolCallId: draft.toolCallId,
+                output,
+              });
+            },
+            wait: async () => {
+              await new Promise<void>((resolve) => {
+                setTimeout(resolve, 250);
+              });
+            },
           });
-          if (Result.isError(settleResult)) {
+          if (settleResult.status === "failed") {
             settlingCreateDocumentDraftIdsRef.current.delete(draft.toolCallId);
             throw settleResult.error;
           }
@@ -367,7 +390,7 @@ export const useChatSession = ({
         "useChatSession.createDocumentDraftReady",
       );
     }
-  }, [addToolResult, messages, t]);
+  }, [addToolResult, chat, messages, t]);
   const sendChatMessage = useCallback(
     async (message: ChatUserMessageInput, options?: ChatSendMessageOptions) => {
       await sendThreadChatMessage(chat, message, options);
@@ -901,6 +924,7 @@ export const useChatSession = ({
             new Blob([new Uint8Array(draft.buffer)], { type: DOCX_MIME }),
             draft.fileName,
           );
+          clearCreateDocumentDraftSnapshot(toolCallId);
           return { status: "downloaded", fileName: draft.fileName } as const;
         });
 
@@ -911,32 +935,23 @@ export const useChatSession = ({
           if (Result.isError(downloadResult)) {
             getAnalytics().captureError(downloadResult.error);
           }
-          const failure: CreateDocumentOutput = {
-            success: false,
-            message: t("chat.createDocument.failedHeader"),
-          };
-          await addToolResult({
-            tool: "create-document",
-            toolCallId,
-            output: failure,
+          stellaToast.add({
+            title: t("chat.createDocument.failedHeader"),
+            type: "error",
           });
           return;
         }
-
-        const output: CreateDocumentOutput = {
-          success: true,
-          destination: "download",
-          fileName: downloadResult.value.fileName,
-        };
-        await addToolResult({
-          tool: "create-document",
-          toolCallId,
-          output,
-        });
         return;
       }
 
       const { matterId } = destination;
+      const draftMessageId = findReadyCreateDocumentDraftMessageId(
+        chat.getSnapshot().messages,
+        toolCallId,
+      );
+      if (draftMessageId === null) {
+        return;
+      }
       const createResult = await Result.tryPromise(async () => {
         const draft = await prepareCreateDocumentDraft(toolCallId, input);
         if (draft === null) {
@@ -968,31 +983,28 @@ export const useChatSession = ({
             queryKeys: [workspacesKeys.overviewActivityAll(matterId)],
             file,
             name: draft.fileName,
+            origin: "generated-document",
             propertyId: fileProperty.id,
           });
         if (response.error) {
           throw toAPIError(response.error);
         }
-        return { created: response.data, fileName: draft.fileName };
+        return { created: response.data };
       });
 
       if (Result.isError(createResult)) {
         getAnalytics().captureError(createResult.error);
-        const failure: CreateDocumentOutput = {
-          success: false,
-          message: APIError.is(createResult.error)
+        stellaToast.add({
+          title: APIError.is(createResult.error)
             ? internalToolErrorMessage(createResult.error)
             : t("chat.createDocument.failedHeader"),
-        };
-        await addToolResult({
-          tool: "create-document",
-          toolCallId,
-          output: failure,
+          type: "error",
         });
         return;
       }
 
-      const { created, fileName } = createResult.value;
+      const { created } = createResult.value;
+      const fileName = created.fileName;
       const href = `#stella-entity=${matterId}:${created.entityId}`;
       const output: CreateDocumentMatterSuccess = {
         success: true,
@@ -1005,6 +1017,60 @@ export const useChatSession = ({
         href,
         mention: `[${fileName}](${href})`,
       };
+
+      const persistenceResult = await runCreateDocumentOperationWithRetry({
+        isActive: () =>
+          findReadyCreateDocumentDraftMessageId(
+            chat.getSnapshot().messages,
+            toolCallId,
+          ) !== null,
+        operation: async () => {
+          const response = await api.chat
+            .threads({
+              threadId: toSafeId<"chatThread">(threadRef.threadId),
+            })
+            ["created-draft"].patch(
+              {
+                destinationWorkspaceId: toSafeId<"workspace">(matterId),
+                entityId: toSafeId<"entity">(created.entityId),
+                fieldId: toSafeId<"field">(created.fieldId),
+                messageId: toSafeId<"chatMessage">(draftMessageId),
+                toolCallId,
+              },
+              {
+                query:
+                  threadRef.scope === "workspace"
+                    ? {
+                        workspaceId: toSafeId<"workspace">(
+                          threadRef.workspaceId,
+                        ),
+                      }
+                    : {},
+              },
+            );
+          unwrapEden(response);
+        },
+        wait: async () => {
+          await new Promise<void>((resolve) => {
+            setTimeout(resolve, 250);
+          });
+        },
+      });
+      if (persistenceResult.status === "failed") {
+        getAnalytics().captureError(persistenceResult.error);
+        stellaToast.add({
+          title: t("chat.createDocument.failedHeader"),
+          type: "error",
+        });
+      }
+
+      setMessages(
+        replaceReadyCreateDocumentDraftOutput(
+          chat.getSnapshot().messages,
+          toolCallId,
+          output,
+        ),
+      );
 
       await invalidateCreatedDocumentQueries({
         queryClient,
@@ -1036,14 +1102,9 @@ export const useChatSession = ({
         .getState()
         .closeTab(createDocumentDraftTabId(toolCallId));
       await openCreatedDocumentInInspector(output);
-
-      await addToolResult({
-        tool: "create-document",
-        toolCallId,
-        output,
-      });
+      clearCreateDocumentDraftSnapshot(toolCallId);
     },
-    [addToolResult, queryClient, t],
+    [chat, queryClient, setMessages, t, threadRef],
   );
 
   const handleOpenCreatedDocument = useCallback(

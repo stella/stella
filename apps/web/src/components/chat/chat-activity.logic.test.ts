@@ -3,8 +3,10 @@ import { describe, expect, test } from "bun:test";
 import {
   getChatToolActivityCategory,
   getChatToolActivityState,
+  getLatestCompletedResearchPartIndex,
   resolveChatActivityIndicatorState,
 } from "@/components/chat/chat-activity.logic";
+import type { ChatMessage } from "@/components/chat/chat-ui-tools";
 
 describe("chat tool activity", () => {
   test("classifies evidence gathering as research", () => {
@@ -14,6 +16,11 @@ describe("chat tool activity", () => {
       "fetch_url",
       "read_document",
       "read_content_across_matters",
+      "list_templates",
+      "describe_template",
+      "discover_tools",
+      "load-skill",
+      "read-skill-resource",
       "mcp__salvia__search_decisions",
       "mcp__salvia__get_decision",
     ]) {
@@ -44,6 +51,44 @@ describe("chat tool activity", () => {
 });
 
 describe("thread activity", () => {
+  test("uses only successful research as the synthesis boundary", () => {
+    const message = {
+      id: "assistant-1",
+      role: "assistant" as const,
+      parts: [
+        { type: "text" as const, content: "I will check." },
+        {
+          type: "tool-call" as const,
+          id: "failed-search",
+          name: "mcp__registry__lookup_company" as const,
+          arguments: "{}",
+          state: "complete" as const,
+          output: { error: "Unavailable" },
+        },
+        {
+          type: "tool-call" as const,
+          id: "successful-search",
+          name: "web_search" as const,
+          arguments: "{}",
+          state: "complete" as const,
+          output: {
+            jurisdiction: "global" as const,
+            provider: "tavily" as const,
+            query: "company registry",
+            results: [],
+          },
+        },
+      ],
+    } satisfies ChatMessage;
+
+    expect(getLatestCompletedResearchPartIndex([message])).toBe(2);
+    expect(
+      getLatestCompletedResearchPartIndex([
+        { ...message, parts: message.parts.slice(0, 2) },
+      ]),
+    ).toBeNull();
+  });
+
   test("shows solving only between completed research and visible output", () => {
     expect(
       resolveChatActivityIndicatorState({

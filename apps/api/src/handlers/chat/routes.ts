@@ -1,5 +1,6 @@
 import Elysia from "elysia";
 
+import saveCreatedDraft from "@/api/handlers/chat/created-draft/update";
 import deleteThread from "@/api/handlers/chat/delete-thread";
 import createMessageExport from "@/api/handlers/chat/export/create";
 import getMessages from "@/api/handlers/chat/get-messages";
@@ -83,6 +84,12 @@ export const chatRoute = new Elysia({ prefix: "/chat" })
     params: renameThread.config.params,
     permissions: renameThread.config.permissions,
     query: renameThread.config.query,
+  })
+  .patch("/threads/:threadId/created-draft", saveCreatedDraft.handler, {
+    body: saveCreatedDraft.config.body,
+    params: saveCreatedDraft.config.params,
+    permissions: saveCreatedDraft.config.permissions,
+    query: saveCreatedDraft.config.query,
   })
   .get("/threads/:threadId/title", getThreadTitle.handler, {
     params: getThreadTitle.config.params,

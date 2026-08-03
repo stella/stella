@@ -3,13 +3,16 @@ import { describe, expect, test } from "bun:test";
 import {
   buildCreateDocumentDraftPayload,
   buildCreateDocumentDownloadFileName,
+  findReadyCreateDocumentDraftMessageId,
   isCreateDocumentDraftPayload,
   isSameCreateDocumentDraftPayload,
   normalizeCreateDocumentInput,
+  replaceReadyCreateDocumentDraftOutput,
   selectCreateDocumentDrafts,
   selectUnsettledCreateDocumentDrafts,
 } from "@/components/chat/create-document-draft.logic";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
+import { toSafeId } from "@/lib/safe-id";
 
 describe("create-document drafts", () => {
   test("surfaces partial source while tool arguments are streaming", () => {
@@ -34,6 +37,32 @@ describe("create-document drafts", () => {
         toolCallId: "tool-streaming",
         name: "Power of attorney",
         source: "@doc kind=other\n@paragraph\nDraft in pro",
+        status: "streaming",
+      },
+    ]);
+  });
+
+  test("opens an empty streaming draft as soon as the tool call starts", () => {
+    const messages = [
+      {
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-call",
+            id: "tool-starting",
+            name: "create-document",
+            arguments: "",
+            state: "awaiting-input",
+          },
+        ],
+      },
+    ] satisfies Parameters<typeof selectCreateDocumentDrafts>[0];
+
+    expect(selectCreateDocumentDrafts(messages)).toEqual([
+      {
+        toolCallId: "tool-starting",
+        name: "",
+        source: "",
         status: "streaming",
       },
     ]);
@@ -129,6 +158,60 @@ describe("create-document drafts", () => {
     expect(selectCreateDocumentDrafts(resolved)).toEqual([]);
   });
 
+  test("moves a settled draft to a saved entity without a second tool result", () => {
+    const messageId = toSafeId<"chatMessage">(
+      "019fc8ee-aea6-7eba-8da3-3ec8d4bda03e",
+    );
+    const input = {
+      name: "Purchase agreement",
+      source: "@doc kind=agreement locale=en page=A4",
+    };
+    const messages = [
+      {
+        id: messageId,
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-call",
+            id: "tool-1",
+            name: "create-document",
+            arguments: JSON.stringify(input),
+            state: "complete",
+            input,
+            output: {
+              success: true,
+              destination: "draft",
+              fileName: "Purchase agreement.docx",
+            },
+          },
+        ],
+      },
+    ] satisfies Parameters<typeof findReadyCreateDocumentDraftMessageId>[0];
+    const output = {
+      success: true,
+      entityId: "entity-1",
+      entityRef: "entity-1",
+      fieldId: "field-1",
+      fileName: "Purchase agreement.docx",
+      href: "#stella-entity=workspace-1:entity-1",
+      matterRef: "workspace-1",
+      mention: "[Purchase agreement.docx](#stella-entity=workspace-1:entity-1)",
+      workspaceId: "workspace-1",
+    } as const;
+
+    expect(findReadyCreateDocumentDraftMessageId(messages, "tool-1")).toBe(
+      messageId,
+    );
+    const updated = replaceReadyCreateDocumentDraftOutput(
+      messages,
+      "tool-1",
+      output,
+    );
+    expect(updated[0]?.parts).toHaveLength(1);
+    expect(updated[0]?.parts.at(0)).toMatchObject({ output });
+    expect(findReadyCreateDocumentDraftMessageId(updated, "tool-1")).toBeNull();
+  });
+
   test("normalizes legacy markdown input", () => {
     expect(
       normalizeCreateDocumentInput({
@@ -161,11 +244,6 @@ describe("create-document drafts", () => {
 
   test("gives the draft overlay a fresh stable thread", () => {
     const originChatThreadId = toChatThreadId("thread-origin");
-    const draftChatThreadId = toChatThreadId("thread-draft");
-    const generatedThreadIds = [originChatThreadId, draftChatThreadId];
-    let generatedIndex = 0;
-    const createThreadId = () =>
-      generatedThreadIds.at(generatedIndex++) ?? draftChatThreadId;
     const draft = {
       toolCallId: "tool-1",
       name: "Power of attorney",
@@ -174,19 +252,15 @@ describe("create-document drafts", () => {
     } as const;
 
     const initial = buildCreateDocumentDraftPayload({
-      createThreadId,
       draft,
       existingPayload: undefined,
       originChatThreadId,
     });
 
     expect(initial.originChatThreadId).toBe(originChatThreadId);
-    expect(initial.chatThreadId).toBe(draftChatThreadId);
     expect(initial.chatThreadId).not.toBe(initial.originChatThreadId);
-    expect(generatedIndex).toBe(2);
 
     const updated = buildCreateDocumentDraftPayload({
-      createThreadId: () => toChatThreadId("unexpected-thread"),
       draft: {
         ...draft,
         source: `${draft.source}\n@title Power of attorney`,
@@ -196,7 +270,7 @@ describe("create-document drafts", () => {
       originChatThreadId,
     });
 
-    expect(updated.chatThreadId).toBe(draftChatThreadId);
+    expect(updated.chatThreadId).toBe(initial.chatThreadId);
     expect(updated.source).toContain("@title Power of attorney");
     expect(isCreateDocumentDraftPayload(updated)).toBe(true);
     expect(
@@ -205,6 +279,16 @@ describe("create-document drafts", () => {
         chatThreadId: originChatThreadId,
       }),
     ).toBe(false);
+    expect(
+      buildCreateDocumentDraftPayload({
+        draft,
+        existingPayload: undefined,
+        originChatThreadId,
+      }).chatThreadId,
+    ).toBe(initial.chatThreadId);
+    expect(isCreateDocumentDraftPayload({ ...updated, workspaceId: 42 })).toBe(
+      false,
+    );
   });
 
   test("builds a bounded safe DOCX download name", () => {

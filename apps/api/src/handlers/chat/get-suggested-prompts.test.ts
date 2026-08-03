@@ -62,6 +62,25 @@ describe("suggested prompts turn ownership", () => {
       ]),
     ).toBe(false);
   });
+
+  test("blocks follow-ups while any tool awaits approval", () => {
+    expect(
+      latestAssistantTurnAwaitsUser([
+        {
+          parts: [
+            {
+              arguments: "{}",
+              id: "approval-1",
+              name: "save_matter",
+              state: "approval-requested",
+              type: "tool-call",
+            },
+          ],
+          role: "assistant",
+        },
+      ]),
+    ).toBe(true);
+  });
 });
 
 describe("cleanSuggestionsText", () => {

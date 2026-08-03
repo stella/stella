@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { resolveSuggestedPromptsAvailability } from "@/features/chat/lib/suggested-prompts-availability";
+import {
+  resolveSuggestedPromptsAvailability,
+  resolveSuggestedPromptsTurnOwner,
+} from "@/features/chat/lib/suggested-prompts-availability";
 
 const ELIGIBLE_INPUT = {
   editorIsEmpty: true,
@@ -39,10 +42,58 @@ describe("resolveSuggestedPromptsAvailability", () => {
       "no-assistant-turn",
     ],
     [{ ...ELIGIBLE_INPUT, turnOwner: "ask-user" as const }, "turn-owned"],
+    [{ ...ELIGIBLE_INPUT, turnOwner: "approval" as const }, "turn-owned"],
   ] as const)("blocks an ineligible chat state", (input, reason) => {
     expect(resolveSuggestedPromptsAvailability(input)).toEqual({
       status: "blocked",
       reason,
     });
+  });
+});
+
+describe("resolveSuggestedPromptsTurnOwner", () => {
+  const assistantMessage = {
+    id: "assistant-1",
+    role: "assistant" as const,
+    parts: [{ type: "text" as const, content: "Done" }],
+  };
+
+  test("gives pending approvals precedence over the composer", () => {
+    expect(
+      resolveSuggestedPromptsTurnOwner({
+        approvalPendingMessageId: "assistant-1",
+        hasReopenedAskUser: false,
+        lastMessage: assistantMessage,
+      }),
+    ).toBe("approval");
+  });
+
+  test("keeps pending and reopened clarifications user-owned", () => {
+    const pendingAskUser = {
+      ...assistantMessage,
+      parts: [
+        {
+          type: "tool-call" as const,
+          id: "ask-1",
+          name: "ask-user" as const,
+          arguments: "{}",
+          state: "input-complete" as const,
+        },
+      ],
+    };
+    expect(
+      resolveSuggestedPromptsTurnOwner({
+        approvalPendingMessageId: null,
+        hasReopenedAskUser: false,
+        lastMessage: pendingAskUser,
+      }),
+    ).toBe("ask-user");
+    expect(
+      resolveSuggestedPromptsTurnOwner({
+        approvalPendingMessageId: null,
+        hasReopenedAskUser: true,
+        lastMessage: assistantMessage,
+      }),
+    ).toBe("ask-user");
   });
 });

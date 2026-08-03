@@ -15,6 +15,7 @@
  *   - render the shared `PromptBar` for the composer
  */
 
+import { useCallback, useState } from "react";
 import type { MouseEvent } from "react";
 
 import {
@@ -66,7 +67,10 @@ import { useChatSession } from "@/features/chat/hooks/use-chat-session";
 import { useChatThreadRuntime } from "@/features/chat/hooks/use-chat-thread-runtime";
 import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
 import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
-import { resolveSuggestedPromptsAvailability } from "@/features/chat/lib/suggested-prompts-availability";
+import {
+  resolveSuggestedPromptsAvailability,
+  resolveSuggestedPromptsTurnOwner,
+} from "@/features/chat/lib/suggested-prompts-availability";
 import {
   chatThreadOptions,
   chatThreadSuggestedPromptsOptions,
@@ -278,6 +282,26 @@ export const ChatTabPanel = ({
   // chat. Thread ref is shared with `chatThreadOptions` above so
   // drafts persist across tab close/open.
   const lastMessage = messages.at(-1);
+  const [editingAskUserToolCallIds, setEditingAskUserToolCallIds] = useState<
+    ReadonlySet<string>
+  >(() => new Set<string>());
+  const handleAskUserEditingChange = useCallback(
+    (toolCallId: string, isEditing: boolean) => {
+      setEditingAskUserToolCallIds((current) => {
+        if (current.has(toolCallId) === isEditing) {
+          return current;
+        }
+        const next = new Set(current);
+        if (isEditing) {
+          next.add(toolCallId);
+        } else {
+          next.delete(toolCallId);
+        }
+        return next;
+      });
+    },
+    [],
+  );
   const editorIsInitiallyEmpty = useIsChatDraftEmpty(threadRef);
   // Fetch suggestions only when editor is empty, last message is from
   // assistant, and no generation is in progress. Using draft state
@@ -287,7 +311,11 @@ export const ChatTabPanel = ({
     error,
     isGenerating,
     lastMessage: lastMessage ?? null,
-    turnOwner: "composer",
+    turnOwner: resolveSuggestedPromptsTurnOwner({
+      approvalPendingMessageId,
+      hasReopenedAskUser: editingAskUserToolCallIds.size > 0,
+      lastMessage: lastMessage ?? null,
+    }),
   });
   const lastMessageId =
     suggestedPromptsAvailability.status === "eligible"
@@ -431,6 +459,7 @@ export const ChatTabPanel = ({
                   loadOlderError={loadOlderError}
                   messages={messages}
                   onAskUserEditAndRerun={handleAskUserEditAndRerun}
+                  onAskUserEditingChange={handleAskUserEditingChange}
                   onLoadOlder={loadOlder}
                   onAskUserSubmit={handleAskUserSubmit}
                   onCreateDocumentResolve={handleCreateDocumentResolve}

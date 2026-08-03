@@ -44,6 +44,11 @@ type ActiveExternal = {
   url: string;
 };
 
+export type ActiveDocumentDraft = {
+  fileName: string;
+  toolCallId: string;
+};
+
 export type FileViewerWithAIProps = {
   /**
    * Workspace this viewer belongs to. Used to scope the chat
@@ -61,6 +66,8 @@ export type FileViewerWithAIProps = {
    * filename. Improves the AI's grounding when both are available.
    */
   activeFile?: ActiveFile | undefined;
+  /** Unsaved generated DOCX currently visible in this viewer. */
+  activeDraft?: ActiveDocumentDraft | undefined;
   /** Optional external source context, for MCP/web previews. */
   activeExternal?: ActiveExternal | undefined;
   /** Optional class name applied to the wrapper. */
@@ -99,6 +106,7 @@ export const FileChatOverlayHost = ({
   workspaceId,
   chatThreadId,
   activeFile,
+  activeDraft,
   activeExternal,
   docxEditable,
   docxEditSafety,
@@ -129,6 +137,7 @@ export const FileChatOverlayHost = ({
   return (
     <FileChatOverlay
       activeExternal={activeExternal}
+      activeDraft={activeDraft}
       activeFile={activeFile}
       chatThreadId={chatThreadId}
       docxComments={docxComments}
