@@ -133,8 +133,8 @@ const staticPages = (): PageMeta[] =>
       path.join(import.meta.dir, "..", file),
       "utf-8",
     );
-    const title = source.match(/\btitle="([^"]+)"/u)?.[1];
-    const description = source.match(/\bdescription="([^"]+)"/u)?.[1];
+    const title = /\btitle="([^"]+)"/u.exec(source)?.[1];
+    const description = /\bdescription="([^"]+)"/u.exec(source)?.[1];
     if (title === undefined || description === undefined) {
       return { page, title: title ?? "", description: description ?? "" };
     }

@@ -38,7 +38,7 @@ for (const file of sourceFiles(SRC_ROOT)) {
     const tag = match[0];
     // A spread ({...props}) can carry alt; that shape is not statically
     // checkable here, so it is trusted and skipped.
-    if (/\balt=/u.test(tag) || tag.includes("{...")) {
+    if (/\s+alt\s*=/u.test(tag) || tag.includes("{...")) {
       continue;
     }
     const offset = source.indexOf(tag);

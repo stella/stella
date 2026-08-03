@@ -8,6 +8,7 @@ type NavLabelKey = Extract<
   | "footer.agent"
   | "footer.contact"
   | "footer.editor"
+  | "footer.press"
   | "footer.publicData"
   | "footer.status"
   | "footer.tabularReview"
