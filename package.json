@@ -53,6 +53,7 @@
   "overrides": {
     "@emnapi/core": "1.11.1",
     "@emnapi/runtime": "1.11.1",
+    "@hono/node-server": "2.0.10",
     "emnapi": "1.11.1",
     "yuku-codegen": "0.6.5",
     "yuku-parser": "0.6.5"
@@ -65,8 +66,8 @@
     "@stll/typescript-config": "0.6.0",
     "@typescript/native": "npm:typescript@7.0.2",
     "lefthook": "^2.1.10",
-    "oxfmt": "^0.59.0",
-    "oxlint": "1.75.0",
+    "oxfmt": "^0.61.0",
+    "oxlint": "1.76.0",
     "oxlint-tsgolint": "7.0.2001",
     "turbo": "^2.10.5"
   }
