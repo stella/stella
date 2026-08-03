@@ -194,9 +194,15 @@ export const groupFileContentsByEntityId = (
 ): Map<string, ArchiveFileContent[]> => {
   const contentsByEntityId = new Map<string, ArchiveFileContent[]>();
   for (const { entityId, content } of files) {
-    const contents = contentsByEntityId.get(entityId) ?? [];
+    const contents = contentsByEntityId.get(entityId);
+    // Absent means "no file seen for this document yet", the normal state
+    // on first encounter, so start the list rather than treating the miss
+    // as a violated invariant.
+    if (contents === undefined) {
+      contentsByEntityId.set(entityId, [content]);
+      continue;
+    }
     contents.push(content);
-    contentsByEntityId.set(entityId, contents);
   }
   return contentsByEntityId;
 };
