@@ -22,9 +22,10 @@ to the current head and which are stale.
 Do not rely only on the REST review-comments list: it does not represent thread
 resolution or the complete conversation reliably.
 
-## 2. Triage Every Actionable Bot Thread
+## 2. Triage Every Actionable Bot Finding
 
-Classify each unresolved bot thread:
+Classify each unresolved bot review thread and each actionable top-level bot
+comment:
 
 - **Accept**: correct and improves safety, behavior, tests, or maintainability.
 - **Accept with adjustment**: the concern is valid but the proposed fix conflicts
@@ -49,7 +50,8 @@ branch. Capture the resulting head SHA.
 
 ## 4. Reply With Verifiable Evidence
 
-Reply inline to each handled bot thread. Keep responses short and factual:
+Reply in the review thread or top-level issue conversation for each handled bot
+finding. Keep responses short and factual:
 
 - implemented in `<sha>` with the relevant behavior
 - implemented with an adjustment and why
@@ -59,17 +61,21 @@ Reply inline to each handled bot thread. Keep responses short and factual:
 Follow repository attribution rules for GitHub comments. Do not claim a check
 passed unless it ran successfully on the reported head.
 
-After replying, resolve only bot-authored threads that are implemented, already
-addressed, or answered with a supported pushback. Leave human threads and any
-uncertain bot thread open. Do not minimize summary comments by default.
+After replying, resolve only bot-authored review threads that are implemented,
+already addressed, or answered with a supported pushback. Leave human threads
+and any uncertain bot thread open. Top-level comments have no thread-resolution
+state; do not minimize bot summaries by default.
 
 ## 5. Recheck the Current Head
 
 Refresh the PR after the push and report one status:
 
-- `clean`: no actionable bot thread remains and current-head checks are green
-- `pending_bots`: current-head bot review or checks are still running
-- `needs_changes`: actionable feedback remains
+- `clean`: all current-head automated reviewers are terminal, required checks
+  are green, and no actionable automated finding remains in a review thread or
+  top-level comment
+- `pending_bots`: a current-head automated review or required check is still
+  running
+- `needs_changes`: actionable automated feedback remains
 - `failing_ci`: a current-head required check failed
 
 Preserve the PR's explicit draft state. This skill performs one pass; it does not
