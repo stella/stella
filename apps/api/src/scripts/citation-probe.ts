@@ -192,8 +192,12 @@ const BENIGN: readonly RegExp[] = [
   // 11055/01/332960/2959" (Finanční úřad), "č.j. 27662/97/332960/2959". A
   // real court docket always carries a letter registry between the chamber
   // digit and the docket number (CASE_NUMBER_BODY in the extractor); an
-  // all-numeric multi-segment reference is never a court citation.
-  /[čc]\.\s{0,3}j\.:?\s{0,3}\d{1,6}(?:\/\d{1,6}){2,4}(?!\p{L})/u,
+  // all-numeric multi-segment reference is never a court citation. The
+  // lookahead excludes a following letter, digit, or slash so a longer or
+  // mixed-format reference ("123/45/678/ABC", a 6-segment chain, or an
+  // oversized final segment beyond the 6-digit cap) is never silently
+  // truncated to a shorter benign-looking prefix.
+  /[čc]\.\s{0,3}j\.:?\s{0,3}\d{1,6}(?:\/\d{1,6}){2,4}(?![\p{L}\d/])/u,
 ];
 
 const isBenign = (candidate: string): boolean =>
