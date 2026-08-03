@@ -14,7 +14,15 @@ import type { AIErrorKind } from "@/api/lib/ai-error";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 
-const CHAT_TURN_LEASE_MS = 10 * 60 * 1000;
+/** Maximum time a metered provider call may run before the server aborts it. */
+export const CHAT_METERED_PROVIDER_TIMEOUT_MS = 10 * 60 * 1000;
+
+// The provider timeout begins after preflight and connector setup. Retain an
+// additional hand-off window so a still-live provider call cannot lose its
+// execution owner at the same instant its timeout fires.
+const CHAT_TURN_PROVIDER_LEASE_GRACE_MS = 2 * 60 * 1000;
+const CHAT_TURN_LEASE_MS =
+  CHAT_METERED_PROVIDER_TIMEOUT_MS + CHAT_TURN_PROVIDER_LEASE_GRACE_MS;
 
 const AI_ERROR_RETRYABLE = {
   loop_detected: false,
@@ -40,6 +48,9 @@ export type ChatTurnExecution = {
   id: SafeId<"chatTurn">;
 };
 
+const nextChatTurnLeaseExpiry = (): Date =>
+  new Date(Date.now() + CHAT_TURN_LEASE_MS);
+
 export const createChatTurnAcceptance = ({
   organizationId,
   threadId,
@@ -48,7 +59,7 @@ export const createChatTurnAcceptance = ({
   workspaceId,
 }: Omit<ChatTurnAcceptance, "id" | "leaseExpiresAt">): ChatTurnAcceptance => ({
   id: createSafeId<"chatTurn">(),
-  leaseExpiresAt: new Date(Date.now() + CHAT_TURN_LEASE_MS),
+  leaseExpiresAt: nextChatTurnLeaseExpiry(),
   organizationId,
   threadId,
   userId,
@@ -105,15 +116,22 @@ export const insertChatTurnAcceptanceOnTx = async ({
   });
 };
 
-type ClaimChatTurnForExecutionProps = {
+export type ChatTurnExecutionClaim = {
   acceptedTurnId: SafeId<"chatTurn"> | null;
   incomingMessageId: SafeId<"chatMessage">;
   incomingMessageRole: ChatMessageRole;
   organizationId: SafeId<"organization">;
-  safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
+};
+
+type ClaimChatTurnForExecutionProps = ChatTurnExecutionClaim & {
+  safeDb: SafeDb;
+};
+
+type ClaimChatTurnForExecutionOnTxProps = ChatTurnExecutionClaim & {
+  tx: Transaction;
 };
 
 type ClaimSource = {
@@ -122,179 +140,244 @@ type ClaimSource = {
   status: "accepted" | "awaiting-user" | "running";
 };
 
-/** Claim an accepted turn, or resume the awaiting turn owning an assistant. */
-export const claimChatTurnForExecution = async ({
+/** Claim on the caller's transaction before any owned history mutation. */
+export const claimChatTurnForExecutionOnTx = async ({
   acceptedTurnId,
   incomingMessageId,
   incomingMessageRole,
   organizationId,
-  safeDb,
   threadId,
+  tx,
   userId,
   workspaceId,
+}: ClaimChatTurnForExecutionOnTxProps): Promise<ChatTurnExecution | null> => {
+  const executionId = Bun.randomUUIDv7();
+  const leaseExpiresAt = nextChatTurnLeaseExpiry();
+
+  let source: ClaimSource | null = null;
+  if (acceptedTurnId !== null) {
+    const accepted = await tx.query.chatTurns.findFirst({
+      where: {
+        id: { eq: acceptedTurnId },
+        status: { eq: "accepted" },
+        threadId: { eq: threadId },
+      },
+      columns: { id: true },
+    });
+    source = accepted
+      ? { executionId: null, id: accepted.id, status: "accepted" }
+      : null;
+  } else if (incomingMessageRole === "assistant") {
+    const awaiting = await tx.query.chatTurns.findFirst({
+      where: {
+        assistantMessageId: { eq: incomingMessageId },
+        status: { eq: "awaiting-user" },
+        threadId: { eq: threadId },
+      },
+      columns: { id: true },
+    });
+    source = awaiting
+      ? { executionId: null, id: awaiting.id, status: "awaiting-user" }
+      : null;
+  } else {
+    const accepted = await tx.query.chatTurns.findFirst({
+      where: {
+        status: { eq: "accepted" },
+        threadId: { eq: threadId },
+        userMessageId: { eq: incomingMessageId },
+      },
+      columns: { id: true },
+    });
+    if (accepted) {
+      source = { executionId: null, id: accepted.id, status: "accepted" };
+    } else {
+      const expired = await tx
+        .select({
+          executionId: chatTurns.executionId,
+          id: chatTurns.id,
+        })
+        .from(chatTurns)
+        .where(
+          and(
+            eq(chatTurns.threadId, threadId),
+            eq(chatTurns.userMessageId, incomingMessageId),
+            eq(chatTurns.status, "running"),
+            lte(chatTurns.leaseExpiresAt, new Date()),
+          ),
+        )
+        .limit(1);
+      const expiredTurn = expired.at(0);
+      if (expiredTurn) {
+        if (expiredTurn.executionId === null) {
+          panic("Running chat turn has no execution owner");
+        }
+        source = {
+          executionId: expiredTurn.executionId,
+          id: expiredTurn.id,
+          status: "running",
+        };
+      }
+    }
+  }
+
+  if (!source) {
+    const active = await tx.query.chatTurns.findFirst({
+      where: {
+        status: { in: ["accepted", "running", "awaiting-user"] },
+        threadId: { eq: threadId },
+      },
+      columns: { id: true },
+    });
+    if (active) {
+      return null;
+    }
+
+    const userMessageId =
+      incomingMessageRole === "user"
+        ? incomingMessageId
+        : (
+            await tx
+              .select({ id: chatMessages.id })
+              .from(chatMessages)
+              .where(
+                and(
+                  eq(chatMessages.threadId, threadId),
+                  eq(chatMessages.role, "user"),
+                ),
+              )
+              .orderBy(desc(chatMessages.createdAt), desc(chatMessages.id))
+              .limit(1)
+          ).at(0)?.id;
+    if (userMessageId === undefined) {
+      return null;
+    }
+
+    // Legacy adoption is only for messages that predate durable turns. A
+    // retry of any already-owned message is a fixed point, including a
+    // completed turn whose streamed response was lost by the client.
+    const existingTurn = await tx.query.chatTurns.findFirst({
+      where: {
+        threadId: { eq: threadId },
+        userMessageId: { eq: userMessageId },
+      },
+      columns: { id: true },
+    });
+    if (existingTurn) {
+      return null;
+    }
+
+    const legacyTurnId = createSafeId<"chatTurn">();
+    // audit: skip — deploy compatibility for a persisted pre-chat_turns message; later message settlement is audited
+    await tx.insert(chatTurns).values({
+      executionId,
+      id: legacyTurnId,
+      leaseExpiresAt,
+      organizationId,
+      status: "running",
+      threadId,
+      userId,
+      userMessageId,
+      workspaceId,
+    });
+    return { executionId, id: legacyTurnId };
+  }
+
+  const executionOwnershipPredicate =
+    source.executionId === null
+      ? isNull(chatTurns.executionId)
+      : eq(chatTurns.executionId, source.executionId);
+  // audit: skip — ephemeral execution ownership; durable message changes are audited at settlement
+  const claimed = await tx
+    .update(chatTurns)
+    .set({
+      assistantMessageId: null,
+      executionId,
+      interactionToolCallId: null,
+      interactionType: null,
+      leaseExpiresAt,
+      status: "running",
+    })
+    .where(
+      and(
+        eq(chatTurns.id, source.id),
+        eq(chatTurns.status, source.status),
+        executionOwnershipPredicate,
+      ),
+    )
+    .returning({ id: chatTurns.id });
+
+  const row = claimed.at(0);
+  return row ? { executionId, id: row.id } : null;
+};
+
+/** Claim an accepted turn, or resume the awaiting turn owning an assistant. */
+export const claimChatTurnForExecution = async ({
+  safeDb,
+  ...claim
 }: ClaimChatTurnForExecutionProps): Promise<
   Result<ChatTurnExecution | null, SafeDbError>
-> => {
-  const executionId = Bun.randomUUIDv7();
-  const leaseExpiresAt = new Date(Date.now() + CHAT_TURN_LEASE_MS);
+> =>
+  await safeDb(
+    async (tx) => await claimChatTurnForExecutionOnTx({ ...claim, tx }),
+  );
 
-  return await safeDb(async (tx) => {
-    let source: ClaimSource | null = null;
-    if (acceptedTurnId !== null) {
-      const accepted = await tx.query.chatTurns.findFirst({
-        where: {
-          id: { eq: acceptedTurnId },
-          status: { eq: "accepted" },
-          threadId: { eq: threadId },
-        },
-        columns: { id: true },
-      });
-      source = accepted
-        ? { executionId: null, id: accepted.id, status: "accepted" }
-        : null;
-    } else if (incomingMessageRole === "assistant") {
-      const awaiting = await tx.query.chatTurns.findFirst({
-        where: {
-          assistantMessageId: { eq: incomingMessageId },
-          status: { eq: "awaiting-user" },
-          threadId: { eq: threadId },
-        },
-        columns: { id: true },
-      });
-      source = awaiting
-        ? { executionId: null, id: awaiting.id, status: "awaiting-user" }
-        : null;
-    } else {
-      const accepted = await tx.query.chatTurns.findFirst({
-        where: {
-          status: { eq: "accepted" },
-          threadId: { eq: threadId },
-          userMessageId: { eq: incomingMessageId },
-        },
-        columns: { id: true },
-      });
-      if (accepted) {
-        source = { executionId: null, id: accepted.id, status: "accepted" };
-      } else {
-        const expired = await tx
-          .select({
-            executionId: chatTurns.executionId,
-            id: chatTurns.id,
-          })
-          .from(chatTurns)
-          .where(
-            and(
-              eq(chatTurns.threadId, threadId),
-              eq(chatTurns.userMessageId, incomingMessageId),
-              eq(chatTurns.status, "running"),
-              lte(chatTurns.leaseExpiresAt, new Date()),
-            ),
-          )
-          .limit(1);
-        const expiredTurn = expired.at(0);
-        if (expiredTurn) {
-          if (expiredTurn.executionId === null) {
-            panic("Running chat turn has no execution owner");
-          }
-          source = {
-            executionId: expiredTurn.executionId,
-            id: expiredTurn.id,
-            status: "running",
-          };
-        }
-      }
+type WithClaimedChatTurnExecutionProps<T> = {
+  claim: ChatTurnExecutionClaim;
+  mutate: (args: {
+    execution: ChatTurnExecution;
+    tx: Transaction;
+  }) => Promise<T>;
+  safeDb: SafeDb;
+};
+
+/**
+ * Run a turn-owned mutation only after winning its claim, on the exact same
+ * transaction. A rejected/duplicate claim never invokes `mutate`; a mutation
+ * failure rolls the claim back with the rest of the transaction.
+ */
+export const withClaimedChatTurnExecution = async <T>({
+  claim,
+  mutate,
+  safeDb,
+}: WithClaimedChatTurnExecutionProps<T>): Promise<
+  Result<{ execution: ChatTurnExecution; value: T } | null, SafeDbError>
+> =>
+  await safeDb(async (tx) => {
+    const execution = await claimChatTurnForExecutionOnTx({ ...claim, tx });
+    if (execution === null) {
+      return null;
     }
+    return { execution, value: await mutate({ execution, tx }) };
+  });
 
-    if (!source) {
-      const active = await tx.query.chatTurns.findFirst({
-        where: {
-          status: { in: ["accepted", "running", "awaiting-user"] },
-          threadId: { eq: threadId },
-        },
-        columns: { id: true },
-      });
-      if (active) {
-        return null;
-      }
-
-      const userMessageId =
-        incomingMessageRole === "user"
-          ? incomingMessageId
-          : (
-              await tx
-                .select({ id: chatMessages.id })
-                .from(chatMessages)
-                .where(
-                  and(
-                    eq(chatMessages.threadId, threadId),
-                    eq(chatMessages.role, "user"),
-                  ),
-                )
-                .orderBy(desc(chatMessages.createdAt), desc(chatMessages.id))
-                .limit(1)
-            ).at(0)?.id;
-      if (userMessageId === undefined) {
-        return null;
-      }
-
-      // Legacy adoption is only for messages that predate durable turns. A
-      // retry of any already-owned message is a fixed point, including a
-      // completed turn whose streamed response was lost by the client.
-      const existingTurn = await tx.query.chatTurns.findFirst({
-        where: {
-          threadId: { eq: threadId },
-          userMessageId: { eq: userMessageId },
-        },
-        columns: { id: true },
-      });
-      if (existingTurn) {
-        return null;
-      }
-
-      const legacyTurnId = createSafeId<"chatTurn">();
-      // audit: skip — deploy compatibility for a persisted pre-chat_turns message; later message settlement is audited
-      await tx.insert(chatTurns).values({
-        executionId,
-        id: legacyTurnId,
-        leaseExpiresAt,
-        organizationId,
-        status: "running",
-        threadId,
-        userId,
-        userMessageId,
-        workspaceId,
-      });
-      return { executionId, id: legacyTurnId };
-    }
-
-    const executionOwnershipPredicate =
-      source.executionId === null
-        ? isNull(chatTurns.executionId)
-        : eq(chatTurns.executionId, source.executionId);
-    // audit: skip — ephemeral execution ownership; durable message changes are audited at settlement
-    const claimed = await tx
+/**
+ * Extend a claimed execution immediately before dispatching provider work.
+ * This conditional write makes the renewed lease a proof that the caller still
+ * owns the turn, rather than trusting a lease calculated before connector
+ * discovery and other preflight work.
+ */
+export const renewChatTurnExecutionLease = async ({
+  execution,
+  safeDb,
+}: {
+  execution: ChatTurnExecution;
+  safeDb: SafeDb;
+}): Promise<Result<boolean, SafeDbError>> =>
+  await safeDb(async (tx) => {
+    // audit: skip — ephemeral execution ownership; terminal state is audited at settlement
+    const renewed = await tx
       .update(chatTurns)
-      .set({
-        assistantMessageId: null,
-        executionId,
-        interactionToolCallId: null,
-        interactionType: null,
-        leaseExpiresAt,
-        status: "running",
-      })
+      .set({ leaseExpiresAt: nextChatTurnLeaseExpiry() })
       .where(
         and(
-          eq(chatTurns.id, source.id),
-          eq(chatTurns.status, source.status),
-          executionOwnershipPredicate,
+          eq(chatTurns.id, execution.id),
+          eq(chatTurns.executionId, execution.executionId),
+          eq(chatTurns.status, "running"),
         ),
       )
       .returning({ id: chatTurns.id });
-
-    const row = claimed.at(0);
-    return row ? { executionId, id: row.id } : null;
+    return renewed.length === 1;
   });
-};
 
 type SettleChatTurnProps = {
   assistantMessageId: SafeId<"chatMessage"> | null;

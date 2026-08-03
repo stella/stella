@@ -118,6 +118,23 @@ export const setCreateDocumentDraftInspectorChatThreadId = ({
   return true;
 };
 
+export const getCreateDocumentDraftInspectorChatThreadId = ({
+  inspector,
+  toolCallId,
+}: Omit<
+  SetCreateDocumentDraftInspectorChatThreadIdOptions,
+  "chatThreadId"
+>): ChatThreadId | null => {
+  const tab = inspector.tabs.find(
+    (candidate) => candidate.id === createDocumentDraftTabId(toolCallId),
+  );
+  return tab?.type === "view" &&
+    tab.viewType === CREATE_DOCUMENT_DRAFT_VIEW &&
+    isCreateDocumentDraftPayload(tab.payload)
+    ? tab.payload.chatThreadId
+    : null;
+};
+
 type InvalidateCreatedDocumentQueriesOptions = {
   queryKeys: readonly QueryKey[];
   queryClient: QueryClient;

@@ -1,5 +1,6 @@
 import { use, useCallback, useMemo, useRef, useState } from "react";
 
+import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
@@ -19,6 +20,7 @@ import {
 } from "@/components/docx/app-docx-editor";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { setCreateDocumentDraftInspectorChatThreadId } from "@/features/chat/hooks/use-chat-session-created-document.logic";
+import { fileOptions } from "@/lib/files/queries";
 
 type CreateDocumentDraftInspectorEditorProps = {
   payload: CreateDocumentDraftPayload;
@@ -29,6 +31,14 @@ export const CreateDocumentDraftInspectorEditor = ({
 }: CreateDocumentDraftInspectorEditorProps) => {
   const t = useTranslations();
   const editorRef = useRef<DocxEditorRef>(null);
+  const persistedFileQuery = useQuery({
+    ...fileOptions({
+      workspaceId: payload.status === "persisted" ? payload.workspaceId : "",
+      fieldId: payload.status === "persisted" ? payload.fieldId : "",
+      purpose: "native-display",
+    }),
+    enabled: payload.status === "persisted",
+  });
   const compiled = useMemo(
     () =>
       payload.source.trim()
@@ -38,6 +48,7 @@ export const CreateDocumentDraftInspectorEditor = ({
         : null,
     [payload.name, payload.source],
   );
+  const compiledDocument = compiled?.status === "ok" ? compiled.document : null;
   const availableRestoration = getCreateDocumentDraftRestoration(
     payload.toolCallId,
   );
@@ -51,13 +62,21 @@ export const CreateDocumentDraftInspectorEditor = ({
       if (editor === null) {
         return undefined;
       }
+      if (!draftEditable) {
+        editorRef.current = editor;
+        return () => {
+          if (editorRef.current === editor) {
+            editorRef.current = null;
+          }
+        };
+      }
       return attachCreateDocumentDraftEditor({
         editor,
         editorRef,
         toolCallId: payload.toolCallId,
       });
     },
-    [payload.toolCallId],
+    [draftEditable, payload.toolCallId],
   );
   const handleChatThreadIdChange = useCallback(
     (chatThreadId: CreateDocumentDraftPayload["chatThreadId"]) => {
@@ -70,7 +89,19 @@ export const CreateDocumentDraftInspectorEditor = ({
     [payload.toolCallId],
   );
 
-  if (compiled?.status !== "ok") {
+  if (persistedFileQuery.error) {
+    throw persistedFileQuery.error;
+  }
+
+  if (payload.status === "persisted" && persistedFileQuery.data === undefined) {
+    return (
+      <div className="text-muted-foreground flex min-h-0 flex-1 items-center justify-center p-6 text-sm">
+        {t("common.loading")}
+      </div>
+    );
+  }
+
+  if (payload.status !== "persisted" && compiled?.status !== "ok") {
     return (
       <div className="text-muted-foreground flex min-h-0 flex-1 items-center justify-center p-6 text-sm">
         {payload.status === "streaming"
@@ -86,9 +117,19 @@ export const CreateDocumentDraftInspectorEditor = ({
         ref={attachEditor}
         autoOpenReviewSidebar={false}
         className="folio-docx-preview folio-peek h-full"
-        document={restoredBuffer === null ? compiled.document : null}
-        documentBuffer={restoredBuffer}
-        documentKey={payload.toolCallId}
+        document={
+          payload.status === "persisted" || restoredBuffer !== null
+            ? null
+            : compiledDocument
+        }
+        documentBuffer={
+          payload.status === "persisted"
+            ? (persistedFileQuery.data?.buffer ?? null)
+            : restoredBuffer
+        }
+        documentKey={
+          payload.status === "persisted" ? payload.fieldId : payload.toolCallId
+        }
         initialZoom="fit-width"
         loadingIndicator={null}
         mode={draftEditable ? "editing" : "viewing"}

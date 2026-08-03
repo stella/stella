@@ -14,7 +14,7 @@ import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { getChatThreadKey } from "@/lib/chat-thread-ref";
 
 const DEFAULT_SEND_MODE = CHAT_SEND_MODE.rawOverride;
-const MAX_PERSISTED_THREAD_MODES = 100;
+const MAX_PERSISTED_NON_PROTECTIVE_THREAD_MODES = 100;
 
 type PersistedChatAnonymizedState = {
   defaultSendMode: ChatSendMode;
@@ -55,27 +55,72 @@ const readPersistedThreadModes = (
   }
 
   return Object.fromEntries(
-    Object.entries(persisted.sendModes)
-      .filter(
-        ([threadKey, sendMode]) =>
-          threadKey.length <= 256 && isChatSendMode(sendMode),
-      )
-      .slice(-MAX_PERSISTED_THREAD_MODES),
+    Object.entries(persisted.sendModes).filter(
+      ([threadKey, sendMode]) =>
+        threadKey.length <= 256 && isChatSendMode(sendMode),
+    ),
   );
 };
 
 const readPersistedState = (
   persisted: unknown,
-): PersistedChatAnonymizedState => ({
-  defaultSendMode:
+): PersistedChatAnonymizedState => {
+  const defaultSendMode =
     typeof persisted === "object" &&
     persisted !== null &&
     "defaultSendMode" in persisted &&
     isChatSendMode(persisted.defaultSendMode)
       ? persisted.defaultSendMode
-      : (readPersistedSendMode(persisted) ?? DEFAULT_SEND_MODE),
-  sendModes: readPersistedThreadModes(persisted),
-});
+      : (readPersistedSendMode(persisted) ?? DEFAULT_SEND_MODE);
+  return {
+    defaultSendMode,
+    sendModes: retainThreadSendModes({
+      defaultSendMode,
+      sendModes: Object.entries(readPersistedThreadModes(persisted)).flatMap(
+        ([threadKey, sendMode]) =>
+          sendMode === undefined ? [] : [[threadKey, sendMode]],
+      ),
+    }),
+  };
+};
+
+const isPrivacyIncreasingOverride = ({
+  defaultSendMode,
+  sendMode,
+}: {
+  defaultSendMode: ChatSendMode;
+  sendMode: ChatSendMode;
+}): boolean =>
+  defaultSendMode === CHAT_SEND_MODE.rawOverride &&
+  sendMode === CHAT_SEND_MODE.anonymized;
+
+const retainThreadSendModes = ({
+  defaultSendMode,
+  sendModes,
+}: {
+  defaultSendMode: ChatSendMode;
+  sendModes: readonly (readonly [string, ChatSendMode])[];
+}): Record<string, ChatSendMode | undefined> => {
+  const privacyIncreasing: [string, ChatSendMode][] = [];
+  const nonProtective: [string, ChatSendMode][] = [];
+
+  for (const [threadKey, sendMode] of sendModes) {
+    if (isPrivacyIncreasingOverride({ defaultSendMode, sendMode })) {
+      privacyIncreasing.push([threadKey, sendMode]);
+      continue;
+    }
+    nonProtective.push([threadKey, sendMode]);
+  }
+
+  // A persisted anonymized override must never disappear merely because a
+  // local cache reached an arbitrary count: doing so changes a later send from
+  // private to raw. The bounded partition holds only modes whose eviction
+  // cannot weaken the default privacy posture.
+  return Object.fromEntries([
+    ...privacyIncreasing,
+    ...nonProtective.slice(-MAX_PERSISTED_NON_PROTECTIVE_THREAD_MODES),
+  ]);
+};
 
 export const useChatAnonymizedStore = create<ChatAnonymizedStore>()(
   persist(
@@ -91,10 +136,14 @@ export const useChatAnonymizedStore = create<ChatAnonymizedStore>()(
           if (sendMode !== state.defaultSendMode) {
             retained.push([threadKey, sendMode]);
           }
+          const nextModes = retained.flatMap(([retainedThreadKey, mode]) =>
+            mode === undefined ? [] : [[retainedThreadKey, mode] as const],
+          );
           return {
-            sendModes: Object.fromEntries(
-              retained.slice(-MAX_PERSISTED_THREAD_MODES),
-            ),
+            sendModes: retainThreadSendModes({
+              defaultSendMode: state.defaultSendMode,
+              sendModes: nextModes,
+            }),
           };
         });
       },

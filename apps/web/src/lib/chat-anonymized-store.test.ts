@@ -52,16 +52,16 @@ describe("chat anonymization scope", () => {
     expect(getChatSendMode(second)).toBe(CHAT_SEND_MODE.rawOverride);
   });
 
-  test("bounds persisted thread overrides", () => {
+  test("never evicts privacy-increasing thread overrides", () => {
     for (let index = 0; index < 101; index += 1) {
       setChatAnonymized(globalThread(`thread-${index}`), true);
     }
 
     expect(
       Object.keys(useChatAnonymizedStore.getState().sendModes),
-    ).toHaveLength(100);
+    ).toHaveLength(101);
     expect(getChatSendMode(globalThread("thread-0"))).toBe(
-      CHAT_SEND_MODE.rawOverride,
+      CHAT_SEND_MODE.anonymized,
     );
     expect(getChatSendMode(globalThread("thread-100"))).toBe(
       CHAT_SEND_MODE.anonymized,

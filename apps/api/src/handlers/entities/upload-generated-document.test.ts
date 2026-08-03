@@ -2,7 +2,12 @@ import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { uploadGeneratedDocument } from "@/api/handlers/entities/upload";
+import {
+  hasExactGeneratedDocumentDraftThreadLink,
+  resolveGeneratedDocumentDraftThreadLinkPreflight,
+  resolveGeneratedDocumentDraftThreadScope,
+  uploadGeneratedDocument,
+} from "@/api/handlers/entities/upload";
 import { toSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
@@ -17,6 +22,19 @@ const messageId = toSafeId<"chatMessage">(
 );
 const threadId = toSafeId<"chatThread">("00000000-0000-0000-0000-000000000002");
 const propertyId = toSafeId<"property">("00000000-0000-0000-0000-000000000003");
+const workspaceId = toSafeId<"workspace">(
+  "00000000-0000-0000-0000-000000000004",
+);
+const originWorkspaceId = toSafeId<"workspace">(
+  "00000000-0000-0000-0000-000000000005",
+);
+const entityId = toSafeId<"entity">("00000000-0000-0000-0000-000000000006");
+const fieldId = toSafeId<"field">("00000000-0000-0000-0000-000000000007");
+const otherFieldId = toSafeId<"field">("00000000-0000-0000-0000-000000000009");
+const organizationId = toSafeId<"organization">(
+  "00000000-0000-0000-0000-000000000008",
+);
+const userId = "user-1";
 
 const createUnreadFile = () => {
   const file = new File(["untrusted bytes"], "draft.docx", {
@@ -143,5 +161,65 @@ describe("generated document upload preflight", () => {
       response: { message: "Property not found in workspace" },
     });
     expect(arrayBuffer).not.toHaveBeenCalled();
+  });
+});
+
+describe("generated draft chat promotion", () => {
+  test("promotes both global and origin-scoped dedicated draft chats to the saved file workspace", () => {
+    expect(
+      resolveGeneratedDocumentDraftThreadScope({
+        destinationWorkspaceId: workspaceId,
+        threadWorkspaceId: null,
+      }),
+    ).toBe("promote");
+    expect(
+      resolveGeneratedDocumentDraftThreadScope({
+        destinationWorkspaceId: workspaceId,
+        threadWorkspaceId: originWorkspaceId,
+      }),
+    ).toBe("promote");
+    expect(
+      resolveGeneratedDocumentDraftThreadScope({
+        destinationWorkspaceId: workspaceId,
+        threadWorkspaceId: workspaceId,
+      }),
+    ).toBe("already-scoped");
+  });
+
+  test("accepts only an idempotent exact file-chat association after a conflict", () => {
+    const expected = {
+      chatThreadId: threadId,
+      entityId,
+      fieldId,
+      organizationId,
+      userId,
+      workspaceId,
+    };
+
+    expect(
+      hasExactGeneratedDocumentDraftThreadLink({
+        existingLinks: [expected],
+        expected,
+      }),
+    ).toBe(true);
+    expect(
+      hasExactGeneratedDocumentDraftThreadLink({
+        existingLinks: [{ ...expected, fieldId: otherFieldId }],
+        expected,
+      }),
+    ).toBe(false);
+  });
+
+  test("rejects a linked draft chat before the document write transaction mutates anything", () => {
+    expect(
+      resolveGeneratedDocumentDraftThreadLinkPreflight({
+        hasExistingLink: true,
+      }),
+    ).toBe("conflict");
+    expect(
+      resolveGeneratedDocumentDraftThreadLinkPreflight({
+        hasExistingLink: false,
+      }),
+    ).toBe("continue");
   });
 });

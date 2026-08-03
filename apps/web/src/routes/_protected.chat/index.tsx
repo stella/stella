@@ -61,7 +61,7 @@ import {
   useChatAnonymized,
 } from "@/lib/chat-anonymized-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
-import { createChatThreadId } from "@/lib/chat-thread-ref";
+import { createChatThreadId, getChatThreadKey } from "@/lib/chat-thread-ref";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
@@ -470,6 +470,7 @@ function ChatIndex() {
             <ChatAnonymizationLayer
               editor={controller.editor}
               enabled={anonymized}
+              ownerKey={getChatThreadKey(threadRef)}
               workspaceId={draftThreadId}
             />
             <ChatInputSurface

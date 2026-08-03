@@ -2,8 +2,11 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import {
   __resetCreateDocumentDraftRuntimeForTests,
+  beginCreateDocumentDraftPersistence,
   completeCreateDocumentDraft,
+  endCreateDocumentDraftPersistence,
   getCreateDocumentDraftRestoration,
+  isCreateDocumentDraftPersistenceActive,
   prepareCreateDocumentDraft,
   registerCreateDocumentDraftSaver,
   runCreateDocumentOperationWithRetry,
@@ -87,6 +90,24 @@ describe("create-document operation retries", () => {
 });
 
 describe("create-document draft runtime", () => {
+  test("keeps a closed draft locked throughout matter persistence", () => {
+    expect(beginCreateDocumentDraftPersistence("tool-1")).toBe(true);
+    expect(beginCreateDocumentDraftPersistence("tool-1")).toBe(false);
+    expect(isCreateDocumentDraftPersistenceActive("tool-1")).toBe(true);
+
+    endCreateDocumentDraftPersistence("tool-1");
+
+    expect(isCreateDocumentDraftPersistenceActive("tool-1")).toBe(false);
+  });
+
+  test("clears the draft persistence lock only when the draft is terminal", () => {
+    beginCreateDocumentDraftPersistence("tool-1");
+
+    completeCreateDocumentDraft("tool-1");
+
+    expect(isCreateDocumentDraftPersistenceActive("tool-1")).toBe(false);
+  });
+
   test("retains the latest editor bytes when the editor unmounts", async () => {
     const bytes = new Uint8Array([1, 2, 3]).buffer;
     const unregister = registerCreateDocumentDraftSaver(
@@ -176,10 +197,10 @@ describe("create-document draft runtime", () => {
     expect(await getCreateDocumentDraftRestoration("tool-1")).toBe(edited);
   });
 
-  test("bounds retained snapshots while keeping refreshed drafts newest", async () => {
-    const snapshotLimit = 32;
+  test("preserves every actionable draft snapshot until it becomes terminal", async () => {
+    const draftCount = 33;
     const buffers = Array.from(
-      { length: snapshotLimit + 1 },
+      { length: draftCount },
       (_, index) => new Uint8Array([index]).buffer,
     );
 
@@ -196,20 +217,27 @@ describe("create-document draft runtime", () => {
       );
     }
 
+    const secondBuffer = buffers.at(1);
+    if (secondBuffer === undefined) {
+      throw new Error(
+        "Expected the draft snapshot fixture to contain two rows",
+      );
+    }
     expect(await saveCreateDocumentDraft("tool-1")).toEqual({
-      status: "unavailable",
+      status: "saved",
+      buffer: secondBuffer,
     });
     expect(await saveCreateDocumentDraft("tool-0")).toEqual({
       status: "saved",
       buffer: refreshed,
     });
-    expect(await saveCreateDocumentDraft(`tool-${snapshotLimit}`)).toEqual({
+    expect(await saveCreateDocumentDraft(`tool-${draftCount - 1}`)).toEqual({
       status: "saved",
       buffer: lastBuffer,
     });
   });
 
-  test("bounds retained snapshot bytes independently of entry count", async () => {
+  test("preserves large edited snapshots until their draft becomes terminal", async () => {
     const snapshotBytes = 24 * 1024 * 1024;
     const buffers = Array.from(
       { length: 3 },
@@ -222,9 +250,7 @@ describe("create-document draft runtime", () => {
     }
     await Promise.all(saves);
 
-    expect(await saveCreateDocumentDraft("large-0")).toEqual({
-      status: "unavailable",
-    });
+    expect((await saveCreateDocumentDraft("large-0")).status).toBe("saved");
     expect((await saveCreateDocumentDraft("large-1")).status).toBe("saved");
     expect((await saveCreateDocumentDraft("large-2")).status).toBe("saved");
   });

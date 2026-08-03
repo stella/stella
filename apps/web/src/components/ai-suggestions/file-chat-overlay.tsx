@@ -132,7 +132,11 @@ import {
   getChatEditModeSelection,
   useChatEditModeStore,
 } from "@/lib/chat-edit-mode-store";
-import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
+import {
+  getChatThreadKey,
+  type ChatThreadId,
+  type ChatThreadRef,
+} from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { useModelSelectorStore } from "@/lib/model-selector-store";
@@ -2169,6 +2173,7 @@ const FileChatOverlayInner = ({
         <ChatAnonymizationLayer
           editor={editorController.editor}
           enabled={anonymized}
+          ownerKey={getChatThreadKey(threadRef)}
           workspaceId={workspaceId ?? threadRef.threadId}
         />
         <PromptBar

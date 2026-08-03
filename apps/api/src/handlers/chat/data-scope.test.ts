@@ -6,11 +6,11 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import type { ChatMention, ChatMessage } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { expandThreadDataScope } from "@/api/lib/chat/data-scope";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import {
   computeAssistantTurnWorkspaceIds,
-  expandThreadDataScope,
   extractAssistantWorkspaceIds,
   extractIncomingMessageWorkspaceIds,
   extractMessageWorkspaceIds,

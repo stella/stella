@@ -1,8 +1,12 @@
 import type { Editor } from "@tiptap/react";
 
-import { setChatAnonDecorationPairs } from "@/components/chat/chat-anon-decorations-plugin";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { warmupChatAnonymizeWorker } from "@/lib/anonymize/anonymize-chat-worker-client";
+import {
+  clearChatAnonDecorationOwner,
+  setActiveChatAnonDecorationOwner,
+  updateActiveChatAnonDecorationOwner,
+} from "@/lib/anonymize/chat-anon-decoration-owner";
 import {
   acquireChatAnonDecorationsPlugin,
   releaseChatAnonDecorationsPlugin,
@@ -32,6 +36,7 @@ import { optionalReadonlyArray } from "@/lib/arrays";
 export const useChatAnonymizationLayer = ({
   editor,
   enabled,
+  ownerKey,
   workspaceId,
 }: {
   editor: Editor | null;
@@ -42,6 +47,8 @@ export const useChatAnonymizationLayer = ({
    * versa. Callers pass their own source of truth.
    */
   enabled: boolean;
+  /** Stable ChatThreadRef-derived identity for this composer surface. */
+  ownerKey: string;
   workspaceId: string;
 }): void => {
   // Kick off worker boot + dictionary load the moment the user
@@ -95,11 +102,37 @@ export const useChatAnonymizationLayer = ({
   }, [editor, enabled]);
 
   useExternalSyncEffect(() => {
-    if (!editor || !enabled) {
+    if (!editor) {
+      return undefined;
+    }
+    const activePairs = optionalReadonlyArray(pairs);
+    const activate = () => {
+      setActiveChatAnonDecorationOwner({
+        editor,
+        ownerKey,
+        pairs: activePairs,
+      });
+    };
+    editor.on("focus", activate);
+    if (editor.isFocused) {
+      activate();
+    }
+    return () => {
+      editor.off("focus", activate);
+      clearChatAnonDecorationOwner({ editor, ownerKey });
+    };
+  }, [editor, ownerKey, pairs]);
+
+  useExternalSyncEffect(() => {
+    if (!editor) {
       return;
     }
-    setChatAnonDecorationPairs(editor.view, optionalReadonlyArray(pairs));
-  }, [editor, enabled, pairs]);
+    updateActiveChatAnonDecorationOwner({
+      editor,
+      ownerKey,
+      pairs: optionalReadonlyArray(pairs),
+    });
+  }, [editor, ownerKey, pairs]);
 };
 
 /**
@@ -113,12 +146,14 @@ export const useChatAnonymizationLayer = ({
 export const ChatAnonymizationLayer = ({
   editor,
   enabled,
+  ownerKey,
   workspaceId,
 }: {
   editor: Editor | null;
   enabled: boolean;
+  ownerKey: string;
   workspaceId: string;
 }): null => {
-  useChatAnonymizationLayer({ editor, enabled, workspaceId });
+  useChatAnonymizationLayer({ editor, enabled, ownerKey, workspaceId });
   return null;
 };

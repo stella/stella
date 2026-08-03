@@ -40,7 +40,10 @@ import {
   withParsedToolCallInputs,
 } from "@/components/chat/chat-ui-tools";
 import {
+  beginCreateDocumentDraftPersistence,
   completeCreateDocumentDraft,
+  endCreateDocumentDraftPersistence,
+  isCreateDocumentDraftPersistenceActive,
   prepareCreateDocumentDraft as prepareCreateDocumentDraftBuffer,
   settleCreateDocumentDraftWithRetry,
 } from "@/components/chat/create-document-draft-runtime";
@@ -57,7 +60,9 @@ import {
   isSameCreateDocumentDraftPayload,
   replaceReadyCreateDocumentDraftOutput,
   selectCreateDocumentDrafts,
+  selectTerminalCreateDocumentDraftIds,
   selectUnsettledCreateDocumentDrafts,
+  setCreateDocumentDraftPayloadStatus,
   terminalizeUnsettledCreateDocumentDraft,
 } from "@/components/chat/create-document-draft.logic";
 import { openEntityInInspector } from "@/components/chat/entity-open";
@@ -69,6 +74,7 @@ import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import {
+  getCreateDocumentDraftInspectorChatThreadId,
   invalidateCreatedDocumentQueries,
   promoteCreateDocumentDraftInspectorTab,
   setCreateDocumentDraftInspectorTabStatus,
@@ -310,7 +316,7 @@ export const useChatSession = ({
         ? buildCreateDocumentDownloadFileName(draft.name)
         : t("chat.createDocument.headerStreaming");
       const existing = inspector.tabs.find((tab) => tab.id === id);
-      const payload = buildCreateDocumentDraftPayload({
+      const basePayload = buildCreateDocumentDraftPayload({
         draft,
         existingPayload:
           existing?.type === "view" &&
@@ -322,6 +328,12 @@ export const useChatSession = ({
           ? { workspaceId: threadRef.workspaceId }
           : {}),
       });
+      const payload = isCreateDocumentDraftPersistenceActive(draft.toolCallId)
+        ? setCreateDocumentDraftPayloadStatus({
+            payload: basePayload,
+            status: "saving",
+          })
+        : basePayload;
       for (const tab of inspector.tabs) {
         if (
           tab.id !== id &&
@@ -375,6 +387,27 @@ export const useChatSession = ({
     }
     openCreateDocumentDraft({ draft, mode: "automatic" });
   }, [messages, openCreateDocumentDraft]);
+  useExternalSyncEffect(() => {
+    const failedDraftIds = new Set(
+      selectTerminalCreateDocumentDraftIds(messages),
+    );
+    if (failedDraftIds.size === 0) {
+      return;
+    }
+    const inspector = useInspectorTabsStore.getState();
+    for (const tab of inspector.tabs) {
+      if (
+        tab.type !== "view" ||
+        tab.viewType !== CREATE_DOCUMENT_DRAFT_VIEW ||
+        !isCreateDocumentDraftPayload(tab.payload) ||
+        tab.payload.originChatThreadId !== threadRef.threadId ||
+        !failedDraftIds.has(tab.payload.toolCallId)
+      ) {
+        continue;
+      }
+      inspector.closeTab(tab.id);
+    }
+  }, [messages, threadRef.threadId]);
   const handleOpenCreateDocumentDraft = useCallback(
     (toolCallId: string) => {
       const draft = selectCreateDocumentDrafts(messages).find(
@@ -1014,10 +1047,17 @@ export const useChatSession = ({
       if (draftMessageId === null) {
         return;
       }
+      if (!beginCreateDocumentDraftPersistence(toolCallId)) {
+        return;
+      }
       const inspector = useInspectorTabsStore.getState();
       const lockedDraftEditor = setCreateDocumentDraftInspectorTabStatus({
         inspector,
         status: "saving",
+        toolCallId,
+      });
+      const draftChatThreadId = getCreateDocumentDraftInspectorChatThreadId({
+        inspector,
         toolCallId,
       });
       const createResult = await Result.tryPromise(async () => {
@@ -1055,6 +1095,11 @@ export const useChatSession = ({
             messageId: toSafeId<"chatMessage">(draftMessageId),
             name: draft.fileName,
             propertyId: fileProperty.id,
+            ...(draftChatThreadId === null
+              ? {}
+              : {
+                  draftChatThreadId: toSafeId<"chatThread">(draftChatThreadId),
+                }),
             threadId: toSafeId<"chatThread">(threadRef.threadId),
             ...(threadRef.scope === "workspace"
               ? {
@@ -1085,6 +1130,7 @@ export const useChatSession = ({
       });
 
       if (Result.isError(createResult)) {
+        endCreateDocumentDraftPersistence(toolCallId);
         if (lockedDraftEditor) {
           setCreateDocumentDraftInspectorTabStatus({
             inspector: useInspectorTabsStore.getState(),

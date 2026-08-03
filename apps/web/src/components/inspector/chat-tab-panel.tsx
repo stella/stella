@@ -86,7 +86,11 @@ import {
   useChatAnonymized,
 } from "@/lib/chat-anonymized-store";
 import { useIsChatDraftEmpty } from "@/lib/chat-draft-store";
-import { type ChatThreadRef, createChatThreadId } from "@/lib/chat-thread-ref";
+import {
+  createChatThreadId,
+  getChatThreadKey,
+  type ChatThreadRef,
+} from "@/lib/chat-thread-ref";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { detached } from "@/lib/detached";
 import { useModelSelectorStore } from "@/lib/model-selector-store";
@@ -485,6 +489,7 @@ export const ChatTabPanel = ({
           <ChatAnonymizationLayer
             editor={editorController.editor}
             enabled={anonymized}
+            ownerKey={getChatThreadKey(threadRef)}
             workspaceId={tabWorkspaceId ?? threadRef.threadId}
           />
           {/* PromptBar owns its own docked positioning (via

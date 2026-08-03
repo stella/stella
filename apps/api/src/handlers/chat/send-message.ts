@@ -49,11 +49,15 @@ import {
   createChatTurnAcceptance,
   failChatTurnExecution,
   insertChatTurnAcceptanceOnTx,
+  CHAT_METERED_PROVIDER_TIMEOUT_MS,
+  renewChatTurnExecutionLease,
   settleChatTurnOnTx,
+  withClaimedChatTurnExecution,
 } from "@/api/handlers/chat/chat-turn-persistence";
 import type {
   ChatTurnAcceptance,
   ChatTurnExecution,
+  ChatTurnExecutionClaim,
 } from "@/api/handlers/chat/chat-turn-persistence";
 import {
   compactChatMessagesForModel,
@@ -62,8 +66,6 @@ import {
 import { resolveChatCompactionBudget } from "@/api/handlers/chat/compaction-budget";
 import {
   computeAssistantTurnWorkspaceIds,
-  expandThreadDataScope,
-  expandThreadDataScopeOnTx,
   extractIncomingMessageWorkspaceIds,
   extractThreadDataWorkspaceIds,
 } from "@/api/handlers/chat/data-scope";
@@ -146,6 +148,10 @@ import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resolveEffectiveChatModelId } from "@/api/lib/chat-model-selection";
 import { isReadyGeneratedDocumentDraft } from "@/api/lib/chat/created-draft";
+import {
+  expandThreadDataScope,
+  expandThreadDataScopeOnTx,
+} from "@/api/lib/chat/data-scope";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { detached } from "@/api/lib/detached";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -163,7 +169,6 @@ import { loadWebSearchProvidersForOrg } from "@/api/lib/web-search/load-org-keys
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const CHAT_COMPACTION_CHECKPOINT_TIMEOUT_MS = 120_000;
-const CHAT_METERED_AI_TIMEOUT_MS = 600_000;
 
 /**
  * Dev model overrides (`body.devModelId`) are local-only: reject them outside
@@ -823,7 +828,7 @@ const sendMessage = createSafeRootHandler(
       // the AI SDK emits token usage; allowing that abort to reach the provider
       // would skip the usage ledger callback while still spending provider work.
       const createMeteredAIAbortSignal = () =>
-        AbortSignal.timeout(CHAT_METERED_AI_TIMEOUT_MS);
+        AbortSignal.timeout(CHAT_METERED_PROVIDER_TIMEOUT_MS);
 
       if (isClientConnectionAborted()) {
         yield* Result.await(
@@ -1030,39 +1035,69 @@ const sendMessage = createSafeRootHandler(
             })
           : undefined;
 
-      yield* Result.await(
-        persistMessage({
-          acceptedSendMode: body.sendMode,
-          recordAuditEvent,
-          safeDb,
-          threadId: body.threadId,
-          turnAcceptance,
-          userId: user.id,
-          workspaceId,
+      const persistenceProps = {
+        acceptedSendMode: body.sendMode,
+        recordAuditEvent,
+        safeDb,
+        threadId: body.threadId,
+        turnAcceptance,
+        userId: user.id,
+        workspaceId,
+        persistencePlan: latestMessagePlan.persistencePlan,
+        deleteMessageIds: deleteMessageIdsBeforeLatest,
+        dataWorkspaceIdsChange:
+          recomputedDataWorkspaceIds === null
+            ? undefined
+            : {
+                oldDataWorkspaceIds: thread.data.dataWorkspaceIds,
+                newDataWorkspaceIds: recomputedDataWorkspaceIds,
+              },
+      } as const;
+      let turnExecution: ChatTurnExecution | null;
+      if (parsedMessage.message.role === "assistant") {
+        if (latestMessagePlan.persistencePlan.type !== "update") {
+          return Result.err(
+            new HandlerError({
+              status: 409,
+              message: "Interactive replay must update its owning message",
+            }),
+          );
+        }
+        const replayResult = await persistClaimedReplayMessage({
+          ...persistenceProps,
+          claim: {
+            acceptedTurnId: null,
+            incomingMessageId: parsedMessage.message.id,
+            incomingMessageRole: parsedMessage.message.role,
+            organizationId: session.activeOrganizationId,
+            threadId: body.threadId,
+            userId: user.id,
+            workspaceId,
+          },
           persistencePlan: latestMessagePlan.persistencePlan,
-          deleteMessageIds: deleteMessageIdsBeforeLatest,
-          dataWorkspaceIdsChange:
-            recomputedDataWorkspaceIds === null
-              ? undefined
-              : {
-                  oldDataWorkspaceIds: thread.data.dataWorkspaceIds,
-                  newDataWorkspaceIds: recomputedDataWorkspaceIds,
-                },
-        }),
-      );
-
-      const turnExecution = yield* Result.await(
-        claimChatTurnForExecution({
-          acceptedTurnId: turnAcceptance?.id ?? null,
-          incomingMessageId: parsedMessage.message.id,
-          incomingMessageRole: parsedMessage.message.role,
-          organizationId: session.activeOrganizationId,
-          safeDb,
-          threadId: body.threadId,
-          userId: user.id,
-          workspaceId,
-        }),
-      );
+        });
+        if (Result.isError(replayResult)) {
+          return Result.err(replayResult.error);
+        }
+        turnExecution = replayResult.value;
+      } else {
+        const persistenceResult = await persistMessage(persistenceProps);
+        if (Result.isError(persistenceResult)) {
+          return Result.err(persistenceResult.error);
+        }
+        turnExecution = yield* Result.await(
+          claimChatTurnForExecution({
+            acceptedTurnId: turnAcceptance?.id ?? null,
+            incomingMessageId: parsedMessage.message.id,
+            incomingMessageRole: parsedMessage.message.role,
+            organizationId: session.activeOrganizationId,
+            safeDb,
+            threadId: body.threadId,
+            userId: user.id,
+            workspaceId,
+          }),
+        );
+      }
       if (turnExecution === null) {
         return Result.err(
           new HandlerError({
@@ -1249,6 +1284,28 @@ const sendMessage = createSafeRootHandler(
                 });
               }
 
+              // Connector discovery and prompt assembly can take meaningful
+              // time. Renew immediately before provider dispatch so the
+              // durable owner covers the entire provider timeout, rather than
+              // only the earlier preflight window.
+              const leaseRenewal = await renewChatTurnExecutionLease({
+                execution: turnExecution,
+                safeDb,
+              });
+              if (Result.isError(leaseRenewal)) {
+                throw new HandlerError({
+                  status: 500,
+                  message: "Failed to renew chat execution lease",
+                  cause: leaseRenewal.error,
+                });
+              }
+              if (!leaseRenewal.value) {
+                throw new HandlerError({
+                  status: 409,
+                  message: "Chat turn lost its durable execution owner",
+                });
+              }
+
               // Snapshot the refs the registry already holds before streaming.
               // Prompt-time pins (`contextMatterIds` → `toMatterRef`) are
               // resolved during prompt construction; folding the WHOLE registry
@@ -1419,6 +1476,12 @@ const sendMessage = createSafeRootHandler(
 
               if (!isChatStreamResponse(chatResponse)) {
                 await externalMcpTools.close();
+                // streamChat can reject before it creates an SSE stream (for
+                // example an anonymization-boundary or attachment-modality
+                // refusal). No terminal middleware hook runs in that branch,
+                // so settle the claimed turn here instead of leaving it
+                // indefinitely running.
+                await failCurrentTurn("internal", chatResponse.status >= 500);
               }
 
               return chatResponse;
@@ -2559,6 +2622,51 @@ const runPersistMessage = async ({
   });
 
   return replaceResult.andThen(() => Result.ok());
+};
+
+type PersistClaimedReplayMessageProps = PersistMessageProps & {
+  claim: ChatTurnExecutionClaim;
+  persistencePlan: Extract<MessagePersistencePlan, { type: "update" }>;
+};
+
+const safeDbOnTransaction = (tx: Transaction): SafeDb =>
+  async function transactionSafeDb(operation) {
+    return Result.ok(await operation(tx));
+  };
+
+/**
+ * Claim an interactive replay and mutate its existing assistant message on one
+ * transaction. `withClaimedChatTurnExecution` never invokes the mutation for a
+ * stale or duplicate claim, so truncation cannot race turn ownership.
+ */
+const persistClaimedReplayMessage = async ({
+  claim,
+  safeDb,
+  ...persistenceProps
+}: PersistClaimedReplayMessageProps): Promise<
+  Result<ChatTurnExecution | null, SafeDbError>
+> => {
+  const result = await withClaimedChatTurnExecution({
+    claim,
+    safeDb,
+    mutate: async ({ tx }) => {
+      const persistenceResult = await runPersistMessage({
+        ...persistenceProps,
+        safeDb: safeDbOnTransaction(tx),
+      });
+      if (Result.isError(persistenceResult)) {
+        throw persistenceResult.error;
+      }
+    },
+  });
+  if (Result.isError(result)) {
+    return Result.err(result.error);
+  }
+  if (result.value === null) {
+    return Result.ok(null);
+  }
+  upsertChatThreadSearchDocument(persistenceProps.threadId).catch(captureError);
+  return Result.ok(result.value.execution);
 };
 
 type RecomputeThreadDataScopeProps = {

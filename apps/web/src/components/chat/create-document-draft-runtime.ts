@@ -4,9 +4,6 @@ import { detached } from "@/lib/detached";
 
 type CreateDocumentDraftSaver = () => Promise<ArrayBuffer | null>;
 
-const MAX_RETAINED_DRAFT_SNAPSHOTS = 32;
-const MAX_RETAINED_DRAFT_SNAPSHOT_BYTES = 64 * 1024 * 1024;
-
 type RetainedDraftSnapshot = {
   byteLength: number | null;
   captureId: object;
@@ -17,6 +14,7 @@ type RetainedDraftSnapshot = {
 let draftSavers: Record<string, CreateDocumentDraftSaver | undefined> = {};
 let retainedDraftSnapshots: Record<string, RetainedDraftSnapshot | undefined> =
   {};
+let savingDrafts: Readonly<Record<string, true | undefined>> = {};
 
 const draftRuntimeKey = (toolCallId: string): string => `tool:${toolCallId}`;
 const withoutRuntimeKey = <T>(
@@ -26,37 +24,6 @@ const withoutRuntimeKey = <T>(
   Object.fromEntries(
     Object.entries(values).filter(([candidate]) => candidate !== key),
   );
-
-const withRetainedDraftSnapshot = (
-  values: Readonly<Record<string, RetainedDraftSnapshot | undefined>>,
-  key: string,
-  snapshot: RetainedDraftSnapshot,
-): Record<string, RetainedDraftSnapshot | undefined> => {
-  const entries = Object.entries(withoutRuntimeKey(values, key));
-  entries.push([key, snapshot]);
-  return Object.fromEntries(entries.slice(-MAX_RETAINED_DRAFT_SNAPSHOTS));
-};
-
-const pruneRetainedDraftSnapshotsByBytes = (): void => {
-  const entries = Object.entries(retainedDraftSnapshots);
-  const retained: [string, RetainedDraftSnapshot][] = [];
-  let retainedBytes = 0;
-  for (const [key, snapshot] of entries.toReversed()) {
-    if (snapshot === undefined) {
-      continue;
-    }
-    const byteLength = snapshot.byteLength ?? 0;
-    if (
-      byteLength > 0 &&
-      retainedBytes + byteLength > MAX_RETAINED_DRAFT_SNAPSHOT_BYTES
-    ) {
-      continue;
-    }
-    retainedBytes += byteLength;
-    retained.push([key, snapshot]);
-  }
-  retainedDraftSnapshots = Object.fromEntries(retained.toReversed());
-};
 
 export type CreateDocumentDraftSaveResult =
   | { status: "failed"; error: unknown }
@@ -184,20 +151,21 @@ const captureDraftSnapshot = async (
           restoration: retained.restoration,
         },
       };
-      pruneRetainedDraftSnapshotsByBytes();
     }
     return result;
   })();
-  retainedDraftSnapshots = withRetainedDraftSnapshot(
-    retainedDraftSnapshots,
-    key,
-    {
+  // A completed draft card stays actionable until the user resolves it. Its
+  // local editor bytes are therefore durable runtime state, not an LRU cache:
+  // evicting them would silently rebuild from the model source and lose edits.
+  retainedDraftSnapshots = {
+    ...retainedDraftSnapshots,
+    [key]: {
       byteLength: previous?.byteLength ?? null,
       captureId,
       promise: snapshot,
       restoration,
     },
-  );
+  };
   return await snapshot;
 };
 
@@ -269,13 +237,43 @@ export const getCreateDocumentDraftRestoration = (
 ): Promise<ArrayBuffer | null> | null =>
   retainedDraftSnapshots[draftRuntimeKey(toolCallId)]?.restoration ?? null;
 
+/**
+ * A draft save has no mounted-editor prerequisite: the action card may remain
+ * visible after its inspector tab closes. Keep the write lock with the draft
+ * runtime itself so reopening during the upload is necessarily read-only.
+ */
+export const beginCreateDocumentDraftPersistence = (
+  toolCallId: string,
+): boolean => {
+  const key = draftRuntimeKey(toolCallId);
+  if (savingDrafts[key] === true) {
+    return false;
+  }
+  savingDrafts = { ...savingDrafts, [key]: true };
+  return true;
+};
+
+export const isCreateDocumentDraftPersistenceActive = (
+  toolCallId: string,
+): boolean => savingDrafts[draftRuntimeKey(toolCallId)] === true;
+
+export const endCreateDocumentDraftPersistence = (toolCallId: string): void => {
+  const key = draftRuntimeKey(toolCallId);
+  if (savingDrafts[key] !== true) {
+    return;
+  }
+  savingDrafts = withoutRuntimeKey(savingDrafts, key);
+};
+
 export const completeCreateDocumentDraft = (toolCallId: string): void => {
   const key = draftRuntimeKey(toolCallId);
   draftSavers = withoutRuntimeKey(draftSavers, key);
   retainedDraftSnapshots = withoutRuntimeKey(retainedDraftSnapshots, key);
+  endCreateDocumentDraftPersistence(toolCallId);
 };
 
 export const __resetCreateDocumentDraftRuntimeForTests = (): void => {
   draftSavers = {};
   retainedDraftSnapshots = {};
+  savingDrafts = {};
 };

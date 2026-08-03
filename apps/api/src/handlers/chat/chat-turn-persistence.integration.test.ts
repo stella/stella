@@ -6,10 +6,14 @@ import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import {
+  CHAT_METERED_PROVIDER_TIMEOUT_MS,
   claimChatTurnForExecution,
   createChatTurnAcceptance,
+  failChatTurnExecution,
   insertChatTurnAcceptanceOnTx,
+  renewChatTurnExecutionLease,
   settleChatTurnOnTx,
+  withClaimedChatTurnExecution,
 } from "@/api/handlers/chat/chat-turn-persistence";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -300,6 +304,249 @@ describe("durable chat turn persistence", () => {
       interactionToolCallId: null,
       interactionType: null,
       status: "running",
+    });
+  });
+
+  test("a duplicate awaiting-user claim cannot mutate replay history", async () => {
+    const { assistantMessageId, threadId, userMessageId } = await seedThread();
+    const acceptance = createChatTurnAcceptance({
+      organizationId: ids.orgA,
+      threadId,
+      userId: ids.userA1,
+      userMessageId,
+      workspaceId: ids.wsA1,
+    });
+    unwrap(
+      await safeDb(async (tx) => {
+        await tx.insert(chatMessages).values({
+          content: {
+            data: [{ text: "Draft a response", type: "text" }],
+            version: 1,
+          },
+          id: userMessageId,
+          role: "user",
+          threadId,
+          userId: ids.userA1,
+          workspaceId: ids.wsA1,
+        });
+        await insertChatTurnAcceptanceOnTx({ acceptance, tx });
+      }),
+    );
+    const initialExecution = unwrap(
+      await claimChatTurnForExecution({
+        acceptedTurnId: acceptance.id,
+        incomingMessageId: userMessageId,
+        incomingMessageRole: "user",
+        organizationId: ids.orgA,
+        safeDb,
+        threadId,
+        userId: ids.userA1,
+        workspaceId: ids.wsA1,
+      }),
+    );
+    if (initialExecution === null) {
+      throw new Error("Expected the accepted turn to be claimed");
+    }
+    unwrap(
+      await safeDb(async (tx) => {
+        await tx.insert(chatMessages).values({
+          content: {
+            data: [{ text: "Which court?", type: "text" }],
+            version: 1,
+          },
+          id: assistantMessageId,
+          role: "assistant",
+          threadId,
+          userId: ids.userA1,
+          workspaceId: ids.wsA1,
+        });
+        return await settleChatTurnOnTx({
+          assistantMessageId,
+          execution: initialExecution,
+          outcome: {
+            interaction: { toolCallId: "ask-1", type: "ask-user" },
+            type: "awaiting-user",
+          },
+          tx,
+        });
+      }),
+    );
+
+    const claim = {
+      acceptedTurnId: null,
+      incomingMessageId: assistantMessageId,
+      incomingMessageRole: "assistant" as const,
+      organizationId: ids.orgA,
+      threadId,
+      userId: ids.userA1,
+      workspaceId: ids.wsA1,
+    };
+    const winner = unwrap(
+      await withClaimedChatTurnExecution({
+        claim,
+        safeDb,
+        mutate: async ({ tx }) => {
+          await tx
+            .update(chatMessages)
+            .set({
+              content: {
+                data: [{ text: "Winner response", type: "text" }],
+                version: 1,
+              },
+            })
+            .where(inArray(chatMessages.id, [assistantMessageId]));
+        },
+      }),
+    );
+    expect(winner).not.toBeNull();
+
+    let duplicateMutationRan = false;
+    const duplicate = unwrap(
+      await withClaimedChatTurnExecution({
+        claim,
+        safeDb,
+        mutate: async ({ tx }) => {
+          duplicateMutationRan = true;
+          await tx
+            .update(chatMessages)
+            .set({
+              content: {
+                data: [{ text: "Duplicate response", type: "text" }],
+                version: 1,
+              },
+            })
+            .where(inArray(chatMessages.id, [assistantMessageId]));
+        },
+      }),
+    );
+    expect(duplicate).toBeNull();
+    expect(duplicateMutationRan).toBe(false);
+
+    const message = await testDb.query.chatMessages.findFirst({
+      where: { id: { eq: assistantMessageId } },
+      columns: { content: true },
+    });
+    expect(message?.content).toEqual({
+      data: [{ text: "Winner response", type: "text" }],
+      version: 1,
+    });
+  });
+
+  test("renews a claimed execution past the full provider timeout", async () => {
+    const { threadId, userMessageId } = await seedThread();
+    const acceptance = createChatTurnAcceptance({
+      organizationId: ids.orgA,
+      threadId,
+      userId: ids.userA1,
+      userMessageId,
+      workspaceId: ids.wsA1,
+    });
+    unwrap(
+      await safeDb(async (tx) => {
+        await tx.insert(chatMessages).values({
+          content: {
+            data: [{ text: "Draft an NDA", type: "text" }],
+            version: 1,
+          },
+          id: userMessageId,
+          role: "user",
+          threadId,
+          userId: ids.userA1,
+          workspaceId: ids.wsA1,
+        });
+        await insertChatTurnAcceptanceOnTx({ acceptance, tx });
+      }),
+    );
+    const execution = unwrap(
+      await claimChatTurnForExecution({
+        acceptedTurnId: acceptance.id,
+        incomingMessageId: userMessageId,
+        incomingMessageRole: "user",
+        organizationId: ids.orgA,
+        safeDb,
+        threadId,
+        userId: ids.userA1,
+        workspaceId: ids.wsA1,
+      }),
+    );
+    if (execution === null) {
+      throw new Error("Expected the accepted turn to be claimed");
+    }
+
+    const beforeRenewal = Date.now();
+    expect(
+      unwrap(await renewChatTurnExecutionLease({ execution, safeDb })),
+    ).toBe(true);
+
+    const turn = await testDb.query.chatTurns.findFirst({
+      where: { id: { eq: execution.id } },
+      columns: { leaseExpiresAt: true },
+    });
+    expect(turn?.leaseExpiresAt?.getTime()).toBeGreaterThanOrEqual(
+      beforeRenewal + CHAT_METERED_PROVIDER_TIMEOUT_MS,
+    );
+  });
+
+  test("terminalizes a claimed turn when work fails before streaming", async () => {
+    const { threadId, userMessageId } = await seedThread();
+    const acceptance = createChatTurnAcceptance({
+      organizationId: ids.orgA,
+      threadId,
+      userId: ids.userA1,
+      userMessageId,
+      workspaceId: ids.wsA1,
+    });
+    unwrap(
+      await safeDb(async (tx) => {
+        await tx.insert(chatMessages).values({
+          content: {
+            data: [{ text: "Draft an NDA", type: "text" }],
+            version: 1,
+          },
+          id: userMessageId,
+          role: "user",
+          threadId,
+          userId: ids.userA1,
+          workspaceId: ids.wsA1,
+        });
+        await insertChatTurnAcceptanceOnTx({ acceptance, tx });
+      }),
+    );
+    const execution = unwrap(
+      await claimChatTurnForExecution({
+        acceptedTurnId: acceptance.id,
+        incomingMessageId: userMessageId,
+        incomingMessageRole: "user",
+        organizationId: ids.orgA,
+        safeDb,
+        threadId,
+        userId: ids.userA1,
+        workspaceId: ids.wsA1,
+      }),
+    );
+    if (execution === null) {
+      throw new Error("Expected the accepted turn to be claimed");
+    }
+
+    expect(
+      unwrap(
+        await failChatTurnExecution({
+          code: "unsupported-input",
+          execution,
+          retryable: false,
+          safeDb,
+        }),
+      ),
+    ).toBe(true);
+    const turn = await testDb.query.chatTurns.findFirst({
+      where: { id: { eq: execution.id } },
+    });
+    expect(turn).toMatchObject({
+      executionId: null,
+      failureCode: "unsupported-input",
+      failureRetryable: false,
+      leaseExpiresAt: null,
+      status: "failed",
     });
   });
 });

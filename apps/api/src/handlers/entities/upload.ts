@@ -1,5 +1,5 @@
-import { Result } from "better-result";
-import { and, eq, isNull, like, sql } from "drizzle-orm";
+import { panic, Result } from "better-result";
+import { and, eq, isNull, like, or, sql } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
@@ -11,6 +11,7 @@ import {
   chatThreads,
   entities,
   entityVersions,
+  fileChatThreads,
   fields,
   workspaces,
 } from "@/api/db/schema";
@@ -26,6 +27,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { getGeneratedDocumentDraftState } from "@/api/lib/chat/created-draft";
+import { expandThreadDataScopeOnTx } from "@/api/lib/chat/data-scope";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
@@ -63,6 +65,7 @@ const uploadEntityBodySchema = t.Object({
 const uploadGeneratedDocumentBodySchema = t.Object({
   ...uploadEntityBodySchema.properties,
   contentSha256Hex: t.RegExp(/^[0-9a-f]{64}$/u),
+  draftChatThreadId: t.Optional(tSafeId("chatThread")),
   messageId: tSafeId("chatMessage"),
   threadId: tSafeId("chatThread"),
   threadWorkspaceId: t.Optional(tSafeId("workspace")),
@@ -82,6 +85,7 @@ type UploadEntityHandlerProps = {
     | {
         messageId: SafeId<"chatMessage">;
         contentSha256Hex: string;
+        draftChatThreadId?: SafeId<"chatThread"> | undefined;
         threadId: SafeId<"chatThread">;
         threadWorkspaceId?: SafeId<"workspace"> | undefined;
         toolCallId: string;
@@ -93,6 +97,70 @@ type GeneratedDocumentDraftIdentity = NonNullable<
   UploadEntityHandlerProps["generatedDraft"]
 >;
 
+type DraftChatThread = {
+  dataWorkspaceIds: SafeId<"workspace">[];
+  workspaceId: SafeId<"workspace"> | null;
+};
+
+type ExistingFileChatThreadLink = {
+  chatThreadId: SafeId<"chatThread">;
+  entityId: SafeId<"entity">;
+  fieldId: SafeId<"field">;
+  organizationId: SafeId<"organization">;
+  userId: string;
+  workspaceId: SafeId<"workspace">;
+};
+
+type GeneratedDocumentDraftThreadLink = {
+  chatThreadId: SafeId<"chatThread">;
+  entityId: SafeId<"entity">;
+  fieldId: SafeId<"field">;
+  organizationId: SafeId<"organization">;
+  userId: string;
+  workspaceId: SafeId<"workspace">;
+};
+
+export const resolveGeneratedDocumentDraftThreadScope = ({
+  destinationWorkspaceId,
+  threadWorkspaceId,
+}: {
+  destinationWorkspaceId: SafeId<"workspace">;
+  threadWorkspaceId: SafeId<"workspace"> | null;
+}): "already-scoped" | "promote" =>
+  threadWorkspaceId === destinationWorkspaceId ? "already-scoped" : "promote";
+
+export const hasExactGeneratedDocumentDraftThreadLink = ({
+  existingLinks,
+  expected,
+}: {
+  existingLinks: ExistingFileChatThreadLink[];
+  expected: GeneratedDocumentDraftThreadLink;
+}): boolean => {
+  if (existingLinks.length !== 1) {
+    return false;
+  }
+
+  const existingLink = existingLinks.at(0);
+  if (existingLink === undefined) {
+    return false;
+  }
+
+  return (
+    existingLink.chatThreadId === expected.chatThreadId &&
+    existingLink.entityId === expected.entityId &&
+    existingLink.fieldId === expected.fieldId &&
+    existingLink.organizationId === expected.organizationId &&
+    existingLink.userId === expected.userId &&
+    existingLink.workspaceId === expected.workspaceId
+  );
+};
+
+export const resolveGeneratedDocumentDraftThreadLinkPreflight = ({
+  hasExistingLink,
+}: {
+  hasExistingLink: boolean;
+}): "conflict" | "continue" => (hasExistingLink ? "conflict" : "continue");
+
 type ResolveFileNameProps = {
   tx: Transaction;
   propertyId: SafeId<"property">;
@@ -101,6 +169,7 @@ type ResolveFileNameProps = {
 
 type UploadWriteFailureReason =
   | "content-mismatch"
+  | "draft-thread-conflict"
   | "entity-limit"
   | "invalid-property"
   | "missing-draft";
@@ -125,6 +194,8 @@ const uploadWriteFailureMessage = (
   switch (reason) {
     case "content-mismatch":
       return "Generated document content does not match the requested draft";
+    case "draft-thread-conflict":
+      return "Generated document draft chat is already linked elsewhere";
     case "entity-limit":
       return "Entities limit reached";
     case "invalid-property":
@@ -141,6 +212,7 @@ const uploadWriteFailureStatus = (
 ): 400 | 409 => {
   switch (reason) {
     case "content-mismatch":
+    case "draft-thread-conflict":
     case "missing-draft":
       return 409;
     case "entity-limit":
@@ -291,6 +363,8 @@ const findGeneratedDocumentDraftState = async ({
   const query = tx
     .select({
       content: chatMessages.content,
+      dataWorkspaceIds: chatThreads.dataWorkspaceIds,
+      threadWorkspaceId: chatThreads.workspaceId,
     })
     .from(chatMessages)
     .innerJoin(chatThreads, eq(chatThreads.id, chatMessages.threadId))
@@ -309,14 +383,32 @@ const findGeneratedDocumentDraftState = async ({
     )
     .limit(1);
 
-  const toDraftState = (message: { content: unknown } | undefined) =>
-    message === undefined
-      ? ({ status: "invalid" } as const)
-      : getGeneratedDocumentDraftState({
-          persistedContent: message.content,
-          fileName,
-          toolCallId: generatedDraft.toolCallId,
-        });
+  const toDraftState = (
+    message:
+      | {
+          content: unknown;
+          dataWorkspaceIds: SafeId<"workspace">[];
+          threadWorkspaceId: SafeId<"workspace"> | null;
+        }
+      | undefined,
+  ) => {
+    if (message === undefined) {
+      return { status: "invalid" } as const;
+    }
+
+    const draftState = getGeneratedDocumentDraftState({
+      persistedContent: message.content,
+      fileName,
+      toolCallId: generatedDraft.toolCallId,
+    });
+    return draftState.status === "ready"
+      ? {
+          ...draftState,
+          dataWorkspaceIds: message.dataWorkspaceIds,
+          threadWorkspaceId: message.threadWorkspaceId,
+        }
+      : draftState;
+  };
 
   switch (lock) {
     case "none":
@@ -326,6 +418,179 @@ const findGeneratedDocumentDraftState = async ({
     default:
       return lock satisfies never;
   }
+};
+
+const findGeneratedDocumentDraftChatThread = async ({
+  generatedDraft,
+  organizationId,
+  tx,
+  userId,
+}: {
+  generatedDraft: GeneratedDocumentDraftIdentity;
+  organizationId: SafeId<"organization">;
+  tx: Transaction;
+  userId: SafeId<"user">;
+}): Promise<DraftChatThread | null> => {
+  if (generatedDraft.draftChatThreadId === undefined) {
+    return null;
+  }
+
+  const draftThread = await tx
+    .select({
+      dataWorkspaceIds: chatThreads.dataWorkspaceIds,
+      workspaceId: chatThreads.workspaceId,
+    })
+    .from(chatThreads)
+    .where(
+      and(
+        eq(chatThreads.id, generatedDraft.draftChatThreadId),
+        eq(chatThreads.organizationId, organizationId),
+        eq(chatThreads.userId, userId),
+      ),
+    )
+    .limit(1)
+    .for("update");
+  return draftThread.at(0) ?? null;
+};
+
+const findExistingGeneratedDocumentDraftChatThreadLink = async ({
+  chatThreadId,
+  tx,
+}: {
+  chatThreadId: SafeId<"chatThread">;
+  tx: Transaction;
+}): Promise<boolean> => {
+  const existing = await tx
+    .select({ id: fileChatThreads.id })
+    .from(fileChatThreads)
+    .where(eq(fileChatThreads.chatThreadId, chatThreadId))
+    .limit(1)
+    .for("update");
+  return existing.length > 0;
+};
+
+const linkGeneratedDocumentDraftChatThread = async ({
+  draftThread,
+  entityId,
+  fieldId,
+  generatedDraft,
+  organizationId,
+  recordAuditEvent,
+  tx,
+  userId,
+  workspaceId,
+}: {
+  draftThread: DraftChatThread | null;
+  entityId: SafeId<"entity">;
+  fieldId: SafeId<"field">;
+  generatedDraft: GeneratedDocumentDraftIdentity;
+  organizationId: SafeId<"organization">;
+  recordAuditEvent: AuditRecorder;
+  tx: Transaction;
+  userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace">;
+}): Promise<void> => {
+  if (draftThread === null || generatedDraft.draftChatThreadId === undefined) {
+    return;
+  }
+
+  const scopeAction = resolveGeneratedDocumentDraftThreadScope({
+    destinationWorkspaceId: workspaceId,
+    threadWorkspaceId: draftThread.workspaceId,
+  });
+  if (scopeAction === "promote") {
+    await tx
+      .update(chatThreads)
+      .set({ workspaceId })
+      .where(eq(chatThreads.id, generatedDraft.draftChatThreadId));
+    await recordAuditEvent(tx, {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
+      resourceId: generatedDraft.draftChatThreadId,
+      workspaceId,
+      changes: {
+        workspaceId: {
+          old: draftThread.workspaceId,
+          new: workspaceId,
+        },
+      },
+    });
+  }
+
+  // A locally empty draft chat has no durable thread to preserve. Once the
+  // user has sent a message, the authenticated dedicated draft chat becomes
+  // the destination file chat: first promote its authoritative scope, then
+  // widen the data scope before associating destination-file metadata.
+  await expandThreadDataScopeOnTx({
+    currentDataWorkspaceIds: draftThread.dataWorkspaceIds,
+    newWorkspaceIds: [workspaceId],
+    recordAuditEvent,
+    threadId: generatedDraft.draftChatThreadId,
+    threadWorkspaceId: workspaceId,
+    tx,
+  });
+  const fileChatThreadId = createSafeId<"fileChatThread">();
+  const inserted = await tx
+    .insert(fileChatThreads)
+    .values({
+      id: fileChatThreadId,
+      organizationId,
+      workspaceId,
+      userId,
+      entityId,
+      fieldId,
+      chatThreadId: generatedDraft.draftChatThreadId,
+    })
+    .onConflictDoNothing()
+    .returning({ id: fileChatThreads.id });
+  if (inserted.length === 0) {
+    const existingLinks = await tx
+      .select({
+        chatThreadId: fileChatThreads.chatThreadId,
+        entityId: fileChatThreads.entityId,
+        fieldId: fileChatThreads.fieldId,
+        organizationId: fileChatThreads.organizationId,
+        userId: fileChatThreads.userId,
+        workspaceId: fileChatThreads.workspaceId,
+      })
+      .from(fileChatThreads)
+      .where(
+        or(
+          eq(fileChatThreads.chatThreadId, generatedDraft.draftChatThreadId),
+          and(
+            eq(fileChatThreads.organizationId, organizationId),
+            eq(fileChatThreads.workspaceId, workspaceId),
+            eq(fileChatThreads.userId, userId),
+            eq(fileChatThreads.entityId, entityId),
+            eq(fileChatThreads.fieldId, fieldId),
+          ),
+        ),
+      )
+      .for("update");
+    if (
+      hasExactGeneratedDocumentDraftThreadLink({
+        existingLinks,
+        expected: {
+          chatThreadId: generatedDraft.draftChatThreadId,
+          entityId,
+          fieldId,
+          organizationId,
+          userId,
+          workspaceId,
+        },
+      })
+    ) {
+      panic("Draft chat link existed despite locked-link preflight");
+    }
+    panic("Draft chat link conflicts despite locked-link preflight");
+  }
+  await recordAuditEvent(tx, {
+    action: AUDIT_ACTION.UPDATE,
+    resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
+    resourceId: generatedDraft.draftChatThreadId,
+    workspaceId,
+    metadata: { entityId, fieldId, fileChatThreadId },
+  });
 };
 
 const preflightGeneratedDocumentDraft = async ({
@@ -586,6 +851,9 @@ const uploadEntityHandler = async function* ({
         await lockWorkspacesForEntityCap(tx, [workspaceId]);
 
         let generatedDraftPartIndex: number | null = null;
+        let generatedDraftDataWorkspaceIds: readonly SafeId<"workspace">[] = [];
+        let generatedDraftThreadWorkspaceId: SafeId<"workspace"> | null = null;
+        let draftChatThread: DraftChatThread | null = null;
         if (generatedDraft !== undefined) {
           const draftState = await findGeneratedDocumentDraftState({
             tx,
@@ -622,6 +890,34 @@ const uploadEntityHandler = async function* ({
             };
           }
           generatedDraftPartIndex = draftState.partIndex;
+          generatedDraftDataWorkspaceIds = draftState.dataWorkspaceIds;
+          generatedDraftThreadWorkspaceId = draftState.threadWorkspaceId;
+          draftChatThread = await findGeneratedDocumentDraftChatThread({
+            generatedDraft,
+            organizationId,
+            tx,
+            userId,
+          });
+          if (
+            draftChatThread !== null &&
+            generatedDraft.draftChatThreadId !== undefined
+          ) {
+            const hasExistingLink =
+              await findExistingGeneratedDocumentDraftChatThreadLink({
+                chatThreadId: generatedDraft.draftChatThreadId,
+                tx,
+              });
+            if (
+              resolveGeneratedDocumentDraftThreadLinkPreflight({
+                hasExistingLink,
+              }) === "conflict"
+            ) {
+              return {
+                ok: false as const,
+                reason: "draft-thread-conflict" as const,
+              };
+            }
+          }
         }
 
         // The earlier `entityCount` check above is a
@@ -703,6 +999,18 @@ const uploadEntityHandler = async function* ({
             workspaceId,
           } as const;
           const outputPath = `{data,${generatedDraftPartIndex},output}`;
+          // The destination reference becomes durable in this source chat
+          // message. Widen the source thread first, in this transaction, so a
+          // global thread can never retain destination-matter data without
+          // the RLS scope that protects it.
+          await expandThreadDataScopeOnTx({
+            currentDataWorkspaceIds: generatedDraftDataWorkspaceIds,
+            newWorkspaceIds: [workspaceId],
+            recordAuditEvent,
+            threadId: generatedDraft.threadId,
+            threadWorkspaceId: generatedDraftThreadWorkspaceId,
+            tx,
+          });
           await tx
             .update(chatMessages)
             .set({
@@ -725,6 +1033,17 @@ const uploadEntityHandler = async function* ({
                 new: "matter",
               },
             },
+          });
+          await linkGeneratedDocumentDraftChatThread({
+            draftThread: draftChatThread,
+            entityId,
+            fieldId,
+            generatedDraft,
+            organizationId,
+            recordAuditEvent,
+            tx,
+            userId,
+            workspaceId,
           });
         }
 
@@ -883,6 +1202,7 @@ export const uploadGeneratedDocument = createSafeHandler(
       recordAuditEvent,
       generatedDraft: {
         contentSha256Hex: body.contentSha256Hex,
+        draftChatThreadId: body.draftChatThreadId,
         messageId: body.messageId,
         threadId: body.threadId,
         threadWorkspaceId: body.threadWorkspaceId,

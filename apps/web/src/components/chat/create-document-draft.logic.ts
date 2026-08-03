@@ -513,6 +513,38 @@ export const selectUnsettledCreateDocumentDrafts = (
   return drafts;
 };
 
+/** IDs of create-document calls that can no longer produce a usable draft. */
+export const selectTerminalCreateDocumentDraftIds = (
+  messages: readonly { role: string; parts: readonly ChatPart[] }[],
+): readonly string[] => {
+  const terminalIds: string[] = [];
+  for (const message of messages) {
+    if (message.role !== "assistant") {
+      continue;
+    }
+    for (const part of message.parts) {
+      if (part.type !== "tool-call" || part.name !== "create-document") {
+        continue;
+      }
+      switch (part.state) {
+        case "error":
+          terminalIds.push(part.id);
+          break;
+        case "awaiting-input":
+        case "input-streaming":
+        case "input-complete":
+        case "complete":
+        case "approval-requested":
+        case "approval-responded":
+          break;
+        default:
+          part satisfies never;
+      }
+    }
+  }
+  return terminalIds;
+};
+
 export const isCreateDocumentDraftSettlementActive = (
   messages: readonly { role: string; parts: readonly ChatPart[] }[],
   toolCallId: string,

@@ -621,6 +621,7 @@ export const ChatThreadPage = ({
             <ChatAnonymizationLayer
               editor={controller.editor}
               enabled={anonymized}
+              ownerKey={threadKey}
               workspaceId={workspaceId ?? threadRef.threadId}
             />
             {/* Soft fade so messages dissolve into the floating composer

@@ -14,6 +14,7 @@ import { toChatThreadId } from "@/lib/chat-thread-ref";
 
 import {
   invalidateCreatedDocumentQueries,
+  getCreateDocumentDraftInspectorChatThreadId,
   promoteCreateDocumentDraftInspectorTab,
   setCreateDocumentDraftInspectorChatThreadId,
   setCreateDocumentDraftInspectorTabStatus,
@@ -63,6 +64,38 @@ describe("invalidateCreatedDocumentQueries", () => {
 });
 
 describe("create-document inspector transition", () => {
+  test("returns the retained draft chat identity for matter persistence", () => {
+    const inspector = {
+      tabs: [
+        {
+          id: createDocumentDraftTabId("tool-1"),
+          label: "Draft.docx",
+          payload: buildCreateDocumentDraftPayload({
+            draft: {
+              messageId: "message-1",
+              toolCallId: "tool-1",
+              name: "Draft",
+              source: "@doc",
+              status: "ready",
+            },
+            existingPayload: undefined,
+            originChatThreadId: toChatThreadId("origin-thread"),
+          }),
+          type: "view" as const,
+          viewType: CREATE_DOCUMENT_DRAFT_VIEW,
+        },
+      ],
+      updateView: () => {},
+    };
+
+    expect(
+      getCreateDocumentDraftInspectorChatThreadId({
+        inspector,
+        toolCallId: "tool-1",
+      }),
+    ).not.toBeNull();
+  });
+
   test("locks an open draft during save and restores it after failure", () => {
     const toolCallId = "tool-1";
     const id = createDocumentDraftTabId(toolCallId);

@@ -91,7 +91,7 @@ import {
   useChatAnonymized,
 } from "@/lib/chat-anonymized-store";
 import { CHAT_EDIT_APPLY_MODE } from "@/lib/chat-edit-mode";
-import { toChatThreadId } from "@/lib/chat-thread-ref";
+import { getChatThreadKey, toChatThreadId } from "@/lib/chat-thread-ref";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
@@ -1336,6 +1336,7 @@ const TemplateStudioChatInner = ({
         <ChatAnonymizationLayer
           editor={editorController.editor}
           enabled={anonymized}
+          ownerKey={getChatThreadKey(threadRef)}
           workspaceId={threadRef.threadId}
         />
         <PromptBar

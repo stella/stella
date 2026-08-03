@@ -11,6 +11,7 @@ import {
   persistCreateDocumentDraftPayload,
   replaceReadyCreateDocumentDraftOutput,
   selectCreateDocumentDrafts,
+  selectTerminalCreateDocumentDraftIds,
   selectUnsettledCreateDocumentDrafts,
   setCreateDocumentDraftChatThreadId,
   setCreateDocumentDraftPayloadStatus,
@@ -251,6 +252,34 @@ describe("create-document drafts", () => {
     const updated = terminalizeUnsettledCreateDocumentDraft(messages, "tool-1");
     expect(updated[0]?.parts[0]).toMatchObject({ state: "error" });
     expect(selectUnsettledCreateDocumentDrafts(updated)).toEqual([]);
+  });
+
+  test("marks failed create-document calls terminal without closing active drafts", () => {
+    const messages = [
+      {
+        role: "assistant",
+        parts: [
+          {
+            arguments: "{}",
+            id: "failed-tool",
+            name: "create-document",
+            state: "error",
+            type: "tool-call",
+          },
+          {
+            arguments: "{}",
+            id: "active-tool",
+            name: "create-document",
+            state: "input-streaming",
+            type: "tool-call",
+          },
+        ],
+      },
+    ] satisfies Parameters<typeof selectTerminalCreateDocumentDraftIds>[0];
+
+    expect(selectTerminalCreateDocumentDraftIds(messages)).toEqual([
+      "failed-tool",
+    ]);
   });
 
   test("normalizes legacy markdown input", () => {
