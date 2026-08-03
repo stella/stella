@@ -28,34 +28,42 @@ const stripComments = (source: string): string =>
   source
     .replace(/<!--[\s\S]*?-->/gu, "")
     .replace(/\/\*[\s\S]*?\*\//gu, "")
-    .replace(/^\s*\/\/.*$/gmu, "");
+    .replace(/^[\t ]*\/\/.*$/gmu, "");
 
-const failures: string[] = [];
-for (const file of sourceFiles(SRC_ROOT)) {
-  const source = readFileSync(file, "utf-8");
-  const stripped = stripComments(source);
-  for (const match of stripped.matchAll(/<img\b[^>]*>/gu)) {
-    const tag = match[0];
-    // A spread ({...props}) can carry alt; that shape is not statically
-    // checkable here, so it is trusted and skipped.
-    if (/\s+alt\s*=/u.test(tag) || tag.includes("{...")) {
-      continue;
+export const hasExplicitAlt = (tag: string): boolean => /\salt\s*=/u.test(tag);
+
+const main = (): void => {
+  const failures: string[] = [];
+  for (const file of sourceFiles(SRC_ROOT)) {
+    const source = readFileSync(file, "utf-8");
+    const stripped = stripComments(source);
+    for (const match of stripped.matchAll(/<img\b[^>]*>/gu)) {
+      const tag = match[0];
+      // A spread ({...props}) can carry alt; that shape is not statically
+      // checkable here, so it is trusted and skipped.
+      if (hasExplicitAlt(tag) || tag.includes("{...")) {
+        continue;
+      }
+      const offset = source.indexOf(tag);
+      const line =
+        offset === -1 ? "?" : source.slice(0, offset).split("\n").length;
+      failures.push(
+        `${file.slice(SRC_ROOT.length + 1)}:${line}: <img> without an alt attribute`,
+      );
     }
-    const offset = source.indexOf(tag);
-    const line =
-      offset === -1 ? "?" : source.slice(0, offset).split("\n").length;
-    failures.push(
-      `${file.slice(SRC_ROOT.length + 1)}:${line}: <img> without an alt attribute`,
-    );
   }
-}
 
-if (failures.length > 0) {
-  console.error(`img alt: ${failures.length} violation(s)`);
-  for (const failure of failures) {
-    console.error(`  ${failure}`);
+  if (failures.length > 0) {
+    console.error(`img alt: ${failures.length} violation(s)`);
+    for (const failure of failures) {
+      console.error(`  ${failure}`);
+    }
+    process.exit(1);
   }
-  process.exit(1);
-}
 
-console.log("img alt: all <img> elements carry an explicit alt attribute");
+  console.log("img alt: all <img> elements carry an explicit alt attribute");
+};
+
+if (import.meta.main) {
+  main();
+}
