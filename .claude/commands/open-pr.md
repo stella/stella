@@ -1,12 +1,12 @@
 # Open PR
 
-Prepare the current change or stack for review and publish it without
-disturbing unrelated work.
+Prepare the current change or stack for review without disturbing unrelated
+work.
 
 ## 1. Resolve Scope and Isolation
 
-Inspect the branch, worktree, status, remotes, and existing PR before changing
-history:
+Inspect the branch, worktree, status, remotes, applicable repository
+instructions, and existing PR before changing history:
 
 ```bash
 git branch --show-current
@@ -15,122 +15,101 @@ gh pr list --head "$(git branch --show-current)" --state all \
   --json number,state,isDraft,headRefName,baseRefName,url
 ```
 
-An empty list means no PR exists. Authentication, network, or repository
+An empty PR list means no PR exists. Authentication, network, or repository
 errors must remain visible and stop the workflow before history changes or
 publication.
 
-Never prepare a PR in the user's dirty shared checkout. If the checkout is on
-the default branch, has unrelated changes, or spans multiple repositories or
-submodules, create a clean worktree and a concise inferred branch name. Do not
-ask the user to name an ordinary branch; ask only when the intended change
-cannot be isolated safely.
+Never prepare a PR in a dirty shared checkout. If the checkout is on the
+default branch, detached, has unrelated changes, or spans repositories or
+submodules, move the intended work to a clean worktree with a concise inferred
+branch name. Transfer only owned commits or hunks; do not stash, reset, or
+silently include unrelated files. Ask only when ownership cannot be determined
+safely.
 
-When the intended work is uncommitted in the shared checkout, identify and
-transfer only its owned hunks into the clean worktree. Do not stash, reset, or
-silently carry unrelated files along with it.
-
-Enable rerere before rebasing:
-
-```bash
-git config --global rerere.enabled true
-git config --global rerere.autoupdate true
-```
+Follow the repository's rerere policy. Review every replayed conflict
+resolution before continuing.
 
 ## 2. Bootstrap Before Trusting Failures
 
-Confirm Bun, workspace dependencies, project binaries, submodules, and expected
-env links exist in the isolated worktree. Run the repository's normal setup
-when they do not. Retry the same check after setup; missing modules or tools are
-not product regressions. Keep setup-only lockfile or generated churn out of the
-PR.
+Confirm the repository toolchain, dependencies, submodules, generated sources,
+and expected environment links exist in the isolated worktree. Run the normal
+setup flow when they do not, then retry the same check. Missing tools or modules
+are not product regressions. Keep setup-only lockfile or generated churn out of
+the PR.
 
 ## 3. Rebase the Correct Layer
 
-Fetch the base immediately before review. Check `gh extension list` for the
-optional `github/gh-stack` extension before invoking `gh stack`. If installed
-and `gh stack view` identifies a stack, use `gh stack rebase` and review each
-layer against its immediate parent. If the extension is absent or the branch
-is not stacked, use ordinary Git; do not install an optional extension merely
-to prepare a normal PR:
+Resolve the remote default branch rather than assuming its name. Check
+`gh extension list` before invoking the optional `github/gh-stack` extension.
+If it is installed and `gh stack view` identifies a stack, use
+`gh stack rebase` and review each layer against its parent. If the extension is
+absent or the branch is not stacked, use ordinary Git; do not install an
+optional extension merely to prepare a normal PR:
 
 ```bash
-git fetch origin main
-git rebase origin/main
+DEFAULT_BRANCH="$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@')"
+if [ -z "$DEFAULT_BRANCH" ]; then
+  DEFAULT_BRANCH="$(gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name')"
+fi
+git fetch origin "$DEFAULT_BRANCH"
+git rebase "origin/$DEFAULT_BRANCH"
 ```
 
-Resolve deterministic conflicts directly. Ask only when competing resolutions
-would change product behavior or discard work whose ownership is unclear.
+Resolve deterministic conflicts directly. Ask when competing resolutions
+would change behavior or discard work whose ownership is unclear.
 
 ## 4. Review the Actual Change
 
-Read applicable `AGENTS.md` files, then inspect the complete semantic diff and
-all changed source files. For generated artifacts, review their canonical
-source in full and inspect the generated delta for scope/drift; do not spend
-context rereading thousands of mechanical lines.
+Read applicable instruction files, then inspect the complete semantic diff and
+changed canonical sources. For generated artifacts, review their source in full
+and inspect the generated delta for drift; do not reread large mechanical
+copies.
 
-Check for:
+Check for accidental files, invalid states, authorization and disclosure
+boundaries, missing generated/i18n synchronization, migration compatibility,
+performance, replay safety, and tests that cover real failure modes. Fix
+confirmed defects before publishing.
 
-- accidental or unrelated files;
-- invalid states that types could prevent;
-- authorization, tenant, file, external-input, and disclosure boundaries;
-- missing i18n/generated synchronization;
-- migration compatibility, pagination, performance, and replay safety;
-- tests that exercise real failure modes rather than implementation trivia.
+## 5. Run Proportionate Checks
 
-Fix confirmed defects before publishing and keep unrelated cleanup separate.
+Use the repository's canonical verification command for code changes. Start
+with focused checks while iterating, then run the CI-equivalent command before
+push when the task and machine allow it.
 
-## 5. Run Proportionate Repository Checks
+For documentation or skill-only changes, run their owning generators and
+validators, formatting verification, and `git diff --check`; do not run
+unrelated application suites as ritual. Let pre-push hooks run their affected
+gates.
 
-For code changes, `bun run verify` is the canonical local CI-equivalent check.
-Start with focused tests/checks while iterating, then run `bun run verify` before
-push when the machine and task allow it.
-
-For documentation or skill-only changes, run the generators/validators that own
-the files, `bun run sync-ai:check` when applicable, formatting, and
-`git diff --check`; do not run unrelated application suites merely to satisfy a
-ritual. Let the pre-push hook run its affected gates.
-
-Honor an explicit instruction to skip heavy local checks. Record exactly what
-was skipped and rely on CI rather than quietly rerunning it through a different
-command.
+Honor explicit constraints on heavy local checks. Record what was skipped and
+rely on CI rather than silently invoking equivalent work another way.
 
 ## 6. Apply Security Review by Risk
 
-Always inspect the diff for secrets, private identifiers, unsafe public
-wording, and accidental local paths. Run `/security-audit` when the change
-touches authentication, authorization, tenant data, files, AI/tool execution,
-external APIs, dependencies, workflows, or another security boundary, or when
-the user requests it. A docs-only change still needs a disclosure review, not a
-full application threat-model exercise.
-
-Fix validated critical/high findings in scope before publication. Keep public
-commit and PR text limited to the implementation visible in the diff.
+Always inspect for secrets, private identifiers, unsafe public wording, and
+local paths. Run the repository security-audit workflow when the change touches
+a security boundary or the user requests it. Fix validated in-scope high-risk
+findings before publication and follow the repository's public-disclosure
+policy.
 
 ## 7. Commit and Push Safely
 
-Use focused Conventional Commits. Push a new branch normally:
-
-```bash
-git push -u origin HEAD
-```
-
-Use `--force-with-lease`, never plain force, only when updating a previously
-pushed branch after an intentional rebase. Submit stacks with `gh stack submit
---auto` and verify every PR targets its parent layer.
+Use focused commits that follow repository conventions. Push a new branch
+normally. Use `--force-with-lease`, never plain force, only after intentionally
+rebasing a published branch. For a stack, submit every layer and verify each PR
+targets its parent.
 
 ## 8. Open or Update Review State
 
-- An explicit “draft PR” request creates or keeps a draft.
-- An ordinary “open PR” request creates a ready-for-review PR so review bots and
-  required review workflows can run.
-- Keep a PR draft only when the user requested it or the change is knowingly
-  incomplete/broken; state that reason.
+- An explicit draft request creates or preserves a draft.
+- An ordinary request to open a complete PR creates it ready for review.
+- Keep a PR draft only when requested or when the change is knowingly
+  incomplete; state the reason.
 
-Write a concise Conventional Commit-style title and a short body describing
-only the visible implementation. Do not add a test-plan section unless the
-user asks. Avoid private motivation, identities, deployment details, security
-architecture, or wording that advertises a previously exploitable condition.
+Write a concise title and body describing only the visible implementation.
+Follow repository rules for attribution and public context. Do not add a test
+plan unless requested.
 
-Report the URL, readiness state, checks run/skipped, and any real blocker. Do
-not start bot monitoring, merge, or perform deployment unless the user also
-requested that broader workflow.
+Report the URL, readiness, checks run or skipped, and any blocker. Do not begin
+bot monitoring, merge, or deployment unless the user requested that broader
+workflow.
