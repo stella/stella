@@ -90,10 +90,21 @@ test("chat composer sends a message and renders the assistant reply", async ({
   );
   await expect(errorBoundary).toHaveCount(0);
 
+  const followups = page.getByRole("group", {
+    name: /suggested follow-up prompts/iu,
+  });
+  await expect(followups).toBeVisible({ timeout: 30_000 });
+
+  // A populated thread advertises the first follow-up as a Tab-to-ask
+  // suggestion. This is intentionally a different accessible name than the
+  // blank-thread composer checked above; pressing Tab accepts the suggestion.
+  const compactComposer = page.getByRole("textbox", { name: /to ask:/iu });
+  await expect(compactComposer).toHaveCount(1);
+
   // A populated thread uses the compact composer. Its controls share the
   // editor row; regressing to a second action row creates a large empty band
   // under one-line prompts.
-  const compactComposerHeight = await composer.evaluate((textbox) => {
+  const compactComposerHeight = await compactComposer.evaluate((textbox) => {
     const editor = textbox.closest(".chat-editor");
     const surface = editor?.parentElement?.parentElement;
     if (!(surface instanceof HTMLElement)) {
@@ -103,10 +114,6 @@ test("chat composer sends a message and renders the assistant reply", async ({
   });
   expect(compactComposerHeight).toBeLessThanOrEqual(48);
 
-  const followups = page.getByRole("group", {
-    name: /suggested follow-up prompts/iu,
-  });
-  await expect(followups).toBeVisible({ timeout: 30_000 });
   const typography = await followups
     .getByRole("button")
     .first()
