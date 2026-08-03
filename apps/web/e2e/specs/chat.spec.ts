@@ -160,6 +160,7 @@ test("chat composer sends a message and renders the assistant reply", async ({
     viewport.scrollTop +=
       sentinel.getBoundingClientRect().top -
       viewport.getBoundingClientRect().top +
+      sentinel.getBoundingClientRect().height +
       1;
   });
   await expect(stickyHeader).toHaveAttribute("data-stuck", "true");
