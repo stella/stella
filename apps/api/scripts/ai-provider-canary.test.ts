@@ -13,8 +13,11 @@ import {
   CanaryProviderRunError,
   createPdfCanaryMessages,
   errorSummary,
+  isRetryableCanaryError,
   PDF_CANARY_TOKEN,
   pdfCanarySelection,
+  requireWeeklyToolExecution,
+  runCanaryProbe,
   toolRoundTripInputSchema,
   toolRoundTripInputSchemaForProvider,
   toolRoundTripPromptForProvider,
@@ -175,5 +178,138 @@ describe("AI provider canary error summaries", () => {
     );
 
     expect(errorSummary(error, signal)).toBe("provider HTTP 429");
+  });
+});
+
+class ProviderStatusError extends Error {
+  readonly status: number;
+
+  constructor(status: number) {
+    super(`Synthetic provider HTTP ${status}`);
+    this.name = "ProviderStatusError";
+    this.status = status;
+  }
+}
+
+describe("AI provider canary retry contract", () => {
+  test("retries exactly once for every retryable HTTP status class", async () => {
+    const statuses = [
+      { retryable: false, status: 400 },
+      { retryable: false, status: 401 },
+      { retryable: false, status: 403 },
+      { retryable: false, status: 422 },
+      { retryable: true, status: 429 },
+      { retryable: true, status: 500 },
+      { retryable: true, status: 502 },
+      { retryable: true, status: 503 },
+    ];
+
+    const outcomes = await Promise.all(
+      statuses.map(async ({ retryable, status }) => {
+        let calls = 0;
+        const result = await runCanaryProbe({
+          retryDelayMs: 0,
+          run: async () => {
+            calls += 1;
+            throw new ProviderStatusError(status);
+          },
+          timeoutMs: 1000,
+          wait: async () => {},
+        });
+        return { calls, result, retryable, status };
+      }),
+    );
+
+    expect(
+      outcomes.map(({ calls, result, retryable, status }) => ({
+        attempts: result.attempts,
+        calls,
+        retryable,
+        status,
+      })),
+    ).toEqual(
+      statuses.map(({ retryable, status }) => ({
+        attempts: retryable ? 2 : 1,
+        calls: retryable ? 2 : 1,
+        retryable,
+        status,
+      })),
+    );
+  });
+
+  test("retries an opaque provider stream failure before succeeding", async () => {
+    let calls = 0;
+    const result = await runCanaryProbe({
+      retryDelayMs: 0,
+      run: async () => {
+        calls += 1;
+        if (calls === 1) {
+          throw new CanaryProviderRunError({}, "before-tool-call");
+        }
+      },
+      timeoutMs: 1000,
+      wait: async () => {},
+    });
+
+    expect(result).toEqual({ attempts: 2, status: "passed" });
+    expect(calls).toBe(2);
+  });
+
+  test("does not retry deterministic contract failures", async () => {
+    let calls = 0;
+    const error = new TypeError(
+      "Provider returned unexpected weekly canary tool arguments.",
+    );
+    const result = await runCanaryProbe({
+      retryDelayMs: 0,
+      run: async () => {
+        calls += 1;
+        throw error;
+      },
+      timeoutMs: 1000,
+      wait: async () => {},
+    });
+
+    expect(result).toMatchObject({ attempts: 1, error, status: "failed" });
+    expect(calls).toBe(1);
+  });
+
+  test("classifies only bounded provider codes as retryable", () => {
+    const signal = new AbortController().signal;
+
+    expect(
+      isRetryableCanaryError(
+        new CanaryProviderRunError(
+          { error: { code: "provider_error" } },
+          "before-tool-call",
+        ),
+        signal,
+      ),
+    ).toBe(true);
+    expect(
+      isRetryableCanaryError(
+        new CanaryProviderRunError(
+          { error: { code: "invalid_request_error" } },
+          "before-tool-call",
+        ),
+        signal,
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("AI provider weekly tool execution contract", () => {
+  test("accepts valid execution without inspecting assistant wording", () => {
+    const input = {
+      details: { value: "stella-weekly" },
+      type: "nested",
+    };
+
+    expect(() =>
+      requireWeeklyToolExecution({
+        expectedInputs: [input],
+        observedInputs: [input],
+      }),
+    ).not.toThrow();
   });
 });

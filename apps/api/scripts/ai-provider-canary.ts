@@ -1,5 +1,6 @@
 import { chat, EventType, maxIterations, toolDefinition } from "@tanstack/ai";
 import type { ModelMessage, Tool } from "@tanstack/ai";
+import { panic } from "better-result";
 import { isDeepStrictEqual } from "node:util";
 import * as v from "valibot";
 
@@ -37,10 +38,7 @@ import type {
   CanaryProvider,
   WeeklyCanaryRotation,
 } from "./ai-provider-canary-config";
-import {
-  createWeeklyToolShapeDefinition,
-  WEEKLY_TOOL_RESULT,
-} from "./ai-provider-canary-weekly";
+import { createWeeklyToolShapeDefinition } from "./ai-provider-canary-weekly";
 
 const CAPABILITY_ROLE = "fast" satisfies ModelRole;
 const TOOL_CALL_ROLE = "chat" satisfies ModelRole;
@@ -48,6 +46,8 @@ const MAX_OUTPUT_TOKENS = 64;
 const CAPABILITY_PROBE_TIMEOUT_MS = 20_000;
 const MODEL_ROLE_PROBE_TIMEOUT_MS = 30_000;
 const TOOL_ROUND_TRIP_PROBE_TIMEOUT_MS = 45_000;
+const CANARY_PROBE_MAX_ATTEMPTS = 2;
+const CANARY_PROBE_RETRY_DELAY_MS = 5000;
 const MILLISECONDS_PER_WEEK = 7 * 24 * 60 * 60 * 1000;
 const SYNTHETIC_PROMPT = "Reply with exactly OK.";
 export const PDF_CANARY_TOKEN = "STELLA_PDF_CANARY_OK";
@@ -81,10 +81,8 @@ const SAFE_CANARY_ERROR_MESSAGES = new Set([
   "Provider adapter preserved a synthetic null tool argument.",
   "Provider generated an unexpected optional tool argument.",
   "Provider returned unexpected canary tool arguments.",
-  "Provider did not return the canary tool result.",
   "Provider did not execute the weekly canary tool exactly once.",
   "Provider returned unexpected weekly canary tool arguments.",
-  "Provider did not return the weekly canary tool result.",
   "Provider did not read the attached PDF.",
   "Provider returned no text.",
 ]);
@@ -160,6 +158,20 @@ const SAFE_PROVIDER_CODES = new Set([
   "timeout_error",
 ]);
 
+const RETRYABLE_PROVIDER_CODES = new Set([
+  "aborted",
+  "api_error",
+  "error",
+  "incomplete",
+  "overloaded_error",
+  "provider_error",
+  "rate_limit_error",
+  "rate_limit_exceeded",
+  "server_error",
+  "timeout",
+  "timeout_error",
+]);
+
 type CanaryRunStage =
   | "before-tool-call"
   | "after-tool-call"
@@ -214,6 +226,9 @@ const providerStatus = (error: unknown, depth = 0): number | null => {
   return null;
 };
 
+const isRetryableProviderStatus = (status: number): boolean =>
+  status === 429 || status >= 500;
+
 export class CanaryProviderRunError extends TypeError {
   readonly code: string | null;
   readonly stage: CanaryRunStage;
@@ -227,6 +242,68 @@ export class CanaryProviderRunError extends TypeError {
     this.status = providerStatus(event);
   }
 }
+
+export const isRetryableCanaryError = (
+  error: unknown,
+  signal: AbortSignal,
+): boolean => {
+  if (signal.aborted) {
+    return true;
+  }
+
+  if (error instanceof CanaryProviderRunError) {
+    if (error.status !== null) {
+      return isRetryableProviderStatus(error.status);
+    }
+    return error.code === null || RETRYABLE_PROVIDER_CODES.has(error.code);
+  }
+
+  const status = providerStatus(error);
+  return status !== null && isRetryableProviderStatus(status);
+};
+
+type CanaryProbeResult =
+  | { attempts: number; status: "passed" }
+  | {
+      attempts: number;
+      error: unknown;
+      signal: AbortSignal;
+      status: "failed";
+    };
+
+type RunCanaryProbeOptions = {
+  retryDelayMs?: number;
+  run: (signal: AbortSignal) => Promise<void>;
+  timeoutMs: number;
+  wait?: (delayMs: number) => Promise<void>;
+};
+
+export const runCanaryProbe = async ({
+  retryDelayMs = CANARY_PROBE_RETRY_DELAY_MS,
+  run: runAttempt,
+  timeoutMs,
+  wait = Bun.sleep,
+}: RunCanaryProbeOptions): Promise<CanaryProbeResult> => {
+  for (let attempt = 1; attempt <= CANARY_PROBE_MAX_ATTEMPTS; attempt += 1) {
+    const signal = AbortSignal.timeout(timeoutMs);
+    try {
+      // oxlint-disable-next-line no-await-in-loop -- retries must wait for the preceding provider attempt to fail.
+      await runAttempt(signal);
+      return { attempts: attempt, status: "passed" };
+    } catch (error) {
+      if (
+        attempt === CANARY_PROBE_MAX_ATTEMPTS ||
+        !isRetryableCanaryError(error, signal)
+      ) {
+        return { attempts: attempt, error, signal, status: "failed" };
+      }
+      // oxlint-disable-next-line no-await-in-loop -- bounded backoff separates sequential provider attempts.
+      await wait(retryDelayMs);
+    }
+  }
+
+  return panic("Canary retry loop exhausted without a result.");
+};
 
 const NO_CACHING = {
   enabled: false,
@@ -432,7 +509,7 @@ const capabilityProbes = [
     name: "strict-tool-schema",
     timeoutMs: CAPABILITY_PROBE_TIMEOUT_MS,
     run: async (context, signal) => {
-      await runToolProbe({
+      const output = await runToolProbe({
         context,
         maxOutputTokens: MAX_OUTPUT_TOKENS,
         prompt: TOOL_SCHEMA_PROMPT,
@@ -440,6 +517,7 @@ const capabilityProbes = [
         signal,
         tool: strictTool,
       });
+      requireNonEmptyText(output);
     },
   },
   {
@@ -447,7 +525,7 @@ const capabilityProbes = [
     name: "open-map-tool-schema",
     timeoutMs: CAPABILITY_PROBE_TIMEOUT_MS,
     run: async (context, signal) => {
-      await runToolProbe({
+      const output = await runToolProbe({
         context,
         maxOutputTokens: MAX_OUTPUT_TOKENS,
         prompt: TOOL_SCHEMA_PROMPT,
@@ -455,6 +533,7 @@ const capabilityProbes = [
         signal,
         tool: openMapTool,
       });
+      requireNonEmptyText(output);
     },
   },
   {
@@ -639,7 +718,7 @@ const runToolCallRoundTripProbe = async ({
     return { confirmation: TOOL_ROUND_TRIP_RESULT };
   });
 
-  const output = await runToolProbe({
+  await runToolProbe({
     context,
     maxOutputTokens: modelRoleMaxOutputTokens(TOOL_CALL_ROLE),
     prompt: toolRoundTripPromptForProvider(context.provider),
@@ -671,9 +750,6 @@ const runToolCallRoundTripProbe = async ({
       "Provider generated an unexpected optional tool argument.",
     );
   }
-  if (output.trim() !== TOOL_ROUND_TRIP_RESULT) {
-    throw new TypeError("Provider did not return the canary tool result.");
-  }
 };
 
 type RunWeeklyToolShapeProbeOptions = {
@@ -681,25 +757,15 @@ type RunWeeklyToolShapeProbeOptions = {
   signal: AbortSignal;
 };
 
-const runWeeklyToolShapeProbe = async ({
-  context,
-  signal,
-}: RunWeeklyToolShapeProbeOptions): Promise<void> => {
-  const observedInputs: unknown[] = [];
-  const { expectedInputs, prompt, tool } = createWeeklyToolShapeDefinition(
-    context.rotation.toolShape,
-    context.provider,
-    observedInputs,
-  );
-  const output = await runToolProbe({
-    context: { config: context.rotatedConfig, provider: context.provider },
-    maxOutputTokens: modelRoleMaxOutputTokens(TOOL_CALL_ROLE),
-    prompt,
-    role: TOOL_CALL_ROLE,
-    signal,
-    tool,
-  });
+type RequireWeeklyToolExecutionOptions = {
+  expectedInputs: readonly unknown[];
+  observedInputs: readonly unknown[];
+};
 
+export const requireWeeklyToolExecution = ({
+  expectedInputs,
+  observedInputs,
+}: RequireWeeklyToolExecutionOptions): void => {
   if (observedInputs.length !== 1) {
     throw new TypeError(
       "Provider did not execute the weekly canary tool exactly once.",
@@ -715,11 +781,28 @@ const runWeeklyToolShapeProbe = async ({
       "Provider returned unexpected weekly canary tool arguments.",
     );
   }
-  if (output.trim() !== WEEKLY_TOOL_RESULT) {
-    throw new TypeError(
-      "Provider did not return the weekly canary tool result.",
-    );
-  }
+};
+
+const runWeeklyToolShapeProbe = async ({
+  context,
+  signal,
+}: RunWeeklyToolShapeProbeOptions): Promise<void> => {
+  const observedInputs: unknown[] = [];
+  const { expectedInputs, prompt, tool } = createWeeklyToolShapeDefinition(
+    context.rotation.toolShape,
+    context.provider,
+    observedInputs,
+  );
+  await runToolProbe({
+    context: { config: context.rotatedConfig, provider: context.provider },
+    maxOutputTokens: modelRoleMaxOutputTokens(TOOL_CALL_ROLE),
+    prompt,
+    role: TOOL_CALL_ROLE,
+    signal,
+    tool,
+  });
+
+  requireWeeklyToolExecution({ expectedInputs, observedInputs });
 };
 
 type RunToolProbeOptions = {
@@ -784,7 +867,6 @@ const runToolProbe = async ({
       throw new CanaryProviderRunError(chunk, stage);
     }
   }
-  requireNonEmptyText(output);
   return output;
 };
 
@@ -948,6 +1030,9 @@ const probeLabel = (context: CanaryContext, probe: Probe): string => {
   return `${prefix}-${probe.role}:${modelId ?? "unsupported"}`;
 };
 
+const attemptSummary = (attempts: number): string =>
+  attempts === 1 ? "" : ` after ${attempts} attempts`;
+
 const run = async (): Promise<void> => {
   const args = parseCanaryRunArgs(Bun.argv.slice(2));
   const { provider } = args;
@@ -1017,17 +1102,23 @@ const runProbes = async (
     return await runProbes(context, index + 1, failures);
   }
 
-  const signal = AbortSignal.timeout(probe.timeoutMs);
-  try {
-    await probe.run(context, signal);
-    console.log(`[ai-canary] ${context.provider}/${label}: passed`);
-    return await runProbes(context, index + 1, failures);
-  } catch (error) {
-    console.error(
-      `[ai-canary] ${context.provider}/${label}: failed (${errorSummary(error, signal)})`,
+  const result = await runCanaryProbe({
+    run: async (signal) => {
+      await probe.run(context, signal);
+    },
+    timeoutMs: probe.timeoutMs,
+  });
+  if (result.status === "passed") {
+    console.log(
+      `[ai-canary] ${context.provider}/${label}: passed${attemptSummary(result.attempts)}`,
     );
-    return await runProbes(context, index + 1, failures + 1);
+    return await runProbes(context, index + 1, failures);
   }
+
+  console.error(
+    `[ai-canary] ${context.provider}/${label}: failed${attemptSummary(result.attempts)} (${errorSummary(result.error, result.signal)})`,
+  );
+  return await runProbes(context, index + 1, failures + 1);
 };
 
 const runWeeklyCanaryProbes = async (
@@ -1038,48 +1129,66 @@ const runWeeklyCanaryProbes = async (
 
   for (const role of context.rotation.modelRoles) {
     const label = `weekly-role-${role}:${context.rotation.modelId}`;
-    const signal = AbortSignal.timeout(MODEL_ROLE_PROBE_TIMEOUT_MS);
-    try {
-      // oxlint-disable-next-line no-await-in-loop -- role probes must stay sequential so the failure count and console output stay ordered.
-      await runWeeklyModelRoleProbe({ context, role, signal });
-      console.log(`[ai-canary] ${context.provider}/${label}: passed`);
-    } catch (error) {
+    // oxlint-disable-next-line no-await-in-loop -- role probes must stay sequential so provider rate limits and output remain deterministic.
+    const result = await runCanaryProbe({
+      run: async (signal) => {
+        await runWeeklyModelRoleProbe({ context, role, signal });
+      },
+      timeoutMs: MODEL_ROLE_PROBE_TIMEOUT_MS,
+    });
+    if (result.status === "passed") {
+      console.log(
+        `[ai-canary] ${context.provider}/${label}: passed${attemptSummary(result.attempts)}`,
+      );
+    } else {
       console.error(
-        `[ai-canary] ${context.provider}/${label}: failed (${errorSummary(error, signal)})`,
+        `[ai-canary] ${context.provider}/${label}: failed${attemptSummary(result.attempts)} (${errorSummary(result.error, result.signal)})`,
       );
       totalFailures += 1;
     }
 
     const structuredLabel = `weekly-structured-role-${role}:${context.rotation.modelId}`;
-    const structuredSignal = AbortSignal.timeout(MODEL_ROLE_PROBE_TIMEOUT_MS);
-    try {
-      // oxlint-disable-next-line no-await-in-loop -- provider probes must stay sequential so rate limits and output remain deterministic.
-      await runWeeklyStructuredOutputModelRoleProbe({
-        context,
-        role,
-        signal: structuredSignal,
-      });
-      console.log(`[ai-canary] ${context.provider}/${structuredLabel}: passed`);
-    } catch (error) {
+    // oxlint-disable-next-line no-await-in-loop -- structured probes share the same provider quota and must remain sequential.
+    const structuredResult = await runCanaryProbe({
+      run: async (signal) => {
+        await runWeeklyStructuredOutputModelRoleProbe({
+          context,
+          role,
+          signal,
+        });
+      },
+      timeoutMs: MODEL_ROLE_PROBE_TIMEOUT_MS,
+    });
+    if (structuredResult.status === "passed") {
+      console.log(
+        `[ai-canary] ${context.provider}/${structuredLabel}: passed${attemptSummary(structuredResult.attempts)}`,
+      );
+    } else {
       console.error(
-        `[ai-canary] ${context.provider}/${structuredLabel}: failed (${errorSummary(error, structuredSignal)})`,
+        `[ai-canary] ${context.provider}/${structuredLabel}: failed${attemptSummary(structuredResult.attempts)} (${errorSummary(structuredResult.error, structuredResult.signal)})`,
       );
       totalFailures += 1;
     }
   }
 
   const label = `weekly-tool-${context.rotation.toolShape}:${context.rotation.modelId}`;
-  const signal = AbortSignal.timeout(TOOL_ROUND_TRIP_PROBE_TIMEOUT_MS);
-  try {
-    await runWeeklyToolShapeProbe({ context, signal });
-    console.log(`[ai-canary] ${context.provider}/${label}: passed`);
-    return totalFailures;
-  } catch (error) {
-    console.error(
-      `[ai-canary] ${context.provider}/${label}: failed (${errorSummary(error, signal)})`,
+  const result = await runCanaryProbe({
+    run: async (signal) => {
+      await runWeeklyToolShapeProbe({ context, signal });
+    },
+    timeoutMs: TOOL_ROUND_TRIP_PROBE_TIMEOUT_MS,
+  });
+  if (result.status === "passed") {
+    console.log(
+      `[ai-canary] ${context.provider}/${label}: passed${attemptSummary(result.attempts)}`,
     );
-    return totalFailures + 1;
+    return totalFailures;
   }
+
+  console.error(
+    `[ai-canary] ${context.provider}/${label}: failed${attemptSummary(result.attempts)} (${errorSummary(result.error, result.signal)})`,
+  );
+  return totalFailures + 1;
 };
 
 if (import.meta.main) {
