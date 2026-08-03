@@ -1,4 +1,5 @@
 import type { ContentPartSource } from "@tanstack/ai";
+import type { ToolCallPart as TanStackToolCallPart } from "@tanstack/ai-client";
 import { panic, Result } from "better-result";
 import { Buffer } from "node:buffer";
 
@@ -413,15 +414,95 @@ type AwaitingUserInteraction = Extract<
   { type: "awaiting-user" }
 >["interaction"];
 
+type ChatToolCallPart = Extract<ChatPart, { type: "tool-call" }>;
+
+type ChatApprovalMetadata = NonNullable<TanStackToolCallPart["approval"]>;
+
+const isChatApprovalMetadata = (
+  value: unknown,
+): value is ChatApprovalMetadata =>
+  isRecord(value) &&
+  typeof value["id"] === "string" &&
+  typeof value["needsApproval"] === "boolean" &&
+  (value["approved"] === undefined || typeof value["approved"] === "boolean");
+
+const toChatToolCallPart = (value: unknown): ChatToolCallPart => {
+  if (!isChatPart(value) || value.type !== "tool-call") {
+    return panic("Cannot terminalize malformed chat tool call");
+  }
+  return value;
+};
+
+const terminalToolCallError = (part: ChatToolCallPart): ChatToolCallPart => {
+  const metadata = Reflect.get(part, "metadata");
+  return toChatToolCallPart({
+    arguments: part.arguments,
+    id: part.id,
+    name: part.name,
+    state: "error",
+    type: "tool-call",
+    ...(metadata === undefined ? {} : { metadata }),
+  });
+};
+
+const cancelPendingToolCallPart = (
+  part: ChatToolCallPart,
+): ChatToolCallPart => {
+  switch (part.state) {
+    case "approval-requested": {
+      const approval = Reflect.get(part, "approval");
+      if (!isChatApprovalMetadata(approval)) {
+        return terminalToolCallError(part);
+      }
+      return toChatToolCallPart({
+        ...part,
+        approval: { ...approval, approved: false },
+        state: "approval-responded",
+      });
+    }
+    case "awaiting-input":
+    case "input-streaming":
+    case "input-complete":
+      // Do not leave a partial or client-owned call in a state that a fresh
+      // hydration can execute after its owning turn was superseded. Omitting
+      // input/approval/output also removes now-invalid user controls.
+      return terminalToolCallError(part);
+    case "approval-responded":
+    case "complete":
+    case "error":
+      return part;
+    default:
+      return part.state satisfies never;
+  }
+};
+
+/**
+ * Keep a terminal assistant message internally consistent: metadata records
+ * its turn's outcome, and its parts no longer expose an approval or input
+ * control that belongs to that terminated turn.
+ */
+export const cancelPendingChatToolCalls = (
+  message: PersistableChatMessage,
+): PersistableChatMessage => {
+  const parts = message.parts.map((part) =>
+    part.type === "tool-call" ? cancelPendingToolCallPart(part) : part,
+  );
+  return { ...message, parts };
+};
+
 /**
  * Every approval-requested call remains actionable. A chat turn is owned by
  * its assistant message, not by whichever pending approval happened to arrive
  * first in the stream.
  */
 export const getAwaitingUserInteractions = (
-  message: Pick<ChatMessage, "parts" | "role"> | null,
+  message: Pick<ChatMessage, "metadata" | "parts" | "role"> | null,
 ): AwaitingUserInteraction[] => {
-  if (message?.role !== "assistant") {
+  const turnOutcome = message?.metadata?.turnOutcome;
+  if (
+    message?.role !== "assistant" ||
+    (turnOutcome !== undefined && turnOutcome.type !== "awaiting-user")
+  ) {
     return [];
   }
   const interactions: AwaitingUserInteraction[] = [];

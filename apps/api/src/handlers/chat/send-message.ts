@@ -49,6 +49,7 @@ import {
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
 import {
   claimChatTurnForExecution,
+  claimChatTurnForExecutionOnTx,
   canAcceptChatTurnOnTx,
   createChatTurnAcceptance,
   failChatTurnExecution,
@@ -1050,25 +1051,36 @@ const sendMessage = createSafeRootHandler(
           pendingUnpersistedSideEffects = undefined;
         }
       } else {
-        const persistenceResult = await persistMessage(persistenceProps);
-        if (Result.isError(persistenceResult)) {
-          return Result.err(persistenceResult.error);
+        if (turnAcceptance === undefined) {
+          const persistenceResult = await persistMessage(persistenceProps);
+          if (Result.isError(persistenceResult)) {
+            return Result.err(persistenceResult.error);
+          }
+          turnExecution = yield* Result.await(
+            claimChatTurnForExecution({
+              acceptedTurnId: null,
+              incomingMessageId: parsedMessage.message.id,
+              incomingMessageRole: parsedMessage.message.role,
+              organizationId: session.activeOrganizationId,
+              safeDb,
+              threadId: body.threadId,
+              userId: user.id,
+              workspaceId,
+            }),
+          );
+        } else {
+          const persistenceResult = await persistAcceptedMessageWithClaim({
+            ...persistenceProps,
+            turnAcceptance,
+          });
+          if (Result.isError(persistenceResult)) {
+            return Result.err(persistenceResult.error);
+          }
+          turnExecution = persistenceResult.value;
         }
         if (latestMessagePlan.persistencePlan.type !== "none") {
           pendingUnpersistedSideEffects = undefined;
         }
-        turnExecution = yield* Result.await(
-          claimChatTurnForExecution({
-            acceptedTurnId: turnAcceptance?.id ?? null,
-            incomingMessageId: parsedMessage.message.id,
-            incomingMessageRole: parsedMessage.message.role,
-            organizationId: session.activeOrganizationId,
-            safeDb,
-            threadId: body.threadId,
-            userId: user.id,
-            workspaceId,
-          }),
-        );
       }
       if (turnExecution === null) {
         return Result.err(
@@ -2861,6 +2873,57 @@ const safeDbOnTransaction = (tx: Transaction): SafeDb =>
   async function transactionSafeDb(operation) {
     return Result.ok(await operation(tx));
   };
+
+type PersistAcceptedMessageWithClaimProps = PersistMessageProps & {
+  turnAcceptance: ChatTurnAcceptance;
+};
+
+/**
+ * Persist a new user message, create its durable turn, and claim execution
+ * before releasing the thread lock. No other sender can observe and supersede
+ * an accepted-but-unclaimed turn between these operations.
+ */
+const persistAcceptedMessageWithClaim = async ({
+  safeDb,
+  turnAcceptance,
+  ...persistenceProps
+}: PersistAcceptedMessageWithClaimProps): Promise<
+  Result<ChatTurnExecution, HandlerError<409> | SafeDbError>
+> => {
+  const result = await safeDb(async (tx) => {
+    const persistenceResult = await runPersistMessage({
+      ...persistenceProps,
+      safeDb: safeDbOnTransaction(tx),
+      turnAcceptance,
+    });
+    if (Result.isError(persistenceResult)) {
+      return Result.err(persistenceResult.error);
+    }
+
+    const execution = await claimChatTurnForExecutionOnTx({
+      acceptedTurnId: turnAcceptance.id,
+      incomingMessageId: turnAcceptance.userMessageId,
+      incomingMessageRole: "user",
+      organizationId: turnAcceptance.organizationId,
+      threadId: turnAcceptance.threadId,
+      tx,
+      userId: turnAcceptance.userId,
+      workspaceId: turnAcceptance.workspaceId,
+    });
+    if (execution === null) {
+      panic("Newly accepted chat turn lost execution ownership");
+    }
+    return Result.ok(execution);
+  });
+  if (Result.isError(result)) {
+    return Result.err(result.error);
+  }
+  if (Result.isError(result.value)) {
+    return Result.err(result.value.error);
+  }
+  upsertChatThreadSearchDocument(persistenceProps.threadId).catch(captureError);
+  return Result.ok(result.value.value);
+};
 
 /**
  * Claim an interactive replay and mutate its existing assistant message on one

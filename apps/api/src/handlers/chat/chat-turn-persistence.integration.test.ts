@@ -5,7 +5,10 @@ import { eq, inArray } from "drizzle-orm";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
-import { toChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
+import {
+  getAwaitingUserInteractions,
+  toChatMessageContent,
+} from "@/api/handlers/chat/chat-message-parts";
 import {
   CHAT_METERED_PROVIDER_TIMEOUT_MS,
   canAcceptChatTurnOnTx,
@@ -18,6 +21,7 @@ import {
   withClaimedChatTurnExecution,
 } from "@/api/handlers/chat/chat-turn-persistence";
 import type { ChatTurnExecutionClaim } from "@/api/handlers/chat/chat-turn-persistence";
+import { clientMessageFromPageRow } from "@/api/handlers/chat/message-page";
 import type { ChatPart } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -95,6 +99,22 @@ const awaitingAskUserContent = toChatMessageContent({
       state: "input-complete",
       type: "tool-call",
     },
+  ] satisfies ChatPart[],
+  version: 2,
+});
+
+const awaitingApprovalAndAskUserContent = toChatMessageContent({
+  data: [
+    {
+      approval: { id: "approval-1", needsApproval: true },
+      arguments: '{"query":"Draft"}',
+      id: "approval-1",
+      input: { query: "Draft" },
+      name: "mcp__test__write",
+      state: "approval-requested",
+      type: "tool-call",
+    },
+    ...awaitingAskUserContent.data,
   ] satisfies ChatPart[],
   version: 2,
 });
@@ -909,6 +929,104 @@ describe("durable chat turn persistence", () => {
         columns: { id: true },
       }),
     ).toEqual(replacementAccepted ? { id: replacementMessageId } : undefined);
+  });
+
+  test("terminalizes a superseded interaction before its replacement reloads", async () => {
+    const { acceptance, assistantMessageId, threadId } =
+      await seedAwaitingTurn();
+    await testDb
+      .update(chatMessages)
+      .set({ content: awaitingApprovalAndAskUserContent })
+      .where(eq(chatMessages.id, assistantMessageId));
+    const replacementMessageId = toSafeId<"chatMessage">(Bun.randomUUIDv7());
+    const replacement = createChatTurnAcceptance({
+      organizationId: ids.orgA,
+      threadId,
+      userId: ids.userA1,
+      userMessageId: replacementMessageId,
+      workspaceId: ids.wsA1,
+    });
+
+    unwrap(
+      await safeDb(async (tx) => {
+        await tx.insert(chatMessages).values({
+          content: {
+            data: [{ text: "A newer request", type: "text" }],
+            version: 1,
+          },
+          id: replacementMessageId,
+          role: "user",
+          threadId,
+          userId: ids.userA1,
+          workspaceId: ids.wsA1,
+        });
+        expect(
+          await insertChatTurnAcceptanceOnTx({ acceptance: replacement, tx }),
+        ).toBe(true);
+      }),
+    );
+
+    const staleAssistant = await testDb.query.chatMessages.findFirst({
+      where: { id: { eq: assistantMessageId } },
+      columns: { content: true, id: true, role: true },
+    });
+    if (staleAssistant === undefined) {
+      throw new Error("Expected the superseded assistant message to persist");
+    }
+    const reloadedAssistant = clientMessageFromPageRow(
+      staleAssistant,
+      new Map(),
+    );
+    expect(reloadedAssistant.metadata?.turnOutcome).toEqual({
+      reason: "superseded",
+      type: "cancelled",
+    });
+    expect(getAwaitingUserInteractions(reloadedAssistant)).toEqual([]);
+    expect(
+      reloadedAssistant.parts.flatMap((part) =>
+        part.type === "tool-call"
+          ? [
+              {
+                approval: Reflect.get(part, "approval"),
+                input: Reflect.get(part, "input"),
+                state: part.state,
+              },
+            ]
+          : [],
+      ),
+    ).toEqual([
+      {
+        approval: {
+          approved: false,
+          id: "approval-1",
+          needsApproval: true,
+        },
+        input: { query: "Draft" },
+        state: "approval-responded",
+      },
+      { approval: undefined, input: undefined, state: "error" },
+    ]);
+
+    const staleContinuation = unwrap(
+      await claimChatTurnForExecution({
+        acceptedTurnId: null,
+        continuationInteraction: { toolCallId: "ask-1", type: "ask-user" },
+        incomingMessageId: assistantMessageId,
+        incomingMessageRole: "assistant",
+        organizationId: ids.orgA,
+        safeDb,
+        threadId,
+        userId: ids.userA1,
+        workspaceId: ids.wsA1,
+      }),
+    );
+    expect(staleContinuation).toBeNull();
+    expect(
+      await testDb.query.chatTurns.findFirst({
+        where: { id: { eq: acceptance.id } },
+        columns: { cancellationReason: true, status: true },
+      }),
+    ).toEqual({ cancellationReason: "superseded", status: "cancelled" });
   });
 
   test("a duplicate awaiting-user claim cannot mutate replay history", async () => {

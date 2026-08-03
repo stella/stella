@@ -6,6 +6,9 @@ import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
 import {
+  attachTerminalTurnOutcome,
+  cancelPendingChatToolCalls,
+  chatMessageContentFromMessage,
   chatMessageFromPersisted,
   getAwaitingUserInteractions,
 } from "@/api/handlers/chat/chat-message-parts";
@@ -160,6 +163,68 @@ export const canAcceptChatTurnOnTx = async ({
 };
 
 /**
+ * A pending human interaction is represented twice: its owning turn protects
+ * execution ownership, while the assistant message is what reload hydration
+ * renders. Superseding only the turn leaves that canonical message inviting an
+ * action the server can no longer accept. Terminalize both in this transaction
+ * so a reload cannot resurrect a stale approval or question.
+ */
+const cancelAwaitingAssistantMessagesOnTx = async ({
+  threadId,
+  tx,
+}: {
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+}): Promise<void> => {
+  const awaitingMessage = (
+    await tx
+      .select({
+        content: chatMessages.content,
+        id: chatMessages.id,
+        role: chatMessages.role,
+      })
+      .from(chatTurns)
+      .innerJoin(
+        chatMessages,
+        and(
+          eq(chatMessages.id, chatTurns.assistantMessageId),
+          eq(chatMessages.threadId, chatTurns.threadId),
+        ),
+      )
+      .where(
+        and(
+          eq(chatTurns.threadId, threadId),
+          eq(chatTurns.status, "awaiting-user"),
+        ),
+      )
+      .limit(1)
+  ).at(0);
+
+  if (awaitingMessage === undefined) {
+    return;
+  }
+  if (awaitingMessage.role !== "assistant") {
+    panic("Awaiting chat turn does not own an assistant message");
+  }
+  const cancelledMessage = attachTerminalTurnOutcome({
+    message: cancelPendingChatToolCalls(
+      chatMessageFromPersisted(awaitingMessage),
+    ),
+    turnOutcome: { reason: "superseded", type: "cancelled" },
+  });
+  // audit: skip — this is the server-owned counterpart of the same turn cancellation below
+  await tx
+    .update(chatMessages)
+    .set({ content: chatMessageContentFromMessage(cancelledMessage) })
+    .where(
+      and(
+        eq(chatMessages.id, awaitingMessage.id),
+        eq(chatMessages.threadId, threadId),
+      ),
+    );
+};
+
+/**
  * Store acceptance in the caller's message transaction. A pending interaction
  * may be replaced, but a running turn is never superseded: its provider and
  * tool side effects still belong to a live execution. Returning false leaves
@@ -178,6 +243,10 @@ export const insertChatTurnAcceptanceOnTx = async ({
   if (!(await canAcceptChatTurnOnTx({ threadId: acceptance.threadId, tx }))) {
     return false;
   }
+  await cancelAwaitingAssistantMessagesOnTx({
+    threadId: acceptance.threadId,
+    tx,
+  });
   // audit: skip — internal turn coordination; the user message mutation is audited in this transaction
   await tx
     .update(chatTurns)

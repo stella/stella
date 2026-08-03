@@ -6,6 +6,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_TURN_INTENT } from "@stll/api-contract";
 
+import type { SafeDb } from "@/api/db/safe-db";
 import { chatThreads, chatTurns } from "@/api/db/schema";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -152,6 +153,7 @@ const createContext = ({
     parts: [{ type: "text", content: "Summarize the selected matters" }],
   },
   request = new Request("http://localhost/v1/chat/send"),
+  onSafeDbTransaction,
   truncateAfterMessageId,
   turnIntent,
   transaction = {
@@ -165,11 +167,16 @@ const createContext = ({
   contextMatterIds: SendMessageCtx["body"]["contextMatterIds"];
   message?: SendMessageCtx["body"]["message"];
   request?: Request;
+  onSafeDbTransaction?: (() => void) | undefined;
   truncateAfterMessageId?: SendMessageCtx["body"]["truncateAfterMessageId"];
   turnIntent?: SendMessageCtx["body"]["turnIntent"];
   transaction?: unknown;
 }): SendMessageCtx => {
   const { safeDb, scopedDb } = createScopedDbMock(transaction);
+  const observedSafeDb: SafeDb = async (operation, retry) => {
+    onSafeDbTransaction?.();
+    return await safeDb(operation, retry);
+  };
 
   return asTestRaw<SendMessageCtx>({
     body: {
@@ -196,7 +203,7 @@ const createContext = ({
     recordAuditEvent: async () => {},
     request,
     route: "/v1/chat/send",
-    safeDb,
+    safeDb: observedSafeDb,
     scopedDb,
     session: { activeOrganizationId: organizationId },
     user: { id: userId },
@@ -560,6 +567,7 @@ describe("send message disconnect handling", () => {
     const turnUpdates: unknown[] = [];
     const selectWithThreadLock = () => ({
       from: () => ({
+        innerJoin: () => ({ where: () => ({ limit: async () => [] }) }),
         where: () => ({
           for: async () => [{ id: threadId }],
           limit: async () => [],
@@ -644,6 +652,9 @@ describe("send message disconnect handling", () => {
 
   test("terminalizes the claimed turn when context preparation disconnects", async () => {
     const abortController = new AbortController();
+    let safeDbTransaction = 0;
+    let acceptanceTransaction: number | null = null;
+    let claimTransaction: number | null = null;
     let organizationSettingsReads = 0;
     const findOrganizationSettings = mock(async () => {
       organizationSettingsReads += 1;
@@ -655,6 +666,7 @@ describe("send message disconnect handling", () => {
     const turnUpdates: unknown[] = [];
     const selectWithThreadLock = () => ({
       from: () => ({
+        innerJoin: () => ({ where: () => ({ limit: async () => [] }) }),
         where: () => ({
           for: async () => [{ id: threadId }],
           limit: async () => [],
@@ -663,19 +675,30 @@ describe("send message disconnect handling", () => {
       }),
     });
     const insert = (table: unknown) => ({
-      values: () =>
-        table === chatTurns
-          ? {
-              onConflictDoNothing: () => ({
-                returning: async () => [{ id: turnId }],
-              }),
-            }
-          : undefined,
+      values: () => {
+        if (table !== chatTurns) {
+          return;
+        }
+        acceptanceTransaction = safeDbTransaction;
+        return {
+          onConflictDoNothing: () => ({
+            returning: async () => [{ id: turnId }],
+          }),
+        };
+      },
     });
     const update = (table: unknown) => ({
       set: (values: unknown) => {
         turnUpdates.push(values);
         if (table === chatTurns) {
+          if (
+            typeof values === "object" &&
+            values !== null &&
+            "status" in values &&
+            values.status === "running"
+          ) {
+            claimTransaction = safeDbTransaction;
+          }
           return {
             where: () => ({ returning: async () => [{ id: turnId }] }),
           };
@@ -687,6 +710,9 @@ describe("send message disconnect handling", () => {
     const result = await sendMessage.handler(
       createContext({
         contextMatterIds: [],
+        onSafeDbTransaction: () => {
+          safeDbTransaction += 1;
+        },
         request: new Request("http://localhost/v1/chat/send", {
           signal: abortController.signal,
         }),
@@ -729,6 +755,8 @@ describe("send message disconnect handling", () => {
       response: { message: "Client disconnected before AI work started" },
     });
     expect(findOrganizationSettings).toHaveBeenCalledTimes(2);
+    expect(acceptanceTransaction).not.toBeNull();
+    expect(claimTransaction).toBe(acceptanceTransaction);
     expect(turnUpdates).toContainEqual(
       expect.objectContaining({
         interruptionReason: "client-disconnected",
@@ -749,6 +777,7 @@ describe("send message disconnect handling", () => {
     });
     const selectWithThreadLock = () => ({
       from: () => ({
+        innerJoin: () => ({ where: () => ({ limit: async () => [] }) }),
         where: () => ({
           for: async () => [{ id: threadId }],
           limit: async () => [],
@@ -910,6 +939,7 @@ describe("send message turn persistence", () => {
 
     const selectWithThreadLock = () => ({
       from: () => ({
+        innerJoin: () => ({ where: () => ({ limit: async () => [] }) }),
         where: () => ({
           for: async () => [{ id: threadId }],
           limit: async () => [],
