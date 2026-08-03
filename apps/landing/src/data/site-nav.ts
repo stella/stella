@@ -8,6 +8,7 @@ type NavLabelKey = Extract<
   | "footer.agent"
   | "footer.contact"
   | "footer.editor"
+  | "footer.press"
   | "footer.publicData"
   | "footer.status"
   | "footer.tabularReview"
@@ -53,6 +54,7 @@ export const resourceLinks = [
   { kind: "translated", labelKey: "nav.blog", href: "/blog" },
   { kind: "translated", labelKey: "nav.aiFactSheet", href: "/ai-info" },
   { kind: "translated", labelKey: "hero.selfHost", href: selfHostingUrl },
+  { kind: "translated", labelKey: "footer.press", href: "/press" },
   { kind: "translated", labelKey: "footer.status", href: statusUrl },
 ] as const satisfies readonly NavLink[];
 

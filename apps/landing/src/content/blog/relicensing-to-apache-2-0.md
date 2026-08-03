@@ -1,6 +1,6 @@
 ---
 title: stella is now Apache 2.0
-description: stella is now licensed under Apache 2.0, making it easier to fork, embed, and reuse the open source legal workspace.
+description: stella is now licensed under Apache 2.0, making it easier to fork, embed, and reuse the open source legal workspace in products and self-hosted deployments.
 publishedAt: 2026-05-06
 author: stella
 ---
