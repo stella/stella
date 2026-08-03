@@ -706,7 +706,9 @@ const toTerminalIfRunningToolPart = (
   if (
     mode === "hydrate" &&
     part.name === "create-document" &&
-    part.state === "input-complete"
+    part.state === "input-complete" &&
+    typeof part.input?.source === "string" &&
+    part.input.source.trim() !== ""
   ) {
     return part;
   }

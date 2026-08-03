@@ -46,6 +46,8 @@ type ActiveExternal = {
 
 export type ActiveDocumentDraft = {
   fileName: string;
+  originChatMessageId: string;
+  originChatThreadId: ChatThreadId;
   toolCallId: string;
 };
 

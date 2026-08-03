@@ -107,4 +107,37 @@ describe("create-document draft runtime", () => {
 
     expect((await saveCreateDocumentDraft("tool-1")).status).toBe("failed");
   });
+
+  test("bounds retained snapshots while keeping refreshed drafts newest", async () => {
+    const snapshotLimit = 32;
+    const buffers = Array.from(
+      { length: snapshotLimit + 1 },
+      (_, index) => new Uint8Array([index]).buffer,
+    );
+
+    for (const [index, buffer] of buffers.entries()) {
+      registerCreateDocumentDraftSaver(`tool-${index}`, async () => buffer)();
+    }
+
+    const refreshed = new Uint8Array([255]).buffer;
+    registerCreateDocumentDraftSaver("tool-0", async () => refreshed)();
+    const lastBuffer = buffers.at(-1);
+    if (lastBuffer === undefined) {
+      throw new Error(
+        "Expected the fixed-size snapshot fixture to be non-empty",
+      );
+    }
+
+    expect(await saveCreateDocumentDraft("tool-1")).toEqual({
+      status: "unavailable",
+    });
+    expect(await saveCreateDocumentDraft("tool-0")).toEqual({
+      status: "saved",
+      buffer: refreshed,
+    });
+    expect(await saveCreateDocumentDraft(`tool-${snapshotLimit}`)).toEqual({
+      status: "saved",
+      buffer: lastBuffer,
+    });
+  });
 });

@@ -22,6 +22,7 @@ const CREATE_DOCUMENT_DRAFT_THREAD_NAMESPACE =
   "58cd2ab8-5b47-4c60-8ccc-edbbabf7fc69";
 
 export type CreateDocumentDraftPayload = {
+  originChatMessageId: string;
   originChatThreadId: ChatThreadId;
   chatThreadId: ChatThreadId;
   toolCallId: string;
@@ -45,6 +46,8 @@ export const isCreateDocumentDraftPayload = (
     typeof payload.toolCallId === "string" &&
     "originChatThreadId" in payload &&
     typeof payload.originChatThreadId === "string" &&
+    "originChatMessageId" in payload &&
+    typeof payload.originChatMessageId === "string" &&
     "chatThreadId" in payload &&
     typeof payload.chatThreadId === "string" &&
     payload.chatThreadId !== payload.originChatThreadId &&
@@ -66,6 +69,7 @@ export const isSameCreateDocumentDraftPayload = (
 ): boolean =>
   isCreateDocumentDraftPayload(left) &&
   left.toolCallId === right.toolCallId &&
+  left.originChatMessageId === right.originChatMessageId &&
   left.originChatThreadId === right.originChatThreadId &&
   left.chatThreadId === right.chatThreadId &&
   left.name === right.name &&
@@ -78,6 +82,7 @@ const MAX_DOWNLOAD_FILENAME_LENGTH = 255;
 const UNSAFE_DOWNLOAD_FILENAME_CHARACTERS = '"/\\<>\r\n\0|*?:';
 
 export type CreateDocumentDraft = {
+  messageId: string;
   toolCallId: string;
   name: string;
   source: string;
@@ -110,6 +115,7 @@ export const buildCreateDocumentDraftPayload = ({
         );
 
   return {
+    originChatMessageId: draft.messageId,
     originChatThreadId,
     chatThreadId,
     toolCallId: draft.toolCallId,
@@ -176,6 +182,28 @@ export const replaceReadyCreateDocumentDraftOutput = (
       }
       return { ...part, output };
     });
+    return parts.some((part, index) => part !== message.parts[index])
+      ? { ...message, parts }
+      : message;
+  });
+
+export const terminalizeUnsettledCreateDocumentDraft = (
+  messages: readonly ChatMessage[],
+  toolCallId: string,
+): ChatMessage[] =>
+  messages.map((message) => {
+    if (message.role !== "assistant") {
+      return message;
+    }
+    const parts = message.parts.map((part) =>
+      part.type === "tool-call" &&
+      part.name === "create-document" &&
+      part.id === toolCallId &&
+      part.state === "input-complete" &&
+      part.output === undefined
+        ? { ...part, state: "error" as const }
+        : part,
+    );
     return parts.some((part, index) => part !== message.parts[index])
       ? { ...message, parts }
       : message;
@@ -249,7 +277,11 @@ const getCreateDocumentInput = (
 };
 
 export const selectCreateDocumentDrafts = (
-  messages: readonly { role: string; parts: readonly ChatPart[] }[],
+  messages: readonly {
+    id: string;
+    role: string;
+    parts: readonly ChatPart[];
+  }[],
 ): CreateDocumentDraft[] => {
   const drafts: CreateDocumentDraft[] = [];
   for (const message of messages) {
@@ -281,6 +313,7 @@ export const selectCreateDocumentDrafts = (
       }
       const input = getCreateDocumentInput(part);
       drafts.push({
+        messageId: message.id,
         toolCallId: part.id,
         name: input?.name ?? "",
         source: input?.source ?? "",
@@ -292,7 +325,11 @@ export const selectCreateDocumentDrafts = (
 };
 
 export const selectUnsettledCreateDocumentDrafts = (
-  messages: readonly { role: string; parts: readonly ChatPart[] }[],
+  messages: readonly {
+    id: string;
+    role: string;
+    parts: readonly ChatPart[];
+  }[],
 ): CreateDocumentDraft[] => {
   const message = messages.at(-1);
   if (message?.role !== "assistant") {
@@ -310,6 +347,7 @@ export const selectUnsettledCreateDocumentDrafts = (
     }
     const input = normalizeCreateDocumentInput(part.input);
     drafts.push({
+      messageId: message.id,
       toolCallId: part.id,
       name: input?.name ?? "",
       source: input?.source ?? "",

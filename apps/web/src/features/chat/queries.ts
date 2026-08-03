@@ -71,6 +71,8 @@ type ActiveFileContext = {
 type ActiveDraftContext = {
   docxEditSnapshot?: ActiveFileContext["docxEditSnapshot"];
   fileName: string;
+  originChatMessageId: string;
+  originChatThreadId: string;
   toolCallId: string;
 };
 
@@ -988,6 +990,12 @@ export const buildSendRequestBody = ({
   if (activeDraft) {
     body.activeDraft = {
       fileName: activeDraft.fileName,
+      originChatMessageId: toSafeId<"chatMessage">(
+        activeDraft.originChatMessageId,
+      ),
+      originChatThreadId: toSafeId<"chatThread">(
+        activeDraft.originChatThreadId,
+      ),
       toolCallId: activeDraft.toolCallId,
       ...(activeDraft.docxEditSnapshot === undefined
         ? {}

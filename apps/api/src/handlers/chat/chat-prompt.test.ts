@@ -487,6 +487,8 @@ describe("chat prompt builders", () => {
   test("active-draft prompt grounds edits in the visible unsaved document", () => {
     const prompt = buildActiveDraftPrompt(
       {
+        originChatMessageId: toSafeId<"chatMessage">("message-origin"),
+        originChatThreadId: toSafeId<"chatThread">("thread-origin"),
         toolCallId: "tool-draft",
         fileName: "Plna moc.docx",
         docxEditSnapshot: {

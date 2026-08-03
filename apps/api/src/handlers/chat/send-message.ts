@@ -131,6 +131,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resolveEffectiveChatModelId } from "@/api/lib/chat-model-selection";
+import { isReadyGeneratedDocumentDraft } from "@/api/lib/chat/created-draft";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { detached } from "@/api/lib/detached";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -210,6 +211,62 @@ const usableWorkspaceIds = (
     }
   }
   return ids;
+};
+
+const validateActiveDraftContext = async ({
+  activeDraft,
+  organizationId,
+  safeDb,
+  userId,
+}: {
+  activeDraft: IncomingActiveDraft | undefined;
+  organizationId: SafeId<"organization">;
+  safeDb: SafeDb;
+  userId: SafeId<"user">;
+}): Promise<Result<void, HandlerError<404> | SafeDbError>> => {
+  if (activeDraft === undefined) {
+    return Result.ok(undefined);
+  }
+  const rows = await safeDb((tx) =>
+    tx
+      .select({
+        content: chatMessages.content,
+        id: chatMessages.id,
+        role: chatMessages.role,
+      })
+      .from(chatMessages)
+      .innerJoin(chatThreads, eq(chatThreads.id, chatMessages.threadId))
+      .where(
+        and(
+          eq(chatMessages.userId, userId),
+          eq(chatMessages.id, activeDraft.originChatMessageId),
+          eq(chatThreads.id, activeDraft.originChatThreadId),
+          eq(chatThreads.userId, userId),
+          eq(chatThreads.organizationId, organizationId),
+        ),
+      )
+      .limit(1),
+  );
+  if (Result.isError(rows)) {
+    return Result.err(rows.error);
+  }
+  const matches = rows.value.some(
+    (message) =>
+      message.role === "assistant" &&
+      isReadyGeneratedDocumentDraft({
+        content: message,
+        fileName: activeDraft.fileName,
+        toolCallId: activeDraft.toolCallId,
+      }),
+  );
+  return matches
+    ? Result.ok(undefined)
+    : Result.err(
+        new HandlerError({
+          status: 404,
+          message: "Active generated document draft not found",
+        }),
+      );
 };
 
 const sendMessage = createSafeRootHandler(
@@ -362,6 +419,14 @@ const sendMessage = createSafeRootHandler(
         threadId: body.threadId,
         userId: user.id,
         workspaceId,
+      }),
+    );
+    yield* Result.await(
+      validateActiveDraftContext({
+        activeDraft: body.activeDraft,
+        organizationId: session.activeOrganizationId,
+        safeDb,
+        userId: user.id,
       }),
     );
     const validationActiveSkillContext = yield* Result.await(

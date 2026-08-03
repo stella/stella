@@ -3,23 +3,32 @@ import path from "node:path";
 
 import { DOC_SOURCES } from "../.claude/mcp/doc-sources";
 
-type PackageManifest = {
-  dependencies?: Record<string, string>;
-  devDependencies?: Record<string, string>;
-};
+const readDependencyNames = (value: unknown): string[] =>
+  typeof value === "object" && value !== null && !Array.isArray(value)
+    ? Object.keys(value)
+    : [];
 
 const readManifestDependencies = (manifestPath: string): string[] => {
-  const manifest = JSON.parse(
-    readFileSync(manifestPath, "utf-8"),
-  ) as PackageManifest;
+  const manifest: unknown = JSON.parse(readFileSync(manifestPath, "utf-8"));
+  if (typeof manifest !== "object" || manifest === null) {
+    return [];
+  }
   return [
-    ...Object.keys(manifest.dependencies ?? {}),
-    ...Object.keys(manifest.devDependencies ?? {}),
+    ...readDependencyNames(
+      "dependencies" in manifest ? manifest.dependencies : undefined,
+    ),
+    ...readDependencyNames(
+      "devDependencies" in manifest ? manifest.devDependencies : undefined,
+    ),
   ];
 };
 
-const getWorkspaceManifestPaths = (root: string): string[] => {
+const getDependencyManifestPaths = (root: string): string[] => {
   const manifests = [path.join(root, "package.json")];
+  const docsMcpManifest = path.join(root, ".claude", "mcp", "package.json");
+  if (existsSync(docsMcpManifest)) {
+    manifests.push(docsMcpManifest);
+  }
   for (const workspaceRoot of ["apps", "packages"]) {
     const directory = path.join(root, workspaceRoot);
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
@@ -42,10 +51,11 @@ export const findUndeclaredDocSourceDependencies = (
     .filter(([, source]) => !declaredDependencies.has(source.dependency))
     .map(([name, source]) => `${name}: ${source.dependency}`);
 
+export const getDeclaredDocSourceDependencies = (root: string) =>
+  new Set(getDependencyManifestPaths(root).flatMap(readManifestDependencies));
+
 export const checkDocSourceDependencies = (root: string): string[] => {
-  const declaredDependencies = new Set(
-    getWorkspaceManifestPaths(root).flatMap(readManifestDependencies),
-  );
+  const declaredDependencies = getDeclaredDocSourceDependencies(root);
   return findUndeclaredDocSourceDependencies(declaredDependencies);
 };
 

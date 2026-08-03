@@ -387,6 +387,8 @@ describe("buildSendRequestBody", () => {
             ],
           },
           fileName: "draft.docx",
+          originChatMessageId: "message-origin",
+          originChatThreadId: threadId,
           toolCallId: "tool-draft",
         }),
         getActiveExternal: () => ({
@@ -433,6 +435,8 @@ describe("buildSendRequestBody", () => {
           blocks: [{ id: "draft-block", kind: "heading", text: "Draft title" }],
         },
         fileName: "draft.docx",
+        originChatMessageId: "message-origin",
+        originChatThreadId: threadId,
         toolCallId: "tool-draft",
       },
       activeFile: {

@@ -849,7 +849,14 @@ type FileChatOverlayProps = {
    * fine but loses the file-context hint.
    */
   activeFile?: ActiveFile | undefined;
-  activeDraft?: { fileName: string; toolCallId: string } | undefined;
+  activeDraft?:
+    | {
+        fileName: string;
+        originChatMessageId: string;
+        originChatThreadId: ChatThreadId;
+        toolCallId: string;
+      }
+    | undefined;
   activeExternal?: ActiveExternal | undefined;
   docxEditorRef?: RefObject<DocxEditorRef | null> | undefined;
   docxEditable?: boolean | undefined;

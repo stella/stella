@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import { toPersistableChatMessage } from "@/api/handlers/chat/chat-message-parts";
-import { replaceCreatedDraftOutput } from "@/api/handlers/chat/created-draft/update";
+import {
+  hasMatchingCreatedDraftOutput,
+  replaceCreatedDraftOutput,
+} from "@/api/handlers/chat/created-draft/update";
 import { toSafeId } from "@/api/lib/branded-types";
 
 const messageId = toSafeId<"chatMessage">(
@@ -71,13 +74,12 @@ describe("replaceCreatedDraftOutput", () => {
     expect(first).not.toBeNull();
 
     expect(
-      replaceCreatedDraftOutput({
+      hasMatchingCreatedDraftOutput({
         message: first ?? draftMessage,
-        messageId,
         output,
         toolCallId: "tool-create-document-1",
       }),
-    ).not.toBeNull();
+    ).toBe(true);
   });
 
   test("refuses to rewrite another tool call or saved entity", () => {

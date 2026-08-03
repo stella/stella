@@ -10,6 +10,7 @@ import {
   replaceReadyCreateDocumentDraftOutput,
   selectCreateDocumentDrafts,
   selectUnsettledCreateDocumentDrafts,
+  terminalizeUnsettledCreateDocumentDraft,
 } from "@/components/chat/create-document-draft.logic";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { toSafeId } from "@/lib/safe-id";
@@ -18,6 +19,7 @@ describe("create-document drafts", () => {
   test("surfaces partial source while tool arguments are streaming", () => {
     const messages = [
       {
+        id: "message-streaming",
         role: "assistant",
         parts: [
           {
@@ -34,6 +36,7 @@ describe("create-document drafts", () => {
 
     expect(selectCreateDocumentDrafts(messages)).toEqual([
       {
+        messageId: "message-streaming",
         toolCallId: "tool-streaming",
         name: "Power of attorney",
         source: "@doc kind=other\n@paragraph\nDraft in pro",
@@ -45,6 +48,7 @@ describe("create-document drafts", () => {
   test("opens an empty streaming draft as soon as the tool call starts", () => {
     const messages = [
       {
+        id: "message-starting",
         role: "assistant",
         parts: [
           {
@@ -60,6 +64,7 @@ describe("create-document drafts", () => {
 
     expect(selectCreateDocumentDrafts(messages)).toEqual([
       {
+        messageId: "message-starting",
         toolCallId: "tool-starting",
         name: "",
         source: "",
@@ -75,6 +80,7 @@ describe("create-document drafts", () => {
     };
     const unresolved = [
       {
+        id: "message-unresolved",
         role: "assistant",
         parts: [
           {
@@ -91,6 +97,7 @@ describe("create-document drafts", () => {
 
     expect(selectCreateDocumentDrafts(unresolved)).toEqual([
       {
+        messageId: "message-unresolved",
         toolCallId: "tool-1",
         name: "Purchase agreement",
         source: input.source,
@@ -100,6 +107,7 @@ describe("create-document drafts", () => {
 
     const readyDraft = [
       {
+        id: "message-ready",
         role: "assistant",
         parts: [
           {
@@ -120,6 +128,7 @@ describe("create-document drafts", () => {
     ] satisfies Parameters<typeof selectCreateDocumentDrafts>[0];
     expect(selectCreateDocumentDrafts(readyDraft)).toEqual([
       {
+        messageId: "message-ready",
         toolCallId: "tool-1",
         name: "Purchase agreement",
         source: input.source,
@@ -131,12 +140,17 @@ describe("create-document drafts", () => {
     expect(
       selectUnsettledCreateDocumentDrafts([
         ...unresolved,
-        { role: "user", parts: [{ type: "text", content: "Make it longer" }] },
+        {
+          id: "message-user",
+          role: "user",
+          parts: [{ type: "text", content: "Make it longer" }],
+        },
       ]),
     ).toEqual([]);
 
     const resolved = [
       {
+        id: "message-resolved",
         role: "assistant",
         parts: [
           {
@@ -212,6 +226,29 @@ describe("create-document drafts", () => {
     expect(findReadyCreateDocumentDraftMessageId(updated, "tool-1")).toBeNull();
   });
 
+  test("terminalizes only the exhausted draft settlement", () => {
+    const messages = [
+      {
+        id: toSafeId<"chatMessage">("019fc8ee-aea6-7eba-8da3-3ec8d4bda03f"),
+        role: "assistant",
+        parts: [
+          {
+            arguments: JSON.stringify({ name: "Draft", source: "@doc" }),
+            id: "tool-1",
+            input: { name: "Draft", source: "@doc" },
+            name: "create-document",
+            state: "input-complete",
+            type: "tool-call",
+          },
+        ],
+      },
+    ] satisfies Parameters<typeof terminalizeUnsettledCreateDocumentDraft>[0];
+
+    const updated = terminalizeUnsettledCreateDocumentDraft(messages, "tool-1");
+    expect(updated[0]?.parts[0]).toMatchObject({ state: "error" });
+    expect(selectUnsettledCreateDocumentDrafts(updated)).toEqual([]);
+  });
+
   test("normalizes legacy markdown input", () => {
     expect(
       normalizeCreateDocumentInput({
@@ -223,6 +260,7 @@ describe("create-document drafts", () => {
 
   test("recognizes an unchanged inspector payload", () => {
     const payload = {
+      originChatMessageId: "message-origin",
       originChatThreadId: toChatThreadId("thread-origin"),
       chatThreadId: toChatThreadId("thread-draft"),
       toolCallId: "tool-1",
@@ -245,6 +283,7 @@ describe("create-document drafts", () => {
   test("gives the draft overlay a fresh stable thread", () => {
     const originChatThreadId = toChatThreadId("thread-origin");
     const draft = {
+      messageId: "message-origin",
       toolCallId: "tool-1",
       name: "Power of attorney",
       source: "@doc kind=other locale=en page=A4",

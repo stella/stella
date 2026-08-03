@@ -88,6 +88,8 @@ export const activeFileSchema = t.Object({
 });
 
 export const activeDraftSchema = t.Object({
+  originChatMessageId: tSafeId("chatMessage"),
+  originChatThreadId: tSafeId("chatThread"),
   toolCallId: t.String(),
   fileName: t.String(),
   docxEditSnapshot: t.Optional(docxEditSnapshotSchema),

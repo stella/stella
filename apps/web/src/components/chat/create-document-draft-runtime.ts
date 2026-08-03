@@ -4,6 +4,8 @@ import { detached } from "@/lib/detached";
 
 type CreateDocumentDraftSaver = () => Promise<ArrayBuffer | null>;
 
+const MAX_RETAINED_DRAFT_SNAPSHOTS = 32;
+
 let draftSavers: Record<string, CreateDocumentDraftSaver | undefined> = {};
 let retainedDraftSnapshots: Record<
   string,
@@ -18,6 +20,18 @@ const withoutRuntimeKey = <T>(
   Object.fromEntries(
     Object.entries(values).filter(([candidate]) => candidate !== key),
   );
+
+const withRetainedDraftSnapshot = (
+  values: Readonly<
+    Record<string, Promise<CreateDocumentDraftSaveResult> | undefined>
+  >,
+  key: string,
+  snapshot: Promise<CreateDocumentDraftSaveResult>,
+): Record<string, Promise<CreateDocumentDraftSaveResult> | undefined> => {
+  const entries = Object.entries(withoutRuntimeKey(values, key));
+  entries.push([key, snapshot]);
+  return Object.fromEntries(entries.slice(-MAX_RETAINED_DRAFT_SNAPSHOTS));
+};
 
 export type CreateDocumentDraftSaveResult =
   | { status: "failed"; error: unknown }
@@ -112,10 +126,11 @@ const captureDraftSnapshot = async (
   saver: CreateDocumentDraftSaver,
 ): Promise<CreateDocumentDraftSaveResult> => {
   const snapshot = runDraftSaver(saver);
-  retainedDraftSnapshots = {
-    ...retainedDraftSnapshots,
-    [draftRuntimeKey(toolCallId)]: snapshot,
-  };
+  retainedDraftSnapshots = withRetainedDraftSnapshot(
+    retainedDraftSnapshots,
+    draftRuntimeKey(toolCallId),
+    snapshot,
+  );
   return await snapshot;
 };
 

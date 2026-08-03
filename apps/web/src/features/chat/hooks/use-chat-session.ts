@@ -57,6 +57,7 @@ import {
   replaceReadyCreateDocumentDraftOutput,
   selectCreateDocumentDrafts,
   selectUnsettledCreateDocumentDrafts,
+  terminalizeUnsettledCreateDocumentDraft,
 } from "@/components/chat/create-document-draft.logic";
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import type {
@@ -66,7 +67,13 @@ import type {
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
-import { invalidateCreatedDocumentQueries } from "@/features/chat/hooks/use-chat-session-created-document.logic";
+import {
+  clearPendingCreatedDocumentPersistence,
+  invalidateCreatedDocumentQueries,
+  pendingCreatedDocumentPersistenceKey,
+  readPendingCreatedDocumentPersistence,
+  writePendingCreatedDocumentPersistence,
+} from "@/features/chat/hooks/use-chat-session-created-document.logic";
 import { reconcileDocumentDeletionToolCalls } from "@/features/chat/hooks/use-chat-session-document-deletion.logic";
 import {
   createInitialSendQueueState,
@@ -384,7 +391,17 @@ export const useChatSession = ({
           });
           if (settleResult.status === "failed") {
             settlingCreateDocumentDraftIdsRef.current.delete(draft.toolCallId);
-            throw settleResult.error;
+            getAnalytics().captureError(settleResult.error);
+            chat.setMessages(
+              terminalizeUnsettledCreateDocumentDraft(
+                chat.getSnapshot().messages,
+                draft.toolCallId,
+              ),
+            );
+            stellaToast.add({
+              title: t("chat.createDocument.failedHeader"),
+              type: "error",
+            });
           }
         })(),
         "useChatSession.createDocumentDraftReady",
@@ -908,7 +925,7 @@ export const useChatSession = ({
     }
   }, [messages, queryClient, workspaceId]);
 
-  const handleCreateDocumentResolve = useCallback(
+  const handleCreateDocumentResolve = useLatestCallback(
     async (
       toolCallId: string,
       destination: CreateDocumentDestination,
@@ -944,79 +961,114 @@ export const useChatSession = ({
         return;
       }
 
-      const { matterId } = destination;
-      const draftMessageId = findReadyCreateDocumentDraftMessageId(
-        chat.getSnapshot().messages,
+      const pendingKey = pendingCreatedDocumentPersistenceKey(
+        conversationId,
         toolCallId,
       );
+      const pendingStorage =
+        typeof window === "undefined" ? null : window.sessionStorage;
+      const pending =
+        pendingStorage === null
+          ? null
+          : readPendingCreatedDocumentPersistence(pendingStorage, pendingKey);
+      const matterId = pending?.matterId ?? destination.matterId;
+      const draftMessageId =
+        pending?.draftMessageId ??
+        findReadyCreateDocumentDraftMessageId(
+          chat.getSnapshot().messages,
+          toolCallId,
+        );
       if (draftMessageId === null) {
         return;
       }
-      const createResult = await Result.tryPromise(async () => {
-        const draft = await prepareCreateDocumentDraft(toolCallId, input);
-        if (draft === null) {
-          throw new ClientOperationError({
-            action: "prepare-create-document-draft",
-            message: "Generated document source could not be compiled",
-          });
-        }
-        const properties = await queryClient.fetchQuery(
-          propertiesOptions(matterId),
-        );
-        const fileProperty = properties.find(
-          (property) => property.content.type === "file",
-        );
-        if (fileProperty === undefined) {
-          throw new ClientOperationError({
-            action: "save-create-document-draft",
-            message: "Destination matter has no file property",
-          });
-        }
+      let output: CreateDocumentMatterSuccess;
+      if (pending === null) {
+        const createResult = await Result.tryPromise(async () => {
+          const draft = await prepareCreateDocumentDraft(toolCallId, input);
+          if (draft === null) {
+            throw new ClientOperationError({
+              action: "prepare-create-document-draft",
+              message: "Generated document source could not be compiled",
+            });
+          }
+          const properties = await queryClient.fetchQuery(
+            propertiesOptions(matterId),
+          );
+          const fileProperty = properties.find(
+            (property) => property.content.type === "file",
+          );
+          if (fileProperty === undefined) {
+            throw new ClientOperationError({
+              action: "save-create-document-draft",
+              message: "Destination matter has no file property",
+            });
+          }
 
-        const file = new File([new Uint8Array(draft.buffer)], draft.fileName, {
-          type: DOCX_MIME,
+          const file = new File(
+            [new Uint8Array(draft.buffer)],
+            draft.fileName,
+            { type: DOCX_MIME },
+          );
+          const response = await api
+            .entities({ workspaceId: toSafeId<"workspace">(matterId) })
+            ["upload-generated-document"].post({
+              queryKey: entitiesKeys.all(matterId),
+              queryKeys: [workspacesKeys.overviewActivityAll(matterId)],
+              file,
+              messageId: toSafeId<"chatMessage">(draftMessageId),
+              name: draft.fileName,
+              propertyId: fileProperty.id,
+              threadId: toSafeId<"chatThread">(threadRef.threadId),
+              ...(threadRef.scope === "workspace"
+                ? {
+                    threadWorkspaceId: toSafeId<"workspace">(
+                      threadRef.workspaceId,
+                    ),
+                  }
+                : {}),
+              toolCallId,
+            });
+          if (response.error) {
+            throw toAPIError(response.error);
+          }
+          const created = response.data;
+          const fileName = created.fileName;
+          const href = `#stella-entity=${matterId}:${created.entityId}`;
+          return {
+            success: true,
+            fileName,
+            entityId: created.entityId,
+            fieldId: created.fieldId,
+            workspaceId: matterId,
+            entityRef: created.entityId,
+            matterRef: matterId,
+            href,
+            mention: `[${fileName}](${href})`,
+          } satisfies CreateDocumentMatterSuccess;
         });
-        const response = await api
-          .entities({ workspaceId: toSafeId<"workspace">(matterId) })
-          .upload.post({
-            queryKey: entitiesKeys.all(matterId),
-            queryKeys: [workspacesKeys.overviewActivityAll(matterId)],
-            file,
-            name: draft.fileName,
-            origin: "generated-document",
-            propertyId: fileProperty.id,
-          });
-        if (response.error) {
-          throw toAPIError(response.error);
-        }
-        return { created: response.data };
-      });
 
-      if (Result.isError(createResult)) {
-        getAnalytics().captureError(createResult.error);
-        stellaToast.add({
-          title: APIError.is(createResult.error)
-            ? internalToolErrorMessage(createResult.error)
-            : t("chat.createDocument.failedHeader"),
-          type: "error",
-        });
-        return;
+        if (Result.isError(createResult)) {
+          getAnalytics().captureError(createResult.error);
+          stellaToast.add({
+            title: APIError.is(createResult.error)
+              ? internalToolErrorMessage(createResult.error)
+              : t("chat.createDocument.failedHeader"),
+            type: "error",
+          });
+          return;
+        }
+        output = createResult.value;
+        if (pendingStorage !== null) {
+          writePendingCreatedDocumentPersistence(pendingStorage, pendingKey, {
+            draftMessageId,
+            matterId,
+            output,
+            toolCallId,
+          });
+        }
+      } else {
+        output = pending.output;
       }
-
-      const { created } = createResult.value;
-      const fileName = created.fileName;
-      const href = `#stella-entity=${matterId}:${created.entityId}`;
-      const output: CreateDocumentMatterSuccess = {
-        success: true,
-        fileName,
-        entityId: created.entityId,
-        fieldId: created.fieldId,
-        workspaceId: matterId,
-        entityRef: created.entityId,
-        matterRef: matterId,
-        href,
-        mention: `[${fileName}](${href})`,
-      };
 
       const persistenceResult = await runCreateDocumentOperationWithRetry({
         isActive: () =>
@@ -1032,8 +1084,8 @@ export const useChatSession = ({
             ["created-draft"].patch(
               {
                 destinationWorkspaceId: toSafeId<"workspace">(matterId),
-                entityId: toSafeId<"entity">(created.entityId),
-                fieldId: toSafeId<"field">(created.fieldId),
+                entityId: toSafeId<"entity">(output.entityId),
+                fieldId: toSafeId<"field">(output.fieldId),
                 messageId: toSafeId<"chatMessage">(draftMessageId),
                 toolCallId,
               },
@@ -1062,6 +1114,10 @@ export const useChatSession = ({
           title: t("chat.createDocument.failedHeader"),
           type: "error",
         });
+        return;
+      }
+      if (pendingStorage !== null) {
+        clearPendingCreatedDocumentPersistence(pendingStorage, pendingKey);
       }
 
       setMessages(
@@ -1104,7 +1160,6 @@ export const useChatSession = ({
       await openCreatedDocumentInInspector(output);
       clearCreateDocumentDraftSnapshot(toolCallId);
     },
-    [chat, queryClient, setMessages, t, threadRef],
   );
 
   const handleOpenCreatedDocument = useCallback(

@@ -1,11 +1,11 @@
-import { useMemo, useRef } from "react";
+import { useCallback, useMemo, useRef } from "react";
 
 import { useTranslations } from "use-intl";
 
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
 import { ReviewBar } from "@/components/ai-suggestions/review-bar";
 import { compileCreateDocumentSourceToDocument } from "@/components/chat/create-document-compiler";
-import { registerCreateDocumentDraftSaver } from "@/components/chat/create-document-draft-runtime";
+import { attachCreateDocumentDraftEditor } from "@/components/chat/create-document-draft-inspector-editor.logic";
 import {
   buildCreateDocumentDownloadFileName,
   createDocumentDraftReviewId,
@@ -15,7 +15,6 @@ import {
   DocxEditor,
   type DocxEditorRef,
 } from "@/components/docx/app-docx-editor";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 
 type CreateDocumentDraftInspectorEditorProps = {
   payload: CreateDocumentDraftPayload;
@@ -36,13 +35,17 @@ export const CreateDocumentDraftInspectorEditor = ({
     [payload.name, payload.source],
   );
 
-  useExternalSyncEffect(
-    () =>
-      registerCreateDocumentDraftSaver(
-        payload.toolCallId,
-        async () =>
-          (await editorRef.current?.save({ selective: false })) ?? null,
-      ),
+  const attachEditor = useCallback(
+    (editor: DocxEditorRef | null) => {
+      if (editor === null) {
+        return undefined;
+      }
+      return attachCreateDocumentDraftEditor({
+        editor,
+        editorRef,
+        toolCallId: payload.toolCallId,
+      });
+    },
     [payload.toolCallId],
   );
 
@@ -59,7 +62,7 @@ export const CreateDocumentDraftInspectorEditor = ({
   const editor = (
     <div className="h-full min-h-0 overflow-auto">
       <DocxEditor
-        ref={editorRef}
+        ref={attachEditor}
         autoOpenReviewSidebar={false}
         className="folio-docx-preview folio-peek h-full"
         document={compiled.document}
@@ -82,6 +85,8 @@ export const CreateDocumentDraftInspectorEditor = ({
     <FileViewerWithAI
       activeDraft={{
         fileName: buildCreateDocumentDownloadFileName(payload.name),
+        originChatMessageId: payload.originChatMessageId,
+        originChatThreadId: payload.originChatThreadId,
         toolCallId: payload.toolCallId,
       }}
       chatThreadId={payload.chatThreadId}

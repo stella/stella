@@ -987,6 +987,36 @@ describe("sanitizeRunningToolCalls", () => {
     expect(sanitizeRunningToolCalls(messages)[0]).toBe(messages[0]);
   });
 
+  test.each(["", "   \n\t"])(
+    "terminalizes a create-document draft with non-resumable source %j",
+    (source) => {
+      const messages: PersistedChatMessage[] = [
+        {
+          id: "message-1",
+          parts: [
+            {
+              arguments: JSON.stringify({ name: "Empty draft", source }),
+              id: "tool-call-1",
+              input: { name: "Empty draft", source },
+              name: "create-document",
+              state: "input-complete",
+              type: "tool-call",
+            } satisfies ChatPart,
+          ],
+          role: "assistant",
+        },
+      ];
+
+      const part = sanitizeRunningToolCalls(messages)[0]?.parts[0];
+      expect(part).toMatchObject({ state: "error", type: "tool-call" });
+      expect(
+        hasRunningToolCallInLatestAssistantMessage({
+          messages: sanitizeRunningToolCalls(messages),
+        }),
+      ).toBe(false);
+    },
+  );
+
   test("leaves a completed tool call untouched", () => {
     const messages: PersistedChatMessage[] = [
       {

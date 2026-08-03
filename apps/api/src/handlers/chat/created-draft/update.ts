@@ -54,6 +54,24 @@ const isReplaceableCreateDocumentOutput = (
   (("destination" in candidate && candidate.destination === "draft") ||
     isMatchingSavedOutput(candidate, output));
 
+export const hasMatchingCreatedDraftOutput = ({
+  message,
+  output,
+  toolCallId,
+}: {
+  message: ChatMessage;
+  output: CreatedDraftOutput;
+  toolCallId: string;
+}): boolean =>
+  message.parts.some(
+    (part) =>
+      part.type === "tool-call" &&
+      part.id === toolCallId &&
+      part.name === "create-document" &&
+      part.state === "complete" &&
+      isMatchingSavedOutput(part.output, output),
+  );
+
 export const replaceCreatedDraftOutput = ({
   message,
   messageId,
@@ -222,8 +240,18 @@ const saveCreatedDraft = createSafeRootHandler(
           mention: `[${field.content.fileName}](${href})`,
           workspaceId: body.destinationWorkspaceId,
         };
+        const parsedMessage = chatMessageFromPersisted(message);
+        if (
+          hasMatchingCreatedDraftOutput({
+            message: parsedMessage,
+            output,
+            toolCallId: body.toolCallId,
+          })
+        ) {
+          return { status: "saved", output } as const;
+        }
         const updated = replaceCreatedDraftOutput({
-          message: chatMessageFromPersisted(message),
+          message: parsedMessage,
           messageId: message.id,
           output,
           toolCallId: body.toolCallId,

@@ -1,12 +1,19 @@
 import { Result } from "better-result";
-import { and, eq, like } from "drizzle-orm";
+import { and, eq, isNull, like } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
 import { jsonField } from "@/api/db/json-utils";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
-import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
+import {
+  chatMessages,
+  chatThreads,
+  entities,
+  entityVersions,
+  fields,
+  workspaces,
+} from "@/api/db/schema";
 import {
   UPLOAD_ENTITY_ORIGIN,
   uploadTriggeredFlowPolicy,
@@ -18,6 +25,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isReadyGeneratedDocumentDraft } from "@/api/lib/chat/created-draft";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
@@ -49,13 +57,15 @@ const uploadEntityBodySchema = t.Object({
     maxSize: FILE_SIZE_LIMITS.document,
   }),
   name: tDefaultVarchar,
-  origin: t.Optional(
-    t.Union([
-      t.Literal(UPLOAD_ENTITY_ORIGIN.GENERATED_DOCUMENT),
-      t.Literal(UPLOAD_ENTITY_ORIGIN.USER),
-    ]),
-  ),
   propertyId: tSafeId("property"),
+});
+
+const uploadGeneratedDocumentBodySchema = t.Object({
+  ...uploadEntityBodySchema.properties,
+  messageId: tSafeId("chatMessage"),
+  threadId: tSafeId("chatThread"),
+  threadWorkspaceId: t.Optional(tSafeId("workspace")),
+  toolCallId: t.String(),
 });
 
 type UploadEntityHandlerProps = {
@@ -64,7 +74,9 @@ type UploadEntityHandlerProps = {
   workspaceId: SafeId<"workspace">;
   userId: SafeId<"user">;
   recordAuditEvent: AuditRecorder;
-  body: Static<typeof uploadEntityBodySchema>;
+  body: Static<typeof uploadEntityBodySchema> & {
+    origin: (typeof UPLOAD_ENTITY_ORIGIN)[keyof typeof UPLOAD_ENTITY_ORIGIN];
+  };
 };
 
 type ResolveFileNameProps = {
@@ -150,7 +162,7 @@ const uploadEntityHandler = async function* ({
   workspaceId,
   userId,
   recordAuditEvent,
-  body: { file, name: rawName, origin = UPLOAD_ENTITY_ORIGIN.USER, propertyId },
+  body: { file, name: rawName, origin, propertyId },
 }: UploadEntityHandlerProps) {
   const name = sanitizeFilename(rawName);
   // Non-authoritative fast-fail: cheap, unlocked, avoids scanning
@@ -460,7 +472,83 @@ const uploadEntity = createSafeHandler(
       workspaceId,
       userId: user.id,
       recordAuditEvent,
-      body,
+      body: { ...body, origin: UPLOAD_ENTITY_ORIGIN.USER },
+    });
+  },
+);
+
+const generatedDocumentConfig = {
+  permissions: { entity: ["create"] },
+  mcp: { type: "internal", reason: "assistant_chat" },
+  body: uploadGeneratedDocumentBodySchema,
+} satisfies HandlerConfig;
+
+export const uploadGeneratedDocument = createSafeHandler(
+  generatedDocumentConfig,
+  async function* ({
+    body,
+    recordAuditEvent,
+    safeDb,
+    session,
+    user,
+    workspaceId,
+  }) {
+    const name = sanitizeFilename(body.name);
+    const rows = yield* Result.await(
+      safeDb((tx) =>
+        tx
+          .select({
+            content: chatMessages.content,
+            id: chatMessages.id,
+            role: chatMessages.role,
+          })
+          .from(chatMessages)
+          .innerJoin(chatThreads, eq(chatThreads.id, chatMessages.threadId))
+          .where(
+            and(
+              eq(chatMessages.id, body.messageId),
+              eq(chatMessages.threadId, body.threadId),
+              eq(chatMessages.userId, user.id),
+              eq(chatThreads.userId, user.id),
+              eq(chatThreads.organizationId, session.activeOrganizationId),
+              body.threadWorkspaceId === undefined
+                ? isNull(chatThreads.workspaceId)
+                : eq(chatThreads.workspaceId, body.threadWorkspaceId),
+            ),
+          )
+          .limit(1),
+      ),
+    );
+    const message = rows.at(0);
+    if (
+      !message ||
+      message.role !== "assistant" ||
+      !isReadyGeneratedDocumentDraft({
+        content: message,
+        fileName: name,
+        toolCallId: body.toolCallId,
+      })
+    ) {
+      return Result.err(
+        new HandlerError({
+          status: 404,
+          message: "Generated document draft not found",
+        }),
+      );
+    }
+
+    return yield* uploadEntityHandler({
+      safeDb,
+      organizationId: session.activeOrganizationId,
+      workspaceId,
+      userId: user.id,
+      recordAuditEvent,
+      body: {
+        file: body.file,
+        name,
+        origin: UPLOAD_ENTITY_ORIGIN.GENERATED_DOCUMENT,
+        propertyId: body.propertyId,
+      },
     });
   },
 );
