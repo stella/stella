@@ -93,6 +93,19 @@ export const getCreateDocumentDraftEditorAccess = (
 ): "editable" | "read-only" =>
   payload.status === "ready" ? "editable" : "read-only";
 
+/**
+ * An unbound draft-only chat has no durable relationship to the saved file.
+ * Once the document exists, omit that synthetic id so the file overlay
+ * resolves its canonical file-chat mapping instead. A bound id is safe to
+ * retain because the server moved that mapping as part of the save.
+ */
+export const resolveCreateDocumentDraftOverlayChatThreadId = (
+  payload: CreateDocumentDraftPayload,
+): ChatThreadId | undefined =>
+  payload.status === "persisted" && payload.chatThreadBinding === "unbound"
+    ? undefined
+    : payload.chatThreadId;
+
 type SetCreateDocumentDraftChatThreadIdOptions = {
   chatThreadId: ChatThreadId;
   payload: CreateDocumentDraftPayload;

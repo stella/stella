@@ -11,6 +11,7 @@ import {
   normalizeCreateDocumentInput,
   persistCreateDocumentDraftPayload,
   replaceReadyCreateDocumentDraftOutput,
+  resolveCreateDocumentDraftOverlayChatThreadId,
   selectCreateDocumentDrafts,
   selectTerminalCreateDocumentDraftIds,
   selectUnsettledCreateDocumentDrafts,
@@ -520,6 +521,41 @@ describe("create-document drafts", () => {
       fieldId: "field-1",
       status: "persisted",
     });
+  });
+
+  test("resolves an unbound saved draft through the canonical file chat", () => {
+    const draft = buildCreateDocumentDraftPayload({
+      draft: {
+        messageId: "message-origin",
+        toolCallId: "tool-1",
+        name: "Power of attorney",
+        source: "@doc kind=other locale=en page=A4",
+        status: "ready",
+      },
+      existingPayload: undefined,
+      originChatThreadId: toChatThreadId("thread-origin"),
+    });
+    const persisted = persistCreateDocumentDraftPayload({
+      entityId: "entity-1",
+      fieldId: "field-1",
+      fileName: "Power of attorney.docx",
+      payload: draft,
+      workspaceId: "workspace-1",
+    });
+
+    // An unbound deterministic draft id must not create a second thread after
+    // save. `undefined` selects FileChatOverlay's file-mapping resolver.
+    expect(
+      resolveCreateDocumentDraftOverlayChatThreadId(persisted),
+    ).toBeUndefined();
+
+    const bound = bindCreateDocumentDraftChatThread({
+      chatThreadId: draft.chatThreadId,
+      payload: persisted,
+    });
+    expect(resolveCreateDocumentDraftOverlayChatThreadId(bound)).toBe(
+      draft.chatThreadId,
+    );
   });
 
   test("builds a bounded safe DOCX download name", () => {

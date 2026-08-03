@@ -17,6 +17,7 @@ import {
   createDocumentDraftReviewId,
   type CreateDocumentDraftPayload,
   getCreateDocumentDraftEditorAccess,
+  resolveCreateDocumentDraftOverlayChatThreadId,
 } from "@/components/chat/create-document-draft.logic";
 import {
   DocxEditor,
@@ -204,7 +205,7 @@ export const CreateDocumentDraftInspectorEditor = ({
             }
           : undefined
       }
-      chatThreadId={payload.chatThreadId}
+      chatThreadId={resolveCreateDocumentDraftOverlayChatThreadId(payload)}
       docxEditable={draftEditable}
       docxEditorRef={editorRef}
       onChatThreadIdChange={handleChatThreadIdChange}
