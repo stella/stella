@@ -25,6 +25,8 @@ import {
   validateDoctorEnvironment,
 } from "./env-tool";
 
+const BUN_ENV_REJECTION_TEST_TIMEOUT_MS = 15_000;
+
 describe("generated environment examples", () => {
   test("contain every documented schema entry exactly once", () => {
     const examples = {
@@ -131,13 +133,17 @@ describe("environment file parsing", () => {
     });
   });
 
-  test("fails closed when Bun rejects nested fallbacks", () => {
-    expect(() =>
-      parseEnvText(`DB_PORT=\${MISSING_PORT:-\${PGPORT:-5432}}`, {
-        PGPORT: "6432",
-      }),
-    ).toThrow("Bun failed to load environment layers.");
-  });
+  test(
+    "fails closed when Bun rejects nested fallbacks",
+    () => {
+      expect(() =>
+        parseEnvText(`DB_PORT=\${MISSING_PORT:-\${PGPORT:-5432}}`, {
+          PGPORT: "6432",
+        }),
+      ).toThrow("Bun failed to load environment layers.");
+    },
+    BUN_ENV_REJECTION_TEST_TIMEOUT_MS,
+  );
 
   test("matches Bun consecutive-dollar expansion", () => {
     const dollars = String.fromCodePoint(36);

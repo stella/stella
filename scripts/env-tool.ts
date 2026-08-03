@@ -152,7 +152,7 @@ export const renderCollabEnvExample = () =>
 
 const BUN_ENV_READER =
   'const names=JSON.parse(process.argv[1]??"[]");process.stdout.write(JSON.stringify(Object.fromEntries(names.map(name=>[name,process.env[name]??""]))));';
-const BUN_ENV_LOAD_TIMEOUT_MS = 1000;
+const BUN_ENV_LOAD_TIMEOUT_MS = 10_000;
 
 const definedEnvironment = (environment: NodeJS.ProcessEnv) => {
   const defined: Record<string, string> = {};
