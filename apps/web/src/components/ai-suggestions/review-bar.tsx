@@ -256,7 +256,7 @@ export const ReviewBar = ({
       aria-label={t("docxReview.barLabel")}
       data-docx-review-bar=""
       className={cn(
-        "bg-popover/90 text-popover-foreground border-border pointer-events-auto absolute start-1/2 bottom-28 z-50 flex w-max max-w-[calc(100%-2rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-1 rounded-full border py-1 ps-2 pe-1.5",
+        "bg-popover/90 text-popover-foreground border-border pointer-events-auto absolute start-1/2 bottom-24 z-50 flex w-max max-w-[calc(100%-2rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-1 rounded-full border py-1 ps-2 pe-1.5",
         "[backdrop-filter:blur(18px)_saturate(160%)] [-webkit-backdrop-filter:blur(18px)_saturate(160%)]",
         "shadow-[0_1px_2px_rgb(0_0_0/0.06),0_12px_32px_rgb(0_0_0/0.14)]",
         "animate-in fade-in-0 slide-in-from-bottom-1",

@@ -29,7 +29,7 @@ import {
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
-import { LoaderCircleIcon, MessageSquareIcon } from "lucide-react";
+import { LoaderCircleIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import { v7 as uuidv7 } from "uuid";
 
@@ -44,7 +44,6 @@ import type {
   FolioAIEditSnapshot,
 } from "@stll/folio-react";
 import { BidiText } from "@stll/ui/components/bidi-text";
-import { Button } from "@stll/ui/components/button";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { resolveDocxSuggestionRequest } from "@/components/ai-suggestions/docx-suggestion-persistence";
@@ -2099,6 +2098,7 @@ const FileChatOverlayInner = ({
           >
             <ChatThreadMessages
               activeFileName={activeFile?.fileName}
+              assistantTextDensity="compact"
               approvalPendingMessageId={approvalPendingMessageId}
               error={error}
               hasOlderMessages={olderCursor !== null}
@@ -2203,6 +2203,14 @@ const FileChatOverlayInner = ({
             ) : undefined
           }
           layout="floating"
+          minimizedThreadAction={
+            !panelOpen && hasThreadContent
+              ? {
+                  label: t("chat.aiThread"),
+                  onOpen: () => setPanelOpen(true),
+                }
+              : undefined
+          }
           onStop={() => {
             stop();
           }}
@@ -2256,27 +2264,12 @@ const FileChatOverlayInner = ({
                 ) : undefined
               }
               endExtras={
-                <>
-                  <ComposerEditModeControl
-                    onChange={setEditModeOptionId}
-                    optionId={editModeOptionId}
-                    selectable={canSelectEditMode}
-                    unsafe={docxEditSafety === "unsafe"}
-                  />
-                  {!panelOpen && hasThreadContent && (
-                    <Button
-                      aria-label={t("chat.aiThread")}
-                      className="text-muted-foreground hover:text-foreground"
-                      onClick={() => setPanelOpen(true)}
-                      size="icon-xs"
-                      tooltip={t("chat.aiThread")}
-                      type="button"
-                      variant="ghost"
-                    >
-                      <MessageSquareIcon className="size-3.5" />
-                    </Button>
-                  )}
-                </>
+                <ComposerEditModeControl
+                  onChange={setEditModeOptionId}
+                  optionId={editModeOptionId}
+                  selectable={canSelectEditMode}
+                  unsafe={docxEditSafety === "unsafe"}
+                />
               }
               threadRef={threadRef}
             />

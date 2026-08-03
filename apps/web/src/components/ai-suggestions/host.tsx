@@ -27,6 +27,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   LoaderCircleIcon,
+  MessageSquareIcon,
   UserIcon,
   WandSparklesIcon,
 } from "lucide-react";
@@ -54,6 +55,7 @@ import type {
 import { ChatComposerActionButton } from "@/components/chat/chat-composer-action-button";
 import { resolveChatComposerAction } from "@/components/chat/chat-composer-action-button.logic";
 import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachment-chips";
+import { COMPOSER_CONTROL_BUTTON_SIZE } from "@/components/chat/composer-control-style";
 import { ComposerPlusMenu } from "@/components/chat/composer-plus-menu";
 import type {
   ComposerContextMenuProps,
@@ -257,6 +259,12 @@ type PromptBarProps = {
   skillsOrganizationId?: string | undefined;
   context?: Omit<ComposerContextMenuProps, "editor"> | undefined;
   mcpOrganizationId?: string | undefined;
+  /**
+   * Replaces the ordinary (+) menu while a floating transcript is minimised.
+   * The control reopens that existing conversation; once open, the attachment
+   * menu returns in the same slot.
+   */
+  minimizedThreadAction?: { label: string; onOpen: () => void } | undefined;
 };
 
 /**
@@ -351,14 +359,14 @@ const FLOATING_THREAD_CARD_OFFSET_CLASS = "bottom-24";
 
 /**
  * Taller bottom offset for the thread card when the floating DOCX
- * `ReviewBar` is present. The review pill pins at `bottom-28` (112px) and
- * stands ~40px tall, so its top sits ~152px up. `bottom-44` (176px) drops
+ * `ReviewBar` is present. The review pill pins at `bottom-24` (96px) and
+ * stands ~40px tall, so its top sits ~136px up. `bottom-40` (160px) drops
  * the card ~24px above the pill so the two never overlap (the collision
  * seen when a card and the review bar were both anchored near the pane
  * bottom). Callers pass this to `ChatThreadCard`'s `bottomOffsetClass`
  * whenever the entity has pending suggestions driving the review bar.
  */
-export const FLOATING_THREAD_CARD_OFFSET_WITH_REVIEW_CLASS = "bottom-44";
+export const FLOATING_THREAD_CARD_OFFSET_WITH_REVIEW_CLASS = "bottom-40";
 
 type DockedComposerProps = {
   /**
@@ -594,6 +602,7 @@ export function PromptBar(props: PromptBarProps) {
     skillsOrganizationId,
     context,
     mcpOrganizationId,
+    minimizedThreadAction,
   } = props;
 
   const t = useTranslations();
@@ -876,30 +885,44 @@ export function PromptBar(props: PromptBarProps) {
               height: the shell is items-end, so the bare 28px button would
               otherwise ride 2px below the placeholder's center line. */}
           <span className="flex h-8 shrink-0 items-center">
-            <ComposerPlusMenu
-              context={
-                context
-                  ? {
-                      activeOrganizationId: context.activeOrganizationId,
-                      editor,
-                      threadRef: context.threadRef,
-                    }
-                  : undefined
-              }
-              disabled={inputDisabled}
-              mcp={
-                mcpOrganizationId
-                  ? { activeOrganizationId: mcpOrganizationId }
-                  : undefined
-              }
-              models={models}
-              onOpenFilePicker={openFilePicker}
-              skills={
-                skillsOrganizationId
-                  ? { activeOrganizationId: skillsOrganizationId, editor }
-                  : undefined
-              }
-            />
+            {minimizedThreadAction ? (
+              <Button
+                aria-label={minimizedThreadAction.label}
+                className="border-border size-7 shrink-0 rounded-full border"
+                onClick={minimizedThreadAction.onOpen}
+                size={COMPOSER_CONTROL_BUTTON_SIZE}
+                tooltip={minimizedThreadAction.label}
+                type="button"
+                variant="secondary"
+              >
+                <MessageSquareIcon aria-hidden="true" className="size-4" />
+              </Button>
+            ) : (
+              <ComposerPlusMenu
+                context={
+                  context
+                    ? {
+                        activeOrganizationId: context.activeOrganizationId,
+                        editor,
+                        threadRef: context.threadRef,
+                      }
+                    : undefined
+                }
+                disabled={inputDisabled}
+                mcp={
+                  mcpOrganizationId
+                    ? { activeOrganizationId: mcpOrganizationId }
+                    : undefined
+                }
+                models={models}
+                onOpenFilePicker={openFilePicker}
+                skills={
+                  skillsOrganizationId
+                    ? { activeOrganizationId: skillsOrganizationId, editor }
+                    : undefined
+                }
+              />
+            )}
           </span>
         </>
       )}

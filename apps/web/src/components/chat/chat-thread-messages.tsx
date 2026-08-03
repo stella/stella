@@ -86,6 +86,7 @@ import {
 
 export const ChatThreadMessages = ({
   activeFileName,
+  assistantTextDensity = "default",
   approvalPendingMessageId,
   error,
   hasOlderMessages = false,
@@ -247,6 +248,7 @@ export const ChatThreadMessages = ({
             <AssistantMessageParts
               activeFileName={activeFileName}
               activeOrganizationId={activeOrganizationId}
+              assistantTextDensity={assistantTextDensity}
               isGenerating={generationActive}
               isLatestAssistantMessage={
                 message.id === retryableAssistantMessageId
@@ -1053,6 +1055,8 @@ type ChatThreadMessagesProps = {
    * inspector) omit it and the card falls back to a generic summary.
    */
   activeFileName?: string | undefined;
+  /** Compact prose is reserved for constrained overlays over a document. */
+  assistantTextDensity?: "compact" | "default" | undefined;
   approvalPendingMessageId: string | null;
   error?: Error | undefined;
   /** Whether an older page exists to load above the current top. */
@@ -1211,6 +1215,7 @@ type AssistantMessagePartsProps = Pick<
   | "workspaceId"
 > & {
   activeOrganizationId: string;
+  assistantTextDensity: "compact" | "default";
   isGenerating: boolean;
   isLatestAssistantMessage: boolean;
   message: PersistedChatMessage;
@@ -1277,6 +1282,7 @@ const toAssistantPartRenderEntries = (
 const AssistantMessageParts = ({
   activeFileName,
   activeOrganizationId,
+  assistantTextDensity,
   isGenerating,
   isLatestAssistantMessage,
   message,
@@ -1338,6 +1344,19 @@ const AssistantMessageParts = ({
         if (part.type === "text") {
           return (
             <AssistantTextPart
+              className={
+                assistantTextDensity === "compact"
+                  ? cn(
+                      "text-[13px] leading-5",
+                      "[&_h1]:my-2 [&_h1]:text-[16px] [&_h1]:leading-5",
+                      "[&_h2]:my-2 [&_h2]:text-[15px] [&_h2]:leading-5",
+                      "[&_h3]:my-1.5 [&_h3]:text-[14px] [&_h3]:leading-5",
+                      "[&_h4]:my-1.5 [&_h4]:text-[13px] [&_h4]:leading-5",
+                      "[&_h5]:my-1.5 [&_h5]:text-[13px] [&_h5]:leading-5",
+                      "[&_h6]:my-1.5 [&_h6]:text-[13px] [&_h6]:leading-5",
+                    )
+                  : undefined
+              }
               components={streamdownComponents}
               // eslint-disable-next-line react/no-array-index-key -- message.parts is append-only during streaming (never reordered/removed); index only disambiguates multiple parts within this single, already message.id-scoped message.
               key={`${message.id}-text-${index}`}
