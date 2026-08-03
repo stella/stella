@@ -158,7 +158,6 @@ import {
 } from "@/api/lib/chat/active-draft-context";
 import { isReadyGeneratedDocumentDraft } from "@/api/lib/chat/created-draft";
 import {
-  expandThreadDataScope,
   expandThreadDataScopeOnTx,
   replaceThreadDataScopeOnTx,
 } from "@/api/lib/chat/data-scope";
@@ -252,14 +251,20 @@ const validateActiveDraftContext = async ({
   organizationId: SafeId<"organization">;
   safeDb: SafeDb;
   userId: SafeId<"user">;
-}): Promise<Result<void, HandlerError<404> | SafeDbError>> => {
+}): Promise<
+  Result<
+    { originDataWorkspaceIds: readonly SafeId<"workspace">[] } | null,
+    HandlerError<404> | SafeDbError
+  >
+> => {
   if (activeDraft === undefined) {
-    return Result.ok(undefined);
+    return Result.ok(null);
   }
   const rows = await safeDb((tx) =>
     tx
       .select({
         content: chatMessages.content,
+        dataWorkspaceIds: chatThreads.dataWorkspaceIds,
         id: chatMessages.id,
         role: chatMessages.role,
       })
@@ -279,23 +284,26 @@ const validateActiveDraftContext = async ({
   if (Result.isError(rows)) {
     return Result.err(rows.error);
   }
-  const matches = rows.value.some(
-    (message) =>
-      message.role === "assistant" &&
-      isReadyGeneratedDocumentDraft({
-        persistedContent: message.content,
-        fileName: activeDraft.fileName,
-        toolCallId: activeDraft.toolCallId,
+  const originMessage = rows.value.at(0);
+  if (
+    originMessage?.role !== "assistant" ||
+    !isReadyGeneratedDocumentDraft({
+      persistedContent: originMessage.content,
+      fileName: activeDraft.fileName,
+      toolCallId: activeDraft.toolCallId,
+    })
+  ) {
+    return Result.err(
+      new HandlerError({
+        status: 404,
+        message: "Active generated document draft not found",
       }),
-  );
-  return matches
-    ? Result.ok(undefined)
-    : Result.err(
-        new HandlerError({
-          status: 404,
-          message: "Active generated document draft not found",
-        }),
-      );
+    );
+  }
+
+  return Result.ok({
+    originDataWorkspaceIds: originMessage.dataWorkspaceIds,
+  });
 };
 
 const stampValidatedMessageWithActiveDraftContext = ({
@@ -479,7 +487,7 @@ const sendMessage = createSafeRootHandler(
         workspaceId,
       }),
     );
-    yield* Result.await(
+    const activeDraftContext = yield* Result.await(
       validateActiveDraftContext({
         activeDraft: body.activeDraft,
         organizationId: session.activeOrganizationId,
@@ -646,6 +654,8 @@ const sendMessage = createSafeRootHandler(
 
       const thread = yield* Result.await(
         loadThread({
+          initialDataWorkspaceIds:
+            activeDraftContext?.originDataWorkspaceIds ?? [],
           initialContextMatterIds: requestedContextMatterIds,
           isAnonymized: body.sendMode === CHAT_SEND_MODE.anonymized,
           organizationId: session.activeOrganizationId,
@@ -1139,21 +1149,6 @@ const sendMessage = createSafeRootHandler(
         mentions: parsedMessage.mentions,
         message: parsedMessage.message,
       }).filter((id) => accessibleSet.has(id));
-      if (
-        recomputedDataWorkspaceIds === null &&
-        incomingMessageWorkspaceIds.length > 0
-      ) {
-        yield* Result.await(
-          expandThreadDataScope({
-            newWorkspaceIds: incomingMessageWorkspaceIds,
-            recordAuditEvent,
-            safeDb,
-            threadId: body.threadId,
-            threadWorkspaceId: workspaceId,
-          }),
-        );
-      }
-
       const turnAcceptance =
         parsedMessage.message.role === "user" &&
         latestMessagePlan.persistencePlan.type !== "none"
@@ -1175,6 +1170,10 @@ const sendMessage = createSafeRootHandler(
         userId: user.id,
         workspaceId,
         persistencePlan: latestMessagePlan.persistencePlan,
+        dataScopeExpansion:
+          recomputedDataWorkspaceIds === null
+            ? { newWorkspaceIds: incomingMessageWorkspaceIds }
+            : undefined,
         deleteMessageIds: deleteMessageIdsBeforeLatest,
         dataScopeReplacement:
           recomputedDataWorkspaceIds === null
@@ -1216,6 +1215,20 @@ const sendMessage = createSafeRootHandler(
       } else {
         const persistenceResult = await persistMessage(persistenceProps);
         if (Result.isError(persistenceResult)) {
+          const rollbackResult = await rollbackUnpersistedChatSideEffects({
+            recordAuditEvent,
+            safeDb,
+            threadId: body.threadId,
+            threadState: thread,
+            uploadedFiles: uploadResult.uploadedFiles,
+            userId: user.id,
+          });
+          if (Result.isError(rollbackResult)) {
+            captureError(persistenceResult.error, {
+              threadId: body.threadId,
+            });
+            return Result.err(rollbackResult.error);
+          }
           return Result.err(persistenceResult.error);
         }
         turnExecution = yield* Result.await(

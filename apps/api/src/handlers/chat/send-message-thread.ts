@@ -107,6 +107,13 @@ type ChatThreadRecord = {
 };
 
 type LoadThreadProps = {
+  /**
+   * Server-derived workspace scope inherited by a newly created draft chat.
+   * This is deliberately not populated from the request: a draft can place
+   * its origin document snapshot in the model context before its first
+   * message is durable, so its thread must start with the origin's RLS scope.
+   */
+  initialDataWorkspaceIds: readonly SafeId<"workspace">[];
   initialContextMatterIds: SafeId<"workspace">[];
   isAnonymized: boolean;
   organizationId: SafeId<"organization">;
@@ -145,6 +152,7 @@ type LoadThreadAttemptProps = LoadThreadProps & {
 
 const loadThreadAttempt = async ({
   claimAttempt,
+  initialDataWorkspaceIds,
   initialContextMatterIds,
   isAnonymized,
   organizationId,
@@ -276,6 +284,7 @@ const loadThreadAttempt = async ({
       }
       return await loadThreadAttempt({
         claimAttempt: claimAttempt + 1,
+        initialDataWorkspaceIds,
         initialContextMatterIds,
         isAnonymized,
         organizationId,
@@ -340,9 +349,13 @@ const loadThreadAttempt = async ({
       return Result.ok(existingResult.value);
     }
 
-    const initialDataWorkspaceIds: SafeId<"workspace">[] = workspaceId
-      ? [workspaceId]
-      : [];
+    const initialThreadDataWorkspaceIds = [...initialDataWorkspaceIds];
+    if (
+      workspaceId !== null &&
+      !initialThreadDataWorkspaceIds.includes(workspaceId)
+    ) {
+      initialThreadDataWorkspaceIds.unshift(workspaceId);
+    }
     const rollbackToken = Bun.randomUUIDv7();
 
     const insertResult = await safeDb(async (tx) => {
@@ -359,7 +372,7 @@ const loadThreadAttempt = async ({
         // embedded workspace data; subsequent messages widen
         // this set via expandThreadDataScope when they reference
         // workspace assets (mentions, source-document parts).
-        dataWorkspaceIds: initialDataWorkspaceIds,
+        dataWorkspaceIds: initialThreadDataWorkspaceIds,
       });
 
       await recordAuditEvent(tx, {
@@ -425,7 +438,7 @@ const loadThreadAttempt = async ({
         id: threadId,
         workspaceId,
         contextMatterIds: initialContextMatterIds,
-        dataWorkspaceIds: initialDataWorkspaceIds,
+        dataWorkspaceIds: initialThreadDataWorkspaceIds,
         webSearchEnabled: false,
         chatModel: null,
         messages: [],

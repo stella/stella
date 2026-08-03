@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 import { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
@@ -9,6 +10,9 @@ import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+
+import type { PersistableChatMessage } from "./types";
+import type { UploadedChatFile } from "./upload-files";
 
 let webSearchProviderLoadHook: (() => void) | undefined;
 const loadWebSearchProvidersForOrgMock = mock(async () => {
@@ -62,6 +66,34 @@ void mock.module("@/api/lib/analytics/tanstack-ai", () => ({
       middleware: [],
     };
   },
+}));
+
+const chatSideEffectsModule = await import("./send-message-side-effects");
+const realRollbackUnpersistedChatSideEffects =
+  chatSideEffectsModule.rollbackUnpersistedChatSideEffects;
+const uploadMessageFilesWithRollbackMock = mock(
+  async ({
+    message,
+  }: {
+    message: PersistableChatMessage;
+  }): Promise<
+    Result<
+      { message: PersistableChatMessage; uploadedFiles: UploadedChatFile[] },
+      never
+    >
+  > => Result.ok({ message, uploadedFiles: [] }),
+);
+const rollbackUnpersistedChatSideEffectsMock = mock(
+  async (
+    options: Parameters<
+      typeof chatSideEffectsModule.rollbackUnpersistedChatSideEffects
+    >[0],
+  ) => await realRollbackUnpersistedChatSideEffects(options),
+);
+void mock.module("./send-message-side-effects", () => ({
+  ...chatSideEffectsModule,
+  rollbackUnpersistedChatSideEffects: rollbackUnpersistedChatSideEffectsMock,
+  uploadMessageFilesWithRollback: uploadMessageFilesWithRollbackMock,
 }));
 
 const sendMessage = (await import("./send-message")).default;
@@ -682,5 +714,72 @@ describe("send message disconnect handling", () => {
     expect(updateWhere).toHaveBeenCalledTimes(1);
     expect(upsertChatThreadSearchDocumentMock).toHaveBeenCalledWith(threadId);
     expect(loadExternalMcpToolsForUserMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("send message turn persistence", () => {
+  test("rolls back every uploaded file when a running turn rejects the message", async () => {
+    const uploadedFile = {
+      id: toSafeId<"userFile">("00000000-0000-0000-0000-000000000009"),
+      s3Key: "chat/thread/input.png",
+      thumbnailS3Key: "chat/thread/input-thumbnail.png",
+    } satisfies UploadedChatFile;
+    uploadMessageFilesWithRollbackMock.mockImplementationOnce(
+      async ({ message }) =>
+        Result.ok({ message, uploadedFiles: [uploadedFile] }),
+    );
+    rollbackUnpersistedChatSideEffectsMock.mockClear();
+    rollbackUnpersistedChatSideEffectsMock.mockImplementationOnce(async () =>
+      Result.ok(),
+    );
+
+    const selectWithThreadLock = () => ({
+      from: () => ({
+        where: () => ({
+          for: async () => [{ id: threadId }],
+          limit: async () => [],
+          orderBy: emptyOrderedRows,
+        }),
+      }),
+    });
+
+    const result = await sendMessage.handler(
+      createContext({
+        contextMatterIds: [],
+        transaction: {
+          query: {
+            chatMessages: { findFirst: async () => null },
+            chatThreadCompactions: { findFirst: async () => null },
+            chatThreads: {
+              findFirst: async () => ({
+                chatModel: null,
+                contextMatterIds: [],
+                dataWorkspaceIds: [],
+                id: threadId,
+                messages: [],
+                rollbackToken: null,
+                title: "Existing thread",
+                webSearchEnabled: false,
+                workspaceId: null,
+              }),
+            },
+            chatTurns: { findFirst: async () => ({ id: turnId }) },
+            organizationSettings: { findFirst: async () => null },
+          },
+          select: selectWithThreadLock,
+        },
+      }),
+    );
+
+    expect(result).toEqual({
+      code: 409,
+      response: { message: "A chat turn is already running" },
+    });
+    expect(rollbackUnpersistedChatSideEffectsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        threadId,
+        uploadedFiles: [uploadedFile],
+      }),
+    );
   });
 });

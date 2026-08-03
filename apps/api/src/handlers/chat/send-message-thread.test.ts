@@ -47,6 +47,7 @@ describe("send-message thread loading", () => {
     });
 
     const result = await loadThread({
+      initialDataWorkspaceIds: [],
       initialContextMatterIds: [],
       isAnonymized: false,
       organizationId,
@@ -86,6 +87,22 @@ describe("send-message thread loading", () => {
     await expectCreatedThreadDataScope(null, []);
   });
 
+  test("copies an origin draft's data scope before its first message persists", async () => {
+    await expectCreatedThreadDataScope(
+      null,
+      [workspaceId, otherWorkspaceId],
+      [workspaceId, otherWorkspaceId],
+    );
+  });
+
+  test("keeps the destination workspace in a draft thread's inherited scope", async () => {
+    await expectCreatedThreadDataScope(
+      workspaceId,
+      [workspaceId, otherWorkspaceId],
+      [otherWorkspaceId],
+    );
+  });
+
   test("retries creation when rollback deletes before the adoption claim", async () => {
     const rollbackToken = "rollback-token";
     let lookupCount = 0;
@@ -121,6 +138,7 @@ describe("send-message thread loading", () => {
     });
 
     const result = await loadThread({
+      initialDataWorkspaceIds: [],
       initialContextMatterIds: [],
       isAnonymized: false,
       organizationId,
@@ -164,6 +182,7 @@ describe("send-message thread loading", () => {
     });
 
     const result = await loadThread({
+      initialDataWorkspaceIds: [],
       initialContextMatterIds: [],
       isAnonymized: false,
       organizationId,
@@ -187,6 +206,7 @@ describe("send-message thread loading", () => {
 const expectCreatedThreadDataScope = async (
   requestedWorkspaceId: SafeId<"workspace"> | null,
   expectedDataWorkspaceIds: SafeId<"workspace">[],
+  initialDataWorkspaceIds: SafeId<"workspace">[] = [],
 ) => {
   const insertedRows: unknown[] = [];
   const insertValues = mock(async (values: unknown) => {
@@ -199,6 +219,7 @@ const expectCreatedThreadDataScope = async (
   });
 
   const result = await loadThread({
+    initialDataWorkspaceIds,
     initialContextMatterIds: [],
     isAnonymized: false,
     organizationId,
