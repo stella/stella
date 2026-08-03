@@ -1,14 +1,14 @@
 ---
 name: dev
-description: 'Launch the local dev environment using the project''s dev-runner. The runner handles env symlinks, Docker services, port allocation, health checks, and browser opening automatically.'
+description: 'Launch the local dev environment using the project''s dev-runner. The runner handles env symlinks, isolated worktree infrastructure, migrations, port allocation, and readiness checks.'
 ---
 
 # Dev Server
 
 Launch the local dev environment using the project's `dev-runner`
 (`packages/scripts/src/dev-runner.ts`). The runner handles env
-symlinks, Docker services, port allocation, health checks, and
-browser opening automatically.
+symlinks, Docker services, migrations, port allocation, and health
+checks.
 
 ## Instructions
 
@@ -22,8 +22,10 @@ browser opening automatically.
    bun run dev --dry-run --skip-install --no-browser
    ```
 
-   Parse the `web:` and `api:` lines from the output to get the
-   resolved URLs.
+   Parse the numeric `offset:` and the `web:` and `api:` URLs. Use
+   that resolved offset as the infrastructure offset so each
+   worktree gets its own Postgres, Valkey, MinIO, and Gotenberg
+   state. Offset `0` is the shared root-checkout infrastructure.
 
 2. **Start the dev runner**:
 
@@ -32,27 +34,33 @@ browser opening automatically.
    readiness polling internally.
 
    ```bash
-   bun run dev --no-browser
+   bun run dev --no-browser --infra-offset <resolved-offset>
    ```
 
    Run this in the background. The runner exits if any child
    process dies, so a single background command covers everything.
+   Keep dependency installation enabled on the first run. Add
+   `--skip-install` only when this worktree is already bootstrapped
+   and its dependencies have not changed.
 
-3. **Wait for readiness**:
+3. **Handle cold-start setup safely**:
+
+   The first isolated run creates Docker volumes and applies every
+   migration, so it can take longer. Never reset or repair the
+   shared database to resolve migration drift; confirm the command
+   uses the resolved non-zero `--infra-offset` instead.
+
+   If the runner completes infrastructure and migrations but exits
+   only because its application-readiness deadline elapsed, rerun
+   the same command once. The expensive setup is cached. If the
+   second run fails, inspect its logs and report the blocker.
+
+4. **Wait for readiness**:
 
    Poll the resolved API health endpoint (`{apiUrl}/health`) and
-   the web root until both return 200. The dry-run output from
-   step 1 gives you the exact URLs. Timeout after ~60 seconds.
+   the web root with bounded per-request timeouts until both return
+   200. The dry-run output from step 1 gives the exact URLs. Allow
+   up to 120 seconds for a cold start.
 
-4. **Open Chrome** to the running app:
-
-   Use the Claude-in-Chrome MCP tools to navigate to the resolved
-   web URL from step 1. If no tab exists, create one.
-
-5. **Verify** the page loads without errors:
-
-   Take a screenshot and check for the "Something went wrong"
-   error. If it appears, check console and network errors, and
-   debug.
-
-6. **Report** the resolved URLs and status to the user.
+5. **Report** the resolved URLs and status to the user. Leave the
+   runner active until the user asks to stop it.
