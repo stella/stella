@@ -15,9 +15,11 @@ and applicable comment-attribution rules. Fail visibly if the PR cannot be
 identified.
 
 Fetch paginated review threads through GitHub GraphQL so unresolved state and
-thread replies are preserved. Fetch top-level issue comments separately. Filter
-known bot accounts without treating humans as bots. Record which comments apply
-to the current head and which are stale.
+thread replies are preserved. Fetch top-level issue comments separately. Record
+every participant and reply author in a thread, which comments apply to the
+current head, and which are stale. Treat a thread as bot-authored only when every
+participant is a confirmed allowed bot; a mixed or uncertain thread follows the
+human-thread rules.
 
 Do not rely only on the REST review-comments list: it does not represent thread
 resolution or the complete conversation reliably.
@@ -46,7 +48,9 @@ CI-equivalent verification before publication when practical.
 
 Commit and push the implementation before saying it is fixed. Push a new branch
 normally; use `--force-with-lease` only after intentionally rebasing a published
-branch. Capture the resulting head SHA.
+branch. Capture the resulting head SHA. If this round pushes a new head, its
+final status is `pending_bots` even when GitHub has not registered checks or
+reviewers yet; a newly published head cannot be clean in the same pass.
 
 ## 4. Reply With Verifiable Evidence
 
@@ -61,10 +65,11 @@ finding. Keep responses short and factual:
 Follow repository attribution rules for GitHub comments. Do not claim a check
 passed unless it ran successfully on the reported head.
 
-After replying, resolve only bot-authored review threads that are implemented,
-already addressed, or answered with a supported pushback. Leave human threads
-and any uncertain bot thread open. Top-level comments have no thread-resolution
-state; do not minimize bot summaries by default.
+After replying, resolve only review threads whose every participant is a
+confirmed allowed bot and that are implemented, already addressed, or answered
+with a supported pushback. Leave human, mixed-participant, and uncertain threads
+open. Top-level comments have no thread-resolution state; do not minimize bot
+summaries by default.
 
 ## 5. Recheck the Current Head
 
@@ -73,8 +78,8 @@ Refresh the PR after the push and report one status:
 - `clean`: all current-head automated reviewers are terminal, required checks
   are green, and no actionable automated finding remains in a review thread or
   top-level comment
-- `pending_bots`: a current-head automated review or required check is still
-  running
+- `pending_bots`: this round pushed the current head, or a current-head
+  automated review or required check is still running
 - `needs_changes`: actionable automated feedback remains
 - `failing_ci`: a current-head required check failed
 

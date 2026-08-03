@@ -38,15 +38,17 @@ For each relevant Rust manifest, inspect the full dependency graph:
 cargo outdated --manifest-path <path/to/Cargo.toml>
 ```
 
-If `cargo-outdated` is unavailable, use:
+If `cargo-outdated` is unavailable, preview compatible lockfile updates with:
 
 ```bash
 cargo update --manifest-path <path/to/Cargo.toml> --dry-run
 ```
 
-Add targeted `cargo search` or `cargo info` only where the dry run is ambiguous.
-Do not default to `--root-deps-only`: transitive changes can carry the material
-risk.
+This dry run is an incomplete inventory: it cannot surface releases outside the
+manifest's current version requirements. Supplement it with registry-aware
+`cargo info` or `cargo search` checks for every direct dependency in scope, and
+report the limitation. Do not default to `--root-deps-only` when
+`cargo-outdated` is available: transitive changes can carry the material risk.
 
 Inventory container references across Dockerfiles and Compose files:
 
@@ -90,6 +92,18 @@ Update the real source of truth: a shared catalog or resolution before duplicati
 versions across workspaces. Preserve the intended prerelease channel explicitly;
 do not use a flag that silently replaces it with stable latest.
 
+For Bun versions already allowed by the manifest, update only the planned
+packages:
+
+```bash
+bun update <package>
+```
+
+When a shared catalog owns the version, edit that catalog and run `bun install`
+instead of creating workspace drift. Use `bun update <package> --latest` only
+when intentionally changing the declared dependency range. Resolve and preserve
+an intended prerelease version or channel explicitly.
+
 For Rust, use targeted lockfile updates:
 
 ```bash
@@ -118,6 +132,10 @@ manifest path, for example:
 cargo check --manifest-path <path/to/Cargo.toml>
 cargo test --manifest-path <path/to/Cargo.toml>
 ```
+
+Run the repository's dependency or security audit command when it defines one,
+for example `bun run security:audit`, and report its result. Do not substitute a
+generic command for repository policy when no such audit is configured.
 
 Verify generated artifacts when a dependency affects them. If applying multiple
 batches, commit each only after its validation passes so rollback remains clear.

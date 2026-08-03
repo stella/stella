@@ -44,21 +44,24 @@ the PR.
 
 ## 3. Rebase the Correct Layer
 
-Resolve the remote default branch rather than assuming its name. Check
-`gh extension list` before invoking the optional `github/gh-stack` extension.
+Resolve the actual base branch and repository rather than assuming
+`origin/main`. Check `gh extension list` before invoking the optional
+`github/gh-stack` extension.
 If it is installed and `gh stack view` identifies a stack, use
 `gh stack rebase` and review each layer against its parent. If the extension is
 absent or the branch is not stacked, use ordinary Git; do not install an
-optional extension merely to prepare a normal PR:
+optional extension merely to prepare a normal PR.
 
-```bash
-DEFAULT_BRANCH="$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@')"
-if [ -z "$DEFAULT_BRANCH" ]; then
-  DEFAULT_BRANCH="$(gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name')"
-fi
-git fetch origin "$DEFAULT_BRANCH"
-git rebase "origin/$DEFAULT_BRANCH"
-```
+For an existing PR, read its `baseRefName` and base repository with `gh pr
+view`. Match that repository to a configured Git remote, fetch the PR base from
+that remote, and rebase onto the fetched base. If no configured remote matches,
+fetch the base repository URL directly and rebase onto `FETCH_HEAD`; do not add
+or rewrite remotes silently.
+
+For a branch without a PR, prefer its configured upstream remote and that
+remote's default branch. Fall back to `origin` only when no upstream is
+configured, then resolve the remote default through its symbolic `HEAD` or
+repository metadata. Fetch immediately before rebasing.
 
 Resolve deterministic conflicts directly. Ask when competing resolutions
 would change behavior or discard work whose ownership is unclear.

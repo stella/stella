@@ -25,6 +25,8 @@ task.
 
 Do not create a second planning system. Use `.agents/plans/` only when it is
 already established or the repository clearly adopts the shared convention.
+If no planning area exists and the repository does not adopt this convention,
+ask the user where to save the plan before creating a new directory.
 
 ## 2. Resolve Decisions With Evidence
 
@@ -33,9 +35,11 @@ facts separately from proposals. Ask about a materially different product,
 security, migration, or compatibility choice only when repository evidence
 cannot resolve it. Do not pause for discoverable implementation details.
 
-Prefer vertical slices that leave the repository working after each slice.
-Identify ownership boundaries, data contracts, invalid states, rollout risks,
-and generated artifacts explicitly.
+Prefer vertical slices that leave the repository working after each slice when
+the implementation shape is sufficiently settled. Otherwise plan outcomes and
+contracts without inventing files or symbols. Identify ownership boundaries,
+data contracts, invalid states, rollout risks, and generated artifacts
+explicitly.
 
 ## 3. Create a Collision-Safe File
 
@@ -68,7 +72,7 @@ Relevant behavior, entry points, constraints, and evidence.
 
 ## Decisions
 
-- **Decision**: choice and rationale.
+- **Decision**: choice, alternatives considered, and why they were rejected.
 
 ## Scope
 
@@ -95,8 +99,9 @@ Migration, sequencing, monitoring, rollback, or "Not applicable".
 Only unresolved decisions that can change the plan.
 ```
 
-Name concrete files and symbols where repository evidence supports them. Avoid
-pseudocode unless a contract would otherwise remain ambiguous. Keep the plan
-concise enough to stay useful during implementation.
+Name concrete files and symbols only where repository evidence and settled
+implementation decisions support them. Avoid pseudocode unless a contract would
+otherwise remain ambiguous. Keep the plan concise enough to stay useful during
+implementation.
 
 Report the created path and any decision that still needs the user.
