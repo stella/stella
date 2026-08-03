@@ -46,10 +46,27 @@ type ReviewBarPosition = {
 };
 
 /**
- * The review counter reports the first of the remaining proposals. Accepting
- * the active item therefore keeps the numerator stable and only decreases the
- * denominator (1 / 4 → 1 / 3), while the full session remains addressable via
- * the previous/next controls for per-item reverts.
+ * Keep the focus id valid across store hydration and session replacement.
+ * A new review starts at its first pending suggestion; an already-resolved
+ * session still has a deterministic first item for inspection.
+ */
+export const getReviewBarFocusTarget = (
+  suggestions: readonly ReviewSuggestion[],
+  focusedId: string | null,
+): string | null => {
+  if (focusedId !== null && suggestions.some((item) => item.id === focusedId)) {
+    return null;
+  }
+  return (
+    (suggestions.find((item) => item.status === "pending") ?? suggestions.at(0))
+      ?.id ?? null
+  );
+};
+
+/**
+ * The counter and navigation deliberately use the full session. Resolved
+ * suggestions stay addressable so the reviewer can inspect or revert them;
+ * pending/applying state only controls each item's available action.
  */
 export const getReviewBarPosition = (
   suggestions: readonly ReviewSuggestion[],
@@ -61,12 +78,9 @@ export const getReviewBarPosition = (
   }
   const focusedIndex = suggestions.findIndex((item) => item.id === focusedId);
   const activeIndex = Math.max(focusedIndex, 0);
-  const pendingCount = suggestions.filter(
-    (item) => item.status === "pending" || item.status === "applying",
-  ).length;
   return {
     activeIndex,
-    current: 1,
-    total: Math.max(pendingCount, 1),
+    current: activeIndex + 1,
+    total: suggestions.length,
   };
 };

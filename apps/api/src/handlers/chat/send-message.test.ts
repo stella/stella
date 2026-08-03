@@ -102,6 +102,7 @@ const emptyOrderedRows = () => Object.assign([], { limit: async () => [] });
 const selectChatMessages = () => ({
   from: () => ({
     where: () => ({
+      for: async () => [],
       limit: async () => [],
       orderBy: emptyOrderedRows,
     }),
@@ -593,9 +594,22 @@ describe("send message disconnect handling", () => {
 
   test("stops before connector discovery when the client disconnects during persistence", async () => {
     const abortController = new AbortController();
-    const insertValues = mock(async () => undefined);
+    const insertValues = mock(() => ({
+      onConflictDoNothing: () => ({
+        returning: async () => [{ id: turnId }],
+      }),
+    }));
     const updateWhere = mock(async () => {
       abortController.abort();
+    });
+    const selectWithThreadLock = () => ({
+      from: () => ({
+        where: () => ({
+          for: async () => [{ id: threadId }],
+          limit: async () => [],
+          orderBy: emptyOrderedRows,
+        }),
+      }),
     });
     loadExternalMcpToolsForUserMock.mockClear();
     upsertChatThreadSearchDocumentMock.mockClear();
@@ -611,7 +625,22 @@ describe("send message disconnect handling", () => {
           query: {
             chatMessages: { findFirst: async () => null },
             chatThreadCompactions: { findFirst: async () => null },
-            chatTurns: { findFirst: async () => ({ id: turnId }) },
+            chatTurns: {
+              findFirst: async ({
+                where,
+              }: {
+                where?: { status?: unknown };
+              }) => {
+                const status = where?.status;
+                const queriedStatus =
+                  typeof status === "object" &&
+                  status !== null &&
+                  "eq" in status
+                    ? status.eq
+                    : undefined;
+                return queriedStatus === "running" ? undefined : { id: turnId };
+              },
+            },
             chatThreads: {
               findFirst: async () => ({
                 chatModel: null,
@@ -627,7 +656,7 @@ describe("send message disconnect handling", () => {
             },
             organizationSettings: { findFirst: async () => null },
           },
-          select: selectChatMessages,
+          select: selectWithThreadLock,
           update: (table: unknown) => {
             if (table === chatThreads) {
               return { set: () => ({ where: updateWhere }) };

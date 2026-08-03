@@ -13,6 +13,7 @@ import type { FieldContent } from "@/api/db/schema-validators";
 import { env } from "@/api/env";
 import {
   chatMessageContentFromMessage,
+  getResumedUserInteraction,
   isChatPart,
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
@@ -48,6 +49,7 @@ import {
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
 import {
   claimChatTurnForExecution,
+  canAcceptChatTurnOnTx,
   createChatTurnAcceptance,
   failChatTurnExecution,
   insertChatTurnAcceptanceOnTx,
@@ -1196,6 +1198,8 @@ const sendMessage = createSafeRootHandler(
           ...persistenceProps,
           claim: {
             acceptedTurnId: null,
+            continuationInteraction:
+              getResumedUserInteraction(parsedMessage.message) ?? undefined,
             incomingMessageId: parsedMessage.message.id,
             incomingMessageRole: parsedMessage.message.role,
             organizationId: session.activeOrganizationId,
@@ -2339,8 +2343,11 @@ const applyChatTurnWritesOnTx = async ({
   settlement: ChatTurnSettlement | undefined;
   tx: Transaction;
 }): Promise<void> => {
-  if (acceptance !== undefined) {
-    await insertChatTurnAcceptanceOnTx({ acceptance, tx });
+  if (
+    acceptance !== undefined &&
+    !(await insertChatTurnAcceptanceOnTx({ acceptance, tx }))
+  ) {
+    panic("Chat turn acceptance lost its reserved thread slot");
   }
   if (
     settlement !== undefined &&
@@ -2349,6 +2356,16 @@ const applyChatTurnWritesOnTx = async ({
     panic("Chat turn settlement lost execution ownership");
   }
 };
+
+const reserveChatTurnAcceptanceOnTx = async ({
+  acceptance,
+  tx,
+}: {
+  acceptance: ChatTurnAcceptance | undefined;
+  tx: Transaction;
+}): Promise<boolean> =>
+  acceptance === undefined ||
+  (await canAcceptChatTurnOnTx({ threadId: acceptance.threadId, tx }));
 
 const applyChatDataScopeExpansionOnTx = async ({
   expansion,
@@ -2469,12 +2486,22 @@ const insertMessages = async ({
   turnSettlement,
   userId,
   workspaceId,
-}: InsertMessagesProps): Promise<Result<void, SafeDbError>> => {
+}: InsertMessagesProps): Promise<
+  Result<void, HandlerError<409> | SafeDbError>
+> => {
   if (messages.length === 0) {
     return Result.ok();
   }
 
   const insertResult = await safeDb(async (tx) => {
+    if (
+      !(await reserveChatTurnAcceptanceOnTx({
+        acceptance: turnAcceptance,
+        tx,
+      }))
+    ) {
+      return false;
+    }
     await applyChatDataScopeExpansionOnTx({
       expansion: dataScopeExpansion,
       recordAuditEvent,
@@ -2520,9 +2547,19 @@ const insertMessages = async ({
       settlement: turnSettlement,
       tx,
     });
+    return true;
   });
 
-  return insertResult.andThen(() => Result.ok());
+  return insertResult.andThen((inserted) =>
+    inserted
+      ? Result.ok()
+      : Result.err(
+          new HandlerError({
+            status: 409,
+            message: "A chat turn is already running",
+          }),
+        ),
+  );
 };
 
 type PersistMessageProps = {
@@ -2582,6 +2619,14 @@ const runPersistMessage = async ({
 
   if (persistencePlan.type === "update") {
     const updateResult = await safeDb(async (tx) => {
+      if (
+        !(await reserveChatTurnAcceptanceOnTx({
+          acceptance: turnAcceptance,
+          tx,
+        }))
+      ) {
+        return false;
+      }
       await applyChatDataScopeExpansionOnTx({
         expansion: dataScopeExpansion,
         recordAuditEvent,
@@ -2660,9 +2705,19 @@ const runPersistMessage = async ({
         settlement: turnSettlement,
         tx,
       });
+      return true;
     });
 
-    return updateResult.andThen(() => Result.ok());
+    return updateResult.andThen((updated) =>
+      updated
+        ? Result.ok()
+        : Result.err(
+            new HandlerError({
+              status: 409,
+              message: "A chat turn is already running",
+            }),
+          ),
+    );
   }
 
   if (persistencePlan.type === "none") {
@@ -2670,6 +2725,14 @@ const runPersistMessage = async ({
       return Result.ok();
     }
     const turnResult = await safeDb(async (tx) => {
+      if (
+        !(await reserveChatTurnAcceptanceOnTx({
+          acceptance: turnAcceptance,
+          tx,
+        }))
+      ) {
+        return false;
+      }
       await applyChatDataScopeExpansionOnTx({
         expansion: dataScopeExpansion,
         recordAuditEvent,
@@ -2682,11 +2745,29 @@ const runPersistMessage = async ({
         settlement: turnSettlement,
         tx,
       });
+      return true;
     });
-    return turnResult.andThen(() => Result.ok());
+    return turnResult.andThen((written) =>
+      written
+        ? Result.ok()
+        : Result.err(
+            new HandlerError({
+              status: 409,
+              message: "A chat turn is already running",
+            }),
+          ),
+    );
   }
 
   const replaceResult = await safeDb(async (tx) => {
+    if (
+      !(await reserveChatTurnAcceptanceOnTx({
+        acceptance: turnAcceptance,
+        tx,
+      }))
+    ) {
+      return false;
+    }
     await applyChatDataScopeExpansionOnTx({
       expansion: dataScopeExpansion,
       recordAuditEvent,
@@ -2754,9 +2835,19 @@ const runPersistMessage = async ({
       settlement: turnSettlement,
       tx,
     });
+    return true;
   });
 
-  return replaceResult.andThen(() => Result.ok());
+  return replaceResult.andThen((replaced) =>
+    replaced
+      ? Result.ok()
+      : Result.err(
+          new HandlerError({
+            status: 409,
+            message: "A chat turn is already running",
+          }),
+        ),
+  );
 };
 
 type PersistClaimedReplayMessageProps = PersistMessageProps & {

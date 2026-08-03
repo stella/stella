@@ -50,6 +50,7 @@ import { AcceptAllButton } from "@/components/ai-suggestions/accept-all-button";
 import { DOCKED_COMPOSER_WIDTH_CLASS } from "@/components/ai-suggestions/composer-geometry";
 import {
   getReviewBarAction,
+  getReviewBarFocusTarget,
   getReviewBarPosition,
 } from "@/components/ai-suggestions/review-bar.logic";
 import {
@@ -137,15 +138,12 @@ export const ReviewBar = ({
   // review controls appear. Without this, the bar says "1 / n" but Folio has
   // no focused id, so it renders only generic underlines rather than the
   // exact struck-through/replacement pair the reviewer is about to resolve.
+  const focusTargetId = getReviewBarFocusTarget(suggestions, focusedId);
   useExternalSyncEffect(() => {
-    if (focusedId !== null) {
-      return;
+    if (focusTargetId !== null) {
+      setFocusedId(entityId, focusTargetId);
     }
-    const firstPending = suggestions.find(isPending);
-    if (firstPending !== undefined) {
-      setFocusedId(entityId, firstPending.id);
-    }
-  }, [entityId, focusedId, setFocusedId, suggestions]);
+  }, [entityId, focusTargetId, setFocusedId]);
 
   const focusAt = useLatestCallback((index: number) => {
     const item = suggestions.at(index);

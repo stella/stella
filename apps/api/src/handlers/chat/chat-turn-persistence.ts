@@ -4,8 +4,11 @@ import { and, desc, eq, inArray, isNull, lte } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
-import { chatMessages, chatTurns } from "@/api/db/schema";
-import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
+import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
+import type {
+  ChatTurnFailureCode,
+  ChatTurnInteractionType,
+} from "@/api/handlers/chat/chat-turn-state";
 import type {
   ChatTurnOutcome,
   ChatMessageRole,
@@ -67,10 +70,50 @@ export const createChatTurnAcceptance = ({
   workspaceId,
 });
 
+const lockChatThreadForTurnOnTx = async ({
+  threadId,
+  tx,
+}: {
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+}): Promise<boolean> => {
+  const locked = await tx
+    .select({ id: chatThreads.id })
+    .from(chatThreads)
+    .where(eq(chatThreads.id, threadId))
+    .for("update");
+  return locked.length === 1;
+};
+
 /**
- * Store acceptance in the caller's message transaction. Superseding an old
- * active turn and accepting its replacement are one write boundary, so the
- * per-thread active-turn uniqueness constraint never observes two owners.
+ * Lock the thread before a caller writes its new user message. A running turn
+ * cannot be superseded because its provider and tool effects are live.
+ */
+export const canAcceptChatTurnOnTx = async ({
+  threadId,
+  tx,
+}: {
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+}): Promise<boolean> => {
+  if (!(await lockChatThreadForTurnOnTx({ threadId, tx }))) {
+    return false;
+  }
+  const running = await tx.query.chatTurns.findFirst({
+    where: {
+      status: { eq: "running" },
+      threadId: { eq: threadId },
+    },
+    columns: { id: true },
+  });
+  return running === undefined;
+};
+
+/**
+ * Store acceptance in the caller's message transaction. A pending interaction
+ * may be replaced, but a running turn is never superseded: its provider and
+ * tool side effects still belong to a live execution. Returning false leaves
+ * the entire caller transaction to roll back before the new message is saved.
  */
 export const insertChatTurnAcceptanceOnTx = async ({
   acceptance,
@@ -78,8 +121,13 @@ export const insertChatTurnAcceptanceOnTx = async ({
 }: {
   acceptance: ChatTurnAcceptance;
   tx: Transaction;
-}): Promise<void> => {
+}): Promise<boolean> => {
   const now = new Date();
+  // The caller normally reserved this lock before persisting the user
+  // message. Keep the check here too so direct callers retain the invariant.
+  if (!(await canAcceptChatTurnOnTx({ threadId: acceptance.threadId, tx }))) {
+    return false;
+  }
   // audit: skip — internal turn coordination; the user message mutation is audited in this transaction
   await tx
     .update(chatTurns)
@@ -99,25 +147,33 @@ export const insertChatTurnAcceptanceOnTx = async ({
     .where(
       and(
         eq(chatTurns.threadId, acceptance.threadId),
-        inArray(chatTurns.status, ["accepted", "running", "awaiting-user"]),
+        inArray(chatTurns.status, ["accepted", "awaiting-user"]),
       ),
     );
 
   // audit: skip — internal turn coordination; the user message mutation is audited in this transaction
-  await tx.insert(chatTurns).values({
-    id: acceptance.id,
-    leaseExpiresAt: acceptance.leaseExpiresAt,
-    organizationId: acceptance.organizationId,
-    status: "accepted",
-    threadId: acceptance.threadId,
-    userId: acceptance.userId,
-    userMessageId: acceptance.userMessageId,
-    workspaceId: acceptance.workspaceId,
-  });
+  const inserted = await tx
+    .insert(chatTurns)
+    .values({
+      id: acceptance.id,
+      leaseExpiresAt: acceptance.leaseExpiresAt,
+      organizationId: acceptance.organizationId,
+      status: "accepted",
+      threadId: acceptance.threadId,
+      userId: acceptance.userId,
+      userMessageId: acceptance.userMessageId,
+      workspaceId: acceptance.workspaceId,
+    })
+    .onConflictDoNothing()
+    .returning({ id: chatTurns.id });
+  return inserted.length === 1;
 };
 
 export type ChatTurnExecutionClaim = {
   acceptedTurnId: SafeId<"chatTurn"> | null;
+  continuationInteraction?:
+    | { toolCallId: string; type: ChatTurnInteractionType }
+    | undefined;
   incomingMessageId: SafeId<"chatMessage">;
   incomingMessageRole: ChatMessageRole;
   organizationId: SafeId<"organization">;
@@ -143,6 +199,7 @@ type ClaimSource = {
 /** Claim on the caller's transaction before any owned history mutation. */
 export const claimChatTurnForExecutionOnTx = async ({
   acceptedTurnId,
+  continuationInteraction,
   incomingMessageId,
   incomingMessageRole,
   organizationId,
@@ -151,6 +208,12 @@ export const claimChatTurnForExecutionOnTx = async ({
   userId,
   workspaceId,
 }: ClaimChatTurnForExecutionOnTxProps): Promise<ChatTurnExecution | null> => {
+  // Acceptance and replay claims serialize on the exact same thread row.
+  // This prevents a new user turn from cancelling an awaiting interaction
+  // between its validation and ownership claim.
+  if (!(await lockChatThreadForTurnOnTx({ threadId, tx }))) {
+    return null;
+  }
   const executionId = Bun.randomUUIDv7();
   const leaseExpiresAt = nextChatTurnLeaseExpiry();
 
@@ -168,9 +231,14 @@ export const claimChatTurnForExecutionOnTx = async ({
       ? { executionId: null, id: accepted.id, status: "accepted" }
       : null;
   } else if (incomingMessageRole === "assistant") {
+    if (continuationInteraction === undefined) {
+      return null;
+    }
     const awaiting = await tx.query.chatTurns.findFirst({
       where: {
         assistantMessageId: { eq: incomingMessageId },
+        interactionToolCallId: { eq: continuationInteraction.toolCallId },
+        interactionType: { eq: continuationInteraction.type },
         status: { eq: "awaiting-user" },
         threadId: { eq: threadId },
       },

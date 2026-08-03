@@ -18,6 +18,7 @@ import {
   bindCreateDocumentDraftInspectorChatThread,
   getBoundCreateDocumentDraftInspectorChatThreadId,
   promoteCreateDocumentDraftInspectorTab,
+  resolveBoundCreateDocumentDraftChatThreadId,
   setCreateDocumentDraftInspectorChatThreadId,
   setCreateDocumentDraftInspectorTabStatus,
 } from "./use-chat-session-created-document.logic";
@@ -119,6 +120,15 @@ describe("create-document inspector transition", () => {
     expect(
       getBoundCreateDocumentDraftInspectorChatThreadId({
         inspector,
+        toolCallId: "tool-1",
+      }),
+    ).toBe(tab.payload.chatThreadId);
+
+    inspector.tabs.length = 0;
+    expect(
+      resolveBoundCreateDocumentDraftChatThreadId({
+        inspector,
+        retainedChatThreadId: tab.payload.chatThreadId,
         toolCallId: "tool-1",
       }),
     ).toBe(tab.payload.chatThreadId);
@@ -225,7 +235,7 @@ describe("create-document inspector transition", () => {
         entityId: "entity-1",
         fieldId: "field-1",
         fileName: "Power of attorney.docx",
-        inspector,
+        getInspector: () => inspector,
         toolCallId,
         workspaceId: "workspace-1",
       }),
@@ -274,6 +284,64 @@ describe("create-document inspector transition", () => {
     expect(updateCount).toBe(2);
   });
 
+  test("promotes a draft reopened while its save is pending", () => {
+    const toolCallId = "tool-1";
+    const reopenedTabs: InspectorTab[] = [
+      {
+        id: createDocumentDraftTabId(toolCallId),
+        label: "Power of attorney.docx",
+        payload: {
+          ...buildCreateDocumentDraftPayload({
+            draft: {
+              messageId: "message-origin",
+              toolCallId,
+              name: "Power of attorney",
+              source: "@doc kind=other locale=en page=A4",
+              status: "ready",
+            },
+            existingPayload: undefined,
+            originChatThreadId: toChatThreadId("thread-origin"),
+          }),
+          status: "saving",
+        },
+        type: "view",
+        viewType: CREATE_DOCUMENT_DRAFT_VIEW,
+      },
+    ];
+    const closedInspector = {
+      tabs: [],
+      updateView: () => {},
+    } satisfies Pick<InspectorTabsStore, "tabs" | "updateView">;
+    const reopenedInspector = {
+      tabs: reopenedTabs,
+      updateView: ({ id, label, payload }) => {
+        const tab = reopenedTabs.find((candidate) => candidate.id === id);
+        if (tab?.type !== "view") {
+          return;
+        }
+        tab.label = label;
+        tab.payload = payload;
+      },
+    } satisfies Pick<InspectorTabsStore, "tabs" | "updateView">;
+    let currentInspector: Pick<InspectorTabsStore, "tabs" | "updateView"> =
+      closedInspector;
+
+    currentInspector = reopenedInspector;
+    expect(
+      promoteCreateDocumentDraftInspectorTab({
+        entityId: "entity-1",
+        fieldId: "field-1",
+        fileName: "Power of attorney.docx",
+        getInspector: () => currentInspector,
+        toolCallId,
+        workspaceId: "workspace-1",
+      }),
+    ).toBe(true);
+    expect(reopenedTabs.at(0)).toMatchObject({
+      payload: { status: "persisted", entityId: "entity-1" },
+    });
+  });
+
   test("falls back when the user closed the draft before persistence finishes", () => {
     const inspector = {
       tabs: [],
@@ -284,7 +352,7 @@ describe("create-document inspector transition", () => {
         entityId: "entity-1",
         fieldId: "field-1",
         fileName: "Power of attorney.docx",
-        inspector,
+        getInspector: () => inspector,
         toolCallId: "tool-1",
         workspaceId: "workspace-1",
       }),

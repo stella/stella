@@ -19,6 +19,7 @@ import {
 } from "@/api/handlers/chat/attachment-validation";
 import {
   chatMessageFromPersisted,
+  getAwaitingUserInteraction,
   hasServerOwnedChatPartType,
   isIncomingChatPart,
   isChatTextPart,
@@ -473,12 +474,72 @@ const validateIncomingChatParts = ({
           content: persistedMessage.content,
         }).parts
       : [];
+  const continuationIntegrityResult = validateContinuationToolCallIntegrity({
+    incomingParts: validatedParts,
+    persistedParts,
+  });
+  if (Result.isError(continuationIntegrityResult)) {
+    return Result.err(continuationIntegrityResult.error);
+  }
   return Result.ok(
     restoreServerOwnedChatParts({
       incomingParts: validatedParts,
       persistedParts,
     }),
   );
+};
+
+/**
+ * A client continuation may supply the result of an awaited interaction, but
+ * it must not change the canonical call that requested it. In particular, the
+ * provider-visible name, arguments, and input remain server-authored.
+ */
+const validateContinuationToolCallIntegrity = ({
+  incomingParts,
+  persistedParts,
+}: {
+  incomingParts: readonly ChatPart[];
+  persistedParts: readonly ChatPart[];
+}): Result<void, HandlerError<400>> => {
+  const interaction = getAwaitingUserInteraction({
+    parts: [...persistedParts],
+    role: "assistant",
+  });
+  if (interaction === null) {
+    return Result.ok();
+  }
+
+  const canonicalCall = persistedParts.find(
+    (part): part is ChatToolCallPart =>
+      part.type === "tool-call" && part.id === interaction.toolCallId,
+  );
+  if (canonicalCall === undefined) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Persisted chat interaction has no matching tool call",
+      }),
+    );
+  }
+
+  const incomingCall = incomingParts.find(
+    (part): part is ChatToolCallPart =>
+      part.type === "tool-call" && part.id === interaction.toolCallId,
+  );
+  if (
+    incomingCall === undefined ||
+    incomingCall.name !== canonicalCall.name ||
+    !deepEquals(incomingCall.arguments, canonicalCall.arguments) ||
+    !deepEquals(incomingCall.input, canonicalCall.input)
+  ) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Chat continuation does not match its awaited interaction",
+      }),
+    );
+  }
+  return Result.ok();
 };
 
 const validateIncomingChatMetadata = (

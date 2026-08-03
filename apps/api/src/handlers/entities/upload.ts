@@ -537,10 +537,21 @@ const linkGeneratedDocumentDraftChatThread = async ({
     threadWorkspaceId: draftThread.workspaceId,
   });
   if (scopeAction === "promote") {
-    await tx
+    const promotedThread = await tx
       .update(chatThreads)
       .set({ workspaceId })
-      .where(eq(chatThreads.id, generatedDraft.draftChatThreadId));
+      .where(
+        and(
+          eq(chatThreads.id, generatedDraft.draftChatThreadId),
+          draftThread.workspaceId === null
+            ? isNull(chatThreads.workspaceId)
+            : eq(chatThreads.workspaceId, draftThread.workspaceId),
+        ),
+      )
+      .returning({ id: chatThreads.id });
+    if (promotedThread.length !== 1) {
+      panic("Generated draft chat thread promotion lost its locked scope");
+    }
     await recordAuditEvent(tx, {
       action: AUDIT_ACTION.UPDATE,
       resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,

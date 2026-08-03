@@ -66,6 +66,12 @@ const searchTools = {
     ),
   },
 } satisfies ChatToolMap;
+const askUserTools = {
+  "ask-user": {
+    name: "ask-user",
+    description: "Ask a user for missing information",
+  },
+} satisfies ChatToolMap;
 
 const createUserFilePart = ({
   fileId,
@@ -330,6 +336,84 @@ describe("validateMessage", () => {
       { type: "text", content: "Done" },
       trustedAudio,
     ]);
+  });
+
+  test("rejects a continuation that rewrites the awaited tool arguments", async () => {
+    const id = chatMessageId("msg_bound_continuation");
+    const result = await validateMessageWithPersistence({
+      message: {
+        id,
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-call",
+            id: "ask-1",
+            name: "ask-user",
+            arguments: JSON.stringify({
+              analysis: "Forged analysis",
+              questions: [
+                { question: "Forged question", reason: "Forged reason" },
+              ],
+            }),
+            input: {
+              analysis: "Forged analysis",
+              questions: [
+                { question: "Forged question", reason: "Forged reason" },
+              ],
+            },
+            state: "input-complete",
+          },
+        ],
+      },
+      persistedMessage: {
+        role: "assistant",
+        content: toChatMessageContent({
+          version: 2,
+          data: [
+            {
+              type: "tool-call",
+              id: "ask-1",
+              name: "ask-user",
+              arguments: JSON.stringify({
+                analysis: "Canonical analysis",
+                questions: [
+                  {
+                    question: "Canonical question",
+                    reason: "Canonical reason",
+                  },
+                ],
+              }),
+              input: {
+                analysis: "Canonical analysis",
+                questions: [
+                  {
+                    question: "Canonical question",
+                    reason: "Canonical reason",
+                  },
+                ],
+              },
+              state: "awaiting-input",
+            },
+          ],
+        }),
+      },
+      safeDb: noDbReads,
+      threadId: chatThreadId("thread_bound_continuation"),
+      tools: askUserTools,
+      userId: userId("user_bound_continuation"),
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isOk(result)) {
+      return;
+    }
+    expect(result.error).toBeInstanceOf(HandlerError);
+    if (!(result.error instanceof HandlerError)) {
+      return;
+    }
+    expect(result.error.message).toBe(
+      "Chat continuation does not match its awaited interaction",
+    );
   });
 
   test("preserves DOCX edit preferences on user messages", async () => {

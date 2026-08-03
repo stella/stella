@@ -7,7 +7,11 @@ import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-a
 import { ReviewBar } from "@/components/ai-suggestions/review-bar";
 import { compileCreateDocumentSourceToDocument } from "@/components/chat/create-document-compiler";
 import { attachCreateDocumentDraftEditor } from "@/components/chat/create-document-draft-inspector-editor.logic";
-import { getCreateDocumentDraftRestoration } from "@/components/chat/create-document-draft-runtime";
+import {
+  bindCreateDocumentDraftChatThread as retainCreateDocumentDraftChatThread,
+  clearCreateDocumentDraftChatThreadBinding,
+  getCreateDocumentDraftRestoration,
+} from "@/components/chat/create-document-draft-runtime";
 import {
   buildCreateDocumentDownloadFileName,
   createDocumentDraftReviewId,
@@ -56,7 +60,9 @@ export const CreateDocumentDraftInspectorEditor = ({
     payload.toolCallId,
   );
   const [restoration] = useState(availableRestoration);
-  const restoredBuffer = restoration === null ? null : use(restoration);
+  const restoredDraft = restoration === null ? null : use(restoration);
+  const restoredBuffer =
+    restoredDraft?.status === "saved" ? restoredDraft.buffer : null;
   const draftEditable =
     getCreateDocumentDraftEditorAccess(payload) === "editable";
 
@@ -83,13 +89,16 @@ export const CreateDocumentDraftInspectorEditor = ({
   );
   const handleChatThreadIdChange = useCallback(
     (chatThreadId: CreateDocumentDraftPayload["chatThreadId"]) => {
-      setCreateDocumentDraftInspectorChatThreadId({
+      const changed = setCreateDocumentDraftInspectorChatThreadId({
         chatThreadId,
         inspector: useInspectorTabsStore.getState(),
         toolCallId: payload.toolCallId,
       });
+      if (changed && chatThreadId !== payload.chatThreadId) {
+        clearCreateDocumentDraftChatThreadBinding(payload.toolCallId);
+      }
     },
-    [payload.toolCallId],
+    [payload.chatThreadId, payload.toolCallId],
   );
   const handleActiveDraftChatBound = useCallback(
     (chatThreadId: CreateDocumentDraftPayload["chatThreadId"]) => {
@@ -98,12 +107,27 @@ export const CreateDocumentDraftInspectorEditor = ({
         inspector: useInspectorTabsStore.getState(),
         toolCallId: payload.toolCallId,
       });
+      retainCreateDocumentDraftChatThread({
+        chatThreadId,
+        toolCallId: payload.toolCallId,
+      });
     },
     [payload.toolCallId],
   );
 
   if (persistedFileQuery.error) {
     throw persistedFileQuery.error;
+  }
+
+  if (restoredDraft?.status === "failed") {
+    return (
+      <div
+        className="text-muted-foreground flex min-h-0 flex-1 items-center justify-center p-6 text-sm"
+        role="alert"
+      >
+        {t("chat.createDocument.failedHeader")}
+      </div>
+    );
   }
 
   if (payload.status === "persisted" && persistedFileQuery.data === undefined) {

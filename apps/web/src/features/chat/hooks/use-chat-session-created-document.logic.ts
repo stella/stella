@@ -16,7 +16,7 @@ type PromoteCreateDocumentDraftInspectorTabOptions = {
   entityId: string;
   fieldId: string;
   fileName: string;
-  inspector: Pick<InspectorTabsStore, "tabs" | "updateView">;
+  getInspector: () => Pick<InspectorTabsStore, "tabs" | "updateView">;
   toolCallId: string;
   workspaceId: string;
 };
@@ -26,10 +26,11 @@ export const promoteCreateDocumentDraftInspectorTab = ({
   entityId,
   fieldId,
   fileName,
-  inspector,
+  getInspector,
   toolCallId,
   workspaceId,
 }: PromoteCreateDocumentDraftInspectorTabOptions): boolean => {
+  const inspector = getInspector();
   const id = createDocumentDraftTabId(toolCallId);
   const tab = inspector.tabs.find((candidate) => candidate.id === id);
   if (
@@ -166,6 +167,23 @@ export const getBoundCreateDocumentDraftInspectorChatThreadId = ({
     ? tab.payload.chatThreadId
     : null;
 };
+
+type ResolveBoundCreateDocumentDraftChatThreadIdOptions = Omit<
+  SetCreateDocumentDraftInspectorChatThreadIdOptions,
+  "chatThreadId"
+> & {
+  retainedChatThreadId: ChatThreadId | null;
+};
+
+/** The tab is a view, not the source of truth: closing it must not discard a
+ * server-confirmed draft-chat binding retained by the draft runtime. */
+export const resolveBoundCreateDocumentDraftChatThreadId = ({
+  inspector,
+  retainedChatThreadId,
+  toolCallId,
+}: ResolveBoundCreateDocumentDraftChatThreadIdOptions): ChatThreadId | null =>
+  getBoundCreateDocumentDraftInspectorChatThreadId({ inspector, toolCallId }) ??
+  retainedChatThreadId;
 
 type InvalidateCreatedDocumentQueriesOptions = {
   queryKeys: readonly QueryKey[];

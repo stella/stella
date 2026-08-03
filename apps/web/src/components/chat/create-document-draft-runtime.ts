@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 
+import type { ChatThreadId } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 
 type CreateDocumentDraftSaver = () => Promise<ArrayBuffer | null>;
@@ -8,12 +9,20 @@ type RetainedDraftSnapshot = {
   byteLength: number | null;
   captureId: object;
   promise: Promise<CreateDocumentDraftSaveResult>;
-  restoration: Promise<ArrayBuffer | null>;
+  restoration: Promise<CreateDocumentDraftSaveResult>;
 };
+
+type RetainedDraftChatBinding =
+  | { status: "bound"; threadId: ChatThreadId }
+  | { status: "unbound" };
 
 let draftSavers: Record<string, CreateDocumentDraftSaver | undefined> = {};
 let retainedDraftSnapshots: Record<string, RetainedDraftSnapshot | undefined> =
   {};
+let retainedDraftChatBindings: Record<
+  string,
+  RetainedDraftChatBinding | undefined
+> = {};
 let savingDrafts: Readonly<Record<string, true | undefined>> = {};
 
 const draftRuntimeKey = (toolCallId: string): string => `tool:${toolCallId}`;
@@ -133,19 +142,28 @@ const captureDraftSnapshot = async (
   const saved = runDraftSaver(saver);
   const restoration = saved.then(async (result) => {
     if (result.status === "saved") {
-      return result.buffer;
+      return result;
     }
-    return (await previous?.restoration) ?? null;
+    const previousRestoration = await previous?.restoration;
+    // A failed capture is actionable state, not the absence of a snapshot.
+    // Keep it until a later capture produces bytes; otherwise a remount could
+    // fall back to model source and silently discard unsaved edits.
+    return previousRestoration?.status === "unavailable"
+      ? result
+      : (previousRestoration ?? result);
   });
   const snapshot = (async () => {
     const result = await saved;
-    const restorationBuffer = await restoration;
+    const restorationResult = await restoration;
     const retained = retainedDraftSnapshots[key];
     if (retained?.captureId === captureId) {
       retainedDraftSnapshots = {
         ...retainedDraftSnapshots,
         [key]: {
-          byteLength: restorationBuffer?.byteLength ?? 0,
+          byteLength:
+            restorationResult.status === "saved"
+              ? restorationResult.buffer.byteLength
+              : 0,
           captureId: retained.captureId,
           promise: retained.promise,
           restoration: retained.restoration,
@@ -206,9 +224,7 @@ export const saveCreateDocumentDraft = async (
     return result;
   }
   const restoration = await retained.restoration;
-  return restoration === null
-    ? result
-    : { status: "saved", buffer: restoration };
+  return restoration.status === "unavailable" ? result : restoration;
 };
 
 export const prepareCreateDocumentDraft = async ({
@@ -234,8 +250,44 @@ export const prepareCreateDocumentDraft = async ({
 
 export const getCreateDocumentDraftRestoration = (
   toolCallId: string,
-): Promise<ArrayBuffer | null> | null =>
+): Promise<CreateDocumentDraftSaveResult> | null =>
   retainedDraftSnapshots[draftRuntimeKey(toolCallId)]?.restoration ?? null;
+
+export const bindCreateDocumentDraftChatThread = ({
+  chatThreadId,
+  toolCallId,
+}: {
+  chatThreadId: ChatThreadId;
+  toolCallId: string;
+}): void => {
+  retainedDraftChatBindings = {
+    ...retainedDraftChatBindings,
+    [draftRuntimeKey(toolCallId)]: {
+      status: "bound",
+      threadId: chatThreadId,
+    },
+  };
+};
+
+export const clearCreateDocumentDraftChatThreadBinding = (
+  toolCallId: string,
+): void => {
+  const key = draftRuntimeKey(toolCallId);
+  if (retainedDraftChatBindings[key]?.status !== "bound") {
+    return;
+  }
+  retainedDraftChatBindings = {
+    ...retainedDraftChatBindings,
+    [key]: { status: "unbound" },
+  };
+};
+
+export const getBoundCreateDocumentDraftChatThreadId = (
+  toolCallId: string,
+): ChatThreadId | null => {
+  const binding = retainedDraftChatBindings[draftRuntimeKey(toolCallId)];
+  return binding?.status === "bound" ? binding.threadId : null;
+};
 
 /**
  * A draft save has no mounted-editor prerequisite: the action card may remain
@@ -269,11 +321,13 @@ export const completeCreateDocumentDraft = (toolCallId: string): void => {
   const key = draftRuntimeKey(toolCallId);
   draftSavers = withoutRuntimeKey(draftSavers, key);
   retainedDraftSnapshots = withoutRuntimeKey(retainedDraftSnapshots, key);
+  retainedDraftChatBindings = withoutRuntimeKey(retainedDraftChatBindings, key);
   endCreateDocumentDraftPersistence(toolCallId);
 };
 
 export const __resetCreateDocumentDraftRuntimeForTests = (): void => {
   draftSavers = {};
   retainedDraftSnapshots = {};
+  retainedDraftChatBindings = {};
   savingDrafts = {};
 };

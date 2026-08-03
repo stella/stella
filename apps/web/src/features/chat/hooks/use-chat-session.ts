@@ -43,6 +43,7 @@ import {
   beginCreateDocumentDraftPersistence,
   completeCreateDocumentDraft,
   endCreateDocumentDraftPersistence,
+  getBoundCreateDocumentDraftChatThreadId,
   isCreateDocumentDraftPersistenceActive,
   prepareCreateDocumentDraft as prepareCreateDocumentDraftBuffer,
   settleCreateDocumentDraftWithRetry,
@@ -74,9 +75,9 @@ import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import {
-  getBoundCreateDocumentDraftInspectorChatThreadId,
   invalidateCreatedDocumentQueries,
   promoteCreateDocumentDraftInspectorTab,
+  resolveBoundCreateDocumentDraftChatThreadId,
   setCreateDocumentDraftInspectorTabStatus,
 } from "@/features/chat/hooks/use-chat-session-created-document.logic";
 import { reconcileDocumentDeletionToolCalls } from "@/features/chat/hooks/use-chat-session-document-deletion.logic";
@@ -1056,11 +1057,12 @@ export const useChatSession = ({
         status: "saving",
         toolCallId,
       });
-      const draftChatThreadId =
-        getBoundCreateDocumentDraftInspectorChatThreadId({
-          inspector,
-          toolCallId,
-        });
+      const draftChatThreadId = resolveBoundCreateDocumentDraftChatThreadId({
+        inspector,
+        retainedChatThreadId:
+          getBoundCreateDocumentDraftChatThreadId(toolCallId),
+        toolCallId,
+      });
       const createResult = await Result.tryPromise(async () => {
         const draft = await prepareCreateDocumentDraft(toolCallId, input);
         if (draft === null) {
@@ -1163,7 +1165,7 @@ export const useChatSession = ({
         entityId: output.entityId,
         fieldId: output.fieldId,
         fileName: output.fileName,
-        inspector,
+        getInspector: useInspectorTabsStore.getState,
         toolCallId,
         workspaceId: output.workspaceId,
       });

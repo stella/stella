@@ -3,9 +3,12 @@ import { afterEach, describe, expect, test } from "bun:test";
 import {
   __resetCreateDocumentDraftRuntimeForTests,
   beginCreateDocumentDraftPersistence,
+  bindCreateDocumentDraftChatThread,
+  clearCreateDocumentDraftChatThreadBinding,
   completeCreateDocumentDraft,
   endCreateDocumentDraftPersistence,
   getCreateDocumentDraftRestoration,
+  getBoundCreateDocumentDraftChatThreadId,
   isCreateDocumentDraftPersistenceActive,
   prepareCreateDocumentDraft,
   registerCreateDocumentDraftSaver,
@@ -13,10 +16,14 @@ import {
   saveCreateDocumentDraft,
   settleCreateDocumentDraftWithRetry,
 } from "@/components/chat/create-document-draft-runtime";
+import { toChatThreadId } from "@/lib/chat-thread-ref";
 
 afterEach(() => {
   __resetCreateDocumentDraftRuntimeForTests();
 });
+
+const errorMessage = (value: unknown): string =>
+  value instanceof Error ? value.message : String(value);
 
 describe("create-document settlement retries", () => {
   test("settles after a transient failure without relying on a rerender", async () => {
@@ -182,7 +189,7 @@ describe("create-document draft runtime", () => {
     const restoration = getCreateDocumentDraftRestoration("tool-1");
 
     expect(restoration).not.toBeNull();
-    expect(await restoration).toBe(edited);
+    expect(await restoration).toEqual({ status: "saved", buffer: edited });
   });
 
   test("restores the last valid bytes but keeps a later serialization failure terminal", async () => {
@@ -194,7 +201,72 @@ describe("create-document draft runtime", () => {
     });
 
     expect((await saveCreateDocumentDraft("tool-1")).status).toBe("failed");
-    expect(await getCreateDocumentDraftRestoration("tool-1")).toBe(edited);
+    expect(await getCreateDocumentDraftRestoration("tool-1")).toEqual({
+      status: "saved",
+      buffer: edited,
+    });
+  });
+
+  test("retains a first unmount serialization failure instead of recompiling", async () => {
+    const error = new Error("first serialization failed");
+    let fallbackCalls = 0;
+    registerCreateDocumentDraftSaver("tool-1", async () => {
+      throw error;
+    })();
+
+    const restoration = getCreateDocumentDraftRestoration("tool-1");
+    if (restoration === null) {
+      throw new Error("Expected failed restoration to be retained");
+    }
+    const restored = await restoration;
+    expect(restored.status).toBe("failed");
+    if (restored.status === "failed") {
+      expect(errorMessage(restored.error)).toContain(error.message);
+    }
+
+    const prepared = await prepareCreateDocumentDraft({
+      toolCallId: "tool-1",
+      compileFallback: async () => {
+        fallbackCalls += 1;
+        return new Uint8Array([9]).buffer;
+      },
+    });
+    expect(prepared.status).toBe("failed");
+    expect(fallbackCalls).toBe(0);
+  });
+
+  test("does not turn a retained capture failure into a source fallback", async () => {
+    const error = new Error("first serialization failed");
+    let fallbackCalls = 0;
+    registerCreateDocumentDraftSaver("tool-1", async () => {
+      throw error;
+    })();
+    registerCreateDocumentDraftSaver("tool-1", async () => null)();
+
+    const prepared = await prepareCreateDocumentDraft({
+      toolCallId: "tool-1",
+      compileFallback: async () => {
+        fallbackCalls += 1;
+        return new Uint8Array([9]).buffer;
+      },
+    });
+    expect(prepared.status).toBe("failed");
+    expect(fallbackCalls).toBe(0);
+  });
+
+  test("retains a bound draft chat after its inspector tab closes", () => {
+    bindCreateDocumentDraftChatThread({
+      chatThreadId: toChatThreadId("draft-thread"),
+      toolCallId: "tool-1",
+    });
+
+    expect(getBoundCreateDocumentDraftChatThreadId("tool-1")).toBe(
+      toChatThreadId("draft-thread"),
+    );
+
+    clearCreateDocumentDraftChatThreadBinding("tool-1");
+
+    expect(getBoundCreateDocumentDraftChatThreadId("tool-1")).toBeNull();
   });
 
   test("preserves every actionable draft snapshot until it becomes terminal", async () => {

@@ -392,8 +392,21 @@ const ASK_USER_STATE_AWAITS_USER = {
   "input-streaming": true,
 } as const satisfies Record<TanStackToolCallState, boolean>;
 
+const RESUMED_INTERACTION_TYPE_BY_TOOL_STATE = {
+  "approval-requested": null,
+  "approval-responded": "approval",
+  "awaiting-input": null,
+  complete: "ask-user",
+  error: null,
+  "input-complete": "ask-user",
+  "input-streaming": null,
+} as const satisfies Record<
+  TanStackToolCallState,
+  "approval" | "ask-user" | null
+>;
+
 export const getAwaitingUserInteraction = (
-  message: ChatMessage | null,
+  message: Pick<ChatMessage, "parts" | "role"> | null,
 ):
   | Extract<
       NonNullable<ChatMessageMetadata["turnOutcome"]>,
@@ -413,6 +426,42 @@ export const getAwaitingUserInteraction = (
     if (part.name === "ask-user" && ASK_USER_STATE_AWAITS_USER[part.state]) {
       return { type: "ask-user", toolCallId: part.id };
     }
+  }
+  return null;
+};
+
+/**
+ * Return the durable interaction a client continuation is attempting to
+ * resolve. The turn store compares this identity with its canonical awaited
+ * interaction before any client-supplied assistant parts replace history.
+ */
+export const getResumedUserInteraction = (
+  message: Pick<ChatMessage, "parts" | "role">,
+):
+  | Extract<
+      NonNullable<ChatMessageMetadata["turnOutcome"]>,
+      { type: "awaiting-user" }
+    >["interaction"]
+  | null => {
+  if (message.role !== "assistant") {
+    return null;
+  }
+  for (let index = message.parts.length - 1; index >= 0; index -= 1) {
+    const part = message.parts[index];
+    if (part === undefined) {
+      continue;
+    }
+    if (part.type !== "tool-call") {
+      continue;
+    }
+    const interactionType = RESUMED_INTERACTION_TYPE_BY_TOOL_STATE[part.state];
+    if (interactionType === null) {
+      continue;
+    }
+    if (interactionType === "ask-user" && part.name !== "ask-user") {
+      continue;
+    }
+    return { type: interactionType, toolCallId: part.id };
   }
   return null;
 };
