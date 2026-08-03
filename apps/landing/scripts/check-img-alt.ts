@@ -78,21 +78,135 @@ export const maskComments = (source: string): string => {
   return masked.join("");
 };
 
-export const hasExplicitAlt = (tag: string): boolean => /\salt\s*=/u.test(tag);
+const isWhitespace = (character: string | undefined): boolean =>
+  character === " " ||
+  character === "\t" ||
+  character === "\n" ||
+  character === "\r" ||
+  character === "\f";
+
+type ImageTag = { offset: number; tag: string };
+
+export const imageTags = (source: string): ImageTag[] => {
+  const tags: ImageTag[] = [];
+  let searchFrom = 0;
+  while (searchFrom < source.length) {
+    const offset = source.indexOf("<img", searchFrom);
+    if (offset === -1) {
+      return tags;
+    }
+
+    const boundary = source[offset + 4];
+    if (!isWhitespace(boundary) && boundary !== "/" && boundary !== ">") {
+      searchFrom = offset + 4;
+      continue;
+    }
+
+    let braceDepth = 0;
+    let quote: string | undefined;
+    let index = offset + 4;
+    while (index < source.length) {
+      const character = source[index];
+      if (quote !== undefined) {
+        if (character === "\\") {
+          index += 2;
+          continue;
+        }
+        if (character === quote) {
+          quote = undefined;
+        }
+        index += 1;
+        continue;
+      }
+
+      if (character === '"' || character === "'" || character === "`") {
+        quote = character;
+        index += 1;
+        continue;
+      }
+      if (character === "{") {
+        braceDepth += 1;
+        index += 1;
+        continue;
+      }
+      if (character === "}" && braceDepth > 0) {
+        braceDepth -= 1;
+        index += 1;
+        continue;
+      }
+      if (character === ">" && braceDepth === 0) {
+        tags.push({ offset, tag: source.slice(offset, index + 1) });
+        searchFrom = index + 1;
+        break;
+      }
+      index += 1;
+    }
+
+    if (index === source.length) {
+      return tags;
+    }
+  }
+  return tags;
+};
+
+export const hasExplicitAlt = (tag: string): boolean => {
+  let braceDepth = 0;
+  let quote: string | undefined;
+  for (let index = 4; index < tag.length; index += 1) {
+    const character = tag[index];
+    if (quote !== undefined) {
+      if (character === "\\") {
+        index += 1;
+      } else if (character === quote) {
+        quote = undefined;
+      }
+      continue;
+    }
+    if (character === '"' || character === "'" || character === "`") {
+      quote = character;
+      continue;
+    }
+    if (character === "{") {
+      braceDepth += 1;
+      continue;
+    }
+    if (character === "}" && braceDepth > 0) {
+      braceDepth -= 1;
+      continue;
+    }
+    if (braceDepth > 0 || !isWhitespace(character)) {
+      continue;
+    }
+
+    let attributeStart = index + 1;
+    while (isWhitespace(tag[attributeStart])) {
+      attributeStart += 1;
+    }
+    if (!tag.startsWith("alt", attributeStart)) {
+      continue;
+    }
+    let equals = attributeStart + 3;
+    while (isWhitespace(tag[equals])) {
+      equals += 1;
+    }
+    if (tag[equals] === "=") {
+      return true;
+    }
+  }
+  return false;
+};
 
 const main = (): void => {
   const failures: string[] = [];
   for (const file of sourceFiles(SRC_ROOT)) {
     const source = readFileSync(file, "utf-8");
     const masked = maskComments(source);
-    for (const match of masked.matchAll(/<img\b[^>]*>/gu)) {
-      const tag = match[0];
+    for (const { offset, tag } of imageTags(masked)) {
       // A spread ({...props}) can carry alt; that shape is not statically
       // checkable here, so it is trusted and skipped.
       if (hasExplicitAlt(tag) || tag.includes("{...")) {
         continue;
       }
-      const offset = match.index;
       const line = source.slice(0, offset).split("\n").length;
       failures.push(
         `${file.slice(SRC_ROOT.length + 1)}:${line}: <img> without an alt attribute`,

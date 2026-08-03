@@ -1,5 +1,7 @@
 #!/usr/bin/env bun
-import { readFileSync } from "node:fs";
+import { Result } from "better-result";
+import { YAML } from "bun";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { products } from "../src/data/products/registry";
@@ -141,6 +143,72 @@ const staticPages = (): PageMeta[] =>
     return { page, title, description };
   });
 
+const BLOG_ROOT = path.join(import.meta.dir, "..", "src", "content", "blog");
+const FRONTMATTER_OPEN = "---\n";
+const FRONTMATTER_CLOSE = "\n---\n";
+
+const markdownFiles = (dir: string): string[] =>
+  readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const entryPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      return markdownFiles(entryPath);
+    }
+    return entry.name.endsWith(".md") ? [entryPath] : [];
+  });
+
+type BlogPagesResult = { pages: PageMeta[]; violations: string[] };
+
+const publishedBlogPages = (): BlogPagesResult => {
+  const pages: PageMeta[] = [];
+  const violations: string[] = [];
+  for (const file of markdownFiles(BLOG_ROOT).sort()) {
+    const relativePath = path
+      .relative(BLOG_ROOT, file)
+      .split(path.sep)
+      .join("/");
+    const page = `/blog/${relativePath.slice(0, -3)}`;
+    const source = readFileSync(file, "utf-8");
+    const close = source.indexOf(FRONTMATTER_CLOSE, FRONTMATTER_OPEN.length);
+    if (!source.startsWith(FRONTMATTER_OPEN) || close === -1) {
+      violations.push(`${page} has malformed frontmatter delimiters`);
+      continue;
+    }
+
+    const parsed = Result.try(() =>
+      YAML.parse(source.slice(FRONTMATTER_OPEN.length, close)),
+    );
+    if (Result.isError(parsed)) {
+      violations.push(`${page} has invalid YAML frontmatter`);
+      continue;
+    }
+    const frontmatter = parsed.value;
+    if (
+      typeof frontmatter !== "object" ||
+      frontmatter === null ||
+      Array.isArray(frontmatter) ||
+      !("title" in frontmatter) ||
+      !("description" in frontmatter)
+    ) {
+      violations.push(`${page} frontmatter lacks title or description`);
+      continue;
+    }
+    const { title, description } = frontmatter;
+    const draft = "draft" in frontmatter ? frontmatter.draft : false;
+    if (
+      typeof title !== "string" ||
+      typeof description !== "string" ||
+      typeof draft !== "boolean"
+    ) {
+      violations.push(`${page} frontmatter meta fields have invalid types`);
+      continue;
+    }
+    if (!draft) {
+      pages.push({ page, title: `${title} | stella`, description });
+    }
+  }
+  return { pages, violations };
+};
+
 const budgetViolations = ({ page, title, description }: PageMeta): string[] => {
   const violations: string[] = [];
   if (title.length > TITLE_MAX) {
@@ -179,11 +247,13 @@ const duplicateViolations = (pages: readonly PageMeta[]): string[] => {
   return violations;
 };
 
-const failures: string[] = [];
+const englishStaticPages = staticPages();
+const blogPages = publishedBlogPages();
+const failures = blogPages.violations.map((violation) => `en: ${violation}`);
 for (const locale of localeCodes) {
   const pages =
     locale === "en"
-      ? [...pagesFor(locale), ...staticPages()]
+      ? [...pagesFor(locale), ...englishStaticPages, ...blogPages.pages]
       : pagesFor(locale);
   const violations = [
     ...pages.flatMap(budgetViolations),
@@ -204,5 +274,5 @@ if (failures.length > 0) {
 }
 
 console.log(
-  `meta budgets: ${localeCodes.length} locales x ${products.length + 1} pages ok`,
+  `meta budgets: ${localeCodes.length} locales x ${products.length + 1} catalog pages + ${englishStaticPages.length} static pages + ${blogPages.pages.length} blog posts ok`,
 );
