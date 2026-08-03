@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.7.4
+
+### Patch Changes
+
+- [#442](https://github.com/stella/anonymize/pull/442) [`179ddf7`](https://github.com/stella/anonymize/commit/179ddf783fd927d4396171bc1db5d03c63df19be) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Reduce the first-call cost of shipped pipelines by parallelizing lazy regex initialization.
+
 ## 2.7.3
 
 ### Patch Changes

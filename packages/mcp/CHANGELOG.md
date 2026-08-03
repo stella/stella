@@ -1,5 +1,16 @@
 # @stll/anonymize-mcp
 
+## 2.7.4
+
+### Patch Changes
+
+- [#440](https://github.com/stella/anonymize/pull/440) [`05888a0`](https://github.com/stella/anonymize/commit/05888a0bba74498289bdedb4c795af399de0ede4) Thanks [@dependabot](https://github.com/apps/dependabot)! - Update the MCP SDK dependency.
+
+- Updated dependencies [[`179ddf7`](https://github.com/stella/anonymize/commit/179ddf783fd927d4396171bc1db5d03c63df19be)]:
+  - @stll/anonymize@2.7.4
+  - @stll/anonymize-pdf@2.7.4
+  - @stll/anonymize-docx@2.7.4
+
 ## 2.7.3
 
 ### Patch Changes
