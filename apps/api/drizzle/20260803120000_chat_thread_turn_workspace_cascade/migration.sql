@@ -39,6 +39,11 @@ $function$;--> statement-breakpoint
 
 REVOKE ALL ON FUNCTION public.sync_chat_turn_workspace_from_thread() FROM PUBLIC;--> statement-breakpoint
 
+-- chat_turns is introduced by the immediately preceding migration and has no
+-- production writers until this feature deploys. Keep this small-table index
+-- in the same transaction as the authorization trigger so the RLS invariant
+-- becomes visible atomically.
+-- squawk-ignore require-concurrent-index-creation
 CREATE INDEX IF NOT EXISTS "chat_turns_thread_id_idx" ON public.chat_turns (thread_id);--> statement-breakpoint
 
 -- stella-migration-safety: reviewed destructive-change - this new, idempotently named trigger is replaced atomically so a retried migration installs the same workspace-cascade behavior; a failed migration transaction restores the prior trigger state.
