@@ -7,6 +7,7 @@ import {
   isCreateDocumentDraftPayload,
   isSameCreateDocumentDraftPayload,
   normalizeCreateDocumentInput,
+  persistCreateDocumentDraftPayload,
   replaceReadyCreateDocumentDraftOutput,
   selectCreateDocumentDrafts,
   selectUnsettledCreateDocumentDrafts,
@@ -328,6 +329,56 @@ describe("create-document drafts", () => {
     expect(isCreateDocumentDraftPayload({ ...updated, workspaceId: 42 })).toBe(
       false,
     );
+  });
+
+  test("promotes a draft to a persisted file without changing editor identity", () => {
+    const payload = buildCreateDocumentDraftPayload({
+      draft: {
+        messageId: "message-origin",
+        toolCallId: "tool-1",
+        name: "Power of attorney",
+        source: "@doc kind=other locale=en page=A4",
+        status: "ready",
+      },
+      existingPayload: undefined,
+      originChatThreadId: toChatThreadId("thread-origin"),
+    });
+
+    const persisted = persistCreateDocumentDraftPayload({
+      entityId: "entity-1",
+      fieldId: "field-1",
+      fileName: "Power of attorney.docx",
+      payload,
+      workspaceId: "workspace-1",
+    });
+
+    expect(persisted).toMatchObject({
+      status: "persisted",
+      entityId: "entity-1",
+      fieldId: "field-1",
+      fileName: "Power of attorney.docx",
+      workspaceId: "workspace-1",
+    });
+    expect(persisted.toolCallId).toBe(payload.toolCallId);
+    expect(persisted.chatThreadId).toBe(payload.chatThreadId);
+    expect(persisted.source).toBe(payload.source);
+    expect(isCreateDocumentDraftPayload(persisted)).toBe(true);
+    expect(isSameCreateDocumentDraftPayload({ ...persisted }, persisted)).toBe(
+      true,
+    );
+    expect(
+      buildCreateDocumentDraftPayload({
+        draft: {
+          messageId: payload.originChatMessageId,
+          toolCallId: payload.toolCallId,
+          name: payload.name,
+          source: payload.source,
+          status: "ready",
+        },
+        existingPayload: persisted,
+        originChatThreadId: payload.originChatThreadId,
+      }),
+    ).toBe(persisted);
   });
 
   test("builds a bounded safe DOCX download name", () => {

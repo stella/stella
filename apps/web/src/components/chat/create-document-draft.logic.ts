@@ -21,16 +21,57 @@ export const createDocumentDraftReviewId = (toolCallId: string): string =>
 const CREATE_DOCUMENT_DRAFT_THREAD_NAMESPACE =
   "58cd2ab8-5b47-4c60-8ccc-edbbabf7fc69";
 
-export type CreateDocumentDraftPayload = {
+type CreateDocumentDraftPayloadBase = {
   originChatMessageId: string;
   originChatThreadId: ChatThreadId;
   chatThreadId: ChatThreadId;
   toolCallId: string;
   name: string;
   source: string;
-  status: "streaming" | "ready";
-  workspaceId?: string | undefined;
 };
+
+export type CreateDocumentDraftPayload = CreateDocumentDraftPayloadBase &
+  (
+    | {
+        status: "streaming" | "ready";
+        workspaceId?: string | undefined;
+      }
+    | {
+        status: "persisted";
+        entityId: string;
+        fieldId: string;
+        fileName: string;
+        workspaceId: string;
+      }
+  );
+
+type PersistCreateDocumentDraftPayloadOptions = {
+  entityId: string;
+  fieldId: string;
+  fileName: string;
+  payload: CreateDocumentDraftPayload;
+  workspaceId: string;
+};
+
+export const persistCreateDocumentDraftPayload = ({
+  entityId,
+  fieldId,
+  fileName,
+  payload,
+  workspaceId,
+}: PersistCreateDocumentDraftPayloadOptions): CreateDocumentDraftPayload => ({
+  originChatMessageId: payload.originChatMessageId,
+  originChatThreadId: payload.originChatThreadId,
+  chatThreadId: payload.chatThreadId,
+  toolCallId: payload.toolCallId,
+  name: payload.name,
+  source: payload.source,
+  status: "persisted",
+  entityId,
+  fieldId,
+  fileName,
+  workspaceId,
+});
 
 export const createDocumentDraftTabId = (toolCallId: string) =>
   `${CREATE_DOCUMENT_DRAFT_VIEW}:${toolCallId}`;
@@ -41,7 +82,7 @@ export const isCreateDocumentDraftPayload = (
   if (typeof payload !== "object" || payload === null) {
     return false;
   }
-  return (
+  const hasBasePayload =
     "toolCallId" in payload &&
     typeof payload.toolCallId === "string" &&
     "originChatThreadId" in payload &&
@@ -54,12 +95,27 @@ export const isCreateDocumentDraftPayload = (
     "name" in payload &&
     typeof payload.name === "string" &&
     "source" in payload &&
-    typeof payload.source === "string" &&
-    "status" in payload &&
-    (payload.status === "streaming" || payload.status === "ready") &&
-    (!("workspaceId" in payload) ||
+    typeof payload.source === "string";
+  if (!hasBasePayload || !("status" in payload)) {
+    return false;
+  }
+  if (payload.status === "streaming" || payload.status === "ready") {
+    return (
+      !("workspaceId" in payload) ||
       payload.workspaceId === undefined ||
-      typeof payload.workspaceId === "string")
+      typeof payload.workspaceId === "string"
+    );
+  }
+  return (
+    payload.status === "persisted" &&
+    "entityId" in payload &&
+    typeof payload.entityId === "string" &&
+    "fieldId" in payload &&
+    typeof payload.fieldId === "string" &&
+    "fileName" in payload &&
+    typeof payload.fileName === "string" &&
+    "workspaceId" in payload &&
+    typeof payload.workspaceId === "string"
   );
 };
 
@@ -75,7 +131,12 @@ export const isSameCreateDocumentDraftPayload = (
   left.name === right.name &&
   left.source === right.source &&
   left.status === right.status &&
-  left.workspaceId === right.workspaceId;
+  left.workspaceId === right.workspaceId &&
+  (left.status !== "persisted" ||
+    right.status !== "persisted" ||
+    (left.entityId === right.entityId &&
+      left.fieldId === right.fieldId &&
+      left.fileName === right.fileName));
 
 const DOWNLOAD_EXTENSION = ".docx";
 const MAX_DOWNLOAD_FILENAME_LENGTH = 255;
@@ -102,17 +163,21 @@ export const buildCreateDocumentDraftPayload = ({
   originChatThreadId,
   workspaceId,
 }: BuildCreateDocumentDraftPayloadOptions): CreateDocumentDraftPayload => {
-  const chatThreadId =
+  const hasExistingIdentity =
     isCreateDocumentDraftPayload(existingPayload) &&
     existingPayload.originChatThreadId === originChatThreadId &&
-    existingPayload.toolCallId === draft.toolCallId
-      ? existingPayload.chatThreadId
-      : toChatThreadId(
-          uuidv5(
-            `${originChatThreadId}:${draft.toolCallId}`,
-            CREATE_DOCUMENT_DRAFT_THREAD_NAMESPACE,
-          ),
-        );
+    existingPayload.toolCallId === draft.toolCallId;
+  if (hasExistingIdentity && existingPayload.status === "persisted") {
+    return existingPayload;
+  }
+  const chatThreadId = hasExistingIdentity
+    ? existingPayload.chatThreadId
+    : toChatThreadId(
+        uuidv5(
+          `${originChatThreadId}:${draft.toolCallId}`,
+          CREATE_DOCUMENT_DRAFT_THREAD_NAMESPACE,
+        ),
+      );
 
   return {
     originChatMessageId: draft.messageId,

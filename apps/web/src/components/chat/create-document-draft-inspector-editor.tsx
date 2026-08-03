@@ -76,10 +76,10 @@ export const CreateDocumentDraftInspectorEditor = ({
         documentKey={payload.toolCallId}
         initialZoom="fit-width"
         loadingIndicator={null}
-        mode={payload.status === "ready" ? "editing" : "viewing"}
+        mode={payload.status === "streaming" ? "viewing" : "editing"}
         readOnly={payload.status === "streaming"}
-        showToolbar={payload.status === "ready"}
-        showZoomControl={payload.status === "ready"}
+        showToolbar={payload.status !== "streaming"}
+        showZoomControl={payload.status !== "streaming"}
       />
     </div>
   );
@@ -90,12 +90,26 @@ export const CreateDocumentDraftInspectorEditor = ({
 
   return (
     <FileViewerWithAI
-      activeDraft={{
-        fileName: buildCreateDocumentDownloadFileName(payload.name),
-        originChatMessageId: payload.originChatMessageId,
-        originChatThreadId: payload.originChatThreadId,
-        toolCallId: payload.toolCallId,
-      }}
+      activeDraft={
+        payload.status === "persisted"
+          ? undefined
+          : {
+              fileName: buildCreateDocumentDownloadFileName(payload.name),
+              originChatMessageId: payload.originChatMessageId,
+              originChatThreadId: payload.originChatThreadId,
+              toolCallId: payload.toolCallId,
+            }
+      }
+      activeFile={
+        payload.status === "persisted"
+          ? {
+              editable: true,
+              entityId: payload.entityId,
+              fileFieldId: payload.fieldId,
+              fileName: payload.fileName,
+            }
+          : undefined
+      }
       chatThreadId={payload.chatThreadId}
       docxEditable
       docxEditorRef={editorRef}

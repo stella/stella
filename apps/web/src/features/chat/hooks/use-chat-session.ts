@@ -66,7 +66,10 @@ import type {
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
-import { invalidateCreatedDocumentQueries } from "@/features/chat/hooks/use-chat-session-created-document.logic";
+import {
+  invalidateCreatedDocumentQueries,
+  promoteCreateDocumentDraftInspectorTab,
+} from "@/features/chat/hooks/use-chat-session-created-document.logic";
 import { reconcileDocumentDeletionToolCalls } from "@/features/chat/hooks/use-chat-session-document-deletion.logic";
 import {
   createInitialSendQueueState,
@@ -1048,6 +1051,16 @@ export const useChatSession = ({
       );
       completeCreateDocumentDraft(toolCallId);
 
+      const inspector = useInspectorTabsStore.getState();
+      const promotedDraftInPlace = promoteCreateDocumentDraftInspectorTab({
+        entityId: output.entityId,
+        fieldId: output.fieldId,
+        fileName: output.fileName,
+        inspector,
+        toolCallId,
+        workspaceId: output.workspaceId,
+      });
+
       await invalidateCreatedDocumentQueries({
         queryClient,
         queryKeys: [
@@ -1074,10 +1087,9 @@ export const useChatSession = ({
         "useChatSession",
       );
 
-      useInspectorTabsStore
-        .getState()
-        .closeTab(createDocumentDraftTabId(toolCallId));
-      await openCreatedDocumentInInspector(output);
+      if (!promotedDraftInPlace) {
+        await openCreatedDocumentInInspector(output);
+      }
     },
     [chat, queryClient, setMessages, t, threadRef],
   );
