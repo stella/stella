@@ -30,6 +30,7 @@ describe("API deployment health receipt", () => {
       "Staging health gate did not pass; skipping this deployment.",
     );
     expect(deployJob).toContain("needs: staging-health");
+    expect(deployJob).toContain("github.event_name == 'workflow_dispatch'");
     expect(deployJob).toContain(
       "needs.staging-health.outputs.status == 'ready'",
     );
