@@ -187,6 +187,13 @@ const BENIGN: readonly RegExp[] = [
   // from "sygn. akt II Ca (…)"), and self-references such as "sygn. j.w."
   // ("as above").
   /^(?:sp\.\s{0,3}zn\.|sen\.\s{0,3}zn\.|sygn\.(?:\s{1,3}akt)?|[čc]\.\s{0,3}j\.:?)[^\d]{0,45}$/iu,
+  // Administrative-authority "č. j." reference (tax office, land registry):
+  // three or more purely numeric segments joined by slashes, e.g. "č. j.
+  // 11055/01/332960/2959" (Finanční úřad), "č.j. 27662/97/332960/2959". A
+  // real court docket always carries a letter registry between the chamber
+  // digit and the docket number (CASE_NUMBER_BODY in the extractor); an
+  // all-numeric multi-segment reference is never a court citation.
+  /[čc]\.\s{0,3}j\.:?\s{0,3}\d{1,6}(?:\/\d{1,6}){2,4}(?!\p{L})/u,
 ];
 
 const isBenign = (candidate: string): boolean =>
