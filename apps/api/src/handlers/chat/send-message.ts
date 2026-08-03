@@ -13,6 +13,7 @@ import { env } from "@/api/env";
 import {
   chatMessageContentFromMessage,
   isChatPart,
+  toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
   appendAnonymizedModeHintToChatSafePrompt,
@@ -147,6 +148,11 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resolveEffectiveChatModelId } from "@/api/lib/chat-model-selection";
+import {
+  canUseChatThreadForGeneratedDocumentDraft,
+  createGeneratedDocumentActiveDraftContext,
+  hasPersistedGeneratedDocumentActiveDraftContext,
+} from "@/api/lib/chat/active-draft-context";
 import { isReadyGeneratedDocumentDraft } from "@/api/lib/chat/created-draft";
 import {
   expandThreadDataScope,
@@ -286,6 +292,35 @@ const validateActiveDraftContext = async ({
           message: "Active generated document draft not found",
         }),
       );
+};
+
+const stampValidatedMessageWithActiveDraftContext = ({
+  activeDraft,
+  message,
+}: {
+  activeDraft: IncomingActiveDraft | undefined;
+  message: PersistableChatMessage;
+}): PersistableChatMessage => {
+  if (activeDraft === undefined) {
+    return message;
+  }
+
+  return toPersistableChatMessage({
+    id: message.id,
+    role: message.role,
+    parts: message.parts,
+    ...(message.createdAt === undefined
+      ? {}
+      : { createdAt: message.createdAt }),
+    metadata: {
+      ...message.metadata,
+      activeDraftContext: createGeneratedDocumentActiveDraftContext({
+        originChatMessageId: activeDraft.originChatMessageId,
+        originChatThreadId: activeDraft.originChatThreadId,
+        toolCallId: activeDraft.toolCallId,
+      }),
+    },
+  });
 };
 
 const sendMessage = createSafeRootHandler(
@@ -619,6 +654,50 @@ const sendMessage = createSafeRootHandler(
         }),
       );
 
+      const activeDraft = body.activeDraft;
+      if (activeDraft !== undefined) {
+        const hasPersistedContext =
+          thread.type === "created"
+            ? false
+            : yield* Result.await(
+                safeDb(async (tx) =>
+                  hasPersistedGeneratedDocumentActiveDraftContext({
+                    generatedDraft: {
+                      originChatMessageId: activeDraft.originChatMessageId,
+                      originChatThreadId: activeDraft.originChatThreadId,
+                      toolCallId: activeDraft.toolCallId,
+                    },
+                    organizationId: session.activeOrganizationId,
+                    threadId: thread.data.id,
+                    tx,
+                    userId: user.id,
+                  }),
+                ),
+              );
+        if (
+          !canUseChatThreadForGeneratedDocumentDraft({
+            hasPersistedContext,
+            threadType: thread.type,
+          })
+        ) {
+          return Result.err(
+            new HandlerError({
+              status: 409,
+              message:
+                "Active generated document draft is not bound to this chat",
+            }),
+          );
+        }
+      }
+
+      const stampedValidatedMessage = {
+        ...validatedMessage,
+        message: stampValidatedMessageWithActiveDraftContext({
+          activeDraft: body.activeDraft,
+          message: validatedMessage.message,
+        }),
+      };
+
       // Existing-thread pin changes are durable side effects, so stop before
       // applying them when any earlier validation or thread read observed a
       // client disconnect. Created threads still need their rollback token
@@ -727,7 +806,7 @@ const sendMessage = createSafeRootHandler(
 
       const uploadResult = yield* Result.await(
         uploadMessageFilesWithRollback({
-          message: validatedMessage.message,
+          message: stampedValidatedMessage.message,
           recordAuditEvent,
           safeDb,
           threadId: thread.data.id,

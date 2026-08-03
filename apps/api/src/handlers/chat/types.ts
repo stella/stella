@@ -9,6 +9,7 @@ import type {
 } from "@/api/handlers/chat/tools/chat-tools";
 import type { AIErrorKind } from "@/api/lib/ai-error";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { GeneratedDocumentActiveDraftContext } from "@/api/lib/chat/active-draft-context";
 import type {
   ChatClientToolsFor,
   ChatUIToolsFor,
@@ -99,6 +100,9 @@ export type ChatTurnOutcome =
     };
 
 export type ChatMessageMetadata = {
+  /** Server-owned generated-document draft binding. Incoming client metadata
+   * deliberately does not accept this field. */
+  activeDraftContext?: GeneratedDocumentActiveDraftContext | undefined;
   anonRestorations?: ChatAnonRestorationsData | undefined;
   docxEditPreferences?:
     | {

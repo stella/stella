@@ -47,10 +47,19 @@ const createUnreadFile = () => {
   return { arrayBuffer, file };
 };
 
-const createContext = ({ file, safeDb }: { file: File; safeDb: SafeDb }) =>
+const createContext = ({
+  draftChatThreadId,
+  file,
+  safeDb,
+}: {
+  draftChatThreadId?: typeof threadId | undefined;
+  file: File;
+  safeDb: SafeDb;
+}) =>
   createTestHandlerContext<UploadGeneratedDocumentContext>({
     body: {
       contentSha256Hex: "0".repeat(64),
+      ...(draftChatThreadId === undefined ? {} : { draftChatThreadId }),
       file,
       messageId,
       name: "draft.docx",
@@ -84,6 +93,25 @@ describe("generated document upload preflight", () => {
     expect(result).toEqual({
       code: 409,
       response: { message: "Generated document draft not found" },
+    });
+    expect(arrayBuffer).not.toHaveBeenCalled();
+  });
+
+  test("rejects an unbound supplied draft chat before reading uploaded bytes", async () => {
+    const { arrayBuffer, file } = createUnreadFile();
+    const safeDb = asTestRaw<SafeDb>(async <T>() =>
+      Result.ok(asTestRaw<T>({ status: "draft-thread-not-bound" })),
+    );
+
+    const result = await uploadGeneratedDocument.handler(
+      createContext({ draftChatThreadId: threadId, file, safeDb }),
+    );
+
+    expect(result).toEqual({
+      code: 409,
+      response: {
+        message: "Generated document draft is not bound to this chat",
+      },
     });
     expect(arrayBuffer).not.toHaveBeenCalled();
   });

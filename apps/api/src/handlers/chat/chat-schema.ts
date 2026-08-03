@@ -423,6 +423,9 @@ const restoreServerOwnedChatMetadata = ({
     ...(persistedMetadata?.serverProvenance === undefined
       ? {}
       : { serverProvenance: persistedMetadata.serverProvenance }),
+    ...(persistedMetadata?.activeDraftContext === undefined
+      ? {}
+      : { activeDraftContext: persistedMetadata.activeDraftContext }),
     ...(persistedMetadata?.sourceDocuments === undefined
       ? {}
       : { sourceDocuments: persistedMetadata.sourceDocuments }),
@@ -672,6 +675,7 @@ const parseUsageMetadata = (
 };
 
 const isChatMessageMetadataEmpty = (metadata: ChatMessageMetadata): boolean =>
+  metadata.activeDraftContext === undefined &&
   metadata.anonRestorations === undefined &&
   metadata.docxEditPreferences === undefined &&
   metadata.mentions === undefined &&

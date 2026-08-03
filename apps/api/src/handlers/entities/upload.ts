@@ -26,6 +26,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { hasPersistedGeneratedDocumentActiveDraftContext } from "@/api/lib/chat/active-draft-context";
 import { getGeneratedDocumentDraftState } from "@/api/lib/chat/created-draft";
 import { expandThreadDataScopeOnTx } from "@/api/lib/chat/data-scope";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
@@ -102,6 +103,15 @@ type DraftChatThread = {
   workspaceId: SafeId<"workspace"> | null;
 };
 
+type GeneratedDocumentDraftChatThreadLookup =
+  | { status: "not-bound" }
+  | { status: "not-supplied" }
+  | {
+      chatThreadId: SafeId<"chatThread">;
+      draftThread: DraftChatThread;
+      status: "bound";
+    };
+
 type ExistingFileChatThreadLink = {
   chatThreadId: SafeId<"chatThread">;
   entityId: SafeId<"entity">;
@@ -169,6 +179,7 @@ type ResolveFileNameProps = {
 
 type UploadWriteFailureReason =
   | "content-mismatch"
+  | "draft-thread-not-bound"
   | "draft-thread-conflict"
   | "entity-limit"
   | "invalid-property"
@@ -184,6 +195,7 @@ type GeneratedDocumentUploadResult = {
 
 type GeneratedDocumentDraftPreflight =
   | { status: "content-mismatch" }
+  | { status: "draft-thread-not-bound" }
   | { status: "invalid" }
   | { status: "ready" }
   | { result: GeneratedDocumentUploadResult; status: "saved" };
@@ -194,6 +206,8 @@ const uploadWriteFailureMessage = (
   switch (reason) {
     case "content-mismatch":
       return "Generated document content does not match the requested draft";
+    case "draft-thread-not-bound":
+      return "Generated document draft is not bound to this chat";
     case "draft-thread-conflict":
       return "Generated document draft chat is already linked elsewhere";
     case "entity-limit":
@@ -212,6 +226,7 @@ const uploadWriteFailureStatus = (
 ): 400 | 409 => {
   switch (reason) {
     case "content-mismatch":
+    case "draft-thread-not-bound":
     case "draft-thread-conflict":
     case "missing-draft":
       return 409;
@@ -430,9 +445,25 @@ const findGeneratedDocumentDraftChatThread = async ({
   organizationId: SafeId<"organization">;
   tx: Transaction;
   userId: SafeId<"user">;
-}): Promise<DraftChatThread | null> => {
+}): Promise<GeneratedDocumentDraftChatThreadLookup> => {
   if (generatedDraft.draftChatThreadId === undefined) {
-    return null;
+    return { status: "not-supplied" };
+  }
+
+  const hasBoundDraftContext =
+    await hasPersistedGeneratedDocumentActiveDraftContext({
+      generatedDraft: {
+        originChatMessageId: generatedDraft.messageId,
+        originChatThreadId: generatedDraft.threadId,
+        toolCallId: generatedDraft.toolCallId,
+      },
+      organizationId,
+      threadId: generatedDraft.draftChatThreadId,
+      tx,
+      userId,
+    });
+  if (!hasBoundDraftContext) {
+    return { status: "not-bound" };
   }
 
   const draftThread = await tx
@@ -450,7 +481,14 @@ const findGeneratedDocumentDraftChatThread = async ({
     )
     .limit(1)
     .for("update");
-  return draftThread.at(0) ?? null;
+  const foundDraftThread = draftThread.at(0);
+  return foundDraftThread === undefined
+    ? { status: "not-bound" }
+    : {
+        chatThreadId: generatedDraft.draftChatThreadId,
+        draftThread: foundDraftThread,
+        status: "bound",
+      };
 };
 
 const findExistingGeneratedDocumentDraftChatThreadLink = async ({
@@ -613,8 +651,20 @@ const preflightGeneratedDocumentDraft = async ({
     switch (draftState.status) {
       case "invalid":
         return { status: "invalid" };
-      case "ready":
-        return { status: "ready" };
+      case "ready": {
+        if (generatedDraft.draftChatThreadId === undefined) {
+          return { status: "ready" };
+        }
+        const draftChatThread = await findGeneratedDocumentDraftChatThread({
+          generatedDraft,
+          organizationId,
+          tx,
+          userId,
+        });
+        return draftChatThread.status === "not-bound"
+          ? { status: "draft-thread-not-bound" }
+          : { status: "ready" };
+      }
       case "saved": {
         const saved = await resolveSavedGeneratedDocument({
           tx,
@@ -696,6 +746,13 @@ const uploadEntityHandler = async function* ({
           new HandlerError({
             status: 409,
             message: uploadWriteFailureMessage("content-mismatch"),
+          }),
+        );
+      case "draft-thread-not-bound":
+        return Result.err(
+          new HandlerError({
+            status: 409,
+            message: uploadWriteFailureMessage("draft-thread-not-bound"),
           }),
         );
       case "invalid":
@@ -892,19 +949,24 @@ const uploadEntityHandler = async function* ({
           generatedDraftPartIndex = draftState.partIndex;
           generatedDraftDataWorkspaceIds = draftState.dataWorkspaceIds;
           generatedDraftThreadWorkspaceId = draftState.threadWorkspaceId;
-          draftChatThread = await findGeneratedDocumentDraftChatThread({
-            generatedDraft,
-            organizationId,
-            tx,
-            userId,
-          });
-          if (
-            draftChatThread !== null &&
-            generatedDraft.draftChatThreadId !== undefined
-          ) {
+          const draftChatThreadLookup =
+            await findGeneratedDocumentDraftChatThread({
+              generatedDraft,
+              organizationId,
+              tx,
+              userId,
+            });
+          if (draftChatThreadLookup.status === "not-bound") {
+            return {
+              ok: false as const,
+              reason: "draft-thread-not-bound" as const,
+            };
+          }
+          if (draftChatThreadLookup.status === "bound") {
+            draftChatThread = draftChatThreadLookup.draftThread;
             const hasExistingLink =
               await findExistingGeneratedDocumentDraftChatThreadLink({
-                chatThreadId: generatedDraft.draftChatThreadId,
+                chatThreadId: draftChatThreadLookup.chatThreadId,
                 tx,
               });
             if (

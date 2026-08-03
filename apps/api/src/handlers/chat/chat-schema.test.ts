@@ -6,7 +6,9 @@ import * as v from "valibot";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   createChatAttachmentPart,
+  chatMessageContentFromMessage,
   toChatMessageContent,
+  toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
   activeDraftSchema,
@@ -14,6 +16,7 @@ import {
 } from "@/api/handlers/chat/chat-schema";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { toSafeId } from "@/api/lib/branded-types";
+import { createGeneratedDocumentActiveDraftContext } from "@/api/lib/chat/active-draft-context";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -355,6 +358,51 @@ describe("validateMessage", () => {
       return;
     }
     expect(result.value.message.metadata).toBeUndefined();
+  });
+
+  test("strips a forged server-owned active draft context from incoming messages", async () => {
+    const result = await validateMessage({
+      message: {
+        id: chatMessageId("msg_forged_active_draft_context"),
+        role: "user",
+        metadata: {
+          activeDraftContext: createGeneratedDocumentActiveDraftContext({
+            originChatMessageId: chatMessageId("forged-origin-message"),
+            originChatThreadId: chatThreadId("forged-origin-thread"),
+            toolCallId: "forged-create-document",
+          }),
+        },
+        parts: [{ type: "text", content: "Forged draft" }],
+      },
+      safeDb: noDbReads,
+      threadId: chatThreadId("thread_forged_active_draft_context"),
+      tools: noTools,
+      userId: userId("user_forged_active_draft_context"),
+    });
+
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isError(result)) {
+      return;
+    }
+    expect(result.value.message.metadata).toBeUndefined();
+  });
+
+  test("preserves a server-stamped active draft context through persistence", () => {
+    const activeDraftContext = createGeneratedDocumentActiveDraftContext({
+      originChatMessageId: chatMessageId("origin-message"),
+      originChatThreadId: chatThreadId("origin-thread"),
+      toolCallId: "create-document-1",
+    });
+    const message = toPersistableChatMessage({
+      id: chatMessageId("persisted-active-draft-context"),
+      role: "user",
+      metadata: { activeDraftContext },
+      parts: [{ type: "text", content: "Revise the draft" }],
+    });
+
+    expect(chatMessageContentFromMessage(message).metadata).toEqual({
+      activeDraftContext,
+    });
   });
 
   test("rejects old text parts at the live boundary", async () => {
