@@ -208,6 +208,8 @@ fi
 run_step "React Compiler bailout guard" bun scripts/rc-bailouts.ts --check
 run_step "Ratchet guard" run_ratchet_guard
 run_step "Crawl posture guard" run_crawl_posture_guard
+run_step "Documentation source dependency guard self-test" bun test \
+  scripts/docs-source-dependency-guard.test.ts
 run_step "Documentation source dependency guard" bun run check:docs-sources
 run_step "exactMirror route guard" run_exact_mirror_guard
 run_step "MCP coverage guard" run_mcp_coverage_guard
