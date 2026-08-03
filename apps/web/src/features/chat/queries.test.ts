@@ -1653,6 +1653,61 @@ describe("acquireChatRuntime reconcile", () => {
     expect(afterRefetch).not.toBe(handoff);
   });
 
+  test("replaces an errored runtime with a stranded tool part", async () => {
+    const queryClient = new QueryClient();
+    globalThis.fetch = createFetchMock(async () =>
+      createSseResponse([
+        { type: "RUN_STARTED", threadId, runId: "run-error" },
+        {
+          type: "TEXT_MESSAGE_START",
+          messageId: assistantMessageId,
+          role: "assistant",
+        },
+        {
+          type: "TOOL_CALL_START",
+          parentMessageId: assistantMessageId,
+          toolCallId: "tool-error",
+          toolCallName: "web_search",
+          toolName: "web_search",
+        },
+        {
+          type: "RUN_ERROR",
+          message: "upstream failure",
+        },
+      ]),
+    );
+    const runtime = acquireChatRuntime({
+      activeOrganizationId,
+      context: { allowMissingThread: true },
+      data: buildThreadData(),
+      key: threadRef,
+      queryClient,
+    });
+
+    await runtime.startRouteHandoffMessage(
+      createOutgoingMessage("22222222-2222-4222-8222-2222222222e1"),
+    ).stream;
+
+    expect(runtime.getSnapshot()).toMatchObject({ status: "error" });
+    expect(runtime.getSnapshot().messages.at(-1)?.parts.at(0)).toMatchObject({
+      state: "awaiting-input",
+      type: "tool-call",
+    });
+
+    const reconciled = acquireChatRuntime({
+      activeOrganizationId,
+      context: { allowMissingThread: true },
+      data: newerThreadData(),
+      key: threadRef,
+      queryClient,
+    });
+
+    expect(reconciled).not.toBe(runtime);
+    expect(reconciled.getSnapshot().messages.at(-1)?.parts).toEqual([
+      { type: "text", content: "Ahoj!" },
+    ]);
+  });
+
   test("replaces stale local approval state with a resolved authoritative transcript", async () => {
     const queryClient = new QueryClient();
     globalThis.fetch = createFetchMock(async () =>

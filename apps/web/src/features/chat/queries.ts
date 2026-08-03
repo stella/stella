@@ -21,6 +21,7 @@ import type {
 } from "@/components/chat/chat-ui-tools";
 import {
   hasRunningToolCallInLatestAssistantMessage,
+  isChatTurnInFlight,
   isChatClientRequestActive,
   sanitizeRunningToolCalls,
 } from "@/components/chat/chat-ui-tools";
@@ -1741,14 +1742,19 @@ const CHAT_RUNTIME_RECONCILE_DISPOSITION = {
  */
 const hasInFlightChatRuntimeWork = (runtime: ChatRuntime): boolean => {
   const snapshot = runtime.getSnapshot();
-  return (
-    snapshot.isLoading ||
-    snapshot.sessionGenerating ||
-    isChatClientRequestActive(snapshot.status) ||
-    hasRunningToolCallInLatestAssistantMessage({
-      messages: snapshot.messages,
-    })
-  );
+  const turnInFlight = isChatTurnInFlight({
+    messages: snapshot.messages,
+    status: snapshot.status,
+    turnAbandoned: snapshot.turnAbandoned,
+  });
+  // A terminal runtime wins over any stale transport signal. In particular,
+  // TanStack preserves a partial tool part (and may still report a generation
+  // session) after RUN_ERROR, but that turn will never resume.
+  if (snapshot.status === "error" || snapshot.turnAbandoned) {
+    return false;
+  }
+
+  return snapshot.isLoading || snapshot.sessionGenerating || turnInFlight;
 };
 
 const getChatRuntimeReconcileDisposition = ({
