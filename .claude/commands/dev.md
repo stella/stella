@@ -2,12 +2,12 @@
 
 Launch the local dev environment using the project's `dev-runner`
 (`packages/scripts/src/dev-runner.ts`). The runner handles env
-symlinks, Docker services, port allocation, health checks, and
-browser opening automatically.
+symlinks, Docker services, migrations, port allocation, and health
+checks.
 
 ## Instructions
 
-1. **Resolve ports** (dry run):
+1. **Resolve application ports** (dry run):
 
    Run the dev-runner in dry-run mode to learn which ports it will
    use. The runner hashes the worktree/branch name into a port
@@ -17,37 +17,70 @@ browser opening automatically.
    bun run dev --dry-run --skip-install --no-browser
    ```
 
-   Parse the `web:` and `api:` lines from the output to get the
-   resolved URLs.
+   Parse the numeric `offset:` and the `web:` and `api:` URLs. This
+   offset covers application ports only; do not copy it into
+   `--infra-offset` without the independent ownership check below.
 
-2. **Start the dev runner**:
+2. **Resolve infrastructure ownership**:
+
+   Offset `0` belongs to the root checkout and its shared Docker
+   project. A non-root worktree needs a stable non-zero offset whose
+   Compose project and volumes belong to that worktree.
+
+   Reuse a previously recorded assignment for the same canonical
+   worktree path. For a new assignment, select from the full valid
+   infrastructure range, reserve the candidate with a race-safe
+   lock, and validate all five shifted ports (Postgres, Valkey,
+   MinIO API, MinIO console, and Gotenberg). Reject the candidate if
+   any of those ports intersects the dry-run web or API ports, or if
+   any container or Docker volume already uses the corresponding
+   `stella-dev-<offset>` project unless its Compose working-directory
+   label matches this worktree. Probe another candidate on any
+   ownership or port collision.
+
+   The runner hashes application offsets into only 400 buckets and
+   checks application ports separately. That hash is not an
+   infrastructure ownership mechanism, and adjacent infrastructure
+   offsets can overlap because MinIO uses consecutive ports.
+
+3. **Start the dev runner**:
 
    Launch the full runner in the background. It manages Docker
    services, env symlinks, `db:push`, process lifecycle, and
    readiness polling internally.
 
    ```bash
-   bun run dev --no-browser
+   bun run dev --no-browser --infra-offset <resolved-offset>
    ```
 
    Run this in the background. The runner exits if any child
    process dies, so a single background command covers everything.
+   Keep dependency installation enabled on the first run. Add
+   `--skip-install` only when this worktree is already bootstrapped
+   and its dependencies have not changed.
 
-3. **Wait for readiness**:
+4. **Handle cold-start setup safely**:
 
-   Poll the resolved API health endpoint (`{apiUrl}/health`) and
-   the web root until both return 200. The dry-run output from
-   step 1 gives you the exact URLs. Timeout after ~60 seconds.
+   The first isolated run creates Docker volumes and applies every
+   migration, so it can take longer. Never reset or repair the
+   shared database to resolve migration drift. In a non-root
+   worktree, confirm the command uses its owned non-zero
+   `--infra-offset`; in the root checkout, keep offset `0`.
 
-4. **Open Chrome** to the running app:
+   If the runner completes infrastructure and migrations but exits
+   only because its application-readiness deadline elapsed, rerun
+   the same command once. The expensive setup is cached. If the
+   second run fails, inspect its logs and report the blocker.
 
-   Use the Claude-in-Chrome MCP tools to navigate to the resolved
-   web URL from step 1. If no tab exists, create one.
+5. **Use the runner's readiness result**:
 
-5. **Verify** the page loads without errors:
+   Capture the live runner output and read the final summary for the
+   exact web and API URLs. Infrastructure startup or another process
+   can make the runner move away from the dry-run application offset,
+   so never poll or report the preliminary URLs from step 1. The
+   runner prints its final summary only after its bounded internal
+   readiness checks pass; do not duplicate those checks or open a
+   browser to verify them again.
 
-   Take a screenshot and check for the "Something went wrong"
-   error. If it appears, check console and network errors, and
-   debug.
-
-6. **Report** the resolved URLs and status to the user.
+6. **Report** the resolved URLs and status to the user. Leave the
+   runner active until the user asks to stop it.

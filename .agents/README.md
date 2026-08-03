@@ -9,16 +9,17 @@ See [CLAUDE.md](../CLAUDE.md) for project guidelines.
 
 ```
 .agents/
-├── plans/           # Implementation plans (001-feature.md, 002-feature.md)
+├── plans/           # Timestamped implementation plans
 ├── justifications/  # Decision rationale (why we chose X over Y)
-├── reports/         # QA reports from /click-around (gitignored)
+├── reports/         # Local investigation reports (gitignored)
 └── scratch/         # Temporary notes, drafts, work-in-progress
 ```
 
 ## Conventions
 
 - **Plans** focus on _what_ and _why_, not prescriptive implementation
-  details. Number sequentially: `001-`, `002-`, etc.
+  details. Use the collision-resistant timestamp format from the `/plan`
+  skill: `YYYYMMDD-HHMMSS-feature-unique.md`.
 - **Justifications** record decisions that future contributors (or
   agents) might question. Include alternatives considered and why
   they were rejected.

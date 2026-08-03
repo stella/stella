@@ -6,7 +6,7 @@ description: 'Apply when a performance-guard check (network baseline, bundle bas
 # Performance Guard Conventions
 
 Apply when a performance-guard check fails in CI, or when touching a route or
-endpoint flagged in the hotspot table below.
+endpoint flagged by the live `bun scripts/perf-hotspots.ts` report.
 
 ## Overview
 
@@ -144,41 +144,25 @@ jitter: rerun before touching the baseline. Do not bump an individual route's
 `depth` to paper over a flake; only `write`/`rewrite` when the request
 manifest itself actually changed.
 
-## Hotspot Burn-Down (snapshot: 2026-07)
+## Live Hotspot Burn-Down
 
-These are the current worst budgets in `apps/web/e2e/network-baseline.json`,
-not acceptable targets. If you touch one of these endpoints or routes, batch
-its queries or fix its waterfall and tighten the baseline with `rewrite`
-rather than leaving the number where it is. Get the current ranking live with
-`bun scripts/perf-hotspots.ts` instead of trusting this table once it goes
-stale.
+Do not embed a dated hotspot snapshot in instructions; it becomes false while
+remaining authoritative-looking. Before touching a hot route or endpoint, run:
 
-Worst DB-query budgets per endpoint:
+```bash
+bun scripts/perf-hotspots.ts
+```
 
-| Endpoint                                   | Route (first seen)                          | DB query budget |
-| ------------------------------------------- | -------------------------------------------- | ---------------- |
-| `POST /v1/chat/workspaces/:id/file-thread`  | `/workspaces/$workspaceId/entities/$entityId` | 12 (creation path) |
-| `GET /v1/workspaces`                        | `/todos`                                     | 10                |
-| `GET /v1/entities/:id/entity/:id/versions`  | `/workspaces/$workspaceId/$viewId/document`  | 10                |
-| `GET /v1/contacts/:id`                      | `/contacts/$contactId`                       | 9                 |
+Treat the reported budgets as recorded debt, not acceptable targets. Capture
+the relevant before value, fix or avoid worsening the access path, then run the
+same command and affected guard again. When a real improvement lowers a
+baseline, commit the tighter value. When an intentional product capability
+raises one, document the measured tradeoff in the PR rather than hiding it in a
+generic baseline refresh.
 
-(Two 2026-07 rounds paid down the earlier debt: the validateAuth
-resolve used to run 2-3 times per request, a 14-21 query floor on every
-authenticated endpoint, now 4 (per-request memoization, one merged
-member-access join, no per-request jwks read); chat thread messages
-went 27 to 10, workspace overview 25 to 7, and the hot handlers share
-one transaction instead of paying a `set_config` per read. Remaining
-levers: better-auth's session+user pair (cookieCache trades a bounded
-revocation-staleness window and needs maintainer sign-off; the drizzle
-adapter's experimental joins flag is INCOMPATIBLE with RQBv2 relations,
-do not retry it) and any handler still stacking separate safeDb calls.)
-
-Deepest waterfalls: `/workspaces/$workspaceId/entities/$entityId` at depth 11
-is a legacy redirect shim (render-fetches versions, then client-navigates to
-the document page, concatenating two waterfalls); the durable fix is
-retiring the shim, not tuning it. The document page itself is depth 8
-(its chat thread messages GET was folded into the file-thread POST
-response and cache-seeded).
+For database changes, pair the route/query counter with the actual query plan
+and cardinality. A lower request count can still conceal a slower scan, and a
+fast development database does not validate a production-size access path.
 
 ## Cross-Links
 

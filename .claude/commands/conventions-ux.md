@@ -157,9 +157,14 @@ Small, almost invisible touches. Linear is a good reference.
 
 ## Hit Areas
 
-- All interactive elements must have a minimum 44×44px touch
-  target (WCAG 2.5.8). If the visible element is smaller, extend
-  the hit area with a pseudo-element or padding.
+- Stella targets a minimum 44×44 CSS-pixel touch area for interactive
+  controls. If the visible element is smaller, extend its hit area without
+  changing the visual size or colliding with adjacent controls.
+- Use native interactive elements and preserve keyboard activation, focus
+  order, accessible names, and visible focus. A clickable `div` with ARIA is
+  not a substitute for a button or link.
+- Respect reduced-motion preferences. Meaning and completion feedback must not
+  depend on animation, hover, colour alone, or pointer precision.
 
 ## Right-to-Left (RTL) & Bidirectional
 

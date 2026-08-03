@@ -58,3 +58,14 @@ enforcement, branded types) live in
 - Avoid "tests for tests' sake": don't add shallow examples
   just to increase coverage if a stronger invariant test would
   cover the same surface with more signal
+- Run tests through the owning package script so preloads and setup survive:
+  `bun run test -- --bail -t "<name>"`. Do not call a raw runner from the
+  worktree root when the package script supplies configuration.
+- Verify a new regression test fails against the known-bad behavior before
+  trusting it. A test that never reaches the fault, or matches zero tests, is
+  not a guard.
+- For systemic bugs, test the class: fixed points for replay, matrices for
+  tenant isolation, properties for parsers/normalizers, state-machine
+  transitions for lifecycle code, and round trips for serialization.
+- Keep time, randomness, network, filesystem, and database ownership explicit
+  in tests. Pin or inject them rather than relying on ambient machine state.
