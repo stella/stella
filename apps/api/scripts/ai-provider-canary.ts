@@ -172,12 +172,52 @@ const RETRYABLE_PROVIDER_CODES = new Set([
   "timeout_error",
 ]);
 
+const RETRYABLE_TRANSPORT_CODES = new Set([
+  "EAI_AGAIN",
+  "ECONNABORTED",
+  "ECONNRESET",
+  "ETIMEDOUT",
+  "UND_ERR_CONNECT_TIMEOUT",
+  "UND_ERR_HEADERS_TIMEOUT",
+  "UND_ERR_SOCKET",
+]);
+
 type CanaryRunStage =
   | "before-tool-call"
   | "after-tool-call"
   | "after-tool-result";
 
 const PROVIDER_ERROR_NESTED_KEYS = ["rawEvent", "error", "cause"] as const;
+
+const explicitRetryability = (error: unknown, depth = 0): boolean | null => {
+  if (!isRecord(error)) {
+    return null;
+  }
+
+  for (const key of ["retryable", "isRetryable"] as const) {
+    const value = error[key];
+    if (typeof value === "boolean") {
+      return value;
+    }
+  }
+  const smithyRetryable = error["$retryable"];
+  if (typeof smithyRetryable === "boolean") {
+    return smithyRetryable;
+  }
+  if (isRecord(smithyRetryable)) {
+    return true;
+  }
+
+  if (depth < 3) {
+    for (const key of PROVIDER_ERROR_NESTED_KEYS) {
+      const nestedRetryability = explicitRetryability(error[key], depth + 1);
+      if (nestedRetryability !== null) {
+        return nestedRetryability;
+      }
+    }
+  }
+  return null;
+};
 
 const rawProviderCode = (error: unknown, depth = 0): string | null => {
   if (!isRecord(error)) {
@@ -231,9 +271,14 @@ const providerStatus = (error: unknown, depth = 0): number | null => {
 const isRetryableProviderStatus = (status: number): boolean =>
   status === 429 || status >= 500;
 
+const isRetryableProviderCode = (code: string | null): boolean =>
+  code !== null &&
+  (RETRYABLE_PROVIDER_CODES.has(code) || RETRYABLE_TRANSPORT_CODES.has(code));
+
 export class CanaryProviderRunError extends TypeError {
   readonly code: string | null;
   readonly retryCode: string | null;
+  readonly retryable: boolean | null;
   readonly stage: CanaryRunStage;
   readonly status: number | null;
 
@@ -241,6 +286,7 @@ export class CanaryProviderRunError extends TypeError {
     super("Provider stream failed.");
     this.name = "CanaryProviderRunError";
     this.retryCode = rawProviderCode(event);
+    this.retryable = explicitRetryability(event);
     this.code = safeProviderCode(this.retryCode);
     this.stage = stage;
     this.status = providerStatus(event);
@@ -259,13 +305,21 @@ export const isRetryableCanaryError = (
     if (error.status !== null) {
       return isRetryableProviderStatus(error.status);
     }
-    return (
-      error.retryCode === null || RETRYABLE_PROVIDER_CODES.has(error.retryCode)
-    );
+    if (error.retryable !== null) {
+      return error.retryable;
+    }
+    return error.retryCode === null || isRetryableProviderCode(error.retryCode);
   }
 
   const status = providerStatus(error);
-  return status !== null && isRetryableProviderStatus(status);
+  if (status !== null) {
+    return isRetryableProviderStatus(status);
+  }
+  const retryable = explicitRetryability(error);
+  if (retryable !== null) {
+    return retryable;
+  }
+  return isRetryableProviderCode(rawProviderCode(error));
 };
 
 type CanaryProbeResult =

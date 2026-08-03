@@ -255,6 +255,26 @@ describe("AI provider canary retry contract", () => {
     expect(calls).toBe(2);
   });
 
+  test("retries a known status-less transport failure before succeeding", async () => {
+    let calls = 0;
+    const result = await runCanaryProbe({
+      retryDelayMs: 0,
+      run: async () => {
+        calls += 1;
+        if (calls === 1) {
+          throw new TypeError("fetch failed", {
+            cause: { code: "ECONNRESET" },
+          });
+        }
+      },
+      timeoutMs: 1000,
+      wait: async () => {},
+    });
+
+    expect(result).toEqual({ attempts: 2, status: "passed" });
+    expect(calls).toBe(2);
+  });
+
   test("does not retry deterministic contract failures", async () => {
     let calls = 0;
     const error = new TypeError(
@@ -319,6 +339,25 @@ describe("AI provider canary retry contract", () => {
     expect(error.status).toBe(401);
     expect(error.code).toBe("authentication_error");
     expect(isRetryableCanaryError(error, signal)).toBe(false);
+  });
+
+  test("classifies only known status-less transport errors and SDK markers", () => {
+    const signal = new AbortController().signal;
+    const cases = [
+      { error: { cause: { code: "ECONNRESET" } }, retryable: true },
+      { error: { code: "ETIMEDOUT" }, retryable: true },
+      { error: { retryable: true }, retryable: true },
+      { error: { $retryable: {} }, retryable: true },
+      {
+        error: { cause: { code: "ECONNRESET" }, isRetryable: false },
+        retryable: false,
+      },
+      { error: { code: "EACCES" }, retryable: false },
+    ];
+
+    expect(
+      cases.map(({ error }) => isRetryableCanaryError(error, signal)),
+    ).toEqual(cases.map(({ retryable }) => retryable));
   });
 });
 
