@@ -28,8 +28,10 @@ import {
   buildProviderInvocation,
   buildProviderSampleOrder,
   parseCrossProviderArgs,
+  providerDefinitions,
   type ProviderDefinition,
 } from "../performance/providers/run";
+import { CROSS_PROVIDER_IDS } from "../performance/providers/types";
 import { regexDetectorConfig } from "../performance/providers/stella-config";
 import { assertProviderEntities } from "../performance/providers/identity";
 import {
@@ -87,6 +89,12 @@ describe("canonical performance statistics", () => {
 });
 
 describe("cross-provider performance contract", () => {
+  test("defines every provider in the report contract", () => {
+    expect(providerDefinitions().map(({ id }) => id)).toEqual([
+      ...CROSS_PROVIDER_IDS,
+    ]);
+  });
+
   test("uses worker-verified UTF-16 input identity for astral text", () => {
     const inputText = "A😀B";
     const identity = computeProviderInputIdentity(inputText);
@@ -180,6 +188,7 @@ describe("cross-provider performance contract", () => {
         command: "stella-regex",
         args: [],
       },
+      { id: "openredaction-default", command: "openredaction", args: [] },
       { id: "scrubadub-base", command: "scrubadub", args: [] },
       { id: "datafog-regex-only", command: "datafog", args: [] },
     ];

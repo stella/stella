@@ -1,10 +1,14 @@
+import { createHash } from "node:crypto";
+
 import { describe, expect, test } from "bun:test";
 
 import type { Dictionaries } from "@stll/anonymize";
 
 import type { GroundTruthDocument } from "../ground-truth";
+import { loadGroundTruth } from "../ground-truth";
 import {
   buildStllBenchmarkConfig,
+  createStllAdapter,
   loadStllBenchmarkConfig,
   runStllAdapterWithInitializer,
 } from "../adapters/stella";
@@ -23,6 +27,35 @@ const document = (
 });
 
 describe("stella benchmark adapter language scoping", () => {
+  test("pins the shipped product-default prepared pipeline output", async () => {
+    const outcome = await createStllAdapter().run(await loadGroundTruth());
+    if (outcome.status !== "ok") {
+      throw new Error(outcome.reason);
+    }
+
+    const hash = createHash("sha256");
+    let spanCount = 0;
+    for (const [documentId, predictions] of outcome.predictions) {
+      for (const { start, end, label } of predictions) {
+        hash.update(`${documentId}\0${start}\0${end}\0${label}\n`);
+        spanCount++;
+      }
+    }
+
+    expect(spanCount).toBe(172);
+    expect(hash.digest("hex")).toBe(
+      "e950b7a28df156fcaf43c6739a86b68802eb9bd6f97e391fc4eedf546900cda3",
+    );
+  });
+
+  test("uses the all-language package when no scoped package is shipped", async () => {
+    const outcome = await createStllAdapter().run([
+      document("es-1", "es", "Paciente Ana García"),
+    ]);
+
+    expect(outcome.status).toBe("ok");
+  });
+
   test("an English corpus builds and reuses only an English pipeline", async () => {
     const builtLanguages: string[] = [];
     const processedLanguages: string[] = [];

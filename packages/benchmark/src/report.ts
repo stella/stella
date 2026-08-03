@@ -259,7 +259,6 @@ export const renderMarkdown = (result: BenchResult): string => {
     "  `src/taxonomy.ts` for every decision.",
     "- **No cherry-picking.** Every label is reported, including those where stella",
     "  underperforms. Overlap and exact modes are both shown.",
-    "",
   );
 
   return `${lines.join("\n")}\n`;

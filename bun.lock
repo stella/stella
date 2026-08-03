@@ -40,7 +40,7 @@
         "@stll/anonymize-darwin-x64": "2.7.3",
         "@stll/anonymize-linux-arm64-gnu": "2.7.3",
         "@stll/anonymize-linux-x64-gnu": "2.7.3",
-        "@stll/anonymize-wasm": "2.7.0",
+        "@stll/anonymize-wasm": "2.7.3",
         "@stll/anonymize-win32-x64-msvc": "2.7.3",
       },
       "peerDependencies": {
@@ -84,8 +84,9 @@
       "name": "@stll/anonymize-benchmark",
       "version": "0.0.0",
       "dependencies": {
+        "@openredaction/core": "1.1.5",
         "@stll/anonymize": "workspace:^",
-        "@stll/anonymize-data": "^0.0.7",
+        "@stll/anonymize-data": "^0.0.9",
         "fflate": "0.8.2",
         "hyparquet": "1.26.2",
       },
@@ -485,6 +486,8 @@
     "@octokit/rest": ["@octokit/rest@22.0.1", "", { "dependencies": { "@octokit/core": "^7.0.6", "@octokit/plugin-paginate-rest": "^14.0.0", "@octokit/plugin-request-log": "^6.0.0", "@octokit/plugin-rest-endpoint-methods": "^17.0.0" } }, "sha512-Jzbhzl3CEexhnivb1iQ0KJ7s5vvjMWcmRtq5aUsKmKDrRW6z3r84ngmiFKFvpZjpiU/9/S6ITPFRpn5s/3uQJw=="],
 
     "@octokit/types": ["@octokit/types@16.0.0", "", { "dependencies": { "@octokit/openapi-types": "^27.0.0" } }, "sha512-sKq+9r1Mm4efXW1FCk7hFSeJo4QKreL/tTbR0rz/qx/r1Oa2VV83LTA/H/MuCOX7uCIJmQVRKBcbmWoySjAnSg=="],
+
+    "@openredaction/core": ["@openredaction/core@1.1.5", "", { "peerDependencies": { "mammoth": "^1.6.0", "pdf-parse": "^1.1.1", "tesseract.js": "^5.0.0" }, "optionalPeers": ["mammoth", "pdf-parse", "tesseract.js"] }, "sha512-SpQTBhVV4p3rmge818NH6iJiL/fvwFlDvhGaejoL0wbzY7jRHIhU5vEf3KzNARsIZmpCJV1eHdiavIjQyN1hXQ=="],
 
     "@oxc-project/types": ["@oxc-project/types@0.140.0", "", {}, "sha512-h5LUOzGArYemnW1NMz/DuuQhBi96J6JL2Bk8zE4kvqxB5Sg3jxmCiH4uyOWHDkiKSt5vWlG4FIwCR/DbstcNRQ=="],
 

@@ -5,6 +5,7 @@ export const CROSS_PROVIDER_REPORT_SCHEMA_VERSION = 2 as const;
 export const CROSS_PROVIDER_IDS = [
   "stella-full",
   "stella-regex-detectors-only",
+  "openredaction-default",
   "scrubadub-base",
   "datafog-regex-only",
 ] as const;

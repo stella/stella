@@ -3,6 +3,7 @@ import { cpus, arch, platform, totalmem } from "node:os";
 import { join } from "node:path";
 
 import { loadAdhocDocs, runAdhoc } from "./adhoc";
+import { createOpenRedactionAdapter } from "./adapters/openredaction";
 import { createStllAdapter } from "./adapters/stella";
 import { createRedactPiiAdapter } from "./adapters/redact-pii";
 import { createPythonAdapter } from "./adapters/python";
@@ -30,6 +31,7 @@ import {
   DATAFOG_MAPPING,
   type CommonLabel,
   type NativeMapping,
+  OPENREDACTION_MAPPING,
   PRESIDIO_MAPPING,
   REDACT_PII_MAPPING,
   SCRUBADUB_MAPPING,
@@ -92,6 +94,10 @@ type RegisteredAdapter = { adapter: Adapter; mapping: NativeMapping };
 
 const buildRegisteredAdapters = (): RegisteredAdapter[] => [
   { adapter: createStllAdapter(), mapping: STELLA_MAPPING },
+  {
+    adapter: createOpenRedactionAdapter(),
+    mapping: OPENREDACTION_MAPPING,
+  },
   {
     adapter: createPythonAdapter(PRESIDIO_PROVIDER),
     mapping: PRESIDIO_MAPPING,

@@ -557,7 +557,7 @@ dependencies = [
 
 [[package]]
 name = "stella-anonymize-core"
-version = "2.5.0"
+version = "2.7.3"
 dependencies = [
  "bon",
  "chacha20poly1305",
@@ -618,8 +618,8 @@ dependencies = [
 
 [[package]]
 name = "stella-text-search-core"
-version = "1.0.9"
-source = "git+https://github.com/stella/text-search?tag=v1.0.9#1b8a728ba702825cef683690156bbeda560d014b"
+version = "1.0.10"
+source = "git+https://github.com/stella/text-search?tag=v1.0.10#2b2f3be09ee635bc3b1aebdff56f7d5e71bc7955"
 dependencies = [
  "stella-aho-corasick-core",
  "stella-fuzzy-search-core",

@@ -49,6 +49,18 @@ license text and citation metadata.
 
 ## Benchmark provider dependencies
 
+### OpenRedaction
+
+OpenRedaction is invoked as a pinned benchmark dependency; its source is not
+redistributed here.
+
+- Project: OpenRedaction
+- Source: https://github.com/sam247/openredaction
+- Version: `@openredaction/core` 1.1.5
+- Published source commit: `3c11cf570ae4f9e6206a5f8321e8fb8d60cb9c04`
+- License: MIT (see the upstream repository for the canonical license text)
+- Configuration: stateless local regex engine; learning and optional NER disabled
+
 ### Nym PII multilingual small
 
 The opt-in German assisted lane downloads the reviewed `int8/` ONNX export;

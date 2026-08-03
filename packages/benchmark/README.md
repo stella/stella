@@ -26,7 +26,7 @@ src/
   report.ts               Markdown report renderer
   adhoc.ts                unseen-document mode: side-by-side detections, no gold
   bench.ts                runner: bun run bench:compare [--input <file|dir>]
-  adapters/               stella, Python libraries, redact-pii, PII-Shield, Nym
+  adapters/               stella, OpenRedaction, Python libraries, redact-pii, PII-Shield, Nym
 REPRODUCING.md            exact versions, models, hardware, mapping decisions
 ```
 

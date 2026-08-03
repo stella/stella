@@ -169,6 +169,10 @@ const pythonExecutable = (environmentName: string, venvName: string): string =>
 
 export const providerDefinitions = (): readonly ProviderDefinition[] => {
   const stellaWorker = resolve(import.meta.dir, "stella-worker.ts");
+  const openRedactionWorker = resolve(
+    import.meta.dir,
+    "openredaction-worker.ts",
+  );
   const pythonWorker = resolve(
     import.meta.dir,
     "..",
@@ -187,6 +191,11 @@ export const providerDefinitions = (): readonly ProviderDefinition[] => {
       id: "stella-regex-detectors-only",
       command: process.execPath,
       args: [stellaWorker, "stella-regex-detectors-only"],
+    },
+    {
+      id: "openredaction-default",
+      command: process.execPath,
+      args: [openRedactionWorker],
     },
     {
       id: "scrubadub-base",
@@ -659,7 +668,7 @@ export const runCrossProviderPerformance = async (
       passesPerProcess: "one-first-call-one-second-call",
       sampleOrder: "balanced-diagonal-rotation",
       interpretation:
-        "The closest like-for-like lanes are stella's built-in regex detectors and DataFog's regex engine; their pattern sets and result resolution still differ. stella full and scrubadub base cover broader, different detector sets. Speed must be read beside output counts and digests.",
+        "The closest like-for-like lanes are stella's built-in regex detectors, OpenRedaction's stateless local configuration, and DataFog's regex engine; their pattern sets, context processing, and result resolution still differ. stella full and scrubadub base cover broader, different detector sets. Speed must be read beside output counts and digests.",
     },
     configuration: {
       warmups: options.warmups,

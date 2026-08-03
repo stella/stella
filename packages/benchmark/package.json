@@ -28,6 +28,7 @@
     "bench:performance:providers": "bun src/performance/providers/run.ts"
   },
   "dependencies": {
+    "@openredaction/core": "1.1.5",
     "@stll/anonymize": "workspace:^",
     "@stll/anonymize-data": "^0.0.9",
     "fflate": "0.8.2",

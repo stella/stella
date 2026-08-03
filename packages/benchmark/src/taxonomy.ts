@@ -153,6 +153,77 @@ export const DATAFOG_MAPPING: NativeMapping = {
 };
 
 /**
+ * OpenRedaction 1.1.5 stateless local regex engine. Its generic personal and
+ * contact patterns map directly. Mapped financial and government identifiers
+ * share the benchmark's deliberately coarse `id-number` category. The package
+ * also runs hundreds of industry-specific detectors; their native labels remain
+ * out of scope for this eight-label development taxonomy, while sealed
+ * label-agnostic tasks still evaluate every returned span.
+ */
+export const OPENREDACTION_MAPPING: NativeMapping = {
+  NAME: "person",
+  EMAIL: "email",
+  DATE: "date",
+  DATE_OF_BIRTH: "date",
+  PHONE_UK_MOBILE: "phone",
+  PHONE_UK: "phone",
+  PHONE_US: "phone",
+  PHONE_INTERNATIONAL: "phone",
+  POSTCODE_UK: "address",
+  ZIP_CODE_US: "address",
+  ADDRESS_STREET: "address",
+  ADDRESS_PO_BOX: "address",
+  EMPLOYEE_ID: "id-number",
+  AUSTRALIAN_MEDICARE: "id-number",
+  BOOKING_NUMBER: "id-number",
+  CARD_AUTH_CODE: "id-number",
+  CLIENT_ID: "id-number",
+  CZECH_NATIONAL_ID: "id-number",
+  ENROLLMENT_NUMBER: "id-number",
+  LICENSE_PLATE: "id-number",
+  NDA_ID: "id-number",
+  STANDING_ORDER_REF: "id-number",
+  CREDIT_CARD: "id-number",
+  IBAN: "id-number",
+  BANK_ACCOUNT_UK: "id-number",
+  SORT_CODE_UK: "id-number",
+  ROUTING_NUMBER_US: "id-number",
+  CVV: "id-number",
+  IFSC: "id-number",
+  CLABE: "id-number",
+  BSB_AU: "id-number",
+  ISIN: "id-number",
+  CUSIP: "id-number",
+  SEDOL: "id-number",
+  LEI: "id-number",
+  SSN: "id-number",
+  PASSPORT_UK: "id-number",
+  PASSPORT_US: "id-number",
+  NATIONAL_INSURANCE_UK: "id-number",
+  NHS_NUMBER: "id-number",
+  DRIVING_LICENSE_UK: "id-number",
+  DRIVING_LICENSE_US: "id-number",
+  TAX_ID: "id-number",
+  PASSPORT_MRZ_TD3: "id-number",
+  PASSPORT_MRZ_TD1: "id-number",
+  VISA_MRZ: "id-number",
+  TRAVEL_DOCUMENT_NUMBER: "id-number",
+  VISA_NUMBER: "id-number",
+  IMMIGRATION_NUMBER: "id-number",
+  BORDER_CROSSING_CARD: "id-number",
+  UTR_UK: "id-number",
+  VAT_NUMBER: "id-number",
+  COMPANY_NUMBER_UK: "id-number",
+  ITIN: "id-number",
+  SIN_CA: "id-number",
+  EMERGENCY_CONTACT: "person",
+  USERNAME: null,
+  INSTAGRAM_USERNAME: null,
+  TWITTER_USER_ID: null,
+  XBOX_GAMERTAG: null,
+};
+
+/**
  * redact-pii — built-in redactor names (v3). English-only. Street address and
  * zipcode fold into `address`; credit card and SSN fold into `id-number`.
  * No org/date/money support (reported as zero recall).

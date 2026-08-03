@@ -24,44 +24,6 @@ const { inputBytes, inputCharacters, inputSha256 } =
 const initStarted = performance.now();
 const anonymize = await import("@stll/anonymize");
 const binding = anonymize.loadNativeAnonymizeBinding();
-const commonConfig = {
-  threshold: 0.3,
-  language: "en",
-  nameCorpusLanguages: ["en"],
-  enableGazetteer: false,
-  labels: [...anonymize.DEFAULT_ENTITY_LABELS],
-  workspaceId: `cross-provider-performance-${provider}`,
-};
-const config =
-  provider === "stella-full"
-    ? {
-        ...commonConfig,
-        enableTriggerPhrases: true,
-        enableRegex: true,
-        enableLegalForms: true,
-        enableNameCorpus: true,
-        enableDenyList: true,
-        enableConfidenceBoost: true,
-        enableCoreference: true,
-        enableHotwordRules: true,
-        enableZoneClassification: true,
-        dictionaries: await (
-          await import("../../dictionaries")
-        ).loadCorpusDictionaries("en"),
-      }
-    : {
-        ...commonConfig,
-        enableTriggerPhrases: false,
-        enableRegex: true,
-        enableLegalForms: false,
-        enableNameCorpus: false,
-        enableDenyList: false,
-        enableCountries: false,
-        enableConfidenceBoost: false,
-        enableCoreference: false,
-        enableHotwordRules: false,
-        enableZoneClassification: false,
-      };
 type RedactText = (text: string) => {
   readonly resolvedEntities: readonly {
     readonly start: number;
@@ -72,13 +34,31 @@ type RedactText = (text: string) => {
 };
 let redactText: RedactText;
 if (provider === "stella-full") {
-  const pipeline = await anonymize.createNativePipelineFromConfig({
+  const pipeline = anonymize.getDefaultNativePipeline({
     binding,
-    config,
-    gazetteerEntries: [],
+    language: "en",
+    warmup: "none",
   });
   redactText = (text) => pipeline.redactText(text);
 } else {
+  const config = {
+    threshold: 0.3,
+    language: "en",
+    nameCorpusLanguages: ["en"],
+    enableGazetteer: false,
+    labels: [...anonymize.DEFAULT_ENTITY_LABELS],
+    workspaceId: `cross-provider-performance-${provider}`,
+    enableTriggerPhrases: false,
+    enableRegex: true,
+    enableLegalForms: false,
+    enableNameCorpus: false,
+    enableDenyList: false,
+    enableCountries: false,
+    enableConfidenceBoost: false,
+    enableCoreference: false,
+    enableHotwordRules: false,
+    enableZoneClassification: false,
+  };
   const assembled = await anonymize.prepareNativePipelineConfig({
     binding,
     config,

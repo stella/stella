@@ -8,9 +8,11 @@ hardware.
 ## What is measured
 
 The development comparison is configured to run `@stll/anonymize` (stella)
-and four other open-source PII libraries on a public, synthetic, legal-domain
+and five other open-source PII libraries on a public, synthetic, legal-domain
 corpus (en/cs/de):
 
+- **OpenRedaction** 1.1.5 (stateless local regex engine; learning and optional
+  NER disabled).
 - **Microsoft Presidio** (`presidio-analyzer`) with spaCy models.
 - **scrubadub** (base install).
 - **DataFog** 4.8.0 (core regex engine only; no spaCy or GLiNER extras).
@@ -113,7 +115,8 @@ pin processes and records a null benchmark CPU.
 
 The separate provider harness runs the same public-safe synthetic English text
 through stella's full pipeline, stella's built-in regex detectors with all
-non-regex support data removed, base scrubadub, and DataFog's regex-only engine:
+non-regex support data removed, OpenRedaction's stateless local configuration,
+base scrubadub, and DataFog's regex-only engine:
 
 ```sh
 bun run bench:performance:providers
@@ -121,7 +124,9 @@ bun run bench:performance:providers
 
 Each observation uses a fresh process, followed by a first and second call.
 Startup ends when the worker interpreter is ready; provider imports and pipeline
-construction are recorded as initialization. The parent also records the paired
+loading are recorded as initialization. stella's full-pipeline lane reads the
+shipped English prepared package; its regex-only lane assembles the intentionally
+narrow detector configuration. The parent also records the paired
 spawn-to-clean-exit wall duration, and each worker records total process CPU
 time. These paired values are the end-to-end comparison; phase medians must not
 be added together. Canonical mode uses the same host
@@ -132,10 +137,11 @@ quiet. Provider-size pairs use paired forward/reverse rotations so every
 coordinate's mean execution position is exactly balanced across measured
 rounds; canonical runs therefore require an even sample count.
 
-The scopes are deliberately explicit. stella's regex-detector lane and
-DataFog's regex engine are the closest like-for-like rows, but their pattern
-sets and result resolution differ. stella full and scrubadub base run different,
-broader detector sets. Every row
+The scopes are deliberately explicit. stella's regex-detector lane,
+OpenRedaction's local configuration, and DataFog's regex engine are the closest
+like-for-like rows, but their pattern sets, context processing, and result
+resolution differ. stella full and scrubadub base run different, broader
+detector sets. Every row
 records its detection count, per-label counts, and output digest, so a fast
 provider cannot appear to win by doing no work. Throughput uses JavaScript
 UTF-16 code units across every provider; each worker recomputes and verifies the
@@ -143,23 +149,24 @@ input bytes, denominator, and SHA-256 independently. Python virtualenvs default 
 `.venv-scrubadub` and `.venv-datafog`; override their interpreters with
 `ANONYMIZE_SCRUBADUB_PYTHON` and `ANONYMIZE_DATAFOG_PYTHON` when needed.
 
-## Toolchain versions (committed run)
+## Pinned toolchain versions
 
-| Component                       | Version       |
-| ------------------------------- | ------------- |
-| Bun                             | 1.3.14        |
-| stella (`@stll/anonymize`)      | 2.0.0-alpha.1 |
-| redact-pii (npm)                | 3.4.0         |
-| Python                          | 3.11.12       |
-| presidio-analyzer               | 2.2.360       |
-| presidio-anonymizer             | 2.2.360       |
-| spaCy                           | 3.8.7         |
-| en_core_web_lg                  | 3.8.0         |
-| de_core_news_lg                 | 3.8.0         |
-| es_core_news_lg                 | 3.8.0         |
-| xx_ent_wiki_sm (used for Czech) | 3.8.0         |
-| scrubadub                       | 2.0.1         |
-| phonenumbers                    | 8.13.55       |
+| Component                             | Version |
+| ------------------------------------- | ------- |
+| Bun                                   | 1.3.14  |
+| stella (`@stll/anonymize`)            | 2.7.3   |
+| OpenRedaction (`@openredaction/core`) | 1.1.5   |
+| redact-pii (npm)                      | 3.4.0   |
+| Python                                | 3.11.12 |
+| presidio-analyzer                     | 2.2.360 |
+| presidio-anonymizer                   | 2.2.360 |
+| spaCy                                 | 3.8.7   |
+| en_core_web_lg                        | 3.8.0   |
+| de_core_news_lg                       | 3.8.0   |
+| es_core_news_lg                       | 3.8.0   |
+| xx_ent_wiki_sm (used for Czech)       | 3.8.0   |
+| scrubadub                             | 2.0.1   |
+| phonenumbers                          | 8.13.55 |
 
 ## Steps
 
@@ -172,10 +179,11 @@ bun install
 bun run build
 ```
 
-### 1. stella and redact-pii (Node/Bun)
+### 1. stella, OpenRedaction, and redact-pii (Node/Bun)
 
-No extra setup. stella is a workspace dependency. The exact regexp and name-list
-assets used by the redact-pii 3.4.0 adapter are committed under
+No extra setup. stella is a workspace dependency and OpenRedaction's core
+package is pinned in the Bun lockfile. The exact regexp and name-list assets
+used by the redact-pii 3.4.0 adapter are committed under
 `vendor/redact-pii/3.4.0/` with their upstream license and checksums. The adapter
 does not install redact-pii's unused Google DLP dependency tree.
 
@@ -301,16 +309,16 @@ is `src/taxonomy.ts`; a summary:
 Common labels: `person`, `organization`, `address`, `email`, `phone`,
 `id-number`, `date`, `money`.
 
-| Common label | stella                                                                                                                 | Presidio                                                                                                                                     | scrubadub                                                                                                                    | redact-pii                               |
-| ------------ | ---------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| person       | person                                                                                                                 | PERSON                                                                                                                                       | —                                                                                                                            | names                                    |
-| organization | organization                                                                                                           | ORGANIZATION / ORG                                                                                                                           | —                                                                                                                            | —                                        |
-| address      | address, country, land parcel                                                                                          | LOCATION, GPE, NRP, ADDRESS                                                                                                                  | —                                                                                                                            | streetAddress, zipcode                   |
-| email        | email address                                                                                                          | EMAIL_ADDRESS                                                                                                                                | email                                                                                                                        | emailAddress                             |
-| phone        | phone number                                                                                                           | PHONE_NUMBER                                                                                                                                 | phone                                                                                                                        | phoneNumber                              |
-| id-number    | bank account, iban, tax id, identity card, birth number, national id, ssn, registration, credit card, passport, crypto | US_SSN, US_ITIN, US_PASSPORT, US_DRIVER_LICENSE, US_BANK_NUMBER, IBAN_CODE, CREDIT_CARD, CRYPTO, MEDICAL_LICENSE, UK_NHS, IN_PAN, IN_AADHAAR | credit_card, social_security_number, drivers_licence, national_insurance_number, tax_reference_number, vehicle_licence_plate | creditCardNumber, usSocialSecurityNumber |
-| date         | date, date of birth                                                                                                    | DATE_TIME                                                                                                                                    | —                                                                                                                            | —                                        |
-| money        | monetary amount                                                                                                        | —                                                                                                                                            | —                                                                                                                            | —                                        |
+| Common label | stella                                                                                                                 | OpenRedaction                                 | Presidio                                                                                                                                     | scrubadub                                                                                                                    | DataFog                              | redact-pii                               |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ | ---------------------------------------- |
+| person       | person                                                                                                                 | NAME, EMERGENCY_CONTACT                       | PERSON                                                                                                                                       | —                                                                                                                            | —                                    | names                                    |
+| organization | organization                                                                                                           | —                                             | ORGANIZATION / ORG                                                                                                                           | —                                                                                                                            | —                                    | —                                        |
+| address      | address, country, land parcel                                                                                          | postcode, ZIP code, street, PO box            | LOCATION, GPE, NRP, ADDRESS                                                                                                                  | —                                                                                                                            | ZIP_CODE, DE_POSTAL_CODE             | streetAddress, zipcode                   |
+| email        | email address                                                                                                          | EMAIL                                         | EMAIL_ADDRESS                                                                                                                                | email                                                                                                                        | EMAIL                                | emailAddress                             |
+| phone        | phone number                                                                                                           | UK, US, and international phone patterns      | PHONE_NUMBER                                                                                                                                 | phone                                                                                                                        | PHONE                                | phoneNumber                              |
+| id-number    | bank account, iban, tax id, identity card, birth number, national id, ssn, registration, credit card, passport, crypto | financial, government, and travel identifiers | US_SSN, US_ITIN, US_PASSPORT, US_DRIVER_LICENSE, US_BANK_NUMBER, IBAN_CODE, CREDIT_CARD, CRYPTO, MEDICAL_LICENSE, UK_NHS, IN_PAN, IN_AADHAAR | credit_card, social_security_number, drivers_licence, national_insurance_number, tax_reference_number, vehicle_licence_plate | CREDIT_CARD, SSN, German identifiers | creditCardNumber, usSocialSecurityNumber |
+| date         | date, date of birth                                                                                                    | DATE, DATE_OF_BIRTH                           | DATE_TIME                                                                                                                                    | —                                                                                                                            | DATE                                 | —                                        |
+| money        | monetary amount                                                                                                        | —                                             | —                                                                                                                                            | —                                                                                                                            | —                                    | —                                        |
 
 `—` means the library has no recognizer that maps to that category, so it scores
 zero recall there (reported, not hidden). scrubadub's base install ships no name
@@ -332,6 +340,15 @@ credit-card, SSN, German VAT, IBAN, tax, social-security, passport, and
 residence-permit labels to `id-number`. `IP_ADDRESS` is out of scope and maps
 to `null`. Person, organization, and money are unsupported by this engine.
 
+OpenRedaction's stateless local engine maps its generic name, address, email,
+phone, and date patterns directly. The identifier labels exercised by the
+development corpus map to the coarse `id-number` label. Every native label
+emitted on that corpus is explicitly mapped or marked out of scope; a test
+guards this coverage. Hundreds of other industry-specific labels remain outside
+the development corpus's eight-label taxonomy. Sealed label-agnostic tasks
+still evaluate every returned span. Organization and money are unsupported by
+the default regex engine.
+
 ### Mapping fairness decisions
 
 - **Presidio NRP/GPE/LOCATION -> address.** NRP (nationalities, religious and
@@ -348,8 +365,18 @@ to `null`. Person, organization, and money are unsupported by this engine.
 
 ## Adapter faithfulness notes
 
-- **stella** runs its native rules pipeline with NER off, matching the product
-  default and the corpus tooling config (`src/adapters/stella.ts`).
+- **stella** loads the shipped language-scoped prepared packages and runs the
+  native product-default rules and dictionary bundle with NER off
+  (`src/adapters/stella.ts`). Caller-owned config assembly remains covered by
+  the separate performance and assisted-adapter paths. This replaces the older
+  benchmark-only neutral-dictionary assembly path, so stella quality and timing
+  are not directly comparable with reports generated before this change.
+- **OpenRedaction** runs the pinned package's local configuration with all 579
+  built-in regex patterns plus its heuristic context processing. Its
+  working-directory learning store is disabled so local state cannot change
+  predictions. Its optional NER path is also disabled: it requires an
+  undeclared English-only dependency and is not reproducible across the
+  benchmark's languages. Native positions are already UTF-16 offsets.
 - **Presidio** is configured multilingually with the language-agnostic pattern
   recognizers enabled for all three languages (`python/presidio_adapter.py`).
 - **scrubadub** runs its default `Scrubber()`; the active detector set is
@@ -373,20 +400,20 @@ per-document detection passes. For the comparison to be fair, every library's
 own one-time cost must fall inside `init`, not be hidden at import time or folded
 into the per-document loop. What counts as init for each adapter:
 
-| Library    | Counted as init (one-time)                                                                                | Per document (cold/warm)       |
-| ---------- | --------------------------------------------------------------------------------------------------------- | ------------------------------ |
-| stella     | load language-scoped names and neutral dictionaries, load native binding, build one pipeline per language | `redactText` per doc           |
-| Presidio   | load the three spaCy models and build the analyzer/recognizer registry                                    | `analyzer.analyze` per doc     |
-| scrubadub  | construct `Scrubber()` (instantiates its detectors)                                                       | `iter_filth` per doc           |
-| DataFog    | no explicit pipeline; first-use regex compilation remains in the cold pass                                | `scan(..., engine="regex")`    |
-| redact-pii | load built-in pattern list + well-known-names, compile regexes (large name alternation)                   | run compiled detectors per doc |
+| Library       | Counted as init (one-time)                                                    | Per document (cold/warm)       |
+| ------------- | ----------------------------------------------------------------------------- | ------------------------------ |
+| stella        | load native binding; read and decode one trusted shipped package per language | `redactText` per doc           |
+| OpenRedaction | construct a stateless local detector and compile its 579 built-in patterns    | `detect` per doc               |
+| Presidio      | load the three spaCy models and build the analyzer/recognizer registry        | `analyzer.analyze` per doc     |
+| scrubadub     | construct `Scrubber()` (instantiates its detectors)                           | `iter_filth` per doc           |
+| DataFog       | no explicit pipeline; first-use regex compilation remains in the cold pass    | `scan(..., engine="regex")`    |
+| redact-pii    | load built-in pattern list + well-known-names, compile regexes                | run compiled detectors per doc |
 
-stella's scoped dictionary load and binding load are the analogue of Presidio's
-model load, so they are timed inside `init` (`src/adapters/stella.ts`). Corpus
-documents declare language but not jurisdiction, so stella loads only that
-language's name dictionaries and country-neutral non-name dictionaries; it
-does not guess national/city vocabularies from language. redact-pii's
-pattern/name-list load and regex compilation are
+stella's binding and prepared-package loading are timed inside `init`
+(`src/adapters/stella.ts`). This measures the released product path instead of
+charging runtime package assembly that normal consumers perform at build time.
+Lazy regex compilation remains in the cold pass. redact-pii's pattern/name-list
+load and regex compilation are
 likewise timed as init rather than left as a module-load side effect
 (`src/adapters/redact-pii.ts`). Python init is measured inside each Python
 process and excludes interpreter startup, which is reported separately in prose.

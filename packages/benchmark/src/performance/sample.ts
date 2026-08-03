@@ -38,34 +38,12 @@ export const runPerformanceSample = async ({
   inputSha256,
   initStartedMilliseconds,
 }: PerformanceSampleOptions): Promise<PerformanceSample> => {
-  const [anonymize, dictionariesModule] = await Promise.all([
-    import("@stll/anonymize"),
-    import("../dictionaries"),
-  ]);
-  const dictionaries =
-    await dictionariesModule.loadCorpusDictionaries(PERFORMANCE_LANGUAGE);
+  const anonymize = await import("@stll/anonymize");
   const binding = anonymize.loadNativeAnonymizeBinding();
-  const pipeline = await anonymize.createNativePipelineFromConfig({
+  const pipeline = anonymize.getDefaultNativePipeline({
     binding,
-    config: {
-      threshold: 0.3,
-      language: PERFORMANCE_LANGUAGE,
-      nameCorpusLanguages: [PERFORMANCE_LANGUAGE],
-      enableTriggerPhrases: true,
-      enableRegex: true,
-      enableLegalForms: true,
-      enableNameCorpus: true,
-      enableDenyList: true,
-      enableGazetteer: false,
-      enableConfidenceBoost: true,
-      enableCoreference: true,
-      enableHotwordRules: true,
-      enableZoneClassification: true,
-      labels: [...anonymize.DEFAULT_ENTITY_LABELS],
-      workspaceId: "canonical-performance",
-      dictionaries,
-    },
-    gazetteerEntries: [],
+    language: PERFORMANCE_LANGUAGE,
+    warmup: "none",
   });
   const initSeconds = (performance.now() - initStartedMilliseconds) / 1000;
 
