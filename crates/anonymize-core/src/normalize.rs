@@ -144,6 +144,9 @@ pub(crate) fn normalize_entity_text(label: &str, text: &str) -> String {
   if upper == "NATIONAL_IDENTIFICATION_NUMBER" && contains_nhs_cue(text) {
     return text.chars().filter(char::is_ascii_digit).collect();
   }
+  if upper == "CREDIT_CARD_NUMBER" {
+    return normalize_credit_card_text(text);
+  }
   if is_identifier_label(&upper) {
     return normalize_identifier_text(text);
   }
@@ -200,6 +203,26 @@ fn strip_id_separators(text: &str) -> String {
 
 fn normalize_identifier_text(text: &str) -> String {
   strip_id_separators(text).to_uppercase()
+}
+
+fn normalize_credit_card_text(text: &str) -> String {
+  let trimmed = text.trim();
+  let track = trimmed
+    .strip_prefix("%B")
+    .or_else(|| trimmed.strip_prefix(';'))
+    .unwrap_or(trimmed);
+  let track_pan = track
+    .split_once('^')
+    .or_else(|| track.split_once('='))
+    .map(|(pan, _)| pan);
+  if let Some(pan) = track_pan
+    && (13..=19).contains(&pan.len())
+    && pan.chars().all(|character| character.is_ascii_digit())
+  {
+    return pan.to_owned();
+  }
+
+  normalize_identifier_text(text)
 }
 
 fn is_identifier_label(upper: &str) -> bool {

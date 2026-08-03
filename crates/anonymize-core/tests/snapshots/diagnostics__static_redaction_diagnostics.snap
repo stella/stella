@@ -169,6 +169,11 @@ events:
     kind: StageSummary
     count: 0
     input_bytes: 25
+  - stage: EntityStructuredDocumentData
+    phase: Detect
+    kind: StageSummary
+    count: 0
+    input_bytes: 25
   - stage: EntityAddressContext
     phase: Resolve
     kind: StageSummary

@@ -3,7 +3,10 @@ use std::collections::BTreeSet;
 use crate::address_seeds::AddressSeedDetection;
 use crate::address_seeds::PreparedAddressSeedData;
 use crate::diagnostics::{DiagnosticStage, StaticRedactionDiagnostics};
-use crate::labels::ADDRESS_LABEL;
+use crate::labels::{
+  ADDRESS_LABEL, CREDIT_CARD_NUMBER_LABEL, IDENTITY_CARD_NUMBER_LABEL,
+  PASSPORT_NUMBER_LABEL,
+};
 use crate::legal_forms::PreparedLegalFormData;
 use crate::legal_forms::process_legal_form_matches;
 use crate::name_corpus::{NameCorpusDetection, PreparedNameCorpusData};
@@ -38,6 +41,7 @@ pub(super) enum StaticDetectorId {
   LegalForm,
   NameCorpus,
   AddressSeed,
+  StructuredDocumentData,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -355,6 +359,27 @@ impl<'a> StaticDetectorContext<'a> {
             .iter()
             .any(|label| label == ADDRESS_LABEL)),
     )
+  }
+
+  pub(super) fn structured_document_data_is_active(&self) -> Result<bool> {
+    self.spec.require_input(StaticDetectorInput::FullText)?;
+    Ok(
+      self.engine.policy.allowed_labels.is_empty()
+        || self.engine.policy.allowed_labels.iter().any(|label| {
+          matches!(
+            label.as_str(),
+            CREDIT_CARD_NUMBER_LABEL
+              | IDENTITY_CARD_NUMBER_LABEL
+              | PASSPORT_NUMBER_LABEL
+          )
+        }),
+    )
+  }
+
+  pub(super) fn structured_document_data_input(
+    &self,
+  ) -> Result<(&'a str, &'a [String])> {
+    Ok((self.full_text()?, &self.engine.policy.allowed_labels))
   }
 
   pub(super) fn detect_address_seed(

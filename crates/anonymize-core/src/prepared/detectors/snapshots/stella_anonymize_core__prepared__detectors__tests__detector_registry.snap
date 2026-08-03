@@ -151,3 +151,13 @@ modules:
           - LiteralMatches
           - ContextEntities
           - FullText
+  - name: structured_document_data
+    rules:
+      - id: StructuredDocumentData
+        stage: EntityStructuredDocumentData
+        inputs:
+          - FullText
+        dependencies: []
+        support_resources: []
+        additive_scaling_domains:
+          - FullText

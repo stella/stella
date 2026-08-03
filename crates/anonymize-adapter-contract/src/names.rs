@@ -134,6 +134,7 @@ pub(crate) fn diagnostic_stage_name(stage: DiagnosticStage) -> String {
     | DiagnosticStage::EntityAddressSeedCluster
     | DiagnosticStage::EntityAddressSeedBoundary
     | DiagnosticStage::EntityAddressSeedExpand
+    | DiagnosticStage::EntityStructuredDocumentData
     | DiagnosticStage::EntityNameCorpus
     | DiagnosticStage::EntityNameCorpusCjk
     | DiagnosticStage::EntityNameCorpusSegment
@@ -261,6 +262,9 @@ const fn diagnostic_detect_stage_name(stage: DiagnosticStage) -> &'static str {
       "entity.address-seed.boundary"
     }
     DiagnosticStage::EntityAddressSeedExpand => "entity.address-seed.expand",
+    DiagnosticStage::EntityStructuredDocumentData => {
+      "entity.structured-document-data"
+    }
     DiagnosticStage::EntityNameCorpus => "entity.name-corpus",
     DiagnosticStage::EntityNameCorpusCjk => "entity.name-corpus.cjk",
     DiagnosticStage::EntityNameCorpusSegment => "entity.name-corpus.segment",

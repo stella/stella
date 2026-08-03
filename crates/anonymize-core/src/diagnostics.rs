@@ -92,6 +92,7 @@ pub enum DiagnosticStage {
   EntityAddressSeedCluster,
   EntityAddressSeedBoundary,
   EntityAddressSeedExpand,
+  EntityStructuredDocumentData,
   EntityNameCorpus,
   EntityNameCorpusCjk,
   EntityNameCorpusSegment,
@@ -180,6 +181,7 @@ impl DiagnosticStage {
       | Self::EntityAddressSeedCluster
       | Self::EntityAddressSeedBoundary
       | Self::EntityAddressSeedExpand
+      | Self::EntityStructuredDocumentData
       | Self::EntityNameCorpus
       | Self::EntityNameCorpusCjk
       | Self::EntityNameCorpusSegment

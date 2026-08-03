@@ -92,6 +92,7 @@ impl StaticEntityLayers {
     legal_form => LegalForm,
     name_corpus => NameCorpus,
     address_seed => AddressSeed,
+    structured_document_data => StructuredDocumentData,
   }
 
   fn entities_for(&self, detector: StaticDetectorId) -> &[PipelineEntity] {

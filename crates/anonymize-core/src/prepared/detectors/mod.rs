@@ -22,6 +22,7 @@ static_detector_modules! {
   mod legal_form;
   mod name_corpus;
   mod address_seed;
+  mod structured_document_data;
 }
 
 pub(super) fn static_entity_rules() -> impl Iterator<Item = StaticDetectorRule>

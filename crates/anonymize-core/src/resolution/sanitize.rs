@@ -13,7 +13,10 @@ const ADDRESS_FINAL_ABBREVS: &str =
 pub fn sanitize_entities(entities: &[PipelineEntity]) -> Vec<PipelineEntity> {
   let mut sanitized = Vec::with_capacity(entities.len());
   for entity in entities {
-    if is_caller_owned(entity) || has_curated_literal_boundary(entity) {
+    if is_caller_owned(entity)
+      || has_curated_literal_boundary(entity)
+      || has_structured_record_boundary(entity)
+    {
       sanitized.push(entity.clone());
       continue;
     }
@@ -31,7 +34,10 @@ pub(crate) fn sanitize_entities_with_document(
   let mut sanitized = Vec::with_capacity(entities.len());
 
   for entity in entities {
-    if is_caller_owned(&entity) || has_curated_literal_boundary(&entity) {
+    if is_caller_owned(&entity)
+      || has_curated_literal_boundary(&entity)
+      || has_structured_record_boundary(&entity)
+    {
       sanitized.push(entity);
       continue;
     }
@@ -128,6 +134,13 @@ fn has_curated_literal_boundary(entity: &PipelineEntity) -> bool {
       .into_iter()
       .chain(entity.text.chars().next_back())
       .any(is_literal_boundary_punct)
+}
+
+fn has_structured_record_boundary(entity: &PipelineEntity) -> bool {
+  entity.label == crate::labels::CREDIT_CARD_NUMBER_LABEL
+    && entity.source == DetectionSource::Regex
+    && entity.text.ends_with('?')
+    && (entity.text.starts_with("%B") || entity.text.starts_with(';'))
 }
 
 fn is_leading_trim(ch: char, label: &str) -> bool {
