@@ -137,6 +137,7 @@ import type {
   PersistableChatMessage,
 } from "@/api/handlers/chat/types";
 import { createRawChatFilePart } from "@/api/handlers/chat/upload-files";
+import type { UploadedChatFile } from "@/api/handlers/chat/upload-files";
 import {
   resolveActiveChatSkillContext,
   type ActiveChatSkillContext,
@@ -526,6 +527,12 @@ const sendMessage = createSafeRootHandler(
         }),
     );
     let externalMcpToolsHandedOffToStreaming = false;
+    let pendingUnpersistedSideEffects:
+      | {
+          threadState: ChatThreadState;
+          uploadedFiles: UploadedChatFile[];
+        }
+      | undefined;
 
     // The try/finally starts immediately after the loader is constructed
     // (rather than just around the streaming pass) so that a throw from
@@ -655,7 +662,9 @@ const sendMessage = createSafeRootHandler(
       const thread = yield* Result.await(
         loadThread({
           initialDataWorkspaceIds:
-            activeDraftContext?.originDataWorkspaceIds ?? [],
+            activeDraftContext === null
+              ? []
+              : activeDraftContext.originDataWorkspaceIds,
           initialContextMatterIds: requestedContextMatterIds,
           isAnonymized: body.sendMode === CHAT_SEND_MODE.anonymized,
           organizationId: session.activeOrganizationId,
@@ -667,6 +676,13 @@ const sendMessage = createSafeRootHandler(
           workspaceId,
         }),
       );
+      // Own the thread from creation through the first durable message. The
+      // enclosing finally is the sole rollback boundary for every later
+      // return, error, or SDK short-circuit before that persistence succeeds.
+      pendingUnpersistedSideEffects = {
+        threadState: thread,
+        uploadedFiles: [],
+      };
 
       const activeDraft = body.activeDraft;
       if (activeDraft !== undefined) {
@@ -717,16 +733,6 @@ const sendMessage = createSafeRootHandler(
       // client disconnect. Created threads still need their rollback token
       // cleaned up on this exit path.
       if (isClientConnectionAborted()) {
-        yield* Result.await(
-          rollbackUnpersistedChatSideEffects({
-            recordAuditEvent,
-            safeDb,
-            threadId: body.threadId,
-            threadState: thread,
-            uploadedFiles: [],
-            userId: user.id,
-          }),
-        );
         return Result.err(
           new HandlerError({
             status: 400,
@@ -800,16 +806,6 @@ const sendMessage = createSafeRootHandler(
       });
 
       if (isClientConnectionAborted()) {
-        yield* Result.await(
-          rollbackUnpersistedChatSideEffects({
-            recordAuditEvent,
-            safeDb,
-            threadId: body.threadId,
-            threadState: thread,
-            uploadedFiles: [],
-            userId: user.id,
-          }),
-        );
         return Result.err(
           new HandlerError({
             status: 400,
@@ -818,20 +814,26 @@ const sendMessage = createSafeRootHandler(
         );
       }
 
-      const uploadResult = yield* Result.await(
-        uploadMessageFilesWithRollback({
-          message: stampedValidatedMessage.message,
-          recordAuditEvent,
-          safeDb,
-          threadId: thread.data.id,
-          threadState: thread,
-          userId: user.id,
-        }),
-      );
+      const uploadResult = await uploadMessageFilesWithRollback({
+        message: stampedValidatedMessage.message,
+        recordAuditEvent,
+        safeDb,
+        threadId: thread.data.id,
+        threadState: thread,
+        userId: user.id,
+      });
+      if (Result.isError(uploadResult)) {
+        // The upload helper already cleans a partial upload (and a newly
+        // created thread) before returning an error.
+        pendingUnpersistedSideEffects = undefined;
+        return Result.err(uploadResult.error);
+      }
+      pendingUnpersistedSideEffects.uploadedFiles =
+        uploadResult.value.uploadedFiles;
 
       const parsedMessage = parseMessage({
         accessibleWorkspaceIds,
-        message: uploadResult.message,
+        message: uploadResult.value.message,
       });
 
       const isExplicitRegeneration =
@@ -973,16 +975,6 @@ const sendMessage = createSafeRootHandler(
         AbortSignal.timeout(CHAT_METERED_PROVIDER_TIMEOUT_MS);
 
       if (isClientConnectionAborted()) {
-        yield* Result.await(
-          rollbackUnpersistedChatSideEffects({
-            recordAuditEvent,
-            safeDb,
-            threadId: body.threadId,
-            threadState: thread,
-            uploadedFiles: uploadResult.uploadedFiles,
-            userId: user.id,
-          }),
-        );
         return Result.err(
           new HandlerError({
             status: 400,
@@ -1004,35 +996,10 @@ const sendMessage = createSafeRootHandler(
         workspaceId,
       });
       if (Result.isError(messagesForContextResult)) {
-        const rollbackResult = await rollbackUnpersistedChatSideEffects({
-          recordAuditEvent,
-          safeDb,
-          threadId: body.threadId,
-          threadState: thread,
-          uploadedFiles: uploadResult.uploadedFiles,
-          userId: user.id,
-        });
-        if (Result.isError(rollbackResult)) {
-          captureError(messagesForContextResult.error, {
-            threadId: body.threadId,
-          });
-          return yield* Result.err(rollbackResult.error);
-        }
-
-        return yield* Result.err(messagesForContextResult.error);
+        return Result.err(messagesForContextResult.error);
       }
 
       if (isClientConnectionAborted()) {
-        yield* Result.await(
-          rollbackUnpersistedChatSideEffects({
-            recordAuditEvent,
-            safeDb,
-            threadId: body.threadId,
-            threadState: thread,
-            uploadedFiles: uploadResult.uploadedFiles,
-            userId: user.id,
-          }),
-        );
         return Result.err(
           new HandlerError({
             status: 400,
@@ -1098,34 +1065,11 @@ const sendMessage = createSafeRootHandler(
         refRegistry,
       });
       if (Result.isError(chatContextResult)) {
-        const rollbackResult = await rollbackUnpersistedChatSideEffects({
-          recordAuditEvent,
-          safeDb,
-          threadId: body.threadId,
-          threadState: thread,
-          uploadedFiles: uploadResult.uploadedFiles,
-          userId: user.id,
-        });
-        if (Result.isError(rollbackResult)) {
-          captureError(chatContextResult.error, { threadId: body.threadId });
-          return yield* Result.err(rollbackResult.error);
-        }
-
-        return yield* Result.err(chatContextResult.error);
+        return Result.err(chatContextResult.error);
       }
       const chatContext = chatContextResult.value;
 
       if (isClientConnectionAborted()) {
-        yield* Result.await(
-          rollbackUnpersistedChatSideEffects({
-            recordAuditEvent,
-            safeDb,
-            threadId: body.threadId,
-            threadState: thread,
-            uploadedFiles: uploadResult.uploadedFiles,
-            userId: user.id,
-          }),
-        );
         return Result.err(
           new HandlerError({
             status: 400,
@@ -1212,24 +1156,16 @@ const sendMessage = createSafeRootHandler(
           return Result.err(replayResult.error);
         }
         turnExecution = replayResult.value;
+        if (turnExecution !== null) {
+          pendingUnpersistedSideEffects = undefined;
+        }
       } else {
         const persistenceResult = await persistMessage(persistenceProps);
         if (Result.isError(persistenceResult)) {
-          const rollbackResult = await rollbackUnpersistedChatSideEffects({
-            recordAuditEvent,
-            safeDb,
-            threadId: body.threadId,
-            threadState: thread,
-            uploadedFiles: uploadResult.uploadedFiles,
-            userId: user.id,
-          });
-          if (Result.isError(rollbackResult)) {
-            captureError(persistenceResult.error, {
-              threadId: body.threadId,
-            });
-            return Result.err(rollbackResult.error);
-          }
           return Result.err(persistenceResult.error);
+        }
+        if (latestMessagePlan.persistencePlan.type !== "none") {
+          pendingUnpersistedSideEffects = undefined;
         }
         turnExecution = yield* Result.await(
           claimChatTurnForExecution({
@@ -1649,6 +1585,25 @@ const sendMessage = createSafeRootHandler(
 
       return Result.ok(response);
     } finally {
+      if (pendingUnpersistedSideEffects !== undefined) {
+        const rollbackResult = await rollbackUnpersistedChatSideEffects({
+          recordAuditEvent,
+          safeDb,
+          threadId: body.threadId,
+          threadState: pendingUnpersistedSideEffects.threadState,
+          uploadedFiles: pendingUnpersistedSideEffects.uploadedFiles,
+          userId: user.id,
+        });
+        if (Result.isError(rollbackResult)) {
+          // Preserve the request's original outcome while recording cleanup
+          // failure for the orphan-recovery path; control flow from a finally
+          // block must not silently replace the send result.
+          captureError(rollbackResult.error, {
+            source: "send-message-unpersisted-side-effect-rollback",
+            threadId: body.threadId,
+          });
+        }
+      }
       // No-op if `getExternalMcpTools` was never called on this exit path
       // (the message needed neither validation nor streaming to load
       // external tools before failing/returning early).

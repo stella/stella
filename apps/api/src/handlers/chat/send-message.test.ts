@@ -4,6 +4,7 @@ import { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
+import { CHAT_TURN_INTENT } from "@stll/api-contract";
 
 import { chatThreads, chatTurns } from "@/api/db/schema";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
@@ -149,6 +150,8 @@ const createContext = ({
     parts: [{ type: "text", content: "Summarize the selected matters" }],
   },
   request = new Request("http://localhost/v1/chat/send"),
+  truncateAfterMessageId,
+  turnIntent,
   transaction = {
     query: {
       organizationSettings: {
@@ -160,6 +163,8 @@ const createContext = ({
   contextMatterIds: SendMessageCtx["body"]["contextMatterIds"];
   message?: SendMessageCtx["body"]["message"];
   request?: Request;
+  truncateAfterMessageId?: SendMessageCtx["body"]["truncateAfterMessageId"];
+  turnIntent?: SendMessageCtx["body"]["turnIntent"];
   transaction?: unknown;
 }): SendMessageCtx => {
   const { safeDb, scopedDb } = createScopedDbMock(transaction);
@@ -170,6 +175,10 @@ const createContext = ({
       sendMode: CHAT_SEND_MODE.rawOverride,
       contextMatterIds,
       message,
+      ...(truncateAfterMessageId === undefined
+        ? {}
+        : { truncateAfterMessageId }),
+      ...(turnIntent === undefined ? {} : { turnIntent }),
     },
     createAuditRecorder: () => async () => {},
     getAccessibleWorkspaces: async () => [
@@ -718,6 +727,63 @@ describe("send message disconnect handling", () => {
 });
 
 describe("send message turn persistence", () => {
+  test("rolls back an uploaded attachment before rejecting an invalid replay", async () => {
+    const uploadedFile = {
+      id: toSafeId<"userFile">("00000000-0000-0000-0000-000000000009"),
+      s3Key: "chat/thread/input.png",
+      thumbnailS3Key: "chat/thread/input-thumbnail.png",
+    } satisfies UploadedChatFile;
+    uploadMessageFilesWithRollbackMock.mockImplementationOnce(
+      async ({ message }) =>
+        Result.ok({ message, uploadedFiles: [uploadedFile] }),
+    );
+    rollbackUnpersistedChatSideEffectsMock.mockClear();
+    rollbackUnpersistedChatSideEffectsMock.mockImplementationOnce(async () =>
+      Result.ok(),
+    );
+
+    const result = await sendMessage.handler(
+      createContext({
+        contextMatterIds: [],
+        truncateAfterMessageId: messageId,
+        turnIntent: CHAT_TURN_INTENT.regenerate,
+        transaction: {
+          query: {
+            chatThreadCompactions: { findFirst: async () => null },
+            chatThreads: {
+              findFirst: async () => ({
+                chatModel: null,
+                contextMatterIds: [],
+                dataWorkspaceIds: [],
+                id: threadId,
+                messages: [],
+                rollbackToken: null,
+                title: "Existing thread",
+                webSearchEnabled: false,
+                workspaceId: null,
+              }),
+            },
+            organizationSettings: { findFirst: async () => null },
+          },
+          select: selectChatMessages,
+        },
+      }),
+    );
+
+    expect(result).toEqual({
+      code: 400,
+      response: {
+        message: "Regeneration requires one unambiguous user-message target",
+      },
+    });
+    expect(rollbackUnpersistedChatSideEffectsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        threadId,
+        uploadedFiles: [uploadedFile],
+      }),
+    );
+  });
+
   test("rolls back every uploaded file when a running turn rejects the message", async () => {
     const uploadedFile = {
       id: toSafeId<"userFile">("00000000-0000-0000-0000-000000000009"),
