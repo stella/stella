@@ -336,6 +336,11 @@ const stampValidatedMessageWithActiveDraftContext = ({
   });
 };
 
+type ClaimedChatTurnOwnership =
+  | { status: "unclaimed" }
+  | { status: "preflight"; execution: ChatTurnExecution }
+  | { status: "streaming" };
+
 const sendMessage = createSafeRootHandler(
   config,
   async function* ({
@@ -533,6 +538,9 @@ const sendMessage = createSafeRootHandler(
           uploadedFiles: UploadedChatFile[];
         }
       | undefined;
+    let claimedChatTurnOwnership: ClaimedChatTurnOwnership = {
+      status: "unclaimed",
+    };
 
     // The try/finally starts immediately after the loader is constructed
     // (rather than just around the streaming pass) so that a throw from
@@ -960,124 +968,6 @@ const sendMessage = createSafeRootHandler(
             })
           : null;
 
-      const messagesForContextInput = await selectMessagesForContextInput({
-        messages: latestMessagePlan.messages,
-        safeDb,
-        skipCheckpoint: replayTargetMessageId !== undefined,
-        threadId: body.threadId,
-      });
-
-      // Metered provider calls must not be directly cancelled by the client
-      // connection. A disconnect can arrive after preflight succeeds but before
-      // the AI SDK emits token usage; allowing that abort to reach the provider
-      // would skip the usage ledger callback while still spending provider work.
-      const createMeteredAIAbortSignal = () =>
-        AbortSignal.timeout(CHAT_METERED_PROVIDER_TIMEOUT_MS);
-
-      if (isClientConnectionAborted()) {
-        return Result.err(
-          new HandlerError({
-            status: 400,
-            message: "Client disconnected before AI work started",
-          }),
-        );
-      }
-
-      const messagesForContextResult = await compactMessagesForContext({
-        abortSignal: createMeteredAIAbortSignal(),
-        boundary: thirdPartyBoundary,
-        chatModelOverride,
-        messages: messagesForContextInput,
-        organizationId: session.activeOrganizationId,
-        orgAIConfig,
-        safeDb,
-        threadId: body.threadId,
-        userId: user.id,
-        workspaceId,
-      });
-      if (Result.isError(messagesForContextResult)) {
-        return Result.err(messagesForContextResult.error);
-      }
-
-      if (isClientConnectionAborted()) {
-        return Result.err(
-          new HandlerError({
-            status: 400,
-            message: "Client disconnected before AI work started",
-          }),
-        );
-      }
-
-      const toolWorkspaceIds = resolveToolWorkspaceIds({
-        pinnedIds: effectiveContextMatterIds,
-        accessibleWorkspaceIds,
-      });
-      const registeredDocxEditMode = resolveRegisteredDocxEditMode({
-        activeFile: activeFileForTools,
-        editApplyMode,
-        hasActiveDocxEditClient:
-          hasActiveDocxFileClient ||
-          body.activeDraft !== undefined ||
-          body.activeTemplate !== undefined,
-        memberRole: memberRole.role,
-        recordAuditEventAvailable: true,
-        requestWorkspaceId: workspaceId,
-        toolWorkspaceIds,
-        workspaceStatusById,
-      });
-      const chatContextResult = await prepareChatContext({
-        activeDecision: body.activeDecision,
-        activeDraft: body.activeDraft,
-        activeExternal: body.activeExternal,
-        activeFile: body.activeFile,
-        activeSkill: body.activeSkill,
-        activeTemplate: body.activeTemplate,
-        contextMatterIds: effectiveContextMatterIds,
-        memberRole,
-        messageWindow: messagesForContextResult.value,
-        organizationId: session.activeOrganizationId,
-        safeDb,
-        sendMode: body.sendMode,
-        // Derived from the same predicates/inputs `getChatTools` uses to
-        // register `web_search`/`fetch_url` and `suggest_template_fields`
-        // below, so the prompt only steers the model to tools that are
-        // actually handed to it.
-        toolAvailability: {
-          docxEditMode: registeredDocxEditMode,
-          templateAuthoring: areTemplateAuthoringToolsRegistered(
-            memberRole.role,
-          ),
-          webResearch: areWebResearchToolsRegistered({
-            webSearchEnabled: thread.data.webSearchEnabled,
-            webSearchProviders,
-            disabledNativeToolSlugs,
-          }),
-          folioAgentDocTools: hasActiveDocxFileClient,
-          // Only at the top level of a turn, and only when the turn's scope (if
-          // any) allows spawn_subagents — a restricted scope (e.g.
-          // suggest-template-fields) drops the tool from the streaming set, so
-          // the prompt must not steer the model toward a tool it was never handed.
-          subagents: areSubagentToolsAvailableForTurn(body.toolScope),
-        },
-        userContext: body.userContext,
-        userId: user.id,
-        workspaceId,
-        refRegistry,
-      });
-      if (Result.isError(chatContextResult)) {
-        return Result.err(chatContextResult.error);
-      }
-      const chatContext = chatContextResult.value;
-
-      if (isClientConnectionAborted()) {
-        return Result.err(
-          new HandlerError({
-            status: 400,
-            message: "Client disconnected before AI work started",
-          }),
-        );
-      }
-
       // Keep the thread's data scope aligned with the messages being
       // stored. Normal sends append newly observed workspace IDs
       // before persisting. Replay truncation recomputes the exact
@@ -1188,6 +1078,10 @@ const sendMessage = createSafeRootHandler(
           }),
         );
       }
+      claimedChatTurnOwnership = {
+        status: "preflight",
+        execution: turnExecution,
+      };
       const failCurrentTurn = async (
         code: Parameters<typeof failChatTurnExecution>[0]["code"],
         retryable: boolean,
@@ -1200,7 +1094,31 @@ const sendMessage = createSafeRootHandler(
         });
         if (Result.isError(failureResult)) {
           captureError(failureResult.error, { threadId: body.threadId });
+          return;
         }
+        claimedChatTurnOwnership = { status: "unclaimed" };
+      };
+      const interruptCurrentTurn = async () => {
+        const settlementResult = await persistMessage({
+          persistencePlan: { type: "none" },
+          recordAuditEvent,
+          safeDb,
+          threadId: body.threadId,
+          turnSettlement: {
+            assistantMessageId: null,
+            execution: turnExecution,
+            outcome: {
+              type: "interrupted",
+              reason: "client-disconnected",
+            },
+          },
+          userId: user.id,
+          workspaceId,
+        });
+        if (Result.isOk(settlementResult)) {
+          claimedChatTurnOwnership = { status: "unclaimed" };
+        }
+        return settlementResult;
       };
 
       // The incoming message is durable now, so a disconnect must not run the
@@ -1208,28 +1126,128 @@ const sendMessage = createSafeRootHandler(
       // message). It should still stop before connector discovery and any
       // metered provider work.
       if (isClientConnectionAborted()) {
-        yield* Result.await(
-          persistMessage({
-            persistencePlan: { type: "none" },
-            recordAuditEvent,
-            safeDb,
-            threadId: body.threadId,
-            turnSettlement: {
-              assistantMessageId: null,
-              execution: turnExecution,
-              outcome: {
-                type: "interrupted",
-                reason: "client-disconnected",
-              },
-            },
-            userId: user.id,
-            workspaceId,
-          }),
-        );
+        yield* Result.await(interruptCurrentTurn());
         return Result.err(
           new HandlerError({
             status: 400,
             message: "Client disconnected before stream started",
+          }),
+        );
+      }
+
+      const messagesForContextInput = await selectMessagesForContextInput({
+        messages: latestMessagePlan.messages,
+        safeDb,
+        skipCheckpoint: replayTargetMessageId !== undefined,
+        threadId: body.threadId,
+      });
+
+      // Compaction can issue a metered provider request. The turn was claimed
+      // above, so a concurrent send is rejected before either request starts
+      // this work. Its terminal state remains explicit on every preflight exit.
+      const createMeteredAIAbortSignal = () =>
+        AbortSignal.timeout(CHAT_METERED_PROVIDER_TIMEOUT_MS);
+      if (isClientConnectionAborted()) {
+        yield* Result.await(interruptCurrentTurn());
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Client disconnected before AI work started",
+          }),
+        );
+      }
+
+      const messagesForContextResult = await compactMessagesForContext({
+        abortSignal: createMeteredAIAbortSignal(),
+        boundary: thirdPartyBoundary,
+        chatModelOverride,
+        messages: messagesForContextInput,
+        organizationId: session.activeOrganizationId,
+        orgAIConfig,
+        safeDb,
+        threadId: body.threadId,
+        userId: user.id,
+        workspaceId,
+      });
+      if (Result.isError(messagesForContextResult)) {
+        await failCurrentTurn("provider-error", true);
+        return Result.err(messagesForContextResult.error);
+      }
+
+      if (isClientConnectionAborted()) {
+        yield* Result.await(interruptCurrentTurn());
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Client disconnected before AI work started",
+          }),
+        );
+      }
+
+      const toolWorkspaceIds = resolveToolWorkspaceIds({
+        pinnedIds: effectiveContextMatterIds,
+        accessibleWorkspaceIds,
+      });
+      const registeredDocxEditMode = resolveRegisteredDocxEditMode({
+        activeFile: activeFileForTools,
+        editApplyMode,
+        hasActiveDocxEditClient:
+          hasActiveDocxFileClient ||
+          body.activeDraft !== undefined ||
+          body.activeTemplate !== undefined,
+        memberRole: memberRole.role,
+        recordAuditEventAvailable: true,
+        requestWorkspaceId: workspaceId,
+        toolWorkspaceIds,
+        workspaceStatusById,
+      });
+      const chatContextResult = await prepareChatContext({
+        activeDecision: body.activeDecision,
+        activeDraft: body.activeDraft,
+        activeExternal: body.activeExternal,
+        activeFile: body.activeFile,
+        activeSkill: body.activeSkill,
+        activeTemplate: body.activeTemplate,
+        contextMatterIds: effectiveContextMatterIds,
+        memberRole,
+        messageWindow: messagesForContextResult.value,
+        organizationId: session.activeOrganizationId,
+        safeDb,
+        sendMode: body.sendMode,
+        toolAvailability: {
+          docxEditMode: registeredDocxEditMode,
+          templateAuthoring: areTemplateAuthoringToolsRegistered(
+            memberRole.role,
+          ),
+          webResearch: areWebResearchToolsRegistered({
+            webSearchEnabled: thread.data.webSearchEnabled,
+            webSearchProviders,
+            disabledNativeToolSlugs,
+          }),
+          folioAgentDocTools: hasActiveDocxFileClient,
+          subagents: areSubagentToolsAvailableForTurn(body.toolScope),
+        },
+        userContext: body.userContext,
+        userId: user.id,
+        workspaceId,
+        refRegistry,
+      });
+      if (Result.isError(chatContextResult)) {
+        await failCurrentTurn(
+          "internal",
+          !(chatContextResult.error instanceof HandlerError) ||
+            chatContextResult.error.status >= 500,
+        );
+        return Result.err(chatContextResult.error);
+      }
+      const chatContext = chatContextResult.value;
+
+      if (isClientConnectionAborted()) {
+        yield* Result.await(interruptCurrentTurn());
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Client disconnected before AI work started",
           }),
         );
       }
@@ -1563,6 +1581,8 @@ const sendMessage = createSafeRootHandler(
                 // so settle the claimed turn here instead of leaving it
                 // indefinitely running.
                 await failCurrentTurn("internal", chatResponse.status >= 500);
+              } else {
+                claimedChatTurnOwnership = { status: "streaming" };
               }
 
               return chatResponse;
@@ -1585,6 +1605,20 @@ const sendMessage = createSafeRootHandler(
 
       return Result.ok(response);
     } finally {
+      if (claimedChatTurnOwnership.status === "preflight") {
+        const failureResult = await failChatTurnExecution({
+          code: "internal",
+          execution: claimedChatTurnOwnership.execution,
+          retryable: true,
+          safeDb,
+        });
+        if (Result.isError(failureResult)) {
+          captureError(failureResult.error, {
+            source: "send-message-claimed-turn-preflight-cleanup",
+            threadId: body.threadId,
+          });
+        }
+      }
       if (pendingUnpersistedSideEffects !== undefined) {
         const rollbackResult = await rollbackUnpersistedChatSideEffects({
           recordAuditEvent,

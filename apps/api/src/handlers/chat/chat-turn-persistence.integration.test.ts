@@ -1157,4 +1157,88 @@ describe("durable chat turn persistence", () => {
       status: "failed",
     });
   });
+
+  test("settles through the database clock when the worker clock is behind", async () => {
+    const { threadId, userMessageId } = await seedThread();
+    const acceptance = createChatTurnAcceptance({
+      organizationId: ids.orgA,
+      threadId,
+      userId: ids.userA1,
+      userMessageId,
+      workspaceId: ids.wsA1,
+    });
+    unwrap(
+      await safeDb(async (tx) => {
+        await tx.insert(chatMessages).values({
+          content: {
+            data: [{ text: "Draft an NDA", type: "text" }],
+            version: 1,
+          },
+          id: userMessageId,
+          role: "user",
+          threadId,
+          userId: ids.userA1,
+          workspaceId: ids.wsA1,
+        });
+        expect(await insertChatTurnAcceptanceOnTx({ acceptance, tx })).toBe(
+          true,
+        );
+      }),
+    );
+    const execution = unwrap(
+      await claimChatTurnForExecution({
+        acceptedTurnId: acceptance.id,
+        incomingMessageId: userMessageId,
+        incomingMessageRole: "user",
+        organizationId: ids.orgA,
+        safeDb,
+        threadId,
+        userId: ids.userA1,
+        workspaceId: ids.wsA1,
+      }),
+    );
+    if (execution === null) {
+      throw new Error("Expected the accepted turn to be claimed");
+    }
+
+    const originalDate = globalThis.Date;
+    const workerClockEpoch = new originalDate("2000-01-01T00:00:00.000Z");
+    class WorkerClockBehindDatabase extends originalDate {
+      constructor(value?: string | number | Date) {
+        super(value ?? workerClockEpoch);
+      }
+
+      // Keep the embedded database's monotonic clock real while making an
+      // API-side `new Date()` visibly stale.
+      static override now = () => originalDate.now();
+    }
+    Object.defineProperty(globalThis, "Date", {
+      configurable: true,
+      value: WorkerClockBehindDatabase,
+    });
+    try {
+      expect(
+        unwrap(
+          await failChatTurnExecution({
+            code: "unsupported-input",
+            execution,
+            retryable: false,
+            safeDb,
+          }),
+        ),
+      ).toBe(true);
+    } finally {
+      Object.defineProperty(globalThis, "Date", {
+        configurable: true,
+        value: originalDate,
+      });
+    }
+
+    const turn = await testDb.query.chatTurns.findFirst({
+      where: { id: { eq: execution.id } },
+      columns: { settledAt: true, status: true },
+    });
+    expect(turn).toMatchObject({ status: "failed" });
+    expect(turn?.settledAt).not.toBeNull();
+  });
 });

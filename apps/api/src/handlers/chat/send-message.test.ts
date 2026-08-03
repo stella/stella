@@ -58,10 +58,12 @@ void mock.module("@/api/handlers/chat/tools/external-mcp-tools", () => ({
   loadExternalMcpToolsForUser: loadExternalMcpToolsForUserMock,
 }));
 
-let analyticsCreationHook: (() => void) | undefined;
+let contextCompactionAnalyticsHook: (() => void) | undefined;
 void mock.module("@/api/lib/analytics/tanstack-ai", () => ({
-  createTanStackAIAnalyticsCallbacks: () => {
-    analyticsCreationHook?.();
+  createTanStackAIAnalyticsCallbacks: ({ feature }: { feature: string }) => {
+    if (feature === "chat.context_compaction") {
+      contextCompactionAnalyticsHook?.();
+    }
     return {
       captureError: () => undefined,
       middleware: [],
@@ -549,14 +551,43 @@ describe("send message disconnect handling", () => {
     expect(update).not.toHaveBeenCalled();
   });
 
-  test("rolls back when the client disconnects during context compaction", async () => {
+  test("terminalizes the claimed turn when compaction preflight disconnects", async () => {
     const abortController = new AbortController();
-    analyticsCreationHook = () => {
-      analyticsCreationHook = undefined;
+    contextCompactionAnalyticsHook = () => {
+      contextCompactionAnalyticsHook = undefined;
       abortController.abort();
     };
-    const insertValues = mock(async () => undefined);
-    const deleteReturning = mock(async () => [{ id: threadId }]);
+    const turnUpdates: unknown[] = [];
+    const selectWithThreadLock = () => ({
+      from: () => ({
+        where: () => ({
+          for: async () => [{ id: threadId }],
+          limit: async () => [],
+          orderBy: emptyOrderedRows,
+        }),
+      }),
+    });
+    const insert = (table: unknown) => ({
+      values: () =>
+        table === chatTurns
+          ? {
+              onConflictDoNothing: () => ({
+                returning: async () => [{ id: turnId }],
+              }),
+            }
+          : undefined,
+    });
+    const update = (table: unknown) => ({
+      set: (values: unknown) => {
+        turnUpdates.push(values);
+        if (table === chatTurns) {
+          return {
+            where: () => ({ returning: async () => [{ id: turnId }] }),
+          };
+        }
+        return { where: async () => undefined };
+      },
+    });
 
     const result = await sendMessage.handler(
       createContext({
@@ -565,31 +596,53 @@ describe("send message disconnect handling", () => {
           signal: abortController.signal,
         }),
         transaction: {
-          delete: () => ({
-            where: () => ({ returning: deleteReturning }),
-          }),
-          insert: () => ({ values: insertValues }),
+          insert,
           query: {
             chatMessages: { findFirst: async () => null },
             chatThreadCompactions: { findFirst: async () => null },
-            chatThreads: { findFirst: async () => null },
+            chatThreads: {
+              findFirst: async () => ({
+                chatModel: null,
+                contextMatterIds: [],
+                dataWorkspaceIds: [],
+                id: threadId,
+                messages: [],
+                rollbackToken: null,
+                title: "Existing thread",
+                webSearchEnabled: false,
+                workspaceId: null,
+              }),
+            },
+            chatTurns: {
+              findFirst: async ({
+                where,
+              }: {
+                where?: { status?: { eq?: string } };
+              }) =>
+                where?.status?.eq === "running" ? undefined : { id: turnId },
+            },
             organizationSettings: { findFirst: async () => null },
           },
-          select: selectChatMessages,
+          select: selectWithThreadLock,
+          update,
         },
       }),
     );
-    analyticsCreationHook = undefined;
+    contextCompactionAnalyticsHook = undefined;
 
     expect(result).toEqual({
       code: 400,
       response: { message: "Client disconnected before AI work started" },
     });
-    expect(insertValues).toHaveBeenCalledTimes(1);
-    expect(deleteReturning).toHaveBeenCalledTimes(1);
+    expect(turnUpdates).toContainEqual(
+      expect.objectContaining({
+        interruptionReason: "client-disconnected",
+        status: "interrupted",
+      }),
+    );
   });
 
-  test("rolls back when the client disconnects during context preparation", async () => {
+  test("terminalizes the claimed turn when context preparation disconnects", async () => {
     const abortController = new AbortController();
     let organizationSettingsReads = 0;
     const findOrganizationSettings = mock(async () => {
@@ -599,8 +652,37 @@ describe("send message disconnect handling", () => {
       }
       return null;
     });
-    const insertValues = mock(async () => undefined);
-    const deleteReturning = mock(async () => [{ id: threadId }]);
+    const turnUpdates: unknown[] = [];
+    const selectWithThreadLock = () => ({
+      from: () => ({
+        where: () => ({
+          for: async () => [{ id: threadId }],
+          limit: async () => [],
+          orderBy: emptyOrderedRows,
+        }),
+      }),
+    });
+    const insert = (table: unknown) => ({
+      values: () =>
+        table === chatTurns
+          ? {
+              onConflictDoNothing: () => ({
+                returning: async () => [{ id: turnId }],
+              }),
+            }
+          : undefined,
+    });
+    const update = (table: unknown) => ({
+      set: (values: unknown) => {
+        turnUpdates.push(values);
+        if (table === chatTurns) {
+          return {
+            where: () => ({ returning: async () => [{ id: turnId }] }),
+          };
+        }
+        return { where: async () => undefined };
+      },
+    });
 
     const result = await sendMessage.handler(
       createContext({
@@ -609,17 +691,35 @@ describe("send message disconnect handling", () => {
           signal: abortController.signal,
         }),
         transaction: {
-          delete: () => ({
-            where: () => ({ returning: deleteReturning }),
-          }),
-          insert: () => ({ values: insertValues }),
+          insert,
           query: {
             chatMessages: { findFirst: async () => null },
             chatThreadCompactions: { findFirst: async () => null },
-            chatThreads: { findFirst: async () => null },
+            chatThreads: {
+              findFirst: async () => ({
+                chatModel: null,
+                contextMatterIds: [],
+                dataWorkspaceIds: [],
+                id: threadId,
+                messages: [],
+                rollbackToken: null,
+                title: "Existing thread",
+                webSearchEnabled: false,
+                workspaceId: null,
+              }),
+            },
+            chatTurns: {
+              findFirst: async ({
+                where,
+              }: {
+                where?: { status?: { eq?: string } };
+              }) =>
+                where?.status?.eq === "running" ? undefined : { id: turnId },
+            },
             organizationSettings: { findFirst: findOrganizationSettings },
           },
-          select: selectChatMessages,
+          select: selectWithThreadLock,
+          update,
         },
       }),
     );
@@ -629,8 +729,12 @@ describe("send message disconnect handling", () => {
       response: { message: "Client disconnected before AI work started" },
     });
     expect(findOrganizationSettings).toHaveBeenCalledTimes(2);
-    expect(insertValues).toHaveBeenCalledTimes(1);
-    expect(deleteReturning).toHaveBeenCalledTimes(1);
+    expect(turnUpdates).toContainEqual(
+      expect.objectContaining({
+        interruptionReason: "client-disconnected",
+        status: "interrupted",
+      }),
+    );
   });
 
   test("stops before connector discovery when the client disconnects during persistence", async () => {
@@ -798,6 +902,11 @@ describe("send message turn persistence", () => {
     rollbackUnpersistedChatSideEffectsMock.mockImplementationOnce(async () =>
       Result.ok(),
     );
+    let compactionStarted = false;
+    contextCompactionAnalyticsHook = () => {
+      contextCompactionAnalyticsHook = undefined;
+      compactionStarted = true;
+    };
 
     const selectWithThreadLock = () => ({
       from: () => ({
@@ -833,6 +942,7 @@ describe("send message turn persistence", () => {
             organizationSettings: { findFirst: async () => null },
           },
           select: selectWithThreadLock,
+          update: () => ({ set: () => ({ where: async () => [] }) }),
         },
       }),
     );
@@ -841,11 +951,13 @@ describe("send message turn persistence", () => {
       code: 409,
       response: { message: "A chat turn is already running" },
     });
+    expect(compactionStarted).toBe(false);
     expect(rollbackUnpersistedChatSideEffectsMock).toHaveBeenCalledWith(
       expect.objectContaining({
         threadId,
         uploadedFiles: [uploadedFile],
       }),
     );
+    contextCompactionAnalyticsHook = undefined;
   });
 });

@@ -1,6 +1,6 @@
 import type { Result } from "better-result";
 import { panic } from "better-result";
-import { and, desc, eq, inArray, isNull, lte } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lte, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
@@ -42,7 +42,6 @@ const AI_ERROR_RETRYABLE = {
 
 export type ChatTurnAcceptance = {
   id: SafeId<"chatTurn">;
-  leaseExpiresAt: Date;
   organizationId: SafeId<"organization">;
   threadId: SafeId<"chatThread">;
   userId: SafeId<"user">;
@@ -55,8 +54,15 @@ export type ChatTurnExecution = {
   id: SafeId<"chatTurn">;
 };
 
-const nextChatTurnLeaseExpiry = (): Date =>
-  new Date(Date.now() + CHAT_TURN_LEASE_MS);
+/**
+ * Turn timestamps participate in database check constraints with `created_at`.
+ * Generate them on the database too: API worker clocks are not an authority for
+ * a row whose creation and settlement are both enforced by PostgreSQL.
+ */
+const databaseNow = () => sql<Date>`now()`;
+
+const nextChatTurnLeaseExpiry = () =>
+  sql<Date>`now() + ${CHAT_TURN_LEASE_MS} * interval '1 millisecond'`;
 
 export const createChatTurnAcceptance = ({
   organizationId,
@@ -64,9 +70,8 @@ export const createChatTurnAcceptance = ({
   userId,
   userMessageId,
   workspaceId,
-}: Omit<ChatTurnAcceptance, "id" | "leaseExpiresAt">): ChatTurnAcceptance => ({
+}: Omit<ChatTurnAcceptance, "id">): ChatTurnAcceptance => ({
   id: createSafeId<"chatTurn">(),
-  leaseExpiresAt: nextChatTurnLeaseExpiry(),
   organizationId,
   threadId,
   userId,
@@ -102,7 +107,7 @@ const interruptExpiredRunningChatTurnOnTx = async ({
   threadId: SafeId<"chatThread">;
   tx: Transaction;
 }): Promise<void> => {
-  const now = new Date();
+  const now = databaseNow();
   // audit: skip — timeout terminalization records that an execution lease ended; no user-authored content changes
   await tx
     .update(chatTurns)
@@ -167,7 +172,7 @@ export const insertChatTurnAcceptanceOnTx = async ({
   acceptance: ChatTurnAcceptance;
   tx: Transaction;
 }): Promise<boolean> => {
-  const now = new Date();
+  const now = databaseNow();
   // The caller normally reserved this lock before persisting the user
   // message. Keep the check here too so direct callers retain the invariant.
   if (!(await canAcceptChatTurnOnTx({ threadId: acceptance.threadId, tx }))) {
@@ -201,7 +206,7 @@ export const insertChatTurnAcceptanceOnTx = async ({
     .insert(chatTurns)
     .values({
       id: acceptance.id,
-      leaseExpiresAt: acceptance.leaseExpiresAt,
+      leaseExpiresAt: nextChatTurnLeaseExpiry(),
       organizationId: acceptance.organizationId,
       status: "accepted",
       threadId: acceptance.threadId,
@@ -337,7 +342,7 @@ export const claimChatTurnForExecutionOnTx = async ({
             eq(chatTurns.threadId, threadId),
             eq(chatTurns.userMessageId, incomingMessageId),
             eq(chatTurns.status, "running"),
-            lte(chatTurns.leaseExpiresAt, new Date()),
+            lte(chatTurns.leaseExpiresAt, databaseNow()),
           ),
         )
         .limit(1);
@@ -532,7 +537,7 @@ export const settleChatTurnOnTx = async ({
   outcome,
   tx,
 }: SettleChatTurnProps): Promise<boolean> => {
-  const settledAt = new Date();
+  const settledAt = databaseNow();
   const base = {
     cancellationReason: null,
     executionId: null,
@@ -657,7 +662,7 @@ export const failChatTurnExecution = async ({
         interactionType: null,
         interruptionReason: null,
         leaseExpiresAt: null,
-        settledAt: new Date(),
+        settledAt: databaseNow(),
         status: "failed",
       })
       .where(
