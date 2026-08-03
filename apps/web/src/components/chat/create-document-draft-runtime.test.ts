@@ -140,4 +140,24 @@ describe("create-document draft runtime", () => {
       buffer: lastBuffer,
     });
   });
+
+  test("bounds retained snapshot bytes independently of entry count", async () => {
+    const snapshotBytes = 24 * 1024 * 1024;
+    const buffers = Array.from(
+      { length: 3 },
+      () => new ArrayBuffer(snapshotBytes),
+    );
+    const saves: ReturnType<typeof saveCreateDocumentDraft>[] = [];
+    for (const [index, buffer] of buffers.entries()) {
+      registerCreateDocumentDraftSaver(`large-${index}`, async () => buffer)();
+      saves.push(saveCreateDocumentDraft(`large-${index}`));
+    }
+    await Promise.all(saves);
+
+    expect(await saveCreateDocumentDraft("large-0")).toEqual({
+      status: "unavailable",
+    });
+    expect((await saveCreateDocumentDraft("large-1")).status).toBe("saved");
+    expect((await saveCreateDocumentDraft("large-2")).status).toBe("saved");
+  });
 });

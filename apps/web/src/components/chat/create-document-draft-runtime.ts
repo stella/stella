@@ -5,12 +5,16 @@ import { detached } from "@/lib/detached";
 type CreateDocumentDraftSaver = () => Promise<ArrayBuffer | null>;
 
 const MAX_RETAINED_DRAFT_SNAPSHOTS = 32;
+const MAX_RETAINED_DRAFT_SNAPSHOT_BYTES = 64 * 1024 * 1024;
+
+type RetainedDraftSnapshot = {
+  byteLength: number | null;
+  promise: Promise<CreateDocumentDraftSaveResult>;
+};
 
 let draftSavers: Record<string, CreateDocumentDraftSaver | undefined> = {};
-let retainedDraftSnapshots: Record<
-  string,
-  Promise<CreateDocumentDraftSaveResult> | undefined
-> = {};
+let retainedDraftSnapshots: Record<string, RetainedDraftSnapshot | undefined> =
+  {};
 
 const draftRuntimeKey = (toolCallId: string): string => `tool:${toolCallId}`;
 const withoutRuntimeKey = <T>(
@@ -22,15 +26,34 @@ const withoutRuntimeKey = <T>(
   );
 
 const withRetainedDraftSnapshot = (
-  values: Readonly<
-    Record<string, Promise<CreateDocumentDraftSaveResult> | undefined>
-  >,
+  values: Readonly<Record<string, RetainedDraftSnapshot | undefined>>,
   key: string,
-  snapshot: Promise<CreateDocumentDraftSaveResult>,
-): Record<string, Promise<CreateDocumentDraftSaveResult> | undefined> => {
+  snapshot: RetainedDraftSnapshot,
+): Record<string, RetainedDraftSnapshot | undefined> => {
   const entries = Object.entries(withoutRuntimeKey(values, key));
   entries.push([key, snapshot]);
   return Object.fromEntries(entries.slice(-MAX_RETAINED_DRAFT_SNAPSHOTS));
+};
+
+const pruneRetainedDraftSnapshotsByBytes = (): void => {
+  const entries = Object.entries(retainedDraftSnapshots);
+  const retained: [string, RetainedDraftSnapshot][] = [];
+  let retainedBytes = 0;
+  for (const [key, snapshot] of entries.toReversed()) {
+    if (snapshot === undefined) {
+      continue;
+    }
+    const byteLength = snapshot.byteLength ?? 0;
+    if (
+      byteLength > 0 &&
+      retainedBytes + byteLength > MAX_RETAINED_DRAFT_SNAPSHOT_BYTES
+    ) {
+      continue;
+    }
+    retainedBytes += byteLength;
+    retained.push([key, snapshot]);
+  }
+  retainedDraftSnapshots = Object.fromEntries(retained.toReversed());
 };
 
 export type CreateDocumentDraftSaveResult =
@@ -129,9 +152,22 @@ const captureDraftSnapshot = async (
   retainedDraftSnapshots = withRetainedDraftSnapshot(
     retainedDraftSnapshots,
     draftRuntimeKey(toolCallId),
-    snapshot,
+    { byteLength: null, promise: snapshot },
   );
-  return await snapshot;
+  const result = await snapshot;
+  const key = draftRuntimeKey(toolCallId);
+  const retained = retainedDraftSnapshots[key];
+  if (retained?.promise === snapshot) {
+    retainedDraftSnapshots = {
+      ...retainedDraftSnapshots,
+      [key]: {
+        byteLength: result.status === "saved" ? result.buffer.byteLength : 0,
+        promise: snapshot,
+      },
+    };
+    pruneRetainedDraftSnapshotsByBytes();
+  }
+  return result;
 };
 
 export const registerCreateDocumentDraftSaver = (
@@ -160,7 +196,7 @@ export const saveCreateDocumentDraft = async (
     return await captureDraftSnapshot(toolCallId, saver);
   }
   return (
-    (await retainedDraftSnapshots[key]) ?? {
+    (await retainedDraftSnapshots[key]?.promise) ?? {
       status: "unavailable",
     }
   );

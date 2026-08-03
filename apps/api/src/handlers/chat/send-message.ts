@@ -254,7 +254,7 @@ const validateActiveDraftContext = async ({
     (message) =>
       message.role === "assistant" &&
       isReadyGeneratedDocumentDraft({
-        content: message,
+        persistedContent: message.content,
         fileName: activeDraft.fileName,
         toolCallId: activeDraft.toolCallId,
       }),
