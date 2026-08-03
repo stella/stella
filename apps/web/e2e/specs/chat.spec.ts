@@ -10,7 +10,7 @@ test("chat composer sends a message and renders the assistant reply", async ({
   // Keep the sticky-turn canary independent of the runner's default viewport.
   // The transcript must have enough vertical overflow to cross the sticky
   // sentinel; otherwise scrollTop is clamped before the state can become stuck.
-  await page.setViewportSize({ height: 560, width: 960 });
+  await page.setViewportSize({ height: 420, width: 960 });
 
   // A route is ready when its UI is ready, not when every cold Vite resource
   // has fired the browser load event. Commit the document, then synchronize on
@@ -132,6 +132,14 @@ test("chat composer sends a message and renders the assistant reply", async ({
     hasText: messageText,
   });
   await expect(stickyHeader).toHaveCount(1);
+  const availableScroll = await stickyHeader.evaluate((header) => {
+    const viewport = header.closest('[data-slot="scroll-area-viewport"]');
+    if (!(viewport instanceof HTMLElement)) {
+      throw new Error("Sticky chat header is missing its scroll viewport");
+    }
+    return viewport.scrollHeight - viewport.clientHeight;
+  });
+  expect(availableScroll).toBeGreaterThan(0);
   await stickyHeader.evaluate((header) => {
     const viewport = header.closest('[data-slot="scroll-area-viewport"]');
     const turn = header.closest("[data-chat-turn-id]");

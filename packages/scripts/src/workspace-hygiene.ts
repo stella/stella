@@ -27,6 +27,8 @@ const TURBO_INSTALL_PATTERN =
 const TURBO_VERSION_PATTERN = /^\^?(?<version>\d+\.\d+\.\d+)$/u;
 const BABEL_CORE_DEPENDENCY = "@babel/core";
 const BABEL_MAJOR_PATTERN = /^[~^]?(?<major>\d+)\./u;
+const EXACT_PACKAGE_VERSION_PATTERN =
+  /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/u;
 const BABEL_TOOLCHAINS = [
   { expectedMajor: 7, packagePath: "apps/mobile/package.json" },
   { expectedMajor: 8, packagePath: "apps/web/package.json" },
@@ -181,6 +183,117 @@ const readStringProperty = (
 
   const value = values[property];
   return typeof value === "string" ? value : null;
+};
+
+const resolveCatalogVersion = (
+  rootPackage: Record<string, unknown> | null,
+  dependencyName: string,
+  specifier: string,
+): string | null => {
+  if (specifier === "catalog:") {
+    return readStringProperty(rootPackage, "catalog", dependencyName);
+  }
+  const catalogName = specifier.startsWith("catalog:")
+    ? specifier.slice("catalog:".length)
+    : "";
+  if (catalogName.length === 0) {
+    return null;
+  }
+  const catalogs = rootPackage?.["catalogs"];
+  if (!isRecord(catalogs)) {
+    return null;
+  }
+  const catalog = catalogs[catalogName];
+  return isRecord(catalog) && typeof catalog[dependencyName] === "string"
+    ? catalog[dependencyName]
+    : null;
+};
+
+const findResolvedPackageJson = (
+  rootDir: string,
+  workspacePath: string,
+  dependencyName: string,
+): string | null => {
+  let cursor = workspacePath;
+  while (cursor.startsWith(rootDir)) {
+    const candidate = path.join(
+      cursor,
+      "node_modules",
+      ...dependencyName.split("/"),
+      "package.json",
+    );
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+    if (cursor === rootDir) {
+      return null;
+    }
+    cursor = path.dirname(cursor);
+  }
+  return null;
+};
+
+/**
+ * Bun's hoisted linker can leave an older workspace-local package behind
+ * after the root catalog moves forward. Runtime resolution prefers that
+ * nested copy, so the manifest and lockfile can look correct while Vite
+ * bundles old code. Check the same nearest-node_modules path the workspace
+ * will resolve and reject exact catalog pins that disagree.
+ */
+const validateInstalledCatalogVersions = (
+  rootDir: string,
+  workspacePath: string,
+  relativePackagePath: string,
+  packageJson: Record<string, unknown> | null,
+): WorkspaceIssue[] => {
+  const rootPackage = readPackageJson(path.resolve(rootDir, "package.json"));
+  const issues: WorkspaceIssue[] = [];
+
+  for (const field of DEPENDENCY_FIELDS) {
+    if (field === "peerDependencies") {
+      continue;
+    }
+    const dependencies = packageJson?.[field];
+    if (!isRecord(dependencies)) {
+      continue;
+    }
+    for (const [dependencyName, specifier] of Object.entries(dependencies)) {
+      if (typeof specifier !== "string" || !specifier.startsWith("catalog:")) {
+        continue;
+      }
+      const expectedVersion = resolveCatalogVersion(
+        rootPackage,
+        dependencyName,
+        specifier,
+      );
+      if (
+        expectedVersion === null ||
+        !EXACT_PACKAGE_VERSION_PATTERN.test(expectedVersion)
+      ) {
+        continue;
+      }
+      const resolvedPackageJsonPath = findResolvedPackageJson(
+        rootDir,
+        workspacePath,
+        dependencyName,
+      );
+      if (resolvedPackageJsonPath === null) {
+        continue;
+      }
+      const installedVersion = readPackageJson(resolvedPackageJsonPath)?.[
+        "version"
+      ];
+      if (installedVersion === expectedVersion) {
+        continue;
+      }
+      issues.push({
+        message: `${dependencyName} resolves to ${typeof installedVersion === "string" ? installedVersion : "an invalid package"}, but ${specifier} requires ${expectedVersion}; remove the stale nested install and reinstall`,
+        path: relativePackagePath,
+      });
+    }
+  }
+
+  return issues;
 };
 
 const validateTypeScriptToolchain = (rootDir: string): WorkspaceIssue[] => {
@@ -599,6 +712,12 @@ export const validateWorkspaceRoot = (rootDir: string): WorkspaceIssue[] => {
           path.resolve(parentPath, entry.name),
           relativePath,
           dependencyNames,
+        ),
+        ...validateInstalledCatalogVersions(
+          rootDir,
+          path.resolve(parentPath, entry.name),
+          `${relativePath}/package.json`,
+          readPackageJson(packageJsonPath),
         ),
       );
     }
