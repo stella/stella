@@ -465,13 +465,18 @@ const TableExportMenu = ({ view, workspaceId }: TableExportMenuProps) => {
             />
           }
         >
-          <DownloadIcon className="size-3.5" />
+          {exportingFormat === null ? (
+            <DownloadIcon className="size-3.5" />
+          ) : (
+            <Loader2Icon className="size-3.5 animate-spin" />
+          )}
         </MenuTrigger>
         <MenuPopup className="min-w-56">
           {TABLE_EXPORT_FORMATS.map((option) => (
             <Fragment key={option.format}>
               {option.separatorBefore ? <MenuSeparator /> : null}
               <MenuItem
+                closeOnClick={false}
                 disabled={exportingFormat !== null}
                 onClick={() => {
                   detached(handleExport(option.format), "TableExportMenu");
