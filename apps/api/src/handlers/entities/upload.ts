@@ -93,6 +93,26 @@ type ResolveFileNameProps = {
   name: SanitizedFileName;
 };
 
+type UploadWriteFailureReason =
+  | "entity-limit"
+  | "invalid-property"
+  | "missing-draft";
+
+const uploadWriteFailureMessage = (
+  reason: UploadWriteFailureReason,
+): string => {
+  switch (reason) {
+    case "entity-limit":
+      return "Entities limit reached";
+    case "invalid-property":
+      return "Property not found or not a file property";
+    case "missing-draft":
+      return "Generated document draft not found";
+    default:
+      return reason satisfies never;
+  }
+};
+
 const MAX_FILENAME_LENGTH = 255;
 
 type CleanupUploadedS3KeysOptions = {
@@ -530,24 +550,10 @@ const uploadEntityHandler = async function* ({
 
     if (!writeResult.ok) {
       await cleanupUploadedS3Keys({ keys: s3Keys, fileId, workspaceId });
-      let message: string;
-      switch (writeResult.reason) {
-        case "entity-limit":
-          message = "Entities limit reached";
-          break;
-        case "invalid-property":
-          message = "Property not found or not a file property";
-          break;
-        case "missing-draft":
-          message = "Generated document draft not found";
-          break;
-        default:
-          writeResult.reason satisfies never;
-      }
       return Result.err(
         new HandlerError({
           status: writeResult.reason === "missing-draft" ? 409 : 400,
-          message,
+          message: uploadWriteFailureMessage(writeResult.reason),
         }),
       );
     }
