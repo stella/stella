@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { Result } from "better-result";
 import { makeZip } from "client-zip";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
@@ -7,10 +7,14 @@ import { entities, entityVersions, fields } from "@/api/db/schema";
 import {
   buildArchivePaths,
   buildErrorManifest,
+  groupFileContentsByEntityId,
   mapOrderedConcurrent,
   uniquePath,
 } from "@/api/handlers/entities/zip-archive";
-import type { ArchiveNode } from "@/api/handlers/entities/zip-archive";
+import type {
+  ArchiveFileContent,
+  ArchiveNode,
+} from "@/api/handlers/entities/zip-archive";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -145,10 +149,7 @@ const downloadZipHandler = async function* ({
   );
 
   // Uploaded-file content for the document descendants, in one query.
-  const fileContentsByEntityId = new Map<
-    string,
-    { fileId: string; fileName: string; mimeType: string }[]
-  >();
+  let fileContentsByEntityId = new Map<string, ArchiveFileContent[]>();
   if (descendants.length > 0) {
     const descendantIds = descendants.map((node) =>
       brandPersistedEntityId(node.id),
@@ -176,19 +177,21 @@ const downloadZipHandler = async function* ({
           .where(inArray(entityVersions.entityId, descendantIds)),
       ),
     );
-    for (const row of fieldRows) {
-      if (row.content.type === "file") {
-        const entityFileContents =
-          fileContentsByEntityId.get(String(row.entityId)) ??
-          panic("File contents missing for downloadable entity");
-        entityFileContents.push({
-          fileId: row.content.id,
-          fileName: row.content.fileName,
-          mimeType: row.content.mimeType,
-        });
-        fileContentsByEntityId.set(String(row.entityId), entityFileContents);
-      }
-    }
+    const uploadedFiles = fieldRows.flatMap((row) =>
+      row.content.type === "file"
+        ? [
+            {
+              entityId: String(row.entityId),
+              content: {
+                fileId: row.content.id,
+                fileName: row.content.fileName,
+                mimeType: row.content.mimeType,
+              },
+            },
+          ]
+        : [],
+    );
+    fileContentsByEntityId = groupFileContentsByEntityId(uploadedFiles);
   }
 
   // Rebuild the tree → archive paths, rooted at the folder's own name.

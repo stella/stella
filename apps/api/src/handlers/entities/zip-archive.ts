@@ -177,6 +177,30 @@ export const mapOrderedConcurrent = async function* <T, R>(
   }
 };
 
+/** An uploaded file held by a document descendant. */
+export type ArchiveFileContent = {
+  fileId: string;
+  fileName: string;
+  mimeType: string;
+};
+
+/**
+ * Group uploaded files by the id of the document that holds them. A
+ * document can carry several file fields, so each id maps to a list;
+ * documents without one are absent rather than mapped to an empty list.
+ */
+export const groupFileContentsByEntityId = (
+  files: readonly { entityId: string; content: ArchiveFileContent }[],
+): Map<string, ArchiveFileContent[]> => {
+  const contentsByEntityId = new Map<string, ArchiveFileContent[]>();
+  for (const { entityId, content } of files) {
+    const contents = contentsByEntityId.get(entityId) ?? [];
+    contents.push(content);
+    contentsByEntityId.set(entityId, contents);
+  }
+  return contentsByEntityId;
+};
+
 /** Body of the in-archive notice listing files that could not be fetched. */
 export const buildErrorManifest = (failedPaths: readonly string[]): string =>
   [
