@@ -94,6 +94,7 @@ Project: root
 - babel-plugin-react-compiler 1.0.0 — MIT
 - better-auth 1.6.25 — MIT
 - better-result 2.10.0 — MIT
+- better-result 3.0.0 — MIT
 - bullmq 5.81.2 — MIT
 - cheerio 1.2.0 — MIT
 - class-variance-authority 0.7.1 — Apache-2.0
@@ -104,6 +105,7 @@ Project: root
 - crossws 0.4.10 — MIT
 - diff 8.0.4 — BSD-3-Clause
 - diff 9.0.0 — BSD-3-Clause
+- disposable-email-domains-js 1.25.0 — CC0-1.0
 - domhandler 5.0.3 — BSD-2-Clause
 - domhandler 6.0.1 — BSD-2-Clause
 - drizzle-orm 1.0.0-rc.4 — Apache-2.0
@@ -115,6 +117,7 @@ Project: root
 - fast-check 4.9.0 — MIT
 - immer 11.1.15 — MIT
 - input-otp 1.4.2 — MIT
+- ip-address 10.2.0 — MIT
 - jose 6.2.4 — MIT
 - jszip 3.10.1 — (MIT OR GPL-3.0-or-later)
 - lucide-react 1.27.0 — ISC
