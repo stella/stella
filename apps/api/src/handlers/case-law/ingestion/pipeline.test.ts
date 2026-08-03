@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, mock, test } from "bun:test";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -538,5 +538,57 @@ describe("processDecision — corpus storage off", () => {
       astS3Key: null,
       contentHash: null,
     });
+  });
+});
+
+describe("processDecision — source raw upload failure", () => {
+  test("reports a new decision's failed raw upload as retryable, not thrown", async () => {
+    // A thrown failure is caught by the decision loop, counted as skipped,
+    // and lets the page's cursor advance; a forward-only traversal then
+    // never returns to the decision and its raw source is lost. Only a
+    // retryable outcome reaches the page-level cursor hold.
+    await mock.module("@/api/lib/s3", () => ({
+      getS3: () => ({
+        write: () => {
+          throw new Error("an unexpected error has occurred");
+        },
+      }),
+    }));
+
+    const scopedDb: ScopedDb = async (callback) => {
+      const tx = {
+        query: {
+          caseLawDecisions: {
+            findFirst: async () => await Promise.resolve(undefined),
+          },
+        },
+      };
+
+      // SAFETY: the raw upload runs before any decision write, so the
+      // dedup lookup is the only chain this path reaches.
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion
+      return await callback(tx as unknown as Transaction);
+    };
+
+    const outcome = await processDecision({
+      input: {
+        caseNumber: "X/2/2026",
+        court: "Test Court",
+        country: "SVK",
+        language: "sk",
+        fulltext: "Rozhodnutie o veci samej.",
+        metadata: {},
+        rawHash: "new-hash",
+        documentAst: EMPTY_AST,
+        sourceRaw: "<html></html>",
+      },
+      observationOrder: 1n,
+      sourceId: createSafeId<"caseLawSource">(),
+      scopedDb,
+      observedAt: new Date("2026-08-03T00:00:00.000Z"),
+    });
+
+    expect(outcome.status).toBe("retryable");
+    expect(outcome.inserted).toBe(false);
   });
 });

@@ -145,6 +145,7 @@ const PROCESS_DECISION_STATUS = {
 const PROCESS_DECISION_RETRY_REASON = {
   CONTENTION: "contention",
   CORPUS_WRITE: "corpus-write",
+  SOURCE_RAW_WRITE: "source-raw-write",
 } as const;
 
 type ProcessResult =
@@ -682,13 +683,29 @@ const processDecisionAttempt = async ({
       sourceRawContentType = rawContentType;
     } catch (error) {
       if (!existing) {
-        // New decision: re-throw so the pipeline skips this decision
-        // and retries next cycle. Inserting with sourceRawS3Key: null
-        // would set sourceHash, causing the dedup check to skip it
-        // permanently — the raw source would be lost forever.
-        // Skip captureError here; the outer catch in
-        // runIngestionPipeline will capture it once.
-        throw error;
+        // New decision: hold the page's cursor and retry the slice.
+        // Inserting with sourceRawS3Key: null would set sourceHash,
+        // causing the dedup check to skip it permanently — the raw
+        // source would be lost forever.
+        //
+        // Reported as retryable rather than thrown: the decision loop
+        // catches a throw, counts it as skipped, and lets the cursor
+        // advance, so a forward-only traversal passes the decision and
+        // never returns to it. Only a retryable outcome reaches the
+        // page-level hold.
+        logger.error("case_law.ingestion.source_raw_write_failed", {
+          sourceId,
+          caseNumber: result.caseNumber,
+          "error.type": errorTag(error),
+          "error.detail": corpusWriteErrorDetail(error),
+        });
+        captureError(error, { sourceId, step: "uploadSourceRaw" });
+
+        return {
+          status: PROCESS_DECISION_STATUS.RETRYABLE,
+          inserted: false,
+          reason: PROCESS_DECISION_RETRY_REASON.SOURCE_RAW_WRITE,
+        };
       }
 
       captureError(error, { sourceId, step: "uploadSourceRaw" });
@@ -1524,14 +1541,23 @@ export const runIngestionPipeline = async ({
               }
               break;
             case PROCESS_DECISION_STATUS.RETRYABLE:
-              if (
-                outcome.reason === PROCESS_DECISION_RETRY_REASON.CORPUS_WRITE
-              ) {
-                s3UploadFailures++;
-                haltReason = "1 corpus write failure(s); cursor held for retry";
-              } else {
-                haltReason =
-                  "Concurrent decision reconciliation; cursor held for retry";
+              switch (outcome.reason) {
+                case PROCESS_DECISION_RETRY_REASON.CORPUS_WRITE:
+                  s3UploadFailures++;
+                  haltReason =
+                    "1 corpus write failure(s); cursor held for retry";
+                  break;
+                case PROCESS_DECISION_RETRY_REASON.SOURCE_RAW_WRITE:
+                  s3UploadFailures++;
+                  haltReason =
+                    "1 source raw write failure(s); cursor held for retry";
+                  break;
+                case PROCESS_DECISION_RETRY_REASON.CONTENTION:
+                  haltReason =
+                    "Concurrent decision reconciliation; cursor held for retry";
+                  break;
+                default:
+                  return outcome.reason satisfies never;
               }
               retryableDecision = true;
               break;
