@@ -31,7 +31,16 @@ describe("document icon MIME classification", () => {
       getDocumentIconKind(
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       ),
+    ).toBe("excel");
+  });
+
+  // The Excel mark is brand-specific: a spreadsheet that is not an Excel
+  // workbook must not carry it.
+  test("keeps non-Excel spreadsheets off the Excel mark", () => {
+    expect(
+      getDocumentIconKind("application/vnd.oasis.opendocument.spreadsheet"),
     ).toBe("spreadsheet");
+    expect(getDocumentIconKind("application/vnd.ms-excel")).toBe("excel");
   });
 
   test("classifies markdown by MIME or extension", () => {

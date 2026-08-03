@@ -1,6 +1,12 @@
 import type { SVGProps } from "react";
 
-import { File, FileImage, FileText, MailIcon } from "lucide-react";
+import {
+  File,
+  FileImage,
+  FileSpreadsheet,
+  FileText,
+  MailIcon,
+} from "lucide-react";
 
 import { getDocumentIconKind } from "@/components/document-icon.logic";
 import { MarkdownIcon } from "@/components/markdown-icon";
@@ -166,8 +172,12 @@ export function DocumentIcon({
     return <DocxIcon className={className} />;
   }
 
-  if (iconKind === "spreadsheet") {
+  if (iconKind === "excel") {
     return <XlsxIcon className={className} />;
+  }
+
+  if (iconKind === "spreadsheet") {
+    return <FileSpreadsheet className={className} />;
   }
 
   if (iconKind === "csv") {

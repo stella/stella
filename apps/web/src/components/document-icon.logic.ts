@@ -8,9 +8,14 @@ const wordMimeTypes = Object.freeze({
   "application/vnd.oasis.opendocument.text": true,
 });
 
-const spreadsheetMimeTypes = Object.freeze({
+// Only the Excel formats get the Excel mark. ODS is a spreadsheet but not an
+// Excel workbook, so it keeps the unbranded spreadsheet glyph.
+const excelMimeTypes = Object.freeze({
   "application/vnd.ms-excel": true,
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": true,
+});
+
+const spreadsheetMimeTypes = Object.freeze({
   "application/vnd.oasis.opendocument.spreadsheet": true,
 });
 
@@ -31,6 +36,7 @@ const emailMimeTypes = Object.freeze({ [EML_MIME]: true, [MSG_MIME]: true });
 export type DocumentIconKind =
   | "pdf"
   | "word"
+  | "excel"
   | "spreadsheet"
   | "csv"
   | "image"
@@ -49,6 +55,10 @@ export const getDocumentIconKind = (
 
   if (Object.hasOwn(wordMimeTypes, mimeType)) {
     return "word";
+  }
+
+  if (Object.hasOwn(excelMimeTypes, mimeType)) {
+    return "excel";
   }
 
   if (Object.hasOwn(spreadsheetMimeTypes, mimeType)) {
