@@ -87,6 +87,10 @@ type UploadEntityHandlerProps = {
     | undefined;
 };
 
+type GeneratedDocumentDraftIdentity = NonNullable<
+  UploadEntityHandlerProps["generatedDraft"]
+>;
+
 type ResolveFileNameProps = {
   tx: Transaction;
   propertyId: SafeId<"property">;
@@ -97,6 +101,19 @@ type UploadWriteFailureReason =
   | "entity-limit"
   | "invalid-property"
   | "missing-draft";
+
+type GeneratedDocumentUploadResult = {
+  entityId: string;
+  fieldId: string;
+  fileId: string;
+  fileName: string;
+  renamed: boolean;
+};
+
+type GeneratedDocumentDraftPreflight =
+  | { status: "invalid" }
+  | { status: "ready" }
+  | { result: GeneratedDocumentUploadResult; status: "saved" };
 
 const uploadWriteFailureMessage = (
   reason: UploadWriteFailureReason,
@@ -149,6 +166,177 @@ const cleanupUploadedS3Keys = async ({
   }
 };
 
+type ResolveSavedGeneratedDocumentProps = {
+  tx: Transaction;
+  output: {
+    entityId: string;
+    fieldId: string;
+    fileName: string;
+    workspaceId: string;
+  };
+  requestedFileName: SanitizedFileName;
+  workspaceId: SafeId<"workspace">;
+};
+
+const resolveSavedGeneratedDocument = async ({
+  tx,
+  output,
+  requestedFileName,
+  workspaceId,
+}: ResolveSavedGeneratedDocumentProps): Promise<GeneratedDocumentUploadResult | null> => {
+  if (output.workspaceId !== workspaceId) {
+    return null;
+  }
+
+  const [savedField] = await tx
+    .select({
+      content: fields.content,
+      entityId: entities.id,
+      fieldId: fields.id,
+    })
+    .from(entities)
+    .innerJoin(
+      entityVersions,
+      and(
+        eq(entityVersions.id, entities.currentVersionId),
+        eq(entityVersions.entityId, entities.id),
+        eq(entityVersions.workspaceId, entities.workspaceId),
+        isNull(entityVersions.deletedAt),
+      ),
+    )
+    .innerJoin(
+      fields,
+      and(
+        sql`${fields.id} = ${output.fieldId}::uuid`,
+        eq(fields.entityVersionId, entityVersions.id),
+        eq(fields.workspaceId, entities.workspaceId),
+      ),
+    )
+    .where(
+      and(
+        sql`${entities.id} = ${output.entityId}::uuid`,
+        eq(entities.workspaceId, workspaceId),
+      ),
+    )
+    .limit(1);
+
+  if (savedField?.content.type !== "file") {
+    return null;
+  }
+
+  return {
+    entityId: savedField.entityId,
+    fieldId: savedField.fieldId,
+    fileId: savedField.content.id,
+    fileName: savedField.content.fileName,
+    renamed: savedField.content.fileName !== requestedFileName,
+  };
+};
+
+type PreflightGeneratedDocumentDraftProps = {
+  safeDb: SafeDb;
+  organizationId: SafeId<"organization">;
+  workspaceId: SafeId<"workspace">;
+  userId: SafeId<"user">;
+  fileName: SanitizedFileName;
+  generatedDraft: GeneratedDocumentDraftIdentity;
+};
+
+type FindGeneratedDocumentDraftStateProps = {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+  fileName: SanitizedFileName;
+  generatedDraft: GeneratedDocumentDraftIdentity;
+  lock: "none" | "for-update";
+};
+
+const findGeneratedDocumentDraftState = async ({
+  tx,
+  organizationId,
+  userId,
+  fileName,
+  generatedDraft,
+  lock,
+}: FindGeneratedDocumentDraftStateProps) => {
+  const query = tx
+    .select({
+      content: chatMessages.content,
+    })
+    .from(chatMessages)
+    .innerJoin(chatThreads, eq(chatThreads.id, chatMessages.threadId))
+    .where(
+      and(
+        eq(chatMessages.id, generatedDraft.messageId),
+        eq(chatMessages.threadId, generatedDraft.threadId),
+        eq(chatMessages.userId, userId),
+        eq(chatMessages.role, "assistant"),
+        eq(chatThreads.userId, userId),
+        eq(chatThreads.organizationId, organizationId),
+        generatedDraft.threadWorkspaceId === undefined
+          ? isNull(chatThreads.workspaceId)
+          : eq(chatThreads.workspaceId, generatedDraft.threadWorkspaceId),
+      ),
+    )
+    .limit(1);
+
+  const toDraftState = (message: { content: unknown } | undefined) =>
+    message === undefined
+      ? ({ status: "invalid" } as const)
+      : getGeneratedDocumentDraftState({
+          persistedContent: message.content,
+          fileName,
+          toolCallId: generatedDraft.toolCallId,
+        });
+
+  switch (lock) {
+    case "none":
+      return toDraftState((await query).at(0));
+    case "for-update":
+      return toDraftState((await query.for("update")).at(0));
+    default:
+      return lock satisfies never;
+  }
+};
+
+const preflightGeneratedDocumentDraft = async ({
+  safeDb,
+  organizationId,
+  workspaceId,
+  userId,
+  fileName,
+  generatedDraft,
+}: PreflightGeneratedDocumentDraftProps) =>
+  await safeDb(async (tx): Promise<GeneratedDocumentDraftPreflight> => {
+    const draftState = await findGeneratedDocumentDraftState({
+      tx,
+      organizationId,
+      userId,
+      fileName,
+      generatedDraft,
+      lock: "none",
+    });
+    switch (draftState.status) {
+      case "invalid":
+        return { status: "invalid" };
+      case "ready":
+        return { status: "ready" };
+      case "saved": {
+        const saved = await resolveSavedGeneratedDocument({
+          tx,
+          output: draftState.output,
+          requestedFileName: fileName,
+          workspaceId,
+        });
+        return saved === null
+          ? { status: "invalid" }
+          : { result: saved, status: "saved" };
+      }
+      default:
+        return draftState satisfies never;
+    }
+  });
+
 const resolveFileName = async ({
   tx,
   propertyId,
@@ -194,6 +382,33 @@ const uploadEntityHandler = async function* ({
   body: { file, name: rawName, origin, propertyId },
 }: UploadEntityHandlerProps) {
   const name = sanitizeFilename(rawName);
+
+  if (generatedDraft !== undefined) {
+    const preflightResult = yield* await preflightGeneratedDocumentDraft({
+      safeDb,
+      organizationId,
+      workspaceId,
+      userId,
+      fileName: name,
+      generatedDraft,
+    });
+    switch (preflightResult.status) {
+      case "invalid":
+        return Result.err(
+          new HandlerError({
+            status: 409,
+            message: uploadWriteFailureMessage("missing-draft"),
+          }),
+        );
+      case "saved":
+        return Result.ok(preflightResult.result);
+      case "ready":
+        break;
+      default:
+        return preflightResult satisfies never;
+    }
+  }
+
   // Non-authoritative fast-fail: cheap, unlocked, avoids scanning
   // and uploading a file for a request that's obviously over the
   // limit. The authoritative check is inside the write transaction
@@ -211,13 +426,13 @@ const uploadEntityHandler = async function* ({
   const entityCount = yield* entityCountResult;
   const property = yield* propertyResult;
 
-  if (generatedDraft === undefined && entityCount >= LIMITS.entitiesCount) {
+  if (entityCount >= LIMITS.entitiesCount) {
     return Result.err(
       new HandlerError({ status: 400, message: "Entities limit reached" }),
     );
   }
 
-  if (!property && generatedDraft === undefined) {
+  if (!property) {
     return Result.err(
       new HandlerError({
         status: 400,
@@ -226,11 +441,7 @@ const uploadEntityHandler = async function* ({
     );
   }
 
-  if (
-    property !== undefined &&
-    property.content.type !== "file" &&
-    generatedDraft === undefined
-  ) {
+  if (property.content.type !== "file") {
     return Result.err(
       new HandlerError({ status: 400, message: "Property isn't of type file" }),
     );
@@ -324,97 +535,34 @@ const uploadEntityHandler = async function* ({
 
         let generatedDraftPartIndex: number | null = null;
         if (generatedDraft !== undefined) {
-          const [message] = await tx
-            .select({
-              content: chatMessages.content,
-              id: chatMessages.id,
-              role: chatMessages.role,
-            })
-            .from(chatMessages)
-            .innerJoin(chatThreads, eq(chatThreads.id, chatMessages.threadId))
-            .where(
-              and(
-                eq(chatMessages.id, generatedDraft.messageId),
-                eq(chatMessages.threadId, generatedDraft.threadId),
-                eq(chatMessages.userId, userId),
-                eq(chatThreads.userId, userId),
-                eq(chatThreads.organizationId, organizationId),
-                generatedDraft.threadWorkspaceId === undefined
-                  ? isNull(chatThreads.workspaceId)
-                  : eq(
-                      chatThreads.workspaceId,
-                      generatedDraft.threadWorkspaceId,
-                    ),
-              ),
-            )
-            .limit(1)
-            .for("update");
-          if (!message || message.role !== "assistant") {
-            return { ok: false as const, reason: "missing-draft" as const };
-          }
-          const draftState = getGeneratedDocumentDraftState({
-            persistedContent: message.content,
+          const draftState = await findGeneratedDocumentDraftState({
+            tx,
+            organizationId,
+            userId,
             fileName: name,
-            toolCallId: generatedDraft.toolCallId,
+            generatedDraft,
+            lock: "for-update",
           });
           if (draftState.status === "invalid") {
             return { ok: false as const, reason: "missing-draft" as const };
           }
           if (draftState.status === "saved") {
-            if (draftState.output.workspaceId !== workspaceId) {
-              return { ok: false as const, reason: "missing-draft" as const };
-            }
-            const [savedField] = await tx
-              .select({
-                content: fields.content,
-                entityId: entities.id,
-                fieldId: fields.id,
-              })
-              .from(entities)
-              .innerJoin(
-                entityVersions,
-                and(
-                  eq(entityVersions.id, entities.currentVersionId),
-                  eq(entityVersions.entityId, entities.id),
-                  eq(entityVersions.workspaceId, entities.workspaceId),
-                  isNull(entityVersions.deletedAt),
-                ),
-              )
-              .innerJoin(
-                fields,
-                and(
-                  sql`${fields.id} = ${draftState.output.fieldId}::uuid`,
-                  eq(fields.entityVersionId, entityVersions.id),
-                  eq(fields.workspaceId, entities.workspaceId),
-                ),
-              )
-              .where(
-                and(
-                  sql`${entities.id} = ${draftState.output.entityId}::uuid`,
-                  eq(entities.workspaceId, workspaceId),
-                ),
-              )
-              .limit(1);
-            if (savedField?.content.type !== "file") {
+            const saved = await resolveSavedGeneratedDocument({
+              tx,
+              output: draftState.output,
+              requestedFileName: name,
+              workspaceId,
+            });
+            if (saved === null) {
               return { ok: false as const, reason: "missing-draft" as const };
             }
             return {
               ok: true as const,
-              result: {
-                entityId: savedField.entityId,
-                fieldId: savedField.fieldId,
-                fileId: savedField.content.id,
-                fileName: savedField.content.fileName,
-                renamed: savedField.content.fileName !== name,
-              },
+              result: saved,
               status: "replayed" as const,
             };
           }
           generatedDraftPartIndex = draftState.partIndex;
-        }
-
-        if (!property || property.content.type !== "file") {
-          return { ok: false as const, reason: "invalid-property" as const };
         }
 
         // The earlier `entityCount` check above is a
