@@ -5,6 +5,7 @@ import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import type { SkillMetadata } from "@stll/skills";
 
+import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
@@ -44,6 +45,17 @@ import {
 } from "@/api/handlers/chat/chat-schema";
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
 import {
+  claimChatTurnForExecution,
+  createChatTurnAcceptance,
+  failChatTurnExecution,
+  insertChatTurnAcceptanceOnTx,
+  settleChatTurnOnTx,
+} from "@/api/handlers/chat/chat-turn-persistence";
+import type {
+  ChatTurnAcceptance,
+  ChatTurnExecution,
+} from "@/api/handlers/chat/chat-turn-persistence";
+import {
   compactChatMessagesForModel,
   shouldCompactChatMessages,
 } from "@/api/handlers/chat/compaction";
@@ -51,6 +63,7 @@ import { resolveChatCompactionBudget } from "@/api/handlers/chat/compaction-budg
 import {
   computeAssistantTurnWorkspaceIds,
   expandThreadDataScope,
+  expandThreadDataScopeOnTx,
   extractIncomingMessageWorkspaceIds,
   extractThreadDataWorkspaceIds,
 } from "@/api/handlers/chat/data-scope";
@@ -114,6 +127,7 @@ import {
 } from "@/api/handlers/chat/tools/tool-scope";
 import type {
   ChatMessage,
+  ChatTurnOutcome,
   PersistableChatMessage,
 } from "@/api/handlers/chat/types";
 import { createRawChatFilePart } from "@/api/handlers/chat/upload-files";
@@ -1004,12 +1018,25 @@ const sendMessage = createSafeRootHandler(
         );
       }
 
+      const turnAcceptance =
+        parsedMessage.message.role === "user" &&
+        latestMessagePlan.persistencePlan.type !== "none"
+          ? createChatTurnAcceptance({
+              organizationId: session.activeOrganizationId,
+              threadId: body.threadId,
+              userId: user.id,
+              userMessageId: parsedMessage.message.id,
+              workspaceId,
+            })
+          : undefined;
+
       yield* Result.await(
         persistMessage({
           acceptedSendMode: body.sendMode,
           recordAuditEvent,
           safeDb,
           threadId: body.threadId,
+          turnAcceptance,
           userId: user.id,
           workspaceId,
           persistencePlan: latestMessagePlan.persistencePlan,
@@ -1024,11 +1051,64 @@ const sendMessage = createSafeRootHandler(
         }),
       );
 
+      const turnExecution = yield* Result.await(
+        claimChatTurnForExecution({
+          acceptedTurnId: turnAcceptance?.id ?? null,
+          incomingMessageId: parsedMessage.message.id,
+          incomingMessageRole: parsedMessage.message.role,
+          organizationId: session.activeOrganizationId,
+          safeDb,
+          threadId: body.threadId,
+          userId: user.id,
+          workspaceId,
+        }),
+      );
+      if (turnExecution === null) {
+        return Result.err(
+          new HandlerError({
+            status: 409,
+            message: "Chat turn has no durable execution owner",
+          }),
+        );
+      }
+      const failCurrentTurn = async (
+        code: Parameters<typeof failChatTurnExecution>[0]["code"],
+        retryable: boolean,
+      ): Promise<void> => {
+        const failureResult = await failChatTurnExecution({
+          code,
+          execution: turnExecution,
+          retryable,
+          safeDb,
+        });
+        if (Result.isError(failureResult)) {
+          captureError(failureResult.error, { threadId: body.threadId });
+        }
+      };
+
       // The incoming message is durable now, so a disconnect must not run the
       // pre-persistence rollback (which would delete files referenced by that
       // message). It should still stop before connector discovery and any
       // metered provider work.
       if (isClientConnectionAborted()) {
+        yield* Result.await(
+          persistMessage({
+            persistencePlan: { type: "none" },
+            recordAuditEvent,
+            safeDb,
+            threadId: body.threadId,
+            turnSettlement: {
+              assistantMessageId: null,
+              execution: turnExecution,
+              outcome: {
+                type: "interrupted",
+                reason: "client-disconnected",
+              },
+            },
+            userId: user.id,
+            workspaceId,
+          }),
+        );
         return Result.err(
           new HandlerError({
             status: 400,
@@ -1046,8 +1126,20 @@ const sendMessage = createSafeRootHandler(
       // failure, client disconnect) never contacts a single connector.
       // `getExternalMcpTools` reuses the validation-triggered load instead
       // of loading again when one already happened.
-      const externalMcpTools =
-        await externalMcpToolsLoader.getExternalMcpTools();
+      const externalMcpToolsResult = await Result.tryPromise({
+        try: async () => await externalMcpToolsLoader.getExternalMcpTools(),
+        catch: (cause) =>
+          new HandlerError({
+            status: 500,
+            message: "Failed to discover chat connectors",
+            cause,
+          }),
+      });
+      if (Result.isError(externalMcpToolsResult)) {
+        await failCurrentTurn("connector-discovery", true);
+        return Result.err(externalMcpToolsResult.error);
+      }
+      const externalMcpTools = externalMcpToolsResult.value;
 
       // Streaming tools mirror the surface the user is on: only the
       // DOCX file-overlay client knows how to satisfy
@@ -1174,7 +1266,7 @@ const sendMessage = createSafeRootHandler(
                 abortSignal: createMeteredAIAbortSignal(),
                 messages: chatContext.hydratedMessages,
                 latestMessageId: parsedMessage.message.id,
-                onFinish: async ({ isAborted, responseMessage }) => {
+                onFinish: async ({ outcome, responseMessage }) => {
                   const resolvedMessages = resolveAssistantMessageRefs({
                     messages: [responseMessage],
                     refRegistry,
@@ -1184,48 +1276,27 @@ const sendMessage = createSafeRootHandler(
                     panic("Missing chat response message");
                   }
 
-                  // `isAborted` is the metered stream's own signal: true only
-                  // when the generation was cut off mid-stream (metered-timeout
-                  // abort or aborted-stream finish), never on natural
-                  // completion. It is NOT folded together with
-                  // `isClientConnectionAborted()`: the metered provider call is
-                  // decoupled from the client socket, so a connection dropped
-                  // mid-generation still runs the model to completion and meters
-                  // it. That completed message must be persisted, or the user is
-                  // billed for an answer they can never see after remount. Only
-                  // a genuinely incomplete generation is discarded.
                   const persistencePlan = planAssistantFinishPersistence({
                     existingIds: latestMessagePlan.existingIds,
-                    finishOutcome: isAborted
-                      ? { type: "aborted" }
-                      : { type: "completed" },
+                    finishOutcome: outcome,
                     message: resolvedResponseMessage,
                   });
 
-                  // Skip scope expansion when the assistant message
-                  // will not be persisted (aborted stream, planner
-                  // returned `none`). Widening `data_workspace_ids`
-                  // for transient parts that never land in
-                  // `chat_messages` could make the thread unreadable
-                  // after future access changes even though no
-                  // corresponding content was saved. A completed
-                  // message whose client merely disconnected is NOT
-                  // `none` here, so it flows through the same
-                  // scope-widening and persist path below.
+                  // A terminal stream always supplies an assistant message.
+                  // Silently accepting `none` would acknowledge the stream
+                  // while leaving its durable turn running forever.
                   if (persistencePlan.type === "none") {
-                    return;
+                    panic("Assistant turn produced no persistence plan");
                   }
 
                   // Widen the thread's data scope to cover any
                   // workspace-scoped content the assistant just
                   // emitted (source-document parts from search and
-                  // workspace tools). Run before persistMessage so
-                  // the recorded scope already includes the
-                  // workspaces when the message lands in
-                  // `chat_messages`.
+                  // workspace tools). Scope, message, and turn settlement are
+                  // written in one transaction below.
                   //
-                  // If expansion fails (transient DB error, etc.),
-                  // SKIP the message persist. Storing workspace-
+                  // If expansion fails (transient DB error, etc.), the whole
+                  // transaction fails. Storing workspace-
                   // scoped content in `chat_messages` while the
                   // owning thread's `data_workspace_ids` stays stale
                   // would leave the new content readable after the
@@ -1248,25 +1319,20 @@ const sendMessage = createSafeRootHandler(
                         refRegistry.getRegisteredWorkspaceIds(),
                       accessibleWorkspaceIds: accessibleSet,
                     });
-                  const expandResult = await expandThreadDataScope({
-                    currentDataWorkspaceIds: dataScopeAfterIncomingMessage,
-                    newWorkspaceIds: assistantWorkspaceIds,
-                    recordAuditEvent,
-                    safeDb,
-                    threadId: body.threadId,
-                    threadWorkspaceId: workspaceId,
-                  });
-                  if (Result.isError(expandResult)) {
-                    captureError(expandResult.error, {
-                      threadId: body.threadId,
-                    });
-                    return;
-                  }
                   const persistResult = await persistMessage({
+                    dataScopeExpansion: {
+                      currentDataWorkspaceIds: dataScopeAfterIncomingMessage,
+                      newWorkspaceIds: assistantWorkspaceIds,
+                    },
                     persistencePlan,
                     recordAuditEvent,
                     safeDb,
                     threadId: body.threadId,
+                    turnSettlement: {
+                      assistantMessageId: resolvedResponseMessage.id,
+                      execution: turnExecution,
+                      outcome,
+                    },
                     userId: user.id,
                     workspaceId,
                   });
@@ -1275,6 +1341,12 @@ const sendMessage = createSafeRootHandler(
                     captureError(persistResult.error, {
                       threadId: body.threadId,
                     });
+                    await failCurrentTurn("persistence", true);
+                    throw new HandlerError({
+                      status: 500,
+                      message: "Failed to persist assistant turn",
+                      cause: persistResult.error,
+                    });
                   } else {
                     const messagesAfterAssistantPersist =
                       applyAssistantPersistencePlan({
@@ -1282,6 +1354,7 @@ const sendMessage = createSafeRootHandler(
                         persistencePlan,
                       });
                     if (
+                      outcome.type === "completed" &&
                       messagesAfterAssistantPersist !== null &&
                       body.sendMode !== CHAT_SEND_MODE.anonymized
                     ) {
@@ -1300,6 +1373,7 @@ const sendMessage = createSafeRootHandler(
                     }
 
                     if (
+                      outcome.type === "completed" &&
                       thread.type === "created" &&
                       body.sendMode !== CHAT_SEND_MODE.anonymized
                     ) {
@@ -1350,6 +1424,7 @@ const sendMessage = createSafeRootHandler(
               return chatResponse;
             } catch (error) {
               await externalMcpTools.close();
+              await failCurrentTurn("internal", true);
               throw error;
             }
           },
@@ -2038,12 +2113,71 @@ const getPdfFileRefForModel = (
 
 type InsertMessagesProps = {
   acceptedSendMode: ChatSendMode | null;
+  dataScopeExpansion?: ChatDataScopeExpansion | undefined;
   messages: PersistableChatMessage[];
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
+  turnAcceptance?: ChatTurnAcceptance | undefined;
+  turnSettlement?: ChatTurnSettlement | undefined;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
+};
+
+type ChatDataScopeExpansion = {
+  currentDataWorkspaceIds: readonly SafeId<"workspace">[];
+  newWorkspaceIds: readonly SafeId<"workspace">[];
+};
+
+type ChatTurnSettlement = {
+  assistantMessageId: SafeId<"chatMessage"> | null;
+  execution: ChatTurnExecution;
+  outcome: ChatTurnOutcome;
+};
+
+const applyChatTurnWritesOnTx = async ({
+  acceptance,
+  settlement,
+  tx,
+}: {
+  acceptance: ChatTurnAcceptance | undefined;
+  settlement: ChatTurnSettlement | undefined;
+  tx: Transaction;
+}): Promise<void> => {
+  if (acceptance !== undefined) {
+    await insertChatTurnAcceptanceOnTx({ acceptance, tx });
+  }
+  if (
+    settlement !== undefined &&
+    !(await settleChatTurnOnTx({ ...settlement, tx }))
+  ) {
+    panic("Chat turn settlement lost execution ownership");
+  }
+};
+
+const applyChatDataScopeExpansionOnTx = async ({
+  expansion,
+  recordAuditEvent,
+  threadId,
+  tx,
+  workspaceId,
+}: {
+  expansion: ChatDataScopeExpansion | undefined;
+  recordAuditEvent: AuditRecorder;
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+  workspaceId: SafeId<"workspace"> | null;
+}): Promise<void> => {
+  if (expansion === undefined) {
+    return;
+  }
+  await expandThreadDataScopeOnTx({
+    ...expansion,
+    recordAuditEvent,
+    threadId,
+    threadWorkspaceId: workspaceId,
+    tx,
+  });
 };
 
 type ResolveAssistantMessageRefsProps = {
@@ -2088,7 +2222,7 @@ const hydrateAssistantMessageRefs = ({
     part: ChatMessage["parts"][number],
   ): ChatMessage["parts"][number] => {
     const hydrated = refRegistry.hydrateAssistantValueRefs(part);
-    if (!isChatMessagePart(hydrated)) {
+    if (!isChatPart(hydrated)) {
       panic("Hydrating assistant refs changed the message part shape");
     }
     return hydrated;
@@ -2104,20 +2238,15 @@ const hydrateAssistantMessageRefs = ({
   );
 };
 
-const isChatMessagePart = (
-  value: unknown,
-): value is ChatMessage["parts"][number] =>
-  typeof value === "object" &&
-  value !== null &&
-  "type" in value &&
-  typeof value.type === "string";
-
 const insertMessages = async ({
   acceptedSendMode,
+  dataScopeExpansion,
   messages,
   recordAuditEvent,
   safeDb,
   threadId,
+  turnAcceptance,
+  turnSettlement,
   userId,
   workspaceId,
 }: InsertMessagesProps): Promise<Result<void, SafeDbError>> => {
@@ -2126,6 +2255,13 @@ const insertMessages = async ({
   }
 
   const insertResult = await safeDb(async (tx) => {
+    await applyChatDataScopeExpansionOnTx({
+      expansion: dataScopeExpansion,
+      recordAuditEvent,
+      threadId,
+      tx,
+      workspaceId,
+    });
     await tx.insert(chatMessages).values(
       messages.map((persistedMessage) => ({
         id: persistedMessage.id,
@@ -2159,6 +2295,11 @@ const insertMessages = async ({
         metadata: { threadId, role: persistedMessage.role },
       })),
     );
+    await applyChatTurnWritesOnTx({
+      acceptance: turnAcceptance,
+      settlement: turnSettlement,
+      tx,
+    });
   });
 
   return insertResult.andThen(() => Result.ok());
@@ -2166,9 +2307,12 @@ const insertMessages = async ({
 
 type PersistMessageProps = {
   acceptedSendMode?: ChatSendMode | null;
+  dataScopeExpansion?: ChatDataScopeExpansion | undefined;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
+  turnAcceptance?: ChatTurnAcceptance | undefined;
+  turnSettlement?: ChatTurnSettlement | undefined;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
   persistencePlan: MessagePersistencePlan;
@@ -2194,9 +2338,12 @@ const persistMessage = async (props: PersistMessageProps) => {
 
 const runPersistMessage = async ({
   acceptedSendMode = null,
+  dataScopeExpansion,
   recordAuditEvent,
   safeDb,
   threadId,
+  turnAcceptance,
+  turnSettlement,
   userId,
   workspaceId,
   persistencePlan,
@@ -2206,10 +2353,13 @@ const runPersistMessage = async ({
   if (persistencePlan.type === "insert") {
     return await insertMessages({
       acceptedSendMode,
+      dataScopeExpansion,
       messages: [persistencePlan.message],
       recordAuditEvent,
       safeDb,
       threadId,
+      turnAcceptance,
+      turnSettlement,
       userId,
       workspaceId,
     });
@@ -2217,6 +2367,13 @@ const runPersistMessage = async ({
 
   if (persistencePlan.type === "update") {
     const updateResult = await safeDb(async (tx) => {
+      await applyChatDataScopeExpansionOnTx({
+        expansion: dataScopeExpansion,
+        recordAuditEvent,
+        threadId,
+        tx,
+        workspaceId,
+      });
       if (deleteMessageIds.length > 0) {
         await tx
           .delete(chatMessages)
@@ -2300,56 +2457,108 @@ const runPersistMessage = async ({
         workspaceId,
         metadata: { threadId, role: persistencePlan.message.role },
       });
+      await applyChatTurnWritesOnTx({
+        acceptance: turnAcceptance,
+        settlement: turnSettlement,
+        tx,
+      });
     });
 
     return updateResult.andThen(() => Result.ok());
   }
 
   if (persistencePlan.type === "none") {
-    return Result.ok();
+    if (turnAcceptance === undefined && turnSettlement === undefined) {
+      return Result.ok();
+    }
+    const turnResult = await safeDb(async (tx) => {
+      await applyChatDataScopeExpansionOnTx({
+        expansion: dataScopeExpansion,
+        recordAuditEvent,
+        threadId,
+        tx,
+        workspaceId,
+      });
+      await applyChatTurnWritesOnTx({
+        acceptance: turnAcceptance,
+        settlement: turnSettlement,
+        tx,
+      });
+    });
+    return turnResult.andThen(() => Result.ok());
   }
 
-  return await Result.gen(async function* () {
+  const replaceResult = await safeDb(async (tx) => {
+    await applyChatDataScopeExpansionOnTx({
+      expansion: dataScopeExpansion,
+      recordAuditEvent,
+      threadId,
+      tx,
+      workspaceId,
+    });
     const deletedMessageId = persistencePlan.deleteMessageId;
-    yield* Result.await(
-      safeDb(async (tx) => {
-        await tx
-          .delete(chatMessages)
-          .where(and(eq(chatMessages.id, deletedMessageId)));
+    await tx
+      .delete(chatMessages)
+      .where(
+        and(
+          eq(chatMessages.id, deletedMessageId),
+          eq(chatMessages.threadId, threadId),
+        ),
+      );
 
-        if (
-          shouldInvalidateChatCompactionCheckpoint({
-            deletedMessageCount: 1,
-            persistencePlan,
-          })
-        ) {
-          await markActiveChatCompactionCheckpointStale({ threadId, tx });
-        }
+    if (
+      shouldInvalidateChatCompactionCheckpoint({
+        deletedMessageCount: 1,
+        persistencePlan,
+      })
+    ) {
+      await markActiveChatCompactionCheckpointStale({ threadId, tx });
+    }
 
-        await recordAuditEvent(tx, {
-          action: AUDIT_ACTION.DELETE,
-          resourceType: AUDIT_RESOURCE_TYPE.CHAT_MESSAGE,
-          resourceId: deletedMessageId,
-          workspaceId,
-          metadata: { threadId, reason: "delete_and_reinsert" },
-        });
-      }),
-    );
+    await recordAuditEvent(tx, {
+      action: AUDIT_ACTION.DELETE,
+      resourceType: AUDIT_RESOURCE_TYPE.CHAT_MESSAGE,
+      resourceId: deletedMessageId,
+      workspaceId,
+      metadata: { threadId, reason: "delete_and_reinsert" },
+    });
 
-    yield* Result.await(
-      insertMessages({
-        acceptedSendMode,
-        messages: [persistencePlan.insertMessage],
-        recordAuditEvent,
-        safeDb,
-        threadId,
-        userId,
-        workspaceId,
-      }),
-    );
-
-    return Result.ok();
+    const insertedMessage = persistencePlan.insertMessage;
+    await tx.insert(chatMessages).values({
+      content: chatMessageContentFromMessage(insertedMessage),
+      id: insertedMessage.id,
+      role: insertedMessage.role,
+      threadId,
+      userId,
+      workspaceId,
+    });
+    await tx
+      .update(chatThreads)
+      .set({
+        updatedAt: new Date(),
+        ...(shouldMarkThreadUsedAnonymization({
+          messages: [insertedMessage],
+          sendMode: acceptedSendMode,
+        })
+          ? { usedAnonymization: true }
+          : {}),
+      })
+      .where(eq(chatThreads.id, threadId));
+    await recordAuditEvent(tx, {
+      action: AUDIT_ACTION.CREATE,
+      resourceType: AUDIT_RESOURCE_TYPE.CHAT_MESSAGE,
+      resourceId: insertedMessage.id,
+      workspaceId,
+      metadata: { threadId, role: insertedMessage.role },
+    });
+    await applyChatTurnWritesOnTx({
+      acceptance: turnAcceptance,
+      settlement: turnSettlement,
+      tx,
+    });
   });
+
+  return replaceResult.andThen(() => Result.ok());
 };
 
 type RecomputeThreadDataScopeProps = {

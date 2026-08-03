@@ -129,6 +129,12 @@ type PromptBarPresetScopeChooser = {
 
 type PromptBarProps = {
   /**
+   * Whether this thread will anonymize its next send. Required so every
+   * floating/inspector composer paints the same active state as its shield
+   * and transport instead of silently falling back to ordinary chrome.
+   */
+  anonymized: boolean;
+  /**
    * Gates surface-specific FEATURES only — the preset chips and the
    * pending-suggestion badge are shown in `floating` surfaces (chats
    * over a document) and hidden in `standalone` ones. It no longer
@@ -565,6 +571,7 @@ export function SuggestionStepper({
 
 export function PromptBar(props: PromptBarProps) {
   const {
+    anonymized,
     layout,
     status,
     pendingCount,
@@ -758,7 +765,9 @@ export function PromptBar(props: PromptBarProps) {
       aria-label={t("chat.aiPrompt")}
       onKeyDownCapture={handleShellKeyDown}
       className={cn(
-        !inputDisabled && "focus-within:border-foreground/30",
+        !inputDisabled && !anonymized && "focus-within:border-foreground/30",
+        anonymized &&
+          "ring-info/40 border-info/40 focus-within:border-info/60 shadow-[0_0_0_4px_rgb(from_var(--color-info)_r_g_b_/_0.08)] ring-1",
         // Attention pulse — kicked by the inspector chip click to
         // close the panel→producer loop visually. Stronger ring
         // than the busy state because it's transient and meant to

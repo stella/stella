@@ -703,6 +703,45 @@ describe("chat runtime", () => {
     globalThis.fetch = previousFetch;
   });
 
+  test("latches an explicitly stopped turn until authoritative hydration", async () => {
+    const threadId = toChatThreadId("thread-stopped");
+    globalThis.fetch = createFetchMock(
+      async (_input, init) =>
+        await new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener(
+            "abort",
+            () => {
+              const error = new Error("aborted");
+              error.name = "AbortError";
+              reject(error);
+            },
+            { once: true },
+          );
+        }),
+    );
+    const runtime = createChatRuntime({
+      context: undefined,
+      initialMessages: [],
+      key: { scope: "global", threadId },
+      onError: () => {},
+      onFinish: () => {},
+    });
+
+    const stream = sendThreadChatMessage(
+      runtime,
+      createOutgoingMessage("77777777-7777-4777-8777-777777777778"),
+    );
+    expect(runtime.getSnapshot().turnAbandoned).toBe(false);
+
+    runtime.stop();
+
+    expect(runtime.getSnapshot()).toMatchObject({
+      status: "ready",
+      turnAbandoned: true,
+    });
+    await stream;
+  });
+
   test("exposes progressive create-document source from TanStack tool arguments", async () => {
     const threadId = toChatThreadId("thread-progressive-draft");
     const messageId = "66666666-6666-4666-8666-666666666666";

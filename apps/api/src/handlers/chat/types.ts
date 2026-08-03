@@ -7,6 +7,7 @@ import type {
   ChatBuiltinApprovalToolName,
   ChatTools,
 } from "@/api/handlers/chat/tools/chat-tools";
+import type { AIErrorKind } from "@/api/lib/ai-error";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   ChatClientToolsFor,
@@ -60,17 +61,7 @@ export type ChatAttachmentPart =
 
 export type ChatTanStackPart = MessagePart<ChatClientTools>;
 export type ChatPart = ChatTanStackPart;
-export type PersistableChatPartType =
-  | "audio"
-  | "document"
-  | "image"
-  | "structured-output"
-  | "text"
-  | "thinking"
-  | "tool-call"
-  | "tool-result"
-  | "ui-resource"
-  | "video";
+export type PersistableChatPartType = ChatTanStackPart["type"];
 
 export type ChatMessageUsage = Pick<
   TokenUsage,
@@ -83,6 +74,29 @@ export type ChatMessageUsage = Pick<
       >
     | undefined;
 };
+
+/**
+ * Server-owned terminal state for one accepted assistant turn.
+ *
+ * Every newly generated assistant message carries exactly one branch. Older
+ * persisted messages predate this field and are treated as completed only when
+ * they contain user-visible content. Incoming clients can never set or replace
+ * this value; chat-schema restores it from the persisted server copy.
+ */
+export type ChatTurnOutcome =
+  | {
+      type: "awaiting-user";
+      interaction:
+        | { type: "approval"; toolCallId: string }
+        | { type: "ask-user"; toolCallId: string };
+    }
+  | { type: "completed" }
+  | { type: "cancelled"; reason: "superseded" | "user-stop" }
+  | { type: "failed"; error: AIErrorKind }
+  | {
+      type: "interrupted";
+      reason: "client-disconnected" | "timeout";
+    };
 
 export type ChatMessageMetadata = {
   anonRestorations?: ChatAnonRestorationsData | undefined;
@@ -104,6 +118,9 @@ export type ChatMessageMetadata = {
   /** Server-owned grounded documents. Incoming client metadata validation
    * deliberately does not accept this field. */
   sourceDocuments?: ChatSourceDocument[] | undefined;
+  /** Server-owned terminal state. Incoming client metadata validation
+   * deliberately does not accept this field. */
+  turnOutcome?: ChatTurnOutcome | undefined;
   usage?: ChatMessageUsage | undefined;
 };
 
@@ -128,6 +145,12 @@ export type PersistableChatMessage = {
   parts: ChatMessage["parts"];
   readonly [persistableChatMessageProof]: true;
   role: ChatMessage["role"];
+};
+
+/** Proof that an assistant message closes an accepted turn exactly once. */
+export type PersistableTerminalAssistantMessage = PersistableChatMessage & {
+  metadata: ChatMessageMetadata & { turnOutcome: ChatTurnOutcome };
+  role: "assistant";
 };
 
 export type ChatMessageRole = UIMessage["role"];

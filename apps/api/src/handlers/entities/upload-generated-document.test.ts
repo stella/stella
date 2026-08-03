@@ -32,6 +32,7 @@ const createUnreadFile = () => {
 const createContext = ({ file, safeDb }: { file: File; safeDb: SafeDb }) =>
   createTestHandlerContext<UploadGeneratedDocumentContext>({
     body: {
+      contentSha256Hex: "0".repeat(64),
       file,
       messageId,
       name: "draft.docx",
@@ -87,6 +88,26 @@ describe("generated document upload preflight", () => {
     );
 
     expect(result).toEqual(replay);
+    expect(arrayBuffer).not.toHaveBeenCalled();
+  });
+
+  test("rejects a saved replay whose bytes no longer match", async () => {
+    const { arrayBuffer, file } = createUnreadFile();
+    const safeDb = asTestRaw<SafeDb>(async <T>() =>
+      Result.ok(asTestRaw<T>({ status: "content-mismatch" })),
+    );
+
+    const result = await uploadGeneratedDocument.handler(
+      createContext({ file, safeDb }),
+    );
+
+    expect(result).toEqual({
+      code: 409,
+      response: {
+        message:
+          "Generated document content does not match the requested draft",
+      },
+    });
     expect(arrayBuffer).not.toHaveBeenCalled();
   });
 

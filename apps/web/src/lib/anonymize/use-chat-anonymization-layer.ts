@@ -15,8 +15,8 @@ import { optionalReadonlyArray } from "@/lib/arrays";
 
 /**
  * The single integration point that lights up anonymization
- * highlights inside any chat input. Reads the global "anonymized
- * mode" preference, runs the wasm pipeline against the editor's
+ * highlights inside any chat input. Receives that surface's per-thread
+ * anonymization state, runs the wasm pipeline against the editor's
  * current text (debounced via TanStack Query), and pushes the
  * resulting placeholder pairs into the editor as inline
  * ProseMirror decorations.
@@ -37,9 +37,7 @@ export const useChatAnonymizationLayer = ({
   editor: Editor | null;
   /**
    * Anonymized state for *this surface*. Each chat surface owns its
-   * own toggle (the inspector tab has a local one, the /chat page
-   * uses the per-thread store, the file overlay has none and sends
-   * raw). Reading from a global store here would let the editor
+   * own per-thread value. Reading from a global store here would let the editor
    * highlight names that the request then forwards raw — and vice
    * versa. Callers pass their own source of truth.
    */

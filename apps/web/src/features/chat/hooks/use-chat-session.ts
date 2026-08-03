@@ -28,6 +28,7 @@ import type {
 } from "@/components/chat/chat-ui-tools";
 import {
   getExternalMcpConnectorApprovalGrant,
+  getChatAssistantTurnError,
   getExternalMcpConnectorSlugFromToolName,
   getToolApprovalGrant,
   hasRunningToolCallInLatestAssistantMessage,
@@ -109,6 +110,7 @@ import {
 } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { fileOptions } from "@/lib/files/queries";
+import { sha256Hex } from "@/lib/files/sha256";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
 import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
@@ -273,7 +275,12 @@ export const useChatSession = ({
     chat.getSnapshot,
     chat.getSnapshot,
   );
-  const { error, sessionGenerating, status } = snapshot;
+  const {
+    error: runtimeError,
+    sessionGenerating,
+    status,
+    turnAbandoned,
+  } = snapshot;
   const notifyError = useLatestCallback((nextError: Error) => {
     onError?.(nextError);
   });
@@ -289,6 +296,11 @@ export const useChatSession = ({
     () => withParsedToolCallInputs(snapshot.messages),
     [snapshot.messages],
   );
+  const authoritativeTurnError = useMemo(
+    () => getChatAssistantTurnError(messages.at(-1) ?? null),
+    [messages],
+  );
+  const error = runtimeError ?? authoritativeTurnError;
   const openedCreateDocumentDraftIdsRef = useRef(new Set<string>());
   const openCreateDocumentDraft = useCallback(
     ({ draft, mode }: OpenCreateDocumentDraftOptions) => {
@@ -1032,12 +1044,14 @@ export const useChatSession = ({
         const file = new File([new Uint8Array(draft.buffer)], draft.fileName, {
           type: DOCX_MIME,
         });
+        const contentSha256Hex = await sha256Hex(draft.buffer);
         const response = await api
           .entities({ workspaceId: toSafeId<"workspace">(matterId) })
           ["upload-generated-document"].post({
             queryKey: entitiesKeys.all(matterId),
             queryKeys: [workspacesKeys.overviewActivityAll(matterId)],
             file,
+            contentSha256Hex,
             messageId: toSafeId<"chatMessage">(draftMessageId),
             name: draft.fileName,
             propertyId: fileProperty.id,
@@ -1186,16 +1200,16 @@ export const useChatSession = ({
   // reads the latest `onError`), so listing it below is a formality: it
   // never changes and so never re-triggers this effect on its own.
   useExternalSyncEffect(() => {
-    if (!error) {
+    if (!runtimeError) {
       lastHandledErrorRef.current = undefined;
       return;
     }
-    if (lastHandledErrorRef.current === error) {
+    if (lastHandledErrorRef.current === runtimeError) {
       return;
     }
-    lastHandledErrorRef.current = error;
-    notifyError(error);
-  }, [error, notifyError]);
+    lastHandledErrorRef.current = runtimeError;
+    notifyError(runtimeError);
+  }, [notifyError, runtimeError]);
 
   useExternalSyncEffect(() => {
     applySendQueueEvent({ type: "conversation-switched", conversationId });
@@ -1310,6 +1324,7 @@ export const useChatSession = ({
     removeQueuedMessage,
     stop,
     isGenerating,
+    turnAbandoned,
     alwaysApprovedTools,
     conversationApprovedTools,
     handleApprove,

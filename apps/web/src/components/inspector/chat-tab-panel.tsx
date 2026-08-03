@@ -230,6 +230,7 @@ export const ChatTabPanel = ({
     removeQueuedMessage,
     stop,
     isGenerating,
+    turnAbandoned,
     alwaysApprovedTools,
     conversationApprovedTools,
     handleApprove,
@@ -312,6 +313,7 @@ export const ChatTabPanel = ({
     error,
     isGenerating,
     lastMessage: lastMessage ?? null,
+    turnAbandoned,
     turnOwner: resolveSuggestedPromptsTurnOwner({
       approvalPendingMessageId,
       hasReopenedAskUser: editingAskUserToolCallIds.size > 0,
@@ -491,6 +493,7 @@ export const ChatTabPanel = ({
               chat. The chips ride the same one geometry through the
               `followupChips` slot. */}
           <PromptBar
+            anonymized={anonymized}
             attachmentsEnabled
             editorController={editorController}
             emptyPlaceholder={

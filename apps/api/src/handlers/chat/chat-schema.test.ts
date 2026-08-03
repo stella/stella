@@ -514,6 +514,40 @@ describe("validateMessage", () => {
     expect(Result.isOk(result)).toBe(true);
   });
 
+  test("round-trips TanStack's persisted server-tool error result", async () => {
+    const error = "Search is temporarily unavailable";
+    const result = await validateMessage({
+      message: {
+        id: chatMessageId("msg_server_tool_error_continuation"),
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-call",
+            id: "tool-call-1",
+            name: "search-documents",
+            arguments: JSON.stringify({ query: "contract" }),
+            input: { query: "contract" },
+            output: { error },
+            state: "error",
+          },
+          {
+            type: "tool-result",
+            toolCallId: "tool-call-1",
+            content: JSON.stringify({ error }),
+            error,
+            state: "error",
+          },
+        ],
+      },
+      safeDb: noDbReads,
+      threadId: chatThreadId("thread_server_tool_error_continuation"),
+      tools: searchTools,
+      userId: userId("user_server_tool_error_continuation"),
+    });
+
+    expect(Result.isOk(result)).toBe(true);
+  });
+
   test("rejects a malformed failed tool-call output", async () => {
     const result = await validateMessage({
       message: {

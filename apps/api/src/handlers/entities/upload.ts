@@ -62,6 +62,7 @@ const uploadEntityBodySchema = t.Object({
 
 const uploadGeneratedDocumentBodySchema = t.Object({
   ...uploadEntityBodySchema.properties,
+  contentSha256Hex: t.RegExp(/^[0-9a-f]{64}$/u),
   messageId: tSafeId("chatMessage"),
   threadId: tSafeId("chatThread"),
   threadWorkspaceId: t.Optional(tSafeId("workspace")),
@@ -80,6 +81,7 @@ type UploadEntityHandlerProps = {
   generatedDraft?:
     | {
         messageId: SafeId<"chatMessage">;
+        contentSha256Hex: string;
         threadId: SafeId<"chatThread">;
         threadWorkspaceId?: SafeId<"workspace"> | undefined;
         toolCallId: string;
@@ -98,6 +100,7 @@ type ResolveFileNameProps = {
 };
 
 type UploadWriteFailureReason =
+  | "content-mismatch"
   | "entity-limit"
   | "invalid-property"
   | "missing-draft";
@@ -111,6 +114,7 @@ type GeneratedDocumentUploadResult = {
 };
 
 type GeneratedDocumentDraftPreflight =
+  | { status: "content-mismatch" }
   | { status: "invalid" }
   | { status: "ready" }
   | { result: GeneratedDocumentUploadResult; status: "saved" };
@@ -119,12 +123,29 @@ const uploadWriteFailureMessage = (
   reason: UploadWriteFailureReason,
 ): string => {
   switch (reason) {
+    case "content-mismatch":
+      return "Generated document content does not match the requested draft";
     case "entity-limit":
       return "Entities limit reached";
     case "invalid-property":
       return "Property not found or not a file property";
     case "missing-draft":
       return "Generated document draft not found";
+    default:
+      return reason satisfies never;
+  }
+};
+
+const uploadWriteFailureStatus = (
+  reason: UploadWriteFailureReason,
+): 400 | 409 => {
+  switch (reason) {
+    case "content-mismatch":
+    case "missing-draft":
+      return 409;
+    case "entity-limit":
+    case "invalid-property":
+      return 400;
     default:
       return reason satisfies never;
   }
@@ -175,6 +196,7 @@ type ResolveSavedGeneratedDocumentProps = {
     workspaceId: string;
   };
   requestedFileName: SanitizedFileName;
+  requestedSha256Hex: string;
   workspaceId: SafeId<"workspace">;
 };
 
@@ -182,8 +204,11 @@ const resolveSavedGeneratedDocument = async ({
   tx,
   output,
   requestedFileName,
+  requestedSha256Hex,
   workspaceId,
-}: ResolveSavedGeneratedDocumentProps): Promise<GeneratedDocumentUploadResult | null> => {
+}: ResolveSavedGeneratedDocumentProps): Promise<
+  GeneratedDocumentUploadResult | "content-mismatch" | null
+> => {
   if (output.workspaceId !== workspaceId) {
     return null;
   }
@@ -222,6 +247,10 @@ const resolveSavedGeneratedDocument = async ({
 
   if (savedField?.content.type !== "file") {
     return null;
+  }
+
+  if (savedField.content.sha256Hex !== requestedSha256Hex) {
+    return "content-mismatch" as const;
   }
 
   return {
@@ -326,8 +355,12 @@ const preflightGeneratedDocumentDraft = async ({
           tx,
           output: draftState.output,
           requestedFileName: fileName,
+          requestedSha256Hex: generatedDraft.contentSha256Hex,
           workspaceId,
         });
+        if (saved === "content-mismatch") {
+          return { status: "content-mismatch" };
+        }
         return saved === null
           ? { status: "invalid" }
           : { result: saved, status: "saved" };
@@ -393,6 +426,13 @@ const uploadEntityHandler = async function* ({
       generatedDraft,
     });
     switch (preflightResult.status) {
+      case "content-mismatch":
+        return Result.err(
+          new HandlerError({
+            status: 409,
+            message: uploadWriteFailureMessage("content-mismatch"),
+          }),
+        );
       case "invalid":
         return Result.err(
           new HandlerError({
@@ -451,6 +491,18 @@ const uploadEntityHandler = async function* ({
   const sha256Hex = new Bun.CryptoHasher("sha256")
     .update(fileBuffer)
     .digest("hex");
+
+  if (
+    generatedDraft !== undefined &&
+    sha256Hex !== generatedDraft.contentSha256Hex
+  ) {
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        message: uploadWriteFailureMessage("content-mismatch"),
+      }),
+    );
+  }
 
   // Security scan before S3 upload
   const scanResult = await scanFile({
@@ -551,8 +603,15 @@ const uploadEntityHandler = async function* ({
               tx,
               output: draftState.output,
               requestedFileName: name,
+              requestedSha256Hex: generatedDraft.contentSha256Hex,
               workspaceId,
             });
+            if (saved === "content-mismatch") {
+              return {
+                ok: false as const,
+                reason: "content-mismatch" as const,
+              };
+            }
             if (saved === null) {
               return { ok: false as const, reason: "missing-draft" as const };
             }
@@ -700,7 +759,7 @@ const uploadEntityHandler = async function* ({
       await cleanupUploadedS3Keys({ keys: s3Keys, fileId, workspaceId });
       return Result.err(
         new HandlerError({
-          status: writeResult.reason === "missing-draft" ? 409 : 400,
+          status: uploadWriteFailureStatus(writeResult.reason),
           message: uploadWriteFailureMessage(writeResult.reason),
         }),
       );
@@ -823,6 +882,7 @@ export const uploadGeneratedDocument = createSafeHandler(
       userId: user.id,
       recordAuditEvent,
       generatedDraft: {
+        contentSha256Hex: body.contentSha256Hex,
         messageId: body.messageId,
         threadId: body.threadId,
         threadWorkspaceId: body.threadWorkspaceId,

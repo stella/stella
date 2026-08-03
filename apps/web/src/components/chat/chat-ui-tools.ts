@@ -817,6 +817,69 @@ export const isChatClientRequestActive = (status: ChatClientState): boolean => {
   }
 };
 
+type ServerChatTurnOutcome = NonNullable<
+  NonNullable<ChatMessage["metadata"]>["turnOutcome"]
+>;
+
+export type ResolvedChatAssistantTurnOutcome =
+  | ServerChatTurnOutcome
+  | { type: "incomplete" }
+  | { type: "legacy-completed" };
+
+type ChatAssistantTurnMessage = Pick<ChatMessage, "metadata" | "role"> & {
+  parts: readonly ChatPart[];
+};
+
+/**
+ * Resolve the server-owned terminal state for follow-up and error UI policy.
+ * Legacy assistant messages predate `turnOutcome`; only a non-empty legacy
+ * message may stand in for a completed turn.
+ */
+export const resolveChatAssistantTurnOutcome = (
+  message: ChatAssistantTurnMessage | null,
+): ResolvedChatAssistantTurnOutcome => {
+  if (message?.role !== "assistant") {
+    return { type: "incomplete" };
+  }
+
+  const outcome = message.metadata?.turnOutcome;
+  if (outcome === undefined) {
+    return message.parts.length > 0
+      ? { type: "legacy-completed" }
+      : { type: "incomplete" };
+  }
+
+  switch (outcome.type) {
+    case "awaiting-user":
+    case "cancelled":
+    case "completed":
+    case "failed":
+    case "interrupted":
+      return outcome;
+    default:
+      return outcome satisfies never;
+  }
+};
+
+export const getChatAssistantTurnError = (
+  message: ChatAssistantTurnMessage | null,
+): Error | undefined => {
+  const outcome = resolveChatAssistantTurnOutcome(message);
+  switch (outcome.type) {
+    case "failed":
+      return new Error(outcome.error);
+    case "awaiting-user":
+    case "cancelled":
+    case "completed":
+    case "incomplete":
+    case "interrupted":
+    case "legacy-completed":
+      return undefined;
+    default:
+      return outcome satisfies never;
+  }
+};
+
 /**
  * Parse a completed tool-call part's raw `arguments` JSON.
  *

@@ -60,6 +60,7 @@ import {
 } from "@/components/chat-mention-helpers";
 import { MentionIcon } from "@/components/chat-mention-list";
 import { insertPastedTextChip } from "@/components/chat-pasted-text-extension";
+import { COMPOSER_CONTROL_BUTTON_SIZE } from "@/components/chat/composer-control-style";
 import { slashItemChipAttrs } from "@/components/chat/prompt-slash-extension";
 import type { SlashItem } from "@/components/chat/prompt-slash-extension";
 import { MatterIcon } from "@/components/matter-icon";
@@ -216,7 +217,7 @@ export const ComposerPlusMenu = ({
               "border-border size-7 shrink-0 rounded-full border",
               triggerClassName,
             )}
-            size="icon-xs"
+            size={COMPOSER_CONTROL_BUTTON_SIZE}
             type="button"
             variant="secondary"
           />

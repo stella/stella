@@ -769,15 +769,15 @@ describe("outgoing chat stream message ids", () => {
         },
       },
     });
-    const finishEvents: { isAborted: boolean; text: string }[] = [];
+    const finishEvents: { outcome: string; text: string }[] = [];
 
     const stream = processServerChatStream({
       abortSignal: abortController.signal,
       getResponseMessage: () => responseMessage,
       mapMessageId: createChatMessageIdMapper(() => messageId),
-      onFinish: ({ isAborted, responseMessage: finishedMessage }) => {
+      onFinish: ({ outcome, responseMessage: finishedMessage }) => {
         finishEvents.push({
-          isAborted,
+          outcome: outcome.type,
           text: finishedMessage.parts
             .map((part) => (part.type === "text" ? part.content : ""))
             .join(""),
@@ -824,19 +824,22 @@ describe("outgoing chat stream message ids", () => {
         code: "unknown",
       },
     ]);
-    expect(finishEvents).toEqual([{ isAborted: true, text: "Partial answer" }]);
+    expect(finishEvents).toEqual([
+      { outcome: "interrupted", text: "Partial answer" },
+    ]);
   });
 
   test("normalizes in-band provider run errors", async () => {
     const messageId = toSafeId<"chatMessage">(
       "11111111-1111-4111-8111-111111111111",
     );
+    const outcomes: string[] = [];
     const stream = processServerChatStream({
       abortSignal: new AbortController().signal,
       getResponseMessage: () => null,
       mapMessageId: createChatMessageIdMapper(() => messageId),
-      onFinish: () => {
-        throw new Error("Expected run error not to finish");
+      onFinish: ({ outcome }) => {
+        outcomes.push(outcome.type);
       },
       processor: new StreamProcessor(),
       source: streamChunks([
@@ -858,18 +861,20 @@ describe("outgoing chat stream message ids", () => {
         rawEvent: { statusCode: 429 },
       },
     ]);
+    expect(outcomes).toEqual(["failed"]);
   });
 
   test("classifies a run error whose body arrives in the message", async () => {
     const messageId = toSafeId<"chatMessage">(
       "11111111-1111-4111-8111-111111111111",
     );
+    const outcomes: string[] = [];
     const stream = processServerChatStream({
       abortSignal: new AbortController().signal,
       getResponseMessage: () => null,
       mapMessageId: createChatMessageIdMapper(() => messageId),
-      onFinish: () => {
-        throw new Error("Expected run error not to finish");
+      onFinish: ({ outcome }) => {
+        outcomes.push(outcome.type);
       },
       processor: new StreamProcessor(),
       source: streamChunks([
@@ -895,18 +900,20 @@ describe("outgoing chat stream message ids", () => {
         code: "provider_unavailable",
       },
     ]);
+    expect(outcomes).toEqual(["failed"]);
   });
 
   test("classifies a run error body behind leading whitespace", async () => {
     const messageId = toSafeId<"chatMessage">(
       "11111111-1111-4111-8111-111111111111",
     );
+    const outcomes: string[] = [];
     const stream = processServerChatStream({
       abortSignal: new AbortController().signal,
       getResponseMessage: () => null,
       mapMessageId: createChatMessageIdMapper(() => messageId),
-      onFinish: () => {
-        throw new Error("Expected run error not to finish");
+      onFinish: ({ outcome }) => {
+        outcomes.push(outcome.type);
       },
       processor: new StreamProcessor(),
       source: streamChunks([
@@ -923,18 +930,20 @@ describe("outgoing chat stream message ids", () => {
       message: "quota_exhausted",
       code: "quota_exhausted",
     });
+    expect(outcomes).toEqual(["failed"]);
   });
 
   test("leaves a plain-text run error unclassified", async () => {
     const messageId = toSafeId<"chatMessage">(
       "11111111-1111-4111-8111-111111111111",
     );
+    const outcomes: string[] = [];
     const stream = processServerChatStream({
       abortSignal: new AbortController().signal,
       getResponseMessage: () => null,
       mapMessageId: createChatMessageIdMapper(() => messageId),
-      onFinish: () => {
-        throw new Error("Expected run error not to finish");
+      onFinish: ({ outcome }) => {
+        outcomes.push(outcome.type);
       },
       processor: new StreamProcessor(),
       source: streamChunks([
@@ -951,19 +960,20 @@ describe("outgoing chat stream message ids", () => {
         code: "unknown",
       },
     ]);
+    expect(outcomes).toEqual(["failed"]);
   });
 
   test("does not finish successfully after an in-band run error", async () => {
     const messageId = toSafeId<"chatMessage">(
       "11111111-1111-4111-8111-111111111111",
     );
-    let finished = false;
+    const outcomes: string[] = [];
     const stream = processServerChatStream({
       abortSignal: new AbortController().signal,
       getResponseMessage: () => null,
       mapMessageId: createChatMessageIdMapper(() => messageId),
-      onFinish: () => {
-        finished = true;
+      onFinish: ({ outcome }) => {
+        outcomes.push(outcome.type);
       },
       processor: new StreamProcessor(),
       source: streamChunks([
@@ -998,7 +1008,7 @@ describe("outgoing chat stream message ids", () => {
       code: "provider_billing",
       rawEvent: { statusCode: 402 },
     });
-    expect(finished).toBe(false);
+    expect(outcomes).toEqual(["failed"]);
   });
 });
 
@@ -1045,14 +1055,17 @@ describe("chat stream client-disconnect persistence", () => {
   test("persists the accumulated assistant message when the client disconnects mid-stream", async () => {
     const abortSignal = new AbortController().signal;
     const { getResponseMessage, processor } = accumulatingProcessor();
-    const finishEvents: { isAborted: boolean; text: string }[] = [];
+    const finishEvents: { outcome: string; text: string }[] = [];
 
     const stream = processServerChatStream({
       abortSignal,
       getResponseMessage,
       mapMessageId: createChatMessageIdMapper(() => messageId),
-      onFinish: ({ isAborted, responseMessage }) => {
-        finishEvents.push({ isAborted, text: textOf(responseMessage) });
+      onFinish: ({ outcome, responseMessage }) => {
+        finishEvents.push({
+          outcome: outcome.type,
+          text: textOf(responseMessage),
+        });
       },
       processor,
       source: streamChunks([
@@ -1085,7 +1098,7 @@ describe("chat stream client-disconnect persistence", () => {
     }
 
     expect(finishEvents).toEqual([
-      { isAborted: false, text: "Partial answer" },
+      { outcome: "interrupted", text: "Partial answer" },
     ]);
     expect(abortSignal.aborted).toBe(false);
   });
@@ -1131,16 +1144,16 @@ describe("chat stream client-disconnect persistence", () => {
     expect(finishCount).toBe(1);
   });
 
-  test("does not persist when the client disconnects before any content accumulates", async () => {
+  test("settles an interrupted turn when the client disconnects before content", async () => {
     const { getResponseMessage, processor } = accumulatingProcessor();
-    let finishCount = 0;
+    const outcomes: string[] = [];
 
     const stream = processServerChatStream({
       abortSignal: new AbortController().signal,
       getResponseMessage,
       mapMessageId: createChatMessageIdMapper(() => messageId),
-      onFinish: () => {
-        finishCount += 1;
+      onFinish: ({ outcome }) => {
+        outcomes.push(outcome.type);
       },
       processor,
       source: streamChunks([
@@ -1159,7 +1172,7 @@ describe("chat stream client-disconnect persistence", () => {
     await iterator.next();
     await iterator.return?.();
 
-    expect(finishCount).toBe(0);
+    expect(outcomes).toEqual(["interrupted"]);
   });
 });
 
@@ -1202,11 +1215,11 @@ describe("streamed chat message conversion", () => {
     });
   }
 
-  test("does not finish a part-less turn", async () => {
+  test("settles a part-less completion as a failed turn", async () => {
     const messageId = toSafeId<"chatMessage">(
       "11111111-1111-4111-8111-111111111111",
     );
-    let finishCount = 0;
+    const outcomes: string[] = [];
     // A provider can finish without emitting content. Finishing that turn
     // would insert a blank assistant message into the history.
     const responseMessage: ChatMessage = {
@@ -1221,8 +1234,8 @@ describe("streamed chat message conversion", () => {
         abortSignal: new AbortController().signal,
         getResponseMessage: () => responseMessage,
         mapMessageId: createChatMessageIdMapper(() => messageId),
-        onFinish: () => {
-          finishCount += 1;
+        onFinish: ({ outcome }) => {
+          outcomes.push(outcome.type);
         },
         processor,
         source: streamChunks([
@@ -1237,16 +1250,16 @@ describe("streamed chat message conversion", () => {
       }),
     );
 
-    expect(finishCount).toBe(0);
+    expect(outcomes).toEqual(["failed"]);
   });
 
-  // The teardown `finally` reaches the same guard by a different route, so a
-  // dropped connection must not persist the blank turn either.
-  test("does not finish a part-less turn when the client disconnects", async () => {
+  // The teardown `finally` reaches the same settlement boundary by a different
+  // route, so a dropped connection still closes the durable turn.
+  test("settles a part-less turn when the client disconnects", async () => {
     const messageId = toSafeId<"chatMessage">(
       "11111111-1111-4111-8111-111111111111",
     );
-    let finishCount = 0;
+    const outcomes: string[] = [];
     const responseMessage: ChatMessage = {
       id: messageId,
       parts: [],
@@ -1258,8 +1271,8 @@ describe("streamed chat message conversion", () => {
       abortSignal: new AbortController().signal,
       getResponseMessage: () => responseMessage,
       mapMessageId: createChatMessageIdMapper(() => messageId),
-      onFinish: () => {
-        finishCount += 1;
+      onFinish: ({ outcome }) => {
+        outcomes.push(outcome.type);
       },
       processor,
       source: streamChunks([
@@ -1285,7 +1298,7 @@ describe("streamed chat message conversion", () => {
       }
     }
 
-    expect(finishCount).toBe(0);
+    expect(outcomes).toEqual(["interrupted"]);
   });
 });
 

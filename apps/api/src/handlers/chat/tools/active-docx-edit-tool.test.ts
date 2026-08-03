@@ -1,4 +1,7 @@
-import { convertSchemaToJsonSchema } from "@tanstack/ai";
+import {
+  convertSchemaToJsonSchema,
+  parseWithStandardSchema,
+} from "@tanstack/ai";
 import { describe, expect, test } from "bun:test";
 
 import type { FolioAIEditAppliedOperation } from "@stll/folio-core/ai-edits";
@@ -97,7 +100,7 @@ const validateInput = async (input: unknown) => {
   if (tool.inputSchema === undefined) {
     throw new TypeError("Expected active DOCX edit input schema");
   }
-  return await tool.inputSchema["~standard"].validate(input);
+  return tool.inputSchema["~standard"].validate(input);
 };
 
 const validateOutput = async (output: unknown) => {
@@ -109,6 +112,22 @@ const validateOutput = async (output: unknown) => {
 };
 
 describe("apply-active-docx-edits stella narrowings", () => {
+  test("stays synchronous at TanStack's tool-execution boundary", () => {
+    const tool = createActiveDocxEditTool();
+    expect(() =>
+      parseWithStandardSchema(tool.inputSchema, {
+        version: 1,
+        operations: [
+          {
+            ...reviewMeta,
+            type: "deleteBlock",
+            blockId: "b-0010",
+          },
+        ],
+      }),
+    ).not.toThrow();
+  });
+
   test("does not send the pinned numeric version as a provider enum", () => {
     const schema = convertSchemaToJsonSchema(
       createActiveDocxEditTool().inputSchema,

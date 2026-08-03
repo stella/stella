@@ -192,6 +192,26 @@ const chatMessageScopeCheck = sql`(
   )
 )`;
 
+// Turn rows carry the message-like ownership columns needed for constant-time
+// tenant filters, then prove that those discriminators match the owning thread.
+// The thread join also applies the embedded-data scope, exactly as messages do.
+const chatTurnScopeCheck = sql`(
+  ${userCheck} AND
+  ${organizationCheck} AND
+  (workspace_id IS NULL OR ${workspaceCheck}) AND
+  EXISTS (
+    SELECT 1 FROM chat_threads ct
+    WHERE ct.id = chat_turns.thread_id
+      AND ct.user_id = chat_turns.user_id
+      AND ct.organization_id = chat_turns.organization_id
+      AND ct.workspace_id IS NOT DISTINCT FROM chat_turns.workspace_id
+      AND (
+        cardinality(ct.data_workspace_ids) = 0
+        OR ${workspaceArrayCheck(sql`ct.data_workspace_ids`)}
+      )
+  )
+)`;
+
 const fileChatThreadScopeCheck = sql`(
   ${userCheck} AND
   ${organizationCheck} AND
@@ -783,6 +803,30 @@ export const chatMessagePolicies = () => [
     for: "delete",
     to: stella,
     using: chatMessageScopeCheck,
+  }),
+];
+
+export const chatTurnPolicies = () => [
+  p.pgPolicy("chat_turn_select", {
+    for: "select",
+    to: stella,
+    using: chatTurnScopeCheck,
+  }),
+  p.pgPolicy("chat_turn_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: chatTurnScopeCheck,
+  }),
+  p.pgPolicy("chat_turn_update", {
+    for: "update",
+    to: stella,
+    using: chatTurnScopeCheck,
+    withCheck: chatTurnScopeCheck,
+  }),
+  p.pgPolicy("chat_turn_delete", {
+    for: "delete",
+    to: stella,
+    using: chatTurnScopeCheck,
   }),
 ];
 

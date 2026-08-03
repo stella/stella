@@ -393,6 +393,7 @@ type ChatRuntimeSnapshot = {
   messages: PersistedChatMessage[];
   sessionGenerating: boolean;
   status: ChatClientState;
+  turnAbandoned: boolean;
 };
 
 type TanStackClientToolResult = Parameters<
@@ -720,6 +721,7 @@ export const createChatRuntime = ({
     messages: initialMessages,
     sessionGenerating: false,
     status: "ready",
+    turnAbandoned: false,
   };
 
   const emit = () => {
@@ -777,7 +779,11 @@ export const createChatRuntime = ({
     onFinish: () => {
       onFinish();
     },
-    onLoadingChange: (isLoading) => setSnapshot({ isLoading }),
+    onLoadingChange: (isLoading) =>
+      setSnapshot({
+        isLoading,
+        ...(isLoading ? { turnAbandoned: false } : {}),
+      }),
     onMessagesChange: (messages) =>
       setSnapshot({ messages: toPersistedChatMessages(messages) }),
     onSessionGeneratingChange: (sessionGenerating) =>
@@ -864,6 +870,13 @@ export const createChatRuntime = ({
       return { messageId: message.id, status: "started", stream };
     },
     stop: () => {
+      const turnWasActive =
+        snapshot.isLoading ||
+        snapshot.sessionGenerating ||
+        isChatClientRequestActive(snapshot.status) ||
+        hasRunningToolCallInLatestAssistantMessage({
+          messages: snapshot.messages,
+        });
       client.stop();
       // `client.stop()` aborts the live request but never rewrites message
       // parts, so a tool-call part caught mid-run stays in a running state and
@@ -880,6 +893,9 @@ export const createChatRuntime = ({
         const sanitized = sanitizeRunningToolCalls(snapshot.messages, "cancel");
         client.setMessagesManually(sanitized);
         setSnapshot({ messages: sanitized });
+      }
+      if (turnWasActive) {
+        setSnapshot({ turnAbandoned: true });
       }
     },
     subscribe: (listener) => {
@@ -2092,12 +2108,28 @@ export const acquireChatRuntime = ({
     }
   }
 
+  const refreshPersistedThread = () => {
+    detached(
+      Promise.all([
+        invalidateChatThread({ queryClient, threadRef: key }),
+        invalidateChatThreadLists({
+          queryClient,
+          workspaceId: key.scope === "workspace" ? key.workspaceId : undefined,
+        }),
+      ]),
+      "chatTurnTerminal",
+    );
+  };
   const runtime = createChatRuntime({
     context,
     initialMessages: data.messages,
     key,
     onError: (error) => {
       getAnalytics().captureError(error);
+      // The server persists a failed terminal outcome before emitting
+      // RUN_ERROR. Reconcile the ephemeral TanStack error runtime with that
+      // durable message metadata just as a successful finish does.
+      refreshPersistedThread();
     },
     onFinish: () => {
       // Invalidate only — do NOT evict the registry entry here. The
@@ -2108,17 +2140,7 @@ export const acquireChatRuntime = ({
       // wiping the finished turn until the refetch wins (or forever if
       // it fails). Kept in place, the entry reattaches seed-equal until
       // the refetch lands, then the idle reconcile replaces it.
-      detached(
-        Promise.all([
-          invalidateChatThread({ queryClient, threadRef: key }),
-          invalidateChatThreadLists({
-            queryClient,
-            workspaceId:
-              key.scope === "workspace" ? key.workspaceId : undefined,
-          }),
-        ]),
-        "onFinish",
-      );
+      refreshPersistedThread();
     },
   });
   chatRuntimeRegistry.set(registryKey, {

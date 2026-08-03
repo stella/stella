@@ -23,10 +23,16 @@
  * it wins over any editor default before the editor can act.
  */
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import type { RefObject } from "react";
 
-import { CheckIcon, ChevronDownIcon, ChevronUpIcon, XIcon } from "lucide-react";
+import {
+  CheckIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
+  RotateCcwIcon,
+  XIcon,
+} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import type { DocxEditorRef } from "@stll/folio-react";
@@ -47,11 +53,12 @@ import {
 } from "@/components/ai-suggestions/review-store";
 import type { ReviewSuggestion } from "@/components/ai-suggestions/review-store";
 import { useReviewActions } from "@/components/ai-suggestions/use-review-actions";
-import { useMountEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { detached } from "@/lib/detached";
 
 const EMPTY_SUGGESTIONS: readonly ReviewSuggestion[] = [];
+const ACCEPT_ALL_UNDO_DURATION_MS = 6000;
 
 // Shortcut hints shown in the button tooltips so the bindings are
 // discoverable in the UI, not just the docstring. Rendered with the
@@ -102,6 +109,7 @@ export const ReviewBar = ({
     acceptOne,
     rejectOne,
     acceptMany,
+    revertOne,
     navigateTo,
   } = useReviewActions({
     entityId,
@@ -115,6 +123,20 @@ export const ReviewBar = ({
   const total = pendingItems.length;
   const focusedIndex = pendingItems.findIndex((item) => item.id === focusedId);
   const activeIndex = Math.max(focusedIndex, 0);
+  const [recentAcceptedBatch, setRecentAcceptedBatch] = useState<
+    readonly ReviewSuggestion[] | null
+  >(null);
+
+  useExternalSyncEffect(() => {
+    if (recentAcceptedBatch === null) {
+      return undefined;
+    }
+    const timeout = window.setTimeout(
+      () => setRecentAcceptedBatch(null),
+      ACCEPT_ALL_UNDO_DURATION_MS,
+    );
+    return () => window.clearTimeout(timeout);
+  }, [recentAcceptedBatch]);
 
   const focusAt = useLatestCallback((index: number) => {
     const item = pendingItems.at(index);
@@ -172,6 +194,33 @@ export const ReviewBar = ({
     }
   });
 
+  const acceptAllWithUndo = useLatestCallback(
+    async (items: readonly ReviewSuggestion[]) => {
+      await acceptMany(items);
+      const accepted = items.filter((item) => {
+        const live = useReviewStore
+          .getState()
+          .sessions[entityId]?.find(
+            (candidate) =>
+              candidate.id === item.id ||
+              candidate.pendingOperation?.id === item.pendingOperation?.id,
+          );
+        return live?.status === "accepted";
+      });
+      setRecentAcceptedBatch(accepted.length > 0 ? accepted : null);
+    },
+  );
+
+  const undoAcceptedBatch = useLatestCallback(() => {
+    if (recentAcceptedBatch === null) {
+      return;
+    }
+    for (const item of recentAcceptedBatch.toReversed()) {
+      revertOne(item);
+    }
+    setRecentAcceptedBatch(null);
+  });
+
   const handleKeyDown = useLatestCallback((event: KeyboardEvent) => {
     if (
       total === 0 ||
@@ -223,8 +272,27 @@ export const ReviewBar = ({
     };
   });
 
-  if (total === 0) {
+  if (total === 0 && recentAcceptedBatch === null) {
     return null;
+  }
+
+  if (total === 0) {
+    return (
+      <div
+        className="bg-popover/90 border-border pointer-events-auto absolute start-1/2 bottom-28 z-50 -translate-x-1/2 rounded-full border p-1 shadow-lg [backdrop-filter:blur(18px)_saturate(160%)]"
+        data-docx-review-undo=""
+      >
+        <Button
+          className="h-8 rounded-full px-3 text-sm"
+          onClick={undoAcceptedBatch}
+          size="sm"
+          variant="ghost"
+        >
+          <RotateCcwIcon className="me-1.5 size-4" />
+          {t("common.undo")}
+        </Button>
+      </div>
+    );
   }
 
   const current = Math.min(activeIndex + 1, total);
@@ -296,7 +364,7 @@ export const ReviewBar = ({
       </Button>
       <AcceptAllButton
         className="h-7 px-2.5 text-xs"
-        onAcceptAll={acceptMany}
+        onAcceptAll={acceptAllWithUndo}
         pendingItems={pendingItems}
         size="sm"
         variant="ghost"

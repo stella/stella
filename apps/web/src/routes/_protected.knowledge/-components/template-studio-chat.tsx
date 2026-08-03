@@ -1339,6 +1339,7 @@ const TemplateStudioChatInner = ({
           workspaceId={threadRef.threadId}
         />
         <PromptBar
+          anonymized={anonymized}
           attachmentsEnabled
           canSubmitNow={canSubmitWithCurrentSnapshot}
           editorController={editorController}

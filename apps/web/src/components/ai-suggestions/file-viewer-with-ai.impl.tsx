@@ -16,15 +16,23 @@
 import type { ReactNode, RefObject } from "react";
 import { startTransition } from "react";
 
+import {
+  setAISuggestionsMeta,
+  setFocusedSuggestionMeta,
+} from "@stll/folio-react";
 import type { DocxEditorRef } from "@stll/folio-react";
 
 import type { DocxComments } from "@/components/docx/app-docx-editor";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { DocxEditSafety } from "@/lib/chat-edit-mode";
 import type { ChatThreadId } from "@/lib/chat-thread-ref";
 import { createChatThreadId } from "@/lib/chat-thread-ref";
 
 import { FileChatOverlay } from "./file-chat-overlay";
+import { resolveFileReviewSessionId } from "./file-review-session";
+import { buildFolioReviewDecorations } from "./review-folio-decorations";
 import { useReviewStore } from "./review-store";
+import type { ReviewSuggestion } from "./review-store";
 import "./file-viewer-with-ai.css";
 
 type ActiveFile = {
@@ -62,6 +70,8 @@ export type FileViewerWithAIProps = {
    * the workspace file-chat mapping.
    */
   chatThreadId?: ChatThreadId | undefined;
+  /** Persist an explicit thread rotation in the viewer's owning surface. */
+  onChatThreadIdChange?: ((threadId: ChatThreadId) => void) | undefined;
   /**
    * Optional file context surfaced to the model so prompts can
    * reference "the file you're looking at" — entity id and human
@@ -99,9 +109,88 @@ export type FileViewerWithAIProps = {
 
 type FileChatOverlayHostProps = Omit<
   FileViewerWithAIProps,
-  "children" | "className"
+  "children" | "className" | "onChatThreadIdChange"
 > & {
   onChatThreadIdChange: (threadId: ChatThreadId) => void;
+};
+
+type ResolveActiveReviewSessionIdOptions = {
+  activeDraft: ActiveDocumentDraft | undefined;
+  activeFile: ActiveFile | undefined;
+};
+
+const resolveActiveReviewSessionId = ({
+  activeDraft,
+  activeFile,
+}: ResolveActiveReviewSessionIdOptions): string | undefined => {
+  if (activeFile !== undefined) {
+    return resolveFileReviewSessionId({
+      type: "file",
+      entityId: activeFile.entityId,
+    });
+  }
+  if (activeDraft !== undefined) {
+    return resolveFileReviewSessionId({
+      type: "draft",
+      toolCallId: activeDraft.toolCallId,
+    });
+  }
+  return resolveFileReviewSessionId({ type: "none" });
+};
+
+const EMPTY_REVIEW_SUGGESTIONS: readonly ReviewSuggestion[] = [];
+
+const ReviewFolioDecorationsBridge = ({
+  docxEditorRef,
+  entityId,
+}: {
+  docxEditorRef: RefObject<DocxEditorRef | null>;
+  entityId: string;
+}) => {
+  const suggestions = useReviewStore(
+    (state) => state.sessions[entityId] ?? EMPTY_REVIEW_SUGGESTIONS,
+  );
+  const focusedId = useReviewStore(
+    (state) => state.focusedId[entityId] ?? null,
+  );
+
+  useExternalSyncEffect(() => {
+    let animationFrame: number | null = null;
+    let cancelled = false;
+    const sync = () => {
+      if (cancelled) {
+        return;
+      }
+      const editor = docxEditorRef.current;
+      editor?.ensureEditorView({ focus: false });
+      const view = editor?.getEditorRef()?.getView();
+      if (!view) {
+        animationFrame = requestAnimationFrame(sync);
+        return;
+      }
+      const folioSuggestions = buildFolioReviewDecorations(
+        suggestions,
+        view.state.doc,
+      );
+      const suggestionsMeta = setAISuggestionsMeta(folioSuggestions);
+      view.dispatch(
+        view.state.tr.setMeta(suggestionsMeta.key, suggestionsMeta.payload),
+      );
+      const focusedMeta = setFocusedSuggestionMeta(focusedId);
+      view.dispatch(
+        view.state.tr.setMeta(focusedMeta.key, focusedMeta.payload),
+      );
+    };
+    sync();
+    return () => {
+      cancelled = true;
+      if (animationFrame !== null) {
+        cancelAnimationFrame(animationFrame);
+      }
+    };
+  }, [docxEditorRef, focusedId, suggestions]);
+
+  return null;
 };
 
 export const FileChatOverlayHost = ({
@@ -124,8 +213,12 @@ export const FileChatOverlayHost = ({
     // thread invites the user to act on proposals they no longer
     // have context for; reset the session whenever they explicitly
     // start a new chat.
-    if (activeFile) {
-      useReviewStore.getState().resetSession(activeFile.entityId);
+    const reviewSessionId = resolveActiveReviewSessionId({
+      activeDraft,
+      activeFile,
+    });
+    if (reviewSessionId !== undefined) {
+      useReviewStore.getState().resetSession(reviewSessionId);
     }
     // Wrap the swap in a transition so React keeps the current chat
     // visible while `chatThreadOptions` suspends on the new key,
@@ -136,20 +229,33 @@ export const FileChatOverlayHost = ({
     });
   };
 
+  const reviewSessionId = resolveActiveReviewSessionId({
+    activeDraft,
+    activeFile,
+  });
+
   return (
-    <FileChatOverlay
-      activeExternal={activeExternal}
-      activeDraft={activeDraft}
-      activeFile={activeFile}
-      chatThreadId={chatThreadId}
-      docxComments={docxComments}
-      docxEditable={docxEditable}
-      docxEditSafety={docxEditSafety}
-      docxEditorRef={docxEditorRef}
-      onDocxCommentsChange={onDocxCommentsChange}
-      onNewThread={handleNewThread}
-      requestDocxEditMode={requestDocxEditMode}
-      workspaceId={workspaceId}
-    />
+    <>
+      {docxEditorRef !== undefined && reviewSessionId !== undefined && (
+        <ReviewFolioDecorationsBridge
+          docxEditorRef={docxEditorRef}
+          entityId={reviewSessionId}
+        />
+      )}
+      <FileChatOverlay
+        activeExternal={activeExternal}
+        activeDraft={activeDraft}
+        activeFile={activeFile}
+        chatThreadId={chatThreadId}
+        docxComments={docxComments}
+        docxEditable={docxEditable}
+        docxEditSafety={docxEditSafety}
+        docxEditorRef={docxEditorRef}
+        onDocxCommentsChange={onDocxCommentsChange}
+        onNewThread={handleNewThread}
+        requestDocxEditMode={requestDocxEditMode}
+        workspaceId={workspaceId}
+      />
+    </>
   );
 };

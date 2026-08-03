@@ -4,7 +4,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 
-import { chatThreads } from "@/api/db/schema";
+import { chatThreads, chatTurns } from "@/api/db/schema";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -76,6 +76,7 @@ const threadId = toSafeId<"chatThread">("00000000-0000-0000-0000-000000000003");
 const messageId = toSafeId<"chatMessage">(
   "00000000-0000-0000-0000-000000000004",
 );
+const turnId = toSafeId<"chatTurn">("00000000-0000-0000-0000-000000000008");
 const activeWorkspaceId = toSafeId<"workspace">(
   "00000000-0000-0000-0000-000000000005",
 );
@@ -610,6 +611,7 @@ describe("send message disconnect handling", () => {
           query: {
             chatMessages: { findFirst: async () => null },
             chatThreadCompactions: { findFirst: async () => null },
+            chatTurns: { findFirst: async () => ({ id: turnId }) },
             chatThreads: {
               findFirst: async () => ({
                 chatModel: null,
@@ -626,9 +628,19 @@ describe("send message disconnect handling", () => {
             organizationSettings: { findFirst: async () => null },
           },
           select: selectChatMessages,
-          update: () => ({
-            set: () => ({ where: updateWhere }),
-          }),
+          update: (table: unknown) => {
+            if (table === chatThreads) {
+              return { set: () => ({ where: updateWhere }) };
+            }
+            if (table === chatTurns) {
+              return {
+                set: () => ({
+                  where: () => ({ returning: async () => [{ id: turnId }] }),
+                }),
+              };
+            }
+            throw new Error("Unexpected table update in chat send test");
+          },
         },
       }),
     );
@@ -637,7 +649,7 @@ describe("send message disconnect handling", () => {
       code: 400,
       response: { message: "Client disconnected before stream started" },
     });
-    expect(insertValues).toHaveBeenCalledTimes(1);
+    expect(insertValues).toHaveBeenCalledTimes(2);
     expect(updateWhere).toHaveBeenCalledTimes(1);
     expect(upsertChatThreadSearchDocumentMock).toHaveBeenCalledWith(threadId);
     expect(loadExternalMcpToolsForUserMock).not.toHaveBeenCalled();

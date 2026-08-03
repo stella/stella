@@ -15,6 +15,7 @@ import { toChatThreadId } from "@/lib/chat-thread-ref";
 import {
   invalidateCreatedDocumentQueries,
   promoteCreateDocumentDraftInspectorTab,
+  setCreateDocumentDraftInspectorChatThreadId,
   setCreateDocumentDraftInspectorTabStatus,
 } from "./use-chat-session-created-document.logic";
 
@@ -183,6 +184,33 @@ describe("create-document inspector transition", () => {
         workspaceId: "workspace-1",
       },
     });
+
+    expect(
+      setCreateDocumentDraftInspectorChatThreadId({
+        chatThreadId: toChatThreadId("thread-rotated"),
+        inspector,
+        toolCallId,
+      }),
+    ).toBe(true);
+    expect(updateCount).toBe(2);
+    expect(tabs.at(0)).toMatchObject({
+      id,
+      payload: {
+        chatThreadId: "thread-rotated",
+        entityId: "entity-1",
+        fieldId: "field-1",
+        status: "persisted",
+      },
+    });
+
+    expect(
+      setCreateDocumentDraftInspectorChatThreadId({
+        chatThreadId: toChatThreadId("thread-origin"),
+        inspector,
+        toolCallId,
+      }),
+    ).toBe(false);
+    expect(updateCount).toBe(2);
   });
 
   test("falls back when the user closed the draft before persistence finishes", () => {

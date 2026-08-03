@@ -14,6 +14,12 @@ tool failures, persistence, and UI reconstruction from producing silent state lo
 
 ## Make SDK states exhaustive
 
+- Never reinterpret or manually redeclare a protocol shape that can be inherited
+  from upstream. Derive discriminators, states, message parts, hook surfaces, and
+  event unions from the installed SDK's exported types, then lock every member with
+  an exhaustive `switch` or `satisfies Record<UpstreamUnion, ...>`. An upstream
+  addition, removal, or rename must fail Stella's typecheck and force an explicit
+  boundary decision.
 - Derive state types from the SDK or Stella's validated boundary type. Handle them
   with an exhaustive `switch` plus a `never` check, or a
   `satisfies Record<SdkState, ...>` table.

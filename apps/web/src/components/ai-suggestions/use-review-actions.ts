@@ -21,6 +21,7 @@ import {
   resolveDocxSuggestionRequest,
   revertDocxSuggestionRequest,
 } from "@/components/ai-suggestions/docx-suggestion-persistence";
+import { findFolioReviewDecoration } from "@/components/ai-suggestions/review-folio-decorations";
 import {
   findLiveSuggestion,
   getReviewApplyMode,
@@ -721,6 +722,16 @@ export const useReviewActions = ({
     if (item.revisionIds !== null) {
       docxEditorRef.current?.scrollToAIEditOperation(item.revisionIds);
       return;
+    }
+    const pagedEditor = docxEditorRef.current?.getEditorRef();
+    const view = pagedEditor?.getView();
+    if (pagedEditor && view) {
+      const decoration = findFolioReviewDecoration(item, view.state.doc);
+      if (decoration !== null) {
+        pagedEditor.setSelection(decoration.range.from);
+        pagedEditor.scrollToPosition(decoration.range.from);
+        return;
+      }
     }
     docxEditorRef.current?.scrollToBlock(
       item.blockId,

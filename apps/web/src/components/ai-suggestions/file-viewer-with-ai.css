@@ -14,3 +14,13 @@
   [contenteditable="true"]:not([role="toolbar"] [contenteditable="true"]) {
   caret-color: transparent;
 }
+
+/* The file chat and review controls float above Folio's scroll viewport.
+ * Reserve enough trailing scroll space for the final page to move fully above
+ * that stack; scroll-padding gives programmatic block navigation the same safe
+ * edge. This belongs at the integration boundary rather than inside Folio,
+ * whose standalone editors do not mount Stella's floating controls. */
+[data-file-viewer-ai] [data-folio-scroll] {
+  padding-block-end: 10rem;
+  scroll-padding-block-end: 10rem;
+}

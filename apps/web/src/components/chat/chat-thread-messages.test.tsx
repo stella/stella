@@ -418,7 +418,8 @@ describe("chat thread messages", () => {
   test("preserves generated document filename casing in the preview", () => {
     const input = {
       name: "Dohoda_o_ochrane_duvernych_informaci_NDA",
-      source: "@doc kind=agreement locale=cs page=A4\n@title Dohoda",
+      source:
+        "@doc kind=agreement locale=cs page=A4\n@title Dohoda\n**Smluvní strany:** Poskytovatel a příjemce",
     };
     const chatMessages: PersistedChatMessage[] = [
       {
@@ -451,6 +452,8 @@ describe("chat thread messages", () => {
     );
 
     expect(html).toContain("Dohoda_o_ochrane_duvernych_informaci_NDA.docx");
+    expect(html).toContain("Smluvní strany: Poskytovatel a příjemce");
+    expect(html).not.toContain("**Smluvní strany:**");
     expect(html).not.toContain("tracking-wide uppercase");
   });
 

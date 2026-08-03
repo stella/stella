@@ -289,11 +289,17 @@ const TOOL_RESULT_VALIDATION = {
   ChatToolResultPart["state"],
   "error" | "incomplete" | "output"
 >;
-type ValidatedToolCallPart = {
-  name: string;
-  hasOutput: boolean;
-  output: unknown;
-};
+type ValidatedToolCallPart =
+  | {
+      type: "error";
+      name: string;
+      error: string | undefined;
+    }
+  | {
+      type: "schema";
+      name: string;
+      output: { type: "absent" } | { type: "present"; value: unknown };
+    };
 
 export const validateMessage = async ({
   message,
@@ -317,13 +323,17 @@ export const validateMessage = async ({
       return Result.err(metadataResult.error);
     }
 
+    const metadata = restoreServerOwnedChatMetadata({
+      incomingMetadata: metadataResult.value,
+      message,
+      persistedMessage,
+    });
+
     const validatedMessage = toPersistableChatMessage({
       id: message.id,
       role: message.role,
       parts: partsResult.value,
-      ...(metadataResult.value === undefined
-        ? {}
-        : { metadata: metadataResult.value }),
+      ...(metadata === undefined ? {} : { metadata }),
     });
     const toolValidationResult = validateToolCallParts({
       message: validatedMessage,
@@ -389,6 +399,39 @@ export const validateMessage = async ({
       storedFileRefs,
     });
   });
+
+const restoreServerOwnedChatMetadata = ({
+  incomingMetadata,
+  message,
+  persistedMessage,
+}: {
+  incomingMetadata: ChatMessageMetadata | undefined;
+  message: RawIncomingMessage;
+  persistedMessage: ValidateMessageInput["persistedMessage"];
+}): ChatMessageMetadata | undefined => {
+  if (message.role !== "assistant" || persistedMessage?.role !== "assistant") {
+    return incomingMetadata;
+  }
+
+  const persistedMetadata = chatMessageFromPersisted({
+    id: message.id,
+    role: persistedMessage.role,
+    content: persistedMessage.content,
+  }).metadata;
+  const restored: ChatMessageMetadata = {
+    ...incomingMetadata,
+    ...(persistedMetadata?.serverProvenance === undefined
+      ? {}
+      : { serverProvenance: persistedMetadata.serverProvenance }),
+    ...(persistedMetadata?.sourceDocuments === undefined
+      ? {}
+      : { sourceDocuments: persistedMetadata.sourceDocuments }),
+    ...(persistedMetadata?.turnOutcome === undefined
+      ? {}
+      : { turnOutcome: persistedMetadata.turnOutcome }),
+  };
+  return isChatMessageMetadataEmpty(restored) ? undefined : restored;
+};
 
 const validateIncomingChatParts = ({
   message,
@@ -634,6 +677,7 @@ const isChatMessageMetadataEmpty = (metadata: ChatMessageMetadata): boolean =>
   metadata.mentions === undefined &&
   metadata.serverProvenance === undefined &&
   metadata.sourceDocuments === undefined &&
+  metadata.turnOutcome === undefined &&
   metadata.usage === undefined;
 
 const validateToolCallParts = ({
@@ -738,34 +782,43 @@ const validateToolCallPart = ({
     if (Result.isError(errorOutputResult)) {
       return Result.err(errorOutputResult.error);
     }
-    return Result.ok({ hasOutput: false, name: part.name, output: undefined });
-  }
-
-  let hasOutput = false;
-  let validatedOutput: unknown = undefined;
-  if (part.output !== undefined) {
-    const outputResult = validateToolPayload({
-      payload: part.output,
-      payloadName: "output",
-      schema: tool.outputSchema,
-      toolName: part.name,
+    return Result.ok({
+      type: "error",
+      name: part.name,
+      error: errorOutputResult.value,
     });
-    if (Result.isError(outputResult)) {
-      return Result.err(outputResult.error);
-    }
-    validatedOutput = outputResult.value;
-    hasOutput = true;
   }
 
-  return Result.ok({ hasOutput, name: part.name, output: validatedOutput });
+  if (part.output === undefined) {
+    return Result.ok({
+      type: "schema",
+      name: part.name,
+      output: { type: "absent" },
+    });
+  }
+
+  const outputResult = validateToolPayload({
+    payload: part.output,
+    payloadName: "output",
+    schema: tool.outputSchema,
+    toolName: part.name,
+  });
+  if (Result.isError(outputResult)) {
+    return Result.err(outputResult.error);
+  }
+  return Result.ok({
+    type: "schema",
+    name: part.name,
+    output: { type: "present", value: outputResult.value },
+  });
 };
 
 const validateToolCallErrorOutput = (
   part: ChatToolCallPart,
-): Result<void, HandlerError<400>> => {
+): Result<string | undefined, HandlerError<400>> => {
   const output: unknown = part.output;
   if (output === undefined) {
-    return Result.ok();
+    return Result.ok(undefined);
   }
   if (
     typeof output !== "object" ||
@@ -781,7 +834,7 @@ const validateToolCallErrorOutput = (
       }),
     );
   }
-  return Result.ok();
+  return Result.ok(output.error);
 };
 
 const validateToolResultPart = ({
@@ -814,10 +867,18 @@ const validateToolResultPart = ({
   }
 
   if (validation === "error") {
-    return validateToolErrorResult(part);
+    if (toolCall.type !== "error") {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: `Chat tool result state does not match call: ${part.toolCallId}`,
+        }),
+      );
+    }
+    return validateToolErrorResult(part, toolCall.error);
   }
 
-  if (!toolCall.hasOutput) {
+  if (toolCall.type !== "schema" || toolCall.output.type === "absent") {
     return Result.err(
       new HandlerError({
         status: 400,
@@ -851,7 +912,7 @@ const validateToolResultPart = ({
     return Result.err(outputResult.error);
   }
 
-  if (!deepEquals(outputResult.value, toolCall.output)) {
+  if (!deepEquals(outputResult.value, toolCall.output.value)) {
     return Result.err(
       new HandlerError({
         status: 400,
@@ -865,13 +926,17 @@ const validateToolResultPart = ({
 
 const validateToolErrorResult = (
   part: ChatToolResultPart,
+  toolCallError: string | undefined,
 ): Result<void, HandlerError<400>> => {
   const contentResult = parseToolResultContent(part.content);
   if (Result.isError(contentResult)) {
     return Result.err(contentResult.error);
   }
 
-  if (contentResult.value !== null || !part.error) {
+  if (
+    !part.error ||
+    (toolCallError !== undefined && toolCallError !== part.error)
+  ) {
     return Result.err(
       new HandlerError({
         status: 400,
@@ -880,7 +945,29 @@ const validateToolErrorResult = (
     );
   }
 
-  return Result.ok();
+  // TanStack currently emits two error-result encodings that can both return
+  // on an assistant continuation: client-executed failures carry `null`
+  // content plus `error`, while server-executed failures carry the same error
+  // in both fields. Accept only those exact shapes so a persisted server error
+  // can round-trip without widening the boundary to arbitrary content.
+  if (contentResult.value === null) {
+    return Result.ok();
+  }
+  if (
+    typeof contentResult.value === "object" &&
+    Object.keys(contentResult.value).length === 1 &&
+    "error" in contentResult.value &&
+    contentResult.value.error === part.error
+  ) {
+    return Result.ok();
+  }
+
+  return Result.err(
+    new HandlerError({
+      status: 400,
+      message: `Invalid chat tool error result: ${part.toolCallId}`,
+    }),
+  );
 };
 
 const parseToolArguments = (

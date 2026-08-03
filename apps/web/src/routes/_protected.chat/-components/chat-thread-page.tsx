@@ -209,6 +209,7 @@ export const ChatThreadPage = ({
     removeQueuedMessage,
     stop,
     isGenerating,
+    turnAbandoned,
     alwaysApprovedTools,
     conversationApprovedTools,
     handleApprove,
@@ -272,6 +273,7 @@ export const ChatThreadPage = ({
     error,
     isGenerating,
     lastMessage: lastMessage ?? null,
+    turnAbandoned,
     turnOwner: resolveSuggestedPromptsTurnOwner({
       approvalPendingMessageId,
       hasReopenedAskUser: editingAskUserToolCallIds.size > 0,

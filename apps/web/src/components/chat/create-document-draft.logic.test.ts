@@ -4,6 +4,7 @@ import {
   buildCreateDocumentDraftPayload,
   buildCreateDocumentDownloadFileName,
   findReadyCreateDocumentDraftMessageId,
+  getCreateDocumentDraftEditorAccess,
   isCreateDocumentDraftPayload,
   isSameCreateDocumentDraftPayload,
   normalizeCreateDocumentInput,
@@ -11,6 +12,7 @@ import {
   replaceReadyCreateDocumentDraftOutput,
   selectCreateDocumentDrafts,
   selectUnsettledCreateDocumentDrafts,
+  setCreateDocumentDraftChatThreadId,
   setCreateDocumentDraftPayloadStatus,
   terminalizeUnsettledCreateDocumentDraft,
 } from "@/components/chat/create-document-draft.logic";
@@ -330,6 +332,25 @@ describe("create-document drafts", () => {
     expect(isCreateDocumentDraftPayload({ ...updated, workspaceId: 42 })).toBe(
       false,
     );
+
+    const rotated = setCreateDocumentDraftChatThreadId({
+      chatThreadId: toChatThreadId("thread-rotated"),
+      payload: updated,
+    });
+    expect(rotated.chatThreadId).toBe(toChatThreadId("thread-rotated"));
+    expect(
+      buildCreateDocumentDraftPayload({
+        draft: { ...draft, status: "ready" },
+        existingPayload: rotated,
+        originChatThreadId,
+      }).chatThreadId,
+    ).toBe(toChatThreadId("thread-rotated"));
+    expect(
+      setCreateDocumentDraftChatThreadId({
+        chatThreadId: originChatThreadId,
+        payload: rotated,
+      }),
+    ).toBe(rotated);
   });
 
   test("keeps the editor locked while a save snapshot is in flight", () => {
@@ -361,6 +382,7 @@ describe("create-document drafts", () => {
     });
 
     expect(rebuilt.status).toBe("saving");
+    expect(getCreateDocumentDraftEditorAccess(saving)).toBe("read-only");
     expect(
       setCreateDocumentDraftPayloadStatus({
         payload: rebuilt,
@@ -417,6 +439,20 @@ describe("create-document drafts", () => {
         originChatThreadId: payload.originChatThreadId,
       }),
     ).toBe(persisted);
+
+    expect(getCreateDocumentDraftEditorAccess(payload)).toBe("editable");
+    expect(getCreateDocumentDraftEditorAccess(persisted)).toBe("read-only");
+
+    const rotated = setCreateDocumentDraftChatThreadId({
+      chatThreadId: toChatThreadId("thread-persisted-rotated"),
+      payload: persisted,
+    });
+    expect(rotated).toMatchObject({
+      chatThreadId: "thread-persisted-rotated",
+      entityId: "entity-1",
+      fieldId: "field-1",
+      status: "persisted",
+    });
   });
 
   test("builds a bounded safe DOCX download name", () => {

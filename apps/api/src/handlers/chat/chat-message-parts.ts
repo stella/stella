@@ -8,6 +8,10 @@ import {
 } from "@stll/api-contract";
 
 import { normalizeLegacyRawToolInputs } from "@/api/handlers/chat/legacy-tool-compat";
+import {
+  TANSTACK_TOOL_CALL_STATE_LIFECYCLE,
+  TANSTACK_TOOL_RESULT_STATE_LIFECYCLE,
+} from "@/api/handlers/chat/tanstack-chat-lifecycle";
 import type {
   ChatAttachmentMetadata,
   ChatAttachmentPart,
@@ -21,6 +25,7 @@ import type {
   PersistableChatPartType,
   PersistableChatMessageCandidate,
   PersistableChatMessage,
+  PersistableTerminalAssistantMessage,
   PersistedChatMessageContent,
 } from "@/api/handlers/chat/types";
 import { arrayOrEmpty } from "@/api/lib/array";
@@ -36,6 +41,28 @@ export type ChatAttachmentInput = {
   placeholder?: string | undefined;
   url: string;
 };
+
+export const attachTerminalTurnOutcome = ({
+  message,
+  turnOutcome,
+}: {
+  message: PersistableChatMessage;
+  turnOutcome: NonNullable<ChatMessageMetadata["turnOutcome"]>;
+}): PersistableTerminalAssistantMessage => {
+  const terminalMessage = toPersistableChatMessage({
+    ...message,
+    metadata: { ...message.metadata, turnOutcome },
+  });
+  if (!isPersistableTerminalAssistantMessage(terminalMessage)) {
+    panic("Terminal chat turn must be an assistant message with an outcome");
+  }
+  return terminalMessage;
+};
+
+const isPersistableTerminalAssistantMessage = (
+  message: PersistableChatMessage,
+): message is PersistableTerminalAssistantMessage =>
+  message.role === "assistant" && message.metadata?.turnOutcome !== undefined;
 
 export type LegacyAiSdkFilePart = {
   filename?: string | undefined;
@@ -334,6 +361,13 @@ export const isProviderVisibleChatPart = (part: ChatPart): boolean =>
 export const toProviderVisibleMessage = (
   message: ChatMessage,
 ): ChatMessage | null => {
+  if (
+    message.metadata?.turnOutcome?.type === "cancelled" ||
+    message.metadata?.turnOutcome?.type === "failed" ||
+    message.metadata?.turnOutcome?.type === "interrupted"
+  ) {
+    return null;
+  }
   const parts: ChatPart[] = [];
   for (const part of message.parts) {
     if (isProviderVisibleChatPart(part)) {
@@ -346,6 +380,41 @@ export const toProviderVisibleMessage = (
   return parts.length === message.parts.length
     ? message
     : { ...message, parts };
+};
+
+const ASK_USER_STATE_AWAITS_USER = {
+  "approval-requested": false,
+  "approval-responded": false,
+  "awaiting-input": true,
+  complete: false,
+  error: false,
+  "input-complete": true,
+  "input-streaming": true,
+} as const satisfies Record<TanStackToolCallState, boolean>;
+
+export const getAwaitingUserInteraction = (
+  message: ChatMessage | null,
+):
+  | Extract<
+      NonNullable<ChatMessageMetadata["turnOutcome"]>,
+      { type: "awaiting-user" }
+    >["interaction"]
+  | null => {
+  if (message?.role !== "assistant") {
+    return null;
+  }
+  for (const part of message.parts) {
+    if (part.type !== "tool-call") {
+      continue;
+    }
+    if (part.state === "approval-requested") {
+      return { type: "approval", toolCallId: part.id };
+    }
+    if (part.name === "ask-user" && ASK_USER_STATE_AWAITS_USER[part.state]) {
+      return { type: "ask-user", toolCallId: part.id };
+    }
+  }
+  return null;
 };
 
 export const toProviderVisibleMessages = (
@@ -562,26 +631,10 @@ type TanStackToolCallState = Extract<
   { type: "tool-call" }
 >["state"];
 
-const TANSTACK_TOOL_CALL_STATES = {
-  "awaiting-input": true,
-  "input-streaming": true,
-  "input-complete": true,
-  "approval-requested": true,
-  "approval-responded": true,
-  complete: true,
-  error: true,
-} as const satisfies Record<TanStackToolCallState, true>;
-
 type TanStackToolResultState = Extract<
   ChatTanStackPart,
   { type: "tool-result" }
 >["state"];
-
-const TANSTACK_TOOL_RESULT_STATES = {
-  streaming: true,
-  complete: true,
-  error: true,
-} as const satisfies Record<TanStackToolResultState, true>;
 
 const isChatPartPersistenceType = (
   type: string,
@@ -969,13 +1022,14 @@ const legacyToolApprovalToTanStack = (
 const isTanStackToolCallState = (
   value: unknown,
 ): value is TanStackToolCallState =>
-  typeof value === "string" && Object.hasOwn(TANSTACK_TOOL_CALL_STATES, value);
+  typeof value === "string" &&
+  Object.hasOwn(TANSTACK_TOOL_CALL_STATE_LIFECYCLE, value);
 
 const isTanStackToolResultState = (
   value: unknown,
 ): value is TanStackToolResultState =>
   typeof value === "string" &&
-  Object.hasOwn(TANSTACK_TOOL_RESULT_STATES, value);
+  Object.hasOwn(TANSTACK_TOOL_RESULT_STATE_LIFECYCLE, value);
 
 const isTanStackToolResultContent = (value: unknown): boolean =>
   typeof value === "string" ||
@@ -1011,6 +1065,7 @@ const isChatMessageMetadataEmpty = (metadata: ChatMessageMetadata): boolean =>
   metadata.mentions === undefined &&
   metadata.serverProvenance === undefined &&
   metadata.sourceDocuments === undefined &&
+  metadata.turnOutcome === undefined &&
   metadata.usage === undefined;
 
 const safeStringifyToolArguments = (value: unknown): string => {

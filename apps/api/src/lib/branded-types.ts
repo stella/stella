@@ -23,6 +23,7 @@ export type SafeIdType =
   | "caseLawSource"
   | "caseLawSourceIngestionLease"
   | "chatMessage"
+  | "chatTurn"
   | "chatThreadCompaction"
   | "chatThread"
   | "fileChatThread"

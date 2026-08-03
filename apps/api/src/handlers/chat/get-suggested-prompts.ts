@@ -154,6 +154,13 @@ const getSuggestedPrompts = createSafeRootHandler(
             workspaceId: true,
             usedAnonymization: true,
           },
+          with: {
+            turns: {
+              columns: { status: true },
+              limit: 1,
+              orderBy: { createdAt: "desc" },
+            },
+          },
         }),
       ),
     );
@@ -171,6 +178,11 @@ const getSuggestedPrompts = createSafeRootHandler(
     yield* assertChatThreadScopeMatches({ persistedWorkspaceId, scope });
 
     if (thread.usedAnonymization) {
+      return Result.ok<SuggestedPromptsResult>({ prompts: [] });
+    }
+
+    const latestTurn = thread.turns.at(0);
+    if (latestTurn !== undefined && latestTurn.status !== "completed") {
       return Result.ok<SuggestedPromptsResult>({ prompts: [] });
     }
 

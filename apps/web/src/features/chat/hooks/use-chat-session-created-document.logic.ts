@@ -5,9 +5,11 @@ import {
   createDocumentDraftTabId,
   isCreateDocumentDraftPayload,
   persistCreateDocumentDraftPayload,
+  setCreateDocumentDraftChatThreadId,
   setCreateDocumentDraftPayloadStatus,
 } from "@/components/chat/create-document-draft.logic";
 import type { InspectorTabsStore } from "@/components/inspector/inspector-store-types";
+import type { ChatThreadId } from "@/lib/chat-thread-ref";
 
 type PromoteCreateDocumentDraftInspectorTabOptions = {
   entityId: string;
@@ -79,6 +81,40 @@ export const setCreateDocumentDraftInspectorTabStatus = ({
       status,
     }),
   });
+  return true;
+};
+
+type SetCreateDocumentDraftInspectorChatThreadIdOptions = {
+  chatThreadId: ChatThreadId;
+  inspector: Pick<InspectorTabsStore, "tabs" | "updateView">;
+  toolCallId: string;
+};
+
+export const setCreateDocumentDraftInspectorChatThreadId = ({
+  chatThreadId,
+  inspector,
+  toolCallId,
+}: SetCreateDocumentDraftInspectorChatThreadIdOptions): boolean => {
+  const id = createDocumentDraftTabId(toolCallId);
+  const tab = inspector.tabs.find((candidate) => candidate.id === id);
+  if (
+    tab?.type !== "view" ||
+    tab.viewType !== CREATE_DOCUMENT_DRAFT_VIEW ||
+    !isCreateDocumentDraftPayload(tab.payload) ||
+    chatThreadId === tab.payload.originChatThreadId
+  ) {
+    return false;
+  }
+
+  const payload = setCreateDocumentDraftChatThreadId({
+    chatThreadId,
+    payload: tab.payload,
+  });
+  if (payload === tab.payload) {
+    return true;
+  }
+
+  inspector.updateView({ id, label: tab.label, payload });
   return true;
 };
 

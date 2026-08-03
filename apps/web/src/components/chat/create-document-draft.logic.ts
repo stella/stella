@@ -73,6 +73,64 @@ export const persistCreateDocumentDraftPayload = ({
   workspaceId,
 });
 
+export const getCreateDocumentDraftEditorAccess = (
+  payload: CreateDocumentDraftPayload,
+): "editable" | "read-only" =>
+  payload.status === "ready" ? "editable" : "read-only";
+
+type SetCreateDocumentDraftChatThreadIdOptions = {
+  chatThreadId: ChatThreadId;
+  payload: CreateDocumentDraftPayload;
+};
+
+export const setCreateDocumentDraftChatThreadId = ({
+  chatThreadId,
+  payload,
+}: SetCreateDocumentDraftChatThreadIdOptions): CreateDocumentDraftPayload => {
+  if (
+    chatThreadId === payload.chatThreadId ||
+    chatThreadId === payload.originChatThreadId
+  ) {
+    return payload;
+  }
+
+  switch (payload.status) {
+    case "streaming":
+    case "ready":
+    case "saving":
+      return {
+        originChatMessageId: payload.originChatMessageId,
+        originChatThreadId: payload.originChatThreadId,
+        chatThreadId,
+        toolCallId: payload.toolCallId,
+        name: payload.name,
+        source: payload.source,
+        status: payload.status,
+        ...(payload.workspaceId === undefined
+          ? {}
+          : { workspaceId: payload.workspaceId }),
+      };
+    case "persisted":
+      return {
+        originChatMessageId: payload.originChatMessageId,
+        originChatThreadId: payload.originChatThreadId,
+        chatThreadId,
+        toolCallId: payload.toolCallId,
+        name: payload.name,
+        source: payload.source,
+        status: "persisted",
+        entityId: payload.entityId,
+        fieldId: payload.fieldId,
+        fileName: payload.fileName,
+        workspaceId: payload.workspaceId,
+      };
+    default: {
+      const exhaustiveStatus: never = payload;
+      return exhaustiveStatus;
+    }
+  }
+};
+
 export const createDocumentDraftTabId = (toolCallId: string) =>
   `${CREATE_DOCUMENT_DRAFT_VIEW}:${toolCallId}`;
 

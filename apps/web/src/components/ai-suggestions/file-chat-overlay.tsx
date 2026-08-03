@@ -47,6 +47,7 @@ import { BidiText } from "@stll/ui/components/bidi-text";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { resolveDocxSuggestionRequest } from "@/components/ai-suggestions/docx-suggestion-persistence";
+import { resolveFileReviewSessionId } from "@/components/ai-suggestions/file-review-session";
 import {
   ChatThreadCard,
   FLOATING_THREAD_CARD_OFFSET_WITH_REVIEW_CLASS,
@@ -87,7 +88,6 @@ import type {
   UnresolvedActiveDocxEditToolCallPart,
   UnresolvedFolioAgentDocToolCallPart,
 } from "@/components/chat/chat-ui-tools";
-import { createDocumentDraftReviewId } from "@/components/chat/create-document-draft.logic";
 import { useChatModelSelection } from "@/components/chat/use-chat-model-selection";
 import type { DocxComments } from "@/components/docx/app-docx-editor";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -1079,11 +1079,20 @@ const FileChatOverlayInner = ({
   // renders while any suggestion is pending/applying (mirrors the bar's own
   // `isPending` gate). When it is, the thread card lifts above the bar so the
   // two floating surfaces never overlap.
-  const reviewEntityId =
-    activeFile?.entityId ??
-    (activeDraft === undefined
-      ? undefined
-      : createDocumentDraftReviewId(activeDraft.toolCallId));
+  let reviewEntityId: string | undefined;
+  if (activeFile !== undefined) {
+    reviewEntityId = resolveFileReviewSessionId({
+      type: "file",
+      entityId: activeFile.entityId,
+    });
+  } else if (activeDraft !== undefined) {
+    reviewEntityId = resolveFileReviewSessionId({
+      type: "draft",
+      toolCallId: activeDraft.toolCallId,
+    });
+  } else {
+    reviewEntityId = resolveFileReviewSessionId({ type: "none" });
+  }
   const hasPendingReview = useReviewStore((state) => {
     if (reviewEntityId === undefined) {
       return false;
@@ -1413,6 +1422,7 @@ const FileChatOverlayInner = ({
     removeQueuedMessage,
     stop,
     isGenerating,
+    turnAbandoned,
     alwaysApprovedTools,
     conversationApprovedTools,
     handleApprove,
@@ -1538,6 +1548,7 @@ const FileChatOverlayInner = ({
     error,
     isGenerating,
     lastMessage: lastMessage ?? null,
+    turnAbandoned,
     turnOwner: resolveSuggestedPromptsTurnOwner({
       approvalPendingMessageId,
       hasReopenedAskUser: editingAskUserToolCallIds.size > 0,
@@ -2156,6 +2167,7 @@ const FileChatOverlayInner = ({
           workspaceId={workspaceId ?? threadRef.threadId}
         />
         <PromptBar
+          anonymized={anonymized}
           attachmentsEnabled
           attentionPulseSeq={attentionPulseSeq}
           canSubmitNow={canSubmitWithCurrentDocxSnapshot}

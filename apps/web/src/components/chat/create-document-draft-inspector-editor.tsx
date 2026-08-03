@@ -11,11 +11,14 @@ import {
   buildCreateDocumentDownloadFileName,
   createDocumentDraftReviewId,
   type CreateDocumentDraftPayload,
+  getCreateDocumentDraftEditorAccess,
 } from "@/components/chat/create-document-draft.logic";
 import {
   DocxEditor,
   type DocxEditorRef,
 } from "@/components/docx/app-docx-editor";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { setCreateDocumentDraftInspectorChatThreadId } from "@/features/chat/hooks/use-chat-session-created-document.logic";
 
 type CreateDocumentDraftInspectorEditorProps = {
   payload: CreateDocumentDraftPayload;
@@ -40,8 +43,8 @@ export const CreateDocumentDraftInspectorEditor = ({
   );
   const [restoration] = useState(availableRestoration);
   const restoredBuffer = restoration === null ? null : use(restoration);
-  const draftReadOnly =
-    payload.status === "streaming" || payload.status === "saving";
+  const draftEditable =
+    getCreateDocumentDraftEditorAccess(payload) === "editable";
 
   const attachEditor = useCallback(
     (editor: DocxEditorRef | null) => {
@@ -51,6 +54,16 @@ export const CreateDocumentDraftInspectorEditor = ({
       return attachCreateDocumentDraftEditor({
         editor,
         editorRef,
+        toolCallId: payload.toolCallId,
+      });
+    },
+    [payload.toolCallId],
+  );
+  const handleChatThreadIdChange = useCallback(
+    (chatThreadId: CreateDocumentDraftPayload["chatThreadId"]) => {
+      setCreateDocumentDraftInspectorChatThreadId({
+        chatThreadId,
+        inspector: useInspectorTabsStore.getState(),
         toolCallId: payload.toolCallId,
       });
     },
@@ -78,9 +91,9 @@ export const CreateDocumentDraftInspectorEditor = ({
         documentKey={payload.toolCallId}
         initialZoom="fit-width"
         loadingIndicator={null}
-        mode={draftReadOnly ? "viewing" : "editing"}
-        readOnly={draftReadOnly}
-        showToolbar={payload.status !== "streaming"}
+        mode={draftEditable ? "editing" : "viewing"}
+        readOnly={!draftEditable}
+        showToolbar={draftEditable}
         showZoomControl={payload.status !== "streaming"}
       />
     </div>
@@ -92,6 +105,7 @@ export const CreateDocumentDraftInspectorEditor = ({
 
   return (
     <FileViewerWithAI
+      className="min-h-0 flex-1"
       activeDraft={
         payload.status === "persisted"
           ? undefined
@@ -105,7 +119,7 @@ export const CreateDocumentDraftInspectorEditor = ({
       activeFile={
         payload.status === "persisted"
           ? {
-              editable: true,
+              editable: false,
               entityId: payload.entityId,
               fileFieldId: payload.fieldId,
               fileName: payload.fileName,
@@ -113,17 +127,20 @@ export const CreateDocumentDraftInspectorEditor = ({
           : undefined
       }
       chatThreadId={payload.chatThreadId}
-      docxEditable
+      docxEditable={draftEditable}
       docxEditorRef={editorRef}
+      onChatThreadIdChange={handleChatThreadIdChange}
       workspaceId={payload.workspaceId}
     >
       {editor}
-      <ReviewBar
-        docxEditable
-        docxEditorRef={editorRef}
-        entityId={createDocumentDraftReviewId(payload.toolCallId)}
-        persistence={{ type: "local" }}
-      />
+      {payload.status !== "persisted" && (
+        <ReviewBar
+          docxEditable={draftEditable}
+          docxEditorRef={editorRef}
+          entityId={createDocumentDraftReviewId(payload.toolCallId)}
+          persistence={{ type: "local" }}
+        />
+      )}
     </FileViewerWithAI>
   );
 };

@@ -1147,7 +1147,10 @@ jobs:
           ARTIFACT_NAME: e2e-web-build
           GH_TOKEN: ${{ github.token }}
         run: |
-          for attempt in {1..90}; do
+          # Build/upload can legitimately finish just after the previous
+          # three-minute window on busy runners. Keep polling bounded, but let
+          # it use six minutes within the job's existing 25-minute timeout.
+          for attempt in {1..180}; do
             count=$(gh api --method GET \
               "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts" \
               -f name="$ARTIFACT_NAME" \

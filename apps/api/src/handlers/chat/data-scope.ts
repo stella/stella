@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { eq, sql } from "drizzle-orm";
 
+import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { chatThreads } from "@/api/db/schema";
 import type { ChatMention, ChatMessage } from "@/api/handlers/chat/types";
@@ -235,6 +236,61 @@ type ExpandThreadDataScopeInput = {
 
 type ExpandThreadDataScopeResult = Result<SafeId<"workspace">[], SafeDbError>;
 
+type ExpandThreadDataScopeOnTxInput = Omit<
+  ExpandThreadDataScopeInput,
+  "safeDb"
+> & { tx: Transaction };
+
+export const expandThreadDataScopeOnTx = async ({
+  threadId,
+  currentDataWorkspaceIds,
+  newWorkspaceIds,
+  recordAuditEvent,
+  threadWorkspaceId,
+  tx,
+}: ExpandThreadDataScopeOnTxInput): Promise<SafeId<"workspace">[]> => {
+  if (newWorkspaceIds.length === 0) {
+    return [...currentDataWorkspaceIds];
+  }
+  const currentSet = new Set<SafeId<"workspace">>(currentDataWorkspaceIds);
+  const additions = newWorkspaceIds.filter((id) => !currentSet.has(id));
+  if (additions.length === 0) {
+    return [...currentDataWorkspaceIds];
+  }
+  const additionsArray = sql`ARRAY[${sql.join(
+    additions.map((id) => sql`${id}`),
+    sql`, `,
+  )}]::uuid[]`;
+
+  await tx
+    .update(chatThreads)
+    .set({
+      dataWorkspaceIds: sql`(
+        SELECT ARRAY(
+          SELECT DISTINCT unnest(
+            ${chatThreads.dataWorkspaceIds} || ${additionsArray}
+          )
+        )
+      )`,
+    })
+    .where(eq(chatThreads.id, threadId));
+
+  await recordAuditEvent(tx, {
+    action: AUDIT_ACTION.UPDATE,
+    resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
+    resourceId: threadId,
+    workspaceId: threadWorkspaceId,
+    changes: {
+      dataWorkspaceIds: {
+        old: [...currentDataWorkspaceIds],
+        new: [...currentSet, ...additions],
+      },
+    },
+  });
+
+  return [...currentSet, ...additions];
+};
+
 // Atomically widens a chat thread's `data_workspace_ids` to include
 // any workspaces a new message references. The append-and-dedupe
 // happens in SQL so two concurrent message persists cannot lose
@@ -248,53 +304,20 @@ export const expandThreadDataScope = async ({
   recordAuditEvent,
   threadWorkspaceId,
 }: ExpandThreadDataScopeInput): Promise<ExpandThreadDataScopeResult> => {
-  if (newWorkspaceIds.length === 0) {
-    return Result.ok([...currentDataWorkspaceIds]);
-  }
-  const currentSet = new Set<SafeId<"workspace">>(currentDataWorkspaceIds);
-  const additions = newWorkspaceIds.filter((id) => !currentSet.has(id));
-  if (additions.length === 0) {
-    return Result.ok([...currentDataWorkspaceIds]);
-  }
-  const additionsArray = sql`ARRAY[${sql.join(
-    additions.map((id) => sql`${id}`),
-    sql`, `,
-  )}]::uuid[]`;
-
-  const updateResult = await safeDb(async (tx) => {
-    await tx
-      .update(chatThreads)
-      .set({
-        // Append-and-dedupe in SQL so concurrent persists on the
-        // same thread cannot lose entries. Postgres handles the
-        // uniqueness; the local return value below is best-effort
-        // for callers that want to keep their view in sync.
-        dataWorkspaceIds: sql`(
-          SELECT ARRAY(
-            SELECT DISTINCT unnest(
-              ${chatThreads.dataWorkspaceIds} || ${additionsArray}
-            )
-          )
-        )`,
-      })
-      .where(eq(chatThreads.id, threadId));
-
-    await recordAuditEvent(tx, {
-      action: AUDIT_ACTION.UPDATE,
-      resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
-      resourceId: threadId,
-      workspaceId: threadWorkspaceId,
-      changes: {
-        dataWorkspaceIds: {
-          old: [...currentDataWorkspaceIds],
-          new: [...currentSet, ...additions],
-        },
-      },
-    });
-  });
+  const updateResult = await safeDb(
+    async (tx) =>
+      await expandThreadDataScopeOnTx({
+        currentDataWorkspaceIds,
+        newWorkspaceIds,
+        recordAuditEvent,
+        threadId,
+        threadWorkspaceId,
+        tx,
+      }),
+  );
 
   if (Result.isError(updateResult)) {
     return Result.err(updateResult.error);
   }
-  return Result.ok([...currentSet, ...additions]);
+  return Result.ok(updateResult.value);
 };

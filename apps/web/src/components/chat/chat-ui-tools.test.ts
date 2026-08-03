@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   consumeDocumentDeletionToolCalls,
+  getChatAssistantTurnError,
   getChatToolTitleKey,
   getApprovalToolName,
   getToolApprovalGrant,
@@ -17,15 +18,101 @@ import {
   isRunningToolPart,
   isToolApprovedByGrant,
   isUnresolvedFolioAgentDocToolCallPart,
+  resolveChatAssistantTurnOutcome,
   sanitizeRunningToolCalls,
   selectUnresolvedFolioAgentDocToolCallParts,
   withParsedToolCallInputs,
 } from "@/components/chat/chat-ui-tools";
 import type {
+  ChatMessage,
   ChatPart,
   DocumentDeletionMessage,
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
+
+describe("assistant turn outcomes", () => {
+  test("resolves server-owned failures for reload error rendering", () => {
+    const failed = {
+      id: "assistant-failed",
+      metadata: {
+        turnOutcome: { type: "failed", error: "provider_unavailable" },
+      },
+      parts: [{ type: "text", content: "Partial answer" }],
+      role: "assistant",
+    } satisfies ChatMessage;
+
+    expect(resolveChatAssistantTurnOutcome(failed)).toEqual({
+      type: "failed",
+      error: "provider_unavailable",
+    });
+    expect(getChatAssistantTurnError(failed)?.message).toBe(
+      "provider_unavailable",
+    );
+  });
+
+  test("does not invent completion for an empty legacy assistant turn", () => {
+    const emptyLegacy = {
+      id: "assistant-empty",
+      parts: [],
+      role: "assistant",
+    } satisfies ChatMessage;
+    const nonEmptyLegacy = {
+      ...emptyLegacy,
+      parts: [{ type: "text", content: "Legacy answer" }],
+    } satisfies ChatMessage;
+
+    expect(resolveChatAssistantTurnOutcome(emptyLegacy)).toEqual({
+      type: "incomplete",
+    });
+    expect(resolveChatAssistantTurnOutcome(nonEmptyLegacy)).toEqual({
+      type: "legacy-completed",
+    });
+  });
+
+  test("does not turn a persisted human interaction into an error", () => {
+    const awaitingUser = {
+      id: "assistant-awaiting-user",
+      metadata: {
+        turnOutcome: {
+          type: "awaiting-user",
+          interaction: { type: "ask-user", toolCallId: "ask-1" },
+        },
+      },
+      parts: [
+        {
+          type: "tool-call",
+          id: "ask-1",
+          name: "ask-user",
+          state: "input-complete",
+          arguments: "{}",
+        },
+      ],
+      role: "assistant",
+    } satisfies ChatMessage;
+
+    expect(resolveChatAssistantTurnOutcome(awaitingUser)).toMatchObject({
+      type: "awaiting-user",
+    });
+    expect(getChatAssistantTurnError(awaitingUser)).toBeUndefined();
+  });
+
+  test("does not turn a persisted cancellation into an error", () => {
+    const cancelled = {
+      id: "assistant-cancelled",
+      metadata: {
+        turnOutcome: { type: "cancelled", reason: "user-stop" },
+      },
+      parts: [{ type: "text", content: "Partial answer" }],
+      role: "assistant",
+    } satisfies ChatMessage;
+
+    expect(resolveChatAssistantTurnOutcome(cancelled)).toEqual({
+      type: "cancelled",
+      reason: "user-stop",
+    });
+    expect(getChatAssistantTurnError(cancelled)).toBeUndefined();
+  });
+});
 
 describe("chat tool titles", () => {
   test("maps stella API tools to translation keys", () => {

@@ -26,6 +26,7 @@ const createLazyFileChatOverlayHost = () =>
 export const FileViewerWithAI = ({
   workspaceId,
   chatThreadId,
+  onChatThreadIdChange,
   activeFile,
   activeDraft,
   activeExternal,
@@ -92,6 +93,7 @@ export const FileViewerWithAI = ({
           key={overlayKey}
           onChatThreadIdChange={(threadId) => {
             setOverlayThread({ overlayKey, threadId });
+            onChatThreadIdChange?.(threadId);
           }}
           onDocxCommentsChange={onDocxCommentsChange}
           requestDocxEditMode={requestDocxEditMode}

@@ -18,6 +18,7 @@ import { contentDir } from "@stll/ui/hooks/use-content-dir";
 import { cn } from "@stll/ui/lib/utils";
 
 import { useChatMatters } from "@/components/chat/chat-matters-context";
+import { assistantMessageFallbackText } from "@/components/chat/chat-thread-messages.logic";
 import type {
   ChatToolCallPart,
   ChatUITools,
@@ -27,6 +28,7 @@ import {
   normalizeCreateDocumentInput,
 } from "@/components/chat/create-document-draft.logic";
 import { DocumentIcon } from "@/components/document-icon";
+import { MarkdownPreview } from "@/components/markdown-preview";
 import { MatterIcon } from "@/components/matter-icon";
 import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
@@ -227,9 +229,12 @@ const DocumentPreview = ({ name, source }: DocumentPreviewProps) => {
           </p>
         )}
         {snippet ? (
-          <p className="text-muted-foreground line-clamp-3 text-xs break-words whitespace-pre-wrap">
+          <MarkdownPreview
+            className="text-muted-foreground max-h-15 overflow-hidden text-xs leading-5 break-words [&_h1]:mb-0 [&_h1]:text-xs [&_h2]:mb-0 [&_h2]:text-xs [&_h3]:mb-0 [&_h3]:text-xs [&_p]:my-0"
+            fallbackChildren={assistantMessageFallbackText(snippet)}
+          >
             {snippet}
-          </p>
+          </MarkdownPreview>
         ) : (
           <p className="text-muted-foreground text-xs italic">
             {t("chat.createDocument.previewWaiting")}
