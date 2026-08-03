@@ -341,6 +341,31 @@ describe("AI provider canary retry contract", () => {
     expect(isRetryableCanaryError(error, signal)).toBe(false);
   });
 
+  test("prefers terminal provider codes over a generic wrapper status", () => {
+    const signal = new AbortController().signal;
+    const errors = [
+      { code: "invalid_request_error", status: 502 },
+      { error: { code: "authentication_error" }, status: 502 },
+      {
+        cause: { code: "ECONNRESET" },
+        code: "invalid_request_error",
+        status: 502,
+      },
+      new CanaryProviderRunError(
+        {
+          cause: { code: "provider_error" },
+          code: "permission_error",
+          status: 502,
+        },
+        "before-tool-call",
+      ),
+    ];
+
+    expect(
+      errors.map((error) => isRetryableCanaryError(error, signal)),
+    ).toEqual([false, false, false, false]);
+  });
+
   test("classifies only known status-less transport errors and SDK markers", () => {
     const signal = new AbortController().signal;
     const cases = [
