@@ -385,11 +385,14 @@ export const toProviderVisibleMessage = (
 const ASK_USER_STATE_AWAITS_USER = {
   "approval-requested": false,
   "approval-responded": false,
-  "awaiting-input": true,
+  // A terminal stream can end while the provider has only announced a call or
+  // is still emitting its JSON arguments. The card cannot render a usable
+  // question in either state, so neither may take durable user-turn ownership.
+  "awaiting-input": false,
   complete: false,
   error: false,
   "input-complete": true,
-  "input-streaming": true,
+  "input-streaming": false,
 } as const satisfies Record<TanStackToolCallState, boolean>;
 
 const RESUMED_INTERACTION_TYPE_BY_TOOL_STATE = {

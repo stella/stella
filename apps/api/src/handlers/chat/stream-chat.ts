@@ -992,6 +992,7 @@ export const processServerChatStream = async function* ({
   source,
 }: ProcessServerChatStreamProps): AsyncIterable<StreamChunk> {
   const deferredRunFinishedChunks: StreamChunk[] = [];
+  const toolCallsWithCompleteInput = new Set<string>();
   let usage: TokenUsage | undefined;
   // One accepted turn has exactly one terminal callback. Set before awaiting
   // persistence so a callback failure cannot re-enter and double-write a
@@ -1030,6 +1031,9 @@ export const processServerChatStream = async function* ({
     });
 
     for await (const sourceChunk of normalizedSource) {
+      if (sourceChunk.type === EventType.TOOL_CALL_END) {
+        toolCallsWithCompleteInput.add(sourceChunk.toolCallId);
+      }
       if (
         sourceChunk.type === EventType.RUN_STARTED &&
         deferredRunFinishedChunks.length > 0
@@ -1098,14 +1102,22 @@ export const processServerChatStream = async function* ({
     }
     const awaitingUserInteraction =
       getAwaitingUserInteraction(getResponseMessage());
+    const incompleteAskUserInteraction =
+      awaitingUserInteraction?.type === "ask-user" &&
+      !toolCallsWithCompleteInput.has(awaitingUserInteraction.toolCallId);
+    let outcome: ChatTurnOutcome;
+    if (incompleteAskUserInteraction) {
+      outcome = { type: "failed", error: "unknown" };
+    } else if (awaitingUserInteraction === null) {
+      outcome = { type: "completed" };
+    } else {
+      outcome = {
+        type: "awaiting-user",
+        interaction: awaitingUserInteraction,
+      };
+    }
     await terminalize({
-      outcome:
-        awaitingUserInteraction === null
-          ? { type: "completed" }
-          : {
-              type: "awaiting-user",
-              interaction: awaitingUserInteraction,
-            },
+      outcome,
     });
     for (const chunk of finalRunFinishedChunks) {
       yield chunk;

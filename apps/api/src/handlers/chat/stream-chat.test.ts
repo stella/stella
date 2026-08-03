@@ -118,6 +118,107 @@ describe("tool-call history pruning", () => {
 });
 
 describe("outgoing chat stream message ids", () => {
+  test("requires an input-complete event before ask-user takes terminal ownership", async () => {
+    const messageId = toSafeId<"chatMessage">(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    const askUserCallSequences = [
+      [
+        {
+          type: EventType.TOOL_CALL_START,
+          parentMessageId: "provider-message",
+          toolCallId: "ask-awaiting-input",
+          toolCallName: "ask-user",
+          // eslint-disable-next-line typescript/no-deprecated -- AG-UI still requires the compatibility field.
+          toolName: "ask-user",
+        },
+      ],
+      [
+        {
+          type: EventType.TOOL_CALL_START,
+          parentMessageId: "provider-message",
+          toolCallId: "ask-input-complete",
+          toolCallName: "ask-user",
+          // eslint-disable-next-line typescript/no-deprecated -- AG-UI still requires the compatibility field.
+          toolName: "ask-user",
+        },
+        {
+          type: EventType.TOOL_CALL_ARGS,
+          delta: '{"question":"Which jurisdiction applies?"}',
+          toolCallId: "ask-input-complete",
+        },
+        {
+          type: EventType.TOOL_CALL_END,
+          input: { question: "Which jurisdiction applies?" },
+          toolCallId: "ask-input-complete",
+          toolCallName: "ask-user",
+          // eslint-disable-next-line typescript/no-deprecated -- AG-UI still requires the compatibility field.
+          toolName: "ask-user",
+        },
+      ],
+      [
+        {
+          type: EventType.TOOL_CALL_START,
+          parentMessageId: "provider-message",
+          toolCallId: "ask-input-streaming",
+          toolCallName: "ask-user",
+          // eslint-disable-next-line typescript/no-deprecated -- AG-UI still requires the compatibility field.
+          toolName: "ask-user",
+        },
+        {
+          type: EventType.TOOL_CALL_ARGS,
+          delta: '{"question":"Which',
+          toolCallId: "ask-input-streaming",
+        },
+      ],
+    ] as const satisfies readonly (readonly StreamChunk[])[];
+
+    const terminalOutcomes = await Promise.all(
+      askUserCallSequences.map(async (callChunks) => {
+        let responseMessage: ChatMessage | null = null;
+        let resolveTerminalOutcome: (outcome: string) => void;
+        const terminalOutcome = new Promise<string>((resolve) => {
+          resolveTerminalOutcome = resolve;
+        });
+        const processor = new StreamProcessor({
+          events: {
+            onStreamEnd: (message) => {
+              responseMessage = toChatMessage(message);
+            },
+          },
+        });
+        const stream = processServerChatStream({
+          abortSignal: new AbortController().signal,
+          getResponseMessage: () => responseMessage,
+          mapMessageId: createChatMessageIdMapper(() => messageId),
+          onFinish: ({ outcome }) => {
+            resolveTerminalOutcome(outcome.type);
+          },
+          processor,
+          source: streamChunks([
+            {
+              type: EventType.RUN_STARTED,
+              runId: "run-1",
+              threadId: "thread-1",
+            },
+            ...callChunks,
+            {
+              type: EventType.RUN_FINISHED,
+              finishReason: "tool_calls",
+              runId: "run-1",
+              threadId: "thread-1",
+            },
+          ]),
+        });
+
+        await collectChunks(stream);
+        return await terminalOutcome;
+      }),
+    );
+
+    expect(terminalOutcomes).toEqual(["failed", "awaiting-user", "failed"]);
+  });
+
   test("normalizes provider assistant message ids to one stable stella UUID", async () => {
     const firstId = toSafeId<"chatMessage">(
       "11111111-1111-4111-8111-111111111111",
