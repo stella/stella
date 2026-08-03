@@ -27,16 +27,74 @@ describe("image alt attribute detection", () => {
 
 describe("source comment masking", () => {
   test("preserves positions while hiding image tags in comments", () => {
-    const source = [
-      "<!-- <img> -->",
-      "/* <img> */",
-      "  // <img>",
-      '<img alt="">',
-    ].join("\n");
-    const masked = maskComments(source);
+    const source = ["<!-- <img> -->", "{/* <img> */}", '<img alt="">'].join(
+      "\n",
+    );
+    const masked = maskComments(source, "astro");
 
     expect(masked).toHaveLength(source.length);
     expect([...masked.matchAll(/<img/gu)]).toHaveLength(1);
     expect(masked.split("\n")).toHaveLength(source.split("\n").length);
+  });
+
+  test("does not treat comment markers in source strings as comments", () => {
+    const dollar = "$";
+    const interpolation = `${dollar}{condition ? "x" : "y"}`;
+    const astro = [
+      "---",
+      'const block = "/*";',
+      'const html = "<!--";',
+      "---",
+      '<div data-comment="<!--" data-astro="{/*" />',
+      '<img src="missing-alt.png" />',
+    ].join("\n");
+    const tsx = [
+      'const block = "/*";',
+      'const line = "//";',
+      `const template = \`literal /* ${interpolation} */\`;`,
+      'export const Example = () => <img src="missing-alt.png" />;',
+    ].join("\n");
+
+    expect(imageTags(maskComments(astro, "astro"))).toHaveLength(1);
+    expect(imageTags(maskComments(tsx, "tsx"))).toHaveLength(1);
+  });
+
+  test("masks real TSX comments outside strings and template text", () => {
+    const dollar = "$";
+    const interpolation = `${dollar}{condition ? /* <img> */ "x" : "y"}`;
+    const source = [
+      "// <img>",
+      "const template = `literal /* marker */`;",
+      `const value = \`${interpolation}\`;`,
+      "{/* <img> */}",
+      '<img alt="">',
+    ].join("\n");
+
+    expect(imageTags(maskComments(source, "tsx"))).toEqual([
+      { offset: source.lastIndexOf("<img"), tag: '<img alt="">' },
+    ]);
+  });
+
+  test("checks rendered Markdown but ignores metadata and code samples", () => {
+    const source = [
+      "---",
+      'description: "example with <img>"',
+      "---",
+      "`<img>`",
+      "```html",
+      '<img src="code-sample.png">',
+      "```",
+      "<!-- <img> -->",
+      '<img src="rendered.png">',
+    ].join("\n");
+
+    const tags = imageTags(maskComments(source, "markdown"));
+    expect(tags).toEqual([
+      {
+        offset: source.lastIndexOf("<img"),
+        tag: '<img src="rendered.png">',
+      },
+    ]);
+    expect(hasExplicitAlt(tags[0]?.tag ?? "")).toBe(false);
   });
 });

@@ -7,6 +7,7 @@ import path from "node:path";
 import { products } from "../src/data/products/registry";
 import { type Locale, localeCodes } from "../src/i18n/config";
 import { catalogs } from "../src/i18n/utils";
+import { literalAttribute, maskComments, openingTags } from "./check-img-alt";
 
 // SERP length budgets for every indexable page's meta strings, in every locale.
 // Google truncates a title past ~60 characters and a description past ~158,
@@ -114,7 +115,7 @@ const termPolicyViolations = (
 // The English-only static pages set their metas inline as Base-layout props,
 // which the catalog-driven loop above cannot see — which is how every one of
 // them drifted under the description budget at once. Extracted here from the
-// page source (first title/description prop wins) and checked with the same
+// Base layout's exact literal props and checked with the same
 // budgets and duplicate detection as the catalog pages, merged into the en run.
 // The 404 page is excluded: it is not an indexable surface.
 const staticPageFiles = [
@@ -129,19 +130,30 @@ const staticPageFiles = [
   { page: "/terms", file: "src/pages/terms.astro" },
 ];
 
+export const staticMetaFromSource = (
+  page: string,
+  source: string,
+): PageMeta => {
+  const close = source.startsWith("---\n") ? source.indexOf("\n---\n", 4) : -1;
+  const markup = close === -1 ? source : source.slice(close + 5);
+  const base = openingTags(maskComments(markup, "astro"), "Base").at(0)?.tag;
+  if (base === undefined) {
+    return { page, title: "", description: "" };
+  }
+  return {
+    page,
+    title: literalAttribute(base, "title") ?? "",
+    description: literalAttribute(base, "description") ?? "",
+  };
+};
+
 const staticPages = (): PageMeta[] =>
-  staticPageFiles.map(({ page, file }) => {
-    const source = readFileSync(
-      path.join(import.meta.dir, "..", file),
-      "utf-8",
-    );
-    const title = /\btitle="([^"]+)"/u.exec(source)?.[1];
-    const description = /\bdescription="([^"]+)"/u.exec(source)?.[1];
-    if (title === undefined || description === undefined) {
-      return { page, title: title ?? "", description: description ?? "" };
-    }
-    return { page, title, description };
-  });
+  staticPageFiles.map(({ page, file }) =>
+    staticMetaFromSource(
+      page,
+      readFileSync(path.join(import.meta.dir, "..", file), "utf-8"),
+    ),
+  );
 
 const BLOG_ROOT = path.join(import.meta.dir, "..", "src", "content", "blog");
 const FRONTMATTER_OPEN = "---\n";
@@ -247,32 +259,38 @@ const duplicateViolations = (pages: readonly PageMeta[]): string[] => {
   return violations;
 };
 
-const englishStaticPages = staticPages();
-const blogPages = publishedBlogPages();
-const failures = blogPages.violations.map((violation) => `en: ${violation}`);
-for (const locale of localeCodes) {
-  const pages =
-    locale === "en"
-      ? [...pagesFor(locale), ...englishStaticPages, ...blogPages.pages]
-      : pagesFor(locale);
-  const violations = [
-    ...pages.flatMap(budgetViolations),
-    ...duplicateViolations(pages),
-    ...termPolicyViolations(locale, pages),
-  ];
-  for (const violation of violations) {
-    failures.push(`${locale}: ${violation}`);
+const main = (): void => {
+  const englishStaticPages = staticPages();
+  const blogPages = publishedBlogPages();
+  const failures = blogPages.violations.map((violation) => `en: ${violation}`);
+  for (const locale of localeCodes) {
+    const pages =
+      locale === "en"
+        ? [...pagesFor(locale), ...englishStaticPages, ...blogPages.pages]
+        : pagesFor(locale);
+    const violations = [
+      ...pages.flatMap(budgetViolations),
+      ...duplicateViolations(pages),
+      ...termPolicyViolations(locale, pages),
+    ];
+    for (const violation of violations) {
+      failures.push(`${locale}: ${violation}`);
+    }
   }
-}
 
-if (failures.length > 0) {
-  console.error(`meta budgets: ${failures.length} violation(s)`);
-  for (const failure of failures) {
-    console.error(`  ${failure}`);
+  if (failures.length > 0) {
+    console.error(`meta budgets: ${failures.length} violation(s)`);
+    for (const failure of failures) {
+      console.error(`  ${failure}`);
+    }
+    process.exit(1);
   }
-  process.exit(1);
-}
 
-console.log(
-  `meta budgets: ${localeCodes.length} locales x ${products.length + 1} catalog pages + ${englishStaticPages.length} static pages + ${blogPages.pages.length} blog posts ok`,
-);
+  console.log(
+    `meta budgets: ${localeCodes.length} locales x ${products.length + 1} catalog pages + ${englishStaticPages.length} static pages + ${blogPages.pages.length} blog posts ok`,
+  );
+};
+
+if (import.meta.main) {
+  main();
+}
