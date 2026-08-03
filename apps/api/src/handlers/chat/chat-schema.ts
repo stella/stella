@@ -19,7 +19,8 @@ import {
 } from "@/api/handlers/chat/attachment-validation";
 import {
   chatMessageFromPersisted,
-  getAwaitingUserInteraction,
+  getAwaitingUserInteractions,
+  getResumedUserInteraction,
   hasServerOwnedChatPartType,
   isIncomingChatPart,
   isChatTextPart,
@@ -501,12 +502,29 @@ const validateContinuationToolCallIntegrity = ({
   incomingParts: readonly ChatPart[];
   persistedParts: readonly ChatPart[];
 }): Result<void, HandlerError<400>> => {
-  const interaction = getAwaitingUserInteraction({
+  const resumedInteraction = getResumedUserInteraction({
+    parts: [...incomingParts],
+    role: "assistant",
+  });
+  if (resumedInteraction === null) {
+    return Result.ok();
+  }
+  const awaitedInteractions = getAwaitingUserInteractions({
     parts: [...persistedParts],
     role: "assistant",
   });
-  if (interaction === null) {
-    return Result.ok();
+  const interaction = awaitedInteractions.find(
+    (candidate) =>
+      candidate.toolCallId === resumedInteraction.toolCallId &&
+      candidate.type === resumedInteraction.type,
+  );
+  if (interaction === undefined) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Chat continuation does not match its awaited interaction",
+      }),
+    );
   }
 
   const canonicalCall = persistedParts.find(

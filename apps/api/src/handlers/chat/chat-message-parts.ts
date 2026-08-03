@@ -408,30 +408,42 @@ const RESUMED_INTERACTION_TYPE_BY_TOOL_STATE = {
   "approval" | "ask-user" | null
 >;
 
-export const getAwaitingUserInteraction = (
+type AwaitingUserInteraction = Extract<
+  NonNullable<ChatMessageMetadata["turnOutcome"]>,
+  { type: "awaiting-user" }
+>["interaction"];
+
+/**
+ * Every approval-requested call remains actionable. A chat turn is owned by
+ * its assistant message, not by whichever pending approval happened to arrive
+ * first in the stream.
+ */
+export const getAwaitingUserInteractions = (
   message: Pick<ChatMessage, "parts" | "role"> | null,
-):
-  | Extract<
-      NonNullable<ChatMessageMetadata["turnOutcome"]>,
-      { type: "awaiting-user" }
-    >["interaction"]
-  | null => {
+): AwaitingUserInteraction[] => {
   if (message?.role !== "assistant") {
-    return null;
+    return [];
   }
+  const interactions: AwaitingUserInteraction[] = [];
   for (const part of message.parts) {
     if (part.type !== "tool-call") {
       continue;
     }
     if (part.state === "approval-requested") {
-      return { type: "approval", toolCallId: part.id };
+      interactions.push({ type: "approval", toolCallId: part.id });
+      continue;
     }
     if (part.name === "ask-user" && ASK_USER_STATE_AWAITS_USER[part.state]) {
-      return { type: "ask-user", toolCallId: part.id };
+      interactions.push({ type: "ask-user", toolCallId: part.id });
     }
   }
-  return null;
+  return interactions;
 };
+
+export const getAwaitingUserInteraction = (
+  message: Pick<ChatMessage, "parts" | "role"> | null,
+): AwaitingUserInteraction | null =>
+  getAwaitingUserInteractions(message).at(0) ?? null;
 
 /**
  * Return the durable interaction a client continuation is attempting to
@@ -440,15 +452,11 @@ export const getAwaitingUserInteraction = (
  */
 export const getResumedUserInteraction = (
   message: Pick<ChatMessage, "parts" | "role">,
-):
-  | Extract<
-      NonNullable<ChatMessageMetadata["turnOutcome"]>,
-      { type: "awaiting-user" }
-    >["interaction"]
-  | null => {
+): AwaitingUserInteraction | null => {
   if (message.role !== "assistant") {
     return null;
   }
+  let inputCompleteAskUser: AwaitingUserInteraction | null = null;
   for (let index = message.parts.length - 1; index >= 0; index -= 1) {
     const part = message.parts[index];
     if (part === undefined) {
@@ -464,9 +472,16 @@ export const getResumedUserInteraction = (
     if (interactionType === "ask-user" && part.name !== "ask-user") {
       continue;
     }
+    // An unchanged ask-user call remains input-complete while the user acts
+    // on a later approval in the same message. Prefer the explicit approval
+    // response; retain input-complete only as the legacy ask-user fallback.
+    if (part.state === "input-complete") {
+      inputCompleteAskUser = { type: interactionType, toolCallId: part.id };
+      continue;
+    }
     return { type: interactionType, toolCallId: part.id };
   }
-  return null;
+  return inputCompleteAskUser;
 };
 
 export const toProviderVisibleMessages = (

@@ -66,6 +66,23 @@ const searchTools = {
     ),
   },
 } satisfies ChatToolMap;
+const createDocumentTools = {
+  "create-document": {
+    name: "create-document",
+    description: "Create a document",
+    inputSchema: toTanStackToolSchema(
+      v.strictObject({
+        name: v.string(),
+        source: v.string(),
+      }),
+    ),
+    outputSchema: toTanStackToolSchema(
+      v.strictObject({
+        fileName: v.string(),
+      }),
+    ),
+  },
+} satisfies ChatToolMap;
 const askUserTools = {
   "ask-user": {
     name: "ask-user",
@@ -412,6 +429,81 @@ describe("validateMessage", () => {
       return;
     }
     expect(result.error.message).toBe(
+      "Chat continuation does not match its awaited interaction",
+    );
+  });
+
+  test("allows only an unchanged second pending approval to continue", async () => {
+    const id = chatMessageId("msg_second_approval_continuation");
+    const canonicalParts = [
+      {
+        type: "tool-call",
+        approval: { id: "approval-1", needsApproval: true },
+        id: "approval-1",
+        name: "create-document",
+        arguments: JSON.stringify({ name: "First", source: "First source" }),
+        input: { name: "First", source: "First source" },
+        state: "approval-requested",
+      },
+      {
+        type: "tool-call",
+        approval: { id: "approval-2", needsApproval: true },
+        id: "approval-2",
+        name: "create-document",
+        arguments: JSON.stringify({ name: "Second", source: "Second source" }),
+        input: { name: "Second", source: "Second source" },
+        state: "approval-requested",
+      },
+    ] as const;
+    const persistedMessage = {
+      role: "assistant" as const,
+      content: toChatMessageContent({ version: 2, data: [...canonicalParts] }),
+    };
+    const continuationParts = [
+      canonicalParts[0],
+      {
+        ...canonicalParts[1],
+        approval: { ...canonicalParts[1].approval, approved: true },
+        state: "approval-responded" as const,
+      },
+    ];
+    const sharedProps = {
+      persistedMessage,
+      safeDb: noDbReads,
+      threadId: chatThreadId("thread_second_approval_continuation"),
+      tools: createDocumentTools,
+      userId: userId("user_second_approval_continuation"),
+    } as const;
+
+    const accepted = await validateMessageWithPersistence({
+      ...sharedProps,
+      message: { id, role: "assistant", parts: [...continuationParts] },
+    });
+    expect(Result.isOk(accepted)).toBe(true);
+
+    const rejected = await validateMessageWithPersistence({
+      ...sharedProps,
+      message: {
+        id,
+        role: "assistant",
+        parts: [
+          canonicalParts[0],
+          {
+            ...continuationParts[1],
+            arguments: JSON.stringify({
+              name: "Forged",
+              source: "Forged source",
+            }),
+            input: { name: "Forged", source: "Forged source" },
+          },
+        ],
+      },
+    });
+    expect(Result.isError(rejected)).toBe(true);
+    if (Result.isOk(rejected)) {
+      return;
+    }
+    expect(rejected.error.message).toBe(
       "Chat continuation does not match its awaited interaction",
     );
   });

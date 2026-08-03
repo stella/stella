@@ -1,10 +1,11 @@
 import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import { chatMessages, chatThreads } from "@/api/db/schema";
+import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
+import { toChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
 import {
   CHAT_METERED_PROVIDER_TIMEOUT_MS,
   canAcceptChatTurnOnTx,
@@ -17,6 +18,7 @@ import {
   withClaimedChatTurnExecution,
 } from "@/api/handlers/chat/chat-turn-persistence";
 import type { ChatTurnExecutionClaim } from "@/api/handlers/chat/chat-turn-persistence";
+import type { ChatPart } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -74,6 +76,29 @@ const unwrap = <T>(result: Result<T, unknown>): T => {
   return result.value;
 };
 
+const awaitingAskUserContent = toChatMessageContent({
+  data: [
+    {
+      arguments:
+        '{"analysis":"Need jurisdiction","questions":[{"question":"Which court?","reason":"Jurisdiction determines the law."}]}',
+      id: "ask-1",
+      input: {
+        analysis: "Need jurisdiction",
+        questions: [
+          {
+            question: "Which court?",
+            reason: "Jurisdiction determines the law.",
+          },
+        ],
+      },
+      name: "ask-user",
+      state: "input-complete",
+      type: "tool-call",
+    },
+  ] satisfies ChatPart[],
+  version: 2,
+});
+
 const seedAwaitingTurn = async () => {
   const { assistantMessageId, threadId, userMessageId } = await seedThread();
   const acceptance = createChatTurnAcceptance({
@@ -98,10 +123,7 @@ const seedAwaitingTurn = async () => {
           workspaceId: ids.wsA1,
         },
         {
-          content: {
-            data: [{ text: "Which court?", type: "text" }],
-            version: 1,
-          },
+          content: awaitingAskUserContent,
           id: assistantMessageId,
           role: "assistant",
           threadId,
@@ -371,10 +393,7 @@ describe("durable chat turn persistence", () => {
     unwrap(
       await safeDb(async (tx) => {
         await tx.insert(chatMessages).values({
-          content: {
-            data: [{ text: "What scope should it cover?", type: "text" }],
-            version: 1,
-          },
+          content: awaitingAskUserContent,
           id: assistantMessageId,
           role: "assistant",
           threadId,
@@ -523,6 +542,129 @@ describe("durable chat turn persistence", () => {
     });
   });
 
+  test("resumes from every pending approval in one assistant response", async () => {
+    const { assistantMessageId, threadId, userMessageId } = await seedThread();
+    const acceptance = createChatTurnAcceptance({
+      organizationId: ids.orgA,
+      threadId,
+      userId: ids.userA1,
+      userMessageId,
+      workspaceId: ids.wsA1,
+    });
+    const pendingApprovals = toChatMessageContent({
+      data: [
+        {
+          arguments: '{"name":"First","source":"@title First"}',
+          id: "approval-first",
+          input: { name: "First", source: "@title First" },
+          name: "create-document",
+          state: "approval-requested",
+          type: "tool-call",
+        },
+        {
+          arguments: '{"name":"Second","source":"@title Second"}',
+          id: "approval-second",
+          input: { name: "Second", source: "@title Second" },
+          name: "create-document",
+          state: "approval-requested",
+          type: "tool-call",
+        },
+        {
+          arguments:
+            '{"analysis":"Need jurisdiction","questions":[{"question":"Which court?","reason":"Jurisdiction determines the law."}]}',
+          id: "ask-1",
+          input: {
+            analysis: "Need jurisdiction",
+            questions: [
+              {
+                question: "Which court?",
+                reason: "Jurisdiction determines the law.",
+              },
+            ],
+          },
+          name: "ask-user",
+          state: "input-complete",
+          type: "tool-call",
+        },
+      ] satisfies ChatPart[],
+      version: 2,
+    });
+
+    unwrap(
+      await safeDb(async (tx) => {
+        await tx.insert(chatMessages).values([
+          {
+            content: {
+              data: [{ text: "Create both documents", type: "text" }],
+              version: 1,
+            },
+            id: userMessageId,
+            role: "user",
+            threadId,
+            userId: ids.userA1,
+            workspaceId: ids.wsA1,
+          },
+          {
+            content: pendingApprovals,
+            id: assistantMessageId,
+            role: "assistant",
+            threadId,
+            userId: ids.userA1,
+            workspaceId: ids.wsA1,
+          },
+        ]);
+        expect(await insertChatTurnAcceptanceOnTx({ acceptance, tx })).toBe(
+          true,
+        );
+      }),
+    );
+    const initialExecution = unwrap(
+      await claimChatTurnForExecution({
+        acceptedTurnId: acceptance.id,
+        incomingMessageId: userMessageId,
+        incomingMessageRole: "user",
+        organizationId: ids.orgA,
+        safeDb,
+        threadId,
+        userId: ids.userA1,
+        workspaceId: ids.wsA1,
+      }),
+    );
+    if (initialExecution === null) {
+      throw new Error("Expected the accepted turn to be claimed");
+    }
+    unwrap(
+      await safeDb(
+        async (tx) =>
+          await settleChatTurnOnTx({
+            assistantMessageId,
+            execution: initialExecution,
+            outcome: {
+              interaction: { toolCallId: "approval-first", type: "approval" },
+              type: "awaiting-user",
+            },
+            tx,
+          }),
+      ),
+    );
+
+    const continuation = unwrap(
+      await claimChatTurnForExecution({
+        acceptedTurnId: null,
+        continuationInteraction: { toolCallId: "ask-1", type: "ask-user" },
+        incomingMessageId: assistantMessageId,
+        incomingMessageRole: "assistant",
+        organizationId: ids.orgA,
+        safeDb,
+        threadId,
+        userId: ids.userA1,
+        workspaceId: ids.wsA1,
+      }),
+    );
+
+    expect(continuation?.id).toBe(acceptance.id);
+  });
+
   test("rejects a competing send before its user message can be persisted", async () => {
     const { threadId, userMessageId } = await seedThread();
     const acceptance = createChatTurnAcceptance({
@@ -591,6 +733,121 @@ describe("durable chat turn persistence", () => {
         columns: { id: true },
       }),
     ).toBeUndefined();
+  });
+
+  test("reclaims an expired execution before accepting its replacement", async () => {
+    const { threadId, userMessageId } = await seedThread();
+    const acceptance = createChatTurnAcceptance({
+      organizationId: ids.orgA,
+      threadId,
+      userId: ids.userA1,
+      userMessageId,
+      workspaceId: ids.wsA1,
+    });
+    unwrap(
+      await safeDb(async (tx) => {
+        await tx.insert(chatMessages).values({
+          content: {
+            data: [{ text: "First request", type: "text" }],
+            version: 1,
+          },
+          id: userMessageId,
+          role: "user",
+          threadId,
+          userId: ids.userA1,
+          workspaceId: ids.wsA1,
+        });
+        expect(await insertChatTurnAcceptanceOnTx({ acceptance, tx })).toBe(
+          true,
+        );
+      }),
+    );
+    const execution = unwrap(
+      await claimChatTurnForExecution({
+        acceptedTurnId: acceptance.id,
+        incomingMessageId: userMessageId,
+        incomingMessageRole: "user",
+        organizationId: ids.orgA,
+        safeDb,
+        threadId,
+        userId: ids.userA1,
+        workspaceId: ids.wsA1,
+      }),
+    );
+    if (execution === null) {
+      throw new Error("Expected the accepted turn to be claimed");
+    }
+
+    const expiredAt = new Date(Date.now() - 1000);
+    await testDb
+      .update(chatTurns)
+      .set({
+        createdAt: new Date(expiredAt.getTime() - 1000),
+        leaseExpiresAt: expiredAt,
+      })
+      .where(eq(chatTurns.id, execution.id));
+
+    const replacementMessageId = toSafeId<"chatMessage">(Bun.randomUUIDv7());
+    const replacement = createChatTurnAcceptance({
+      organizationId: ids.orgA,
+      threadId,
+      userId: ids.userA1,
+      userMessageId: replacementMessageId,
+      workspaceId: ids.wsA1,
+    });
+    unwrap(
+      await safeDb(async (tx) => {
+        await tx.insert(chatMessages).values({
+          content: {
+            data: [{ text: "Replacement request", type: "text" }],
+            version: 1,
+          },
+          id: replacementMessageId,
+          role: "user",
+          threadId,
+          userId: ids.userA1,
+          workspaceId: ids.wsA1,
+        });
+        expect(
+          await insertChatTurnAcceptanceOnTx({ acceptance: replacement, tx }),
+        ).toBe(true);
+      }),
+    );
+
+    const turns = await testDb.query.chatTurns.findMany({
+      where: { threadId: { eq: threadId } },
+      columns: {
+        executionId: true,
+        id: true,
+        interruptionReason: true,
+        leaseExpiresAt: true,
+        settledAt: true,
+        status: true,
+      },
+    });
+    expect(turns).toEqual(
+      expect.arrayContaining([
+        {
+          executionId: null,
+          id: acceptance.id,
+          interruptionReason: "timeout",
+          leaseExpiresAt: null,
+          settledAt: expect.any(Date),
+          status: "interrupted",
+        },
+        {
+          executionId: null,
+          id: replacement.id,
+          interruptionReason: null,
+          leaseExpiresAt: expect.any(Date),
+          settledAt: null,
+          status: "accepted",
+        },
+      ]),
+    );
+    expect(
+      unwrap(await renewChatTurnExecutionLease({ execution, safeDb })),
+    ).toBe(false);
   });
 
   test("serializes an awaiting continuation with a competing user send", async () => {
@@ -699,10 +956,7 @@ describe("durable chat turn persistence", () => {
     unwrap(
       await safeDb(async (tx) => {
         await tx.insert(chatMessages).values({
-          content: {
-            data: [{ text: "Which court?", type: "text" }],
-            version: 1,
-          },
+          content: awaitingAskUserContent,
           id: assistantMessageId,
           role: "assistant",
           threadId,

@@ -19,6 +19,8 @@ import {
   toChatMessageContent,
   toPersistableChatMessage,
   getAwaitingUserInteraction,
+  getAwaitingUserInteractions,
+  getResumedUserInteraction,
 } from "@/api/handlers/chat/chat-message-parts";
 import type { ChatPart } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -112,6 +114,69 @@ describe("persisted chat message parts", () => {
         getAwaitingUserInteraction({ parts: [call], role: "assistant" }),
       ).toEqual(expectedInteraction);
     }
+  });
+
+  test("keeps every pending approval actionable", () => {
+    const parts = [
+      {
+        arguments: '{"title":"First"}',
+        id: "approval-first",
+        name: "create-document",
+        state: "approval-requested",
+        type: "tool-call",
+      },
+      {
+        arguments: '{"title":"Second"}',
+        id: "approval-second",
+        name: "create-document",
+        state: "approval-requested",
+        type: "tool-call",
+      },
+    ] as const satisfies ChatPart[];
+
+    expect(
+      getAwaitingUserInteractions({ parts: [...parts], role: "assistant" }),
+    ).toEqual([
+      { toolCallId: "approval-first", type: "approval" },
+      { toolCallId: "approval-second", type: "approval" },
+    ]);
+  });
+
+  test("prefers an explicit approval response over an unchanged ask-user call", () => {
+    const parts = [
+      {
+        arguments:
+          '{"analysis":"Need jurisdiction","questions":[{"question":"Which court?","reason":"Jurisdiction determines the law."}]}',
+        id: "ask-1",
+        input: {
+          analysis: "Need jurisdiction",
+          questions: [
+            {
+              question: "Which court?",
+              reason: "Jurisdiction determines the law.",
+            },
+          ],
+        },
+        name: "ask-user",
+        state: "input-complete",
+        type: "tool-call",
+      },
+      {
+        arguments: '{"name":"Agreement","source":"@title Agreement"}',
+        id: "approval-1",
+        input: { name: "Agreement", source: "@title Agreement" },
+        name: "create-document",
+        state: "approval-responded",
+        type: "tool-call",
+      },
+    ] as const satisfies ChatPart[];
+
+    expect(
+      getAwaitingUserInteractions({ parts: [...parts], role: "assistant" }),
+    ).toEqual([{ toolCallId: "ask-1", type: "ask-user" }]);
+    expect(
+      getResumedUserInteraction({ parts: [...parts], role: "assistant" }),
+    ).toEqual({ toolCallId: "approval-1", type: "approval" });
   });
 
   test("persists every structured-output terminal and streaming state", () => {

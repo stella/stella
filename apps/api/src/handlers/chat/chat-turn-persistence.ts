@@ -5,6 +5,10 @@ import { and, desc, eq, inArray, isNull, lte } from "drizzle-orm";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
+import {
+  chatMessageFromPersisted,
+  getAwaitingUserInteractions,
+} from "@/api/handlers/chat/chat-message-parts";
 import type {
   ChatTurnFailureCode,
   ChatTurnInteractionType,
@@ -86,8 +90,48 @@ const lockChatThreadForTurnOnTx = async ({
 };
 
 /**
+ * Under the thread lock, turn an abandoned provider owner into its durable
+ * terminal outcome. A live owner renews its lease conditionally, so it either
+ * wins that renewal before this write (and remains running), or loses it after
+ * this write (and can no longer settle effects it no longer owns).
+ */
+const interruptExpiredRunningChatTurnOnTx = async ({
+  threadId,
+  tx,
+}: {
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+}): Promise<void> => {
+  const now = new Date();
+  // audit: skip — timeout terminalization records that an execution lease ended; no user-authored content changes
+  await tx
+    .update(chatTurns)
+    .set({
+      assistantMessageId: null,
+      cancellationReason: null,
+      executionId: null,
+      failureCode: null,
+      failureRetryable: null,
+      interactionToolCallId: null,
+      interactionType: null,
+      interruptionReason: "timeout",
+      leaseExpiresAt: null,
+      settledAt: now,
+      status: "interrupted",
+    })
+    .where(
+      and(
+        eq(chatTurns.threadId, threadId),
+        eq(chatTurns.status, "running"),
+        lte(chatTurns.leaseExpiresAt, now),
+      ),
+    );
+};
+
+/**
  * Lock the thread before a caller writes its new user message. A running turn
- * cannot be superseded because its provider and tool effects are live.
+ * cannot be superseded while its lease is live. Once its lease expires, end it
+ * atomically under the same lock so it cannot block every future message.
  */
 export const canAcceptChatTurnOnTx = async ({
   threadId,
@@ -99,6 +143,7 @@ export const canAcceptChatTurnOnTx = async ({
   if (!(await lockChatThreadForTurnOnTx({ threadId, tx }))) {
     return false;
   }
+  await interruptExpiredRunningChatTurnOnTx({ threadId, tx });
   const running = await tx.query.chatTurns.findFirst({
     where: {
       status: { eq: "running" },
@@ -234,18 +279,40 @@ export const claimChatTurnForExecutionOnTx = async ({
     if (continuationInteraction === undefined) {
       return null;
     }
-    const awaiting = await tx.query.chatTurns.findFirst({
-      where: {
-        assistantMessageId: { eq: incomingMessageId },
-        interactionToolCallId: { eq: continuationInteraction.toolCallId },
-        interactionType: { eq: continuationInteraction.type },
-        status: { eq: "awaiting-user" },
-        threadId: { eq: threadId },
-      },
-      columns: { id: true },
-    });
-    source = awaiting
-      ? { executionId: null, id: awaiting.id, status: "awaiting-user" }
+    const awaiting = await tx
+      .select({ content: chatMessages.content, id: chatTurns.id })
+      .from(chatTurns)
+      .innerJoin(
+        chatMessages,
+        and(
+          eq(chatMessages.id, chatTurns.assistantMessageId),
+          eq(chatMessages.threadId, chatTurns.threadId),
+        ),
+      )
+      .where(
+        and(
+          eq(chatTurns.assistantMessageId, incomingMessageId),
+          eq(chatTurns.status, "awaiting-user"),
+          eq(chatTurns.threadId, threadId),
+        ),
+      )
+      .limit(1);
+    const awaitingTurn = awaiting.at(0);
+    const ownsContinuation =
+      awaitingTurn !== undefined &&
+      getAwaitingUserInteractions(
+        chatMessageFromPersisted({
+          content: awaitingTurn.content,
+          id: incomingMessageId,
+          role: "assistant",
+        }),
+      ).some(
+        (interaction) =>
+          interaction.toolCallId === continuationInteraction.toolCallId &&
+          interaction.type === continuationInteraction.type,
+      );
+    source = ownsContinuation
+      ? { executionId: null, id: awaitingTurn.id, status: "awaiting-user" }
       : null;
   } else {
     const accepted = await tx.query.chatTurns.findFirst({
