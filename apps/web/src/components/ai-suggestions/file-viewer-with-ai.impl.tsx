@@ -34,7 +34,10 @@ import { createChatThreadId } from "@/lib/chat-thread-ref";
 
 import { FileChatOverlay } from "./file-chat-overlay";
 import { resolveFileReviewSessionId } from "./file-review-session";
-import { buildFolioReviewDecorations } from "./review-folio-decorations";
+import {
+  buildFolioReviewDecorations,
+  resolveFolioReviewFocusId,
+} from "./review-folio-decorations";
 import { useReviewStore } from "./review-store";
 import type { ReviewSuggestion } from "./review-store";
 import { stageReviewSuggestions } from "./review-suggestion-staging";
@@ -206,7 +209,13 @@ const ReviewFolioDecorationsBridge = ({
       view.dispatch(
         view.state.tr.setMeta(suggestionsMeta.key, suggestionsMeta.payload),
       );
-      const focusedMeta = setFocusedSuggestionMeta(focusedId);
+      const focusedMeta = setFocusedSuggestionMeta(
+        resolveFolioReviewFocusId({
+          focusedId,
+          nativeSuggestionIds,
+          suggestions,
+        }),
+      );
       view.dispatch(
         view.state.tr.setMeta(focusedMeta.key, focusedMeta.payload),
       );

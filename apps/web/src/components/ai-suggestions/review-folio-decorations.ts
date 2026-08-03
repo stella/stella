@@ -225,6 +225,39 @@ export const buildFolioReviewDecorations = (
     ];
   });
 
+type ResolveFolioReviewFocusIdOptions = {
+  focusedId: string | null;
+  nativeSuggestionIds: ReadonlySet<string>;
+  suggestions: readonly ReviewSuggestion[];
+};
+
+/**
+ * The review store owns the persisted suggestion row id, whereas Folio owns
+ * the client operation id used to stage its native suggestions. Reconciliation
+ * deliberately renames only the former, so adapt the focus id at the renderer
+ * boundary instead of leaking Folio's identity into persistence/navigation.
+ *
+ * When native staging is unavailable, the fallback decoration uses the row id
+ * produced by `buildFolioReviewDecorations`; keep that path focused too.
+ */
+export const resolveFolioReviewFocusId = ({
+  focusedId,
+  nativeSuggestionIds,
+  suggestions,
+}: ResolveFolioReviewFocusIdOptions): string | null => {
+  if (focusedId === null) {
+    return null;
+  }
+  const focusedSuggestion = suggestions.find(
+    (suggestion) => suggestion.id === focusedId,
+  );
+  const operationId = focusedSuggestion?.pendingOperation?.id;
+  if (operationId !== undefined && nativeSuggestionIds.has(operationId)) {
+    return operationId;
+  }
+  return focusedId;
+};
+
 export const findFolioReviewDecoration = (
   item: ReviewSuggestion,
   doc: ProseMirrorNode,

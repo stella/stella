@@ -3,7 +3,10 @@ import { describe, expect, test } from "bun:test";
 import { createFolioAIEditSnapshot } from "@stll/folio-core/ai-edits";
 import { schema } from "@stll/folio-core/prosemirror";
 
-import { buildFolioReviewDecorations } from "./review-folio-decorations";
+import {
+  buildFolioReviewDecorations,
+  resolveFolioReviewFocusId,
+} from "./review-folio-decorations";
 import type { ReviewSuggestion } from "./review-store";
 
 const doc = schema.node("doc", undefined, [
@@ -165,5 +168,51 @@ describe("buildFolioReviewDecorations", () => {
         doc,
       ),
     ).toEqual([]);
+  });
+});
+
+describe("resolveFolioReviewFocusId", () => {
+  test("uses the stable operation id after server reconciliation staged a native suggestion", () => {
+    const reconciled = suggestion({
+      id: "server-suggestion-id",
+      pendingOperation: {
+        blockId: "A1",
+        find: "30 days",
+        id: "client-operation-id",
+        replace: "45 days",
+        type: "replaceInBlock",
+      },
+      persisted: true,
+    });
+
+    expect(
+      resolveFolioReviewFocusId({
+        focusedId: "server-suggestion-id",
+        nativeSuggestionIds: new Set(["client-operation-id"]),
+        suggestions: [reconciled],
+      }),
+    ).toBe("client-operation-id");
+  });
+
+  test("keeps the row id when the visible fallback decoration owns it", () => {
+    const reconciled = suggestion({
+      id: "server-suggestion-id",
+      pendingOperation: {
+        blockId: "A1",
+        find: "30 days",
+        id: "client-operation-id",
+        replace: "45 days",
+        type: "replaceInBlock",
+      },
+      persisted: true,
+    });
+
+    expect(
+      resolveFolioReviewFocusId({
+        focusedId: "server-suggestion-id",
+        nativeSuggestionIds: new Set(),
+        suggestions: [reconciled],
+      }),
+    ).toBe("server-suggestion-id");
   });
 });
