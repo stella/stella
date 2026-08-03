@@ -416,7 +416,9 @@ type AwaitingUserInteraction = Extract<
 
 type ChatToolCallPart = Extract<ChatPart, { type: "tool-call" }>;
 
-type ChatApprovalMetadata = NonNullable<TanStackToolCallPart["approval"]>;
+type ChatApprovalMetadata = NonNullable<
+  TanStackToolCallPart<never>["approval"]
+>;
 
 const isChatApprovalMetadata = (
   value: unknown,
@@ -433,8 +435,18 @@ const toChatToolCallPart = (value: unknown): ChatToolCallPart => {
   return value;
 };
 
+const getChatToolCallExtension = (
+  part: ChatToolCallPart,
+  property: "approval" | "metadata",
+): unknown => {
+  if (!isRecord(part)) {
+    return panic("Chat tool call must remain an object");
+  }
+  return part[property];
+};
+
 const terminalToolCallError = (part: ChatToolCallPart): ChatToolCallPart => {
-  const metadata = Reflect.get(part, "metadata");
+  const metadata = getChatToolCallExtension(part, "metadata");
   return toChatToolCallPart({
     arguments: part.arguments,
     id: part.id,
@@ -450,7 +462,7 @@ const cancelPendingToolCallPart = (
 ): ChatToolCallPart => {
   switch (part.state) {
     case "approval-requested": {
-      const approval = Reflect.get(part, "approval");
+      const approval = getChatToolCallExtension(part, "approval");
       if (!isChatApprovalMetadata(approval)) {
         return terminalToolCallError(part);
       }

@@ -677,7 +677,7 @@ describe("send message disconnect handling", () => {
     const insert = (table: unknown) => ({
       values: () => {
         if (table !== chatTurns) {
-          return;
+          return undefined;
         }
         acceptanceTransaction = safeDbTransaction;
         return {
