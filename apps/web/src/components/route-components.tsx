@@ -3,12 +3,7 @@ import { useState, useTransition } from "react";
 import { CancelledError, useQueryClient } from "@tanstack/react-query";
 import { Link, Navigate } from "@tanstack/react-router";
 import type { ErrorComponentProps } from "@tanstack/react-router";
-import {
-  CircleAlertIcon,
-  CopyIcon,
-  MailIcon,
-  RefreshCcwIcon,
-} from "lucide-react";
+import { CopyIcon, MailIcon, RefreshCcwIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
@@ -283,19 +278,26 @@ const UnexpectedRouteError = ({
   return (
     <div
       className={cn(
-        "flex h-full w-full items-center overflow-auto px-6 py-10 sm:px-10",
+        "error-gradient flex h-full w-full items-center overflow-auto px-6 py-10 sm:px-10",
         className,
       )}
     >
+      <style>{`
+        .error-gradient {
+          background: linear-gradient(
+            to bottom,
+            var(--background) 40%,
+            var(--error-gradient-end)
+          );
+        }
+        :root { --error-gradient-end: #fbe9e4; }
+        .dark { --error-gradient-end: #261815; }
+      `}</style>
       <section
         aria-labelledby="route-error-title"
         className="mx-auto flex w-full max-w-xl flex-col gap-6"
         role="alert"
       >
-        <div className="bg-muted text-muted-foreground flex size-10 items-center justify-center rounded-xl">
-          <CircleAlertIcon aria-hidden="true" className="size-5" />
-        </div>
-
         <div className="flex flex-col gap-2">
           <h1
             className="text-foreground text-xl font-semibold text-balance outline-none"
