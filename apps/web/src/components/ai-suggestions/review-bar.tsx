@@ -47,6 +47,7 @@ import {
 import { cn } from "@stll/ui/lib/utils";
 
 import { AcceptAllButton } from "@/components/ai-suggestions/accept-all-button";
+import { DOCKED_COMPOSER_WIDTH_CLASS } from "@/components/ai-suggestions/composer-geometry";
 import {
   getReviewBarAction,
   getReviewBarPosition,
@@ -57,7 +58,7 @@ import {
 } from "@/components/ai-suggestions/review-store";
 import type { ReviewSuggestion } from "@/components/ai-suggestions/review-store";
 import { useReviewActions } from "@/components/ai-suggestions/use-review-actions";
-import { useMountEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { detached } from "@/lib/detached";
 
@@ -106,6 +107,7 @@ export const ReviewBar = ({
   const focusedId = useReviewStore((state) =>
     getReviewFocusedId(state, entityId),
   );
+  const setFocusedId = useReviewStore((state) => state.setFocusedId);
   const {
     applyMode,
     setApplyMode,
@@ -130,6 +132,20 @@ export const ReviewBar = ({
   const activeItem = suggestions.at(activeIndex);
   const activeAction =
     activeItem === undefined ? "busy" : getReviewBarAction(activeItem);
+
+  // The first proposed edit must be visible in the document as soon as the
+  // review controls appear. Without this, the bar says "1 / n" but Folio has
+  // no focused id, so it renders only generic underlines rather than the
+  // exact struck-through/replacement pair the reviewer is about to resolve.
+  useExternalSyncEffect(() => {
+    if (focusedId !== null) {
+      return;
+    }
+    const firstPending = suggestions.find(isPending);
+    if (firstPending !== undefined) {
+      setFocusedId(entityId, firstPending.id);
+    }
+  }, [entityId, focusedId, setFocusedId, suggestions]);
 
   const focusAt = useLatestCallback((index: number) => {
     const item = suggestions.at(index);
@@ -256,13 +272,24 @@ export const ReviewBar = ({
       aria-label={t("docxReview.barLabel")}
       data-docx-review-bar=""
       className={cn(
-        "bg-popover/90 text-popover-foreground border-border pointer-events-auto absolute start-1/2 bottom-24 z-50 flex w-max max-w-[calc(100%-2rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-1 rounded-full border py-1 ps-2 pe-1.5",
-        "[backdrop-filter:blur(18px)_saturate(160%)] [-webkit-backdrop-filter:blur(18px)_saturate(160%)]",
-        "shadow-[0_1px_2px_rgb(0_0_0/0.06),0_12px_32px_rgb(0_0_0/0.14)]",
+        "text-popover-foreground border-foreground/15 pointer-events-auto absolute start-1/2 bottom-24 z-50 flex -translate-x-1/2 items-center gap-1 rounded-2xl border py-0.5 ps-1.5 pe-1",
+        DOCKED_COMPOSER_WIDTH_CLASS,
+        "bg-(--doc-float-surface) [--doc-float-surface:var(--color-white)] dark:[--doc-float-surface:var(--popover)]",
+        "shadow-[0_0_0_1px_rgb(0_0_0/0.02),0_1px_2px_rgb(0_0_0/0.03),0_8px_20px_rgb(0_0_0/0.05)]",
         "animate-in fade-in-0 slide-in-from-bottom-1",
       )}
       role="toolbar"
     >
+      {activeItem !== undefined && (
+        <button
+          className="text-foreground hover:bg-muted focus-visible:ring-ring min-w-0 flex-1 truncate rounded-md px-1.5 text-start text-xs font-medium transition-colors outline-none focus-visible:ring-2 @max-[42rem]/file-viewer:hidden"
+          onClick={() => navigateTo(activeItem)}
+          title={activeItem.summary}
+          type="button"
+        >
+          {activeItem.summary}
+        </button>
+      )}
       <span className="text-muted-foreground min-w-14 px-1 text-center text-xs font-medium tabular-nums">
         {t("common.stepProgress", {
           current: String(current),
@@ -271,7 +298,7 @@ export const ReviewBar = ({
       </span>
       <Button
         aria-label={t("common.previous")}
-        disabled={current <= 1}
+        disabled={activeIndex <= 0}
         onClick={goPrev}
         size="icon-sm"
         tooltip={`${t("common.previous")} · ${SHORTCUT_HINTS.prev}`}
@@ -281,7 +308,7 @@ export const ReviewBar = ({
       </Button>
       <Button
         aria-label={t("common.next")}
-        disabled={current >= total}
+        disabled={activeIndex >= suggestions.length - 1}
         onClick={goNext}
         size="icon-sm"
         tooltip={`${t("common.next")} · ${SHORTCUT_HINTS.next}`}

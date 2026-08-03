@@ -45,6 +45,27 @@ const countInlineBoldDelimiters = (content: ParagraphContent[]): number => {
   return count;
 };
 
+/**
+ * Legal-source headings have structural directives. A body paragraph wrapped
+ * entirely in Markdown emphasis is almost always an accidental carry-over
+ * from chat prose, especially in two-column bilingual drafts where it makes
+ * a whole column look like a heading. Keep the readable text but drop the
+ * delimiters rather than turning the complete body paragraph bold.
+ */
+const isWholeParagraphBold = (content: ParagraphContent[]): boolean => {
+  const text = content
+    .flatMap((part) => (part.type === "run" ? [getInlineText(part) ?? ""] : []))
+    .join("");
+  const firstDelimiter = text.indexOf(INLINE_BOLD_DELIMITER);
+  const lastDelimiter = text.lastIndexOf(INLINE_BOLD_DELIMITER);
+  return (
+    firstDelimiter !== -1 &&
+    firstDelimiter !== lastDelimiter &&
+    text.slice(0, firstDelimiter).trim().length === 0 &&
+    text.slice(lastDelimiter + INLINE_BOLD_DELIMITER.length).trim().length === 0
+  );
+};
+
 const appendInlineBoldRun = (
   runs: Run[],
   run: Run,
@@ -79,6 +100,7 @@ const formatParagraphInlineBold = (paragraph: Paragraph): Paragraph => {
     return paragraph;
   }
 
+  const suppressWholeParagraphBold = isWholeParagraphBold(paragraph.content);
   const hasUnmatchedTrailingDelimiter = delimiterCount % 2 === 1;
   let remainingDelimiters = delimiterCount;
   let bold = false;
@@ -110,7 +132,7 @@ const formatParagraphInlineBold = (paragraph: Paragraph): Paragraph => {
       if (isUnmatchedTrailingDelimiter) {
         appendInlineBoldRun(runs, part, INLINE_BOLD_DELIMITER, bold);
       } else {
-        bold = !bold;
+        bold = suppressWholeParagraphBold ? false : !bold;
       }
       cursor = delimiterIndex + INLINE_BOLD_DELIMITER.length;
     }

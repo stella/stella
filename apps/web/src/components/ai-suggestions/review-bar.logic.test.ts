@@ -27,7 +27,7 @@ const suggestion = (
 });
 
 describe("review bar session progress", () => {
-  test("keeps the original total and position after earlier decisions resolve", () => {
+  test("keeps the active proposal at one while the remaining total shrinks", () => {
     const items = [
       suggestion("one", "accepted"),
       suggestion("two", "pending"),
@@ -38,12 +38,12 @@ describe("review bar session progress", () => {
     expect(getReviewBarPosition(items, "one")).toEqual({
       activeIndex: 0,
       current: 1,
-      total: 4,
+      total: 2,
     });
     expect(getReviewBarPosition(items, "two")).toEqual({
       activeIndex: 1,
-      current: 2,
-      total: 4,
+      current: 1,
+      total: 2,
     });
   });
 

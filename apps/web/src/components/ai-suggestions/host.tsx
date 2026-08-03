@@ -70,6 +70,7 @@ import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
 import { isValueTypeKind, VALUE_TYPE_META } from "@/lib/value-types";
 
+import { DOCKED_COMPOSER_WIDTH_CLASS } from "./composer-geometry";
 import { shouldShowPromptBarBusyPlaceholder } from "./host.logic";
 import type { FileAIChatStatus } from "./types";
 
@@ -342,8 +343,6 @@ export function PromptBarShell({
  * card that aligns to it. One owner so the bar and the card can never
  * drift to different widths.
  */
-const DOCKED_COMPOSER_WIDTH_CLASS = "w-[min(560px,calc(100%-2rem))]";
-
 /**
  * Bottom offset for a floating `ChatThreadCard` so it clears the docked
  * composer stack that `DockedComposer` pins at `bottom-3.5` (14px).

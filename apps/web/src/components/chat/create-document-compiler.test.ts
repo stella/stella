@@ -94,4 +94,37 @@ Neuzavřená ** značka
     expect(runs.at(0)?.formatting?.highlight).toBe("yellow");
     expect(runs.at(1)?.formatting?.bold).not.toBe(true);
   });
+
+  test("does not turn an entire bilingual body paragraph bold", () => {
+    const compiled = compileCreateDocumentSourceToDocument(`
+@doc kind=agreement locale=cs page=A4
+@paragraph
+**Přijímající strana chrání Důvěrné informace. / The Receiving Party protects Confidential Information.**
+`);
+    expect(compiled.status).toBe("ok");
+    if (compiled.status !== "ok") {
+      return;
+    }
+
+    const paragraph = compiled.document.package.document.content.find(
+      (block) =>
+        block.type === "paragraph" && block.formatting?.styleId === "BodyText",
+    );
+    expect(paragraph?.type).toBe("paragraph");
+    if (paragraph?.type !== "paragraph") {
+      return;
+    }
+
+    const runs = paragraph.content.filter((part) => part.type === "run");
+    expect(
+      runs.flatMap((run) =>
+        run.content.flatMap((content) =>
+          content.type === "text" ? [content.text] : [],
+        ),
+      ),
+    ).toEqual([
+      "Přijímající strana chrání Důvěrné informace. / The Receiving Party protects Confidential Information.",
+    ]);
+    expect(runs.some((run) => run.formatting?.bold === true)).toBe(false);
+  });
 });

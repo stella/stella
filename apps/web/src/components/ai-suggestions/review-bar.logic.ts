@@ -46,9 +46,10 @@ type ReviewBarPosition = {
 };
 
 /**
- * Review progress is position within the original session, not position in a
- * shrinking pending queue. Resolved items stay addressable so the reviewer can
- * navigate back and revert any individual decision.
+ * The review counter reports the first of the remaining proposals. Accepting
+ * the active item therefore keeps the numerator stable and only decreases the
+ * denominator (1 / 4 → 1 / 3), while the full session remains addressable via
+ * the previous/next controls for per-item reverts.
  */
 export const getReviewBarPosition = (
   suggestions: readonly ReviewSuggestion[],
@@ -60,5 +61,12 @@ export const getReviewBarPosition = (
   }
   const focusedIndex = suggestions.findIndex((item) => item.id === focusedId);
   const activeIndex = Math.max(focusedIndex, 0);
-  return { activeIndex, current: activeIndex + 1, total };
+  const pendingCount = suggestions.filter(
+    (item) => item.status === "pending" || item.status === "applying",
+  ).length;
+  return {
+    activeIndex,
+    current: 1,
+    total: Math.max(pendingCount, 1),
+  };
 };

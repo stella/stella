@@ -947,6 +947,12 @@ describe("chat tool schemas", () => {
       requiresAnonymization: false,
     });
     expect(createDocument.needsApproval).toBeUndefined();
+    expect(createDocument.description).toContain(
+      "Never wrap an entire body paragraph, table cell, or bilingual column in `**`",
+    );
+    expect(createDocument.description).toContain(
+      "use @title, @clause, or @subclause for structural headings",
+    );
     expect(getChatToolPolicy(createDocument)).toEqual({
       kind: "internal",
       needsApproval: false,

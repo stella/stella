@@ -98,9 +98,11 @@ export const createCreateDocumentTool = () =>
       "  @schedule <heading> — schedule/annex starting on a new page.\n" +
       "  @signatures — side-by-side party signature block; see below.\n" +
       "  @pagebreak — force a page break.\n\n" +
-      "INLINE EMPHASIS: wrap inline text in `**` for bold, for example " +
-      "`**Seller:** [[seller name]]`. The markers are compiled into DOCX runs " +
-      "and are not shown literally.\n\n" +
+      "INLINE EMPHASIS: wrap only a short inline label in `**` for bold, for example " +
+      "`**Seller:** [[seller name]]`. Never wrap an entire body paragraph, " +
+      "table cell, or bilingual column in `**`; use @title, @clause, or @subclause " +
+      "for structural headings. The markers are compiled into DOCX runs and are " +
+      "not shown literally.\n\n" +
       "PLACEHOLDERS: wrap unknown values in `[[ ]]` — the compiler highlights them in yellow so the user can spot and fill them. Example: `Buyer shall pay [[purchase price]] on or before [[closing date]].` Briefly tell the user in your reply which placeholders you left.\n\n" +
       "@signatures: one block at the end, key:value lines per party. Keys: `party` (legal name), `by` (signing person, alias `name`), `title` (role). Use the document-language alias for the keys — e.g. `party / strana / partei / partie / parte / fél`. Each `party:` line opens a new party block; omit `by` and `title` to leave a blank line for hand-fill. The compiler renders one column per party (party name bolded, signing space, rule, then your `by:` / `title:` values raw) — no compiler-added captions. If you want labels like 'Datum:' or 'Podpis', write them inline in the source above the @signatures block (with @paragraph), in the document's language.",
     inputSchema: toTanStackToolSchema(createDocumentToolInputSchema),
