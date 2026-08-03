@@ -276,6 +276,18 @@ type ValidateMessageResult = Result<
 type ChatToolSchema = SchemaInput | undefined;
 type ChatToolCallPart = Extract<ChatPart, { type: "tool-call" }>;
 type ChatToolResultPart = Extract<ChatPart, { type: "tool-result" }>;
+const CONTINUATION_TOOL_CALL_TRANSITIONS = {
+  "approval-requested": ["approval-requested", "approval-responded"],
+  "approval-responded": ["approval-responded"],
+  "awaiting-input": ["awaiting-input"],
+  complete: ["complete"],
+  error: ["error"],
+  "input-complete": ["input-complete", "complete", "error"],
+  "input-streaming": ["input-streaming"],
+} as const satisfies Record<
+  ChatToolCallPart["state"],
+  readonly ChatToolCallPart["state"][]
+>;
 const TOOL_CALL_OUTPUT_VALIDATION = {
   "awaiting-input": "schema",
   "approval-requested": "schema",
@@ -475,12 +487,14 @@ const validateIncomingChatParts = ({
           content: persistedMessage.content,
         }).parts
       : [];
-  const continuationIntegrityResult = validateContinuationToolCallIntegrity({
-    incomingParts: validatedParts,
-    persistedParts,
-  });
-  if (Result.isError(continuationIntegrityResult)) {
-    return Result.err(continuationIntegrityResult.error);
+  if (message.role === "assistant" && persistedMessage?.role === "assistant") {
+    const continuationIntegrityResult = validateContinuationToolCallIntegrity({
+      incomingParts: validatedParts,
+      persistedParts,
+    });
+    if (Result.isError(continuationIntegrityResult)) {
+      return Result.err(continuationIntegrityResult.error);
+    }
   }
   return Result.ok(
     restoreServerOwnedChatParts({
@@ -502,6 +516,29 @@ const validateContinuationToolCallIntegrity = ({
   incomingParts: readonly ChatPart[];
   persistedParts: readonly ChatPart[];
 }): Result<void, HandlerError<400>> => {
+  const canonicalCalls = persistedParts.filter(
+    (part): part is ChatToolCallPart => part.type === "tool-call",
+  );
+  const incomingCalls = incomingParts.filter(
+    (part): part is ChatToolCallPart => part.type === "tool-call",
+  );
+  if (incomingCalls.length !== canonicalCalls.length) {
+    return invalidContinuationToolCall();
+  }
+  for (const [index, canonicalCall] of canonicalCalls.entries()) {
+    const incomingCall = incomingCalls.at(index);
+    if (
+      incomingCall === undefined ||
+      incomingCall.id !== canonicalCall.id ||
+      !isPermittedContinuationToolCallTransition({
+        canonicalCall,
+        incomingCall,
+      })
+    ) {
+      return invalidContinuationToolCall();
+    }
+  }
+
   const resumedInteraction = getResumedUserInteraction({
     parts: [...incomingParts],
     role: "assistant",
@@ -519,45 +556,74 @@ const validateContinuationToolCallIntegrity = ({
       candidate.type === resumedInteraction.type,
   );
   if (interaction === undefined) {
-    return Result.err(
-      new HandlerError({
-        status: 400,
-        message: "Chat continuation does not match its awaited interaction",
-      }),
-    );
+    return invalidContinuationToolCall();
   }
+  return Result.ok();
+};
 
-  const canonicalCall = persistedParts.find(
-    (part): part is ChatToolCallPart =>
-      part.type === "tool-call" && part.id === interaction.toolCallId,
+const invalidContinuationToolCall = (): Result<never, HandlerError<400>> =>
+  Result.err(
+    new HandlerError({
+      status: 400,
+      message: "Chat continuation does not match its awaited interaction",
+    }),
   );
-  if (canonicalCall === undefined) {
-    return Result.err(
-      new HandlerError({
-        status: 400,
-        message: "Persisted chat interaction has no matching tool call",
-      }),
-    );
+
+const isPermittedContinuationToolCallTransition = ({
+  canonicalCall,
+  incomingCall,
+}: {
+  canonicalCall: ChatToolCallPart;
+  incomingCall: ChatToolCallPart;
+}): boolean => {
+  let stateTransitionAllowed = false;
+  for (const allowedState of CONTINUATION_TOOL_CALL_TRANSITIONS[
+    canonicalCall.state
+  ]) {
+    if (allowedState === incomingCall.state) {
+      stateTransitionAllowed = true;
+      break;
+    }
   }
-
-  const incomingCall = incomingParts.find(
-    (part): part is ChatToolCallPart =>
-      part.type === "tool-call" && part.id === interaction.toolCallId,
-  );
   if (
-    incomingCall === undefined ||
+    !stateTransitionAllowed ||
     incomingCall.name !== canonicalCall.name ||
     !deepEquals(incomingCall.arguments, canonicalCall.arguments) ||
     !deepEquals(incomingCall.input, canonicalCall.input)
   ) {
-    return Result.err(
-      new HandlerError({
-        status: 400,
-        message: "Chat continuation does not match its awaited interaction",
-      }),
+    return false;
+  }
+
+  if (incomingCall.state === canonicalCall.state) {
+    return deepEquals(incomingCall, canonicalCall);
+  }
+  if (
+    canonicalCall.state === "approval-requested" &&
+    incomingCall.state === "approval-responded"
+  ) {
+    if (!("approval" in canonicalCall) || !("approval" in incomingCall)) {
+      return false;
+    }
+    return (
+      incomingCall.approval.id === canonicalCall.approval.id &&
+      incomingCall.approval.needsApproval ===
+        canonicalCall.approval.needsApproval &&
+      canonicalCall.approval.approved === undefined &&
+      typeof incomingCall.approval.approved === "boolean" &&
+      deepEquals(incomingCall.output, canonicalCall.output)
     );
   }
-  return Result.ok();
+  if (
+    canonicalCall.state === "input-complete" &&
+    (incomingCall.state === "complete" || incomingCall.state === "error")
+  ) {
+    const canonicalApproval =
+      "approval" in canonicalCall ? canonicalCall.approval : undefined;
+    const incomingApproval =
+      "approval" in incomingCall ? incomingCall.approval : undefined;
+    return deepEquals(incomingApproval, canonicalApproval);
+  }
+  return false;
 };
 
 const validateIncomingChatMetadata = (

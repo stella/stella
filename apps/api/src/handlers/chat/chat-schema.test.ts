@@ -506,6 +506,90 @@ describe("validateMessage", () => {
     expect(rejected.error.message).toBe(
       "Chat continuation does not match its awaited interaction",
     );
+
+    const rejectedSiblingTransition = await validateMessageWithPersistence({
+      ...sharedProps,
+      message: {
+        id,
+        role: "assistant",
+        parts: [
+          {
+            ...canonicalParts[0],
+            approval: { ...canonicalParts[0].approval, approved: true },
+            state: "approval-responded",
+          },
+          {
+            ...canonicalParts[1],
+            approval: { ...canonicalParts[1].approval, approved: true },
+            arguments: JSON.stringify({
+              name: "Forged sibling",
+              source: "Forged sibling source",
+            }),
+            input: {
+              name: "Forged sibling",
+              source: "Forged sibling source",
+            },
+            state: "approval-responded",
+          },
+        ],
+      },
+    });
+    expect(Result.isError(rejectedSiblingTransition)).toBe(true);
+
+    const rejectedMissingCall = await validateMessageWithPersistence({
+      ...sharedProps,
+      message: {
+        id,
+        role: "assistant",
+        parts: [continuationParts[1]],
+      },
+    });
+    expect(Result.isError(rejectedMissingCall)).toBe(true);
+  });
+
+  test("accepts the canonical ask-user call completing with its answer", async () => {
+    const id = chatMessageId("msg_ask_user_completion");
+    const canonicalCall = {
+      type: "tool-call",
+      id: "ask-user-1",
+      name: "ask-user",
+      arguments: JSON.stringify({
+        analysis: "Need jurisdiction",
+        questions: [
+          { question: "Which court?", reason: "Determines jurisdiction" },
+        ],
+      }),
+      input: {
+        analysis: "Need jurisdiction",
+        questions: [
+          { question: "Which court?", reason: "Determines jurisdiction" },
+        ],
+      },
+      state: "input-complete",
+    } satisfies ChatParts[number];
+    const result = await validateMessageWithPersistence({
+      message: {
+        id,
+        role: "assistant",
+        parts: [
+          {
+            ...canonicalCall,
+            output: { answers: ["Municipal Court in Prague"] },
+            state: "complete",
+          },
+        ],
+      },
+      persistedMessage: {
+        role: "assistant",
+        content: toChatMessageContent({ version: 2, data: [canonicalCall] }),
+      },
+      safeDb: noDbReads,
+      threadId: chatThreadId("thread_ask_user_completion"),
+      tools: askUserTools,
+      userId: userId("user_ask_user_completion"),
+    });
+
+    expect(Result.isOk(result)).toBe(true);
   });
 
   test("preserves DOCX edit preferences on user messages", async () => {
