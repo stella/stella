@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, asc, desc, eq, gt, inArray, lt, or } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
@@ -12,7 +12,7 @@ import {
   fields,
   workspaces,
 } from "@/api/db/schema";
-import { handoffCommittedEntityDeletionCleanup } from "@/api/handlers/entities/entity-deletion-cleanup-handoff";
+import { handoffCommittedEntityDeletionCleanupBatch } from "@/api/handlers/entities/entity-deletion-cleanup-handoff";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -31,7 +31,11 @@ import {
   createOcrSearchablePdfKey,
 } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
-import { forEachOcrDerivativePage } from "@/api/lib/ocr-derivative-pages";
+import {
+  forEachOcrDerivativePage,
+  ocrDerivativeCursorFilter,
+  ocrDerivativePageOrder,
+} from "@/api/lib/ocr-derivative-pages";
 import { getSearchProvider } from "@/api/lib/search/provider";
 
 const deleteEntitiesBodySchema = t.Object({
@@ -174,21 +178,10 @@ export const deleteEntitiesHandler = async function* ({
               and(
                 eq(documentProcessingRuns.workspaceId, workspaceId),
                 inArray(documentProcessingRuns.entityId, body.entityIds),
-                cursor === null
-                  ? undefined
-                  : or(
-                      lt(documentProcessingRuns.createdAt, cursor.createdAt),
-                      and(
-                        eq(documentProcessingRuns.createdAt, cursor.createdAt),
-                        gt(documentProcessingRuns.id, cursor.id),
-                      ),
-                    ),
+                ocrDerivativeCursorFilter(cursor),
               ),
             )
-            .orderBy(
-              desc(documentProcessingRuns.createdAt),
-              asc(documentProcessingRuns.id),
-            )
+            .orderBy(...ocrDerivativePageOrder())
             .limit(limit),
         onPage: async (runs) =>
           await recordCleanupRequest(
@@ -254,18 +247,15 @@ export const deleteEntitiesHandler = async function* ({
     return Result.err(txOutcome.error);
   }
   const deletedEntities = txOutcome.entities;
-  // Reconciliation owns eventual delivery, so a slow handoff must not hold the
-  // deletion response open per page; failures are captured, never swallowed.
-  await Promise.all(
-    txOutcome.cleanupRequestIds.map(
-      async (requestId) =>
-        await handoffCommittedEntityDeletionCleanup({
-          captureDeliveryError: captureError,
-          enqueueCleanup,
-          requestId,
-        }),
-    ),
-  );
+  // Accelerate only a bounded prefix. The requests are already committed and
+  // the reconciler claims every `pending` row on its own schedule, so a
+  // deletion that produced many pages must not fan out an unbounded number of
+  // queue calls or hold its response open behind the slowest one.
+  await handoffCommittedEntityDeletionCleanupBatch({
+    captureDeliveryError: captureError,
+    enqueueCleanup,
+    requestIds: txOutcome.cleanupRequestIds,
+  });
 
   // Explicit removal for non-PG providers (CASCADE handles PG)
   const provider = getSearchProvider();

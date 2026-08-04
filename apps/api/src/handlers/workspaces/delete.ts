@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, asc, desc, eq, gt, inArray, lt, ne, or } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 
 import { member } from "@/api/db/auth-schema";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -31,7 +31,11 @@ import {
   deleteS3Keys,
   deleteS3Objects,
 } from "@/api/lib/files/utils";
-import { forEachOcrDerivativePage } from "@/api/lib/ocr-derivative-pages";
+import {
+  forEachOcrDerivativePage,
+  ocrDerivativeCursorFilter,
+  ocrDerivativePageOrder,
+} from "@/api/lib/ocr-derivative-pages";
 import { pendingUploadS3KeysForDeletion } from "@/api/lib/pending-upload-keys";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
@@ -135,21 +139,10 @@ const deleteWorkspaceOcrDerivatives = async ({
             .where(
               and(
                 eq(documentProcessingRuns.workspaceId, workspaceId),
-                cursor === null
-                  ? undefined
-                  : or(
-                      lt(documentProcessingRuns.createdAt, cursor.createdAt),
-                      and(
-                        eq(documentProcessingRuns.createdAt, cursor.createdAt),
-                        gt(documentProcessingRuns.id, cursor.id),
-                      ),
-                    ),
+                ocrDerivativeCursorFilter(cursor),
               ),
             )
-            .orderBy(
-              desc(documentProcessingRuns.createdAt),
-              asc(documentProcessingRuns.id),
-            )
+            .orderBy(...ocrDerivativePageOrder())
             .limit(limit),
       );
       return Result.unwrap(result, "Matter OCR derivative query failed");
