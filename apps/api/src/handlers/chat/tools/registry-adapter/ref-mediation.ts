@@ -175,6 +175,31 @@ const readScalarAtPath = (root: unknown, path: string): unknown => {
   return cursor;
 };
 
+// --- output stripping ---------------------------------------------------------
+
+/**
+ * Delete every declared strip path from a tool payload, in place, before ref
+ * hydration and the UUID backstop run. Strip paths carry ids other surfaces
+ * need (web-UI field/file plumbing handles) but chat cannot act on: removing
+ * them keeps the model context free of raw ids without widening the
+ * passthrough allowlist. The payload is the caller-owned JSON.parsed object,
+ * so in-place deletion is safe.
+ */
+export const stripDeclaredPaths = ({
+  output,
+  stripPaths,
+}: {
+  output: unknown;
+  stripPaths: readonly string[];
+}): unknown => {
+  for (const path of stripPaths) {
+    visitPathSlots(output, parsePath(path), (container, key) => {
+      Reflect.deleteProperty(container, key);
+    });
+  }
+  return output;
+};
+
 // --- input dehydration ------------------------------------------------------
 
 export type DehydratedInput = {

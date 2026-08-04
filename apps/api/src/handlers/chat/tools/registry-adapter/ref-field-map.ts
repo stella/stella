@@ -101,6 +101,16 @@ export type RefMediationEntry = {
    * it, which fails closed the same as an undeclared path.
    */
   passthroughIdPaths: readonly string[];
+  /**
+   * Output paths deleted from the chat projection before hydration and the
+   * UUID backstop run. For fields other surfaces need (web-UI field/file
+   * plumbing handles) that chat cannot act on: stripping keeps them out of
+   * the model context entirely instead of leaking them as passthrough noise.
+   * Same `a.b` / `a[].b` grammar as `outputRefs`. Required so every tool
+   * records an explicit decision, like `passthroughIdPaths`; the backstop
+   * still fails closed on any undeclared survivor.
+   */
+  stripPaths: readonly string[];
 };
 
 export type RegistryRefFieldMapEntry = RefMediationEntry & {
@@ -134,6 +144,7 @@ export const READ_TOOL_REF_FIELD_MAP = {
     inputRefs: [],
     outputRefs: [],
     passthroughIdPaths: ["id", "url", "workspaceId"],
+    stripPaths: [],
   },
   search: {
     chatProjectable: false,
@@ -144,6 +155,7 @@ export const READ_TOOL_REF_FIELD_MAP = {
       "results[].url",
       "results[].workspaceId",
     ],
+    stripPaths: [],
   },
 
   // --- Matters / contacts / content -----------------------------------------
@@ -174,6 +186,15 @@ export const READ_TOOL_REF_FIELD_MAP = {
       "members[].userId",
       "nextCursor",
     ],
+    // The overview feed's field/file plumbing ids exist for the web UI (mime
+    // icon, click-to-open); chat cannot act on them and they carry raw UUIDs
+    // whenever a recent entity has a primary field, which tripped the UUID
+    // backstop on every non-empty matter until they were stripped here.
+    stripPaths: [
+      "overview.recentEntities[].fieldId",
+      "overview.recentEntities[].propertyId",
+      "overview.recentEntities[].pdfFileId",
+    ],
   },
   list_contacts: {
     chatProjectable: true,
@@ -181,6 +202,7 @@ export const READ_TOOL_REF_FIELD_MAP = {
     outputRefs: [{ kind: "contact", path: "items[].id" }],
     // `nextCursor` is an opaque base64url pagination cursor.
     passthroughIdPaths: ["nextCursor"],
+    stripPaths: [],
   },
   search_across_matters: {
     chatProjectable: true,
@@ -194,6 +216,7 @@ export const READ_TOOL_REF_FIELD_MAP = {
       },
     ],
     passthroughIdPaths: [],
+    stripPaths: [],
   },
   read_content_across_matters: {
     chatProjectable: true,
@@ -207,12 +230,14 @@ export const READ_TOOL_REF_FIELD_MAP = {
       },
     ],
     passthroughIdPaths: [],
+    stripPaths: [],
   },
   read_contact: {
     chatProjectable: true,
     inputRefs: [{ kind: "contact", param: "contact_id" }],
     outputRefs: [{ kind: "contact", path: "contactId" }],
     passthroughIdPaths: [],
+    stripPaths: [],
   },
 
   // --- Documents / properties -----------------------------------------------
@@ -236,6 +261,7 @@ export const READ_TOOL_REF_FIELD_MAP = {
     ],
     // Opaque `[createdAt, id]` cursor; embeds an entity id, not UUID-formatted.
     passthroughIdPaths: ["nextCursor"],
+    stripPaths: [],
   },
   read_document: {
     chatProjectable: true,
@@ -267,6 +293,7 @@ export const READ_TOOL_REF_FIELD_MAP = {
       "diff.targetVersionId",
       "versionsNextCursor",
     ],
+    stripPaths: [],
   },
   list_properties: {
     chatProjectable: true,
@@ -274,6 +301,7 @@ export const READ_TOOL_REF_FIELD_MAP = {
     outputRefs: [{ kind: "property", path: "properties[].id" }],
     // Opaque `[createdAt, id]` cursor; not UUID-formatted.
     passthroughIdPaths: ["nextCursor"],
+    stripPaths: [],
   },
 
   // --- Tasks -----------------------------------------------------------------
@@ -316,6 +344,7 @@ export const READ_TOOL_REF_FIELD_MAP = {
       "task.links[].linkId",
       "nextCursor",
     ],
+    stripPaths: [],
   },
 
   // --- Knowledge: org-scoped handles, no tenant refs ------------------------
@@ -343,6 +372,7 @@ export const READ_TOOL_REF_FIELD_MAP = {
       "version.id",
       "nextCursor",
     ],
+    stripPaths: [],
   },
   list_playbooks: {
     chatProjectable: true,
@@ -357,6 +387,15 @@ export const READ_TOOL_REF_FIELD_MAP = {
       "playbook.positions.items[].sourceId",
       "playbook.positions.items[].standard.clauseId",
       "nextCursor",
+    ],
+    // Tier rule and fallback-entry ids are client-supplied stable ids inside
+    // the positions jsonb, UUID-shaped in practice; no chat tool accepts
+    // them, so the projection strips them instead of passing UUID noise
+    // through to the model.
+    stripPaths: [
+      "playbook.positions.items[].tiers.acceptable.rules[].id",
+      "playbook.positions.items[].tiers.fallback.entries[].id",
+      "playbook.positions.items[].tiers.notAcceptable.rules[].id",
     ],
   },
 
@@ -394,12 +433,14 @@ export const READ_TOOL_REF_FIELD_MAP = {
       "entry.userId",
       "nextCursor",
     ],
+    stripPaths: [],
   },
   resolve_rate: {
     chatProjectable: true,
     inputRefs: [{ kind: "matter", param: "matter_id" }],
     outputRefs: [],
     passthroughIdPaths: [],
+    stripPaths: [],
   },
   list_invoices: {
     chatProjectable: true,
@@ -442,6 +483,7 @@ export const READ_TOOL_REF_FIELD_MAP = {
       "invoice.expenses[].id",
       "nextCursor",
     ],
+    stripPaths: [],
   },
   get_usage: {
     chatProjectable: true,
@@ -449,6 +491,7 @@ export const READ_TOOL_REF_FIELD_MAP = {
     outputRefs: [],
     // Org billing-plan ids, not tenant refs.
     passthroughIdPaths: ["entitlement.id", "policy.id"],
+    stripPaths: [],
   },
 
   // --- Public corpora: public ids, no tenant refs ---------------------------
@@ -459,6 +502,7 @@ export const READ_TOOL_REF_FIELD_MAP = {
     // Public case-law corpus id; `source_id` is a request input, never an
     // output field, so it needs no output-path declaration here.
     passthroughIdPaths: ["results[].decisionId", "nextCursor"],
+    stripPaths: [],
   },
   read_case_law_decision: {
     chatProjectable: true,
@@ -478,6 +522,7 @@ export const READ_TOOL_REF_FIELD_MAP = {
       "decision.source.id",
       "nextCursor",
     ],
+    stripPaths: [],
   },
   search_legislation: {
     chatProjectable: true,
@@ -493,12 +538,14 @@ export const READ_TOOL_REF_FIELD_MAP = {
       "law.lawId",
       "data[].identificador",
     ],
+    stripPaths: [],
   },
   lookup_business_registry: {
     chatProjectable: true,
     inputRefs: [],
     outputRefs: [],
     passthroughIdPaths: [],
+    stripPaths: [],
   },
 
   // --- Templates: org-scoped template handles -------------------------------
@@ -510,6 +557,7 @@ export const READ_TOOL_REF_FIELD_MAP = {
     // field, so it needs no output-path declaration. Detail mode's describe
     // payload carries no id fields at all.
     passthroughIdPaths: ["templates[].id", "nextCursor"],
+    stripPaths: [],
   },
 
   // --- Audit log: not projected to chat -------------------------------------
@@ -531,6 +579,7 @@ export const READ_TOOL_REF_FIELD_MAP = {
     // this payload safe to walk. Moot in practice: `chatProjectable: false`
     // means the backstop never runs against this tool's output at all.
     passthroughIdPaths: ["items[].workspaceId", "items[].resourceId"],
+    stripPaths: [],
   },
 
   // --- Capability meta-tools: not projected to chat -------------------------
@@ -544,12 +593,14 @@ export const READ_TOOL_REF_FIELD_MAP = {
     inputRefs: [],
     outputRefs: [],
     passthroughIdPaths: [],
+    stripPaths: [],
   },
   describe_capability: {
     chatProjectable: false,
     inputRefs: [],
     outputRefs: [],
     passthroughIdPaths: [],
+    stripPaths: [],
   },
 } as const satisfies Record<RegistryReadToolName, RegistryRefFieldMapEntry>;
 
@@ -581,6 +632,7 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
     // `updated: true`); the matter id is a workspace tenant id.
     outputRefs: [{ kind: "matter", path: "matterId" }],
     passthroughIdPaths: [],
+    stripPaths: [],
   },
   delete_matter: {
     chatProjectable: true,
@@ -588,6 +640,7 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
     // Returns `{ deleted: true }`: an ack with no id.
     outputRefs: [],
     passthroughIdPaths: [],
+    stripPaths: [],
   },
   save_contact: {
     chatProjectable: true,
@@ -595,12 +648,14 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
     // Both branches return `{ contactId }`.
     outputRefs: [{ kind: "contact", path: "contactId" }],
     passthroughIdPaths: [],
+    stripPaths: [],
   },
   delete_contact: {
     chatProjectable: true,
     inputRefs: [{ kind: "contact", param: "contact_id" }],
     outputRefs: [],
     passthroughIdPaths: [],
+    stripPaths: [],
   },
   save_task: {
     chatProjectable: true,
@@ -626,6 +681,7 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
       },
     ],
     passthroughIdPaths: [],
+    stripPaths: [],
   },
   link_matter_contact: {
     chatProjectable: true,
@@ -639,6 +695,7 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
     // `{ unlinked: true }`. The join-row id is a non-tenant handle.
     outputRefs: [],
     passthroughIdPaths: ["workspaceContactId"],
+    stripPaths: [],
   },
 
   // --- Documents / properties -----------------------------------------------
@@ -662,6 +719,7 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
       },
     ],
     passthroughIdPaths: [],
+    stripPaths: [],
   },
   delete_document: {
     chatProjectable: true,
@@ -670,6 +728,7 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
     // Returns `{ deleted: true }`.
     outputRefs: [],
     passthroughIdPaths: [],
+    stripPaths: [],
   },
   set_field_value: {
     chatProjectable: true,
@@ -682,6 +741,7 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
     // Returns `{}`.
     outputRefs: [],
     passthroughIdPaths: [],
+    stripPaths: [],
   },
 
   // --- Billing --------------------------------------------------------------
@@ -697,6 +757,7 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
     // time-entry id is a billing handle, not a tenant ref.
     outputRefs: [],
     passthroughIdPaths: ["timeEntryId"],
+    stripPaths: [],
   },
   delete_time_entry: {
     chatProjectable: true,
@@ -704,6 +765,7 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
     // Returns `{ deleted }` (a boolean).
     outputRefs: [],
     passthroughIdPaths: [],
+    stripPaths: [],
   },
 
   // --- Knowledge ------------------------------------------------------------
@@ -715,12 +777,14 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
     // Both branches return `{ clauseId }` (a library handle).
     outputRefs: [],
     passthroughIdPaths: ["clauseId"],
+    stripPaths: [],
   },
   delete_clause: {
     chatProjectable: true,
     inputRefs: [],
     outputRefs: [],
     passthroughIdPaths: [],
+    stripPaths: [],
   },
   run_playbook: {
     chatProjectable: true,
@@ -729,6 +793,7 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
     // Returns `{ runPropertyCount }`: an integer, no id.
     outputRefs: [],
     passthroughIdPaths: [],
+    stripPaths: [],
   },
 
   // --- Organization ---------------------------------------------------------
@@ -743,6 +808,7 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
     // returns scalar settings only.
     outputRefs: [],
     passthroughIdPaths: ["memberId", "id"],
+    stripPaths: [],
   },
 
   // --- Practice profile -----------------------------------------------------
@@ -752,6 +818,7 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
     // Returns `{ practiceJurisdictions }`: country codes and booleans, no id.
     outputRefs: [],
     passthroughIdPaths: [],
+    stripPaths: [],
   },
 
   // --- Templates ------------------------------------------------------------
@@ -768,6 +835,7 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
     inputRefs: [],
     outputRefs: [],
     passthroughIdPaths: [],
+    stripPaths: [],
   },
   // Compound template persistence is an MCP/CLI convenience for clients that
   // cannot PUT bytes. Chat already has first-class template/document flows;
@@ -777,6 +845,7 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
     inputRefs: [],
     outputRefs: [],
     passthroughIdPaths: [],
+    stripPaths: [],
   },
   save_template: {
     chatProjectable: true,
@@ -786,6 +855,7 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
     // configure returns the describe shape (name + field configs, no ids).
     outputRefs: [],
     passthroughIdPaths: ["templateId"],
+    stripPaths: [],
   },
 
   // --- Feedback -------------------------------------------------------------
@@ -801,6 +871,7 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
     inputRefs: [],
     outputRefs: [],
     passthroughIdPaths: [],
+    stripPaths: [],
   },
 
   // --- Capability meta-tool: not projected to chat --------------------------
@@ -814,5 +885,6 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
     inputRefs: [],
     outputRefs: [],
     passthroughIdPaths: [],
+    stripPaths: [],
   },
 } as const satisfies Record<RegistryWriteToolName, RegistryRefFieldMapEntry>;
