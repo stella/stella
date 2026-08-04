@@ -705,8 +705,48 @@ jobs:
             '{archiveDigest: $archive_digest, buildRunId: $build_run_id, releaseRef: $release_ref, releaseSha: $release_sha, targetEnvironment: $target_environment}' \
             > web-image-publication.json
 
+      # The registry refused this upload on v0.6.22 with a 403 on the first
+      # blob, then accepted the identical digest 13 minutes later with nothing
+      # changed. The image is already published by this point, so a refusal
+      # that outlives a couple of attempts is the only one worth failing on.
+      # The backoff is longer than ./.github/actions/provenance's single 10s
+      # retry because 10s would not have covered the one refusal we have seen.
       - name: Attest web image publication
+        id: attest-web
         if: steps.existing.outputs.reused != 'true'
+        continue-on-error: true
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.WEB_IMAGE_NAME }}
+          subject-digest: ${{ steps.publish.outputs.digest }}
+          predicate-type: ${{ env.WEB_PUBLICATION_PREDICATE }}
+          predicate-path: web-image-publication.json
+          push-to-registry: true
+
+      - name: Wait before first retry
+        if: steps.attest-web.outcome == 'failure'
+        run: sleep 30
+
+      - name: Attest web image publication (retry)
+        id: attest-web-retry
+        if: steps.attest-web.outcome == 'failure'
+        continue-on-error: true
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.WEB_IMAGE_NAME }}
+          subject-digest: ${{ steps.publish.outputs.digest }}
+          predicate-type: ${{ env.WEB_PUBLICATION_PREDICATE }}
+          predicate-path: web-image-publication.json
+          push-to-registry: true
+
+      - name: Wait before final retry
+        if: steps.attest-web-retry.outcome == 'failure'
+        run: sleep 90
+
+      # No continue-on-error: a third refusal fails the release, because a
+      # published image without an attestation is not a releasable artifact.
+      - name: Attest web image publication (final retry)
+        if: steps.attest-web-retry.outcome == 'failure'
         uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.WEB_IMAGE_NAME }}
