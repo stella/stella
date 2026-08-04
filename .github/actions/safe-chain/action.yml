@@ -1,0 +1,94 @@
+name: Install Aikido Safe Chain
+description: >
+  Install Aikido Safe Chain in CI mode, which puts shims for bun/bunx (and the
+  other supported package managers) ahead of the real binaries on PATH. Every
+  later install step in the same job is then checked against Aikido's malware
+  feed before a tarball is written to disk, with no change to the install
+  commands themselves.
+
+  This complements the controls already here rather than repeating them. The
+  `minimumReleaseAge` quarantine in bunfig.toml gates on release age, and
+  scripts/dependency-audit.ts gates on disclosed advisories in resolved
+  versions. Safe Chain's own release-age filter is disabled below so it only
+  matches against a known-bad feed; the three controls remain independent
+  signals over the same dependency graph.
+
+  Keep the scanning job's Bun cache cold: Safe Chain's Bun integration proxies
+  registry downloads and cannot rescan tarballs restored before it starts.
+
+  Safe Chain is AGPL-3.0-or-later. It is installed as a standalone CI tool and
+  must never be added to package.json: dependency-review.yml blocks AGPL in the
+  dependency graph, and stella ships under Apache-2.0.
+
+  POSIX runners only (ubuntu, macos). The installer is a shell script and does
+  not run on the windows jobs.
+
+inputs:
+  version:
+    description: Safe Chain release to install
+    required: false
+    default: "1.5.14"
+  sha256:
+    description: >
+      Expected SHA-256 of that release's install-safe-chain.sh. Must be updated
+      together with `version`; a mismatch fails the job rather than executing an
+      unverified installer.
+    required: false
+    default: d41816ab564e9b9238946786433eec15e2d0e699698fa81c1fd1bdd3a78adf5c
+
+runs:
+  using: composite
+  steps:
+    - name: Install Safe Chain
+      shell: bash
+      env:
+        SAFE_CHAIN_RELEASE_VERSION: ${{ inputs.version }}
+        SAFE_CHAIN_SHA256: ${{ inputs.sha256 }}
+      run: |
+        set -euo pipefail
+
+        installer="$(mktemp)"
+        trap 'rm -f "$installer"' EXIT
+
+        curl -fsSL --retry 3 --retry-delay 2 \
+          "https://github.com/AikidoSec/safe-chain/releases/download/${SAFE_CHAIN_RELEASE_VERSION}/install-safe-chain.sh" \
+          -o "$installer"
+
+        # macOS runners have shasum but not sha256sum.
+        if command -v sha256sum >/dev/null 2>&1; then
+          actual="$(sha256sum "$installer" | cut -d' ' -f1)"
+        else
+          actual="$(shasum -a 256 "$installer" | cut -d' ' -f1)"
+        fi
+
+        if [[ "$actual" != "$SAFE_CHAIN_SHA256" ]]; then
+          echo "::error::Safe Chain installer hash mismatch for ${SAFE_CHAIN_RELEASE_VERSION}:" \
+               "expected ${SAFE_CHAIN_SHA256}, got ${actual}"
+          exit 1
+        fi
+
+        # --ci installs PATH shims instead of shell aliases, so non-interactive
+        # `run:` steps pick them up.
+        sh "$installer" --ci
+
+        # Safe Chain also defaults to a 48-hour package-age filter. Stella's
+        # 5-day gate and its reviewed exclusions live in bunfig.toml, so keep
+        # this independent signal limited to malware in every later step.
+        echo "SAFE_CHAIN_MINIMUM_PACKAGE_AGE_HOURS=0" >> "$GITHUB_ENV"
+
+    - name: Verify shims are active
+      shell: bash
+      run: |
+        set -euo pipefail
+        # A failure here means the install did not take, so fail the job: the
+        # steps after it would otherwise read as scanned when they are not.
+        safe-chain --version
+
+        resolved="$(command -v bun)"
+        expected="${HOME}/.safe-chain/shims/bun"
+        echo "bun resolves to: ${resolved}"
+        if [[ "$resolved" != "$expected" ]]; then
+          echo "::error::bun does not resolve through the expected Safe Chain shim:" \
+               "expected ${expected}, got ${resolved}"
+          exit 1
+        fi

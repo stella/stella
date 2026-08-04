@@ -49,43 +49,48 @@ minimumReleaseAgeExcludes = [
   "@tanstack/ai-react",
   "@tanstack/ai-utils",
   "@tanstack/react-ai-devtools",
-  # TanStack Table v9 beta: opted in ahead of stable to adopt the
-  # tree-shakable feature/plugin model, granular re-render control,
-  # and table devtools. Remove once v9 ships stable and clears the
-  # 5-day quarantine on its own.
-  "@tanstack/react-table",
-  "@tanstack/table-core",
-  "@tanstack/react-table-devtools",
-  "@tanstack/table-devtools",
+  # TanStack Table v9: opted in ahead of stable for the tree-shakable
+  # feature/plugin model, granular re-render control, and table devtools.
+  # 9.0.0 shipped stable, so the release-age gate covers this now; annotated
+  # for automatic removal by quarantine-prune.yml.
+  "@tanstack/react-table", # quarantine-expires: 2026-08-04T19:00:00.000Z
+  "@tanstack/table-core", # quarantine-expires: 2026-08-04T19:00:00.000Z
+  "@tanstack/react-table-devtools", # quarantine-expires: 2026-08-04T19:00:00.000Z
+  "@tanstack/table-devtools", # quarantine-expires: 2026-08-04T19:00:00.000Z
   "@tanstack/openai-base",
   # TypeScript 7 stable: opted in immediately for the native compiler
-  # migration. Remove once the release family clears quarantine.
-  "typescript",
-  "@typescript/native",
-  "@typescript/typescript-aix-ppc64",
-  "@typescript/typescript-darwin-arm64",
-  "@typescript/typescript-darwin-x64",
-  "@typescript/typescript-freebsd-arm64",
-  "@typescript/typescript-freebsd-x64",
-  "@typescript/typescript-linux-arm",
-  "@typescript/typescript-linux-arm64",
-  "@typescript/typescript-linux-loong64",
-  "@typescript/typescript-linux-mips64el",
-  "@typescript/typescript-linux-ppc64",
-  "@typescript/typescript-linux-riscv64",
-  "@typescript/typescript-linux-s390x",
-  "@typescript/typescript-linux-x64",
-  "@typescript/typescript-netbsd-arm64",
-  "@typescript/typescript-netbsd-x64",
-  "@typescript/typescript-openbsd-arm64",
-  "@typescript/typescript-openbsd-x64",
-  "@typescript/typescript-sunos-x64",
-  "@typescript/typescript-win32-arm64",
-  "@typescript/typescript-win32-x64",
+  # migration. 7.0.2 has long since cleared the window, so the release-age
+  # gate covers this now; annotated for automatic removal by
+  # quarantine-prune.yml.
+  "typescript", # quarantine-expires: 2026-08-04T19:00:00.000Z
+  "@typescript/native", # quarantine-expires: 2026-08-04T19:00:00.000Z
+  "@typescript/typescript-aix-ppc64", # quarantine-expires: 2026-08-04T19:00:00.000Z
+  "@typescript/typescript-darwin-arm64", # quarantine-expires: 2026-08-04T19:00:00.000Z
+  "@typescript/typescript-darwin-x64", # quarantine-expires: 2026-08-04T19:00:00.000Z
+  "@typescript/typescript-freebsd-arm64", # quarantine-expires: 2026-08-04T19:00:00.000Z
+  "@typescript/typescript-freebsd-x64", # quarantine-expires: 2026-08-04T19:00:00.000Z
+  "@typescript/typescript-linux-arm", # quarantine-expires: 2026-08-04T19:00:00.000Z
+  "@typescript/typescript-linux-arm64", # quarantine-expires: 2026-08-04T19:00:00.000Z
+  "@typescript/typescript-linux-loong64", # quarantine-expires: 2026-08-04T19:00:00.000Z
+  "@typescript/typescript-linux-mips64el", # quarantine-expires: 2026-08-04T19:00:00.000Z
+  "@typescript/typescript-linux-ppc64", # quarantine-expires: 2026-08-04T19:00:00.000Z
+  "@typescript/typescript-linux-riscv64", # quarantine-expires: 2026-08-04T19:00:00.000Z
+  "@typescript/typescript-linux-s390x", # quarantine-expires: 2026-08-04T19:00:00.000Z
+  "@typescript/typescript-linux-x64", # quarantine-expires: 2026-08-04T19:00:00.000Z
+  "@typescript/typescript-netbsd-arm64", # quarantine-expires: 2026-08-04T19:00:00.000Z
+  "@typescript/typescript-netbsd-x64", # quarantine-expires: 2026-08-04T19:00:00.000Z
+  "@typescript/typescript-openbsd-arm64", # quarantine-expires: 2026-08-04T19:00:00.000Z
+  "@typescript/typescript-openbsd-x64", # quarantine-expires: 2026-08-04T19:00:00.000Z
+  "@typescript/typescript-sunos-x64", # quarantine-expires: 2026-08-04T19:00:00.000Z
+  "@typescript/typescript-win32-arm64", # quarantine-expires: 2026-08-04T19:00:00.000Z
+  "@typescript/typescript-win32-x64", # quarantine-expires: 2026-08-04T19:00:00.000Z
   # Security patches for dependency-audit findings. Publisher and repository
   # ownership match the preceding releases; remove after quarantine expiry.
   # better-result 3: opted in immediately for migration evaluation.
   # 3.0.0 was published at 2026-08-01T21:35:30.036Z.
-  "drizzle-kit",
-  "drizzle-orm",
+  "better-result", # quarantine-expires: 2026-08-06T21:35:30.036Z
+  # Drizzle 1.0 release candidates, opted in ahead of stable. The pinned rc
+  # cleared the window weeks ago; annotated for automatic removal.
+  "drizzle-kit", # quarantine-expires: 2026-08-04T19:00:00.000Z
+  "drizzle-orm", # quarantine-expires: 2026-08-04T19:00:00.000Z
 ]

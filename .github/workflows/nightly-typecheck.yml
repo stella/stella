@@ -29,7 +29,9 @@ jobs:
       - name: Install dependencies
         run: bun ci --ignore-scripts
         env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # .npmrc references NPM_TOKEN, but installs must not expose
+          # the real npm token to dependency lifecycle scripts.
+          NPM_TOKEN: ""
 
       - name: Full typecheck (no --affected, no turbo cache)
         run: bun run typecheck && bun run typecheck:repo
