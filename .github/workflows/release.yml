@@ -122,12 +122,13 @@ jobs:
           if-no-files-found: error
 
   smoke:
-    name: Build and smoke test API image
+    name: Smoke test API image
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 20
-    needs: resolve
+    needs: [resolve, build]
     permissions:
       contents: read
+      packages: read
 
     services:
       postgres:
@@ -160,8 +161,27 @@ jobs:
           ref: ${{ needs.resolve.outputs.release_sha }}
           persist-credentials: false
 
-      - name: Build smoke image
-        run: docker build -f apps/api/Dockerfile -t stella-api:smoke .
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@371161bbe7024a29a25c5e19bfcbc0804fe9ad2c # v4.5.2
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Smoke the artifact that was actually pushed (with its release build
+      # args baked in), not a local rebuild that could drift from it.
+      - name: Pull pushed image by digest
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          IMAGE_DIGEST: ${{ needs.build.outputs.digest-arm64 }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$IMAGE_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+            echo "::error::arm64 image digest was not resolved from the build job."
+            exit 1
+          fi
+          docker pull "${IMAGE}@${IMAGE_DIGEST}"
+          docker tag "${IMAGE}@${IMAGE_DIGEST}" stella-api:smoke
 
       - name: Prepare smoke database
         env:
