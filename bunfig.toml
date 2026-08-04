@@ -7,6 +7,18 @@ minimumReleaseAge = 432_000
 # They share a release cadence and would otherwise be blocked
 # by the quarantine on every publish cycle.
 minimumReleaseAgeExcludes = [
+  # Office-format text extraction for search indexing. Opted in ahead
+  # of the quarantine window; runs only inside the sandboxed extraction
+  # subprocess, never in the API process. Listed with its platform
+  # subpackages per the napi note below.
+  "@firecrawl/anydoc", # quarantine-expires: 2026-08-09T15:24:34.170Z
+  "@firecrawl/anydoc-darwin-arm64",
+  "@firecrawl/anydoc-darwin-x64",
+  "@firecrawl/anydoc-linux-arm64-gnu",
+  "@firecrawl/anydoc-linux-arm64-musl",
+  "@firecrawl/anydoc-linux-x64-gnu",
+  "@firecrawl/anydoc-linux-x64-musl",
+  "@firecrawl/anydoc-win32-x64-msvc",
   "@stll/oxlint-config",
   "@stll/typescript-config",
   "@stll/aho-corasick-wasm",
