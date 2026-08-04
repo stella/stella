@@ -861,7 +861,6 @@
     "description": "Apraksts",
     "details": "Detaļas",
     "disconnect": "Atvienot",
-    "displayName": "Attēlojamais vārds",
     "document": "Dokuments",
     "documentation": "Dokumentācija",
     "done": "Gatavs",
@@ -1137,6 +1136,7 @@
       "billingAddressState": "Novads / reģions",
       "color": "Krāsa",
       "defaultHourlyRate": "Noklusējuma stundas likme",
+      "displayName": "Attēlojamais vārds",
       "firstName": "Vārds",
       "lastName": "Uzvārds",
       "middleName": "Otrais vārds",
@@ -1680,7 +1680,7 @@
       "progress": "Pabeigti {completed} no {total}"
     },
     "community": {
-      "body": "Stellai ir publisks kopienas tērzēšanas serveris. Tur atbild uzturētāji un citi lietotāji, dalās pieredzē un pieņem kļūdu ziņojumus. Tas ir kopienas forums, nevis atbalsta dienests: atbild tas, kurš tobrīd ir tiešsaistē.",
+      "body": "Saņemiet palīdzību no citiem lietotājiem un izstrādātājiem mūsu kopienas tērzēšanā.",
       "linkLabel": "Atvērt kopienas forumu"
     },
     "help": {
@@ -2591,9 +2591,6 @@
       "desktopDownloadWindows": "Lejupielādēt operētājsistēmai Windows",
       "desktopSelfHostDescription": "Uzticieties šim stella URL parakstītajā desktop lietotnē, lai šīs instalācijas dokumentus varētu atvērt lokāli.",
       "desktopSelfHostTitle": "Desktop rediģēšana self-hosting videi",
-      "displayNameDescription": "Tā kolēģi jūs redz lietās, komentāros un aktivitātēs.",
-      "displayNameRequired": "Ievadiet attēlojamo vārdu.",
-      "displayNameSaved": "Attēlojamais vārds atjaunināts",
       "enterOtp": "Apstiprinājuma kods",
       "otpSentSuccess": "Apstiprinājuma kods ir nosūtīts uz jūsu e-pastu.",
       "preferredName": "Vēlamais vārds",

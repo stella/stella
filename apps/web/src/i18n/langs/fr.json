@@ -861,7 +861,6 @@
     "description": "Description",
     "details": "Détails",
     "disconnect": "Déconnecter",
-    "displayName": "Nom affiché",
     "document": "Document",
     "documentation": "Documentation",
     "done": "Terminé",
@@ -1137,6 +1136,7 @@
       "billingAddressState": "Région / État",
       "color": "Couleur",
       "defaultHourlyRate": "Taux horaire par défaut",
+      "displayName": "Nom affiché",
       "firstName": "Prénom",
       "lastName": "Nom de famille",
       "middleName": "Deuxième prénom",
@@ -1680,7 +1680,7 @@
       "progress": "{completed} sur {total} terminés"
     },
     "community": {
-      "body": "Stella dispose d'un salon de discussion communautaire public. Les mainteneurs et d'autres utilisateurs y répondent aux questions, partagent leurs méthodes et recueillent les signalements de bugs. C'est un forum communautaire, pas un service d'assistance : la réponse vient de qui est disponible.",
+      "body": "Obtenez de l'aide auprès d'autres utilisateurs et des développeurs dans notre chat communautaire.",
       "linkLabel": "Ouvrir le forum communautaire"
     },
     "help": {
@@ -2591,9 +2591,6 @@
       "desktopDownloadWindows": "Télécharger pour Windows",
       "desktopSelfHostDescription": "Approuvez cette URL stella dans l'application desktop signée afin que les documents de cette installation puissent s'ouvrir localement.",
       "desktopSelfHostTitle": "Édition desktop pour self-hosting",
-      "displayNameDescription": "Ce que vos collègues voient dans les dossiers, les commentaires et l'activité.",
-      "displayNameRequired": "Saisissez un nom affiché.",
-      "displayNameSaved": "Nom affiché mis à jour",
       "enterOtp": "Code de vérification",
       "otpSentSuccess": "Code de vérification envoyé à votre adresse e-mail.",
       "preferredName": "Nom préféré",

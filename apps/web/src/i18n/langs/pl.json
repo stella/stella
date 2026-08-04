@@ -861,7 +861,6 @@
     "description": "Opis",
     "details": "Szczegóły",
     "disconnect": "Rozłącz",
-    "displayName": "Nazwa wyświetlana",
     "document": "Dokument",
     "documentation": "Dokumentacja",
     "done": "Gotowe",
@@ -1137,6 +1136,7 @@
       "billingAddressState": "Województwo / stan",
       "color": "Kolor",
       "defaultHourlyRate": "Domyślna stawka godzinowa",
+      "displayName": "Nazwa wyświetlana",
       "firstName": "Imię",
       "lastName": "Nazwisko",
       "middleName": "Drugie imię",
@@ -1680,7 +1680,7 @@
       "progress": "Ukończono {completed} z {total}"
     },
     "community": {
-      "body": "Stella ma publiczny czat społeczności. Odpowiadają tam opiekunowie projektu i inni użytkownicy, dzielą się swoimi sposobami pracy i przyjmują zgłoszenia błędów. To forum społeczności, a nie dział wsparcia: odpowiada ten, kto akurat jest online.",
+      "body": "Uzyskaj pomoc od innych użytkowników i deweloperów na naszym czacie społeczności.",
       "linkLabel": "Otwórz forum społeczności"
     },
     "help": {
@@ -2591,9 +2591,6 @@
       "desktopDownloadWindows": "Pobierz dla Windows",
       "desktopSelfHostDescription": "Zaufaj temu URL stella w podpisanej aplikacji desktop, aby dokumenty z tej instalacji mogły otwierać się lokalnie.",
       "desktopSelfHostTitle": "Edycja desktop dla self-hostingu",
-      "displayNameDescription": "Tak widzą Cię współpracownicy w sprawach, komentarzach i aktywności.",
-      "displayNameRequired": "Podaj nazwę wyświetlaną.",
-      "displayNameSaved": "Zaktualizowano nazwę wyświetlaną",
       "enterOtp": "Kod weryfikacyjny",
       "otpSentSuccess": "Kod weryfikacyjny został wysłany na Twój adres e-mail.",
       "preferredName": "Preferowane imię",

@@ -861,7 +861,6 @@
     "description": "Leírás",
     "details": "Részletek",
     "disconnect": "Leválasztás",
-    "displayName": "Megjelenítendő név",
     "document": "Dokumentum",
     "documentation": "Dokumentáció",
     "done": "Kész",
@@ -1137,6 +1136,7 @@
       "billingAddressState": "Megye/tartomány",
       "color": "Szín",
       "defaultHourlyRate": "Alapértelmezett óradíj",
+      "displayName": "Megjelenítendő név",
       "firstName": "Keresztnév",
       "lastName": "Vezetéknév",
       "middleName": "Középső név",
@@ -1680,7 +1680,7 @@
       "progress": "{completed} / {total} kész"
     },
     "community": {
-      "body": "A Stellának nyilvános közösségi csevegőszervere van. Ott a karbantartók és a többi felhasználó válaszol a kérdésekre, megosztják a munkamódszereiket, és felveszik a hibajelentéseket. Ez közösségi fórum, nem ügyfélszolgálat: az válaszol, aki éppen elérhető.",
+      "body": "Kérjen segítséget más felhasználóktól és a fejlesztőktől a közösségi csevegésünkben.",
       "linkLabel": "Közösségi fórum megnyitása"
     },
     "help": {
@@ -2591,9 +2591,6 @@
       "desktopDownloadWindows": "Letöltés Windowsra",
       "desktopSelfHostDescription": "Bízzon meg ebben a stella URL-ben az aláírt desktop appban, hogy a telepítés dokumentumai helyben nyílhassanak meg.",
       "desktopSelfHostTitle": "Desktop szerkesztés self-hostinghoz",
-      "displayNameDescription": "Így látják Önt a kollégái az ügyekben, a megjegyzésekben és a tevékenységeknél.",
-      "displayNameRequired": "Adjon meg egy megjelenített nevet.",
-      "displayNameSaved": "Megjelenített név frissítve",
       "enterOtp": "Ellenőrző kód",
       "otpSentSuccess": "Az ellenőrző kódot elküldtük az e-mail címére.",
       "preferredName": "Választott név",

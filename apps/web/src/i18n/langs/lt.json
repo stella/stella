@@ -861,7 +861,6 @@
     "description": "Aprašymas",
     "details": "Detalės",
     "disconnect": "Atjungti",
-    "displayName": "Rodomas vardas",
     "document": "Dokumentas",
     "documentation": "Dokumentacija",
     "done": "Atlikta",
@@ -1137,6 +1136,7 @@
       "billingAddressState": "Valstija / regionas",
       "color": "Spalva",
       "defaultHourlyRate": "Numatytasis valandinis tarifas",
+      "displayName": "Rodomas vardas",
       "firstName": "Vardas",
       "lastName": "Pavardė",
       "middleName": "Antras vardas",
@@ -1680,7 +1680,7 @@
       "progress": "Atlikta {completed} iš {total}"
     },
     "community": {
-      "body": "„Stella“ turi viešą bendruomenės pokalbių serverį. Ten atsako prižiūrėtojai ir kiti naudotojai, dalijasi savo darbo būdais ir priima klaidų pranešimus. Tai bendruomenės forumas, o ne pagalbos tarnyba: atsako tas, kas tuo metu yra prisijungęs.",
+      "body": "Gaukite pagalbos iš kitų naudotojų ir kūrėjų mūsų bendruomenės pokalbiuose.",
       "linkLabel": "Atverti bendruomenės forumą"
     },
     "help": {
@@ -2591,9 +2591,6 @@
       "desktopDownloadWindows": "Atsisiųsti „Windows“",
       "desktopSelfHostDescription": "Patikėkite šį stella URL pasirašytoje desktop programoje, kad šios instaliacijos dokumentai galėtų būti atidaromi lokaliai.",
       "desktopSelfHostTitle": "Desktop redagavimas self-hosting aplinkai",
-      "displayNameDescription": "Taip jus mato kolegos bylose, komentaruose ir veiklos įrašuose.",
-      "displayNameRequired": "Įveskite rodomą vardą.",
-      "displayNameSaved": "Rodomas vardas atnaujintas",
       "enterOtp": "Patvirtinimo kodas",
       "otpSentSuccess": "Patvirtinimo kodas išsiųstas į jūsų el. paštą.",
       "preferredName": "Pageidaujamas vardas",

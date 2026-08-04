@@ -861,7 +861,6 @@
     "description": "الوصف",
     "details": "التفاصيل",
     "disconnect": "قطع الاتصال",
-    "displayName": "الاسم المعروض",
     "document": "مستند",
     "documentation": "التوثيق",
     "done": "تم",
@@ -1137,6 +1136,7 @@
       "billingAddressState": "الولاية",
       "color": "اللون",
       "defaultHourlyRate": "السعر الافتراضي للساعة",
+      "displayName": "الاسم المعروض",
       "firstName": "الاسم الأول",
       "lastName": "اسم العائلة",
       "middleName": "الاسم الأوسط",
@@ -1680,7 +1680,7 @@
       "progress": "اكتمل {completed} من {total}"
     },
     "community": {
-      "body": "لدى Stella خادم دردشة مجتمعي عام. يجيب هناك القائمون على المشروع وسائر المستخدمين، ويتشاركون طرق عملهم، ويستقبلون بلاغات الأخطاء. إنه منتدى مجتمعي لا جهة دعم رسمية: يجيب من يكون متاحًا في حينه.",
+      "body": "احصل على المساعدة من المستخدمين الآخرين والمطورين في دردشة مجتمعنا.",
       "linkLabel": "فتح منتدى المجتمع"
     },
     "help": {
@@ -2591,9 +2591,6 @@
       "desktopDownloadWindows": "التنزيل لنظام Windows",
       "desktopSelfHostDescription": "ثق بعنوان URL الخاص بهذه stella في تطبيق سطح المكتب الموقع كي يمكن فتح مستندات هذا التثبيت محليا.",
       "desktopSelfHostTitle": "تحرير سطح المكتب للاستضافة الذاتية",
-      "displayNameDescription": "هكذا يراك زملاؤك في الملفات القانونية والتعليقات والنشاط.",
-      "displayNameRequired": "أدخل اسمًا ظاهرًا.",
-      "displayNameSaved": "تم تحديث الاسم الظاهر",
       "enterOtp": "رمز التحقق",
       "otpSentSuccess": "تم إرسال رمز التحقق إلى بريدك الإلكتروني.",
       "preferredName": "الاسم المفضّل",

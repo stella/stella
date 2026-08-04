@@ -861,7 +861,6 @@
     "description": "Description",
     "details": "Details",
     "disconnect": "Disconnect",
-    "displayName": "Display name",
     "document": "Document",
     "documentation": "Documentation",
     "done": "Done",
@@ -1137,6 +1136,7 @@
       "billingAddressState": "State",
       "color": "Color",
       "defaultHourlyRate": "Default hourly rate",
+      "displayName": "Display name",
       "firstName": "First name",
       "lastName": "Last name",
       "middleName": "Middle name",
@@ -1680,7 +1680,7 @@
       "progress": "{completed} of {total} complete"
     },
     "community": {
-      "body": "Stella has a public community chat server. Maintainers and other users answer questions there, share how they work, and pick up bug reports. It is a community forum rather than a support desk: the answer comes from whoever is around.",
+      "body": "Get help from other users and the developers in our community chat.",
       "linkLabel": "Open the community forum"
     },
     "help": {
@@ -2591,9 +2591,6 @@
       "desktopDownloadWindows": "Download for Windows",
       "desktopSelfHostDescription": "Trust this stella URL in the signed desktop app so documents from this install can open locally.",
       "desktopSelfHostTitle": "Self-hosted desktop editing",
-      "displayNameDescription": "How your colleagues see you across matters, comments, and activity.",
-      "displayNameRequired": "Enter a display name.",
-      "displayNameSaved": "Display name updated",
       "enterOtp": "Verification code",
       "otpSentSuccess": "Verification code sent to your email.",
       "preferredName": "Preferred name",

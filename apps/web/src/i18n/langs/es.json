@@ -861,7 +861,6 @@
     "description": "Descripción",
     "details": "Detalles",
     "disconnect": "Desconectar",
-    "displayName": "Nombre para mostrar",
     "document": "Documento",
     "documentation": "Documentación",
     "done": "Hecho",
@@ -1137,6 +1136,7 @@
       "billingAddressState": "Provincia",
       "color": "Color",
       "defaultHourlyRate": "Tarifa por hora predeterminada",
+      "displayName": "Nombre para mostrar",
       "firstName": "Nombre",
       "lastName": "Apellido",
       "middleName": "Segundo nombre",
@@ -1680,7 +1680,7 @@
       "progress": "{completed} de {total} completado"
     },
     "community": {
-      "body": "Stella tiene un chat comunitario público. Allí responden los mantenedores y otros usuarios, comparten cómo trabajan y recogen los informes de errores. Es un foro de la comunidad, no un servicio de soporte: responde quien esté disponible.",
+      "body": "Obtén ayuda de otros usuarios y de los desarrolladores en nuestro chat de la comunidad.",
       "linkLabel": "Abrir el foro de la comunidad"
     },
     "help": {
@@ -2591,9 +2591,6 @@
       "desktopDownloadWindows": "Descargar para Windows",
       "desktopSelfHostDescription": "Confía en esta URL de stella en la app de escritorio firmada para abrir localmente los documentos de esta instalación.",
       "desktopSelfHostTitle": "Edición de escritorio para self-hosting",
-      "displayNameDescription": "Así te ven tus colegas en los asuntos, los comentarios y la actividad.",
-      "displayNameRequired": "Introduce un nombre visible.",
-      "displayNameSaved": "Nombre visible actualizado",
       "enterOtp": "Código de verificación",
       "otpSentSuccess": "Código de verificación enviado a su correo electrónico.",
       "preferredName": "Nombre preferido",

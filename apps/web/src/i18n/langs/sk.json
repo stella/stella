@@ -861,7 +861,6 @@
     "description": "Popis",
     "details": "Detaily",
     "disconnect": "Odpojiť",
-    "displayName": "Zobrazované meno",
     "document": "Dokument",
     "documentation": "Dokumentácia",
     "done": "Hotovo",
@@ -1137,6 +1136,7 @@
       "billingAddressState": "Kraj",
       "color": "Farba",
       "defaultHourlyRate": "Predvolená hodinová sadzba",
+      "displayName": "Zobrazované meno",
       "firstName": "Meno",
       "lastName": "Priezvisko",
       "middleName": "Stredné meno",
@@ -1680,7 +1680,7 @@
       "progress": "{completed} z {total} dokončených"
     },
     "community": {
-      "body": "Stella má verejný komunitný chat. Odpovedajú tam vývojári aj ostatní používatelia, delia sa o svoje postupy a preberajú hlásenia chýb. Je to komunitné fórum, nie zákaznícka podpora: odpovie ten, kto je práve online.",
+      "body": "Získajte pomoc od ostatných používateľov a vývojárov v našom komunitnom chate.",
       "linkLabel": "Otvoriť komunitné fórum"
     },
     "help": {
@@ -2591,9 +2591,6 @@
       "desktopDownloadWindows": "Stiahnuť pre Windows",
       "desktopSelfHostDescription": "Dôverujte tejto URL stella v podpísanej desktopovej aplikácii, aby sa dokumenty z tejto inštalácie mohli otvárať lokálne.",
       "desktopSelfHostTitle": "Desktopové úpravy pre self-hosting",
-      "displayNameDescription": "Takto vás vidia kolegovia v spisoch, komentároch a aktivite.",
-      "displayNameRequired": "Zadajte zobrazované meno.",
-      "displayNameSaved": "Zobrazované meno aktualizované",
       "enterOtp": "Overovací kód",
       "otpSentSuccess": "Overovací kód bol odoslaný na váš e-mail.",
       "preferredName": "Preferované meno",
