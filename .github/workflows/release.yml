@@ -1059,6 +1059,16 @@ jobs:
           API_DEPLOYMENT_URL: https://api.stll.app
         run: bun scripts/check-api-deployment.ts
 
+      # Same commit gate as the staging web smoke: the web origin's
+      # version marker must stably report the released commit. Read-only
+      # GET probes against the production frontend.
+      - name: Verify production web serves the release commit
+        env:
+          API_DEPLOYMENT_EXPECTED_COMMIT: ${{ needs.resolve.outputs.release_sha }}
+          API_DEPLOYMENT_PROBE_PATH: version.json
+          API_DEPLOYMENT_URL: https://my.stll.app
+        run: bun scripts/check-api-deployment.ts
+
   promote-staging:
     # Auto-promote release-candidate tags (vX.Y.Z-rc.N) to staging.
     # Same dispatch pattern as `promote` above; the infra workflow

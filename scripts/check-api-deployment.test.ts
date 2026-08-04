@@ -151,6 +151,9 @@ describe("API deployment health receipt", () => {
     expect(getApiHealthUrl("https://example.com").toString()).toBe(
       "https://example.com/health",
     );
+    expect(
+      getApiHealthUrl("https://example.com", "version.json").toString(),
+    ).toBe("https://example.com/version.json");
   });
 
   test("accepts only a full lowercase commit SHA", () => {

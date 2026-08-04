@@ -66,20 +66,20 @@ const sleep = async (ms: number) => {
   });
 };
 
-const readDeployedCommit = async (apiUrl: string) => {
-  const healthUrl = getApiHealthUrl(apiUrl);
-  const response = await fetch(healthUrl, {
+const readDeployedCommit = async (apiUrl: string, probePath: string) => {
+  const probeUrl = getApiHealthUrl(apiUrl, probePath);
+  const response = await fetch(probeUrl, {
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
   if (!response.ok) {
     throw new ApiDeploymentError(
-      `${healthUrl.toString()} returned HTTP ${response.status}`,
+      `${probeUrl.toString()} returned HTTP ${response.status}`,
     );
   }
   const commit = parseHealthCommit(await response.json());
   if (!commit) {
     throw new ApiDeploymentError(
-      `${healthUrl.toString()} did not return a full commit SHA`,
+      `${probeUrl.toString()} did not return a full commit SHA`,
     );
   }
   return commit;
@@ -87,6 +87,8 @@ const readDeployedCommit = async (apiUrl: string) => {
 
 const main = async () => {
   const apiUrl = readRequiredEnv("API_DEPLOYMENT_URL");
+  const probePath =
+    process.env["API_DEPLOYMENT_PROBE_PATH"]?.trim() || "health";
   const expectedCommit = readRequiredEnv("API_DEPLOYMENT_EXPECTED_COMMIT");
   if (!COMMIT_SHA_PATTERN.test(expectedCommit)) {
     throw new ApiDeploymentError(
@@ -116,7 +118,7 @@ const main = async () => {
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
       // eslint-disable-next-line no-await-in-loop -- each probe must observe the deployed commit before deciding whether to retry.
-      lastObservedCommit = await readDeployedCommit(apiUrl);
+      lastObservedCommit = await readDeployedCommit(apiUrl, probePath);
       const stability = advanceDeploymentStability({
         consecutiveMatches,
         expectedCommit,
