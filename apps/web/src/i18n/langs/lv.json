@@ -3238,8 +3238,10 @@
         "updateRequiredTitle": "Atjauniniet stella desktop"
       },
       "downloadAsZip": "Lejupielādēt .zip failu",
+      "downloadExtractedText": "Izvilktais teksts (.txt)",
       "downloadOriginal": "Oriģinālais fails",
       "downloadPdf": "PDF",
+      "downloadSearchablePdf": "Meklējams PDF",
       "maxEntitiesReached": "Sasniegts maksimālais ierakstu skaits",
       "ocrAlreadyProcessed": "Teksta atpazīšana jau ir pabeigta",
       "ocrQueueFailed": "Neizdevās ievietot teksta atpazīšanu rindā",

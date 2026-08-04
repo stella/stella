@@ -3238,8 +3238,10 @@
         "updateRequiredTitle": "Aktualizujte stella desktop"
       },
       "downloadAsZip": "Stiahnuť .zip súbor",
+      "downloadExtractedText": "Extrahovaný text (.txt)",
       "downloadOriginal": "Pôvodný súbor",
       "downloadPdf": "PDF",
+      "downloadSearchablePdf": "Prehľadávateľné PDF",
       "maxEntitiesReached": "Dosiahnutý maximálny počet entít",
       "ocrAlreadyProcessed": "Rozpoznávanie textu už bolo dokončené",
       "ocrQueueFailed": "Rozpoznávanie textu sa nepodarilo zaradiť do fronty",

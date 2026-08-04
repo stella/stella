@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, inArray, ne } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, lt, ne, or } from "drizzle-orm";
 
 import { member } from "@/api/db/auth-schema";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -26,10 +26,12 @@ import { preserveBufferObjectCleanupIntents } from "@/api/lib/buffer-intent-reco
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
 import {
+  createOcrSearchablePdfKey,
   createUserFileKey,
   deleteS3Keys,
   deleteS3Objects,
 } from "@/api/lib/files/utils";
+import { LIMITS } from "@/api/lib/limits";
 import { pendingUploadS3KeysForDeletion } from "@/api/lib/pending-upload-keys";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
@@ -110,6 +112,103 @@ const extractFileRefs = (content: FieldContent): FileRef[] => {
 
   return refs;
 };
+
+type OcrDerivativeRun = {
+  createdAt: Date;
+  id: SafeId<"documentProcessingRun">;
+};
+
+type OcrDerivativeCursor = OcrDerivativeRun;
+
+type DeleteOcrDerivativePagesOptions = {
+  deletePage: (runs: OcrDerivativeRun[]) => Promise<void>;
+  readPage: (
+    cursor: OcrDerivativeCursor | null,
+    limit: number,
+  ) => Promise<OcrDerivativeRun[]>;
+};
+
+export const deleteOcrDerivativePages = async ({
+  deletePage,
+  readPage,
+}: DeleteOcrDerivativePagesOptions): Promise<void> => {
+  let cursor: OcrDerivativeCursor | null = null;
+  while (true) {
+    // oxlint-disable-next-line no-await-in-loop -- each bounded page must be deleted before its cursor advances
+    const page = await readPage(
+      cursor,
+      LIMITS.workspaceDeletionOcrDerivativeBatchSize,
+    );
+    if (page.length === 0) {
+      return;
+    }
+    // oxlint-disable-next-line no-await-in-loop -- pages are sequential so a retry can safely restart from the first deterministic key
+    await deletePage(page);
+    if (page.length < LIMITS.workspaceDeletionOcrDerivativeBatchSize) {
+      return;
+    }
+    const lastRun = page.at(-1);
+    if (!lastRun) {
+      return;
+    }
+    cursor = lastRun;
+  }
+};
+
+const deleteWorkspaceOcrDerivatives = async ({
+  organizationId,
+  safeDb,
+  workspaceId,
+}: {
+  organizationId: SafeId<"organization">;
+  safeDb: SafeDb;
+  workspaceId: SafeId<"workspace">;
+}): Promise<void> =>
+  await deleteOcrDerivativePages({
+    readPage: async (cursor, limit) => {
+      const result = await safeDb(
+        async (tx) =>
+          await tx
+            .select({
+              createdAt: documentProcessingRuns.createdAt,
+              id: documentProcessingRuns.id,
+            })
+            .from(documentProcessingRuns)
+            .where(
+              and(
+                eq(documentProcessingRuns.workspaceId, workspaceId),
+                cursor === null
+                  ? undefined
+                  : or(
+                      lt(documentProcessingRuns.createdAt, cursor.createdAt),
+                      and(
+                        eq(documentProcessingRuns.createdAt, cursor.createdAt),
+                        gt(documentProcessingRuns.id, cursor.id),
+                      ),
+                    ),
+              ),
+            )
+            .orderBy(
+              desc(documentProcessingRuns.createdAt),
+              asc(documentProcessingRuns.id),
+            )
+            .limit(limit),
+      );
+      return Result.unwrap(result, "Matter OCR derivative query failed");
+    },
+    deletePage: async (runs) => {
+      const result = await deleteS3Keys(
+        runs.map(({ id }) =>
+          createOcrSearchablePdfKey({
+            organizationId,
+            workspaceId,
+            runId: id,
+          }),
+        ),
+      );
+      Result.unwrap(result, "Matter OCR derivative cleanup failed");
+    },
+  });
 
 const config = {
   description:
@@ -297,6 +396,14 @@ export const deleteWorkspaceHandler = async function* ({
       ),
     );
   }
+
+  s3Deletes.push(
+    deleteWorkspaceOcrDerivatives({
+      organizationId,
+      safeDb,
+      workspaceId,
+    }),
+  );
 
   const s3Result = await Result.tryPromise({
     try: async () => await Promise.all(s3Deletes),

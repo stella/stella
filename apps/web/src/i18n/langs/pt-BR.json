@@ -3238,8 +3238,10 @@
         "updateRequiredTitle": "Atualize o stella desktop"
       },
       "downloadAsZip": "Baixe como ZIP",
+      "downloadExtractedText": "Texto extraído (.txt)",
       "downloadOriginal": "Arquivo original",
       "downloadPdf": "PDF",
+      "downloadSearchablePdf": "PDF pesquisável",
       "maxEntitiesReached": "Contagem máxima de entidades atingida",
       "ocrAlreadyProcessed": "O reconhecimento de texto já foi concluído",
       "ocrQueueFailed": "Não foi possível colocar o reconhecimento de texto na fila",

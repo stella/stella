@@ -437,6 +437,12 @@ export const extractedContent = p.pgTable(
     ),
     sourceFileId: p.uuid("source_file_id"),
     sourceSha256Hex: p.varchar("source_sha256_hex", { length: 64 }),
+    /** OCR-only derivative identity; null for native extraction rows. */
+    ocrRunId: safeUuid<"documentProcessingRun">("ocr_run_id"),
+    ocrProcessorVersion: p.integer("ocr_processor_version"),
+    /** Encrypted versioned page geometry used by viewers and regeneration. */
+    ocrPayloadCiphertext: bytea("ocr_payload_ciphertext"),
+    ocrPayloadIv: bytea("ocr_payload_iv"),
     ciphertext: bytea("ciphertext").notNull(),
     iv: bytea("iv").notNull(),
     charCount: p.integer("char_count").notNull(),
@@ -459,6 +465,20 @@ export const extractedContent = p.pgTable(
     p.check(
       "extracted_content_source_sha256_hex_check",
       sql`${table.sourceSha256Hex} IS NULL OR ${table.sourceSha256Hex} ~ '^[0-9a-f]{64}$'`,
+    ),
+    p.check(
+      "extracted_content_ocr_payload_complete_check",
+      sql`(
+        ${table.ocrRunId} IS NULL
+        AND ${table.ocrProcessorVersion} IS NULL
+        AND ${table.ocrPayloadCiphertext} IS NULL
+        AND ${table.ocrPayloadIv} IS NULL
+      ) OR (
+        ${table.ocrRunId} IS NOT NULL
+        AND ${table.ocrProcessorVersion} > 0
+        AND ${table.ocrPayloadCiphertext} IS NOT NULL
+        AND ${table.ocrPayloadIv} IS NOT NULL
+      )`,
     ),
     ...wsPolicies(),
   ],

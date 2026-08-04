@@ -151,6 +151,7 @@ export type WorkspaceField = {
   id: FieldId;
   propertyId: PropertyId;
   content: WorkspaceFieldContent;
+  ocrExportStatus?: "ready" | "unavailable";
 };
 
 export type WorkspaceCellMetadata = {

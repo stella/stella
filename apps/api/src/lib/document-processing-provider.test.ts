@@ -14,14 +14,73 @@ describe("parsePaddleOcrResponse", () => {
       errorCode: 0,
       result: {
         ocrResults: [
-          { prunedResult: { rec_texts: ["Soud", "Rozsudek"] } },
-          { prunedResult: { rec_texts: ["Sygn. akt", "I ACa 12/26"] } },
+          {
+            prunedResult: {
+              rec_boxes: [
+                [10, 20, 110, 40],
+                [10, 50, 160, 75],
+              ],
+              rec_scores: [0.99, 0.98],
+              rec_texts: ["Soud", "Rozsudek"],
+            },
+          },
+          {
+            prunedResult: {
+              rec_boxes: [
+                [15, 30, 150, 55],
+                [15, 60, 220, 90],
+              ],
+              rec_scores: [0.97, 0.96],
+              rec_texts: ["Sygn. akt", "I ACa 12/26"],
+            },
+          },
         ],
+        dataInfo: {
+          type: "pdf",
+          numPages: 2,
+          pages: [
+            { width: 1000, height: 1400 },
+            { width: 1000, height: 1400 },
+          ],
+        },
       },
     });
 
     expect(result).toEqual({
       pageCount: 2,
+      payload: {
+        version: 1,
+        pages: [
+          {
+            width: 1000,
+            height: 1400,
+            lines: [
+              { box: [10, 20, 110, 40], confidence: 0.99, text: "Soud" },
+              {
+                box: [10, 50, 160, 75],
+                confidence: 0.98,
+                text: "Rozsudek",
+              },
+            ],
+          },
+          {
+            width: 1000,
+            height: 1400,
+            lines: [
+              {
+                box: [15, 30, 150, 55],
+                confidence: 0.97,
+                text: "Sygn. akt",
+              },
+              {
+                box: [15, 60, 220, 90],
+                confidence: 0.96,
+                text: "I ACa 12/26",
+              },
+            ],
+          },
+        ],
+      },
       text: "Soud\nRozsudek\n\n\f\n\nSygn. akt\nI ACa 12/26",
       truncated: false,
     });
@@ -32,7 +91,20 @@ describe("parsePaddleOcrResponse", () => {
       parsePaddleOcrResponse({
         errorCode: 0,
         result: {
-          ocrResults: [{ prunedResult: { rec_texts: ["valid", 42] } }],
+          ocrResults: [
+            {
+              prunedResult: {
+                rec_boxes: [[0, 0, 10, 10]],
+                rec_scores: [0.9],
+                rec_texts: ["valid", 42],
+              },
+            },
+          ],
+          dataInfo: {
+            type: "pdf",
+            numPages: 1,
+            pages: [{ width: 100, height: 100 }],
+          },
         },
       }),
     ).toBeNull();
@@ -45,15 +117,25 @@ describe("parsePaddleOcrResponse", () => {
         ocrResults: [
           {
             prunedResult: {
+              rec_boxes: [[0, 0, 100, 20]],
+              rec_scores: [0.9],
               rec_texts: ["x".repeat(LIMITS.extractedContentMaxChars + 1)],
             },
           },
         ],
+        dataInfo: {
+          type: "pdf",
+          numPages: 1,
+          pages: [{ width: 100, height: 100 }],
+        },
       },
     });
 
     expect(result?.text).toHaveLength(LIMITS.extractedContentMaxChars);
     expect(result?.truncated).toBe(true);
+    expect(result?.payload.pages.at(0)?.lines.at(0)?.text).toHaveLength(
+      LIMITS.extractedContentMaxChars + 1,
+    );
   });
 });
 

@@ -3238,8 +3238,10 @@
         "updateRequiredTitle": "Mettre à jour stella desktop"
       },
       "downloadAsZip": "Télécharger en .zip",
+      "downloadExtractedText": "Texte extrait (.txt)",
       "downloadOriginal": "Fichier d'origine",
       "downloadPdf": "PDF",
+      "downloadSearchablePdf": "PDF avec texte recherchable",
       "maxEntitiesReached": "Nombre maximal d'entités atteint",
       "ocrAlreadyProcessed": "La reconnaissance de texte est déjà terminée",
       "ocrQueueFailed": "Impossible de mettre la reconnaissance de texte en file d’attente",

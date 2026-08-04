@@ -26,7 +26,10 @@ import {
   extractFieldFileRefs,
   filterUnreferencedFieldFileRefs,
 } from "@/api/lib/files/field-file-refs";
-import { createFileKey } from "@/api/lib/files/utils";
+import {
+  createFileKey,
+  createOcrSearchablePdfKey,
+} from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
 import { getSearchProvider } from "@/api/lib/search/provider";
 
@@ -133,8 +136,40 @@ export const deleteEntitiesHandler = async function* ({
         excludedEntityIds: body.entityIds,
       });
 
+      const ocrRuns = await tx
+        .select({ id: documentProcessingRuns.id })
+        .from(documentProcessingRuns)
+        .where(
+          and(
+            eq(documentProcessingRuns.workspaceId, workspaceId),
+            inArray(documentProcessingRuns.entityId, body.entityIds),
+          ),
+        )
+        .limit(LIMITS.entityDeletionOcrDerivativesMax + 1);
+      if (ocrRuns.length > LIMITS.entityDeletionOcrDerivativesMax) {
+        return {
+          status: "rejected" as const,
+          error: new HandlerError({
+            status: 409,
+            message: "Delete fewer documents at a time",
+          }),
+        };
+      }
+      const cleanupKeys = [
+        ...unreferencedFileRefs.map(({ fileId, mimeType }) =>
+          createFileKey({ organizationId, workspaceId, fileId, mimeType }),
+        ),
+        ...ocrRuns.map(({ id }) =>
+          createOcrSearchablePdfKey({
+            organizationId,
+            workspaceId,
+            runId: id,
+          }),
+        ),
+      ];
+
       const cleanupRequestId =
-        unreferencedFileRefs.length > 0
+        cleanupKeys.length > 0
           ? createSafeId<"entityDeletionCleanupRequest">()
           : null;
       if (cleanupRequestId) {
@@ -142,9 +177,7 @@ export const deleteEntitiesHandler = async function* ({
           id: cleanupRequestId,
           organizationId,
           workspaceId,
-          s3Keys: unreferencedFileRefs.map(({ fileId, mimeType }) =>
-            createFileKey({ organizationId, workspaceId, fileId, mimeType }),
-          ),
+          s3Keys: cleanupKeys,
         });
       }
 

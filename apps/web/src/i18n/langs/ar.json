@@ -3238,8 +3238,10 @@
         "updateRequiredTitle": "تحديث تطبيق stella لسطح المكتب"
       },
       "downloadAsZip": "تنزيل بصيغة ZIP",
+      "downloadExtractedText": "النص المستخرج (.txt)",
       "downloadOriginal": "الملف الأصلي",
       "downloadPdf": "PDF",
+      "downloadSearchablePdf": "ملف PDF قابل للبحث",
       "maxEntitiesReached": "تم بلوغ الحد الأقصى لعدد العناصر",
       "ocrAlreadyProcessed": "اكتمل التعرّف على النص بالفعل",
       "ocrQueueFailed": "تعذّرت جدولة التعرّف على النص",

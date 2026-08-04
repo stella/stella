@@ -12,8 +12,8 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import { DOCUMENT_OCR_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
 
-const OCR_PROCESSOR_VERSION = 1;
 const RETRYABLE_MANUAL_OCR_CANCELLATION_CODES = [
   "policy_disabled",
   "manual_selection_superseded",
@@ -167,7 +167,7 @@ export const persistManualOcrRun = async ({
         sourceFileId: source.sourceFileId,
         sourceSha256Hex: source.sourceSha256Hex,
         kind: "ocr",
-        processorVersion: OCR_PROCESSOR_VERSION,
+        processorVersion: DOCUMENT_OCR_PROCESSOR_VERSION,
         requestSource: "manual",
         requestedBy: userId,
       })
@@ -206,7 +206,10 @@ export const persistManualOcrRun = async ({
             eq(documentProcessingRuns.sourceFileId, source.sourceFileId),
             eq(documentProcessingRuns.sourceSha256Hex, source.sourceSha256Hex),
             eq(documentProcessingRuns.kind, "ocr"),
-            eq(documentProcessingRuns.processorVersion, OCR_PROCESSOR_VERSION),
+            eq(
+              documentProcessingRuns.processorVersion,
+              DOCUMENT_OCR_PROCESSOR_VERSION,
+            ),
           ),
         )
         .limit(1)

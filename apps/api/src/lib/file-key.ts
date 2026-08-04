@@ -45,6 +45,20 @@ export const createFileKey = ({
 }: CreateFileKeyProps) =>
   `${organizationId}/${workspaceId}/${fileId}.${getFileExtension(mimeType)}`;
 
+type CreateOcrDerivativeKeyProps = {
+  organizationId: SafeId<"organization">;
+  workspaceId: SafeId<"workspace">;
+  runId: SafeId<"documentProcessingRun">;
+};
+
+/** Deterministic key: retries overwrite the same immutable-source derivative. */
+export const createOcrSearchablePdfKey = ({
+  organizationId,
+  workspaceId,
+  runId,
+}: CreateOcrDerivativeKeyProps): string =>
+  `${organizationId}/${workspaceId}/ocr/${runId}.pdf`;
+
 type CreateUserFileKeyProps = {
   fileId: string;
   mimeType: string;

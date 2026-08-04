@@ -15,6 +15,7 @@ import {
   isPreservableAutomaticProjection,
   isReversibleAutomaticOcrCancellation,
   isRetryableAutomaticOcrFailure,
+  isRetryableOcrDerivativeFailure,
   isRetryableSearchIndexFailure,
   mapWithConcurrency,
   ownsPromotedManualOcrClaim,
@@ -86,6 +87,40 @@ const source = {
   fieldEntityVersionId: run.entityVersionId,
   versionDeletedAt: null,
 };
+
+describe("OCR derivative durability", () => {
+  test("persists and indexes recognized text before building the derivative", () => {
+    const processStart = queueSource.indexOf(
+      "export const processDocumentProcessingRun",
+    );
+    const processEnd = queueSource.indexOf("\nconst errorCode", processStart);
+    const processSource = queueSource.slice(processStart, processEnd);
+    const persistence = processSource.indexOf(
+      "const persistenceOutcome = await persistOcrProjection",
+    );
+    const searchIndex = processSource.indexOf("await indexOcrProjection");
+    const derivative = processSource.indexOf("await createOcrSearchablePdf");
+
+    expect(persistence).toBeGreaterThan(-1);
+    expect(searchIndex).toBeGreaterThan(persistence);
+    expect(derivative).toBeGreaterThan(searchIndex);
+  });
+
+  test("retries derivative failures within the bounded attempt budget", () => {
+    expect(
+      isRetryableOcrDerivativeFailure({
+        attemptCount: 1,
+        errorCode: "searchable_pdf_failed",
+      }),
+    ).toBe(true);
+    expect(
+      isRetryableOcrDerivativeFailure({
+        attemptCount: 5,
+        errorCode: "searchable_pdf_failed",
+      }),
+    ).toBe(false);
+  });
+});
 
 describe("lease heartbeat", () => {
   test("reports a deadline without accumulating stalled renewals", async () => {

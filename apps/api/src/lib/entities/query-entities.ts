@@ -23,6 +23,7 @@ import {
   desktopEditSessions,
   entities,
   entityVersions,
+  extractedContent,
   fields,
   searchDocuments,
 } from "@/api/db/schema";
@@ -118,6 +119,7 @@ export type QueryEntityResult = {
     propertyId: string;
     entityId: string;
     content: FieldContent;
+    ocrExportStatus?: "ready" | "unavailable";
   }[];
   cellMetadata: {
     propertyId: string;
@@ -853,9 +855,22 @@ const queryEntitiesGenerator = async function* ({
           id: fields.id,
           propertyId: fields.propertyId,
           content: fields.content,
+          ocrExportStatus: sql<
+            "ready" | "unavailable"
+          >`CASE WHEN ${extractedContent.ocrRunId} IS NOT NULL THEN 'ready' ELSE 'unavailable' END`,
         })
         .from(fields)
-        .innerJoin(entities, and(...fieldPredicates)),
+        .innerJoin(entities, and(...fieldPredicates))
+        .leftJoin(
+          extractedContent,
+          and(
+            eq(extractedContent.entityId, entities.id),
+            eq(extractedContent.workspaceId, workspaceId),
+            eq(extractedContent.sourceEntityVersionId, fields.entityVersionId),
+            eq(extractedContent.sourceFieldId, fields.id),
+            isNotNull(extractedContent.ocrRunId),
+          ),
+        ),
     ),
     safeDb((tx) =>
       tx
@@ -1034,6 +1049,7 @@ const queryEntitiesGenerator = async function* ({
         propertyId: field.propertyId,
         entityId: entity.id,
         content: field.content,
+        ocrExportStatus: field.ocrExportStatus,
       })),
       cellMetadata: entityCellMetadata.map((entry) => ({
         propertyId: entry.propertyId,

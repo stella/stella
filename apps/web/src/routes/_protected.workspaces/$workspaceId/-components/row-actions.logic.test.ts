@@ -124,6 +124,7 @@ describe("manual OCR action visibility", () => {
         entity: { kind: "document", readOnly: false },
         ocrSource: {
           encrypted: false,
+          exportStatus: "unavailable",
           fieldId: selectedFieldId,
           fileName: "selected.pdf",
           mimeType: "application/pdf",
