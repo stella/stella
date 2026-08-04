@@ -3,7 +3,7 @@ description: Epic
 title: "epic: "
 labels: ["⚡ epic"]
 type: "task"
-projects: ["stll-ai/1"]
+projects: ["stella/1"]
 
 body:
   - type: textarea

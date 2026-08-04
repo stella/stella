@@ -1,7 +1,7 @@
 name: "Other Issue"
 description: Raise an issue that wouldn't be covered by the other templates.
 type: "task"
-projects: ["stll-ai/1"]
+projects: ["stella/1"]
 
 body:
   - type: textarea

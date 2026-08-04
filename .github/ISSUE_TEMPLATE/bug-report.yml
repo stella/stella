@@ -2,7 +2,7 @@ name: "\U0001F41B Bug Report"
 description: Submit a bug report
 title: "bug: "
 type: "bug"
-projects: ["stll-ai/1"]
+projects: ["stella/1"]
 
 body:
   - type: textarea
