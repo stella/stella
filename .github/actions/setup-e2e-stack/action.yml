@@ -1,0 +1,110 @@
+name: Setup E2E stack
+description: Start the docker infra stack, migrate and seed the database, and boot the API for browser tests
+
+inputs:
+  dockerhub-username:
+    description: Docker Hub username for authenticated image pulls; leave empty to pull anonymously
+    required: false
+    default: ""
+  dockerhub-token:
+    description: Docker Hub token for authenticated image pulls; leave empty to pull anonymously
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Check Docker Hub credentials
+      id: dockerhub
+      # Keep Docker Hub credentials scoped to this trusted inline check and
+      # the login action below, not the whole job environment where
+      # repository-controlled code can read them.
+      shell: bash
+      env:
+        DOCKERHUB_USERNAME: ${{ inputs.dockerhub-username }}
+        DOCKERHUB_TOKEN: ${{ inputs.dockerhub-token }}
+      run: |
+        if [[ -n "$DOCKERHUB_USERNAME" && -n "$DOCKERHUB_TOKEN" ]]; then
+          echo "available=true" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        echo "available=false" >> "$GITHUB_OUTPUT"
+
+    - name: Log in to Docker Hub
+      # Skipped automatically until DOCKERHUB_USERNAME / DOCKERHUB_TOKEN repo
+      # secrets exist; authenticated pulls raise the rate limit well above the
+      # shared-runner anonymous cap that can flake infrastructure image pulls.
+      if: steps.dockerhub.outputs.available == 'true'
+      uses: docker/login-action@371161bbe7024a29a25c5e19bfcbc0804fe9ad2c # v4.5.2
+      with:
+        username: ${{ inputs.dockerhub-username }}
+        password: ${{ inputs.dockerhub-token }}
+
+    - name: Start docker stack
+      # `--wait` only on long-running services; `minio-setup` is a one-shot
+      # bucket-creator container that exits 0, which `--wait` treats as
+      # "not running" and fails the whole command. Run it separately in
+      # the foreground so we still block on its success. `compose run`
+      # propagates the one-shot command's exit code without stopping the
+      # already-running MinIO dependency. The whole bring-up is retried:
+      # image pulls and `--wait` health checks occasionally fail transiently
+      # on CI runners. Tear the stack down between attempts so a half-started
+      # stack does not poison the retry.
+      shell: bash
+      run: |
+        for attempt in 1 2 3; do
+          if docker compose --profile dev up -d --wait postgres minio valkey \
+            && docker compose --profile dev run --rm --no-deps minio-setup; then
+            exit 0
+          fi
+          echo "::warning::docker stack start failed (attempt ${attempt}/3); tearing down and retrying"
+          docker compose --profile dev down --volumes --remove-orphans || true
+          sleep "$((attempt * 20))"
+        done
+        echo "::error::docker stack failed to start after 3 attempts"
+        exit 1
+
+    - name: Log out of Docker Hub
+      # Remove credentials from the runner before executing app code and tests.
+      if: always() && steps.dockerhub.outputs.available == 'true'
+      shell: bash
+      run: docker logout
+
+    - name: Run database migrations
+      # `db:migrate` (not `db:push`) so role bootstrap migrations such as
+      # `20260516000000_case_law_ingestion_role` actually execute. `db:push`
+      # only diffs the declarative schema, which references `stella_ingestion`
+      # as `existing()` and then fails when later policy creates target it.
+      shell: bash
+      run: bun --filter @stll/api db:migrate
+
+    - name: Seed test user
+      shell: bash
+      run: bun --filter @stll/api db:seed-test-user
+
+    - name: Start API server
+      # `--watch` is for local dev; CI runs the server flat. Logs land in
+      # /tmp/api.log so the "Upload server logs" step can publish them on
+      # failure for debugging.
+      shell: bash
+      run: |
+        cd apps/api
+        # --preload registers the dev/test-only mock-AI generator; .env.example
+        # sets USE_MOCK_AI=true, so e2e must route through the mock rather than
+        # the real provider (which would fail on the placeholder API key).
+        NODE_ENV=development E2E_DISABLE_AUTH_RATE_LIMIT=true nohup bun --port 3001 --preload ./src/dev/register-mock-ai.ts src/server.ts > /tmp/api.log 2>&1 &
+        echo $! > /tmp/api.pid
+
+    - name: Wait for API
+      shell: bash
+      run: |
+        for i in {1..60}; do
+          if curl --connect-timeout 2 --max-time 5 -sf http://localhost:3001/health > /dev/null 2>&1; then
+            echo "API up after ${i}s"
+            exit 0
+          fi
+          sleep 1
+        done
+        echo "::error::API never came up"
+        tail -200 /tmp/api.log || true
+        exit 1
