@@ -37,14 +37,16 @@ RUN turbo prune @stll/web --docker
 
 FROM build-base AS deps
 COPY --from=install-inputs /json/ .
-RUN bun install --filter @stll/web --frozen-lockfile --ignore-scripts --network-concurrency=8
+RUN --mount=type=cache,target=/root/.bun/install/cache \
+    bun install --filter @stll/web --frozen-lockfile --ignore-scripts --network-concurrency=8
 
 # Runtime install: the SSR server bundle (dist/server/server.js) externalises
 # its imports, so they must resolve from `dependencies` alone with
 # devDependencies stripped. The web-build CI job boot-smokes this same install.
 FROM runtime-base AS deps-prod
 COPY --from=install-inputs /json/ .
-RUN bun install --filter @stll/web --production --frozen-lockfile --ignore-scripts --network-concurrency=8
+RUN --mount=type=cache,target=/root/.bun/install/cache \
+    bun install --filter @stll/web --production --frozen-lockfile --ignore-scripts --network-concurrency=8
 
 FROM deps AS builder
 ARG STELLA_VERSION=dev
@@ -118,7 +120,11 @@ ENV HOST=0.0.0.0
 ENV PORT=3002
 RUN groupadd --system --gid 1001 stella && \
     useradd --system --uid 1001 --gid stella --no-create-home stella
-COPY --chown=stella:stella --from=pruner /app/out/full/ .
+# The runtime needs only the workspace manifests (node_modules linkage), the
+# server entry, and the built output. Workspace sources stay in the build
+# stages; `scripts/check-web-docker-platform.test.ts` enforces this boundary.
+COPY --chown=stella:stella --from=pruner /app/out/json/ .
+COPY --chown=stella:stella --from=builder /app/apps/web/start-runtime.js ./apps/web/start-runtime.js
 COPY --chown=stella:stella --from=builder /app/apps/web/dist ./apps/web/dist
 WORKDIR /app/apps/web
 USER stella
