@@ -288,8 +288,18 @@ const SelectionActions = ({
   }
 
   return (
-    <div className="ms-auto flex items-center gap-1.5">
-      <span className="text-muted-foreground text-xs">
+    <div className="relative ms-auto flex items-center gap-1.5">
+      {/* The bulk actions behind the "…" menu stay invisible until a
+          row is selected, so nothing signals that selecting rows
+          unlocked them. This group only mounts once something is
+          selected, which makes mount the 0 → 1 transition: a double
+          tint blink then points at the count and the menu exactly
+          once per selection, without any timer state. */}
+      <div
+        aria-hidden
+        className="bg-primary/12 animate-attention-flash-twice pointer-events-none absolute -inset-x-1.5 -inset-y-1 rounded-md opacity-0 motion-reduce:animate-none"
+      />
+      <span className="text-muted-foreground relative text-xs">
         {t("workspaces.views.fieldsSelected", {
           count: selectedEntities.length,
         })}
@@ -299,7 +309,7 @@ const SelectionActions = ({
         selectedEntities={
           selectedEntities.length > 1 ? selectedEntities : undefined
         }
-        triggerClassName=""
+        triggerClassName="relative"
         workspaceId={workspaceId}
       />
     </div>
