@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
 import {
   CheckIcon,
@@ -44,18 +44,12 @@ import {
   humanizeIdentifier,
 } from "@/components/chat/tool-approval-summary";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
-import {
-  emptyColor,
-  resolveOptionColor,
-} from "@/components/workspaces/property-utils";
 import { useMountEffect } from "@/hooks/use-effect";
 import type { DocxEditRepresentation } from "@/lib/chat-edit-mode";
 import { DOCX_EDIT_REPRESENTATION } from "@/lib/chat-edit-mode";
 import { detached } from "@/lib/detached";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { sanitizeHref } from "@/lib/sanitize-href";
-import type { WorkspaceProperty } from "@/lib/types";
-import { propertiesKeys } from "@/lib/workspaces/queries/properties";
 
 type UpdateEntityFieldsInput = ChatUITools["update-entity-fields"]["input"];
 type ActiveDocxEditInput = ChatUITools["apply-active-docx-edits"]["input"];
@@ -86,64 +80,20 @@ const getApprovalId = (part: ApprovalToolPart): string | null => {
 
 const getApprovalPartInput = (part: ApprovalToolPart): unknown => part.input;
 
-// -- Select badge (colored chip matching table UX) --
-
-type SelectBadgeProps = {
-  value: string | null;
-  property: WorkspaceProperty | undefined;
-};
-
-const SelectBadge = ({ value, property }: SelectBadgeProps) => {
-  const t = useTranslations();
-  let color = emptyColor;
-
-  if (value && property?.content.type === "single-select") {
-    const opt = property.content.options.find((o) => o.value === value);
-    if (opt) {
-      color = resolveOptionColor(opt.color);
-    }
-  }
-
-  return (
-    <span
-      className="inline-flex items-center rounded px-1.5 py-0.5 text-[11px] leading-none font-medium"
-      style={{
-        backgroundColor: color.background,
-        color: color.foreground,
-      }}
-    >
-      {value ?? t("common.empty")}
-    </span>
-  );
-};
-
 // -- Update summary (rich rendering) --
 
 type UpdateSummaryProps = {
   input: UpdateEntityFieldsInput;
-  workspaceId?: string | undefined;
 };
 
-const UpdateSummary = ({ input, workspaceId }: UpdateSummaryProps) => {
+const UpdateSummary = ({ input }: UpdateSummaryProps) => {
   const t = useTranslations();
-  const qc = useQueryClient();
   const newVal = input.value;
 
-  // Look up the property from cache for colors.
-  let property: WorkspaceProperty | undefined;
-  if (workspaceId) {
-    const cached = qc.getQueryData<WorkspaceProperty[]>(
-      propertiesKeys.all(workspaceId),
-    );
-    if (cached !== undefined) {
-      property = cached.find((p) => p.id === input.propertyId);
-    }
-  }
-  const propName = property?.name ?? input.propertyId;
-
-  const isSelect =
-    property?.content.type === "single-select" ||
-    property?.content.type === "multi-select";
+  // The tool input carries per-turn chat refs (prop_N/ent_N), not stable
+  // property/entity ids, so the property can no longer be resolved from the
+  // React Query cache for name/option colors; the refs are shown as-is.
+  const propName = input.propertyRef;
 
   let displayNew: string | null = null;
   if (Array.isArray(newVal)) {
@@ -157,16 +107,12 @@ const UpdateSummary = ({ input, workspaceId }: UpdateSummaryProps) => {
   return (
     <div className="border-border/50 flex flex-col gap-1.5 border-t px-3 py-2">
       <code className="text-muted-foreground text-xs break-all">
-        {input.entityId}
+        {input.entityRef}
       </code>
       {/* Property change */}
       <div className="flex items-center gap-1.5 text-xs">
         <span className="text-muted-foreground">{propName}:</span>
-        {isSelect ? (
-          <SelectBadge property={property} value={displayNew} />
-        ) : (
-          <span className="font-medium">{displayNew ?? t("common.empty")}</span>
-        )}
+        <span className="font-medium">{displayNew ?? t("common.empty")}</span>
       </div>
     </div>
   );
@@ -444,7 +390,6 @@ type ToolApprovalCardProps = {
    *  `ChatThreadMessagesProps.activeFileName`. */
   activeFileName?: string | undefined;
   part: ApprovalToolPart;
-  workspaceId?: string | undefined;
 };
 
 const AutomaticApprovalResponse = ({ respond }: { respond: () => void }) => {
@@ -458,7 +403,6 @@ const AutomaticApprovalResponse = ({ respond }: { respond: () => void }) => {
 export const ToolApprovalCard = ({
   activeFileName,
   part,
-  workspaceId,
 }: ToolApprovalCardProps) => {
   const {
     activeOrganizationId,
@@ -657,9 +601,7 @@ export const ToolApprovalCard = ({
       {/* Rich summary */}
       {part.name === "update-entity-fields" &&
         part.state !== "input-streaming" &&
-        part.input !== undefined && (
-          <UpdateSummary input={part.input} workspaceId={workspaceId} />
-        )}
+        part.input !== undefined && <UpdateSummary input={part.input} />}
       {part.name === "apply-active-docx-edits" &&
         part.state !== "input-streaming" &&
         part.input !== undefined && (

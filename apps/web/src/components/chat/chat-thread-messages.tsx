@@ -1434,13 +1434,7 @@ const AssistantMessageParts = ({
             (part.state === "approval-requested" ||
               part.state === "approval-responded")
           ) {
-            return (
-              <ToolApprovalCard
-                key={part.id}
-                part={part}
-                workspaceId={workspaceId}
-              />
-            );
+            return <ToolApprovalCard key={part.id} part={part} />;
           }
           return <SpawnSubagentsCard key={part.id} part={part} />;
         }
@@ -1452,7 +1446,6 @@ const AssistantMessageParts = ({
                 activeFileName={activeFileName}
                 key={part.id}
                 part={part}
-                workspaceId={workspaceId}
               />
             );
           }

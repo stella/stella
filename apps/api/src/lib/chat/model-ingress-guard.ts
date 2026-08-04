@@ -68,36 +68,60 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> => {
 
 type RedactionState = { paths: string[] };
 
-const redactValue = (
-  value: unknown,
+const redactString = (
+  value: string,
   workspaceIds: readonly string[],
   path: string,
   state: RedactionState,
-): unknown => {
-  if (typeof value === "string") {
-    let redacted = value;
-    for (const id of workspaceIds) {
-      if (redacted.includes(id)) {
-        state.paths.push(path);
-        redacted = redacted.replaceAll(id, TENANT_ID_REDACTION_PLACEHOLDER);
+): string => {
+  let redacted = value;
+  for (const id of workspaceIds) {
+    if (redacted.includes(id)) {
+      state.paths.push(path);
+      redacted = redacted.replaceAll(id, TENANT_ID_REDACTION_PLACEHOLDER);
+    }
+  }
+  return redacted;
+};
+
+/**
+ * Mutate a structuredClone'd container in place, replacing tenant ids inside
+ * every nested string. In-place mutation (instead of a rebuilding map) keeps
+ * the entry point's return type the caller's own `T` without a cast. Dates,
+ * class instances, and scalars pass through untouched.
+ */
+const redactContainerInPlace = (
+  container: Record<string, unknown> | unknown[],
+  workspaceIds: readonly string[],
+  path: string,
+  state: RedactionState,
+): void => {
+  const visit = (entry: unknown, key: string | number, entryPath: string) => {
+    if (typeof entry === "string") {
+      const redacted = redactString(entry, workspaceIds, entryPath, state);
+      if (redacted !== entry) {
+        if (Array.isArray(container) && typeof key === "number") {
+          container[key] = redacted;
+        } else if (!Array.isArray(container) && typeof key === "string") {
+          container[key] = redacted;
+        }
       }
+      return;
     }
-    return redacted;
-  }
-  if (Array.isArray(value)) {
-    return value.map((item, index) =>
-      redactValue(item, workspaceIds, `${path}[${index}]`, state),
+    if (Array.isArray(entry) || isPlainObject(entry)) {
+      redactContainerInPlace(entry, workspaceIds, entryPath, state);
+    }
+  };
+
+  if (Array.isArray(container)) {
+    container.forEach((entry, index) =>
+      visit(entry, index, `${path}[${index}]`),
     );
+    return;
   }
-  if (isPlainObject(value)) {
-    const next: Record<string, unknown> = {};
-    for (const [key, entry] of Object.entries(value)) {
-      next[key] = redactValue(entry, workspaceIds, `${path}.${key}`, state);
-    }
-    return next;
+  for (const [key, entry] of Object.entries(container)) {
+    visit(entry, key, `${path}.${key}`);
   }
-  // Dates, class instances, and scalars pass through untouched.
-  return value;
 };
 
 export type RedactTenantIdsResult<T> = {
@@ -112,7 +136,7 @@ export type RedactTenantIdsResult<T> = {
  * telemetry by path so residual ingress leaks stay visible while chat keeps
  * working for threads whose history predates ref mediation.
  */
-export const redactTenantIdsDeep = <T>({
+export const redactTenantIdsDeep = <T extends object>({
   value,
   workspaceIds,
 }: {
@@ -120,10 +144,10 @@ export const redactTenantIdsDeep = <T>({
   workspaceIds: readonly SafeId<"workspace">[];
 }): RedactTenantIdsResult<T> => {
   const state: RedactionState = { paths: [] };
-  // SAFETY: redactValue preserves structure exactly — strings map to
-  // strings, arrays to arrays, plain records to plain records, and every
-  // other value is returned by reference — so the output shape is T.
-  const redacted = redactValue(value, workspaceIds, "$", state) as T;
+  const redacted = structuredClone(value);
+  if (Array.isArray(redacted) || isPlainObject(redacted)) {
+    redactContainerInPlace(redacted, workspaceIds, "$", state);
+  }
   if (state.paths.length > 0) {
     captureError(
       new TelemetryError({
