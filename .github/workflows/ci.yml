@@ -44,6 +44,7 @@ jobs:
       e2e_core_required: ${{ steps.changed-files.outputs.e2e_core_required }}
       e2e_landing_required: ${{ steps.changed-files.outputs.e2e_landing_required }}
       landing_build_required: ${{ steps.changed-files.outputs.landing_build_required }}
+      legal_atlas_image_required: ${{ steps.changed-files.outputs.legal_atlas_image_required }}
       mobile_build_required: ${{ steps.changed-files.outputs.mobile_build_required }}
       ocr_image_required: ${{ steps.changed-files.outputs.ocr_image_required }}
       package_checks_required: ${{ steps.changed-files.outputs.package_checks_required }}
@@ -94,6 +95,7 @@ jobs:
               echo "e2e_core_required=true"
               echo "e2e_landing_required=true"
               echo "landing_build_required=true"
+              echo "legal_atlas_image_required=true"
               echo "mobile_build_required=true"
               echo "ocr_image_required=true"
               echo "package_checks_required=true"
@@ -113,6 +115,7 @@ jobs:
               echo "e2e_core_required=false"
               echo "e2e_landing_required=false"
               echo "landing_build_required=false"
+              echo "legal_atlas_image_required=false"
               echo "mobile_build_required=false"
               echo "ocr_image_required=false"
               echo "package_checks_required=true"
@@ -144,6 +147,7 @@ jobs:
           # runner just to decide it has nothing to do.
           api_image_deps_required=false
           landing_build_required=false
+          legal_atlas_image_required=false
           mobile_build_required=false
           ocr_image_required=false
           web_build_required=false
@@ -167,6 +171,11 @@ jobs:
             case "$file" in
               apps/api/*|apps/legal-atlas-runner/*|packages/*|patches/*|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|.github/workflows/ci.yml)
                 api_image_deps_required=true
+                ;;
+            esac
+            case "$file" in
+              apps/legal-atlas-runner/*|apps/api/*|packages/legal-atlas/*|packages/typescript-config/*|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|.github/workflows/ci.yml)
+                legal_atlas_image_required=true
                 ;;
             esac
             case "$file" in
@@ -195,6 +204,7 @@ jobs:
             echo "e2e_core_required=$e2e_core_required"
             echo "e2e_landing_required=$e2e_landing_required"
             echo "landing_build_required=$landing_build_required"
+            echo "legal_atlas_image_required=$legal_atlas_image_required"
             echo "mobile_build_required=$mobile_build_required"
             echo "ocr_image_required=$ocr_image_required"
             echo "package_checks_required=$package_checks_required"
@@ -1563,6 +1573,36 @@ jobs:
           cache-from: type=gha,scope=ocr-service
           cache-to: type=gha,mode=max,scope=ocr-service
 
+  legal-atlas-image:
+    needs: ci-plan
+    if: >-
+      (needs.ci-plan.outputs.trusted == 'true'
+       || github.event_name == 'workflow_dispatch')
+      && needs.ci-plan.outputs.legal_atlas_image_required == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      - name: Build legal-atlas-runner image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          file: apps/legal-atlas-runner/Dockerfile
+          platforms: linux/amd64
+          push: false
+          cache-from: type=gha,scope=legal-atlas-runner
+          cache-to: type=gha,mode=max,scope=legal-atlas-runner
+
   # Narrow Windows smoke for the dev runner. Full app CI stays on Linux,
   # but this catches path and shell assumptions in the scripts package
   # before Windows contributors hit them locally.
@@ -1702,6 +1742,7 @@ jobs:
         e2e,
         api-image-deps,
         ocr-image,
+        legal-atlas-image,
         windows-scripts,
         desktop-clippy,
       ]
@@ -1719,6 +1760,7 @@ jobs:
           EVENT: ${{ github.event_name }}
           LANDING_RESULT: ${{ needs.landing-build.result }}
           CODE_QUALITY_RESULT: ${{ needs.code-quality.result }}
+          LEGAL_ATLAS_IMAGE_RESULT: ${{ needs.legal-atlas-image.result }}
           MOBILE_RESULT: ${{ needs.mobile-build.result }}
           OCR_IMAGE_RESULT: ${{ needs.ocr-image.result }}
           TRUSTED: ${{ needs.ci-plan.outputs.trusted }}
@@ -1745,6 +1787,7 @@ jobs:
                   || "$E2E_RESULT" == "failure" || "$E2E_RESULT" == "cancelled" \
                   || "$API_IMAGE_DEPS_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "cancelled" \
                   || "$OCR_IMAGE_RESULT" == "failure" || "$OCR_IMAGE_RESULT" == "cancelled" \
+                  || "$LEGAL_ATLAS_IMAGE_RESULT" == "failure" || "$LEGAL_ATLAS_IMAGE_RESULT" == "cancelled" \
                   || "$WINDOWS_SCRIPTS_RESULT" == "failure" || "$WINDOWS_SCRIPTS_RESULT" == "cancelled" \
                   || "$PLAN_RESULT" == "failure" || "$PLAN_RESULT" == "cancelled" \
                   || "$CHANGESET_RESULT" == "failure" || "$CHANGESET_RESULT" == "cancelled" \
@@ -1772,12 +1815,12 @@ jobs:
 
           # "cancelled" means cancel-in-progress replaced this
           # run with a newer one; the newer run is authoritative.
-          if [[ "$CI_RESULT" == "cancelled" || "$CODE_QUALITY_RESULT" == "cancelled" || "$TYPECHECK_BASELINE_RESULT" == "cancelled" || "$WEB_RESULT" == "cancelled" || "$MOBILE_RESULT" == "cancelled" || "$LANDING_RESULT" == "cancelled" || "$E2E_RESULT" == "cancelled" || "$API_IMAGE_DEPS_RESULT" == "cancelled" || "$OCR_IMAGE_RESULT" == "cancelled" || "$WINDOWS_SCRIPTS_RESULT" == "cancelled" || "$CHANGESET_RESULT" == "cancelled" || "$DESKTOP_CLIPPY_RESULT" == "cancelled" ]]; then
+          if [[ "$CI_RESULT" == "cancelled" || "$CODE_QUALITY_RESULT" == "cancelled" || "$TYPECHECK_BASELINE_RESULT" == "cancelled" || "$WEB_RESULT" == "cancelled" || "$MOBILE_RESULT" == "cancelled" || "$LANDING_RESULT" == "cancelled" || "$E2E_RESULT" == "cancelled" || "$API_IMAGE_DEPS_RESULT" == "cancelled" || "$OCR_IMAGE_RESULT" == "cancelled" || "$LEGAL_ATLAS_IMAGE_RESULT" == "cancelled" || "$WINDOWS_SCRIPTS_RESULT" == "cancelled" || "$CHANGESET_RESULT" == "cancelled" || "$DESKTOP_CLIPPY_RESULT" == "cancelled" ]]; then
             echo "CI run was superseded by a newer run (cancel-in-progress). Passing."
             exit 0
           fi
 
-          if [[ "$CI_RESULT" == "failure" || "$CODE_QUALITY_RESULT" == "failure" || "$TYPECHECK_BASELINE_RESULT" == "failure" || "$WEB_RESULT" == "failure" || "$MOBILE_RESULT" == "failure" || "$LANDING_RESULT" == "failure" || "$E2E_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "failure" || "$OCR_IMAGE_RESULT" == "failure" || "$WINDOWS_SCRIPTS_RESULT" == "failure" || "$CHANGESET_RESULT" == "failure" || "$DESKTOP_CLIPPY_RESULT" == "failure" ]]; then
+          if [[ "$CI_RESULT" == "failure" || "$CODE_QUALITY_RESULT" == "failure" || "$TYPECHECK_BASELINE_RESULT" == "failure" || "$WEB_RESULT" == "failure" || "$MOBILE_RESULT" == "failure" || "$LANDING_RESULT" == "failure" || "$E2E_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "failure" || "$OCR_IMAGE_RESULT" == "failure" || "$LEGAL_ATLAS_IMAGE_RESULT" == "failure" || "$WINDOWS_SCRIPTS_RESULT" == "failure" || "$CHANGESET_RESULT" == "failure" || "$DESKTOP_CLIPPY_RESULT" == "failure" ]]; then
             echo "::error::CI checks failed."
             exit 1
           fi

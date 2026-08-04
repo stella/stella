@@ -3,16 +3,22 @@
 .vscode
 .idea
 .claude
+.ai
 .turbo
 .cache
 coverage
 dist
 node_modules
 tmp
+Dockerfile*
+.dockerignore
 *.log
 **/.env*
 **/*.test.ts
+**/*.spec.ts
 **/__snapshots__
+# *.md and !README.md are root-only (dockerignore patterns without `**/` don't
+# recurse); per-app markdown such as THIRD-PARTY-NOTICES.md still copies.
 *.md
 !README.md
 
