@@ -114,15 +114,9 @@ export const generateBBoxData = async ({
     },
   });
 
-  if (Result.isError(generated)) {
-    return Result.err(generated.error);
-  }
-  if (generated.value.length === 0) {
-    const error = new WorkflowIntegrationError({
-      message: "BBox AI generation returned no bounding boxes",
-    });
-    aiAnalytics.captureError(error);
-    return Result.err(error);
-  }
-  return Result.ok(generated.value);
+  // An empty list is an answer, not a failure: the system prompt asks
+  // for the minimum number of boxes, and a cited page whose content
+  // the model matches nothing on legitimately yields none. Only the
+  // provider call itself can fail here.
+  return generated;
 };

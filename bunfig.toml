@@ -84,7 +84,6 @@ minimumReleaseAgeExcludes = [
   "@typescript/typescript-win32-x64",
   # Security patches for dependency-audit findings. Publisher and repository
   # ownership match the preceding releases; remove after quarantine expiry.
-  "brace-expansion", # quarantine-expires: 2026-08-04T10:00:32.762Z
   "fast-uri", # quarantine-expires: 2026-08-05T09:16:56.212Z
   # better-result 3: opted in immediately for migration evaluation.
   # 3.0.0 was published at 2026-08-01T21:35:30.036Z.
