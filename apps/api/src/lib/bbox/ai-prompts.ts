@@ -25,7 +25,7 @@ const context = {
 
 // Element schema for the top-level `boxes` array. The object root
 // keeps provider strict-response modes away from top-level array
-// schemas. Emptiness is checked at the caller boundary.
+// schemas.
 //
 // Four named coordinates rather than a length-4 array: array arity is
 // expressible only as `minItems`/`maxItems`, which the
@@ -46,10 +46,10 @@ const bboxItemSchema = v.pipe(
   v.examples(context.bBoxItem.examples),
 );
 
-// No lower bound on `boxes`: the projection drops value constraints,
-// so `v.minLength(1)` would reach the model as nothing at all and
-// could only reject an empty response afterwards, preempting the
-// caller's own emptiness check.
+// No lower bound on `boxes`: a page the model matches nothing on
+// yields none, and the projection drops value constraints anyway, so
+// `v.minLength(1)` would reach the model as nothing at all and could
+// only reject that answer once the response was complete.
 export const bboxOutputSchema = v.strictObject({
   boxes: v.pipe(
     v.array(bboxItemSchema),
