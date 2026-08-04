@@ -2130,8 +2130,21 @@
     "recents": "Naujausi",
     "search": "Ieškoti",
     "shortcutCategories": {
-      "navigation": "Naršymas"
+      "help": "Pagalba",
+      "navigation": "Naršymas",
+      "review": "Dokumento peržiūra"
     },
+    "shortcutsDialog": {
+      "collision": "Jau priskirta: {label}",
+      "description": "Naršykite sparčiuosius klavišus, kad dirbtumėte greičiau.",
+      "editShortcut": "Keisti spartųjį klavišą",
+      "invalidBinding": "Pridėkite ne modifikavimo klavišą",
+      "notRebindable": "Šio sparčiojo klavišo pakeisti negalima",
+      "pressKeys": "Paspauskite naujus klavišus…",
+      "resetToDefault": "Atkurti numatytuosius",
+      "title": "Spartieji klavišai"
+    },
+    "showShortcuts": "Rodyti sparčiuosius klavišus",
     "sidebar": "Šoninė juosta",
     "sidebarDescription": "Rodo mobilią šoninę juostą.",
     "templates": "Šablonai",

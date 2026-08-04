@@ -2130,8 +2130,21 @@
     "recents": "Récents",
     "search": "Rechercher",
     "shortcutCategories": {
-      "navigation": "Navigation"
+      "help": "Aide",
+      "navigation": "Navigation",
+      "review": "Révision du document"
     },
+    "shortcutsDialog": {
+      "collision": "Déjà attribué à {label}",
+      "description": "Parcourez les raccourcis clavier pour travailler plus vite.",
+      "editShortcut": "Modifier le raccourci",
+      "invalidBinding": "Ajoutez une touche non modificatrice",
+      "notRebindable": "Ce raccourci ne peut pas être modifié",
+      "pressKeys": "Appuyez sur les nouvelles touches…",
+      "resetToDefault": "Réinitialiser par défaut",
+      "title": "Raccourcis clavier"
+    },
+    "showShortcuts": "Afficher les raccourcis clavier",
     "sidebar": "Barre latérale",
     "sidebarDescription": "Affiche la barre latérale mobile.",
     "templates": "Modèles",

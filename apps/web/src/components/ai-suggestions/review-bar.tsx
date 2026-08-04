@@ -6,13 +6,17 @@
  * here and there can never disagree.
  *
  * Keyboard (active while the bar is visible and focus is in the editor
- * or on the bar, never in the chat composer or a form field):
+ * or on the bar, never in the chat composer or a form field). The bindings
+ * below are the DEFAULTS; each is a registry entry (`acceptSuggestion`,
+ * `rejectSuggestion`, `previousSuggestion`, `nextSuggestion`) that the user
+ * can rebind, so the handler matches the effective binding rather than a
+ * hardcoded chord:
  *   Alt+Enter        accept the focused suggestion and advance
  *   Alt+Shift+Enter  reject the focused suggestion and advance
  *   Alt+ArrowUp      focus the previous pending suggestion
  *   Alt+ArrowDown    focus the next pending suggestion
  *
- * Alt (not Cmd/Ctrl) because folio binds Mod+Enter to a document-level
+ * Alt (not Cmd/Ctrl) is the DEFAULT because folio binds Mod+Enter to a document-level
  * page break in the capture phase and Mod+Backspace to delete-backward;
  * Alt+Enter, Alt+Shift+Enter and Alt+ArrowUp/Down are all unbound.
  * Reject deliberately avoids Alt+Backspace: that IS macOS delete-word
@@ -26,6 +30,10 @@
 import { useRef } from "react";
 import type { RefObject } from "react";
 
+import {
+  formatForDisplay,
+  matchesKeyboardEvent,
+} from "@tanstack/react-hotkeys";
 import {
   CheckIcon,
   ChevronDownIcon,
@@ -62,24 +70,9 @@ import { useReviewActions } from "@/components/ai-suggestions/use-review-actions
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { detached } from "@/lib/detached";
+import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
 
 const EMPTY_SUGGESTIONS: readonly ReviewSuggestion[] = [];
-
-// Shortcut hints shown in the button tooltips so the bindings are
-// discoverable in the UI, not just the docstring. Rendered with the
-// platform's own modifier glyphs (Option/⌥ on macOS, Alt elsewhere) —
-// these are keyboard tokens, not translatable prose.
-const IS_MAC =
-  typeof navigator !== "undefined" &&
-  /Mac|iP(?:hone|ad|od)/u.test(navigator.userAgent);
-const SHORTCUT_HINTS = IS_MAC
-  ? { accept: "⌥↵", reject: "⌥⇧↵", prev: "⌥↑", next: "⌥↓" }
-  : {
-      accept: "Alt+Enter",
-      reject: "Alt+Shift+Enter",
-      prev: "Alt+↑",
-      next: "Alt+↓",
-    };
 
 const isPending = (item: ReviewSuggestion): boolean =>
   item.status === "pending";
@@ -101,6 +94,14 @@ export const ReviewBar = ({
   requestDocxEditMode,
 }: ReviewBarProps) => {
   const t = useTranslations();
+  // Effective (user-rebindable) bindings for the four review shortcuts. The
+  // capture-phase handler below matches against these, and the tooltips render
+  // them, so a rebind changes both behavior and the discoverable hint. These
+  // are keyboard tokens (⌥↵ / Alt+Enter), not translatable prose.
+  const acceptHotkey = useEffectiveHotkey("acceptSuggestion");
+  const rejectHotkey = useEffectiveHotkey("rejectSuggestion");
+  const prevHotkey = useEffectiveHotkey("previousSuggestion");
+  const nextHotkey = useEffectiveHotkey("nextSuggestion");
   // `?? EMPTY_SUGGESTIONS` shares one module-level array for no-session
   // reads so useSyncExternalStore doesn't loop on a fresh `[]` each call.
   const suggestions =
@@ -208,46 +209,37 @@ export const ReviewBar = ({
   });
 
   const handleKeyDown = useLatestCallback((event: KeyboardEvent) => {
-    if (
-      total === 0 ||
-      !event.altKey ||
-      event.ctrlKey ||
-      event.metaKey ||
-      !shouldHandleReviewShortcut()
-    ) {
+    if (total === 0 || !shouldHandleReviewShortcut()) {
       return;
     }
-    switch (event.key) {
-      case "Enter":
-        // Alt+Enter accepts, Alt+Shift+Enter rejects. Branch on shift
-        // explicitly so a stray shift can't turn accept into reject or
-        // vice versa.
-        if (activeAction !== "resolve") {
-          return;
-        }
-        claimShortcut(event);
-        if (event.shiftKey) {
-          rejectAndAdvance();
-        } else {
-          detached(acceptAndAdvance(), "ReviewBar");
-        }
+    // Match against the effective bindings. `matchesKeyboardEvent` compares
+    // modifiers exactly, so accept (default Alt+Enter) and reject (default
+    // Alt+Shift+Enter) stay distinct even though they share the Enter key, and
+    // a stray Shift can never turn one into the other.
+    if (matchesKeyboardEvent(event, rejectHotkey)) {
+      if (activeAction !== "resolve") {
         return;
-      case "ArrowUp":
-        if (event.shiftKey) {
-          return;
-        }
-        claimShortcut(event);
-        goPrev();
+      }
+      claimShortcut(event);
+      rejectAndAdvance();
+      return;
+    }
+    if (matchesKeyboardEvent(event, acceptHotkey)) {
+      if (activeAction !== "resolve") {
         return;
-      case "ArrowDown":
-        if (event.shiftKey) {
-          return;
-        }
-        claimShortcut(event);
-        goNext();
-        return;
-      default:
-        return;
+      }
+      claimShortcut(event);
+      detached(acceptAndAdvance(), "ReviewBar");
+      return;
+    }
+    if (matchesKeyboardEvent(event, prevHotkey)) {
+      claimShortcut(event);
+      goPrev();
+      return;
+    }
+    if (matchesKeyboardEvent(event, nextHotkey)) {
+      claimShortcut(event);
+      goNext();
     }
   });
 
@@ -299,7 +291,7 @@ export const ReviewBar = ({
         disabled={activeIndex <= 0}
         onClick={goPrev}
         size="icon-sm"
-        tooltip={`${t("common.previous")} · ${SHORTCUT_HINTS.prev}`}
+        tooltip={`${t("common.previous")} · ${formatForDisplay(prevHotkey)}`}
         variant="ghost"
       >
         <ChevronUpIcon className="size-4" />
@@ -309,7 +301,7 @@ export const ReviewBar = ({
         disabled={activeIndex >= suggestions.length - 1}
         onClick={goNext}
         size="icon-sm"
-        tooltip={`${t("common.next")} · ${SHORTCUT_HINTS.next}`}
+        tooltip={`${t("common.next")} · ${formatForDisplay(nextHotkey)}`}
         variant="ghost"
       >
         <ChevronDownIcon className="size-4" />
@@ -338,7 +330,7 @@ export const ReviewBar = ({
               detached(acceptAndAdvance(), "ReviewBar");
             }}
             size="sm"
-            tooltip={`${t("common.accept")} · ${SHORTCUT_HINTS.accept}`}
+            tooltip={`${t("common.accept")} · ${formatForDisplay(acceptHotkey)}`}
             variant="default"
           >
             <CheckIcon className="me-1 size-3.5 @max-[80rem]/file-viewer:me-0" />
@@ -351,7 +343,7 @@ export const ReviewBar = ({
             disabled={activeAction === "busy"}
             onClick={rejectAndAdvance}
             size="sm"
-            tooltip={`${t("docxReview.reject")} · ${SHORTCUT_HINTS.reject}`}
+            tooltip={`${t("docxReview.reject")} · ${formatForDisplay(rejectHotkey)}`}
             variant="outline"
           >
             <XIcon className="me-1 size-3.5 @max-[80rem]/file-viewer:me-0" />

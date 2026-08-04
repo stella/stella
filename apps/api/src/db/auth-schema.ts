@@ -28,6 +28,11 @@ export const user = pgTable(
     timezoneId: text("timezone_id").default("UTC").notNull(),
     preferredName: text("preferred_name"),
     wordEditShortcut: text("word_edit_shortcut"),
+    // Per-user keyboard-shortcut rebindings, serialized as a JSON object of
+    // `{ [shortcutId]: "Mod+K" }`. Null when the user has never rebound a
+    // shortcut (the default registry then applies unchanged). Structurally
+    // validated and length-capped before persistence (see `user-shortcuts.ts`).
+    userShortcuts: text("user_shortcuts"),
     // ISO 3166-1 alpha-2 code captured from the edge at signup; seeds the
     // practice-jurisdiction suggestion in onboarding. Null when the edge
     // did not advertise a country (local dev, self-hosted without a proxy).
@@ -68,6 +73,7 @@ export const AUTH_USER_STELLA_SELECT_COLUMNS = {
   timezoneId: "timezone_id",
   preferredName: "preferred_name",
   wordEditShortcut: "word_edit_shortcut",
+  userShortcuts: "user_shortcuts",
   detectedCountry: "detected_country",
   twoFactorEnabled: "two_factor_enabled",
   deletedAt: "deleted_at",

@@ -2130,8 +2130,21 @@
     "recents": "الأخيرة",
     "search": "بحث",
     "shortcutCategories": {
-      "navigation": "التنقّل"
+      "help": "مساعدة",
+      "navigation": "التنقّل",
+      "review": "مراجعة المستند"
     },
+    "shortcutsDialog": {
+      "collision": "مُعيَّن بالفعل لـ {label}",
+      "description": "تصفّح اختصارات لوحة المفاتيح للعمل بشكل أسرع.",
+      "editShortcut": "تغيير الاختصار",
+      "invalidBinding": "أضف مفتاحًا غير معدِّل",
+      "notRebindable": "لا يمكن تغيير هذا الاختصار",
+      "pressKeys": "اضغط مفاتيح جديدة…",
+      "resetToDefault": "إعادة التعيين إلى الوضع الافتراضي",
+      "title": "اختصارات لوحة المفاتيح"
+    },
+    "showShortcuts": "عرض اختصارات لوحة المفاتيح",
     "sidebar": "الشريط الجانبي",
     "sidebarDescription": "يعرض الشريط الجانبي للجوال.",
     "templates": "القوالب",

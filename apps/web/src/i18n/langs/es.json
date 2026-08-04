@@ -2130,8 +2130,21 @@
     "recents": "Recientes",
     "search": "Buscar",
     "shortcutCategories": {
-      "navigation": "Navegación"
+      "help": "Ayuda",
+      "navigation": "Navegación",
+      "review": "Revisión del documento"
     },
+    "shortcutsDialog": {
+      "collision": "Ya asignado a {label}",
+      "description": "Explora los atajos de teclado para trabajar más rápido.",
+      "editShortcut": "Cambiar atajo",
+      "invalidBinding": "Añade una tecla que no sea modificadora",
+      "notRebindable": "Este atajo no se puede cambiar",
+      "pressKeys": "Pulsa las nuevas teclas…",
+      "resetToDefault": "Restablecer valores predeterminados",
+      "title": "Atajos de teclado"
+    },
+    "showShortcuts": "Mostrar atajos de teclado",
     "sidebar": "Panel lateral",
     "sidebarDescription": "Muestra el panel lateral móvil.",
     "templates": "Plantillas",

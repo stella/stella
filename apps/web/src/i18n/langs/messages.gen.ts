@@ -2133,8 +2133,21 @@ type Messages = {
     "recents": "Recents";
     "search": "Search";
     "shortcutCategories": {
+      "help": "Help";
       "navigation": "Navigation";
+      "review": "Document review";
     };
+    "shortcutsDialog": {
+      "collision": "Already assigned to {label}";
+      "description": "Browse keyboard shortcuts to work faster.";
+      "editShortcut": "Change shortcut";
+      "invalidBinding": "Add a non-modifier key";
+      "notRebindable": "This shortcut can't be changed";
+      "pressKeys": "Press new keys…";
+      "resetToDefault": "Reset to default";
+      "title": "Keyboard shortcuts";
+    };
+    "showShortcuts": "Show keyboard shortcuts";
     "sidebar": "Sidebar";
     "sidebarDescription": "Displays the mobile sidebar.";
     "templates": "Templates";

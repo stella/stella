@@ -2130,8 +2130,21 @@
     "recents": "Ostatnie",
     "search": "Szukaj",
     "shortcutCategories": {
-      "navigation": "Nawigacja"
+      "help": "Pomoc",
+      "navigation": "Nawigacja",
+      "review": "Przegląd dokumentu"
     },
+    "shortcutsDialog": {
+      "collision": "Już przypisano do {label}",
+      "description": "Przeglądaj skróty klawiszowe, aby pracować szybciej.",
+      "editShortcut": "Zmień skrót",
+      "invalidBinding": "Dodaj klawisz niebędący modyfikatorem",
+      "notRebindable": "Tego skrótu nie można zmienić",
+      "pressKeys": "Naciśnij nowe klawisze…",
+      "resetToDefault": "Przywróć domyślne",
+      "title": "Skróty klawiszowe"
+    },
+    "showShortcuts": "Pokaż skróty klawiszowe",
     "sidebar": "Panel boczny",
     "sidebarDescription": "Wyświetla mobilny panel boczny.",
     "templates": "Szablony",

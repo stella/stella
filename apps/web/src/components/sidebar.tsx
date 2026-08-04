@@ -26,8 +26,8 @@ import {
 import { useIsMobile } from "@stll/ui/hooks/use-mobile";
 import { cn } from "@stll/ui/lib/utils";
 
-import { HOTKEYS } from "@/lib/hotkeys";
 import { Slot } from "@/lib/slot";
+import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
 
 const SIDEBAR_LS_NAME = "sidebar_state";
 const SIDEBAR_WIDTH = "16rem";
@@ -111,7 +111,7 @@ function SidebarProvider({
       ? setOpenMobile((isOpen) => !isOpen)
       : setOpen((isOpen) => !isOpen);
 
-  useHotkey(HOTKEYS.TOGGLE_SIDEBAR, () => {
+  useHotkey(useEffectiveHotkey("toggleSidebar"), () => {
     toggleSidebar();
   });
 

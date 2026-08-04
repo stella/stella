@@ -2130,8 +2130,21 @@
     "recents": "Hiljutised",
     "search": "Otsing",
     "shortcutCategories": {
-      "navigation": "Navigeerimine"
+      "help": "Abi",
+      "navigation": "Navigeerimine",
+      "review": "Dokumendi ülevaatus"
     },
+    "shortcutsDialog": {
+      "collision": "Juba määratud: {label}",
+      "description": "Sirvi klaviatuuri otseteid, et kiiremini töötada.",
+      "editShortcut": "Muuda otseteed",
+      "invalidBinding": "Lisage klahv, mis pole muuteklahv",
+      "notRebindable": "Seda otseteed ei saa muuta",
+      "pressKeys": "Vajutage uued klahvid…",
+      "resetToDefault": "Lähtesta vaikeväärtusele",
+      "title": "Klaviatuuri otseteed"
+    },
+    "showShortcuts": "Kuva klaviatuuri otseteed",
     "sidebar": "Külgriba",
     "sidebarDescription": "Kuvab mobiilse külgriba.",
     "templates": "Mallid",

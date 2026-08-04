@@ -2130,8 +2130,21 @@
     "recents": "Nedávne",
     "search": "Hľadať",
     "shortcutCategories": {
-      "navigation": "Navigácia"
+      "help": "Pomocník",
+      "navigation": "Navigácia",
+      "review": "Revízia dokumentu"
     },
+    "shortcutsDialog": {
+      "collision": "Už priradené k {label}",
+      "description": "Prehľadávajte klávesové skratky a pracujte rýchlejšie.",
+      "editShortcut": "Zmeniť skratku",
+      "invalidBinding": "Pridajte kláves, ktorý nie je modifikátor",
+      "notRebindable": "Túto skratku nie je možné zmeniť",
+      "pressKeys": "Stlačte nové klávesy…",
+      "resetToDefault": "Obnoviť predvolené",
+      "title": "Klávesové skratky"
+    },
+    "showShortcuts": "Zobraziť klávesové skratky",
     "sidebar": "Bočný panel",
     "sidebarDescription": "Zobrazí mobilný bočný panel.",
     "templates": "Vzory",
