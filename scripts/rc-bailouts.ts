@@ -66,14 +66,14 @@ const functionName = (code: string, location: SourceLocation): string => {
   const start = sourceIndex(code, location.start);
   const end = sourceIndex(code, location.end);
   const source = code.slice(start, end);
-  const declarationName = source.match(FUNCTION_DECLARATION)?.[1];
+  const declarationName = FUNCTION_DECLARATION.exec(source)?.[1];
   if (declarationName !== undefined) {
     return declarationName;
   }
 
   const lineStart = code.lastIndexOf("\n", Math.max(0, start - 1)) + 1;
   const leftOfFunction = code.slice(lineStart, start);
-  const assignedName = leftOfFunction.match(ASSIGNED_FUNCTION)?.[1];
+  const assignedName = ASSIGNED_FUNCTION.exec(leftOfFunction)?.[1];
   if (assignedName !== undefined) {
     return assignedName;
   }
@@ -100,7 +100,7 @@ const bailoutReason = (event: BailoutEvent): string => {
   if (event.kind === "PipelineError") {
     return event.data;
   }
-  return String(event.detail.category);
+  return event.detail.category;
 };
 
 const isBailoutEvent = (event: LoggerEvent): event is BailoutEvent =>
@@ -160,9 +160,23 @@ const scanFile = (
   }
 };
 
+// Code-unit order on the key. `Array#sort` with no comparator orders entries by
+// their string form, which for a `[key, record]` tuple is
+// `` `${key},[object Object]` `` — so the serialized baseline's ordering would
+// depend on how a record happens to stringify. Keys are Map keys, hence unique.
+const byKey = (
+  [left]: readonly [string, BailoutRecord],
+  [right]: readonly [string, BailoutRecord],
+): number => {
+  if (left === right) {
+    return 0;
+  }
+  return left < right ? -1 : 1;
+};
+
 const toBaseline = (bailouts: Map<string, BailoutRecord>): Baseline => {
   const current: Baseline = {};
-  for (const [key, { memos }] of [...bailouts.entries()].sort()) {
+  for (const [key, { memos }] of [...bailouts.entries()].sort(byKey)) {
     current[key] = memos;
   }
   return current;
@@ -293,7 +307,7 @@ const run = (): number => {
   }
 
   if (mode === "report") {
-    for (const [key, { reasons }] of [...bailouts.entries()].sort()) {
+    for (const [key, { reasons }] of [...bailouts.entries()].sort(byKey)) {
       console.log(`${key}\t${[...reasons].sort().join(", ")}`);
     }
     console.log(

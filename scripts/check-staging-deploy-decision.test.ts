@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { chmod, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import path from "node:path";
 
 // The staging gate decides, per run, whether to deploy, defer, or escalate.
 // Reading that decision out of the workflow text only proves the words are
@@ -22,7 +22,7 @@ const extractDecideScript = (workflow: string) => {
   );
   const jobEnd = workflow.indexOf("\n  build-and-deploy:\n", stepStart);
   const runStart = workflow.indexOf("run: |\n", stepStart);
-  if (stepStart < 0 || jobEnd < 0 || runStart < 0) {
+  if (stepStart === -1 || jobEnd === -1 || runStart === -1) {
     throw new Error("deploy-staging.yml no longer exposes the decide step");
   }
 
@@ -62,8 +62,8 @@ const runDecision = async ({
   servedCommit = "",
   status,
 }: DecisionCase): Promise<Decision> => {
-  const outputPath = join(workspace, `output-${Bun.randomUUIDv7()}.txt`);
-  const summaryPath = join(workspace, `summary-${Bun.randomUUIDv7()}.md`);
+  const outputPath = path.join(workspace, `output-${Bun.randomUUIDv7()}.txt`);
+  const summaryPath = path.join(workspace, `summary-${Bun.randomUUIDv7()}.md`);
   await Promise.all([Bun.write(outputPath, ""), Bun.write(summaryPath, "")]);
 
   const nowSeconds = Math.floor(Date.now() / 1000);
@@ -93,15 +93,14 @@ const runDecision = async ({
   const output = await Bun.file(outputPath).text();
   const deploy = output
     .split("\n")
-    .filter((line) => line.startsWith("deploy="))
-    .at(-1);
+    .findLast((line) => line.startsWith("deploy="));
 
   return { deploy: deploy ?? "", exitCode: result.exitCode };
 };
 
 beforeAll(async () => {
-  workspace = await mkdtemp(join(tmpdir(), "staging-deploy-decision-"));
-  scriptPath = join(workspace, "decide.sh");
+  workspace = await mkdtemp(path.join(tmpdir(), "staging-deploy-decision-"));
+  scriptPath = path.join(workspace, "decide.sh");
 
   const script = extractDecideScript(await Bun.file(WORKFLOW_URL).text());
   expect(script).toContain("set -euo pipefail");
@@ -111,7 +110,7 @@ beforeAll(async () => {
   // Stands in for the reads the script makes: the last recorded staging
   // deployment, the oldest commit staging has not taken, and the tip's own
   // timestamp.
-  const stub = join(workspace, "gh");
+  const stub = path.join(workspace, "gh");
   await Bun.write(
     stub,
     `#!/usr/bin/env bash

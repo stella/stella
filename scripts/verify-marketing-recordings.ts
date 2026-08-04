@@ -216,7 +216,12 @@ const main = () => {
       );
     }
     return {
-      ...entry,
+      captureId: entry.captureId,
+      theme: entry.theme,
+      viewport: entry.viewport,
+      dpr: entry.dpr,
+      recordedAtCommit: entry.recordedAtCommit,
+      watchedPaths: entry.watchedPaths,
       manualVerification: {
         artifactsHash: recordingArtifactsHash(entry.captureId, entry.theme),
         reason: options.reason,

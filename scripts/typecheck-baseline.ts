@@ -116,7 +116,7 @@ const runProject = (project: string): RunResult => {
 // integers, memory has a K suffix, times an s suffix.
 
 const diagnosticField = (diagnostics: string, label: string): number | null => {
-  const match = diagnostics.match(new RegExp(`^${label}:\\s+([\\d.]+)`, "mu"));
+  const match = new RegExp(`^${label}:\\s+([\\d.]+)`, "mu").exec(diagnostics);
   const raw = match?.[1];
   if (raw === undefined) {
     return null;
