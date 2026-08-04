@@ -366,6 +366,7 @@
     },
     "aiPrompt": "Pole správy pre AI",
     "aiThread": "Konverzácia s AI",
+    "analyzingSources": "Analyzujem zdroje",
     "anonymizedMode": "Anonymizovaný režim AI",
     "anonymizedModeDisabled": "Anonymizovaný režim AI je vypnutý",
     "anonymizedModeEnabled": "Anonymizovaný režim AI je zapnutý",
@@ -448,7 +449,8 @@
       "openInFolio": "Otvoriť v editore",
       "pickMatterPrompt": "Vyberte spis, do ktorého sa tento dokument uloží.",
       "previewName": "Dokument: {name}",
-      "previewWaiting": "Čaká sa na obsah…"
+      "previewWaiting": "Čaká sa na obsah…",
+      "savePendingReview": "Pred uložením dokumentu vyriešte návrhy AI čakajúce na revíziu."
     },
     "deleteThread": "Zmazať konverzáciu",
     "editMode": {
@@ -880,11 +882,11 @@
     "expenses": "Výdavky",
     "export": {
       "citations": "Citácie",
-      "failed": "Správu sa nepodarilo exportovať",
+      "failed": "Správu sa nepodarilo uložiť",
       "footnotes": "Poznámky pod čiarou",
       "formatDocx": "Dokument Word (<docx>.docx</docx>)",
       "inline": "V texte",
-      "title": "Exportovať správu"
+      "title": "Uložiť správu"
     },
     "filter": "Filtrovať",
     "formula": "Vzorec",

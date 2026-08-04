@@ -28,8 +28,10 @@ import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { modelAcceptsDocumentAttachment } from "@/api/handlers/chat/attachment-modality";
 import {
   applyChatPartPersistenceBudget,
+  attachTerminalTurnOutcome,
   classifyChatPartForPersistence,
   getChatAttachmentMimeType,
+  getAwaitingUserInteraction,
   getUserFileIdFromAttachmentPart,
   isChatAttachmentPart,
   isChatDocumentPart,
@@ -48,6 +50,10 @@ import {
   shouldSurfaceFinalContentLoop,
   shouldStopLoopRecovery,
 } from "@/api/handlers/chat/loop-detector";
+import {
+  createTanStackTerminalHooks,
+  tanStackStreamEventLifecycle,
+} from "@/api/handlers/chat/tanstack-chat-lifecycle";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import {
   deanonymizeFromBoundary,
@@ -63,7 +69,9 @@ import type {
   ChatMessage,
   ChatMessageUsage,
   ChatPart,
+  ChatTurnOutcome,
   PersistableChatMessage,
+  PersistableTerminalAssistantMessage,
 } from "@/api/handlers/chat/types";
 import { hydrateFilePart } from "@/api/handlers/chat/upload-files";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
@@ -120,8 +128,8 @@ type StoredUserFile = {
 type AssistantValueRefResolver = ChatRefRegistry["resolveAssistantValueRefs"];
 
 type StreamChatFinishEvent = {
-  isAborted: boolean;
-  responseMessage: PersistableChatMessage;
+  outcome: ChatTurnOutcome;
+  responseMessage: PersistableTerminalAssistantMessage;
 };
 
 type StreamChatProps = {
@@ -161,14 +169,27 @@ export const pruneOrphanedToolParts = (
       return message;
     }
 
-    const parts = message.parts.filter(
-      (part) =>
-        part.type !== "tool-call" ||
-        part.state === "complete" ||
-        part.state === "input-complete" ||
-        part.state === "approval-responded" ||
-        part.output !== undefined,
-    );
+    const parts = message.parts.filter((part) => {
+      if (part.type !== "tool-call") {
+        return true;
+      }
+
+      const { state } = part;
+      switch (state) {
+        case "awaiting-input":
+        case "input-streaming":
+        case "approval-requested":
+          return false;
+        case "input-complete":
+        case "approval-responded":
+        case "complete":
+        case "error":
+          return true;
+        default:
+          state satisfies never;
+          return panic("Unhandled tool-call state");
+      }
+    });
     return parts.length === message.parts.length
       ? message
       : { ...message, parts };
@@ -806,8 +827,29 @@ const createChatRuntimeMiddleware = ({
   threadId,
 }: ChatRuntimeMiddlewareProps): ChatMiddleware => {
   let lastLoopRecoveryKey: string | null = null;
+  const terminalHooks = createTanStackTerminalHooks((event) => {
+    switch (event.type) {
+      case "completed":
+        recordChatAttemptFinish({
+          finishReason: event.info.finishReason,
+          messages: event.context.messages,
+          modelInfo: model,
+          state,
+          threadId,
+          usage: event.info.usage,
+        });
+        return;
+      case "failed":
+      case "interrupted":
+        return;
+      default:
+        event satisfies never;
+        return;
+    }
+  });
   return {
     name: "stella-chat-runtime",
+    ...terminalHooks,
     onConfig: async (ctx, config) => {
       if (ctx.phase !== "beforeModel") {
         return undefined;
@@ -860,16 +902,6 @@ const createChatRuntimeMiddleware = ({
       }
 
       return Object.keys(patch).length === 0 ? undefined : patch;
-    },
-    onFinish: (ctx, info) => {
-      recordChatAttemptFinish({
-        finishReason: info.finishReason,
-        messages: ctx.messages,
-        modelInfo: model,
-        state,
-        threadId,
-        usage: info.usage,
-      });
     },
   };
 };
@@ -960,15 +992,34 @@ export const processServerChatStream = async function* ({
   source,
 }: ProcessServerChatStreamProps): AsyncIterable<StreamChunk> {
   const deferredRunFinishedChunks: StreamChunk[] = [];
+  const toolCallsWithCompleteInput = new Set<string>();
   let usage: TokenUsage | undefined;
-  // `onFinish` must run at most once. Natural completion and the metered-abort
-  // `catch` invoke it explicitly and set this flag; the `finally` only persists
-  // the accumulated message when neither did.
-  let finishInvoked = false;
-  // A thrown error or an in-band `RUN_ERROR` chunk is a stream failure, handled
-  // above. The teardown persist in `finally` must not fire for it: an aborted
-  // generation is incomplete and an errored one has no trustworthy content.
-  let streamFailed = false;
+  // One accepted turn has exactly one terminal callback. Set before awaiting
+  // persistence so a callback failure cannot re-enter and double-write a
+  // different outcome from catch/finally.
+  const terminal: { state: "open" | "settled" } = { state: "open" };
+  const terminalize = async ({
+    flushProcessor = false,
+    outcome,
+  }: {
+    flushProcessor?: boolean;
+    outcome: ChatTurnOutcome;
+  }): Promise<void> => {
+    if (terminal.state === "settled") {
+      return;
+    }
+    if (flushProcessor) {
+      finalizeResponseProcessor(processor);
+    }
+    const responseMessage = createTerminalResponseMessage({
+      getResponseMessage,
+      mapMessageId,
+      outcome,
+      usage,
+    });
+    terminal.state = "settled";
+    await onFinish({ outcome, responseMessage });
+  };
   try {
     const normalizedSource = ensureAssistantMessageStart({
       getOrCreateMessageId: () =>
@@ -980,14 +1031,23 @@ export const processServerChatStream = async function* ({
     });
 
     for await (const sourceChunk of normalizedSource) {
+      if (sourceChunk.type === EventType.TOOL_CALL_END) {
+        toolCallsWithCompleteInput.add(sourceChunk.toolCallId);
+      }
       if (
         sourceChunk.type === EventType.RUN_STARTED &&
         deferredRunFinishedChunks.length > 0
       ) {
         // Continuation events such as `approval-requested` belong before the
-        // run's finish, but a later run does not. Flush the prior boundary
-        // before starting a fallback/next attempt so run lifecycles cannot
-        // interleave as START(A), START(B), FINISH(A).
+        // run's finish, but a later run does not. Register the later run with
+        // the server-side processor before closing the prior run so the
+        // processor keeps the shared assistant message active across a
+        // server-tool continuation. The client still receives the canonical
+        // FINISH(A), START(B) order. Without this internal overlap, TanStack
+        // finalizes after A and a tool-only B has no message-start event to
+        // reactivate, so its client-tool call is visible live but omitted from
+        // the persisted assistant turn.
+        processor.processChunk(sourceChunk);
         const priorRunFinishedChunks = deferredRunFinishedChunks.splice(0);
         for (const chunk of priorRunFinishedChunks) {
           processor.processChunk(chunk);
@@ -995,15 +1055,21 @@ export const processServerChatStream = async function* ({
         for (const chunk of priorRunFinishedChunks) {
           yield chunk;
         }
+        yield sourceChunk;
+        continue;
       }
       const chunk =
         sourceChunk.type === EventType.RUN_ERROR
           ? normalizeRunErrorChunk(sourceChunk)
           : sourceChunk;
-      if (chunk.type === EventType.RUN_FINISHED && chunk.usage) {
-        usage = chunk.usage;
-      }
-      if (chunk.type === EventType.RUN_FINISHED) {
+      const lifecycle = tanStackStreamEventLifecycle(chunk);
+      if (lifecycle === "completed") {
+        if (chunk.type !== EventType.RUN_FINISHED) {
+          panic("Unhandled TanStack completed stream event");
+        }
+        if (chunk.usage) {
+          usage = chunk.usage;
+        }
         // TanStack's agent loop can emit continuation events after a model
         // run finishes, notably `approval-requested` for a gated server tool.
         // The client already receives RUN_FINISHED only after the source is
@@ -1016,45 +1082,63 @@ export const processServerChatStream = async function* ({
         continue;
       }
       processor.processChunk(chunk);
-      yield chunk;
-      if (chunk.type === EventType.RUN_ERROR) {
-        streamFailed = true;
+      if (lifecycle === "failed") {
+        if (chunk.type !== EventType.RUN_ERROR) {
+          panic("Unhandled TanStack failed stream event");
+        }
+        await terminalize({
+          flushProcessor: true,
+          outcome: { type: "failed", error: classifyRunErrorChunk(chunk) },
+        });
+        yield chunk;
         return;
       }
+      yield chunk;
     }
 
     const finalRunFinishedChunks = deferredRunFinishedChunks.splice(0);
     for (const chunk of finalRunFinishedChunks) {
       processor.processChunk(chunk);
     }
-    finishInvoked = await finishResponseMessage({
-      abortSignal,
-      getResponseMessage,
-      mapMessageId,
-      onFinish,
-      usage,
+    const awaitingUserInteraction =
+      getAwaitingUserInteraction(getResponseMessage());
+    const incompleteAskUserInteraction =
+      awaitingUserInteraction?.type === "ask-user" &&
+      !toolCallsWithCompleteInput.has(awaitingUserInteraction.toolCallId);
+    let outcome: ChatTurnOutcome;
+    if (incompleteAskUserInteraction) {
+      outcome = { type: "failed", error: "unknown" };
+    } else if (awaitingUserInteraction === null) {
+      outcome = { type: "completed" };
+    } else {
+      outcome = {
+        type: "awaiting-user",
+        interaction: awaitingUserInteraction,
+      };
+    }
+    await terminalize({
+      outcome,
     });
     for (const chunk of finalRunFinishedChunks) {
       yield chunk;
     }
   } catch (error) {
-    streamFailed = true;
     const kind = classifyAIError(error);
     if (abortSignal.aborted) {
       // An aborted stream is an expected exit (metered cutoff, client
       // disconnect); its rejection shape is not a stream defect even
       // when the classifier cannot name it.
       captureError(error, { kind });
-      finishInvoked = await finalizeInterruptedResponseMessage({
-        abortSignal,
-        getResponseMessage,
-        mapMessageId,
-        onFinish,
-        processor,
-        usage,
+      await terminalize({
+        flushProcessor: true,
+        outcome: { type: "interrupted", reason: "timeout" },
       });
     } else {
       reportStreamFailure(error, kind);
+      await terminalize({
+        flushProcessor: true,
+        outcome: { type: "failed", error: kind },
+      });
     }
     yield {
       type: EventType.RUN_ERROR,
@@ -1073,87 +1157,63 @@ export const processServerChatStream = async function* ({
     // failed, and a no-op when nothing accumulated (finalizeStream drops
     // whitespace-only messages). Awaiting here completes even on teardown, and
     // persistence uses the shared RLS pool, not a request-scoped handle.
-    if (!finishInvoked && !streamFailed) {
-      await finalizeInterruptedResponseMessage({
-        abortSignal,
-        getResponseMessage,
-        mapMessageId,
-        onFinish,
-        processor,
-        usage,
+    if (terminal.state === "open") {
+      await terminalize({
+        flushProcessor: true,
+        outcome: { type: "interrupted", reason: "client-disconnected" },
       });
     }
   }
 };
 
 type FinishResponseMessageProps = {
-  abortSignal: AbortSignal;
   getResponseMessage: () => ChatMessage | null;
   mapMessageId: MessageIdMapper;
-  onFinish: (event: StreamChatFinishEvent) => Promise<void> | void;
+  outcome: ChatTurnOutcome;
   usage: TokenUsage | undefined;
 };
 
-/** Returns whether `onFinish` was invoked (false when no message accumulated). */
-const finishResponseMessage = async ({
-  abortSignal,
+const createTerminalResponseMessage = ({
   getResponseMessage,
   mapMessageId,
-  onFinish,
+  outcome,
   usage,
-}: FinishResponseMessageProps): Promise<boolean> => {
+}: FinishResponseMessageProps): PersistableTerminalAssistantMessage => {
   const responseMessage = getResponseMessage();
-  // A part-less message is not a turn. `planAssistantFinishPersistence` inserts
-  // whatever a `completed` finish hands it, so letting one through would put a
-  // blank assistant turn in the history that hydration then renders as an empty
-  // reply. Both callers funnel through here, so no path can persist one.
-  if (!responseMessage || responseMessage.parts.length === 0) {
-    return false;
+  if (
+    (outcome.type === "completed" || outcome.type === "awaiting-user") &&
+    (!responseMessage || responseMessage.parts.length === 0)
+  ) {
+    throw new ChatEmptyCompletionError({
+      message: CHAT_EMPTY_COMPLETION_MESSAGE,
+    });
   }
 
-  await onFinish({
-    isAborted: abortSignal.aborted,
-    responseMessage: attachUsageMetadata({
-      message: normalizeFinalAssistantMessageId({
-        mapMessageId,
-        message: responseMessage,
-      }),
-      usage,
-    }),
+  const persistableMessage =
+    responseMessage === null
+      ? toPersistableChatMessage({
+          id: mapMessageId(ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL),
+          parts: [],
+          role: "assistant",
+        })
+      : attachUsageMetadata({
+          message: normalizeFinalAssistantMessageId({
+            mapMessageId,
+            message: responseMessage,
+          }),
+          usage,
+        });
+  return attachTerminalTurnOutcome({
+    message: persistableMessage,
+    turnOutcome: outcome,
   });
-  return true;
 };
 
-type FinalizeInterruptedResponseMessageProps = FinishResponseMessageProps & {
-  processor: StreamProcessor;
-};
-
-/**
- * Flush the processor's partial assistant message and run the finish callback
- * when the stream stopped before a natural `RUN_FINISHED`. Two callers:
- *
- * - the `catch` path, when the metered abort signal fired mid-stream. There
- *   `abortSignal.aborted` is true, so the finish is reported as aborted and the
- *   incomplete message is discarded downstream.
- * - the `finally` path, when the client connection dropped and the SSE consumer
- *   `.return()`d the stream generator before the after-loop finish ran. The
- *   metered signal is decoupled from the socket, so `abortSignal.aborted` is
- *   false, the finish is reported as completed, and the already-generated (and
- *   separately metered) message is persisted instead of lost.
- *
- * Returns whether `onFinish` was invoked (false when no content accumulated,
- * e.g. `finalizeStream` dropped a whitespace-only message).
- */
-const finalizeInterruptedResponseMessage = async ({
-  processor,
-  ...props
-}: FinalizeInterruptedResponseMessageProps): Promise<boolean> => {
+const finalizeResponseProcessor = (processor: StreamProcessor): void => {
   try {
     processor.finalizeStream();
-    return await finishResponseMessage(props);
   } catch (error) {
     captureError(error, { kind: "aborted_stream_finish_failed" });
-    return false;
   }
 };
 

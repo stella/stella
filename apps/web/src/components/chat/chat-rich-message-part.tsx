@@ -89,35 +89,43 @@ export const toRenderableMediaSource = (part: MediaChatPart): string | null => {
   ) {
     return null;
   }
-  if (source.type === "data") {
-    if (
-      mimeType === undefined ||
-      !mimeType.startsWith(mimePrefix) ||
-      !isBoundedBase64Content(
-        source.value,
-        CHAT_RICH_PART_LIMITS.inlineMediaMaxChars,
-      )
-    ) {
-      return null;
+  switch (source.type) {
+    case "data":
+      if (
+        mimeType === undefined ||
+        !mimeType.startsWith(mimePrefix) ||
+        !isBoundedBase64Content(
+          source.value,
+          CHAT_RICH_PART_LIMITS.inlineMediaMaxChars,
+        )
+      ) {
+        return null;
+      }
+      return `data:${mimeType};base64,${source.value}`;
+    case "url": {
+      if (mimeType && !mimeType.startsWith(mimePrefix)) {
+        return null;
+      }
+      if (source.value.length > CHAT_RICH_PART_LIMITS.mediaUrlMaxChars) {
+        return null;
+      }
+      const storedFileUrl = getUserFileContentUrl(source.value);
+      if (storedFileUrl) {
+        return storedFileUrl;
+      }
+      if (!URL.canParse(source.value)) {
+        return null;
+      }
+      const { protocol } = new URL(source.value);
+      return protocol === "http:" || protocol === "https:"
+        ? source.value
+        : null;
     }
-    return `data:${mimeType};base64,${source.value}`;
+    default: {
+      const exhaustive: never = source;
+      return exhaustive;
+    }
   }
-
-  if (mimeType && !mimeType.startsWith(mimePrefix)) {
-    return null;
-  }
-  if (source.value.length > CHAT_RICH_PART_LIMITS.mediaUrlMaxChars) {
-    return null;
-  }
-  const storedFileUrl = getUserFileContentUrl(source.value);
-  if (storedFileUrl) {
-    return storedFileUrl;
-  }
-  if (!URL.canParse(source.value)) {
-    return null;
-  }
-  const { protocol } = new URL(source.value);
-  return protocol === "http:" || protocol === "https:" ? source.value : null;
 };
 
 const decodeBase64Utf8 = (value: string): string | null => {

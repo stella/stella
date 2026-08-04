@@ -56,6 +56,14 @@ type OnlineIndex = RequiredMigrationIndex & {
 export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   {
     createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "chat_messages_id_thread_uidx" ON public."chat_messages" USING btree ("id", "thread_id")',
+    definitionBody: "ON public.chat_messages USING btree (id, thread_id)",
+    isUnique: true,
+    name: "chat_messages_id_thread_uidx",
+    tableName: "chat_messages",
+  },
+  {
+    createSql:
       'CREATE INDEX CONCURRENTLY "report_exports_workspace_requester_created_idx" ON public."report_exports" USING btree ("workspace_id", "requested_by", "created_at", "id")',
     definitionBody:
       "ON public.report_exports USING btree (workspace_id, requested_by, created_at, id)",

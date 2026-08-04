@@ -366,6 +366,7 @@
     },
     "aiPrompt": "DI pranešimo laukas",
     "aiThread": "DI pokalbis",
+    "analyzingSources": "Analizuojami šaltiniai",
     "anonymizedMode": "Anonimizuotas DI režimas",
     "anonymizedModeDisabled": "Anonimizuotas DI režimas išjungtas",
     "anonymizedModeEnabled": "Anonimizuotas DI režimas įjungtas",
@@ -448,7 +449,8 @@
       "openInFolio": "Atidaryti redaktoriuje",
       "pickMatterPrompt": "Pasirinkite bylą, į kurią išsaugoti šį dokumentą.",
       "previewName": "Dokumentas: {name}",
-      "previewWaiting": "Laukiama turinio…"
+      "previewWaiting": "Laukiama turinio…",
+      "savePendingReview": "Prieš išsaugodami dokumentą išspręskite peržiūros laukiančius AI pasiūlymus."
     },
     "deleteThread": "Ištrinti pokalbį",
     "editMode": {
@@ -880,11 +882,11 @@
     "expenses": "Išlaidos",
     "export": {
       "citations": "Citatos",
-      "failed": "Nepavyko eksportuoti žinutės",
+      "failed": "Nepavyko išsaugoti žinutės",
       "footnotes": "Išnašos",
       "formatDocx": "„Word“ dokumentas (<docx>.docx</docx>)",
       "inline": "Tekste",
-      "title": "Eksportuoti žinutę"
+      "title": "Išsaugoti žinutę"
     },
     "filter": "Filtras",
     "formula": "Formulė",

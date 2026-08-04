@@ -25,8 +25,10 @@ import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models"
 // first and reveals the rest behind a toggle.
 const MAX_SUGGESTIONS = 4;
 
-const SUGGESTIONS_SYSTEM_PROMPT = `You write a list of suggested follow-up prompts for someone in a legal workspace chat.
-Based on the conversation transcript, suggest up to ${MAX_SUGGESTIONS} short, natural, and distinct follow-up questions or next steps that the user might want to ask next.
+export const SUGGESTIONS_SYSTEM_PROMPT = `You write a list of suggested follow-up prompts for someone in a legal workspace chat.
+Based on the conversation transcript, suggest up to ${MAX_SUGGESTIONS} short, natural, and distinct follow-up questions or next steps that the user might want to send next.
+
+Each suggestion is inserted verbatim into the USER'S message composer and sent to the AI. Write strictly from the user's perspective, addressed to the AI. Never write a question that the AI would ask the user, such as "Do you want to add substitution authority?", "Would you like me to...?", "Chceš doplnit...?", or "Přejete si...?". Rewrite those as user requests, such as "Add substitution authority." or "Please generate the document as a PDF." If missing information is the natural next topic, phrase it as the user asking the AI what to provide, for example "What information do you need from me?".
 
 Make each suggestion a concise, single-sentence prompt (e.g., "What are the key risks?", "Can you draft a response?", "Explain the governing law section.").
 Do not include headings, bullet points, numbering, or introductory text. Respond only with the suggested prompts, one per line.
@@ -40,6 +42,45 @@ const config = {
 } satisfies HandlerConfig;
 
 type SuggestedPromptsResult = { prompts: string[] };
+
+type SuggestedPromptMessage = {
+  parts: ReturnType<typeof normalizePersistedChatMessageContent>["parts"];
+  role: "assistant" | "system" | "user";
+};
+
+type SuggestedPromptToolCallState = Extract<
+  SuggestedPromptMessage["parts"][number],
+  { type: "tool-call" }
+>["state"];
+
+const ASK_USER_STATE_AWAITS_USER = {
+  "awaiting-input": true,
+  "approval-requested": true,
+  "approval-responded": false,
+  complete: false,
+  error: false,
+  "input-complete": true,
+  "input-streaming": true,
+} as const satisfies Record<SuggestedPromptToolCallState, boolean>;
+
+export const latestAssistantTurnAwaitsUser = (
+  messages: readonly SuggestedPromptMessage[],
+): boolean => {
+  const latest = messages.at(-1);
+  if (latest?.role !== "assistant") {
+    return false;
+  }
+
+  return latest.parts.some((part) => {
+    if (part.type !== "tool-call") {
+      return false;
+    }
+    if (part.state === "approval-requested") {
+      return true;
+    }
+    return part.name === "ask-user" && ASK_USER_STATE_AWAITS_USER[part.state];
+  });
+};
 
 // Budget for the visible output only: a few short lines, well under 100
 // tokens. The fast role requests reasoning off (see the OpenRouter role
@@ -113,6 +154,13 @@ const getSuggestedPrompts = createSafeRootHandler(
             workspaceId: true,
             usedAnonymization: true,
           },
+          with: {
+            turns: {
+              columns: { status: true },
+              limit: 1,
+              orderBy: { createdAt: "desc" },
+            },
+          },
         }),
       ),
     );
@@ -133,6 +181,11 @@ const getSuggestedPrompts = createSafeRootHandler(
       return Result.ok<SuggestedPromptsResult>({ prompts: [] });
     }
 
+    const latestTurn = thread.turns.at(0);
+    if (latestTurn !== undefined && latestTurn.status !== "completed") {
+      return Result.ok<SuggestedPromptsResult>({ prompts: [] });
+    }
+
     const messageWindow = yield* Result.await(
       loadRecapMessageWindow({ safeDb, threadId, userId: user.id }),
     );
@@ -145,6 +198,10 @@ const getSuggestedPrompts = createSafeRootHandler(
       role: row.role,
       parts: normalizePersistedChatMessageContent(row.content).parts,
     }));
+
+    if (latestAssistantTurnAwaitsUser(recapMessages)) {
+      return Result.ok<SuggestedPromptsResult>({ prompts: [] });
+    }
 
     const transcript = buildRecapTranscript(recapMessages);
     if (!transcript) {

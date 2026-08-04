@@ -43,6 +43,10 @@ import { useChatThreadRuntime } from "@/features/chat/hooks/use-chat-thread-runt
 import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
 import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
 import {
+  resolveSuggestedPromptsAvailability,
+  resolveSuggestedPromptsTurnOwner,
+} from "@/features/chat/lib/suggested-prompts-availability";
+import {
   applyChatModelChange,
   chatThreadOptions,
   chatThreadSuggestedPromptsOptions,
@@ -133,6 +137,7 @@ export const ChatThreadPage = ({
   );
   const threadKey = getChatThreadKey(threadRef);
   const anonymized = useChatAnonymized(threadRef);
+  const [composerFocused, setComposerFocused] = useState(false);
   const getContextMatterIds = useLatestCallback(() =>
     resolveChatContextMatterIds(
       threadRef,
@@ -205,6 +210,7 @@ export const ChatThreadPage = ({
     removeQueuedMessage,
     stop,
     isGenerating,
+    turnAbandoned,
     alwaysApprovedTools,
     conversationApprovedTools,
     handleApprove,
@@ -214,6 +220,7 @@ export const ChatThreadPage = ({
     handleAskUserEditAndRerun,
     handleAlwaysAllow,
     handleCreateDocumentResolve,
+    handleOpenCreateDocumentDraft,
     handleOpenCreatedDocument,
     createDocumentMatters,
     isLoadingCreateDocumentMatters,
@@ -238,8 +245,6 @@ export const ChatThreadPage = ({
   // Gated by draft store emptiness so the query does not fire when the
   // user is already typing a custom follow-up.
   const lastMessage = messages.at(-1);
-  const lastMessageId = lastMessage?.id ?? null;
-  const lastMessageRole = lastMessage?.role ?? null;
   // Ask-user cards report their local "edit answers" mode here: reopening an
   // answered card turns it back into a live clarification form, which the
   // persisted part state (`output-available`) does not reflect.
@@ -263,40 +268,35 @@ export const ChatThreadPage = ({
     },
     [],
   );
-  // An ask-user clarification card owns the turn, and its own questions and
-  // submit button take precedence over generic follow-up suggestions, so
-  // suppress both the chips and the Tab-to-ask editor hint while one is live.
-  // A card is live when it is still awaiting input (always the last message),
-  // or when any card has been reopened via Edit — including an earlier card
-  // with downstream replies, where the persisted `output-available` state no
-  // longer reflects the live edit-and-rerun form.
-  const lastMessageHasPendingAskUser =
-    lastMessage?.role === "assistant" &&
-    lastMessage.parts.some(
-      (part) =>
-        part.type === "tool-call" &&
-        part.name === "ask-user" &&
-        part.state !== "complete",
-    );
-  const askUserOwnsTurn =
-    lastMessageHasPendingAskUser || editingAskUserToolCallIds.size > 0;
   const editorIsEmpty = useIsChatDraftEmpty(threadRef);
-  const eligibleForSuggestions =
-    editorIsEmpty &&
-    lastMessageId !== null &&
-    lastMessageRole === "assistant" &&
-    !askUserOwnsTurn;
+  const suggestedPromptsAvailability = resolveSuggestedPromptsAvailability({
+    editorIsEmpty,
+    error,
+    isGenerating,
+    lastMessage: lastMessage ?? null,
+    turnAbandoned,
+    turnOwner: resolveSuggestedPromptsTurnOwner({
+      approvalPendingMessageId,
+      hasReopenedAskUser: editingAskUserToolCallIds.size > 0,
+      lastMessage: lastMessage ?? null,
+    }),
+  });
+  const lastMessageId =
+    suggestedPromptsAvailability.status === "eligible"
+      ? suggestedPromptsAvailability.lastMessageId
+      : "";
   const { data: suggestedPromptsData } = useQuery(
     chatThreadSuggestedPromptsOptions({
       activeOrganizationId,
-      enabled: !isGenerating && eligibleForSuggestions,
-      lastMessageId: lastMessageId ?? "",
+      enabled: suggestedPromptsAvailability.status === "eligible",
+      lastMessageId,
       threadRef,
     }),
   );
-  const suggestedFollowupPrompts = suggestedPromptsData
-    ? suggestedPromptsData.prompts
-    : [];
+  const suggestedFollowupPrompts =
+    suggestedPromptsAvailability.status === "eligible" && suggestedPromptsData
+      ? suggestedPromptsData.prompts
+      : [];
   const suggestedFollowupPrompt = suggestedFollowupPrompts.at(0) ?? undefined;
 
   // Seed brand-new (empty) threads from the persisted web-search
@@ -590,6 +590,7 @@ export const ChatThreadPage = ({
                       onAskUserEditingChange={handleAskUserEditingChange}
                       onAskUserSubmit={handleAskUserSubmit}
                       onCreateDocumentResolve={handleCreateDocumentResolve}
+                      onOpenCreateDocumentDraft={handleOpenCreateDocumentDraft}
                       onOpenCreatedDocument={handleOpenCreatedDocument}
                       onRemoveQueuedMessage={removeQueuedMessage}
                       onResend={resendLatestMessage}
@@ -621,6 +622,8 @@ export const ChatThreadPage = ({
             <ChatAnonymizationLayer
               editor={controller.editor}
               enabled={anonymized}
+              focused={composerFocused}
+              ownerKey={threadKey}
               workspaceId={workspaceId ?? threadRef.threadId}
             />
             {/* Soft fade so messages dissolve into the floating composer
@@ -719,6 +722,7 @@ export const ChatThreadPage = ({
                   onStop={() => {
                     stop();
                   }}
+                  onFocusChange={setComposerFocused}
                   onSubmit={handleSubmit}
                 />
               </div>

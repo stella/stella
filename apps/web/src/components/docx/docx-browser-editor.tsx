@@ -1671,14 +1671,14 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
           {/* Floating bottom-center review stepper for the AI's pending
               DOCX suggestions. Rendered inside the FileViewerWithAI
               positioned container so it shares the chat composer's
-              coordinate space (it clears the composer at `bottom-28`).
+              coordinate space (it clears the composer at `bottom-24`).
               Returns null unless this entity has pending suggestions. */}
           <ReviewBar
             docxEditable={isUnlocked}
             docxEditorRef={editorRef}
             entityId={entityId}
+            persistence={{ type: "workspace", workspaceId }}
             requestDocxEditMode={requestEditMode}
-            workspaceId={workspaceId}
           />
         </FileViewerWithAI>
       </div>

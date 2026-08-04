@@ -207,9 +207,13 @@
     {
       "id": "export",
       "en": "Export",
+      "note": "Czech product UI uses ordinary save language; avoid the technical loanword Exportovat.",
+      "forbidden": {
+        "cs": ["Exportovat"]
+      },
       "translations": {
         "ar": "تصدير",
-        "cs": "Exportovat",
+        "cs": "Uložit",
         "sk": "Exportovať",
         "pl": "Eksportuj",
         "de": "Exportieren",

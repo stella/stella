@@ -41,6 +41,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { AcceptAllButton } from "@/components/ai-suggestions/accept-all-button";
+import { canRevertReviewSuggestion } from "@/components/ai-suggestions/review-bar.logic";
 import {
   REVIEW_UNSPECIFIED_AREA,
   SEVERITY_ORDER,
@@ -182,7 +183,7 @@ export const ReviewPanelImpl = ({
     navigateTo,
   } = useReviewActions({
     entityId,
-    workspaceId,
+    persistence: { type: "workspace", workspaceId },
     docxEditorRef,
     docxEditable,
     requestDocxEditMode,
@@ -1019,11 +1020,7 @@ const SuggestionRow = ({
   const showArea =
     item.area.length > 0 && item.area !== REVIEW_UNSPECIFIED_AREA;
   const isAccepted = item.status === "accepted";
-  // A hydrated, pre-reload accepted item carries no live `undoHandle`
-  // (it didn't survive the reload), so Revert can't undo the document
-  // change — hide the affordance. Reject stays revertible, and pending
-  // hydrated items re-apply via their `pendingOperation`.
-  const canRevert = !(item.status === "accepted" && item.undoHandle === null);
+  const canRevert = canRevertReviewSuggestion(item);
 
   if (isResolved) {
     return (

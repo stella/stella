@@ -3,15 +3,19 @@ import { and, eq, inArray } from "drizzle-orm";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
+import { CHAT_TURN_INTENT } from "@stll/api-contract";
 import type { SkillMetadata } from "@stll/skills";
 
+import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { env } from "@/api/env";
 import {
   chatMessageContentFromMessage,
+  getResumedUserInteraction,
   isChatPart,
+  toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
   appendAnonymizedModeHintToChatSafePrompt,
@@ -28,6 +32,7 @@ import type {
 import type {
   ChatSendRequest,
   IncomingActiveDecision,
+  IncomingActiveDraft,
   IncomingActiveExternal,
   IncomingActiveFile,
   IncomingActiveSkill,
@@ -43,13 +48,29 @@ import {
 } from "@/api/handlers/chat/chat-schema";
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
 import {
+  claimChatTurnForExecution,
+  claimChatTurnForExecutionOnTx,
+  canAcceptChatTurnOnTx,
+  createChatTurnAcceptance,
+  insertChatTurnAcceptanceOnTx,
+  CHAT_METERED_PROVIDER_TIMEOUT_MS,
+  renewChatTurnExecutionLease,
+  settleChatTurnOnTx,
+  withClaimedChatTurnExecution,
+} from "@/api/handlers/chat/chat-turn-persistence";
+import type {
+  ChatTurnAcceptance,
+  ChatTurnExecution,
+  ChatTurnExecutionClaim,
+} from "@/api/handlers/chat/chat-turn-persistence";
+import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
+import {
   compactChatMessagesForModel,
   shouldCompactChatMessages,
 } from "@/api/handlers/chat/compaction";
 import { resolveChatCompactionBudget } from "@/api/handlers/chat/compaction-budget";
 import {
   computeAssistantTurnWorkspaceIds,
-  expandThreadDataScope,
   extractIncomingMessageWorkspaceIds,
   extractThreadDataWorkspaceIds,
 } from "@/api/handlers/chat/data-scope";
@@ -113,9 +134,11 @@ import {
 } from "@/api/handlers/chat/tools/tool-scope";
 import type {
   ChatMessage,
+  ChatTurnOutcome,
   PersistableChatMessage,
 } from "@/api/handlers/chat/types";
 import { createRawChatFilePart } from "@/api/handlers/chat/upload-files";
+import type { UploadedChatFile } from "@/api/handlers/chat/upload-files";
 import {
   resolveActiveChatSkillContext,
   type ActiveChatSkillContext,
@@ -128,8 +151,19 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
+import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resolveEffectiveChatModelId } from "@/api/lib/chat-model-selection";
+import {
+  canUseChatThreadForGeneratedDocumentDraft,
+  createGeneratedDocumentActiveDraftContext,
+  hasPersistedGeneratedDocumentActiveDraftContext,
+} from "@/api/lib/chat/active-draft-context";
+import { isReadyGeneratedDocumentDraft } from "@/api/lib/chat/created-draft";
+import {
+  expandThreadDataScopeOnTx,
+  replaceThreadDataScopeOnTx,
+} from "@/api/lib/chat/data-scope";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { detached } from "@/api/lib/detached";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -147,7 +181,6 @@ import { loadWebSearchProvidersForOrg } from "@/api/lib/web-search/load-org-keys
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const CHAT_COMPACTION_CHECKPOINT_TIMEOUT_MS = 120_000;
-const CHAT_METERED_AI_TIMEOUT_MS = 600_000;
 
 /**
  * Dev model overrides (`body.devModelId`) are local-only: reject them outside
@@ -210,6 +243,105 @@ const usableWorkspaceIds = (
   }
   return ids;
 };
+
+const validateActiveDraftContext = async ({
+  activeDraft,
+  organizationId,
+  safeDb,
+  userId,
+}: {
+  activeDraft: IncomingActiveDraft | undefined;
+  organizationId: SafeId<"organization">;
+  safeDb: SafeDb;
+  userId: SafeId<"user">;
+}): Promise<
+  Result<
+    { originDataWorkspaceIds: readonly SafeId<"workspace">[] } | null,
+    HandlerError<404> | SafeDbError
+  >
+> => {
+  if (activeDraft === undefined) {
+    return Result.ok(null);
+  }
+  const rows = await safeDb((tx) =>
+    tx
+      .select({
+        content: chatMessages.content,
+        dataWorkspaceIds: chatThreads.dataWorkspaceIds,
+        id: chatMessages.id,
+        role: chatMessages.role,
+      })
+      .from(chatMessages)
+      .innerJoin(chatThreads, eq(chatThreads.id, chatMessages.threadId))
+      .where(
+        and(
+          eq(chatMessages.userId, userId),
+          eq(chatMessages.id, activeDraft.originChatMessageId),
+          eq(chatThreads.id, activeDraft.originChatThreadId),
+          eq(chatThreads.userId, userId),
+          eq(chatThreads.organizationId, organizationId),
+        ),
+      )
+      .limit(1),
+  );
+  if (Result.isError(rows)) {
+    return Result.err(rows.error);
+  }
+  const originMessage = rows.value.at(0);
+  if (
+    originMessage?.role !== "assistant" ||
+    !isReadyGeneratedDocumentDraft({
+      persistedContent: originMessage.content,
+      fileName: activeDraft.fileName,
+      toolCallId: activeDraft.toolCallId,
+    })
+  ) {
+    return Result.err(
+      new HandlerError({
+        status: 404,
+        message: "Active generated document draft not found",
+      }),
+    );
+  }
+
+  return Result.ok({
+    originDataWorkspaceIds: originMessage.dataWorkspaceIds,
+  });
+};
+
+const stampValidatedMessageWithActiveDraftContext = ({
+  activeDraft,
+  message,
+}: {
+  activeDraft: IncomingActiveDraft | undefined;
+  message: PersistableChatMessage;
+}): PersistableChatMessage => {
+  if (activeDraft === undefined) {
+    return message;
+  }
+
+  return toPersistableChatMessage({
+    id: message.id,
+    role: message.role,
+    parts: message.parts,
+    ...(message.createdAt === undefined
+      ? {}
+      : { createdAt: message.createdAt }),
+    metadata: {
+      ...message.metadata,
+      activeDraftContext: createGeneratedDocumentActiveDraftContext({
+        originChatMessageId: activeDraft.originChatMessageId,
+        originChatThreadId: activeDraft.originChatThreadId,
+        toolCallId: activeDraft.toolCallId,
+      }),
+    },
+  });
+};
+
+type ClaimedChatTurnOwnership =
+  | { status: "unclaimed" }
+  | { status: "preflight"; execution: ChatTurnExecution }
+  | { status: "streaming" };
 
 const sendMessage = createSafeRootHandler(
   config,
@@ -363,6 +495,14 @@ const sendMessage = createSafeRootHandler(
         workspaceId,
       }),
     );
+    const activeDraftContext = yield* Result.await(
+      validateActiveDraftContext({
+        activeDraft: body.activeDraft,
+        organizationId: session.activeOrganizationId,
+        safeDb,
+        userId: user.id,
+      }),
+    );
     const validationActiveSkillContext = yield* Result.await(
       resolveActiveChatSkillContext({
         activeSkill: body.activeSkill,
@@ -394,6 +534,15 @@ const sendMessage = createSafeRootHandler(
         }),
     );
     let externalMcpToolsHandedOffToStreaming = false;
+    let pendingUnpersistedSideEffects:
+      | {
+          threadState: ChatThreadState;
+          uploadedFiles: UploadedChatFile[];
+        }
+      | undefined;
+    let claimedChatTurnOwnership: ClaimedChatTurnOwnership = {
+      status: "unclaimed",
+    };
 
     // The try/finally starts immediately after the loader is constructed
     // (rather than just around the streaming pass) so that a throw from
@@ -522,6 +671,10 @@ const sendMessage = createSafeRootHandler(
 
       const thread = yield* Result.await(
         loadThread({
+          initialDataWorkspaceIds:
+            activeDraftContext === null
+              ? []
+              : activeDraftContext.originDataWorkspaceIds,
           initialContextMatterIds: requestedContextMatterIds,
           isAnonymized: body.sendMode === CHAT_SEND_MODE.anonymized,
           organizationId: session.activeOrganizationId,
@@ -533,22 +686,63 @@ const sendMessage = createSafeRootHandler(
           workspaceId,
         }),
       );
+      // Own the thread from creation through the first durable message. The
+      // enclosing finally is the sole rollback boundary for every later
+      // return, error, or SDK short-circuit before that persistence succeeds.
+      pendingUnpersistedSideEffects = {
+        threadState: thread,
+        uploadedFiles: [],
+      };
+
+      const activeDraft = body.activeDraft;
+      if (activeDraft !== undefined) {
+        const hasPersistedContext =
+          thread.type === "created"
+            ? false
+            : yield* Result.await(
+                safeDb(async (tx) =>
+                  hasPersistedGeneratedDocumentActiveDraftContext({
+                    generatedDraft: {
+                      originChatMessageId: activeDraft.originChatMessageId,
+                      originChatThreadId: activeDraft.originChatThreadId,
+                      toolCallId: activeDraft.toolCallId,
+                    },
+                    organizationId: session.activeOrganizationId,
+                    threadId: thread.data.id,
+                    tx,
+                    userId: user.id,
+                  }),
+                ),
+              );
+        if (
+          !canUseChatThreadForGeneratedDocumentDraft({
+            hasPersistedContext,
+            threadType: thread.type,
+          })
+        ) {
+          return Result.err(
+            new HandlerError({
+              status: 409,
+              message:
+                "Active generated document draft is not bound to this chat",
+            }),
+          );
+        }
+      }
+
+      const stampedValidatedMessage = {
+        ...validatedMessage,
+        message: stampValidatedMessageWithActiveDraftContext({
+          activeDraft: body.activeDraft,
+          message: validatedMessage.message,
+        }),
+      };
 
       // Existing-thread pin changes are durable side effects, so stop before
       // applying them when any earlier validation or thread read observed a
       // client disconnect. Created threads still need their rollback token
       // cleaned up on this exit path.
       if (isClientConnectionAborted()) {
-        yield* Result.await(
-          rollbackUnpersistedChatSideEffects({
-            recordAuditEvent,
-            safeDb,
-            threadId: body.threadId,
-            threadState: thread,
-            uploadedFiles: [],
-            userId: user.id,
-          }),
-        );
         return Result.err(
           new HandlerError({
             status: 400,
@@ -622,16 +816,6 @@ const sendMessage = createSafeRootHandler(
       });
 
       if (isClientConnectionAborted()) {
-        yield* Result.await(
-          rollbackUnpersistedChatSideEffects({
-            recordAuditEvent,
-            safeDb,
-            threadId: body.threadId,
-            threadState: thread,
-            uploadedFiles: [],
-            userId: user.id,
-          }),
-        );
         return Result.err(
           new HandlerError({
             status: 400,
@@ -640,21 +824,46 @@ const sendMessage = createSafeRootHandler(
         );
       }
 
-      const uploadResult = yield* Result.await(
-        uploadMessageFilesWithRollback({
-          message: validatedMessage.message,
-          recordAuditEvent,
-          safeDb,
-          threadId: thread.data.id,
-          threadState: thread,
-          userId: user.id,
-        }),
-      );
+      const uploadResult = await uploadMessageFilesWithRollback({
+        message: stampedValidatedMessage.message,
+        recordAuditEvent,
+        safeDb,
+        threadId: thread.data.id,
+        threadState: thread,
+        userId: user.id,
+      });
+      if (Result.isError(uploadResult)) {
+        // The upload helper already cleans a partial upload (and a newly
+        // created thread) before returning an error.
+        pendingUnpersistedSideEffects = undefined;
+        return Result.err(uploadResult.error);
+      }
+      pendingUnpersistedSideEffects.uploadedFiles =
+        uploadResult.value.uploadedFiles;
 
       const parsedMessage = parseMessage({
         accessibleWorkspaceIds,
-        message: uploadResult.message,
+        message: uploadResult.value.message,
       });
+
+      const isExplicitRegeneration =
+        body.turnIntent === CHAT_TURN_INTENT.regenerate;
+      if (
+        isExplicitRegeneration &&
+        (parsedMessage.message.role !== "user" ||
+          body.truncateAfterMessageId !== undefined)
+      ) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message:
+              "Regeneration requires one unambiguous user-message target",
+          }),
+        );
+      }
+      const replayTargetMessageId =
+        body.truncateAfterMessageId ??
+        (isExplicitRegeneration ? parsedMessage.message.id : undefined);
 
       let messagesForPersistence: ChatThreadState["data"]["messages"] =
         thread.data.messages;
@@ -663,8 +872,8 @@ const sendMessage = createSafeRootHandler(
       // stored list is a bounded window that may exclude an old re-sent/edited
       // id, so a targeted existence check guards against a duplicate insert.
       let incomingMessageExists = false;
-      if (body.truncateAfterMessageId !== undefined) {
-        if (parsedMessage.message.id !== body.truncateAfterMessageId) {
+      if (replayTargetMessageId !== undefined) {
+        if (parsedMessage.message.id !== replayTargetMessageId) {
           return Result.err(
             new HandlerError({
               status: 400,
@@ -680,7 +889,7 @@ const sendMessage = createSafeRootHandler(
           resolveTruncationTarget({
             safeDb,
             threadId: body.threadId,
-            targetMessageId: body.truncateAfterMessageId,
+            targetMessageId: replayTargetMessageId,
           }),
         );
         if (truncationTarget === null) {
@@ -695,6 +904,14 @@ const sendMessage = createSafeRootHandler(
         messagesForPersistence = truncationTarget.messagesForPersistence;
         deleteMessageIdsBeforeLatest =
           truncationTarget.deleteMessageIdsBeforeLatest;
+        if (isExplicitRegeneration && truncationTarget.hasLaterUserMessage) {
+          return Result.err(
+            new HandlerError({
+              status: 409,
+              message: "Only the latest user turn can be regenerated",
+            }),
+          );
+        }
       } else {
         incomingMessageExists = yield* Result.await(
           chatMessageExistsForThread({
@@ -705,13 +922,35 @@ const sendMessage = createSafeRootHandler(
         );
       }
 
-      const latestMessagePlan = planMessagePersistence({
+      const baseLatestMessagePlan = planMessagePersistence({
         message: parsedMessage.message,
         storedMessages: messagesForPersistence,
         incomingMessageExists,
       });
       if (
-        body.truncateAfterMessageId !== undefined &&
+        isExplicitRegeneration &&
+        baseLatestMessagePlan.persistencePlan.type !== "none"
+      ) {
+        return Result.err(
+          new HandlerError({
+            status: 409,
+            message: "Regeneration target is not a persisted user message",
+          }),
+        );
+      }
+      const latestMessagePlan = isExplicitRegeneration
+        ? {
+            existingIds: baseLatestMessagePlan.existingIds,
+            messages: baseLatestMessagePlan.messages,
+            persistencePlan: {
+              message: parsedMessage.message,
+              messageId: parsedMessage.message.id,
+              type: "update",
+            } satisfies MessagePersistencePlan,
+          }
+        : baseLatestMessagePlan;
+      if (
+        replayTargetMessageId !== undefined &&
         latestMessagePlan.persistencePlan.type !== "update"
       ) {
         return Result.err(
@@ -723,7 +962,7 @@ const sendMessage = createSafeRootHandler(
       }
 
       const recomputedDataWorkspaceIds =
-        body.truncateAfterMessageId !== undefined
+        replayTargetMessageId !== undefined
           ? recomputeThreadDataScope({
               accessibleSet,
               baseWorkspaceId: workspaceId,
@@ -731,31 +970,213 @@ const sendMessage = createSafeRootHandler(
             })
           : null;
 
+      // Keep the thread's data scope aligned with the messages being
+      // stored. Normal sends append newly observed workspace IDs
+      // before persisting. Replay truncation recomputes the exact
+      // retained scope and writes it in the same transaction as the
+      // replay update below.
+      //
+      // Intersect with `accessibleWorkspaceIds` first: an unknown ID
+      // (model hallucination, copy-pasted UUID from elsewhere) added
+      // to `data_workspace_ids` would fail the RLS subset check on
+      // every subsequent message persist, silently breaking the
+      // thread.
+      const incomingMessageWorkspaceIds = extractIncomingMessageWorkspaceIds({
+        mentions: parsedMessage.mentions,
+        message: parsedMessage.message,
+      }).filter((id) => accessibleSet.has(id));
+      const turnAcceptance =
+        parsedMessage.message.role === "user" &&
+        latestMessagePlan.persistencePlan.type !== "none"
+          ? createChatTurnAcceptance({
+              organizationId: session.activeOrganizationId,
+              threadId: body.threadId,
+              userId: user.id,
+              userMessageId: parsedMessage.message.id,
+              workspaceId,
+            })
+          : undefined;
+
+      const persistenceProps = {
+        acceptedSendMode: body.sendMode,
+        recordAuditEvent,
+        safeDb,
+        threadId: body.threadId,
+        turnAcceptance,
+        userId: user.id,
+        workspaceId,
+        persistencePlan: latestMessagePlan.persistencePlan,
+        dataScopeExpansion:
+          recomputedDataWorkspaceIds === null
+            ? { newWorkspaceIds: incomingMessageWorkspaceIds }
+            : undefined,
+        deleteMessageIds: deleteMessageIdsBeforeLatest,
+        dataScopeReplacement:
+          recomputedDataWorkspaceIds === null
+            ? undefined
+            : {
+                observedDataWorkspaceIds: thread.data.dataWorkspaceIds,
+                newDataWorkspaceIds: recomputedDataWorkspaceIds,
+              },
+      } as const;
+      let turnExecution: ChatTurnExecution | null;
+      if (parsedMessage.message.role === "assistant") {
+        if (latestMessagePlan.persistencePlan.type !== "update") {
+          return Result.err(
+            new HandlerError({
+              status: 409,
+              message: "Interactive replay must update its owning message",
+            }),
+          );
+        }
+        const replayResult = await persistClaimedReplayMessage({
+          ...persistenceProps,
+          claim: {
+            acceptedTurnId: null,
+            continuationInteraction:
+              getResumedUserInteraction(parsedMessage.message) ?? undefined,
+            incomingMessageId: parsedMessage.message.id,
+            incomingMessageRole: parsedMessage.message.role,
+            organizationId: session.activeOrganizationId,
+            threadId: body.threadId,
+            userId: user.id,
+            workspaceId,
+          },
+          persistencePlan: latestMessagePlan.persistencePlan,
+        });
+        if (Result.isError(replayResult)) {
+          return Result.err(replayResult.error);
+        }
+        turnExecution = replayResult.value;
+        if (turnExecution !== null) {
+          pendingUnpersistedSideEffects = undefined;
+        }
+      } else {
+        if (turnAcceptance === undefined) {
+          const persistenceResult = await persistMessage(persistenceProps);
+          if (Result.isError(persistenceResult)) {
+            return Result.err(persistenceResult.error);
+          }
+          turnExecution = yield* Result.await(
+            claimChatTurnForExecution({
+              acceptedTurnId: null,
+              incomingMessageId: parsedMessage.message.id,
+              incomingMessageRole: parsedMessage.message.role,
+              organizationId: session.activeOrganizationId,
+              safeDb,
+              threadId: body.threadId,
+              userId: user.id,
+              workspaceId,
+            }),
+          );
+        } else {
+          const persistenceResult = await persistAcceptedMessageWithClaim({
+            ...persistenceProps,
+            turnAcceptance,
+          });
+          if (Result.isError(persistenceResult)) {
+            return Result.err(persistenceResult.error);
+          }
+          turnExecution = persistenceResult.value;
+        }
+        if (latestMessagePlan.persistencePlan.type !== "none") {
+          pendingUnpersistedSideEffects = undefined;
+        }
+      }
+      if (turnExecution === null) {
+        return Result.err(
+          new HandlerError({
+            status: 409,
+            message: "Chat turn has no durable execution owner",
+          }),
+        );
+      }
+      claimedChatTurnOwnership = {
+        status: "preflight",
+        execution: turnExecution,
+      };
+      const failCurrentTurn = async (
+        code: ChatTurnFailureCode,
+        retryable: boolean,
+      ): Promise<void> => {
+        const failureResult = await persistFailedChatTurn({
+          code,
+          execution: turnExecution,
+          recordAuditEvent,
+          retryable,
+          safeDb,
+          threadId: body.threadId,
+          userId: user.id,
+          workspaceId,
+        });
+        if (Result.isError(failureResult)) {
+          captureError(failureResult.error, { threadId: body.threadId });
+          return;
+        }
+        claimedChatTurnOwnership = { status: "unclaimed" };
+      };
+      // Like `persistFailedChatTurn`, a pre-stream disconnect must hydrate as
+      // the same terminal assistant turn as a streamed interruption: persist
+      // the empty interrupted message and settle its owner in one transaction,
+      // so reload cannot show the user message as unanswered.
+      const interruptCurrentTurn = async () => {
+        const outcome = {
+          type: "interrupted",
+          reason: "client-disconnected",
+        } as const;
+        const assistantMessage = toPersistableChatMessage({
+          id: createSafeId<"chatMessage">(),
+          metadata: { turnOutcome: outcome },
+          parts: [],
+          role: "assistant",
+        });
+        const settlementResult = await persistMessage({
+          persistencePlan: { type: "insert", message: assistantMessage },
+          recordAuditEvent,
+          safeDb,
+          threadId: body.threadId,
+          turnSettlement: {
+            assistantMessageId: assistantMessage.id,
+            execution: turnExecution,
+            outcome,
+          },
+          userId: user.id,
+          workspaceId,
+        });
+        if (Result.isOk(settlementResult)) {
+          claimedChatTurnOwnership = { status: "unclaimed" };
+        }
+        return settlementResult;
+      };
+
+      // The incoming message is durable now, so a disconnect must not run the
+      // pre-persistence rollback (which would delete files referenced by that
+      // message). It should still stop before connector discovery and any
+      // metered provider work.
+      if (isClientConnectionAborted()) {
+        yield* Result.await(interruptCurrentTurn());
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Client disconnected before stream started",
+          }),
+        );
+      }
+
       const messagesForContextInput = await selectMessagesForContextInput({
         messages: latestMessagePlan.messages,
         safeDb,
-        skipCheckpoint: body.truncateAfterMessageId !== undefined,
+        skipCheckpoint: replayTargetMessageId !== undefined,
         threadId: body.threadId,
       });
 
-      // Metered provider calls must not be directly cancelled by the client
-      // connection. A disconnect can arrive after preflight succeeds but before
-      // the AI SDK emits token usage; allowing that abort to reach the provider
-      // would skip the usage ledger callback while still spending provider work.
+      // Compaction can issue a metered provider request. The turn was claimed
+      // above, so a concurrent send is rejected before either request starts
+      // this work. Its terminal state remains explicit on every preflight exit.
       const createMeteredAIAbortSignal = () =>
-        AbortSignal.timeout(CHAT_METERED_AI_TIMEOUT_MS);
-
+        AbortSignal.timeout(CHAT_METERED_PROVIDER_TIMEOUT_MS);
       if (isClientConnectionAborted()) {
-        yield* Result.await(
-          rollbackUnpersistedChatSideEffects({
-            recordAuditEvent,
-            safeDb,
-            threadId: body.threadId,
-            threadState: thread,
-            uploadedFiles: uploadResult.uploadedFiles,
-            userId: user.id,
-          }),
-        );
+        yield* Result.await(interruptCurrentTurn());
         return Result.err(
           new HandlerError({
             status: 400,
@@ -777,35 +1198,12 @@ const sendMessage = createSafeRootHandler(
         workspaceId,
       });
       if (Result.isError(messagesForContextResult)) {
-        const rollbackResult = await rollbackUnpersistedChatSideEffects({
-          recordAuditEvent,
-          safeDb,
-          threadId: body.threadId,
-          threadState: thread,
-          uploadedFiles: uploadResult.uploadedFiles,
-          userId: user.id,
-        });
-        if (Result.isError(rollbackResult)) {
-          captureError(messagesForContextResult.error, {
-            threadId: body.threadId,
-          });
-          return yield* Result.err(rollbackResult.error);
-        }
-
-        return yield* Result.err(messagesForContextResult.error);
+        await failCurrentTurn("provider-error", true);
+        return Result.err(messagesForContextResult.error);
       }
 
       if (isClientConnectionAborted()) {
-        yield* Result.await(
-          rollbackUnpersistedChatSideEffects({
-            recordAuditEvent,
-            safeDb,
-            threadId: body.threadId,
-            threadState: thread,
-            uploadedFiles: uploadResult.uploadedFiles,
-            userId: user.id,
-          }),
-        );
+        yield* Result.await(interruptCurrentTurn());
         return Result.err(
           new HandlerError({
             status: 400,
@@ -822,7 +1220,9 @@ const sendMessage = createSafeRootHandler(
         activeFile: activeFileForTools,
         editApplyMode,
         hasActiveDocxEditClient:
-          hasActiveDocxFileClient || body.activeTemplate !== undefined,
+          hasActiveDocxFileClient ||
+          body.activeDraft !== undefined ||
+          body.activeTemplate !== undefined,
         memberRole: memberRole.role,
         recordAuditEventAvailable: true,
         requestWorkspaceId: workspaceId,
@@ -831,6 +1231,7 @@ const sendMessage = createSafeRootHandler(
       });
       const chatContextResult = await prepareChatContext({
         activeDecision: body.activeDecision,
+        activeDraft: body.activeDraft,
         activeExternal: body.activeExternal,
         activeFile: body.activeFile,
         activeSkill: body.activeSkill,
@@ -841,10 +1242,6 @@ const sendMessage = createSafeRootHandler(
         organizationId: session.activeOrganizationId,
         safeDb,
         sendMode: body.sendMode,
-        // Derived from the same predicates/inputs `getChatTools` uses to
-        // register `web_search`/`fetch_url` and `suggest_template_fields`
-        // below, so the prompt only steers the model to tools that are
-        // actually handed to it.
         toolAvailability: {
           docxEditMode: registeredDocxEditMode,
           templateAuthoring: areTemplateAuthoringToolsRegistered(
@@ -856,10 +1253,6 @@ const sendMessage = createSafeRootHandler(
             disabledNativeToolSlugs,
           }),
           folioAgentDocTools: hasActiveDocxFileClient,
-          // Only at the top level of a turn, and only when the turn's scope (if
-          // any) allows spawn_subagents — a restricted scope (e.g.
-          // suggest-template-fields) drops the tool from the streaming set, so
-          // the prompt must not steer the model toward a tool it was never handed.
           subagents: areSubagentToolsAvailableForTurn(body.toolScope),
         },
         userContext: body.userContext,
@@ -868,102 +1261,21 @@ const sendMessage = createSafeRootHandler(
         refRegistry,
       });
       if (Result.isError(chatContextResult)) {
-        const rollbackResult = await rollbackUnpersistedChatSideEffects({
-          recordAuditEvent,
-          safeDb,
-          threadId: body.threadId,
-          threadState: thread,
-          uploadedFiles: uploadResult.uploadedFiles,
-          userId: user.id,
-        });
-        if (Result.isError(rollbackResult)) {
-          captureError(chatContextResult.error, { threadId: body.threadId });
-          return yield* Result.err(rollbackResult.error);
-        }
-
-        return yield* Result.err(chatContextResult.error);
+        await failCurrentTurn(
+          "internal",
+          !(chatContextResult.error instanceof HandlerError) ||
+            chatContextResult.error.status >= 500,
+        );
+        return Result.err(chatContextResult.error);
       }
       const chatContext = chatContextResult.value;
 
       if (isClientConnectionAborted()) {
-        yield* Result.await(
-          rollbackUnpersistedChatSideEffects({
-            recordAuditEvent,
-            safeDb,
-            threadId: body.threadId,
-            threadState: thread,
-            uploadedFiles: uploadResult.uploadedFiles,
-            userId: user.id,
-          }),
-        );
+        yield* Result.await(interruptCurrentTurn());
         return Result.err(
           new HandlerError({
             status: 400,
             message: "Client disconnected before AI work started",
-          }),
-        );
-      }
-
-      // Keep the thread's data scope aligned with the messages being
-      // stored. Normal sends append newly observed workspace IDs
-      // before persisting. Replay truncation recomputes the exact
-      // retained scope and writes it in the same transaction as the
-      // replay update below.
-      //
-      // Intersect with `accessibleWorkspaceIds` first: an unknown ID
-      // (model hallucination, copy-pasted UUID from elsewhere) added
-      // to `data_workspace_ids` would fail the RLS subset check on
-      // every subsequent message persist, silently breaking the
-      // thread.
-      const incomingMessageWorkspaceIds = extractIncomingMessageWorkspaceIds({
-        mentions: parsedMessage.mentions,
-        message: parsedMessage.message,
-      }).filter((id) => accessibleSet.has(id));
-      let dataScopeAfterIncomingMessage: SafeId<"workspace">[];
-      if (recomputedDataWorkspaceIds !== null) {
-        dataScopeAfterIncomingMessage = recomputedDataWorkspaceIds;
-      } else {
-        dataScopeAfterIncomingMessage = yield* Result.await(
-          expandThreadDataScope({
-            currentDataWorkspaceIds: thread.data.dataWorkspaceIds,
-            newWorkspaceIds: incomingMessageWorkspaceIds,
-            recordAuditEvent,
-            safeDb,
-            threadId: body.threadId,
-            threadWorkspaceId: workspaceId,
-          }),
-        );
-      }
-
-      yield* Result.await(
-        persistMessage({
-          acceptedSendMode: body.sendMode,
-          recordAuditEvent,
-          safeDb,
-          threadId: body.threadId,
-          userId: user.id,
-          workspaceId,
-          persistencePlan: latestMessagePlan.persistencePlan,
-          deleteMessageIds: deleteMessageIdsBeforeLatest,
-          dataWorkspaceIdsChange:
-            recomputedDataWorkspaceIds === null
-              ? undefined
-              : {
-                  oldDataWorkspaceIds: thread.data.dataWorkspaceIds,
-                  newDataWorkspaceIds: recomputedDataWorkspaceIds,
-                },
-        }),
-      );
-
-      // The incoming message is durable now, so a disconnect must not run the
-      // pre-persistence rollback (which would delete files referenced by that
-      // message). It should still stop before connector discovery and any
-      // metered provider work.
-      if (isClientConnectionAborted()) {
-        return Result.err(
-          new HandlerError({
-            status: 400,
-            message: "Client disconnected before stream started",
           }),
         );
       }
@@ -977,8 +1289,20 @@ const sendMessage = createSafeRootHandler(
       // failure, client disconnect) never contacts a single connector.
       // `getExternalMcpTools` reuses the validation-triggered load instead
       // of loading again when one already happened.
-      const externalMcpTools =
-        await externalMcpToolsLoader.getExternalMcpTools();
+      const externalMcpToolsResult = await Result.tryPromise({
+        try: async () => await externalMcpToolsLoader.getExternalMcpTools(),
+        catch: (cause) =>
+          new HandlerError({
+            status: 500,
+            message: "Failed to discover chat connectors",
+            cause,
+          }),
+      });
+      if (Result.isError(externalMcpToolsResult)) {
+        await failCurrentTurn("connector-discovery", true);
+        return Result.err(externalMcpToolsResult.error);
+      }
+      const externalMcpTools = externalMcpToolsResult.value;
 
       // Streaming tools mirror the surface the user is on: only the
       // DOCX file-overlay client knows how to satisfy
@@ -1006,7 +1330,9 @@ const sendMessage = createSafeRootHandler(
         toolWorkspaceIds,
         activeFile: activeFileForTools,
         hasActiveDocxEditClient:
-          hasActiveDocxFileClient || body.activeTemplate !== undefined,
+          hasActiveDocxFileClient ||
+          body.activeDraft !== undefined ||
+          body.activeTemplate !== undefined,
         hasActiveDocxFileClient,
         editApplyMode,
         docxEditRepresentation,
@@ -1086,6 +1412,28 @@ const sendMessage = createSafeRootHandler(
                 });
               }
 
+              // Connector discovery and prompt assembly can take meaningful
+              // time. Renew immediately before provider dispatch so the
+              // durable owner covers the entire provider timeout, rather than
+              // only the earlier preflight window.
+              const leaseRenewal = await renewChatTurnExecutionLease({
+                execution: turnExecution,
+                safeDb,
+              });
+              if (Result.isError(leaseRenewal)) {
+                throw new HandlerError({
+                  status: 500,
+                  message: "Failed to renew chat execution lease",
+                  cause: leaseRenewal.error,
+                });
+              }
+              if (!leaseRenewal.value) {
+                throw new HandlerError({
+                  status: 409,
+                  message: "Chat turn lost its durable execution owner",
+                });
+              }
+
               // Snapshot the refs the registry already holds before streaming.
               // Prompt-time pins (`contextMatterIds` → `toMatterRef`) are
               // resolved during prompt construction; folding the WHOLE registry
@@ -1103,7 +1451,7 @@ const sendMessage = createSafeRootHandler(
                 abortSignal: createMeteredAIAbortSignal(),
                 messages: chatContext.hydratedMessages,
                 latestMessageId: parsedMessage.message.id,
-                onFinish: async ({ isAborted, responseMessage }) => {
+                onFinish: async ({ outcome, responseMessage }) => {
                   const resolvedMessages = resolveAssistantMessageRefs({
                     messages: [responseMessage],
                     refRegistry,
@@ -1113,48 +1461,27 @@ const sendMessage = createSafeRootHandler(
                     panic("Missing chat response message");
                   }
 
-                  // `isAborted` is the metered stream's own signal: true only
-                  // when the generation was cut off mid-stream (metered-timeout
-                  // abort or aborted-stream finish), never on natural
-                  // completion. It is NOT folded together with
-                  // `isClientConnectionAborted()`: the metered provider call is
-                  // decoupled from the client socket, so a connection dropped
-                  // mid-generation still runs the model to completion and meters
-                  // it. That completed message must be persisted, or the user is
-                  // billed for an answer they can never see after remount. Only
-                  // a genuinely incomplete generation is discarded.
                   const persistencePlan = planAssistantFinishPersistence({
                     existingIds: latestMessagePlan.existingIds,
-                    finishOutcome: isAborted
-                      ? { type: "aborted" }
-                      : { type: "completed" },
+                    finishOutcome: outcome,
                     message: resolvedResponseMessage,
                   });
 
-                  // Skip scope expansion when the assistant message
-                  // will not be persisted (aborted stream, planner
-                  // returned `none`). Widening `data_workspace_ids`
-                  // for transient parts that never land in
-                  // `chat_messages` could make the thread unreadable
-                  // after future access changes even though no
-                  // corresponding content was saved. A completed
-                  // message whose client merely disconnected is NOT
-                  // `none` here, so it flows through the same
-                  // scope-widening and persist path below.
+                  // A terminal stream always supplies an assistant message.
+                  // Silently accepting `none` would acknowledge the stream
+                  // while leaving its durable turn running forever.
                   if (persistencePlan.type === "none") {
-                    return;
+                    panic("Assistant turn produced no persistence plan");
                   }
 
                   // Widen the thread's data scope to cover any
                   // workspace-scoped content the assistant just
                   // emitted (source-document parts from search and
-                  // workspace tools). Run before persistMessage so
-                  // the recorded scope already includes the
-                  // workspaces when the message lands in
-                  // `chat_messages`.
+                  // workspace tools). Scope, message, and turn settlement are
+                  // written in one transaction below.
                   //
-                  // If expansion fails (transient DB error, etc.),
-                  // SKIP the message persist. Storing workspace-
+                  // If expansion fails (transient DB error, etc.), the whole
+                  // transaction fails. Storing workspace-
                   // scoped content in `chat_messages` while the
                   // owning thread's `data_workspace_ids` stays stale
                   // would leave the new content readable after the
@@ -1177,25 +1504,19 @@ const sendMessage = createSafeRootHandler(
                         refRegistry.getRegisteredWorkspaceIds(),
                       accessibleWorkspaceIds: accessibleSet,
                     });
-                  const expandResult = await expandThreadDataScope({
-                    currentDataWorkspaceIds: dataScopeAfterIncomingMessage,
-                    newWorkspaceIds: assistantWorkspaceIds,
-                    recordAuditEvent,
-                    safeDb,
-                    threadId: body.threadId,
-                    threadWorkspaceId: workspaceId,
-                  });
-                  if (Result.isError(expandResult)) {
-                    captureError(expandResult.error, {
-                      threadId: body.threadId,
-                    });
-                    return;
-                  }
                   const persistResult = await persistMessage({
+                    dataScopeExpansion: {
+                      newWorkspaceIds: assistantWorkspaceIds,
+                    },
                     persistencePlan,
                     recordAuditEvent,
                     safeDb,
                     threadId: body.threadId,
+                    turnSettlement: {
+                      assistantMessageId: resolvedResponseMessage.id,
+                      execution: turnExecution,
+                      outcome,
+                    },
                     userId: user.id,
                     workspaceId,
                   });
@@ -1204,6 +1525,12 @@ const sendMessage = createSafeRootHandler(
                     captureError(persistResult.error, {
                       threadId: body.threadId,
                     });
+                    await failCurrentTurn("persistence", true);
+                    throw new HandlerError({
+                      status: 500,
+                      message: "Failed to persist assistant turn",
+                      cause: persistResult.error,
+                    });
                   } else {
                     const messagesAfterAssistantPersist =
                       applyAssistantPersistencePlan({
@@ -1211,6 +1538,7 @@ const sendMessage = createSafeRootHandler(
                         persistencePlan,
                       });
                     if (
+                      outcome.type === "completed" &&
                       messagesAfterAssistantPersist !== null &&
                       body.sendMode !== CHAT_SEND_MODE.anonymized
                     ) {
@@ -1229,6 +1557,7 @@ const sendMessage = createSafeRootHandler(
                     }
 
                     if (
+                      outcome.type === "completed" &&
                       thread.type === "created" &&
                       body.sendMode !== CHAT_SEND_MODE.anonymized
                     ) {
@@ -1274,11 +1603,20 @@ const sendMessage = createSafeRootHandler(
 
               if (!isChatStreamResponse(chatResponse)) {
                 await externalMcpTools.close();
+                // streamChat can reject before it creates an SSE stream (for
+                // example an anonymization-boundary or attachment-modality
+                // refusal). No terminal middleware hook runs in that branch,
+                // so settle the claimed turn here instead of leaving it
+                // indefinitely running.
+                await failCurrentTurn("internal", chatResponse.status >= 500);
+              } else {
+                claimedChatTurnOwnership = { status: "streaming" };
               }
 
               return chatResponse;
             } catch (error) {
               await externalMcpTools.close();
+              await failCurrentTurn("internal", true);
               throw error;
             }
           },
@@ -1295,6 +1633,43 @@ const sendMessage = createSafeRootHandler(
 
       return Result.ok(response);
     } finally {
+      if (claimedChatTurnOwnership.status === "preflight") {
+        const failureResult = await persistFailedChatTurn({
+          code: "internal",
+          execution: claimedChatTurnOwnership.execution,
+          recordAuditEvent,
+          retryable: true,
+          safeDb,
+          threadId: body.threadId,
+          userId: user.id,
+          workspaceId,
+        });
+        if (Result.isError(failureResult)) {
+          captureError(failureResult.error, {
+            source: "send-message-claimed-turn-preflight-cleanup",
+            threadId: body.threadId,
+          });
+        }
+      }
+      if (pendingUnpersistedSideEffects !== undefined) {
+        const rollbackResult = await rollbackUnpersistedChatSideEffects({
+          recordAuditEvent,
+          safeDb,
+          threadId: body.threadId,
+          threadState: pendingUnpersistedSideEffects.threadState,
+          uploadedFiles: pendingUnpersistedSideEffects.uploadedFiles,
+          userId: user.id,
+        });
+        if (Result.isError(rollbackResult)) {
+          // Preserve the request's original outcome while recording cleanup
+          // failure for the orphan-recovery path; control flow from a finally
+          // block must not silently replace the send result.
+          captureError(rollbackResult.error, {
+            source: "send-message-unpersisted-side-effect-rollback",
+            threadId: body.threadId,
+          });
+        }
+      }
       // No-op if `getExternalMcpTools` was never called on this exit path
       // (the message needed neither validation nor streaming to load
       // external tools before failing/returning early).
@@ -1626,6 +2001,7 @@ const resolveExternalToolsForValidation = async (
 
 type PrepareChatContextProps = {
   activeDecision: IncomingActiveDecision | undefined;
+  activeDraft: IncomingActiveDraft | undefined;
   activeExternal: IncomingActiveExternal | undefined;
   activeFile: IncomingActiveFile | undefined;
   activeSkill: IncomingActiveSkill | undefined;
@@ -1666,6 +2042,7 @@ type PrepareChatContextResult = Result<
 
 const prepareChatContext = async ({
   activeDecision,
+  activeDraft,
   activeExternal,
   activeFile,
   activeSkill,
@@ -1698,6 +2075,7 @@ const prepareChatContext = async ({
     const promptAndMessagesResult = await Result.allAsync([
       buildChatSystemPromptParts({
         activeDecision,
+        activeDraft,
         activeExternal,
         activeFile,
         activeSkill,
@@ -1964,12 +2342,115 @@ const getPdfFileRefForModel = (
 
 type InsertMessagesProps = {
   acceptedSendMode: ChatSendMode | null;
+  dataScopeExpansion?: ChatDataScopeExpansion | undefined;
   messages: PersistableChatMessage[];
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
+  turnAcceptance?: ChatTurnAcceptance | undefined;
+  turnSettlement?: ChatTurnSettlement | undefined;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
+};
+
+type ChatDataScopeExpansion = {
+  newWorkspaceIds: readonly SafeId<"workspace">[];
+};
+
+type ChatDataScopeReplacement = {
+  newDataWorkspaceIds: readonly SafeId<"workspace">[];
+  observedDataWorkspaceIds: readonly SafeId<"workspace">[];
+};
+
+type ChatTurnSettlement = {
+  assistantMessageId: SafeId<"chatMessage"> | null;
+  execution: ChatTurnExecution;
+  failureCode?: ChatTurnFailureCode | undefined;
+  failureRetryable?: boolean | undefined;
+  outcome: ChatTurnOutcome;
+};
+
+const applyChatTurnWritesOnTx = async ({
+  acceptance,
+  settlement,
+  tx,
+}: {
+  acceptance: ChatTurnAcceptance | undefined;
+  settlement: ChatTurnSettlement | undefined;
+  tx: Transaction;
+}): Promise<void> => {
+  if (
+    acceptance !== undefined &&
+    !(await insertChatTurnAcceptanceOnTx({ acceptance, tx }))
+  ) {
+    panic("Chat turn acceptance lost its reserved thread slot");
+  }
+  if (
+    settlement !== undefined &&
+    !(await settleChatTurnOnTx({ ...settlement, tx }))
+  ) {
+    panic("Chat turn settlement lost execution ownership");
+  }
+};
+
+const reserveChatTurnAcceptanceOnTx = async ({
+  acceptance,
+  tx,
+}: {
+  acceptance: ChatTurnAcceptance | undefined;
+  tx: Transaction;
+}): Promise<boolean> =>
+  acceptance === undefined ||
+  (await canAcceptChatTurnOnTx({ threadId: acceptance.threadId, tx }));
+
+const applyChatDataScopeExpansionOnTx = async ({
+  expansion,
+  recordAuditEvent,
+  threadId,
+  tx,
+  workspaceId,
+}: {
+  expansion: ChatDataScopeExpansion | undefined;
+  recordAuditEvent: AuditRecorder;
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+  workspaceId: SafeId<"workspace"> | null;
+}): Promise<void> => {
+  if (expansion === undefined || expansion.newWorkspaceIds.length === 0) {
+    return;
+  }
+  await expandThreadDataScopeOnTx({
+    ...expansion,
+    recordAuditEvent,
+    threadId,
+    threadWorkspaceId: workspaceId,
+    tx,
+  });
+};
+
+const applyChatDataScopeReplacementOnTx = async ({
+  recordAuditEvent,
+  replacement,
+  threadId,
+  tx,
+  workspaceId,
+}: {
+  recordAuditEvent: AuditRecorder;
+  replacement: ChatDataScopeReplacement | undefined;
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+  workspaceId: SafeId<"workspace"> | null;
+}): Promise<void> => {
+  if (replacement === undefined) {
+    return;
+  }
+  await replaceThreadDataScopeOnTx({
+    ...replacement,
+    recordAuditEvent,
+    threadId,
+    threadWorkspaceId: workspaceId,
+    tx,
+  });
 };
 
 type ResolveAssistantMessageRefsProps = {
@@ -2014,7 +2495,7 @@ const hydrateAssistantMessageRefs = ({
     part: ChatMessage["parts"][number],
   ): ChatMessage["parts"][number] => {
     const hydrated = refRegistry.hydrateAssistantValueRefs(part);
-    if (!isChatMessagePart(hydrated)) {
+    if (!isChatPart(hydrated)) {
       panic("Hydrating assistant refs changed the message part shape");
     }
     return hydrated;
@@ -2030,28 +2511,40 @@ const hydrateAssistantMessageRefs = ({
   );
 };
 
-const isChatMessagePart = (
-  value: unknown,
-): value is ChatMessage["parts"][number] =>
-  typeof value === "object" &&
-  value !== null &&
-  "type" in value &&
-  typeof value.type === "string";
-
 const insertMessages = async ({
   acceptedSendMode,
+  dataScopeExpansion,
   messages,
   recordAuditEvent,
   safeDb,
   threadId,
+  turnAcceptance,
+  turnSettlement,
   userId,
   workspaceId,
-}: InsertMessagesProps): Promise<Result<void, SafeDbError>> => {
+}: InsertMessagesProps): Promise<
+  Result<void, HandlerError<409> | SafeDbError>
+> => {
   if (messages.length === 0) {
     return Result.ok();
   }
 
   const insertResult = await safeDb(async (tx) => {
+    if (
+      !(await reserveChatTurnAcceptanceOnTx({
+        acceptance: turnAcceptance,
+        tx,
+      }))
+    ) {
+      return false;
+    }
+    await applyChatDataScopeExpansionOnTx({
+      expansion: dataScopeExpansion,
+      recordAuditEvent,
+      threadId,
+      tx,
+      workspaceId,
+    });
     await tx.insert(chatMessages).values(
       messages.map((persistedMessage) => ({
         id: persistedMessage.id,
@@ -2085,26 +2578,39 @@ const insertMessages = async ({
         metadata: { threadId, role: persistedMessage.role },
       })),
     );
+    await applyChatTurnWritesOnTx({
+      acceptance: turnAcceptance,
+      settlement: turnSettlement,
+      tx,
+    });
+    return true;
   });
 
-  return insertResult.andThen(() => Result.ok());
+  return insertResult.andThen((inserted) =>
+    inserted
+      ? Result.ok()
+      : Result.err(
+          new HandlerError({
+            status: 409,
+            message: "A chat turn is already running",
+          }),
+        ),
+  );
 };
 
 type PersistMessageProps = {
   acceptedSendMode?: ChatSendMode | null;
+  dataScopeExpansion?: ChatDataScopeExpansion | undefined;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
+  turnAcceptance?: ChatTurnAcceptance | undefined;
+  turnSettlement?: ChatTurnSettlement | undefined;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
   persistencePlan: MessagePersistencePlan;
   deleteMessageIds?: SafeId<"chatMessage">[];
-  dataWorkspaceIdsChange?:
-    | {
-        oldDataWorkspaceIds: readonly SafeId<"workspace">[];
-        newDataWorkspaceIds: SafeId<"workspace">[];
-      }
-    | undefined;
+  dataScopeReplacement?: ChatDataScopeReplacement | undefined;
 };
 
 const persistMessage = async (props: PersistMessageProps) => {
@@ -2118,24 +2624,79 @@ const persistMessage = async (props: PersistMessageProps) => {
   return result;
 };
 
-const runPersistMessage = async ({
-  acceptedSendMode = null,
+/**
+ * A failure before the stream exists must still hydrate as the same terminal
+ * assistant turn as a streamed RUN_ERROR. Persist the empty terminal message
+ * and settle its owner in one transaction, so reload cannot turn a retryable
+ * failure into a missing assistant response.
+ */
+const persistFailedChatTurn = async ({
+  code,
+  execution,
   recordAuditEvent,
+  retryable,
   safeDb,
   threadId,
   userId,
   workspaceId,
+}: {
+  code: ChatTurnFailureCode;
+  execution: ChatTurnExecution;
+  recordAuditEvent: AuditRecorder;
+  retryable: boolean;
+  safeDb: SafeDb;
+  threadId: SafeId<"chatThread">;
+  userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace"> | null;
+}) => {
+  const outcome = { type: "failed", error: "unknown" } as const;
+  const assistantMessage = toPersistableChatMessage({
+    id: createSafeId<"chatMessage">(),
+    metadata: { turnOutcome: outcome },
+    parts: [],
+    role: "assistant",
+  });
+  return await persistMessage({
+    persistencePlan: { type: "insert", message: assistantMessage },
+    recordAuditEvent,
+    safeDb,
+    threadId,
+    turnSettlement: {
+      assistantMessageId: assistantMessage.id,
+      execution,
+      failureCode: code,
+      failureRetryable: retryable,
+      outcome,
+    },
+    userId,
+    workspaceId,
+  });
+};
+
+const runPersistMessage = async ({
+  acceptedSendMode = null,
+  dataScopeExpansion,
+  recordAuditEvent,
+  safeDb,
+  threadId,
+  turnAcceptance,
+  turnSettlement,
+  userId,
+  workspaceId,
   persistencePlan,
   deleteMessageIds = [],
-  dataWorkspaceIdsChange,
+  dataScopeReplacement,
 }: PersistMessageProps) => {
   if (persistencePlan.type === "insert") {
     return await insertMessages({
       acceptedSendMode,
+      dataScopeExpansion,
       messages: [persistencePlan.message],
       recordAuditEvent,
       safeDb,
       threadId,
+      turnAcceptance,
+      turnSettlement,
       userId,
       workspaceId,
     });
@@ -2143,6 +2704,28 @@ const runPersistMessage = async ({
 
   if (persistencePlan.type === "update") {
     const updateResult = await safeDb(async (tx) => {
+      if (
+        !(await reserveChatTurnAcceptanceOnTx({
+          acceptance: turnAcceptance,
+          tx,
+        }))
+      ) {
+        return false;
+      }
+      await applyChatDataScopeExpansionOnTx({
+        expansion: dataScopeExpansion,
+        recordAuditEvent,
+        threadId,
+        tx,
+        workspaceId,
+      });
+      await applyChatDataScopeReplacementOnTx({
+        recordAuditEvent,
+        replacement: dataScopeReplacement,
+        threadId,
+        tx,
+        workspaceId,
+      });
       if (deleteMessageIds.length > 0) {
         await tx
           .delete(chatMessages)
@@ -2186,9 +2769,6 @@ const runPersistMessage = async ({
         .update(chatThreads)
         .set({
           updatedAt: new Date(),
-          ...(dataWorkspaceIdsChange === undefined
-            ? {}
-            : { dataWorkspaceIds: dataWorkspaceIdsChange.newDataWorkspaceIds }),
           ...(shouldMarkThreadUsedAnonymization({
             messages: [persistencePlan.message],
             sendMode: acceptedSendMode,
@@ -2198,27 +2778,6 @@ const runPersistMessage = async ({
         })
         .where(eq(chatThreads.id, threadId));
 
-      if (
-        dataWorkspaceIdsChange !== undefined &&
-        !workspaceIdsEqual(
-          dataWorkspaceIdsChange.oldDataWorkspaceIds,
-          dataWorkspaceIdsChange.newDataWorkspaceIds,
-        )
-      ) {
-        await recordAuditEvent(tx, {
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
-          resourceId: threadId,
-          workspaceId,
-          changes: {
-            dataWorkspaceIds: {
-              old: [...dataWorkspaceIdsChange.oldDataWorkspaceIds],
-              new: [...dataWorkspaceIdsChange.newDataWorkspaceIds],
-            },
-          },
-        });
-      }
-
       await recordAuditEvent(tx, {
         action: AUDIT_ACTION.UPDATE,
         resourceType: AUDIT_RESOURCE_TYPE.CHAT_MESSAGE,
@@ -2226,56 +2785,250 @@ const runPersistMessage = async ({
         workspaceId,
         metadata: { threadId, role: persistencePlan.message.role },
       });
+      await applyChatTurnWritesOnTx({
+        acceptance: turnAcceptance,
+        settlement: turnSettlement,
+        tx,
+      });
+      return true;
     });
 
-    return updateResult.andThen(() => Result.ok());
+    return updateResult.andThen((updated) =>
+      updated
+        ? Result.ok()
+        : Result.err(
+            new HandlerError({
+              status: 409,
+              message: "A chat turn is already running",
+            }),
+          ),
+    );
   }
 
   if (persistencePlan.type === "none") {
-    return Result.ok();
+    if (turnAcceptance === undefined && turnSettlement === undefined) {
+      return Result.ok();
+    }
+    const turnResult = await safeDb(async (tx) => {
+      if (
+        !(await reserveChatTurnAcceptanceOnTx({
+          acceptance: turnAcceptance,
+          tx,
+        }))
+      ) {
+        return false;
+      }
+      await applyChatDataScopeExpansionOnTx({
+        expansion: dataScopeExpansion,
+        recordAuditEvent,
+        threadId,
+        tx,
+        workspaceId,
+      });
+      await applyChatTurnWritesOnTx({
+        acceptance: turnAcceptance,
+        settlement: turnSettlement,
+        tx,
+      });
+      return true;
+    });
+    return turnResult.andThen((written) =>
+      written
+        ? Result.ok()
+        : Result.err(
+            new HandlerError({
+              status: 409,
+              message: "A chat turn is already running",
+            }),
+          ),
+    );
   }
 
-  return await Result.gen(async function* () {
+  const replaceResult = await safeDb(async (tx) => {
+    if (
+      !(await reserveChatTurnAcceptanceOnTx({
+        acceptance: turnAcceptance,
+        tx,
+      }))
+    ) {
+      return false;
+    }
+    await applyChatDataScopeExpansionOnTx({
+      expansion: dataScopeExpansion,
+      recordAuditEvent,
+      threadId,
+      tx,
+      workspaceId,
+    });
     const deletedMessageId = persistencePlan.deleteMessageId;
-    yield* Result.await(
-      safeDb(async (tx) => {
-        await tx
-          .delete(chatMessages)
-          .where(and(eq(chatMessages.id, deletedMessageId)));
+    await tx
+      .delete(chatMessages)
+      .where(
+        and(
+          eq(chatMessages.id, deletedMessageId),
+          eq(chatMessages.threadId, threadId),
+        ),
+      );
 
-        if (
-          shouldInvalidateChatCompactionCheckpoint({
-            deletedMessageCount: 1,
-            persistencePlan,
-          })
-        ) {
-          await markActiveChatCompactionCheckpointStale({ threadId, tx });
-        }
+    if (
+      shouldInvalidateChatCompactionCheckpoint({
+        deletedMessageCount: 1,
+        persistencePlan,
+      })
+    ) {
+      await markActiveChatCompactionCheckpointStale({ threadId, tx });
+    }
 
-        await recordAuditEvent(tx, {
-          action: AUDIT_ACTION.DELETE,
-          resourceType: AUDIT_RESOURCE_TYPE.CHAT_MESSAGE,
-          resourceId: deletedMessageId,
-          workspaceId,
-          metadata: { threadId, reason: "delete_and_reinsert" },
-        });
-      }),
-    );
+    await recordAuditEvent(tx, {
+      action: AUDIT_ACTION.DELETE,
+      resourceType: AUDIT_RESOURCE_TYPE.CHAT_MESSAGE,
+      resourceId: deletedMessageId,
+      workspaceId,
+      metadata: { threadId, reason: "delete_and_reinsert" },
+    });
 
-    yield* Result.await(
-      insertMessages({
-        acceptedSendMode,
-        messages: [persistencePlan.insertMessage],
-        recordAuditEvent,
-        safeDb,
-        threadId,
-        userId,
-        workspaceId,
-      }),
-    );
-
-    return Result.ok();
+    const insertedMessage = persistencePlan.insertMessage;
+    await tx.insert(chatMessages).values({
+      content: chatMessageContentFromMessage(insertedMessage),
+      id: insertedMessage.id,
+      role: insertedMessage.role,
+      threadId,
+      userId,
+      workspaceId,
+    });
+    await tx
+      .update(chatThreads)
+      .set({
+        updatedAt: new Date(),
+        ...(shouldMarkThreadUsedAnonymization({
+          messages: [insertedMessage],
+          sendMode: acceptedSendMode,
+        })
+          ? { usedAnonymization: true }
+          : {}),
+      })
+      .where(eq(chatThreads.id, threadId));
+    await recordAuditEvent(tx, {
+      action: AUDIT_ACTION.CREATE,
+      resourceType: AUDIT_RESOURCE_TYPE.CHAT_MESSAGE,
+      resourceId: insertedMessage.id,
+      workspaceId,
+      metadata: { threadId, role: insertedMessage.role },
+    });
+    await applyChatTurnWritesOnTx({
+      acceptance: turnAcceptance,
+      settlement: turnSettlement,
+      tx,
+    });
+    return true;
   });
+
+  return replaceResult.andThen((replaced) =>
+    replaced
+      ? Result.ok()
+      : Result.err(
+          new HandlerError({
+            status: 409,
+            message: "A chat turn is already running",
+          }),
+        ),
+  );
+};
+
+type PersistClaimedReplayMessageProps = PersistMessageProps & {
+  claim: ChatTurnExecutionClaim;
+  persistencePlan: Extract<MessagePersistencePlan, { type: "update" }>;
+};
+
+const safeDbOnTransaction = (tx: Transaction): SafeDb =>
+  async function transactionSafeDb(operation) {
+    return Result.ok(await operation(tx));
+  };
+
+type PersistAcceptedMessageWithClaimProps = PersistMessageProps & {
+  turnAcceptance: ChatTurnAcceptance;
+};
+
+/**
+ * Persist a new user message, create its durable turn, and claim execution
+ * before releasing the thread lock. No other sender can observe and supersede
+ * an accepted-but-unclaimed turn between these operations.
+ */
+const persistAcceptedMessageWithClaim = async ({
+  safeDb,
+  turnAcceptance,
+  ...persistenceProps
+}: PersistAcceptedMessageWithClaimProps): Promise<
+  Result<ChatTurnExecution, HandlerError<409> | SafeDbError>
+> => {
+  const result = await safeDb(async (tx) => {
+    const persistenceResult = await runPersistMessage({
+      ...persistenceProps,
+      safeDb: safeDbOnTransaction(tx),
+      turnAcceptance,
+    });
+    if (Result.isError(persistenceResult)) {
+      return Result.err(persistenceResult.error);
+    }
+
+    const execution = await claimChatTurnForExecutionOnTx({
+      acceptedTurnId: turnAcceptance.id,
+      incomingMessageId: turnAcceptance.userMessageId,
+      incomingMessageRole: "user",
+      organizationId: turnAcceptance.organizationId,
+      threadId: turnAcceptance.threadId,
+      tx,
+      userId: turnAcceptance.userId,
+      workspaceId: turnAcceptance.workspaceId,
+    });
+    if (execution === null) {
+      panic("Newly accepted chat turn lost execution ownership");
+    }
+    return Result.ok(execution);
+  });
+  if (Result.isError(result)) {
+    return Result.err(result.error);
+  }
+  if (Result.isError(result.value)) {
+    return Result.err(result.value.error);
+  }
+  upsertChatThreadSearchDocument(persistenceProps.threadId).catch(captureError);
+  return Result.ok(result.value.value);
+};
+
+/**
+ * Claim an interactive replay and mutate its existing assistant message on one
+ * transaction. `withClaimedChatTurnExecution` never invokes the mutation for a
+ * stale or duplicate claim, so truncation cannot race turn ownership.
+ */
+const persistClaimedReplayMessage = async ({
+  claim,
+  safeDb,
+  ...persistenceProps
+}: PersistClaimedReplayMessageProps): Promise<
+  Result<ChatTurnExecution | null, SafeDbError>
+> => {
+  const result = await withClaimedChatTurnExecution({
+    claim,
+    safeDb,
+    mutate: async ({ tx }) => {
+      const persistenceResult = await runPersistMessage({
+        ...persistenceProps,
+        safeDb: safeDbOnTransaction(tx),
+      });
+      if (Result.isError(persistenceResult)) {
+        throw persistenceResult.error;
+      }
+    },
+  });
+  if (Result.isError(result)) {
+    return Result.err(result.error);
+  }
+  if (result.value === null) {
+    return Result.ok(null);
+  }
+  upsertChatThreadSearchDocument(persistenceProps.threadId).catch(captureError);
+  return Result.ok(result.value.execution);
 };
 
 type RecomputeThreadDataScopeProps = {

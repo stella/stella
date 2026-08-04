@@ -8,6 +8,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { resolveChatComposerAction } from "@/components/chat/chat-composer-action-button.logic";
 import type { ChatComposerActionState } from "@/components/chat/chat-composer-action-button.logic";
+import { COMPOSER_CONTROL_BUTTON_SIZE } from "@/components/chat/composer-control-style";
 
 type ChatComposerActionButtonProps = ChatComposerActionState & {
   className?: string;
@@ -52,7 +53,12 @@ export const ChatComposerActionButton = (
     }
   };
 
-  const { className, iconClassName, size = "icon-sm", variant } = props;
+  const {
+    className,
+    iconClassName,
+    size = COMPOSER_CONTROL_BUTTON_SIZE,
+    variant,
+  } = props;
 
   return (
     <Button

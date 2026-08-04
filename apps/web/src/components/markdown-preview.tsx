@@ -12,6 +12,7 @@ type MarkdownPreviewProps = Omit<
 > & {
   children: string;
   components?: MessageResponseProps["components"];
+  fallbackChildren?: string | undefined;
 };
 
 export const MarkdownPreview = ({

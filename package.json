@@ -52,6 +52,7 @@
     "check:auth-md-spec": "bun packages/scripts/src/auth-md-spec-drift.ts",
     "check:resolutions": "bun scripts/check-resolution-ranges.ts",
     "check:result-consumption": "bun packages/scripts/src/result-consumption.ts",
+    "check:docs-sources": "bun scripts/docs-source-dependency-guard.ts",
     "check:railway-template-draft": "bun scripts/check-railway-template-draft.ts",
     "check:railway-template": "bun scripts/check-railway-template-shape.ts",
     "check:railway-template-source-runtime": "bun scripts/sync-railway-template-source.ts --check-rendered-credentials",
@@ -101,10 +102,10 @@
   "resolutions": {
     "@emnapi/core": "1.9.1",
     "@emnapi/runtime": "1.9.1",
-    "@stll/folio-core": "^0.15.11",
-    "brace-expansion": "5.0.8",
-    "fast-uri": "3.1.4",
+    "brace-expansion": "5.0.9",
+    "fast-uri": "3.1.5",
     "fast-xml-parser": "5.10.1",
+    "ip-address": "10.3.1",
     "lucide-react": "1.27.0",
     "postcss": "8.5.19",
     "prosemirror-model": "1.25.11",
@@ -112,7 +113,8 @@
     "prosemirror-view": "1.42.2",
     "react-native-screens": "4.26.2",
     "sharp": "0.35.3",
-    "svgo": "4.0.2"
+    "svgo": "4.0.2",
+    "undici": "7.29.0"
   },
   "packageManager": "bun@1.3.14",
   "catalog": {
@@ -123,6 +125,9 @@
     "@mcp-ui/client": "7.1.1",
     "@stll/anonymize-data": "0.0.9",
     "@stll/anonymize-wasm": "2.7.3",
+    "@stll/folio-agents": "0.8.2",
+    "@stll/folio-core": "0.15.13",
+    "@stll/folio-react": "0.13.2",
     "@t3-oss/env-core": "0.13.11",
     "@tailwindcss/postcss": "4.3.3",
     "@tailwindcss/vite": "4.3.3",

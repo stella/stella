@@ -1,14 +1,20 @@
+import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 import { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
+import { CHAT_TURN_INTENT } from "@stll/api-contract";
 
-import { chatThreads } from "@/api/db/schema";
+import type { SafeDb } from "@/api/db/safe-db";
+import { chatThreads, chatTurns } from "@/api/db/schema";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+
+import type { PersistableChatMessage } from "./types";
+import type { UploadedChatFile } from "./upload-files";
 
 let webSearchProviderLoadHook: (() => void) | undefined;
 const loadWebSearchProvidersForOrgMock = mock(async () => {
@@ -53,15 +59,45 @@ void mock.module("@/api/handlers/chat/tools/external-mcp-tools", () => ({
   loadExternalMcpToolsForUser: loadExternalMcpToolsForUserMock,
 }));
 
-let analyticsCreationHook: (() => void) | undefined;
+let contextCompactionAnalyticsHook: (() => void) | undefined;
 void mock.module("@/api/lib/analytics/tanstack-ai", () => ({
-  createTanStackAIAnalyticsCallbacks: () => {
-    analyticsCreationHook?.();
+  createTanStackAIAnalyticsCallbacks: ({ feature }: { feature: string }) => {
+    if (feature === "chat.context_compaction") {
+      contextCompactionAnalyticsHook?.();
+    }
     return {
       captureError: () => undefined,
       middleware: [],
     };
   },
+}));
+
+const chatSideEffectsModule = await import("./send-message-side-effects");
+const realRollbackUnpersistedChatSideEffects =
+  chatSideEffectsModule.rollbackUnpersistedChatSideEffects;
+const uploadMessageFilesWithRollbackMock = mock(
+  async ({
+    message,
+  }: {
+    message: PersistableChatMessage;
+  }): Promise<
+    Result<
+      { message: PersistableChatMessage; uploadedFiles: UploadedChatFile[] },
+      never
+    >
+  > => Result.ok({ message, uploadedFiles: [] }),
+);
+const rollbackUnpersistedChatSideEffectsMock = mock(
+  async (
+    options: Parameters<
+      typeof chatSideEffectsModule.rollbackUnpersistedChatSideEffects
+    >[0],
+  ) => await realRollbackUnpersistedChatSideEffects(options),
+);
+void mock.module("./send-message-side-effects", () => ({
+  ...chatSideEffectsModule,
+  rollbackUnpersistedChatSideEffects: rollbackUnpersistedChatSideEffectsMock,
+  uploadMessageFilesWithRollback: uploadMessageFilesWithRollbackMock,
 }));
 
 const sendMessage = (await import("./send-message")).default;
@@ -76,6 +112,7 @@ const threadId = toSafeId<"chatThread">("00000000-0000-0000-0000-000000000003");
 const messageId = toSafeId<"chatMessage">(
   "00000000-0000-0000-0000-000000000004",
 );
+const turnId = toSafeId<"chatTurn">("00000000-0000-0000-0000-000000000008");
 const activeWorkspaceId = toSafeId<"workspace">(
   "00000000-0000-0000-0000-000000000005",
 );
@@ -101,6 +138,7 @@ const emptyOrderedRows = () => Object.assign([], { limit: async () => [] });
 const selectChatMessages = () => ({
   from: () => ({
     where: () => ({
+      for: async () => [],
       limit: async () => [],
       orderBy: emptyOrderedRows,
     }),
@@ -115,6 +153,9 @@ const createContext = ({
     parts: [{ type: "text", content: "Summarize the selected matters" }],
   },
   request = new Request("http://localhost/v1/chat/send"),
+  onSafeDbTransaction,
+  truncateAfterMessageId,
+  turnIntent,
   transaction = {
     query: {
       organizationSettings: {
@@ -126,9 +167,16 @@ const createContext = ({
   contextMatterIds: SendMessageCtx["body"]["contextMatterIds"];
   message?: SendMessageCtx["body"]["message"];
   request?: Request;
+  onSafeDbTransaction?: (() => void) | undefined;
+  truncateAfterMessageId?: SendMessageCtx["body"]["truncateAfterMessageId"];
+  turnIntent?: SendMessageCtx["body"]["turnIntent"];
   transaction?: unknown;
 }): SendMessageCtx => {
   const { safeDb, scopedDb } = createScopedDbMock(transaction);
+  const observedSafeDb: SafeDb = async (operation, retry) => {
+    onSafeDbTransaction?.();
+    return await safeDb(operation, retry);
+  };
 
   return asTestRaw<SendMessageCtx>({
     body: {
@@ -136,6 +184,10 @@ const createContext = ({
       sendMode: CHAT_SEND_MODE.rawOverride,
       contextMatterIds,
       message,
+      ...(truncateAfterMessageId === undefined
+        ? {}
+        : { truncateAfterMessageId }),
+      ...(turnIntent === undefined ? {} : { turnIntent }),
     },
     createAuditRecorder: () => async () => {},
     getAccessibleWorkspaces: async () => [
@@ -151,7 +203,7 @@ const createContext = ({
     recordAuditEvent: async () => {},
     request,
     route: "/v1/chat/send",
-    safeDb,
+    safeDb: observedSafeDb,
     scopedDb,
     session: { activeOrganizationId: organizationId },
     user: { id: userId },
@@ -506,14 +558,44 @@ describe("send message disconnect handling", () => {
     expect(update).not.toHaveBeenCalled();
   });
 
-  test("rolls back when the client disconnects during context compaction", async () => {
+  test("terminalizes the claimed turn when compaction preflight disconnects", async () => {
     const abortController = new AbortController();
-    analyticsCreationHook = () => {
-      analyticsCreationHook = undefined;
+    contextCompactionAnalyticsHook = () => {
+      contextCompactionAnalyticsHook = undefined;
       abortController.abort();
     };
-    const insertValues = mock(async () => undefined);
-    const deleteReturning = mock(async () => [{ id: threadId }]);
+    const turnUpdates: unknown[] = [];
+    const selectWithThreadLock = () => ({
+      from: () => ({
+        innerJoin: () => ({ where: () => ({ limit: async () => [] }) }),
+        where: () => ({
+          for: async () => [{ id: threadId }],
+          limit: async () => [],
+          orderBy: emptyOrderedRows,
+        }),
+      }),
+    });
+    const insert = (table: unknown) => ({
+      values: () =>
+        table === chatTurns
+          ? {
+              onConflictDoNothing: () => ({
+                returning: async () => [{ id: turnId }],
+              }),
+            }
+          : undefined,
+    });
+    const update = (table: unknown) => ({
+      set: (values: unknown) => {
+        turnUpdates.push(values);
+        if (table === chatTurns) {
+          return {
+            where: () => ({ returning: async () => [{ id: turnId }] }),
+          };
+        }
+        return { where: async () => undefined };
+      },
+    });
 
     const result = await sendMessage.handler(
       createContext({
@@ -522,32 +604,57 @@ describe("send message disconnect handling", () => {
           signal: abortController.signal,
         }),
         transaction: {
-          delete: () => ({
-            where: () => ({ returning: deleteReturning }),
-          }),
-          insert: () => ({ values: insertValues }),
+          insert,
           query: {
             chatMessages: { findFirst: async () => null },
             chatThreadCompactions: { findFirst: async () => null },
-            chatThreads: { findFirst: async () => null },
+            chatThreads: {
+              findFirst: async () => ({
+                chatModel: null,
+                contextMatterIds: [],
+                dataWorkspaceIds: [],
+                id: threadId,
+                messages: [],
+                rollbackToken: null,
+                title: "Existing thread",
+                webSearchEnabled: false,
+                workspaceId: null,
+              }),
+            },
+            chatTurns: {
+              findFirst: async ({
+                where,
+              }: {
+                where?: { status?: { eq?: string } };
+              }) =>
+                where?.status?.eq === "running" ? undefined : { id: turnId },
+            },
             organizationSettings: { findFirst: async () => null },
           },
-          select: selectChatMessages,
+          select: selectWithThreadLock,
+          update,
         },
       }),
     );
-    analyticsCreationHook = undefined;
+    contextCompactionAnalyticsHook = undefined;
 
     expect(result).toEqual({
       code: 400,
       response: { message: "Client disconnected before AI work started" },
     });
-    expect(insertValues).toHaveBeenCalledTimes(1);
-    expect(deleteReturning).toHaveBeenCalledTimes(1);
+    expect(turnUpdates).toContainEqual(
+      expect.objectContaining({
+        interruptionReason: "client-disconnected",
+        status: "interrupted",
+      }),
+    );
   });
 
-  test("rolls back when the client disconnects during context preparation", async () => {
+  test("terminalizes the claimed turn when context preparation disconnects", async () => {
     const abortController = new AbortController();
+    let safeDbTransaction = 0;
+    let acceptanceTransaction: number | null = null;
+    let claimTransaction: number | null = null;
     let organizationSettingsReads = 0;
     const findOrganizationSettings = mock(async () => {
       organizationSettingsReads += 1;
@@ -556,27 +663,89 @@ describe("send message disconnect handling", () => {
       }
       return null;
     });
-    const insertValues = mock(async () => undefined);
-    const deleteReturning = mock(async () => [{ id: threadId }]);
+    const turnUpdates: unknown[] = [];
+    const selectWithThreadLock = () => ({
+      from: () => ({
+        innerJoin: () => ({ where: () => ({ limit: async () => [] }) }),
+        where: () => ({
+          for: async () => [{ id: threadId }],
+          limit: async () => [],
+          orderBy: emptyOrderedRows,
+        }),
+      }),
+    });
+    const insert = (table: unknown) => ({
+      values: () => {
+        if (table !== chatTurns) {
+          return undefined;
+        }
+        acceptanceTransaction = safeDbTransaction;
+        return {
+          onConflictDoNothing: () => ({
+            returning: async () => [{ id: turnId }],
+          }),
+        };
+      },
+    });
+    const update = (table: unknown) => ({
+      set: (values: unknown) => {
+        turnUpdates.push(values);
+        if (table === chatTurns) {
+          if (
+            typeof values === "object" &&
+            values !== null &&
+            "status" in values &&
+            values.status === "running"
+          ) {
+            claimTransaction = safeDbTransaction;
+          }
+          return {
+            where: () => ({ returning: async () => [{ id: turnId }] }),
+          };
+        }
+        return { where: async () => undefined };
+      },
+    });
 
     const result = await sendMessage.handler(
       createContext({
         contextMatterIds: [],
+        onSafeDbTransaction: () => {
+          safeDbTransaction += 1;
+        },
         request: new Request("http://localhost/v1/chat/send", {
           signal: abortController.signal,
         }),
         transaction: {
-          delete: () => ({
-            where: () => ({ returning: deleteReturning }),
-          }),
-          insert: () => ({ values: insertValues }),
+          insert,
           query: {
             chatMessages: { findFirst: async () => null },
             chatThreadCompactions: { findFirst: async () => null },
-            chatThreads: { findFirst: async () => null },
+            chatThreads: {
+              findFirst: async () => ({
+                chatModel: null,
+                contextMatterIds: [],
+                dataWorkspaceIds: [],
+                id: threadId,
+                messages: [],
+                rollbackToken: null,
+                title: "Existing thread",
+                webSearchEnabled: false,
+                workspaceId: null,
+              }),
+            },
+            chatTurns: {
+              findFirst: async ({
+                where,
+              }: {
+                where?: { status?: { eq?: string } };
+              }) =>
+                where?.status?.eq === "running" ? undefined : { id: turnId },
+            },
             organizationSettings: { findFirst: findOrganizationSettings },
           },
-          select: selectChatMessages,
+          select: selectWithThreadLock,
+          update,
         },
       }),
     );
@@ -586,15 +755,133 @@ describe("send message disconnect handling", () => {
       response: { message: "Client disconnected before AI work started" },
     });
     expect(findOrganizationSettings).toHaveBeenCalledTimes(2);
-    expect(insertValues).toHaveBeenCalledTimes(1);
-    expect(deleteReturning).toHaveBeenCalledTimes(1);
+    expect(acceptanceTransaction).not.toBeNull();
+    expect(claimTransaction).toBe(acceptanceTransaction);
+    expect(turnUpdates).toContainEqual(
+      expect.objectContaining({
+        interruptionReason: "client-disconnected",
+        status: "interrupted",
+      }),
+    );
+  });
+
+  test("persists a reloadable assistant error when connector preflight fails", async () => {
+    const insertedMessages: unknown[] = [];
+    const turnUpdates: unknown[] = [];
+    const selectWithThreadLock = () => ({
+      from: () => ({
+        innerJoin: () => ({ where: () => ({ limit: async () => [] }) }),
+        where: () => ({
+          for: async () => [{ id: threadId }],
+          limit: async () => [],
+          orderBy: emptyOrderedRows,
+        }),
+      }),
+    });
+    const insert = (table: unknown) => ({
+      values: (values: unknown) => {
+        if (table === chatTurns) {
+          return {
+            onConflictDoNothing: () => ({
+              returning: async () => [{ id: turnId }],
+            }),
+          };
+        }
+        insertedMessages.push(values);
+        return undefined;
+      },
+    });
+    const update = (table: unknown) => ({
+      set: (values: unknown) => {
+        if (table === chatTurns) {
+          turnUpdates.push(values);
+          return {
+            where: () => ({ returning: async () => [{ id: turnId }] }),
+          };
+        }
+        return { where: async () => undefined };
+      },
+    });
+
+    const result = await sendMessage.handler(
+      createContext({
+        contextMatterIds: [],
+        transaction: {
+          insert,
+          query: {
+            chatMessages: { findFirst: async () => null },
+            chatThreadCompactions: { findFirst: async () => null },
+            chatThreads: {
+              findFirst: async () => ({
+                chatModel: null,
+                contextMatterIds: [],
+                dataWorkspaceIds: [],
+                id: threadId,
+                messages: [],
+                rollbackToken: null,
+                title: "Existing thread",
+                webSearchEnabled: false,
+                workspaceId: null,
+              }),
+            },
+            chatTurns: {
+              findFirst: async ({
+                where,
+              }: {
+                where?: { status?: { eq?: string } };
+              }) =>
+                where?.status?.eq === "running" ? undefined : { id: turnId },
+            },
+            organizationSettings: { findFirst: async () => null },
+          },
+          select: selectWithThreadLock,
+          update,
+        },
+      }),
+    );
+
+    expect(result).toEqual({
+      code: 500,
+      response: { message: "Failed to discover chat connectors" },
+    });
+    const persistedFailure = insertedMessages.at(-1);
+    expect(persistedFailure).toEqual([
+      expect.objectContaining({
+        content: expect.objectContaining({
+          data: [],
+          metadata: { turnOutcome: { error: "unknown", type: "failed" } },
+        }),
+        role: "assistant",
+      }),
+    ]);
+    expect(turnUpdates).toContainEqual(
+      expect.objectContaining({
+        failureCode: "connector-discovery",
+        failureRetryable: true,
+        status: "failed",
+      }),
+    );
   });
 
   test("stops before connector discovery when the client disconnects during persistence", async () => {
     const abortController = new AbortController();
-    const insertValues = mock(async () => undefined);
+    const insertValues = mock(() => ({
+      onConflictDoNothing: () => ({
+        returning: async () => [{ id: turnId }],
+      }),
+    }));
     const updateWhere = mock(async () => {
       abortController.abort();
+    });
+    const selectWithThreadLock = () => ({
+      from: () => ({
+        innerJoin: () => ({ where: () => ({ limit: async () => [] }) }),
+        where: () => ({
+          for: async () => [{ id: threadId }],
+          limit: async () => [],
+          orderBy: emptyOrderedRows,
+        }),
+      }),
     });
     loadExternalMcpToolsForUserMock.mockClear();
     upsertChatThreadSearchDocumentMock.mockClear();
@@ -609,6 +896,90 @@ describe("send message disconnect handling", () => {
           insert: () => ({ values: insertValues }),
           query: {
             chatMessages: { findFirst: async () => null },
+            chatThreadCompactions: { findFirst: async () => null },
+            chatTurns: {
+              findFirst: async ({
+                where,
+              }: {
+                where?: { status?: unknown };
+              }) => {
+                const status = where?.status;
+                const queriedStatus =
+                  typeof status === "object" &&
+                  status !== null &&
+                  "eq" in status
+                    ? status.eq
+                    : undefined;
+                return queriedStatus === "running" ? undefined : { id: turnId };
+              },
+            },
+            chatThreads: {
+              findFirst: async () => ({
+                chatModel: null,
+                contextMatterIds: [],
+                dataWorkspaceIds: [],
+                id: threadId,
+                messages: [],
+                rollbackToken: null,
+                title: "Existing thread",
+                webSearchEnabled: false,
+                workspaceId: null,
+              }),
+            },
+            organizationSettings: { findFirst: async () => null },
+          },
+          select: selectWithThreadLock,
+          update: (table: unknown) => {
+            if (table === chatThreads) {
+              return { set: () => ({ where: updateWhere }) };
+            }
+            if (table === chatTurns) {
+              return {
+                set: () => ({
+                  where: () => ({ returning: async () => [{ id: turnId }] }),
+                }),
+              };
+            }
+            throw new Error("Unexpected table update in chat send test");
+          },
+        },
+      }),
+    );
+
+    expect(result).toEqual({
+      code: 400,
+      response: { message: "Client disconnected before stream started" },
+    });
+    expect(insertValues).toHaveBeenCalledTimes(2);
+    expect(updateWhere).toHaveBeenCalledTimes(1);
+    expect(upsertChatThreadSearchDocumentMock).toHaveBeenCalledWith(threadId);
+    expect(loadExternalMcpToolsForUserMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("send message turn persistence", () => {
+  test("rolls back an uploaded attachment before rejecting an invalid replay", async () => {
+    const uploadedFile = {
+      id: toSafeId<"userFile">("00000000-0000-0000-0000-000000000009"),
+      s3Key: "chat/thread/input.png",
+      thumbnailS3Key: "chat/thread/input-thumbnail.png",
+    } satisfies UploadedChatFile;
+    uploadMessageFilesWithRollbackMock.mockImplementationOnce(
+      async ({ message }) =>
+        Result.ok({ message, uploadedFiles: [uploadedFile] }),
+    );
+    rollbackUnpersistedChatSideEffectsMock.mockClear();
+    rollbackUnpersistedChatSideEffectsMock.mockImplementationOnce(async () =>
+      Result.ok(),
+    );
+
+    const result = await sendMessage.handler(
+      createContext({
+        contextMatterIds: [],
+        truncateAfterMessageId: messageId,
+        turnIntent: CHAT_TURN_INTENT.regenerate,
+        transaction: {
+          query: {
             chatThreadCompactions: { findFirst: async () => null },
             chatThreads: {
               findFirst: async () => ({
@@ -626,20 +997,95 @@ describe("send message disconnect handling", () => {
             organizationSettings: { findFirst: async () => null },
           },
           select: selectChatMessages,
-          update: () => ({
-            set: () => ({ where: updateWhere }),
-          }),
         },
       }),
     );
 
     expect(result).toEqual({
       code: 400,
-      response: { message: "Client disconnected before stream started" },
+      response: {
+        message: "Regeneration requires one unambiguous user-message target",
+      },
     });
-    expect(insertValues).toHaveBeenCalledTimes(1);
-    expect(updateWhere).toHaveBeenCalledTimes(1);
-    expect(upsertChatThreadSearchDocumentMock).toHaveBeenCalledWith(threadId);
-    expect(loadExternalMcpToolsForUserMock).not.toHaveBeenCalled();
+    expect(rollbackUnpersistedChatSideEffectsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        threadId,
+        uploadedFiles: [uploadedFile],
+      }),
+    );
+  });
+
+  test("rolls back every uploaded file when a running turn rejects the message", async () => {
+    const uploadedFile = {
+      id: toSafeId<"userFile">("00000000-0000-0000-0000-000000000009"),
+      s3Key: "chat/thread/input.png",
+      thumbnailS3Key: "chat/thread/input-thumbnail.png",
+    } satisfies UploadedChatFile;
+    uploadMessageFilesWithRollbackMock.mockImplementationOnce(
+      async ({ message }) =>
+        Result.ok({ message, uploadedFiles: [uploadedFile] }),
+    );
+    rollbackUnpersistedChatSideEffectsMock.mockClear();
+    rollbackUnpersistedChatSideEffectsMock.mockImplementationOnce(async () =>
+      Result.ok(),
+    );
+    let compactionStarted = false;
+    contextCompactionAnalyticsHook = () => {
+      contextCompactionAnalyticsHook = undefined;
+      compactionStarted = true;
+    };
+
+    const selectWithThreadLock = () => ({
+      from: () => ({
+        innerJoin: () => ({ where: () => ({ limit: async () => [] }) }),
+        where: () => ({
+          for: async () => [{ id: threadId }],
+          limit: async () => [],
+          orderBy: emptyOrderedRows,
+        }),
+      }),
+    });
+
+    const result = await sendMessage.handler(
+      createContext({
+        contextMatterIds: [],
+        transaction: {
+          query: {
+            chatMessages: { findFirst: async () => null },
+            chatThreadCompactions: { findFirst: async () => null },
+            chatThreads: {
+              findFirst: async () => ({
+                chatModel: null,
+                contextMatterIds: [],
+                dataWorkspaceIds: [],
+                id: threadId,
+                messages: [],
+                rollbackToken: null,
+                title: "Existing thread",
+                webSearchEnabled: false,
+                workspaceId: null,
+              }),
+            },
+            chatTurns: { findFirst: async () => ({ id: turnId }) },
+            organizationSettings: { findFirst: async () => null },
+          },
+          select: selectWithThreadLock,
+          update: () => ({ set: () => ({ where: async () => [] }) }),
+        },
+      }),
+    );
+
+    expect(result).toEqual({
+      code: 409,
+      response: { message: "A chat turn is already running" },
+    });
+    expect(compactionStarted).toBe(false);
+    expect(rollbackUnpersistedChatSideEffectsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        threadId,
+        uploadedFiles: [uploadedFile],
+      }),
+    );
+    contextCompactionAnalyticsHook = undefined;
   });
 });

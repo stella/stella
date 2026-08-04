@@ -108,7 +108,7 @@ describe("legacy chat tool input compatibility", () => {
     if (tool.inputSchema === undefined) {
       throw new TypeError("Expected active DOCX edit input schema");
     }
-    const result = await tool.inputSchema["~standard"].validate({
+    const result = tool.inputSchema["~standard"].validate({
       operations: [
         JSON.stringify({
           blockId: "block-1",

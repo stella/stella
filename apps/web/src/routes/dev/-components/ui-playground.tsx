@@ -17,6 +17,7 @@ import {
   Trash2Icon,
   UserIcon,
 } from "lucide-react";
+import { useTranslations } from "use-intl";
 
 import {
   Accordion,
@@ -184,6 +185,7 @@ import {
   TooltipTrigger,
 } from "@stll/ui/components/tooltip";
 
+import { ChatActivityOrb } from "@/components/chat/chat-activity-orb";
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
@@ -1397,8 +1399,28 @@ const RUNNING_TOOL_STEP = {
 } satisfies ChatToolCallPart;
 
 function ToolActivityPlayground() {
+  const t = useTranslations();
+
   return (
     <div className="flex flex-col">
+      <div className="bg-muted/25 mb-3 flex flex-wrap gap-x-5 gap-y-2 rounded-lg px-3 py-2.5">
+        <div className="text-muted-foreground flex items-center gap-2 text-xs">
+          <ChatActivityOrb state="working" />
+          <span>{t("chat.thinking")}</span>
+        </div>
+        <div className="text-muted-foreground flex items-center gap-2 text-xs">
+          <ChatActivityOrb state="searching" />
+          <span>{t("chat.tool.infosoud_lookup_case")}</span>
+        </div>
+        <div className="text-muted-foreground flex items-center gap-2 text-xs">
+          <ChatActivityOrb state="solving" />
+          <span>{t("chat.analyzingSources")}</span>
+        </div>
+        <div className="text-muted-foreground flex items-center gap-2 text-xs">
+          <ChatActivityOrb state="shaping" />
+          <span>{t("chat.tool.edit_workspace_document")}</span>
+        </div>
+      </div>
       <ToolCallCard
         activeOrganizationId="playground"
         durationMs={8000}

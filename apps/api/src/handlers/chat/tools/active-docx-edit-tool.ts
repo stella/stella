@@ -613,8 +613,8 @@ const repairingInputToolSchema = {
   ...inputToolSchema,
   "~standard": {
     ...inputToolSchema["~standard"],
-    validate: async (input: unknown) => {
-      const initial = await inputToolSchema["~standard"].validate(input);
+    validate: (input: unknown) => {
+      const initial = validateActiveDocxEditToolInput(input);
       if (initial.issues === undefined) {
         return initial;
       }
@@ -629,7 +629,7 @@ const repairingInputToolSchema = {
         return initial;
       }
 
-      return await inputToolSchema["~standard"].validate(JSON.parse(repaired));
+      return validateActiveDocxEditToolInput(JSON.parse(repaired));
     },
   },
 } satisfies typeof inputToolSchema;

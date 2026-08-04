@@ -14,3 +14,40 @@
   [contenteditable="true"]:not([role="toolbar"] [contenteditable="true"]) {
   caret-color: transparent;
 }
+
+/* The file chat and review controls float above Folio's scroll viewport.
+ * Reserve enough trailing scroll space for the final page to move fully above
+ * that stack; scroll-padding gives programmatic block navigation the same safe
+ * edge. This belongs at the integration boundary rather than inside Folio,
+ * whose standalone editors do not mount Stella's floating controls. */
+[data-file-viewer-ai] [data-folio-scroll] {
+  padding-block-end: 10rem;
+  scroll-padding-block-end: 10rem;
+}
+
+/* Folio's native suggested mode must remain legible over authored DOCX
+ * highlights. Deletions recede as neutral source text; insertions keep the
+ * document's normal text colour with a quiet success underline. The authored
+ * highlight still shows, but no longer combines with a saturated purple glyph
+ * colour into a low-contrast block. */
+[data-file-viewer-ai] .docx-deletion--suggested {
+  color: var(--doc-text-muted, #6b7280);
+  opacity: 0.48;
+  background-image: none;
+  text-decoration-color: currentcolor;
+  text-decoration-style: solid;
+}
+
+[data-file-viewer-ai] .docx-insertion--suggested {
+  color: var(--doc-text, #111827);
+  background-image: linear-gradient(
+    color-mix(in oklch, var(--doc-success, #166534) 12%, transparent),
+    color-mix(in oklch, var(--doc-success, #166534) 12%, transparent)
+  );
+  text-decoration-color: color-mix(
+    in oklch,
+    var(--doc-success, #166534) 70%,
+    currentcolor
+  );
+  text-decoration-style: solid;
+}

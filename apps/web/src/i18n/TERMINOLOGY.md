@@ -111,7 +111,7 @@ Slavic, Baltic, Germanic, Finno-Ugric:
 | **Close**    | Zavřít       | Zavrieť      | Zamknij     | Schließen     | Sulge      | Bezárás       | Uždaryti    | Aizvērt      |
 | **Send**     | Odeslat      | Odoslať      | Wyślij      | Senden        | Saada      | Küldés        | Siųsti      | Sūtīt        |
 | **Download** | Stáhnout     | Stiahnuť     | Pobierz     | Herunterladen | Laadi alla | Letöltés      | Atsisiųsti  | Lejupielādēt |
-| **Export**   | Exportovat   | Exportovať   | Eksportuj   | Exportieren   | Ekspordi   | Exportálás    | Eksportuoti | Eksportēt    |
+| **Export**   | Uložit       | Exportovať   | Eksportuj   | Exportieren   | Ekspordi   | Exportálás    | Eksportuoti | Eksportēt    |
 | **Sign in**  | Přihlásit se | Prihlásiť sa | Zaloguj się | Anmelden      | Logi sisse | Bejelentkezés | Prisijungti | Pieslēgties  |
 | **Sign out** | Odhlásit se  | Odhlásiť sa  | Wyloguj się | Abmelden      | Logi välja | Kijelentkezés | Atsijungti  | Atslēgties   |
 

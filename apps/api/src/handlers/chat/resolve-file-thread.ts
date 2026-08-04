@@ -298,6 +298,42 @@ const findFileChatThread = async (
       .limit(1)
   ).at(0);
 
+/**
+ * The file mapping is scoped to the destination workspace, while its target
+ * chat thread can become unreadable when its historical data scope includes
+ * a matter the user no longer has access to. Lock the visible mapping before
+ * deciding whether to reuse it or replace it with a fresh destination thread.
+ */
+const lockFileChatThreadMapping = async (
+  tx: Transaction,
+  {
+    entityId,
+    fieldId,
+    organizationId,
+    userId,
+    workspaceId,
+  }: FileThreadLookupInput,
+) =>
+  (
+    await tx
+      .select({
+        chatThreadId: fileChatThreads.chatThreadId,
+        id: fileChatThreads.id,
+      })
+      .from(fileChatThreads)
+      .where(
+        and(
+          eq(fileChatThreads.entityId, entityId),
+          eq(fileChatThreads.fieldId, fieldId),
+          eq(fileChatThreads.organizationId, organizationId),
+          eq(fileChatThreads.userId, userId),
+          eq(fileChatThreads.workspaceId, workspaceId),
+        ),
+      )
+      .limit(1)
+      .for("update")
+  ).at(0);
+
 const findFieldKeyedChatThread = async (
   tx: Transaction,
   { fieldId, organizationId, userId, workspaceId }: FileThreadLookupInput,
@@ -519,6 +555,7 @@ const resolveFileThread = createSafeHandler(
         input.organizationId,
       );
 
+      const mapping = await lockFileChatThreadMapping(tx, input);
       const existing = await findFileChatThread(tx, input);
 
       if (existing) {
@@ -540,6 +577,26 @@ const resolveFileThread = createSafeHandler(
           chatThreadId: existing.chatThreadId,
           messagePage,
         };
+      }
+
+      if (mapping !== undefined) {
+        // Keep the inaccessible historical thread intact, but detach the
+        // destination file from it. The unique mapping slot can then point to
+        // a new B-scoped thread that the current user may actually open.
+        await tx
+          .delete(fileChatThreads)
+          .where(eq(fileChatThreads.id, mapping.id));
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
+          resourceId: mapping.chatThreadId,
+          workspaceId: input.workspaceId,
+          metadata: {
+            entityId: input.entityId,
+            fieldId: input.fieldId,
+            reason: "replace_inaccessible_file_chat_thread",
+          },
+        });
       }
 
       return await createFileChatThread(

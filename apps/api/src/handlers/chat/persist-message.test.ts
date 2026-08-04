@@ -229,14 +229,18 @@ describe("chat approval persistence", () => {
     expect(finishPlan).toEqual({ type: "none" });
   });
 
-  test("leaves approval-responded messages untouched when a stream aborts", () => {
+  test("updates approval-responded messages with the interrupted outcome", () => {
     const finishPlan = planAssistantFinishPersistence({
       existingIds: new Set([createDocumentFinishedMessage.id]),
-      finishOutcome: { type: "aborted" },
+      finishOutcome: { type: "interrupted", reason: "timeout" },
       message: createDocumentFinishedMessage,
     });
 
-    expect(finishPlan).toEqual({ type: "none" });
+    expect(finishPlan).toEqual({
+      type: "update",
+      messageId: createDocumentFinishedMessage.id,
+      message: createDocumentFinishedMessage,
+    });
   });
 });
 
@@ -274,21 +278,19 @@ describe("chat finish persistence on client disconnect", () => {
     });
   });
 
-  // A metered-timeout / aborted-stream finish yields an incomplete message that
-  // must never be persisted, regardless of client connection state.
-  test("does not persist a generation cut off mid-stream", () => {
+  test("persists the terminal state of a generation cut off mid-stream", () => {
     const finishPlan = planAssistantFinishPersistence({
       existingIds: new Set([userMessage.id]),
-      finishOutcome: { type: "aborted" },
+      finishOutcome: { type: "interrupted", reason: "timeout" },
       message: completedAssistantMessage,
     });
 
-    expect(finishPlan).toEqual({ type: "none" });
+    expect(finishPlan).toEqual({
+      type: "insert",
+      message: completedAssistantMessage,
+    });
   });
 
-  // The genuine-error path never invokes `onFinish` in the streaming loop, so
-  // it never reaches persistence. Guard the adjacent invariant the planner is
-  // responsible for: a non-assistant message is never persisted from finish.
   test("does not persist a non-assistant finish message", () => {
     const finishPlan = planAssistantFinishPersistence({
       existingIds: new Set([userMessage.id]),

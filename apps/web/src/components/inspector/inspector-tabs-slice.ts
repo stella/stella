@@ -377,6 +377,16 @@ export const createInspectorTabsSlice = (
       }
     }),
 
+  updateView: ({ id, label, payload }) =>
+    set((state) => {
+      const existing = state.tabs.find((tab) => tab.id === id);
+      if (!existing || !isGenericInspectorTab(existing)) {
+        return;
+      }
+      existing.label = label;
+      existing.payload = payload;
+    }),
+
   flashTab: (tabId) =>
     set((state) => {
       state.flashTabId = tabId;

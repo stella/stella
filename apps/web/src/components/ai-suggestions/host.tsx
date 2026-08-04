@@ -16,6 +16,7 @@ import "@/components/chat-editor.css";
 import { useCallback, useRef, useState } from "react";
 import type {
   ComponentProps,
+  FocusEvent as ReactFocusEvent,
   KeyboardEvent as ReactKeyboardEvent,
   ReactNode,
   RefObject,
@@ -27,6 +28,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   LoaderCircleIcon,
+  MessageSquareIcon,
   UserIcon,
   WandSparklesIcon,
 } from "lucide-react";
@@ -54,6 +56,7 @@ import type {
 import { ChatComposerActionButton } from "@/components/chat/chat-composer-action-button";
 import { resolveChatComposerAction } from "@/components/chat/chat-composer-action-button.logic";
 import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachment-chips";
+import { COMPOSER_CONTROL_BUTTON_SIZE } from "@/components/chat/composer-control-style";
 import { ComposerPlusMenu } from "@/components/chat/composer-plus-menu";
 import type {
   ComposerContextMenuProps,
@@ -68,6 +71,7 @@ import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
 import { isValueTypeKind, VALUE_TYPE_META } from "@/lib/value-types";
 
+import { DOCKED_COMPOSER_WIDTH_CLASS } from "./composer-geometry";
 import { shouldShowPromptBarBusyPlaceholder } from "./host.logic";
 import type { FileAIChatStatus } from "./types";
 
@@ -128,6 +132,14 @@ type PromptBarPresetScopeChooser = {
 };
 
 type PromptBarProps = {
+  /**
+   * Whether this thread will anonymize its next send. Required so every
+   * floating/inspector composer paints the same active state as its shield
+   * and transport instead of silently falling back to ordinary chrome.
+   */
+  anonymized: boolean;
+  /** Reports whether this surface, rather than another mounted chat, owns focus. */
+  onFocusChange?: ((focused: boolean) => void) | undefined;
   /**
    * Gates surface-specific FEATURES only — the preset chips and the
    * pending-suggestion badge are shown in `floating` surfaces (chats
@@ -209,7 +221,7 @@ type PromptBarProps = {
    * empty-state placeholder so the user doesn't fire a message
    * into a dead context.
    */
-  sendDisabledReason?: "editor-loading" | undefined;
+  sendDisabledReason?: "draft-saving" | "editor-loading" | undefined;
   /**
    * When true the composer keeps accepting input while a response
    * streams: pressing Enter queues a send via `useChatSession` and
@@ -251,6 +263,12 @@ type PromptBarProps = {
   skillsOrganizationId?: string | undefined;
   context?: Omit<ComposerContextMenuProps, "editor"> | undefined;
   mcpOrganizationId?: string | undefined;
+  /**
+   * Replaces the ordinary (+) menu while a floating transcript is minimised.
+   * The control reopens that existing conversation; once open, the attachment
+   * menu returns in the same slot.
+   */
+  minimizedThreadAction?: { label: string; onOpen: () => void } | undefined;
 };
 
 /**
@@ -328,8 +346,6 @@ export function PromptBarShell({
  * card that aligns to it. One owner so the bar and the card can never
  * drift to different widths.
  */
-const DOCKED_COMPOSER_WIDTH_CLASS = "w-[min(560px,calc(100%-2rem))]";
-
 /**
  * Bottom offset for a floating `ChatThreadCard` so it clears the docked
  * composer stack that `DockedComposer` pins at `bottom-3.5` (14px).
@@ -345,14 +361,14 @@ const FLOATING_THREAD_CARD_OFFSET_CLASS = "bottom-24";
 
 /**
  * Taller bottom offset for the thread card when the floating DOCX
- * `ReviewBar` is present. The review pill pins at `bottom-28` (112px) and
- * stands ~40px tall, so its top sits ~152px up. `bottom-44` (176px) drops
+ * `ReviewBar` is present. The review pill pins at `bottom-24` (96px) and
+ * stands ~40px tall, so its top sits ~136px up. `bottom-40` (160px) drops
  * the card ~24px above the pill so the two never overlap (the collision
  * seen when a card and the review bar were both anchored near the pane
  * bottom). Callers pass this to `ChatThreadCard`'s `bottomOffsetClass`
  * whenever the entity has pending suggestions driving the review bar.
  */
-export const FLOATING_THREAD_CARD_OFFSET_WITH_REVIEW_CLASS = "bottom-44";
+export const FLOATING_THREAD_CARD_OFFSET_WITH_REVIEW_CLASS = "bottom-40";
 
 type DockedComposerProps = {
   /**
@@ -565,6 +581,8 @@ export function SuggestionStepper({
 
 export function PromptBar(props: PromptBarProps) {
   const {
+    anonymized,
+    onFocusChange,
     layout,
     status,
     pendingCount,
@@ -587,6 +605,7 @@ export function PromptBar(props: PromptBarProps) {
     skillsOrganizationId,
     context,
     mcpOrganizationId,
+    minimizedThreadAction,
   } = props;
 
   const t = useTranslations();
@@ -751,14 +770,31 @@ export function PromptBar(props: PromptBarProps) {
     },
     [presetChipsVisible, presets, editor, scopePromptPreset],
   );
+  const handleShellFocus = () => {
+    onFocusChange?.(true);
+  };
+  const handleShellBlur = (event: ReactFocusEvent<HTMLDivElement>) => {
+    const nextTarget = event.relatedTarget;
+    if (
+      nextTarget instanceof Node &&
+      event.currentTarget.contains(nextTarget)
+    ) {
+      return;
+    }
+    onFocusChange?.(false);
+  };
 
   const shell = (
     <PromptBarShell
       aria-busy={busy}
       aria-label={t("chat.aiPrompt")}
+      onBlurCapture={handleShellBlur}
+      onFocusCapture={handleShellFocus}
       onKeyDownCapture={handleShellKeyDown}
       className={cn(
-        !inputDisabled && "focus-within:border-foreground/30",
+        !inputDisabled && !anonymized && "focus-within:border-foreground/30",
+        anonymized &&
+          "ring-info/40 border-info/40 focus-within:border-info/60 shadow-[0_0_0_4px_rgb(from_var(--color-info)_r_g_b_/_0.08)] ring-1",
         // Attention pulse — kicked by the inspector chip click to
         // close the panel→producer loop visually. Stronger ring
         // than the busy state because it's transient and meant to
@@ -867,30 +903,44 @@ export function PromptBar(props: PromptBarProps) {
               height: the shell is items-end, so the bare 28px button would
               otherwise ride 2px below the placeholder's center line. */}
           <span className="flex h-8 shrink-0 items-center">
-            <ComposerPlusMenu
-              context={
-                context
-                  ? {
-                      activeOrganizationId: context.activeOrganizationId,
-                      editor,
-                      threadRef: context.threadRef,
-                    }
-                  : undefined
-              }
-              disabled={inputDisabled}
-              mcp={
-                mcpOrganizationId
-                  ? { activeOrganizationId: mcpOrganizationId }
-                  : undefined
-              }
-              models={models}
-              onOpenFilePicker={openFilePicker}
-              skills={
-                skillsOrganizationId
-                  ? { activeOrganizationId: skillsOrganizationId, editor }
-                  : undefined
-              }
-            />
+            {minimizedThreadAction ? (
+              <Button
+                aria-label={minimizedThreadAction.label}
+                className="border-border size-7 shrink-0 rounded-full border"
+                onClick={minimizedThreadAction.onOpen}
+                size={COMPOSER_CONTROL_BUTTON_SIZE}
+                tooltip={minimizedThreadAction.label}
+                type="button"
+                variant="secondary"
+              >
+                <MessageSquareIcon aria-hidden="true" className="size-4" />
+              </Button>
+            ) : (
+              <ComposerPlusMenu
+                context={
+                  context
+                    ? {
+                        activeOrganizationId: context.activeOrganizationId,
+                        editor,
+                        threadRef: context.threadRef,
+                      }
+                    : undefined
+                }
+                disabled={inputDisabled}
+                mcp={
+                  mcpOrganizationId
+                    ? { activeOrganizationId: mcpOrganizationId }
+                    : undefined
+                }
+                models={models}
+                onOpenFilePicker={openFilePicker}
+                skills={
+                  skillsOrganizationId
+                    ? { activeOrganizationId: skillsOrganizationId, editor }
+                    : undefined
+                }
+              />
+            )}
           </span>
         </>
       )}
@@ -917,7 +967,11 @@ export function PromptBar(props: PromptBarProps) {
               aria-hidden="true"
               className="size-3.5 shrink-0 animate-spin"
             />
-            <span className="truncate">{t("chat.editorLoading")}</span>
+            <span className="truncate">
+              {sendDisabledReason === "editor-loading"
+                ? t("chat.editorLoading")
+                : t("folio.savingDocument")}
+            </span>
           </div>
         )}
         {isEmpty &&

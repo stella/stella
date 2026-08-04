@@ -366,6 +366,7 @@
     },
     "aiPrompt": "KI-Nachrichtenfeld",
     "aiThread": "KI-Konversation",
+    "analyzingSources": "Quellen werden analysiert",
     "anonymizedMode": "Anonymisierter KI-Modus",
     "anonymizedModeDisabled": "Anonymisierter KI-Modus ist aus",
     "anonymizedModeEnabled": "Anonymisierter KI-Modus ist an",
@@ -448,7 +449,8 @@
       "openInFolio": "Im Editor öffnen",
       "pickMatterPrompt": "Wählen Sie eine Akte, in der dieses Dokument gespeichert werden soll.",
       "previewName": "Dokument: {name}",
-      "previewWaiting": "Warten auf Inhalt…"
+      "previewWaiting": "Warten auf Inhalt…",
+      "savePendingReview": "Prüfen Sie die ausstehenden KI-Vorschläge, bevor Sie das Dokument speichern."
     },
     "deleteThread": "Konversation löschen",
     "editMode": {
@@ -880,11 +882,11 @@
     "expenses": "Ausgaben",
     "export": {
       "citations": "Zitate",
-      "failed": "Nachricht konnte nicht exportiert werden",
+      "failed": "Nachricht konnte nicht gespeichert werden",
       "footnotes": "Fußnoten",
       "formatDocx": "Word-Dokument (<docx>.docx</docx>)",
       "inline": "Im Text",
-      "title": "Nachricht exportieren"
+      "title": "Nachricht speichern"
     },
     "filter": "Filtern",
     "formula": "Formel",

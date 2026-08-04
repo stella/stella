@@ -623,6 +623,36 @@ describe("revive suggestion", () => {
     );
   });
 
+  test("updating a view payload preserves the user's active tab", () => {
+    useInspectorTabsStore.getState().openView({
+      type: "test-live-view",
+      id: "test-live-view:1",
+      label: "Draft",
+      payload: { source: "First" },
+    });
+    useInspectorTabsStore
+      .getState()
+      .openChat({ id: toChatThreadId("thread-1") });
+    const activationSeq = useInspectorTabsStore.getState().activationSeq;
+
+    useInspectorTabsStore.getState().updateView({
+      id: "test-live-view:1",
+      label: "Updated draft",
+      payload: { source: "Second" },
+    });
+
+    const state = useInspectorTabsStore.getState();
+    expect(state.activeId).toBe("thread-1");
+    expect(state.activationSeq).toBe(activationSeq);
+    expect(state.tabs.find((tab) => tab.id === "test-live-view:1")).toEqual({
+      type: "view",
+      viewType: "test-live-view",
+      id: "test-live-view:1",
+      label: "Updated draft",
+      payload: { source: "Second" },
+    });
+  });
+
   test("route-owned view tab: user close suggests, owner unmount close clears", () => {
     registerInspectorView<{ templateId: string }>({
       type: "test-bound-view",

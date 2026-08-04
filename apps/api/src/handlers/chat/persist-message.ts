@@ -1,5 +1,6 @@
 import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts";
 import type {
+  ChatTurnOutcome,
   ChatMessageRole,
   PersistableChatMessage,
   PersistedChatMessageContent,
@@ -135,21 +136,11 @@ export const planMessagePersistence = ({
 };
 
 /**
- * Why the assistant streaming turn finished, from the streaming loop's point of
- * view. Only a fully completed generation is persisted; a generation cut off
- * mid-stream (metered-timeout abort, aborted-stream finish) leaves an
- * incomplete message that must be discarded.
- *
- * This is deliberately independent of the client HTTP connection. The metered
- * provider call is decoupled from the socket (see `createMeteredAIAbortSignal`),
- * so a dropped connection does not make the generation "aborted": the message is
- * still fully generated and metered, and must be persisted. Modelling the finish
- * reason as an outcome rather than a bare `isAborted` boolean keeps a future
- * caller from folding connection state back into the persistence decision.
+ * The streaming adapter must hand persistence one explicit terminal branch.
+ * Failed and interrupted messages are durable turn state, not malformed or
+ * disposable content; provider projection excludes them from later model input.
  */
-export type ChatAssistantFinishOutcome =
-  | { type: "completed" }
-  | { type: "aborted" };
+export type ChatAssistantFinishOutcome = ChatTurnOutcome;
 
 type PlanAssistantFinishPersistenceProps = {
   existingIds: Set<SafeId<"chatMessage">>;
@@ -167,9 +158,11 @@ export const planAssistantFinishPersistence = ({
   }
 
   switch (finishOutcome.type) {
-    case "aborted":
-      return { type: "none" };
+    case "awaiting-user":
+    case "cancelled":
     case "completed":
+    case "failed":
+    case "interrupted":
       return existingIds.has(message.id)
         ? { type: "update", messageId: message.id, message }
         : { type: "insert", message };

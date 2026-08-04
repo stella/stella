@@ -366,6 +366,7 @@
     },
     "aiPrompt": "Champ de message IA",
     "aiThread": "Conversation IA",
+    "analyzingSources": "Analyse des sources",
     "anonymizedMode": "Mode IA anonymisé",
     "anonymizedModeDisabled": "Le mode IA anonymisé est désactivé",
     "anonymizedModeEnabled": "Le mode IA anonymisé est activé",
@@ -448,7 +449,8 @@
       "openInFolio": "Ouvrir dans l’éditeur",
       "pickMatterPrompt": "Choisissez un dossier dans lequel enregistrer ce document.",
       "previewName": "Document : {name}",
-      "previewWaiting": "En attente du contenu…"
+      "previewWaiting": "En attente du contenu…",
+      "savePendingReview": "Traitez les suggestions de l’IA en attente avant d’enregistrer le document."
     },
     "deleteThread": "Supprimer la conversation",
     "editMode": {
@@ -880,11 +882,11 @@
     "expenses": "Dépenses",
     "export": {
       "citations": "Références",
-      "failed": "Impossible d'exporter le message",
+      "failed": "Impossible d’enregistrer le message",
       "footnotes": "Notes de bas de page",
       "formatDocx": "Document Word (<docx>.docx</docx>)",
       "inline": "Dans le texte",
-      "title": "Exporter le message"
+      "title": "Enregistrer le message"
     },
     "filter": "Filtrer",
     "formula": "Formule",

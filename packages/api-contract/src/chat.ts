@@ -6,6 +6,10 @@ export const CHAT_TOOL_SCOPE = {
   suggestTemplateFields: "suggest-template-fields",
 } as const;
 
+export const CHAT_TURN_INTENT = {
+  regenerate: "regenerate",
+} as const;
+
 export type SafeId<TType extends string> = string &
   Brand<"SafeId"> & {
     readonly __safeIdType?: TType;
@@ -36,6 +40,13 @@ export type ChatSendRequest = {
     title: string;
     url: string;
   };
+  activeDraft?: {
+    docxEditSnapshot: DocxEditSnapshot;
+    fileName: string;
+    originChatMessageId: SafeId<"chatMessage">;
+    originChatThreadId: SafeId<"chatThread">;
+    toolCallId: string;
+  };
   activeFile?: {
     docxEditSnapshot?: DocxEditSnapshot;
     entityId: SafeId<"entity">;
@@ -64,6 +75,7 @@ export type ChatSendRequest = {
   };
   sendMode: ChatSendMode;
   threadId: SafeId<"chatThread">;
+  turnIntent?: (typeof CHAT_TURN_INTENT)["regenerate"];
   toolScope?: (typeof CHAT_TOOL_SCOPE)["suggestTemplateFields"];
   truncateAfterMessageId?: SafeId<"chatMessage">;
   userContext?: {

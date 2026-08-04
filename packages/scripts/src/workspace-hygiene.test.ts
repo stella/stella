@@ -124,6 +124,67 @@ describe("workspace hygiene", () => {
     expect(validateWorkspaceRoot(rootDir)).toEqual([]);
   });
 
+  test("rejects a stale workspace-local package that shadows an exact catalog pin", () => {
+    const rootDir = createWorkspaceRoot({
+      rootPackageJson: {
+        catalog: { "@stll/folio-core": "0.15.13" },
+        devDependencies: { turbo: "^2.10.3" },
+      },
+      webPackageJson: {
+        dependencies: { "@stll/folio-core": "catalog:" },
+        name: "@stll/web",
+      },
+    });
+    const stalePackageDirectory = path.join(
+      rootDir,
+      "apps/web/node_modules/@stll/folio-core",
+    );
+    const hoistedPackageDirectory = path.join(
+      rootDir,
+      "node_modules/@stll/folio-core",
+    );
+    mkdirSync(hoistedPackageDirectory, { recursive: true });
+    writeFileSync(
+      path.join(hoistedPackageDirectory, "package.json"),
+      JSON.stringify({ name: "@stll/folio-core", version: "0.15.13" }),
+    );
+    mkdirSync(stalePackageDirectory, { recursive: true });
+    writeFileSync(
+      path.join(stalePackageDirectory, "package.json"),
+      JSON.stringify({ name: "@stll/folio-core", version: "0.15.12" }),
+    );
+
+    expect(validateWorkspaceRoot(rootDir)).toContainEqual({
+      message:
+        "@stll/folio-core resolves to 0.15.12, but catalog: requires 0.15.13; remove the stale nested install and reinstall",
+      path: "apps/web/package.json",
+    });
+  });
+
+  test("accepts the exact catalog version resolved by a workspace", () => {
+    const rootDir = createWorkspaceRoot({
+      rootPackageJson: {
+        catalog: { "@stll/folio-core": "0.15.13" },
+        devDependencies: { turbo: "^2.10.3" },
+      },
+      webPackageJson: {
+        dependencies: { "@stll/folio-core": "catalog:" },
+        name: "@stll/web",
+      },
+    });
+    const packageDirectory = path.join(
+      rootDir,
+      "node_modules/@stll/folio-core",
+    );
+    mkdirSync(packageDirectory, { recursive: true });
+    writeFileSync(
+      path.join(packageDirectory, "package.json"),
+      JSON.stringify({ name: "@stll/folio-core", version: "0.15.13" }),
+    );
+
+    expect(validateWorkspaceRoot(rootDir)).toEqual([]);
+  });
+
   test("ignores package imports inside CSS comments", () => {
     const rootDir = createWorkspaceRoot({
       rootPackageJson: {
@@ -250,6 +311,9 @@ const createWorkspaceRoot = ({
     catalog: {
       oxlint: "1.75.0",
       typescript: "6.0.3",
+      ...(isRecord(rootPackageJson["catalog"])
+        ? rootPackageJson["catalog"]
+        : {}),
     },
     devDependencies: {
       "@stll/oxlint-config": "0.6.0",

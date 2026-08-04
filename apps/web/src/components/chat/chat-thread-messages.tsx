@@ -26,6 +26,11 @@ import {
 } from "@/components/ai-elements/message";
 import { AnonymizedSpan } from "@/components/chat/anonymized-span";
 import { AskUserCard } from "@/components/chat/ask-user-card";
+import { ChatActivityOrb } from "@/components/chat/chat-activity-orb";
+import {
+  getLatestCompletedResearchPartIndex,
+  resolveChatActivityIndicatorState,
+} from "@/components/chat/chat-activity.logic";
 import { useChatApproval } from "@/components/chat/chat-approval-context";
 import { ChatImageAttachment } from "@/components/chat/chat-image-attachment";
 import {
@@ -34,6 +39,7 @@ import {
 } from "@/components/chat/chat-rich-message-part";
 import type { RichChatPart } from "@/components/chat/chat-rich-message-part";
 import {
+  assistantMessageFallbackText,
   buildMessageTurns,
   collectAnonRestorations,
   EMPTY_RESTORATION_PAIRS,
@@ -49,9 +55,15 @@ import type {
   ChatUITools,
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
-import { isApprovalPart } from "@/components/chat/chat-ui-tools";
+import {
+  hasRunningToolCallInLatestAssistantMessage,
+  isApprovalPart,
+} from "@/components/chat/chat-ui-tools";
+import type { CreateDocumentDraft } from "@/components/chat/create-document-draft.logic";
 import { MessageExportMenu } from "@/components/chat/message-export-menu";
+import { findCreateDocumentArtifactForMessage } from "@/components/chat/message-export-menu.logic";
 import { NeedsMatterCard } from "@/components/chat/needs-matter-card";
+import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";
 import { rehypeAnonSpans } from "@/components/chat/rehype-anon-spans";
 import { SourceChips } from "@/components/chat/source-chips";
 import { SpawnSubagentsCard } from "@/components/chat/spawn-subagents-card";
@@ -74,6 +86,7 @@ import {
 
 export const ChatThreadMessages = ({
   activeFileName,
+  assistantTextDensity = "default",
   approvalPendingMessageId,
   error,
   hasOlderMessages = false,
@@ -89,6 +102,7 @@ export const ChatThreadMessages = ({
   onAskUserEditAndRerun,
   onAskUserEditingChange,
   onCreateDocumentResolve,
+  onOpenCreateDocumentDraft,
   onOpenCreatedDocument,
   showThinkingIndicator = false,
   showToolCallDetails,
@@ -112,6 +126,17 @@ export const ChatThreadMessages = ({
     [messages],
   );
   const shouldShowToolCalls = showToolCallDetails ?? showToolCalls ?? false;
+  const latestCompletedResearchPartIndex =
+    getLatestCompletedResearchPartIndex(messages);
+  const activityIndicatorState = resolveChatActivityIndicatorState({
+    hasCompletedResearch: latestCompletedResearchPartIndex !== null,
+    hasRunningTool: hasRunningToolCallInLatestAssistantMessage({ messages }),
+    hasVisibleResponse: hasVisibleResponseContent(
+      messages,
+      latestCompletedResearchPartIndex,
+    ),
+    hasVisibleContent: hasVisibleContent(messages),
+  });
 
   // Null when this list renders outside a `Conversation` (the file-chat
   // overlay uses its own scroll container and never wires load-older).
@@ -223,6 +248,7 @@ export const ChatThreadMessages = ({
             <AssistantMessageParts
               activeFileName={activeFileName}
               activeOrganizationId={activeOrganizationId}
+              assistantTextDensity={assistantTextDensity}
               isGenerating={generationActive}
               isLatestAssistantMessage={
                 message.id === retryableAssistantMessageId
@@ -232,6 +258,7 @@ export const ChatThreadMessages = ({
               onAskUserEditingChange={onAskUserEditingChange}
               onAskUserSubmit={onAskUserSubmit}
               onCreateDocumentResolve={onCreateDocumentResolve}
+              onOpenCreateDocumentDraft={onOpenCreateDocumentDraft}
               onOpenCreatedDocument={onOpenCreatedDocument}
               shouldShowToolCalls={shouldShowToolCalls}
               streamdownComponents={streamdownComponents}
@@ -245,6 +272,10 @@ export const ChatThreadMessages = ({
               workspaceId={workspaceId}
             />
             <AssistantMessageActions
+              exportArtifact={findCreateDocumentArtifactForMessage(
+                messages,
+                index,
+              )}
               isGenerating={generationActive}
               isLatestAssistantMessage={
                 message.id === retryableAssistantMessageId
@@ -330,9 +361,9 @@ export const ChatThreadMessages = ({
           onSendWithoutAnonymization={onSendWithoutAnonymization}
         />
       )}
-      {showThinkingIndicator &&
-        generationActive &&
-        !hasVisibleContent(messages) && <ThinkingIndicator />}
+      {showThinkingIndicator && generationActive && activityIndicatorState && (
+        <ThinkingIndicator state={activityIndicatorState} />
+      )}
       {onRemoveQueuedMessage &&
         queuedMessages !== undefined &&
         queuedMessages.length > 0 && (
@@ -354,6 +385,9 @@ type StickyUserTurnProps = {
   children: ReactNode;
 };
 
+const STICKY_USER_HEADER_NATURAL_HEIGHT_VAR =
+  "--sticky-user-header-natural-height";
+
 /**
  * One turn in the sticky layout: a user header pinned to the top of the
  * scroll container while its answer scrolls beneath. The header only sticks
@@ -370,6 +404,7 @@ const StickyUserTurn = ({
 }: StickyUserTurnProps) => {
   const t = useTranslations();
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const stickyHeaderRef = useRef<HTMLDivElement>(null);
   const [isStuck, setIsStuck] = useState(false);
   const restorationPairs = getFollowingAssistantRestorations(
     messages,
@@ -389,6 +424,41 @@ const StickyUserTurn = ({
   const hasVisibleText = headerMessage.parts.some(
     (part) => part.type === "text" && part.content.trim().length > 0,
   );
+
+  // The compact pinned header must be a visual change only. If collapsing
+  // its text also changes this turn's in-flow height, Chrome's scroll
+  // anchoring moves the sentinel back below the sticky boundary; that
+  // immediately expands the header again and creates a render/scroll loop.
+  // Capture the natural height before paint, then keep that outer layout box
+  // stable while the inner pinned chrome becomes compact.
+  useLayoutEffect(() => {
+    const header = stickyHeaderRef.current;
+    if (!header) {
+      return;
+    }
+    header.style.setProperty(
+      STICKY_USER_HEADER_NATURAL_HEIGHT_VAR,
+      `${String(header.offsetHeight)}px`,
+    );
+  }, [headerMessage.id]);
+
+  useExternalSyncEffect(() => {
+    const header = stickyHeaderRef.current;
+    if (!header) {
+      return undefined;
+    }
+    const observer = new ResizeObserver(() => {
+      if (header.dataset["stuck"] !== "false") {
+        return;
+      }
+      header.style.setProperty(
+        STICKY_USER_HEADER_NATURAL_HEIGHT_VAR,
+        `${String(header.offsetHeight)}px`,
+      );
+    });
+    observer.observe(header);
+    return () => observer.disconnect();
+  }, [headerMessage.id]);
 
   // Stuck-detection: an out-of-flow 1px sentinel marks the header's natural
   // top. Once it scrolls above the container's top edge the header is pinned.
@@ -452,81 +522,84 @@ const StickyUserTurn = ({
           // keeps the floating composer above the whole transcript, so this
           // must NOT climb high enough to overlay it. `z-10` is the ceiling.
           "group/sticky sticky top-0 z-10",
-          // Unstuck: opaque band flush with the page (no chrome/box).
-          "data-[stuck=false]:bg-background",
-          // Stuck: near-opaque glass veil + blur matching the floating
-          // composer and sidebar, so the pinned message floats over the
-          // answer scrolling beneath. The veil is raised toward opaque
-          // (/95, /80 with backdrop-filter) so the moving answer text
-          // barely ghosts through instead of competing with the header.
-          "data-[stuck=true]:bg-background/95 supports-[backdrop-filter]:data-[stuck=true]:bg-background/80 data-[stuck=true]:backdrop-blur-md",
-          // The veil band stays pinned flush to the pane top (top-0) so it
-          // always covers the answer scrolling through beneath it; the top
-          // padding then insets the bubble by a sliver, so the pinned
-          // message floats with a little blurred breathing room above it
-          // rather than leaning against the pane's top edge. A rounded
-          // bottom + fine border reads as a floating shelf, not a hard cut.
-          "data-[stuck=true]:border-border/50 data-[stuck=true]:rounded-b-xl data-[stuck=true]:border-b data-[stuck=true]:pt-1",
+          // Preserve the natural in-flow height while pinned. The compact
+          // chrome below owns its own paint, so the transparent remainder
+          // neither hides nor intercepts the answer scrolling underneath.
+          "data-[stuck=true]:pointer-events-none data-[stuck=true]:h-(--sticky-user-header-natural-height)",
         )}
         data-stuck={isStuck ? "true" : "false"}
+        ref={stickyHeaderRef}
       >
-        {/* Behind the bubble: while stuck the bubble goes pointer-events-none
-            so plain text falls through to this jump target, and only its
-            interactive children (anonymization pills) re-enable clicks. */}
-        {isStuck && (
-          <button
-            aria-label={t("chat.jumpToMessage")}
-            className="absolute inset-0 z-0 cursor-pointer"
-            onClick={handleScrollBack}
-            type="button"
-          />
-        )}
-        <Message
+        <div
           className={cn(
-            "relative z-10 transition-opacity duration-200",
-            approvalPendingMessageId &&
-              approvalPendingMessageId !== headerMessage.id &&
-              "opacity-40",
-            "group-data-[stuck=true]/sticky:pointer-events-none",
-            "group-data-[stuck=true]/sticky:[&_a]:pointer-events-auto",
-            "group-data-[stuck=true]/sticky:[&_button]:pointer-events-auto",
+            "pointer-events-auto relative",
+            // Unstuck: opaque band flush with the page (no chrome/box).
+            "group-data-[stuck=false]/sticky:bg-background",
+            // Stuck: near-opaque compact glass shelf. Keeping these styles
+            // on the inner chrome leaves the height-preserving outer box
+            // transparent below the visible pinned message.
+            "group-data-[stuck=true]/sticky:bg-background/95 supports-[backdrop-filter]:group-data-[stuck=true]/sticky:bg-background/80 group-data-[stuck=true]/sticky:backdrop-blur-md",
+            "group-data-[stuck=true]/sticky:border-border/50 group-data-[stuck=true]/sticky:rounded-b-xl group-data-[stuck=true]/sticky:border-b group-data-[stuck=true]/sticky:pt-1",
           )}
-          from="user"
         >
-          <MessageContent>
-            <div className="group-data-[stuck=true]/sticky:hidden">
-              <UserAttachments parts={fileParts} />
-            </div>
-            {!hasVisibleText && fileParts.length > 0 && (
-              <span className="text-muted-foreground hidden items-center gap-1 text-xs group-data-[stuck=true]/sticky:flex">
-                <PaperclipIcon aria-hidden="true" className="size-3" />
-                {t("chat.queuedAttachmentCount", { count: fileParts.length })}
-              </span>
+          {/* Behind the bubble: while stuck the bubble goes
+              pointer-events-none so plain text falls through to this jump
+              target, and only its interactive children re-enable clicks. */}
+          {isStuck && (
+            <button
+              aria-label={t("chat.jumpToMessage")}
+              className="absolute inset-0 z-0 cursor-pointer"
+              onClick={handleScrollBack}
+              type="button"
+            />
+          )}
+          <Message
+            className={cn(
+              "relative z-10 transition-opacity duration-200",
+              approvalPendingMessageId &&
+                approvalPendingMessageId !== headerMessage.id &&
+                "opacity-40",
+              "group-data-[stuck=true]/sticky:pointer-events-none",
+              "group-data-[stuck=true]/sticky:[&_a]:pointer-events-auto",
+              "group-data-[stuck=true]/sticky:[&_button]:pointer-events-auto",
             )}
-            <div
-              className={cn(
-                "group-data-[stuck=true]/sticky:max-h-11 group-data-[stuck=true]/sticky:overflow-hidden",
-                // Fade the clipped overflow so a long pinned message dissolves
-                // instead of ending in a hard mid-glyph cut. The absolute-length
-                // stop (~one line-height) keeps a single-line message wholly
-                // inside the opaque zone so it stays fully visible; the fade only
-                // bites once a second line overflows.
-                "group-data-[stuck=true]/sticky:[mask-image:linear-gradient(to_bottom,black_1.25rem,transparent)]",
+            from="user"
+          >
+            <MessageContent>
+              <div className="group-data-[stuck=true]/sticky:hidden">
+                <UserAttachments parts={fileParts} />
+              </div>
+              {!hasVisibleText && fileParts.length > 0 && (
+                <span className="text-muted-foreground hidden items-center gap-1 text-xs group-data-[stuck=true]/sticky:flex">
+                  <PaperclipIcon aria-hidden="true" className="size-3" />
+                  {t("chat.queuedAttachmentCount", { count: fileParts.length })}
+                </span>
               )}
-            >
-              {headerMessage.parts.map((part, partIndex) =>
-                part.type === "text" ? (
-                  <UserMessageText
-                    // eslint-disable-next-line react/no-array-index-key -- message.parts is append-only during streaming (never reordered/removed); partIndex only disambiguates multiple text parts within this single, already message.id-scoped message.
-                    key={`${headerMessage.id}-user-text-${partIndex}`}
-                    restorationPairs={restorationPairs}
-                    text={normalizeUserMessageTextForDisplay(part.content)}
-                  />
-                ) : null,
-              )}
-            </div>
-          </MessageContent>
-        </Message>
+              <div
+                className={cn(
+                  "group-data-[stuck=true]/sticky:max-h-11 group-data-[stuck=true]/sticky:overflow-hidden",
+                  // Fade the clipped overflow so a long pinned message dissolves
+                  // instead of ending in a hard mid-glyph cut. The absolute-length
+                  // stop (~one line-height) keeps a single-line message wholly
+                  // inside the opaque zone so it stays fully visible; the fade only
+                  // bites once a second line overflows.
+                  "group-data-[stuck=true]/sticky:[mask-image:linear-gradient(to_bottom,black_1.25rem,transparent)]",
+                )}
+              >
+                {headerMessage.parts.map((part, partIndex) =>
+                  part.type === "text" ? (
+                    <UserMessageText
+                      // eslint-disable-next-line react/no-array-index-key -- message.parts is append-only during streaming (never reordered/removed); partIndex only disambiguates multiple text parts within this single, already message.id-scoped message.
+                      key={`${headerMessage.id}-user-text-${partIndex}`}
+                      restorationPairs={restorationPairs}
+                      text={normalizeUserMessageTextForDisplay(part.content)}
+                    />
+                  ) : null,
+                )}
+              </div>
+            </MessageContent>
+          </Message>
+        </div>
       </div>
       {children}
     </section>
@@ -716,17 +789,17 @@ const UserAttachments = ({
   );
 };
 
-const ThinkingIndicator = () => {
+const ThinkingIndicator = ({ state }: { state: "solving" | "working" }) => {
   const t = useTranslations();
 
   return (
     <Message from="assistant">
       <MessageContent>
         <div className="text-muted-foreground flex items-center gap-2 text-xs">
-          <div className="bg-muted relative h-1 w-9 overflow-hidden rounded-full">
-            <div className="bg-foreground/35 h-full w-1/2 animate-pulse rounded-full" />
-          </div>
-          <span>{t("chat.thinking")}</span>
+          <ChatActivityOrb state={state} />
+          <span>
+            {t(state === "solving" ? "chat.analyzingSources" : "chat.thinking")}
+          </span>
         </div>
       </MessageContent>
     </Message>
@@ -849,6 +922,25 @@ const hasVisibleContent = (
   return false;
 };
 
+const hasVisibleResponseContent = (
+  messages: readonly PersistedChatMessage[],
+  afterPartIndex: number | null,
+): boolean => {
+  const message = messages.at(-1);
+  if (message?.role !== "assistant") {
+    return false;
+  }
+
+  return message.parts
+    .slice((afterPartIndex ?? -1) + 1)
+    .some(
+      (part) =>
+        (part.type === "text" && part.content.trim().length > 0) ||
+        (part.type === "thinking" && part.content.trim().length > 0) ||
+        isRichChatPart(part),
+    );
+};
+
 const getMessageText = (message: PersistedChatMessage) => {
   const textParts: string[] = [];
   for (const part of message.parts) {
@@ -861,12 +953,14 @@ const getMessageText = (message: PersistedChatMessage) => {
 };
 
 const AssistantMessageActions = ({
+  exportArtifact,
   isGenerating,
   isLatestAssistantMessage,
   message,
   onResend,
   threadRef,
 }: {
+  exportArtifact: CreateDocumentDraft | null;
   isGenerating: boolean;
   isLatestAssistantMessage: boolean;
   message: PersistedChatMessage;
@@ -930,7 +1024,12 @@ const AssistantMessageActions = ({
         </Button>
       )}
       {(!isGenerating || !isLatestAssistantMessage) && text && threadRef && (
-        <MessageExportMenu messageId={message.id} threadRef={threadRef} />
+        <MessageExportMenu
+          artifact={exportArtifact ?? undefined}
+          key={`${message.id}:${exportArtifact?.toolCallId ?? "message-only"}`}
+          message={message}
+          threadRef={threadRef}
+        />
       )}
     </div>
   );
@@ -956,6 +1055,8 @@ type ChatThreadMessagesProps = {
    * inspector) omit it and the card falls back to a generic summary.
    */
   activeFileName?: string | undefined;
+  /** Compact prose is reserved for constrained overlays over a document. */
+  assistantTextDensity?: "compact" | "default" | undefined;
   approvalPendingMessageId: string | null;
   error?: Error | undefined;
   /** Whether an older page exists to load above the current top. */
@@ -997,13 +1098,14 @@ type ChatThreadMessagesProps = {
     | undefined;
   onCreateDocumentResolve: (
     toolCallId: string,
-    matterId: string,
+    destination: CreateDocumentDestination,
     input: ChatUITools["create-document"]["input"],
   ) => Promise<void> | void;
+  onOpenCreateDocumentDraft?: ((toolCallId: string) => void) | undefined;
   onOpenCreatedDocument: (
     output: Extract<
       ChatUITools["create-document"]["output"],
-      { success: true }
+      { entityId: string }
     >,
   ) => Promise<void> | void;
   showThinkingIndicator?: boolean | undefined;
@@ -1107,11 +1209,13 @@ type AssistantMessagePartsProps = Pick<
   | "onAskUserEditingChange"
   | "onAskUserSubmit"
   | "onCreateDocumentResolve"
+  | "onOpenCreateDocumentDraft"
   | "onOpenCreatedDocument"
   | "streamdownComponents"
   | "workspaceId"
 > & {
   activeOrganizationId: string;
+  assistantTextDensity: "compact" | "default";
   isGenerating: boolean;
   isLatestAssistantMessage: boolean;
   message: PersistedChatMessage;
@@ -1178,6 +1282,7 @@ const toAssistantPartRenderEntries = (
 const AssistantMessageParts = ({
   activeFileName,
   activeOrganizationId,
+  assistantTextDensity,
   isGenerating,
   isLatestAssistantMessage,
   message,
@@ -1185,6 +1290,7 @@ const AssistantMessageParts = ({
   onAskUserEditingChange,
   onAskUserSubmit,
   onCreateDocumentResolve,
+  onOpenCreateDocumentDraft,
   onOpenCreatedDocument,
   shouldShowToolCalls,
   streamdownComponents,
@@ -1216,15 +1322,13 @@ const AssistantMessageParts = ({
             <AssistantThinkingPart
               components={streamdownComponents}
               displayState={
-                // Only show the always-open live view while this message is
-                // actively streaming its reasoning (no answer text yet).
-                // Otherwise — including a finished message that never produced
-                // answer text — render the collapsible `<details>`, collapsed
-                // by default and clickable, so a completed reasoning block can
-                // always be minimised.
+                // Start open while this message is actively streaming its
+                // reasoning (no answer text yet), but always render the same
+                // disclosure so the user can collapse it immediately. Once
+                // the stream settles it folds unless the user already did so.
                 !hasAnswerContent && isGenerating && isLatestAssistantMessage
-                  ? { isStreaming: true, status: "expanded" }
-                  : { status: "folded" }
+                  ? "expanded"
+                  : "folded"
               }
               // eslint-disable-next-line react/no-array-index-key -- message.parts is append-only during streaming (never reordered/removed); index only disambiguates multiple parts within this single, already message.id-scoped message.
               key={`${message.id}-thinking-${index}`}
@@ -1240,6 +1344,19 @@ const AssistantMessageParts = ({
         if (part.type === "text") {
           return (
             <AssistantTextPart
+              className={
+                assistantTextDensity === "compact"
+                  ? cn(
+                      "text-[13px] leading-5",
+                      "[&_h1]:my-2 [&_h1]:text-[16px] [&_h1]:leading-5",
+                      "[&_h2]:my-2 [&_h2]:text-[15px] [&_h2]:leading-5",
+                      "[&_h3]:my-1.5 [&_h3]:text-[14px] [&_h3]:leading-5",
+                      "[&_h4]:my-1.5 [&_h4]:text-[13px] [&_h4]:leading-5",
+                      "[&_h5]:my-1.5 [&_h5]:text-[13px] [&_h5]:leading-5",
+                      "[&_h6]:my-1.5 [&_h6]:text-[13px] [&_h6]:leading-5",
+                    )
+                  : undefined
+              }
               components={streamdownComponents}
               // eslint-disable-next-line react/no-array-index-key -- message.parts is append-only during streaming (never reordered/removed); index only disambiguates multiple parts within this single, already message.id-scoped message.
               key={`${message.id}-text-${index}`}
@@ -1281,10 +1398,22 @@ const AssistantMessageParts = ({
             <NeedsMatterCard
               key={part.id}
               onOpenCreated={onOpenCreatedDocument}
+              onOpenDraft={onOpenCreateDocumentDraft}
               onResolve={onCreateDocumentResolve}
               part={part}
             />
           );
+        }
+
+        if (
+          part.type === "tool-call" &&
+          part.state === "error" &&
+          (part.name === "load-skill" || part.name === "read-skill-resource")
+        ) {
+          // Skill lookup is internal routing. Once the agent has the error and
+          // can recover, showing the miss as a prominent transcript event adds
+          // implementation noise without giving the user an action to take.
+          return null;
         }
 
         if (
@@ -1392,9 +1521,7 @@ const ReasoningTokenCount = ({ count }: { count: number }) => {
   );
 };
 
-type AssistantThinkingDisplayState =
-  | { status: "expanded"; isStreaming: boolean }
-  | { status: "folded" };
+type AssistantThinkingDisplayState = "expanded" | "folded";
 
 const AssistantThinkingPart = ({
   components,
@@ -1409,43 +1536,39 @@ const AssistantThinkingPart = ({
   restorationPairs: readonly ChatAnonRestoration[];
   text: string;
 }) => {
+  const [isOpen, setIsOpen] = useState(displayState === "expanded");
+  useExternalSyncEffect(() => {
+    setIsOpen(displayState === "expanded");
+  }, [displayState]);
+
   if (!text.trim()) {
     return null;
   }
 
-  if (displayState.status === "expanded") {
-    return (
-      <div className="border-border/70 bg-muted/20 max-w-[min(44rem,100%)] rounded-md border">
-        <div className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs">
-          <AssistantThinkingHeader
-            isExpanded
-            isStreaming={displayState.isStreaming}
-            reasoningTokenCount={reasoningTokenCount}
-          />
-        </div>
-        <AssistantThinkingBody
-          components={components}
-          restorationPairs={restorationPairs}
-          text={text}
-        />
-      </div>
-    );
-  }
-
   return (
-    <details className="group/reasoning w-fit max-w-full rounded-md">
+    <details
+      className={cn(
+        "group/reasoning max-w-[min(44rem,100%)] rounded-md",
+        isOpen && "border-border/70 bg-muted/20 border",
+      )}
+      onToggle={(event) => {
+        setIsOpen(event.currentTarget.open);
+      }}
+      open={isOpen}
+    >
       <summary
         className={cn(
           "inline-flex min-h-8 cursor-pointer list-none items-center gap-1.5",
-          "border-border/70 bg-background/70 rounded-md border px-2.5 py-1.5 text-xs shadow-sm",
+          "rounded-md px-2.5 py-1.5 text-xs",
+          !isOpen &&
+            "border-border/70 bg-background/70 hover:bg-muted/40 border shadow-sm",
           "text-muted-foreground",
-          "hover:bg-muted/40 transition-colors",
+          "transition-colors",
           "[&::-webkit-details-marker]:hidden",
         )}
       >
         <AssistantThinkingHeader
-          isExpanded={false}
-          isStreaming={false}
+          isExpanded={isOpen}
           reasoningTokenCount={reasoningTokenCount}
         />
       </summary>
@@ -1460,11 +1583,9 @@ const AssistantThinkingPart = ({
 
 const AssistantThinkingHeader = ({
   isExpanded,
-  isStreaming,
   reasoningTokenCount,
 }: {
   isExpanded: boolean;
-  isStreaming: boolean;
   reasoningTokenCount: number | null;
 }) => {
   const t = useTranslations();
@@ -1485,9 +1606,6 @@ const AssistantThinkingHeader = ({
           <ReasoningTokenCount count={reasoningTokenCount} />
         </>
       )}
-      {isStreaming && (
-        <span className="bg-foreground-placeholder size-1.5 animate-pulse rounded-full" />
-      )}
     </>
   );
 };
@@ -1504,7 +1622,13 @@ const AssistantThinkingBody = ({
   <div className="px-2.5 pb-2.5">
     <div className="border-s ps-2.5">
       <AssistantTextPart
-        className="text-muted-foreground text-xs leading-relaxed"
+        className={cn(
+          "text-muted-foreground text-xs leading-relaxed",
+          "[&_h1]:my-1 [&_h1]:text-xs [&_h2]:my-1 [&_h2]:text-xs",
+          "[&_h3]:my-1 [&_h3]:text-xs [&_h4]:my-1 [&_h4]:text-xs",
+          "[&_h5]:my-1 [&_h5]:text-xs [&_h6]:my-1 [&_h6]:text-xs",
+          "[&_code]:text-[11px]",
+        )}
         components={components}
         restorationPairs={restorationPairs}
         text={text}
@@ -1537,7 +1661,11 @@ const AssistantTextPart = ({
   const classNamePatch = className === undefined ? {} : { className };
   if (rehypePlugins === undefined) {
     return (
-      <MessageResponse components={components} {...classNamePatch}>
+      <MessageResponse
+        components={components}
+        fallbackChildren={assistantMessageFallbackText(text)}
+        {...classNamePatch}
+      >
         {text}
       </MessageResponse>
     );
@@ -1545,6 +1673,7 @@ const AssistantTextPart = ({
   return (
     <MessageResponse
       components={components}
+      fallbackChildren={assistantMessageFallbackText(text)}
       rehypePlugins={rehypePlugins}
       {...classNamePatch}
     >

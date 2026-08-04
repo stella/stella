@@ -366,6 +366,7 @@
     },
     "aiPrompt": "AI sõnumiväli",
     "aiThread": "AI vestlus",
+    "analyzingSources": "Allikate analüüsimine",
     "anonymizedMode": "Anonüümitud AI režiim",
     "anonymizedModeDisabled": "Anonüümitud AI režiim on väljas",
     "anonymizedModeEnabled": "Anonüümitud AI režiim on sees",
@@ -448,7 +449,8 @@
       "openInFolio": "Ava redaktoris",
       "pickMatterPrompt": "Valige toimik, kuhu see dokument salvestada.",
       "previewName": "Dokument: {name}",
-      "previewWaiting": "Sisu ootamine…"
+      "previewWaiting": "Sisu ootamine…",
+      "savePendingReview": "Enne dokumendi salvestamist lahendage ülevaatust ootavad AI soovitused."
     },
     "deleteThread": "Kustuta vestlus",
     "editMode": {
@@ -880,11 +882,11 @@
     "expenses": "Kulud",
     "export": {
       "citations": "Viited",
-      "failed": "Sõnumit ei õnnestunud eksportida",
+      "failed": "Sõnumit ei õnnestunud salvestada",
       "footnotes": "Allmärkused",
       "formatDocx": "Wordi dokument (<docx>.docx</docx>)",
       "inline": "Tekstisisene",
-      "title": "Ekspordi sõnum"
+      "title": "Salvesta sõnum"
     },
     "filter": "Filter",
     "formula": "Valem",

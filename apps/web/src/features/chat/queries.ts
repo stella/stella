@@ -10,7 +10,7 @@ import { panic } from "better-result";
 
 import { CHAT_SEND_MODE, isChatSendMode } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
-import { CHAT_TOOL_SCOPE } from "@stll/api-contract";
+import { CHAT_TOOL_SCOPE, CHAT_TURN_INTENT } from "@stll/api-contract";
 import type { ChatSendRequest } from "@stll/api-contract";
 
 import type { ChatContextUsage } from "@/components/chat/chat-context-meter";
@@ -21,6 +21,8 @@ import type {
 } from "@/components/chat/chat-ui-tools";
 import {
   hasRunningToolCallInLatestAssistantMessage,
+  isChatTurnInFlight,
+  isChatClientRequestActive,
   sanitizeRunningToolCalls,
 } from "@/components/chat/chat-ui-tools";
 import type { ChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
@@ -65,6 +67,14 @@ type ActiveFileContext = {
   fileFieldId?: string | undefined;
   fileName: string;
   supportsDocxEdits?: boolean | undefined;
+};
+
+type ActiveDraftContext = {
+  docxEditSnapshot: NonNullable<ActiveFileContext["docxEditSnapshot"]>;
+  fileName: string;
+  originChatMessageId: string;
+  originChatThreadId: string;
+  toolCallId: string;
 };
 
 type ActiveTemplateContext = {
@@ -134,6 +144,7 @@ export type ApplyActiveDocxEditsOutput =
 export type ChatThreadOptionsContext = {
   allowMissingThread?: boolean | undefined;
   getActiveDecision?: (() => ActiveDecisionContext | undefined) | undefined;
+  getActiveDraft?: (() => ActiveDraftContext) | undefined;
   getActiveExternal?: (() => ActiveExternalContext | undefined) | undefined;
   getActiveFile?: (() => ActiveFileContext | undefined) | undefined;
   getActiveSkill?: (() => ActiveSkillContext | undefined) | undefined;
@@ -195,6 +206,10 @@ const getChatRuntimeContextKind = (
 
   if (context?.getActiveFile) {
     return "active-file";
+  }
+
+  if (context?.getActiveDraft) {
+    return "active-docx-edit";
   }
 
   if (context?.getActiveExternal) {
@@ -363,6 +378,7 @@ export type ChatContinuationRequestBody = {
   sendMode?: ChatSendMode | undefined;
   toolScope?: ChatToolScope | undefined;
   truncateAfterMessageId?: SafeId<"chatMessage"> | undefined;
+  turnIntent?: (typeof CHAT_TURN_INTENT)["regenerate"] | undefined;
 };
 export type ChatSendMessageOptions = {
   body?: ChatContinuationRequestBody | undefined;
@@ -379,6 +395,7 @@ type ChatRuntimeSnapshot = {
   messages: PersistedChatMessage[];
   sessionGenerating: boolean;
   status: ChatClientState;
+  turnAbandoned: boolean;
 };
 
 type TanStackClientToolResult = Parameters<
@@ -706,6 +723,7 @@ export const createChatRuntime = ({
     messages: initialMessages,
     sessionGenerating: false,
     status: "ready",
+    turnAbandoned: false,
   };
 
   const emit = () => {
@@ -763,7 +781,11 @@ export const createChatRuntime = ({
     onFinish: () => {
       onFinish();
     },
-    onLoadingChange: (isLoading) => setSnapshot({ isLoading }),
+    onLoadingChange: (isLoading) =>
+      setSnapshot({
+        isLoading,
+        ...(isLoading ? { turnAbandoned: false } : {}),
+      }),
     onMessagesChange: (messages) =>
       setSnapshot({ messages: toPersistedChatMessages(messages) }),
     onSessionGeneratingChange: (sessionGenerating) =>
@@ -827,9 +849,17 @@ export const createChatRuntime = ({
     },
     getSnapshot: () => snapshot,
     reload: async (options) => {
-      await withBody(options, async () => {
-        await client.reload();
-      });
+      await withBody(
+        {
+          body: {
+            ...options?.body,
+            turnIntent: CHAT_TURN_INTENT.regenerate,
+          },
+        },
+        async () => {
+          await client.reload();
+        },
+      );
     },
     setMessages: (messages) => {
       client.setMessagesManually(messages);
@@ -850,6 +880,13 @@ export const createChatRuntime = ({
       return { messageId: message.id, status: "started", stream };
     },
     stop: () => {
+      const turnWasActive =
+        snapshot.isLoading ||
+        snapshot.sessionGenerating ||
+        isChatClientRequestActive(snapshot.status) ||
+        hasRunningToolCallInLatestAssistantMessage({
+          messages: snapshot.messages,
+        });
       client.stop();
       // `client.stop()` aborts the live request but never rewrites message
       // parts, so a tool-call part caught mid-run stays in a running state and
@@ -863,9 +900,12 @@ export const createChatRuntime = ({
           messages: snapshot.messages,
         })
       ) {
-        const sanitized = sanitizeRunningToolCalls(snapshot.messages);
+        const sanitized = sanitizeRunningToolCalls(snapshot.messages, "cancel");
         client.setMessagesManually(sanitized);
         setSnapshot({ messages: sanitized });
+      }
+      if (turnWasActive) {
+        setSnapshot({ turnAbandoned: true });
       }
     },
     subscribe: (listener) => {
@@ -938,6 +978,10 @@ export const buildSendRequestBody = ({
     body.truncateAfterMessageId = requestBody.truncateAfterMessageId;
   }
 
+  if (requestBody?.turnIntent !== undefined) {
+    body.turnIntent = requestBody.turnIntent;
+  }
+
   if (requestBody?.toolScope !== undefined) {
     body.toolScope = requestBody.toolScope;
   }
@@ -969,6 +1013,23 @@ export const buildSendRequestBody = ({
               activeFile.docxEditSnapshot,
             ),
           }),
+    };
+  }
+
+  const activeDraft = context?.getActiveDraft?.();
+  if (activeDraft) {
+    body.activeDraft = {
+      fileName: activeDraft.fileName,
+      originChatMessageId: toSafeId<"chatMessage">(
+        activeDraft.originChatMessageId,
+      ),
+      originChatThreadId: toSafeId<"chatThread">(
+        activeDraft.originChatThreadId,
+      ),
+      toolCallId: activeDraft.toolCallId,
+      docxEditSnapshot: toChatSendDocxEditSnapshot(
+        activeDraft.docxEditSnapshot,
+      ),
     };
   }
 
@@ -1259,6 +1320,9 @@ const normalizeChatContinuationRequestBody = (
       data["truncateAfterMessageId"],
     );
   }
+  if (data["turnIntent"] === CHAT_TURN_INTENT.regenerate) {
+    body.turnIntent = data["turnIntent"];
+  }
 
   return Object.keys(body).length === 0 ? undefined : body;
 };
@@ -1493,6 +1557,7 @@ const chatThreadIdentity = ({
 // send, and is already part of the query key.
 const CHAT_CONTEXT_CAPABILITY_KEYS = [
   "getActiveDecision",
+  "getActiveDraft",
   "getActiveExternal",
   "getActiveFile",
   "getActiveSkill",
@@ -1677,15 +1742,19 @@ const CHAT_RUNTIME_RECONCILE_DISPOSITION = {
  */
 const hasInFlightChatRuntimeWork = (runtime: ChatRuntime): boolean => {
   const snapshot = runtime.getSnapshot();
-  return (
-    snapshot.isLoading ||
-    snapshot.sessionGenerating ||
-    snapshot.status === "submitted" ||
-    snapshot.status === "streaming" ||
-    hasRunningToolCallInLatestAssistantMessage({
-      messages: snapshot.messages,
-    })
-  );
+  const turnInFlight = isChatTurnInFlight({
+    messages: snapshot.messages,
+    status: snapshot.status,
+    turnAbandoned: snapshot.turnAbandoned,
+  });
+  // A terminal runtime wins over any stale transport signal. In particular,
+  // TanStack preserves a partial tool part (and may still report a generation
+  // session) after RUN_ERROR, but that turn will never resume.
+  if (snapshot.status === "error" || snapshot.turnAbandoned) {
+    return false;
+  }
+
+  return snapshot.isLoading || snapshot.sessionGenerating || turnInFlight;
 };
 
 const getChatRuntimeReconcileDisposition = ({
@@ -2057,12 +2126,28 @@ export const acquireChatRuntime = ({
     }
   }
 
+  const refreshPersistedThread = () => {
+    detached(
+      Promise.all([
+        invalidateChatThread({ queryClient, threadRef: key }),
+        invalidateChatThreadLists({
+          queryClient,
+          workspaceId: key.scope === "workspace" ? key.workspaceId : undefined,
+        }),
+      ]),
+      "chatTurnTerminal",
+    );
+  };
   const runtime = createChatRuntime({
     context,
     initialMessages: data.messages,
     key,
     onError: (error) => {
       getAnalytics().captureError(error);
+      // The server persists a failed terminal outcome before emitting
+      // RUN_ERROR. Reconcile the ephemeral TanStack error runtime with that
+      // durable message metadata just as a successful finish does.
+      refreshPersistedThread();
     },
     onFinish: () => {
       // Invalidate only — do NOT evict the registry entry here. The
@@ -2073,17 +2158,7 @@ export const acquireChatRuntime = ({
       // wiping the finished turn until the refetch wins (or forever if
       // it fails). Kept in place, the entry reattaches seed-equal until
       // the refetch lands, then the idle reconcile replaces it.
-      detached(
-        Promise.all([
-          invalidateChatThread({ queryClient, threadRef: key }),
-          invalidateChatThreadLists({
-            queryClient,
-            workspaceId:
-              key.scope === "workspace" ? key.workspaceId : undefined,
-          }),
-        ]),
-        "onFinish",
-      );
+      refreshPersistedThread();
     },
   });
   chatRuntimeRegistry.set(registryKey, {

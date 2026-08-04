@@ -47,10 +47,14 @@ export const maybeSkillTools = (
   if (ctx === undefined || !SKILL_REF_RE.test(prompt)) {
     return undefined;
   }
+  const skills = getChatSkillMetadata();
+  if (skills.length === 0) {
+    return undefined;
+  }
   return createSkillTools({
     organizationId: ctx.organizationId,
     safeDb: ctx.safeDb,
-    skills: getChatSkillMetadata(),
+    skills,
     userId: ctx.userId,
   });
 };

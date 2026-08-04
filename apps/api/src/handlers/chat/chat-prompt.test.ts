@@ -12,6 +12,7 @@ import { DOCX_REVIEW_MARKUP_EXAMPLES } from "@/api/lib/docx-review-markup";
 import {
   appendAnonymizedModeHintToChatSafePrompt,
   appendActiveFilePromptIfEntityExists,
+  buildActiveDraftPrompt,
   buildActiveSkillSection,
   buildActiveTemplatePrompt,
   buildChatPromptCacheKey,
@@ -301,6 +302,8 @@ describe("chat prompt builders", () => {
     });
 
     expect(prompt.cacheStablePrefix).not.toContain("Available stella skills");
+    expect(prompt.cacheStablePrefix).not.toContain("load-skill");
+    expect(prompt.cacheStablePrefix).not.toContain("read-skill-resource");
     expect(prompt.cacheStablePrefix).not.toContain("\n\n\n\n");
     expect(prompt.fullPrompt).not.toContain("\n\n\n\n");
   });
@@ -479,6 +482,32 @@ describe("chat prompt builders", () => {
     expect(prompt).toContain("Plna moc.docx");
     expect(prompt).not.toContain("apply-active-docx-edits");
     expect(prompt).not.toContain("suggest_template_fields");
+  });
+
+  test("active-draft prompt grounds edits in the visible unsaved document", () => {
+    const prompt = buildActiveDraftPrompt(
+      {
+        originChatMessageId: toSafeId<"chatMessage">("message-origin"),
+        originChatThreadId: toSafeId<"chatThread">("thread-origin"),
+        toolCallId: "tool-draft",
+        fileName: "Plna moc.docx",
+        docxEditSnapshot: {
+          blocks: [
+            { id: "b-1", kind: "paragraph", text: "Zmocnitel: Jan Novak" },
+          ],
+        },
+      },
+      FULL_TOOL_AVAILABILITY,
+    );
+
+    expect(prompt).toContain("ACTIVE UNSAVED DRAFT");
+    expect(prompt).toContain("Plna moc.docx");
+    expect(prompt).toContain("apply-active-docx-edits");
+    expect(prompt).toContain('"blockId":"b-1"');
+    expect(prompt).toContain("do not call matter retrieval or create-document");
+    expect(prompt).toContain("Do not call `execute_typescript`");
+    expect(prompt).toContain("Editable DOCX blocks:");
+    expect(prompt).not.toContain("TEMPLATE EDITING");
   });
 
   test("active-template prompt wires the suggest-fields and edit flows when a snapshot exists", () => {

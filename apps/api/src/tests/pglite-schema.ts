@@ -13,6 +13,11 @@ const WORKSPACE_AUTHORIZATION_MIGRATION_PATH = nodePath.join(
   "20260710173000_scalable_workspace_authorization",
   "migration.sql",
 );
+const CHAT_THREAD_TURN_WORKSPACE_CASCADE_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20260803120000_chat_thread_turn_workspace_cascade",
+  "migration.sql",
+);
 
 type PgliteSchemaDb = {
   execute: (query: SQL) => Promise<unknown>;
@@ -95,9 +100,24 @@ const isTransactionControlStatement = (executable: string): boolean =>
 export const installPgliteWorkspaceAccessObjects = async (
   db: PgliteSchemaDb,
 ): Promise<void> => {
-  const statements = readMigrationStatements(
+  const migrationPaths = [
     WORKSPACE_AUTHORIZATION_MIGRATION_PATH,
-  );
+    CHAT_THREAD_TURN_WORKSPACE_CASCADE_MIGRATION_PATH,
+  ];
+  for (const migrationPath of migrationPaths) {
+    // oxlint-disable-next-line no-await-in-loop -- migration batches must stay ordered
+    await installPgliteMigration({ db, migrationPath });
+  }
+};
+
+const installPgliteMigration = async ({
+  db,
+  migrationPath,
+}: {
+  db: PgliteSchemaDb;
+  migrationPath: string;
+}): Promise<void> => {
+  const statements = readMigrationStatements(migrationPath);
   for (const statement of statements) {
     const executable = executableSql(statement);
     if (executable.length === 0) {

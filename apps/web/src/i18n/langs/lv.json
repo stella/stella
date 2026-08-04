@@ -366,6 +366,7 @@
     },
     "aiPrompt": "MI ziņojuma lauks",
     "aiThread": "MI saruna",
+    "analyzingSources": "Avotu analīze",
     "anonymizedMode": "Anonimizēts AI režīms",
     "anonymizedModeDisabled": "Anonimizēts AI režīms ir izslēgts",
     "anonymizedModeEnabled": "Anonimizēts AI režīms ir ieslēgts",
@@ -448,7 +449,8 @@
       "openInFolio": "Atvērt redaktorā",
       "pickMatterPrompt": "Izvēlieties lietu, kurā saglabāt šo dokumentu.",
       "previewName": "Dokuments: {name}",
-      "previewWaiting": "Gaida saturu…"
+      "previewWaiting": "Gaida saturu…",
+      "savePendingReview": "Pirms dokumenta saglabāšanas izskatiet pārskatīšanu gaidošos AI ieteikumus."
     },
     "deleteThread": "Dzēst sarunu",
     "editMode": {
@@ -880,11 +882,11 @@
     "expenses": "Izdevumi",
     "export": {
       "citations": "Atsauces",
-      "failed": "Neizdevās eksportēt ziņojumu",
+      "failed": "Neizdevās saglabāt ziņojumu",
       "footnotes": "Vēres",
       "formatDocx": "Word dokuments (<docx>.docx</docx>)",
       "inline": "Tekstā",
-      "title": "Eksportēt ziņojumu"
+      "title": "Saglabāt ziņojumu"
     },
     "filter": "Filtrs",
     "formula": "Formula",

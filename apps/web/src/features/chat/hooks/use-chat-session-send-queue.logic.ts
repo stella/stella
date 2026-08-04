@@ -149,6 +149,20 @@ export type SendQueueEvent =
     }
   | { type: "conversation-switched"; conversationId: string };
 
+const canDrainQueueAfterTurn = (status: ChatClientState): boolean => {
+  switch (status) {
+    case "ready":
+      return true;
+    case "error":
+    case "streaming":
+    case "submitted":
+      return false;
+    default:
+      status satisfies never;
+      return panic("Unhandled chat client state");
+  }
+};
+
 export type SendQueueTransition = {
   state: SendQueueState;
   /**
@@ -240,7 +254,7 @@ export const reduceSendQueue = (
       // message into a failing provider just burns quota and spams the
       // user with repeats of the same error. The next manual send (or a
       // successful regenerate) lifts the gate.
-      if (!finishedTurn || event.status === "error") {
+      if (!finishedTurn || !canDrainQueueAfterTurn(event.status)) {
         return { state: next, dispatchedEntry: null };
       }
       return startOldestDispatch(next);

@@ -369,6 +369,7 @@ type Messages = {
     };
     "aiPrompt": "AI message composer";
     "aiThread": "AI conversation";
+    "analyzingSources": "Analyzing sources";
     "anonymizedMode": "Anonymized AI mode";
     "anonymizedModeDisabled": "Anonymized AI mode is off";
     "anonymizedModeEnabled": "Anonymized AI mode is on";
@@ -452,6 +453,7 @@ type Messages = {
       "pickMatterPrompt": "Choose a matter to save this document into.";
       "previewName": "Document: {name}";
       "previewWaiting": "Waiting for content…";
+      "savePendingReview": "Resolve the pending AI suggestions before saving the document.";
     };
     "deleteThread": "Delete conversation";
     "editMode": {
@@ -883,11 +885,11 @@ type Messages = {
     "expenses": "Expenses";
     "export": {
       "citations": "Citations";
-      "failed": "Couldn't export the message";
+      "failed": "Couldn't save the message";
       "footnotes": "Footnotes";
       "formatDocx": "Word document (<docx>.docx</docx>)";
       "inline": "Inline";
-      "title": "Export message";
+      "title": "Save message";
     };
     "filter": "Filter";
     "formula": "Formula";

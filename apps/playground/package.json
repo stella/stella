@@ -14,7 +14,7 @@
     "test": "bun test --pass-with-no-tests"
   },
   "dependencies": {
-    "@stll/folio-react": "^0.13.0",
+    "@stll/folio-react": "catalog:",
     "@stll/ui": "workspace:*",
     "lucide-react": "catalog:",
     "react": "catalog:react19",

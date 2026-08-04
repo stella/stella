@@ -9,6 +9,7 @@ import type { Static } from "elysia";
 import { t } from "elysia";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
+import { CHAT_TURN_INTENT } from "@stll/api-contract";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import type { StoredFileRef } from "@/api/handlers/chat/attachment-validation";
@@ -18,6 +19,8 @@ import {
 } from "@/api/handlers/chat/attachment-validation";
 import {
   chatMessageFromPersisted,
+  getAwaitingUserInteractions,
+  getResumedUserInteraction,
   hasServerOwnedChatPartType,
   isIncomingChatPart,
   isChatTextPart,
@@ -85,6 +88,14 @@ export const activeFileSchema = t.Object({
   fileName: t.String(),
   supportsDocxEdits: t.Optional(t.Boolean()),
   docxEditSnapshot: t.Optional(docxEditSnapshotSchema),
+});
+
+export const activeDraftSchema = t.Object({
+  originChatMessageId: tSafeId("chatMessage"),
+  originChatThreadId: tSafeId("chatThread"),
+  toolCallId: t.String(),
+  fileName: t.String(),
+  docxEditSnapshot: docxEditSnapshotSchema,
 });
 
 /**
@@ -184,6 +195,7 @@ export const sendMessageBodySchema = t.Object({
   contextMatterIds: t.Optional(t.Array(tSafeId("workspace"))),
   message: rawMessageSchema,
   truncateAfterMessageId: t.Optional(tSafeId("chatMessage")),
+  turnIntent: t.Optional(t.Literal(CHAT_TURN_INTENT.regenerate)),
   /**
    * Optional named tool scope for this turn. Only server-defined
    * scope names validate; the server maps the name to a fixed tool
@@ -192,6 +204,7 @@ export const sendMessageBodySchema = t.Object({
    */
   toolScope: t.Optional(t.Literal(CHAT_TOOL_SCOPE.suggestTemplateFields)),
   userContext: t.Optional(userContextSchema),
+  activeDraft: t.Optional(activeDraftSchema),
   activeFile: t.Optional(activeFileSchema),
   activeTemplate: t.Optional(activeTemplateSchema),
   activeDecision: t.Optional(activeDecisionSchema),
@@ -234,6 +247,7 @@ export type ChatSendRequest = Static<typeof sendMessageBodySchema>;
 type RawIncomingMessage = Static<typeof rawMessageSchema>;
 export type IncomingUserContext = Static<typeof userContextSchema>;
 export type IncomingActiveFile = Static<typeof activeFileSchema>;
+export type IncomingActiveDraft = Static<typeof activeDraftSchema>;
 export type IncomingActiveTemplate = Static<typeof activeTemplateSchema>;
 export type IncomingActiveDecision = Static<typeof activeDecisionSchema>;
 export type IncomingActiveExternal = Static<typeof activeExternalSchema>;
@@ -262,11 +276,46 @@ type ValidateMessageResult = Result<
 type ChatToolSchema = SchemaInput | undefined;
 type ChatToolCallPart = Extract<ChatPart, { type: "tool-call" }>;
 type ChatToolResultPart = Extract<ChatPart, { type: "tool-result" }>;
-type ValidatedToolCallPart = {
-  name: string;
-  hasOutput: boolean;
-  output: unknown;
-};
+const CONTINUATION_TOOL_CALL_TRANSITIONS = {
+  "approval-requested": ["approval-requested", "approval-responded"],
+  "approval-responded": ["approval-responded"],
+  "awaiting-input": ["awaiting-input"],
+  complete: ["complete"],
+  error: ["error"],
+  "input-complete": ["input-complete", "complete", "error"],
+  "input-streaming": ["input-streaming"],
+} as const satisfies Record<
+  ChatToolCallPart["state"],
+  readonly ChatToolCallPart["state"][]
+>;
+const TOOL_CALL_OUTPUT_VALIDATION = {
+  "awaiting-input": "schema",
+  "approval-requested": "schema",
+  "approval-responded": "schema",
+  complete: "schema",
+  error: "error",
+  "input-complete": "schema",
+  "input-streaming": "schema",
+} as const satisfies Record<ChatToolCallPart["state"], "error" | "schema">;
+const TOOL_RESULT_VALIDATION = {
+  complete: "output",
+  error: "error",
+  streaming: "incomplete",
+} as const satisfies Record<
+  ChatToolResultPart["state"],
+  "error" | "incomplete" | "output"
+>;
+type ValidatedToolCallPart =
+  | {
+      type: "error";
+      name: string;
+      error: string | undefined;
+    }
+  | {
+      type: "schema";
+      name: string;
+      output: { type: "absent" } | { type: "present"; value: unknown };
+    };
 
 export const validateMessage = async ({
   message,
@@ -290,13 +339,17 @@ export const validateMessage = async ({
       return Result.err(metadataResult.error);
     }
 
+    const metadata = restoreServerOwnedChatMetadata({
+      incomingMetadata: metadataResult.value,
+      message,
+      persistedMessage,
+    });
+
     const validatedMessage = toPersistableChatMessage({
       id: message.id,
       role: message.role,
       parts: partsResult.value,
-      ...(metadataResult.value === undefined
-        ? {}
-        : { metadata: metadataResult.value }),
+      ...(metadata === undefined ? {} : { metadata }),
     });
     const toolValidationResult = validateToolCallParts({
       message: validatedMessage,
@@ -363,6 +416,42 @@ export const validateMessage = async ({
     });
   });
 
+const restoreServerOwnedChatMetadata = ({
+  incomingMetadata,
+  message,
+  persistedMessage,
+}: {
+  incomingMetadata: ChatMessageMetadata | undefined;
+  message: RawIncomingMessage;
+  persistedMessage: ValidateMessageInput["persistedMessage"];
+}): ChatMessageMetadata | undefined => {
+  if (message.role !== "assistant" || persistedMessage?.role !== "assistant") {
+    return incomingMetadata;
+  }
+
+  const persistedMetadata = chatMessageFromPersisted({
+    id: message.id,
+    role: persistedMessage.role,
+    content: persistedMessage.content,
+  }).metadata;
+  const restored: ChatMessageMetadata = {
+    ...incomingMetadata,
+    ...(persistedMetadata?.serverProvenance === undefined
+      ? {}
+      : { serverProvenance: persistedMetadata.serverProvenance }),
+    ...(persistedMetadata?.activeDraftContext === undefined
+      ? {}
+      : { activeDraftContext: persistedMetadata.activeDraftContext }),
+    ...(persistedMetadata?.sourceDocuments === undefined
+      ? {}
+      : { sourceDocuments: persistedMetadata.sourceDocuments }),
+    ...(persistedMetadata?.turnOutcome === undefined
+      ? {}
+      : { turnOutcome: persistedMetadata.turnOutcome }),
+  };
+  return isChatMessageMetadataEmpty(restored) ? undefined : restored;
+};
+
 const validateIncomingChatParts = ({
   message,
   persistedMessage,
@@ -398,12 +487,143 @@ const validateIncomingChatParts = ({
           content: persistedMessage.content,
         }).parts
       : [];
+  if (message.role === "assistant" && persistedMessage?.role === "assistant") {
+    const continuationIntegrityResult = validateContinuationToolCallIntegrity({
+      incomingParts: validatedParts,
+      persistedParts,
+    });
+    if (Result.isError(continuationIntegrityResult)) {
+      return Result.err(continuationIntegrityResult.error);
+    }
+  }
   return Result.ok(
     restoreServerOwnedChatParts({
       incomingParts: validatedParts,
       persistedParts,
     }),
   );
+};
+
+/**
+ * A client continuation may supply the result of an awaited interaction, but
+ * it must not change the canonical call that requested it. In particular, the
+ * provider-visible name, arguments, and input remain server-authored.
+ */
+const validateContinuationToolCallIntegrity = ({
+  incomingParts,
+  persistedParts,
+}: {
+  incomingParts: readonly ChatPart[];
+  persistedParts: readonly ChatPart[];
+}): Result<void, HandlerError<400>> => {
+  const canonicalCalls = persistedParts.filter(
+    (part): part is ChatToolCallPart => part.type === "tool-call",
+  );
+  const incomingCalls = incomingParts.filter(
+    (part): part is ChatToolCallPart => part.type === "tool-call",
+  );
+  if (incomingCalls.length !== canonicalCalls.length) {
+    return invalidContinuationToolCall();
+  }
+  for (const [index, canonicalCall] of canonicalCalls.entries()) {
+    const incomingCall = incomingCalls.at(index);
+    if (
+      incomingCall === undefined ||
+      incomingCall.id !== canonicalCall.id ||
+      !isPermittedContinuationToolCallTransition({
+        canonicalCall,
+        incomingCall,
+      })
+    ) {
+      return invalidContinuationToolCall();
+    }
+  }
+
+  const resumedInteraction = getResumedUserInteraction({
+    parts: [...incomingParts],
+    role: "assistant",
+  });
+  if (resumedInteraction === null) {
+    return Result.ok();
+  }
+  const awaitedInteractions = getAwaitingUserInteractions({
+    parts: [...persistedParts],
+    role: "assistant",
+  });
+  const interaction = awaitedInteractions.find(
+    (candidate) =>
+      candidate.toolCallId === resumedInteraction.toolCallId &&
+      candidate.type === resumedInteraction.type,
+  );
+  if (interaction === undefined) {
+    return invalidContinuationToolCall();
+  }
+  return Result.ok();
+};
+
+const invalidContinuationToolCall = (): Result<never, HandlerError<400>> =>
+  Result.err(
+    new HandlerError({
+      status: 400,
+      message: "Chat continuation does not match its awaited interaction",
+    }),
+  );
+
+const isPermittedContinuationToolCallTransition = ({
+  canonicalCall,
+  incomingCall,
+}: {
+  canonicalCall: ChatToolCallPart;
+  incomingCall: ChatToolCallPart;
+}): boolean => {
+  let stateTransitionAllowed = false;
+  for (const allowedState of CONTINUATION_TOOL_CALL_TRANSITIONS[
+    canonicalCall.state
+  ]) {
+    if (allowedState === incomingCall.state) {
+      stateTransitionAllowed = true;
+      break;
+    }
+  }
+  if (
+    !stateTransitionAllowed ||
+    incomingCall.name !== canonicalCall.name ||
+    !deepEquals(incomingCall.arguments, canonicalCall.arguments) ||
+    !deepEquals(incomingCall.input, canonicalCall.input)
+  ) {
+    return false;
+  }
+
+  if (incomingCall.state === canonicalCall.state) {
+    return deepEquals(incomingCall, canonicalCall);
+  }
+  if (
+    canonicalCall.state === "approval-requested" &&
+    incomingCall.state === "approval-responded"
+  ) {
+    if (!("approval" in canonicalCall) || !("approval" in incomingCall)) {
+      return false;
+    }
+    return (
+      incomingCall.approval.id === canonicalCall.approval.id &&
+      incomingCall.approval.needsApproval ===
+        canonicalCall.approval.needsApproval &&
+      canonicalCall.approval.approved === undefined &&
+      typeof incomingCall.approval.approved === "boolean" &&
+      deepEquals(incomingCall.output, canonicalCall.output)
+    );
+  }
+  if (
+    canonicalCall.state === "input-complete" &&
+    (incomingCall.state === "complete" || incomingCall.state === "error")
+  ) {
+    const canonicalApproval =
+      "approval" in canonicalCall ? canonicalCall.approval : undefined;
+    const incomingApproval =
+      "approval" in incomingCall ? incomingCall.approval : undefined;
+    return deepEquals(incomingApproval, canonicalApproval);
+  }
+  return false;
 };
 
 const validateIncomingChatMetadata = (
@@ -602,11 +822,13 @@ const parseUsageMetadata = (
 };
 
 const isChatMessageMetadataEmpty = (metadata: ChatMessageMetadata): boolean =>
+  metadata.activeDraftContext === undefined &&
   metadata.anonRestorations === undefined &&
   metadata.docxEditPreferences === undefined &&
   metadata.mentions === undefined &&
   metadata.serverProvenance === undefined &&
   metadata.sourceDocuments === undefined &&
+  metadata.turnOutcome === undefined &&
   metadata.usage === undefined;
 
 const validateToolCallParts = ({
@@ -706,23 +928,64 @@ const validateToolCallPart = ({
     }
   }
 
-  let hasOutput = false;
-  let validatedOutput: unknown = undefined;
-  if (part.output !== undefined) {
-    const outputResult = validateToolPayload({
-      payload: part.output,
-      payloadName: "output",
-      schema: tool.outputSchema,
-      toolName: part.name,
-    });
-    if (Result.isError(outputResult)) {
-      return Result.err(outputResult.error);
+  if (TOOL_CALL_OUTPUT_VALIDATION[part.state] === "error") {
+    const errorOutputResult = validateToolCallErrorOutput(part);
+    if (Result.isError(errorOutputResult)) {
+      return Result.err(errorOutputResult.error);
     }
-    validatedOutput = outputResult.value;
-    hasOutput = true;
+    return Result.ok({
+      type: "error",
+      name: part.name,
+      error: errorOutputResult.value,
+    });
   }
 
-  return Result.ok({ hasOutput, name: part.name, output: validatedOutput });
+  if (part.output === undefined) {
+    return Result.ok({
+      type: "schema",
+      name: part.name,
+      output: { type: "absent" },
+    });
+  }
+
+  const outputResult = validateToolPayload({
+    payload: part.output,
+    payloadName: "output",
+    schema: tool.outputSchema,
+    toolName: part.name,
+  });
+  if (Result.isError(outputResult)) {
+    return Result.err(outputResult.error);
+  }
+  return Result.ok({
+    type: "schema",
+    name: part.name,
+    output: { type: "present", value: outputResult.value },
+  });
+};
+
+const validateToolCallErrorOutput = (
+  part: ChatToolCallPart,
+): Result<string | undefined, HandlerError<400>> => {
+  const output: unknown = part.output;
+  if (output === undefined) {
+    return Result.ok(undefined);
+  }
+  if (
+    typeof output !== "object" ||
+    output === null ||
+    !("error" in output) ||
+    typeof output.error !== "string" ||
+    output.error.length === 0
+  ) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: `Invalid chat tool call error output: ${part.id}`,
+      }),
+    );
+  }
+  return Result.ok(output.error);
 };
 
 const validateToolResultPart = ({
@@ -734,7 +997,8 @@ const validateToolResultPart = ({
   toolCallsById: Map<string, ValidatedToolCallPart>;
   tools: ChatToolMap;
 }): Result<void, HandlerError<400>> => {
-  if (part.state === "streaming") {
+  const validation = TOOL_RESULT_VALIDATION[part.state];
+  if (validation === "incomplete") {
     return Result.err(
       new HandlerError({
         status: 400,
@@ -753,11 +1017,19 @@ const validateToolResultPart = ({
     );
   }
 
-  if (part.state === "error") {
-    return validateToolErrorResult(part);
+  if (validation === "error") {
+    if (toolCall.type !== "error") {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: `Chat tool result state does not match call: ${part.toolCallId}`,
+        }),
+      );
+    }
+    return validateToolErrorResult(part, toolCall.error);
   }
 
-  if (!toolCall.hasOutput) {
+  if (toolCall.type !== "schema" || toolCall.output.type === "absent") {
     return Result.err(
       new HandlerError({
         status: 400,
@@ -791,7 +1063,7 @@ const validateToolResultPart = ({
     return Result.err(outputResult.error);
   }
 
-  if (!deepEquals(outputResult.value, toolCall.output)) {
+  if (!deepEquals(outputResult.value, toolCall.output.value)) {
     return Result.err(
       new HandlerError({
         status: 400,
@@ -805,13 +1077,17 @@ const validateToolResultPart = ({
 
 const validateToolErrorResult = (
   part: ChatToolResultPart,
+  toolCallError: string | undefined,
 ): Result<void, HandlerError<400>> => {
   const contentResult = parseToolResultContent(part.content);
   if (Result.isError(contentResult)) {
     return Result.err(contentResult.error);
   }
 
-  if (contentResult.value !== null || !part.error) {
+  if (
+    !part.error ||
+    (toolCallError !== undefined && toolCallError !== part.error)
+  ) {
     return Result.err(
       new HandlerError({
         status: 400,
@@ -820,7 +1096,29 @@ const validateToolErrorResult = (
     );
   }
 
-  return Result.ok();
+  // TanStack currently emits two error-result encodings that can both return
+  // on an assistant continuation: client-executed failures carry `null`
+  // content plus `error`, while server-executed failures carry the same error
+  // in both fields. Accept only those exact shapes so a persisted server error
+  // can round-trip without widening the boundary to arbitrary content.
+  if (contentResult.value === null) {
+    return Result.ok();
+  }
+  if (
+    typeof contentResult.value === "object" &&
+    Object.keys(contentResult.value).length === 1 &&
+    "error" in contentResult.value &&
+    contentResult.value.error === part.error
+  ) {
+    return Result.ok();
+  }
+
+  return Result.err(
+    new HandlerError({
+      status: 400,
+      message: `Invalid chat tool error result: ${part.toolCallId}`,
+    }),
+  );
 };
 
 const parseToolArguments = (

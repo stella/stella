@@ -205,126 +205,163 @@ export const ChatInputSurface = ({
       >
         <ChatDraftAttachmentChips files={attachments} onRemove={removeFile} />
         <div
-          className="chat-editor relative min-w-0 overflow-hidden ps-3 pe-3 pt-2 pb-1"
-          onKeyDown={(event) => {
-            // "/" in an empty composer, on a surface with a Skills submenu,
-            // opens the (+) menu at Skills instead of typing the character —
-            // the composer (+) menu replaces the old slash popover here (see
-            // `disableSlashSuggestion` on `useChatEditor`). Modifier
-            // combinations and IME composition fall through untouched; AltGr
-            // is allowed because some layouts emit printable characters with
-            // Ctrl+Alt set.
-            if (
-              skillsOrganizationId !== undefined &&
-              isBlank &&
-              event.key === "/" &&
-              !event.nativeEvent.isComposing &&
-              !hasBlockingCharacterShortcutModifier(event)
-            ) {
-              event.preventDefault();
-              plusMenuRef.current?.openSkills();
-            }
-            // "@" in an empty composer, on a surface with a Context submenu,
-            // opens the (+) menu at Context the same way. Shift is
-            // deliberately NOT excluded: many keyboard layouts (e.g. US
-            // QWERTY) only produce "@" with Shift held, so requiring its
-            // absence would make this unreachable there. A non-empty
-            // composer keeps the existing "@" mention suggestion popover
-            // (`ChatMention` in chat-editor-provider.tsx) untouched — this
-            // only intercepts the empty-composer entry point.
-            if (
-              context !== undefined &&
-              isBlank &&
-              event.key === "@" &&
-              !event.nativeEvent.isComposing &&
-              !hasBlockingCharacterShortcutModifier(event)
-            ) {
-              event.preventDefault();
-              plusMenuRef.current?.openContext();
-            }
-            event.stopPropagation();
-          }}
-          role="presentation"
-        >
-          <PromptEditorContent
-            // Compact: default to a single text line and grow with content
-            // (drop the provider's `min-h-10`), matching the inspector and
-            // file-chat bars. Large: hold ~3 text lines (`text-sm` at
-            // `leading-5` = 20px per line) so the hero box keeps its
-            // stature while empty.
-            className={cn(
-              variant === "large"
-                ? "[&_.ProseMirror]:min-h-15"
-                : "[&_.ProseMirror]:min-h-0",
-              inputDisabled && "pointer-events-none",
-            )}
-            editor={editor}
-          />
-          {isBlank && (
-            <span
-              aria-hidden="true"
-              className="text-foreground-placeholder pointer-events-none absolute start-3 end-3 top-2 truncate text-sm"
-            >
-              {placeholder}
-            </span>
+          className={cn(
+            variant === "compact" &&
+              "grid min-h-11 grid-cols-[auto_minmax(0,1fr)_auto] items-end gap-1 px-1.5 py-1.5",
           )}
-        </div>
-        <div className="flex items-center justify-end gap-0.5 px-1.5 pb-1.5">
-          <div className="me-auto flex min-w-0 items-center gap-0.5">
-            <ComposerPlusMenu
-              context={
-                context
-                  ? {
-                      activeOrganizationId: context.activeOrganizationId,
-                      editor,
-                      threadRef: context.threadRef,
-                    }
-                  : undefined
+        >
+          <div
+            className={cn(
+              "chat-editor relative min-w-0 overflow-hidden",
+              variant === "compact"
+                ? "col-start-2 row-start-1 py-1"
+                : "ps-3 pe-3 pt-2 pb-1",
+            )}
+            onKeyDown={(event) => {
+              // "/" in an empty composer, on a surface with a Skills submenu,
+              // opens the (+) menu at Skills instead of typing the character —
+              // the composer (+) menu replaces the old slash popover here (see
+              // `disableSlashSuggestion` on `useChatEditor`). Modifier
+              // combinations and IME composition fall through untouched; AltGr
+              // is allowed because some layouts emit printable characters with
+              // Ctrl+Alt set.
+              if (
+                skillsOrganizationId !== undefined &&
+                isBlank &&
+                event.key === "/" &&
+                !event.nativeEvent.isComposing &&
+                !hasBlockingCharacterShortcutModifier(event)
+              ) {
+                event.preventDefault();
+                plusMenuRef.current?.openSkills();
               }
-              disabled={inputDisabled}
-              mcp={
-                mcpOrganizationId
-                  ? { activeOrganizationId: mcpOrganizationId }
-                  : undefined
+              // "@" in an empty composer, on a surface with a Context submenu,
+              // opens the (+) menu at Context the same way. Shift is
+              // deliberately NOT excluded: many keyboard layouts (e.g. US
+              // QWERTY) only produce "@" with Shift held, so requiring its
+              // absence would make this unreachable there. A non-empty
+              // composer keeps the existing "@" mention suggestion popover
+              // (`ChatMention` in chat-editor-provider.tsx) untouched — this
+              // only intercepts the empty-composer entry point.
+              if (
+                context !== undefined &&
+                isBlank &&
+                event.key === "@" &&
+                !event.nativeEvent.isComposing &&
+                !hasBlockingCharacterShortcutModifier(event)
+              ) {
+                event.preventDefault();
+                plusMenuRef.current?.openContext();
               }
-              models={models}
-              onOpenFilePicker={openFilePicker}
-              onProgrammaticMenuClose={focus}
-              ref={plusMenuRef}
-              skills={
-                skillsOrganizationId
-                  ? { activeOrganizationId: skillsOrganizationId, editor }
-                  : undefined
-              }
-            />
-          </div>
-          <input
-            accept={fileInputAccept}
-            className="hidden"
-            disabled={inputDisabled}
-            multiple
-            onChange={handleFileInputChange}
-            ref={fileInputRef}
-            type="file"
-          />
-          <span className="me-0.5 inline-flex">
-            <ChatPromptImproveButton
-              anonymized={anonymized}
-              controller={controller}
-              disabled={inputDisabled || isBlank}
-            />
-          </span>
-          {/* The single primary affordance morphs in place: the button
-              itself resolves send vs. stop from the state it is fed, so
-              this surface cannot render a second, parallel control. */}
-          <ChatComposerActionButton
-            canSend={!submitDisabled && canSubmit}
-            isGenerating={isGenerating}
-            onSend={() => {
-              detached(submitDraft(), "ChatInputSurface");
+              event.stopPropagation();
             }}
-            onStop={onStop}
-          />
+            role="presentation"
+          >
+            <PromptEditorContent
+              // Compact: default to a single text line and grow with content
+              // (drop the provider's `min-h-10`), matching the inspector and
+              // file-chat bars. Large: hold ~3 text lines (`text-sm` at
+              // `leading-5` = 20px per line) so the hero box keeps its
+              // stature while empty.
+              className={cn(
+                variant === "large"
+                  ? "[&_.ProseMirror]:min-h-15"
+                  : "[&_.ProseMirror]:min-h-0",
+                inputDisabled && "pointer-events-none",
+              )}
+              editor={editor}
+            />
+            {isBlank && (
+              <span
+                aria-hidden="true"
+                className={cn(
+                  "text-foreground-placeholder pointer-events-none absolute truncate text-sm",
+                  variant === "compact"
+                    ? "start-0 end-0 top-1"
+                    : "start-3 end-3 top-2",
+                )}
+              >
+                {placeholder}
+              </span>
+            )}
+          </div>
+          <div
+            className={cn(
+              variant === "compact"
+                ? "contents"
+                : "flex items-center justify-end gap-0.5 px-1.5 pb-1.5",
+            )}
+          >
+            <div
+              className={cn(
+                "flex min-w-0 items-center gap-0.5",
+                variant === "compact"
+                  ? "col-start-1 row-start-1 self-end"
+                  : "me-auto",
+              )}
+            >
+              <ComposerPlusMenu
+                context={
+                  context
+                    ? {
+                        activeOrganizationId: context.activeOrganizationId,
+                        editor,
+                        threadRef: context.threadRef,
+                      }
+                    : undefined
+                }
+                disabled={inputDisabled}
+                mcp={
+                  mcpOrganizationId
+                    ? { activeOrganizationId: mcpOrganizationId }
+                    : undefined
+                }
+                models={models}
+                onOpenFilePicker={openFilePicker}
+                onProgrammaticMenuClose={focus}
+                ref={plusMenuRef}
+                skills={
+                  skillsOrganizationId
+                    ? { activeOrganizationId: skillsOrganizationId, editor }
+                    : undefined
+                }
+              />
+            </div>
+            <input
+              accept={fileInputAccept}
+              className="hidden"
+              disabled={inputDisabled}
+              multiple
+              onChange={handleFileInputChange}
+              ref={fileInputRef}
+              type="file"
+            />
+            <div
+              className={cn(
+                "flex items-center gap-0.5",
+                variant === "compact" && "col-start-3 row-start-1 self-end",
+              )}
+            >
+              <span className="me-0.5 inline-flex">
+                <ChatPromptImproveButton
+                  anonymized={anonymized}
+                  controller={controller}
+                  disabled={inputDisabled || isBlank}
+                />
+              </span>
+              {/* The single primary affordance morphs in place: the button
+                  itself resolves send vs. stop from the state it is fed, so
+                  this surface cannot render a second, parallel control. */}
+              <ChatComposerActionButton
+                canSend={!submitDisabled && canSubmit}
+                isGenerating={isGenerating}
+                onSend={() => {
+                  detached(submitDraft(), "ChatInputSurface");
+                }}
+                onStop={onStop}
+              />
+            </div>
+          </div>
         </div>
       </div>
       {dock}

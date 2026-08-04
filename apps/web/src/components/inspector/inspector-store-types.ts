@@ -227,6 +227,11 @@ export type InspectorTabsActions = {
     payload: StructuredCloneable<P>;
     ownerRouteId?: string;
   }) => void;
+  updateView: <P>(args: {
+    id: string;
+    label: string;
+    payload: StructuredCloneable<P>;
+  }) => void;
   closeTabsForRoute: (routeId: string) => void;
   closeTab: (id: string, options?: CloseTabOptions) => void;
   closeOthers: (id: string) => void;

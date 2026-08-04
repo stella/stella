@@ -61,7 +61,7 @@ import {
   useChatAnonymized,
 } from "@/lib/chat-anonymized-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
-import { createChatThreadId } from "@/lib/chat-thread-ref";
+import { createChatThreadId, getChatThreadKey } from "@/lib/chat-thread-ref";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
@@ -127,6 +127,7 @@ function ChatIndex() {
     [groupedThreadPages?.pages],
   );
   const anonymized = useChatAnonymized(threadRef);
+  const [composerFocused, setComposerFocused] = useState(false);
   const getSendMode = useLatestCallback(() => getChatSendMode(threadRef));
   const openInspectorChat = useInspectorTabsStore((s) => s.openChat);
   const [contextMatterIds, setContextMatterIds] = useState<string[]>([]);
@@ -470,6 +471,8 @@ function ChatIndex() {
             <ChatAnonymizationLayer
               editor={controller.editor}
               enabled={anonymized}
+              focused={composerFocused}
+              ownerKey={getChatThreadKey(threadRef)}
               workspaceId={draftThreadId}
             />
             <ChatInputSurface
@@ -516,6 +519,7 @@ function ChatIndex() {
                 />
               }
               onSubmit={handleSubmit}
+              onFocusChange={setComposerFocused}
             />
           </div>
         </div>

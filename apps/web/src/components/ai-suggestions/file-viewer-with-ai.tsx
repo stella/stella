@@ -26,7 +26,10 @@ const createLazyFileChatOverlayHost = () =>
 export const FileViewerWithAI = ({
   workspaceId,
   chatThreadId,
+  onChatThreadIdChange,
+  onActiveDraftChatBound,
   activeFile,
+  activeDraft,
   activeExternal,
   className,
   docxEditable,
@@ -42,6 +45,7 @@ export const FileViewerWithAI = ({
     workspaceId ?? "",
     activeFile?.entityId ?? "",
     activeFile?.fileFieldId ?? "",
+    activeDraft?.toolCallId ?? "",
     activeExternal?.url ?? "",
   ].join(":");
   const [LazyFileChatOverlayHost, setLazyFileChatOverlayHost] = useState(
@@ -80,6 +84,7 @@ export const FileViewerWithAI = ({
       >
         <LazyFileChatOverlayHost
           activeExternal={activeExternal}
+          activeDraft={activeDraft}
           activeFile={activeFile}
           chatThreadId={activeChatThreadId}
           docxComments={docxComments}
@@ -89,7 +94,9 @@ export const FileViewerWithAI = ({
           key={overlayKey}
           onChatThreadIdChange={(threadId) => {
             setOverlayThread({ overlayKey, threadId });
+            onChatThreadIdChange?.(threadId);
           }}
+          onActiveDraftChatBound={onActiveDraftChatBound}
           onDocxCommentsChange={onDocxCommentsChange}
           requestDocxEditMode={requestDocxEditMode}
           workspaceId={workspaceId}

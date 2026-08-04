@@ -1,16 +1,14 @@
 import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
-import type { SQL } from "drizzle-orm";
-import { PgDialect } from "drizzle-orm/pg-core";
 
 import type { ChatMention, ChatMessage } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { expandThreadDataScope } from "@/api/lib/chat/data-scope";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import {
   computeAssistantTurnWorkspaceIds,
-  expandThreadDataScope,
   extractAssistantWorkspaceIds,
   extractIncomingMessageWorkspaceIds,
   extractMessageWorkspaceIds,
@@ -456,24 +454,44 @@ describe("computeAssistantTurnWorkspaceIds", () => {
 });
 
 describe("expandThreadDataScope", () => {
-  const buildTx = () => {
-    const setMock = mock((_: { dataWorkspaceIds: SQL }) => ({
-      where: mock(async () => undefined),
-    }));
+  const buildTx = (initialDataWorkspaceIds: SafeId<"workspace">[] = []) => {
+    let dataWorkspaceIds = [...initialDataWorkspaceIds];
+    const returningMock = mock(async () => [{ dataWorkspaceIds }]);
+    const whereUpdateMock = mock(() => ({ returning: returningMock }));
+    const setMock = mock(({ dataWorkspaceIds: nextDataWorkspaceIds }) => {
+      dataWorkspaceIds = [...nextDataWorkspaceIds];
+      return { where: whereUpdateMock };
+    });
     const updateMock = mock(() => ({ set: setMock }));
+    const forUpdateMock = mock(async () => [{ dataWorkspaceIds }]);
+    const limitMock = mock(() => ({ for: forUpdateMock }));
+    const whereSelectMock = mock(() => ({ limit: limitMock }));
+    const fromMock = mock(() => ({ where: whereSelectMock }));
+    const selectMock = mock(() => ({ from: fromMock }));
     const insertMock = mock(() => ({
       values: mock(async () => undefined),
     }));
-    const tx = { update: updateMock, insert: insertMock };
+    const tx = {
+      insert: insertMock,
+      select: selectMock,
+      update: updateMock,
+    };
     const { safeDb } = createScopedDbMock(tx);
     const recordAuditEvent = mock(async () => undefined);
-    return { safeDb, updateMock, setMock, recordAuditEvent };
+    return {
+      forUpdateMock,
+      recordAuditEvent,
+      safeDb,
+      setMock,
+      updateMock,
+    };
   };
 
-  test("no new IDs → no UPDATE issued", async () => {
-    const { safeDb, updateMock, recordAuditEvent } = buildTx();
+  test("locks and returns the persisted scope when no IDs are requested", async () => {
+    const { forUpdateMock, safeDb, updateMock, recordAuditEvent } = buildTx([
+      wsA,
+    ]);
     const result = await expandThreadDataScope({
-      currentDataWorkspaceIds: [wsA],
       newWorkspaceIds: [],
       recordAuditEvent,
       safeDb,
@@ -482,13 +500,17 @@ describe("expandThreadDataScope", () => {
     });
 
     expect(Result.isOk(result)).toBe(true);
+    expect(forUpdateMock).toHaveBeenCalledTimes(1);
     expect(updateMock).not.toHaveBeenCalled();
+    expect(recordAuditEvent).not.toHaveBeenCalled();
+    if (Result.isOk(result)) {
+      expect(result.value).toEqual([wsA]);
+    }
   });
 
   test("all new IDs already present → no UPDATE issued", async () => {
-    const { safeDb, updateMock, recordAuditEvent } = buildTx();
+    const { safeDb, updateMock, recordAuditEvent } = buildTx([wsA, wsB]);
     const result = await expandThreadDataScope({
-      currentDataWorkspaceIds: [wsA, wsB],
       newWorkspaceIds: [wsA, wsB],
       recordAuditEvent,
       safeDb,
@@ -501,9 +523,8 @@ describe("expandThreadDataScope", () => {
   });
 
   test("regression: genuinely new workspace IDs trigger UPDATE", async () => {
-    const { safeDb, updateMock, setMock, recordAuditEvent } = buildTx();
+    const { safeDb, updateMock, setMock, recordAuditEvent } = buildTx([wsA]);
     const result = await expandThreadDataScope({
-      currentDataWorkspaceIds: [wsA],
       newWorkspaceIds: [wsB, wsC],
       recordAuditEvent,
       safeDb,
@@ -521,31 +542,9 @@ describe("expandThreadDataScope", () => {
     }
   });
 
-  test("regression: new IDs are bound as a Postgres uuid array expression", async () => {
-    const { safeDb, setMock, recordAuditEvent } = buildTx();
-    await expandThreadDataScope({
-      currentDataWorkspaceIds: [wsA],
-      newWorkspaceIds: [wsB],
-      recordAuditEvent,
-      safeDb,
-      threadId,
-      threadWorkspaceId: null,
-    });
-
-    const setArg = setMock.mock.calls.at(0)?.[0];
-    if (!setArg) {
-      throw new Error("Expected dataWorkspaceIds update");
-    }
-
-    const query = new PgDialect().sqlToQuery(setArg.dataWorkspaceIds);
-    expect(query.sql).toContain("ARRAY[$1]::uuid[]");
-    expect(query.params).toEqual([wsB]);
-  });
-
-  test("partial overlap: only the genuinely-new IDs are appended", async () => {
-    const { safeDb, updateMock, recordAuditEvent } = buildTx();
+  test("uses the locked row for the audit transition, not a caller snapshot", async () => {
+    const { safeDb, updateMock, recordAuditEvent } = buildTx([wsA, wsB]);
     const result = await expandThreadDataScope({
-      currentDataWorkspaceIds: [wsA, wsB],
       newWorkspaceIds: [wsB, wsC],
       recordAuditEvent,
       safeDb,
@@ -559,6 +558,33 @@ describe("expandThreadDataScope", () => {
       expect(new Set<SafeId<"workspace">>(result.value)).toEqual(
         new Set([wsA, wsB, wsC]),
       );
+    }
+    expect(recordAuditEvent).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        changes: {
+          dataWorkspaceIds: {
+            old: [wsA, wsB],
+            new: [wsA, wsB, wsC],
+          },
+        },
+      }),
+    );
+  });
+
+  test("deduplicates repeated workspace IDs before updating", async () => {
+    const { safeDb, recordAuditEvent } = buildTx([wsA]);
+    const result = await expandThreadDataScope({
+      newWorkspaceIds: [wsB, wsB, wsC],
+      recordAuditEvent,
+      safeDb,
+      threadId,
+      threadWorkspaceId: null,
+    });
+
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isOk(result)) {
+      expect(result.value).toEqual([wsA, wsB, wsC]);
     }
   });
 });

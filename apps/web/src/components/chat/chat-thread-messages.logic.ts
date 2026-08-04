@@ -138,6 +138,77 @@ export const userMessageFallbackText = (html: string): string => {
     .trim();
 };
 
+/**
+ * Keep the lazy Markdown renderer's first paint readable. The full renderer
+ * replaces this fallback with semantic Markdown; until then, remove the most
+ * visible source delimiters instead of flashing raw model syntax.
+ */
+const stripMarkdownLinkDestinations = (markdown: string): string => {
+  let output = "";
+  let candidate = "";
+  let label = "";
+  let state: "destination" | "label" | "text" = "text";
+
+  for (let index = 0; index < markdown.length; index += 1) {
+    const character = markdown.charAt(index);
+    const nextCharacter = markdown.charAt(index + 1);
+
+    switch (state) {
+      case "text": {
+        if (character === "[" || (character === "!" && nextCharacter === "[")) {
+          candidate = character === "[" ? "[" : "![";
+          label = "";
+          state = "label";
+          if (character === "!") {
+            index += 1;
+          }
+          break;
+        }
+        output += character;
+        break;
+      }
+      case "label": {
+        if (character === "]" && nextCharacter === "(") {
+          candidate += "](";
+          state = "destination";
+          index += 1;
+          break;
+        }
+        candidate += character;
+        label += character;
+        if (character === "]") {
+          output += candidate;
+          candidate = "";
+          label = "";
+          state = "text";
+        }
+        break;
+      }
+      case "destination": {
+        candidate += character;
+        if (character === ")") {
+          output += label;
+          candidate = "";
+          label = "";
+          state = "text";
+        }
+        break;
+      }
+      default: {
+        state satisfies never;
+      }
+    }
+  }
+
+  return output + candidate;
+};
+
+export const assistantMessageFallbackText = (markdown: string): string =>
+  stripMarkdownLinkDestinations(markdown)
+    .replace(/^\s{0,3}#{1,6}\s+/gmu, "")
+    .replace(/\*\*|__/gu, "")
+    .replace(/`+/gu, "");
+
 type TurnBodyItem = {
   message: PersistedChatMessage;
   /** Position in the flat `messages` list, kept so anon-restoration lookups

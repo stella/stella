@@ -3,9 +3,15 @@ import { describe, expect, test } from "bun:test";
 import { isUploadRateLimitedPath } from "@/api/handlers/entities/upload-rate-limit";
 
 describe("entity upload rate limiting", () => {
-  test("covers original and version upload endpoints", () => {
+  test("covers every endpoint that processes uploaded document bytes", () => {
     expect(isUploadRateLimitedPath("/v1/entities/ws_1/upload")).toBe(true);
     expect(isUploadRateLimitedPath("/v1/entities/ws_1/upload/")).toBe(true);
+    expect(
+      isUploadRateLimitedPath("/v1/entities/ws_1/upload-generated-document"),
+    ).toBe(true);
+    expect(
+      isUploadRateLimitedPath("/v1/entities/ws_1/upload-generated-document/"),
+    ).toBe(true);
     expect(isUploadRateLimitedPath("/v1/entities/ws_1/upload-version")).toBe(
       true,
     );
@@ -21,6 +27,11 @@ describe("entity upload rate limiting", () => {
     );
     expect(
       isUploadRateLimitedPath("/v1/entities/ws_1/upload-version/extra"),
+    ).toBe(false);
+    expect(
+      isUploadRateLimitedPath(
+        "/v1/entities/ws_1/upload-generated-document/extra",
+      ),
     ).toBe(false);
   });
 });

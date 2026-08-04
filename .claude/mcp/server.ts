@@ -2,33 +2,11 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod/v3";
 
+import { DOC_SOURCES } from "./doc-sources";
 import {
   fetchAllowedUrl,
   isAllowedDocUrl as isAllowedDocUrlForHosts,
 } from "./fetch-allowed-url";
-
-const SOURCES: Record<string, string> = {
-  Elysia: "https://elysiajs.com/llms.txt",
-  Drizzle: "https://orm.drizzle.team/llms.txt",
-  TanStack: "https://tanstack.com/llms.txt",
-  TanStackStart:
-    "https://tanstack.com/start/latest/docs/framework/react/overview.md",
-  React: "https://react.dev/llms.txt",
-  BaseUI: "https://base-ui.com/llms.txt",
-  AISDK: "https://ai-sdk.dev/llms.txt",
-  WXT: "https://wxt.dev/llms.txt",
-  AtlassianDesign: "https://atlassian.design/llms.txt",
-  Valibot: "https://valibot.dev/llms.txt",
-  Zod: "https://zod.dev/llms.txt",
-  TipTap: "https://tiptap.dev/llms.txt",
-  Bun: "https://bun.sh/llms.txt",
-  BetterAuth: "https://better-auth.com/llms.txt",
-  Turborepo: "https://turborepo.dev/llms.txt",
-  Rivet: "https://rivet.dev/llms.txt",
-  PostHog: "https://posthog.com/llms.txt",
-  Zustand: "https://zustand.docs.pmnd.rs/llms.txt",
-  Oxlint: "https://oxc.rs/llms.txt",
-};
 
 const HOST_ALIASES: Record<string, string[]> = {
   "bun.sh": ["bun.com", "www.bun.com"],
@@ -99,7 +77,7 @@ server.registerTool(
   "list_doc_sources",
   { description: "List available library documentation sources" },
   () => ({
-    content: Object.entries(SOURCES).map(([name, url]) => ({
+    content: Object.entries(DOC_SOURCES).map(([name, { url }]) => ({
       type: "text" as const,
       text: `${name}: ${url}`,
     })),
@@ -107,7 +85,7 @@ server.registerTool(
 );
 
 const ALLOWED_HOSTS = new Set(
-  Object.values(SOURCES).flatMap((u) => {
+  Object.values(DOC_SOURCES).flatMap(({ url: u }) => {
     const host = new URL(u).hostname;
     return [host].concat(HOST_ALIASES[host] ?? []);
   }),
@@ -395,21 +373,26 @@ const scoreDocEntry = ({
   return score;
 };
 
+const isDocSourceName = (
+  sourceName: string,
+): sourceName is keyof typeof DOC_SOURCES =>
+  Object.hasOwn(DOC_SOURCES, sourceName);
+
 const validateSources = (sourceNames?: string[]) => {
   if (!sourceNames || sourceNames.length === 0) {
-    return Object.entries(SOURCES).map(([name, indexUrl]) => ({
+    return Object.entries(DOC_SOURCES).map(([name, { url }]) => ({
       name,
-      indexUrl,
+      indexUrl: url,
     }));
   }
 
   const entries: SourceEntry[] = [];
   for (const sourceName of sourceNames) {
-    const indexUrl = SOURCES[sourceName];
-    if (!indexUrl) {
+    if (!isDocSourceName(sourceName)) {
       throw new Error(`Unknown doc source: ${sourceName}`);
     }
-    entries.push({ name: sourceName, indexUrl });
+    const source = DOC_SOURCES[sourceName];
+    entries.push({ name: sourceName, indexUrl: source.url });
   }
 
   return entries;

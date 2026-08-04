@@ -1,8 +1,13 @@
 import type { Editor } from "@tiptap/react";
 
-import { setChatAnonDecorationPairs } from "@/components/chat/chat-anon-decorations-plugin";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { warmupChatAnonymizeWorker } from "@/lib/anonymize/anonymize-chat-worker-client";
+import {
+  clearChatAnonDecorationOwner,
+  setActiveChatAnonDecorationOwner,
+  updateActiveChatAnonDecorationOwner,
+} from "@/lib/anonymize/chat-anon-decoration-owner";
 import {
   acquireChatAnonDecorationsPlugin,
   releaseChatAnonDecorationsPlugin,
@@ -15,8 +20,8 @@ import { optionalReadonlyArray } from "@/lib/arrays";
 
 /**
  * The single integration point that lights up anonymization
- * highlights inside any chat input. Reads the global "anonymized
- * mode" preference, runs the wasm pipeline against the editor's
+ * highlights inside any chat input. Receives that surface's per-thread
+ * anonymization state, runs the wasm pipeline against the editor's
  * current text (debounced via TanStack Query), and pushes the
  * resulting placeholder pairs into the editor as inline
  * ProseMirror decorations.
@@ -32,18 +37,22 @@ import { optionalReadonlyArray } from "@/lib/arrays";
 export const useChatAnonymizationLayer = ({
   editor,
   enabled,
+  focused,
+  ownerKey,
   workspaceId,
 }: {
   editor: Editor | null;
   /**
    * Anonymized state for *this surface*. Each chat surface owns its
-   * own toggle (the inspector tab has a local one, the /chat page
-   * uses the per-thread store, the file overlay has none and sends
-   * raw). Reading from a global store here would let the editor
+   * own per-thread value. Reading from a global store here would let the editor
    * highlight names that the request then forwards raw — and vice
    * versa. Callers pass their own source of truth.
    */
   enabled: boolean;
+  /** True only while this surface's composer, rather than another surface, owns focus. */
+  focused: boolean;
+  /** Stable ChatThreadRef-derived identity for this composer surface. */
+  ownerKey: string;
   workspaceId: string;
 }): void => {
   // Kick off worker boot + dictionary load the moment the user
@@ -66,6 +75,16 @@ export const useChatAnonymizationLayer = ({
     enabled,
     text,
     workspaceId,
+  });
+  const activateFocusedOwner = useLatestCallback(() => {
+    if (!editor) {
+      return;
+    }
+    setActiveChatAnonDecorationOwner({
+      editor,
+      ownerKey,
+      pairs: optionalReadonlyArray(pairs),
+    });
   });
 
   // Install the plugin directly on the editor instead of going
@@ -97,11 +116,25 @@ export const useChatAnonymizationLayer = ({
   }, [editor, enabled]);
 
   useExternalSyncEffect(() => {
-    if (!editor || !enabled) {
+    if (!editor || !focused) {
+      return undefined;
+    }
+    activateFocusedOwner();
+    return () => {
+      clearChatAnonDecorationOwner({ editor, ownerKey });
+    };
+  }, [activateFocusedOwner, editor, focused, ownerKey]);
+
+  useExternalSyncEffect(() => {
+    if (!editor) {
       return;
     }
-    setChatAnonDecorationPairs(editor.view, optionalReadonlyArray(pairs));
-  }, [editor, enabled, pairs]);
+    updateActiveChatAnonDecorationOwner({
+      editor,
+      ownerKey,
+      pairs: optionalReadonlyArray(pairs),
+    });
+  }, [editor, ownerKey, pairs]);
 };
 
 /**
@@ -115,12 +148,22 @@ export const useChatAnonymizationLayer = ({
 export const ChatAnonymizationLayer = ({
   editor,
   enabled,
+  focused,
+  ownerKey,
   workspaceId,
 }: {
   editor: Editor | null;
   enabled: boolean;
+  focused: boolean;
+  ownerKey: string;
   workspaceId: string;
 }): null => {
-  useChatAnonymizationLayer({ editor, enabled, workspaceId });
+  useChatAnonymizationLayer({
+    editor,
+    enabled,
+    focused,
+    ownerKey,
+    workspaceId,
+  });
   return null;
 };

@@ -42,7 +42,9 @@ import restoreVersion from "@/api/handlers/entities/restore-version";
 import translateEntity from "@/api/handlers/entities/translate";
 import updateVersionDescription from "@/api/handlers/entities/update-version-description";
 import updateVersionLabel from "@/api/handlers/entities/update-version-label";
-import uploadEntity from "@/api/handlers/entities/upload";
+import uploadEntity, {
+  uploadGeneratedDocument,
+} from "@/api/handlers/entities/upload";
 import {
   isTranslateRateLimitedPath,
   isUploadRateLimitedPath,
@@ -107,6 +109,11 @@ export const entitiesRoute = new Elysia({
     body: uploadEntity.config.body,
     invalidateQuery: true,
     permissions: uploadEntity.config.permissions,
+  })
+  .post("/upload-generated-document", uploadGeneratedDocument.handler, {
+    body: uploadGeneratedDocument.config.body,
+    invalidateQuery: true,
+    permissions: uploadGeneratedDocument.config.permissions,
   })
   .post("/desktop-edit-sessions/open", openDesktopEditSession.handler, {
     body: openDesktopEditSession.config.body,

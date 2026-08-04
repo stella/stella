@@ -1,4 +1,5 @@
 import type { ContentPartSource } from "@tanstack/ai";
+import type { ToolCallPart as TanStackToolCallPart } from "@tanstack/ai-client";
 import { panic, Result } from "better-result";
 import { Buffer } from "node:buffer";
 
@@ -8,6 +9,10 @@ import {
 } from "@stll/api-contract";
 
 import { normalizeLegacyRawToolInputs } from "@/api/handlers/chat/legacy-tool-compat";
+import {
+  TANSTACK_TOOL_CALL_STATE_LIFECYCLE,
+  TANSTACK_TOOL_RESULT_STATE_LIFECYCLE,
+} from "@/api/handlers/chat/tanstack-chat-lifecycle";
 import type {
   ChatAttachmentMetadata,
   ChatAttachmentPart,
@@ -21,6 +26,7 @@ import type {
   PersistableChatPartType,
   PersistableChatMessageCandidate,
   PersistableChatMessage,
+  PersistableTerminalAssistantMessage,
   PersistedChatMessageContent,
 } from "@/api/handlers/chat/types";
 import { arrayOrEmpty } from "@/api/lib/array";
@@ -36,6 +42,28 @@ export type ChatAttachmentInput = {
   placeholder?: string | undefined;
   url: string;
 };
+
+export const attachTerminalTurnOutcome = ({
+  message,
+  turnOutcome,
+}: {
+  message: PersistableChatMessage;
+  turnOutcome: NonNullable<ChatMessageMetadata["turnOutcome"]>;
+}): PersistableTerminalAssistantMessage => {
+  const terminalMessage = toPersistableChatMessage({
+    ...message,
+    metadata: { ...message.metadata, turnOutcome },
+  });
+  if (!isPersistableTerminalAssistantMessage(terminalMessage)) {
+    panic("Terminal chat turn must be an assistant message with an outcome");
+  }
+  return terminalMessage;
+};
+
+const isPersistableTerminalAssistantMessage = (
+  message: PersistableChatMessage,
+): message is PersistableTerminalAssistantMessage =>
+  message.role === "assistant" && message.metadata?.turnOutcome !== undefined;
 
 export type LegacyAiSdkFilePart = {
   filename?: string | undefined;
@@ -334,6 +362,13 @@ export const isProviderVisibleChatPart = (part: ChatPart): boolean =>
 export const toProviderVisibleMessage = (
   message: ChatMessage,
 ): ChatMessage | null => {
+  if (
+    message.metadata?.turnOutcome?.type === "cancelled" ||
+    message.metadata?.turnOutcome?.type === "failed" ||
+    message.metadata?.turnOutcome?.type === "interrupted"
+  ) {
+    return null;
+  }
   const parts: ChatPart[] = [];
   for (const part of message.parts) {
     if (isProviderVisibleChatPart(part)) {
@@ -346,6 +381,204 @@ export const toProviderVisibleMessage = (
   return parts.length === message.parts.length
     ? message
     : { ...message, parts };
+};
+
+const ASK_USER_STATE_AWAITS_USER = {
+  "approval-requested": false,
+  "approval-responded": false,
+  // A terminal stream can end while the provider has only announced a call or
+  // is still emitting its JSON arguments. The card cannot render a usable
+  // question in either state, so neither may take durable user-turn ownership.
+  "awaiting-input": false,
+  complete: false,
+  error: false,
+  "input-complete": true,
+  "input-streaming": false,
+} as const satisfies Record<TanStackToolCallState, boolean>;
+
+const RESUMED_INTERACTION_TYPE_BY_TOOL_STATE = {
+  "approval-requested": null,
+  "approval-responded": "approval",
+  "awaiting-input": null,
+  complete: "ask-user",
+  error: null,
+  "input-complete": "ask-user",
+  "input-streaming": null,
+} as const satisfies Record<
+  TanStackToolCallState,
+  "approval" | "ask-user" | null
+>;
+
+type AwaitingUserInteraction = Extract<
+  NonNullable<ChatMessageMetadata["turnOutcome"]>,
+  { type: "awaiting-user" }
+>["interaction"];
+
+type ChatToolCallPart = Extract<ChatPart, { type: "tool-call" }>;
+
+type ChatApprovalMetadata = NonNullable<
+  TanStackToolCallPart<never>["approval"]
+>;
+
+const isChatApprovalMetadata = (
+  value: unknown,
+): value is ChatApprovalMetadata =>
+  isRecord(value) &&
+  typeof value["id"] === "string" &&
+  typeof value["needsApproval"] === "boolean" &&
+  (value["approved"] === undefined || typeof value["approved"] === "boolean");
+
+const toChatToolCallPart = (value: unknown): ChatToolCallPart => {
+  if (!isChatPart(value) || value.type !== "tool-call") {
+    return panic("Cannot terminalize malformed chat tool call");
+  }
+  return value;
+};
+
+const getChatToolCallExtension = (
+  part: ChatToolCallPart,
+  property: "approval" | "metadata",
+): unknown => {
+  switch (property) {
+    case "approval":
+      return "approval" in part ? part.approval : undefined;
+    case "metadata":
+      return "metadata" in part ? part.metadata : undefined;
+    default:
+      return property satisfies never;
+  }
+};
+
+const terminalToolCallError = (part: ChatToolCallPart): ChatToolCallPart => {
+  const metadata = getChatToolCallExtension(part, "metadata");
+  return toChatToolCallPart({
+    arguments: part.arguments,
+    id: part.id,
+    name: part.name,
+    state: "error",
+    type: "tool-call",
+    ...(metadata === undefined ? {} : { metadata }),
+  });
+};
+
+const cancelPendingToolCallPart = (
+  part: ChatToolCallPart,
+): ChatToolCallPart => {
+  switch (part.state) {
+    case "approval-requested": {
+      const approval = getChatToolCallExtension(part, "approval");
+      if (!isChatApprovalMetadata(approval)) {
+        return terminalToolCallError(part);
+      }
+      return toChatToolCallPart({
+        ...part,
+        approval: { ...approval, approved: false },
+        state: "approval-responded",
+      });
+    }
+    case "awaiting-input":
+    case "input-streaming":
+    case "input-complete":
+      // Do not leave a partial or client-owned call in a state that a fresh
+      // hydration can execute after its owning turn was superseded. Omitting
+      // input/approval/output also removes now-invalid user controls.
+      return terminalToolCallError(part);
+    case "approval-responded":
+    case "complete":
+    case "error":
+      return part;
+    default:
+      return part.state satisfies never;
+  }
+};
+
+/**
+ * Keep a terminal assistant message internally consistent: metadata records
+ * its turn's outcome, and its parts no longer expose an approval or input
+ * control that belongs to that terminated turn.
+ */
+export const cancelPendingChatToolCalls = (
+  message: PersistableChatMessage,
+): PersistableChatMessage => {
+  const parts = message.parts.map((part) =>
+    part.type === "tool-call" ? cancelPendingToolCallPart(part) : part,
+  );
+  return { ...message, parts };
+};
+
+/**
+ * Every approval-requested call remains actionable. A chat turn is owned by
+ * its assistant message, not by whichever pending approval happened to arrive
+ * first in the stream.
+ */
+export const getAwaitingUserInteractions = (
+  message: Pick<ChatMessage, "metadata" | "parts" | "role"> | null,
+): AwaitingUserInteraction[] => {
+  const turnOutcome = message?.metadata?.turnOutcome;
+  if (
+    message?.role !== "assistant" ||
+    (turnOutcome !== undefined && turnOutcome.type !== "awaiting-user")
+  ) {
+    return [];
+  }
+  const interactions: AwaitingUserInteraction[] = [];
+  for (const part of message.parts) {
+    if (part.type !== "tool-call") {
+      continue;
+    }
+    if (part.state === "approval-requested") {
+      interactions.push({ type: "approval", toolCallId: part.id });
+      continue;
+    }
+    if (part.name === "ask-user" && ASK_USER_STATE_AWAITS_USER[part.state]) {
+      interactions.push({ type: "ask-user", toolCallId: part.id });
+    }
+  }
+  return interactions;
+};
+
+export const getAwaitingUserInteraction = (
+  message: Pick<ChatMessage, "parts" | "role"> | null,
+): AwaitingUserInteraction | null =>
+  getAwaitingUserInteractions(message).at(0) ?? null;
+
+/**
+ * Return the durable interaction a client continuation is attempting to
+ * resolve. The turn store compares this identity with its canonical awaited
+ * interaction before any client-supplied assistant parts replace history.
+ */
+export const getResumedUserInteraction = (
+  message: Pick<ChatMessage, "parts" | "role">,
+): AwaitingUserInteraction | null => {
+  if (message.role !== "assistant") {
+    return null;
+  }
+  let inputCompleteAskUser: AwaitingUserInteraction | null = null;
+  for (let index = message.parts.length - 1; index >= 0; index -= 1) {
+    const part = message.parts[index];
+    if (part === undefined) {
+      continue;
+    }
+    if (part.type !== "tool-call") {
+      continue;
+    }
+    const interactionType = RESUMED_INTERACTION_TYPE_BY_TOOL_STATE[part.state];
+    if (interactionType === null) {
+      continue;
+    }
+    if (interactionType === "ask-user" && part.name !== "ask-user") {
+      continue;
+    }
+    // An unchanged ask-user call remains input-complete while the user acts
+    // on a later approval in the same message. Prefer the explicit approval
+    // response; retain input-complete only as the legacy ask-user fallback.
+    if (part.state === "input-complete") {
+      inputCompleteAskUser = { type: interactionType, toolCallId: part.id };
+      continue;
+    }
+    return { type: interactionType, toolCallId: part.id };
+  }
+  return inputCompleteAskUser;
 };
 
 export const toProviderVisibleMessages = (
@@ -493,13 +726,54 @@ const CHAT_PART_PERSISTENCE = {
   video: "persist",
 } as const satisfies Record<ChatTanStackPart["type"], ChatPartPersistence>;
 
+type TanStackStructuredOutputStatus = Extract<
+  ChatTanStackPart,
+  { type: "structured-output" }
+>["status"];
+
+const TANSTACK_STRUCTURED_OUTPUT_STATUSES = {
+  complete: true,
+  error: true,
+  streaming: true,
+} as const satisfies Record<TanStackStructuredOutputStatus, true>;
+
+const isTanStackStructuredOutputStatus = (
+  value: unknown,
+): value is TanStackStructuredOutputStatus =>
+  typeof value === "string" &&
+  Object.hasOwn(TANSTACK_STRUCTURED_OUTPUT_STATUSES, value);
+
+const isStructuredOutputPart = (part: Record<string, unknown>): boolean => {
+  const status = part["status"];
+  if (
+    !isTanStackStructuredOutputStatus(status) ||
+    typeof part["raw"] !== "string" ||
+    ("reasoning" in part &&
+      part["reasoning"] !== undefined &&
+      typeof part["reasoning"] !== "string")
+  ) {
+    return false;
+  }
+
+  switch (status) {
+    case "streaming":
+      return !("errorMessage" in part && part["errorMessage"] !== undefined);
+    case "complete":
+      return "data" in part && part["data"] !== undefined;
+    case "error":
+      return typeof part["errorMessage"] === "string";
+    default:
+      return status satisfies never;
+  }
+};
+
 // Validators are independently exhaustive over the persistable subset, so a
 // part cannot enter the persistence boundary without structural validation.
 const CHAT_PART_VALIDATORS = {
   audio: (part) => isMediaPart(part, "audio/"),
   document: isContentPartWithSource,
   image: isContentPartWithSource,
-  "structured-output": (part) => "data" in part,
+  "structured-output": isStructuredOutputPart,
   text: (part) => typeof part["content"] === "string",
   thinking: (part) => typeof part["content"] === "string",
   "tool-call": (part) =>
@@ -515,6 +789,16 @@ const CHAT_PART_VALIDATORS = {
   "ui-resource": isUiResourcePart,
   video: (part) => isMediaPart(part, "video/"),
 } satisfies Record<PersistableChatPartType, ChatPartValidator>;
+
+type TanStackToolCallState = Extract<
+  ChatTanStackPart,
+  { type: "tool-call" }
+>["state"];
+
+type TanStackToolResultState = Extract<
+  ChatTanStackPart,
+  { type: "tool-result" }
+>["state"];
 
 const isChatPartPersistenceType = (
   type: string,
@@ -617,18 +901,24 @@ export const restoreServerOwnedChatParts = ({
 };
 
 const normalizeMediaSource = (source: ContentPartSource): ContentPartSource => {
-  if (source.type === "data") {
-    return {
-      type: "data",
-      value: source.value,
-      mimeType: source.mimeType,
-    };
+  switch (source.type) {
+    case "data":
+      return {
+        type: "data",
+        value: source.value,
+        mimeType: source.mimeType,
+      };
+    case "url":
+      return {
+        type: "url",
+        value: source.value,
+        ...(source.mimeType === undefined ? {} : { mimeType: source.mimeType }),
+      };
+    default: {
+      const exhaustive: never = source;
+      return exhaustive;
+    }
   }
-  return {
-    type: "url",
-    value: source.value,
-    ...(source.mimeType === undefined ? {} : { mimeType: source.mimeType }),
-  };
 };
 
 const normalizeChatPartForPersistence = (part: ChatPart): ChatPart => {
@@ -893,16 +1183,17 @@ const legacyToolApprovalToTanStack = (
   };
 };
 
-const isTanStackToolCallState = (value: unknown): boolean =>
-  value === "awaiting-input" ||
-  value === "input-streaming" ||
-  value === "input-complete" ||
-  value === "approval-requested" ||
-  value === "approval-responded" ||
-  value === "complete";
+const isTanStackToolCallState = (
+  value: unknown,
+): value is TanStackToolCallState =>
+  typeof value === "string" &&
+  Object.hasOwn(TANSTACK_TOOL_CALL_STATE_LIFECYCLE, value);
 
-const isTanStackToolResultState = (value: unknown): boolean =>
-  value === "streaming" || value === "complete" || value === "error";
+const isTanStackToolResultState = (
+  value: unknown,
+): value is TanStackToolResultState =>
+  typeof value === "string" &&
+  Object.hasOwn(TANSTACK_TOOL_RESULT_STATE_LIFECYCLE, value);
 
 const isTanStackToolResultContent = (value: unknown): boolean =>
   typeof value === "string" ||
@@ -934,10 +1225,12 @@ const mergeAnonRestorations = (
 });
 
 const isChatMessageMetadataEmpty = (metadata: ChatMessageMetadata): boolean =>
+  metadata.activeDraftContext === undefined &&
   metadata.anonRestorations === undefined &&
   metadata.mentions === undefined &&
   metadata.serverProvenance === undefined &&
   metadata.sourceDocuments === undefined &&
+  metadata.turnOutcome === undefined &&
   metadata.usage === undefined;
 
 const safeStringifyToolArguments = (value: unknown): string => {

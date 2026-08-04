@@ -21,6 +21,7 @@ import {
 import {
   chatMessageSearchDocuments,
   chatMessages,
+  chatTurns,
   chatThreadCompactions,
   chatThreadSearchDocuments,
   chatThreads,
@@ -172,6 +173,7 @@ export const relations = defineRelations(
     caseLawIngestionFailures,
     chatThreads,
     chatMessages,
+    chatTurns,
     chatMessageSearchDocuments,
     chatThreadCompactions,
     chatThreadSearchDocuments,
@@ -896,6 +898,10 @@ export const relations = defineRelations(
         from: r.chatThreads.id,
         to: r.chatMessages.threadId,
       }),
+      turns: r.many.chatTurns({
+        from: r.chatThreads.id,
+        to: r.chatTurns.threadId,
+      }),
       compactions: r.many.chatThreadCompactions({
         from: r.chatThreads.id,
         to: r.chatThreadCompactions.threadId,
@@ -929,6 +935,40 @@ export const relations = defineRelations(
       searchDocument: r.one.chatMessageSearchDocuments({
         from: r.chatMessages.id,
         to: r.chatMessageSearchDocuments.messageId,
+      }),
+      initiatedTurns: r.many.chatTurns({
+        from: r.chatMessages.id,
+        to: r.chatTurns.userMessageId,
+        alias: "chatTurnUserMessage",
+      }),
+      completedTurns: r.many.chatTurns({
+        from: r.chatMessages.id,
+        to: r.chatTurns.assistantMessageId,
+        alias: "chatTurnAssistantMessage",
+      }),
+    },
+    chatTurns: {
+      thread: r.one.chatThreads({
+        from: r.chatTurns.threadId,
+        to: r.chatThreads.id,
+      }),
+      workspace: r.one.workspaces({
+        from: r.chatTurns.workspaceId,
+        to: r.workspaces.id,
+      }),
+      user: r.one.user({
+        from: r.chatTurns.userId,
+        to: r.user.id,
+      }),
+      userMessage: r.one.chatMessages({
+        from: r.chatTurns.userMessageId,
+        to: r.chatMessages.id,
+        alias: "chatTurnUserMessage",
+      }),
+      assistantMessage: r.one.chatMessages({
+        from: r.chatTurns.assistantMessageId,
+        to: r.chatMessages.id,
+        alias: "chatTurnAssistantMessage",
       }),
     },
     chatMessageSearchDocuments: {

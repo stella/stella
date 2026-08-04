@@ -10,6 +10,7 @@
 
 import type { RefObject } from "react";
 
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { DocxEditorRef, FolioAIEditApplyMode } from "@stll/folio-react";
@@ -20,6 +21,7 @@ import {
   resolveDocxSuggestionRequest,
   revertDocxSuggestionRequest,
 } from "@/components/ai-suggestions/docx-suggestion-persistence";
+import { findFolioReviewDecoration } from "@/components/ai-suggestions/review-folio-decorations";
 import {
   findLiveSuggestion,
   getReviewApplyMode,
@@ -63,12 +65,7 @@ type ApplyOutcome = {
 
 export type UseReviewActionsOptions = {
   entityId: string;
-  /**
-   * Workspace the entity lives in. Scopes the persistence calls that
-   * fire (server-side) when a `persisted` suggestion is resolved or
-   * reverted.
-   */
-  workspaceId: string;
+  persistence: { type: "local" } | { type: "workspace"; workspaceId: string };
   docxEditorRef: RefObject<DocxEditorRef | null>;
   /** Whether the editor currently accepts edit operations. */
   docxEditable: boolean;
@@ -99,7 +96,7 @@ export type ReviewActions = {
 
 export const useReviewActions = ({
   entityId,
-  workspaceId,
+  persistence,
   docxEditorRef,
   docxEditable,
   requestDocxEditMode,
@@ -109,7 +106,6 @@ export const useReviewActions = ({
     getReviewApplyMode(state, entityId),
   );
   const updateSuggestion = useReviewStore((state) => state.updateSuggestion);
-  const setStatusBatch = useReviewStore((state) => state.setStatusBatch);
   const setApplyModeAction = useReviewStore((state) => state.setApplyMode);
   const setFocusedId = useReviewStore((state) => state.setFocusedId);
   // Author the tracked-change marks as the user (their preferred name
@@ -117,6 +113,12 @@ export const useReviewActions = ({
   // THEMSELVES, not as "AI".
   const user = useAuthenticatedUser();
   const wordAuthor = getWordEditAuthorName(user);
+  const persistedWorkspaceId = useLatestCallback(() => {
+    if (persistence.type === "local") {
+      return panic("A local DOCX suggestion cannot be persisted");
+    }
+    return persistence.workspaceId;
+  });
 
   const setApplyMode = useLatestCallback((mode: FolioAIEditApplyMode) => {
     setApplyModeAction(entityId, mode);
@@ -229,11 +231,17 @@ export const useReviewActions = ({
       });
       const applied = result.applied.at(0);
       if (applied) {
+        const revisionIds =
+          applied.revisionIds ??
+          (applied.revisionId === undefined ? null : [applied.revisionId]);
         return {
           status: "accepted",
-          revisionIds: applied.revisionIds ?? null,
+          revisionIds,
           undoHandle: result.undoHandle,
-          appliedMode: mode,
+          appliedMode:
+            mode === "tracked-changes" && revisionIds === null
+              ? "direct"
+              : mode,
         };
       }
       const skipped = result.skipped.at(0);
@@ -244,6 +252,81 @@ export const useReviewActions = ({
         appliedMode: mode,
         skipReason: skipped?.reason ?? "unsupportedBlock",
       };
+    },
+  );
+
+  const acceptPending = useLatestCallback(
+    (
+      item: ReviewSuggestion,
+      applyModeOverride?: FolioAIEditApplyMode,
+    ): ApplyOutcome => {
+      const editor = docxEditorRef.current;
+      const suggestionId = item.pendingOperation?.id;
+      const staged = editor
+        ?.getSuggestions()
+        .find((suggestion) => suggestion.suggestionId === suggestionId);
+      if (!(editor && suggestionId && staged)) {
+        return applyPending(item, applyModeOverride);
+      }
+
+      const requestedMode = applyModeOverride ?? applyMode;
+      if (
+        requestedMode === "direct" ||
+        staged.appliedAs !== "tracked" ||
+        item.revisionIds === null
+      ) {
+        if (!editor.rejectSuggestion(suggestionId)) {
+          return {
+            status: "skipped",
+            revisionIds: null,
+            undoHandle: null,
+            appliedMode: requestedMode,
+            skipReason: "unsupportedBlock",
+          };
+        }
+        return applyPending(item, requestedMode);
+      }
+
+      const accepted = editor.acceptSuggestion(suggestionId, {
+        ...(wordAuthor.length > 0 && { author: wordAuthor }),
+      });
+      if (!accepted.accepted) {
+        return {
+          status: "skipped",
+          revisionIds: null,
+          undoHandle: null,
+          appliedMode: requestedMode,
+          skipReason: "unsupportedBlock",
+        };
+      }
+
+      return {
+        status: "accepted",
+        revisionIds: item.revisionIds,
+        undoHandle: null,
+        appliedMode: "tracked-changes",
+      };
+    },
+  );
+
+  type RejectStagedSuggestionResult =
+    | { status: "not-staged" }
+    | { status: "rejected" }
+    | { status: "failed" };
+
+  const rejectStagedSuggestion = useLatestCallback(
+    (item: ReviewSuggestion): RejectStagedSuggestionResult => {
+      const editor = docxEditorRef.current;
+      const suggestionId = item.pendingOperation?.id;
+      const staged = editor
+        ?.getSuggestions()
+        .some((suggestion) => suggestion.suggestionId === suggestionId);
+      if (!(editor && suggestionId && staged)) {
+        return { status: "not-staged" };
+      }
+      return editor.rejectSuggestion(suggestionId)
+        ? { status: "rejected" }
+        : { status: "failed" };
     },
   );
 
@@ -336,14 +419,16 @@ export const useReviewActions = ({
   const rollbackAcceptedResolution = useLatestCallback(
     (
       item: ReviewSuggestion,
-      undoHandle: ReviewSuggestion["undoHandle"],
+      outcome: ApplyOutcome,
       result: Exclude<DocxResolveResult, "synced">,
     ) => {
       if (result === "failed") {
         captureResolveFailure("accept");
       }
-      if (undoHandle !== null) {
-        docxEditorRef.current?.undoDocumentOperations(undoHandle);
+      if (outcome.revisionIds !== null) {
+        docxEditorRef.current?.rejectAIEditOperation(outcome.revisionIds);
+      } else if (outcome.undoHandle !== null) {
+        docxEditorRef.current?.undoDocumentOperations(outcome.undoHandle);
       }
       updateSuggestion(entityId, item.id, {
         status: "pending",
@@ -411,7 +496,7 @@ export const useReviewActions = ({
       // handler took it over). Nothing to apply.
       return;
     }
-    const outcome = applyPending(live);
+    const outcome = acceptPending(live);
     recordOutcome(live, outcome);
     // Persist the resolution only when the apply actually landed; a
     // `skipped` op leaves the row pending server-side so it can be
@@ -425,11 +510,11 @@ export const useReviewActions = ({
             live.id,
             async () =>
               await resolveDocxSuggestionRequest({
-                workspaceId,
+                workspaceId: persistedWorkspaceId(),
                 entityId,
                 suggestionId: live.id,
                 status: "accepted",
-                appliedMode: applyMode,
+                appliedMode: outcome.appliedMode,
               }),
           );
           if (result === "synced") {
@@ -438,7 +523,7 @@ export const useReviewActions = ({
           // The editor applied the change but the server row is not in
           // "accepted": rewind the editor + local state so the user sees the
           // suggestion pending again, matching the server.
-          rollbackAcceptedResolution(live, outcome.undoHandle, result);
+          rollbackAcceptedResolution(live, outcome, result);
           if (result === "failed") {
             toastPersistFailed();
           } else {
@@ -462,6 +547,19 @@ export const useReviewActions = ({
     if (claimed === null) {
       return;
     }
+    const rejected = rejectStagedSuggestion(claimed);
+    if (rejected.status === "failed") {
+      releaseClaim(claimed.id);
+      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      return;
+    }
+    if (rejected.status === "rejected") {
+      updateSuggestion(entityId, claimed.id, {
+        revisionIds: null,
+        undoHandle: null,
+        applyMode: null,
+      });
+    }
     // Same reason as accept: don't drop pendingOperation, so the user can
     // revert the rejection and the suggestion goes back to actionable.
     if (claimed.persisted === true) {
@@ -471,7 +569,7 @@ export const useReviewActions = ({
             claimed.id,
             async () =>
               await resolveDocxSuggestionRequest({
-                workspaceId,
+                workspaceId: persistedWorkspaceId(),
                 entityId,
                 suggestionId: claimed.id,
                 status: "rejected",
@@ -553,7 +651,7 @@ export const useReviewActions = ({
           item.id,
           async () =>
             await revertDocxSuggestionRequest({
-              workspaceId,
+              workspaceId: persistedWorkspaceId(),
               entityId,
               suggestionId: item.id,
             }),
@@ -622,7 +720,7 @@ export const useReviewActions = ({
         if (claimed === null) {
           continue;
         }
-        const outcome = applyPending(claimed);
+        const outcome = acceptPending(claimed);
         recordOutcome(claimed, outcome);
         if (claimed.persisted === true && outcome.status === "accepted") {
           toPersist.push({ item: claimed, outcome });
@@ -639,17 +737,17 @@ export const useReviewActions = ({
                 item.id,
                 async () =>
                   await resolveDocxSuggestionRequest({
-                    workspaceId,
+                    workspaceId: persistedWorkspaceId(),
                     entityId,
                     suggestionId: item.id,
                     status: "accepted",
-                    appliedMode: applyMode,
+                    appliedMode: outcome.appliedMode,
                   }),
               );
               if (result === "synced") {
                 return result;
               }
-              rollbackAcceptedResolution(item, outcome.undoHandle, result);
+              rollbackAcceptedResolution(item, outcome, result);
               return result;
             }),
           );
@@ -661,23 +759,34 @@ export const useReviewActions = ({
   );
 
   const rejectMany = useLatestCallback((items: readonly ReviewSuggestion[]) => {
-    // Resolve each captured item to its LIVE row (following any reconcile
-    // rename) and keep only those still pending. rejectMany has no await before
-    // the batch set, so this read + `setStatusBatch` runs as one synchronous
-    // block that no other handler can interleave: collecting the still-pending
-    // rows and flipping them is atomic, and a target another handler already
-    // resolved is dropped rather than re-rejected.
-    const targets = items
-      .map((item) => readLive(item.id))
-      .filter((row): row is ReviewSuggestion => row?.status === "pending");
+    const targets: ReviewSuggestion[] = [];
+    let failed = false;
+    for (const item of items) {
+      const claimed = claimPending(item.id, "rejected");
+      if (claimed === null) {
+        continue;
+      }
+      const rejected = rejectStagedSuggestion(claimed);
+      if (rejected.status === "failed") {
+        releaseClaim(claimed.id);
+        failed = true;
+        continue;
+      }
+      if (rejected.status === "rejected") {
+        updateSuggestion(entityId, claimed.id, {
+          revisionIds: null,
+          undoHandle: null,
+          applyMode: null,
+        });
+      }
+      targets.push(claimed);
+    }
+    if (failed) {
+      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+    }
     if (targets.length === 0) {
       return;
     }
-    setStatusBatch(
-      entityId,
-      targets.map((item) => item.id),
-      "rejected",
-    );
     const toPersist = targets.filter((item) => item.persisted === true);
     if (toPersist.length === 0) {
       return;
@@ -690,7 +799,7 @@ export const useReviewActions = ({
               item.id,
               async () =>
                 await resolveDocxSuggestionRequest({
-                  workspaceId,
+                  workspaceId: persistedWorkspaceId(),
                   entityId,
                   suggestionId: item.id,
                   status: "rejected",
@@ -712,6 +821,13 @@ export const useReviewActions = ({
 
   const navigateTo = useLatestCallback((item: ReviewSuggestion) => {
     setFocusedId(entityId, item.id);
+    const suggestionId = item.pendingOperation?.id;
+    if (
+      suggestionId !== undefined &&
+      docxEditorRef.current?.scrollToSuggestion(suggestionId) === true
+    ) {
+      return;
+    }
     // Pending items don't have revision ids yet (nothing applied), so
     // scroll by the snapshot blockId. Once accepted in tracked-changes
     // mode the revision-ids path snaps to the exact insertion/deletion
@@ -719,6 +835,16 @@ export const useReviewActions = ({
     if (item.revisionIds !== null) {
       docxEditorRef.current?.scrollToAIEditOperation(item.revisionIds);
       return;
+    }
+    const pagedEditor = docxEditorRef.current?.getEditorRef();
+    const view = pagedEditor?.getView();
+    if (pagedEditor && view) {
+      const decoration = findFolioReviewDecoration(item, view.state.doc);
+      if (decoration !== null) {
+        pagedEditor.setSelection(decoration.range.from);
+        pagedEditor.scrollToPosition(decoration.range.from);
+        return;
+      }
     }
     docxEditorRef.current?.scrollToBlock(
       item.blockId,

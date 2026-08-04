@@ -31,9 +31,9 @@ export type ChatClientTools =
 export type ChatMessageMetadata = NonNullable<ChatMessage["metadata"]>;
 export type SharedChatUITools = Pick<ChatUITools, "ask-user">;
 export type AskUserOutput = SharedChatUITools["ask-user"]["output"];
-// `create-document` is client-executed and uses the matter-pick UI as
-// its gate, not the approval flow. Keep it out of the approval set so
-// `NeedsMatterCard` renders instead of `ToolApprovalCard`.
+// `create-document` is client-executed and renders its own draft UI, not the
+// approval flow. Keep it out of the approval set so `NeedsMatterCard` renders
+// instead of `ToolApprovalCard`.
 type BuiltInApprovalToolName = Exclude<
   keyof ChatUITools,
   "ask-user" | "create-document"
@@ -70,14 +70,21 @@ type ExternalInputToolName = Extract<
   BuiltInApprovalToolName,
   "boe_search_legislation" | "fetch_url" | "web_search"
 >;
-const RUNNING_TOOL_STATES = {
+const TOOL_CALL_STATE_IS_RUNNING = {
   "awaiting-input": true,
+  "approval-requested": false,
+  "approval-responded": false,
+  complete: false,
+  error: false,
   "input-complete": true,
   "input-streaming": true,
-} as const satisfies Record<string, true>;
+} as const satisfies Record<ChatToolCallPart["state"], boolean>;
+const isChatToolCallState = (
+  value: string,
+): value is ChatToolCallPart["state"] =>
+  Object.hasOwn(TOOL_CALL_STATE_IS_RUNNING, value);
 const USER_INPUT_TOOL_NAMES = {
   "ask-user": true,
-  "create-document": true,
 } as const satisfies Record<string, true>;
 
 // Mirrors the `@stll/folio-agents` tool names registered server-side in
@@ -167,7 +174,7 @@ const CHAT_TOOL_TITLE_KEYS = {
 // `business_registry_lookup` (or removed for other reasons). Keep
 // title keys around so historical chat history still renders with a
 // recognisable label rather than the generic "unknown" fallback.
-const LEGACY_CHAT_TOOL_TITLE_KEYS = {
+const RETIRED_CHAT_TOOL_TITLE_KEYS = {
   ares_lookup_company: "chat.tool.ares_lookup_company",
   ares_search_companies: "chat.tool.ares_search_companies",
   // Retired hand-rolled code-execution tools, replaced by the code-mode
@@ -184,7 +191,7 @@ const LEGACY_CHAT_TOOL_TITLE_KEYS = {
 
 const CHAT_TOOL_DISPLAY_TITLE_KEYS = {
   ...CHAT_TOOL_TITLE_KEYS,
-  ...LEGACY_CHAT_TOOL_TITLE_KEYS,
+  ...RETIRED_CHAT_TOOL_TITLE_KEYS,
 } as const;
 
 const UNKNOWN_CHAT_TOOL_TITLE_KEY =
@@ -530,7 +537,10 @@ export const isRunningToolPart = (part: unknown): boolean => {
     return false;
   }
 
-  if (!(part.state in RUNNING_TOOL_STATES)) {
+  if (
+    !isChatToolCallState(part.state) ||
+    !TOOL_CALL_STATE_IS_RUNNING[part.state]
+  ) {
     return false;
   }
 
@@ -681,8 +691,25 @@ export const selectUnresolvedActiveDocxEditToolCallParts = (
 // is never that message.
 const INTERRUPTED_TOOL_CALL_STATE = "error" as const;
 
-const toTerminalIfRunningToolPart = (part: ChatPart): ChatPart => {
+export type RunningToolCallSanitization = "cancel" | "hydrate";
+
+const toTerminalIfRunningToolPart = (
+  part: ChatPart,
+  mode: RunningToolCallSanitization,
+): ChatPart => {
   if (part.type !== "tool-call" || !isRunningToolPart(part)) {
+    return part;
+  }
+  // The draft compiler can deterministically resume this client-executed tool
+  // after hydration. Preserve it so the session effect can return its result
+  // instead of turning a recoverable draft into an interrupted tool call.
+  if (
+    mode === "hydrate" &&
+    part.name === "create-document" &&
+    part.state === "input-complete" &&
+    typeof part.input?.source === "string" &&
+    part.input.source.trim() !== ""
+  ) {
     return part;
   }
   return { ...part, state: INTERRUPTED_TOOL_CALL_STATE };
@@ -701,24 +728,28 @@ const toTerminalIfRunningToolPart = (part: ChatPart): ChatPart => {
  *    (written at stream end, not mid-stream), so any running tool-call part
  *    in server-loaded messages belongs to a turn whose stream died before
  *    finishing (API restart / deploy / crash mid tool call).
- *  - Explicit stop: the AI SDK's `stop()` aborts the live request but never
+ *  - Explicit stop: TanStack AI's `stop()` aborts the live request but never
  *    rewrites message parts, so a tool part caught mid-input would keep the
  *    turn "generating" forever. The runtime's `stop` applies this right
  *    after aborting.
  *
- * `ask-user` / `create-document` and approval-flow parts are long-lived by
- * design and already excluded by `isRunningToolPart`. Messages and parts
- * left unchanged are returned by reference so downstream memoization stays
- * stable.
+ * `ask-user` and approval-flow parts are user-owned and excluded by
+ * `isRunningToolPart`. A complete `create-document` input is resumable by the
+ * client and remains live until the draft result is returned. Messages and
+ * parts left unchanged are returned by reference so downstream memoization
+ * stays stable.
  */
 export const sanitizeRunningToolCalls = (
   messages: readonly PersistedChatMessage[],
+  mode: RunningToolCallSanitization = "hydrate",
 ): PersistedChatMessage[] =>
   messages.map((message) => {
     if (message.role !== "assistant") {
       return message;
     }
-    const parts = message.parts.map(toTerminalIfRunningToolPart);
+    const parts = message.parts.map((part) =>
+      toTerminalIfRunningToolPart(part, mode),
+    );
     const partsChanged = parts.some(
       (part, index) => part !== message.parts[index],
     );
@@ -729,7 +760,7 @@ type ChatTurnInFlightOptions = {
   status: ChatClientState;
   messages: PersistedChatMessage[];
   /**
-   * Set when the user explicitly stopped the turn. The AI SDK's
+   * Set when the user explicitly stopped the turn. TanStack AI's
    * `stop()` only aborts a live request; it never rewrites message
    * parts, so a tool part caught mid-input stays in a running state
    * and would otherwise keep the turn "in flight" forever.
@@ -744,7 +775,7 @@ type ChatTurnInFlightOptions = {
  * in multi-step tool turns).
  *
  * An errored turn is never in flight. When the stream dies mid tool
- * call (network drop, server restart) the AI SDK flips its status to
+ * call (network drop, server restart) TanStack AI flips its status to
  * `"error"` but leaves the partial tool part in a running state; the
  * SDK never auto-continues after an error, so treating that tail as
  * in-flight would wedge the session as "generating" until reload.
@@ -754,13 +785,99 @@ export const isChatTurnInFlight = ({
   messages,
   turnAbandoned = false,
 }: ChatTurnInFlightOptions): boolean => {
-  if (status === "submitted" || status === "streaming") {
-    return true;
-  }
-  if (status === "error" || turnAbandoned) {
+  if (turnAbandoned) {
     return false;
   }
-  return hasRunningToolCallInLatestAssistantMessage({ messages });
+
+  switch (status) {
+    case "submitted":
+    case "streaming":
+      return true;
+    case "error":
+      return false;
+    case "ready":
+      return hasRunningToolCallInLatestAssistantMessage({ messages });
+    default:
+      status satisfies never;
+      return panic("Unhandled chat client state");
+  }
+};
+
+export const isChatClientRequestActive = (status: ChatClientState): boolean => {
+  switch (status) {
+    case "submitted":
+    case "streaming":
+      return true;
+    case "error":
+    case "ready":
+      return false;
+    default:
+      status satisfies never;
+      return panic("Unhandled chat client state");
+  }
+};
+
+type ServerChatTurnOutcome = NonNullable<
+  NonNullable<ChatMessage["metadata"]>["turnOutcome"]
+>;
+
+export type ResolvedChatAssistantTurnOutcome =
+  | ServerChatTurnOutcome
+  | { type: "incomplete" }
+  | { type: "legacy-completed" };
+
+type ChatAssistantTurnMessage = Pick<ChatMessage, "metadata" | "role"> & {
+  parts: readonly ChatPart[];
+};
+
+/**
+ * Resolve the server-owned terminal state for follow-up and error UI policy.
+ * Legacy assistant messages predate `turnOutcome`; only a non-empty legacy
+ * message may stand in for a completed turn.
+ */
+export const resolveChatAssistantTurnOutcome = (
+  message: ChatAssistantTurnMessage | null,
+): ResolvedChatAssistantTurnOutcome => {
+  if (message?.role !== "assistant") {
+    return { type: "incomplete" };
+  }
+
+  const outcome = message.metadata?.turnOutcome;
+  if (outcome === undefined) {
+    return message.parts.length > 0
+      ? { type: "legacy-completed" }
+      : { type: "incomplete" };
+  }
+
+  switch (outcome.type) {
+    case "awaiting-user":
+    case "cancelled":
+    case "completed":
+    case "failed":
+    case "interrupted":
+      return outcome;
+    default:
+      return outcome satisfies never;
+  }
+};
+
+export const getChatAssistantTurnError = (
+  message: ChatAssistantTurnMessage | null,
+): Error | undefined => {
+  const outcome = resolveChatAssistantTurnOutcome(message);
+  switch (outcome.type) {
+    case "failed":
+      return new Error(outcome.error);
+    case "awaiting-user":
+    case "cancelled":
+    case "completed":
+    case "incomplete":
+    case "interrupted":
+    case "legacy-completed":
+      return undefined;
+    default:
+      return outcome satisfies never;
+  }
 };
 
 /**
