@@ -3251,8 +3251,10 @@
         "updateRequiredTitle": "stella desktop frissítése"
       },
       "downloadAsZip": ".zip fájl letöltése",
+      "downloadExtractedText": "Kinyert szöveg (.txt)",
       "downloadOriginal": "Eredeti fájl",
       "downloadPdf": "PDF",
+      "downloadSearchablePdf": "Kereshető PDF",
       "maxEntitiesReached": "Elérte a maximális entitásszámot",
       "ocrAlreadyProcessed": "A szövegfelismerés már befejeződött",
       "ocrQueueFailed": "A szövegfelismerést nem sikerült várólistára tenni",

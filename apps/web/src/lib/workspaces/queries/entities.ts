@@ -52,6 +52,7 @@ type RawWorkspaceEntity = Omit<
     propertyId: string;
     entityId: string;
     content: WorkspaceField["content"];
+    ocrExportStatus?: WorkspaceField["ocrExportStatus"];
   }[];
   cellMetadata: {
     propertyId: string;
@@ -69,6 +70,7 @@ const toWorkspaceEntity = (entity: RawWorkspaceEntity): WorkspaceEntity => {
       entityId: toSafeId<"entity">(field.entityId),
       propertyId,
       content: field.content,
+      ocrExportStatus: field.ocrExportStatus ?? "unavailable",
     };
   }
   const cellMetadata: WorkspaceEntity["cellMetadata"] = {};

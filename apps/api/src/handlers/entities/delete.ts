@@ -12,7 +12,7 @@ import {
   fields,
   workspaces,
 } from "@/api/db/schema";
-import { handoffCommittedEntityDeletionCleanup } from "@/api/handlers/entities/entity-deletion-cleanup-handoff";
+import { handoffCommittedEntityDeletionCleanupBatch } from "@/api/handlers/entities/entity-deletion-cleanup-handoff";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -26,8 +26,16 @@ import {
   extractFieldFileRefs,
   filterUnreferencedFieldFileRefs,
 } from "@/api/lib/files/field-file-refs";
-import { createFileKey } from "@/api/lib/files/utils";
+import {
+  createFileKey,
+  createOcrSearchablePdfKey,
+} from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
+import {
+  forEachOcrDerivativePage,
+  ocrDerivativeCursorFilter,
+  ocrDerivativePageOrder,
+} from "@/api/lib/ocr-derivative-pages";
 import { getSearchProvider } from "@/api/lib/search/provider";
 
 const deleteEntitiesBodySchema = t.Object({
@@ -133,20 +141,59 @@ export const deleteEntitiesHandler = async function* ({
         excludedEntityIds: body.entityIds,
       });
 
-      const cleanupRequestId =
-        unreferencedFileRefs.length > 0
-          ? createSafeId<"entityDeletionCleanupRequest">()
-          : null;
-      if (cleanupRequestId) {
+      // A long-lived document accumulates one OCR run per version and field,
+      // so the derivative set is unbounded. Record it as bounded cleanup
+      // request pages instead of capping how much a caller may delete.
+      const cleanupRequestIds: SafeId<"entityDeletionCleanupRequest">[] = [];
+      const recordCleanupRequest = async (s3Keys: string[]): Promise<void> => {
+        if (s3Keys.length === 0) {
+          return;
+        }
+        const cleanupRequestId = createSafeId<"entityDeletionCleanupRequest">();
+        // audit: skip — outbox bookkeeping for the deletion this transaction
+        // already audits; the request rows carry no user-visible state.
         await tx.insert(entityDeletionCleanupRequests).values({
           id: cleanupRequestId,
           organizationId,
           workspaceId,
-          s3Keys: unreferencedFileRefs.map(({ fileId, mimeType }) =>
-            createFileKey({ organizationId, workspaceId, fileId, mimeType }),
-          ),
+          s3Keys,
         });
-      }
+        cleanupRequestIds.push(cleanupRequestId);
+      };
+
+      await recordCleanupRequest(
+        unreferencedFileRefs.map(({ fileId, mimeType }) =>
+          createFileKey({ organizationId, workspaceId, fileId, mimeType }),
+        ),
+      );
+      await forEachOcrDerivativePage({
+        readPage: async (cursor, limit) =>
+          await tx
+            .select({
+              createdAt: documentProcessingRuns.createdAt,
+              id: documentProcessingRuns.id,
+            })
+            .from(documentProcessingRuns)
+            .where(
+              and(
+                eq(documentProcessingRuns.workspaceId, workspaceId),
+                inArray(documentProcessingRuns.entityId, body.entityIds),
+                ocrDerivativeCursorFilter(cursor),
+              ),
+            )
+            .orderBy(...ocrDerivativePageOrder())
+            .limit(limit),
+        onPage: async (runs) =>
+          await recordCleanupRequest(
+            runs.map(({ id }) =>
+              createOcrSearchablePdfKey({
+                organizationId,
+                workspaceId,
+                runId: id,
+              }),
+            ),
+          ),
+      });
 
       // Cascade: entities → entityVersions → fields →
       // justifications (all cascade).
@@ -191,7 +238,7 @@ export const deleteEntitiesHandler = async function* ({
 
       return {
         status: "deleted" as const,
-        cleanupRequestId,
+        cleanupRequestIds,
         entities: deleted,
       };
     }),
@@ -200,14 +247,15 @@ export const deleteEntitiesHandler = async function* ({
     return Result.err(txOutcome.error);
   }
   const deletedEntities = txOutcome.entities;
-  const cleanupRequestId = txOutcome.cleanupRequestId;
-  if (cleanupRequestId) {
-    await handoffCommittedEntityDeletionCleanup({
-      captureDeliveryError: captureError,
-      enqueueCleanup,
-      requestId: cleanupRequestId,
-    });
-  }
+  // Accelerate only a bounded prefix. The requests are already committed and
+  // the reconciler claims every `pending` row on its own schedule, so a
+  // deletion that produced many pages must not fan out an unbounded number of
+  // queue calls or hold its response open behind the slowest one.
+  await handoffCommittedEntityDeletionCleanupBatch({
+    captureDeliveryError: captureError,
+    enqueueCleanup,
+    requestIds: txOutcome.cleanupRequestIds,
+  });
 
   // Explicit removal for non-PG providers (CASCADE handles PG)
   const provider = getSearchProvider();

@@ -9,9 +9,8 @@ import {
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import { DOCUMENT_OCR_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
-
-const OCR_PROCESSOR_VERSION = 1;
 
 export const requestAutomaticDocumentOcr = async ({
   entityId,
@@ -94,7 +93,7 @@ export const requestAutomaticDocumentOcr = async ({
         sourceFileId,
         sourceSha256Hex,
         kind: "ocr",
-        processorVersion: OCR_PROCESSOR_VERSION,
+        processorVersion: DOCUMENT_OCR_PROCESSOR_VERSION,
         requestSource,
         requestedBy: null,
       })
@@ -128,7 +127,10 @@ export const requestAutomaticDocumentOcr = async ({
           eq(documentProcessingRuns.sourceFileId, sourceFileId),
           eq(documentProcessingRuns.sourceSha256Hex, sourceSha256Hex),
           eq(documentProcessingRuns.kind, "ocr"),
-          eq(documentProcessingRuns.processorVersion, OCR_PROCESSOR_VERSION),
+          eq(
+            documentProcessingRuns.processorVersion,
+            DOCUMENT_OCR_PROCESSOR_VERSION,
+          ),
           eq(documentProcessingRuns.status, "queued"),
         ),
       )

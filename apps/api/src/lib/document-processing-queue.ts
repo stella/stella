@@ -34,6 +34,11 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
 import { detached } from "@/api/lib/detached";
+import type { DocumentOcrPayload } from "@/api/lib/document-processing-contract";
+import {
+  DOCUMENT_OCR_PROCESSOR_VERSION,
+  serializeDocumentOcrPayload,
+} from "@/api/lib/document-processing-contract";
 import {
   DOCUMENT_PROCESSING_QUEUE_NAME,
   enqueueDocumentProcessingRun,
@@ -46,12 +51,14 @@ import {
 } from "@/api/lib/document-processing-provider";
 import { startDocumentOcrWorkerReadiness } from "@/api/lib/document-processing-readiness";
 import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
-import { createFileKey } from "@/api/lib/file-key";
+import { createFileKey, createOcrSearchablePdfKey } from "@/api/lib/file-key";
 import { logger } from "@/api/lib/observability/logger";
+import { createOcrSearchablePdf } from "@/api/lib/ocr-searchable-pdf";
 import {
   createBullMqConnection,
   createRedisClient,
 } from "@/api/lib/redis-client";
+import { getS3 } from "@/api/lib/s3";
 import { presignDownloadUrl } from "@/api/lib/s3-presign";
 import { getSearchProvider } from "@/api/lib/search/provider";
 import { broadcast } from "@/api/lib/sse";
@@ -98,6 +105,7 @@ const AUTOMATIC_OCR_MAX_ATTEMPTS = 5;
 const AUTOMATIC_OCR_RETRY_BASE_DELAY_MS = 30_000;
 const AUTOMATIC_OCR_RETRY_MAX_DELAY_MS = 30 * 60 * 1000;
 const SEARCH_INDEX_FAILURE_CODE = "search_index_failed";
+const SEARCHABLE_PDF_FAILURE_CODE = "searchable_pdf_failed";
 const RETRYABLE_AUTOMATIC_OCR_FAILURE_CODES = [
   "not_configured",
   "processing_failed",
@@ -159,6 +167,56 @@ export const indexOcrProjection = async ({
       code: SEARCH_INDEX_FAILURE_CODE,
       message: "OCR text was stored but search indexing failed",
       cause: indexed.error,
+    });
+  }
+};
+
+/**
+ * Builds and stores the run's cached searchable PDF.
+ *
+ * The source read, the overlay, and the derivative write are one stage under a
+ * single failure code: a storage blip is as retryable as a generation failure,
+ * so neither can leave a persisted projection permanently without its PDF.
+ */
+const writeOcrSearchablePdfDerivative = async ({
+  lifecycleSignal,
+  payload,
+  run,
+  sourceKey,
+}: {
+  lifecycleSignal: AbortSignal;
+  payload: DocumentOcrPayload;
+  run: typeof documentProcessingRuns.$inferSelect;
+  sourceKey: string;
+}): Promise<void> => {
+  const written = await Result.tryPromise({
+    try: async () => {
+      const sourceBuffer = await getS3().file(sourceKey).arrayBuffer();
+      lifecycleSignal.throwIfAborted();
+      const searchablePdf = await createOcrSearchablePdf(sourceBuffer, payload);
+      if (Result.isError(searchablePdf)) {
+        throw searchablePdf.error;
+      }
+      lifecycleSignal.throwIfAborted();
+
+      await getS3().write(
+        createOcrSearchablePdfKey({
+          organizationId: run.organizationId,
+          workspaceId: run.workspaceId,
+          runId: run.id,
+        }),
+        searchablePdf.value,
+        { type: PDF_MIME_TYPE },
+      );
+    },
+    catch: (cause) => cause,
+  });
+  lifecycleSignal.throwIfAborted();
+  if (Result.isError(written)) {
+    throw new DocumentProcessingJobError({
+      code: SEARCHABLE_PDF_FAILURE_CODE,
+      message: "OCR text was stored but the searchable PDF was not",
+      cause: written.error,
     });
   }
 };
@@ -483,10 +541,18 @@ const readCurrentOcrSource = async ({
   return rows.at(0) ?? null;
 };
 
+type OcrProjectionPersistenceOutcome =
+  | "persisted"
+  | "preserved"
+  | "source_cancelled"
+  | "stale_claim";
+
 const persistOcrProjection = async ({
   claimToken,
   ciphertext,
   iv,
+  ocrPayloadCiphertext,
+  ocrPayloadIv,
   pageCount,
   run,
   textLength,
@@ -494,10 +560,12 @@ const persistOcrProjection = async ({
   claimToken: string;
   ciphertext: Buffer;
   iv: Buffer;
+  ocrPayloadCiphertext: Buffer;
+  ocrPayloadIv: Buffer;
   pageCount: number;
   run: typeof documentProcessingRuns.$inferSelect;
   textLength: number;
-}): Promise<boolean> =>
+}): Promise<OcrProjectionPersistenceOutcome> =>
   await rootDb.transaction(async (tx) => {
     const lockedRows = await tx
       .select({
@@ -561,7 +629,7 @@ const persistOcrProjection = async ({
       });
     const ownedClaim = ownedClaims.at(0);
     if (!ownedClaim) {
-      return false;
+      return "stale_claim";
     }
 
     const source = lockedRows.at(0) ?? null;
@@ -589,7 +657,7 @@ const persistOcrProjection = async ({
             eq(documentProcessingRuns.claimedBy, claimToken),
           ),
         );
-      return false;
+      return "source_cancelled";
     }
 
     // Native extraction takes the same entity lock before it persists a
@@ -599,6 +667,7 @@ const persistOcrProjection = async ({
     if (shouldPreserveCurrentProjection(ownedClaim.requestSource)) {
       const projections = await tx
         .select({
+          ocrRunId: extractedContent.ocrRunId,
           sourceEntityVersionId: extractedContent.sourceEntityVersionId,
           sourceFieldId: extractedContent.sourceFieldId,
           sourceFileId: extractedContent.sourceFileId,
@@ -633,6 +702,7 @@ const persistOcrProjection = async ({
         : [];
       if (
         projection &&
+        projection.ocrRunId !== run.id &&
         isPreservableAutomaticProjection({
           currentEntityVersionId: run.entityVersionId,
           currentWorkspaceId: run.workspaceId,
@@ -640,7 +710,7 @@ const persistOcrProjection = async ({
           sourceField: projectionSourceRows.at(0) ?? null,
         })
       ) {
-        return true;
+        return "preserved";
       }
     }
 
@@ -654,6 +724,10 @@ const persistOcrProjection = async ({
         sourceFieldId: run.fieldId,
         sourceFileId: run.sourceFileId,
         sourceSha256Hex: run.sourceSha256Hex,
+        ocrRunId: run.id,
+        ocrProcessorVersion: run.processorVersion,
+        ocrPayloadCiphertext,
+        ocrPayloadIv,
         ciphertext,
         iv,
         charCount: textLength,
@@ -667,6 +741,10 @@ const persistOcrProjection = async ({
           sourceFieldId: run.fieldId,
           sourceFileId: run.sourceFileId,
           sourceSha256Hex: run.sourceSha256Hex,
+          ocrRunId: run.id,
+          ocrProcessorVersion: run.processorVersion,
+          ocrPayloadCiphertext,
+          ocrPayloadIv,
           ciphertext,
           iv,
           charCount: textLength,
@@ -689,7 +767,7 @@ const persistOcrProjection = async ({
           eq(documentProcessingRuns.claimedBy, claimToken),
         ),
       );
-    return true;
+    return "persisted";
   });
 
 export const requiresOcrPolicy = (
@@ -1019,29 +1097,55 @@ export const processDocumentProcessingRun = async (
       }
       lifecycleSignal.throwIfAborted();
 
-      const encrypted = await encryptContent(
-        run.organizationId,
-        result.value.text,
-      );
+      const [encrypted, encryptedPayload] = await Promise.all([
+        encryptContent(run.organizationId, result.value.text),
+        encryptContent(
+          run.organizationId,
+          serializeDocumentOcrPayload(result.value.payload),
+        ),
+      ]);
       lifecycleSignal.throwIfAborted();
-      const persisted = await persistOcrProjection({
+      const persistenceOutcome = await persistOcrProjection({
         claimToken,
         ciphertext: encrypted.ciphertext,
         iv: encrypted.iv,
+        ocrPayloadCiphertext: encryptedPayload.ciphertext,
+        ocrPayloadIv: encryptedPayload.iv,
         pageCount: result.value.pageCount,
         run,
         textLength: result.value.text.length,
       });
-      if (!persisted) {
-        return;
+      switch (persistenceOutcome) {
+        case "persisted":
+        case "preserved":
+          break;
+        case "source_cancelled":
+        case "stale_claim":
+          return;
+        default:
+          persistenceOutcome satisfies never;
       }
       lifecycleSignal.throwIfAborted();
+
+      // The derivative is written before indexing: a failed index leaves a
+      // retryable run that `recoverFailedSearchIndex` completes without
+      // revisiting storage, so ordering it after indexing would let that
+      // replay mark a run succeeded that never got its searchable PDF.
+      if (persistenceOutcome === "persisted") {
+        await writeOcrSearchablePdfDerivative({
+          lifecycleSignal,
+          payload: result.value.payload,
+          run,
+          sourceKey,
+        });
+      }
 
       await indexOcrProjection({
         indexEntity: async () =>
           await getSearchProvider().indexEntity(run.entityId),
       });
       lifecycleSignal.throwIfAborted();
+
       const completed = await rootDb
         .update(documentProcessingRuns)
         .set({
@@ -1127,6 +1231,16 @@ export const isRetryableAutomaticOcrFailure = ({
 export const isRetryableSearchIndexFailure = (failureCode: string): boolean =>
   failureCode === SEARCH_INDEX_FAILURE_CODE;
 
+export const isRetryableOcrDerivativeFailure = ({
+  attemptCount,
+  errorCode: failureCode,
+}: {
+  attemptCount: number;
+  errorCode: string;
+}): boolean =>
+  failureCode === SEARCHABLE_PDF_FAILURE_CODE &&
+  attemptCount < AUTOMATIC_OCR_MAX_ATTEMPTS;
+
 const markRunFailed = async ({
   claimToken,
   error,
@@ -1163,6 +1277,10 @@ const markRunFailed = async ({
       requestSource: owned.requestSource,
     });
     const retryableSearchIndex = isRetryableSearchIndexFailure(failureCode);
+    const retryableDerivative = isRetryableOcrDerivativeFailure({
+      attemptCount: owned.attemptCount,
+      errorCode: failureCode,
+    });
     await tx
       .update(documentProcessingRuns)
       .set({
@@ -1171,7 +1289,7 @@ const markRunFailed = async ({
         errorAt: new Date(),
         errorCode: failureCode,
         nextAttemptAt:
-          retryable || retryableSearchIndex
+          retryable || retryableSearchIndex || retryableDerivative
             ? new Date(
                 Date.now() + automaticOcrRetryDelayMs(owned.attemptCount),
               )
@@ -1456,7 +1574,7 @@ const persistRepairableOcrRuns = async (
             fieldId: candidate.fieldId,
             kind: "ocr",
             organizationId: candidate.organizationId,
-            processorVersion: 1,
+            processorVersion: DOCUMENT_OCR_PROCESSOR_VERSION,
             requestedBy: null,
             requestSource: "repair",
             sourceFileId: candidate.content.id,
@@ -1747,7 +1865,21 @@ const dispatchScheduledDocumentProcessingRetries = async (): Promise<number> =>
     })
   ).attempted;
 
-const recoverRetryableAutomaticOcrFailures = async (): Promise<number> => {
+// Manual searchable-PDF failures are retryable too, so the condition spans
+// both automatic OCR sources and every derivative failure.
+const retryableOcrFailureCondition = () =>
+  or(
+    and(
+      inArray(documentProcessingRuns.requestSource, ["upload", "repair"]),
+      inArray(
+        documentProcessingRuns.errorCode,
+        RETRYABLE_AUTOMATIC_OCR_FAILURE_CODES,
+      ),
+    ),
+    eq(documentProcessingRuns.errorCode, SEARCHABLE_PDF_FAILURE_CODE),
+  );
+
+const recoverRetryableOcrFailures = async (): Promise<number> => {
   const now = new Date();
   const retryableRuns = await rootDb
     .select({
@@ -1759,11 +1891,7 @@ const recoverRetryableAutomaticOcrFailures = async (): Promise<number> => {
     .where(
       and(
         eq(documentProcessingRuns.status, "failed"),
-        inArray(documentProcessingRuns.requestSource, ["upload", "repair"]),
-        inArray(
-          documentProcessingRuns.errorCode,
-          RETRYABLE_AUTOMATIC_OCR_FAILURE_CODES,
-        ),
+        retryableOcrFailureCondition(),
         lt(documentProcessingRuns.attemptCount, AUTOMATIC_OCR_MAX_ATTEMPTS),
         or(
           isNull(documentProcessingRuns.nextAttemptAt),
@@ -1806,11 +1934,7 @@ const recoverRetryableAutomaticOcrFailures = async (): Promise<number> => {
     .where(
       and(
         eq(documentProcessingRuns.status, "failed"),
-        inArray(documentProcessingRuns.requestSource, ["upload", "repair"]),
-        inArray(
-          documentProcessingRuns.errorCode,
-          RETRYABLE_AUTOMATIC_OCR_FAILURE_CODES,
-        ),
+        retryableOcrFailureCondition(),
         capturedSchedules,
       ),
     )
@@ -2299,7 +2423,7 @@ const reconcileDocumentProcessing = async ({
         },
         {
           name: RECONCILIATION_PHASE.RETRY,
-          run: recoverRetryableAutomaticOcrFailures,
+          run: recoverRetryableOcrFailures,
         },
         {
           name: RECONCILIATION_PHASE.STALE_LEASE,

@@ -69,6 +69,7 @@ const APPROVED_PROCEDURAL_STATEMENTS = new Set([
   "20260731170000_case_law_corpus_generation_backfill/migration.sql:156772a852d5e4193fc68e5effb6881b8f9f022435c91882f16d5ad642c88993",
   "20260801140000_report_export_result_field/migration.sql:f6ad29cee9c49e07aad487cf5a8d5f32838b63a1cfa8f92a071a4f0afc277a5d",
   "20260801120000_case_law_source_ingestion_lease/migration.sql:c8cddc8405b46385e7159c745ccb8c095e88e67a6c4ff0a2d6bcd1cd124a2b63",
+  "20260805100000_ocr_exports/migration.sql:a119e3e1f41e55e853ae907e400426de2443dd1575f675c10e705b945c6e0e66",
 ]);
 
 type TimeoutState = "bounded" | "unbounded" | "unset";

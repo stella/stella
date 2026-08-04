@@ -3251,8 +3251,10 @@
         "updateRequiredTitle": "Atnaujinkite stella desktop"
       },
       "downloadAsZip": "Atsisiųsti .zip failą",
+      "downloadExtractedText": "Išgautas tekstas (.txt)",
       "downloadOriginal": "Originalus failas",
       "downloadPdf": "PDF",
+      "downloadSearchablePdf": "PDF su paieškos tekstu",
       "maxEntitiesReached": "Pasiektas didžiausias įrašų skaičius",
       "ocrAlreadyProcessed": "Teksto atpažinimas jau baigtas",
       "ocrQueueFailed": "Nepavyko įtraukti teksto atpažinimo į eilę",

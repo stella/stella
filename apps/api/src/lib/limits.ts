@@ -227,6 +227,13 @@ export const LIMITS = {
   /** Max messages returned before or after a history expansion target. */
   chatHistoryExpansionSideMax: 5,
   extractedContentMaxChars: 500_000,
+  /** Maximum encrypted OCR page-geometry payload before AES-GCM overhead. */
+  documentOcrPayloadMaxBytes: 16 * 1024 * 1024,
+  /** Cursor page size for document- and matter-deletion OCR derivative
+   *  cleanup. Also caps the storage keys recorded per cleanup request. */
+  ocrDerivativeCleanupBatchSize: 1000,
+  /** Hard timeout for adding a searchable text layer to one PDF. */
+  ocrPdfGenerationTimeoutMs: 2 * 60_000,
   /** Hard timeout (ms) for the sandboxed extraction subprocess. */
   extractionTimeoutMs: 30_000,
   /** Wall-clock ceiling (ms) for the live DOCX-to-Markdown read path in

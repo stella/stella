@@ -7,6 +7,10 @@ import {
   readFileHandler,
   stampedDownloadHandler,
 } from "@/api/handlers/files/get";
+import {
+  OCR_EXPORT_FORMATS,
+  readOcrExport,
+} from "@/api/handlers/files/ocr-export";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
@@ -130,6 +134,39 @@ const stampedDownloadEndpoint = createSafeHandler(
   },
 );
 
+export const ocrExportEndpoint = createSafeHandler(
+  {
+    permissions: { workspace: ["read"] },
+    mcp: { type: "internal", reason: "upload_mechanics" },
+    query: t.Object({ format: t.UnionEnum(OCR_EXPORT_FORMATS) }),
+    params: workspaceParams({ fieldId: tSafeId("field") }),
+    response: t.Unknown(),
+  } satisfies HandlerConfig,
+  async function* ({
+    params: { fieldId },
+    query: { format },
+    scopedDb,
+    session,
+    workspaceId,
+    recordAuditEvent,
+  }) {
+    const response = yield* Result.await(
+      Result.tryPromise(
+        async () =>
+          await readOcrExport({
+            fieldId,
+            format,
+            organizationId: session.activeOrganizationId,
+            recordAuditEvent,
+            scopedDb,
+            workspaceId,
+          }),
+      ),
+    );
+    return Result.ok(response);
+  },
+);
+
 export const filesRoute = new Elysia({
   prefix: "/files/:workspaceId",
 })
@@ -154,4 +191,10 @@ export const filesRoute = new Elysia({
   .get("/stamped/:fieldId", stampedDownloadEndpoint.handler, {
     params: stampedDownloadEndpoint.config.params,
     permissions: stampedDownloadEndpoint.config.permissions,
+  })
+  .get("/ocr-export/:fieldId", ocrExportEndpoint.handler, {
+    params: ocrExportEndpoint.config.params,
+    permissions: ocrExportEndpoint.config.permissions,
+    query: ocrExportEndpoint.config.query,
+    response: ocrExportEndpoint.config.response,
   });

@@ -10,6 +10,7 @@ import {
   EllipsisVerticalIcon,
   EyeIcon,
   FileOutputIcon,
+  FileTextIcon,
   FolderPlusIcon,
   FolderSyncIcon,
   LaptopIcon,
@@ -79,6 +80,7 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { toSafeId } from "@/lib/safe-id";
 import type {
+  OcrExportStatus,
   PropertyId,
   WorkspaceCellMetadata,
   WorkspaceEntity,
@@ -102,7 +104,11 @@ import { requestManualOcr } from "@/routes/_protected.workspaces/$workspaceId/-c
 import {
   canRunManualOcr,
   getDesktopEditLockState,
+  getOcrExportFileName,
+  getOcrExportFormats,
   getPdfDownloadFileName,
+  hasOcrExport,
+  type OcrExportFormat,
   type OcrSource,
   type RowActionContext,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions.logic";
@@ -140,6 +146,37 @@ type RowActionsProps = {
     | { propertyId: PropertyId; metadata: WorkspaceCellMetadata | undefined }
     | null
     | undefined;
+};
+
+const OcrExportMenuItems = ({
+  exportStatus,
+  onDownload,
+  searchablePdfLabel,
+  textLabel,
+}: {
+  exportStatus: OcrExportStatus;
+  onDownload: (format: OcrExportFormat) => void;
+  searchablePdfLabel: string;
+  textLabel: string;
+}) => {
+  const formats = getOcrExportFormats(exportStatus);
+
+  return (
+    <>
+      {formats.includes("searchable-pdf") && (
+        <MenuItem onClick={() => onDownload("searchable-pdf")}>
+          <FileOutputIcon />
+          {searchablePdfLabel}
+        </MenuItem>
+      )}
+      {formats.includes("text") && (
+        <MenuItem onClick={() => onDownload("text")}>
+          <FileTextIcon />
+          {textLabel}
+        </MenuItem>
+      )}
+    </>
+  );
 };
 
 export const RowActions = ({
@@ -273,6 +310,14 @@ export const RowActions = ({
 
   const hasPdfConversion =
     file !== null && file.pdfFileId !== null && file.mimeType !== PDF_MIME_TYPE;
+  let exportableOcrSources: readonly OcrSource[] = [];
+  if (!isBulk && isCellContext && ocrSource && hasOcrExport(ocrSource)) {
+    exportableOcrSources = [ocrSource];
+  } else if (!isBulk && !isCellContext) {
+    exportableOcrSources = ocrSources.filter(hasOcrExport);
+  }
+  const hasDownloadVariants =
+    !isBulk && (hasPdfConversion || exportableOcrSources.length > 0);
 
   const msg: Msg = {
     downloading: t("workspaces.files.downloadAsZip"),
@@ -306,6 +351,13 @@ export const RowActions = ({
     if (file) {
       await downloadSingleFile(workspaceId, file, asPdf, msg);
     }
+  };
+
+  const handleOcrExport = async (
+    source: OcrSource,
+    format: OcrExportFormat,
+  ) => {
+    await downloadOcrExport({ workspaceId, source, format, msg });
   };
 
   const handleOpenInDesktop = async () => {
@@ -825,12 +877,29 @@ export const RowActions = ({
           {t("chat.chatAbout")}
         </MenuItem>
 
+        {isCellContext && exportableOcrSources.length === 1 && (
+          <>
+            <MenuSeparator />
+            {exportableOcrSources.map((source) => (
+              <OcrExportMenuItems
+                key={source.fieldId}
+                exportStatus={source.exportStatus}
+                onDownload={(format) => {
+                  detached(handleOcrExport(source, format), "RowActions");
+                }}
+                searchablePdfLabel={t("workspaces.files.downloadSearchablePdf")}
+                textLabel={t("workspaces.files.downloadExtractedText")}
+              />
+            ))}
+          </>
+        )}
+
         {!isCellContext && (
           <>
             <MenuSeparator />
 
             {/* --- File operations --- */}
-            {hasAnyFile && (isBulk || !hasPdfConversion) && (
+            {hasAnyFile && (isBulk || !hasDownloadVariants) && (
               <MenuItem
                 onClick={() => {
                   detached(handleDownload(), "RowActions");
@@ -840,7 +909,7 @@ export const RowActions = ({
                 {t("common.download")}
               </MenuItem>
             )}
-            {!isBulk && hasPdfConversion && (
+            {hasDownloadVariants && (
               <MenuSub>
                 <MenuSubTrigger>
                   <DownloadIcon />
@@ -855,14 +924,61 @@ export const RowActions = ({
                     <DownloadIcon />
                     {t("workspaces.files.downloadOriginal")}
                   </MenuItem>
-                  <MenuItem
-                    onClick={() => {
-                      detached(handleDownload(true), "RowActions");
-                    }}
-                  >
-                    <FileOutputIcon />
-                    {t("workspaces.files.downloadPdf")}
-                  </MenuItem>
+                  {hasPdfConversion && (
+                    <MenuItem
+                      onClick={() => {
+                        detached(handleDownload(true), "RowActions");
+                      }}
+                    >
+                      <FileOutputIcon />
+                      {t("workspaces.files.downloadPdf")}
+                    </MenuItem>
+                  )}
+                  {exportableOcrSources.length === 1 &&
+                    exportableOcrSources.map((source) => (
+                      <OcrExportMenuItems
+                        key={source.fieldId}
+                        exportStatus={source.exportStatus}
+                        onDownload={(format) => {
+                          detached(
+                            handleOcrExport(source, format),
+                            "RowActions",
+                          );
+                        }}
+                        searchablePdfLabel={t(
+                          "workspaces.files.downloadSearchablePdf",
+                        )}
+                        textLabel={t("workspaces.files.downloadExtractedText")}
+                      />
+                    ))}
+                  {exportableOcrSources.length > 1 &&
+                    exportableOcrSources.map((source) => (
+                      <MenuSub key={source.fieldId}>
+                        <MenuSubTrigger>
+                          <ScanTextIcon />
+                          <BidiText as="span" className="max-w-64 truncate">
+                            {source.fileName}
+                          </BidiText>
+                        </MenuSubTrigger>
+                        <MenuSubPopup>
+                          <OcrExportMenuItems
+                            exportStatus={source.exportStatus}
+                            onDownload={(format) => {
+                              detached(
+                                handleOcrExport(source, format),
+                                "RowActions",
+                              );
+                            }}
+                            searchablePdfLabel={t(
+                              "workspaces.files.downloadSearchablePdf",
+                            )}
+                            textLabel={t(
+                              "workspaces.files.downloadExtractedText",
+                            )}
+                          />
+                        </MenuSubPopup>
+                      </MenuSub>
+                    ))}
                 </MenuSubPopup>
               </MenuSub>
             )}
@@ -1087,6 +1203,44 @@ const downloadEntityAsZip = async (
 
   stellaToast.close(toastId);
   downloadFile(blobResult.value, `${name}.zip`);
+};
+
+const downloadOcrExport = async ({
+  workspaceId,
+  source,
+  format,
+  msg,
+}: {
+  workspaceId: string;
+  source: OcrSource;
+  format: OcrExportFormat;
+  msg: Msg;
+}) => {
+  const responseResult = await Result.tryPromise(
+    async () =>
+      await fetchWithTimeout(
+        apiUrl(
+          `/files/${encodeURIComponent(workspaceId)}/ocr-export/${encodeURIComponent(source.fieldId)}?format=${format}`,
+        ),
+        {
+          credentials: "include",
+          timeoutMs: 60_000,
+        },
+      ),
+  );
+  if (Result.isError(responseResult) || !responseResult.value.ok) {
+    stellaToast.add({ title: msg.failed, type: "error" });
+    return;
+  }
+
+  const blobResult = await Result.tryPromise(
+    async () => await responseResult.value.blob(),
+  );
+  if (Result.isError(blobResult)) {
+    stellaToast.add({ title: msg.failed, type: "error" });
+    return;
+  }
+  downloadFile(blobResult.value, getOcrExportFileName(source.fileName, format));
 };
 
 const downloadSingleFile = async (

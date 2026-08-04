@@ -3251,8 +3251,10 @@
         "updateRequiredTitle": "stella desktop aktualisieren"
       },
       "downloadAsZip": "Als .zip herunterladen",
+      "downloadExtractedText": "Extrahierter Text (.txt)",
       "downloadOriginal": "Originaldatei",
       "downloadPdf": "PDF",
+      "downloadSearchablePdf": "Durchsuchbare PDF",
       "maxEntitiesReached": "Maximale Anzahl an Entitäten erreicht",
       "ocrAlreadyProcessed": "Texterkennung wurde bereits abgeschlossen",
       "ocrQueueFailed": "Texterkennung konnte nicht in die Warteschlange gestellt werden",

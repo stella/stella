@@ -15,6 +15,7 @@ import {
   isPreservableAutomaticProjection,
   isReversibleAutomaticOcrCancellation,
   isRetryableAutomaticOcrFailure,
+  isRetryableOcrDerivativeFailure,
   isRetryableSearchIndexFailure,
   mapWithConcurrency,
   ownsPromotedManualOcrClaim,
@@ -86,6 +87,83 @@ const source = {
   fieldEntityVersionId: run.entityVersionId,
   versionDeletedAt: null,
 };
+
+describe("OCR derivative durability", () => {
+  // A failed search index leaves a run that `recoverFailedSearchIndex` later
+  // completes without revisiting storage. Building the derivative after
+  // indexing would let that replay mark a run succeeded whose searchable PDF
+  // was never written, so every export of it would 404 forever.
+  test("stores the derivative before indexing so index replay cannot skip it", () => {
+    const processStart = queueSource.indexOf(
+      "export const processDocumentProcessingRun",
+    );
+    const processEnd = queueSource.indexOf("\nconst errorCode", processStart);
+    const processSource = queueSource.slice(processStart, processEnd);
+    const persistence = processSource.indexOf(
+      "const persistenceOutcome = await persistOcrProjection",
+    );
+    const derivative = processSource.indexOf(
+      "await writeOcrSearchablePdfDerivative",
+    );
+    const searchIndex = processSource.indexOf("await indexOcrProjection");
+
+    expect(persistence).toBeGreaterThan(-1);
+    expect(derivative).toBeGreaterThan(persistence);
+    expect(searchIndex).toBeGreaterThan(derivative);
+  });
+
+  // The source read and the derivative write are storage calls that can fail
+  // transiently. Outside the derivative stage they would settle as generic
+  // `processing_failed`, which manual retries exclude, stranding the
+  // projection without its PDF.
+  test("classifies the whole derivative stage as a retryable derivative failure", () => {
+    const stageStart = queueSource.indexOf(
+      "const writeOcrSearchablePdfDerivative",
+    );
+    const stageEnd = queueSource.indexOf("\nexport const", stageStart);
+    const stageSource = queueSource.slice(stageStart, stageEnd);
+
+    expect(stageStart).toBeGreaterThan(-1);
+    for (const storageCall of [
+      "getS3().file(sourceKey).arrayBuffer()",
+      "await createOcrSearchablePdf(",
+      "await getS3().write(",
+    ]) {
+      expect(stageSource).toContain(storageCall);
+    }
+    expect(stageSource).toContain("code: SEARCHABLE_PDF_FAILURE_CODE");
+  });
+
+  test("retries derivative failures within the bounded attempt budget", () => {
+    expect(
+      isRetryableOcrDerivativeFailure({
+        attemptCount: 1,
+        errorCode: "searchable_pdf_failed",
+      }),
+    ).toBe(true);
+    expect(
+      isRetryableOcrDerivativeFailure({
+        attemptCount: 5,
+        errorCode: "searchable_pdf_failed",
+      }),
+    ).toBe(false);
+  });
+
+  test("retries derivative failures within the bounded attempt budget", () => {
+    expect(
+      isRetryableOcrDerivativeFailure({
+        attemptCount: 1,
+        errorCode: "searchable_pdf_failed",
+      }),
+    ).toBe(true);
+    expect(
+      isRetryableOcrDerivativeFailure({
+        attemptCount: 5,
+        errorCode: "searchable_pdf_failed",
+      }),
+    ).toBe(false);
+  });
+});
 
 describe("lease heartbeat", () => {
   test("reports a deadline without accumulating stalled renewals", async () => {

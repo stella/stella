@@ -1,14 +1,44 @@
 import { PDF_MIME_TYPE } from "@/consts";
-import type { FieldId, PropertyId, WorkspaceEntity } from "@/lib/types";
+import type {
+  FieldId,
+  OcrExportStatus,
+  PropertyId,
+  WorkspaceEntity,
+} from "@/lib/types";
 
 export type OcrSource = {
   encrypted: boolean;
+  exportStatus: OcrExportStatus;
   fieldId: FieldId;
   fileName: string;
   mimeType: string;
 };
 
 export type RowActionContext = "bulk" | "cell" | "row";
+export type OcrExportFormat = "searchable-pdf" | "text";
+
+/**
+ * The searchable PDF is a stored derivative that can lag or fail behind the
+ * text, so an export offer is per format rather than per source.
+ */
+export const getOcrExportFormats = (
+  exportStatus: OcrExportStatus,
+): readonly OcrExportFormat[] => {
+  switch (exportStatus) {
+    case "text-and-pdf":
+      return ["searchable-pdf", "text"];
+    case "text":
+      return ["text"];
+    case "unavailable":
+      return [];
+    default:
+      exportStatus satisfies never;
+      return [];
+  }
+};
+
+export const hasOcrExport = (source: OcrSource): boolean =>
+  getOcrExportFormats(source.exportStatus).length > 0;
 
 type GetOcrSourceInput = {
   fields: WorkspaceEntity["fields"];
@@ -33,6 +63,7 @@ export const getOcrSource = ({
 
   return {
     encrypted: field.content.encrypted,
+    exportStatus: field.ocrExportStatus ?? "unavailable",
     fieldId: field.id,
     fileName: field.content.fileName,
     mimeType: field.content.mimeType,
@@ -47,6 +78,7 @@ export const getOcrSources = (fields: WorkspaceEntity["fields"]): OcrSource[] =>
     return [
       {
         encrypted: field.content.encrypted,
+        exportStatus: field.ocrExportStatus ?? "unavailable",
         fieldId: field.id,
         fileName: field.content.fileName,
         mimeType: field.content.mimeType,
@@ -80,6 +112,17 @@ export const getPdfDownloadFileName = (fileName: string): string => {
   }
 
   return `${fileName.slice(0, dotIndex)}.pdf`;
+};
+
+export const getOcrExportFileName = (
+  fileName: string,
+  format: OcrExportFormat,
+): string => {
+  const dotIndex = fileName.lastIndexOf(".");
+  const baseName = dotIndex <= 0 ? fileName : fileName.slice(0, dotIndex);
+  return format === "searchable-pdf"
+    ? `${baseName}-searchable.pdf`
+    : `${baseName}.txt`;
 };
 
 export const getDesktopEditLockState = (

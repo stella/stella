@@ -21,8 +21,10 @@ import type { SafeDb } from "@/api/db/safe-db";
 import {
   cellMetadata,
   desktopEditSessions,
+  documentProcessingRuns,
   entities,
   entityVersions,
+  extractedContent,
   fields,
   searchDocuments,
 } from "@/api/db/schema";
@@ -77,6 +79,15 @@ type CellMetadataResult = Omit<
   lockProvenance?: CellLockProvenanceResult;
 };
 
+/**
+ * Which OCR export formats a file field can currently serve.
+ *
+ * Text lands with the projection; the searchable PDF is a separate stored
+ * derivative that can still be retrying or permanently failed. One value keeps
+ * the two from being reported as interchangeable.
+ */
+export type OcrExportStatus = "text-and-pdf" | "text" | "unavailable";
+
 export type QueryEntityResult = {
   entityId: string;
   kind: EntityKind;
@@ -118,6 +129,7 @@ export type QueryEntityResult = {
     propertyId: string;
     entityId: string;
     content: FieldContent;
+    ocrExportStatus?: OcrExportStatus;
   }[];
   cellMetadata: {
     propertyId: string;
@@ -853,9 +865,34 @@ const queryEntitiesGenerator = async function* ({
           id: fields.id,
           propertyId: fields.propertyId,
           content: fields.content,
+          // The run that produced the projection also wrote the searchable
+          // PDF before it succeeded, so its terminal state is the derivative's
+          // readiness: a retrying or failed run still serves text only.
+          ocrExportStatus: sql<OcrExportStatus>`CASE
+            WHEN ${extractedContent.ocrRunId} IS NULL THEN 'unavailable'
+            WHEN ${documentProcessingRuns.status} = 'succeeded' THEN 'text-and-pdf'
+            ELSE 'text'
+          END`,
         })
         .from(fields)
-        .innerJoin(entities, and(...fieldPredicates)),
+        .innerJoin(entities, and(...fieldPredicates))
+        .leftJoin(
+          extractedContent,
+          and(
+            eq(extractedContent.entityId, entities.id),
+            eq(extractedContent.workspaceId, workspaceId),
+            eq(extractedContent.sourceEntityVersionId, fields.entityVersionId),
+            eq(extractedContent.sourceFieldId, fields.id),
+            isNotNull(extractedContent.ocrRunId),
+          ),
+        )
+        .leftJoin(
+          documentProcessingRuns,
+          and(
+            eq(documentProcessingRuns.id, extractedContent.ocrRunId),
+            eq(documentProcessingRuns.workspaceId, workspaceId),
+          ),
+        ),
     ),
     safeDb((tx) =>
       tx
@@ -1034,6 +1071,7 @@ const queryEntitiesGenerator = async function* ({
         propertyId: field.propertyId,
         entityId: entity.id,
         content: field.content,
+        ocrExportStatus: field.ocrExportStatus,
       })),
       cellMetadata: entityCellMetadata.map((entry) => ({
         propertyId: entry.propertyId,

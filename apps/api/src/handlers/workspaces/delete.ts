@@ -26,10 +26,16 @@ import { preserveBufferObjectCleanupIntents } from "@/api/lib/buffer-intent-reco
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
 import {
+  createOcrSearchablePdfKey,
   createUserFileKey,
   deleteS3Keys,
   deleteS3Objects,
 } from "@/api/lib/files/utils";
+import {
+  forEachOcrDerivativePage,
+  ocrDerivativeCursorFilter,
+  ocrDerivativePageOrder,
+} from "@/api/lib/ocr-derivative-pages";
 import { pendingUploadS3KeysForDeletion } from "@/api/lib/pending-upload-keys";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
@@ -110,6 +116,50 @@ const extractFileRefs = (content: FieldContent): FileRef[] => {
 
   return refs;
 };
+
+const deleteWorkspaceOcrDerivatives = async ({
+  organizationId,
+  safeDb,
+  workspaceId,
+}: {
+  organizationId: SafeId<"organization">;
+  safeDb: SafeDb;
+  workspaceId: SafeId<"workspace">;
+}): Promise<void> =>
+  await forEachOcrDerivativePage({
+    readPage: async (cursor, limit) => {
+      const result = await safeDb(
+        async (tx) =>
+          await tx
+            .select({
+              createdAt: documentProcessingRuns.createdAt,
+              id: documentProcessingRuns.id,
+            })
+            .from(documentProcessingRuns)
+            .where(
+              and(
+                eq(documentProcessingRuns.workspaceId, workspaceId),
+                ocrDerivativeCursorFilter(cursor),
+              ),
+            )
+            .orderBy(...ocrDerivativePageOrder())
+            .limit(limit),
+      );
+      return Result.unwrap(result, "Matter OCR derivative query failed");
+    },
+    onPage: async (runs) => {
+      const result = await deleteS3Keys(
+        runs.map(({ id }) =>
+          createOcrSearchablePdfKey({
+            organizationId,
+            workspaceId,
+            runId: id,
+          }),
+        ),
+      );
+      Result.unwrap(result, "Matter OCR derivative cleanup failed");
+    },
+  });
 
 const config = {
   description:
@@ -297,6 +347,14 @@ export const deleteWorkspaceHandler = async function* ({
       ),
     );
   }
+
+  s3Deletes.push(
+    deleteWorkspaceOcrDerivatives({
+      organizationId,
+      safeDb,
+      workspaceId,
+    }),
+  );
 
   const s3Result = await Result.tryPromise({
     try: async () => await Promise.all(s3Deletes),

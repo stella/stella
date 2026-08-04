@@ -3251,8 +3251,10 @@
         "updateRequiredTitle": "Värskendage stella desktop"
       },
       "downloadAsZip": "Laadi alla .zip-fail",
+      "downloadExtractedText": "Eraldatud tekst (.txt)",
       "downloadOriginal": "Algfail",
       "downloadPdf": "PDF",
+      "downloadSearchablePdf": "Otsitav PDF",
       "maxEntitiesReached": "Kirjete piirarv on täis",
       "ocrAlreadyProcessed": "Tekstituvastus on juba lõpetatud",
       "ocrQueueFailed": "Tekstituvastust ei õnnestunud järjekorda lisada",

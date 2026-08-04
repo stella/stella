@@ -3251,8 +3251,10 @@
         "updateRequiredTitle": "Aktualizujte stella desktop"
       },
       "downloadAsZip": "Stáhnout .zip soubor",
+      "downloadExtractedText": "Extrahovaný text (.txt)",
       "downloadOriginal": "Původní soubor",
       "downloadPdf": "PDF",
+      "downloadSearchablePdf": "Prohledávatelné PDF",
       "maxEntitiesReached": "Dosažen maximální počet entit",
       "ocrAlreadyProcessed": "Rozpoznávání textu již bylo dokončeno",
       "ocrQueueFailed": "Rozpoznávání textu se nepodařilo zařadit do fronty",

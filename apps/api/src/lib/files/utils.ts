@@ -3,13 +3,19 @@ import { Result, TaggedError } from "better-result";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   createFileKey,
+  createOcrSearchablePdfKey,
   createUserFileKey,
   getFileExtension,
 } from "@/api/lib/file-key";
 import { deleteS3ObjectWithSignal } from "@/api/lib/s3";
 import { withTimeout } from "@/api/lib/with-timeout";
 
-export { createFileKey, createUserFileKey, getFileExtension };
+export {
+  createFileKey,
+  createOcrSearchablePdfKey,
+  createUserFileKey,
+  getFileExtension,
+};
 
 /**
  * MIME types browsers report when they have no registered handler

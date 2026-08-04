@@ -87,7 +87,11 @@ RUN mkdir -p /app/runtime-workers && \
     bun build \
       --target bun \
       --outfile /app/runtime-workers/extraction-worker.js \
-      apps/api/src/lib/search/extraction-worker.ts
+      apps/api/src/lib/search/extraction-worker.ts && \
+    bun build \
+      --target bun \
+      --outfile /app/runtime-workers/ocr-searchable-pdf-worker.js \
+      apps/api/src/lib/ocr-searchable-pdf-worker.ts
 RUN bun --filter @stll/legal-atlas-runner build
 
 # Run the compiled API as non-root. Built from the bare base image: every
@@ -113,6 +117,7 @@ ENV FEATURE_KNOWLEDGE_TEMPLATES=true
 ENV FEATURE_TODOS=true
 ENV REQUIRE_PERSONAL_AI_KEY=true
 ENV STELLA_WORKER_DIR=/\$bunfs/root/workers
+ENV STELLA_OCR_PDF_FONT_PATH=/\$bunfs/root/fonts/CabinetGrotesk-Regular.otf
 RUN groupadd --system --gid 1001 stella && \
     useradd --system --uid 1001 --gid stella --no-create-home stella
 COPY --chown=stella:stella --from=builder /app/server /app/server
@@ -127,6 +132,9 @@ COPY --chown=stella:stella --from=builder /app/apps/api/src/db/migrate.js /app/a
 COPY --chown=stella:stella --from=builder /app/apps/api/drizzle /app/apps/api/drizzle
 RUN mkdir -p '/$bunfs/root'
 COPY --chown=stella:stella --from=builder /app/runtime-workers /\$bunfs/root/workers
+COPY --chown=stella:stella --from=install-inputs \
+    /app/apps/landing/public/fonts/CabinetGrotesk-Regular.otf \
+    /\$bunfs/root/fonts/CabinetGrotesk-Regular.otf
 COPY --chown=stella:stella --from=builder /app/apps/api/src/lib/file-scan/yara /\$bunfs/root/yara
 # @stll/anonymize-wasm resolves its native glue, WASM, and prepared pipeline
 # packages relative to `dist/wasm.mjs`; Bun's compiled binary resolves those

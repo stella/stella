@@ -3254,8 +3254,10 @@ type Messages = {
         "updateRequiredTitle": "Update stella desktop";
       };
       "downloadAsZip": "Download as ZIP";
+      "downloadExtractedText": "Extracted text (.txt)";
       "downloadOriginal": "Original file";
       "downloadPdf": "PDF";
+      "downloadSearchablePdf": "Searchable PDF";
       "maxEntitiesReached": "Max entities count reached";
       "ocrAlreadyProcessed": "Text recognition has already completed";
       "ocrQueueFailed": "Couldn't queue text recognition";
