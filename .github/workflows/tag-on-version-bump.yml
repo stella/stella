@@ -95,14 +95,17 @@ jobs:
             echo "skip=true" >> "$GITHUB_ENV"
           fi
 
-      - name: Require fresh marketing recordings
+      - name: Warn on stale marketing recordings
         if: env.skip != 'true'
         # Reads the committed captures.ts matrix and recordings-manifest.json
-        # only (no node_modules), so no install step is needed. `--strict`
-        # fails the tag push instead of just reporting; run
-        # `bun run marketing:reshoot` (re-records only the stale captures)
-        # before bumping VERSION to clear this.
-        run: bun run marketing:stale --strict
+        # only (no node_modules), so no install step is needed. Marketing
+        # freshness is content debt, not a release defect: staleness surfaces
+        # as a workflow warning instead of blocking the tag. Clear it with
+        # `bun run marketing:reshoot` (re-records only the stale captures).
+        run: |
+          if ! bun run marketing:stale --strict; then
+            echo "::warning::Stale marketing recordings (see step log). Re-record with \`bun run marketing:reshoot\`."
+          fi
 
       - name: Push tag
         if: env.skip != 'true'
