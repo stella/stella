@@ -328,12 +328,12 @@ function OrganizationMenuSection({
     return (
       <>
         <MenuGroup>
-          <MenuGroupLabel className="pb-1 text-sm">
+          <MenuGroupLabel className="flex min-w-0 items-center gap-1.5 text-sm">
             <BidiText as="span" className="min-w-0 truncate">
               {activeOrganization.name}
             </BidiText>
+            <OrganizationRoleBadge role={role} />
           </MenuGroupLabel>
-          <OrganizationRoleBadge role={role} />
         </MenuGroup>
         <MenuSeparator />
       </>
@@ -348,6 +348,7 @@ function OrganizationMenuSection({
           <BidiText as="span" className="min-w-0 truncate">
             {activeOrganization.name}
           </BidiText>
+          <OrganizationRoleBadge role={role} />
         </MenuSubTrigger>
         <MenuSubPopup>
           <MenuGroup>
@@ -375,11 +376,6 @@ function OrganizationMenuSection({
           </MenuGroup>
         </MenuSubPopup>
       </MenuSub>
-      {role && (
-        <MenuGroup>
-          <OrganizationRoleBadge role={role} />
-        </MenuGroup>
-      )}
       <MenuSeparator />
     </>
   );
@@ -394,10 +390,8 @@ function OrganizationRoleBadge({ role }: { role: Role | undefined }) {
   }
 
   return (
-    <div className="px-2 pb-1.5">
-      <span className="bg-muted text-muted-foreground inline-flex items-center rounded-md px-1.5 py-0.5 text-[0.6875rem] font-medium select-none">
-        {t(`organization.roles.${role}`)}
-      </span>
-    </div>
+    <span className="bg-muted text-muted-foreground inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 text-[0.6875rem] font-medium select-none">
+      {t(`organization.roles.${role}`)}
+    </span>
   );
 }
