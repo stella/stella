@@ -50,7 +50,6 @@ import { MatterIcon } from "@/components/matter-icon";
 import { AIAvailabilityProvider } from "@/components/require-ai-key";
 import { SelfhostUpdateBanner } from "@/components/selfhost-update-banner";
 import { ShortcutEchoHud } from "@/components/shortcut-echo-hud";
-import { ShortcutHintsOverlay } from "@/components/shortcut-hints-overlay";
 import {
   SidebarInset,
   SidebarProvider,
@@ -72,11 +71,11 @@ import {
   TOOLBAR_ROW_HEIGHT,
 } from "@/lib/consts";
 import { detached } from "@/lib/detached";
-import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { aiAvailabilityOptions } from "@/lib/organization/ai-config-queries";
 import { usePinnedStore } from "@/lib/pinned-store";
 import { prefetchRouteQuery } from "@/lib/react-query";
+import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
 import { workspaceOptions } from "@/lib/workspaces/queries";
 import { loadAuthContext } from "@/routes/-auth-context";
 
@@ -335,7 +334,6 @@ function ProtectedComponent() {
               <CreateMatterDialog />
               <ProtectedContent />
               <WorkspaceInspectorSidePanel />
-              <ShortcutHintsOverlay />
               <ShortcutEchoHud />
               <KeyboardShortcutsDialog />
               <ModelSelectorDialog />

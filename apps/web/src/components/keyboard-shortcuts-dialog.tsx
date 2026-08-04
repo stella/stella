@@ -2,6 +2,7 @@ import { useId, useState } from "react";
 
 import { formatForDisplay, useHotkeyRecorder } from "@tanstack/react-hotkeys";
 import type { Hotkey } from "@tanstack/react-hotkeys";
+import { PencilIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
@@ -27,6 +28,7 @@ import type {
   ShortcutGroup,
   ShortcutId,
 } from "@/lib/hotkeys";
+import { useKeyboardShortcutsDialogStore } from "@/lib/keyboard-shortcuts-dialog-store";
 import type { RebindError } from "@/lib/shortcut-overrides";
 import {
   useEffectiveShortcutGroups,
@@ -35,21 +37,20 @@ import {
 import { useShortcutEchoStore } from "@/lib/use-shortcut-echo";
 
 /**
- * A browsable reference of every app-level keyboard shortcut, opened with `?`.
- * Renders the per-user effective registry, flashes the row for whatever
- * shortcut was just pressed, and lets the user rebind hotkey-chord shortcuts in
- * place. Complements the transient hold-Mod overlay: both read the same
- * registry, so the surfaces cannot drift apart.
+ * A browsable reference of every app-level keyboard shortcut, opened with `?`
+ * or from the Settings entry. Renders the per-user effective registry, flashes
+ * the row for whatever shortcut was just pressed, and lets the user rebind
+ * hotkey-chord shortcuts in place.
  */
 export function KeyboardShortcutsDialog() {
   const t = useTranslations();
-  const [open, setOpen] = useState(false);
-  useShowShortcutsHotkey(setOpen);
+  const { isOpen, open, setOpen } = useKeyboardShortcutsDialogStore();
+  useShowShortcutsHotkey(open);
 
   const groups = useEffectiveShortcutGroups();
 
   return (
-    <Dialog onOpenChange={setOpen} open={open}>
+    <Dialog onOpenChange={setOpen} open={isOpen}>
       <DialogPopup className="max-w-xl">
         <DialogHeader>
           <DialogTitle>{t("navigation.shortcutsDialog.title")}</DialogTitle>
@@ -120,7 +121,7 @@ const ShortcutRow = ({
   return (
     <li
       className={cn(
-        "flex items-center justify-between gap-4 rounded px-1 py-1 transition-colors",
+        "group flex items-center justify-between gap-4 rounded px-1 py-1 transition-colors",
         isFlashing && "bg-accent/60",
       )}
     >
@@ -278,13 +279,22 @@ const RebindableBinding = ({
         {formatShortcutBinding({ type: "hotkey", hotkey })}
       </kbd>
       <Button
+        // Quiet entry affordance: hidden until the row is hovered or receives
+        // keyboard focus. `focus-visible:opacity-100` keeps it reachable by
+        // Tab even when the pointer never touches the row (a11y), so it is not
+        // hover-only.
         aria-label={t("navigation.shortcutsDialog.editShortcut")}
+        className={cn(
+          "text-muted-foreground opacity-0 transition-opacity",
+          "group-focus-within:opacity-100 group-hover:opacity-100",
+          "focus-visible:opacity-100",
+        )}
         disabled={isBusy}
         onClick={startEdit}
-        size="sm"
+        size="icon-sm"
         variant="ghost"
       >
-        {t("common.edit")}
+        <PencilIcon className="size-3.5" />
       </Button>
     </div>
   );
@@ -295,9 +305,7 @@ const RebindableBinding = ({
  * TanStack `Hotkey` (see `SHOW_SHORTCUTS_KEY`), so match the produced
  * character directly, which stays correct across keyboard layouts.
  */
-const useShowShortcutsHotkey = (
-  setOpen: React.Dispatch<React.SetStateAction<boolean>>,
-) => {
+const useShowShortcutsHotkey = (open: () => void) => {
   useExternalSyncEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.repeat) {
@@ -315,12 +323,12 @@ const useShowShortcutsHotkey = (
         return;
       }
       event.preventDefault();
-      setOpen(true);
+      open();
     };
 
     document.addEventListener("keydown", onKeyDown, { capture: true });
     return () => {
       document.removeEventListener("keydown", onKeyDown, { capture: true });
     };
-  }, [setOpen]);
+  }, [open]);
 };

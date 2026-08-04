@@ -4,6 +4,7 @@ import {
   FlaskConicalIcon,
   GaugeIcon,
   HashIcon,
+  KeyboardIcon,
   MonitorIcon,
   PlugIcon,
   ScrollTextIcon,
@@ -21,6 +22,7 @@ import { cn } from "@stll/ui/lib/utils";
 import type { TranslationKey } from "@/i18n/types";
 import { roleOptions } from "@/lib/auth-queries";
 import { betaFeaturesAvailable } from "@/lib/beta-features";
+import { useKeyboardShortcutsDialogStore } from "@/lib/keyboard-shortcuts-dialog-store";
 import { managementRoles } from "@/lib/organization/consts";
 import { pageTitle } from "@/lib/page-title";
 
@@ -128,10 +130,16 @@ const ORGANIZATION_SECTION = {
   ],
 } as const satisfies Section;
 
+const NAV_ITEM_CLASS = cn(
+  "hover:bg-sidebar-accent/60 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-hidden",
+  "focus-visible:ring-ring focus-visible:ring-2",
+);
+
 function SettingsLayout() {
   const t = useTranslations();
   const { data: role } = useQuery({ ...roleOptions, throwOnError: true });
   const showOrganization = role !== undefined && managementRoles.includes(role);
+  const openShortcuts = useKeyboardShortcutsDialogStore((store) => store.open);
 
   // No `Section` annotation: it would widen labelKey to the full
   // TranslationKey union, whose ICU-variable members make t() demand a
@@ -166,10 +174,7 @@ function SettingsLayout() {
                     className:
                       "bg-sidebar-accent text-sidebar-accent-foreground",
                   }}
-                  className={cn(
-                    "hover:bg-sidebar-accent/60 flex items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-hidden",
-                    "focus-visible:ring-ring focus-visible:ring-2",
-                  )}
+                  className={NAV_ITEM_CLASS}
                   to={item.to}
                 >
                   <Icon className="size-4" />
@@ -177,6 +182,16 @@ function SettingsLayout() {
                 </Link>
               );
             })}
+            {section.id === "account" ? (
+              <button
+                className={NAV_ITEM_CLASS}
+                onClick={openShortcuts}
+                type="button"
+              >
+                <KeyboardIcon className="size-4" />
+                <span>{t("navigation.shortcutsDialog.title")}</span>
+              </button>
+            ) : null}
           </div>
         ))}
       </nav>
