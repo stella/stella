@@ -799,6 +799,9 @@ const createAuth = () => {
         // Per-user keyboard-shortcut rebindings, serialized as JSON. Structural
         // validation + length cap happen in the create/update hooks below.
         userShortcuts: {
+          type: "string",
+          required: false,
+        },
         // Serialized JSON map of onboarding-guide tour id -> status. Shape and
         // length are enforced in the create/update hooks below.
         guideProgress: {
