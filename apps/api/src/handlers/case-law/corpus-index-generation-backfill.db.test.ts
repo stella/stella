@@ -2370,3 +2370,113 @@ test("rejects a pending hash without a pending action", async () => {
     "case_law_corpus_index_projections_pending_revision_nonnegative",
   );
 });
+
+test(
+  "a trigger-seeded projection reserves as append-safe until a reservation crosses the boundary",
+  async () => {
+    // The projection trigger seeds every pending decision at revision 1 with
+    // append targets, so revision alone cannot distinguish a first-ever
+    // append from a replay; only the boundary stamp can. This runs the real
+    // trigger and the real reservation together — the combination whose
+    // absence from the suite let a revision-based gate ship and never fire.
+    const generation = "case_law_v63";
+    const sourceId = toSafeId<"caseLawSource">(
+      "00000000-0000-4000-8000-000000000063",
+    );
+    const decisionId = toSafeId<"caseLawDecision">(
+      "00000000-0000-4000-8000-000000000163",
+    );
+    // pushSchema creates tables and constraints but not migration triggers;
+    // install the projection trigger so the decision insert exercises it.
+    const migration = await Bun.file(generationMigrationSource).text();
+    const projectionTriggerStatements = migration
+      .split("--> statement-breakpoint")
+      .map((statement) => statement.trim())
+      .filter((statement) =>
+        statement.includes("enqueue_case_law_corpus_index_projection"),
+      );
+    expect(projectionTriggerStatements).toHaveLength(2);
+    for (const statement of projectionTriggerStatements) {
+      // oxlint-disable-next-line no-await-in-loop -- function then trigger creation are order-dependent DDL
+      await db.execute(sql.raw(statement));
+    }
+    await db.insert(caseLawSources).values({
+      adapterKey: "boundary-seed",
+      id: sourceId,
+      name: "boundary seed",
+    });
+    await db.insert(caseLawCorpusIndexBackfills).values({
+      generation,
+      snapshotAt: await nextBackfillSnapshotAt(),
+      status: "complete",
+    });
+    // Inserting after the checkpoint fires the projection trigger.
+    await db.insert(caseLawDecisions).values({
+      caseNumber: "63 T 63/2026",
+      contentHash: "boundary-seed",
+      country: "CZE",
+      court: "Boundary court",
+      createdAt: CREATED_AT,
+      fulltext: "boundary seed",
+      id: decisionId,
+      language: "cs",
+      languageGroupKey: "boundary-seed",
+      slug: "boundary-seed",
+      sourceId,
+    });
+
+    try {
+      const seeded = await db
+        .select()
+        .from(caseLawCorpusIndexProjections)
+        .where(
+          and(
+            eq(caseLawCorpusIndexProjections.generation, generation),
+            eq(caseLawCorpusIndexProjections.decisionId, decisionId),
+          ),
+        );
+      expect(seeded).toHaveLength(1);
+      expect(seeded.at(0)?.pendingRevision).toBe(1);
+      expect(seeded.at(0)?.appendReservedAt).toBeNull();
+
+      const selected = await caseLawCorpusIndexAdapter.selectMissing(scopedDb, {
+        generation,
+        limit: 100,
+      });
+      const row = selected.find(({ id }) => id === decisionId);
+      expect(row).toBeDefined();
+      if (!row) {
+        return;
+      }
+
+      const first = await scopedDb(
+        async (tx) =>
+          await reserveGenerationProjectionTargets(tx, {
+            generation,
+            rows: [row],
+          }),
+      );
+      // Seeded by the trigger, never appended: safe to append with no delete.
+      expect(first.get(decisionId)?.mayHaveCopy).toBe(false);
+
+      const replay = await scopedDb(
+        async (tx) =>
+          await reserveGenerationProjectionTargets(tx, {
+            generation,
+            rows: [row],
+          }),
+      );
+      // The first reservation crossed the boundary; a replay must clean up.
+      expect(replay.get(decisionId)?.mayHaveCopy).toBe(true);
+    } finally {
+      await db
+        .delete(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, decisionId));
+      await db
+        .delete(caseLawCorpusIndexBackfills)
+        .where(eq(caseLawCorpusIndexBackfills.generation, generation));
+      await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
+    }
+  },
+  { timeout: 30_000 },
+);
