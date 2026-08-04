@@ -19,6 +19,13 @@ const playwrightSetup = readFileSync(
   ),
   "utf-8",
 );
+const e2eStackSetup = readFileSync(
+  path.join(
+    import.meta.dirname,
+    "../.github/actions/setup-e2e-stack/action.yml",
+  ),
+  "utf-8",
+);
 
 const workflowJob = (jobId: string): string => {
   const marker = `\n  ${jobId}:\n`;
@@ -105,6 +112,7 @@ describe("detect-e2e-changes", () => {
   test("runs both PR scopes when their orchestration changes", () => {
     for (const file of [
       ".github/workflows/ci.yml",
+      ".github/actions/setup-e2e-stack/action.yml",
       ".github/actions/setup-playwright/action.yml",
     ]) {
       expect(detects("core", [file])).toBe("true");
@@ -170,16 +178,18 @@ describe("detect-e2e-changes", () => {
   test("starts only infrastructure exercised by pull request E2E", () => {
     for (const jobId of ["e2e-production-shard", "e2e-vite-canary"]) {
       const job = workflowJob(jobId);
-      expect(job).toContain("- name: Start docker stack");
-      const composeStartLines = job
-        .split("\n")
-        .filter((line) => line.includes("docker compose --profile dev up"))
-        .map((line) => line.trim());
-      expect(composeStartLines).toEqual([
-        "if docker compose --profile dev up -d --wait postgres minio valkey \\",
-      ]);
+      expect(job).toContain("uses: ./.github/actions/setup-e2e-stack");
       expect(job).not.toContain("gotenberg");
     }
+    expect(e2eStackSetup).toContain("- name: Start docker stack");
+    const composeStartLines = e2eStackSetup
+      .split("\n")
+      .filter((line) => line.includes("docker compose --profile dev up"))
+      .map((line) => line.trim());
+    expect(composeStartLines).toEqual([
+      "if docker compose --profile dev up -d --wait postgres minio valkey \\",
+    ]);
+    expect(e2eStackSetup).not.toContain("gotenberg");
   });
 
   test("keeps full code quality for manual sweeps and scopes pull requests", () => {

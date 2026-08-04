@@ -39,10 +39,16 @@ jobs:
       contents: read
     outputs:
       trusted: ${{ steps.check.outputs.trusted }}
+      api_image_deps_required: ${{ steps.changed-files.outputs.api_image_deps_required }}
       desktop_rust_checks_required: ${{ steps.changed-files.outputs.desktop_rust_checks_required }}
       e2e_core_required: ${{ steps.changed-files.outputs.e2e_core_required }}
       e2e_landing_required: ${{ steps.changed-files.outputs.e2e_landing_required }}
+      landing_build_required: ${{ steps.changed-files.outputs.landing_build_required }}
+      mobile_build_required: ${{ steps.changed-files.outputs.mobile_build_required }}
+      ocr_image_required: ${{ steps.changed-files.outputs.ocr_image_required }}
       package_checks_required: ${{ steps.changed-files.outputs.package_checks_required }}
+      web_build_required: ${{ steps.changed-files.outputs.web_build_required }}
+      windows_scripts_required: ${{ steps.changed-files.outputs.windows_scripts_required }}
     steps:
       - name: Check if PR is trusted
         id: check
@@ -83,10 +89,16 @@ jobs:
         run: |
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
             {
+              echo "api_image_deps_required=true"
               echo "desktop_rust_checks_required=true"
               echo "e2e_core_required=true"
               echo "e2e_landing_required=true"
+              echo "landing_build_required=true"
+              echo "mobile_build_required=true"
+              echo "ocr_image_required=true"
               echo "package_checks_required=true"
+              echo "web_build_required=true"
+              echo "windows_scripts_required=true"
             } >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -96,10 +108,16 @@ jobs:
 
           if (( ${#changed_files[@]} == 0 )); then
             {
+              echo "api_image_deps_required=false"
               echo "desktop_rust_checks_required=false"
               echo "e2e_core_required=false"
               echo "e2e_landing_required=false"
+              echo "landing_build_required=false"
+              echo "mobile_build_required=false"
+              echo "ocr_image_required=false"
               echo "package_checks_required=true"
+              echo "web_build_required=false"
+              echo "windows_scripts_required=false"
             } >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -121,13 +139,67 @@ jobs:
             fi
           done
 
+          # Path scopes for the build/smoke jobs, computed here so a job whose
+          # scope did not change is skipped entirely instead of scheduling a
+          # runner just to decide it has nothing to do.
+          api_image_deps_required=false
+          landing_build_required=false
+          mobile_build_required=false
+          ocr_image_required=false
+          web_build_required=false
+          windows_scripts_required=false
+          for file in "${changed_files[@]}"; do
+            case "$file" in
+              apps/web/*|packages/*|patches/*|scripts/bundle-baseline.ts|scripts/bundle-baseline.json|VERSION|bun.lock|bunfig.toml|package.json|.npmrc|.github/workflows/ci.yml)
+                web_build_required=true
+                ;;
+            esac
+            case "$file" in
+              apps/mobile/*|packages/*|patches/*|bun.lock|bunfig.toml|package.json|.npmrc|.github/workflows/ci.yml)
+                mobile_build_required=true
+                ;;
+            esac
+            case "$file" in
+              apps/landing/*|docs/changelog/*|VERSION|packages/*|patches/*|bun.lock|package.json|.github/workflows/ci.yml)
+                landing_build_required=true
+                ;;
+            esac
+            case "$file" in
+              apps/api/*|apps/legal-atlas-runner/*|packages/*|patches/*|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|.github/workflows/ci.yml)
+                api_image_deps_required=true
+                ;;
+            esac
+            case "$file" in
+              apps/ocr-service/*)
+                ocr_image_required=true
+                ;;
+            esac
+            case "$file" in
+              packages/scripts/*|package.json|bun.lock|.github/workflows/ci.yml)
+                windows_scripts_required=true
+                ;;
+            esac
+          done
+
+          # The production e2e shards consume web-build's artifact, so any
+          # e2e-triggering change must also produce a web build.
+          if [[ "$e2e_core_required" == "true" ]]; then
+            web_build_required=true
+          fi
+
           printf 'Changed files:\n'
           printf ' - %s\n' "${changed_files[@]}"
           {
+            echo "api_image_deps_required=$api_image_deps_required"
             echo "desktop_rust_checks_required=$desktop_rust_checks_required"
             echo "e2e_core_required=$e2e_core_required"
             echo "e2e_landing_required=$e2e_landing_required"
+            echo "landing_build_required=$landing_build_required"
+            echo "mobile_build_required=$mobile_build_required"
+            echo "ocr_image_required=$ocr_image_required"
             echo "package_checks_required=$package_checks_required"
+            echo "web_build_required=$web_build_required"
+            echo "windows_scripts_required=$windows_scripts_required"
           } >> "$GITHUB_OUTPUT"
 
           if [[ "$package_checks_required" != "true" ]]; then
@@ -242,9 +314,7 @@ jobs:
         run: bash .ai/shared/scripts/sync-ai-skills.sh --check .
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version-file: "package.json"
+        uses: ./.github/actions/setup-bun-cached
 
       - name: Turbo remote cache
         if: needs.ci-plan.outputs.package_checks_required == 'true'
@@ -640,9 +710,7 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version-file: "package.json"
+        uses: ./.github/actions/setup-bun-cached
 
       - name: Install dependencies
         run: bash scripts/bun-ci-retry.sh --ignore-scripts
@@ -719,9 +787,7 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version-file: "package.json"
+        uses: ./.github/actions/setup-bun-cached
 
       - name: Install dependencies
         run: bash scripts/bun-ci-retry.sh --ignore-scripts
@@ -751,8 +817,9 @@ jobs:
   web-build:
     needs: ci-plan
     if: >-
-      needs.ci-plan.outputs.trusted == 'true'
-      || github.event_name == 'workflow_dispatch'
+      (needs.ci-plan.outputs.trusted == 'true'
+       || github.event_name == 'workflow_dispatch')
+      && needs.ci-plan.outputs.web_build_required == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -762,44 +829,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
           persist-credentials: false
 
-      - name: Check whether web-affecting paths changed
-        id: changed
-        env:
-          BASE_REF: ${{ github.base_ref || 'main' }}
-          CORE_REQUIRED: ${{ needs.ci-plan.outputs.e2e_core_required }}
-          EVENT_NAME: ${{ github.event_name }}
-        run: |
-          if [[ "$EVENT_NAME" == "workflow_dispatch" || "$CORE_REQUIRED" == "true" ]]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          base_ref="origin/$BASE_REF"
-          mapfile -t changed_files < <(git diff --name-only "$base_ref"...HEAD)
-          run=false
-          for file in "${changed_files[@]}"; do
-            case "$file" in
-              apps/web/*|packages/*|patches/*|scripts/bundle-baseline.ts|scripts/bundle-baseline.json|VERSION|bun.lock|bunfig.toml|package.json|.npmrc|.github/workflows/ci.yml)
-                run=true
-                break
-                ;;
-            esac
-          done
-          echo "run=$run" >> "$GITHUB_OUTPUT"
-          if [[ "$run" != "true" ]]; then
-            echo "::notice::No web-affecting paths changed; skipping web build."
-          fi
-
       - name: Setup Bun
-        if: steps.changed.outputs.run == 'true'
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version-file: "package.json"
+        uses: ./.github/actions/setup-bun-cached
 
       - name: Install dependencies
-        if: steps.changed.outputs.run == 'true'
         run: bash scripts/bun-ci-retry.sh --ignore-scripts
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
@@ -809,13 +844,11 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Prepare environment
-        if: steps.changed.outputs.run == 'true'
         run: |
           cd ./apps/web
           cp .env.example .env
 
       - name: Build web
-        if: steps.changed.outputs.run == 'true'
         env:
           # The same artifact serves the feature-complete production E2E suite.
           # These flags preserve the committed bundle baseline.
@@ -825,9 +858,7 @@ jobs:
         run: bun --filter @stll/web build
 
       - name: Upload production E2E web build
-        if: >-
-          steps.changed.outputs.run == 'true'
-          && needs.ci-plan.outputs.e2e_core_required == 'true'
+        if: needs.ci-plan.outputs.e2e_core_required == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: e2e-web-build
@@ -836,13 +867,11 @@ jobs:
           retention-days: 1
 
       - name: Bundle size guard
-        if: steps.changed.outputs.run == 'true'
         run: |
           bun scripts/bundle-baseline.ts --self-test
           bun scripts/bundle-baseline.ts --check
 
       - name: Prod-deps web boot smoke
-        if: steps.changed.outputs.run == 'true'
         # apps/web/Dockerfile's runner installs --production (deps-prod stage).
         # Reproduce that clean production tree and boot start-runtime.js: a
         # devDependency reached by the SSR server bundle (dist/server/server.js)
@@ -884,8 +913,9 @@ jobs:
   mobile-build:
     needs: ci-plan
     if: >-
-      needs.ci-plan.outputs.trusted == 'true'
-      || github.event_name == 'workflow_dispatch'
+      (needs.ci-plan.outputs.trusted == 'true'
+       || github.event_name == 'workflow_dispatch')
+      && needs.ci-plan.outputs.mobile_build_required == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -895,53 +925,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
           persist-credentials: false
 
-      - name: Check whether mobile-affecting paths changed
-        id: changed
-        env:
-          BASE_REF: ${{ github.base_ref || 'main' }}
-          EVENT_NAME: ${{ github.event_name }}
-        run: |
-          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          base_ref="origin/$BASE_REF"
-          mapfile -t changed_files < <(git diff --name-only "$base_ref"...HEAD)
-          run=false
-          for file in "${changed_files[@]}"; do
-            case "$file" in
-              apps/mobile/*|packages/*|patches/*|bun.lock|bunfig.toml|package.json|.npmrc|.github/workflows/ci.yml)
-                run=true
-                break
-                ;;
-            esac
-          done
-          echo "run=$run" >> "$GITHUB_OUTPUT"
-          if [[ "$run" != "true" ]]; then
-            echo "::notice::No mobile-affecting paths changed; skipping mobile build."
-          fi
-
       - name: Setup Bun
-        if: steps.changed.outputs.run == 'true'
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version-file: "package.json"
+        uses: ./.github/actions/setup-bun-cached
 
       - name: Install dependencies
-        if: steps.changed.outputs.run == 'true'
         run: bash scripts/bun-ci-retry.sh --ignore-scripts
         env:
           NPM_TOKEN: ""
 
       - name: Validate Expo dependency graph
-        if: steps.changed.outputs.run == 'true'
         run: bun --filter @stll/mobile doctor
 
       - name: Bundle Android, iOS, and web
-        if: steps.changed.outputs.run == 'true'
         run: bun --filter @stll/mobile build
 
   # Astro landing build. The required checks run code quality and tests,
@@ -952,8 +949,9 @@ jobs:
   landing-build:
     needs: ci-plan
     if: >-
-      needs.ci-plan.outputs.trusted == 'true'
-      || github.event_name == 'workflow_dispatch'
+      (needs.ci-plan.outputs.trusted == 'true'
+       || github.event_name == 'workflow_dispatch')
+      && needs.ci-plan.outputs.landing_build_required == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -963,43 +961,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
           persist-credentials: false
 
-      - name: Check whether landing-affecting paths changed
-        id: changed
-        env:
-          BASE_REF: ${{ github.base_ref || 'main' }}
-          EVENT_NAME: ${{ github.event_name }}
-        run: |
-          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          base_ref="origin/$BASE_REF"
-          mapfile -t changed_files < <(git diff --name-only "$base_ref"...HEAD)
-          run=false
-          for file in "${changed_files[@]}"; do
-            case "$file" in
-              apps/landing/*|docs/changelog/*|VERSION|packages/*|patches/*|bun.lock|package.json|.github/workflows/ci.yml)
-                run=true
-                break
-                ;;
-            esac
-          done
-          echo "run=$run" >> "$GITHUB_OUTPUT"
-          if [[ "$run" != "true" ]]; then
-            echo "::notice::No landing-affecting paths changed; skipping landing build."
-          fi
-
       - name: Setup Bun
-        if: steps.changed.outputs.run == 'true'
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version-file: "package.json"
+        uses: ./.github/actions/setup-bun-cached
 
       - name: Install dependencies
-        if: steps.changed.outputs.run == 'true'
         run: bash scripts/bun-ci-retry.sh --ignore-scripts
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
@@ -1007,7 +974,6 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Build landing
-        if: steps.changed.outputs.run == 'true'
         run: bun --filter @stll/landing build
 
   # Browser checks use isolated parallel runners: broad production shards,
@@ -1036,9 +1002,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version-file: "package.json"
+        uses: ./.github/actions/setup-bun-cached
 
       - name: Install dependencies
         run: bash scripts/bun-ci-retry.sh --ignore-scripts
@@ -1052,92 +1016,14 @@ jobs:
           cd ../web
           cp .env.example .env
 
-      - name: Check Docker Hub credentials
-        id: dockerhub
-        # Keep Docker Hub secrets scoped to this trusted inline check, not the
-        # whole job environment where repository-controlled code can read them.
-        env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-        run: |
-          if [[ -n "$DOCKERHUB_USERNAME" && -n "$DOCKERHUB_TOKEN" ]]; then
-            echo "available=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          echo "available=false" >> "$GITHUB_OUTPUT"
-
-      - name: Log in to Docker Hub
-        # Skipped automatically until DOCKERHUB_USERNAME / DOCKERHUB_TOKEN repo
-        # secrets exist; authenticated pulls raise the rate limit well above the
-        # shared-runner anonymous cap that can flake infrastructure image pulls.
-        if: steps.dockerhub.outputs.available == 'true'
-        uses: docker/login-action@371161bbe7024a29a25c5e19bfcbc0804fe9ad2c # v4.5.2
+      - name: Start docker stack and API server
+        # Docker Hub secrets stay confined to the action's credential check
+        # and login steps, never the whole job environment where
+        # repository-controlled code can read them.
+        uses: ./.github/actions/setup-e2e-stack
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Start docker stack
-        # `--wait` only on long-running services; `minio-setup` is a one-shot
-        # bucket-creator container that exits 0, which `--wait` treats as
-        # "not running" and fails the whole command. Run it separately in
-        # the foreground so we still block on its success. `compose run`
-        # propagates the one-shot command's exit code without stopping the
-        # already-running MinIO dependency. The whole bring-up is retried:
-        # image pulls and `--wait` health checks occasionally fail transiently
-        # on CI runners. Tear the stack down between attempts so a half-started
-        # stack does not poison the retry.
-        run: |
-          for attempt in 1 2 3; do
-            if docker compose --profile dev up -d --wait postgres minio valkey \
-              && docker compose --profile dev run --rm --no-deps minio-setup; then
-              exit 0
-            fi
-            echo "::warning::docker stack start failed (attempt ${attempt}/3); tearing down and retrying"
-            docker compose --profile dev down --volumes --remove-orphans || true
-            sleep "$((attempt * 20))"
-          done
-          echo "::error::docker stack failed to start after 3 attempts"
-          exit 1
-
-      - name: Log out of Docker Hub
-        # Remove credentials from the runner before executing app code and tests.
-        if: always() && steps.dockerhub.outputs.available == 'true'
-        run: docker logout
-
-      - name: Run database migrations
-        # `db:migrate` (not `db:push`) so role bootstrap migrations such as
-        # `20260516000000_case_law_ingestion_role` actually execute. `db:push`
-        # only diffs the declarative schema, which references `stella_ingestion`
-        # as `existing()` and then fails when later policy creates target it.
-        run: bun --filter @stll/api db:migrate
-
-      - name: Seed test user
-        run: bun --filter @stll/api db:seed-test-user
-
-      - name: Start API server
-        # `--watch` is for local dev; CI runs the server flat. Logs land in
-        # /tmp/api.log so the "Upload server logs" step can publish them on
-        # failure for debugging.
-        run: |
-          cd apps/api
-          # --preload registers the dev/test-only mock-AI generator; .env.example
-          # sets USE_MOCK_AI=true, so e2e must route through the mock rather than
-          # the real provider (which would fail on the placeholder API key).
-          NODE_ENV=development E2E_DISABLE_AUTH_RATE_LIMIT=true nohup bun --port 3001 --preload ./src/dev/register-mock-ai.ts src/server.ts > /tmp/api.log 2>&1 &
-          echo $! > /tmp/api.pid
-
-      - name: Wait for API
-        run: |
-          for i in {1..60}; do
-            if curl --connect-timeout 2 --max-time 5 -sf http://localhost:3001/health > /dev/null 2>&1; then
-              echo "API up after ${i}s"
-              exit 0
-            fi
-            sleep 1
-          done
-          echo "::error::API never came up"
-          tail -200 /tmp/api.log || true
-          exit 1
+          dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
+          dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Install Playwright browsers
         uses: ./.github/actions/setup-playwright
@@ -1150,6 +1036,9 @@ jobs:
           # Build/upload can legitimately finish just after the previous
           # three-minute window on busy runners. Keep polling bounded, but let
           # it use six minutes within the job's existing 25-minute timeout.
+          # Every fifth poll also checks the web-build job itself: once that
+          # job has ended without publishing, the artifact can never appear,
+          # so waiting out the full window would only delay the failure.
           for attempt in {1..180}; do
             count=$(gh api --method GET \
               "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts" \
@@ -1158,6 +1047,18 @@ jobs:
             if [[ "$count" -gt 0 ]]; then
               echo "Production web build ready after $((attempt * 2))s"
               exit 0
+            fi
+            if (( attempt % 5 == 0 )); then
+              conclusion=$(gh api --paginate \
+                "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs" \
+                --jq '.jobs[] | select(.name == "web-build") | .conclusion // "in_progress"' \
+                | head -n 1)
+              case "$conclusion" in
+                failure|cancelled|skipped|timed_out)
+                  echo "::error::web-build ended with status '$conclusion' without publishing the $ARTIFACT_NAME artifact"
+                  exit 1
+                  ;;
+              esac
             fi
             sleep 2
           done
@@ -1245,9 +1146,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version-file: "package.json"
+        uses: ./.github/actions/setup-bun-cached
 
       - name: Install dependencies
         run: bash scripts/bun-ci-retry.sh --ignore-scripts
@@ -1261,69 +1160,14 @@ jobs:
           cd ../web
           cp .env.example .env
 
-      - name: Check Docker Hub credentials
-        id: dockerhub
-        # Secrets stay scoped to the check and login action; application code
-        # runs only after the runner has logged out again.
-        env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-        run: |
-          if [[ -n "$DOCKERHUB_USERNAME" && -n "$DOCKERHUB_TOKEN" ]]; then
-            echo "available=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          echo "available=false" >> "$GITHUB_OUTPUT"
-
-      - name: Log in to Docker Hub
-        if: steps.dockerhub.outputs.available == 'true'
-        uses: docker/login-action@371161bbe7024a29a25c5e19bfcbc0804fe9ad2c # v4.5.2
+      - name: Start docker stack and API server
+        # Secrets stay scoped to the action's credential check and login
+        # steps; application code runs only after the runner has logged
+        # out again.
+        uses: ./.github/actions/setup-e2e-stack
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Start docker stack
-        run: |
-          for attempt in 1 2 3; do
-            if docker compose --profile dev up -d --wait postgres minio valkey \
-              && docker compose --profile dev run --rm --no-deps minio-setup; then
-              exit 0
-            fi
-            echo "::warning::docker stack start failed (attempt ${attempt}/3); tearing down and retrying"
-            docker compose --profile dev down --volumes --remove-orphans || true
-            sleep "$((attempt * 20))"
-          done
-          echo "::error::docker stack failed to start after 3 attempts"
-          exit 1
-
-      - name: Log out of Docker Hub
-        if: always() && steps.dockerhub.outputs.available == 'true'
-        run: docker logout
-
-      - name: Run database migrations
-        run: bun --filter @stll/api db:migrate
-
-      - name: Seed test user
-        run: bun --filter @stll/api db:seed-test-user
-
-      - name: Start API server
-        run: |
-          cd apps/api
-          NODE_ENV=development E2E_DISABLE_AUTH_RATE_LIMIT=true nohup bun --port 3001 --preload ./src/dev/register-mock-ai.ts src/server.ts > /tmp/api.log 2>&1 &
-          echo $! > /tmp/api.pid
-
-      - name: Wait for API
-        run: |
-          for i in {1..60}; do
-            if curl --connect-timeout 2 --max-time 5 -sf http://localhost:3001/health > /dev/null 2>&1; then
-              echo "API up after ${i}s"
-              exit 0
-            fi
-            sleep 1
-          done
-          echo "::error::API never came up"
-          tail -200 /tmp/api.log || true
-          exit 1
+          dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
+          dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Start web dev server
         run: |
@@ -1408,13 +1252,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
           persist-credentials: false
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version-file: "package.json"
+        uses: ./.github/actions/setup-bun-cached
 
       - name: Install dependencies
         run: bash scripts/bun-ci-retry.sh --ignore-scripts
@@ -1492,9 +1333,7 @@ jobs:
           (needs.e2e-production-shard.result == 'failure'
            || needs.e2e-vite-canary.result == 'failure')
           && needs.ci-plan.outputs.e2e_core_required == 'true'
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version-file: "package.json"
+        uses: ./.github/actions/setup-bun-cached
 
       - name: Install dependencies
         if: >-
@@ -1569,8 +1408,9 @@ jobs:
   api-image-deps:
     needs: ci-plan
     if: >-
-      needs.ci-plan.outputs.trusted == 'true'
-      || github.event_name == 'workflow_dispatch'
+      (needs.ci-plan.outputs.trusted == 'true'
+       || github.event_name == 'workflow_dispatch')
+      && needs.ci-plan.outputs.api_image_deps_required == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -1580,48 +1420,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
           persist-credentials: false
 
-      - name: Check whether API/runner-image-affecting paths changed
-        id: changed
-        env:
-          BASE_REF: ${{ github.base_ref || 'main' }}
-          EVENT_NAME: ${{ github.event_name }}
-        run: |
-          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          base_ref="origin/$BASE_REF"
-          mapfile -t changed_files < <(git diff --name-only "$base_ref"...HEAD)
-          run=false
-          for file in "${changed_files[@]}"; do
-            case "$file" in
-              apps/api/*|apps/legal-atlas-runner/*|packages/*|patches/*|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|.github/workflows/ci.yml)
-                run=true
-                break
-                ;;
-            esac
-          done
-          echo "run=$run" >> "$GITHUB_OUTPUT"
-          if [[ "$run" != "true" ]]; then
-            echo "::notice::No API/runner-image-affecting paths changed; skipping image dependency guard."
-          fi
-
       - name: Setup Bun
-        if: steps.changed.outputs.run == 'true'
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version-file: "package.json"
+        uses: ./.github/actions/setup-bun-cached
 
       - name: Install turbo
-        if: steps.changed.outputs.run == 'true'
         # Match the Dockerfiles: Turbo is only used for pruned source overlays.
         run: bun install -g turbo@2.10.7
 
       - name: Prepare Docker install inputs
-        if: steps.changed.outputs.run == 'true'
         run: |
           set -euo pipefail
           rm -rf install-json
@@ -1635,11 +1443,9 @@ jobs:
             -exec cp --parents -t install-json/ {} +
 
       - name: Prune monorepo for API image source
-        if: steps.changed.outputs.run == 'true'
         run: turbo prune @stll/api @stll/legal-atlas-runner --docker
 
       - name: Install API image deps with frozen root lockfile
-        if: steps.changed.outputs.run == 'true'
         run: |
           set -euo pipefail
           rm -rf api-install
@@ -1650,7 +1456,6 @@ jobs:
           NPM_TOKEN: ""
 
       - name: API image compile smoke
-        if: steps.changed.outputs.run == 'true'
         # Overlay pruned source the same way apps/api/Dockerfile copies
         # /app/out/full/ onto the dependency layer, then compile the API
         # binary, migration bundle, and runtime workers.
@@ -1684,7 +1489,6 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Prod-deps legal atlas runner smoke
-        if: steps.changed.outputs.run == 'true'
         run: |
           set -euo pipefail
           rm -rf out-runner
@@ -1715,8 +1519,9 @@ jobs:
   ocr-image:
     needs: ci-plan
     if: >-
-      needs.ci-plan.outputs.trusted == 'true'
-      || github.event_name == 'workflow_dispatch'
+      (needs.ci-plan.outputs.trusted == 'true'
+       || github.event_name == 'workflow_dispatch')
+      && needs.ci-plan.outputs.ocr_image_required == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -1726,28 +1531,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
           persist-credentials: false
 
-      - name: Check whether OCR image inputs changed
-        id: changed
-        env:
-          BASE_REF: ${{ github.base_ref || 'main' }}
-          EVENT_NAME: ${{ github.event_name }}
-        run: |
-          if [[ "$EVENT_NAME" == "workflow_dispatch" ]] \
-            || ! git diff --quiet "origin/$BASE_REF"...HEAD -- apps/ocr-service; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "run=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Set up Docker Buildx
-        if: steps.changed.outputs.run == 'true'
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
 
       - name: Set up uv
-        if: steps.changed.outputs.run == 'true'
         uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           version: 0.11.32
@@ -1755,7 +1544,6 @@ jobs:
           cache-dependency-glob: apps/ocr-service/uv.lock
 
       - name: Check OCR Python sources
-        if: steps.changed.outputs.run == 'true'
         working-directory: apps/ocr-service
         run: |
           uv sync --locked --only-group dev
@@ -1764,7 +1552,6 @@ jobs:
           uv run --no-sync ty check
 
       - name: Build OCR image
-        if: steps.changed.outputs.run == 'true'
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
@@ -1780,8 +1567,9 @@ jobs:
   windows-scripts:
     needs: ci-plan
     if: >-
-      needs.ci-plan.outputs.trusted == 'true'
-      || github.event_name == 'workflow_dispatch'
+      (needs.ci-plan.outputs.trusted == 'true'
+       || github.event_name == 'workflow_dispatch')
+      && needs.ci-plan.outputs.windows_scripts_required == 'true'
     runs-on: windows-latest
     timeout-minutes: 10
     permissions:
@@ -1791,50 +1579,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
           persist-credentials: false
 
-      - name: Check whether scripts-affecting paths changed
-        id: changed
-        shell: bash
-        env:
-          BASE_REF: ${{ github.base_ref || 'main' }}
-          EVENT_NAME: ${{ github.event_name }}
-        run: |
-          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          base_ref="origin/$BASE_REF"
-          mapfile -t changed_files < <(git diff --name-only "$base_ref"...HEAD)
-          run=false
-          for file in "${changed_files[@]}"; do
-            case "$file" in
-              packages/scripts/*|package.json|bun.lock|.github/workflows/ci.yml)
-                run=true
-                break
-                ;;
-            esac
-          done
-          echo "run=$run" >> "$GITHUB_OUTPUT"
-          if [[ "$run" != "true" ]]; then
-            echo "::notice::No scripts-affecting paths changed; skipping Windows scripts smoke."
-          fi
-
       - name: Setup Bun
-        if: steps.changed.outputs.run == 'true'
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version-file: "package.json"
+        uses: ./.github/actions/setup-bun-cached
 
       - name: Install scripts workspace dependencies
-        if: steps.changed.outputs.run == 'true'
         run: bun install --frozen-lockfile --ignore-scripts --filter @stll/scripts
         env:
           NPM_TOKEN: ""
 
       - name: Test dev runner
-        if: steps.changed.outputs.run == 'true'
         run: bun test packages/scripts/src/dev-runner.test.ts
 
   # Rust checks for the Tauri desktop crate. ci-checks only runs
