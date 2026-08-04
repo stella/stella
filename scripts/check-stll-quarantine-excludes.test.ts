@@ -56,6 +56,25 @@ describe("quarantine exclude guard", () => {
     );
   });
 
+  // A fixed-width lookahead read past the entry, so a workspace member on the
+  // next line marked its registry-resolved neighbour as a workspace member
+  // too, and the coverage check silently stopped requiring it.
+  test("counts a registry package followed by a workspace member", () => {
+    const result = checkQuarantineExcludes({
+      bunfig: createBunfig('"better-result",'),
+      lockfile: `
+"packages": {
+  "@stll/native": ["@stll/native@1.0.0", "", {}, "sha512-test"],
+  "@stll/shipped": ["@stll/shipped@1.0.0", "", { "dependencies": { "valibot": "1.4.1" } }, "sha512-test"],
+  "@stll/local": ["@stll/local@workspace:packages/local"],
+}
+`,
+    });
+
+    expect(result.firstPartyCount).toBe(2);
+    expect(result.errors.at(0)).toContain('"@stll/shipped",');
+  });
+
   test("retains the first-party package coverage guard", () => {
     const result = checkQuarantineExcludes({
       bunfig: createBunfig('"better-result",'),
