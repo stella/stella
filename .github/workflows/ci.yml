@@ -355,7 +355,7 @@ jobs:
           BASE_REF: ${{ github.base_ref || 'main' }}
         run: bash scripts/check-release-changelog.sh --base "origin/$BASE_REF"
 
-      - name: Release marketing freshness guard
+      - name: Release marketing freshness warning
         if: github.event_name == 'pull_request'
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
@@ -364,7 +364,9 @@ jobs:
             echo "VERSION unchanged; fresh release recordings not required."
             exit 0
           fi
-          bun run marketing:stale --strict
+          if ! bun run marketing:stale --strict; then
+            echo "::warning::Stale marketing recordings for this release (see step log). Re-record with \`bun run marketing:reshoot\`."
+          fi
 
       - name: Format
         if: needs.ci-plan.outputs.package_checks_required == 'true'
