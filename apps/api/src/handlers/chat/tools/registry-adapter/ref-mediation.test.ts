@@ -9,6 +9,7 @@ import {
   dehydrateInputRefs,
   findUndeclaredUuidPath,
   hydrateOutputRefs,
+  stripDeclaredPaths,
 } from "./ref-mediation";
 
 const WS_UUID = "0dc54d0c-10d7-501d-897e-e801dbd0998c";
@@ -330,6 +331,54 @@ describe("registry ref mediation", () => {
           toolName: "list_invoices",
         }),
       ).toBe("invoice.timeEntries[].entityId");
+    });
+  });
+
+  describe("stripDeclaredPaths", () => {
+    test("deletes declared paths in place and satisfies the backstop", () => {
+      const payload = {
+        matter: { id: "mat_1" },
+        overview: {
+          recentEntities: [
+            {
+              entityId: "ent_1",
+              name: "Brief",
+              fieldId: ENTITY_UUID,
+              propertyId: PROPERTY_UUID,
+              pdfFileId: LINKED_ENTITY_UUID,
+            },
+          ],
+        },
+      };
+
+      const stripped = stripDeclaredPaths({
+        output: payload,
+        stripPaths: [
+          "overview.recentEntities[].fieldId",
+          "overview.recentEntities[].propertyId",
+          "overview.recentEntities[].pdfFileId",
+        ],
+      });
+
+      expect(stripped).toEqual({
+        matter: { id: "mat_1" },
+        overview: { recentEntities: [{ entityId: "ent_1", name: "Brief" }] },
+      });
+      expect(containsRawUuid(stripped)).toBe(false);
+    });
+
+    test("tolerates paths the payload's branch never produces", () => {
+      // List mode carries `matters[]`, not the detail branch's `overview`;
+      // the detail-only strip paths must be a no-op, mirroring how
+      // hydration skips a path with no slots.
+      const payload = { matters: [{ id: "mat_1", name: "Acme" }] };
+
+      const stripped = stripDeclaredPaths({
+        output: payload,
+        stripPaths: ["overview.recentEntities[].fieldId"],
+      });
+
+      expect(stripped).toEqual({ matters: [{ id: "mat_1", name: "Acme" }] });
     });
   });
 });

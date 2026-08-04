@@ -25,6 +25,7 @@ import {
   dehydrateInputRefs,
   findUndeclaredUuidPath,
   hydrateOutputRefs,
+  stripDeclaredPaths,
 } from "./ref-mediation";
 
 /**
@@ -73,9 +74,18 @@ export const firstTextContent = (result: CallToolResult): string => {
 /** Fallback for an `isError` result whose content carries no text block. */
 export const DEFAULT_TOOL_ERROR_MESSAGE = "Tool execution failed.";
 
-/** Surfaced to the model when a hydrated payload still carries a raw uuid. */
-export const ANONYMIZATION_FAILURE_MESSAGE =
-  "Tool output failed anonymization of internal identifiers.";
+/**
+ * Surfaced to the model when a hydrated payload still carries a raw uuid.
+ * Deliberately does not say "anonymization": the anonymization feature (the
+ * anonymized MCP surface) is a different mechanism and is not involved —
+ * chat egress runs in default mode. This is the chat ref projection's own
+ * fail-closed invariant, it fires regardless of any anonymization setting,
+ * and the model can do nothing about it, so the message says both.
+ */
+export const REF_PROJECTION_FAILURE_MESSAGE =
+  "The tool result contained an internal identifier the chat projection " +
+  "could not map to a reference. This is a server-side defect, not a " +
+  "problem with your input; do not retry this call.";
 
 /**
  * A finished registry result is a single text content block holding the
@@ -170,9 +180,13 @@ export const runRegistryReadTool = async ({
     return Result.err(payload.error);
   }
 
+  const stripped = stripDeclaredPaths({
+    output: payload.value,
+    stripPaths: READ_TOOL_REF_FIELD_MAP[toolName].stripPaths,
+  });
   const hydrated = hydrateOutputRefs({
     dehydration: dehydrated.value,
-    output: payload.value,
+    output: stripped,
     refRegistry,
     toolName,
   });
@@ -187,7 +201,9 @@ export const runRegistryReadTool = async ({
   // while the offending path (never the value) still reaches telemetry.
   const offendingPath = findUndeclaredUuidPath({ toolName, payload: hydrated });
   if (offendingPath !== undefined) {
-    const error = new ChatToolError({ message: ANONYMIZATION_FAILURE_MESSAGE });
+    const error = new ChatToolError({
+      message: REF_PROJECTION_FAILURE_MESSAGE,
+    });
     captureError(error, {
       source: "run-registry-tool",
       toolName,

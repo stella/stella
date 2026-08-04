@@ -24,12 +24,13 @@ import {
   dehydrateRefs,
   findUndeclaredUuidPathIn,
   hydrateRefs,
+  stripDeclaredPaths,
 } from "./ref-mediation";
 import {
-  ANONYMIZATION_FAILURE_MESSAGE,
   DEFAULT_TOOL_ERROR_MESSAGE,
   firstTextContent,
   parsePayload,
+  REF_PROJECTION_FAILURE_MESSAGE,
 } from "./run-registry-tool";
 
 /**
@@ -173,9 +174,13 @@ export const runRegistryWriteTool = async ({
     return Result.err(payload.error);
   }
 
+  const stripped = stripDeclaredPaths({
+    output: payload.value,
+    stripPaths: entry.stripPaths,
+  });
   const hydrated = hydrateRefs({
     dehydration: dehydrated.value,
-    output: payload.value,
+    output: stripped,
     outputRefs: entry.outputRefs,
     refRegistry,
   });
@@ -189,7 +194,9 @@ export const runRegistryWriteTool = async ({
     payload: hydrated,
   });
   if (offendingPath !== undefined) {
-    const error = new ChatToolError({ message: ANONYMIZATION_FAILURE_MESSAGE });
+    const error = new ChatToolError({
+      message: REF_PROJECTION_FAILURE_MESSAGE,
+    });
     captureError(error, {
       source: "run-registry-write-tool",
       toolName,
