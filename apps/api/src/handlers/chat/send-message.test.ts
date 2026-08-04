@@ -24,7 +24,9 @@ const loadWebSearchProvidersForOrgMock = mock(async () => {
     webSearchProvider: null,
   };
 });
+const loadOrgKeysModule = await import("@/api/lib/web-search/load-org-keys");
 void mock.module("@/api/lib/web-search/load-org-keys", () => ({
+  ...loadOrgKeysModule,
   loadWebSearchProvidersForOrg: loadWebSearchProvidersForOrgMock,
 }));
 
@@ -950,8 +952,11 @@ describe("send message disconnect handling", () => {
       code: 400,
       response: { message: "Client disconnected before stream started" },
     });
-    expect(insertValues).toHaveBeenCalledTimes(2);
-    expect(updateWhere).toHaveBeenCalledTimes(1);
+    // Turn acceptance, the user message, and the terminal interrupted
+    // assistant message each persist their own row; the user-message
+    // persist and the interrupt persist each touch the thread row once.
+    expect(insertValues).toHaveBeenCalledTimes(3);
+    expect(updateWhere).toHaveBeenCalledTimes(2);
     expect(upsertChatThreadSearchDocumentMock).toHaveBeenCalledWith(threadId);
     expect(loadExternalMcpToolsForUserMock).not.toHaveBeenCalled();
   });
