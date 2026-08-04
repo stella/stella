@@ -568,7 +568,7 @@ jobs:
             -f "inputs[target_environment]=${TARGET_ENV}"
 
           run_id=""
-          for attempt in {1..30}; do
+          for _ in {1..30}; do
             if ! run_id="$(
               gh api \
                 "/repos/${INFRA_REPO}/actions/workflows/build-release-web.yml/runs?event=workflow_dispatch&per_page=10" \
