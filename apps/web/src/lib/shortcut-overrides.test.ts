@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { SHORTCUT_GROUPS } from "@/lib/hotkeys";
+import type { ShortcutGroup } from "@/lib/hotkeys";
 import {
   applyOverridesToGroups,
   isRebindableShortcut,
@@ -12,10 +13,7 @@ import {
 } from "@/lib/shortcut-overrides";
 import type { ShortcutOverrides } from "@/lib/shortcut-overrides";
 
-const bindingFor = (
-  groups: readonly (typeof SHORTCUT_GROUPS)[number][],
-  id: string,
-) =>
+const bindingFor = (groups: readonly ShortcutGroup[], id: string) =>
   groups
     .flatMap((group) => group.shortcuts)
     .find((shortcut) => shortcut.id === id)?.binding;

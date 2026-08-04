@@ -17,6 +17,7 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
+import { detached } from "@/lib/detached";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import {
   formatShortcutBinding,
@@ -143,6 +144,33 @@ const ShortcutRow = ({
   );
 };
 
+type Translate = ReturnType<typeof useTranslations>;
+
+/** Localized message for a rejected rebind. Kept out of the component body so
+ * the switch does not force a React Compiler bailout. */
+const rebindErrorText = (
+  error: RebindError | null,
+  t: Translate,
+): string | null => {
+  if (!error) {
+    return null;
+  }
+  switch (error.type) {
+    case "collision":
+      return t("navigation.shortcutsDialog.collision", {
+        label: t(error.conflictLabelKey),
+      });
+    case "invalidBinding":
+      return t("navigation.shortcutsDialog.invalidBinding");
+    case "notRebindable":
+      return t("navigation.shortcutsDialog.notRebindable");
+    default: {
+      const _exhaustive: never = error;
+      return _exhaustive;
+    }
+  }
+};
+
 type RebindableBindingProps = {
   id: ShortcutId;
   hotkey: Hotkey;
@@ -215,25 +243,7 @@ const RebindableBinding = ({
     }
   };
 
-  const errorText = (() => {
-    if (!error) {
-      return null;
-    }
-    switch (error.type) {
-      case "collision":
-        return t("navigation.shortcutsDialog.collision", {
-          label: t(error.conflictLabelKey),
-        });
-      case "invalidBinding":
-        return t("navigation.shortcutsDialog.invalidBinding");
-      case "notRebindable":
-        return t("navigation.shortcutsDialog.notRebindable");
-      default: {
-        const _exhaustive: never = error;
-        return _exhaustive;
-      }
-    }
-  })();
+  const errorText = rebindErrorText(error, t);
 
   if (isEditing) {
     return (
@@ -246,7 +256,9 @@ const RebindableBinding = ({
           </kbd>
           <Button
             disabled={!pending || isBusy}
-            onClick={save}
+            onClick={() => {
+              detached(save(), "keyboard-shortcuts-dialog.save");
+            }}
             size="sm"
             variant="default"
           >
@@ -268,7 +280,9 @@ const RebindableBinding = ({
       {isOverridden ? (
         <Button
           disabled={isBusy}
-          onClick={resetToDefault}
+          onClick={() => {
+            detached(resetToDefault(), "keyboard-shortcuts-dialog.reset");
+          }}
           size="sm"
           variant="ghost"
         >

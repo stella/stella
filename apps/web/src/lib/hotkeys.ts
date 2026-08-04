@@ -63,15 +63,44 @@ export type ShortcutBinding =
   | { readonly type: "hotkey"; readonly hotkey: Hotkey }
   | { readonly type: "char"; readonly char: string };
 
+/**
+ * The exact no-argument message keys used as shortcut and category labels.
+ * Narrowing to this literal subset (rather than the full `TranslationKey`, which
+ * includes keys that require ICU arguments) lets `t(key)` resolve to the
+ * no-values overload, and keeps the registry's type-instantiation cost small.
+ */
+export type ShortcutCategoryKey = Extract<
+  TranslationKey,
+  | "navigation.shortcutCategories.navigation"
+  | "navigation.shortcutCategories.review"
+  | "navigation.shortcutCategories.help"
+  | "common.actions"
+>;
+
+export type ShortcutLabelKey = Extract<
+  TranslationKey,
+  | "navigation.search"
+  | "navigation.toggleSidebar"
+  | "navigation.toggleChat"
+  | "navigation.showShortcuts"
+  | "common.newMatter"
+  | "common.accept"
+  | "common.previous"
+  | "common.next"
+  | "chat.newChat"
+  | "folio.selectAll"
+  | "docxReview.reject"
+>;
+
 export type ShortcutDescriptor = {
   readonly id: ShortcutId;
   readonly binding: ShortcutBinding;
-  readonly labelKey: TranslationKey;
+  readonly labelKey: ShortcutLabelKey;
   readonly contexts: readonly ShortcutContext[];
 };
 
 export type ShortcutGroup = {
-  readonly categoryKey: TranslationKey;
+  readonly categoryKey: ShortcutCategoryKey;
   readonly shortcuts: readonly ShortcutDescriptor[];
 };
 

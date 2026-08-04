@@ -2,13 +2,13 @@ import { hasNonModifierKey, normalizeHotkey } from "@tanstack/react-hotkeys";
 import type { Hotkey } from "@tanstack/react-hotkeys";
 import { Result } from "better-result";
 
-import type { TranslationKey } from "@/i18n/types";
 import { SHORTCUT_GROUPS } from "@/lib/hotkeys";
 import type {
   ShortcutBinding,
   ShortcutContext,
   ShortcutGroup,
   ShortcutId,
+  ShortcutLabelKey,
 } from "@/lib/hotkeys";
 
 /**
@@ -87,9 +87,7 @@ export const serializeUserShortcuts = (
 ): string => {
   const record: Record<string, string> = {};
   for (const [id, binding] of Object.entries(overrides)) {
-    if (binding) {
-      record[id] = binding.hotkey;
-    }
+    record[id] = binding.hotkey;
   }
   return JSON.stringify(record);
 };
@@ -138,7 +136,7 @@ export const bindingKey = (binding: ShortcutBinding): string => {
 type CollisionCandidate = {
   readonly id: ShortcutId;
   readonly binding: ShortcutBinding;
-  readonly labelKey: TranslationKey;
+  readonly labelKey: ShortcutLabelKey;
   readonly contexts: readonly ShortcutContext[];
 };
 
@@ -202,11 +200,13 @@ export const collectShortcutCandidates = (
 export type RebindError =
   | { readonly type: "notRebindable" }
   | { readonly type: "invalidBinding" }
-  | { readonly type: "collision"; readonly conflictLabelKey: TranslationKey };
+  | { readonly type: "collision"; readonly conflictLabelKey: ShortcutLabelKey };
 
 type ValidateRebindInput = {
   readonly id: ShortcutId;
-  readonly hotkey: Hotkey;
+  // The raw recorded candidate: it may not yet be a valid `Hotkey` (e.g. a
+  // modifier-only chord), which is exactly what the guard below rejects.
+  readonly hotkey: string;
   readonly groups: readonly ShortcutGroup[];
   readonly overrides: ShortcutOverrides;
 };
