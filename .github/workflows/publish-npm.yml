@@ -52,13 +52,16 @@ on:
         type: string
 
 concurrency:
-  group: publish-npm-${{ github.event.workflow_run.id || github.ref }}
+  # One group across every trigger so publishes to the same registry
+  # serialize instead of racing each other.
+  group: publish-npm
   cancel-in-progress: false
 
 jobs:
   release-trigger:
     name: Resolve release trigger
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       actions: read # Download the completed release workflow's source receipt.
     outputs:
@@ -116,6 +119,7 @@ jobs:
     needs: release-trigger
     if: ${{ needs.release-trigger.outputs.eligible == 'true' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read # deliberately NO id-token: untrusted build scripts run here
     outputs:

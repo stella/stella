@@ -5,8 +5,10 @@ on:
     branches: [main]
 
 concurrency:
+  # Queue instead of cancel: this workflow pushes commits to the release PR
+  # branch, so a cancelled mid-push run could leave that branch half-updated.
   group: release-pr-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions: {}
 
