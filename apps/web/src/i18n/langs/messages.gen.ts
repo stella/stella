@@ -453,6 +453,7 @@ type Messages = {
       "pickMatterPrompt": "Choose a matter to save this document into.";
       "previewName": "Document: {name}";
       "previewWaiting": "Waiting for content…";
+      "savePendingReview": "Resolve the pending AI suggestions before saving the document.";
     };
     "deleteThread": "Delete conversation";
     "editMode": {

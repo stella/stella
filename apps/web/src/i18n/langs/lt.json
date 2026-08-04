@@ -449,7 +449,8 @@
       "openInFolio": "Atidaryti redaktoriuje",
       "pickMatterPrompt": "Pasirinkite bylą, į kurią išsaugoti šį dokumentą.",
       "previewName": "Dokumentas: {name}",
-      "previewWaiting": "Laukiama turinio…"
+      "previewWaiting": "Laukiama turinio…",
+      "savePendingReview": "Prieš išsaugodami dokumentą išspręskite peržiūros laukiančius AI pasiūlymus."
     },
     "deleteThread": "Ištrinti pokalbį",
     "editMode": {

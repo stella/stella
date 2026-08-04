@@ -449,7 +449,8 @@
       "openInFolio": "Im Editor öffnen",
       "pickMatterPrompt": "Wählen Sie eine Akte, in der dieses Dokument gespeichert werden soll.",
       "previewName": "Dokument: {name}",
-      "previewWaiting": "Warten auf Inhalt…"
+      "previewWaiting": "Warten auf Inhalt…",
+      "savePendingReview": "Prüfen Sie die ausstehenden KI-Vorschläge, bevor Sie das Dokument speichern."
     },
     "deleteThread": "Konversation löschen",
     "editMode": {

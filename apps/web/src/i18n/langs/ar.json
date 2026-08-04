@@ -449,7 +449,8 @@
       "openInFolio": "فتح في المحرّر",
       "pickMatterPrompt": "اختر ملفًا قانونيًا لحفظ هذا المستند فيه.",
       "previewName": "مستند: {name}",
-      "previewWaiting": "في انتظار المحتوى…"
+      "previewWaiting": "في انتظار المحتوى…",
+      "savePendingReview": "احسم الاقتراحات قيد المراجعة قبل حفظ المستند."
     },
     "deleteThread": "حذف المحادثة",
     "editMode": {

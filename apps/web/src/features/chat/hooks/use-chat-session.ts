@@ -17,6 +17,7 @@ import * as v from "valibot";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { useReviewStore } from "@/components/ai-suggestions/review-store";
 import { AnonymizedSpan } from "@/components/chat/anonymized-span";
 import type {
   ApprovalToolName,
@@ -53,6 +54,7 @@ import {
   buildCreateDocumentDraftPayload,
   buildCreateDocumentDownloadFileName,
   CREATE_DOCUMENT_DRAFT_VIEW,
+  createDocumentDraftReviewId,
   createDocumentDraftTabId,
   type CreateDocumentDraft,
   findReadyCreateDocumentDraftMessageId,
@@ -1049,6 +1051,22 @@ export const useChatSession = ({
         toolCallId,
       );
       if (draftMessageId === null) {
+        return;
+      }
+      // Saving serializes the draft without its suggested-mode changes, and
+      // the persisted inspector view is read-only, so unresolved proposals
+      // would vanish. Keep the draft review session alive until the user
+      // resolves it.
+      const hasPendingDraftReview = (
+        useReviewStore.getState().sessions[
+          createDocumentDraftReviewId(toolCallId)
+        ] ?? []
+      ).some((item) => item.status === "pending" || item.status === "applying");
+      if (hasPendingDraftReview) {
+        stellaToast.add({
+          title: t("chat.createDocument.savePendingReview"),
+          type: "warning",
+        });
         return;
       }
       const inspector = useInspectorTabsStore.getState();

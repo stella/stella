@@ -449,7 +449,8 @@
       "openInFolio": "Otwórz w edytorze",
       "pickMatterPrompt": "Wybierz sprawę, w której chcesz zapisać ten dokument.",
       "previewName": "Dokument: {name}",
-      "previewWaiting": "Oczekiwanie na treść…"
+      "previewWaiting": "Oczekiwanie na treść…",
+      "savePendingReview": "Przed zapisaniem dokumentu rozstrzygnij oczekujące sugestie AI."
     },
     "deleteThread": "Usuń rozmowę",
     "editMode": {

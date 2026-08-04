@@ -449,7 +449,8 @@
       "openInFolio": "Abrir no editor",
       "pickMatterPrompt": "Escolha um caso para salvar este documento.",
       "previewName": "Documento: {name}",
-      "previewWaiting": "Aguardando conteúdo…"
+      "previewWaiting": "Aguardando conteúdo…",
+      "savePendingReview": "Resolva as sugestões de IA pendentes antes de salvar o documento."
     },
     "deleteThread": "Excluir conversa",
     "editMode": {

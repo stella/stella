@@ -1115,19 +1115,30 @@ const sendMessage = createSafeRootHandler(
         }
         claimedChatTurnOwnership = { status: "unclaimed" };
       };
+      // Like `persistFailedChatTurn`, a pre-stream disconnect must hydrate as
+      // the same terminal assistant turn as a streamed interruption: persist
+      // the empty interrupted message and settle its owner in one transaction,
+      // so reload cannot show the user message as unanswered.
       const interruptCurrentTurn = async () => {
+        const outcome = {
+          type: "interrupted",
+          reason: "client-disconnected",
+        } as const;
+        const assistantMessage = toPersistableChatMessage({
+          id: createSafeId<"chatMessage">(),
+          metadata: { turnOutcome: outcome },
+          parts: [],
+          role: "assistant",
+        });
         const settlementResult = await persistMessage({
-          persistencePlan: { type: "none" },
+          persistencePlan: { type: "insert", message: assistantMessage },
           recordAuditEvent,
           safeDb,
           threadId: body.threadId,
           turnSettlement: {
-            assistantMessageId: null,
+            assistantMessageId: assistantMessage.id,
             execution: turnExecution,
-            outcome: {
-              type: "interrupted",
-              reason: "client-disconnected",
-            },
+            outcome,
           },
           userId: user.id,
           workspaceId,

@@ -449,7 +449,8 @@
       "openInFolio": "Otevřít v editoru",
       "pickMatterPrompt": "Vyberte spis, do kterého se tento dokument uloží.",
       "previewName": "Dokument: {name}",
-      "previewWaiting": "Čeká se na obsah…"
+      "previewWaiting": "Čeká se na obsah…",
+      "savePendingReview": "Před uložením dokumentu vyřešte návrhy AI čekající na revizi."
     },
     "deleteThread": "Smazat konverzaci",
     "editMode": {

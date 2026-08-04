@@ -449,7 +449,8 @@
       "openInFolio": "Atvērt redaktorā",
       "pickMatterPrompt": "Izvēlieties lietu, kurā saglabāt šo dokumentu.",
       "previewName": "Dokuments: {name}",
-      "previewWaiting": "Gaida saturu…"
+      "previewWaiting": "Gaida saturu…",
+      "savePendingReview": "Pirms dokumenta saglabāšanas izskatiet pārskatīšanu gaidošos AI ieteikumus."
     },
     "deleteThread": "Dzēst sarunu",
     "editMode": {

@@ -449,7 +449,8 @@
       "openInFolio": "Megnyitás a szerkesztőben",
       "pickMatterPrompt": "Válassza ki azt az ügyet, amelybe a dokumentumot menteni szeretné.",
       "previewName": "Dokumentum: {name}",
-      "previewWaiting": "Várakozás a tartalomra…"
+      "previewWaiting": "Várakozás a tartalomra…",
+      "savePendingReview": "A dokumentum mentése előtt kezelje a felülvizsgálatra váró AI-javaslatokat."
     },
     "deleteThread": "Beszélgetés törlése",
     "editMode": {

@@ -449,7 +449,8 @@
       "openInFolio": "Ava redaktoris",
       "pickMatterPrompt": "Valige toimik, kuhu see dokument salvestada.",
       "previewName": "Dokument: {name}",
-      "previewWaiting": "Sisu ootamine…"
+      "previewWaiting": "Sisu ootamine…",
+      "savePendingReview": "Enne dokumendi salvestamist lahendage ülevaatust ootavad AI soovitused."
     },
     "deleteThread": "Kustuta vestlus",
     "editMode": {
