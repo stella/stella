@@ -8,10 +8,14 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# A newer push to main supersedes an in-flight staging deploy.
+# Queue rather than cancel: build-and-deploy dispatches a promotion to the
+# infra repo and then watches it to completion. A run cancelled mid-dispatch
+# would leave that promotion in flight with nothing watching it, racing
+# whatever the next run dispatches. A dispatched promotion must always be
+# watched, so a newer push waits for the current run instead of preempting it.
 concurrency:
   group: deploy-staging
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   REGISTRY: ghcr.io
@@ -73,7 +77,17 @@ jobs:
 
           echo "status=${status}" >> "$GITHUB_OUTPUT"
           if [[ "$status" == "$NOT_READY_STATUS" ]]; then
-            echo "::notice::Staging health gate did not pass; skipping this deployment."
+            if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+              echo "::notice::Staging health gate did not pass; workflow_dispatch bypasses the gate and deploys anyway."
+            else
+              {
+                echo "### Staging health gate failed"
+                echo "The staging health probe did not return a ready status after ${MAX_ATTEMPTS} attempts."
+                echo "This deployment was skipped. Continuous deploy to staging is stalled until staging health recovers, or until this workflow is re-run with workflow_dispatch to bypass the gate."
+              } >> "$GITHUB_STEP_SUMMARY"
+              echo "::error::Staging health gate did not pass after ${MAX_ATTEMPTS} attempts; skipping this deployment and failing the run so continuous deploy does not stall silently."
+              exit 1
+            fi
           fi
 
   build-and-deploy:

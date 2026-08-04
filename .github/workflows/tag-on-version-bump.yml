@@ -30,6 +30,7 @@ jobs:
     # through the merge-to-main review path.
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Mint App token
         id: app-token
@@ -45,8 +46,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0 # full history: the marketing-recordings check diffs against each capture's recorded-at commit, which can be arbitrarily far back
-          token: ${{ steps.app-token.outputs.token }}
-          persist-credentials: true # zizmor: ignore[artipacked] release tag push requires persisted App token
+          persist-credentials: false
 
       - name: Read and validate VERSION
         id: version
@@ -111,8 +111,12 @@ jobs:
         if: env.skip != 'true'
         env:
           TAG: ${{ steps.version.outputs.tag }}
+          # Injected only for this step: the App token never touches disk via
+          # persisted git credentials, so earlier steps (setup-bun, repo
+          # scripts) run without it available.
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           git config user.name "stella-release-deployer[bot]"
           git config user.email "stella-release-deployer[bot]@users.noreply.github.com"
           git tag -a "$TAG" -m "$TAG"
-          git push origin "$TAG"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$TAG"
