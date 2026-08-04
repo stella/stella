@@ -42,6 +42,9 @@ type DecisionCase = {
   committedHoursAgo?: number;
   deployedSha?: string;
   event: "push" | "schedule" | "workflow_dispatch";
+  // Age of the oldest commit staging has not taken. Defaults to the tip's own
+  // age; set it independently to model an outage that outlives its commits.
+  pendingSinceHoursAgo?: number;
   servedCommit?: string;
   status: "not_ready" | "ready";
 };
@@ -55,6 +58,7 @@ const runDecision = async ({
   committedHoursAgo = 1,
   deployedSha = OTHER_SHA,
   event,
+  pendingSinceHoursAgo,
   servedCommit = "",
   status,
 }: DecisionCase): Promise<Decision> => {
@@ -62,8 +66,10 @@ const runDecision = async ({
   const summaryPath = join(workspace, `summary-${Bun.randomUUIDv7()}.md`);
   await Promise.all([Bun.write(outputPath, ""), Bun.write(summaryPath, "")]);
 
-  const committedEpoch =
-    Math.floor(Date.now() / 1000) - committedHoursAgo * HOUR_SECONDS;
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const committedEpoch = nowSeconds - committedHoursAgo * HOUR_SECONDS;
+  const pendingSinceEpoch =
+    nowSeconds - (pendingSinceHoursAgo ?? committedHoursAgo) * HOUR_SECONDS;
 
   const result = Bun.spawnSync(["bash", scriptPath], {
     env: {
@@ -80,6 +86,7 @@ const runDecision = async ({
       STATUS: status,
       STUB_COMMITTED_EPOCH: String(committedEpoch),
       STUB_DEPLOYED_SHA: deployedSha,
+      STUB_PENDING_SINCE_EPOCH: String(pendingSinceEpoch),
     },
   });
 
@@ -101,8 +108,9 @@ beforeAll(async () => {
   expect(script).toContain("readonly MAX_DEFERRAL_HOURS=");
   await Bun.write(scriptPath, script);
 
-  // Stands in for the two reads the script makes: the last recorded staging
-  // deployment, and the commit's timestamp.
+  // Stands in for the reads the script makes: the last recorded staging
+  // deployment, the oldest commit staging has not taken, and the tip's own
+  // timestamp.
   const stub = join(workspace, "gh");
   await Bun.write(
     stub,
@@ -110,6 +118,7 @@ beforeAll(async () => {
 for arg in "$@"; do
   case "$arg" in
     *"/deployments?environment="*) echo "\${STUB_DEPLOYED_SHA}"; exit 0 ;;
+    *"/compare/"*) echo "\${STUB_PENDING_SINCE_EPOCH}"; exit 0 ;;
     *"/commits/"*) echo "\${STUB_COMMITTED_EPOCH}"; exit 0 ;;
   esac
 done
@@ -197,6 +206,30 @@ describe("staging deploy decision", () => {
         status: "not_ready",
       }),
     ).toEqual({ deploy: "deploy=false", exitCode: 1 });
+  });
+
+  // Measuring the tip would restart the clock on every push made during one
+  // outage, so the alarm would never fire during the longest outages.
+  test("keeps the clock running when a push lands mid-outage", async () => {
+    expect(
+      await runDecision({
+        committedHoursAgo: 1,
+        event: "schedule",
+        pendingSinceHoursAgo: 20,
+        status: "not_ready",
+      }),
+    ).toEqual({ deploy: "deploy=false", exitCode: 1 });
+  });
+
+  test("does not escalate when only the tip is old but delivery is current", async () => {
+    expect(
+      await runDecision({
+        committedHoursAgo: 240,
+        event: "schedule",
+        pendingSinceHoursAgo: 2,
+        status: "not_ready",
+      }),
+    ).toEqual({ deploy: "deploy=false", exitCode: 0 });
   });
 
   test("escalates when no deployment has ever been recorded", async () => {

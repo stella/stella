@@ -156,22 +156,40 @@ jobs:
               exit 0
             fi
 
-            # jq resolves the timestamp so the arithmetic does not depend on
-            # GNU date's -d.
-            committed_epoch="$(
-              gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}" \
-                --jq '.commit.committer.date | fromdateiso8601'
-            )"
-            waited_seconds=$(( $(date -u +%s) - committed_epoch ))
+            # How long delivery has been blocked, which is the age of the
+            # oldest commit staging has not taken yet. Measuring the tip
+            # instead would restart the clock on every push made during one
+            # continuous outage, so the alarm would never fire. jq resolves
+            # the timestamp so the arithmetic does not depend on GNU date's -d.
+            pending_since_epoch=""
+            if [[ -n "$deployed_sha" ]]; then
+              pending_since_epoch="$(
+                gh api \
+                  "repos/${GITHUB_REPOSITORY}/compare/${deployed_sha}...${GITHUB_SHA}" \
+                  --jq '[.commits[].commit.committer.date | fromdateiso8601] | first // empty' \
+                  2>/dev/null || true
+              )"
+            fi
+
+            # Before the first recorded deployment, and if the recorded commit
+            # has since left the history, the tip is all there is to measure.
+            if [[ -z "$pending_since_epoch" ]]; then
+              pending_since_epoch="$(
+                gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}" \
+                  --jq '.commit.committer.date | fromdateiso8601'
+              )"
+            fi
+
+            waited_seconds=$(( $(date -u +%s) - pending_since_epoch ))
 
             if (( waited_seconds > MAX_DEFERRAL_HOURS * 3600 )); then
               waited_hours=$(( waited_seconds / 3600 ))
               {
                 echo "### Staging deploy stalled"
-                echo "\`${GITHUB_SHA}\` has been undeployable for ${waited_hours}h because staging has not answered its health probe."
+                echo "Staging has not answered its health probe, and has taken no commit for ${waited_hours}h. The tip waiting on it is \`${GITHUB_SHA}\`."
                 echo "That is past the ${MAX_DEFERRAL_HOURS}h budget, so staging needs a look."
               } >> "$GITHUB_STEP_SUMMARY"
-              echo "::error::Staging has not accepted ${GITHUB_SHA} for ${waited_hours}h (budget ${MAX_DEFERRAL_HOURS}h); the environment needs attention."
+              echo "::error::Staging has taken no commit for ${waited_hours}h (budget ${MAX_DEFERRAL_HOURS}h); the environment needs attention."
               exit 1
             fi
           fi

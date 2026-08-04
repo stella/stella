@@ -18,10 +18,15 @@ describe("API deployment health receipt", () => {
     expect(deployJobStart).toBeGreaterThan(healthJobStart);
     expect(verifyJobStart).toBeGreaterThan(deployJobStart);
     // The gate only reads: it decides whether to promote, never promotes.
-    const healthPermissions = healthJob.slice(
-      healthJob.indexOf("permissions:"),
-      healthJob.indexOf("outputs:"),
-    );
+    // Both delimiters are asserted so a missing block cannot slice to "" and
+    // satisfy the write check by being empty.
+    const permissionsStart = healthJob.indexOf("permissions:");
+    const outputsStart = healthJob.indexOf("outputs:");
+    expect(permissionsStart).toBeGreaterThanOrEqual(0);
+    expect(outputsStart).toBeGreaterThan(permissionsStart);
+    const healthPermissions = healthJob.slice(permissionsStart, outputsStart);
+    expect(healthPermissions).toContain("contents: read");
+    expect(healthPermissions).toContain("deployments: read");
     expect(healthPermissions).not.toContain("write");
     expect(healthJob).toContain(
       "STAGING_HEALTH_URL: https://api-staging.stll.app/health",
