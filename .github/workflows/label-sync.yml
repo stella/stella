@@ -1,0 +1,29 @@
+name: Label Sync
+
+# Applies the org label manifest from stella/.github to this repository.
+# Manual only: labels should not drift under a push, and a run that writes
+# is a decision.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: What the run is allowed to do
+        type: choice
+        default: plan
+        options:
+          - plan
+          - apply
+          - apply-with-prune
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  label-sync:
+    # Reusable workflow only consumes the auto-provided GITHUB_TOKEN.
+    # Do not switch to `secrets: inherit` — that widens the blast radius
+    # if the reusable ever starts touching named secrets.
+    uses: stella/.github/.github/workflows/label-sync.yml@76d4e3ab6e89ea897c177b026e6ef91c5c46ecc2
+    with:
+      mode: ${{ inputs.mode }}
