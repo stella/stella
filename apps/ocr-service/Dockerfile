@@ -5,7 +5,7 @@ FROM python:3.11-slim-bookworm@sha256:b18992999dbe963a45a8a4da40ac2b1975be1a776d
 
 COPY --from=ghcr.io/astral-sh/uv:0.11.32@sha256:df4cae8f3a96d175e2e5f992e597550000edbe78fdc2594d5cd8de1a217f504c /uv /uvx /bin/
 
-ARG TARGETARCH=amd64
+ARG TARGETARCH
 ARG TEXT_DETECTION_MODEL_URL=https://paddle-model-ecology.bj.bcebos.com/paddlex/official_inference_model/paddle3.0.0/PP-OCRv6_medium_det_infer.tar
 ARG TEXT_DETECTION_MODEL_SHA256=144d0621e059566e5086e228829171591c144c2deb07b2dad4962214fbabfcf7
 ARG TEXT_RECOGNITION_MODEL_URL=https://paddle-model-ecology.bj.bcebos.com/paddlex/official_inference_model/paddle3.0.0/PP-OCRv6_medium_rec_infer.tar
@@ -92,6 +92,7 @@ USER stella
 
 EXPOSE 8080
 
+# Serves Compose/self-host runs; ECS task definitions declare their own health checks.
 HEALTHCHECK --interval=15s --timeout=5s --start-period=120s --retries=4 \
   CMD ["python", "/opt/stella/healthcheck.py"]
 
