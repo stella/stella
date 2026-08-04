@@ -1,3 +1,7 @@
+-- stella-migration-safety: reviewed destructive-change - This replaces only the named state CHECK after every affected row is backfilled; rollback can restore the prior CHECK while leaving the inert assistant messages in place.
+SET lock_timeout = '1s';--> statement-breakpoint
+SET statement_timeout = '5s';--> statement-breakpoint
+
 -- The preceding migration allowed a terminal failure without a rendered
 -- assistant message. Backfill a stable, server-owned error message before the
 -- stricter constraint makes that historical state invalid. MATERIALIZED keeps
@@ -128,4 +132,17 @@ ALTER TABLE "chat_turns"
       "interruption_reason" IS NOT NULL AND
       "settled_at" IS NOT NULL
     ELSE false
-  END);
+  END) NOT VALID;--> statement-breakpoint
+
+-- Validate outside Drizzle's migration transaction so PostgreSQL does not
+-- hold the ADD CONSTRAINT lock for the duration of the table scan.
+-- squawk-ignore transaction-nesting
+COMMIT;--> statement-breakpoint
+SET statement_timeout = 0;--> statement-breakpoint
+SET lock_timeout = 0;--> statement-breakpoint
+ALTER TABLE "chat_turns"
+  VALIDATE CONSTRAINT "chat_turns_state_payload_check";--> statement-breakpoint
+SET statement_timeout = '5s';--> statement-breakpoint
+SET lock_timeout = '1s';--> statement-breakpoint
+-- squawk-ignore transaction-nesting, ban-uncommitted-transaction
+BEGIN;
