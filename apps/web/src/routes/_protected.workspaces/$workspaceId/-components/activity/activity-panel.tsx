@@ -1333,7 +1333,10 @@ const targetIcon = (item: MatterActivityItem) => {
       return <SquareCheckIcon className="text-muted-foreground size-3.5" />;
     case "matter":
       return (
-        <MatterIcon className="text-muted-foreground size-3.5" variant="none" />
+        <MatterIcon
+          className="size-3.5"
+          matter={{ color: item.target.color, id: item.target.id }}
+        />
       );
     case "team":
       return <UsersIcon className="text-muted-foreground size-3.5" />;

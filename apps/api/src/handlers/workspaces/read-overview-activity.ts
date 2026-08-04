@@ -393,6 +393,9 @@ const config = {
 } satisfies HandlerConfig;
 
 type ActivityTarget = {
+  // Matter colour, so a `matter` target renders its own glyph colour
+  // instead of a mono one. Null for every other kind.
+  color: string | null;
   deleted: boolean;
   encrypted: boolean | null;
   entityId: string | null;
@@ -648,7 +651,7 @@ const readOverviewActivity = createSafeHandler(
             id: { eq: workspaceId },
             organizationId: { eq: session.activeOrganizationId },
           },
-          columns: { name: true },
+          columns: { color: true, name: true },
         });
 
         const actorIds = [
@@ -770,6 +773,7 @@ const readOverviewActivity = createSafeHandler(
             entityIdSnapshot: row.entityIdSnapshot,
             entityNameSnapshot: row.entityNameSnapshot,
             fieldVersionMap,
+            matterColor: result.workspace?.color ?? null,
             matterName: result.workspace?.name ?? null,
             resourceId: row.resourceId,
             resourceType: row.resourceType,
@@ -812,6 +816,7 @@ type EntityFile = {
 const toEntityTarget = (entity: EntityRow): EntityTarget => {
   const file = entity.kind === "task" ? null : entity.file;
   return {
+    color: null,
     deleted: false,
     encrypted: file?.encrypted ?? null,
     entityId: entity.id,
@@ -831,6 +836,7 @@ type TargetForRowOptions = {
   entityIdSnapshot: string | null;
   entityNameSnapshot: string | null;
   fieldVersionMap: Map<string, string>;
+  matterColor: string | null;
   matterName: string | null;
   resourceId: string;
   resourceType: string;
@@ -844,6 +850,7 @@ const targetForRow = ({
   entityIdSnapshot,
   entityNameSnapshot,
   fieldVersionMap,
+  matterColor,
   matterName,
   resourceId,
   resourceType,
@@ -895,19 +902,44 @@ const targetForRow = ({
   }
   if (resourceType === AUDIT_RESOURCE_TYPE.WORKSPACE) {
     return category === "team"
-      ? genericTarget("team", resourceId, teamTargetName)
-      : genericTarget("matter", resourceId, matterName);
+      ? genericTarget({
+          color: null,
+          id: resourceId,
+          kind: "team",
+          name: teamTargetName,
+        })
+      : genericTarget({
+          color: matterColor,
+          id: resourceId,
+          kind: "matter",
+          name: matterName,
+        });
   }
   if (
     resourceType === AUDIT_RESOURCE_TYPE.WORKSPACE_MEMBER ||
     resourceType === AUDIT_RESOURCE_TYPE.WORKSPACE_CONTACT
   ) {
-    return genericTarget("team", resourceId, teamTargetName);
+    return genericTarget({
+      color: null,
+      id: resourceId,
+      kind: "team",
+      name: teamTargetName,
+    });
   }
   if (resourceType === AUDIT_RESOURCE_TYPE.CASE_LAW_MATTER_LINK) {
-    return genericTarget("court", resourceId, null);
+    return genericTarget({
+      color: null,
+      id: resourceId,
+      kind: "court",
+      name: null,
+    });
   }
-  return genericTarget("automation", resourceId, null);
+  return genericTarget({
+    color: null,
+    id: resourceId,
+    kind: "automation",
+    name: null,
+  });
 };
 
 type DeletedEntityTargetOptions = {
@@ -921,6 +953,7 @@ const deletedEntityTarget = ({
   id,
   name = null,
 }: DeletedEntityTargetOptions): EntityTarget => ({
+  color: null,
   deleted: true,
   encrypted: null,
   entityId: null,
@@ -939,11 +972,20 @@ const documentTarget = (id: string): EntityTarget => ({
   encrypted: null,
 });
 
-const genericTarget = (
-  kind: Exclude<ActivityTarget["kind"], "document" | "task">,
-  id: string,
-  name: string | null,
-): ActivityTarget => ({
+type GenericTargetOptions = {
+  color: string | null;
+  id: string;
+  kind: Exclude<ActivityTarget["kind"], "document" | "task">;
+  name: string | null;
+};
+
+const genericTarget = ({
+  color,
+  id,
+  kind,
+  name,
+}: GenericTargetOptions): ActivityTarget => ({
+  color,
   deleted: false,
   encrypted: null,
   entityId: null,
