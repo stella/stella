@@ -156,18 +156,9 @@ jobs:
           persist-credentials: false
           ref: ${{ steps.source.outputs.ref }}
 
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-
-      # Inlined rather than the setup-bun-cached composite: this job can check
-      # out an older release tag, and a workspace-local action must resolve
-      # from whatever ref is checked out.
-      - name: Restore Bun install cache
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
-        with:
-          path: ~/.bun/install/cache
-          key: bun-install-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            bun-install-${{ runner.os }}-
+      # Cross-repo reference resolves regardless of which release tag this
+      # job checks out, unlike a workspace-local action.
+      - uses: stella/.github/actions/setup-bun-cached@859a61ee0a799ba1028281329555cadee15bfc4f
 
       # --ignore-scripts: the package builds run tsc/tsdown only and do not
       # depend on install lifecycle scripts; other CI jobs build the same
