@@ -97,7 +97,16 @@ const GuideTourCard = ({
 
   return (
     <li className="border-border flex gap-3 rounded-lg border p-3">
-      <GuideTourPreview tourId={tour.id} />
+      {/* The run length belongs to the thumbnail, the way a clip's duration
+          sits under its poster; on a narrow drawer the preview drops out and
+          this column carries the time alone. */}
+      <div className="flex shrink-0 flex-col items-center gap-1.5">
+        <GuideTourPreview tourId={tour.id} />
+        <span className="text-muted-foreground flex items-center gap-1 text-xs">
+          <ClockIcon className="size-3" />
+          {t("guides.minutes", { count: String(tour.estMinutes) })}
+        </span>
+      </div>
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         <div className="flex items-start justify-between gap-2">
           <p className="text-sm font-medium">{t(tour.titleKey)}</p>
@@ -106,10 +115,6 @@ const GuideTourCard = ({
         <p className="text-muted-foreground text-xs">
           {t(tour.descriptionKey)}
         </p>
-        <div className="text-muted-foreground flex items-center gap-1 text-xs">
-          <ClockIcon className="size-3" />
-          {t("guides.minutes", { count: String(tour.estMinutes) })}
-        </div>
         <div className="flex items-center gap-2">{cta}</div>
       </div>
     </li>
