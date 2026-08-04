@@ -72,6 +72,10 @@ to explore the codebase.
 4. Open a pull request against `main`.
 5. Fill in the PR template and link a related issue.
 
+> In a fresh git worktree run `bun run setup:worktree` once (else `typecheck`
+> fails on a missing compiler binary). `bun run lint:changed` lints only your
+> changed files in seconds; CI still runs the full `lint`.
+
 ## AI Commands
 
 Stella uses a layered AI command setup:
