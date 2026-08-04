@@ -37,14 +37,16 @@ RUN turbo prune @stll/web --docker
 
 FROM build-base AS deps
 COPY --from=install-inputs /json/ .
-RUN bun install --filter @stll/web --frozen-lockfile --ignore-scripts --network-concurrency=8
+RUN --mount=type=cache,target=/root/.bun/install/cache \
+    bun install --filter @stll/web --frozen-lockfile --ignore-scripts --network-concurrency=8
 
 # Runtime install: the SSR server bundle (dist/server/server.js) externalises
 # its imports, so they must resolve from `dependencies` alone with
 # devDependencies stripped. The web-build CI job boot-smokes this same install.
 FROM runtime-base AS deps-prod
 COPY --from=install-inputs /json/ .
-RUN bun install --filter @stll/web --production --frozen-lockfile --ignore-scripts --network-concurrency=8
+RUN --mount=type=cache,target=/root/.bun/install/cache \
+    bun install --filter @stll/web --production --frozen-lockfile --ignore-scripts --network-concurrency=8
 
 FROM deps AS builder
 ARG STELLA_VERSION=dev
