@@ -2130,8 +2130,15 @@
     "recents": "Hiljutised",
     "search": "Otsing",
     "shortcutCategories": {
-      "navigation": "Navigeerimine"
+      "help": "Abi",
+      "navigation": "Navigeerimine",
+      "review": "Dokumendi ülevaatus"
     },
+    "shortcutsDialog": {
+      "description": "Sirvi klaviatuuri otseteid, et kiiremini töötada.",
+      "title": "Klaviatuuri otseteed"
+    },
+    "showShortcuts": "Kuva klaviatuuri otseteed",
     "sidebar": "Külgriba",
     "sidebarDescription": "Kuvab mobiilse külgriba.",
     "templates": "Mallid",

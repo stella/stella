@@ -2130,8 +2130,15 @@
     "recents": "Legutóbbiak",
     "search": "Keresés",
     "shortcutCategories": {
-      "navigation": "Navigáció"
+      "help": "Súgó",
+      "navigation": "Navigáció",
+      "review": "Dokumentum áttekintése"
     },
+    "shortcutsDialog": {
+      "description": "Böngéssze a billentyűparancsokat a gyorsabb munkához.",
+      "title": "Billentyűparancsok"
+    },
+    "showShortcuts": "Billentyűparancsok megjelenítése",
     "sidebar": "Oldalsáv",
     "sidebarDescription": "Megjeleníti a mobil oldalsávot.",
     "templates": "Sablonok",

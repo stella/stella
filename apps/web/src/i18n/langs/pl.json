@@ -2130,8 +2130,15 @@
     "recents": "Ostatnie",
     "search": "Szukaj",
     "shortcutCategories": {
-      "navigation": "Nawigacja"
+      "help": "Pomoc",
+      "navigation": "Nawigacja",
+      "review": "Przegląd dokumentu"
     },
+    "shortcutsDialog": {
+      "description": "Przeglądaj skróty klawiszowe, aby pracować szybciej.",
+      "title": "Skróty klawiszowe"
+    },
+    "showShortcuts": "Pokaż skróty klawiszowe",
     "sidebar": "Panel boczny",
     "sidebarDescription": "Wyświetla mobilny panel boczny.",
     "templates": "Szablony",

@@ -45,6 +45,7 @@ import {
   useInspectorTabsStore,
 } from "@/components/inspector/inspector-tabs-store";
 import type { InspectorTab } from "@/components/inspector/inspector-tabs-store";
+import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog";
 import { MatterIcon } from "@/components/matter-icon";
 import { AIAvailabilityProvider } from "@/components/require-ai-key";
 import { SelfhostUpdateBanner } from "@/components/selfhost-update-banner";
@@ -334,6 +335,7 @@ function ProtectedComponent() {
               <ProtectedContent />
               <WorkspaceInspectorSidePanel />
               <ShortcutHintsOverlay />
+              <KeyboardShortcutsDialog />
               <ModelSelectorDialog />
             </ChatEditorProvider>
           </AIAvailabilityProvider>

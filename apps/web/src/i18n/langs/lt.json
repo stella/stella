@@ -2130,8 +2130,15 @@
     "recents": "Naujausi",
     "search": "Ieškoti",
     "shortcutCategories": {
-      "navigation": "Naršymas"
+      "help": "Pagalba",
+      "navigation": "Naršymas",
+      "review": "Dokumento peržiūra"
     },
+    "shortcutsDialog": {
+      "description": "Naršykite sparčiuosius klavišus, kad dirbtumėte greičiau.",
+      "title": "Spartieji klavišai"
+    },
+    "showShortcuts": "Rodyti sparčiuosius klavišus",
     "sidebar": "Šoninė juosta",
     "sidebarDescription": "Rodo mobilią šoninę juostą.",
     "templates": "Šablonai",

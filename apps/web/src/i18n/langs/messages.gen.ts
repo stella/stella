@@ -2133,8 +2133,15 @@ type Messages = {
     "recents": "Recents";
     "search": "Search";
     "shortcutCategories": {
+      "help": "Help";
       "navigation": "Navigation";
+      "review": "Document review";
     };
+    "shortcutsDialog": {
+      "description": "Browse keyboard shortcuts to work faster.";
+      "title": "Keyboard shortcuts";
+    };
+    "showShortcuts": "Show keyboard shortcuts";
     "sidebar": "Sidebar";
     "sidebarDescription": "Displays the mobile sidebar.";
     "templates": "Templates";

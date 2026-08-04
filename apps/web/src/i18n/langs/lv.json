@@ -2130,8 +2130,15 @@
     "recents": "Nesenie",
     "search": "Meklēt",
     "shortcutCategories": {
-      "navigation": "Navigācija"
+      "help": "Palīdzība",
+      "navigation": "Navigācija",
+      "review": "Dokumenta pārskatīšana"
     },
+    "shortcutsDialog": {
+      "description": "Pārlūkojiet tastatūras saīsnes, lai strādātu ātrāk.",
+      "title": "Tastatūras saīsnes"
+    },
+    "showShortcuts": "Rādīt tastatūras saīsnes",
     "sidebar": "Sānjosla",
     "sidebarDescription": "Parāda mobilo sānjoslu.",
     "templates": "Veidnes",

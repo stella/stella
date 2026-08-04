@@ -2130,8 +2130,15 @@
     "recents": "Zuletzt verwendet",
     "search": "Suchen",
     "shortcutCategories": {
-      "navigation": "Navigation"
+      "help": "Hilfe",
+      "navigation": "Navigation",
+      "review": "Dokumentprüfung"
     },
+    "shortcutsDialog": {
+      "description": "Durchsuchen Sie Tastenkürzel, um schneller zu arbeiten.",
+      "title": "Tastenkürzel"
+    },
+    "showShortcuts": "Tastenkürzel anzeigen",
     "sidebar": "Seitenleiste",
     "sidebarDescription": "Zeigt die mobile Seitenleiste an.",
     "templates": "Vorlagen",

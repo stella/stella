@@ -14,10 +14,10 @@ import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import {
   formatHintKey,
   MOD_KEY,
-  SHORTCUT_HINT_GROUPS,
+  OVERLAY_HINT_GROUPS,
   triggerHotkey,
 } from "@/lib/hotkeys";
-import type { ShortcutContext, ShortcutHint } from "@/lib/hotkeys";
+import type { OverlayHint, ShortcutContext } from "@/lib/hotkeys";
 
 const HOLD_DELAY_MS = 500;
 const HIGHLIGHT_DURATION_MS = 150;
@@ -132,7 +132,7 @@ function ShortcutHintsOverlayContent() {
     <Dialog onOpenChange={handleOpenChange} open={isVisible}>
       <DialogPopup className="w-64 p-4" initialFocus={false} showCloseButton>
         <div className="flex flex-col gap-3">
-          {SHORTCUT_HINT_GROUPS.map((group) => (
+          {OVERLAY_HINT_GROUPS.map((group) => (
             <div key={group.categoryKey}>
               <h3 className="text-muted-foreground mb-1 px-2 text-xs font-medium">
                 {t(group.categoryKey)}
@@ -197,7 +197,7 @@ const useShortcutContext = (): ShortcutContext => {
 };
 
 type HotkeyHintProps = {
-  hint: ShortcutHint;
+  hint: OverlayHint;
   setIsVisible: React.Dispatch<React.SetStateAction<boolean>>;
 };
 

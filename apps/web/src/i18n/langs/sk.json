@@ -2130,8 +2130,15 @@
     "recents": "Nedávne",
     "search": "Hľadať",
     "shortcutCategories": {
-      "navigation": "Navigácia"
+      "help": "Pomocník",
+      "navigation": "Navigácia",
+      "review": "Revízia dokumentu"
     },
+    "shortcutsDialog": {
+      "description": "Prehľadávajte klávesové skratky a pracujte rýchlejšie.",
+      "title": "Klávesové skratky"
+    },
+    "showShortcuts": "Zobraziť klávesové skratky",
     "sidebar": "Bočný panel",
     "sidebarDescription": "Zobrazí mobilný bočný panel.",
     "templates": "Vzory",

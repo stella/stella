@@ -2130,8 +2130,15 @@
     "recents": "الأخيرة",
     "search": "بحث",
     "shortcutCategories": {
-      "navigation": "التنقّل"
+      "help": "مساعدة",
+      "navigation": "التنقّل",
+      "review": "مراجعة المستند"
     },
+    "shortcutsDialog": {
+      "description": "تصفّح اختصارات لوحة المفاتيح للعمل بشكل أسرع.",
+      "title": "اختصارات لوحة المفاتيح"
+    },
+    "showShortcuts": "عرض اختصارات لوحة المفاتيح",
     "sidebar": "الشريط الجانبي",
     "sidebarDescription": "يعرض الشريط الجانبي للجوال.",
     "templates": "القوالب",

@@ -10,7 +10,19 @@ export const HOTKEYS = {
   NEW_CHAT: "Mod+Shift+J",
   NEW_MATTER: "Mod+Shift+E",
   SELECT_ALL: "Mod+A",
+  ACCEPT_SUGGESTION: "Alt+Enter",
+  REJECT_SUGGESTION: "Alt+Shift+Enter",
+  NEXT_SUGGESTION: "Alt+ArrowDown",
+  PREVIOUS_SUGGESTION: "Alt+ArrowUp",
 } as const satisfies Record<string, Hotkey>;
+
+/**
+ * The cheatsheet dialog opens on `?`. `Shift+/` is intentionally NOT a
+ * TanStack `Hotkey` (that type excludes `Shift+<punctuation>` because the
+ * physical key that yields `?` is keyboard-layout dependent). We match the
+ * produced character via `KeyboardEvent.key` instead, which is layout-correct.
+ */
+export const SHOW_SHORTCUTS_KEY = "?";
 
 export const MOD_KEY: IndividualKey =
   detectPlatform() === "mac" ? "Meta" : "Control";
@@ -20,22 +32,55 @@ export const NAV_KEY: IndividualKey =
 
 export type ShortcutContext = "global" | "workspace" | "pdf";
 
-export const SHORTCUT_HINT_GROUPS = [
+export const SHORTCUT_CONTEXTS: readonly ShortcutContext[] = [
+  "global",
+  "workspace",
+  "pdf",
+];
+
+/**
+ * How a shortcut is bound. `hotkey` maps to a @tanstack `Hotkey` (bound with
+ * `useHotkey`, displayed with `formatForDisplay`); `char` is a bare produced
+ * character (layout-correct, matched via `KeyboardEvent.key`).
+ */
+export type ShortcutBinding =
+  | { readonly type: "hotkey"; readonly hotkey: Hotkey }
+  | { readonly type: "char"; readonly char: string };
+
+export type ShortcutDescriptor = {
+  readonly binding: ShortcutBinding;
+  readonly labelKey: TranslationKey;
+  readonly contexts: readonly ShortcutContext[];
+};
+
+export type ShortcutGroup = {
+  readonly categoryKey: TranslationKey;
+  readonly shortcuts: readonly ShortcutDescriptor[];
+};
+
+/**
+ * Single source of truth for app-level keyboard shortcuts. BOTH the
+ * hold-Mod overlay (`ShortcutHintsOverlay`) and the `?` cheatsheet dialog
+ * (`KeyboardShortcutsDialog`) derive their content from this registry, so a
+ * shortcut cannot exist in one surface without the other. Adding a shortcut
+ * here is the only way to surface it; there is no hand-maintained second list.
+ */
+export const SHORTCUT_GROUPS = [
   {
     categoryKey: "navigation.shortcutCategories.navigation",
-    hints: [
+    shortcuts: [
       {
-        hotkey: HOTKEYS.SEARCH,
+        binding: { type: "hotkey", hotkey: HOTKEYS.SEARCH },
         labelKey: "navigation.search",
         contexts: ["global"],
       },
       {
-        hotkey: HOTKEYS.TOGGLE_SIDEBAR,
+        binding: { type: "hotkey", hotkey: HOTKEYS.TOGGLE_SIDEBAR },
         labelKey: "navigation.toggleSidebar",
         contexts: ["global"],
       },
       {
-        hotkey: HOTKEYS.TOGGLE_CHAT,
+        binding: { type: "hotkey", hotkey: HOTKEYS.TOGGLE_CHAT },
         labelKey: "navigation.toggleChat",
         contexts: ["global"],
       },
@@ -43,25 +88,96 @@ export const SHORTCUT_HINT_GROUPS = [
   },
   {
     categoryKey: "common.actions",
-    hints: [
+    shortcuts: [
       {
-        hotkey: HOTKEYS.NEW_MATTER,
+        binding: { type: "hotkey", hotkey: HOTKEYS.NEW_MATTER },
         labelKey: "common.newMatter",
         contexts: ["global", "workspace"],
       },
+      {
+        binding: { type: "hotkey", hotkey: HOTKEYS.NEW_CHAT },
+        labelKey: "chat.newChat",
+        contexts: ["workspace"],
+      },
+      {
+        binding: { type: "hotkey", hotkey: HOTKEYS.SELECT_ALL },
+        labelKey: "folio.selectAll",
+        contexts: ["workspace"],
+      },
     ],
   },
-] as const satisfies readonly {
-  categoryKey: TranslationKey;
-  hints: readonly {
-    hotkey: Hotkey;
-    labelKey: TranslationKey;
-    contexts: readonly ShortcutContext[];
-  }[];
-}[];
+  {
+    categoryKey: "navigation.shortcutCategories.review",
+    shortcuts: [
+      {
+        binding: { type: "hotkey", hotkey: HOTKEYS.ACCEPT_SUGGESTION },
+        labelKey: "common.accept",
+        contexts: ["pdf"],
+      },
+      {
+        binding: { type: "hotkey", hotkey: HOTKEYS.REJECT_SUGGESTION },
+        labelKey: "docxReview.reject",
+        contexts: ["pdf"],
+      },
+      {
+        binding: { type: "hotkey", hotkey: HOTKEYS.PREVIOUS_SUGGESTION },
+        labelKey: "common.previous",
+        contexts: ["pdf"],
+      },
+      {
+        binding: { type: "hotkey", hotkey: HOTKEYS.NEXT_SUGGESTION },
+        labelKey: "common.next",
+        contexts: ["pdf"],
+      },
+    ],
+  },
+  {
+    categoryKey: "navigation.shortcutCategories.help",
+    shortcuts: [
+      {
+        binding: { type: "char", char: SHOW_SHORTCUTS_KEY },
+        labelKey: "navigation.showShortcuts",
+        contexts: ["global"],
+      },
+    ],
+  },
+] as const satisfies readonly ShortcutGroup[];
 
-export type ShortcutHint =
-  (typeof SHORTCUT_HINT_GROUPS)[number]["hints"][number];
+/**
+ * Format a shortcut's full, platform-correct key combo for display in the
+ * cheatsheet (e.g. `⌘K` on macOS, `Ctrl+K` elsewhere). Unlike
+ * `formatHintKey`, the Mod prefix is preserved.
+ */
+export const formatShortcutBinding = (binding: ShortcutBinding): string =>
+  binding.type === "hotkey" ? formatForDisplay(binding.hotkey) : binding.char;
+
+/**
+ * Hold-Mod overlay content, derived from {@link SHORTCUT_GROUPS}. The overlay
+ * is reachable only by holding Mod, so it lists exactly the Mod-chord
+ * shortcuts; every other binding (bare chars, Alt chords) is cheatsheet-only.
+ *
+ * Types are derived from the value (not annotated) so the literal label/category
+ * keys survive: annotating them as the broad `TranslationKey` union would force
+ * `t()` onto its interpolation overload for keys that take no arguments.
+ */
+export const OVERLAY_HINT_GROUPS = SHORTCUT_GROUPS.map((group) => ({
+  categoryKey: group.categoryKey,
+  hints: group.shortcuts.flatMap((shortcut) =>
+    shortcut.binding.type === "hotkey" &&
+    shortcut.binding.hotkey.startsWith("Mod")
+      ? [
+          {
+            hotkey: shortcut.binding.hotkey,
+            labelKey: shortcut.labelKey,
+            contexts: shortcut.contexts,
+          },
+        ]
+      : [],
+  ),
+})).filter((group) => group.hints.length > 0);
+
+export type OverlayHintGroup = (typeof OVERLAY_HINT_GROUPS)[number];
+export type OverlayHint = OverlayHintGroup["hints"][number];
 
 const CTRL_PREFIX_RE = /^Ctrl\+/u;
 

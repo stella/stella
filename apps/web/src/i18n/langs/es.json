@@ -2130,8 +2130,15 @@
     "recents": "Recientes",
     "search": "Buscar",
     "shortcutCategories": {
-      "navigation": "Navegación"
+      "help": "Ayuda",
+      "navigation": "Navegación",
+      "review": "Revisión del documento"
     },
+    "shortcutsDialog": {
+      "description": "Explora los atajos de teclado para trabajar más rápido.",
+      "title": "Atajos de teclado"
+    },
+    "showShortcuts": "Mostrar atajos de teclado",
     "sidebar": "Panel lateral",
     "sidebarDescription": "Muestra el panel lateral móvil.",
     "templates": "Plantillas",
