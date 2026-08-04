@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type * as React from "react";
 
 import {
@@ -146,6 +146,7 @@ import {
   PreviewCardTrigger,
 } from "@stll/ui/components/preview-card";
 import { ScrollArea } from "@stll/ui/components/scroll-area";
+import { ScrollToTop } from "@stll/ui/components/scroll-to-top";
 import {
   Select,
   SelectItem,
@@ -1187,11 +1188,37 @@ export function UiPlayground() {
               >
                 <SharedChatRendererSample />
               </PlaygroundSection>
+              <PlaygroundSection
+                description="Floating affordance that fades in once the container is scrolled past its threshold and jumps back to the top."
+                title="Scroll to top"
+              >
+                <ScrollToTopPlayground />
+              </PlaygroundSection>
             </PlaygroundGrid>
           </TabsPanel>
         </Tabs>
       </div>
     </main>
+  );
+}
+
+function ScrollToTopPlayground() {
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  return (
+    <div className="relative h-64 overflow-hidden rounded-lg border">
+      <div ref={scrollContainerRef} className="h-full overflow-y-auto p-4">
+        <div className="text-muted-foreground flex flex-col gap-4 text-sm">
+          {Array.from({ length: 20 }, (_, index) => (
+            <p key={index}>
+              Scroll row {index + 1} — keep scrolling to reveal the
+              scroll-to-top button.
+            </p>
+          ))}
+        </div>
+      </div>
+      <ScrollToTop scrollContainerRef={scrollContainerRef} threshold={120} />
+    </div>
   );
 }
 
