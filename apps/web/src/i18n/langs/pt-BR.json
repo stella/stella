@@ -1694,6 +1694,7 @@
       },
       "title": "Ajuda e guias"
     },
+    "leave": "Sair do guia",
     "minutes": "{count} min.",
     "status": {
       "skipped": "Ignorado"

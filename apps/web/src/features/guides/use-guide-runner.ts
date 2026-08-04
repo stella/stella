@@ -10,6 +10,7 @@ import type { GuideEngine } from "@/features/guides/guide-engine";
 import type {
   GuideInteraction,
   GuideSeed,
+  GuideStep,
   GuideTour,
   GuideTourId,
 } from "@/features/guides/guide-types";
@@ -18,7 +19,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 
 // Bounded wait so a mid-load, flag-gated, or removed anchor never blocks the
-// tour: after the timeout the step is skipped and the run advances.
+// tour: after the timeout the step is skipped and the run moves on.
 const STEP_POLL_TIMEOUT_MS = 2000;
 const STEP_POLL_INTERVAL_MS = 100;
 
@@ -56,8 +57,33 @@ type GuideRunnerState =
   | { status: "idle" }
   | { status: "running"; tourId: GuideTourId };
 
+// Which way the run is walking the tour. A walk only ever moves one way until
+// the user clicks again; see `resolveFrom`.
+type GuideDirection = 1 | -1;
+
+// A step whose anchor resolved against the live DOM, ready to be shown.
+type ResolvedGuideStep = {
+  index: number;
+  step: GuideStep;
+  element: Element;
+};
+
+// What the user did with the popover.
+type GuideStepOutcome = "next" | "back" | "leave";
+
+// How the run ended. Only `completed` marks the tour done.
+type GuideRunExit =
+  | { type: "completed" }
+  | { type: "left" }
+  // Not one step resolved against the live surface: the tour has diverged
+  // from the app entirely.
+  | { type: "tour-empty" }
+  // Steps were shown, then the run ran out of resolvable ones. Distinct from
+  // completion, which is reaching the end going forwards.
+  | { type: "exhausted" };
+
 type UseGuideRunnerOptions = {
-  // Invoked once a tour reaches its final step (not on early dismiss).
+  // Invoked once a tour reaches its final step (not when the user leaves).
   onCompleted: (tourId: GuideTourId) => void;
 };
 
@@ -75,9 +101,6 @@ export const useGuideRunner = ({
   const analytics = useAnalytics();
   const [state, setState] = useState<GuideRunnerState>({ status: "idle" });
   const engineRef = useRef<GuideEngine | null>(null);
-  // Set to the active step's dismiss resolver while a popover is shown so the
-  // engine's single `onDismiss` can settle the current step.
-  const dismissRef = useRef<() => void>(() => undefined);
 
   const applySeed = (seed: GuideSeed | undefined) => {
     if (!seed) {
@@ -89,7 +112,8 @@ export const useGuideRunner = ({
       case "fill-input": {
         const target = document.querySelector(guideAnchorSelector(seed.anchor));
         // Guarded: only a real text input is seeded; a rich-text or missing
-        // target is a no-op so a demo seed can never throw.
+        // target is a no-op, so a demo seed can never throw and re-applying it
+        // when the user steps back onto the same step is idempotent.
         if (
           target instanceof HTMLInputElement ||
           target instanceof HTMLTextAreaElement
@@ -112,13 +136,9 @@ export const useGuideRunner = ({
 
     const { createGuideEngine } =
       await import("@/features/guides/guide-engine");
-    const engine = createGuideEngine({
-      onDismiss: () => dismissRef.current(),
-    });
+    const engine = createGuideEngine();
     engineRef.current = engine;
 
-    let shownAnyStep = false;
-    let dismissed = false;
     const total = tour.steps.length;
     // The disclosure trigger this run clicked open, while the tour is still
     // teaching what that surface contains. Kept so the run can re-reveal a
@@ -131,8 +151,9 @@ export const useGuideRunner = ({
       }
       revealedTrigger = null;
       // Escape is the disclosure-agnostic close: a menu or popover honours it,
-      // and one that is already closed ignores it. driver.js ends a tour on
-      // Escape *keyup*, so dispatching keydown alone cannot also end the run.
+      // and one that is already closed ignores it. The tour itself no longer
+      // reacts to Escape at all (`allowClose: false`), so this cannot end the
+      // run either.
       document.body.dispatchEvent(
         new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
       );
@@ -141,7 +162,7 @@ export const useGuideRunner = ({
     // Resolves a step's anchor, re-opening the tour's surface first when the
     // anchor is missing because that surface closed: the spotlight popover
     // takes the pointer press that dismisses a menu, so an open menu does not
-    // survive the user clicking "Next".
+    // survive the user clicking a navigation button.
     const resolveStepElement = async (
       anchorId: GuideAnchorId,
     ): Promise<Element | null> => {
@@ -165,8 +186,8 @@ export const useGuideRunner = ({
           return;
         case "open":
           // Recorded, not clicked: `resolveStepElement` opens the surface when
-          // the following step needs something inside it, so the user reads
-          // this step against the closed control they are about to click.
+          // a later step needs something inside it, so the user reads this
+          // step against the closed control they are about to click.
           if (element instanceof HTMLElement) {
             revealedTrigger = element;
           }
@@ -176,91 +197,179 @@ export const useGuideRunner = ({
       }
     };
 
-    try {
-      for (let index = 0; index < total; index++) {
+    // Walks from `from` in `direction` until a step's anchor resolves against
+    // the live DOM. Forwards and backwards resolve a step identically:
+    // navigate to its route, re-open the surface the tour revealed if the
+    // anchor lives inside it, then poll for the anchor within the bounded
+    // deadline. A step whose anchor never appears is logged and skipped, never
+    // thrown, so one diverged step cannot wedge the run in either direction.
+    //
+    // The walk itself never reverses: it returns a step on the `direction`
+    // side of `from`, or runs off that end and returns null. Since only a user
+    // click starts a new walk, and each walk moves the run strictly one way,
+    // two unresolvable steps can never bounce the run back and forth between
+    // them.
+    const resolveFrom = async (
+      from: number,
+      direction: GuideDirection,
+    ): Promise<ResolvedGuideStep | null> => {
+      for (let index = from; index >= 0 && index < total; index += direction) {
         const step = tour.steps.at(index);
         if (!step) {
           continue;
         }
         if (step.route) {
-          // eslint-disable-next-line no-await-in-loop -- sequential by design: each step navigates then waits before the next
+          // eslint-disable-next-line no-await-in-loop -- sequential by design: each candidate navigates then waits before the next is tried
           await navigate({ to: step.route });
         }
-        // eslint-disable-next-line no-await-in-loop -- sequential by design: resolve this step's anchor before showing it
+        // eslint-disable-next-line no-await-in-loop -- sequential by design: resolve this candidate's anchor before trying the next
         const element = await resolveStepElement(step.anchor);
         if (!element) {
-          // A menu that failed to open leaves the trigger recorded, so the next
-          // step inside it can still try: one missing option never wedges the
-          // rest of the tour.
           analytics.captureGuideStepSkipped({
             tourId: tour.id,
             anchorId: step.anchor,
             reason: "anchor-missing",
           });
+          // A menu that failed to open leaves the trigger recorded, so the
+          // next candidate inside it can still try: one missing option never
+          // wedges the rest of the tour.
           continue;
         }
-        if (!element.closest(REVEALED_SURFACE_SELECTOR)) {
-          // The tour has walked back out to the page behind the surface it
-          // opened, so put the UI back the way the user left it.
-          closeRevealedSurface();
-        }
-
-        applySeed(step.seed);
-        shownAnyStep = true;
-
-        // eslint-disable-next-line no-await-in-loop -- sequential by design: block on the user advancing or dismissing this step
-        const outcome = await new Promise<"next" | "close">((resolve) => {
-          dismissRef.current = () => resolve("close");
-          engine.showStep({
-            element,
-            title: t(step.titleKey),
-            body: t(step.bodyKey),
-            when:
-              step.whenKey === undefined
-                ? undefined
-                : { label: t("guides.whenLabel"), text: t(step.whenKey) },
-            placement: step.placement,
-            progressText: t("common.stepProgress", {
-              current: String(index + 1),
-              total: String(total),
-            }),
-            isLastStep: index === total - 1,
-            nextLabel: t("common.next"),
-            doneLabel: t("common.done"),
-            onNext: () => resolve("next"),
-          });
-        });
-        dismissRef.current = () => undefined;
-
-        if (outcome === "close") {
-          dismissed = true;
-          break;
-        }
-        applyInteraction(step.interaction, element);
+        return { index, step, element };
       }
+      return null;
+    };
+
+    const showStep = async (
+      { index, step, element }: ResolvedGuideStep,
+      firstIndex: number,
+    ): Promise<GuideStepOutcome> => {
+      if (!element.closest(REVEALED_SURFACE_SELECTOR)) {
+        // The tour has walked back out to the page behind the surface it
+        // opened — forwards past it, or backwards onto the control that opens
+        // it — so put the UI back the way the user left it.
+        closeRevealedSurface();
+      }
+      applySeed(step.seed);
+
+      return await new Promise<GuideStepOutcome>((resolve) => {
+        engine.showStep({
+          element,
+          title: t(step.titleKey),
+          body: t(step.bodyKey),
+          when:
+            step.whenKey === undefined
+              ? undefined
+              : { label: t("guides.whenLabel"), text: t(step.whenKey) },
+          // Numbered by position in the tour, so the count reads the same
+          // whichever direction the user arrived from.
+          progressText: t("common.stepProgress", {
+            current: String(index + 1),
+            total: String(total),
+          }),
+          // Everything before the earliest step this run could resolve has
+          // already been probed and skipped, so back is genuinely dead there
+          // and the control says so instead of doing nothing.
+          isFirstStep: index <= firstIndex,
+          isLastStep: index === total - 1,
+          backLabel: t("common.back"),
+          nextLabel: t("common.next"),
+          doneLabel: t("common.done"),
+          leaveLabel: t("guides.leave"),
+          onBack: () => resolve("back"),
+          onNext: () => resolve("next"),
+          onLeave: () => resolve("leave"),
+        });
+      });
+    };
+
+    const drive = async (): Promise<GuideRunExit> => {
+      const first = await resolveFrom(0, 1);
+      if (!first) {
+        return { type: "tour-empty" };
+      }
+      let current = first;
+      // The earliest step this run has shown. Tracked so the back control is
+      // disabled where there is provably nothing behind it.
+      let firstIndex = first.index;
+
+      for (;;) {
+        firstIndex = Math.min(firstIndex, current.index);
+        // eslint-disable-next-line no-await-in-loop -- sequential by design: block on the user acting on this step before resolving the next
+        const outcome = await showStep(current, firstIndex);
+
+        switch (outcome) {
+          case "leave":
+            return { type: "left" };
+          case "back": {
+            // eslint-disable-next-line no-await-in-loop -- sequential by design: one step is resolved and shown at a time
+            const previous = await resolveFrom(current.index - 1, -1);
+            // Nothing earlier resolves: stay on this step rather than dropping
+            // the user out of the tour on a back press. Re-resolving forwards
+            // from the same index refreshes the element, which the backwards
+            // probe may have navigated away from, and cannot re-enter the
+            // backwards walk without another click.
+            const restored =
+              // eslint-disable-next-line no-await-in-loop -- sequential by design: one step is resolved and shown at a time
+              previous ?? (await resolveFrom(current.index, 1));
+            if (!restored) {
+              return { type: "exhausted" };
+            }
+            current = restored;
+            break;
+          }
+          case "next": {
+            applyInteraction(current.step.interaction, current.element);
+            // eslint-disable-next-line no-await-in-loop -- sequential by design: one step is resolved and shown at a time
+            const next = await resolveFrom(current.index + 1, 1);
+            if (!next) {
+              return { type: "completed" };
+            }
+            current = next;
+            break;
+          }
+          default:
+            outcome satisfies never;
+        }
+      }
+    };
+
+    let exit: GuideRunExit;
+    try {
+      exit = await drive();
     } finally {
-      // Covers every exit: completion, dismissal, and a step skipped because
-      // its anchor never appeared. The tour never leaves UI it opened behind.
+      // Covers every exit: completion, leaving, and a run where no step could
+      // be resolved. The tour never leaves UI it opened behind.
       closeRevealedSurface();
       engine.destroy();
       engineRef.current = null;
       setState({ status: "idle" });
     }
 
-    if (dismissed) {
-      return;
+    switch (exit.type) {
+      case "left":
+        return;
+      case "tour-empty": {
+        // Every step diverged from the live surface: end cleanly, surface it.
+        analytics.captureGuideStepSkipped({
+          tourId: tour.id,
+          anchorId: tour.steps.at(0)?.anchor ?? "",
+          reason: "tour-empty",
+        });
+        stellaToast.add({ title: t("guides.unavailable"), type: "info" });
+        return;
+      }
+      case "exhausted":
+        // The surface moved under a run that had already started. Say so
+        // rather than ending silently, and do not mark the tour done.
+        stellaToast.add({ title: t("guides.unavailable"), type: "info" });
+        return;
+      case "completed":
+        onCompleted(tour.id);
+        return;
+      default:
+        exit satisfies never;
     }
-    if (!shownAnyStep) {
-      // Every step diverged from the live surface: end cleanly, surface it.
-      analytics.captureGuideStepSkipped({
-        tourId: tour.id,
-        anchorId: tour.steps.at(0)?.anchor ?? "",
-        reason: "tour-empty",
-      });
-      stellaToast.add({ title: t("guides.unavailable"), type: "info" });
-      return;
-    }
-    onCompleted(tour.id);
   };
 
   const start = (tour: GuideTour) => {

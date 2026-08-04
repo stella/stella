@@ -1,7 +1,7 @@
-import { type Driver, driver } from "driver.js";
+import { type Driver, driver, type PopoverDOM } from "driver.js";
 import "driver.js/dist/driver.css";
 
-import type { GuidePlacement } from "@/features/guides/guide-types";
+import "@/features/guides/guide-popover.css";
 
 // Thin, swappable wrapper around the spotlight engine (driver.js, MIT, zero
 // runtime deps). This module statically imports driver.js and its CSS; the
@@ -25,13 +25,19 @@ export type GuideEngineStep = {
   // Rendered under the body as a muted, labelled secondary line; `undefined`
   // on steps that describe a control with no alternative to weigh it against.
   when: GuideEngineWhen | undefined;
-  placement?: GuidePlacement | undefined;
   // Pre-localized "N of M" label; passed through verbatim (no {{tokens}}).
   progressText: string;
+  // Back is rendered on every step and disabled here, so the footer keeps the
+  // same shape from the first step to the last.
+  isFirstStep: boolean;
   isLastStep: boolean;
+  backLabel: string;
   nextLabel: string;
   doneLabel: string;
+  leaveLabel: string;
+  onBack: () => void;
   onNext: () => void;
+  onLeave: () => void;
 };
 
 export type GuideEngine = {
@@ -42,9 +48,7 @@ export type GuideEngine = {
 // driver.js assigns the popover description with `innerHTML`, which is the only
 // seam for a second paragraph. Copy is compiled-in translation text, never user
 // input, but escape it anyway so a future key containing `<` cannot become
-// markup. Styling is inline: the popover is appended to `document.body` outside
-// the app tree, so it is reached by design tokens on `:root` but not by the
-// utility classes the app's own components use.
+// markup.
 const escapeHtml = (value: string): string =>
   value
     .replaceAll("&", "&amp;")
@@ -52,46 +56,50 @@ const escapeHtml = (value: string): string =>
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
 
-const WHEN_PARAGRAPH_STYLE =
-  "margin-top:0.5rem;color:var(--color-muted-foreground);font-size:0.8125rem;line-height:1.45";
-
 const buildDescription = ({ body, when }: GuideEngineStep): string => {
   const bodyHtml = `<p>${escapeHtml(body)}</p>`;
   if (!when) {
     return bodyHtml;
   }
-  return `${bodyHtml}<p style="${WHEN_PARAGRAPH_STYLE}"><span style="font-weight:600">${escapeHtml(
+  return `${bodyHtml}<p class="stella-guide-when"><span class="stella-guide-when-label">${escapeHtml(
     when.label,
   )}</span> ${escapeHtml(when.text)}</p>`;
 };
 
-type CreateGuideEngineOptions = {
-  // Invoked when the user dismisses the tour (close button, overlay click, or
-  // Escape) rather than advancing to the end.
-  onDismiss: () => void;
-};
+// driver.js renders its close control as a bare "×" pinned to the popover's
+// top corner, with no option to relabel or reposition it. Both are wrong for a
+// control that ends the tour: it has to say what it does, and it has to sit
+// with the other controls rather than lurk in a corner. Moving it to the end
+// of the footer also puts it last in the popover's tab order, so driver's
+// focus-the-first-tabbable-on-open lands on a navigation button and never on
+// the one control that throws the run away.
+const renderLeaveControl =
+  (leaveLabel: string) =>
+  ({ closeButton, footer }: PopoverDOM) => {
+    closeButton.textContent = leaveLabel;
+    // The visible label is now the accessible name; driver's hardcoded
+    // "Close" aria-label would otherwise override it.
+    closeButton.removeAttribute("aria-label");
+    footer.append(closeButton);
+  };
 
-export const createGuideEngine = ({
-  onDismiss,
-}: CreateGuideEngineOptions): GuideEngine => {
-  // Distinguishes a programmatic teardown (advance/finish/unmount) from a
-  // user-initiated dismiss so `onDismiss` fires only for the latter.
-  let teardownRequested = false;
-
+export const createGuideEngine = (): GuideEngine => {
   const instance: Driver = driver({
-    allowClose: true,
-    overlayClickBehavior: "close",
+    // A stray click on the backdrop or a reflexive Escape must never cost the
+    // user a half-finished tour. driver gates every teardown path it owns —
+    // escape press, close click, overlay click — on this flag, so turning it
+    // off makes the run un-losable by accident. The explicit, labelled leave
+    // control in the footer is the single way out: it is wired through the
+    // popover's own `onCloseClick` hook, which driver invokes directly instead
+    // of through the flag-gated event, so it keeps working here.
+    allowClose: false,
+    // Stated rather than inherited: the backdrop stays inert on its own terms,
+    // not as a side effect of `allowClose`.
+    overlayClickBehavior: () => undefined,
     overlayOpacity: OVERLAY_OPACITY,
     stagePadding: STAGE_PADDING_PX,
     stageRadius: STAGE_RADIUS_PX,
     popoverClass: "stella-guide-popover",
-    onDestroyStarted: () => {
-      if (!teardownRequested) {
-        teardownRequested = true;
-        onDismiss();
-      }
-      instance.destroy();
-    },
   });
 
   return {
@@ -101,20 +109,23 @@ export const createGuideEngine = ({
         popover: {
           title: step.title,
           description: buildDescription(step),
-          align: "start",
-          showButtons: ["next", "close"],
+          showButtons: ["previous", "next", "close"],
+          disableButtons: step.isFirstStep ? ["previous"] : [],
           showProgress: true,
           progressText: step.progressText,
+          prevBtnText: step.backLabel,
           nextBtnText: step.isLastStep ? step.doneLabel : step.nextLabel,
+          onPrevClick: () => step.onBack(),
           onNextClick: () => step.onNext(),
-          // Omit `side` when unset so driver auto-places (exactOptionalPropertyTypes
-          // forbids passing an explicit `undefined`).
-          ...(step.placement === undefined ? {} : { side: step.placement }),
+          onCloseClick: () => step.onLeave(),
+          onPopoverRender: renderLeaveControl(step.leaveLabel),
+          // No `side`/`align`: the popover is pinned to one fixed, centred
+          // position by `guide-popover.css` rather than chasing the target
+          // around the viewport, so per-step placement has nothing to say.
         },
       });
     },
     destroy: () => {
-      teardownRequested = true;
       instance.destroy();
     },
   };

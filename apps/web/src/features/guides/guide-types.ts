@@ -7,8 +7,6 @@ import type { FileRouteTypes } from "@/routeTree.gen";
 // with a `$param` segment are excluded because a step cannot supply params.
 export type GuideRoute = Exclude<FileRouteTypes["to"], `${string}$${string}`>;
 
-export type GuidePlacement = "top" | "bottom" | "left" | "right";
-
 // Guide copy lives under `guides.tours.*` and takes no ICU arguments, so these
 // keys are safe to pass to `t(key)` with a single argument. Narrowing to the
 // no-argument subset (rather than the full `TranslationKey` union, which
@@ -41,7 +39,8 @@ export type GuideStep = {
   // it over its neighbours. Rendered under the body as a muted, labelled
   // secondary line. Omit it on steps where there is no real choice to make.
   whenKey?: GuideMessageKey;
-  placement?: GuidePlacement;
+  // No placement field: the popover is pinned to one fixed, centred position
+  // for the whole run, so a step has nothing to say about where it appears.
   seed?: GuideSeed;
   interaction?: GuideInteraction;
 };

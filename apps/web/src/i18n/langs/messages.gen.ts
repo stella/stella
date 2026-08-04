@@ -1697,6 +1697,7 @@ type Messages = {
       };
       "title": "Help and guides";
     };
+    "leave": "Leave guide";
     "minutes": "{count} min";
     "status": {
       "skipped": "Skipped";

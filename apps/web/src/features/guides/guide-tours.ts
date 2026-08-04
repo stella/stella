@@ -21,7 +21,6 @@ export const GUIDE_TOURS = [
         route: "/chat",
         titleKey: "guides.tours.chat.steps.composer.title",
         bodyKey: "guides.tours.chat.steps.composer.body",
-        placement: "top",
         // The composer is a rich-text editor, not a plain input, so the
         // guarded seed is skipped at runtime — it demonstrates the fill-input
         // branch and its graceful no-op, not a wired example.
@@ -39,7 +38,6 @@ export const GUIDE_TOURS = [
         titleKey: "guides.tours.chat.steps.plusMenu.title",
         bodyKey: "guides.tours.chat.steps.plusMenu.body",
         whenKey: "guides.tours.chat.steps.plusMenu.when",
-        placement: "top",
         seed: { kind: "none" },
         interaction: { kind: "open" },
       },
@@ -48,7 +46,6 @@ export const GUIDE_TOURS = [
         titleKey: "guides.tours.chat.steps.attach.title",
         bodyKey: "guides.tours.chat.steps.attach.body",
         whenKey: "guides.tours.chat.steps.attach.when",
-        placement: "right",
         seed: { kind: "none" },
       },
       {
@@ -56,7 +53,6 @@ export const GUIDE_TOURS = [
         titleKey: "guides.tours.chat.steps.models.title",
         bodyKey: "guides.tours.chat.steps.models.body",
         whenKey: "guides.tours.chat.steps.models.when",
-        placement: "right",
         seed: { kind: "none" },
       },
       {
@@ -64,7 +60,6 @@ export const GUIDE_TOURS = [
         titleKey: "guides.tours.chat.steps.skills.title",
         bodyKey: "guides.tours.chat.steps.skills.body",
         whenKey: "guides.tours.chat.steps.skills.when",
-        placement: "right",
         seed: { kind: "none" },
       },
       {
@@ -72,7 +67,6 @@ export const GUIDE_TOURS = [
         titleKey: "guides.tours.chat.steps.context.title",
         bodyKey: "guides.tours.chat.steps.context.body",
         whenKey: "guides.tours.chat.steps.context.when",
-        placement: "right",
         seed: { kind: "none" },
       },
       {
@@ -80,7 +74,6 @@ export const GUIDE_TOURS = [
         titleKey: "guides.tours.chat.steps.mcp.title",
         bodyKey: "guides.tours.chat.steps.mcp.body",
         whenKey: "guides.tours.chat.steps.mcp.when",
-        placement: "right",
         seed: { kind: "none" },
       },
       {
@@ -90,7 +83,6 @@ export const GUIDE_TOURS = [
         titleKey: "guides.tours.chat.steps.anonymize.title",
         bodyKey: "guides.tours.chat.steps.anonymize.body",
         whenKey: "guides.tours.chat.steps.anonymize.when",
-        placement: "top",
         seed: { kind: "none" },
       },
       {
@@ -98,7 +90,6 @@ export const GUIDE_TOURS = [
         titleKey: "guides.tours.chat.steps.send.title",
         bodyKey: "guides.tours.chat.steps.send.body",
         whenKey: "guides.tours.chat.steps.send.when",
-        placement: "left",
         seed: { kind: "none" },
       },
     ],
@@ -113,14 +104,12 @@ export const GUIDE_TOURS = [
         anchor: GUIDE_ANCHORS.documentsUpload,
         titleKey: "guides.tours.documents.steps.upload.title",
         bodyKey: "guides.tours.documents.steps.upload.body",
-        placement: "bottom",
         seed: { kind: "none" },
       },
       {
         anchor: GUIDE_ANCHORS.documentsList,
         titleKey: "guides.tours.documents.steps.browse.title",
         bodyKey: "guides.tours.documents.steps.browse.body",
-        placement: "right",
         seed: { kind: "none" },
       },
     ],
@@ -135,7 +124,6 @@ export const GUIDE_TOURS = [
         anchor: GUIDE_ANCHORS.playbooksCreate,
         titleKey: "guides.tours.playbooks.steps.create.title",
         bodyKey: "guides.tours.playbooks.steps.create.body",
-        placement: "bottom",
         seed: { kind: "none" },
       },
     ],
@@ -151,7 +139,6 @@ export const GUIDE_TOURS = [
         route: "/knowledge/workflows",
         titleKey: "guides.tours.workflows.steps.create.title",
         bodyKey: "guides.tours.workflows.steps.create.body",
-        placement: "bottom",
         seed: { kind: "none" },
       },
     ],
@@ -166,7 +153,6 @@ export const GUIDE_TOURS = [
         anchor: GUIDE_ANCHORS.tabularReviewAddColumn,
         titleKey: "guides.tours.tabularReview.steps.addColumn.title",
         bodyKey: "guides.tours.tabularReview.steps.addColumn.body",
-        placement: "bottom",
         seed: { kind: "none" },
       },
     ],
