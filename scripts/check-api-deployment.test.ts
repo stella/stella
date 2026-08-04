@@ -27,7 +27,10 @@ describe("API deployment health receipt", () => {
     expect(healthJob).toContain('status="$READY_STATUS"');
     expect(healthJob).toContain(`echo "status=\${status}" >> "$GITHUB_OUTPUT"`);
     expect(healthJob).toContain(
-      "Staging health gate did not pass; skipping this deployment.",
+      "workflow_dispatch bypasses the gate and deploys anyway.",
+    );
+    expect(healthJob).toContain(
+      "failing the run so continuous deploy does not stall silently",
     );
     expect(deployJob).toContain("needs: staging-health");
     expect(deployJob).toContain("github.event_name == 'workflow_dispatch'");
