@@ -45,7 +45,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 568,
+    "count": 567,
     "files": {
       "apps/api/src/db/migrate.ts": 2,
       "apps/api/src/db/schema.ts": 1,
@@ -90,7 +90,6 @@
       "apps/api/src/handlers/chat/tools/execute/sandbox/run-sandbox.ts": 6,
       "apps/api/src/handlers/chat/tools/registry-adapter/mcp-chat-context.ts": 1,
       "apps/api/src/handlers/chat/tools/spawn-subagents-tool.ts": 1,
-      "apps/api/src/handlers/chat/tools/workspace-tools.ts": 1,
       "apps/api/src/handlers/chat/upload-files.ts": 3,
       "apps/api/src/handlers/clauses/search-vector.ts": 1,
       "apps/api/src/handlers/contacts/create.ts": 1,

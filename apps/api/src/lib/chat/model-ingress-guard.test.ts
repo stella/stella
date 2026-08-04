@@ -44,7 +44,8 @@ describe("redactTenantIdsDeep", () => {
     // Non-tenant UUIDs (public corpus ids, version handles) are untouched:
     // the guard is membership-exact, not pattern-based.
     expect(value.parts[1]?.content).toBe(`public ${PUBLIC_UUID} stays`);
-    expect(value.createdAt).toBe(createdAt);
+    // structuredClone copies the Date: same instant, fresh instance.
+    expect(value.createdAt).toEqual(createdAt);
     expect(value.count).toBe(2);
     expect(redactedPaths).toEqual(["$.parts[0].content"]);
     expect(captureErrorMock).toHaveBeenCalledTimes(1);
