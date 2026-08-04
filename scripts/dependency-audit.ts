@@ -46,25 +46,69 @@ type Baseline = {
   accepted: BaselineEntry[];
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+// `bun audit --json` and the baseline file are both untrusted shape-wise.
+// Coerce only the primitives that have a meaningful string form so an
+// object-valued field degrades to "" instead of stringifying as
+// "[object Object]" and being compared or persisted as that literal.
+const asText = (value: unknown): string => {
+  if (typeof value === "string") {
+    return value;
+  }
+  return typeof value === "number" ? String(value) : "";
+};
+
+// The baseline is a repo-committed file this script owns, but a hand-edit that
+// breaks an entry must not silently accept the advisory it was meant to cover.
+// An unreadable entry is dropped, so the matching advisory reads as new and the
+// gate fails closed.
+const toBaselineEntry = (value: unknown): BaselineEntry | null => {
+  if (!isRecord(value)) {
+    return null;
+  }
+  const id = asText(value["id"]);
+  if (id === "") {
+    return null;
+  }
+  return {
+    id,
+    severity: asText(value["severity"]),
+    package: asText(value["package"]),
+    title: asText(value["title"]),
+    reason: asText(value["reason"]),
+  };
+};
+
 const readBaseline = async (): Promise<Baseline> => {
   const file = Bun.file(BASELINE_PATH);
   if (!(await file.exists())) {
     return { note: "", auditLevel: "high", accepted: [] };
   }
-  // SAFETY: the baseline is a repo-committed file this script owns, not external
-  // input. A hand-edit that breaks the shape surfaces as a thrown TypeError the
-  // first time `.accepted` is iterated (in diffAgainstBaseline / writeBaseline),
-  // which fails the gate closed rather than silently accepting advisories.
-  return (await file.json()) as Baseline;
+  const parsed: unknown = await file.json();
+  const accepted = isRecord(parsed) ? parsed["accepted"] : undefined;
+  return {
+    note: isRecord(parsed) ? asText(parsed["note"]) : "",
+    auditLevel: isRecord(parsed) ? asText(parsed["auditLevel"]) : "high",
+    accepted: Array.isArray(accepted)
+      ? accepted
+          .map(toBaselineEntry)
+          .filter((entry): entry is BaselineEntry => entry !== null)
+      : [],
+  };
 };
 
+const GHSA_ID = /GHSA-[a-z0-9-]+/iu;
+
 const ghsaId = (advisory: Record<string, unknown>): string => {
-  const url = typeof advisory["url"] === "string" ? advisory["url"] : "";
-  const fromUrl = url.match(/GHSA-[a-z0-9-]+/iu)?.[0];
-  return (
-    fromUrl ??
-    String(advisory["github_advisory_id"] ?? advisory["id"] ?? "unknown")
-  );
+  const url = asText(advisory["url"]);
+  const fromUrl = GHSA_ID.exec(url)?.[0];
+  if (fromUrl !== undefined) {
+    return fromUrl;
+  }
+  const fromFields = asText(advisory["github_advisory_id"] ?? advisory["id"]);
+  return fromFields === "" ? "unknown" : fromFields;
 };
 
 // Raised when `bun audit` itself fails (crash, network, unparseable output)
@@ -80,15 +124,12 @@ type AuditProcessResult = {
   stdout: string;
 };
 
-const safeJsonParse = (text: string): Record<string, unknown> | null => {
+// Returns the parsed payload as `unknown`; every downstream read narrows it.
+// A syntactically invalid payload is caught here and returned as null, which
+// the caller treats as a failed audit (fail-closed).
+const safeJsonParse = (text: string): unknown => {
   try {
-    // SAFETY: `bun audit --json` output is untrusted shape-wise, so the cast is
-    // only a starting assumption, not a guarantee. Every downstream read goes
-    // through bracket access coerced with `String(... ?? "")` / `Array.isArray`,
-    // so a non-object (primitive/array) yields no gated advisories rather than a
-    // crash; a syntactically invalid payload is caught here and returned as null,
-    // which the caller treats as a failed audit (fail-closed).
-    return JSON.parse(text) as Record<string, unknown>;
+    return JSON.parse(text);
   } catch {
     return null;
   }
@@ -129,26 +170,25 @@ const gatedAdvisoriesFromAuditResult = ({
     );
   }
 
-  // SAFETY: `bun audit` groups advisories by package under an `advisories` key
-  // (older shape: at the top level). Either way this is untrusted shape; the
-  // cast just lets us enumerate it. `Object.entries` on a non-object yields no
-  // keys, so a wrong shape produces zero advisories, never a throw.
-  const advisories = (parsed["advisories"] ?? parsed) as Record<
-    string,
-    unknown
-  >;
+  // `bun audit` groups advisories by package under an `advisories` key (older
+  // shape: at the top level). Either way this is untrusted shape, so a payload
+  // that is not an object produces zero advisories rather than a throw.
+  const container = isRecord(parsed) ? parsed : {};
+  const grouped = isRecord(container["advisories"])
+    ? container["advisories"]
+    : container;
 
   const byId = new Map<string, Advisory>();
-  for (const [pkg, value] of Object.entries(advisories)) {
+  for (const [pkg, value] of Object.entries(grouped)) {
     const list = Array.isArray(value) ? value : [value];
-    for (const raw of list) {
-      // SAFETY: each advisory entry is untrusted; the cast only enables the
-      // bracket reads below. `severity`, `title`, and the id are all pulled with
-      // `String(... ?? "")` / the `ghsaId` fallback, so a missing or wrong-typed
-      // field degrades to an empty/"unknown" value and the severity gate skips
-      // anything that is not exactly "high"/"critical".
-      const advisory = raw as Record<string, unknown>;
-      const severity = String(advisory["severity"] ?? "");
+    for (const advisory of list) {
+      // Each entry is untrusted: a missing or wrong-typed field degrades to an
+      // empty/"unknown" value, and the severity gate skips anything that is not
+      // exactly "high"/"critical".
+      if (!isRecord(advisory)) {
+        continue;
+      }
+      const severity = asText(advisory["severity"]);
       if (!GATED_SEVERITIES.has(severity)) {
         continue;
       }
@@ -158,7 +198,7 @@ const gatedAdvisoriesFromAuditResult = ({
           id,
           severity,
           package: pkg,
-          title: String(advisory["title"] ?? ""),
+          title: asText(advisory["title"]),
         });
       }
     }

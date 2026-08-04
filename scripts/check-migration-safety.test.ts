@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import path from "node:path";
 
 type CheckerResult = {
   exitCode: number | null;
@@ -12,8 +12,10 @@ type CheckerResult = {
 const decoder = new TextDecoder();
 
 const runChecker = (sql: string): CheckerResult => {
-  const directory = mkdtempSync(join(tmpdir(), "stella-migration-safety-"));
-  const file = join(directory, "migration.sql");
+  const directory = mkdtempSync(
+    path.join(tmpdir(), "stella-migration-safety-"),
+  );
+  const file = path.join(directory, "migration.sql");
 
   writeFileSync(file, sql);
 

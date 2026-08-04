@@ -54,11 +54,18 @@ const GENERATED_HEADER = [
 const quoteEnvValue = (value: string) =>
   `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
 
+// Catalog entries are typed as `v.GenericSchema`, for which `getDefault`
+// resolves to `void` even though it returns the schema's real default at
+// runtime. Reading it through this helper makes the value `unknown`, so the
+// narrowing at the call site is honest rather than dead code.
+const schemaDefault = (schema: v.GenericSchema): unknown =>
+  v.getDefault(schema);
+
 const defaultExample = (entry: EnvCatalogEntry) => {
   if (entry.example !== undefined) {
     return entry.example;
   }
-  const fallback = v.getDefault(entry.schema);
+  const fallback = schemaDefault(entry.schema);
   if (typeof fallback === "string" || typeof fallback === "number") {
     return String(fallback);
   }
@@ -365,6 +372,14 @@ const findComputedEnvUsages = (file: string, text: string): EnvUsage[] => {
     ts.isFunctionDeclaration(node) ||
     ts.isFunctionExpression(node);
 
+  // `ts.Node.parent` is declared non-optional but is undefined once the walk
+  // reaches the source file. Reading it through a nullable view keeps the
+  // termination check meaningful instead of narrowing it away.
+  const parentOf = (node: ts.Node): ts.Node | undefined => {
+    const { parent }: { parent?: ts.Node } = node;
+    return parent;
+  };
+
   const helperName = (node: HelperDeclaration) => {
     if (ts.isFunctionDeclaration(node) && node.name) {
       return node.name.text;
@@ -437,9 +452,9 @@ const findComputedEnvUsages = (file: string, text: string): EnvUsage[] => {
           name: constantName,
         });
       } else {
-        let parent = node.parent;
+        let parent = parentOf(node);
         while (parent && !isHelperDeclaration(parent)) {
-          parent = parent.parent;
+          parent = parentOf(parent);
         }
         if (parent && isHelperDeclaration(parent)) {
           const name = helperName(parent);

@@ -183,38 +183,38 @@ const printReport = (hotspots: Hotspots): void => {
   if (hotspots.dbQueries.length === 0) {
     console.log("   (no dbQueries recorded in the baseline)");
   }
-  hotspots.dbQueries.forEach((row, index) => {
+  for (const [index, row] of hotspots.dbQueries.entries()) {
     console.log(
       `   ${rank(index)} ${`${row.queries} queries`.padEnd(14)} ${row.endpoint}  (${row.route})`,
     );
-  });
+  }
 
   console.log(
     `\n2) top ${LIMIT} routes by waterfall depth (${NETWORK_BASELINE_REL})`,
   );
-  hotspots.waterfallDepth.forEach((row, index) => {
+  for (const [index, row] of hotspots.waterfallDepth.entries()) {
     console.log(
       `   ${rank(index)} ${`depth ${row.depth}`.padEnd(10)} ${row.route}`,
     );
-  });
+  }
 
   console.log(
     `\n3) top ${LIMIT} routes by total request count (${NETWORK_BASELINE_REL})`,
   );
-  hotspots.requestCounts.forEach((row, index) => {
+  for (const [index, row] of hotspots.requestCounts.entries()) {
     console.log(
       `   ${rank(index)} ${`${row.total} requests`.padEnd(14)} ${row.route}`,
     );
-  });
+  }
 
   console.log(
     `\n4) top ${LIMIT} bundle chunk groups by gzip size (${BUNDLE_BASELINE_REL})`,
   );
-  hotspots.bundleGroups.forEach((row, index) => {
+  for (const [index, row] of hotspots.bundleGroups.entries()) {
     console.log(
       `   ${rank(index)} ${kib(row.bytes).padStart(10)}  ${row.group}`,
     );
-  });
+  }
 };
 
 // --- Entry --------------------------------------------------------------

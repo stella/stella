@@ -24,7 +24,8 @@ const FULL_CHECK_FILES = new Set([
   "package.json",
   "scripts/code-check-affected.ts",
   "scripts/lint-oxlint-fixtures.sh",
-  "scripts/lint-root-scripts-sql.sh",
+  "scripts/lint-root-scripts.sh",
+  "scripts/tsconfig.json",
   "turbo.json",
   "tsconfig.json",
   "tsconfig.oxlint-plugins.json",
@@ -227,7 +228,7 @@ export const affectedCommands = (
   // their cross-cutting checks. Run those guards unconditionally.
   const commands: string[][] = [
     ["bun", "run", "env:check"],
-    ["bash", "scripts/lint-root-scripts-sql.sh"],
+    ["bash", "scripts/lint-root-scripts.sh"],
   ];
   if (plan.checkLanding) {
     commands.push(["bun", "--cwd", "apps/landing", "typecheck"]);

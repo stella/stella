@@ -33,7 +33,7 @@ const stripTrailingSlash = (value: string) => value.replace(/(?<!\/)\/+$/u, "");
 const appendPath = (baseUrl: string, path: string) =>
   new URL(path, `${baseUrl}/`).toString();
 
-const sleep = (ms: number) =>
+const sleep = async (ms: number) =>
   new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
@@ -97,10 +97,6 @@ const expectCommit = ({ value, expectedCommit, source }: ExpectCommitInput) => {
   }
 };
 
-const throwError = (error: Error): never => {
-  throw error;
-};
-
 const runProbe = async (name: string, probe: () => Promise<void>) => {
   let lastError: Error | undefined;
   // eslint-disable-next-line no-unreachable-loop -- the catch path explicitly continues after a failed probe; successful probes return.
@@ -126,7 +122,7 @@ const runProbe = async (name: string, probe: () => Promise<void>) => {
   }
 
   if (lastError) {
-    return throwError(lastError);
+    throw lastError;
   }
   throw new RailwaySmokeError(`${name} failed`);
 };
@@ -136,13 +132,17 @@ const main = async () => {
   const webUrl = readRequiredEnv(WEB_URL_ENV);
   const expectedCommit = readOptionalEnv(EXPECTED_COMMIT_ENV);
 
-  await runProbe("api /health", () => checkApiHealth(apiUrl, expectedCommit));
-  await runProbe("web /health", () => checkWebHealth(webUrl));
+  await runProbe("api /health", async () => {
+    await checkApiHealth(apiUrl, expectedCommit);
+  });
+  await runProbe("web /health", async () => {
+    await checkWebHealth(webUrl);
+  });
 
   if (expectedCommit) {
-    await runProbe("web /version.json", () =>
-      checkWebVersion(webUrl, expectedCommit),
-    );
+    await runProbe("web /version.json", async () => {
+      await checkWebVersion(webUrl, expectedCommit);
+    });
   }
 
   console.log("railway-smoke: ok");

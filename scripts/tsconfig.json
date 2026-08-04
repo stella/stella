@@ -1,0 +1,9 @@
+{
+  // Oxlint's type-aware pass resolves compiler options by walking up from each
+  // file to the nearest `tsconfig.json`. The root one lists `"files": []`, so
+  // without this the scripts belong to no project and every type-aware rule
+  // runs against default options: `noUncheckedIndexedAccess` and the `ESNext`
+  // lib silently drop out, producing both false positives and false negatives.
+  // `tsconfig.scripts.json` stays the project `typecheck:repo` compiles.
+  "extends": "../tsconfig.scripts.json"
+}

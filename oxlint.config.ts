@@ -583,6 +583,14 @@ export default defineConfig({
       files: ["**/scripts/**"],
       rules: {
         "no-console": "off",
+        // `noPropertyAccessFromIndexSignature` requires bracket access on the
+        // index-signature types these config/JSON parsers work with, which is
+        // exactly what `dot-notation` flags. Keep the rule for real named
+        // properties; allow the bracket form the compiler mandates.
+        "typescript/dot-notation": [
+          "error",
+          { allowIndexSignaturePropertyAccess: true },
+        ],
         // Scripts import from untyped packages and use dynamic data;
         // strict unsafe-any rules add friction without real safety.
         "typescript/no-unsafe-assignment": "off",

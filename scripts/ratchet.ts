@@ -476,7 +476,7 @@ const REQUIRE_QUERY_LIMIT_RULE = "require-query-limit/require-query-limit";
 
 const lintDisableRules = (directive: string): string[] | null => {
   const match = LINT_DISABLE_DIRECTIVE.exec(directive);
-  if (!match || match.index === undefined) {
+  if (!match) {
     return null;
   }
 
@@ -747,8 +747,7 @@ const countTruncatedCapabilitySchemas = (content: string): number => {
       typeof entry === "object" &&
       entry !== null &&
       "inputSchemaTruncated" in entry &&
-      (entry as { inputSchemaTruncated?: unknown }).inputSchemaTruncated ===
-        true,
+      entry.inputSchemaTruncated === true,
   ).length;
 };
 

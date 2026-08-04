@@ -47,10 +47,7 @@ describe("affected code-check planning", () => {
     });
     // Root scripts belong to no workspace, so the guard must run regardless
     // of which targets were affected.
-    expect(commands).toContainEqual([
-      "bash",
-      "scripts/lint-root-scripts-sql.sh",
-    ]);
+    expect(commands).toContainEqual(["bash", "scripts/lint-root-scripts.sh"]);
     expect(commands).toContainEqual(["bun", "run", "env:check"]);
     const oxc = commands.find((command) => command.includes("oxlint"));
     expect(oxc).toContain("--type-aware");
@@ -64,7 +61,8 @@ describe("affected code-check planning", () => {
     "bunfig.toml",
     "scripts/code-check-affected.ts",
     "scripts/lint-oxlint-fixtures.sh",
-    "scripts/lint-root-scripts-sql.sh",
+    "scripts/lint-root-scripts.sh",
+    "scripts/tsconfig.json",
     "turbo.json",
     "oxlint.config.ts",
     "tsconfig.json",
