@@ -5,6 +5,15 @@
 export const GUIDE_ANCHORS = {
   chatComposer: "chat-composer",
   chatToolsButton: "chat-tools-button",
+  // Options inside the composer's (+) menu. They exist only while that menu is
+  // open, so a step targeting one must follow a step that reveals it
+  // (`interaction: { kind: "open" }` on the trigger).
+  chatMenuAttach: "chat-menu-attach",
+  chatMenuModels: "chat-menu-models",
+  chatMenuSkills: "chat-menu-skills",
+  chatMenuContext: "chat-menu-context",
+  chatMenuMcp: "chat-menu-mcp",
+  chatAnonymize: "chat-anonymize",
   chatSend: "chat-send",
   documentsUpload: "documents-upload",
   documentsList: "documents-list",

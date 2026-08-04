@@ -1679,9 +1679,17 @@
     "checklist": {
       "progress": "Pabeigti {completed} no {total}"
     },
+    "community": {
+      "body": "Stellai ir publisks kopienas tērzēšanas serveris. Tur atbild uzturētāji un citi lietotāji, dalās pieredzē un pieņem kļūdu ziņojumus. Tas ir kopienas forums, nevis atbalsta dienests: atbild tas, kurš tobrīd ir tiešsaistē.",
+      "linkLabel": "Atvērt kopienas forumu"
+    },
     "help": {
       "buttonLabel": "Palīdzība un ceļveži",
       "subtitle": "Interaktīvi darba vietas pārskati",
+      "tabs": {
+        "community": "Kopiena",
+        "guides": "Ceļveži"
+      },
       "title": "Palīdzība un ceļveži"
     },
     "minutes": "{count} min.",
@@ -1690,23 +1698,55 @@
     },
     "tours": {
       "chat": {
-        "description": "Uzrakstiet norādi un saņemiet atbildi",
+        "description": "Kas slēpjas aiz pogas + un kad izvēlēties katru iespēju",
         "examplePrompt": "Apkopojiet šī līguma galvenās saistības",
         "steps": {
+          "anonymize": {
+            "body": "Aizstāj vārdus, identifikatorus un citus personas datus ar vietturiem, pirms pieprasījums atstāj jūsu darbvietu, un atbildē, ko lasāt, atjauno īstās vērtības.",
+            "title": "Sūtīt anonimizēti",
+            "when": "Ieslēdziet, kad tekstā ir personas dati un atbilde nav atkarīga no tā, kas ir puses. Atstājiet izslēgtu, kad svarīga ir tieši identitāte, piemēram, interešu konflikta pārbaudē: vietturi aizvāc tieši to, par ko jautājat."
+          },
+          "attach": {
+            "body": "Augšupielādē failu no šīs ierīces sarunā. To izlasa tikai šai sarakstei, un tas netiek iekļauts lietā.",
+            "title": "Pievienot failu",
+            "when": "Der vienreizējam dokumentam, kas nav jāsaglabā: tikko pa e-pastu saņemtam projektam, skenējumam vai izklājlapai, no kuras vēlaties tikai kopsavilkumu."
+          },
           "composer": {
-            "body": "Ievadiet savu jautājumu vai norādi ziņojuma laukā.",
-            "title": "Uzrakstiet savu pieprasījumu"
+            "body": "Vienkāršā valodā uzrakstiet, ko vēlaties: uzdevumu, uz ko tas attiecas un kādā formā gaidāt atbildi. Viss pārējais šeit tikai precizē jau uzrakstīto pieprasījumu.",
+            "title": "Sāciet ar pieprasījumu"
+          },
+          "context": {
+            "body": "Novirza pieprasījumu uz jau reģistrētu materiālu: uz visu lietu vai vienu failu tajā. Nekas netiek augšupielādēts un nekas netiek kopēts; atsauce ir saite uz vietu, kur materiāls jau glabājas.",
+            "title": "Atsaukties uz lietu vai failu",
+            "when": "Izmantojiet to pievienošanas vietā vienmēr, kad dokuments jau ir reģistrēts. Atsaucieties uz lietu, ja asistentam tā jāpārskata visa; uz vienu failu, ja precīzi zināt, kurš jāizlasa. Ierakstot @ tukšā redaktorā, šis saraksts atveras uzreiz."
+          },
+          "mcp": {
+            "body": "Ieslēdz vai izslēdz pievienota servera rīkus jūsu sarunās: uzņēmumu reģistrus, iekšējās sistēmas, visu, ko jūsu komanda ir pievienojusi.",
+            "title": "Pievienotie rīku serveri",
+            "when": "Ieslēdziet, kad atbildei vajadzīgi aktuāli dati no ārpuses. Pārējos atstājiet izslēgtus: jo mazāk rīku spēlē, jo šaurāka un paredzamāka atbilde."
+          },
+          "models": {
+            "body": "Maina modeli tikai šajā sarunā. Visas pārējās sarakstes paliek pie jūsu darbvietas noklusējuma modeļa.",
+            "title": "Kurš modelis",
+            "when": "Uz jaudīgāku modeli pārejiet rūpīgai lasīšanai, sagatavošanai un visur, kur nepareiza atbilde dārgi maksā. Meklējumiem, kopsavilkumiem un ātriem pārrakstījumiem palieciet pie noklusējuma: papildu dziļums tur maina vienīgi gaidīšanas laiku."
+          },
+          "plusMenu": {
+            "body": "Poga + atver redaktora izvēlni: pievienot failu, mainīt modeli, palaist prasmi, atsaukties uz lietu vai ieslēgt pievienotu rīku serveri. Nākamie soļi to atver un pēc kārtas izskata katru iespēju.",
+            "title": "Viss pievienojamais slēpjas aiz +",
+            "when": "Izmantojiet +, kad atbilde ir atkarīga no kaut kā, ko asistents vēl neredz: no faila, lietas, iekšēja noteikuma vai aktuāla ārēja avota."
           },
           "send": {
-            "body": "Nosūtiet ziņojumu, un darba vieta atbildēs.",
-            "title": "Nosūtīt"
+            "body": "Nosūta ziņu kopā ar visu, ko iepriekš pievienojāt, uz ko atsaucāties vai ko ieslēdzāt. Redaktors paliek vietā, tāpēc ar nākamo jautājumu varat papildināt to, kā trūka pirmajā atbildē.",
+            "title": "Nosūtiet ziņu",
+            "when": "Sūtiet agri. Īsa pirmā atbilde ātrāk parāda, kāda konteksta vēl trūkst, nekā perfekti noslīpēta pirmā uzvedne."
           },
-          "tools": {
-            "body": "Atveriet rīku izvēlni, lai pievienotu failus, prasmes un avotus.",
-            "title": "Pievienot kontekstu"
+          "skills": {
+            "body": "Ievieto saglabātu uzvedni vai jūsu komandas uzrakstītu prasmi: pārbaudītu norādījumu kopumu, kas vienu un to pašu uzdevumu katru reizi izpilda vienādi.",
+            "title": "Prasmes un saglabātās uzvednes",
+            "when": "Izmantojiet, kad uzdevums atkārtojas un formulējums ir svarīgs, piemēram, tipveida līguma pārbaudē vai uzņemšanas kopsavilkumā. Ierakstot / tukšā redaktorā, šis saraksts atveras uzreiz."
           }
         },
-        "title": "Nosūtiet savu pirmo ziņojumu"
+        "title": "Jautājiet ar pareizo kontekstu"
       },
       "documents": {
         "description": "Augšupielādējiet failu un atveriet to",
@@ -1753,7 +1793,8 @@
         "title": "Automatizēt darbplūsmu"
       }
     },
-    "unavailable": "Šis ceļvedis pašlaik nav pieejams"
+    "unavailable": "Šis ceļvedis pašlaik nav pieejams",
+    "whenLabel": "Kad to izmantot:"
   },
   "inspector": {
     "anonymization": {

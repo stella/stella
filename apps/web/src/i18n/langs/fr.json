@@ -1679,9 +1679,17 @@
     "checklist": {
       "progress": "{completed} sur {total} terminés"
     },
+    "community": {
+      "body": "Stella dispose d'un salon de discussion communautaire public. Les mainteneurs et d'autres utilisateurs y répondent aux questions, partagent leurs méthodes et recueillent les signalements de bugs. C'est un forum communautaire, pas un service d'assistance : la réponse vient de qui est disponible.",
+      "linkLabel": "Ouvrir le forum communautaire"
+    },
     "help": {
       "buttonLabel": "Aide et guides",
       "subtitle": "Visites interactives de votre espace de travail",
+      "tabs": {
+        "community": "Communauté",
+        "guides": "Tutoriels"
+      },
       "title": "Aide et guides"
     },
     "minutes": "{count} min.",
@@ -1690,23 +1698,55 @@
     },
     "tours": {
       "chat": {
-        "description": "Rédigez une instruction et obtenez une réponse",
+        "description": "Ce que contient le bouton + et quand choisir chaque option",
         "examplePrompt": "Résumez les principales obligations de ce contrat",
         "steps": {
+          "anonymize": {
+            "body": "Remplace les noms, identifiants et autres données personnelles par des marqueurs avant que la demande ne quitte votre espace de travail, puis rétablit les vraies valeurs dans la réponse que vous lisez.",
+            "title": "Envoyer en mode anonymisé",
+            "when": "Activez-le quand le texte contient des données personnelles et que la question ne dépend pas de l'identité des parties. Laissez-le désactivé quand l'identité est précisément l'objet, par exemple un contrôle de conflits d'intérêts : les marqueurs retirent exactement ce sur quoi vous interrogez."
+          },
+          "attach": {
+            "body": "Téléverse un fichier depuis cet appareil dans la conversation. Il est lu pour ce fil uniquement et n'est pas classé dans un dossier.",
+            "title": "Joindre un fichier",
+            "when": "Idéal pour un document ponctuel que vous n'avez pas besoin de conserver : un projet reçu à l'instant par courriel, un scan, un tableur dont vous voulez seulement un résumé."
+          },
           "composer": {
-            "body": "Saisissez votre question ou instruction dans le champ de message.",
-            "title": "Rédigez votre demande"
+            "body": "Écrivez en langage courant ce que vous voulez : la tâche, ce qu'elle concerne et la forme de réponse attendue. Tout le reste ne fait qu'affiner une demande déjà rédigée.",
+            "title": "Commencer par la demande"
+          },
+          "context": {
+            "body": "Oriente la demande vers un élément déjà classé : un dossier entier ou un seul fichier qu'il contient. Rien n'est téléversé ni copié ; la référence est un lien vers l'endroit où l'élément se trouve déjà.",
+            "title": "Référencer un dossier ou un fichier",
+            "when": "À utiliser au lieu d'une pièce jointe dès que le document est déjà classé. Référencez le dossier pour que l'assistant le parcoure en entier ; un seul fichier quand vous savez précisément lequel lire. Taper @ dans un éditeur vide ouvre directement cette liste."
+          },
+          "mcp": {
+            "body": "Active ou désactive les outils d'un serveur connecté pour vos discussions : registres d'entreprises, systèmes internes, tout ce que votre équipe a connecté.",
+            "title": "Serveurs d'outils connectés",
+            "when": "Activez-en un quand la réponse a besoin de données à jour venant de l'extérieur de l'espace de travail. Laissez les autres désactivés : moins il y a d'outils en jeu, plus la réponse est ciblée et prévisible."
+          },
+          "models": {
+            "body": "Change de modèle pour cette conversation seulement. Tous les autres fils gardent le modèle par défaut de votre espace de travail.",
+            "title": "Quel modèle",
+            "when": "Passez à un modèle plus puissant pour la lecture attentive, la rédaction et tout ce dont une erreur coûte cher. Restez sur le modèle par défaut pour les recherches, les résumés et les reformulations rapides : la profondeur supplémentaire n'y change que le temps d'attente."
+          },
+          "plusMenu": {
+            "body": "Le bouton + ouvre le menu de l'éditeur : joindre un fichier, changer de modèle, lancer une compétence, référencer un dossier ou activer un serveur d'outils connecté. Les étapes suivantes l'ouvrent et passent chaque option en revue.",
+            "title": "Tout ce que vous pouvez ajouter est sous +",
+            "when": "Utilisez + dès que la réponse dépend de quelque chose que l'assistant ne voit pas encore : un fichier, un dossier, une règle interne ou une source externe à jour."
           },
           "send": {
-            "body": "Envoyez votre message et votre espace de travail répond.",
-            "title": "Envoyer"
+            "body": "Envoie le message avec tout ce que vous avez joint, référencé ou activé ci-dessus. L'éditeur reste en place, si bien qu'une question de suivi peut ajouter ce qui manquait à la première réponse.",
+            "title": "Envoyer la demande",
+            "when": "Envoyez tôt. Une première réponse courte montre plus vite quel contexte manque encore qu'un premier prompt parfait."
           },
-          "tools": {
-            "body": "Ouvrez le menu des outils pour joindre des fichiers, des compétences et des sources.",
-            "title": "Ajouter du contexte"
+          "skills": {
+            "body": "Insère un prompt enregistré ou une compétence rédigée par votre équipe : un jeu d'instructions validé qui traite la même tâche de la même façon à chaque fois.",
+            "title": "Compétences et prompts enregistrés",
+            "when": "Utilisez-en une quand la tâche se répète et que la formulation compte, par exemple une revue de contrat standard ou un résumé d'ouverture. Taper / dans un éditeur vide ouvre directement cette liste."
           }
         },
-        "title": "Envoyez votre premier message"
+        "title": "Poser la question avec le bon contexte"
       },
       "documents": {
         "description": "Importez un fichier et ouvrez-le",
@@ -1753,7 +1793,8 @@
         "title": "Automatiser un flux de travail"
       }
     },
-    "unavailable": "Ce guide est indisponible pour le moment"
+    "unavailable": "Ce guide est indisponible pour le moment",
+    "whenLabel": "Quand l'utiliser :"
   },
   "inspector": {
     "anonymization": {

@@ -1679,9 +1679,17 @@
     "checklist": {
       "progress": "Ukończono {completed} z {total}"
     },
+    "community": {
+      "body": "Stella ma publiczny czat społeczności. Odpowiadają tam opiekunowie projektu i inni użytkownicy, dzielą się swoimi sposobami pracy i przyjmują zgłoszenia błędów. To forum społeczności, a nie dział wsparcia: odpowiada ten, kto akurat jest online.",
+      "linkLabel": "Otwórz forum społeczności"
+    },
     "help": {
       "buttonLabel": "Pomoc i przewodniki",
       "subtitle": "Interaktywne przewodniki po obszarze roboczym",
+      "tabs": {
+        "community": "Społeczność",
+        "guides": "Przewodniki"
+      },
       "title": "Pomoc i przewodniki"
     },
     "minutes": "{count} min.",
@@ -1690,23 +1698,55 @@
     },
     "tours": {
       "chat": {
-        "description": "Napisz polecenie i uzyskaj odpowiedź",
+        "description": "Co kryje się pod przyciskiem + i kiedy sięgnąć po którą opcję",
         "examplePrompt": "Podsumuj najważniejsze obowiązki wynikające z tej umowy",
         "steps": {
+          "anonymize": {
+            "body": "Zastępuje nazwiska, identyfikatory i inne dane osobowe symbolami zastępczymi, zanim zapytanie opuści twój obszar roboczy, a w czytanej przez ciebie odpowiedzi przywraca prawdziwe wartości.",
+            "title": "Wyślij anonimowo",
+            "when": "Włącz, gdy tekst zawiera dane osobowe, a pytanie nie zależy od tego, kim są strony. Zostaw wyłączone, gdy chodzi właśnie o tożsamość, na przykład przy badaniu konfliktu interesów: symbole zastępcze zabierają dokładnie to, o co pytasz."
+          },
+          "attach": {
+            "body": "Przesyła plik z tego urządzenia do rozmowy. Jest czytany tylko na potrzeby tego wątku i nie trafia do sprawy.",
+            "title": "Załącz plik",
+            "when": "Najlepsze do jednorazowego dokumentu, którego nie musisz zachowywać: projektu, który właśnie przyszedł mailem, skanu albo arkusza, z którego chcesz tylko streszczenie."
+          },
           "composer": {
-            "body": "Wpisz swoje pytanie lub polecenie w polu wiadomości.",
-            "title": "Napisz swoje zapytanie"
+            "body": "Napisz zwykłym językiem, czego chcesz: jakie zadanie, czego dotyczy i jakiej postaci odpowiedzi oczekujesz. Wszystko inne tutaj tylko doprecyzowuje już napisane polecenie.",
+            "title": "Zacznij od polecenia"
+          },
+          "context": {
+            "body": "Kieruje zapytanie na materiał już zapisany: całą sprawę albo pojedynczy plik w niej. Nic nie jest przesyłane ani kopiowane; odwołanie to odnośnik do miejsca, w którym materiał już leży.",
+            "title": "Odwołaj się do sprawy lub pliku",
+            "when": "Używaj zamiast załączania pliku zawsze, gdy dokument jest już zapisany. Wskaż sprawę, gdy asystent ma przejrzeć ją w całości; jeden plik, gdy dokładnie wiesz, który ma przeczytać. Wpisanie @ w pustym edytorze otwiera tę listę od razu."
+          },
+          "mcp": {
+            "body": "Włącza i wyłącza narzędzia podłączonego serwera w twoich czatach: rejestry przedsiębiorców, systemy wewnętrzne, wszystko, co podłączył twój zespół.",
+            "title": "Podłączone serwery narzędzi",
+            "when": "Włącz, gdy odpowiedź wymaga aktualnych danych spoza obszaru roboczego. Resztę zostaw wyłączoną: im mniej narzędzi w grze, tym węższa i bardziej przewidywalna odpowiedź."
+          },
+          "models": {
+            "body": "Zmienia model tylko w tej rozmowie. Pozostałe wątki zachowują model domyślny ustawiony dla twojego obszaru roboczego.",
+            "title": "Który model",
+            "when": "Mocniejszy model wybierz do uważnej lektury, redagowania i wszędzie tam, gdzie błędna odpowiedź dużo kosztuje. Przy wyszukiwaniu, streszczeniach i szybkich przeróbkach zostań przy domyślnym: dodatkowa głębia zmieni tylko czas oczekiwania."
+          },
+          "plusMenu": {
+            "body": "Przycisk + otwiera menu edytora: załącz plik, zmień model, uruchom umiejętność, odwołaj się do sprawy albo włącz podłączony serwer narzędzi. Kolejne kroki otwierają je i omawiają opcję po opcji.",
+            "title": "Wszystko, co możesz dodać, kryje się pod +",
+            "when": "Sięgaj po +, gdy odpowiedź zależy od czegoś, czego asystent jeszcze nie widzi: pliku, sprawy, wewnętrznej zasady albo aktualnego źródła zewnętrznego."
           },
           "send": {
-            "body": "Wyślij wiadomość, a obszar roboczy odpowie.",
-            "title": "Wyślij"
+            "body": "Wysyła wiadomość razem ze wszystkim, co powyżej załączono, wskazano lub włączono. Edytor zostaje na miejscu, więc kolejnym pytaniem uzupełnisz to, czego zabrakło w pierwszej odpowiedzi.",
+            "title": "Wyślij wiadomość",
+            "when": "Wysyłaj wcześnie. Krótka pierwsza odpowiedź szybciej pokaże, jakiego kontekstu brakuje, niż dopracowywanie pierwszego polecenia."
           },
-          "tools": {
-            "body": "Otwórz menu narzędzi, aby dołączyć pliki, umiejętności i źródła.",
-            "title": "Dodaj kontekst"
+          "skills": {
+            "body": "Wstawia zapisany prompt albo umiejętność napisaną przez twój zespół: zatwierdzony zestaw instrukcji, dzięki któremu to samo zadanie za każdym razem wykonywane jest tak samo.",
+            "title": "Umiejętności i zapisane prompty",
+            "when": "Użyj, gdy zadanie się powtarza i liczy się sformułowanie, na przykład przy standardowej weryfikacji umowy albo streszczeniu zlecenia. Wpisanie / w pustym edytorze otwiera tę listę od razu."
           }
         },
-        "title": "Wyślij swoją pierwszą wiadomość"
+        "title": "Pytaj z właściwym kontekstem"
       },
       "documents": {
         "description": "Prześlij plik i otwórz go",
@@ -1753,7 +1793,8 @@
         "title": "Zautomatyzuj przepływ pracy"
       }
     },
-    "unavailable": "Ten przewodnik jest obecnie niedostępny"
+    "unavailable": "Ten przewodnik jest obecnie niedostępny",
+    "whenLabel": "Kiedy tego użyć:"
   },
   "inspector": {
     "anonymization": {

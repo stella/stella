@@ -1679,9 +1679,17 @@
     "checklist": {
       "progress": "{completed} de {total} concluídos"
     },
+    "community": {
+      "body": "A Stella tem um chat público da comunidade. Lá os mantenedores e outros usuários respondem dúvidas, contam como trabalham e recebem relatos de erros. É um fórum da comunidade, não um canal de suporte: responde quem estiver por perto.",
+      "linkLabel": "Abrir o fórum da comunidade"
+    },
     "help": {
       "buttonLabel": "Ajuda e guias",
       "subtitle": "Tours interativos do espaço de trabalho",
+      "tabs": {
+        "community": "Comunidade",
+        "guides": "Guias"
+      },
       "title": "Ajuda e guias"
     },
     "minutes": "{count} min.",
@@ -1690,23 +1698,55 @@
     },
     "tours": {
       "chat": {
-        "description": "Escreva uma instrução e obtenha uma resposta",
+        "description": "O que está por trás do botão + e quando recorrer a cada opção",
         "examplePrompt": "Resuma as principais obrigações deste contrato",
         "steps": {
+          "anonymize": {
+            "body": "Substitui nomes, identificadores e outros dados pessoais por marcadores antes de o pedido sair do seu espaço de trabalho e repõe os valores reais na resposta que você lê.",
+            "title": "Enviar anonimizado",
+            "when": "Ligue quando o texto trouxer dados pessoais e a pergunta não depender de quem são as partes. Deixe desligado quando a identidade for justamente o ponto, como em uma checagem de conflito: os marcadores tiram exatamente aquilo que você está perguntando."
+          },
+          "attach": {
+            "body": "Envia um arquivo deste dispositivo para a conversa. Ele é lido apenas nesta conversa e não fica arquivado em um caso.",
+            "title": "Anexar um arquivo",
+            "when": "Ideal para um documento pontual que você não precisa guardar: uma minuta que acabou de chegar por e-mail, uma digitalização, uma planilha da qual você só quer um resumo."
+          },
           "composer": {
-            "body": "Digite sua pergunta ou instrução na caixa de mensagem.",
-            "title": "Escreva sua solicitação"
+            "body": "Escreva em linguagem simples o que você quer: a tarefa, sobre o que ela trata e em que formato espera a resposta. Todo o resto aqui apenas refina um pedido que você já escreveu.",
+            "title": "Comece pelo pedido"
+          },
+          "context": {
+            "body": "Aponta o pedido para material já arquivado: um caso inteiro ou um único arquivo dentro dele. Nada é enviado nem copiado; a referência é um link para onde o material já está.",
+            "title": "Referenciar um caso ou um arquivo",
+            "when": "Use no lugar do anexo sempre que o documento já estiver arquivado. Referencie o caso para o assistente percorrer tudo; um único arquivo quando você sabe exatamente qual ele deve ler. Digitar @ no editor vazio abre essa lista direto."
+          },
+          "mcp": {
+            "body": "Liga e desliga as ferramentas de um servidor conectado nos seus chats: cadastros de empresas, sistemas internos, tudo o que sua equipe conectou.",
+            "title": "Servidores de ferramentas conectados",
+            "when": "Ligue um quando a resposta precisar de dados atualizados de fora do espaço de trabalho. Deixe o resto desligado: quanto menos ferramentas em jogo, mais estreita e previsível é a resposta."
+          },
+          "models": {
+            "body": "Troca o modelo apenas nesta conversa. As demais conversas mantêm o modelo padrão do seu espaço de trabalho.",
+            "title": "Qual modelo",
+            "when": "Suba para um modelo mais forte na leitura atenta, na redação e em tudo onde uma resposta errada sai cara. Fique no padrão para consultas, resumos e reescritas rápidas: ali a profundidade extra só muda a espera."
+          },
+          "plusMenu": {
+            "body": "O botão + abre o menu do editor: anexar um arquivo, trocar de modelo, executar uma habilidade, referenciar um caso ou ligar um servidor de ferramentas conectado. Os próximos passos abrem o menu e percorrem cada opção.",
+            "title": "Tudo o que dá para acrescentar está atrás do +",
+            "when": "Recorra ao + sempre que a resposta depender de algo que o assistente ainda não enxerga: um arquivo, um caso, uma regra interna ou uma fonte externa atualizada."
           },
           "send": {
-            "body": "Envie sua mensagem e o espaço de trabalho responde.",
-            "title": "Enviar"
+            "body": "Envia a mensagem junto com tudo o que você anexou, referenciou ou ligou acima. O editor continua no lugar, então uma pergunta seguinte acrescenta o que faltou na primeira resposta.",
+            "title": "Envie a mensagem",
+            "when": "Envie cedo. Uma primeira resposta curta mostra mais rápido qual contexto ainda falta do que um primeiro prompt perfeito."
           },
-          "tools": {
-            "body": "Abra o menu de ferramentas para anexar arquivos, habilidades e fontes.",
-            "title": "Adicionar contexto"
+          "skills": {
+            "body": "Insere um prompt salvo ou uma habilidade escrita pela sua equipe: um conjunto de instruções revisado que trata a mesma tarefa do mesmo jeito toda vez.",
+            "title": "Habilidades e prompts salvos",
+            "when": "Use quando a tarefa se repete e a formulação importa, por exemplo uma revisão de contrato padrão ou um resumo de abertura. Digitar / no editor vazio abre essa lista direto."
           }
         },
-        "title": "Envie sua primeira mensagem"
+        "title": "Perguntar com o contexto certo"
       },
       "documents": {
         "description": "Envie um arquivo e abra-o",
@@ -1753,7 +1793,8 @@
         "title": "Automatize um fluxo de trabalho"
       }
     },
-    "unavailable": "Este guia não está disponível no momento"
+    "unavailable": "Este guia não está disponível no momento",
+    "whenLabel": "Quando usar:"
   },
   "inspector": {
     "anonymization": {

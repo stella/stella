@@ -252,7 +252,10 @@ export const ComposerPlusMenu = ({
         <PlusIcon className="size-4" />
       </MenuTrigger>
       <MenuPopup align="start" side="top">
-        <MenuItem onClick={onOpenFilePicker}>
+        <MenuItem
+          {...useGuideAnchor(GUIDE_ANCHORS.chatMenuAttach)}
+          onClick={onOpenFilePicker}
+        >
           <PaperclipIcon />
           {t("chat.attachFile")}
         </MenuItem>
@@ -405,7 +408,7 @@ const ComposerModelsSubmenu = ({
         }
       }}
     >
-      <MenuSubTrigger>
+      <MenuSubTrigger {...useGuideAnchor(GUIDE_ANCHORS.chatMenuModels)}>
         <CpuIcon />
         {t("chat.composerMenu.models")}
       </MenuSubTrigger>
@@ -584,7 +587,7 @@ const ComposerSkillsSubmenu = ({
       }}
       open={open}
     >
-      <MenuSubTrigger>
+      <MenuSubTrigger {...useGuideAnchor(GUIDE_ANCHORS.chatMenuSkills)}>
         <BookOpenIcon />
         {/* Reuses the chat landing page's "Skills" section label (same
             value) instead of adding a duplicate key. */}
@@ -682,7 +685,7 @@ const ComposerContextSubmenu = ({
       }}
       open={open}
     >
-      <MenuSubTrigger>
+      <MenuSubTrigger {...useGuideAnchor(GUIDE_ANCHORS.chatMenuContext)}>
         <AtSignIcon />
         {t("chat.composerMenu.context")}
       </MenuSubTrigger>
@@ -1007,7 +1010,7 @@ const ComposerMcpSubmenu = ({
         }
       }}
     >
-      <MenuSubTrigger>
+      <MenuSubTrigger {...useGuideAnchor(GUIDE_ANCHORS.chatMenuMcp)}>
         <ServerIcon />
         {t("chat.composerMenu.mcpServers")}
       </MenuSubTrigger>

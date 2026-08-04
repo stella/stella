@@ -21,13 +21,29 @@ export type GuideSeed =
   | { kind: "fill-input"; anchor: GuideAnchorId; valueKey: GuideMessageKey }
   | { kind: "none" };
 
+// A step may reveal transient UI before explaining it, so a tour can teach a
+// menu's contents instead of only pointing at the control that opens it.
+//
+// SAFETY: `open` may only ever target a non-destructive disclosure control —
+// a menu, submenu, or popover trigger. The runner clicks that anchor on the
+// user's behalf, so the click must have no effect beyond showing UI. Never put
+// it on a control that mutates data, sends, deletes, uploads, or navigates
+// away. Whatever a step opens is closed again when the tour ends, is
+// dismissed, or moves on to a step outside the revealed surface.
+export type GuideInteraction = { kind: "open" } | { kind: "none" };
+
 export type GuideStep = {
   anchor: GuideAnchorId;
   route?: GuideRoute;
   titleKey: GuideMessageKey;
   bodyKey: GuideMessageKey;
+  // The decision line: not what the control is, but when you would reach for
+  // it over its neighbours. Rendered under the body as a muted, labelled
+  // secondary line. Omit it on steps where there is no real choice to make.
+  whenKey?: GuideMessageKey;
   placement?: GuidePlacement;
   seed?: GuideSeed;
+  interaction?: GuideInteraction;
 };
 
 export const GUIDE_TOUR_IDS = {

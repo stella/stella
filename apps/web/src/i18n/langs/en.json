@@ -1679,9 +1679,17 @@
     "checklist": {
       "progress": "{completed} of {total} complete"
     },
+    "community": {
+      "body": "Stella has a public community chat server. Maintainers and other users answer questions there, share how they work, and pick up bug reports. It is a community forum rather than a support desk: the answer comes from whoever is around.",
+      "linkLabel": "Open the community forum"
+    },
     "help": {
       "buttonLabel": "Help and guides",
       "subtitle": "Interactive tours of the workspace",
+      "tabs": {
+        "community": "Community",
+        "guides": "Guides"
+      },
       "title": "Help and guides"
     },
     "minutes": "{count} min",
@@ -1690,23 +1698,55 @@
     },
     "tours": {
       "chat": {
-        "description": "Write a prompt and get an answer",
+        "description": "What sits behind the + button, and when to reach for each option",
         "examplePrompt": "Summarize the key obligations in this contract",
         "steps": {
+          "anonymize": {
+            "body": "Replaces names, identifiers, and other personal data with placeholders before the request leaves your workspace, then restores the real values in the answer you read.",
+            "title": "Send anonymized",
+            "when": "Turn it on when the text carries personal data and the question does not turn on who the parties are. Leave it off when identity is the point, such as a conflict check, because placeholders take away exactly what you are asking about."
+          },
+          "attach": {
+            "body": "Uploads a file from this device into the conversation. It is read for this thread only and is not filed into a matter.",
+            "title": "Attach a file",
+            "when": "Best for a one-off document you do not need to keep: a draft that just arrived by email, a scan, a spreadsheet you only want summarized."
+          },
           "composer": {
-            "body": "Type your question or instruction in the message box.",
-            "title": "Write your request"
+            "body": "Write what you want in plain language: the task, what it concerns, and the shape of answer you expect. Everything else here only sharpens a request you have already written.",
+            "title": "Start with the request"
+          },
+          "context": {
+            "body": "Points the request at material that is already filed here: a whole matter, or a single file inside it. Nothing is uploaded and nothing is copied; the reference is a link to where the material already lives.",
+            "title": "Reference a matter or a file",
+            "when": "Use this instead of attaching whenever the document is already filed. Reference the matter to let the assistant look across it; reference one file when you know exactly which one to read. Typing @ in an empty composer opens this list directly."
+          },
+          "mcp": {
+            "body": "Turns a connected server's tools on or off for your chats: business registries, internal systems, anything your team has connected.",
+            "title": "Connected tool servers",
+            "when": "Turn one on when the answer needs live data from outside the workspace. Leave the rest off: the fewer tools in play, the narrower and more predictable the answer."
+          },
+          "models": {
+            "body": "Switches the model for this conversation only. Every other thread keeps the default set for your workspace.",
+            "title": "Which model",
+            "when": "Switch up for close reading, drafting, and anything where a wrong answer is expensive. Stay on the default for lookups, summaries, and quick rewrites, where the extra depth changes nothing but the wait."
+          },
+          "plusMenu": {
+            "body": "The + button opens the composer menu: attach a file, switch model, run a skill, reference a matter, or enable a connected tool server. The next steps open it and take each option in turn.",
+            "title": "Everything you can add sits behind +",
+            "when": "Reach for + whenever the answer depends on something the assistant cannot see yet: a file, a matter, an internal rule, or a live external source."
           },
           "send": {
-            "body": "Send your message and the workspace responds.",
-            "title": "Send it"
+            "body": "Sends the message together with everything you attached, referenced, or switched on above. The composer stays put, so a follow-up can add whatever the first answer showed was missing.",
+            "title": "Send it",
+            "when": "Send early. A short first answer tells you which context is still missing faster than a perfect first prompt does."
           },
-          "tools": {
-            "body": "Open the tools menu to attach files, skills, and sources.",
-            "title": "Add context"
+          "skills": {
+            "body": "Inserts a saved prompt or a skill your team has written: a reviewed set of instructions that handles the same task the same way every time.",
+            "title": "Skills and saved prompts",
+            "when": "Use one when the task repeats and the wording matters, such as a standard contract review or an intake summary. Typing / in an empty composer opens this list directly."
           }
         },
-        "title": "Send your first message"
+        "title": "Ask with the right context"
       },
       "documents": {
         "description": "Upload a file and open it",
@@ -1753,7 +1793,8 @@
         "title": "Automate a workflow"
       }
     },
-    "unavailable": "This guide is not available right now"
+    "unavailable": "This guide is not available right now",
+    "whenLabel": "When to use it:"
   },
   "inspector": {
     "anonymization": {

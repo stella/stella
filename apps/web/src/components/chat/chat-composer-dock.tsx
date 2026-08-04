@@ -14,6 +14,8 @@ import { ComposerStatusRow } from "@/components/chat/composer-status-row";
 import Tooltip from "@/components/tooltip";
 import { ChatAnonymizedToggle } from "@/features/chat/components/chat-anonymized-toggle";
 import { ChatWebSearchToggle } from "@/features/chat/components/chat-web-search-toggle";
+import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
+import { useGuideAnchor } from "@/features/guides/use-guide-anchor";
 import {
   useChatAnonymized,
   useSetChatAnonymized,
@@ -120,11 +122,18 @@ export const ChatComposerDock = ({
               threadRef={threadRef}
             />
           )}
-          <ChatAnonymizedToggle
-            enabled={anonymized}
-            onChange={setAnonymized}
-            size="icon-xs"
-          />
+          {/* Wrapper, not the toggle itself: the anchor is registered here so
+              the guides slice stays out of the chat feature slice's imports. */}
+          <span
+            {...useGuideAnchor(GUIDE_ANCHORS.chatAnonymize)}
+            className="inline-flex"
+          >
+            <ChatAnonymizedToggle
+              enabled={anonymized}
+              onChange={setAnonymized}
+              size="icon-xs"
+            />
+          </span>
           {endExtras}
         </div>
       }

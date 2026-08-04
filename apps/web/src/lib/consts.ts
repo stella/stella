@@ -103,3 +103,8 @@ export const STALE_TIME = {
     MINUTES: 15 * 60 * 1000,
   },
 };
+
+/** Invite to the project's community chat server: a public forum where
+ *  maintainers and users help each other. Single source for every surface
+ *  that links it (the feedback menu, the help drawer's Community tab). */
+export const COMMUNITY_FORUM_URL = "https://discord.gg/8dZjmVFjTK" as const;

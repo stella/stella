@@ -16,6 +16,7 @@ import {
 import { buildFeedbackMailto } from "@/components/feedback-dialog.logic";
 import { SidebarMenuButton, SidebarMenuItem } from "@/components/sidebar";
 import { env } from "@/env";
+import { COMMUNITY_FORUM_URL } from "@/lib/consts";
 
 export const FeedbackDialog = ({ userEmail }: Props) => {
   const t = useTranslations();
@@ -42,7 +43,7 @@ export const FeedbackDialog = ({ userEmail }: Props) => {
             render={
               <a
                 aria-label={t("feedback.discord")}
-                href={DISCORD_URL}
+                href={COMMUNITY_FORUM_URL}
                 rel="noreferrer"
                 target="_blank"
               />
@@ -82,6 +83,5 @@ type Props = {
   userEmail?: string | undefined;
 };
 
-const DISCORD_URL = "https://discord.gg/8dZjmVFjTK";
 const GITHUB_FEEDBACK_URL =
   "https://github.com/stella/stella/issues/new/choose";

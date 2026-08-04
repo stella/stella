@@ -1679,9 +1679,17 @@
     "checklist": {
       "progress": "{completed} / {total} kész"
     },
+    "community": {
+      "body": "A Stellának nyilvános közösségi csevegőszervere van. Ott a karbantartók és a többi felhasználó válaszol a kérdésekre, megosztják a munkamódszereiket, és felveszik a hibajelentéseket. Ez közösségi fórum, nem ügyfélszolgálat: az válaszol, aki éppen elérhető.",
+      "linkLabel": "Közösségi fórum megnyitása"
+    },
     "help": {
       "buttonLabel": "Súgó és útmutatók",
       "subtitle": "Interaktív bemutatók a munkaterületen",
+      "tabs": {
+        "community": "Közösség",
+        "guides": "Útmutatók"
+      },
       "title": "Súgó és útmutatók"
     },
     "minutes": "{count} perc",
@@ -1690,23 +1698,55 @@
     },
     "tours": {
       "chat": {
-        "description": "Írjon egy utasítást, és kapjon választ",
+        "description": "Mi rejlik a + gomb mögött, és mikor melyik lehetőséghez nyúljon",
         "examplePrompt": "Foglalja össze a szerződés legfontosabb kötelezettségeit",
         "steps": {
+          "anonymize": {
+            "body": "A neveket, azonosítókat és egyéb személyes adatokat helyőrzőkre cseréli, mielőtt a kérés elhagyja a munkaterületét, majd a válaszban visszaállítja a valódi értékeket.",
+            "title": "Küldés anonimizálva",
+            "when": "Akkor kapcsolja be, ha a szöveg személyes adatot tartalmaz, és a kérdés nem azon múlik, kik a felek. Hagyja kikapcsolva, ha éppen a személyazonosság a lényeg, például összeférhetetlenségi vizsgálatnál: a helyőrzők pontosan azt tüntetik el, amire rákérdez."
+          },
+          "attach": {
+            "body": "Feltölt egy fájlt erről az eszközről a beszélgetésbe. Csak ehhez a szálhoz olvassa be, és nem kerül be egy ügybe.",
+            "title": "Fájl csatolása",
+            "when": "Egyszeri dokumentumhoz való, amelyet nem kell megőriznie: épp e-mailben érkezett tervezethez, beolvasott irathoz, táblázathoz, amelyből csak összefoglalót kér."
+          },
           "composer": {
-            "body": "Írja be kérdését vagy utasítását az üzenetmezőbe.",
-            "title": "Írja meg a kérését"
+            "body": "Írja le hétköznapi nyelven, mit szeretne: a feladatot, hogy mire vonatkozik, és milyen formájú választ vár. Minden más itt csak élesíti a már megfogalmazott kérést.",
+            "title": "Kezdje a kéréssel"
+          },
+          "context": {
+            "body": "A kérést a már elhelyezett anyagra irányítja: egy egész ügyre vagy egyetlen fájlra azon belül. Semmi nem töltődik fel és nem másolódik; a hivatkozás oda mutat, ahol az anyag már megvan.",
+            "title": "Hivatkozás ügyre vagy fájlra",
+            "when": "Csatolás helyett használja, valahányszor a dokumentum már be van iktatva. Az ügyre hivatkozzon, ha az asszisztensnek végig kell néznie; egyetlen fájlra, ha pontosan tudja, melyiket olvassa. A @ az üres szerkesztőben közvetlenül megnyitja ezt a listát."
+          },
+          "mcp": {
+            "body": "Be- és kikapcsolja egy csatlakoztatott kiszolgáló eszközeit a csevegéseiben: cégnyilvántartások, belső rendszerek, bármi, amit a csapata csatlakoztatott.",
+            "title": "Csatlakoztatott eszközkiszolgálók",
+            "when": "Akkor kapcsoljon be egyet, ha a válaszhoz a munkaterületen kívüli friss adat kell. A többit hagyja kikapcsolva: minél kevesebb eszköz van játékban, annál szűkebb és kiszámíthatóbb a válasz."
+          },
+          "models": {
+            "body": "Csak ebben a beszélgetésben vált modellt. A többi szál megtartja a munkaterülethez beállított alapértelmezést.",
+            "title": "Melyik modell",
+            "when": "Erősebb modellre váltson alapos olvasáshoz, fogalmazáshoz és mindenhez, ahol a hibás válasz sokba kerül. Kereséshez, összefoglalókhoz és gyors átfogalmazásokhoz maradjon az alapértelmezettnél: a többletmélység ott csak a várakozási időt növeli."
+          },
+          "plusMenu": {
+            "body": "A + gomb megnyitja a szerkesztő menüjét: fájl csatolása, modellváltás, skill futtatása, hivatkozás egy ügyre vagy csatlakoztatott eszközkiszolgáló bekapcsolása. A következő lépések megnyitják, és sorra veszik a lehetőségeket.",
+            "title": "Minden hozzáadható elem a + mögött van",
+            "when": "Nyúljon a + gombhoz, valahányszor a válasz olyasmin múlik, amit az asszisztens még nem lát: egy fájlon, egy ügyön, egy belső szabályon vagy egy friss külső forráson."
           },
           "send": {
-            "body": "Küldje el az üzenetét, és a munkaterület válaszol.",
-            "title": "Küldés"
+            "body": "Elküldi az üzenetet mindazzal, amit fent csatolt, meghivatkozott vagy bekapcsolt. A szerkesztő a helyén marad, így egy követő kérdéssel pótolhatja azt, ami az első válaszból hiányzott.",
+            "title": "Küldje el",
+            "when": "Küldjön korán. Egy rövid első válasz gyorsabban megmutatja, milyen kontextus hiányzik még, mint a tökéletesre csiszolt első prompt."
           },
-          "tools": {
-            "body": "Nyissa meg az eszközök menüt fájlok, képességek és források csatolásához.",
-            "title": "Kontextus hozzáadása"
+          "skills": {
+            "body": "Beilleszt egy mentett promptot vagy a csapata által írt skillt: átnézett utasításkészletet, amely ugyanazt a feladatot mindig ugyanúgy oldja meg.",
+            "title": "Skillek és mentett promptok",
+            "when": "Akkor használja, ha a feladat ismétlődik és számít a megfogalmazás, például szokásos szerződés-átnézésnél vagy ügyfélfelvételi összefoglalónál. A / az üres szerkesztőben közvetlenül megnyitja ezt a listát."
           }
         },
-        "title": "Küldje el első üzenetét"
+        "title": "Kérdezzen a megfelelő kontextussal"
       },
       "documents": {
         "description": "Töltsön fel egy fájlt, és nyissa meg",
@@ -1753,7 +1793,8 @@
         "title": "Munkafolyamat automatizálása"
       }
     },
-    "unavailable": "Ez az útmutató jelenleg nem érhető el"
+    "unavailable": "Ez az útmutató jelenleg nem érhető el",
+    "whenLabel": "Mikor használja:"
   },
   "inspector": {
     "anonymization": {

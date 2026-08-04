@@ -1679,9 +1679,17 @@
     "checklist": {
       "progress": "{completed} von {total} abgeschlossen"
     },
+    "community": {
+      "body": "Stella hat einen öffentlichen Community-Chat. Dort antworten die Maintainer und andere Nutzende, teilen ihre Arbeitsweise und nehmen Fehlerberichte auf. Es ist ein Community-Forum, kein Support-Desk: Es antwortet, wer gerade da ist.",
+      "linkLabel": "Community-Forum öffnen"
+    },
     "help": {
       "buttonLabel": "Hilfe und Anleitungen",
       "subtitle": "Interaktive Touren durch den Arbeitsbereich",
+      "tabs": {
+        "community": "Community-Forum",
+        "guides": "Anleitungen"
+      },
       "title": "Hilfe und Anleitungen"
     },
     "minutes": "{count} Min.",
@@ -1690,23 +1698,55 @@
     },
     "tours": {
       "chat": {
-        "description": "Formulieren Sie eine Anweisung und erhalten Sie eine Antwort",
+        "description": "Was hinter der Schaltfläche + steckt und wann Sie zu welcher Option greifen",
         "examplePrompt": "Fassen Sie die wichtigsten Pflichten in diesem Vertrag zusammen",
         "steps": {
+          "anonymize": {
+            "body": "Ersetzt Namen, Kennzeichen und andere personenbezogene Daten durch Platzhalter, bevor die Anfrage Ihren Arbeitsbereich verlässt, und setzt die echten Werte in der Antwort, die Sie lesen, wieder ein.",
+            "title": "Anonymisiert senden",
+            "when": "Schalten Sie es an, wenn der Text personenbezogene Daten enthält und die Frage nicht davon abhängt, wer die Parteien sind. Lassen Sie es aus, wenn es gerade um die Identität geht, etwa bei einer Interessenkollisionsprüfung: Platzhalter nehmen genau das weg, wonach Sie fragen."
+          },
+          "attach": {
+            "body": "Lädt eine Datei von diesem Gerät in das Gespräch. Sie wird nur für diesen Verlauf gelesen und nicht in einer Akte abgelegt.",
+            "title": "Datei anhängen",
+            "when": "Ideal für ein einmaliges Dokument, das Sie nicht aufbewahren müssen: einen gerade per E-Mail eingegangenen Entwurf, einen Scan, eine Tabelle, von der Sie nur eine Zusammenfassung wollen."
+          },
           "composer": {
-            "body": "Geben Sie Ihre Frage oder Anweisung in das Nachrichtenfeld ein.",
-            "title": "Formulieren Sie Ihre Anfrage"
+            "body": "Schreiben Sie in normaler Sprache, was Sie wollen: die Aufgabe, worum es geht und in welcher Form Sie die Antwort erwarten. Alles Weitere hier schärft nur eine Anfrage, die Sie bereits formuliert haben.",
+            "title": "Mit der Anfrage beginnen"
+          },
+          "context": {
+            "body": "Richtet die Anfrage auf Material, das bereits abgelegt ist: eine ganze Akte oder eine einzelne Datei darin. Nichts wird hochgeladen und nichts kopiert; der Verweis ist ein Link auf den Ort, an dem das Material schon liegt.",
+            "title": "Auf eine Akte oder Datei verweisen",
+            "when": "Nutzen Sie das statt eines Anhangs, sobald das Dokument bereits abgelegt ist. Verweisen Sie auf die Akte, wenn der Assistent sie insgesamt durchsehen soll; auf eine einzelne Datei, wenn Sie genau wissen, welche zu lesen ist. Ein @ im leeren Editor öffnet diese Liste direkt."
+          },
+          "mcp": {
+            "body": "Schaltet die Werkzeuge eines verbundenen Servers für Ihre Chats an oder aus: Handelsregister, interne Systeme, alles, was Ihr Team verbunden hat.",
+            "title": "Verbundene Werkzeugserver",
+            "when": "Schalten Sie eines an, wenn die Antwort aktuelle Daten von außerhalb des Arbeitsbereichs braucht. Lassen Sie den Rest aus: Je weniger Werkzeuge im Spiel sind, desto enger und vorhersehbarer die Antwort."
+          },
+          "models": {
+            "body": "Wechselt das Modell nur für dieses Gespräch. Alle anderen Verläufe behalten die Voreinstellung Ihres Arbeitsbereichs.",
+            "title": "Welches Modell",
+            "when": "Wechseln Sie hoch für genaues Lesen, Entwürfe und alles, wo eine falsche Antwort teuer wird. Bei Nachschlagen, Zusammenfassungen und schnellen Umformulierungen bleiben Sie bei der Voreinstellung: Mehr Tiefe ändert dort nur die Wartezeit."
+          },
+          "plusMenu": {
+            "body": "Die Schaltfläche + öffnet das Editor-Menü: Datei anhängen, Modell wechseln, Fähigkeit ausführen, auf eine Akte verweisen oder einen verbundenen Werkzeugserver aktivieren. Die nächsten Schritte öffnen es und gehen jede Option durch.",
+            "title": "Alles Ergänzbare steckt hinter +",
+            "when": "Greifen Sie zu +, sobald die Antwort von etwas abhängt, das der Assistent noch nicht sieht: einer Datei, einer Akte, einer internen Regel oder einer aktuellen externen Quelle."
           },
           "send": {
-            "body": "Senden Sie Ihre Nachricht und der Arbeitsbereich antwortet.",
-            "title": "Absenden"
+            "body": "Sendet die Nachricht mit allem, was Sie oben angehängt, referenziert oder eingeschaltet haben. Der Editor bleibt stehen, sodass eine Rückfrage nachreichen kann, was in der ersten Antwort fehlte.",
+            "title": "Absenden",
+            "when": "Senden Sie früh. Eine kurze erste Antwort zeigt schneller, welcher Kontext noch fehlt, als ein perfekt formulierter erster Prompt."
           },
-          "tools": {
-            "body": "Öffnen Sie das Werkzeugmenü, um Dateien, Fähigkeiten und Quellen anzuhängen.",
-            "title": "Kontext hinzufügen"
+          "skills": {
+            "body": "Fügt einen gespeicherten Prompt oder eine von Ihrem Team geschriebene Fähigkeit ein: ein geprüftes Anweisungspaket, das dieselbe Aufgabe jedes Mal gleich behandelt.",
+            "title": "Fähigkeiten und gespeicherte Prompts",
+            "when": "Nutzen Sie eine, wenn die Aufgabe wiederkehrt und die Formulierung zählt, etwa bei einer Standardvertragsprüfung oder einer Erstaufnahme. Ein / im leeren Editor öffnet diese Liste direkt."
           }
         },
-        "title": "Senden Sie Ihre erste Nachricht"
+        "title": "Mit dem richtigen Kontext fragen"
       },
       "documents": {
         "description": "Laden Sie eine Datei hoch und öffnen Sie sie",
@@ -1753,7 +1793,8 @@
         "title": "Arbeitsablauf automatisieren"
       }
     },
-    "unavailable": "Diese Anleitung ist derzeit nicht verfügbar"
+    "unavailable": "Diese Anleitung ist derzeit nicht verfügbar",
+    "whenLabel": "Wann einsetzen:"
   },
   "inspector": {
     "anonymization": {

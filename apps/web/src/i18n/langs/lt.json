@@ -1679,9 +1679,17 @@
     "checklist": {
       "progress": "Atlikta {completed} iš {total}"
     },
+    "community": {
+      "body": "„Stella“ turi viešą bendruomenės pokalbių serverį. Ten atsako prižiūrėtojai ir kiti naudotojai, dalijasi savo darbo būdais ir priima klaidų pranešimus. Tai bendruomenės forumas, o ne pagalbos tarnyba: atsako tas, kas tuo metu yra prisijungęs.",
+      "linkLabel": "Atverti bendruomenės forumą"
+    },
     "help": {
       "buttonLabel": "Pagalba ir vadovai",
       "subtitle": "Interaktyvios darbo srities apžvalgos",
+      "tabs": {
+        "community": "Bendruomenė",
+        "guides": "Vadovai"
+      },
       "title": "Pagalba ir vadovai"
     },
     "minutes": "{count} min.",
@@ -1690,23 +1698,55 @@
     },
     "tours": {
       "chat": {
-        "description": "Parašykite užklausą ir gaukite atsakymą",
+        "description": "Kas slypi po mygtuku + ir kada rinktis kurią parinktį",
         "examplePrompt": "Apibendrinkite pagrindines šios sutarties prievoles",
         "steps": {
+          "anonymize": {
+            "body": "Prieš užklausai paliekant jūsų darbo sritį pakeičia vardus, identifikatorius ir kitus asmens duomenis vietaženkliais, o jūsų skaitomame atsakyme grąžina tikrąsias reikšmes.",
+            "title": "Siųsti nuasmenintai",
+            "when": "Įjunkite, kai tekste yra asmens duomenų, o klausimas nepriklauso nuo to, kas yra šalys. Palikite išjungtą, kai svarbiausia būtent tapatybė, pavyzdžiui, tikrinant interesų konfliktą: vietaženkliai pašalina būtent tai, ko klausiate."
+          },
+          "attach": {
+            "body": "Įkelia failą iš šio įrenginio į pokalbį. Jis perskaitomas tik šioje gijoje ir į bylą neįsegamas.",
+            "title": "Prisegti failą",
+            "when": "Tinka vienkartiniam dokumentui, kurio nereikia saugoti: ką tik el. paštu gautam projektui, skenuotai kopijai ar skaičiuoklei, kurios tenorite santraukos."
+          },
           "composer": {
-            "body": "Įveskite savo klausimą ar nurodymą žinutės laukelyje.",
-            "title": "Parašykite savo užklausą"
+            "body": "Paprasta kalba parašykite, ko norite: kokia užduotis, su kuo ji susijusi ir kokios formos atsakymo tikitės. Visa kita čia tik patikslina jau parašytą užklausą.",
+            "title": "Pradėkite nuo užklausos"
+          },
+          "context": {
+            "body": "Nukreipia užklausą į jau įsegtą medžiagą: į visą bylą arba į vieną joje esantį failą. Niekas neįkeliama ir nekopijuojama; nuoroda veda ten, kur medžiaga jau yra.",
+            "title": "Nurodyti bylą arba failą",
+            "when": "Naudokite vietoj failo prisegimo visada, kai dokumentas jau įsegtas. Nurodykite bylą, kai asistentas turi peržvelgti ją visą; vieną failą, kai tiksliai žinote, kurį skaityti. Įvedus @ tuščiame redaktoriuje šis sąrašas atsiveria iš karto."
+          },
+          "mcp": {
+            "body": "Įjungia arba išjungia prijungto serverio įrankius jūsų pokalbiuose: įmonių registrus, vidines sistemas, visa, ką prijungė jūsų komanda.",
+            "title": "Prijungti įrankių serveriai",
+            "when": "Įjunkite, kai atsakymui reikia gyvų duomenų iš už darbo srities ribų. Kitus palikite išjungtus: kuo mažiau įrankių žaidime, tuo siauresnis ir nuspėjamesnis atsakymas."
+          },
+          "models": {
+            "body": "Pakeičia modelį tik šiame pokalbyje. Visos kitos gijos lieka su jūsų darbo srities numatytuoju modeliu.",
+            "title": "Kuris modelis",
+            "when": "Į stipresnį modelį pereikite atidžiam skaitymui, rengimui ir visur, kur klaidingas atsakymas brangiai kainuoja. Paieškoms, santraukoms ir greitiems perrašymams likite prie numatytojo: papildomas gylis ten pakeičia tik laukimo laiką."
+          },
+          "plusMenu": {
+            "body": "Mygtukas + atveria redaktoriaus meniu: prisegti failą, pakeisti modelį, paleisti įgūdį, nurodyti bylą arba įjungti prijungtą įrankių serverį. Kiti žingsniai jį atveria ir aptaria kiekvieną parinktį iš eilės.",
+            "title": "Viskas, ką galima pridėti, slypi po +",
+            "when": "Naudokite +, kai atsakymas priklauso nuo to, ko asistentas dar nemato: failo, bylos, vidinės taisyklės ar gyvo išorinio šaltinio."
           },
           "send": {
-            "body": "Išsiųskite žinutę ir darbo sritis atsakys.",
-            "title": "Siųsti"
+            "body": "Išsiunčia žinutę su viskuo, ką aukščiau prisegėte, nurodėte ar įjungėte. Redaktorius lieka vietoje, todėl tolesniu klausimu galėsite pridėti tai, ko trūko pirmame atsakyme.",
+            "title": "Išsiųskite žinutę",
+            "when": "Siųskite anksti. Trumpas pirmas atsakymas greičiau parodo, kokio konteksto dar trūksta, nei tobulai nušlifuota pirma užklausa."
           },
-          "tools": {
-            "body": "Atidarykite įrankių meniu, kad pridėtumėte failų, įgūdžių ir šaltinių.",
-            "title": "Pridėti kontekstą"
+          "skills": {
+            "body": "Įterpia įrašytą užklausą arba jūsų komandos parašytą įgūdį: peržiūrėtą nurodymų rinkinį, kuris tą pačią užduotį kaskart atlieka vienodai.",
+            "title": "Įgūdžiai ir įrašytos užklausos",
+            "when": "Naudokite, kai užduotis kartojasi ir svarbi formuluotė, pavyzdžiui, tikrinant tipinę sutartį ar rengiant priėmimo santrauką. Įvedus / tuščiame redaktoriuje šis sąrašas atsiveria iš karto."
           }
         },
-        "title": "Išsiųskite pirmąją žinutę"
+        "title": "Klauskite su tinkamu kontekstu"
       },
       "documents": {
         "description": "Įkelkite failą ir jį atidarykite",
@@ -1753,7 +1793,8 @@
         "title": "Automatizuoti darbo eigą"
       }
     },
-    "unavailable": "Šis vadovas šiuo metu nepasiekiamas"
+    "unavailable": "Šis vadovas šiuo metu nepasiekiamas",
+    "whenLabel": "Kada naudoti:"
   },
   "inspector": {
     "anonymization": {

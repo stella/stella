@@ -1,8 +1,10 @@
 import { useState } from "react";
 
-import { CircleHelpIcon } from "lucide-react";
+import { CircleHelpIcon, ExternalLinkIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { DiscordLogoIcon } from "@stll/ui/components/brand-icons";
+import { Button } from "@stll/ui/components/button";
 import {
   Sheet,
   SheetDescription,
@@ -12,6 +14,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@stll/ui/components/sheet";
+import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/components/tabs";
 
 import { SidebarMenuButton, SidebarMenuItem } from "@/components/sidebar";
 import { GuideChecklist } from "@/features/guides/guide-checklist";
@@ -22,10 +25,16 @@ import {
 } from "@/features/guides/guide-types";
 import { useGuideRunner } from "@/features/guides/use-guide-runner";
 import { useOnboardingProgress } from "@/features/guides/use-onboarding-progress";
+import { COMMUNITY_FORUM_URL } from "@/lib/consts";
+
+const HELP_TABS = {
+  guides: "guides",
+  community: "community",
+} as const;
 
 // The Help & guides entry: a sidebar button opening a right-side drawer with the
-// progress-tracked onboarding checklist. Gate the render on
-// `useGuidesPreviewEnabled()` at the call site.
+// progress-tracked onboarding checklist and the community forum link. Gate the
+// render on `useGuidesPreviewEnabled()` at the call site.
 export const GuideHelpDrawer = () => {
   const t = useTranslations();
   const [open, setOpen] = useState(false);
@@ -62,15 +71,60 @@ export const GuideHelpDrawer = () => {
             <SheetDescription>{t("guides.help.subtitle")}</SheetDescription>
           </SheetHeader>
           <SheetPanel>
-            <GuideChecklist
-              activeTourId={runner.activeTourId}
-              onStart={handleStart}
-              progress={progress}
-              tours={GUIDE_TOURS}
-            />
+            <Tabs defaultValue={HELP_TABS.guides}>
+              <TabsList className="w-full">
+                <TabsTab value={HELP_TABS.guides}>
+                  {t("guides.help.tabs.guides")}
+                </TabsTab>
+                <TabsTab value={HELP_TABS.community}>
+                  {t("guides.help.tabs.community")}
+                </TabsTab>
+              </TabsList>
+              <TabsPanel className="pt-2" value={HELP_TABS.guides}>
+                <GuideChecklist
+                  activeTourId={runner.activeTourId}
+                  onStart={handleStart}
+                  progress={progress}
+                  tours={GUIDE_TOURS}
+                />
+              </TabsPanel>
+              <TabsPanel className="pt-2" value={HELP_TABS.community}>
+                <GuideCommunityPanel />
+              </TabsPanel>
+            </Tabs>
           </SheetPanel>
         </SheetPopup>
       </Sheet>
     </SidebarMenuItem>
+  );
+};
+
+const GuideCommunityPanel = () => {
+  const t = useTranslations();
+
+  return (
+    <div className="flex flex-col items-start gap-3">
+      <p className="text-muted-foreground text-sm">
+        {t("guides.community.body")}
+      </p>
+      <Button
+        render={
+          <a
+            // The label duplicates the visible text: the anchor's children are
+            // injected by `Button`, so the linter cannot see them statically.
+            aria-label={t("guides.community.linkLabel")}
+            href={COMMUNITY_FORUM_URL}
+            rel="noreferrer noopener"
+            target="_blank"
+          />
+        }
+        size="sm"
+        variant="secondary"
+      >
+        <DiscordLogoIcon />
+        {t("guides.community.linkLabel")}
+        <ExternalLinkIcon aria-hidden="true" className="size-3.5" />
+      </Button>
+    </div>
   );
 };

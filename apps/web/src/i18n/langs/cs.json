@@ -1679,9 +1679,17 @@
     "checklist": {
       "progress": "{completed} z {total} dokončeno"
     },
+    "community": {
+      "body": "Stella má veřejný komunitní chat. Odpovídají tam vývojáři i ostatní uživatelé, sdílejí své postupy a přebírají hlášení chyb. Je to komunitní fórum, ne zákaznická podpora: odpoví ten, kdo je zrovna online.",
+      "linkLabel": "Otevřít komunitní fórum"
+    },
     "help": {
       "buttonLabel": "Nápověda a průvodci",
       "subtitle": "Interaktivní prohlídky pracovního prostoru",
+      "tabs": {
+        "community": "Komunita",
+        "guides": "Průvodci"
+      },
       "title": "Nápověda a průvodci"
     },
     "minutes": "{count} min.",
@@ -1690,23 +1698,55 @@
     },
     "tours": {
       "chat": {
-        "description": "Napište zadání a získejte odpověď",
+        "description": "Co se skrývá pod tlačítkem + a kdy sáhnout po které volbě",
         "examplePrompt": "Shrňte klíčové povinnosti v této smlouvě",
         "steps": {
+          "anonymize": {
+            "body": "Nahradí jména, identifikátory a další osobní údaje zástupnými hodnotami dřív, než dotaz opustí váš pracovní prostor, a v odpovědi, kterou čtete, je zase doplní zpět.",
+            "title": "Odeslat anonymizovaně",
+            "when": "Zapněte, když text obsahuje osobní údaje a otázka nestojí na tom, kdo jsou strany. Nechte vypnuté, když jde právě o totožnost, třeba u kontroly střetu zájmů: zástupné hodnoty odeberou přesně to, na co se ptáte."
+          },
+          "attach": {
+            "body": "Nahraje soubor z tohoto zařízení do konverzace. Přečte se jen pro toto vlákno a nezaloží se do spisu.",
+            "title": "Připojit soubor",
+            "when": "Hodí se pro jednorázový dokument, který nepotřebujete uchovat: návrh, jenž právě přišel e-mailem, sken nebo tabulku, kterou chcete jen shrnout."
+          },
           "composer": {
-            "body": "Zadejte svůj dotaz nebo pokyn do pole zprávy.",
-            "title": "Napište svůj požadavek"
+            "body": "Napište běžnou řečí, co chcete: jaký úkol, čeho se týká a jakou podobu odpovědi čekáte. Všechno ostatní zde už jen zpřesňuje zadání, které jste napsali.",
+            "title": "Začněte zadáním"
+          },
+          "context": {
+            "body": "Nasměruje dotaz na materiál, který už je založený: na celý spis, nebo na jediný soubor v něm. Nic se nenahrává ani nekopíruje; odkaz vede tam, kde materiál už leží.",
+            "title": "Odkázat na spis nebo soubor",
+            "when": "Použijte místo připojení souboru vždy, když je dokument už založený. Odkažte na spis, má-li se asistent podívat napříč ním; na jeden soubor, když přesně víte, který má číst. Napsáním @ v prázdném editoru otevřete tento seznam přímo."
+          },
+          "mcp": {
+            "body": "Zapíná a vypíná nástroje připojeného serveru pro vaše chaty: obchodní rejstříky, interní systémy, cokoli váš tým připojil.",
+            "title": "Připojené servery nástrojů",
+            "when": "Zapněte, když odpověď potřebuje živá data zvenčí. Ostatní nechte vypnuté: čím méně nástrojů je ve hře, tím užší a předvídatelnější odpověď."
+          },
+          "models": {
+            "body": "Přepne model jen pro tuto konverzaci. Ostatní vlákna si ponechají výchozí model nastavený pro váš pracovní prostor.",
+            "title": "Který model",
+            "when": "Silnější model zvolte pro pozorné čtení, koncipování a všude, kde je chybná odpověď drahá. U vyhledávání, shrnutí a rychlých přepisů zůstaňte u výchozího: hloubka navíc změní jen dobu čekání."
+          },
+          "plusMenu": {
+            "body": "Tlačítko + otevře nabídku editoru: připojit soubor, přepnout model, spustit dovednost, odkázat na spis nebo zapnout připojený server nástrojů. Následující kroky ji otevřou a projdou volbu po volbě.",
+            "title": "Vše, co lze přidat, je pod +",
+            "when": "Sáhněte po +, kdykoli odpověď závisí na něčem, co asistent zatím nevidí: na souboru, spisu, interním pravidle nebo živém externím zdroji."
           },
           "send": {
-            "body": "Odešlete zprávu a pracovní prostor odpoví.",
-            "title": "Odeslat"
+            "body": "Odešle zprávu se vším, co jste výše připojili, na co jste odkázali nebo co jste zapnuli. Editor zůstane na místě, takže navazujícím dotazem doplníte to, co v první odpovědi chybělo.",
+            "title": "Odešlete zprávu",
+            "when": "Odesílejte brzy. Krátká první odpověď ukáže, jaký kontext ještě chybí, rychleji než dokonale vymyšlené první zadání."
           },
-          "tools": {
-            "body": "Otevřete nabídku nástrojů a připojte soubory, dovednosti a zdroje.",
-            "title": "Přidat kontext"
+          "skills": {
+            "body": "Vloží uložené zadání nebo dovednost, kterou napsal váš tým: schválený soubor pokynů, díky němuž se stejný úkol pokaždé zpracuje stejně.",
+            "title": "Dovednosti a uložená zadání",
+            "when": "Použijte je, když se úkol opakuje a záleží na formulaci, například u standardní revize smlouvy nebo shrnutí zadání zakázky. Napsáním / v prázdném editoru otevřete tento seznam přímo."
           }
         },
-        "title": "Odešlete svou první zprávu"
+        "title": "Ptejte se se správným kontextem"
       },
       "documents": {
         "description": "Nahrajte soubor a otevřete jej",
@@ -1753,7 +1793,8 @@
         "title": "Automatizovat pracovní postup"
       }
     },
-    "unavailable": "Tento průvodce nyní není k dispozici"
+    "unavailable": "Tento průvodce nyní není k dispozici",
+    "whenLabel": "Kdy to použít:"
   },
   "inspector": {
     "anonymization": {

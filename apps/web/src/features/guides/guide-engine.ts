@@ -12,10 +12,19 @@ const OVERLAY_OPACITY = 0.6;
 const STAGE_PADDING_PX = 6;
 const STAGE_RADIUS_PX = 8;
 
+// The step's "when would I pick this?" line, already localized.
+export type GuideEngineWhen = {
+  label: string;
+  text: string;
+};
+
 export type GuideEngineStep = {
   element: Element;
   title: string;
   body: string;
+  // Rendered under the body as a muted, labelled secondary line; `undefined`
+  // on steps that describe a control with no alternative to weigh it against.
+  when: GuideEngineWhen | undefined;
   placement?: GuidePlacement | undefined;
   // Pre-localized "N of M" label; passed through verbatim (no {{tokens}}).
   progressText: string;
@@ -28,6 +37,32 @@ export type GuideEngineStep = {
 export type GuideEngine = {
   showStep: (step: GuideEngineStep) => void;
   destroy: () => void;
+};
+
+// driver.js assigns the popover description with `innerHTML`, which is the only
+// seam for a second paragraph. Copy is compiled-in translation text, never user
+// input, but escape it anyway so a future key containing `<` cannot become
+// markup. Styling is inline: the popover is appended to `document.body` outside
+// the app tree, so it is reached by design tokens on `:root` but not by the
+// utility classes the app's own components use.
+const escapeHtml = (value: string): string =>
+  value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+
+const WHEN_PARAGRAPH_STYLE =
+  "margin-top:0.5rem;color:var(--color-muted-foreground);font-size:0.8125rem;line-height:1.45";
+
+const buildDescription = ({ body, when }: GuideEngineStep): string => {
+  const bodyHtml = `<p>${escapeHtml(body)}</p>`;
+  if (!when) {
+    return bodyHtml;
+  }
+  return `${bodyHtml}<p style="${WHEN_PARAGRAPH_STYLE}"><span style="font-weight:600">${escapeHtml(
+    when.label,
+  )}</span> ${escapeHtml(when.text)}</p>`;
 };
 
 type CreateGuideEngineOptions = {
@@ -65,7 +100,7 @@ export const createGuideEngine = ({
         element: step.element,
         popover: {
           title: step.title,
-          description: step.body,
+          description: buildDescription(step),
           align: "start",
           showButtons: ["next", "close"],
           showProgress: true,
