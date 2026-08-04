@@ -24,7 +24,8 @@ RUN turbo prune @stll/legal-atlas-runner --docker
 
 FROM base AS deps
 COPY --from=install-inputs /json/ .
-RUN bun install --filter @stll/legal-atlas-runner --production --frozen-lockfile --ignore-scripts --network-concurrency=8
+RUN --mount=type=cache,target=/root/.bun/install/cache \
+    bun install --filter @stll/legal-atlas-runner --production --frozen-lockfile --ignore-scripts --network-concurrency=8
 
 FROM deps AS builder
 ENV NODE_ENV=production
