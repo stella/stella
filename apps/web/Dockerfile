@@ -118,7 +118,11 @@ ENV HOST=0.0.0.0
 ENV PORT=3002
 RUN groupadd --system --gid 1001 stella && \
     useradd --system --uid 1001 --gid stella --no-create-home stella
-COPY --chown=stella:stella --from=pruner /app/out/full/ .
+# The runtime needs only the workspace manifests (node_modules linkage), the
+# server entry, and the built output. Workspace sources stay in the build
+# stages; `scripts/check-web-docker-platform.test.ts` enforces this boundary.
+COPY --chown=stella:stella --from=pruner /app/out/json/ .
+COPY --chown=stella:stella --from=builder /app/apps/web/start-runtime.js ./apps/web/start-runtime.js
 COPY --chown=stella:stella --from=builder /app/apps/web/dist ./apps/web/dist
 WORKDIR /app/apps/web
 USER stella

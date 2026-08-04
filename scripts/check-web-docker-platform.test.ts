@@ -59,9 +59,20 @@ describe("web container platform boundary", () => {
     });
     expect(crossPlatformCopies).toEqual([
       "deps-prod: COPY --from=install-inputs /json/ .",
-      "runner: COPY --chown=stella:stella --from=pruner /app/out/full/ .",
+      "runner: COPY --chown=stella:stella --from=pruner /app/out/json/ .",
+      "runner: COPY --chown=stella:stella --from=builder /app/apps/web/start-runtime.js ./apps/web/start-runtime.js",
       "runner: COPY --chown=stella:stella --from=builder /app/apps/web/dist ./apps/web/dist",
     ]);
+  });
+
+  test("keeps workspace source out of the runtime image", () => {
+    const runner = stagesByName.get("runner");
+    // The pruned source tree (out/full) belongs to the build stages only; the
+    // runtime needs just workspace manifests, the server entry, and dist/.
+    expect(runner?.body).not.toContain("out/full");
+    expect(runner?.body).toContain(
+      "COPY --chown=stella:stella --from=pruner /app/out/json/ .",
+    );
   });
 
   test("uses the same pinned multi-architecture base for build and runtime", () => {
