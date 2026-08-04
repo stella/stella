@@ -1107,7 +1107,7 @@ export const createCorpusIndexer = <
           // copy. The projection trigger seeds pending rows with neither, so
           // a backlog drain — almost entirely never-appended rows — skips
           // the per-row engine round-trip that was its entire cost profile.
-          if (durableTargets !== undefined && durableTargets.mayHaveCopy) {
+          if (durableTargets?.mayHaveCopy === true) {
             previousIndexes.add(indexId);
             for (const projectionIndexId of adapter.generationProjectionIndexIds(
               row,
