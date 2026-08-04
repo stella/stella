@@ -51,7 +51,9 @@ void mock.module("@/api/handlers/chat/tools/external-mcp-tools", () => ({
   },
 }));
 
+const loadOrgKeysModule = await import("@/api/lib/web-search/load-org-keys");
 void mock.module("@/api/lib/web-search/load-org-keys", () => ({
+  ...loadOrgKeysModule,
   loadWebSearchProvidersForOrg: async () => ({
     urlFetcher: null,
     webSearchProvider: null,
