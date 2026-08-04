@@ -36,6 +36,15 @@ import { entityOptions } from "@/lib/workspaces/queries/entities";
 const DECISION_HASH_PREFIX = "#stella-decision=";
 const ENTITY_REF_HASH_PREFIX = "#stella-entity-ref=";
 const WORKSPACE_REF_HASH_PREFIX = "#stella-workspace-ref=";
+/**
+ * The server rewrites a citation whose ref was never minted this turn to
+ * this href (see `CHAT_UNRESOLVED_REF_HREF` in the API's ref registry): a
+ * fabricated or mangled mention must render as plain text, never as a
+ * clickable pill that looks like a real document.
+ */
+const UNRESOLVED_REF_HREF = "#stella-unresolved-ref";
+const UUID_SHAPE_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 export const SKILL_REF_HASH_PREFIX = "#stella-skill-ref=";
 // Hash fragment, NOT a `folio:` scheme. Streamdown runs
 // rehype-sanitize over rendered links; only its protocol
@@ -274,6 +283,12 @@ const EntityRefChip = ({
     separator !== -1 ? rawId.slice(0, separator) : fallbackWorkspaceId;
   const refEntityId = separator !== -1 ? rawId.slice(separator + 1) : rawId;
   const textLabel = typeof label === "string" ? label : "Reference";
+  // Legacy persisted text may carry an unresolved per-turn ref (`ent_99`)
+  // where a stable entity UUID belongs; before this guard it fell back to
+  // the current workspace and rendered as a real-looking, broken pill.
+  if (!UUID_SHAPE_REGEX.test(refEntityId)) {
+    return <span>{label}</span>;
+  }
   const icon = (
     <EntityChipIcon
       entityId={refEntityId}
@@ -350,6 +365,11 @@ const WorkspaceRefChip = ({
   interactive: boolean;
 }) => {
   const navigate = useNavigate();
+  // Same guard as EntityRefChip: an unresolved `mat_99` in legacy persisted
+  // text must not render as a navigable matter pill.
+  if (!UUID_SHAPE_REGEX.test(workspaceId)) {
+    return <span>{label}</span>;
+  }
   const icon = (
     <MatterIcon
       className="size-3 shrink-0"
@@ -578,6 +598,10 @@ export const StreamdownMentionLink = ({
   ...props
 }: StreamdownMentionLinkProps) => {
   if (!href) {
+    return <span {...props}>{children}</span>;
+  }
+
+  if (href === UNRESOLVED_REF_HREF) {
     return <span {...props}>{children}</span>;
   }
 
