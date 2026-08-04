@@ -4,6 +4,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/components/button";
 import { cn } from "@stll/ui/lib/utils";
 
+import { GuideTourPreview } from "@/features/guides/guide-tour-preview";
 import {
   GUIDE_TOUR_STATUSES,
   type GuideTour,
@@ -95,17 +96,22 @@ const GuideTourCard = ({
   })();
 
   return (
-    <li className="border-border flex flex-col gap-2 rounded-lg border p-3">
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-sm font-medium">{t(tour.titleKey)}</p>
-        <GuideStatusBadge status={status} />
+    <li className="border-border flex gap-3 rounded-lg border p-3">
+      <GuideTourPreview tourId={tour.id} />
+      <div className="flex min-w-0 flex-1 flex-col gap-2">
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-sm font-medium">{t(tour.titleKey)}</p>
+          <GuideStatusBadge status={status} />
+        </div>
+        <p className="text-muted-foreground text-xs">
+          {t(tour.descriptionKey)}
+        </p>
+        <div className="text-muted-foreground flex items-center gap-1 text-xs">
+          <ClockIcon className="size-3" />
+          {t("guides.minutes", { count: String(tour.estMinutes) })}
+        </div>
+        <div className="flex items-center gap-2">{cta}</div>
       </div>
-      <p className="text-muted-foreground text-xs">{t(tour.descriptionKey)}</p>
-      <div className="text-muted-foreground flex items-center gap-1 text-xs">
-        <ClockIcon className="size-3" />
-        {t("guides.minutes", { count: String(tour.estMinutes) })}
-      </div>
-      <div className="flex items-center gap-2">{cta}</div>
     </li>
   );
 };
