@@ -11,11 +11,8 @@ on:
         required: true
         type: string
 
-permissions:
-  contents: write
-  packages: write
-  id-token: write
-  attestations: write
+# Every job declares its own least-privilege block.
+permissions: {}
 
 concurrency:
   group: release-${{ github.event_name == 'workflow_dispatch' && inputs.release_ref || github.ref_name }}
