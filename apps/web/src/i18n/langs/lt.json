@@ -1681,6 +1681,8 @@
     },
     "community": {
       "body": "Gaukite pagalbos iš kitų naudotojų ir kūrėjų mūsų bendruomenės pokalbiuose.",
+      "directLinkLabel": "Susisiekite su mumis",
+      "directPrompt": "Reikia garantuoto atsako laiko?",
       "linkLabel": "Atverti bendruomenės forumą"
     },
     "help": {

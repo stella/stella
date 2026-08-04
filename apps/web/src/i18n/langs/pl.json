@@ -1681,6 +1681,8 @@
     },
     "community": {
       "body": "Uzyskaj pomoc od innych użytkowników i deweloperów na naszym czacie społeczności.",
+      "directLinkLabel": "Napisz do nas",
+      "directPrompt": "Potrzebujesz gwarantowanego czasu odpowiedzi?",
       "linkLabel": "Otwórz forum społeczności"
     },
     "help": {

@@ -108,3 +108,8 @@ export const STALE_TIME = {
  *  maintainers and users help each other. Single source for every surface
  *  that links it (the feedback menu, the help drawer's Community tab). */
 export const COMMUNITY_FORUM_URL = "https://discord.gg/8dZjmVFjTK" as const;
+
+/** General contact address. Used where someone wants to reach the team directly
+ *  rather than ask the community: it opens a conversation, so surfaces linking
+ *  it must not imply a committed response time. */
+export const CONTACT_EMAIL = "hello@stll.app" as const;

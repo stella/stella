@@ -1684,6 +1684,8 @@ type Messages = {
     };
     "community": {
       "body": "Get help from other users and the developers in our community chat.";
+      "directLinkLabel": "Talk to us";
+      "directPrompt": "Need guaranteed response times?";
       "linkLabel": "Open the community forum";
     };
     "help": {

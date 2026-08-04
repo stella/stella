@@ -1681,6 +1681,8 @@
     },
     "community": {
       "body": "Saņemiet palīdzību no citiem lietotājiem un izstrādātājiem mūsu kopienas tērzēšanā.",
+      "directLinkLabel": "Sazinieties ar mums",
+      "directPrompt": "Nepieciešams garantēts atbildes laiks?",
       "linkLabel": "Atvērt kopienas forumu"
     },
     "help": {

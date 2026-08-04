@@ -1681,6 +1681,8 @@
     },
     "community": {
       "body": "Obtenha ajuda de outros usuários e dos desenvolvedores no nosso chat da comunidade.",
+      "directLinkLabel": "Fale com a gente",
+      "directPrompt": "Precisa de tempos de resposta garantidos?",
       "linkLabel": "Abrir o fórum da comunidade"
     },
     "help": {

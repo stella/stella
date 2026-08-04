@@ -25,7 +25,7 @@ import {
 } from "@/features/guides/guide-types";
 import { useGuideRunner } from "@/features/guides/use-guide-runner";
 import { useOnboardingProgress } from "@/features/guides/use-onboarding-progress";
-import { COMMUNITY_FORUM_URL } from "@/lib/consts";
+import { COMMUNITY_FORUM_URL, CONTACT_EMAIL } from "@/lib/consts";
 
 const HELP_TABS = {
   guides: "guides",
@@ -125,6 +125,17 @@ const GuideCommunityPanel = () => {
         {t("guides.community.linkLabel")}
         <ExternalLinkIcon aria-hidden="true" className="size-3.5" />
       </Button>
+      {/* Deliberately an invitation to talk, not a service level: the product
+          sells no support tier, so this must promise a conversation only. */}
+      <p className="border-border text-muted-foreground border-t pt-3 text-xs">
+        {t("guides.community.directPrompt")}{" "}
+        <a
+          className="text-foreground underline underline-offset-2"
+          href={`mailto:${CONTACT_EMAIL}`}
+        >
+          {t("guides.community.directLinkLabel")}
+        </a>
+      </p>
     </div>
   );
 };
