@@ -27,7 +27,7 @@
       "manualVerification": {
         "artifactsHash": "d5a2bcdfe9cb207f2a0fe113cecb70849ea844f3d4fd2eeea2fb20798c8cd19e",
         "reason": "Patch release, UX diff negligible",
-        "watchedPathsHash": "eb10814818a5dcd92a08ce48e10d9c7d3900bbf0912e2823fe73773de975effe"
+        "watchedPathsHash": "da54cd6a2fe6719d8f5d4b965dc80964a5ef110d2813f076c217962c90f47adc"
       }
     },
     {
@@ -57,7 +57,7 @@
       "manualVerification": {
         "artifactsHash": "14c73ce07be8ad2b9f23235eb99275e2ebf4968daf63f95855228a116b5d363f",
         "reason": "Patch release, UX diff negligible",
-        "watchedPathsHash": "eb10814818a5dcd92a08ce48e10d9c7d3900bbf0912e2823fe73773de975effe"
+        "watchedPathsHash": "da54cd6a2fe6719d8f5d4b965dc80964a5ef110d2813f076c217962c90f47adc"
       }
     },
     {
@@ -87,7 +87,7 @@
       "manualVerification": {
         "artifactsHash": "14857ed437810aeb4c71bcf4095e362309bdedc159e511a8787e0f32e224d407",
         "reason": "Patch release, UX diff negligible",
-        "watchedPathsHash": "eb10814818a5dcd92a08ce48e10d9c7d3900bbf0912e2823fe73773de975effe"
+        "watchedPathsHash": "da54cd6a2fe6719d8f5d4b965dc80964a5ef110d2813f076c217962c90f47adc"
       }
     },
     {
@@ -117,7 +117,7 @@
       "manualVerification": {
         "artifactsHash": "55505a814c4132d7f88fdceafc880471f2fb26941aa1181df2d38af0f67e5f04",
         "reason": "Patch release, UX diff negligible",
-        "watchedPathsHash": "eb10814818a5dcd92a08ce48e10d9c7d3900bbf0912e2823fe73773de975effe"
+        "watchedPathsHash": "da54cd6a2fe6719d8f5d4b965dc80964a5ef110d2813f076c217962c90f47adc"
       }
     },
     {
