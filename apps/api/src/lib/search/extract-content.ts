@@ -1,5 +1,7 @@
 /**
- * Extract plain text from uploaded files (PDF, DOCX).
+ * Extract plain text from uploaded files (PDF, DOCX, spreadsheets,
+ * presentations, and the other office formats listed in
+ * `extractable-mime-types.ts`).
  *
  * Extraction runs in an isolated Bun subprocess so that parser
  * crashes or exploits (buffer overflow, prototype pollution,
@@ -11,14 +13,29 @@ import { Result } from "better-result";
 
 import { captureError } from "@/api/lib/analytics/capture";
 import { ExtractionWorkerError } from "@/api/lib/errors/tagged-errors";
-import {
-  EMAIL_MIME_TYPES,
-  resolveEmailMimeType,
-} from "@/api/lib/files/email-to-html";
+import { resolveEmailMimeType } from "@/api/lib/files/email-to-html";
 import { LIMITS } from "@/api/lib/limits";
 import { resolveRuntimeWorkerPath } from "@/api/lib/runtime-worker-path";
+import {
+  canExtractMimeType,
+  normalizeMimeType,
+} from "@/api/lib/search/extractable-mime-types";
 import { spawnWorker } from "@/api/lib/subprocess";
-import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
+import {
+  DOC_MIME_TYPE,
+  DOCM_MIME_TYPE,
+  EPUB_MIME_TYPE,
+  ODP_MIME_TYPE,
+  ODS_MIME_TYPE,
+  ODT_MIME_TYPE,
+  PPSX_MIME_TYPE,
+  PPT_MIME_TYPE,
+  PPTX_MIME_TYPE,
+  RTF_MIME_TYPE,
+  XLS_MIME_TYPE,
+  XLSB_MIME_TYPE,
+  XLSX_MIME_TYPE,
+} from "@/api/mime-types";
 
 const WORKER_PATH = resolveRuntimeWorkerPath({
   outputFile: "extraction-worker.js",
@@ -26,48 +43,37 @@ const WORKER_PATH = resolveRuntimeWorkerPath({
   sourceFile: "extraction-worker.ts",
 });
 
-const DIRECT_TEXT_MIME_TYPES = new Set<string>([
-  "application/json",
-  "text/calendar",
-  "text/csv",
-  "text/html",
-  "text/markdown",
-  "text/plain",
-  "text/tab-separated-values",
-]);
-
-const TEXT_EXTENSION_MIME_TYPES: Record<string, string> = {
+/**
+ * Recovers a usable MIME type for files stored under a generic type
+ * (browsers routinely upload office documents as
+ * `application/octet-stream`). Extension is only consulted after the
+ * stored MIME type has been rejected.
+ */
+const EXTENSION_MIME_TYPES: Record<string, string> = {
   csv: "text/csv",
+  doc: DOC_MIME_TYPE,
+  docm: DOCM_MIME_TYPE,
+  epub: EPUB_MIME_TYPE,
   htm: "text/html",
   html: "text/html",
   ics: "text/calendar",
   json: "application/json",
   md: "text/markdown",
   markdown: "text/markdown",
+  odp: ODP_MIME_TYPE,
+  ods: ODS_MIME_TYPE,
+  odt: ODT_MIME_TYPE,
+  ppsx: PPSX_MIME_TYPE,
+  ppt: PPT_MIME_TYPE,
+  pptx: PPTX_MIME_TYPE,
+  rtf: RTF_MIME_TYPE,
   text: "text/plain",
   ts: "text/plain",
   tsx: "text/plain",
   txt: "text/plain",
-};
-
-const BINARY_EXTRACTION_MIME_TYPES = new Set<string>([
-  PDF_MIME_TYPE,
-  DOCX_MIME_TYPE,
-]);
-
-export const normalizeMimeType = (mimeType: string): string =>
-  mimeType.split(";").at(0)?.trim().toLowerCase() ?? "";
-
-export const isDirectTextMimeType = (mimeType: string): boolean =>
-  DIRECT_TEXT_MIME_TYPES.has(normalizeMimeType(mimeType));
-
-export const canExtractMimeType = (mimeType: string): boolean => {
-  const normalized = normalizeMimeType(mimeType);
-  return (
-    BINARY_EXTRACTION_MIME_TYPES.has(normalized) ||
-    isDirectTextMimeType(normalized) ||
-    normalized in EMAIL_MIME_TYPES
-  );
+  xls: XLS_MIME_TYPE,
+  xlsb: XLSB_MIME_TYPE,
+  xlsx: XLSX_MIME_TYPE,
 };
 
 export const resolveExtractionMimeType = ({
@@ -92,7 +98,7 @@ export const resolveExtractionMimeType = ({
     return normalized;
   }
   const extension = fileName.slice(dotIndex + 1).toLowerCase();
-  return TEXT_EXTENSION_MIME_TYPES[extension] ?? normalized;
+  return EXTENSION_MIME_TYPES[extension] ?? normalized;
 };
 
 export const extractFileTextResult = async (

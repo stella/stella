@@ -21,34 +21,50 @@ import {
   extractFileTextResult,
   resolveExtractionMimeType,
 } from "@/api/lib/search/extract-content";
+import { canExtractMimeType } from "@/api/lib/search/extractable-mime-types";
 import { getSearchProvider } from "@/api/lib/search/provider";
 import { findExtractionFileField } from "@/api/lib/search/types";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
+type ExtractionSource = {
+  fileId: string;
+  storageMimeType: string;
+  extractionMimeType: string;
+};
+
 /**
  * Choose which S3 object to extract text from.
- * For non-PDF files that were converted to PDF by
- * Gotenberg, extract from the PDF copy (better text
- * layer). For native PDFs and DOCX, use the original.
+ *
+ * The original file wins whenever a parser handles its format
+ * directly. Going through the Gotenberg PDF derivative instead
+ * would read text off a paginated rendering: spreadsheet columns
+ * are scaled to fit a page and anything past the last fitted
+ * column never reaches the PDF at all.
+ *
+ * Formats with no direct parser (images, HTML, iWork) still fall
+ * back to the PDF copy, which is the only text layer they have.
  */
-const pickExtractionSource = (
+export const pickExtractionSource = (
   fileField: Extract<FieldContent, { type: "file" }>,
-): { fileId: string; storageMimeType: string; extractionMimeType: string } => {
-  if (fileField.mimeType !== PDF_MIME_TYPE && fileField.pdfFileId) {
+): ExtractionSource => {
+  const extractionMimeType = resolveExtractionMimeType({
+    fileName: fileField.fileName,
+    mimeType: fileField.mimeType,
+  });
+
+  if (!canExtractMimeType(extractionMimeType) && fileField.pdfFileId) {
     return {
       fileId: fileField.pdfFileId,
       storageMimeType: PDF_MIME_TYPE,
       extractionMimeType: PDF_MIME_TYPE,
     };
   }
+
   return {
     fileId: fileField.id,
     storageMimeType: fileField.mimeType,
-    extractionMimeType: resolveExtractionMimeType({
-      fileName: fileField.fileName,
-      mimeType: fileField.mimeType,
-    }),
+    extractionMimeType,
   };
 };
 
