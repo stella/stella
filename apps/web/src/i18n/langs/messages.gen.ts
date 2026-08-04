@@ -3729,7 +3729,6 @@ type Messages = {
       };
       "portraitDescription": "Tables need a wider viewport on mobile. Turn your device sideways to continue.";
       "portraitTitle": "Rotate to landscape";
-      "reorderReadOnly": "Table rows follow the current sort";
       "tightContent": "Tight";
       "wrapContent": "Wrap content";
     };

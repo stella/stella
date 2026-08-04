@@ -3726,7 +3726,6 @@
       },
       "portraitDescription": "Les tableaux ont besoin de plus de largeur sur mobile. Tournez l’appareil pour continuer.",
       "portraitTitle": "Passez en paysage",
-      "reorderReadOnly": "Les lignes du tableau suivent le tri actuel",
       "tightContent": "Compact",
       "wrapContent": "Retour à la ligne"
     },
