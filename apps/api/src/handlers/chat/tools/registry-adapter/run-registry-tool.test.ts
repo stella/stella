@@ -149,6 +149,9 @@ describe("runRegistryReadTool", () => {
     if (Result.isError(result)) {
       expect(result.error.message).not.toContain(WS_UUID);
       expect(result.error.message).not.toContain(OTHER_WS_UUID);
+      // The backstop refusal is a Stella bug, not a caller mistake: the kind
+      // drives the orchestrator's mechanical no-retry policy.
+      expect(result.error.kind).toBe("server-defect");
     }
     // Telemetry carries the offending path so the survivor is traceable, but
     // never the leaked value itself.
@@ -175,6 +178,29 @@ describe("runRegistryReadTool", () => {
     expect(Result.isError(result)).toBe(true);
     if (Result.isError(result)) {
       expect(result.error.message).toContain("not available in chat");
+      expect(result.error.kind).toBe("unavailable");
+    }
+  });
+
+  test("classifies a structured registry error envelope by its code", async () => {
+    const registry = createChatRefRegistry();
+    // Detail mode for an inaccessible workspace returns the handler's own
+    // structured not_found envelope, which must classify as `not-found`
+    // rather than the blocking `server-defect`.
+    const matterRef = registry.toMatterRef(
+      toSafeId<"workspace">(OTHER_WS_UUID),
+    );
+
+    const result = await runRegistryReadTool({
+      args: { matter_id: matterRef },
+      context: buildContext(),
+      refRegistry: registry,
+      toolName: "list_matters",
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error.kind).toBe("not-found");
     }
   });
 });

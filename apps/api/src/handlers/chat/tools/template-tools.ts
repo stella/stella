@@ -316,6 +316,7 @@ export const createTemplateAuthoringTools = ({
       } catch (error) {
         aiAnalytics.captureError(error);
         throw new ChatToolError({
+          kind: "transient",
           message:
             "Template field suggestion failed; the workspace's AI provider returned an error.",
           cause: error,

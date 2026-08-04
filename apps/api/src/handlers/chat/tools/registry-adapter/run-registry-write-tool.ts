@@ -27,6 +27,7 @@ import {
   stripDeclaredPaths,
 } from "./ref-mediation";
 import {
+  classifyRegistryErrorKind,
   DEFAULT_TOOL_ERROR_MESSAGE,
   firstTextContent,
   parsePayload,
@@ -126,6 +127,7 @@ export const runRegistryWriteTool = async ({
   if (!entry.chatProjectable) {
     return Result.err(
       new ChatToolError({
+        kind: "unavailable",
         message: `Tool ${toolName} is not available in chat.`,
       }),
     );
@@ -137,6 +139,7 @@ export const runRegistryWriteTool = async ({
   if (!isMcpToolFeatureEnabled(staticDefinition.feature)) {
     return Result.err(
       new ChatToolError({
+        kind: "unavailable",
         message: "This feature is not enabled on this deployment.",
       }),
     );
@@ -166,7 +169,9 @@ export const runRegistryWriteTool = async ({
 
   if (finished.isError === true) {
     const message = firstTextContent(finished) || DEFAULT_TOOL_ERROR_MESSAGE;
-    return Result.err(new ChatToolError({ message }));
+    return Result.err(
+      new ChatToolError({ kind: classifyRegistryErrorKind(message), message }),
+    );
   }
 
   const payload = parsePayload(finished);
@@ -195,6 +200,7 @@ export const runRegistryWriteTool = async ({
   });
   if (offendingPath !== undefined) {
     const error = new ChatToolError({
+      kind: "server-defect",
       message: REF_PROJECTION_FAILURE_MESSAGE,
     });
     captureError(error, {

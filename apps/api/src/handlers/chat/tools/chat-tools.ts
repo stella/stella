@@ -94,6 +94,7 @@ import type {
   ChatUIToolsFor,
 } from "@/api/lib/chat/chat-tool-types";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import type { ChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import type { ResolvedWebSearchProviders } from "@/api/lib/web-search/select-provider";
 
 export const WEB_SEARCH_NATIVE_TOOL_SLUG = "web-search";
@@ -324,6 +325,12 @@ type GetChatToolsProps = {
     | undefined;
   refRegistry: ChatRefRegistry;
   /**
+   * The turn's server-defect memo, shared by every toolset built for this
+   * turn (validation, streaming, and subagents via the props re-spread) so a
+   * call refused as defective in one toolset stays refused in the others.
+   */
+  toolDefectMemo: ChatToolDefectMemo;
+  /**
    * The turn's anonymization boundary. Threaded into
    * `createSpawnSubagentsTool` so each subagent's own model calls cross
    * the same anonymize/deanonymize boundary as the parent turn; the
@@ -549,6 +556,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     toolWorkspaceIds,
     activeFile,
     refRegistry,
+    toolDefectMemo,
     thirdPartyBoundary,
     hasActiveDocxEditClient,
     hasActiveDocxFileClient,
@@ -587,6 +595,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     refRegistry,
     safeDb,
     scopedDb,
+    toolDefectMemo,
     toolWorkspaceIds,
     userId,
   });
@@ -845,6 +854,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
           refRegistry,
           safeDb,
           scopedDb,
+          toolDefectMemo,
           toolWorkspaceIds,
           userId,
           workspaceStatusById,

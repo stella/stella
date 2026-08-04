@@ -165,6 +165,7 @@ import {
   replaceThreadDataScopeOnTx,
 } from "@/api/lib/chat/data-scope";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { detached } from "@/api/lib/detached";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/files/utils";
@@ -440,6 +441,10 @@ const sendMessage = createSafeRootHandler(
     }
 
     const refRegistry = createChatRefRegistry();
+    // Turn-scoped alongside the ref registry: records tool calls that failed
+    // with a server defect so every toolset built this turn refuses to
+    // re-execute the identical call (see `ChatToolDefectMemo`).
+    const toolDefectMemo = createChatToolDefectMemo();
     // Narrower than the combined `apply-active-docx-edits` gate below:
     // only the file overlay (`file-chat-overlay.tsx`) mounts the
     // auto-run watcher that resolves the folio-agents `read_document` /
@@ -617,6 +622,7 @@ const sendMessage = createSafeRootHandler(
         pinServerValidatedWorkspaceId,
         requestWorkspaceId: workspaceId,
         refRegistry,
+        toolDefectMemo,
         safeDb,
         scopedDb,
         threadId: body.threadId,
@@ -1321,6 +1327,7 @@ const sendMessage = createSafeRootHandler(
         pinServerValidatedWorkspaceId,
         requestWorkspaceId: workspaceId,
         refRegistry,
+        toolDefectMemo,
         safeDb,
         scopedDb,
         threadId: body.threadId,

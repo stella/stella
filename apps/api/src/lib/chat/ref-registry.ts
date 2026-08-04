@@ -97,6 +97,7 @@ const resolveRefs = <TTarget>({
     if (target === undefined) {
       return Result.err(
         new ChatToolError({
+          kind: "invalid-input",
           message: `Unknown ${kind} ref "${ref}". Use refs returned by stella tools.`,
         }),
       );

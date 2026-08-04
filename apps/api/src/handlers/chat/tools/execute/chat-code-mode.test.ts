@@ -5,6 +5,7 @@ import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-wo
 import { registerSandboxTestHygiene } from "@/api/handlers/chat/tools/execute/sandbox/sandbox-test-hygiene";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -24,10 +25,16 @@ const { buildChatCodeMode } = await import("./chat-code-mode");
 
 const WS_UUID = "0dc54d0c-10d7-501d-897e-e801dbd0998c";
 
-const selectScopedDb = (rows: readonly unknown[]): ScopedDb =>
+const selectScopedDb = (
+  rows: readonly unknown[],
+  onSelect?: () => void,
+): ScopedDb =>
   asTestRaw<ScopedDb>(async (run: (tx: unknown) => unknown) => {
     const builder = {
-      select: () => builder,
+      select: () => {
+        onSelect?.();
+        return builder;
+      },
       from: () => builder,
       where: () => builder,
       orderBy: () => builder,
@@ -44,6 +51,7 @@ const buildProps = (scopedDb: ScopedDb) => {
     memberRole: "owner" as const,
     organizationId: toSafeId<"organization">("org_1"),
     refRegistry: createChatRefRegistry(),
+    toolDefectMemo: createChatToolDefectMemo(),
     safeDb: toSafeDbMock(scopedDb),
     scopedDb,
     toolWorkspaceIds: resolveToolWorkspaceIds({
@@ -119,5 +127,76 @@ describe("buildChatCodeMode", () => {
     });
 
     expect(output).toMatchObject({ success: false });
+  });
+
+  test("refuses to re-execute a call that already failed with a server defect", async () => {
+    // Doctored row: `reference` holds a raw UUID the ref map never mediates,
+    // so the projection's UUID backstop fails the call as a server defect
+    // (same trip wire as run-registry-tool.test.ts's fail-closed case).
+    const rows = [
+      {
+        id: WS_UUID,
+        name: "Acme",
+        reference: "4e919658-a448-5354-8e3a-e99911214d2c",
+        status: "active",
+        lastActivityAt: new Date("2026-01-01T00:00:00.000Z"),
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      },
+    ];
+    let selectCalls = 0;
+    const codeMode = buildChatCodeMode(
+      buildProps(
+        selectScopedDb(rows, () => {
+          selectCalls += 1;
+        }),
+      ),
+    );
+    const execute = codeMode.tool.execute ?? undefined;
+    if (execute === undefined) {
+      throw new Error("execute_typescript tool has no server execute");
+    }
+    const script = `return await external_list_matters({});`;
+
+    const first = await execute({ typescriptCode: script });
+    expect(first).toMatchObject({ success: false });
+    const callsAfterFirst = selectCalls;
+    expect(callsAfterFirst).toBeGreaterThan(0);
+
+    // The identical call is refused before dispatch: no new DB work, and the
+    // refusal names the mechanism instead of re-running the defective tool.
+    const second = await execute({ typescriptCode: script });
+    expect(second).toMatchObject({ success: false });
+    expect(selectCalls).toBe(callsAfterFirst);
+    expect(JSON.stringify(second)).toContain("refused without re-executing");
+  });
+
+  test("does not memoize non-defect failures: a corrected call still runs", async () => {
+    const rows = [
+      {
+        id: WS_UUID,
+        name: "Acme",
+        reference: "REF-1",
+        status: "active",
+        lastActivityAt: new Date("2026-01-01T00:00:00.000Z"),
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      },
+    ];
+    const codeMode = buildChatCodeMode(buildProps(selectScopedDb(rows)));
+    const execute = codeMode.tool.execute ?? undefined;
+    if (execute === undefined) {
+      throw new Error("execute_typescript tool has no server execute");
+    }
+
+    // invalid-input failure (unknown ref) must not trip the defect memo...
+    const bad = await execute({
+      typescriptCode: `return await external_list_matters({ matter_id: "mat_999" });`,
+    });
+    expect(bad).toMatchObject({ success: false });
+
+    // ...so the corrected call executes normally.
+    const good = await execute({
+      typescriptCode: `return await external_list_matters({});`,
+    });
+    expect(good).toMatchObject({ success: true });
   });
 });

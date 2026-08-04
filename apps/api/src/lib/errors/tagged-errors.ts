@@ -193,8 +193,37 @@ export class ChatToolValidationError extends TaggedError(
   cause?: unknown;
 }> {}
 
-/** Chat tool execution failure. */
+/**
+ * Failure classes a chat tool error carries, driving orchestrator policy and
+ * model guidance instead of relying on the model to parse prose:
+ *  - `server-defect`: a Stella bug (backstop refusal, DB failure, broken
+ *    invariant). The orchestrator refuses to re-dispatch the identical
+ *    tool+args for the rest of the turn; retrying cannot help.
+ *  - `invalid-input`: the call's arguments are wrong, conflict with current
+ *    state, or target an object that cannot accept the operation (read-only);
+ *    the model should correct the call.
+ *  - `not-found`: the referenced object does not exist or is not accessible.
+ *  - `unavailable`: the tool, feature, or permission is off on this surface or
+ *    deployment; no argument change helps.
+ *  - `limit`: a domain limit or entitlement was hit; the identical call will
+ *    not succeed, a smaller/different one might.
+ *  - `transient`: an external dependency failed; a retry may succeed.
+ */
+export const CHAT_TOOL_ERROR_KINDS = [
+  "server-defect",
+  "invalid-input",
+  "not-found",
+  "unavailable",
+  "limit",
+  "transient",
+] as const;
+
+export type ChatToolErrorKind = (typeof CHAT_TOOL_ERROR_KINDS)[number];
+
+/** Chat tool execution failure. `kind` is required so every construction site
+ * records an explicit retry-policy decision; see `CHAT_TOOL_ERROR_KINDS`. */
 export class ChatToolError extends TaggedError("ChatToolError")<{
+  kind: ChatToolErrorKind;
   message: string;
   cause?: unknown;
 }> {}
