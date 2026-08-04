@@ -19,14 +19,16 @@ RUN mkdir -p /json && \
 # Prune the monorepo for the API
 FROM base AS pruner
 # Keep in sync with the turbo version in the root package.json.
-RUN bun install -g turbo@2.10.7
+RUN --mount=type=cache,target=/root/.bun/install/cache \
+    bun install -g turbo@2.10.7
 COPY . .
 RUN turbo prune @stll/api @stll/legal-atlas-runner --docker
 
 # Install dependencies using only package manifests (cached layer)
 FROM base AS deps
 COPY --from=install-inputs /json/ .
-RUN bun install --filter @stll/api --filter @stll/legal-atlas-runner --frozen-lockfile --ignore-scripts --network-concurrency=8
+RUN --mount=type=cache,target=/root/.bun/install/cache \
+    bun install --filter @stll/api --filter @stll/legal-atlas-runner --frozen-lockfile --ignore-scripts --network-concurrency=8
 
 # Copy source code and compile the API to a Bun binary.
 #
@@ -88,8 +90,12 @@ RUN mkdir -p /app/runtime-workers && \
       apps/api/src/lib/search/extraction-worker.ts
 RUN bun --filter @stll/legal-atlas-runner build
 
-# Run the compiled API as non-root.
-FROM deps AS runner
+# Run the compiled API as non-root. Built from the bare base image: every
+# entrypoint is either the compiled binary or a self-contained
+# `bun build --target bun` bundle, so the runtime image ships only those
+# outputs plus the asset trees they read at runtime; the workspace install
+# (node_modules, manifest tree) stays in the build stages.
+FROM base AS runner
 # Stamp the running container with the release version so the API can
 # return it from /health and tag PostHog events with build metadata.
 # Defaults to "dev" for local `docker build` outside the release flow.
