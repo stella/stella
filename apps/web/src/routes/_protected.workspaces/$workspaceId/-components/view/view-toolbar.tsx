@@ -383,11 +383,19 @@ type ExportFormatIconProps = {
 };
 
 // The file-type icons carry their own colours, so `opacity-100` opts them out
-// of the menu's default icon dimming.
+// of the menu's default icon dimming. The spinner is the only signal that an
+// export is running, so it is labelled rather than left aria-hidden.
 const ExportFormatIcon = ({ Icon, pending }: ExportFormatIconProps) => {
+  const t = useTranslations();
+
   if (pending) {
     return (
-      <Loader2Icon className="text-muted-foreground size-4.5 animate-spin sm:size-4" />
+      <Loader2Icon
+        aria-hidden={false}
+        aria-label={t("common.loading")}
+        className="text-muted-foreground size-4.5 animate-spin sm:size-4"
+        role="img"
+      />
     );
   }
 
@@ -457,6 +465,7 @@ const TableExportMenu = ({ view, workspaceId }: TableExportMenuProps) => {
         <MenuTrigger
           render={
             <Button
+              aria-busy={exportingFormat !== null}
               aria-label={t("workspaces.views.exportTable")}
               disabled={exportingFormat !== null}
               size="icon-xs"
