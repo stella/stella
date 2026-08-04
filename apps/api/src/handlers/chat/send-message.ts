@@ -1598,6 +1598,7 @@ const sendMessage = createSafeRootHandler(
                 resolveAssistantValueRefs:
                   refRegistry.resolveAssistantValueRefs,
                 safeDb,
+                tenantWorkspaceIds: accessibleWorkspaceIds,
                 thirdPartyBoundary,
                 threadId: body.threadId,
                 tools: streamingTools,
@@ -2508,14 +2509,27 @@ const hydrateAssistantMessageRefs = ({
     return hydrated;
   };
 
-  return messages.map((message) =>
-    message.role === "assistant"
-      ? {
-          ...message,
-          parts: message.parts.map(hydratePart),
-        }
-      : message,
-  );
+  // User text carries persisted mention hrefs too: composer mention chips
+  // serialize as `#stella-entity=<ws>:<ent>` / `#stella-workspace=<ws>`
+  // links (chat-message.ts `toMentionHref`), and compaction checkpoints are
+  // persisted as user-role messages. Hydrating them keeps raw tenant UUIDs
+  // out of the model context while preserving what the user pointed at.
+  const hydrateUserPart = (
+    part: ChatMessage["parts"][number],
+  ): ChatMessage["parts"][number] =>
+    part.type === "text"
+      ? { ...part, content: refRegistry.hydrateAssistantTextRefs(part.content) }
+      : part;
+
+  return messages.map((message) => {
+    if (message.role === "assistant") {
+      return { ...message, parts: message.parts.map(hydratePart) };
+    }
+    if (message.role === "user") {
+      return { ...message, parts: message.parts.map(hydrateUserPart) };
+    }
+    return message;
+  });
 };
 
 const insertMessages = async ({

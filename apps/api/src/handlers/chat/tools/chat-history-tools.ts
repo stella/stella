@@ -13,6 +13,7 @@ import type {
   ChatMessageRole,
 } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
@@ -97,6 +98,7 @@ const expandChatHistoryOutputSchema = v.strictObject({
 
 type CreateChatHistoryToolsProps = {
   excludedMessageIds?: readonly SafeId<"chatMessage">[] | undefined;
+  refRegistry: ChatRefRegistry;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
 };
@@ -117,6 +119,7 @@ type ChatHistoryExpansionRow = {
 
 export const createChatHistoryTools = ({
   excludedMessageIds = [],
+  refRegistry,
   safeDb,
   threadId,
 }: CreateChatHistoryToolsProps) => {
@@ -181,7 +184,11 @@ export const createChatHistoryTools = ({
         results: result.value.map((row) => ({
           messageId: row.messageId,
           role: row.role,
-          excerpt: row.excerpt,
+          // Persisted text carries stable mention hrefs with raw tenant
+          // UUIDs; hand-written history tools bypass the registry adapter's
+          // hydration, so rewrite them into chat refs here before the text
+          // reaches the model.
+          excerpt: refRegistry.hydrateAssistantTextRefs(row.excerpt),
           createdAt: row.createdAt.toISOString(),
         })),
       };
@@ -263,7 +270,11 @@ export const createChatHistoryTools = ({
             messageId: row.id,
             role: row.role,
             createdAt: row.createdAt.toISOString(),
-            content: renderChatMessagesForCompaction([message]),
+            // Same rationale as the search excerpt: persisted mention hrefs
+            // must re-enter the model as chat refs, not raw tenant UUIDs.
+            content: refRegistry.hydrateAssistantTextRefs(
+              renderChatMessagesForCompaction([message]),
+            ),
           };
         }),
       };

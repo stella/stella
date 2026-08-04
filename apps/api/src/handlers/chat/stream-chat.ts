@@ -87,6 +87,10 @@ import {
   chatToolMapToArray,
   type ChatToolMap,
 } from "@/api/lib/chat/chat-tool-types";
+import {
+  assertModelSurfaceFreeOfTenantIds,
+  redactTenantIdsDeep,
+} from "@/api/lib/chat/model-ingress-guard";
 import { projectChatToolSchemasForProvider } from "@/api/lib/chat/provider-tool-projection";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import {
@@ -153,6 +157,12 @@ type StreamChatProps = {
   safeDb: SafeDb;
   systemSafe: ChatSafePrompt;
   systemUntrusted: ChatUntrustedPromptSuffix;
+  /**
+   * The org's accessible workspace ids, for the model-ingress guard: the
+   * exact tenant set whose raw ids must never reach the provider (only chat
+   * refs may). Already loaded on every send, so membership checks are free.
+   */
+  tenantWorkspaceIds: readonly SafeId<"workspace">[];
   thirdPartyBoundary: ChatThirdPartyBoundary;
   threadId: SafeId<"chatThread">;
   tools: ChatToolMap;
@@ -210,6 +220,7 @@ export const streamChat = async ({
   safeDb,
   systemSafe,
   systemUntrusted,
+  tenantWorkspaceIds,
   thirdPartyBoundary,
   threadId,
   tools,
@@ -229,14 +240,31 @@ export const streamChat = async ({
     preparedUntrusted.value.length > 0
       ? `${systemSafe}${preparedUntrusted.value.startsWith("\n") ? "" : "\n\n"}${preparedUntrusted.value}`
       : systemSafe;
+  // The system prompt is entirely server-built; a tenant workspace id in it
+  // is a Stella bug (matter scope, active-file, and connected-matter
+  // sections must all speak in chat refs), so this fails closed.
+  assertModelSurfaceFreeOfTenantIds({
+    serialized: system,
+    surface: "system-prompt",
+    workspaceIds: tenantWorkspaceIds,
+  });
 
-  const preparedMessages = await prepareMessagesForThirdParty({
+  const rawPreparedMessages = await prepareMessagesForThirdParty({
     boundary: thirdPartyBoundary,
     messages,
   });
-  if (Result.isError(preparedMessages)) {
-    return thirdPartyBoundaryRefusalResponse(preparedMessages.error);
+  if (Result.isError(rawPreparedMessages)) {
+    return thirdPartyBoundaryRefusalResponse(rawPreparedMessages.error);
   }
+  // Messages carry user-authored and historical text (mention hrefs from
+  // before ref hydration covered user text, pasted workspace URLs), so hits
+  // are redacted rather than refused: old threads keep working, telemetry
+  // records the path of every residual ingress leak, and the model loses
+  // only an id it could not legitimately use.
+  const preparedMessageList = redactTenantIdsDeep({
+    value: rawPreparedMessages.value,
+    workspaceIds: tenantWorkspaceIds,
+  }).value;
 
   const primaryModel = resolveTanStackTextModel({
     modelId: devModelId,
@@ -252,9 +280,8 @@ export const streamChat = async ({
   // chat model without gating by modality, so reject here — before dispatch —
   // any document whose format the model cannot ingest, rather than let the
   // adapter crash the stream.
-  const documentAttachmentMimeTypes = preparedMessages.value.flatMap(
-    (message) =>
-      message.parts.filter(isChatDocumentPart).map(getChatAttachmentMimeType),
+  const documentAttachmentMimeTypes = preparedMessageList.flatMap((message) =>
+    message.parts.filter(isChatDocumentPart).map(getChatAttachmentMimeType),
   );
   const modelRejectsAnyDocument = (model: ResolvedTanStackTextModel): boolean =>
     documentAttachmentMimeTypes.some(
@@ -294,11 +321,19 @@ export const streamChat = async ({
   const modelTools = chatToolMapToArray(
     prepareToolsForThirdParty({ boundary: thirdPartyBoundary, tools }),
   );
+  // Tool schemas are mostly server-built but may include org-configured
+  // external MCP tool descriptions, so a hit here is telemetry, not a
+  // turn-killing panic (the guard only panics for the system prompt).
+  assertModelSurfaceFreeOfTenantIds({
+    serialized: JSON.stringify(modelTools),
+    surface: "tool-schemas",
+    workspaceIds: tenantWorkspaceIds,
+  });
   const restorationPairs: ChatAnonRestoration[] = [];
   const mapAssistantMessageId = createChatMessageIdMapper();
   let responseMessage: ChatMessage | null = null;
   const processor = new StreamProcessor({
-    initialMessages: preparedMessages.value,
+    initialMessages: preparedMessageList,
     events: {
       onStreamEnd: (message) => {
         const convertedMessage = toChatMessage(message);
@@ -323,7 +358,7 @@ export const streamChat = async ({
     modelTools,
     organizationId,
     orgAIConfig,
-    preparedMessages: preparedMessages.value,
+    preparedMessages: preparedMessageList,
     primaryModel,
     promptCacheKey,
     promptCachingEnabled,
@@ -344,7 +379,7 @@ export const streamChat = async ({
         thirdPartyBoundary.type === "anonymized"
           ? collectInitialRestorationPlaceholders({
               latestMessageId,
-              messages: preparedMessages.value,
+              messages: preparedMessageList,
               redactionMap: thirdPartyBoundary.redactionMap,
             })
           : new Set<string>(),

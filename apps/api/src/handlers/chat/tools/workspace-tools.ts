@@ -1,5 +1,5 @@
 import { toolDefinition } from "@tanstack/ai";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -12,15 +12,11 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { CHAT_ENTITY_REF_PREFIX } from "@/api/lib/chat/ref-registry";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
-import {
-  brandPersistedEntityId,
-  brandPersistedPropertyId,
-} from "@/api/lib/safe-id-boundaries";
 import { getSearchProvider } from "@/api/lib/search/provider";
 import { isRecord } from "@/api/lib/type-guards";
 
-const idSchema = (description: string) =>
-  v.pipe(v.string(), v.uuid(), v.description(description));
+const refSchema = (description: string) =>
+  v.pipe(v.string(), v.description(description));
 
 // -----------------------------------------------------------------
 // Matter tools (workspace-scoped, explicit workspaceId)
@@ -68,6 +64,7 @@ const formatFieldValue = (content: FieldContent): string => {
 
 type WorkspaceToolsContext = {
   allowedWorkspaceIds: readonly SafeId<"workspace">[];
+  refRegistry: ChatRefRegistry;
   scopedDb: ScopedDb;
 };
 
@@ -102,65 +99,61 @@ export const buildCreatedDocumentToolOutput = ({
   };
 };
 
-const createAllowedWorkspaceIdMap = (
-  allowedIds: readonly SafeId<"workspace">[],
-) => {
-  const allowedIdsByValue = new Map<string, SafeId<"workspace">>(
-    allowedIds.map((id) => [id, id]),
-  );
-  return allowedIdsByValue;
-};
-
-const workspaceIdSchema = (allowedIds: readonly SafeId<"workspace">[]) =>
+/**
+ * Enumerate the allowed matters by their chat refs, never their UUIDs: this
+ * description is serialized into the provider-visible tool catalog every
+ * turn, so a raw workspace id here would hand the model exactly the tenant
+ * identifier the ref invariant exists to keep away from it (and did, before
+ * this took refs).
+ */
+const matterRefSchema = (allowedMatterRefs: readonly string[]) =>
   v.pipe(
     v.string(),
     v.description(
-      "The workspace/matter ID to operate on. " +
-        `Allowed values: ${allowedIds.join(", ")}`,
+      "The matter ref to operate on. " +
+        `Allowed values: ${allowedMatterRefs.join(", ")}`,
     ),
   );
 
 const updateEntityFieldsOutputSchema = v.strictObject({
   success: v.literal(true),
-  entityId: v.string(),
-  propertyId: v.string(),
+  entityRef: v.string(),
+  propertyRef: v.string(),
   newValue: v.string(),
 });
 
-// This is a brand-minting validator: workspaceId is an untrusted
-// string from chat-tool input (LLM-generated), looked up in the
-// allowed-set Map and returned as SafeId<"workspace"> on success.
-// The bare-string parameter is intentional and required.
 const requireAllowedWorkspaceId = ({
-  allowedIdsByValue,
+  allowedIds,
   workspaceId,
 }: {
-  allowedIdsByValue: Map<string, SafeId<"workspace">>;
-  // eslint-disable-next-line no-unbranded-ownership-id-param/no-unbranded-ownership-id-param -- brand-minting boundary: validates untrusted LLM string into SafeId
-  workspaceId: string;
+  allowedIds: ReadonlySet<string>;
+  workspaceId: SafeId<"workspace">;
 }): SafeId<"workspace"> => {
-  const allowedWorkspaceId = allowedIdsByValue.get(workspaceId);
-  if (!allowedWorkspaceId) {
+  if (!allowedIds.has(workspaceId)) {
     throw new ChatToolError({
       kind: "not-found",
-      message: "Workspace not in the allowed set.",
+      message: "Matter not in the allowed set.",
     });
   }
 
-  return allowedWorkspaceId;
+  return workspaceId;
 };
 
 export const createWorkspaceTools = ({
   allowedWorkspaceIds,
+  refRegistry,
   scopedDb,
 }: WorkspaceToolsContext) => {
   if (allowedWorkspaceIds.length === 0) {
     return {};
   }
 
-  const allowedWorkspaceIdsByValue =
-    createAllowedWorkspaceIdMap(allowedWorkspaceIds);
-  const wsSchema = workspaceIdSchema(allowedWorkspaceIds);
+  const allowedWorkspaceIdSet: ReadonlySet<string> = new Set(
+    allowedWorkspaceIds,
+  );
+  const wsSchema = matterRefSchema(
+    allowedWorkspaceIds.map((id) => refRegistry.toMatterRef(id)),
+  );
 
   return {
     "update-entity-fields": toolDefinition({
@@ -177,9 +170,13 @@ export const createWorkspaceTools = ({
       needsApproval: true,
       inputSchema: toTanStackToolSchema(
         v.strictObject({
-          workspaceId: wsSchema,
-          entityId: idSchema("The entity ID to update"),
-          propertyId: idSchema("The property ID (from read-entity)"),
+          matterRef: wsSchema,
+          entityRef: refSchema(
+            "The entity ref (ent_N) of the entity to update, from read tools",
+          ),
+          propertyRef: refSchema(
+            "The property ref (prop_N), from external_list_properties",
+          ),
           value: v.pipe(
             v.union([v.string(), v.number(), v.array(v.string()), v.null_()]),
             v.description("New value for the field"),
@@ -188,12 +185,41 @@ export const createWorkspaceTools = ({
       ),
       outputSchema: toTanStackToolSchema(updateEntityFieldsOutputSchema),
     }).server(async (input) => {
+      const resolvedMatter = refRegistry.resolveMatterRefs([input.matterRef]);
+      if (Result.isError(resolvedMatter)) {
+        throw resolvedMatter.error;
+      }
       const allowedWorkspaceId = requireAllowedWorkspaceId({
-        allowedIdsByValue: allowedWorkspaceIdsByValue,
-        workspaceId: input.workspaceId,
+        allowedIds: allowedWorkspaceIdSet,
+        workspaceId:
+          resolvedMatter.value.at(0) ??
+          panic("resolved matter ref list is unexpectedly empty"),
       });
-      const entityId = brandPersistedEntityId(input.entityId);
-      const propertyId = brandPersistedPropertyId(input.propertyId);
+      const resolvedEntity = refRegistry.resolveEntityRefTargets([
+        input.entityRef,
+      ]);
+      if (Result.isError(resolvedEntity)) {
+        throw resolvedEntity.error;
+      }
+      const entityTarget =
+        resolvedEntity.value.at(0) ??
+        panic("resolved entity ref list is unexpectedly empty");
+      if (entityTarget.workspaceId !== allowedWorkspaceId) {
+        throw new ChatToolError({
+          kind: "invalid-input",
+          message: `Entity "${input.entityRef}" does not belong to matter "${input.matterRef}".`,
+        });
+      }
+      const entityId = entityTarget.entityId;
+      const resolvedProperty = refRegistry.resolvePropertyRefs([
+        input.propertyRef,
+      ]);
+      if (Result.isError(resolvedProperty)) {
+        throw resolvedProperty.error;
+      }
+      const propertyId =
+        resolvedProperty.value.at(0) ??
+        panic("resolved property ref list is unexpectedly empty");
       const { value } = input;
       const property = await scopedDb((tx) =>
         tx.query.properties.findFirst({
@@ -208,7 +234,7 @@ export const createWorkspaceTools = ({
       if (!property) {
         throw new ChatToolError({
           kind: "not-found",
-          message: `Property "${propertyId}" not found. Check the system prompt for available property IDs.`,
+          message: `Property "${input.propertyRef}" not found in matter "${input.matterRef}". Discover property refs with external_list_properties.`,
         });
       }
 
@@ -324,20 +350,20 @@ export const createWorkspaceTools = ({
       if (!entity) {
         throw new ChatToolError({
           kind: "not-found",
-          message: `Entity "${entityId}" not found.`,
+          message: `Entity "${input.entityRef}" not found.`,
         });
       }
       if (entity.readOnly) {
         throw new ChatToolError({
           kind: "invalid-input",
-          message: `Entity "${entityId}" is read-only.`,
+          message: `Entity "${input.entityRef}" is read-only.`,
         });
       }
 
       if (!entity.currentVersionId) {
         throw new ChatToolError({
           kind: "not-found",
-          message: `Entity "${entityId}" has no current version and cannot be updated.`,
+          message: `Entity "${input.entityRef}" has no current version and cannot be updated.`,
         });
       }
 
@@ -377,8 +403,8 @@ export const createWorkspaceTools = ({
 
       return {
         success: true,
-        entityId,
-        propertyId,
+        entityRef: input.entityRef,
+        propertyRef: input.propertyRef,
         newValue: isEmpty ? "" : formatFieldValue(content),
       };
     }),

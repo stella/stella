@@ -462,9 +462,30 @@ describe("chat tool schemas", () => {
     expect(() =>
       createWorkspaceTools({
         allowedWorkspaceIds: [workspaceId],
+        refRegistry: createChatRefRegistry(),
         scopedDb: unusedScopedDb,
       }),
     ).not.toThrow();
+  });
+
+  test("workspace tool schemas enumerate matter refs, never workspace UUIDs", () => {
+    const registry = createChatRefRegistry();
+    const tools = createWorkspaceTools({
+      allowedWorkspaceIds: [workspaceId],
+      refRegistry: registry,
+      scopedDb: unusedScopedDb,
+    });
+    const serialized = JSON.stringify(
+      Object.values(tools).map((tool) => ({
+        description: tool.description,
+        inputSchema: convertSchemaToJsonSchema(tool.inputSchema),
+      })),
+    );
+    // The tool catalog is provider-visible every turn: enumerating raw
+    // workspace ids here is exactly how the model once learned (and used)
+    // a tenant UUID as a matter_id.
+    expect(serialized).toContain(registry.toMatterRef(workspaceId));
+    expect(serialized).not.toContain(workspaceId);
   });
 
   test("construct skill tools as JSON-schema-compatible AI tools", () => {

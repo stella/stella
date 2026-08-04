@@ -672,6 +672,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     : {};
   const historyTools = createChatHistoryTools({
     excludedMessageIds: excludedChatHistoryMessageIds,
+    refRegistry,
     safeDb,
     threadId,
   });
@@ -686,6 +687,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   // chat client (sticky thread-local matter or matter-pick UI).
   const workspaceTools = createWorkspaceTools({
     allowedWorkspaceIds: toolWorkspaceIds,
+    refRegistry,
     scopedDb,
   });
 

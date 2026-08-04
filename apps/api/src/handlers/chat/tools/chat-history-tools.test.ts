@@ -6,6 +6,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { toSafeId } from "@/api/lib/branded-types";
+import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import {
@@ -38,6 +39,7 @@ describe("chat history tools", () => {
   test("exclude replay-truncated messages from history search", async () => {
     const { queries, safeDb } = createSafeDbCapture();
     const tools = createChatHistoryTools({
+      refRegistry: createChatRefRegistry(),
       excludedMessageIds: [hiddenMessageId],
       safeDb,
       threadId,
@@ -63,6 +65,7 @@ describe("chat history tools", () => {
   test("does not expand a replay-truncated target message", async () => {
     const { queries, safeDb } = createSafeDbCapture();
     const tools = createChatHistoryTools({
+      refRegistry: createChatRefRegistry(),
       excludedMessageIds: [hiddenMessageId],
       safeDb,
       threadId,
