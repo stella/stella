@@ -156,11 +156,13 @@ jobs:
               exit 0
             fi
 
-            committed_at="$(
+            # jq resolves the timestamp so the arithmetic does not depend on
+            # GNU date's -d.
+            committed_epoch="$(
               gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}" \
-                --jq '.commit.committer.date'
+                --jq '.commit.committer.date | fromdateiso8601'
             )"
-            waited_seconds=$(( $(date -u +%s) - $(date -u -d "$committed_at" +%s) ))
+            waited_seconds=$(( $(date -u +%s) - committed_epoch ))
 
             if (( waited_seconds > MAX_DEFERRAL_HOURS * 3600 )); then
               waited_hours=$(( waited_seconds / 3600 ))

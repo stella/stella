@@ -651,6 +651,7 @@ jobs:
       - name: Test release policy scripts
         run: |
           bun test scripts/check-api-deployment.test.ts
+          bun test scripts/check-staging-deploy-decision.test.ts
           bash scripts/create-release-manifest.test.sh
 
       - name: Test maintenance release preparation
