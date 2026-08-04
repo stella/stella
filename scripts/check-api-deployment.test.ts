@@ -17,7 +17,17 @@ describe("API deployment health receipt", () => {
     expect(healthJobStart).toBeGreaterThanOrEqual(0);
     expect(deployJobStart).toBeGreaterThan(healthJobStart);
     expect(verifyJobStart).toBeGreaterThan(deployJobStart);
-    expect(healthJob).toContain("permissions: {}");
+    // The gate only reads: it decides whether to promote, never promotes.
+    // Both delimiters are asserted so a missing block cannot slice to "" and
+    // satisfy the write check by being empty.
+    const permissionsStart = healthJob.indexOf("permissions:");
+    const outputsStart = healthJob.indexOf("outputs:");
+    expect(permissionsStart).toBeGreaterThanOrEqual(0);
+    expect(outputsStart).toBeGreaterThan(permissionsStart);
+    const healthPermissions = healthJob.slice(permissionsStart, outputsStart);
+    expect(healthPermissions).toContain("contents: read");
+    expect(healthPermissions).toContain("deployments: read");
+    expect(healthPermissions).not.toContain("write");
     expect(healthJob).toContain(
       "STAGING_HEALTH_URL: https://api-staging.stll.app/health",
     );
@@ -29,13 +39,12 @@ describe("API deployment health receipt", () => {
     expect(healthJob).toContain(
       "workflow_dispatch bypasses the gate and deploys anyway.",
     );
-    expect(healthJob).toContain(
-      "failing the run so continuous deploy does not stall silently",
-    );
+    // An unreachable environment defers; only a wait past the budget fails.
+    expect(healthJob).toContain("readonly MAX_DEFERRAL_HOURS=");
+    expect(healthJob).toContain("the environment needs attention.");
     expect(deployJob).toContain("needs: staging-health");
-    expect(deployJob).toContain("github.event_name == 'workflow_dispatch'");
     expect(deployJob).toContain(
-      "needs.staging-health.outputs.status == 'ready'",
+      "needs.staging-health.outputs.deploy == 'true'",
     );
   });
 
