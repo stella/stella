@@ -731,7 +731,7 @@ describe("failed index jobs always reach the audit trail", () => {
                 corpusIndexId(generation, selected.country),
                 selected.projectionIndexId,
               ],
-              revision: 1,
+              revision: 2,
             },
           ]),
         ),
@@ -787,7 +787,7 @@ describe("failed index jobs always reach the audit trail", () => {
                   corpusIndexId(generation, selected.country),
                   selected.projectionIndexId,
                 ],
-                revision: 1,
+                revision: 2,
               },
             ]),
           ),
@@ -826,7 +826,7 @@ describe("failed index jobs always reach the audit trail", () => {
                   selected.projectionIndexId,
                   lateReservedIndexId,
                 ],
-                revision: 1,
+                revision: 2,
               },
             ]),
           ),
@@ -847,5 +847,99 @@ describe("failed index jobs always reach the audit trail", () => {
     expect(guardedEffects).toBe(calls.length);
     expect(guardedMarks).toBe(2);
     expect(commitEvents).toEqual(["guard", "guard", "mark"]);
+  });
+});
+
+describe("first-ever fenced appends", () => {
+  const GENERATION = "case_law_v2";
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  test("a first-ever reservation appends without any delete round-trip", async () => {
+    // The reservation persists before the external append, so revision 1
+    // proves no earlier append under this generation can have left a copy.
+    // A backlog drain is almost entirely first-ever rows; a delete per row
+    // was its entire cost profile.
+    const calls: { url: string }[] = [];
+    const stub = async (input: Parameters<typeof fetch>[0]) => {
+      let url: string;
+      if (typeof input === "string") {
+        url = input;
+      } else if (input instanceof URL) {
+        url = input.href;
+      } else {
+        url = input.url;
+      }
+      calls.push({ url });
+      if (url.includes("/ingest")) {
+        return new Response(JSON.stringify({ num_docs_for_processing: 1 }), {
+          status: 200,
+        });
+      }
+      return new Response(JSON.stringify({}), { status: 200 });
+    };
+    globalThis.fetch = Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    });
+
+    const row = {
+      id: toSafeId<"caseLawDecision">("dec-first"),
+      country: "CZ",
+      textS3Key: null,
+      astS3Key: null,
+      contentHash: "hash-dec-first",
+      indexedHash: null,
+      indexedGeneration: null,
+      // SAFETY: tests fabricate the branded token the adapters normally
+      // select as `updated_at::text`.
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion
+      updatedAtToken: "2026-01-01 00:00:00" as TimestampCasToken,
+      projectionIndexId: corpusIndexId(GENERATION, "SK"),
+    };
+    const scopedDb: ScopedDb = async (callback) =>
+      // SAFETY: this test's adapter ignores the transaction; the callback
+      // boundary itself is what the indexer must cross before reporting success.
+      // oxlint-disable-next-line node/callback-return, typescript/no-unsafe-type-assertion -- the fake transaction is deliberately inert
+      await callback({} as Transaction);
+    const indexer = createCorpusIndexer<"caseLawDecision", typeof row>({
+      family: "case_law",
+      captureStep: "test",
+      granularity: "document",
+      generationProjectionIndexIds: (selected) => [selected.projectionIndexId],
+      buildDocs: (selected) => [{ document_id: selected.id, text: "body" }],
+      readCorpusText: async () => "body",
+      selectMissing: async () => [row],
+      selectStale: async () => [],
+      fetchFulltext: async () => "body",
+      markIndexedBatch: async (_tx, { rows: markedRows }) =>
+        new Set(markedRows.map((selected) => selected.id)),
+      insertSucceededJobs: async () => undefined,
+      recordJobs: async () => undefined,
+    });
+
+    const indexed = await indexer.backfillRows(scopedDb, [row], GENERATION, {
+      beforeDatabaseMark: async () => undefined,
+      beforeRemoteEffect: async ({ effect }) => await effect(),
+      recoverRemoteEffectLeaseLoss: async () => await Promise.resolve(),
+      reserveExternalAppend: async (_tx, { generation, rows: reservedRows }) =>
+        new Map(
+          reservedRows.map((selected) => [
+            selected.id,
+            {
+              indexIds: [corpusIndexId(generation, selected.country)],
+              revision: 1,
+            },
+          ]),
+        ),
+    });
+
+    expect(indexed).toBe(1);
+    expect(calls.filter(({ url }) => url.includes("/delete-tasks"))).toEqual(
+      [],
+    );
+    expect(calls.some(({ url }) => url.includes("/ingest"))).toBe(true);
   });
 });
