@@ -5,14 +5,20 @@ projects: ["stella/1"]
 
 body:
   - type: textarea
+    id: issue
+    validations:
+      required: true
     attributes:
-      label: "Issue"
+      label: Issue
       description: >
         Please describe the issue you'd like to raise as clearly as possible.
         Make sure to include any relevant links or references.
 
   - type: textarea
+    id: suggestion
+    validations:
+      required: false
     attributes:
-      label: "Suggestion:"
+      label: Suggestion
       description: >
         Please outline a suggestion to improve the issue here.
