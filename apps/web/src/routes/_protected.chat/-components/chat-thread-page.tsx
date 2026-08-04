@@ -137,6 +137,7 @@ export const ChatThreadPage = ({
   );
   const threadKey = getChatThreadKey(threadRef);
   const anonymized = useChatAnonymized(threadRef);
+  const [composerFocused, setComposerFocused] = useState(false);
   const getContextMatterIds = useLatestCallback(() =>
     resolveChatContextMatterIds(
       threadRef,
@@ -621,6 +622,7 @@ export const ChatThreadPage = ({
             <ChatAnonymizationLayer
               editor={controller.editor}
               enabled={anonymized}
+              focused={composerFocused}
               ownerKey={threadKey}
               workspaceId={workspaceId ?? threadRef.threadId}
             />
@@ -720,6 +722,7 @@ export const ChatThreadPage = ({
                   onStop={() => {
                     stop();
                   }}
+                  onFocusChange={setComposerFocused}
                   onSubmit={handleSubmit}
                 />
               </div>

@@ -1088,6 +1088,7 @@ const FileChatOverlayInner = ({
   // `getChatSendMode(threadRef)`, and `ChatAnonymizationLayer` drives the
   // in-editor highlight cue — one source, so display and send agree.
   const anonymized = useChatAnonymized(threadRef);
+  const [composerFocused, setComposerFocused] = useState(false);
   const getSendMode = useLatestCallback(() => getChatSendMode(threadRef));
   // Context matters this file chat draws on. Same plumbing as the main
   // chat and inspector: local state is seeded from the server's persisted
@@ -2241,6 +2242,7 @@ const FileChatOverlayInner = ({
         <ChatAnonymizationLayer
           editor={editorController.editor}
           enabled={anonymized}
+          focused={composerFocused}
           ownerKey={getChatThreadKey(threadRef)}
           workspaceId={workspaceId ?? threadRef.threadId}
         />
@@ -2276,6 +2278,7 @@ const FileChatOverlayInner = ({
             ) : undefined
           }
           layout="floating"
+          onFocusChange={setComposerFocused}
           minimizedThreadAction={
             !panelOpen && hasThreadContent
               ? {

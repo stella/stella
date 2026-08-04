@@ -16,6 +16,7 @@ import "@/components/chat-editor.css";
 import { useCallback, useRef, useState } from "react";
 import type {
   ComponentProps,
+  FocusEvent as ReactFocusEvent,
   KeyboardEvent as ReactKeyboardEvent,
   ReactNode,
   RefObject,
@@ -137,6 +138,8 @@ type PromptBarProps = {
    * and transport instead of silently falling back to ordinary chrome.
    */
   anonymized: boolean;
+  /** Reports whether this surface, rather than another mounted chat, owns focus. */
+  onFocusChange?: ((focused: boolean) => void) | undefined;
   /**
    * Gates surface-specific FEATURES only — the preset chips and the
    * pending-suggestion badge are shown in `floating` surfaces (chats
@@ -579,6 +582,7 @@ export function SuggestionStepper({
 export function PromptBar(props: PromptBarProps) {
   const {
     anonymized,
+    onFocusChange,
     layout,
     status,
     pendingCount,
@@ -766,11 +770,26 @@ export function PromptBar(props: PromptBarProps) {
     },
     [presetChipsVisible, presets, editor, scopePromptPreset],
   );
+  const handleShellFocus = () => {
+    onFocusChange?.(true);
+  };
+  const handleShellBlur = (event: ReactFocusEvent<HTMLDivElement>) => {
+    const nextTarget = event.relatedTarget;
+    if (
+      nextTarget instanceof Node &&
+      event.currentTarget.contains(nextTarget)
+    ) {
+      return;
+    }
+    onFocusChange?.(false);
+  };
 
   const shell = (
     <PromptBarShell
       aria-busy={busy}
       aria-label={t("chat.aiPrompt")}
+      onBlurCapture={handleShellBlur}
+      onFocusCapture={handleShellFocus}
       onKeyDownCapture={handleShellKeyDown}
       className={cn(
         !inputDisabled && !anonymized && "focus-within:border-foreground/30",

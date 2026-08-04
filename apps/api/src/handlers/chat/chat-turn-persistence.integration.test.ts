@@ -14,7 +14,6 @@ import {
   canAcceptChatTurnOnTx,
   claimChatTurnForExecution,
   createChatTurnAcceptance,
-  failChatTurnExecution,
   insertChatTurnAcceptanceOnTx,
   renewChatTurnExecutionLease,
   settleChatTurnOnTx,
@@ -1254,26 +1253,55 @@ describe("durable chat turn persistence", () => {
       throw new Error("Expected the accepted turn to be claimed");
     }
 
-    expect(
-      unwrap(
-        await failChatTurnExecution({
-          code: "unsupported-input",
+    const failedAssistantMessageId = toSafeId<"chatMessage">(
+      Bun.randomUUIDv7(),
+    );
+    unwrap(
+      await safeDb(async (tx) => {
+        await tx.insert(chatMessages).values({
+          content: toChatMessageContent({
+            data: [],
+            metadata: { turnOutcome: { error: "unknown", type: "failed" } },
+            version: 2,
+          }),
+          id: failedAssistantMessageId,
+          role: "assistant",
+          threadId,
+          userId: ids.userA1,
+          workspaceId: ids.wsA1,
+        });
+        return await settleChatTurnOnTx({
+          assistantMessageId: failedAssistantMessageId,
           execution,
-          retryable: false,
-          safeDb,
-        }),
-      ),
-    ).toBe(true);
+          failureCode: "unsupported-input",
+          failureRetryable: false,
+          outcome: { error: "unknown", type: "failed" },
+          tx,
+        });
+      }),
+    );
     const turn = await testDb.query.chatTurns.findFirst({
       where: { id: { eq: execution.id } },
     });
     expect(turn).toMatchObject({
+      assistantMessageId: failedAssistantMessageId,
       executionId: null,
       failureCode: "unsupported-input",
       failureRetryable: false,
       leaseExpiresAt: null,
       status: "failed",
     });
+    const failedAssistant = await testDb.query.chatMessages.findFirst({
+      where: { id: { eq: failedAssistantMessageId } },
+      columns: { content: true, id: true, role: true },
+    });
+    if (failedAssistant === undefined) {
+      throw new Error("Expected the failed assistant message to persist");
+    }
+    expect(
+      clientMessageFromPageRow(failedAssistant, new Map()).metadata
+        ?.turnOutcome,
+    ).toEqual({ error: "unknown", type: "failed" });
   });
 
   test("settles through the database clock when the worker clock is behind", async () => {
@@ -1335,16 +1363,35 @@ describe("durable chat turn persistence", () => {
       value: WorkerClockBehindDatabase,
     });
     try {
-      expect(
-        unwrap(
-          await failChatTurnExecution({
-            code: "unsupported-input",
+      const failedAssistantMessageId = toSafeId<"chatMessage">(
+        Bun.randomUUIDv7(),
+      );
+      unwrap(
+        await safeDb(async (tx) => {
+          await tx.insert(chatMessages).values({
+            content: toChatMessageContent({
+              data: [],
+              metadata: {
+                turnOutcome: { error: "unknown", type: "failed" },
+              },
+              version: 2,
+            }),
+            id: failedAssistantMessageId,
+            role: "assistant",
+            threadId,
+            userId: ids.userA1,
+            workspaceId: ids.wsA1,
+          });
+          return await settleChatTurnOnTx({
+            assistantMessageId: failedAssistantMessageId,
             execution,
-            retryable: false,
-            safeDb,
-          }),
-        ),
-      ).toBe(true);
+            failureCode: "unsupported-input",
+            failureRetryable: false,
+            outcome: { error: "unknown", type: "failed" },
+            tx,
+          });
+        }),
+      );
     } finally {
       Object.defineProperty(globalThis, "Date", {
         configurable: true,

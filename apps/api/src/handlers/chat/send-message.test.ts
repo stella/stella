@@ -765,6 +765,104 @@ describe("send message disconnect handling", () => {
     );
   });
 
+  test("persists a reloadable assistant error when connector preflight fails", async () => {
+    const insertedMessages: unknown[] = [];
+    const turnUpdates: unknown[] = [];
+    const selectWithThreadLock = () => ({
+      from: () => ({
+        innerJoin: () => ({ where: () => ({ limit: async () => [] }) }),
+        where: () => ({
+          for: async () => [{ id: threadId }],
+          limit: async () => [],
+          orderBy: emptyOrderedRows,
+        }),
+      }),
+    });
+    const insert = (table: unknown) => ({
+      values: (values: unknown) => {
+        if (table === chatTurns) {
+          return {
+            onConflictDoNothing: () => ({
+              returning: async () => [{ id: turnId }],
+            }),
+          };
+        }
+        insertedMessages.push(values);
+        return undefined;
+      },
+    });
+    const update = (table: unknown) => ({
+      set: (values: unknown) => {
+        if (table === chatTurns) {
+          turnUpdates.push(values);
+          return {
+            where: () => ({ returning: async () => [{ id: turnId }] }),
+          };
+        }
+        return { where: async () => undefined };
+      },
+    });
+
+    const result = await sendMessage.handler(
+      createContext({
+        contextMatterIds: [],
+        transaction: {
+          insert,
+          query: {
+            chatMessages: { findFirst: async () => null },
+            chatThreadCompactions: { findFirst: async () => null },
+            chatThreads: {
+              findFirst: async () => ({
+                chatModel: null,
+                contextMatterIds: [],
+                dataWorkspaceIds: [],
+                id: threadId,
+                messages: [],
+                rollbackToken: null,
+                title: "Existing thread",
+                webSearchEnabled: false,
+                workspaceId: null,
+              }),
+            },
+            chatTurns: {
+              findFirst: async ({
+                where,
+              }: {
+                where?: { status?: { eq?: string } };
+              }) =>
+                where?.status?.eq === "running" ? undefined : { id: turnId },
+            },
+            organizationSettings: { findFirst: async () => null },
+          },
+          select: selectWithThreadLock,
+          update,
+        },
+      }),
+    );
+
+    expect(result).toEqual({
+      code: 500,
+      response: { message: "Failed to discover chat connectors" },
+    });
+    const persistedFailure = insertedMessages.at(-1);
+    expect(persistedFailure).toEqual([
+      expect.objectContaining({
+        content: expect.objectContaining({
+          data: [],
+          metadata: { turnOutcome: { error: "unknown", type: "failed" } },
+        }),
+        role: "assistant",
+      }),
+    ]);
+    expect(turnUpdates).toContainEqual(
+      expect.objectContaining({
+        failureCode: "connector-discovery",
+        failureRetryable: true,
+        status: "failed",
+      }),
+    );
+  });
+
   test("stops before connector discovery when the client disconnects during persistence", async () => {
     const abortController = new AbortController();
     const insertValues = mock(() => ({

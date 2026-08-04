@@ -173,6 +173,7 @@ export const ChatTabPanel = ({
   // same store — so the shield can never show a state the next request
   // won't honour.
   const anonymized = useChatAnonymized(threadRef);
+  const [composerFocused, setComposerFocused] = useState(false);
   const getSendMode = useLatestCallback(() => getChatSendMode(threadRef));
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const chatContextLabel = useChatContextLabel(tab, activeOrganizationId);
@@ -489,6 +490,7 @@ export const ChatTabPanel = ({
           <ChatAnonymizationLayer
             editor={editorController.editor}
             enabled={anonymized}
+            focused={composerFocused}
             ownerKey={getChatThreadKey(threadRef)}
             workspaceId={tabWorkspaceId ?? threadRef.threadId}
           />
@@ -532,6 +534,7 @@ export const ChatTabPanel = ({
               />
             }
             layout="standalone"
+            onFocusChange={setComposerFocused}
             onStop={() => {
               stop();
             }}

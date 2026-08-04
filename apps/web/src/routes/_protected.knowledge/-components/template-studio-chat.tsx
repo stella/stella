@@ -597,6 +597,7 @@ const TemplateStudioChatInner = ({
   // transport reads `getChatSendMode(threadRef)`, and the anonymization
   // layer highlights the same value — one source, display equals send.
   const anonymized = useChatAnonymized(threadRef);
+  const [composerFocused, setComposerFocused] = useState(false);
   const getSendMode = useLatestCallback(() => getChatSendMode(threadRef));
 
   // No `handleActiveDocxEditToolCall` in the context: the transport
@@ -1336,6 +1337,7 @@ const TemplateStudioChatInner = ({
         <ChatAnonymizationLayer
           editor={editorController.editor}
           enabled={anonymized}
+          focused={composerFocused}
           ownerKey={getChatThreadKey(threadRef)}
           workspaceId={threadRef.threadId}
         />
@@ -1358,6 +1360,7 @@ const TemplateStudioChatInner = ({
             </span>
           }
           layout="floating"
+          onFocusChange={setComposerFocused}
           onStop={() => {
             stop();
           }}

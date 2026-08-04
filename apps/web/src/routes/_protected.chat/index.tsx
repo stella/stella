@@ -127,6 +127,7 @@ function ChatIndex() {
     [groupedThreadPages?.pages],
   );
   const anonymized = useChatAnonymized(threadRef);
+  const [composerFocused, setComposerFocused] = useState(false);
   const getSendMode = useLatestCallback(() => getChatSendMode(threadRef));
   const openInspectorChat = useInspectorTabsStore((s) => s.openChat);
   const [contextMatterIds, setContextMatterIds] = useState<string[]>([]);
@@ -470,6 +471,7 @@ function ChatIndex() {
             <ChatAnonymizationLayer
               editor={controller.editor}
               enabled={anonymized}
+              focused={composerFocused}
               ownerKey={getChatThreadKey(threadRef)}
               workspaceId={draftThreadId}
             />
@@ -517,6 +519,7 @@ function ChatIndex() {
                 />
               }
               onSubmit={handleSubmit}
+              onFocusChange={setComposerFocused}
             />
           </div>
         </div>

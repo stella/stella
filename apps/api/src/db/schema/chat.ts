@@ -192,8 +192,8 @@ export const chatMessages = p.pgTable(
 
 /**
  * Durable ownership and settlement for one assistant turn. Message content
- * remains in chat_messages; this row records the lifecycle even when provider
- * work fails before an assistant message exists.
+ * remains in chat_messages; every terminal success or failure owns the
+ * assistant message that reload hydration renders.
  */
 export const chatTurns = p.pgTable(
   "chat_turns",
@@ -322,7 +322,7 @@ export const chatTurns = p.pgTable(
         WHEN 'failed' THEN
           ${table.leaseExpiresAt} IS NULL AND
           ${table.executionId} IS NULL AND
-          ${table.assistantMessageId} IS NULL AND
+          ${table.assistantMessageId} IS NOT NULL AND
           ${table.interactionType} IS NULL AND
           ${table.interactionToolCallId} IS NULL AND
           ${table.failureCode} IS NOT NULL AND

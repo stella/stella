@@ -1,6 +1,7 @@
 import type { Editor } from "@tiptap/react";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { warmupChatAnonymizeWorker } from "@/lib/anonymize/anonymize-chat-worker-client";
 import {
   clearChatAnonDecorationOwner,
@@ -36,6 +37,7 @@ import { optionalReadonlyArray } from "@/lib/arrays";
 export const useChatAnonymizationLayer = ({
   editor,
   enabled,
+  focused,
   ownerKey,
   workspaceId,
 }: {
@@ -47,6 +49,8 @@ export const useChatAnonymizationLayer = ({
    * versa. Callers pass their own source of truth.
    */
   enabled: boolean;
+  /** True only while this surface's composer, rather than another surface, owns focus. */
+  focused: boolean;
   /** Stable ChatThreadRef-derived identity for this composer surface. */
   ownerKey: string;
   workspaceId: string;
@@ -71,6 +75,16 @@ export const useChatAnonymizationLayer = ({
     enabled,
     text,
     workspaceId,
+  });
+  const activateFocusedOwner = useLatestCallback(() => {
+    if (!editor) {
+      return;
+    }
+    setActiveChatAnonDecorationOwner({
+      editor,
+      ownerKey,
+      pairs: optionalReadonlyArray(pairs),
+    });
   });
 
   // Install the plugin directly on the editor instead of going
@@ -102,26 +116,14 @@ export const useChatAnonymizationLayer = ({
   }, [editor, enabled]);
 
   useExternalSyncEffect(() => {
-    if (!editor) {
+    if (!editor || !focused) {
       return undefined;
     }
-    const activePairs = optionalReadonlyArray(pairs);
-    const activate = () => {
-      setActiveChatAnonDecorationOwner({
-        editor,
-        ownerKey,
-        pairs: activePairs,
-      });
-    };
-    editor.on("focus", activate);
-    if (editor.isFocused) {
-      activate();
-    }
+    activateFocusedOwner();
     return () => {
-      editor.off("focus", activate);
       clearChatAnonDecorationOwner({ editor, ownerKey });
     };
-  }, [editor, ownerKey, pairs]);
+  }, [activateFocusedOwner, editor, focused, ownerKey]);
 
   useExternalSyncEffect(() => {
     if (!editor) {
@@ -146,14 +148,22 @@ export const useChatAnonymizationLayer = ({
 export const ChatAnonymizationLayer = ({
   editor,
   enabled,
+  focused,
   ownerKey,
   workspaceId,
 }: {
   editor: Editor | null;
   enabled: boolean;
+  focused: boolean;
   ownerKey: string;
   workspaceId: string;
 }): null => {
-  useChatAnonymizationLayer({ editor, enabled, ownerKey, workspaceId });
+  useChatAnonymizationLayer({
+    editor,
+    enabled,
+    focused,
+    ownerKey,
+    workspaceId,
+  });
   return null;
 };

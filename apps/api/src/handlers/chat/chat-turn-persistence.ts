@@ -591,6 +591,8 @@ export const renewChatTurnExecutionLease = async ({
 type SettleChatTurnProps = {
   assistantMessageId: SafeId<"chatMessage"> | null;
   execution: ChatTurnExecution;
+  failureCode?: ChatTurnFailureCode | undefined;
+  failureRetryable?: boolean | undefined;
   outcome: ChatTurnOutcome;
   tx: Transaction;
 };
@@ -603,6 +605,8 @@ type SettleChatTurnProps = {
 export const settleChatTurnOnTx = async ({
   assistantMessageId,
   execution,
+  failureCode,
+  failureRetryable,
   outcome,
   tx,
 }: SettleChatTurnProps): Promise<boolean> => {
@@ -659,11 +663,15 @@ export const settleChatTurnOnTx = async ({
           status: "cancelled" as const,
         };
       case "failed":
+        if (assistantMessageId === null) {
+          return null;
+        }
         return {
           ...base,
-          assistantMessageId: null,
-          failureCode: "provider-error" as const,
-          failureRetryable: AI_ERROR_RETRYABLE[outcome.error],
+          assistantMessageId,
+          failureCode: failureCode ?? "provider-error",
+          failureRetryable:
+            failureRetryable ?? AI_ERROR_RETRYABLE[outcome.error],
           interactionToolCallId: null,
           interactionType: null,
           interruptionReason: null,
@@ -705,42 +713,3 @@ export const settleChatTurnOnTx = async ({
     .returning({ id: chatTurns.id });
   return updated.length === 1;
 };
-
-export const failChatTurnExecution = async ({
-  code,
-  execution,
-  retryable,
-  safeDb,
-}: {
-  code: ChatTurnFailureCode;
-  execution: ChatTurnExecution;
-  retryable: boolean;
-  safeDb: SafeDb;
-}): Promise<Result<boolean, SafeDbError>> =>
-  await safeDb(async (tx) => {
-    // audit: skip — failure settlement is the durable record for a turn with no assistant message
-    const updated = await tx
-      .update(chatTurns)
-      .set({
-        assistantMessageId: null,
-        cancellationReason: null,
-        executionId: null,
-        failureCode: code,
-        failureRetryable: retryable,
-        interactionToolCallId: null,
-        interactionType: null,
-        interruptionReason: null,
-        leaseExpiresAt: null,
-        settledAt: databaseNow(),
-        status: "failed",
-      })
-      .where(
-        and(
-          eq(chatTurns.id, execution.id),
-          eq(chatTurns.executionId, execution.executionId),
-          eq(chatTurns.status, "running"),
-        ),
-      )
-      .returning({ id: chatTurns.id });
-    return updated.length === 1;
-  });

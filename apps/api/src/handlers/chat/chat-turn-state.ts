@@ -83,6 +83,7 @@ export type ChatTurnState =
       userMessageId: SafeId<"chatMessage">;
     }
   | {
+      assistantMessageId: SafeId<"chatMessage">;
       failedAt: Date;
       failure: {
         code: ChatTurnFailureCode;
@@ -130,6 +131,7 @@ export type ChatTurnTransition =
       type: "complete";
     }
   | {
+      assistantMessageId: SafeId<"chatMessage">;
       failedAt: Date;
       failure: {
         code: ChatTurnFailureCode;
@@ -197,6 +199,7 @@ export const planChatTurnTransition = (
         case "fail":
           return {
             state: {
+              assistantMessageId: transition.assistantMessageId,
               failedAt: transition.failedAt,
               failure: transition.failure,
               id: state.id,
@@ -266,6 +269,7 @@ export const planChatTurnTransition = (
         case "fail":
           return {
             state: {
+              assistantMessageId: transition.assistantMessageId,
               failedAt: transition.failedAt,
               failure: transition.failure,
               id: state.id,

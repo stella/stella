@@ -52,7 +52,6 @@ import {
   claimChatTurnForExecutionOnTx,
   canAcceptChatTurnOnTx,
   createChatTurnAcceptance,
-  failChatTurnExecution,
   insertChatTurnAcceptanceOnTx,
   CHAT_METERED_PROVIDER_TIMEOUT_MS,
   renewChatTurnExecutionLease,
@@ -64,6 +63,7 @@ import type {
   ChatTurnExecution,
   ChatTurnExecutionClaim,
 } from "@/api/handlers/chat/chat-turn-persistence";
+import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
 import {
   compactChatMessagesForModel,
   shouldCompactChatMessages,
@@ -151,6 +151,7 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
+import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resolveEffectiveChatModelId } from "@/api/lib/chat-model-selection";
 import {
@@ -1095,14 +1096,18 @@ const sendMessage = createSafeRootHandler(
         execution: turnExecution,
       };
       const failCurrentTurn = async (
-        code: Parameters<typeof failChatTurnExecution>[0]["code"],
+        code: ChatTurnFailureCode,
         retryable: boolean,
       ): Promise<void> => {
-        const failureResult = await failChatTurnExecution({
+        const failureResult = await persistFailedChatTurn({
           code,
           execution: turnExecution,
+          recordAuditEvent,
           retryable,
           safeDb,
+          threadId: body.threadId,
+          userId: user.id,
+          workspaceId,
         });
         if (Result.isError(failureResult)) {
           captureError(failureResult.error, { threadId: body.threadId });
@@ -1618,11 +1623,15 @@ const sendMessage = createSafeRootHandler(
       return Result.ok(response);
     } finally {
       if (claimedChatTurnOwnership.status === "preflight") {
-        const failureResult = await failChatTurnExecution({
+        const failureResult = await persistFailedChatTurn({
           code: "internal",
           execution: claimedChatTurnOwnership.execution,
+          recordAuditEvent,
           retryable: true,
           safeDb,
+          threadId: body.threadId,
+          userId: user.id,
+          workspaceId,
         });
         if (Result.isError(failureResult)) {
           captureError(failureResult.error, {
@@ -2345,6 +2354,8 @@ type ChatDataScopeReplacement = {
 type ChatTurnSettlement = {
   assistantMessageId: SafeId<"chatMessage"> | null;
   execution: ChatTurnExecution;
+  failureCode?: ChatTurnFailureCode | undefined;
+  failureRetryable?: boolean | undefined;
   outcome: ChatTurnOutcome;
 };
 
@@ -2600,6 +2611,55 @@ const persistMessage = async (props: PersistMessageProps) => {
     upsertChatThreadSearchDocument(props.threadId).catch(captureError);
   }
   return result;
+};
+
+/**
+ * A failure before the stream exists must still hydrate as the same terminal
+ * assistant turn as a streamed RUN_ERROR. Persist the empty terminal message
+ * and settle its owner in one transaction, so reload cannot turn a retryable
+ * failure into a missing assistant response.
+ */
+const persistFailedChatTurn = async ({
+  code,
+  execution,
+  recordAuditEvent,
+  retryable,
+  safeDb,
+  threadId,
+  userId,
+  workspaceId,
+}: {
+  code: ChatTurnFailureCode;
+  execution: ChatTurnExecution;
+  recordAuditEvent: AuditRecorder;
+  retryable: boolean;
+  safeDb: SafeDb;
+  threadId: SafeId<"chatThread">;
+  userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace"> | null;
+}) => {
+  const outcome = { type: "failed", error: "unknown" } as const;
+  const assistantMessage = toPersistableChatMessage({
+    id: createSafeId<"chatMessage">(),
+    metadata: { turnOutcome: outcome },
+    parts: [],
+    role: "assistant",
+  });
+  return await persistMessage({
+    persistencePlan: { type: "insert", message: assistantMessage },
+    recordAuditEvent,
+    safeDb,
+    threadId,
+    turnSettlement: {
+      assistantMessageId: assistantMessage.id,
+      execution,
+      failureCode: code,
+      failureRetryable: retryable,
+      outcome,
+    },
+    userId,
+    workspaceId,
+  });
 };
 
 const runPersistMessage = async ({

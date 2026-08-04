@@ -52,6 +52,7 @@ const states = {
     userMessageId,
   },
   failed: {
+    assistantMessageId,
     failedAt: now,
     failure: { code: "provider-error", retryable: true },
     id,
@@ -90,6 +91,7 @@ const transitions = {
   },
   complete: { assistantMessageId, completedAt: now, type: "complete" },
   fail: {
+    assistantMessageId,
     failedAt: now,
     failure: { code: "provider-error", retryable: true },
     type: "fail",
