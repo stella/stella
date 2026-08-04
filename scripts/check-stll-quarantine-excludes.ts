@@ -124,8 +124,15 @@ const readRegistryStllPackages = (lockfile: string): Set<string> =>
           return [];
         }
         // The entry's own resolution follows the name; workspace members
-        // carry the workspace protocol instead of a registry tarball.
-        const entry = lockfile.slice(match.index, match.index + 400);
+        // carry the workspace protocol instead of a registry tarball. Read to
+        // the end of that line and no further: a fixed-width window spills
+        // into the next entry, and one workspace neighbour then hides a
+        // registry-resolved package from the coverage check entirely.
+        const lineEnd = lockfile.indexOf("\n", match.index);
+        const entry = lockfile.slice(
+          match.index,
+          lineEnd === -1 ? undefined : lineEnd,
+        );
         return entry.includes(WORKSPACE_PROTOCOL) ? [] : [name];
       },
     ),
@@ -157,9 +164,11 @@ export const checkQuarantineExcludes = ({
 
   if (missing.length > 0) {
     errors.push(
-      `${BUNFIG} minimumReleaseAgeExcludes is missing ${missing.length} first-party package(s):\n${ 
-        missing.map((name) => `  "${name}",`).join("\n") 
-        }\n\nAdd them. Until then, a fresh publish of any of these installs ` +
+      `${BUNFIG} minimumReleaseAgeExcludes is missing ${missing.length} first-party package(s):\n${missing
+        .map((name) => `  "${name}",`)
+        .join(
+          "\n",
+        )}\n\nAdd them. Until then, a fresh publish of any of these installs ` +
         `partially: the quarantine blocks it, and an optionalDependency that ` +
         `is blocked is skipped silently, so the failure surfaces at runtime ` +
         `rather than at install.`,
