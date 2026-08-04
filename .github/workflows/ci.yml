@@ -1516,10 +1516,14 @@ jobs:
             --target bun \
             --outfile /tmp/runtime-workers/pdf-worker.js \
             apps/api/src/lib/files/pdf-worker.ts
+          # `--outdir`, matching apps/api/Dockerfile: the worker pulls in a
+          # native addon that the bundler emits as a sidecar `.node` asset,
+          # and `--outfile` refuses to write more than one output.
           bun build \
             --target bun \
-            --outfile /tmp/runtime-workers/extraction-worker.js \
+            --outdir /tmp/runtime-workers \
             apps/api/src/lib/search/extraction-worker.ts
+          test -s /tmp/runtime-workers/extraction-worker.js
         env:
           NPM_TOKEN: ""
 
