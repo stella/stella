@@ -310,6 +310,30 @@ jobs:
           docker logs stella-api-smoke || true
           exit 1
 
+      - name: Boot-smoke bundled entrypoints
+        # The runner stage ships compiled outputs and their runtime asset
+        # trees without a workspace node_modules. The server and migrate
+        # entrypoints are exercised above; this loads each remaining bundle
+        # far enough to prove its module graph resolves inside the runtime
+        # image. Stopping at environment validation is expected; a module
+        # resolution error fails.
+        run: |
+          set -euo pipefail
+          for entrypoint in /app/scheduler.js /app/document-processing-worker.js /app/backfill.js; do
+            output=$(docker run --rm stella-api:smoke timeout 20 bun "$entrypoint" 2>&1 || true)
+            if grep -qiE "cannot (find|resolve) (module|package)" <<<"$output"; then
+              echo "::error::${entrypoint} failed module resolution in the runtime image."
+              printf '%s\n' "$output"
+              exit 1
+            fi
+            if ! grep -q "Invalid environment variables" <<<"$output"; then
+              echo "::error::${entrypoint} did not reach environment validation."
+              printf '%s\n' "$output"
+              exit 1
+            fi
+          done
+          docker run --rm stella-api:smoke bun /app/legal-atlas.js list
+
   build-arm64:
     name: Build API image (linux/arm64)
     runs-on: ubuntu-24.04-arm
