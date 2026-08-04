@@ -553,7 +553,7 @@
       "GET /v1/organization-settings": 6,
       "GET /v1/organization-settings/ai-availability": 4,
       "GET /v1/workspaces/navigation": 6,
-      "POST /v1/skills/seed": 6
+      "POST /v1/skills/seed": 9
     },
     "responseSizes": {
       "GET /api/auth/get-session": 1024,
@@ -647,7 +647,7 @@
       "GET /v1/organization-settings": 6,
       "GET /v1/organization-settings/ai-availability": 4,
       "GET /v1/workspaces/navigation": 6,
-      "POST /v1/skills/seed": 6
+      "POST /v1/skills/seed": 9
     },
     "responseSizes": {
       "GET /api/auth/get-session": 1024,
@@ -698,7 +698,7 @@
       "GET /v1/organization-settings": 6,
       "GET /v1/organization-settings/ai-availability": 4,
       "GET /v1/workspaces/navigation": 6,
-      "POST /v1/skills/seed": 6
+      "POST /v1/skills/seed": 9
     },
     "responseSizes": {
       "GET /api/auth/get-session": 1024,
@@ -839,7 +839,7 @@
       "GET /v1/organization-settings": 6,
       "GET /v1/organization-settings/ai-availability": 4,
       "GET /v1/workspaces/navigation": 6,
-      "POST /v1/skills/seed": 6
+      "POST /v1/skills/seed": 9
     },
     "responseSizes": {
       "GET /api/auth/get-session": 1024,
@@ -1332,7 +1332,7 @@
       "GET /v1/organization-settings": 6,
       "GET /v1/organization-settings/ai-availability": 4,
       "GET /v1/workspaces/navigation": 6,
-      "POST /v1/skills/seed": 6
+      "POST /v1/skills/seed": 9
     },
     "responseSizes": {
       "GET /api/auth/get-session": 1024,
