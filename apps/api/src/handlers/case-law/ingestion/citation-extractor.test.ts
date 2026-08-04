@@ -100,6 +100,20 @@ describe("extractCitations", () => {
     expect(texts).toContain("T-13/99");
   });
 
+  test("extracts a CJEU case number whose hyphen is a soft hyphen (U+00AD)", () => {
+    // Verbatim from a Slovak Constitutional Court decision citing CJEU
+    // Banif Plus Bank v. Csaba Cipani. A PDF-to-text conversion left a
+    // soft hyphen (invisible when rendered) standing in for the ordinary
+    // separator between "C" and the docket number.
+    const text =
+      "vo veci Banif Plus Bank Zrt proti Csaba Cipani a spol. sp. zn. " +
+      "C­472/11 z 21. februára 2013";
+    const texts = extractCitations([{ index: 0, text }]).map(
+      (c) => c.citationText,
+    );
+    expect(texts).toContain("C­472/11");
+  });
+
   test("extracts CJEU case numbers with OCR-noisy hyphen spacing, hyphen still present", () => {
     // Verbatim from a Czech decision citing CJEU C-679/18 three different
     // ways within the same paragraph. A no-hyphen spelling ("C679/18") is

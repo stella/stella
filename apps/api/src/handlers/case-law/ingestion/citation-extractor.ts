@@ -235,14 +235,16 @@ const CITATION_PATTERNS: RegExp[] = [
   // CJEU: "C-283/81", "T-13/99", "F-100/09" (Court of Justice, General
   // Court, Civil Service Tribunal), including the non-breaking hyphen the
   // publications office uses ("C‑283/81"), the en/em dash normalizeDashes
-  // already canonicalizes for the dedup key ("C–128/22"), and OCR/typo
-  // spacing around the separator seen in prod text for the same case
-  // ("C- 679/18", "C -679/18"), bounded to a few characters so a stray
-  // long whitespace run does not leak into the stored citation text. The
-  // separator itself is never dropped: a bare "C679/18" would collide
-  // with the Czech civil "C" registry ("21 C 1234/2020"), so it is
-  // intentionally out of scope (see the module-level exclusion list).
-  /\b(?<caseNumber>[CTF]\s{0,3}[-‑–—]\s{0,3}\d{1,4}\/\d{2})(?!\d)/gu,
+  // already canonicalizes for the dedup key ("C–128/22"), the soft hyphen
+  // (U+00AD) a PDF-to-text conversion leaves behind at a line-wrap
+  // boundary ("C­472/11", invisible when rendered), and OCR/typo spacing
+  // around the separator seen in prod text for the same case ("C- 679/18",
+  // "C -679/18"), bounded to a few characters so a stray long whitespace
+  // run does not leak into the stored citation text. The separator itself
+  // is never dropped: a bare "C679/18" would collide with the Czech civil
+  // "C" registry ("21 C 1234/2020"), so it is intentionally out of scope
+  // (see the module-level exclusion list).
+  /\b(?<caseNumber>[CTF]\s{0,3}[-‑–—­]\s{0,3}\d{1,4}\/\d{2})(?!\d)/gu,
 
   // ECLI: "ECLI:CZ:NS:2020:21.CDO.1234.2020.1"
   /ECLI:[A-Z]{2}:[A-Z]{1,8}:\d{4}:[\w.]+/gu,
@@ -269,9 +271,10 @@ const CITATION_PATTERNS: RegExp[] = [
   // bare tail of an already-prefixed number ("T‑381/15" must not also
   // yield a phantom "381/15"), including every separator spelling the
   // CJEU C/T/F pattern above tolerates: spaced ("C- 679/18" must not also
-  // yield a phantom "679/18") and en/em dash ("C–128/22" must not also
-  // yield a phantom "128/22").
-  /(?<![CTF]\s{0,4}[-‑–—]\s{0,4})\b(?<caseNumber>\d{1,4}\/\d{2})(?!\d)(?=[\s,]*(?:(?:and|e)\s+\d{1,4}\/\d{2}(?!\d)[\s,]*)?EU:[CTF]:\d{4}:\d+)/gu,
+  // yield a phantom "679/18"), en/em dash ("C–128/22" must not also yield
+  // a phantom "128/22"), and soft hyphen ("C­128/22" must not also yield a
+  // phantom "128/22").
+  /(?<![CTF]\s{0,4}[-‑–—­]\s{0,4})\b(?<caseNumber>\d{1,4}\/\d{2})(?!\d)(?=[\s,]*(?:(?:and|e)\s+\d{1,4}\/\d{2}(?!\d)[\s,]*)?EU:[CTF]:\d{4}:\d+)/gu,
 
   // Czech collection: "č. 123/2020 Sb. rozh. tr." (Nejvyšší soud, civil or
   // criminal) or "č. 2018/2010 Sb. NSS" (Nejvyšší správní soud, a
