@@ -3,7 +3,7 @@ description: Submit a proposal/request for a feature
 title: "feat: "
 labels: ["needs approval"]
 type: "feature"
-projects: ["stll-ai/1"]
+projects: ["stella/1"]
 
 body:
   - type: textarea
