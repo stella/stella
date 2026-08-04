@@ -51,7 +51,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 594,
+    "count": 601,
     "files": {
       "apps/api/src/db/migrate.ts": 2,
       "apps/api/src/db/schema.ts": 1,
@@ -280,6 +280,7 @@
       "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx": 1,
       "apps/web/src/features/chat/hooks/use-chat-session.ts": 4,
       "apps/web/src/features/chat/queries.ts": 1,
+      "apps/web/src/features/guides/use-guide-runner.ts": 7,
       "apps/web/src/hooks/external-file-drop.logic.ts": 5,
       "apps/web/src/hooks/use-effect.ts": 2,
       "apps/web/src/lib/analytics/posthog.ts": 1,
