@@ -30,10 +30,14 @@ jobs:
       contents: read
 
     steps:
+      # Pinned to the default branch: without a ref, a manual dispatch from a
+      # feature branch would prune that branch's bunfig.toml and force-push its
+      # commits into the removal PR along with it.
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          ref: ${{ github.event.repository.default_branch }}
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@859a61ee0a799ba1028281329555cadee15bfc4f

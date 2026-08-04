@@ -142,6 +142,41 @@ minimumReleaseAgeExcludes = [
     ).toEqual([]);
   });
 
+  // Matching by name would take the renewed entry with the expired one, which
+  // silently drops a package back out of the quarantine before its time.
+  test("keeps a renewed entry when an expired one shares its name", () => {
+    const bunfig = `
+[install]
+minimumReleaseAge = 432_000
+minimumReleaseAgeExcludes = [
+  "@stll/native",
+  "fast-uri", # quarantine-expires: 2026-08-05T09:16:56.212Z
+  "fast-uri", # quarantine-expires: 2026-09-01T09:16:56.212Z
+]
+`;
+    const result = pruneExpiredExcludes({
+      bunfig,
+      now: new Date("2026-08-06T00:00:00.000Z"),
+    });
+
+    expect(result.pruned).toEqual(["fast-uri"]);
+    expect(result.bunfig).toContain(
+      '"fast-uri", # quarantine-expires: 2026-09-01T09:16:56.212Z',
+    );
+    expect(result.bunfig).not.toContain("2026-08-05T09:16:56.212Z");
+  });
+
+  test("leaves a malformed annotation for the guard to report", () => {
+    const bunfig = createBunfig('"better-result", # quarantine-expires: nope');
+    const result = pruneExpiredExcludes({
+      bunfig,
+      now: new Date("2026-09-01T00:00:00.000Z"),
+    });
+
+    expect(result.pruned).toEqual([]);
+    expect(result.bunfig).toBe(bunfig);
+  });
+
   test("leaves a file with nothing expired untouched", () => {
     const bunfig = createBunfig(
       '"better-result", # quarantine-expires: 2026-08-06T21:35:30.036Z',

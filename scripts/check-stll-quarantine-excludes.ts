@@ -72,6 +72,49 @@ type TemporaryExcludesResult = {
   errors: string[];
 };
 
+type ParsedTemporaryExclude =
+  | { error: string; kind: "error" }
+  | { expiresAt: string; kind: "entry"; name: string };
+
+/**
+ * One annotated line. Both the guard and the prune read it through here, so
+ * neither can disagree with the other about what a line means.
+ */
+const parseTemporaryExcludeLine = (line: string): ParsedTemporaryExclude => {
+  const commentStart = line.indexOf("#");
+  const declaration = line.slice(0, commentStart).trim();
+  const comment = line.slice(commentStart + 1).trim();
+  const quotedName = declaration.endsWith(",")
+    ? declaration.slice(0, -1).trim()
+    : declaration;
+  const isQuotedName =
+    quotedName.startsWith('"') &&
+    quotedName.endsWith('"') &&
+    !quotedName.slice(1, -1).includes('"');
+  if (!comment.startsWith(EXPIRY_MARKER) || !isQuotedName) {
+    return {
+      error: `${BUNFIG} has a malformed temporary quarantine annotation: ${line.trim()}`,
+      kind: "error",
+    };
+  }
+
+  const name = quotedName.slice(1, -1);
+  const expiresAt = comment.slice(EXPIRY_MARKER.length).trim();
+  const expiresAtMs = Date.parse(expiresAt);
+  if (
+    !EXACT_UTC_TIMESTAMP.test(expiresAt) ||
+    Number.isNaN(expiresAtMs) ||
+    new Date(expiresAtMs).toISOString() !== expiresAt
+  ) {
+    return {
+      error: `${BUNFIG} temporary quarantine exclude "${name}" has an invalid UTC expiry: ${expiresAt}`,
+      kind: "error",
+    };
+  }
+
+  return { expiresAt, kind: "entry", name };
+};
+
 const readTemporaryExcludes = (bunfig: string): TemporaryExcludesResult => {
   const entries: TemporaryExclude[] = [];
   const errors: string[] = [];
@@ -81,38 +124,13 @@ const readTemporaryExcludes = (bunfig: string): TemporaryExcludesResult => {
       continue;
     }
 
-    const commentStart = line.indexOf("#");
-    const declaration = line.slice(0, commentStart).trim();
-    const comment = line.slice(commentStart + 1).trim();
-    const quotedName = declaration.endsWith(",")
-      ? declaration.slice(0, -1).trim()
-      : declaration;
-    const isQuotedName =
-      quotedName.startsWith('"') &&
-      quotedName.endsWith('"') &&
-      !quotedName.slice(1, -1).includes('"');
-    if (!comment.startsWith(EXPIRY_MARKER) || !isQuotedName) {
-      errors.push(
-        `${BUNFIG} has a malformed temporary quarantine annotation: ${line.trim()}`,
-      );
+    const parsed = parseTemporaryExcludeLine(line);
+    if (parsed.kind === "error") {
+      errors.push(parsed.error);
       continue;
     }
 
-    const name = quotedName.slice(1, -1);
-    const expiresAt = comment.slice(EXPIRY_MARKER.length).trim();
-    const expiresAtMs = Date.parse(expiresAt);
-    if (
-      !EXACT_UTC_TIMESTAMP.test(expiresAt) ||
-      Number.isNaN(expiresAtMs) ||
-      new Date(expiresAtMs).toISOString() !== expiresAt
-    ) {
-      errors.push(
-        `${BUNFIG} temporary quarantine exclude "${name}" has an invalid UTC expiry: ${expiresAt}`,
-      );
-      continue;
-    }
-
-    entries.push({ expiresAt, name });
+    entries.push({ expiresAt: parsed.expiresAt, name: parsed.name });
   }
 
   return { entries, errors };
@@ -238,18 +256,16 @@ export const pruneExpiredExcludes = ({
   bunfig: string;
   now?: Date;
 }): PruneResult => {
-  const expired = new Set(
-    readTemporaryExcludes(bunfig)
-      .entries.filter(({ expiresAt }) => now.getTime() >= Date.parse(expiresAt))
-      .map(({ name }) => name),
-  );
-  if (expired.size === 0) {
+  const blockStart = bunfig.indexOf("minimumReleaseAgeExcludes");
+  if (blockStart === -1) {
     return { bunfig, pruned: [] };
   }
-
-  const blockStart = bunfig.indexOf("minimumReleaseAgeExcludes");
   const blockEnd = bunfig.indexOf("]", blockStart);
   const pruned: string[] = [];
+
+  // Each line is judged by its own annotation. Matching by name instead would
+  // delete every entry sharing that name, including one whose expiry was
+  // renewed and has not passed.
   const block = bunfig
     .slice(blockStart, blockEnd)
     .split("\n")
@@ -257,16 +273,22 @@ export const pruneExpiredExcludes = ({
       if (!line.includes(EXPIRY_MARKER)) {
         return true;
       }
-      const name = [...expired].find((candidate) =>
-        line.includes(`"${candidate}"`),
-      );
-      if (name === undefined) {
+      const parsed = parseTemporaryExcludeLine(line);
+      // A malformed annotation is the guard's to report, not this to delete.
+      if (parsed.kind !== "entry") {
         return true;
       }
-      pruned.push(name);
+      if (now.getTime() < Date.parse(parsed.expiresAt)) {
+        return true;
+      }
+      pruned.push(parsed.name);
       return false;
     })
     .join("\n");
+
+  if (pruned.length === 0) {
+    return { bunfig, pruned: [] };
+  }
 
   return {
     bunfig: bunfig.slice(0, blockStart) + block + bunfig.slice(blockEnd),
