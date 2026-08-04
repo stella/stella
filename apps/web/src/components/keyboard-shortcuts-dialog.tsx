@@ -17,8 +17,8 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
-import { detached } from "@/lib/detached";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { detached } from "@/lib/detached";
 import {
   formatShortcutBinding,
   isEditableEventTarget,
@@ -144,33 +144,6 @@ const ShortcutRow = ({
   );
 };
 
-type Translate = ReturnType<typeof useTranslations>;
-
-/** Localized message for a rejected rebind. Kept out of the component body so
- * the switch does not force a React Compiler bailout. */
-const rebindErrorText = (
-  error: RebindError | null,
-  t: Translate,
-): string | null => {
-  if (!error) {
-    return null;
-  }
-  switch (error.type) {
-    case "collision":
-      return t("navigation.shortcutsDialog.collision", {
-        label: t(error.conflictLabelKey),
-      });
-    case "invalidBinding":
-      return t("navigation.shortcutsDialog.invalidBinding");
-    case "notRebindable":
-      return t("navigation.shortcutsDialog.notRebindable");
-    default: {
-      const _exhaustive: never = error;
-      return _exhaustive;
-    }
-  }
-};
-
 type RebindableBindingProps = {
   id: ShortcutId;
   hotkey: Hotkey;
@@ -243,7 +216,25 @@ const RebindableBinding = ({
     }
   };
 
-  const errorText = rebindErrorText(error, t);
+  const errorText = (() => {
+    if (!error) {
+      return null;
+    }
+    switch (error.type) {
+      case "collision":
+        return t("navigation.shortcutsDialog.collision", {
+          label: t(error.conflictLabelKey),
+        });
+      case "invalidBinding":
+        return t("navigation.shortcutsDialog.invalidBinding");
+      case "notRebindable":
+        return t("navigation.shortcutsDialog.notRebindable");
+      default: {
+        const _exhaustive: never = error;
+        return _exhaustive;
+      }
+    }
+  })();
 
   if (isEditing) {
     return (
