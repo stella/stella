@@ -59,7 +59,11 @@
   --color-card: var(--card);
   --animate-skeleton: skeleton 2s -1s infinite linear;
   --animate-caret-blink: caret-blink 1.25s ease-out infinite;
-  --animate-source-bar-flash: source-bar-flash 700ms ease-out;
+  /* One-shot tint pulse for a surface that just became relevant.
+     The `-twice` variant blinks the same curve twice, for an
+     affordance the user has to notice, not merely acknowledge. */
+  --animate-attention-flash: attention-flash 700ms ease-out;
+  --animate-attention-flash-twice: attention-flash 700ms ease-out 2;
   @keyframes skeleton {
     to {
       background-position: -200% 0;
@@ -81,7 +85,7 @@
       opacity: 0;
     }
   }
-  @keyframes source-bar-flash {
+  @keyframes attention-flash {
     0% {
       opacity: 0;
     }

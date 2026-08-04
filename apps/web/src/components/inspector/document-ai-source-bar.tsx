@@ -389,7 +389,7 @@ export const DocumentAiSourceBar = ({
           the overlay and re-runs the keyframe. */}
       <div
         aria-hidden
-        className="bg-primary/12 animate-source-bar-flash pointer-events-none absolute inset-0 opacity-0"
+        className="bg-primary/12 animate-attention-flash pointer-events-none absolute inset-0 opacity-0"
         key={justificationId}
       />
       <div
