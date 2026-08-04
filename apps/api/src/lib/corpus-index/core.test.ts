@@ -865,12 +865,14 @@ describe("first-ever fenced appends", () => {
     // was its entire cost profile.
     const calls: { url: string }[] = [];
     const stub = async (input: Parameters<typeof fetch>[0]) => {
-      const url =
-        typeof input === "string"
-          ? input
-          : input instanceof URL
-            ? input.href
-            : input.url;
+      let url: string;
+      if (typeof input === "string") {
+        url = input;
+      } else if (input instanceof URL) {
+        url = input.href;
+      } else {
+        url = input.url;
+      }
       calls.push({ url });
       if (url.includes("/ingest")) {
         return new Response(JSON.stringify({ num_docs_for_processing: 1 }), {
