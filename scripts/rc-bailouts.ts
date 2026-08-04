@@ -24,6 +24,8 @@ import reactCompiler, { type LoggerEvent } from "babel-plugin-react-compiler";
 import { readFileSync, writeFileSync } from "node:fs";
 
 const BASELINE_PATH = "scripts/react-compiler-bailouts.json";
+/** Cap the stale list so a large prune stays readable in CI logs. */
+const STALE_PREVIEW = 10;
 const MEMO_HOOK = /\buseMemo\(|\buseCallback\(/gu;
 const FUNCTION_DECLARATION =
   /^(?:async\s+)?function\*?\s+([A-Za-z_$][\w$]*)\b/u;
@@ -166,7 +168,11 @@ const toBaseline = (bailouts: Map<string, BailoutRecord>): Baseline => {
   return current;
 };
 
-type BaselineDiff = { added: string[]; regressed: string[] };
+type BaselineDiff = {
+  added: string[];
+  regressed: string[];
+  stale: string[];
+};
 
 const diffBaseline = (current: Baseline, baseline: Baseline): BaselineDiff => {
   const added: string[] = [];
@@ -181,7 +187,12 @@ const diffBaseline = (current: Baseline, baseline: Baseline): BaselineDiff => {
       regressed.push(`${key}: ${previous} -> ${memos} useMemo/useCallback`);
     }
   }
-  return { added, regressed };
+  // Baseline entries the compiler no longer bails out on. These are not
+  // harmless leftovers: a stale key pre-authorizes that exact component to bail
+  // out again, so the guard would stay silent on the very regression it exists
+  // to catch. Treat the baseline as a ratchet that may only tighten.
+  const stale = Object.keys(baseline).filter((key) => !(key in current));
+  return { added, regressed, stale };
 };
 
 const runSelfTest = (): number => {
@@ -222,8 +233,17 @@ const runSelfTest = (): number => {
     diff.regressed[0]?.startsWith(firstKey) === true &&
     diff.added.length === 1 &&
     diff.added[0] === "fixture.tsx::Third";
+  // `secondKey` is in the baseline but absent from current: exactly the stale
+  // entry that used to pass unnoticed.
+  const staleDetectionWorks =
+    diff.stale.length === 1 && diff.stale[0] === secondKey;
 
-  if (identityWorks && memoCountsWork && isolationWorks) {
+  if (
+    identityWorks &&
+    memoCountsWork &&
+    isolationWorks &&
+    staleDetectionWorks
+  ) {
     console.log("rc-bailouts --self-test: PASS");
     return 0;
   }
@@ -283,8 +303,8 @@ const run = (): number => {
   }
 
   const baseline: Baseline = JSON.parse(readFileSync(BASELINE_PATH, "utf-8"));
-  const { added, regressed } = diffBaseline(current, baseline);
-  if (regressed.length === 0 && added.length === 0) {
+  const { added, regressed, stale } = diffBaseline(current, baseline);
+  if (regressed.length === 0 && added.length === 0 && stale.length === 0) {
     console.log(
       `OK: ${Object.keys(current).length} React Compiler bailout functions, memoization intact.`,
     );
@@ -314,6 +334,23 @@ const run = (): number => {
     console.error(
       "\nThese functions opted out of compiler optimization. Keep any required\n" +
         "manual memoization, then run `bun scripts/rc-bailouts.ts\n" +
+        "--write-baseline` and commit the baseline.",
+    );
+  }
+  if (stale.length > 0) {
+    console.error(
+      `\n${stale.length} baseline entr${stale.length === 1 ? "y" : "ies"} no longer bail out:`,
+    );
+    for (const key of stale.slice(0, STALE_PREVIEW)) {
+      console.error(`  ${key}`);
+    }
+    if (stale.length > STALE_PREVIEW) {
+      console.error(`  ... and ${stale.length - STALE_PREVIEW} more`);
+    }
+    console.error(
+      "\nThe compiler now optimizes these, so the baseline must be pruned: while\n" +
+        "a stale entry remains, that component may silently start bailing out\n" +
+        "again without this guard noticing. Run `bun scripts/rc-bailouts.ts\n" +
         "--write-baseline` and commit the baseline.",
     );
   }
