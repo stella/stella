@@ -111,7 +111,7 @@ describe("API deployment health receipt", () => {
       `group: release-\${{ github.event_name == 'workflow_dispatch' && inputs.release_ref || github.ref_name }}`,
     );
     expect(releaseWorkflow).toContain(
-      "needs: [resolve, build-arm64, build-amd64, prepare-web-image, smoke]",
+      "needs: [resolve, build, prepare-web-image, smoke]",
     );
     expect(releaseWorkflow.match(/web-image-digest:/gu)).toHaveLength(2);
     expect(promoteAction).toContain("readonly TOKEN_REFRESH_SECONDS=2700");
@@ -151,6 +151,9 @@ describe("API deployment health receipt", () => {
     expect(getApiHealthUrl("https://example.com").toString()).toBe(
       "https://example.com/health",
     );
+    expect(
+      getApiHealthUrl("https://example.com", "version.json").toString(),
+    ).toBe("https://example.com/version.json");
   });
 
   test("accepts only a full lowercase commit SHA", () => {

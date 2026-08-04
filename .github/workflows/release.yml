@@ -11,11 +11,8 @@ on:
         required: true
         type: string
 
-permissions:
-  contents: write
-  packages: write
-  id-token: write
-  attestations: write
+# Every job declares its own least-privilege block.
+permissions: {}
 
 concurrency:
   group: release-${{ github.event_name == 'workflow_dispatch' && inputs.release_ref || github.ref_name }}
@@ -125,12 +122,13 @@ jobs:
           if-no-files-found: error
 
   smoke:
-    name: Build and smoke test API image
+    name: Smoke test API image
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 20
-    needs: resolve
+    needs: [resolve, build]
     permissions:
       contents: read
+      packages: read
 
     services:
       postgres:
@@ -163,8 +161,27 @@ jobs:
           ref: ${{ needs.resolve.outputs.release_sha }}
           persist-credentials: false
 
-      - name: Build smoke image
-        run: docker build -f apps/api/Dockerfile -t stella-api:smoke .
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@371161bbe7024a29a25c5e19bfcbc0804fe9ad2c # v4.5.2
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Smoke the artifact that was actually pushed (with its release build
+      # args baked in), not a local rebuild that could drift from it.
+      - name: Pull pushed image by digest
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          IMAGE_DIGEST: ${{ needs.build.outputs.digest-arm64 }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$IMAGE_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+            echo "::error::arm64 image digest was not resolved from the build job."
+            exit 1
+          fi
+          docker pull "${IMAGE}@${IMAGE_DIGEST}"
+          docker tag "${IMAGE}@${IMAGE_DIGEST}" stella-api:smoke
 
       - name: Prepare smoke database
         env:
@@ -334,9 +351,9 @@ jobs:
           done
           docker run --rm stella-api:smoke bun /app/legal-atlas.js list
 
-  build-arm64:
-    name: Build API image (linux/arm64)
-    runs-on: ubuntu-24.04-arm
+  build:
+    name: Build API image (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     needs: resolve
     permissions:
@@ -346,8 +363,32 @@ jobs:
       attestations: write
       artifact-metadata: write
 
+    strategy:
+      # A failed arch must not cancel its sibling: both digests are needed to
+      # diagnose a broken release, and the manifest job gates on both anyway.
+      fail-fast: false
+      matrix:
+        include:
+          # Release tags are cut from main, so the staging build cache
+          # (refreshed by every deploy-staging run) is warm for arm64.
+          # Read-only here: release builds must not mutate the staging ref.
+          - runner: ubuntu-24.04-arm
+            platform: linux/arm64
+            cache_from_tag: buildcache-staging
+            cache_to_tag: ""
+          # No continuous amd64 build exists, so releases keep their own
+          # cache scope warm across tags.
+          - runner: ubuntu-latest
+            platform: linux/amd64
+            cache_from_tag: buildcache-release-amd64
+            cache_to_tag: buildcache-release-amd64
+
+    # A matrix job exposes one shared output map, so each arch writes its own
+    # key; the expression is empty on the other leg, and empty values do not
+    # overwrite. Consumers validate the digest shape before use.
     outputs:
-      digest: ${{ steps.build.outputs.digest }}
+      digest-arm64: ${{ matrix.platform == 'linux/arm64' && steps.build.outputs.digest || '' }}
+      digest-amd64: ${{ matrix.platform == 'linux/amd64' && steps.build.outputs.digest || '' }}
 
     steps:
       - name: Checkout
@@ -372,58 +413,10 @@ jobs:
         with:
           context: .
           file: apps/api/Dockerfile
-          platforms: linux/arm64
+          platforms: ${{ matrix.platform }}
           outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
-          build-args: |
-            STELLA_VERSION=${{ needs.resolve.outputs.version }}
-            STELLA_COMMIT_SHA=${{ needs.resolve.outputs.release_sha }}
-
-      - name: Attest image provenance
-        uses: ./.github/actions/provenance
-        with:
-          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          subject-digest: ${{ steps.build.outputs.digest }}
-
-  build-amd64:
-    name: Build API image (linux/amd64)
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    needs: resolve
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-      attestations: write
-      artifact-metadata: write
-
-    outputs:
-      digest: ${{ steps.build.outputs.digest }}
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.resolve.outputs.release_sha }}
-          persist-credentials: false
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@371161bbe7024a29a25c5e19bfcbc0804fe9ad2c # v4.5.2
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push by digest
-        id: build
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
-        with:
-          context: .
-          file: apps/api/Dockerfile
-          platforms: linux/amd64
-          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.cache_from_tag }}
+          cache-to: ${{ matrix.cache_to_tag != '' && format('type=registry,ref={0}/{1}:{2},mode=max', env.REGISTRY, env.IMAGE_NAME, matrix.cache_to_tag) || '' }}
           build-args: |
             STELLA_VERSION=${{ needs.resolve.outputs.version }}
             STELLA_COMMIT_SHA=${{ needs.resolve.outputs.release_sha }}
@@ -515,9 +508,14 @@ jobs:
             exit 1
           fi
 
+          # Pin the certificate identity (SAN) to this workflow at a ref that
+          # legitimately produces release attestations: the release tag itself
+          # (tag push) or main (workflow_dispatch runs from the default
+          # branch). A same-path workflow on any other ref must not pass.
+          identity_pattern="^https://github\\.com/${GITHUB_REPOSITORY//./\\.}/\\.github/workflows/release\\.yml@(refs/tags/${RELEASE_REF//./\\.}|refs/heads/main)\$"
           verification="$(gh attestation verify "oci://${IMAGE}@${tagged_digest}" \
             --repo "${GITHUB_REPOSITORY}" \
-            --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/release.yml" \
+            --cert-identity-regex "$identity_pattern" \
             --predicate-type "$PREDICATE_TYPE" \
             --deny-self-hosted-runners \
             --format json)"
@@ -570,7 +568,7 @@ jobs:
             -f "inputs[target_environment]=${TARGET_ENV}"
 
           run_id=""
-          for attempt in {1..30}; do
+          for _ in {1..30}; do
             if ! run_id="$(
               gh api \
                 "/repos/${INFRA_REPO}/actions/workflows/build-release-web.yml/runs?event=workflow_dispatch&per_page=10" \
@@ -656,10 +654,14 @@ jobs:
               and .releaseSha == $release_sha
               and .targetEnvironment == $target_environment' \
             release-web-image/source-receipt.json >/dev/null
+          # The build was dispatched at ref=main above, so require the
+          # attestation's source ref to match: a same-path workflow on
+          # another branch of the infra repo must not pass.
           gh attestation verify release-web-image/stella-web.tar \
             --bundle release-web-image/stella-web.intoto.jsonl \
             --repo "${GITHUB_REPOSITORY_OWNER}/stella-infra" \
             --signer-workflow "${GITHUB_REPOSITORY_OWNER}/stella-infra/.github/workflows/build-release-web.yml" \
+            --source-ref refs/heads/main \
             --deny-self-hosted-runners >/dev/null
           archive_digest="$(sha256sum release-web-image/stella-web.tar | awk '{print $1}')"
           echo "digest=sha256:${archive_digest}" >> "$GITHUB_OUTPUT"
@@ -730,7 +732,7 @@ jobs:
     name: Assemble multi-arch manifest and GitHub release
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: [resolve, build-arm64, build-amd64, prepare-web-image, smoke]
+    needs: [resolve, build, prepare-web-image, smoke]
     permissions:
       contents: write
       packages: write
@@ -768,8 +770,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
-          ARM64_DIGEST: ${{ needs.build-arm64.outputs.digest }}
-          AMD64_DIGEST: ${{ needs.build-amd64.outputs.digest }}
+          ARM64_DIGEST: ${{ needs.build.outputs.digest-arm64 }}
+          AMD64_DIGEST: ${{ needs.build.outputs.digest-amd64 }}
           SHA: ${{ needs.resolve.outputs.release_sha }}
         run: |
           set -euo pipefail
@@ -790,9 +792,13 @@ jobs:
               echo "::error::Existing API image tag does not match its release receipt."
               exit 1
             fi
+            # Same ref pinning as the web image receipt: release
+            # attestations come from this workflow at the release tag
+            # (tag push) or main (workflow_dispatch).
+            identity_pattern="^https://github\\.com/${GITHUB_REPOSITORY//./\\.}/\\.github/workflows/release\\.yml@(refs/tags/${RELEASE_REF//./\\.}|refs/heads/main)\$"
             gh attestation verify "oci://${IMAGE}@${tagged_digest}" \
               --repo "$GITHUB_REPOSITORY" \
-              --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" \
+              --cert-identity-regex "$identity_pattern" \
               --deny-self-hosted-runners >/dev/null
             docker pull --platform linux/arm64 "${IMAGE}@${tagged_digest}" >/dev/null
             image_env="$(docker image inspect "${IMAGE}@${tagged_digest}" --format '{{json .Config.Env}}')"
@@ -812,6 +818,13 @@ jobs:
             echo "::error::Existing API image receipt has no matching registry tag."
             exit 1
           fi
+
+          for arch_digest in "$ARM64_DIGEST" "$AMD64_DIGEST"; do
+            if [[ ! "$arch_digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+              echo "::error::A per-arch image digest was not resolved from the build job."
+              exit 1
+            fi
+          done
 
           candidate_tag="candidate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           docker buildx imagetools create --tag "${IMAGE}:${candidate_tag}" \
@@ -1044,6 +1057,16 @@ jobs:
         env:
           API_DEPLOYMENT_EXPECTED_COMMIT: ${{ needs.resolve.outputs.release_sha }}
           API_DEPLOYMENT_URL: https://api.stll.app
+        run: bun scripts/check-api-deployment.ts
+
+      # Same commit gate as the staging web smoke: the web origin's
+      # version marker must stably report the released commit. Read-only
+      # GET probes against the production frontend.
+      - name: Verify production web serves the release commit
+        env:
+          API_DEPLOYMENT_EXPECTED_COMMIT: ${{ needs.resolve.outputs.release_sha }}
+          API_DEPLOYMENT_PROBE_PATH: version.json
+          API_DEPLOYMENT_URL: https://my.stll.app
         run: bun scripts/check-api-deployment.ts
 
   promote-staging:
