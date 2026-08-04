@@ -9,6 +9,7 @@ import type {
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import type { BBoxItem } from "@/api/lib/bbox/ai-prompts";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/files/utils";
@@ -110,8 +111,6 @@ export const extractJustificationContent = (
 
 const GEMINI_B_BOX_SCALE = 1000;
 
-type GeminiBBox = [number, number, number, number];
-
 type Page = {
   pageNumber: number;
   width: number;
@@ -119,14 +118,14 @@ type Page = {
 };
 
 export const parseGeminiBBoxes = (
-  bBoxes: GeminiBBox[],
+  bBoxes: BBoxItem[],
   { pageNumber, width, height }: Page,
 ): BoundingBox[] => {
   const boundingBoxHashes = new Set<string>();
   const boundingBoxes: BoundingBox[] = [];
 
   for (const bBox of bBoxes) {
-    const hash = `${pageNumber}-${bBox.join("-")}`;
+    const hash = `${pageNumber}-${bBox.yMin}-${bBox.xMin}-${bBox.yMax}-${bBox.xMax}`;
 
     // gemini sometimes returns duplicate bounding boxes
     if (boundingBoxHashes.has(hash)) {
@@ -137,10 +136,10 @@ export const parseGeminiBBoxes = (
 
     boundingBoxes.push({
       pageNumber,
-      yMin: Math.round((bBox[0] / GEMINI_B_BOX_SCALE) * height),
-      xMin: Math.round((bBox[1] / GEMINI_B_BOX_SCALE) * width),
-      yMax: Math.round((bBox[2] / GEMINI_B_BOX_SCALE) * height),
-      xMax: Math.round((bBox[3] / GEMINI_B_BOX_SCALE) * width),
+      yMin: Math.round((bBox.yMin / GEMINI_B_BOX_SCALE) * height),
+      xMin: Math.round((bBox.xMin / GEMINI_B_BOX_SCALE) * width),
+      yMax: Math.round((bBox.yMax / GEMINI_B_BOX_SCALE) * height),
+      xMax: Math.round((bBox.xMax / GEMINI_B_BOX_SCALE) * width),
     });
   }
 

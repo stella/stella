@@ -19,7 +19,7 @@ export const generateBBoxesMock = async ({
   }
 
   return Result.ok(
-    parseGeminiBBoxes([[100, 100, 300, 900]], {
+    parseGeminiBBoxes([{ yMin: 100, xMin: 100, yMax: 300, xMax: 900 }], {
       pageNumber,
       width: page.width,
       height: page.height,

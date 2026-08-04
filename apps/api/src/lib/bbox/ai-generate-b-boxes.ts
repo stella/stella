@@ -1,43 +1,19 @@
 import type { DocumentPart } from "@tanstack/ai";
 import type { AnthropicDocumentMetadata } from "@tanstack/ai-anthropic";
-import { panic, Result } from "better-result";
-import * as v from "valibot";
+import { Result } from "better-result";
 
 import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
-  BBOX_ARRAY_DESCRIPTION,
   BBOX_SYSTEM_PROMPT,
-  bboxItemSchema,
+  bboxOutputSchema,
   buildBBoxUserMessage,
+  type BBoxItem,
 } from "@/api/lib/bbox/ai-prompts";
 import type { SafeId } from "@/api/lib/branded-types";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import { markTanStackCacheBreakpoint } from "@/api/lib/tanstack-ai-caching";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
-
-const bboxOutputSchema = v.strictObject({
-  boxes: v.pipe(
-    v.array(bboxItemSchema),
-    v.minLength(1),
-    v.description(BBOX_ARRAY_DESCRIPTION),
-  ),
-});
-
-// `bboxItemSchema` already validated `v.length(4)`; this only narrows
-// the static type from `number[]` to the 4-tuple without a cast.
-const toBBoxTuple = (item: number[]): [number, number, number, number] => {
-  const [yMin, xMin, yMax, xMax] = item;
-  if (
-    yMin === undefined ||
-    xMin === undefined ||
-    yMax === undefined ||
-    xMax === undefined
-  ) {
-    panic("BBox element passed length validation but has missing values");
-  }
-  return [yMin, xMin, yMax, xMax];
-};
 
 type GenerateBBoxDataProps = {
   pdfData: Uint8Array;
@@ -66,7 +42,7 @@ export const generateBBoxData = async ({
   orgAIConfig,
   promptCachingEnabled,
 }: GenerateBBoxDataProps): Promise<
-  Result<[number, number, number, number][], WorkflowIntegrationError>
+  Result<BBoxItem[], WorkflowIntegrationError>
 > => {
   const caching = resolveCaching({
     promptCachingEnabled,
@@ -148,5 +124,5 @@ export const generateBBoxData = async ({
     aiAnalytics.captureError(error);
     return Result.err(error);
   }
-  return Result.ok(generated.value.map(toBBoxTuple));
+  return Result.ok(generated.value);
 };
